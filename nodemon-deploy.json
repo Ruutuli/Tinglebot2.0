@@ -1,0 +1,7 @@
+{
+  "watch": ["embeds/", "commands/", "handlers/","scripts/deploy-commands.js","index.js", "commands/", "handlers/", "database/", "models/", "modules/", "utils/"],
+  "ignore": ["node_modules/"],
+  "ext": "js,json",
+  "exec": "node scripts/deploy-commands.js guild > nodemon.log 2>&1",
+  "legacy-watch": true
+}
