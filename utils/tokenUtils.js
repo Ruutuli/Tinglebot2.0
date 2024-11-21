@@ -58,6 +58,49 @@ function calculateFinalTokens({ base, characterCount, typeMultiplier, productMul
   return finalTokenAmount;
 }
 
+
+// ------------------- Token Calculation -------------------
+// Calculates tokens based on submission data
+function calculateTokens(data) {
+  const { baseSelections, typeMultiplierSelections, productMultiplierValue, addOnsApplied, characterCount } = data;
+
+  let totalTokens = 0;
+  const breakdown = [];
+
+  // Example token calculations
+  baseSelections.forEach((base) => {
+      const baseTokens = 10; // Example value
+      totalTokens += baseTokens;
+      breakdown.push(`Base: ${base} - ${baseTokens} tokens`);
+  });
+
+  typeMultiplierSelections.forEach((type) => {
+      const multiplierTokens = 5; // Example value
+      totalTokens += multiplierTokens;
+      breakdown.push(`Type Multiplier: ${type} - ${multiplierTokens} tokens`);
+  });
+
+  if (productMultiplierValue > 1) {
+      const productTokens = productMultiplierValue * 2; // Example multiplier
+      totalTokens += productTokens;
+      breakdown.push(`Product Multiplier: x${productMultiplierValue} - ${productTokens} tokens`);
+  }
+
+  addOnsApplied.forEach((addon) => {
+      const addonTokens = 3; // Example value
+      totalTokens += addonTokens;
+      breakdown.push(`Add-On: ${addon} - ${addonTokens} tokens`);
+  });
+
+  totalTokens += characterCount * 1; // Example: 1 token per character
+  breakdown.push(`Character Count: ${characterCount} - ${characterCount * 1} tokens`);
+
+  return {
+      totalTokens,
+      breakdown: breakdown.join('\n'), // Format breakdown as a single string
+  };
+}
+
 // ------------------- Log Current Token Calculation State -------------------
 // Logs the current state of the token calculation for debugging purposes
 function logCurrentState() {
@@ -73,7 +116,8 @@ function logCurrentState() {
 // ------------------- Exported Functions -------------------
 // Exporting all functions for use in other modules
 module.exports = {
-  resetSubmissionState,    // Resets the submission state
-  calculateFinalTokens,    // Calculates the final token amount
-  logCurrentState          // Logs the current state of the token calculation
+  resetSubmissionState,    
+  calculateFinalTokens,   
+  calculateTokens , 
+  logCurrentState         
 };

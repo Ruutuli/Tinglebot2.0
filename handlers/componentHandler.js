@@ -2,17 +2,34 @@
 // Handles button interactions like confirm/cancel, component interactions, and template command
 
 // ------------------- Imports -------------------
+// Discord.js Imports
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
-const { fetchCharacterById, getCharactersInVillage } = require('../database/characterService');
+
+// Database Service Imports
 const { connectToTinglebot } = require('../database/connection');
-const { createCharacterEmbed, createCharacterGearEmbed } = require('../embeds/characterEmbeds');
+const { fetchCharacterById, getCharactersInVillage } = require('../database/characterService');
+const { getUserById } = require('../database/userService'); 
+
+
+// Model Imports
 const ItemModel = require('../models/ItemModel');
-const { syncInventory } = require('../handlers/syncHandler');
+
+// Embed and Command Imports
+const { createCharacterEmbed, createCharacterGearEmbed } = require('../embeds/characterEmbeds');
 const { createGettingStartedEmbed, createCommandsEmbed, createButtonsRow } = require('../commands/help');
+
+
+// Module Imports
 const { getGeneralJobsPage } = require('../modules/jobsModule');
 const { getVillageColorByName } = require('../modules/locationsModule');
-const { handleTameInteraction, handleMountComponentInteraction } = require('./mountComponentHandler');  // Import the necessary handlers
 
+// Handler Imports
+const { syncInventory } = require('../handlers/syncHandler');
+const { handleTameInteraction, handleMountComponentInteraction } = require('./mountComponentHandler');
+
+// Utility Imports
+const { submissionStore } = require('../utils/storage'); 
+const { capitalizeFirstLetter, capitalizeWords } = require('../modules/formattingModule'); // Formatting utilities
 
 // ------------------- Create Action Row with Cancel Button -------------------
 function getCancelButtonRow() {
@@ -35,26 +52,81 @@ function getConfirmButtonRow() {
 }
 
 // ------------------- Button Interaction Handler -------------------
+// Handles button interactions such as Confirm and Cancel
 async function handleButtonInteraction(interaction) {
-    // Safeguard to ensure interaction isn't processed multiple times
-    if (interaction.replied || interaction.deferred) {
-        return; // Exit if already handled
-    }
+    if (interaction.replied || interaction.deferred) return; // Prevent multiple interactions
 
-    // Handle confirmation or cancellation buttons
+    const userId = interaction.user.id;
+    const submissionData = submissionStore.get(userId);
+
     if (interaction.customId === 'confirm') {
-        await interaction.update({
-            content: '✅ Your submission has been confirmed!',
-            components: []
-        });
+        try {
+            // Fetch user data for token tracker
+            const user = await getUserById(userId);
+
+            // Format the token breakdown as a code block
+            const breakdownMessage = `
+\`\`\`
+${submissionData.baseSelections.map(base => `${capitalizeFirstLetter(base)} (15 × ${submissionData.characterCount})`).join('\n')}
+× ${submissionData.typeMultiplierSelections.map(multiplier => `${capitalizeFirstLetter(multiplier)} (1.5 × ${submissionData.characterCount})`).join('\n× ')}
+× Fullcolor (${submissionData.productMultiplierValue} × 1)
+${submissionData.addOnsApplied.length > 0 ? submissionData.addOnsApplied.map(addOn => `+ ${capitalizeFirstLetter(addOn)} (1.5 × 1)`).join('\n') : ''}
+---------------------
+= ${submissionData.finalTokenAmount} Tokens
+\`\`\`
+`.trim();
+
+            // Post the confirmation message
+            await interaction.update({
+                content: '✅ Your submission has been confirmed!',
+                components: [],
+            });
+
+            // Post the embed with submission details
+            if (submissionData) {
+                const embed = new EmbedBuilder()
+                    .setColor(0x0099ff)
+                    .setTitle('🎨 Art Submission')
+                    .addFields(
+                        { name: 'Art Title', value: submissionData.fileName, inline: false },
+                        { name: 'User', value: `<@${submissionData.userId}>`, inline: false },
+                        {
+                            name: 'Upload Link',
+                            value: submissionData.fileUrl ? `[View Uploaded Image](${submissionData.fileUrl})` : 'N/A',
+                            inline: false,
+                        },
+                        { name: 'Quest/Event', value: submissionData.questEvent || 'N/A', inline: false },
+                        { name: 'Quest/Event Bonus', value: submissionData.questBonus || 'N/A', inline: false },
+                        {
+                            name: 'Token Tracker Link',
+                            value: user.tokenTracker ? `[Token Tracker](${user.tokenTracker})` : 'N/A',
+                            inline: false,
+                        },
+                        { name: 'Token Calculation', value: breakdownMessage, inline: false }
+                    )
+                    .setImage(submissionData.fileUrl)
+                    .setTimestamp()
+                    .setFooter({ text: 'Art Submission System' });
+
+                await interaction.channel.send({ embeds: [embed] }); // Post the embed in the same channel
+            }
+        } catch (error) {
+            console.error('Error fetching user data or posting embed:', error);
+            if (!interaction.replied && !interaction.deferred) {
+                await interaction.reply({ content: '❌ Error processing submission. Please try again later.', ephemeral: true });
+            }
+        }
     } else if (interaction.customId === 'cancel') {
+        // Handle cancellation
         await interaction.update({
             content: '❌ Your submission has been canceled.',
-            components: []
+            components: [],
         });
-    }    
-  }
 
+        // Clear submission data if needed
+        submissionStore.delete(userId);
+    }
+}
  
 // ------------------- Handle Component Interactions -------------------
 async function handleComponentInteraction(interaction) {

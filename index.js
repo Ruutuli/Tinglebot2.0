@@ -13,6 +13,9 @@ const { connectToTinglebot, connectToInventories } = require('./database/connect
 const scheduler = require('./scheduler');
 const { generateVendingStockList } = require('./database/vendingService');
 const { renameChannels, trackBloodMoonCycle } = require('./scripts/bloodmoon');
+const { handleSelectMenuInteraction } = require('./handlers/selectMenuHandler');
+const { handleModalSubmission } = require('./handlers/modalHandler');
+
 
 // Declare the client variable for use across functions
 let client;
@@ -81,12 +84,17 @@ async function initializeClient() {
 client.on('interactionCreate', async interaction => {
   try {
       if (interaction.isButton()) {
-          await handleComponentInteraction(interaction);
+          await handleComponentInteraction(interaction); // Handles buttons
+      } else if (interaction.isStringSelectMenu()) { // Handles dropdowns
+          console.log(`Dropdown interaction detected: ${interaction.customId}`); // Debugging log
+          await handleSelectMenuInteraction(interaction); 
       } else if (interaction.isCommand()) {
           const command = client.commands.get(interaction.commandName);
-          if (command) await command.execute(interaction);
-      } else if (interaction.isAutocomplete() || interaction.isStringSelectMenu() || interaction.isModalSubmit()) {
-          await handleInteraction(interaction, client);
+          if (command) await command.execute(interaction); // Executes slash commands
+      } else if (interaction.isAutocomplete()) {
+          await handleAutocomplete(interaction); // Handles autocomplete
+      } else if (interaction.isModalSubmit()) {
+          await handleModalSubmission(interaction); // Handles modals
       }
   } catch (error) {
       console.error('❌ Interaction error:', error);

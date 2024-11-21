@@ -19,6 +19,8 @@ const {
 } = require('../handlers/modalHandler');
 const { getBaseSelectMenu, getTypeMultiplierMenu, getProductMultiplierMenu, getAddOnsMenu } = require('../utils/menuUtils');
 const { submissionStore } = require('../utils/storage'); // Ensure submissionStore is properly imported
+const { getCancelButtonRow } = require('./componentHandler');
+
 
 // ------------------- Global Variables -------------------
 // Global variables to store submission-related data
@@ -32,12 +34,22 @@ let typeMultiplierValue = 1;
 let submissionBreakdown = ''; // Added submission breakdown to global variables
 
 // ------------------- Select Menu Interaction Handler -------------------
-// Handles selection menus such as base, type multiplier, product multiplier, and add-ons
 async function handleSelectMenuInteraction(interaction) {
-  const customId = interaction.customId;
+  console.log(`Dropdown interaction detected: ${interaction.customId}`); // Debugging log
+
+  // Handle test dropdown interaction
+  if (interaction.customId === 'test_dropdown') { // Added for handling dropdown
+      const selectedOption = interaction.values[0]; // Get the selected value
+      console.log(`Selected option: ${selectedOption}`); // Debugging log
+      await interaction.reply({ 
+          content: `✅ Dropdown interaction works! You selected: ${selectedOption}`, 
+          ephemeral: true 
+      });
+      return; // Exit after handling
+  }
 
   // ------------------- Base Selection -------------------
-  if (customId === 'baseSelect') {
+  if (interaction.customId === 'baseSelect') {
     const selectedBase = interaction.values[0];
     if (selectedBase !== 'complete') {
       // Add selected base and trigger modal for base count
@@ -63,7 +75,7 @@ async function handleSelectMenuInteraction(interaction) {
   }
 
   // ------------------- Type Multiplier Selection -------------------
-  if (customId === 'typeMultiplierSelect') {
+  if (interaction.customId === 'typeMultiplierSelect') {
     const selectedMultiplier = interaction.values[0];
     if (selectedMultiplier !== 'complete') {
       // Add selected type multiplier and trigger modal for multiplier count
@@ -91,7 +103,7 @@ async function handleSelectMenuInteraction(interaction) {
   }
 
   // ------------------- Product Multiplier Selection -------------------
-  if (customId === 'productMultiplierSelect') {
+  if (interaction.customId === 'productMultiplierSelect') {
     const selectedProductMultiplier = interaction.values[0];
     productMultiplierValue = artModule.productMultipliers[selectedProductMultiplier] || 1;
     submissionBreakdown += `**Product Multiplier:** ${capitalizeFirstLetter(selectedProductMultiplier)} × 1`;
@@ -105,7 +117,7 @@ async function handleSelectMenuInteraction(interaction) {
   }
 
   // ------------------- Add-Ons Selection -------------------
-  if (customId === 'addOnsSelect') {
+  if (interaction.customId === 'addOnsSelect') {
     const selectedAddOn = interaction.values[0];
 
     if (selectedAddOn !== 'complete') {
@@ -154,7 +166,7 @@ async function confirmSubmission(interaction) {
   // Format the token breakdown as a code block
   const breakdownMessage = `
 \`\`\`
-${baseSelections.map(base => `${capitalizeFirstLetter(base)} (15 × ${characterCount})`).join('\n')}
+  ${baseSelections.map(base => `${capitalizeFirstLetter(base)} (15 × ${characterCount})`).join('\n')}
 × ${typeMultiplierSelections.map(multiplier => `${capitalizeFirstLetter(multiplier)} (1.5 × ${characterCount})`).join('\n× ')}
 × Fullcolor (${productMultiplierValue} × 1)
 ${addOnsApplied.length > 0 ? addOnsApplied.map(addOn => `+ ${capitalizeFirstLetter(addOn)} (1.5 × 1)`).join('\n') : ''}

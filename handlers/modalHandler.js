@@ -18,6 +18,8 @@ const {
   getAddOnsMenu 
 } = require('../utils/menuUtils');
 
+const { getCancelButtonRow } = require('./componentHandler');
+
 
 // ------------------- Modal Submission Handler -------------------
 // Handles the response after a modal is submitted
