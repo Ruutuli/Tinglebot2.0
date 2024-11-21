@@ -1,1 +1,15 @@
-{}
+{
+  "1731553133054": {
+    "battleId": "1731553133054",
+    "characters": [
+      "Alden"
+    ],
+    "monster": "Rare Talus",
+    "tier": 7,
+    "monsterHearts": {
+      "max": 14,
+      "current": 14
+    },
+    "progress": "\nBattle initiated! Player turn next."
+  }
+}
