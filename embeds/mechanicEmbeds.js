@@ -1,11 +1,48 @@
 // ------------------- Imports -------------------
+// Discord.js Imports
 const { EmbedBuilder } = require('discord.js');
-const { getCommonEmbedSettings, formatItemDetails } = require('./embedUtils');
-const { monsterMapping } = require('../models/MonsterModel');
+
+// Utility Imports
+const { getCommonEmbedSettings, formatItemDetails, getArticleForItem, DEFAULT_IMAGE_URL, jobActions } = require('./embedUtils');
 const { isValidImageUrl } = require('../utils/validation');
 const { getNoEncounterMessage, typeActionMap } = require('../modules/flavorTextModule');
-const { getArticleForItem, DEFAULT_IMAGE_URL, jobActions } = require('./embedUtils');
 const { capitalizeWords } = require('../modules/formattingModule');
+
+// Model Imports
+const { monsterMapping } = require('../models/MonsterModel');
+
+
+
+
+// ------------------- Function to create Art Submission embed -------------------
+
+const createArtSubmissionEmbed = (submissionData, user, tokenCalculation) => {
+    return new EmbedBuilder()
+        .setColor(0x0099ff)
+        .setTitle('🎨 Art Submission')
+        .addFields(
+            { name: 'Submission ID', value: `\`${submissionData.submissionId || 'N/A'}\``, inline: false },
+            { name: 'Art Title', value: String(submissionData.fileName || 'N/A'), inline: false },
+            { name: 'User', value: `<@${submissionData.userId || 'unknown'}>`, inline: false },
+            {
+                name: 'Upload Link',
+                value: submissionData.fileUrl ? `[View Uploaded Image](${submissionData.fileUrl})` : 'N/A',
+                inline: false,
+            },
+            { name: 'Quest/Event', value: String(submissionData.questEvent || 'N/A'), inline: false },
+            { name: 'Quest/Event Bonus', value: String(submissionData.questBonus || 'N/A'), inline: false },
+            {
+                name: 'Token Tracker Link',
+                value: user.tokenTracker ? `[Token Tracker](${user.tokenTracker})` : 'N/A',
+                inline: false,
+            },
+            { name: 'Token Calculation', value: tokenCalculation || 'N/A', inline: false }
+        )
+        .setImage(submissionData.fileUrl || null)
+        .setTimestamp()
+        .setFooter({ text: 'Art Submission System' });
+};
+
 
 // ------------------- Function to create gather embed -------------------
 const createGatherEmbed = (character, randomItem) => {
@@ -171,6 +208,7 @@ const formatMaterialsList = (materials) => {
 };
 
 module.exports = {
+    createArtSubmissionEmbed,
     createGatherEmbed,
     createTransferEmbed,
     createGiftEmbed,

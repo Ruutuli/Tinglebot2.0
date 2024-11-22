@@ -8,6 +8,7 @@ const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('
 const { resetSubmissionState } = require('../utils/tokenUtils');
 const { saveSubmissionToStorage, submissionStore, retrieveSubmissionFromStorage } = require('../utils/storage');
 const { appendEarnedTokens } = require('../database/tokenService');
+const { processSubmissionTokenCalculation } = require('../utils/tokenUtils');
 
 // ------------------- Helper Function -------------------
 // Capitalizes the first letter of a string
@@ -21,7 +22,13 @@ async function handleSubmissionCompletion(interaction) {
     const submissionData = submissionStore.get(interaction.user.id);
 
     if (!submissionData) {
-      throw new Error('No submission data found for this user.');
+      // New: Attempt to retrieve from persistent storage
+      const submissionId = interaction.message.embeds[0]?.fields?.find(field => field.name === 'Submission ID')?.value;
+      submissionData = retrieveSubmissionFromStorage(submissionId);
+    
+      if (!submissionData) {
+        throw new Error('No submission data found for this user.');
+      }
     }
 
     const { fileUrl, fileName, baseSelections, typeMultiplierSelections, productMultiplierValue, addOnsApplied, characterCount, finalTokenAmount } = submissionData;
@@ -35,45 +42,22 @@ async function handleSubmissionCompletion(interaction) {
     // Upload the image and retrieve the public URL
     const publicImageUrl = await uploadSubmissionImage(fileUrl, fileName);
 
-    // ------------------- Token Calculation -------------------
-    let tokenCalculation = baseSelections
-      .map(base => `${capitalizeFirstLetter(base)} (15 × ${characterCount})`)
-      .join('\n+ ');
+// ------------------- Token Calculation -------------------
 
-    tokenCalculation += `\n× ${typeMultiplierSelections
-      .map(multiplier => `${capitalizeFirstLetter(multiplier)} (1.5 × ${characterCount})`)
-      .join(' + ')}`;
 
-    tokenCalculation += `\n× Fullcolor (${productMultiplierValue} × 1)`;
-
-    if (addOnsApplied.length > 0) {
-      addOnsApplied.forEach(addOn => {
-        tokenCalculation += `\n+ ${capitalizeFirstLetter(addOn)} (1.5 × 1)`; 
-      });
-    }
-
-    tokenCalculation += `\n---------------------\n= ${finalTokenAmount} Tokens`;
+const tokenCalculation = processSubmissionTokenCalculation({
+  baseSelections,
+  typeMultiplierSelections,
+  productMultiplierValue,
+  addOnsApplied,
+  characterCount,
+  finalTokenAmount,
+});
 
     // Use code block format for token calculation
     tokenCalculation = `\`\`\`\n${tokenCalculation}\n\`\`\``;
 
     const tokenTrackerLink = 'https://your-token-tracker-url.com';
-
-    // ------------------- Embed Message -------------------
-    const submissionEmbed = new EmbedBuilder()
-      .setColor('#AA926A')
-      .setTitle('Submission Complete! 🎉')
-      .setImage(publicImageUrl)
-      .addFields(
-        { name: 'User', value: user.tag },
-        { name: 'Submission ID', value: submissionId },
-        { name: 'File Name', value: fileName },
-        { name: 'Upload Link', value: `[Image](${publicImageUrl})` },
-        { name: 'Token Calculation', value: tokenCalculation, inline: false },
-        { name: 'Token Tracker', value: `[Tracker](${tokenTrackerLink})`, inline: false }
-      )
-      .setTimestamp()
-      .setFooter({ text: 'A mod will confirm your submission, and once it’s confirmed, it will show on your token tracker.' });
 
     // ------------------- Store Correct Message URL -------------------
     const sentMessage = await interaction.followUp({
@@ -110,11 +94,19 @@ async function handleSubmissionCompletion(interaction) {
 // Cancels the submission process and resets the state
 async function handleCancelSubmission(interaction) {
   try {
+    const userId = interaction.user.id;
+
+    // Reset and clear submission data
     resetSubmissionState();
+    submissionStore.delete(userId);
+
+    // New: Delete from persistent storage
+    const submissionId = `${userId}-${Date.now()}`;
+    deleteSubmissionFromStorage(submissionId);
 
     await interaction.update({
       content: '🚫 **Submission canceled**. Please restart the process if you wish to submit again.',
-      components: [] // Remove all action components
+      components: [], // Remove all action components
     });
   } catch (error) {
     await interaction.followUp({

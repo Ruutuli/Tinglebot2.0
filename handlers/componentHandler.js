@@ -30,6 +30,9 @@ const { handleTameInteraction, handleMountComponentInteraction } = require('./mo
 // Utility Imports
 const { submissionStore } = require('../utils/storage'); 
 const { capitalizeFirstLetter, capitalizeWords } = require('../modules/formattingModule'); // Formatting utilities
+const { calculateTokens, generateTokenBreakdown } = require('../utils/tokenUtils'); // Corrected imports
+
+const { createArtSubmissionEmbed } = require('../embeds/mechanicEmbeds');
 
 // ------------------- Create Action Row with Cancel Button -------------------
 function getCancelButtonRow() {
@@ -52,82 +55,62 @@ function getConfirmButtonRow() {
 }
 
 // ------------------- Button Interaction Handler -------------------
-// Handles button interactions such as Confirm and Cancel
 async function handleButtonInteraction(interaction) {
     if (interaction.replied || interaction.deferred) return; // Prevent multiple interactions
-
+  
     const userId = interaction.user.id;
     const submissionData = submissionStore.get(userId);
-
+  
     if (interaction.customId === 'confirm') {
-        try {
-            // Fetch user data for token tracker
-            const user = await getUserById(userId);
-
-            // Format the token breakdown as a code block
-            const breakdownMessage = `
-\`\`\`
-${submissionData.baseSelections.map(base => `${capitalizeFirstLetter(base)} (15 × ${submissionData.characterCount})`).join('\n')}
-× ${submissionData.typeMultiplierSelections.map(multiplier => `${capitalizeFirstLetter(multiplier)} (1.5 × ${submissionData.characterCount})`).join('\n× ')}
-× Fullcolor (${submissionData.productMultiplierValue} × 1)
-${submissionData.addOnsApplied.length > 0 ? submissionData.addOnsApplied.map(addOn => `+ ${capitalizeFirstLetter(addOn)} (1.5 × 1)`).join('\n') : ''}
----------------------
-= ${submissionData.finalTokenAmount} Tokens
-\`\`\`
-`.trim();
-
-            // Post the confirmation message
-            await interaction.update({
-                content: '✅ Your submission has been confirmed!',
-                components: [],
-            });
-
-            // Post the embed with submission details
-            if (submissionData) {
-                const embed = new EmbedBuilder()
-                    .setColor(0x0099ff)
-                    .setTitle('🎨 Art Submission')
-                    .addFields(
-                        { name: 'Art Title', value: submissionData.fileName, inline: false },
-                        { name: 'User', value: `<@${submissionData.userId}>`, inline: false },
-                        {
-                            name: 'Upload Link',
-                            value: submissionData.fileUrl ? `[View Uploaded Image](${submissionData.fileUrl})` : 'N/A',
-                            inline: false,
-                        },
-                        { name: 'Quest/Event', value: submissionData.questEvent || 'N/A', inline: false },
-                        { name: 'Quest/Event Bonus', value: submissionData.questBonus || 'N/A', inline: false },
-                        {
-                            name: 'Token Tracker Link',
-                            value: user.tokenTracker ? `[Token Tracker](${user.tokenTracker})` : 'N/A',
-                            inline: false,
-                        },
-                        { name: 'Token Calculation', value: breakdownMessage, inline: false }
-                    )
-                    .setImage(submissionData.fileUrl)
-                    .setTimestamp()
-                    .setFooter({ text: 'Art Submission System' });
-
-                await interaction.channel.send({ embeds: [embed] }); // Post the embed in the same channel
-            }
-        } catch (error) {
-            console.error('Error fetching user data or posting embed:', error);
-            if (!interaction.replied && !interaction.deferred) {
-                await interaction.reply({ content: '❌ Error processing submission. Please try again later.', ephemeral: true });
-            }
+      try {
+        if (!submissionData) {
+          await interaction.reply({
+            content: '❌ Submission data not found. Please try again.',
+            ephemeral: true,
+          });
+          return;
         }
-    } else if (interaction.customId === 'cancel') {
-        // Handle cancellation
-        await interaction.update({
-            content: '❌ Your submission has been canceled.',
-            components: [],
+  
+        // Fetch user data for token tracker
+        const user = await getUserById(userId);
+  
+        // ------------------- Token Calculation -------------------
+        const { totalTokens } = calculateTokens(submissionData);
+        const breakdown = generateTokenBreakdown({
+          ...submissionData,
+          finalTokenAmount: totalTokens,
         });
-
-        // Clear submission data if needed
+  
+        // Update interaction with confirmation
+        await interaction.update({
+          content: '✅ **Your submission has been confirmed!**',
+          components: [],
+        });
+  
+        // ------------------- Generate and Send Embed -------------------
+        const embed = createArtSubmissionEmbed(submissionData, user, breakdown);
+        await interaction.channel.send({ embeds: [embed] });
+  
+        // Clean up submission data
         submissionStore.delete(userId);
+      } catch (error) {
+        console.error('Error processing confirmation:', error);
+        await interaction.reply({
+          content: '❌ **An error occurred while processing your submission. Please try again.**',
+          ephemeral: true,
+        });
+      }
+    } else if (interaction.customId === 'cancel') {
+      // ------------------- Handle Cancellation -------------------
+      await interaction.update({
+        content: '❌ **Your submission has been canceled.**',
+        components: [],
+      });
+  
+      submissionStore.delete(userId); // Clear submission data
     }
-}
- 
+  }
+
 // ------------------- Handle Component Interactions -------------------
 async function handleComponentInteraction(interaction) {
     console.log('Button clicked:', interaction.customId);
