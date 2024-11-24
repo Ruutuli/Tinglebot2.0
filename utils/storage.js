@@ -17,6 +17,7 @@ if (!fs.existsSync(path.join(__dirname, '../data'))) {
 
 // Create the submissions file if it doesn't exist
 if (!fs.existsSync(storageFile)) {
+  console.error('Submissions storage file does not exist. Creating a new one.');
   fs.writeFileSync(storageFile, JSON.stringify({}));
 }
 
@@ -40,15 +41,17 @@ function safeReadJSON(filePath) {
 // Saves a submission to the persistent storage (file system)
 function saveSubmissionToStorage(submissionId, submissionData) {
   const submissions = safeReadJSON(storageFile);
-  submissions[submissionId] = submissionData; // Update submission
-  fs.writeFileSync(storageFile, JSON.stringify(submissions, null, 2)); // Persist data
+  submissions[submissionId] = submissionData;
+  console.log(`Saving submission ID ${submissionId} to storage.`); // Debug
+  fs.writeFileSync(storageFile, JSON.stringify(submissions, null, 2));
 }
 
 // ------------------- Retrieve Submission from Storage -------------------
 // Retrieves a submission by its ID from persistent storage
 function retrieveSubmissionFromStorage(submissionId) {
-  const submissions = safeReadJSON(storageFile);  // Read existing submissions
-  return submissions[submissionId] || null;       // Return the submission or null if not found
+  const submissions = safeReadJSON(storageFile);
+  console.log('Available submission IDs:', Object.keys(submissions)); // Debug
+  return submissions[submissionId] || null;
 }
 
 // ------------------- Delete Submission from Storage -------------------

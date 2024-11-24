@@ -28,7 +28,7 @@ const { syncInventory } = require('../handlers/syncHandler');
 const { handleTameInteraction, handleMountComponentInteraction } = require('./mountComponentHandler');
 
 // Utility Imports
-const { submissionStore } = require('../utils/storage'); 
+const { submissionStore,saveSubmissionToStorage  } = require('../utils/storage'); 
 const { capitalizeFirstLetter, capitalizeWords } = require('../modules/formattingModule'); // Formatting utilities
 const { calculateTokens, generateTokenBreakdown } = require('../utils/tokenUtils'); // Corrected imports
 
@@ -57,59 +57,74 @@ function getConfirmButtonRow() {
 // ------------------- Button Interaction Handler -------------------
 async function handleButtonInteraction(interaction) {
     if (interaction.replied || interaction.deferred) return; // Prevent multiple interactions
-  
+
     const userId = interaction.user.id;
     const submissionData = submissionStore.get(userId);
-  
+
     if (interaction.customId === 'confirm') {
-      try {
-        if (!submissionData) {
-          await interaction.reply({
-            content: '❌ Submission data not found. Please try again.',
-            ephemeral: true,
-          });
-          return;
+        try {
+            if (!submissionData) {
+                await interaction.reply({
+                    content: '❌ Submission data not found. Please try again.',
+                    ephemeral: true,
+                });
+                return;
+            }
+
+            // Fetch user data for token tracker
+            const user = await getUserById(userId);
+
+            // ------------------- Token Calculation -------------------
+            const { totalTokens } = calculateTokens(submissionData);
+            const breakdown = generateTokenBreakdown({
+                ...submissionData,
+                finalTokenAmount: totalTokens,
+            });
+
+            // Update interaction with confirmation (No embed sent here)
+            await interaction.update({
+                content: '✅ **You have confirmed your submission!**\n\n' +
+                '- A mod will review and approve it shortly.\n' +
+                '- Tokens will be added to your tracker upon approval.\n' +
+                '- The bot will DM you when your submission has been approved.',
+                components: [],
+            });
+
+            // ------------------- Generate and Send Embed -------------------
+            const embed = createArtSubmissionEmbed(submissionData, user, breakdown);
+
+            // Ensure embed is only sent once
+            if (!submissionData.embedSent) {
+                const sentMessage = await interaction.channel.send({ embeds: [embed] }); // Sends the embed
+
+            // Save the correct message URL
+            submissionData.messageUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${sentMessage.id}`;
+            submissionData.embedSent = true; // Mark embed as sent
+
+            // Update in-memory store and persistent storage
+            submissionStore.set(submissionData.submissionId, submissionData);
+            saveSubmissionToStorage(submissionData.submissionId, submissionData);
+            }
+
+            // Clean up submission data
+            submissionStore.delete(userId);
+        } catch (error) {
+            console.error('Error processing confirmation:', error);
+            await interaction.reply({
+                content: '❌ **An error occurred while processing your submission. Please try again.**',
+                ephemeral: true,
+            });
         }
-  
-        // Fetch user data for token tracker
-        const user = await getUserById(userId);
-  
-        // ------------------- Token Calculation -------------------
-        const { totalTokens } = calculateTokens(submissionData);
-        const breakdown = generateTokenBreakdown({
-          ...submissionData,
-          finalTokenAmount: totalTokens,
-        });
-  
-        // Update interaction with confirmation
-        await interaction.update({
-          content: '✅ **Your submission has been confirmed!**',
-          components: [],
-        });
-  
-        // ------------------- Generate and Send Embed -------------------
-        const embed = createArtSubmissionEmbed(submissionData, user, breakdown);
-        await interaction.channel.send({ embeds: [embed] });
-  
-        // Clean up submission data
-        submissionStore.delete(userId);
-      } catch (error) {
-        console.error('Error processing confirmation:', error);
-        await interaction.reply({
-          content: '❌ **An error occurred while processing your submission. Please try again.**',
-          ephemeral: true,
-        });
-      }
     } else if (interaction.customId === 'cancel') {
-      // ------------------- Handle Cancellation -------------------
-      await interaction.update({
-        content: '❌ **Your submission has been canceled.**',
-        components: [],
-      });
-  
-      submissionStore.delete(userId); // Clear submission data
+        // ------------------- Handle Cancellation -------------------
+        await interaction.update({
+            content: '❌ **Your submission has been canceled.**',
+            components: [],
+        });
+
+        submissionStore.delete(userId); // Clear submission data
     }
-  }
+}
 
 // ------------------- Handle Component Interactions -------------------
 async function handleComponentInteraction(interaction) {

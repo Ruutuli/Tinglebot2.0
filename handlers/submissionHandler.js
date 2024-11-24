@@ -50,27 +50,35 @@ async function handleSubmissionCompletion(interaction) {
     // Update the final token amount
     submissionData.finalTokenAmount = totalTokens;
 
-    // Save updated submission data to persistent storage
-    saveSubmissionToStorage(submissionData.submissionId, submissionData);
-
-    // Reset in-memory store and send confirmation
-    submissionStore.delete(interaction.user.id);
-    resetSubmissionState();
-
-    const submissionEmbed = {
-      title: 'Submission Complete!',
-      description: `Your submission has been confirmed. Your art has been uploaded successfully and your token count has been finalized.`,
-      fields: [
-        { name: 'Final Token Amount', value: `${totalTokens} Tokens`, inline: true },
-      ],
-      image: { url: fileUrl },
-      color: 0x00ff00,
-    };
-
-    await interaction.followUp({
-      embeds: [submissionEmbed],
+    // Send confirmation message
+    const sentMessage = await interaction.followUp({
+      embeds: [{
+        title: 'Submission Complete!',
+        description: `Your submission has been confirmed. Your art has been uploaded successfully and your token count has been finalized.`,
+        fields: [
+          { name: 'Final Token Amount', value: `${totalTokens} Tokens`, inline: true },
+        ],
+        image: { url: fileUrl },
+        color: 0x00ff00,
+      }],
       components: [],
     });
+
+    // Save updated submission data to persistent storage
+    await saveSubmissionToStorage(submissionData.submissionId, {
+      submissionId: submissionData.submissionId,
+      userId: interaction.user.id,
+      fileUrl: fileUrl,
+      fileName: fileName,
+      messageUrl: sentMessage.url || null, // Save message URL here
+      tokenCalculation: submissionData.tokenCalculation || '',
+      finalTokenAmount: totalTokens,
+      submittedAt: new Date(),
+    });
+
+    // Reset in-memory store
+    submissionStore.delete(interaction.user.id);
+    resetSubmissionState();
   } catch (error) {
     console.error('Error completing submission:', error);
     await interaction.followUp({

@@ -11,11 +11,25 @@ const { capitalizeWords } = require('../modules/formattingModule');
 // Model Imports
 const { monsterMapping } = require('../models/MonsterModel');
 
+// ------------------- Function to create Writing Submission embed -------------------
 
-
+const createWritingSubmissionEmbed = (submissionData) => {
+    return new EmbedBuilder()
+        .setColor(0x00A2E8)
+        .setTitle('📚 Writing Submission')
+        .addFields(
+            { name: 'Submission ID', value: `\`${submissionData.submissionId}\``, inline: false },
+            { name: 'Member', value: `<@${submissionData.userId}>`, inline: true },
+            { name: 'Word Count', value: `${submissionData.wordCount}`, inline: true },
+            { name: 'Token Total', value: `${submissionData.finalTokenAmount} Tokens`, inline: true },
+            { name: 'Submission Link', value: `[View Submission](${submissionData.link})`, inline: false },
+            { name: 'Description', value: submissionData.description, inline: false }
+        )
+        .setTimestamp()
+        .setFooter({ text: 'Writing Submission System' });
+};
 
 // ------------------- Function to create Art Submission embed -------------------
-
 const createArtSubmissionEmbed = (submissionData, user, tokenCalculation) => {
     return new EmbedBuilder()
         .setColor(0x0099ff)
@@ -209,6 +223,7 @@ const formatMaterialsList = (materials) => {
 
 module.exports = {
     createArtSubmissionEmbed,
+    createWritingSubmissionEmbed,
     createGatherEmbed,
     createTransferEmbed,
     createGiftEmbed,

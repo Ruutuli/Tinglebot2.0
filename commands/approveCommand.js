@@ -16,10 +16,15 @@ const fs = require('fs');
 // ------------------- React to Message -------------------
 // Reacts to a message with a specific emoji
 async function reactToMessage(interaction, messageUrl, emoji) {
+  if (!messageUrl || typeof messageUrl !== 'string') {
+    console.error('Invalid message URL:', messageUrl);
+    throw new Error('Message URL is invalid or undefined.');
+  }
   // Extract the channel ID and message ID from the URL
   const messageParts = messageUrl.split('/');
   const channelId = messageParts[5];
   const messageId = messageParts[6];
+  console.log(`Extracted channel ID: ${channelId}, message ID: ${messageId}`);
 
   try {
     console.log(`Reacting to message in channel: ${channelId}, message ID: ${messageId}`);
@@ -65,9 +70,12 @@ async function replyToAdmin(interaction, messageContent) {
 // ------------------- Approve Submission -------------------
 // Handles approving the submission and updating user tokens
 async function approveSubmission(interaction, submissionId) {
+  console.log(`Attempting to retrieve submission with ID: ${submissionId}`); // Debug
+
   const submission = await retrieveSubmissionFromStorage(submissionId);
 
   if (!submission) {
+    console.error(`Submission not found for ID: ${submissionId}`); // Debug
     return replyToAdmin(interaction, `⚠️ Submission with ID \`${submissionId}\` not found.`);
   }
 
@@ -80,6 +88,7 @@ async function approveSubmission(interaction, submissionId) {
 
   const fileName = submission.fileName || submissionId;
   const messageUrl = submission.messageUrl;
+  console.log('Message URL:', messageUrl); // Debug
   const tokenAmount = submission.finalTokenAmount;
 
   try {
@@ -115,6 +124,10 @@ async function denySubmission(interaction, submissionId) {
   }
 
   const messageUrl = submission.messageUrl;
+  if (!messageUrl || typeof messageUrl !== 'string') {
+    console.error('Invalid message URL:', messageUrl);
+    throw new Error('Message URL is invalid or undefined.');
+  }
 
   // React to the message and notify the user
   await reactToMessage(interaction, messageUrl, '❌');

@@ -86,11 +86,16 @@ ${addOnSection.length > 0 ? addOnSection : ''}
   return `\`\`\`\n${breakdown}\n\`\`\``;
 }
 
+// ------------------- Calculate Writing Tokens -------------------
+function calculateWritingTokens(wordCount) {
+  return Math.round(wordCount / 100 * 10); // 10 tokens per 100 words
+}
 
 // ------------------- Exported Functions -------------------
 // Exporting the unified `calculateTokens` and other utility functions.
 module.exports = {
   resetSubmissionState,
   calculateTokens, 
+  calculateWritingTokens,
   generateTokenBreakdown, 
 };

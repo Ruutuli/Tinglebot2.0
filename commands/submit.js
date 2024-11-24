@@ -1,5 +1,5 @@
 // ------------------- Submit Command Handler -------------------
-// Handles the `/submit` command for submitting art and claiming tokens
+// Handles the `/submit` command for submitting art or writing and claiming tokens
 
 // ------------------- Imports -------------------
 // Standard Library Imports
@@ -14,19 +14,19 @@ const { handleModalSubmission } = require('../handlers/modalHandler');
 const { getCancelButtonRow } = require('../handlers/componentHandler');
 
 // Utility Imports
-const { resetSubmissionState, calculateTokens } = require('../utils/tokenUtils');
+const { resetSubmissionState, calculateTokens, calculateWritingTokens } = require('../utils/tokenUtils');
 const { getBaseSelectMenu } = require('../utils/menuUtils');
 const { submissionStore, saveSubmissionToStorage } = require('../utils/storage');
 const { uploadSubmissionImage } = require('../utils/uploadUtils');
+const { createArtSubmissionEmbed, createWritingSubmissionEmbed } = require('../embeds/mechanicEmbeds');
 const User = require('../models/UserModel'); // User model for database queries
 
-
 // ------------------- Command Registration -------------------
-// Defines the `/submit` command, allowing users to submit art and claim tokens.
+// Defines the `/submit` command, allowing users to submit art or writing and claim tokens
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('submit')
-    .setDescription('Submit art and claim tokens.')
+    .setDescription('Submit art or writing to claim tokens.')
     .addSubcommand(subcommand =>
       subcommand
         .setName('art')
@@ -34,108 +34,130 @@ module.exports = {
         .addAttachmentOption(option =>
           option.setName('file')
             .setDescription('Attach the file of the art')
-            .setRequired(true))), // Attachment is required for submission
+            .setRequired(true))) // Attachment is required for art submission
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('writing')
+        .setDescription('Submit writing and claim tokens.')
+        .addStringOption(option =>
+          option.setName('link')
+            .setDescription('Provide a link to your submission.')
+            .setRequired(true))
+        .addIntegerOption(option =>
+          option.setName('word_count')
+            .setDescription('Enter the total word count of your submission.')
+            .setRequired(true))
+        .addStringOption(option =>
+          option.setName('description')
+            .setDescription('Provide a brief description of your submission (optional).'))),
 
   // ------------------- Main Command Execution -------------------
   async execute(interaction) {
-    // ------------------- Defer Reply -------------------
-    try {
-      await interaction.deferReply({ ephemeral: true });
-    } catch (error) {
-      console.error('Error deferring reply:', error);
-      return;
-    }
+    const subcommand = interaction.options.getSubcommand(); // Determine which subcommand was invoked
 
-    // ------------------- Extract User and File Information -------------------
-    const user = interaction.user; // User who triggered the command
-    const attachedFile = interaction.options.getAttachment('file');
-    if (!attachedFile) {
-      await interaction.editReply({
-        content: '❌ **No file attached. Please try again.**',
-      });
-      return;
-    }
+    // ------------------- Handle Art Submission -------------------
+    if (subcommand === 'art') {
+      try {
+        await interaction.deferReply({ ephemeral: true });
 
-    // ------------------- Fetch User Data -------------------
-    let userData;
-    try {
-      userData = await User.findOne({ discordId: user.id });
-      if (!userData) {
-        console.error(`User data not found for Discord ID: ${user.id}`);
+        const user = interaction.user;
+        const attachedFile = interaction.options.getAttachment('file');
+
+        if (!attachedFile) {
+          await interaction.editReply({ content: '❌ **No file attached. Please try again.**' });
+          return;
+        }
+
+        const userData = await User.findOne({ discordId: user.id });
+        if (!userData) {
+          await interaction.editReply({ content: '❌ **User data not found. Please try again later.**' });
+          return;
+        }
+
+        const fileName = path.basename(attachedFile.name);
+        const discordImageUrl = attachedFile.url;
+
+        const googleImageUrl = await uploadSubmissionImage(discordImageUrl, fileName);
+
+        const tokenBreakdown = calculateTokens({
+          baseSelections: [],
+          typeMultiplierSelections: [],
+          productMultiplierValue: 1,
+          addOnsApplied: [],
+          characterCount: 1,
+        });
+
+        const submissionId = `${user.id}-${Date.now()}`;
+        submissionStore.set(submissionId, {
+          submissionId,
+          fileUrl: googleImageUrl,
+          fileName,
+          finalTokenAmount: tokenBreakdown.totalTokens,
+          tokenBreakdown: tokenBreakdown.breakdown,
+          userId: user.id,
+          username: user.username,
+        });
+
+        const embed = createArtSubmissionEmbed(submissionStore.get(submissionId), userData, tokenBreakdown);
+
         await interaction.editReply({
-          content: '❌ **User data not found. Please try again later.**',
+          content: '🎨 **Submission Received!**',
+          embeds: [embed],
           ephemeral: true,
         });
-        return;
+
+        saveSubmissionToStorage(submissionId, submissionStore.get(submissionId));
+        resetSubmissionState();
+
+      } catch (error) {
+        console.error('Error handling art submission:', error);
+        await interaction.editReply({ content: '❌ **Error processing your submission. Please try again later.**' });
       }
-    } catch (error) {
-      console.error(`Error fetching user data for Discord ID: ${user.id}`, error);
-      await interaction.editReply({
-        content: '❌ **An error occurred while fetching user data. Please try again later.**',
-        ephemeral: true,
-      });
-      return;
     }
 
-    // Extract file details
-    const fileName = path.basename(attachedFile.name);
-    const discordImageUrl = attachedFile.url;
+    // ------------------- Handle Writing Submission -------------------
+    if (subcommand === 'writing') {
+      try {
+        await interaction.deferReply({ ephemeral: false });
 
-    // ------------------- Upload Image to Google Cloud Storage -------------------
-    let googleImageUrl;
-    try {
-      googleImageUrl = await uploadSubmissionImage(discordImageUrl, fileName);
-    } catch (error) {
-      console.error('Error uploading image to Google Cloud:', error);
-      await interaction.editReply({
-        content: '❌ **Error uploading image. Please try again later.**',
-        ephemeral: true,
-      });
-      return;
-    }
+        const user = interaction.user;
+        const link = interaction.options.getString('link');
+        const wordCount = interaction.options.getInteger('word_count');
+        const description = interaction.options.getString('description') || 'No description provided.';
 
-    // ------------------- Token Calculation -------------------
-    const tokenBreakdown = calculateTokens({
-      baseSelections: [],
-      typeMultiplierSelections: [],
-      productMultiplierValue: 1,
-      addOnsApplied: [],
-      characterCount: 1,
-    });
+        const userData = await User.findOne({ discordId: user.id });
+        if (!userData) {
+          await interaction.editReply({ content: '❌ **User data not found. Please try again later.**' });
+          return;
+        }
 
-    // ------------------- Store Submission Details -------------------
-    const submissionId = `${user.id}-${Date.now()}`; // Generate a unique submission ID
+        const finalTokenAmount = calculateWritingTokens(wordCount);
 
-    submissionStore.set(submissionId, {
-      submissionId, // Unique ID
-      fileUrl: googleImageUrl, // Uploaded file URL from Google Cloud
-      fileName, // File name from the user's attachment
-      finalTokenAmount: tokenBreakdown.totalTokens, // Total tokens
-      tokenBreakdown: tokenBreakdown.breakdown,    // Token breakdown string
-      userId: user.id, // User's Discord ID
-      username: user.username, // User's username
-    });
+        const submissionId = `${user.id}-${Date.now()}`;
+        submissionStore.set(submissionId, {
+          submissionId,
+          userId: user.id,
+          username: user.username,
+          wordCount,
+          finalTokenAmount,
+          link,
+          description,
+        });
 
-    // Save to persistent storage
-    saveSubmissionToStorage(submissionId, submissionStore.get(submissionId));
-    resetSubmissionState(); // Reset the submission state
+        const embed = createWritingSubmissionEmbed(submissionStore.get(submissionId));
 
-    // ------------------- Create and Send Dropdowns -------------------
-    try {
-      const dropdownMenu = getBaseSelectMenu(false); // Generate the dropdown menu for base selections
-      const cancelButtonRow = getCancelButtonRow(); // Generate a cancel button for user options
+        await interaction.editReply({
+          content: '📚 **Your writing submission has been received!**',
+          embeds: [embed],
+          ephemeral: false,
+        });
 
-      await interaction.editReply({
-        content: `🎨 **Submission Received!**\nPlease select a base to proceed with your art submission.`,
-        components: [dropdownMenu, cancelButtonRow],
-        ephemeral: true,
-      });
-    } catch (error) {
-      console.error('Error displaying dropdown menus:', error);
-      await interaction.editReply({
-        content: '⚠️ **Error displaying dropdown menus. Please try again later.**',
-        ephemeral: true,
-      });
+        saveSubmissionToStorage(submissionId, submissionStore.get(submissionId));
+
+      } catch (error) {
+        console.error('Error handling writing submission:', error);
+        await interaction.editReply({ content: '❌ **Error processing your submission. Please try again later.**' });
+      }
     }
   },
 
