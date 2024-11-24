@@ -19,74 +19,64 @@ function capitalizeFirstLetter(string) {
 // ------------------- Handle Submission Completion -------------------
 async function handleSubmissionCompletion(interaction) {
   try {
-    const submissionData = submissionStore.get(interaction.user.id);
+    // Retrieve submission data from the in-memory store
+    let submissionData = submissionStore.get(interaction.user.id);
 
     if (!submissionData) {
-      // New: Attempt to retrieve from persistent storage
       const submissionId = interaction.message.embeds[0]?.fields?.find(field => field.name === 'Submission ID')?.value;
       submissionData = retrieveSubmissionFromStorage(submissionId);
-    
+
       if (!submissionData) {
         throw new Error('No submission data found for this user.');
       }
     }
 
-    const { fileUrl, fileName, baseSelections, typeMultiplierSelections, productMultiplierValue, addOnsApplied, characterCount, finalTokenAmount } = submissionData;
-    const submissionId = Date.now().toString();
+    const { fileUrl, fileName, baseSelections, typeMultiplierSelections, productMultiplierValue, addOnsApplied, characterCount } = submissionData;
     const user = interaction.user;
 
     if (!fileUrl || !fileName) {
       throw new Error('File URL or File Name missing.');
     }
 
-    // Upload the image and retrieve the public URL
-    const publicImageUrl = await uploadSubmissionImage(fileUrl, fileName);
-
-// ------------------- Token Calculation -------------------
-
-
-const tokenCalculation = processSubmissionTokenCalculation({
-  baseSelections,
-  typeMultiplierSelections,
-  productMultiplierValue,
-  addOnsApplied,
-  characterCount,
-  finalTokenAmount,
-});
-
-    // Use code block format for token calculation
-    tokenCalculation = `\`\`\`\n${tokenCalculation}\n\`\`\``;
-
-    const tokenTrackerLink = 'https://your-token-tracker-url.com';
-
-    // ------------------- Store Correct Message URL -------------------
-    const sentMessage = await interaction.followUp({
-      embeds: [submissionEmbed],
-      components: []
+    // Recalculate tokens
+    const { totalTokens } = calculateTokens({
+      baseSelections: baseSelections || [],
+      typeMultiplierSelections: typeMultiplierSelections || [],
+      productMultiplierValue: productMultiplierValue || 1,
+      addOnsApplied: addOnsApplied || [],
+      characterCount: characterCount || 1,
     });
 
-    await saveSubmissionToStorage(submissionId, {
-      submissionId,
-      userId: interaction.user.id,
-      fileUrl: publicImageUrl,
-      fileName,
-      messageUrl: sentMessage.url,
-      tokenCalculation,
-      finalTokenAmount,
-      submittedAt: new Date(),
-    });
+    // Update the final token amount
+    submissionData.finalTokenAmount = totalTokens;
 
-    resetSubmissionState();
+    // Save updated submission data to persistent storage
+    saveSubmissionToStorage(submissionData.submissionId, submissionData);
+
+    // Reset in-memory store and send confirmation
     submissionStore.delete(interaction.user.id);
+    resetSubmissionState();
 
+    const submissionEmbed = {
+      title: 'Submission Complete!',
+      description: `Your submission has been confirmed. Your art has been uploaded successfully and your token count has been finalized.`,
+      fields: [
+        { name: 'Final Token Amount', value: `${totalTokens} Tokens`, inline: true },
+      ],
+      image: { url: fileUrl },
+      color: 0x00ff00,
+    };
+
+    await interaction.followUp({
+      embeds: [submissionEmbed],
+      components: [],
+    });
   } catch (error) {
     console.error('Error completing submission:', error);
-    if (!interaction.replied) {
-      await interaction.followUp({
-        content: '⚠️ **Error completing submission.** Please try again.',
-        ephemeral: true,
-      });
-    }
+    await interaction.followUp({
+      content: '⚠️ **Error completing submission. Please try again.**',
+      ephemeral: true,
+    });
   }
 }
 

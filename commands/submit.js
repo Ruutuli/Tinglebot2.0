@@ -110,12 +110,6 @@ module.exports = {
       submissionId, // Unique ID
       fileUrl: googleImageUrl, // Uploaded file URL from Google Cloud
       fileName, // File name from the user's attachment
-      baseSelections: [],
-      typeMultiplierSelections: [],
-      productMultiplierValue: 1,
-      addOnsApplied: [],
-      addOnCount: {},
-      characterCount: 1,
       finalTokenAmount: tokenBreakdown.totalTokens, // Total tokens
       tokenBreakdown: tokenBreakdown.breakdown,    // Token breakdown string
       userId: user.id, // User's Discord ID

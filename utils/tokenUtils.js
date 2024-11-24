@@ -75,7 +75,7 @@ function generateTokenBreakdown({ baseSelections, typeMultiplierSelections, prod
   const productMultiplierLabel = capitalizeFirstLetter(productMultiplierValue) || 'Fullcolor';
 
   const breakdown = `
-${baseSection}
+ ${baseSection}
 ${typeMultiplierSection.length > 0 ? '× ' + typeMultiplierSection : ''}
 × ${productMultiplierLabel} (${artModule.productMultipliers[productMultiplierValue] || 1} × 1)
 ${addOnSection.length > 0 ? addOnSection : ''}

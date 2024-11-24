@@ -8,7 +8,7 @@ const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 // Utility Imports
 const { calculateTokens, generateTokenBreakdown } = require('../utils/tokenUtils');
 const { capitalizeFirstLetter } = require('../modules/formattingModule');
-const { submissionStore } = require('../utils/storage');
+const { saveSubmissionToStorage, submissionStore } = require('../utils/storage');
 const { getBaseSelectMenu, getTypeMultiplierMenu, getProductMultiplierMenu, getAddOnsMenu } = require('../utils/menuUtils');
 
 // Handler Imports
@@ -73,35 +73,36 @@ async function handleSelectMenuInteraction(interaction) {
     }
   }
 
-  // ------------------- Product Multiplier Selection -------------------
-  if (customId === 'productMultiplierSelect') {
-    const selectedProductMultiplier = interaction.values[0];
-    productMultiplierValue = selectedProductMultiplier;
+// ------------------- Product Multiplier Selection -------------------
+if (customId === 'productMultiplierSelect') {
+  const selectedProductMultiplier = interaction.values[0];
+  productMultiplierValue = selectedProductMultiplier;
 
-    await interaction.update({
-      content: `🎨 **Product Multiplier Set:** ${capitalizeFirstLetter(selectedProductMultiplier)}`,
-      components: [getAddOnsMenu(true), getCancelButtonRow()],
-    });
-  }
+  await interaction.update({
+    content: `🎨 **Add-On Selection:**\nProduct Multiplier selected: ${capitalizeFirstLetter(selectedProductMultiplier)}. You can now choose add-ons or click "Complete ✅" to finish.`,
+    components: [getAddOnsMenu(true), getCancelButtonRow()],
+  });
+}
 
-  // ------------------- Add-Ons Selection -------------------
-  if (customId === 'addOnsSelect') {
-    const selectedAddOn = interaction.values[0];
+// ------------------- Add-Ons Selection -------------------
+if (customId === 'addOnsSelect') {
+  const selectedAddOn = interaction.values[0];
 
-    if (selectedAddOn !== 'complete') {
-      addOnsApplied.push(selectedAddOn); // Add the selected add-on
-      await triggerAddOnCountModal(interaction, selectedAddOn);
+  if (selectedAddOn !== 'complete') {
+    addOnsApplied.push(selectedAddOn); // Add the selected add-on
+    await triggerAddOnCountModal(interaction, selectedAddOn);
 
-      if (!interaction.replied) {
-        await interaction.update({
-          content: `🎯 **Add-On Added:** ${addOnsApplied.map(capitalizeFirstLetter).join(', ')}`,
-          components: [getAddOnsMenu(true), getCancelButtonRow()],
-        });
-      }
-    } else {
-      await confirmSubmission(interaction); // Proceed to confirmation
+    if (!interaction.replied) {
+      await interaction.update({
+        content: `🎯 **Add-On Selection Updated:** ${addOnsApplied.map(capitalizeFirstLetter).join(', ')}`,
+        components: [getAddOnsMenu(true), getCancelButtonRow()],
+      });
     }
+  } else {
+    await confirmSubmission(interaction); // Proceed to confirmation
   }
+}
+
 }
 
 // ------------------- Confirm Submission -------------------
@@ -137,7 +138,7 @@ async function confirmSubmission(interaction) {
   }
 
   // Update submission data with the calculated tokens
-  submissionStore.set(interaction.user.id, {
+  const updatedSubmissionData = {
     ...submissionData,
     baseSelections,
     typeMultiplierSelections,
@@ -146,7 +147,12 @@ async function confirmSubmission(interaction) {
     addOnCount,
     characterCount,
     finalTokenAmount: totalTokens,
-  });
+  };
+
+  submissionStore.set(interaction.user.id, updatedSubmissionData);
+
+  // Persist updated submission data
+  saveSubmissionToStorage(submissionData.submissionId, updatedSubmissionData);
 
   // Send the token breakdown and confirmation buttons
   await interaction.update({
