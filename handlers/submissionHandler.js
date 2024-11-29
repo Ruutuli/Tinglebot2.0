@@ -71,6 +71,7 @@ async function handleSubmissionCompletion(interaction) {
       fileUrl: fileUrl,
       fileName: fileName,
       messageUrl: sentMessage.url || null, // Save message URL here
+      characterCount, // Ensure this is saved
       tokenCalculation: submissionData.tokenCalculation || '',
       finalTokenAmount: totalTokens,
       submittedAt: new Date(),

@@ -12,51 +12,78 @@ const { capitalizeWords } = require('../modules/formattingModule');
 const { monsterMapping } = require('../models/MonsterModel');
 
 // ------------------- Function to create Writing Submission embed -------------------
-
 const createWritingSubmissionEmbed = (submissionData) => {
     return new EmbedBuilder()
-        .setColor(0x00A2E8)
-        .setTitle('📚 Writing Submission')
+        .setColor('#AA926A')
+        .setTitle(`📚 ${submissionData.title}`)
+        .setAuthor({ 
+            name: `Submitted by: ${submissionData.username}`, 
+            iconURL: submissionData.userAvatar || 'https://via.placeholder.com/128' 
+        })
         .addFields(
             { name: 'Submission ID', value: `\`${submissionData.submissionId}\``, inline: false },
             { name: 'Member', value: `<@${submissionData.userId}>`, inline: true },
             { name: 'Word Count', value: `${submissionData.wordCount}`, inline: true },
             { name: 'Token Total', value: `${submissionData.finalTokenAmount} Tokens`, inline: true },
-            { name: 'Submission Link', value: `[View Submission](${submissionData.link})`, inline: false },
+            { name: 'Submission Link', value: `[View Submission](${submissionData.link})`, inline: true },
+            { name: 'Token Tracker Link', value: submissionData.tokenTracker ? `[Token Tracker](${submissionData.tokenTracker})` : 'N/A', inline: true, },
             { name: 'Description', value: submissionData.description, inline: false }
+
         )
+        .setImage(DEFAULT_IMAGE_URL)
         .setTimestamp()
         .setFooter({ text: 'Writing Submission System' });
 };
 
+
 // ------------------- Function to create Art Submission embed -------------------
 const createArtSubmissionEmbed = (submissionData, user, tokenCalculation) => {
     return new EmbedBuilder()
-        .setColor(0x0099ff)
-        .setTitle('🎨 Art Submission')
+        .setColor('#AA926A')
+        .setTitle(`🎨 ${submissionData.title || submissionData.fileName}`) // Use title or default to file name
+        .setAuthor({ 
+            name: `Submitted by: ${submissionData.username}`, 
+            iconURL: submissionData.userAvatar || 'https://via.placeholder.com/128' 
+        })
         .addFields(
             { name: 'Submission ID', value: `\`${submissionData.submissionId || 'N/A'}\``, inline: false },
-            { name: 'Art Title', value: String(submissionData.fileName || 'N/A'), inline: false },
-            { name: 'User', value: `<@${submissionData.userId || 'unknown'}>`, inline: false },
-            {
-                name: 'Upload Link',
-                value: submissionData.fileUrl ? `[View Uploaded Image](${submissionData.fileUrl})` : 'N/A',
-                inline: false,
+            { name: 'Art Title', value: submissionData.title || submissionData.fileName, inline: false }, // Add title field
+            { name: 'Member', value: `<@${submissionData.userId || 'unknown'}>`, inline: true },
+            { 
+                name: 'Upload Link', 
+                value: submissionData.fileUrl ? `[View Uploaded Image](${submissionData.fileUrl})` : 'N/A', 
+                inline: true 
             },
-            { name: 'Quest/Event', value: String(submissionData.questEvent || 'N/A'), inline: false },
-            { name: 'Quest/Event Bonus', value: String(submissionData.questBonus || 'N/A'), inline: false },
-            {
-                name: 'Token Tracker Link',
-                value: user.tokenTracker ? `[Token Tracker](${user.tokenTracker})` : 'N/A',
-                inline: false,
+            { 
+                name: 'Token Tracker Link', 
+                value: user?.tokenTracker ? `[Token Tracker](${user.tokenTracker})` : 'N/A', 
+                inline: true 
             },
-            { name: 'Token Calculation', value: tokenCalculation || 'N/A', inline: false }
+            { 
+                name: 'Quest/Event', 
+                value: submissionData.questEvent || 'N/A', 
+                inline: true 
+            },
+            { 
+                name: 'Quest/Event Bonus', 
+                value: submissionData.questBonus || 'N/A', 
+                inline: true 
+            },
+            { 
+                name: 'Token Total', 
+                value: `${submissionData.finalTokenAmount || 0} Tokens`, 
+                inline: true 
+            },
+            { 
+                name: 'Token Calculation', 
+                value: tokenCalculation || 'N/A', 
+                inline: false 
+            }
         )
         .setImage(submissionData.fileUrl || null)
         .setTimestamp()
         .setFooter({ text: 'Art Submission System' });
 };
-
 
 // ------------------- Function to create gather embed -------------------
 const createGatherEmbed = (character, randomItem) => {

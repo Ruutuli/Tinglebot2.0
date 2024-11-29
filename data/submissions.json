@@ -1,20 +1,25 @@
 {
-  "211219306137124865-1732440927872": {
-    "submissionId": "211219306137124865-1732440927872",
+  "211219306137124865-1732789925567": {
+    "submissionId": "211219306137124865-1732789925567",
+    "fileUrl": "https://storage.googleapis.com/tinglebot/Submissions/3e221a7b-1902-4cfa-a4a5-f59cb8335751-20200807_003007.jpg",
+    "fileName": "20200807_003007.jpg",
+    "title": "20200807_003007.jpg",
+    "finalTokenAmount": 60,
     "userId": "211219306137124865",
     "username": "ruutuli",
-    "wordCount": 500,
-    "finalTokenAmount": 50,
-    "link": "https://www.rootsofthewild.com/tokens",
-    "description": "No description provided."
-  },
-  "211219306137124865-1732440961547": {
-    "submissionId": "211219306137124865-1732440961547",
-    "userId": "211219306137124865",
-    "username": "ruutuli",
-    "wordCount": 500,
-    "finalTokenAmount": 50,
-    "link": "https://www.rootsofthewild.com/tokens",
-    "description": "No description provided."
+    "userAvatar": "https://cdn.discordapp.com/avatars/211219306137124865/edf10b1b9dd270d45658f493b0477dc7.webp",
+    "category": "art",
+    "questEvent": "N/A",
+    "questBonus": "N/A",
+    "baseSelections": [
+      "chibi"
+    ],
+    "typeMultiplierSelections": [
+      "humanoid"
+    ],
+    "productMultiplierValue": "fullColor",
+    "addOnsApplied": [],
+    "addOnCount": {},
+    "characterCount": 1
   }
 }

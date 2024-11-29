@@ -70,49 +70,49 @@ async function replyToAdmin(interaction, messageContent) {
 // ------------------- Approve Submission -------------------
 // Handles approving the submission and updating user tokens
 async function approveSubmission(interaction, submissionId) {
-  console.log(`Attempting to retrieve submission with ID: ${submissionId}`); // Debug
+  console.log(`Attempting to retrieve submission with ID: ${submissionId}`);
 
   const submission = await retrieveSubmissionFromStorage(submissionId);
 
   if (!submission) {
-    console.error(`Submission not found for ID: ${submissionId}`); // Debug
-    return replyToAdmin(interaction, `⚠️ Submission with ID \`${submissionId}\` not found.`);
+      console.error(`Submission not found for ID: ${submissionId}`);
+      return replyToAdmin(interaction, `⚠️ Submission with ID \`${submissionId}\` not found.`);
   }
 
   const userId = submission.userId;
   const spreadsheetId = await getUserGoogleSheetId(userId);
 
   if (!spreadsheetId) {
-    return replyToAdmin(interaction, `⚠️ No Google Sheets linked for user \`${userId}\`.`);
+      return replyToAdmin(interaction, `⚠️ No Google Sheets linked for user \`${userId}\`.`);
   }
 
-  const fileName = submission.fileName || submissionId;
-  const messageUrl = submission.messageUrl;
-  console.log('Message URL:', messageUrl); // Debug
+  const category = submission.category || 'art'; // Determine if submission is 'art' or 'writing'
   const tokenAmount = submission.finalTokenAmount;
+  const fileName = submission.fileName || submission.title || submissionId; // Use title for writing
+  const messageUrl = submission.messageUrl;
 
   try {
-    // 1. Update tokens in the database
-    await updateTokenBalance(userId, tokenAmount);
-    console.log(`Updated token balance for user ${userId} by ${tokenAmount} tokens.`);
+      // Update token balance
+      await updateTokenBalance(userId, tokenAmount);
 
-    // 2. Append token data to Google Sheets
-    await appendEarnedTokens(userId, fileName, 'art', tokenAmount, messageUrl);
+      // Append token data to Google Sheets
+      await appendEarnedTokens(userId, fileName, category, tokenAmount, submission.link || messageUrl);
 
-    // 3. React with ☑️ to the submission message and notify the user
-    await reactToMessage(interaction, messageUrl, '☑️');
-    await notifyUser(interaction, userId, `☑️ Your submission \`${submissionId}\` has been approved! ${tokenAmount} tokens have been added to your balance.`);
+      // React with ☑️ and notify the user
+      await reactToMessage(interaction, messageUrl, '☑️');
+      await notifyUser(interaction, userId, `☑️ Your submission \`${submissionId}\` has been approved! ${tokenAmount} tokens have been added to your balance.`);
 
-    // 4. Reply to the admin
-    await replyToAdmin(interaction, `☑️ Submission \`${submissionId}\` has been approved and ${tokenAmount} tokens have been added to the user's balance.`);
+      // Reply to the admin
+      await replyToAdmin(interaction, `☑️ Submission \`${submissionId}\` has been approved and ${tokenAmount} tokens have been added to the user's balance.`);
 
-    // Optionally delete the submission from storage after approval
-    await deleteSubmissionFromStorage(submissionId);
+      // Delete the submission from storage
+      await deleteSubmissionFromStorage(submissionId);
   } catch (error) {
-    console.error(`Error updating tokens or Google Sheets: ${error.message}`);
-    return replyToAdmin(interaction, '⚠️ Error updating tokens or Google Sheets. Please try again later.');
+      console.error(`Error updating tokens or Google Sheets: ${error.message}`);
+      return replyToAdmin(interaction, '⚠️ Error updating tokens or Google Sheets. Please try again later.');
   }
 }
+
 
 // ------------------- Deny Submission -------------------
 // Handles denying a submission and notifying the user

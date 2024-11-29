@@ -132,30 +132,27 @@ async function appendEarnedTokens(userId, fileName, category, amount, fileUrl = 
   const tokenTrackerLink = token.tokenTrackerLink;
 
   if (!isValidGoogleSheetsUrl(tokenTrackerLink)) {
-    const errorMessage = 'Invalid Google Sheets URL';
-    console.error(errorMessage, { userId, tokenTrackerLink });
-    throw new Error(errorMessage);
+      throw new Error('Invalid Google Sheets URL');
   }
 
   const spreadsheetId = extractSpreadsheetId(tokenTrackerLink);
   const auth = await authorizeSheets();
 
   const newRow = [
-    fileName,       // Column B - Submission
-    fileUrl,        // Column C - Link
-    category,       // Column D - Category (art, writing, etc.)
-    'earned',       // Column E - Type (earned)
-    `${amount}`     // Column F - Token Amount (earned tokens are positive)
+      fileName,       // Column B - Submission
+      fileUrl,        // Column C - Link
+      category,       // Column D - Category (art, writing, etc.)
+      'earned',       // Column E - Type (earned)
+      `${amount}`     // Column F - Token Amount (earned tokens are positive)
   ];
 
   try {
-    // Append data to Token Tracker!B7:F
-    await appendSheetData(auth, spreadsheetId, 'Token Tracker!B7:F', [newRow]);
+      await appendSheetData(auth, spreadsheetId, 'Token Tracker!B7:F', [newRow]);
   } catch (error) {
-    console.error('Error appending earned token data to Google Sheets:', error.message);
-    throw new Error('Error appending earned token data to the Google Sheet.');
+      throw new Error('Error appending earned token data to the Google Sheet.');
   }
 }
+
 
 // ------------------- Append Spent Tokens to Google Sheets -------------------
 // Appends a new entry with spent token data to the user's Google Sheet in the "Spent" section

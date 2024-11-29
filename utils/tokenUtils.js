@@ -29,62 +29,87 @@ function resetSubmissionState() {
 
 // ------------------- Calculate Tokens -------------------
 function calculateTokens({ baseSelections, typeMultiplierSelections, productMultiplierValue, addOnsApplied, characterCount }) {
-  // ------------------- Validation -------------------
-  const validCharacterCount = characterCount || 1; // Default to 1 if not provided
-  const validBase = Array.isArray(baseSelections) ? baseSelections : [];
-  const validTypeMultiplier = Array.isArray(typeMultiplierSelections)
-    ? typeMultiplierSelections.reduce((total, multiplier) => total + (artModule.typeMultipliers[multiplier] || 1), 0) // Sum of type multipliers
-    : 1;
-  const validProductMultiplier = artModule.productMultipliers[productMultiplierValue] || 1; // Ensure it's fetched from artModule
+  const validCharacterCount = characterCount || 1;
 
- // ------------------- Token Calculation -------------------
-  // Base total
-  const baseTotal = validBase.reduce((total, base) => {
-    const baseAmount = artModule.baseTokens[base] || 0; // Fetch value from artModule
-    return total + baseAmount;
-  }, 0) * validCharacterCount;
+  // Structure to track counts for each selection
+  const baseCounts = baseSelections.reduce((acc, base) => {
+      acc[base] = (acc[base] || 0) + 1;
+      return acc;
+  }, {});
 
-  // Add-on total
-  const addOnTotal = addOnsApplied.reduce(
-    (total, addOn) => total + ((artModule.addOns[addOn] || 0) * validCharacterCount), // Fetch add-on values
-    0
-  );
+  const typeMultiplierCounts = typeMultiplierSelections.reduce((acc, multiplier) => {
+      acc[multiplier] = (acc[multiplier] || 0) + 1;
+      return acc;
+  }, {});
 
-  // PEMDAS: Multiply base total by (1 + type multiplier), then by product multiplier
-  const totalTokens = Math.ceil(baseTotal * (validTypeMultiplier || 1) * validProductMultiplier + addOnTotal);
+  const validProductMultiplier = artModule.productMultipliers[productMultiplierValue] || 1;
+
+  // Calculate base total, accounting for counts and character multiplier
+  const baseTotal = Object.entries(baseCounts).reduce((total, [base, count]) => {
+      const baseValue = artModule.baseTokens[base] || 0;
+      return total + (baseValue * count * validCharacterCount);
+  }, 0);
+
+  // Calculate type multiplier total
+  const typeMultiplierTotal = Object.entries(typeMultiplierCounts).reduce((total, [multiplier, count]) => {
+      const multiplierValue = artModule.typeMultipliers[multiplier] || 1;
+      return total + (multiplierValue * count * validCharacterCount);
+  }, 0);
+
+  // Calculate add-on total
+  const addOnTotal = addOnsApplied.reduce((total, addOn) => {
+      const addOnValue = artModule.addOns[addOn] || 0;
+      return total + (addOnValue * validCharacterCount);
+  }, 0);
+
+  // Apply multipliers (base * typeMultiplier * productMultiplier)
+  const totalTokens = Math.ceil((baseTotal * (typeMultiplierTotal || 1)) * validProductMultiplier + addOnTotal);
 
   return {
-    totalTokens: isNaN(totalTokens) ? 0 : totalTokens, // Fallback to 0 if invalid
+      totalTokens: isNaN(totalTokens) ? 0 : totalTokens,
   };
 }
 
+
+
 // ------------------- Generate Token Breakdown -------------------
 function generateTokenBreakdown({ baseSelections, typeMultiplierSelections, productMultiplierValue, addOnsApplied, characterCount, finalTokenAmount }) {
-  const formatSection = (selections, multiplier) =>
-    selections
-      .map(selection => `${capitalizeFirstLetter(selection)} (${multiplier[selection] || 1} × ${characterCount})`)
+  const baseCounts = baseSelections.reduce((acc, base) => {
+      acc[base] = (acc[base] || 0) + 1;
+      return acc;
+  }, {});
+
+  const typeMultiplierCounts = typeMultiplierSelections.reduce((acc, multiplier) => {
+      acc[multiplier] = (acc[multiplier] || 0) + 1;
+      return acc;
+  }, {});
+
+  const baseSection = Object.entries(baseCounts)
+      .map(([base, count]) => `${capitalizeFirstLetter(base)} (${artModule.baseTokens[base] || 0} × ${count})`)
       .join(' x ');
 
-  const baseSection = formatSection(baseSelections, artModule.baseTokens);
-  const typeMultiplierSection = formatSection(typeMultiplierSelections, artModule.typeMultipliers);
-  const addOnSection = addOnsApplied
-    .map(addOn => `+ ${capitalizeFirstLetter(addOn)} (${artModule.addOns[addOn] || 0} × ${characterCount})`)
-    .join('\n');
+  const typeMultiplierSection = Object.entries(typeMultiplierCounts)
+      .map(([multiplier, count]) => `${capitalizeFirstLetter(multiplier)} (${artModule.typeMultipliers[multiplier] || 1} × ${count})`)
+      .join(' x ');
 
-  // Fetch a label for the product multiplier
+  const addOnSection = addOnsApplied
+      .map(addOn => `+ ${capitalizeFirstLetter(addOn)} (${artModule.addOns[addOn] || 0} × ${characterCount})`)
+      .join('\n');
+
   const productMultiplierLabel = capitalizeFirstLetter(productMultiplierValue) || 'Fullcolor';
 
-  const breakdown = `
- ${baseSection}
+  return `
+\`\`\`
+${baseSection}
 ${typeMultiplierSection.length > 0 ? '× ' + typeMultiplierSection : ''}
 × ${productMultiplierLabel} (${artModule.productMultipliers[productMultiplierValue] || 1} × 1)
 ${addOnSection.length > 0 ? addOnSection : ''}
 ---------------------
 = ${finalTokenAmount} Tokens
-`.trim();
-
-  return `\`\`\`\n${breakdown}\n\`\`\``;
+\`\`\`
+  `.trim();
 }
+
 
 // ------------------- Calculate Writing Tokens -------------------
 function calculateWritingTokens(wordCount) {

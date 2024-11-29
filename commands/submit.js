@@ -33,8 +33,16 @@ module.exports = {
         .setDescription('Submit art and claim tokens.')
         .addAttachmentOption(option =>
           option.setName('file')
-            .setDescription('Attach the file of the art')
-            .setRequired(true))) // Attachment is required for art submission
+            .setDescription('Attach the file of the art.')
+            .setRequired(true))
+        .addStringOption(option =>
+          option.setName('title')
+            .setDescription('Provide a title for your art submission (defaults to file name if not provided).')
+            .setRequired(false))
+        .addStringOption(option =>
+          option.setName('questid')
+            .setDescription('Provide a quest ID if this submission is for a quest.')
+            .setRequired(false)))
     .addSubcommand(subcommand =>
       subcommand
         .setName('writing')
@@ -48,8 +56,17 @@ module.exports = {
             .setDescription('Enter the total word count of your submission.')
             .setRequired(true))
         .addStringOption(option =>
+          option.setName('title')
+            .setDescription('Provide a title for your writing submission.')
+            .setRequired(false))
+        .addStringOption(option =>
           option.setName('description')
-            .setDescription('Provide a brief description of your submission (optional).'))),
+            .setDescription('Provide a brief description of your submission.')
+            .setRequired(false))
+        .addStringOption(option =>
+          option.setName('questid')
+            .setDescription('Provide a quest ID if this submission is for a quest.')
+            .setRequired(false))),
 
   // ------------------- Main Command Execution -------------------
   async execute(interaction) {
@@ -62,12 +79,16 @@ module.exports = {
 
         const user = interaction.user;
         const attachedFile = interaction.options.getAttachment('file');
+        const title = interaction.options.getString('title') || attachedFile.name; // Default to file name if no title is provided
+        const questId = interaction.options.getString('questid') || 'N/A';
 
+        // Check if a file is attached
         if (!attachedFile) {
           await interaction.editReply({ content: '❌ **No file attached. Please try again.**' });
           return;
         }
 
+        // Fetch user data from the database
         const userData = await User.findOne({ discordId: user.id });
         if (!userData) {
           await interaction.editReply({ content: '❌ **User data not found. Please try again later.**' });
@@ -77,8 +98,10 @@ module.exports = {
         const fileName = path.basename(attachedFile.name);
         const discordImageUrl = attachedFile.url;
 
+        // Upload the image to Google Drive or cloud storage
         const googleImageUrl = await uploadSubmissionImage(discordImageUrl, fileName);
 
+        // Calculate tokens for the art submission
         const tokenBreakdown = calculateTokens({
           baseSelections: [],
           typeMultiplierSelections: [],
@@ -87,25 +110,35 @@ module.exports = {
           characterCount: 1,
         });
 
+        // Create a unique submission ID
         const submissionId = `${user.id}-${Date.now()}`;
         submissionStore.set(submissionId, {
           submissionId,
           fileUrl: googleImageUrl,
           fileName,
+          title,
           finalTokenAmount: tokenBreakdown.totalTokens,
           tokenBreakdown: tokenBreakdown.breakdown,
           userId: user.id,
           username: user.username,
+          userAvatar: user.displayAvatarURL({ dynamic: true }),
+          category: 'art',
+          questEvent: questId,
+          questBonus: 'N/A',
+          tokenCalculation: tokenBreakdown.breakdown,
         });
 
-        const embed = createArtSubmissionEmbed(submissionStore.get(submissionId), userData, tokenBreakdown);
+        // Generate the dropdown menu and cancel button for user options
+        const dropdownMenu = getBaseSelectMenu(false);
+        const cancelButtonRow = getCancelButtonRow();
 
         await interaction.editReply({
-          content: '🎨 **Submission Received!**',
-          embeds: [embed],
+          content: '🎨 **Submission Received!**\nPlease select a base to proceed with your art submission.',
+          components: [dropdownMenu, cancelButtonRow],
           ephemeral: true,
         });
 
+        // Save the submission to persistent storage
         saveSubmissionToStorage(submissionId, submissionStore.get(submissionId));
         resetSubmissionState();
 
@@ -121,37 +154,48 @@ module.exports = {
         await interaction.deferReply({ ephemeral: false });
 
         const user = interaction.user;
+        const title = interaction.options.getString('title') || 'Untitled';
         const link = interaction.options.getString('link');
         const wordCount = interaction.options.getInteger('word_count');
         const description = interaction.options.getString('description') || 'No description provided.';
+        const questId = interaction.options.getString('questid') || 'N/A';
 
+        // Fetch user data from the database
         const userData = await User.findOne({ discordId: user.id });
         if (!userData) {
           await interaction.editReply({ content: '❌ **User data not found. Please try again later.**' });
           return;
         }
 
+        // Calculate tokens for the writing submission
         const finalTokenAmount = calculateWritingTokens(wordCount);
 
+        // Create a unique submission ID
         const submissionId = `${user.id}-${Date.now()}`;
         submissionStore.set(submissionId, {
           submissionId,
           userId: user.id,
           username: user.username,
+          userAvatar: user.displayAvatarURL({ dynamic: true }),
+          category: 'writing',
+          title,
           wordCount,
           finalTokenAmount,
           link,
           description,
+          questEvent: questId,
+          tokenTracker: userData.tokenTracker || null,
         });
 
+        // Generate an embed for the writing submission
         const embed = createWritingSubmissionEmbed(submissionStore.get(submissionId));
 
         await interaction.editReply({
-          content: '📚 **Your writing submission has been received!**',
           embeds: [embed],
           ephemeral: false,
         });
 
+        // Save the submission to persistent storage
         saveSubmissionToStorage(submissionId, submissionStore.get(submissionId));
 
       } catch (error) {

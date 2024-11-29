@@ -32,10 +32,10 @@ async function handleModalSubmission(interaction) {
     global.characterCount = baseCount; // Store base count globally
 
     await interaction.update({
-      content: `☑️  **${baseCount} base(s)** selected. Select another base or click "Next Section ➡️" when you are done.`,
-      components: [getBaseSelectMenu(true), getCancelButtonRow()]
+        content: `☑️  **${baseCount} base(s)** selected. Select another base or click "Next Section ➡️" when you are done.`,
+        components: [getBaseSelectMenu(true), getCancelButtonRow()],
     });
-  }
+}
 
   // Handle the multiplier count modal submission
   if (customId === 'multiplierCountModal') {
