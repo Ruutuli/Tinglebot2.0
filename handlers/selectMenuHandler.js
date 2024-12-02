@@ -107,64 +107,68 @@ if (customId === 'addOnsSelect') {
 
 // ------------------- Confirm Submission -------------------
 // Finalizes the submission process and waits for confirmation or cancellation
+// ------------------- Confirm Submission -------------------
 async function confirmSubmission(interaction) {
+  const userId = interaction.user.id;
+  const submissionData = submissionStore.get(userId);
+
+  if (!submissionData) {
+      console.error('Submission data not found for user:', userId);
+      await interaction.reply({
+          content: '❌ **Submission data not found. Please restart the submission process.**',
+          ephemeral: true,
+      });
+      return;
+  }
+
+  // Retrieve counts from submission data
+  const { characterCount = 1, typeMultiplierCount = 1 } = submissionData;
+
   const { totalTokens } = calculateTokens({
-    baseSelections,
-    typeMultiplierSelections,
-    productMultiplierValue,
-    addOnsApplied,
-    characterCount,
+      baseSelections,
+      typeMultiplierSelections,
+      productMultiplierValue,
+      addOnsApplied,
+      characterCount,
   });
 
   const breakdownMessage = generateTokenBreakdown({
-    baseSelections,
-    typeMultiplierSelections,
-    productMultiplierValue,
-    addOnsApplied,
-    characterCount,
-    finalTokenAmount: totalTokens,
+      baseSelections,
+      typeMultiplierSelections,
+      productMultiplierValue,
+      addOnsApplied,
+      characterCount,
+      finalTokenAmount: totalTokens,
   });
 
-  // Retrieve submission data from the store
-  const submissionData = Array.from(submissionStore.values()).find(data => data.userId === interaction.user.id);
-
-  if (!submissionData) {
-    console.error('Submission data not found for user:', interaction.user.id);
-    await interaction.reply({
-      content: '❌ **Submission data not found. Please restart the submission process.**',
-      ephemeral: true,
-    });
-    return;
-  }
-
-  // Update submission data with the calculated tokens
+  // Update submission data with calculated tokens
   const updatedSubmissionData = {
-    ...submissionData,
-    baseSelections,
-    typeMultiplierSelections,
-    productMultiplierValue,
-    addOnsApplied,
-    addOnCount,
-    characterCount,
-    finalTokenAmount: totalTokens,
+      ...submissionData,
+      baseSelections,
+      typeMultiplierSelections,
+      productMultiplierValue,
+      addOnsApplied,
+      characterCount,
+      finalTokenAmount: totalTokens,
   };
 
-  submissionStore.set(interaction.user.id, updatedSubmissionData);
+  submissionStore.set(userId, updatedSubmissionData);
 
   // Persist updated submission data
   saveSubmissionToStorage(submissionData.submissionId, updatedSubmissionData);
 
   // Send the token breakdown and confirmation buttons
   await interaction.update({
-    content: `${breakdownMessage}\n\n☑️ **Final Token Calculation:** ${totalTokens} Tokens`,
-    components: [
-      new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('confirm').setLabel('✅ Confirm').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId('cancel').setLabel('❌ Cancel').setStyle(ButtonStyle.Danger),
-      ),
-    ],
+      content: `${breakdownMessage}\n\n☑️ **Final Token Calculation:** ${totalTokens} Tokens`,
+      components: [
+          new ActionRowBuilder().addComponents(
+              new ButtonBuilder().setCustomId('confirm').setLabel('✅ Confirm').setStyle(ButtonStyle.Success),
+              new ButtonBuilder().setCustomId('cancel').setLabel('❌ Cancel').setStyle(ButtonStyle.Danger),
+          ),
+      ],
   });
 }
+
 
 // ------------------- Exported Functions -------------------
 module.exports = {

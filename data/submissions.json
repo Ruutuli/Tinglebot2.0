@@ -1,25 +1,41 @@
 {
-  "211219306137124865-1732789925567": {
-    "submissionId": "211219306137124865-1732789925567",
-    "fileUrl": "https://storage.googleapis.com/tinglebot/Submissions/3e221a7b-1902-4cfa-a4a5-f59cb8335751-20200807_003007.jpg",
-    "fileName": "20200807_003007.jpg",
-    "title": "20200807_003007.jpg",
-    "finalTokenAmount": 60,
+  "211219306137124865-1733175719398": {
+    "submissionId": "211219306137124865-1733175719398",
+    "fileUrl": "https://storage.googleapis.com/tinglebot/Submissions/4ca826bd-e68c-4a07-bea9-c88a69fc5a3a-neebe_akene.png",
+    "fileName": "neebe_akene.png",
+    "title": "neebe_akene.png",
+    "finalTokenAmount": 0,
     "userId": "211219306137124865",
     "username": "ruutuli",
     "userAvatar": "https://cdn.discordapp.com/avatars/211219306137124865/edf10b1b9dd270d45658f493b0477dc7.webp",
     "category": "art",
     "questEvent": "N/A",
-    "questBonus": "N/A",
+    "questBonus": "N/A"
+  },
+  "211219306137124865-1733175865977": {
+    "submissionId": "211219306137124865-1733175865977",
+    "fileUrl": "https://storage.googleapis.com/tinglebot/Submissions/0c59007e-36d4-41b3-8702-c3a9597fcfe8-neebe_akene.png",
+    "fileName": "neebe_akene.png",
+    "title": "neebe_akene.png",
+    "finalTokenAmount": 0,
+    "userId": "211219306137124865",
+    "username": "ruutuli",
+    "userAvatar": "https://cdn.discordapp.com/avatars/211219306137124865/edf10b1b9dd270d45658f493b0477dc7.webp",
+    "category": "art",
+    "questEvent": "N/A",
+    "questBonus": "N/A"
+  },
+  "undefined": {
+    "characterCount": 2,
+    "typeMultiplierCount": 2,
     "baseSelections": [
       "chibi"
     ],
     "typeMultiplierSelections": [
       "humanoid"
     ],
-    "productMultiplierValue": "fullColor",
+    "productMultiplierValue": "monochrome",
     "addOnsApplied": [],
-    "addOnCount": {},
-    "characterCount": 1
+    "finalTokenAmount": 60
   }
 }

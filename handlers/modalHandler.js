@@ -19,6 +19,7 @@ const {
 } = require('../utils/menuUtils');
 
 const { getCancelButtonRow } = require('./componentHandler');
+const { submissionStore } = require('../utils/storage');
 
 
 // ------------------- Modal Submission Handler -------------------
@@ -26,10 +27,16 @@ const { getCancelButtonRow } = require('./componentHandler');
 async function handleModalSubmission(interaction) {
   const customId = interaction.customId;
 
-  // Handle the base count modal submission
-  if (customId === 'baseCountModal') {
-    const baseCount = parseInt(interaction.fields.getTextInputValue('baseCountInput'), 10) || 1;
-    global.characterCount = baseCount; // Store base count globally
+// Handle the base count modal submission
+if (customId === 'baseCountModal') {
+  const baseCount = parseInt(interaction.fields.getTextInputValue('baseCountInput'), 10) || 1;
+
+
+    // Update the submission data in the store
+    const userId = interaction.user.id;
+    const submissionData = submissionStore.get(userId) || {};
+    submissionData.characterCount = baseCount; // Update character count for base
+    submissionStore.set(userId, submissionData);
 
     await interaction.update({
         content: `☑️  **${baseCount} base(s)** selected. Select another base or click "Next Section ➡️" when you are done.`,
@@ -37,16 +44,20 @@ async function handleModalSubmission(interaction) {
     });
 }
 
-  // Handle the multiplier count modal submission
-  if (customId === 'multiplierCountModal') {
-    const multiplierCount = parseInt(interaction.fields.getTextInputValue('multiplierCountInput'), 10) || 1;
-    global.typeMultiplierCount = multiplierCount; // Store multiplier count globally
+ // Handle the multiplier count modal submission
+ if (customId === 'multiplierCountModal') {
+  const multiplierCount = parseInt(interaction.fields.getTextInputValue('multiplierCountInput'), 10) || 1;
 
-    await interaction.update({
+  const userId = interaction.user.id;
+  const submissionData = submissionStore.get(userId) || {};
+  submissionData.typeMultiplierCount = multiplierCount; // Correctly store multiplier count
+  submissionStore.set(userId, submissionData);
+
+  await interaction.update({
       content: `☑️  **${multiplierCount} type multiplier(s)** selected. Select another Type Multiplier or click "Next Section ➡️" when you are done.`,
-      components: [getTypeMultiplierMenu(true), getCancelButtonRow()]
-    });
-  }
+      components: [getTypeMultiplierMenu(true), getCancelButtonRow()],
+  });
+}
 
   // Handle the add-on count modal submission
   if (customId.startsWith('addOnCountModal_')) {
