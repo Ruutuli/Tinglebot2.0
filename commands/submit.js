@@ -110,36 +110,37 @@ module.exports = {
           characterCount: 1,
         });
 
-// Generate a unique submission ID
-const submissionId = `${user.id}-${Date.now()}`;
-
-// Debug log for submission ID
-console.log('Generated Submission ID:', submissionId);
-
-// Store in submissionStore
-submissionStore.set(submissionId, {
-    submissionId, // Include the submission ID
-    fileUrl: googleImageUrl, // Ensure fileUrl is included
-    fileName,
-    title,
-    userId: user.id,
-    username: user.username,
-    userAvatar: user.displayAvatarURL({ dynamic: true }), // Ensure this is correct
-    category: 'art',
-    questEvent: questId,
-    questBonus: 'N/A',
-    baseSelections: [],
-    typeMultiplierSelections: [],
-    productMultiplierValue: 'default',
-    addOnsApplied: [],
-    characterCount: 1,
-    typeMultiplierCount: 1,
-    finalTokenAmount: 0,
-    tokenCalculation: 'N/A',
-});
-
-// Save to persistent storage
-saveSubmissionToStorage(submissionId, submissionStore.get(submissionId));
+        const submissionId = `${user.id}-${Date.now()}`; // Generate unique submission ID
+        console.log('Generated Submission ID:', submissionId);
+        
+        const submissionData = {
+            submissionId,
+            fileUrl: googleImageUrl,
+            fileName,
+            title,
+            userId: user.id,
+            username: user.username,
+            userAvatar: user.displayAvatarURL({ dynamic: true }),
+            category: 'art',
+            questEvent: 'N/A',
+            questBonus: 'N/A',
+            baseSelections: [],
+            typeMultiplierSelections: [],
+            productMultiplierValue: 'default',
+            addOnsApplied: [],
+            characterCount: 1,
+            typeMultiplierCount: 1,
+            finalTokenAmount: 0,
+            tokenCalculation: 'N/A',
+        };
+        
+        // Save submission data to memory and storage
+        submissionStore.set(user.id, submissionData);
+        saveSubmissionToStorage(submissionId, submissionData);
+        
+        console.log('Submission initialized and stored:', submissionData);
+        
+        
 
         // Generate the dropdown menu and cancel button for user options
         const dropdownMenu = getBaseSelectMenu(false);
@@ -184,7 +185,6 @@ saveSubmissionToStorage(submissionId, submissionStore.get(submissionId));
         const finalTokenAmount = calculateWritingTokens(wordCount);
 
         // Create a unique submission ID
-        const submissionId = `${user.id}-${Date.now()}`;
         submissionStore.set(submissionId, {
           submissionId,
           userId: user.id,
