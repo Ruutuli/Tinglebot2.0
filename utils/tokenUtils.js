@@ -55,7 +55,7 @@ function calculateTokens({ baseSelections, typeMultiplierSelections, productMult
   const typeMultiplierTotal = Object.entries(typeMultiplierCounts).reduce((total, [multiplier, count]) => {
     const multiplierValue = artModule.typeMultipliers[multiplier] || 1;
     return total * Math.pow(multiplierValue, count); // Use multiplication logic for multipliers
-  }, 1);
+  }, 1);  
 
   // Calculate add-on total
   const addOnTotal = addOnsApplied.reduce((total, addOn) => {
@@ -88,9 +88,14 @@ function generateTokenBreakdown({ baseSelections, typeMultiplierSelections, prod
     .map(([base, count]) => `${capitalizeFirstLetter(base)} (${artModule.baseTokens[base] || 0} × ${characterCount || 1})`)
     .join(' x ');
 
-  const typeMultiplierSection = Object.entries(typeMultiplierCounts)
-    .map(([multiplier, count]) => `${capitalizeFirstLetter(multiplier)} (${artModule.typeMultipliers[multiplier] || 1} × ${count})`)
+    const typeMultiplierSection = Object.entries(typeMultiplierCounts)
+    .map(([multiplier, count]) => {
+      const multiplierValue = artModule.typeMultipliers[multiplier] || 1;
+      const appliedMultiplier = multiplierValue * (typeMultiplierCount || count); // Use both count and multiplier
+      return `${capitalizeFirstLetter(multiplier)} (${multiplierValue} × ${typeMultiplierCount || count})`;
+    })
     .join(' x ');
+  
 
   const addOnSection = addOnsApplied
     .map(addOn => `+ ${capitalizeFirstLetter(addOn)} (${artModule.addOns[addOn] || 0} × ${characterCount})`)

@@ -125,21 +125,23 @@ async function confirmSubmission(interaction) {
   const { characterCount = 1, typeMultiplierCount = 1 } = submissionData;
 
   const { totalTokens } = calculateTokens({
-      baseSelections,
-      typeMultiplierSelections,
-      productMultiplierValue,
-      addOnsApplied,
-      characterCount,
-  });
+    baseSelections,
+    typeMultiplierSelections,
+    productMultiplierValue,
+    addOnsApplied,
+    characterCount,
+    typeMultiplierCount,
+});
 
-  const breakdownMessage = generateTokenBreakdown({
-      baseSelections,
-      typeMultiplierSelections,
-      productMultiplierValue,
-      addOnsApplied,
-      characterCount,
-      finalTokenAmount: totalTokens,
-  });
+const breakdownMessage = generateTokenBreakdown({
+  baseSelections,
+  typeMultiplierSelections,
+  productMultiplierValue,
+  addOnsApplied,
+  characterCount,
+  typeMultiplierCount,
+  finalTokenAmount: totalTokens,
+});
 
   // Update submission data with calculated tokens
   const updatedSubmissionData = {

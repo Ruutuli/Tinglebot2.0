@@ -49,11 +49,7 @@ const createArtSubmissionEmbed = (submissionData, user, tokenCalculation) => {
             { name: 'Submission ID', value: `\`${submissionData.submissionId || 'N/A'}\``, inline: false },
             { name: 'Art Title', value: submissionData.title || submissionData.fileName, inline: false }, // Add title field
             { name: 'Member', value: `<@${submissionData.userId || 'unknown'}>`, inline: true },
-            { 
-                name: 'Upload Link', 
-                value: submissionData.fileUrl ? `[View Uploaded Image](${submissionData.fileUrl})` : 'N/A', 
-                inline: true 
-            },
+            { name: 'Upload Link', value: submissionData.fileUrl ? `[View Uploaded Image](${submissionData.fileUrl})` : 'N/A', inline: true },
             { 
                 name: 'Token Tracker Link', 
                 value: user?.tokenTracker ? `[Token Tracker](${user.tokenTracker})` : 'N/A', 

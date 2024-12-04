@@ -24,12 +24,17 @@ async function handleSubmissionCompletion(interaction) {
 
     if (!submissionData) {
       const submissionId = interaction.message.embeds[0]?.fields?.find(field => field.name === 'Submission ID')?.value;
+  
+      console.log('Submission ID retrieved from message embed:', submissionId);
+  
       submissionData = retrieveSubmissionFromStorage(submissionId);
-
+  
       if (!submissionData) {
-        throw new Error('No submission data found for this user.');
+          console.error('No submission data found in memory or storage:', { submissionId });
+          throw new Error('No submission data found for this user.');
       }
-    }
+  }
+  
 
     const { fileUrl, fileName, baseSelections, typeMultiplierSelections, productMultiplierValue, addOnsApplied, characterCount } = submissionData;
     const user = interaction.user;
@@ -126,6 +131,7 @@ async function handleSubmitAction(interaction) {
     const submissionId = interaction.message.embeds[0]?.fields?.find(field => field.name === 'Submission ID')?.value;
 
     if (!submissionId) {
+      console.error('submissionhandler.js Submission ID is undefined', submissionData);
       if (!interaction.replied) {
         return interaction.reply({
           content: `⚠️ Submission ID not found.`,

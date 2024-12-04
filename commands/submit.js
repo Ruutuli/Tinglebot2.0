@@ -110,23 +110,36 @@ module.exports = {
           characterCount: 1,
         });
 
-        // Create a unique submission ID
-        const submissionId = `${user.id}-${Date.now()}`;
-        submissionStore.set(submissionId, {
-          submissionId,
-          fileUrl: googleImageUrl,
-          fileName,
-          title,
-          finalTokenAmount: tokenBreakdown.totalTokens,
-          tokenBreakdown: tokenBreakdown.breakdown,
-          userId: user.id,
-          username: user.username,
-          userAvatar: user.displayAvatarURL({ dynamic: true }),
-          category: 'art',
-          questEvent: questId,
-          questBonus: 'N/A',
-          tokenCalculation: tokenBreakdown.breakdown,
-        });
+// Generate a unique submission ID
+const submissionId = `${user.id}-${Date.now()}`;
+
+// Debug log for submission ID
+console.log('Generated Submission ID:', submissionId);
+
+// Store in submissionStore
+submissionStore.set(submissionId, {
+    submissionId, // Include the submission ID
+    fileUrl: googleImageUrl, // Ensure fileUrl is included
+    fileName,
+    title,
+    userId: user.id,
+    username: user.username,
+    userAvatar: user.displayAvatarURL({ dynamic: true }), // Ensure this is correct
+    category: 'art',
+    questEvent: questId,
+    questBonus: 'N/A',
+    baseSelections: [],
+    typeMultiplierSelections: [],
+    productMultiplierValue: 'default',
+    addOnsApplied: [],
+    characterCount: 1,
+    typeMultiplierCount: 1,
+    finalTokenAmount: 0,
+    tokenCalculation: 'N/A',
+});
+
+// Save to persistent storage
+saveSubmissionToStorage(submissionId, submissionStore.get(submissionId));
 
         // Generate the dropdown menu and cancel button for user options
         const dropdownMenu = getBaseSelectMenu(false);

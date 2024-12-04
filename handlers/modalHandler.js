@@ -50,7 +50,7 @@ if (customId === 'baseCountModal') {
 
   const userId = interaction.user.id;
   const submissionData = submissionStore.get(userId) || {};
-  submissionData.typeMultiplierCount = multiplierCount; // Correctly store multiplier count
+  submissionData.typeMultiplierCount = multiplierCount; // Store multiplier count
   submissionStore.set(userId, submissionData);
 
   await interaction.update({

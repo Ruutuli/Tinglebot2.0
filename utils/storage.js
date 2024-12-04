@@ -40,11 +40,15 @@ function safeReadJSON(filePath) {
 // ------------------- Save Submission to Storage -------------------
 // Saves a submission to the persistent storage (file system)
 function saveSubmissionToStorage(submissionId, submissionData) {
+  if (!submissionId || !submissionData) {
+      console.error('Invalid data passed to saveSubmissionToStorage:', { submissionId, submissionData });
+      return;
+  }
   const submissions = safeReadJSON(storageFile);
   submissions[submissionId] = submissionData;
-  console.log(`Saving submission ID ${submissionId} to storage.`); // Debug
   fs.writeFileSync(storageFile, JSON.stringify(submissions, null, 2));
 }
+
 
 // ------------------- Retrieve Submission from Storage -------------------
 // Retrieves a submission by its ID from persistent storage
