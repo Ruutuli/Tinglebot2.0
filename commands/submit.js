@@ -110,7 +110,7 @@ module.exports = {
           characterCount: 1,
         });
 
-        const submissionId = `${user.id}-${Date.now()}`; // Generate unique submission ID
+        const submissionId = `${user.id}-${Date.now()}`;
         console.log('Generated Submission ID:', submissionId);
         
         const submissionData = {
@@ -122,7 +122,7 @@ module.exports = {
             username: user.username,
             userAvatar: user.displayAvatarURL({ dynamic: true }),
             category: 'art',
-            questEvent: 'N/A',
+            questEvent: questId,
             questBonus: 'N/A',
             baseSelections: [],
             typeMultiplierSelections: [],
@@ -134,11 +134,9 @@ module.exports = {
             tokenCalculation: 'N/A',
         };
         
-        // Save submission data to memory and storage
+        console.log('Storing submission data:', submissionData);
         submissionStore.set(user.id, submissionData);
         saveSubmissionToStorage(submissionId, submissionData);
-        
-        console.log('Submission initialized and stored:', submissionData);
         
         
 
@@ -165,26 +163,27 @@ module.exports = {
     // ------------------- Handle Writing Submission -------------------
     if (subcommand === 'writing') {
       try {
-        await interaction.deferReply({ ephemeral: false });
-
+        await interaction.deferReply({ ephemeral: true }); // Ensure the entire flow starts as ephemeral
+    
         const user = interaction.user;
-        const title = interaction.options.getString('title') || 'Untitled';
+        const title = interaction.options.getString('title') || 'Untitled Writing Submission';
         const link = interaction.options.getString('link');
         const wordCount = interaction.options.getInteger('word_count');
         const description = interaction.options.getString('description') || 'No description provided.';
         const questId = interaction.options.getString('questid') || 'N/A';
-
+    
         // Fetch user data from the database
         const userData = await User.findOne({ discordId: user.id });
         if (!userData) {
           await interaction.editReply({ content: '❌ **User data not found. Please try again later.**' });
           return;
         }
-
+    
         // Calculate tokens for the writing submission
         const finalTokenAmount = calculateWritingTokens(wordCount);
-
+    
         // Create a unique submission ID
+        const submissionId = `${user.id}-${Date.now()}`;
         submissionStore.set(submissionId, {
           submissionId,
           userId: user.id,
@@ -199,23 +198,30 @@ module.exports = {
           questEvent: questId,
           tokenTracker: userData.tokenTracker || null,
         });
-
-        // Generate an embed for the writing submission
+    
         const embed = createWritingSubmissionEmbed(submissionStore.get(submissionId));
-
-        await interaction.editReply({
-          embeds: [embed],
-          ephemeral: false,
-        });
-
-        // Save the submission to persistent storage
+    
+        // Post the embed publicly in the channel
+        const sentMessage = await interaction.channel.send({ embeds: [embed] });
+        submissionStore.get(submissionId).messageUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${sentMessage.id}`;
+    
+        // Save to persistent storage
         saveSubmissionToStorage(submissionId, submissionStore.get(submissionId));
-
+    
+        // Send an ephemeral confirmation message
+        await interaction.editReply({
+          content: '📚 **Your writing submission has been successfully posted.**',
+          ephemeral: true, // Ensure this is ephemeral
+        });
       } catch (error) {
         console.error('Error handling writing submission:', error);
-        await interaction.editReply({ content: '❌ **Error processing your submission. Please try again later.**' });
+        await interaction.editReply({
+          content: '❌ **Error processing your submission. Please try again later.**',
+          ephemeral: true, // Ensure error messages are ephemeral
+        });
       }
     }
+    
   },
 
   // ------------------- Interaction Handling -------------------

@@ -92,18 +92,35 @@ async function approveSubmission(interaction, submissionId) {
   const messageUrl = submission.messageUrl;
 
   try {
+      // Handle missing messageUrl for writing submissions
+      if (!messageUrl) {
+        console.error('Invalid message URL in submission:', submission);
+        throw new Error('Message URL is invalid or undefined.');
+    }
+    
+    // React with ☑️ and notify the user
+    await reactToMessage(interaction, messageUrl, '☑️');
+    await notifyUser(
+        interaction,
+        userId,
+        `☑️ Your submission \`${submissionId}\` has been approved! ${tokenAmount} tokens have been added to your balance.`
+      
+          );
+      
+
       // Update token balance
       await updateTokenBalance(userId, tokenAmount);
 
       // Append token data to Google Sheets
-      await appendEarnedTokens(userId, fileName, category, tokenAmount, submission.link || messageUrl);
-
-      // React with ☑️ and notify the user
-      await reactToMessage(interaction, messageUrl, '☑️');
-      await notifyUser(interaction, userId, `☑️ Your submission \`${submissionId}\` has been approved! ${tokenAmount} tokens have been added to your balance.`);
+      const submissionLink = submission.messageUrl || 'N/A'; // Always use the message URL
+      await appendEarnedTokens(userId, fileName, category, tokenAmount, submissionLink);
+      
 
       // Reply to the admin
-      await replyToAdmin(interaction, `☑️ Submission \`${submissionId}\` has been approved and ${tokenAmount} tokens have been added to the user's balance.`);
+      await replyToAdmin(
+          interaction,
+          `☑️ Submission \`${submissionId}\` has been approved and ${tokenAmount} tokens have been added to the user's balance.`
+      );
 
       // Delete the submission from storage
       await deleteSubmissionFromStorage(submissionId);
@@ -114,9 +131,10 @@ async function approveSubmission(interaction, submissionId) {
 }
 
 
+
 // ------------------- Deny Submission -------------------
 // Handles denying a submission and notifying the user
-async function denySubmission(interaction, submissionId) {
+async function denySubmission(interaction, submissionId, reason) {
   const submission = await retrieveSubmissionFromStorage(submissionId);
 
   if (!submission) {
@@ -124,21 +142,26 @@ async function denySubmission(interaction, submissionId) {
   }
 
   const messageUrl = submission.messageUrl;
-  if (!messageUrl || typeof messageUrl !== 'string') {
-    console.error('Invalid message URL:', messageUrl);
+  if (!messageUrl) {
+    console.error(`Invalid message URL in submission:`, submission);
     throw new Error('Message URL is invalid or undefined.');
   }
 
   // React to the message and notify the user
   await reactToMessage(interaction, messageUrl, '❌');
-  await notifyUser(interaction, submission.userId, `❌ Your submission \`${submissionId}\` has been denied!`);
+  await notifyUser(
+    interaction,
+    submission.userId,
+    `❌ Your submission \`${submissionId}\` has been denied. Please resubmit the submission for approval.\n**Reason:** ${reason || 'No reason provided.'}`
+  );
 
   // Reply to the admin
-  await replyToAdmin(interaction, `❌ Submission \`${submissionId}\` has been denied.`);
+  await replyToAdmin(interaction, `❌ Submission \`${submissionId}\` has been denied. Please resubmit the submission for approval. Reason: ${reason || 'No reason provided.'}`);
 
   // Optionally delete the submission from storage after denial
   await deleteSubmissionFromStorage(submissionId);
 }
+
 
 // ------------------- Command Definition -------------------
 // Defines the command for approving or denying submissions or blight tasks
@@ -159,6 +182,11 @@ module.exports = {
           { name: 'Approve', value: 'approve' },
           { name: 'Deny', value: 'deny' }
         )
+    )
+    .addStringOption(option =>
+      option.setName('reason')
+        .setDescription('Provide a reason for denying the submission (optional).')
+        .setRequired(false)
     ),
 
   // ------------------- Execute Command -------------------
@@ -171,7 +199,9 @@ module.exports = {
       // Approve regular submission or blight submission based on context
       await approveSubmission(interaction, submissionId); // Assuming regular approval for non-blight
     } else if (action === 'deny') {
-      await denySubmission(interaction, submissionId); // Assuming regular denial for non-blight
+      const reason = interaction.options.getString('reason') || null;
+      await denySubmission(interaction, submissionId, reason);
+      
     }
   },
 };

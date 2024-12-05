@@ -28,7 +28,7 @@ const { syncInventory } = require('../handlers/syncHandler');
 const { handleTameInteraction, handleMountComponentInteraction } = require('./mountComponentHandler');
 
 // Utility Imports
-const { submissionStore,saveSubmissionToStorage  } = require('../utils/storage'); 
+const { submissionStore, saveSubmissionToStorage, deleteSubmissionFromStorage } = require('../utils/storage');
 const { capitalizeFirstLetter, capitalizeWords } = require('../modules/formattingModule'); // Formatting utilities
 const { calculateTokens, generateTokenBreakdown } = require('../utils/tokenUtils'); // Corrected imports
 
@@ -142,15 +142,12 @@ async function handleButtonInteraction(interaction) {
 
             // Ensure embed is only sent once
             if (!submissionData.embedSent) {
-                const sentMessage = await interaction.channel.send({ embeds: [embed] }); // Sends the embed
 
-            // Save the correct message URL
-            submissionData.messageUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${sentMessage.id}`;
-            submissionData.embedSent = true; // Mark embed as sent
+                const sentMessage = await interaction.channel.send({ embeds: [embed] });
+                submissionData.messageUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${sentMessage.id}`;
+                submissionStore.set(user.id, submissionData);
+                saveSubmissionToStorage(submissionId, submissionData);
 
-            // Update in-memory store and persistent storage
-            submissionStore.set(submissionData.submissionId, submissionData);
-            saveSubmissionToStorage(submissionData.submissionId, submissionData);
             }
 
             // Clean up submission data
@@ -163,14 +160,26 @@ async function handleButtonInteraction(interaction) {
             });
         }
     } else if (interaction.customId === 'cancel') {
-        // ------------------- Handle Cancellation -------------------
+        // Fetch submission data
+        const submissionData = submissionStore.get(userId);
+    
+        if (submissionData && submissionData.submissionId) {
+            console.log(`Deleting submission from storage: ${submissionData.submissionId}`);
+            deleteSubmissionFromStorage(submissionData.submissionId); // Remove from storage
+        } else {
+            console.warn('No submission data found for cancellation:', { userId });
+        }
+    
+        // Clear in-memory submission data
+        submissionStore.delete(userId);
+    
+        // Notify user
         await interaction.update({
             content: '❌ **Your submission has been canceled.**',
             components: [],
         });
-
-        submissionStore.delete(userId); // Clear submission data
     }
+    
 }
 
 // ------------------- Handle Component Interactions -------------------

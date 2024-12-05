@@ -23,18 +23,23 @@ async function handleSubmissionCompletion(interaction) {
     let submissionData = submissionStore.get(interaction.user.id);
 
     if (!submissionData) {
-      const submissionId = interaction.message.embeds[0]?.fields?.find(field => field.name === 'Submission ID')?.value;
-  
-      console.log('Submission ID retrieved from message embed:', submissionId);
-  
-      submissionData = retrieveSubmissionFromStorage(submissionId);
-  
-      if (!submissionData) {
-          console.error('No submission data found in memory or storage:', { submissionId });
-          throw new Error('No submission data found for this user.');
-      }
-  }
-  
+        console.error('No submission data found in memory for user:', interaction.user.id);
+    
+        const submissionId = interaction.message.embeds[0]?.fields?.find(field => field.name === 'Submission ID')?.value;
+        if (submissionId) {
+            console.log('Attempting to retrieve submission data from storage using ID:', submissionId);
+            submissionData = retrieveSubmissionFromStorage(submissionId);
+        }
+    
+        if (!submissionData) {
+            console.error('No submission data found in memory or storage:', { userId: interaction.user.id, submissionId });
+            await interaction.reply({
+                content: '❌ **Submission data not found. Please restart the submission process.**',
+                ephemeral: true,
+            });
+            return;
+        }
+    }
 
     const { fileUrl, fileName, baseSelections, typeMultiplierSelections, productMultiplierValue, addOnsApplied, characterCount } = submissionData;
     const user = interaction.user;
@@ -83,9 +88,14 @@ async function handleSubmissionCompletion(interaction) {
     });
 
     // Reset in-memory store
-    submissionStore.delete(interaction.user.id);
-    resetSubmissionState();
-  } catch (error) {
+    if (submissionData && submissionData.submissionId) {
+      saveSubmissionToStorage(submissionData.submissionId, submissionData);
+  }
+  
+  console.log('Resetting submission state for user:', interaction.user.id);
+  submissionStore.delete(interaction.user.id);
+  resetSubmissionState();
+}   catch (error) {
     console.error('Error completing submission:', error);
     await interaction.followUp({
       content: '⚠️ **Error completing submission. Please try again.**',
@@ -100,19 +110,29 @@ async function handleCancelSubmission(interaction) {
   try {
     const userId = interaction.user.id;
 
-    // Reset and clear submission data
+    // Retrieve submission data from memory
+    const submissionData = submissionStore.get(userId);
+
+    if (submissionData && submissionData.submissionId) {
+      console.log('Deleting submission from storage:', submissionData.submissionId);
+
+      // Remove submission from persistent storage
+      deleteSubmissionFromStorage(submissionData.submissionId);
+    } else {
+      console.warn('No submission data found in memory for user:', userId);
+    }
+
+    // Reset and clear in-memory data
     resetSubmissionState();
     submissionStore.delete(userId);
 
-    // New: Delete from persistent storage
-    const submissionId = `${userId}-${Date.now()}`;
-    deleteSubmissionFromStorage(submissionId);
-
+    // Notify the user
     await interaction.update({
       content: '🚫 **Submission canceled**. Please restart the process if you wish to submit again.',
       components: [], // Remove all action components
     });
   } catch (error) {
+    console.error('Error canceling submission:', error);
     await interaction.followUp({
       content: '⚠️ **Error canceling submission.** Please try again.',
       ephemeral: true,

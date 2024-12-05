@@ -44,6 +44,7 @@ function saveSubmissionToStorage(submissionId, submissionData) {
       console.error('Invalid data passed to saveSubmissionToStorage:', { submissionId, submissionData });
       return;
   }
+  console.log(`Saving submission with ID: ${submissionId}`, submissionData);
   const submissions = safeReadJSON(storageFile);
   submissions[submissionId] = submissionData;
   fs.writeFileSync(storageFile, JSON.stringify(submissions, null, 2));
@@ -54,17 +55,25 @@ function saveSubmissionToStorage(submissionId, submissionData) {
 // Retrieves a submission by its ID from persistent storage
 function retrieveSubmissionFromStorage(submissionId) {
   const submissions = safeReadJSON(storageFile);
-  console.log('Available submission IDs:', Object.keys(submissions)); // Debug
+  console.log('Current submissions in storage:', Object.keys(submissions));  
   return submissions[submissionId] || null;
 }
 
 // ------------------- Delete Submission from Storage -------------------
 // Deletes a submission from persistent storage by its ID
 function deleteSubmissionFromStorage(submissionId) {
-  const submissions = safeReadJSON(storageFile);  // Read existing submissions
-  delete submissions[submissionId];               // Delete the submission by ID
-  fs.writeFileSync(storageFile, JSON.stringify(submissions, null, 2)); // Write back to file
+  const submissions = safeReadJSON(storageFile);
+
+  if (submissions[submissionId]) {
+      console.log(`Deleting submission with ID: ${submissionId}`);
+      delete submissions[submissionId]; // Remove entry by ID
+      fs.writeFileSync(storageFile, JSON.stringify(submissions, null, 2)); // Save changes
+  } else {
+      console.warn(`Submission ID not found in storage: ${submissionId}`);
+  }
 }
+
+
 
 // ------------------- Exported Functions -------------------
 // Export functions and in-memory store for external use

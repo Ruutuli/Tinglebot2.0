@@ -36,6 +36,7 @@ async function handleSelectMenuInteraction(interaction) {
     const selectedBase = interaction.values[0];
     if (selectedBase !== 'complete') {
       baseSelections.push(selectedBase); // Add the selected base
+      console.log('Base selection updated:', baseSelections);
       await triggerBaseCountModal(interaction, selectedBase);
 
       if (!interaction.replied) {
@@ -57,6 +58,7 @@ async function handleSelectMenuInteraction(interaction) {
     const selectedMultiplier = interaction.values[0];
     if (selectedMultiplier !== 'complete') {
       typeMultiplierSelections.push(selectedMultiplier); // Add the selected multiplier
+      console.log('Type multiplier selection updated:', typeMultiplierSelections);      
       await triggerMultiplierCountModal(interaction, selectedMultiplier);
 
       if (!interaction.replied) {
@@ -99,7 +101,15 @@ if (customId === 'addOnsSelect') {
       });
     }
   } else {
-    await confirmSubmission(interaction); // Proceed to confirmation
+    console.log('Confirming submission with data:', {
+      baseSelections,
+      typeMultiplierSelections,
+      productMultiplierValue,
+      addOnsApplied,
+      characterCount,
+  });
+  
+  await confirmSubmission(interaction); // Proceed to confirmation
   }
 }
 
