@@ -78,10 +78,11 @@ module.exports = {
 
                 // ------------------- Reply with sync embed and buttons -------------------
                 await interaction.reply({ embeds: [syncEmbed], components: [row], ephemeral: true });
-
+                console.log('Reached here')
             } catch (error) {
                 // ------------------- Handle any errors -------------------
                 await interaction.reply({ content: `❌ An error occurred while syncing inventory. Please try again later.`, ephemeral: true });
+                console.log(error)
             }
         }
     },

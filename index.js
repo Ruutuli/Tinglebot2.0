@@ -5,17 +5,21 @@ const fs = require('fs');
 const path = require('path');
 const cron = require('node-cron');
 
-// ------------------- Import local modules -------------------
-const { handleInteraction } = require('./handlers/interactionHandler');
-const { handleComponentInteraction } = require('./handlers/componentHandler');
-const { getGuildIds } = require('./utils/getGuildIds');
+// ------------------- Database Connections -------------------
 const { connectToTinglebot, connectToInventories } = require('./database/connection');
-const scheduler = require('./scheduler');
 const { generateVendingStockList } = require('./database/vendingService');
-const { renameChannels, trackBloodMoonCycle } = require('./scripts/bloodmoon');
-const { handleSelectMenuInteraction } = require('./handlers/selectMenuHandler');
-const { handleModalSubmission } = require('./handlers/modalHandler');
 
+// ------------------- Handlers -------------------
+const { handleAutocomplete } = require('./handlers/autocompleteHandler');
+const { handleComponentInteraction } = require('./handlers/componentHandler');
+const { handleInteraction } = require('./handlers/interactionHandler');
+const { handleModalSubmission } = require('./handlers/modalHandler');
+const { handleSelectMenuInteraction } = require('./handlers/selectMenuHandler');
+
+// ------------------- Scripts and Utilities -------------------
+const { renameChannels, trackBloodMoonCycle } = require('./scripts/bloodmoon');
+const scheduler = require('./scheduler');
+const { getGuildIds } = require('./utils/getGuildIds');
 
 // Declare the client variable for use across functions
 let client;
