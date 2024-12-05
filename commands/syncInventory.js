@@ -76,6 +76,8 @@ module.exports = {
                         .setStyle(ButtonStyle.Danger)
                 );
 
+                console.log(`Buttons created with IDs: sync-yes|${character._id}, sync-no|${character._id}`);
+
                 // ------------------- Reply with sync embed and buttons -------------------
                 await interaction.reply({ embeds: [syncEmbed], components: [row], ephemeral: true });
                 console.log('Reached here')

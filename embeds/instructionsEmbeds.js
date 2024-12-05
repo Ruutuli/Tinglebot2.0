@@ -77,6 +77,23 @@ const createSyncEmbed = (characterName, googleSheetsUrl) => {
     return syncEmbed;
 };
 
+// ------------------- Edit sync message with final summary -------------------
+const editSyncMessage = async (interaction, characterName, totalSyncedItemsCount, skippedLinesCount, timestamp) => {
+    try {
+        const inventoryLink = `https://docs.google.com/spreadsheets/d/${interaction.guildId}/edit`; // Replace with actual inventory URL logic
+        const finalMessage = `✅ **Sync completed for ${characterName}!**\n\n**${totalSyncedItemsCount} lines synced**\n**${skippedLinesCount} skipped**\n\n[📄 **View Inventory**](${inventoryLink})\n\n*Synced on ${timestamp}.*`;
+
+        await interaction.editReply({
+            content: finalMessage,
+            embeds: [],
+            components: [],
+        });
+    } catch (error) {
+        console.error(`Error editing sync completion message: ${error.message}`);
+        throw error;
+    }
+};
+
 // ------------------- Edit message for sync error -------------------
 const editSyncErrorMessage = async (interaction, errorMessage) => {
     try {
@@ -123,6 +140,7 @@ const createTokenTrackerSetupEmbed = (username, googleSheetsUrl, errorMessage = 
 // ------------------- Export the functions -------------------
 module.exports = {
     createSetupInstructionsEmbed,
+    editSyncMessage,
     createSyncEmbed,
     editSyncErrorMessage,
     createTokenTrackerSetupEmbed,

@@ -60,8 +60,55 @@ async function handleButtonInteraction(interaction) {
 
     const userId = interaction.user.id;
     const submissionData = submissionStore.get(userId);
+    const [action, characterId] = interaction.customId.split('|'); // Extract action and characterId
 
-    if (interaction.customId === 'confirm') {
+    if (action === 'sync-yes') {
+        try {
+            console.log(`Button clicked: ${interaction.customId}`); // Debug log
+
+            // Notify the user that the sync has started
+            await interaction.deferReply({ ephemeral: true });
+            await interaction.editReply({
+                content: '🔄 **Sync has initiated, this may take some time. Please wait...**',
+            });
+
+            // Fetch the character data
+            const character = await fetchCharacterById(characterId);
+            if (!character) {
+                console.log(`Character not found: ${characterId}`); // Debug log
+                await interaction.editReply({
+                    content: '❌ Character not found.',
+                });
+                return;
+            }
+
+            console.log(`Character fetched: ${character.name}`); // Debug log
+            console.log(`Starting syncInventory for ${character.name}`); // Debug log
+
+            // Call the syncInventory function
+            await syncInventory(character.name, interaction.user.id, interaction);
+        } catch (error) {
+            console.error('Error during sync-yes interaction:', error);
+
+            // Edit the interaction to show an error
+            await interaction.editReply({
+                content: `❌ An error occurred while syncing: ${error.message}`,
+            });
+        }
+    } else if (action === 'sync-no') {
+        try {
+            // Respond to the user that the sync was canceled
+            await interaction.reply({
+                content: '❌ Sync canceled.',
+                ephemeral: true,
+            });
+        } catch (error) {
+            console.error('Error handling sync-no interaction:', error);
+        }
+  
+    
+        
+    } else if (action === 'confirm') {
         try {
             if (!submissionData) {
                 await interaction.reply({
@@ -134,8 +181,12 @@ async function handleComponentInteraction(interaction) {
         // ------------------- Extract Action and Components -------------------
   const [action, characterId] = interaction.customId.split('|'); // Fixed line
 
+  if (['sync-yes', 'sync-no'].includes(action)) {
+    await handleButtonInteraction(interaction); // Handle sync buttons
+
+
         // ------------------- Mount-Specific Actions -------------------
-        if (['sneak', 'distract', 'corner', 'rush', 'glide'].includes(action)) {
+  } else  if (['sneak', 'distract', 'corner', 'rush', 'glide'].includes(action)) {
             await handleMountComponentInteraction(interaction);  // Handle mount-specific actions
         } else if (action === 'tame') {
             await handleTameInteraction(interaction);  // Handle the tame button

@@ -32,72 +32,97 @@ function formatDateTime(date) {
 
 // ------------------- Main function to sync inventory -------------------
 async function syncInventory(characterName, userId, interaction, retryCount = 0, totalSyncedItemsCount = 0) {
+    console.log(`syncInventory called for character: ${characterName}, user: ${userId}, retryCount: ${retryCount}`);
+
     let errors = [];
     let syncedItemsCount = 0;
     let skippedLinesCount = 0;
 
     try {
-        // Connect to the database
+        console.log('Connecting to the database...');
         await connectToTinglebot();
+        console.log('Database connected successfully.');
 
-        // Fetch character data
+        console.log(`Fetching character: ${characterName} for user: ${userId}`);
         let character = await fetchCharacterByNameAndUserId(characterName, userId);
         if (!character) {
+            console.log(`Character not found: ${characterName}`);
             await editCharacterNotFoundMessage(interaction, characterName);
             return;
         }
+        console.log(`Character fetched successfully: ${character.name}`);
 
-        // Validate Google Sheets URL
         const inventoryUrl = character.inventory;
+        console.log(`Validating Google Sheets URL: ${inventoryUrl}`);
         if (!isValidGoogleSheetsUrl(inventoryUrl)) {
+            console.log('Invalid Google Sheets URL.');
             await editSyncErrorMessage(interaction, '❌ **Invalid Google Sheets URL. Please check the URL and try again.**');
             return;
         }
 
-        // Authorize Google Sheets
+        console.log('Authorizing Google Sheets API...');
         const auth = await authorizeSheets();
         const spreadsheetId = extractSpreadsheetId(inventoryUrl);
+        console.log(`Spreadsheet ID extracted: ${spreadsheetId}`);
 
-        // Get the sheet ID for the 'loggedInventory' sheet
+        console.log('Fetching sheet ID for "loggedInventory"...');
         const sheetId = await getSheetIdByTitle(auth, spreadsheetId, 'loggedInventory');
         if (!sheetId && sheetId !== 0) {
+            console.log("Sheet 'loggedInventory' not found.");
             await editSyncErrorMessage(interaction, `❌ **Sheet 'loggedInventory' not found in the spreadsheet.**`);
             return;
         }
+        console.log(`Sheet ID fetched successfully: ${sheetId}`);
 
-        // Read data from Google Sheets
+        console.log('Reading data from Google Sheets...');
         const range = 'loggedInventory!A2:M';
         const sheetData = await readSheetData(auth, spreadsheetId, range);
         if (!sheetData || sheetData.length === 0) {
+            console.log('No data found in the Google Sheet.');
             await editSyncErrorMessage(interaction, `❌ **No data found in the Google Sheet. Please ensure the sheet is correctly set up.**`);
             return;
         }
 
-        // Get the inventory collection for the character
+        // Map data with original indices
+        const mappedData = sheetData.map((row, index) => ({
+            row,
+            originalRowIndex: index + 2, // Adding 2 because we skipped headers (A1:M1)
+        }));
+
+        // Filter rows matching the character name
+        const filteredData = mappedData.filter(data => data.row[0] === character.name && data.row[1]);
+        console.log(`Filtered data size: ${filteredData.length}`);
+
+        if (filteredData.length === 0) {
+            console.log('No matching data found for character in the Google Sheet.');
+            await editSyncErrorMessage(interaction, `❌ **No matching data found for ${character.name} in the Google Sheet.**`);
+            return;
+        }
+
+        console.log(`Fetching inventory collection for character: ${character.name}`);
         const inventoryCollection = await getCharacterInventoryCollection(character.name);
         let batchRequests = [];
 
-        // Process rows in batches
-        for (let i = 0; i < sheetData.length; i += BATCH_SIZE) {
-            const batch = sheetData.slice(i, i + BATCH_SIZE);
+        console.log('Processing rows in batches...');
+        for (let i = 0; i < filteredData.length; i += BATCH_SIZE) {
+            const batch = filteredData.slice(i, i + BATCH_SIZE);
+            console.log(`Processing batch: ${Math.floor(i / BATCH_SIZE) + 1}`);
 
             for (let j = 0; j < batch.length; j++) {
-                const row = batch[j];
+                const { row, originalRowIndex } = batch[j];
                 const [sheetCharacterName, itemName, qty, , , , , , , , , , confirmedSync] = row;
 
-                // Skip rows that don't match the character name or have been confirmed
-                if (sheetCharacterName !== character.name || !itemName || confirmedSync) continue;
+                // Skip rows that have been confirmed
+                if (confirmedSync) continue;
 
                 try {
-                    // Find the item in the database
+                    console.log(`Processing item: ${itemName}, Quantity: ${qty}`);
                     const item = await ItemModel.findOne({ itemName });
                     if (!item) throw new Error(`Item with name ${itemName} not found.`);
 
-                    // Parse the quantity
                     const quantity = parseInt(qty, 10);
                     if (isNaN(quantity)) throw new Error(`Invalid quantity for item ${itemName}: ${qty}`);
 
-                    // Create inventory item object
                     const inventoryItem = {
                         characterId: character._id,
                         itemId: item._id,
@@ -116,13 +141,12 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
                         synced: uuidv4()
                     };
 
-                    // Save the item to the inventory database
+                    console.log(`Saving item to database: ${itemName}, Quantity: ${quantity}`);
                     await syncToInventoryDatabase(character, inventoryItem, interaction);
                     syncedItemsCount++;
 
-                    // Prepare the data to update in Google Sheets
-                    const rowIndex = i + j;
-                    sheetData[rowIndex] = [
+                    // Prepare updated row data
+                    const updatedRowData = [
                         sheetCharacterName,
                         itemName,
                         quantity,
@@ -138,49 +162,42 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
                         inventoryItem.synced
                     ];
 
-                    // Add the update range to batch requests
-                    const updateRange = `loggedInventory!A${rowIndex + 2}:M${rowIndex + 2}`;
-                    batchRequests.push({ range: updateRange, values: [sheetData[rowIndex]], sheetId });
+                    // Use original row index for the update range
+                    const updateRange = `loggedInventory!A${originalRowIndex}:M${originalRowIndex}`;
+                    batchRequests.push({ range: updateRange, values: [updatedRowData], sheetId });
                 } catch (error) {
-                    // Record errors and increment skipped lines count
-                    errors.push(`Row ${i + j + 2}: ${error.message}`);
+                    console.error(`Error processing row ${originalRowIndex}: ${error.message}`);
+                    errors.push(`Row ${originalRowIndex}: ${error.message}`);
                     skippedLinesCount++;
                 }
             }
 
-            // Process the batch
             if (batchRequests.length > 0) {
+                console.log('Writing batch data to Google Sheets...');
                 await writeBatchData(auth, spreadsheetId, batchRequests);
                 batchRequests = [];
             }
 
-            // Pause for 3 seconds between batches
+            console.log('Pausing for batch delay...');
             await new Promise(resolve => setTimeout(resolve, BATCH_DELAY));
         }
 
-        // Handle retries if lines were skipped
-        if (skippedLinesCount > 0 && retryCount < MAX_RETRIES) {
-            const errorMessage = `⚠️ **Some lines were skipped. Sync will retry after 3 minutes.**\n\n**Errors:**\n${errors.join('\n')}`;
-            await editSyncErrorMessage(interaction, errorMessage);
-            await retrySync(interaction, characterName, userId, retryCount, syncedItemsCount, totalSyncedItemsCount, errors);
-            return;
-        }
+        console.log(`Total synced items: ${syncedItemsCount}, Skipped lines: ${skippedLinesCount}`);
 
         totalSyncedItemsCount += syncedItemsCount;
         const now = formatDateTime(new Date());
 
-        // Prepare the confirmation message
-        const confirmationMessage = `✅ Inventory for ${character.name} synced on ${now}!\n**Synced items:** ${totalSyncedItemsCount}\n**Skipped lines:** ${skippedLinesCount}`;
-        await writeSheetData(auth, spreadsheetId, `loggedInventory!A${sheetData.length + 2}:M${sheetData.length + 2}`, [[confirmationMessage]]);
+        console.log(`Sync completed for character: ${character.name} at ${now}`);
 
-        // Clean up initial item and update character status
-        await inventoryCollection.deleteOne({ characterId: character._id, itemName: 'Initial Item' });
-        character.inventorySynced = true;
-        await Character.findByIdAndUpdate(character._id, { inventorySynced: true });
-
-        // Edit the sync message with confirmation
-        await editSyncMessage(interaction, character.name, totalSyncedItemsCount, skippedLinesCount, now);
+        await editSyncMessage(
+            interaction,
+            character.name,
+            totalSyncedItemsCount,
+            skippedLinesCount,
+            now
+        );
     } catch (error) {
+        console.error(`Error in syncInventory: ${error.message}`, error);
         await editSyncErrorMessage(interaction, `❌ **Sync canceled! An error occurred: ${error.message}**`);
     }
 }
@@ -212,3 +229,6 @@ async function retrySync(interaction, characterName, userId, retryCount, syncedI
 module.exports = {
     syncInventory,
 };
+
+
+//This vbersion works
