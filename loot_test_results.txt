@@ -1,0 +1,1852 @@
+Test: Job: Adventurer, Village: Rudania, Run: 1
+Result: {
+  "embeds": [
+    {
+      "color": 2588365,
+      "title": "Inariko Adventurer: Alden encountered no monsters.",
+      "author": {
+        "name": "Alden 🔗",
+        "url": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "icon_url": "https://storage.googleapis.com/tinglebot/a5ff9f2c-061d-4322-8d6d-bbcf31165ed6.png"
+      },
+      "fields": [
+        {
+          "name": "🔹 __Outcome__",
+          "value": "> 🌸🦋 A butterfly lands upon a flower. There is no danger today.",
+          "inline": false
+        }
+      ],
+      "image": {
+        "url": "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+      }
+    }
+  ]
+}
+
+Test: Job: Adventurer, Village: Rudania, Run: 2
+Result: {
+  "embeds": [
+    {
+      "color": 2588365,
+      "title": "Inariko Adventurer: Alden encountered a Fire Chuchu (Small)!",
+      "author": {
+        "name": "Alden 🔗",
+        "url": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "icon_url": "https://storage.googleapis.com/tinglebot/a5ff9f2c-061d-4322-8d6d-bbcf31165ed6.png"
+      },
+      "fields": [
+        {
+          "name": "__❤️ Hearts__",
+          "value": "> 50/50",
+          "inline": false
+        },
+        {
+          "name": "🔹 __Outcome__",
+          "value": "> 🌟🌼 There is no courage without fear, and your enemies don't stand a chance against you.",
+          "inline": false
+        },
+        {
+          "name": "💥 __Loot__",
+          "value": "<:Chuchu_Jelly_Red:744755431615889519> `Red Chuchu Jelly    ` ⨯ `  1`",
+          "inline": false
+        }
+      ],
+      "image": {
+        "url": "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+      },
+      "thumbnail": {
+        "url": "https://storage.googleapis.com/tinglebot/Monsters/%5BRotW%5D%20Monsters_Chuchu_Fire_Small.png"
+      }
+    }
+  ]
+}
+
+Test: Job: Adventurer, Village: Rudania, Run: 3
+Result: {
+  "embeds": [
+    {
+      "color": 2588365,
+      "title": "Inariko Adventurer: Alden encountered no monsters.",
+      "author": {
+        "name": "Alden 🔗",
+        "url": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "icon_url": "https://storage.googleapis.com/tinglebot/a5ff9f2c-061d-4322-8d6d-bbcf31165ed6.png"
+      },
+      "fields": [
+        {
+          "name": "🔹 __Outcome__",
+          "value": "> 🌸🌼 Peaceful surroundings; no monsters encountered.",
+          "inline": false
+        }
+      ],
+      "image": {
+        "url": "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+      }
+    }
+  ]
+}
+
+Test: Job: Adventurer, Village: Inariko, Run: 1
+Result: {
+  "embeds": [
+    {
+      "color": 2588365,
+      "title": "Inariko Adventurer: Alden encountered a Lizalfos!",
+      "author": {
+        "name": "Alden 🔗",
+        "url": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "icon_url": "https://storage.googleapis.com/tinglebot/a5ff9f2c-061d-4322-8d6d-bbcf31165ed6.png"
+      },
+      "fields": [
+        {
+          "name": "__❤️ Hearts__",
+          "value": "> 50/50",
+          "inline": false
+        },
+        {
+          "name": "🔹 __Outcome__",
+          "value": "> 🌟🌼 There is no courage without fear, and your enemies don't stand a chance against you.",
+          "inline": false
+        },
+        {
+          "name": "💥 __Loot__",
+          "value": "<:Lizalfos_Tail:744755438465056799> `Lizalfos Tail       ` ⨯ `  1`",
+          "inline": false
+        }
+      ],
+      "image": {
+        "url": "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+      },
+      "thumbnail": {
+        "url": "https://storage.googleapis.com/tinglebot/Monsters/%5BRotW%5D%20Monsters_Lizalfos.png"
+      }
+    }
+  ]
+}
+
+Test: Job: Adventurer, Village: Inariko, Run: 2
+Result: {
+  "embeds": [
+    {
+      "color": 2588365,
+      "title": "Inariko Adventurer: Alden encountered a Blue Lizalfos!",
+      "author": {
+        "name": "Alden 🔗",
+        "url": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "icon_url": "https://storage.googleapis.com/tinglebot/a5ff9f2c-061d-4322-8d6d-bbcf31165ed6.png"
+      },
+      "fields": [
+        {
+          "name": "__❤️ Hearts__",
+          "value": "> 49/50",
+          "inline": false
+        },
+        {
+          "name": "🔹 __Outcome__",
+          "value": "> 💥⚔️ A swift strike! Lose ❤️ 1 heart!",
+          "inline": false
+        }
+      ],
+      "image": {
+        "url": "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+      },
+      "thumbnail": {
+        "url": "https://storage.googleapis.com/tinglebot/Monsters/%5BRotW%5D%20Monsters_Lizalfos_Blue.png"
+      }
+    }
+  ]
+}
+
+Test: Job: Adventurer, Village: Inariko, Run: 3
+Result: {
+  "embeds": [
+    {
+      "color": 2588365,
+      "title": "Inariko Adventurer: Alden encountered a Horriblin!",
+      "author": {
+        "name": "Alden 🔗",
+        "url": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "icon_url": "https://storage.googleapis.com/tinglebot/a5ff9f2c-061d-4322-8d6d-bbcf31165ed6.png"
+      },
+      "fields": [
+        {
+          "name": "__❤️ Hearts__",
+          "value": "> 50/50",
+          "inline": false
+        },
+        {
+          "name": "🔹 __Outcome__",
+          "value": "> ⚔️✨ Your weapon's power helped you secure the win!",
+          "inline": false
+        },
+        {
+          "name": "💥 __Loot__",
+          "value": "<:Spiked_Boko_Spear:938162363499184178> `Spiked Boko Spear   ` ⨯ `  1`",
+          "inline": false
+        }
+      ],
+      "image": {
+        "url": "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+      },
+      "thumbnail": {
+        "url": "https://storage.googleapis.com/tinglebot/Monsters/%5BRotW%5D%20Monsters_Horriblin.png"
+      }
+    }
+  ]
+}
+
+Test: Job: Adventurer, Village: Vhintl, Run: 1
+Result: {
+  "embeds": [
+    {
+      "color": 2588365,
+      "title": "Inariko Adventurer: Alden encountered a Horriblin!",
+      "author": {
+        "name": "Alden 🔗",
+        "url": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "icon_url": "https://storage.googleapis.com/tinglebot/a5ff9f2c-061d-4322-8d6d-bbcf31165ed6.png"
+      },
+      "fields": [
+        {
+          "name": "__❤️ Hearts__",
+          "value": "> 50/50",
+          "inline": false
+        },
+        {
+          "name": "🔹 __Outcome__",
+          "value": "> 🎊🌟 A narrow escape, but a win nonetheless!",
+          "inline": false
+        },
+        {
+          "name": "💥 __Loot__",
+          "value": "<:Spiked_Boko_Club:938167623861026857> `Spiked Boko Club    ` ⨯ `  1`",
+          "inline": false
+        }
+      ],
+      "image": {
+        "url": "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+      },
+      "thumbnail": {
+        "url": "https://storage.googleapis.com/tinglebot/Monsters/%5BRotW%5D%20Monsters_Horriblin.png"
+      }
+    }
+  ]
+}
+
+Test: Job: Adventurer, Village: Vhintl, Run: 2
+Result: {
+  "embeds": [
+    {
+      "color": 2588365,
+      "title": "Inariko Adventurer: Alden encountered a Blue Bokoblin!",
+      "author": {
+        "name": "Alden 🔗",
+        "url": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "icon_url": "https://storage.googleapis.com/tinglebot/a5ff9f2c-061d-4322-8d6d-bbcf31165ed6.png"
+      },
+      "fields": [
+        {
+          "name": "__❤️ Hearts__",
+          "value": "> 50/50",
+          "inline": false
+        },
+        {
+          "name": "🔹 __Outcome__",
+          "value": "> 🙌✨ Just when it seemed bleak, you pulled through and won!",
+          "inline": false
+        },
+        {
+          "name": "💥 __Loot__",
+          "value": "<:Bokoblin_Horn:744755430764576909> `Bokoblin Horn       ` ⨯ `  1`",
+          "inline": false
+        }
+      ],
+      "image": {
+        "url": "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+      },
+      "thumbnail": {
+        "url": "https://storage.googleapis.com/tinglebot/Monsters/%5BRotW%5D%20Monsters_Bokoblin_Blue.png"
+      }
+    }
+  ]
+}
+
+Test: Job: Adventurer, Village: Vhintl, Run: 3
+Result: {
+  "embeds": [
+    {
+      "color": 2588365,
+      "title": "Inariko Adventurer: Alden encountered a Bokoblin!",
+      "author": {
+        "name": "Alden 🔗",
+        "url": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "icon_url": "https://storage.googleapis.com/tinglebot/a5ff9f2c-061d-4322-8d6d-bbcf31165ed6.png"
+      },
+      "fields": [
+        {
+          "name": "__❤️ Hearts__",
+          "value": "> 49/50",
+          "inline": false
+        },
+        {
+          "name": "🔹 __Outcome__",
+          "value": "> 🩹🌿 Just a scratch! Lose ❤️ 1 heart!",
+          "inline": false
+        }
+      ],
+      "image": {
+        "url": "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+      },
+      "thumbnail": {
+        "url": "https://storage.googleapis.com/tinglebot/Monsters/%5BRotW%5D%20Monsters_Bokoblin.png"
+      }
+    }
+  ]
+}
+
+Test: Job: Graveskeeper, Village: Rudania, Run: 1
+Result: {
+  "embeds": [
+    {
+      "color": 2588365,
+      "title": "Inariko Graveskeeper: Alden encountered a Gibdo!",
+      "author": {
+        "name": "Alden 🔗",
+        "url": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "icon_url": "https://storage.googleapis.com/tinglebot/a5ff9f2c-061d-4322-8d6d-bbcf31165ed6.png"
+      },
+      "fields": [
+        {
+          "name": "__❤️ Hearts__",
+          "value": "> 48/50",
+          "inline": false
+        },
+        {
+          "name": "🔹 __Outcome__",
+          "value": "> 💥💀 You suffer a heavy blow! Lose ❤️❤️ 2 hearts!",
+          "inline": false
+        }
+      ],
+      "image": {
+        "url": "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+      },
+      "thumbnail": {
+        "url": "https://storage.googleapis.com/tinglebot/Monsters/%5BRotW%5D%20Monsters_Gibdo.png"
+      }
+    }
+  ]
+}
+
+Test: Job: Graveskeeper, Village: Rudania, Run: 2
+Result: {
+  "embeds": [
+    {
+      "color": 2588365,
+      "title": "Inariko Graveskeeper: Alden encountered a Stone Pebblit!",
+      "author": {
+        "name": "Alden 🔗",
+        "url": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "icon_url": "https://storage.googleapis.com/tinglebot/a5ff9f2c-061d-4322-8d6d-bbcf31165ed6.png"
+      },
+      "fields": [
+        {
+          "name": "__❤️ Hearts__",
+          "value": "> 49/50",
+          "inline": false
+        },
+        {
+          "name": "🔹 __Outcome__",
+          "value": "> 💥💀 The monster attacks! You lose ❤️ 1 heart!",
+          "inline": false
+        }
+      ],
+      "image": {
+        "url": "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+      },
+      "thumbnail": {
+        "url": "https://storage.googleapis.com/tinglebot/Monsters/%5BRotW%5D%20Monsters_Pebblit_Stone.png"
+      }
+    }
+  ]
+}
+
+Test: Job: Graveskeeper, Village: Rudania, Run: 3
+Result: {
+  "embeds": [
+    {
+      "color": 2588365,
+      "title": "Inariko Graveskeeper: Alden encountered a Fire Keese!",
+      "author": {
+        "name": "Alden 🔗",
+        "url": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "icon_url": "https://storage.googleapis.com/tinglebot/a5ff9f2c-061d-4322-8d6d-bbcf31165ed6.png"
+      },
+      "fields": [
+        {
+          "name": "__❤️ Hearts__",
+          "value": "> 50/50",
+          "inline": false
+        },
+        {
+          "name": "🔹 __Outcome__",
+          "value": "> 🌟💥 ★Fantastic job!! Another win in the books!★",
+          "inline": false
+        },
+        {
+          "name": "💥 __Loot__",
+          "value": "<:Keese_Wing_Fire:744755432928575600> `Fire Keese Wing     ` ⨯ `  1`",
+          "inline": false
+        }
+      ],
+      "image": {
+        "url": "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+      },
+      "thumbnail": {
+        "url": "https://storage.googleapis.com/tinglebot/Monsters/%5BRotW%5D%20Monsters_Keese_Fire.png"
+      }
+    }
+  ]
+}
+
+Test: Job: Graveskeeper, Village: Inariko, Run: 1
+Result: {
+  "embeds": [
+    {
+      "color": 2588365,
+      "title": "Inariko Graveskeeper: Alden encountered no monsters.",
+      "author": {
+        "name": "Alden 🔗",
+        "url": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "icon_url": "https://storage.googleapis.com/tinglebot/a5ff9f2c-061d-4322-8d6d-bbcf31165ed6.png"
+      },
+      "fields": [
+        {
+          "name": "🔹 __Outcome__",
+          "value": "> 🌳🦋 All is calm. No monsters appear.",
+          "inline": false
+        }
+      ],
+      "image": {
+        "url": "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+      }
+    }
+  ]
+}
+
+Test: Job: Graveskeeper, Village: Inariko, Run: 2
+Result: {
+  "embeds": [
+    {
+      "color": 2588365,
+      "title": "Inariko Graveskeeper: Alden encountered no monsters.",
+      "author": {
+        "name": "Alden 🔗",
+        "url": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "icon_url": "https://storage.googleapis.com/tinglebot/a5ff9f2c-061d-4322-8d6d-bbcf31165ed6.png"
+      },
+      "fields": [
+        {
+          "name": "🔹 __Outcome__",
+          "value": "> 🌸🦋 A butterfly lands upon a flower. There is no danger today.",
+          "inline": false
+        }
+      ],
+      "image": {
+        "url": "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+      }
+    }
+  ]
+}
+
+Test: Job: Graveskeeper, Village: Inariko, Run: 3
+Result: {
+  "embeds": [
+    {
+      "color": 2588365,
+      "title": "Inariko Graveskeeper: Alden encountered a Ice Chuchu (Medium)!",
+      "author": {
+        "name": "Alden 🔗",
+        "url": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "icon_url": "https://storage.googleapis.com/tinglebot/a5ff9f2c-061d-4322-8d6d-bbcf31165ed6.png"
+      },
+      "fields": [
+        {
+          "name": "__❤️ Hearts__",
+          "value": "> 50/50",
+          "inline": false
+        },
+        {
+          "name": "🔹 __Outcome__",
+          "value": "> 🙌✨ Just when it seemed bleak, you pulled through and won!",
+          "inline": false
+        },
+        {
+          "name": "💥 __Loot__",
+          "value": "<:Chuchu_Jelly_White:744755431771078666> `White Chuchu Jelly  ` ⨯ `  2`",
+          "inline": false
+        }
+      ],
+      "image": {
+        "url": "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+      },
+      "thumbnail": {
+        "url": "https://storage.googleapis.com/tinglebot/Monsters/%5BRotW%5D%20Monsters_Chuchu_Ice_Medium.png"
+      }
+    }
+  ]
+}
+
+Test: Job: Graveskeeper, Village: Vhintl, Run: 1
+Result: {
+  "embeds": [
+    {
+      "color": 2588365,
+      "title": "Inariko Graveskeeper: Alden encountered a Stalizalfos!",
+      "author": {
+        "name": "Alden 🔗",
+        "url": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "icon_url": "https://storage.googleapis.com/tinglebot/a5ff9f2c-061d-4322-8d6d-bbcf31165ed6.png"
+      },
+      "fields": [
+        {
+          "name": "__❤️ Hearts__",
+          "value": "> 49/50",
+          "inline": false
+        },
+        {
+          "name": "🔹 __Outcome__",
+          "value": "> ⚡️😖 A painful blow! You lose ❤️ 1 heart!",
+          "inline": false
+        }
+      ],
+      "image": {
+        "url": "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+      },
+      "thumbnail": {
+        "url": "https://storage.googleapis.com/tinglebot/Monsters/%5BRotW%5D%20Monsters_Stalizalfos.png"
+      }
+    }
+  ]
+}
+
+Test: Job: Graveskeeper, Village: Vhintl, Run: 2
+Result: {
+  "embeds": [
+    {
+      "color": 2588365,
+      "title": "Inariko Graveskeeper: Alden encountered a Cursed Bokoblin!",
+      "author": {
+        "name": "Alden 🔗",
+        "url": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "icon_url": "https://storage.googleapis.com/tinglebot/a5ff9f2c-061d-4322-8d6d-bbcf31165ed6.png"
+      },
+      "fields": [
+        {
+          "name": "__❤️ Hearts__",
+          "value": "> 50/50",
+          "inline": false
+        },
+        {
+          "name": "🔹 __Outcome__",
+          "value": "> 👊🎊 Another victory in the bag! Well done!",
+          "inline": false
+        },
+        {
+          "name": "💥 __Loot__",
+          "value": "<:Stal_Skull:938273747503288370> `Stal Skull          ` ⨯ `  1`",
+          "inline": false
+        }
+      ],
+      "image": {
+        "url": "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+      },
+      "thumbnail": {
+        "url": "https://storage.googleapis.com/tinglebot/Monsters/%5BRotW%5D%20Monsters_Cursed_Bokoblin.png"
+      }
+    }
+  ]
+}
+
+Test: Job: Graveskeeper, Village: Vhintl, Run: 3
+Result: {
+  "embeds": [
+    {
+      "color": 2588365,
+      "title": "Inariko Graveskeeper: Alden encountered a Chuchu (Small)!",
+      "author": {
+        "name": "Alden 🔗",
+        "url": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "icon_url": "https://storage.googleapis.com/tinglebot/a5ff9f2c-061d-4322-8d6d-bbcf31165ed6.png"
+      },
+      "fields": [
+        {
+          "name": "__❤️ Hearts__",
+          "value": "> 50/50",
+          "inline": false
+        },
+        {
+          "name": "🔹 __Outcome__",
+          "value": "> 🌟💥 ★Fantastic job!! Another win in the books!★",
+          "inline": false
+        },
+        {
+          "name": "💥 __Loot__",
+          "value": "<:Chuchu_Jelly:744755431175356416> `Chuchu Jelly        ` ⨯ `  1`",
+          "inline": false
+        }
+      ],
+      "image": {
+        "url": "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+      },
+      "thumbnail": {
+        "url": "https://storage.googleapis.com/tinglebot/Monsters/%5BRotW%5D%20Monsters_Chuchu_Small.png"
+      }
+    }
+  ]
+}
+
+Test: Job: Guard, Village: Rudania, Run: 1
+Result: {
+  "embeds": [
+    {
+      "color": 2588365,
+      "title": "Inariko Guard: Alden encountered no monsters.",
+      "author": {
+        "name": "Alden 🔗",
+        "url": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "icon_url": "https://storage.googleapis.com/tinglebot/a5ff9f2c-061d-4322-8d6d-bbcf31165ed6.png"
+      },
+      "fields": [
+        {
+          "name": "🔹 __Outcome__",
+          "value": "> 🌳🦋 All is calm. No monsters appear.",
+          "inline": false
+        }
+      ],
+      "image": {
+        "url": "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+      }
+    }
+  ]
+}
+
+Test: Job: Guard, Village: Rudania, Run: 2
+Result: {
+  "embeds": [
+    {
+      "color": 2588365,
+      "title": "Inariko Guard: Alden encountered a Bokoblin!",
+      "author": {
+        "name": "Alden 🔗",
+        "url": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "icon_url": "https://storage.googleapis.com/tinglebot/a5ff9f2c-061d-4322-8d6d-bbcf31165ed6.png"
+      },
+      "fields": [
+        {
+          "name": "__❤️ Hearts__",
+          "value": "> 50/50",
+          "inline": false
+        },
+        {
+          "name": "🔹 __Outcome__",
+          "value": "> 🎊🌟 A narrow escape, but a win nonetheless!",
+          "inline": false
+        },
+        {
+          "name": "💥 __Loot__",
+          "value": "<:Boko_Bat:938167738608791593> `Boko Bat            ` ⨯ `  1`",
+          "inline": false
+        }
+      ],
+      "image": {
+        "url": "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+      },
+      "thumbnail": {
+        "url": "https://storage.googleapis.com/tinglebot/Monsters/%5BRotW%5D%20Monsters_Bokoblin.png"
+      }
+    }
+  ]
+}
+
+Test: Job: Guard, Village: Rudania, Run: 3
+Result: {
+  "embeds": [
+    {
+      "color": 2588365,
+      "title": "Inariko Guard: Alden encountered a Fire Keese!",
+      "author": {
+        "name": "Alden 🔗",
+        "url": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "icon_url": "https://storage.googleapis.com/tinglebot/a5ff9f2c-061d-4322-8d6d-bbcf31165ed6.png"
+      },
+      "fields": [
+        {
+          "name": "__❤️ Hearts__",
+          "value": "> 49/50",
+          "inline": false
+        },
+        {
+          "name": "🔹 __Outcome__",
+          "value": "> 🛡️💔 You couldn't dodge in time! Lose ❤️ 1 heart!",
+          "inline": false
+        }
+      ],
+      "image": {
+        "url": "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+      },
+      "thumbnail": {
+        "url": "https://storage.googleapis.com/tinglebot/Monsters/%5BRotW%5D%20Monsters_Keese_Fire.png"
+      }
+    }
+  ]
+}
+
+Test: Job: Guard, Village: Inariko, Run: 1
+Result: {
+  "embeds": [
+    {
+      "color": 2588365,
+      "title": "Inariko Guard: Alden encountered a Keese!",
+      "author": {
+        "name": "Alden 🔗",
+        "url": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "icon_url": "https://storage.googleapis.com/tinglebot/a5ff9f2c-061d-4322-8d6d-bbcf31165ed6.png"
+      },
+      "fields": [
+        {
+          "name": "__❤️ Hearts__",
+          "value": "> 50/50",
+          "inline": false
+        },
+        {
+          "name": "🔹 __Outcome__",
+          "value": "> 🛡️💪 It was touch and go, but you pulled off the victory!",
+          "inline": false
+        },
+        {
+          "name": "💥 __Loot__",
+          "value": "<:monster_claw:938297694554849290> `Monster Claw        ` ⨯ `  1`",
+          "inline": false
+        }
+      ],
+      "image": {
+        "url": "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+      },
+      "thumbnail": {
+        "url": "https://storage.googleapis.com/tinglebot/Monsters/%5BRotW%5D%20Monsters_Keese.png"
+      }
+    }
+  ]
+}
+
+Test: Job: Guard, Village: Inariko, Run: 2
+Result: {
+  "embeds": [
+    {
+      "color": 2588365,
+      "title": "Inariko Guard: Alden encountered a Lizalfos!",
+      "author": {
+        "name": "Alden 🔗",
+        "url": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "icon_url": "https://storage.googleapis.com/tinglebot/a5ff9f2c-061d-4322-8d6d-bbcf31165ed6.png"
+      },
+      "fields": [
+        {
+          "name": "__❤️ Hearts__",
+          "value": "> 50/50",
+          "inline": false
+        },
+        {
+          "name": "🔹 __Outcome__",
+          "value": "> 🔥💫 Monster vanquished! You win!",
+          "inline": false
+        },
+        {
+          "name": "💥 __Loot__",
+          "value": "<:Lizalfos_Tail:744755438465056799> `Lizalfos Tail       ` ⨯ `  1`",
+          "inline": false
+        }
+      ],
+      "image": {
+        "url": "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+      },
+      "thumbnail": {
+        "url": "https://storage.googleapis.com/tinglebot/Monsters/%5BRotW%5D%20Monsters_Lizalfos.png"
+      }
+    }
+  ]
+}
+
+Test: Job: Guard, Village: Inariko, Run: 3
+Result: {
+  "embeds": [
+    {
+      "color": 2588365,
+      "title": "Inariko Guard: Alden encountered a Keese!",
+      "author": {
+        "name": "Alden 🔗",
+        "url": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "icon_url": "https://storage.googleapis.com/tinglebot/a5ff9f2c-061d-4322-8d6d-bbcf31165ed6.png"
+      },
+      "fields": [
+        {
+          "name": "__❤️ Hearts__",
+          "value": "> 49/50",
+          "inline": false
+        },
+        {
+          "name": "🔹 __Outcome__",
+          "value": "> ⚡️😖 A painful blow! You lose ❤️ 1 heart!",
+          "inline": false
+        }
+      ],
+      "image": {
+        "url": "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+      },
+      "thumbnail": {
+        "url": "https://storage.googleapis.com/tinglebot/Monsters/%5BRotW%5D%20Monsters_Keese.png"
+      }
+    }
+  ]
+}
+
+Test: Job: Guard, Village: Vhintl, Run: 1
+Result: {
+  "embeds": [
+    {
+      "color": 2588365,
+      "title": "Inariko Guard: Alden encountered a Electric Lizalfos!",
+      "author": {
+        "name": "Alden 🔗",
+        "url": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "icon_url": "https://storage.googleapis.com/tinglebot/a5ff9f2c-061d-4322-8d6d-bbcf31165ed6.png"
+      },
+      "fields": [
+        {
+          "name": "__❤️ Hearts__",
+          "value": "> 49/50",
+          "inline": false
+        },
+        {
+          "name": "🔹 __Outcome__",
+          "value": "> 💥💀 The monster attacks! You lose ❤️ 1 heart!",
+          "inline": false
+        }
+      ],
+      "image": {
+        "url": "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+      },
+      "thumbnail": {
+        "url": "https://storage.googleapis.com/tinglebot/Monsters/%5BRotW%5D%20Monsters_Lizalfos_Electric.png"
+      }
+    }
+  ]
+}
+
+Test: Job: Guard, Village: Vhintl, Run: 2
+Result: {
+  "embeds": [
+    {
+      "color": 2588365,
+      "title": "Inariko Guard: Alden encountered a Keese!",
+      "author": {
+        "name": "Alden 🔗",
+        "url": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "icon_url": "https://storage.googleapis.com/tinglebot/a5ff9f2c-061d-4322-8d6d-bbcf31165ed6.png"
+      },
+      "fields": [
+        {
+          "name": "__❤️ Hearts__",
+          "value": "> 50/50",
+          "inline": false
+        },
+        {
+          "name": "🔹 __Outcome__",
+          "value": "> ⚔️✨ Your weapon's power helped you secure the win!",
+          "inline": false
+        },
+        {
+          "name": "💥 __Loot__",
+          "value": "<:monster_claw:938297694554849290> `Monster Claw        ` ⨯ `  1`",
+          "inline": false
+        }
+      ],
+      "image": {
+        "url": "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+      },
+      "thumbnail": {
+        "url": "https://storage.googleapis.com/tinglebot/Monsters/%5BRotW%5D%20Monsters_Keese.png"
+      }
+    }
+  ]
+}
+
+Test: Job: Guard, Village: Vhintl, Run: 3
+Result: {
+  "embeds": [
+    {
+      "color": 2588365,
+      "title": "Inariko Guard: Alden encountered no monsters.",
+      "author": {
+        "name": "Alden 🔗",
+        "url": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "icon_url": "https://storage.googleapis.com/tinglebot/a5ff9f2c-061d-4322-8d6d-bbcf31165ed6.png"
+      },
+      "fields": [
+        {
+          "name": "🔹 __Outcome__",
+          "value": "> 🌲🕊️ A quiet day. No monsters were encountered.",
+          "inline": false
+        }
+      ],
+      "image": {
+        "url": "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+      }
+    }
+  ]
+}
+
+Test: Job: Hunter, Village: Rudania, Run: 1
+Result: {
+  "embeds": [
+    {
+      "color": 2588365,
+      "title": "Inariko Hunter: Alden encountered a Lizalfos!",
+      "author": {
+        "name": "Alden 🔗",
+        "url": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "icon_url": "https://storage.googleapis.com/tinglebot/a5ff9f2c-061d-4322-8d6d-bbcf31165ed6.png"
+      },
+      "fields": [
+        {
+          "name": "__❤️ Hearts__",
+          "value": "> 50/50",
+          "inline": false
+        },
+        {
+          "name": "🔹 __Outcome__",
+          "value": "> 🌟👑 What an impressive display! You win!",
+          "inline": false
+        },
+        {
+          "name": "💥 __Loot__",
+          "value": "<:Lizal_Spear:938162362094075986> `Lizal Spear         ` ⨯ `  1`",
+          "inline": false
+        }
+      ],
+      "image": {
+        "url": "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+      },
+      "thumbnail": {
+        "url": "https://storage.googleapis.com/tinglebot/Monsters/%5BRotW%5D%20Monsters_Lizalfos.png"
+      }
+    }
+  ]
+}
+
+Test: Job: Hunter, Village: Rudania, Run: 2
+Result: {
+  "embeds": [
+    {
+      "color": 2588365,
+      "title": "Inariko Hunter: Alden encountered a Lizalfos!",
+      "author": {
+        "name": "Alden 🔗",
+        "url": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "icon_url": "https://storage.googleapis.com/tinglebot/a5ff9f2c-061d-4322-8d6d-bbcf31165ed6.png"
+      },
+      "fields": [
+        {
+          "name": "__❤️ Hearts__",
+          "value": "> 49/50",
+          "inline": false
+        },
+        {
+          "name": "🔹 __Outcome__",
+          "value": "> 💥💀 Ouch! That cost you ❤️ 1 heart!",
+          "inline": false
+        }
+      ],
+      "image": {
+        "url": "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+      },
+      "thumbnail": {
+        "url": "https://storage.googleapis.com/tinglebot/Monsters/%5BRotW%5D%20Monsters_Lizalfos.png"
+      }
+    }
+  ]
+}
+
+Test: Job: Hunter, Village: Rudania, Run: 3
+Result: {
+  "embeds": [
+    {
+      "color": 2588365,
+      "title": "Inariko Hunter: Alden encountered a Chuchu (Small)!",
+      "author": {
+        "name": "Alden 🔗",
+        "url": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "icon_url": "https://storage.googleapis.com/tinglebot/a5ff9f2c-061d-4322-8d6d-bbcf31165ed6.png"
+      },
+      "fields": [
+        {
+          "name": "__❤️ Hearts__",
+          "value": "> 50/50",
+          "inline": false
+        },
+        {
+          "name": "🔹 __Outcome__",
+          "value": "> 💪🌟 Nothing can stop you! Another win!",
+          "inline": false
+        },
+        {
+          "name": "💥 __Loot__",
+          "value": "<:Chuchu_Jelly:744755431175356416> `Chuchu Jelly        ` ⨯ `  1`",
+          "inline": false
+        }
+      ],
+      "image": {
+        "url": "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+      },
+      "thumbnail": {
+        "url": "https://storage.googleapis.com/tinglebot/Monsters/%5BRotW%5D%20Monsters_Chuchu_Small.png"
+      }
+    }
+  ]
+}
+
+Test: Job: Hunter, Village: Inariko, Run: 1
+Result: {
+  "embeds": [
+    {
+      "color": 2588365,
+      "title": "Inariko Hunter: Alden encountered a Water Octorok!",
+      "author": {
+        "name": "Alden 🔗",
+        "url": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "icon_url": "https://storage.googleapis.com/tinglebot/a5ff9f2c-061d-4322-8d6d-bbcf31165ed6.png"
+      },
+      "fields": [
+        {
+          "name": "__❤️ Hearts__",
+          "value": "> 50/50",
+          "inline": false
+        },
+        {
+          "name": "🔹 __Outcome__",
+          "value": "> 🔥💪 You're an unstoppable force! Another win!",
+          "inline": false
+        },
+        {
+          "name": "💥 __Loot__",
+          "value": "<:Octo_Balloon:744755437475463240> `Octo Balloon        ` ⨯ `  1`",
+          "inline": false
+        }
+      ],
+      "image": {
+        "url": "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+      },
+      "thumbnail": {
+        "url": "https://storage.googleapis.com/tinglebot/Monsters/%5BRotW%5D%20Monsters_Octorok_Water.png"
+      }
+    }
+  ]
+}
+
+Test: Job: Hunter, Village: Inariko, Run: 2
+Result: {
+  "embeds": [
+    {
+      "color": 2588365,
+      "title": "Inariko Hunter: Alden encountered no monsters.",
+      "author": {
+        "name": "Alden 🔗",
+        "url": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "icon_url": "https://storage.googleapis.com/tinglebot/a5ff9f2c-061d-4322-8d6d-bbcf31165ed6.png"
+      },
+      "fields": [
+        {
+          "name": "🔹 __Outcome__",
+          "value": "> 🌲🕊️ A serene day with no threats.",
+          "inline": false
+        }
+      ],
+      "image": {
+        "url": "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+      }
+    }
+  ]
+}
+
+Test: Job: Hunter, Village: Inariko, Run: 3
+Result: {
+  "embeds": [
+    {
+      "color": 2588365,
+      "title": "Inariko Hunter: Alden encountered a Chuchu (Small)!",
+      "author": {
+        "name": "Alden 🔗",
+        "url": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "icon_url": "https://storage.googleapis.com/tinglebot/a5ff9f2c-061d-4322-8d6d-bbcf31165ed6.png"
+      },
+      "fields": [
+        {
+          "name": "__❤️ Hearts__",
+          "value": "> 50/50",
+          "inline": false
+        },
+        {
+          "name": "🔹 __Outcome__",
+          "value": "> 🛡️💪 It was touch and go, but you pulled off the victory!",
+          "inline": false
+        },
+        {
+          "name": "💥 __Loot__",
+          "value": "<:Chuchu_Jelly:744755431175356416> `Chuchu Jelly        ` ⨯ `  1`",
+          "inline": false
+        }
+      ],
+      "image": {
+        "url": "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+      },
+      "thumbnail": {
+        "url": "https://storage.googleapis.com/tinglebot/Monsters/%5BRotW%5D%20Monsters_Chuchu_Small.png"
+      }
+    }
+  ]
+}
+
+Test: Job: Hunter, Village: Vhintl, Run: 1
+Result: {
+  "embeds": [
+    {
+      "color": 2588365,
+      "title": "Inariko Hunter: Alden encountered a Electric Keese!",
+      "author": {
+        "name": "Alden 🔗",
+        "url": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "icon_url": "https://storage.googleapis.com/tinglebot/a5ff9f2c-061d-4322-8d6d-bbcf31165ed6.png"
+      },
+      "fields": [
+        {
+          "name": "__❤️ Hearts__",
+          "value": "> 49/50",
+          "inline": false
+        },
+        {
+          "name": "🔹 __Outcome__",
+          "value": "> 🛡️💔 You couldn't dodge in time! Lose ❤️ 1 heart!",
+          "inline": false
+        }
+      ],
+      "image": {
+        "url": "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+      },
+      "thumbnail": {
+        "url": "https://storage.googleapis.com/tinglebot/Monsters/%5BRotW%5D%20Monsters_Keese_Electric.png"
+      }
+    }
+  ]
+}
+
+Test: Job: Hunter, Village: Vhintl, Run: 2
+Result: {
+  "embeds": [
+    {
+      "color": 2588365,
+      "title": "Inariko Hunter: Alden encountered no monsters.",
+      "author": {
+        "name": "Alden 🔗",
+        "url": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "icon_url": "https://storage.googleapis.com/tinglebot/a5ff9f2c-061d-4322-8d6d-bbcf31165ed6.png"
+      },
+      "fields": [
+        {
+          "name": "🔹 __Outcome__",
+          "value": "> 🌼🌿 The birds are singing. You are at peace.",
+          "inline": false
+        }
+      ],
+      "image": {
+        "url": "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+      }
+    }
+  ]
+}
+
+Test: Job: Hunter, Village: Vhintl, Run: 3
+Result: {
+  "embeds": [
+    {
+      "color": 2588365,
+      "title": "Inariko Hunter: Alden encountered a Forest Octorok!",
+      "author": {
+        "name": "Alden 🔗",
+        "url": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "icon_url": "https://storage.googleapis.com/tinglebot/a5ff9f2c-061d-4322-8d6d-bbcf31165ed6.png"
+      },
+      "fields": [
+        {
+          "name": "__❤️ Hearts__",
+          "value": "> 50/50",
+          "inline": false
+        },
+        {
+          "name": "🔹 __Outcome__",
+          "value": "> 🙌✨ Just when it seemed bleak, you pulled through and won!",
+          "inline": false
+        },
+        {
+          "name": "💥 __Loot__",
+          "value": "<:Octo_Balloon:744755437475463240> `Octo Balloon        ` ⨯ `  1`",
+          "inline": false
+        }
+      ],
+      "image": {
+        "url": "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+      },
+      "thumbnail": {
+        "url": "https://storage.googleapis.com/tinglebot/Monsters/%5BRotW%5D%20Monsters_Octorok_Forest.png"
+      }
+    }
+  ]
+}
+
+Test: Job: Mercenary, Village: Rudania, Run: 1
+Result: {
+  "embeds": [
+    {
+      "color": 2588365,
+      "title": "Inariko Mercenary: Alden encountered a Chuchu (Large)!",
+      "author": {
+        "name": "Alden 🔗",
+        "url": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "icon_url": "https://storage.googleapis.com/tinglebot/a5ff9f2c-061d-4322-8d6d-bbcf31165ed6.png"
+      },
+      "fields": [
+        {
+          "name": "__❤️ Hearts__",
+          "value": "> 49/50",
+          "inline": false
+        },
+        {
+          "name": "🔹 __Outcome__",
+          "value": "> 💥⚔️ A swift strike! Lose ❤️ 1 heart!",
+          "inline": false
+        }
+      ],
+      "image": {
+        "url": "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+      },
+      "thumbnail": {
+        "url": "https://storage.googleapis.com/tinglebot/Monsters/%5BRotW%5D%20Monsters_Chuchu_Large.png"
+      }
+    }
+  ]
+}
+
+Test: Job: Mercenary, Village: Rudania, Run: 2
+Result: {
+  "embeds": [
+    {
+      "color": 2588365,
+      "title": "Inariko Mercenary: Alden encountered a Igneo Pebblit!",
+      "author": {
+        "name": "Alden 🔗",
+        "url": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "icon_url": "https://storage.googleapis.com/tinglebot/a5ff9f2c-061d-4322-8d6d-bbcf31165ed6.png"
+      },
+      "fields": [
+        {
+          "name": "__❤️ Hearts__",
+          "value": "> 50/50",
+          "inline": false
+        },
+        {
+          "name": "🔹 __Outcome__",
+          "value": "> 🌟💥 ★Fantastic job!! Another win in the books!★",
+          "inline": false
+        },
+        {
+          "name": "💥 __Loot__",
+          "value": "<:Goron_Ore:938273747478151189> `Goron Ore           ` ⨯ `  1`",
+          "inline": false
+        }
+      ],
+      "image": {
+        "url": "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+      },
+      "thumbnail": {
+        "url": "https://storage.googleapis.com/tinglebot/Monsters/%5BRotW%5D%20Monsters_Pebblit_Igneo.png"
+      }
+    }
+  ]
+}
+
+Test: Job: Mercenary, Village: Rudania, Run: 3
+Result: {
+  "embeds": [
+    {
+      "color": 2588365,
+      "title": "Inariko Mercenary: Alden encountered a Stone Pebblit!",
+      "author": {
+        "name": "Alden 🔗",
+        "url": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "icon_url": "https://storage.googleapis.com/tinglebot/a5ff9f2c-061d-4322-8d6d-bbcf31165ed6.png"
+      },
+      "fields": [
+        {
+          "name": "__❤️ Hearts__",
+          "value": "> 50/50",
+          "inline": false
+        },
+        {
+          "name": "🔹 __Outcome__",
+          "value": "> 👏✨ Truly impressive! You win!",
+          "inline": false
+        },
+        {
+          "name": "💥 __Loot__",
+          "value": "<:gold_ore:934904427310092288> `Gold Ore            ` ⨯ `  1`",
+          "inline": false
+        }
+      ],
+      "image": {
+        "url": "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+      },
+      "thumbnail": {
+        "url": "https://storage.googleapis.com/tinglebot/Monsters/%5BRotW%5D%20Monsters_Pebblit_Stone.png"
+      }
+    }
+  ]
+}
+
+Test: Job: Mercenary, Village: Inariko, Run: 1
+Result: {
+  "embeds": [
+    {
+      "color": 2588365,
+      "title": "Inariko Mercenary: Alden encountered a Ice Chuchu (Large)!",
+      "author": {
+        "name": "Alden 🔗",
+        "url": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "icon_url": "https://storage.googleapis.com/tinglebot/a5ff9f2c-061d-4322-8d6d-bbcf31165ed6.png"
+      },
+      "fields": [
+        {
+          "name": "__❤️ Hearts__",
+          "value": "> 50/50",
+          "inline": false
+        },
+        {
+          "name": "🔹 __Outcome__",
+          "value": "> 🎉💪 A tough fight, but you emerged victorious!",
+          "inline": false
+        },
+        {
+          "name": "💥 __Loot__",
+          "value": "<:Chuchu_Jelly_White:744755431771078666> `White Chuchu Jelly  ` ⨯ `  3`",
+          "inline": false
+        }
+      ],
+      "image": {
+        "url": "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+      },
+      "thumbnail": {
+        "url": "https://storage.googleapis.com/tinglebot/Monsters/%5BRotW%5D%20Monsters_Chuchu_Ice_Large.png"
+      }
+    }
+  ]
+}
+
+Test: Job: Mercenary, Village: Inariko, Run: 2
+Result: {
+  "embeds": [
+    {
+      "color": 2588365,
+      "title": "Inariko Mercenary: Alden encountered a Ice Chuchu (Large)!",
+      "author": {
+        "name": "Alden 🔗",
+        "url": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "icon_url": "https://storage.googleapis.com/tinglebot/a5ff9f2c-061d-4322-8d6d-bbcf31165ed6.png"
+      },
+      "fields": [
+        {
+          "name": "__❤️ Hearts__",
+          "value": "> 50/50",
+          "inline": false
+        },
+        {
+          "name": "🔹 __Outcome__",
+          "value": "> 🌟👑 What an impressive display! You win!",
+          "inline": false
+        },
+        {
+          "name": "💥 __Loot__",
+          "value": "<:Chuchu_Jelly_White:744755431771078666> `White Chuchu Jelly  ` ⨯ `  3`",
+          "inline": false
+        }
+      ],
+      "image": {
+        "url": "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+      },
+      "thumbnail": {
+        "url": "https://storage.googleapis.com/tinglebot/Monsters/%5BRotW%5D%20Monsters_Chuchu_Ice_Large.png"
+      }
+    }
+  ]
+}
+
+Test: Job: Mercenary, Village: Inariko, Run: 3
+Result: {
+  "embeds": [
+    {
+      "color": 2588365,
+      "title": "Inariko Mercenary: Alden encountered a Stone Pebblit!",
+      "author": {
+        "name": "Alden 🔗",
+        "url": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "icon_url": "https://storage.googleapis.com/tinglebot/a5ff9f2c-061d-4322-8d6d-bbcf31165ed6.png"
+      },
+      "fields": [
+        {
+          "name": "__❤️ Hearts__",
+          "value": "> 50/50",
+          "inline": false
+        },
+        {
+          "name": "🔹 __Outcome__",
+          "value": "> 🙌✨ Just when it seemed bleak, you pulled through and won!",
+          "inline": false
+        },
+        {
+          "name": "💥 __Loot__",
+          "value": "<:Gem_Amethyst:938242921210196018> `Amethyst            ` ⨯ `  1`",
+          "inline": false
+        }
+      ],
+      "image": {
+        "url": "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+      },
+      "thumbnail": {
+        "url": "https://storage.googleapis.com/tinglebot/Monsters/%5BRotW%5D%20Monsters_Pebblit_Stone.png"
+      }
+    }
+  ]
+}
+
+Test: Job: Mercenary, Village: Vhintl, Run: 1
+Result: {
+  "embeds": [
+    {
+      "color": 2588365,
+      "title": "Inariko Mercenary: Alden encountered no monsters.",
+      "author": {
+        "name": "Alden 🔗",
+        "url": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "icon_url": "https://storage.googleapis.com/tinglebot/a5ff9f2c-061d-4322-8d6d-bbcf31165ed6.png"
+      },
+      "fields": [
+        {
+          "name": "🔹 __Outcome__",
+          "value": "> 🌿☀️ The area is peaceful. No monsters in sight.",
+          "inline": false
+        }
+      ],
+      "image": {
+        "url": "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+      }
+    }
+  ]
+}
+
+Test: Job: Mercenary, Village: Vhintl, Run: 2
+Result: {
+  "embeds": [
+    {
+      "color": 2588365,
+      "title": "Inariko Mercenary: Alden encountered a Chuchu (Large)!",
+      "author": {
+        "name": "Alden 🔗",
+        "url": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "icon_url": "https://storage.googleapis.com/tinglebot/a5ff9f2c-061d-4322-8d6d-bbcf31165ed6.png"
+      },
+      "fields": [
+        {
+          "name": "__❤️ Hearts__",
+          "value": "> 49/50",
+          "inline": false
+        },
+        {
+          "name": "🔹 __Outcome__",
+          "value": "> ⚡️😖 A painful blow! You lose ❤️ 1 heart!",
+          "inline": false
+        }
+      ],
+      "image": {
+        "url": "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+      },
+      "thumbnail": {
+        "url": "https://storage.googleapis.com/tinglebot/Monsters/%5BRotW%5D%20Monsters_Chuchu_Large.png"
+      }
+    }
+  ]
+}
+
+Test: Job: Mercenary, Village: Vhintl, Run: 3
+Result: {
+  "embeds": [
+    {
+      "color": 2588365,
+      "title": "Inariko Mercenary: Alden encountered no monsters.",
+      "author": {
+        "name": "Alden 🔗",
+        "url": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "icon_url": "https://storage.googleapis.com/tinglebot/a5ff9f2c-061d-4322-8d6d-bbcf31165ed6.png"
+      },
+      "fields": [
+        {
+          "name": "🔹 __Outcome__",
+          "value": "> 🌲🕊️ A quiet day. No monsters were encountered.",
+          "inline": false
+        }
+      ],
+      "image": {
+        "url": "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+      }
+    }
+  ]
+}
+
+Test: Job: Scout, Village: Rudania, Run: 1
+Result: {
+  "embeds": [
+    {
+      "color": 2588365,
+      "title": "Inariko Scout: Alden encountered a Rock Octorok!",
+      "author": {
+        "name": "Alden 🔗",
+        "url": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "icon_url": "https://storage.googleapis.com/tinglebot/a5ff9f2c-061d-4322-8d6d-bbcf31165ed6.png"
+      },
+      "fields": [
+        {
+          "name": "__❤️ Hearts__",
+          "value": "> 50/50",
+          "inline": false
+        },
+        {
+          "name": "🔹 __Outcome__",
+          "value": "> 🎉💪 A tough fight, but you emerged victorious!",
+          "inline": false
+        },
+        {
+          "name": "💥 __Loot__",
+          "value": "<:Flint:744755087196291165> `Flint               ` ⨯ `  1`",
+          "inline": false
+        }
+      ],
+      "image": {
+        "url": "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+      },
+      "thumbnail": {
+        "url": "https://storage.googleapis.com/tinglebot/Monsters/%5BRotW%5D%20Monsters_Octorok_Rock.png"
+      }
+    }
+  ]
+}
+
+Test: Job: Scout, Village: Rudania, Run: 2
+Result: {
+  "embeds": [
+    {
+      "color": 2588365,
+      "title": "Inariko Scout: Alden encountered a Fire Keese!",
+      "author": {
+        "name": "Alden 🔗",
+        "url": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "icon_url": "https://storage.googleapis.com/tinglebot/a5ff9f2c-061d-4322-8d6d-bbcf31165ed6.png"
+      },
+      "fields": [
+        {
+          "name": "__❤️ Hearts__",
+          "value": "> 50/50",
+          "inline": false
+        },
+        {
+          "name": "🔹 __Outcome__",
+          "value": "> 🛡️💪 It was touch and go, but you pulled off the victory!",
+          "inline": false
+        },
+        {
+          "name": "💥 __Loot__",
+          "value": "<:monster_claw:938297694554849290> `Monster Claw        ` ⨯ `  1`",
+          "inline": false
+        }
+      ],
+      "image": {
+        "url": "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+      },
+      "thumbnail": {
+        "url": "https://storage.googleapis.com/tinglebot/Monsters/%5BRotW%5D%20Monsters_Keese_Fire.png"
+      }
+    }
+  ]
+}
+
+Test: Job: Scout, Village: Rudania, Run: 3
+Result: {
+  "embeds": [
+    {
+      "color": 2588365,
+      "title": "Inariko Scout: Alden encountered a Evermean!",
+      "author": {
+        "name": "Alden 🔗",
+        "url": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "icon_url": "https://storage.googleapis.com/tinglebot/a5ff9f2c-061d-4322-8d6d-bbcf31165ed6.png"
+      },
+      "fields": [
+        {
+          "name": "__❤️ Hearts__",
+          "value": "> 50/50",
+          "inline": false
+        },
+        {
+          "name": "🔹 __Outcome__",
+          "value": "> 🔥💪 You're an unstoppable force! Another win!",
+          "inline": false
+        },
+        {
+          "name": "💥 __Loot__",
+          "value": "<:woodland_rhino_beetle:938298181513515058> `Woodland Rhino Be...` ⨯ `  1`",
+          "inline": false
+        }
+      ],
+      "image": {
+        "url": "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+      },
+      "thumbnail": {
+        "url": "https://storage.googleapis.com/tinglebot/Monsters/%5BRotW%5D%20Monsters_Evermean.png"
+      }
+    }
+  ]
+}
+
+Test: Job: Scout, Village: Inariko, Run: 1
+Result: {
+  "embeds": [
+    {
+      "color": 2588365,
+      "title": "Inariko Scout: Alden encountered a Evermean!",
+      "author": {
+        "name": "Alden 🔗",
+        "url": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "icon_url": "https://storage.googleapis.com/tinglebot/a5ff9f2c-061d-4322-8d6d-bbcf31165ed6.png"
+      },
+      "fields": [
+        {
+          "name": "__❤️ Hearts__",
+          "value": "> 50/50",
+          "inline": false
+        },
+        {
+          "name": "🔹 __Outcome__",
+          "value": "> 🔮⚔️ Your weapon made the difference in your victory!",
+          "inline": false
+        },
+        {
+          "name": "💥 __Loot__",
+          "value": "<:hornet_larvae:938297694382866472> `Hornet Larvae       ` ⨯ `  1`",
+          "inline": false
+        }
+      ],
+      "image": {
+        "url": "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+      },
+      "thumbnail": {
+        "url": "https://storage.googleapis.com/tinglebot/Monsters/%5BRotW%5D%20Monsters_Evermean.png"
+      }
+    }
+  ]
+}
+
+Test: Job: Scout, Village: Inariko, Run: 2
+Result: {
+  "embeds": [
+    {
+      "color": 2588365,
+      "title": "Inariko Scout: Alden encountered a Chuchu (Medium)!",
+      "author": {
+        "name": "Alden 🔗",
+        "url": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "icon_url": "https://storage.googleapis.com/tinglebot/a5ff9f2c-061d-4322-8d6d-bbcf31165ed6.png"
+      },
+      "fields": [
+        {
+          "name": "__❤️ Hearts__",
+          "value": "> 49/50",
+          "inline": false
+        },
+        {
+          "name": "🔹 __Outcome__",
+          "value": "> 🩹🌿 Just a scratch! Lose ❤️ 1 heart!",
+          "inline": false
+        }
+      ],
+      "image": {
+        "url": "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+      },
+      "thumbnail": {
+        "url": "https://storage.googleapis.com/tinglebot/Monsters/%5BRotW%5D%20Monsters_Chuchu_Medium.png"
+      }
+    }
+  ]
+}
+
+Test: Job: Scout, Village: Inariko, Run: 3
+Result: {
+  "embeds": [
+    {
+      "color": 2588365,
+      "title": "Inariko Scout: Alden encountered a Ice Keese!",
+      "author": {
+        "name": "Alden 🔗",
+        "url": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "icon_url": "https://storage.googleapis.com/tinglebot/a5ff9f2c-061d-4322-8d6d-bbcf31165ed6.png"
+      },
+      "fields": [
+        {
+          "name": "__❤️ Hearts__",
+          "value": "> 50/50",
+          "inline": false
+        },
+        {
+          "name": "🔹 __Outcome__",
+          "value": "> 🎉💪 A tough fight, but you emerged victorious!",
+          "inline": false
+        },
+        {
+          "name": "💥 __Loot__",
+          "value": "<:monster_claw:938297694554849290> `Monster Claw        ` ⨯ `  1`",
+          "inline": false
+        }
+      ],
+      "image": {
+        "url": "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+      },
+      "thumbnail": {
+        "url": "https://storage.googleapis.com/tinglebot/Monsters/%5BRotW%5D%20Monsters_Keese_Ice.png"
+      }
+    }
+  ]
+}
+
+Test: Job: Scout, Village: Vhintl, Run: 1
+Result: {
+  "embeds": [
+    {
+      "color": 2588365,
+      "title": "Inariko Scout: Alden encountered a Evermean!",
+      "author": {
+        "name": "Alden 🔗",
+        "url": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "icon_url": "https://storage.googleapis.com/tinglebot/a5ff9f2c-061d-4322-8d6d-bbcf31165ed6.png"
+      },
+      "fields": [
+        {
+          "name": "__❤️ Hearts__",
+          "value": "> 50/50",
+          "inline": false
+        },
+        {
+          "name": "🔹 __Outcome__",
+          "value": "> ⚔️✨ Your weapon's power helped you secure the win!",
+          "inline": false
+        },
+        {
+          "name": "💥 __Loot__",
+          "value": "<:Mighty_Bananas:744756624291528786> `Mighty Bananas      ` ⨯ `  1`",
+          "inline": false
+        }
+      ],
+      "image": {
+        "url": "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+      },
+      "thumbnail": {
+        "url": "https://storage.googleapis.com/tinglebot/Monsters/%5BRotW%5D%20Monsters_Evermean.png"
+      }
+    }
+  ]
+}
+
+Test: Job: Scout, Village: Vhintl, Run: 2
+Result: {
+  "embeds": [
+    {
+      "color": 2588365,
+      "title": "Inariko Scout: Alden encountered a Electric Keese!",
+      "author": {
+        "name": "Alden 🔗",
+        "url": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "icon_url": "https://storage.googleapis.com/tinglebot/a5ff9f2c-061d-4322-8d6d-bbcf31165ed6.png"
+      },
+      "fields": [
+        {
+          "name": "__❤️ Hearts__",
+          "value": "> 49/50",
+          "inline": false
+        },
+        {
+          "name": "🔹 __Outcome__",
+          "value": "> 🩹🌿 Just a scratch! Lose ❤️ 1 heart!",
+          "inline": false
+        }
+      ],
+      "image": {
+        "url": "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+      },
+      "thumbnail": {
+        "url": "https://storage.googleapis.com/tinglebot/Monsters/%5BRotW%5D%20Monsters_Keese_Electric.png"
+      }
+    }
+  ]
+}
+
+Test: Job: Scout, Village: Vhintl, Run: 3
+Result: {
+  "embeds": [
+    {
+      "color": 2588365,
+      "title": "Inariko Scout: Alden encountered a Electric Keese!",
+      "author": {
+        "name": "Alden 🔗",
+        "url": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "icon_url": "https://storage.googleapis.com/tinglebot/a5ff9f2c-061d-4322-8d6d-bbcf31165ed6.png"
+      },
+      "fields": [
+        {
+          "name": "__❤️ Hearts__",
+          "value": "> 50/50",
+          "inline": false
+        },
+        {
+          "name": "🔹 __Outcome__",
+          "value": "> 💪🌿 Your strength is formidable. Your foes fall before you with ease!",
+          "inline": false
+        },
+        {
+          "name": "💥 __Loot__",
+          "value": "<:Keese_Wing_Electric:744755433025044530> `Electric Keese Wing ` ⨯ `  1`",
+          "inline": false
+        }
+      ],
+      "image": {
+        "url": "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+      },
+      "thumbnail": {
+        "url": "https://storage.googleapis.com/tinglebot/Monsters/%5BRotW%5D%20Monsters_Keese_Electric.png"
+      }
+    }
+  ]
+}
+

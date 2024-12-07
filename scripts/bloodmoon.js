@@ -1,4 +1,5 @@
 // ------------------- Import necessary modules -------------------
+require('dotenv').config();
 const { EmbedBuilder } = require('discord.js');
 const { convertToHyruleanDate } = require('../modules/calendarModule');
 const { getRandomEncounter, adjustEncounterProbabilities } = require('../modules/rngModule');
@@ -11,7 +12,9 @@ const authorIconUrl = 'https://static.wikia.nocookie.net/zelda_gamepedia_en/imag
 // ------------------- Constants for Blood Moon Tracking -------------------
 const BLOOD_MOON_CYCLE = 26;
 const BLOOD_MOON_PERIOD_DAYS = [25, 26, 27];
-let currentDayInCycle = 1;
+// let currentDayInCycle = 1;
+currentDayInCycle = 25; // Manually set for testing
+console.log(`Current Day in Cycle: ${currentDayInCycle}`);
 
 // ------------------- Function to send the Blood Moon announcement -------------------
 async function sendBloodMoonAnnouncement(client, channelId, message) {
@@ -36,6 +39,37 @@ async function sendBloodMoonAnnouncement(client, channelId, message) {
     console.error('Error sending Blood Moon announcement:', error);
   }
 }
+
+// ------------------- Function to Send Blood Moon End Announcement -------------------
+// ------------------- Function to Send Blood Moon End Announcement -------------------
+async function sendBloodMoonEndAnnouncement(client, channelId) {
+  const realWorldDate = new Date().toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+  const hyruleanDate = convertToHyruleanDate(new Date());
+
+  const embed = new EmbedBuilder()
+    .setColor('#FFFACD') // Light yellow color (Lemon Chiffon)
+    .setAuthor({
+      name: 'Blood Moon Fades',
+      iconURL: 'https://cdn-icons-png.flaticon.com/512/616/616456.png', // Moon icon
+    })
+    .setDescription(
+      `**The Blood Moon has ended... for now.**\n\n🌕 **Real-World Date:** ${realWorldDate}\n🌕 **Hyrulean Date:** ${hyruleanDate}`
+    )
+    .setImage('https://drive.google.com/uc?export=view&id=1aRe4OR_QbHnlrC-OFCVyvCzkAGRxgDbN') // Main image
+    .setTimestamp();
+
+  try {
+    const channel = await client.channels.fetch(channelId);
+    await channel.send({ embeds: [embed] });
+  } catch (error) {
+    console.error('Error sending Blood Moon end announcement:', error);
+  }
+}
+
 
 // ------------------- Function to Track the Blood Moon Cycle -------------------
 function trackBloodMoonCycle(client, channelId) {
@@ -71,29 +105,86 @@ function adjustEncounterForBloodMoon(encounter) {
 
 // ------------------- Cron Job to Track Blood Moon Daily -------------------
 cron.schedule('0 0 * * *', () => {
-  trackBloodMoonCycle(client, '1286562327218622475');
+  const rudaniaChannelId = process.env.RUDANIA_TOWN_HALL;
+  const inarikoChannelId = process.env.INARIKO_TOWN_HALL;
+  const vhintlChannelId = process.env.VHINTL_TOWN_HALL;
+
+  // Track Blood Moon cycle for each town hall channel
+  trackBloodMoonCycle(client, rudaniaChannelId);
+  trackBloodMoonCycle(client, inarikoChannelId);
+  trackBloodMoonCycle(client, vhintlChannelId);
 }, {
-  timezone: 'America/New_York'
+  timezone: 'America/New_York',
 });
+
 
 // ------------------- Channel Rename Functions -------------------
 async function changeChannelName(client, channelId, newName) {
   try {
+    console.log(`Attempting to rename channel: ${channelId} to ${newName}`);
     const channel = await client.channels.fetch(channelId);
     await channel.setName(newName);
+    console.log(`Channel renamed successfully: ${channel.name}`);
   } catch (error) {
-    console.error(`Failed to rename channel: ${error.message}`);
+    console.error(`Failed to rename channel (ID: ${channelId}) to ${newName}: ${error.message}`);
   }
 }
 
 async function renameChannels(client) {
-  const channelId = '1286562327218622475';
-  await changeChannelName(client, channelId, '🔴🔥》rudania-townhall');
+  const rudaniaChannelId = process.env.RUDANIA_TOWN_HALL;
+  const inarikoChannelId = process.env.INARIKO_TOWN_HALL;
+  const vhintlChannelId = process.env.VHINTL_TOWN_HALL;
+
+  console.log('Starting channel renaming for Blood Moon...');
+  await Promise.all([
+    changeChannelName(client, rudaniaChannelId, '🔴🔥》rudania-townhall'),
+    changeChannelName(client, inarikoChannelId, '🔴💧》inariko-townhall'),
+    changeChannelName(client, vhintlChannelId, '🔴🌱》vhintl-townhall')
+  ]);
+  console.log('Channel renaming completed.');
 }
 
 async function revertChannelNames(client) {
-  const channelId = '1286562327218622475';
-  await changeChannelName(client, channelId, '🔥》rudania-townhall');
+  const rudaniaChannelId = process.env.RUDANIA_TOWN_HALL;
+  const inarikoChannelId = process.env.INARIKO_TOWN_HALL;
+  const vhintlChannelId = process.env.VHINTL_TOWN_HALL;
+
+  await changeChannelName(client, rudaniaChannelId, '🔥》rudania-townhall');
+  await changeChannelName(client, inarikoChannelId, '💧》inariko-townhall');
+  await changeChannelName(client, vhintlChannelId, '🌱》vhintl-townhall');
+
+  // Announce the end of the Blood Moon
+  await sendBloodMoonEndAnnouncement(client, rudaniaChannelId);
+  await sendBloodMoonEndAnnouncement(client, inarikoChannelId);
+  await sendBloodMoonEndAnnouncement(client, vhintlChannelId);
+}
+
+
+
+// ------------------- Function to Trigger Blood Moon Preemptively -------------------
+async function triggerBloodMoonNow(client, channelId) {
+  try {
+    // Log initiation in the console
+    console.log("Initiating Blood Moon preemptively...");
+
+    // Send Blood Moon announcement
+    await sendBloodMoonAnnouncement(client, channelId, 'The Blood Moon rises! Be wary of its glow.');
+
+    // Rename channel to reflect the Blood Moon
+    await renameChannels(client);
+
+    // Log success
+    console.log("Blood Moon triggered successfully.");
+  } catch (error) {
+    console.error("Error triggering Blood Moon:", error);
+  }
+}
+
+// ------------------- Function to Check Blood Moon Active -------------------
+function isBloodMoonActive() {
+  const isActive = BLOOD_MOON_PERIOD_DAYS.includes(currentDayInCycle);
+  console.log(`[Blood Moon Status] Current Day: ${currentDayInCycle}, Active: ${isActive}`);
+  return isActive;
 }
 
 // ------------------- Export Functions -------------------
@@ -102,5 +193,8 @@ module.exports = {
   trackBloodMoonCycle,
   adjustEncounterForBloodMoon,
   renameChannels,
-  revertChannelNames
+  revertChannelNames,
+  triggerBloodMoonNow,
+  sendBloodMoonEndAnnouncement,
+  isBloodMoonActive
 };

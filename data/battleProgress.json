@@ -11,5 +11,70 @@
       "current": 14
     },
     "progress": "\nBattle initiated! Player turn next."
+  },
+  "1733557840777": {
+    "battleId": "1733557840777",
+    "characters": [
+      "Alden"
+    ],
+    "monster": "Blue Hinox",
+    "tier": 5,
+    "monsterHearts": {
+      "max": 10,
+      "current": 10
+    },
+    "progress": "\nRaid initiated! Prepare for battle."
+  },
+  "1733557860007": {
+    "battleId": "1733557860007",
+    "characters": [
+      "Alden"
+    ],
+    "monster": "Thunder Wizzrobe",
+    "tier": 5,
+    "monsterHearts": {
+      "max": 10,
+      "current": 10
+    },
+    "progress": "\nBattle initiated! Player turn next."
+  },
+  "1733558130312": {
+    "battleId": "1733558130312",
+    "characters": [
+      "Alden"
+    ],
+    "monster": "Frost Talus",
+    "tier": 6,
+    "monsterHearts": {
+      "max": 12,
+      "current": 12
+    },
+    "progress": "\nRaid initiated with monster \"Frost Talus\" (Tier 6)."
+  },
+  "1733558198947": {
+    "battleId": "1733558198947",
+    "characters": [
+      "Alden"
+    ],
+    "monster": "Gloom Hands",
+    "tier": 5,
+    "monsterHearts": {
+      "max": 10,
+      "current": 10
+    },
+    "progress": "\nRaid initiated! Player turn next."
+  },
+  "1733559919132": {
+    "battleId": "1733559919132",
+    "characters": [
+      "Alden"
+    ],
+    "monster": "Hinox",
+    "tier": 5,
+    "monsterHearts": {
+      "max": 10,
+      "current": 10
+    },
+    "progress": "\nRaid initiated! Player turn next."
   }
 }

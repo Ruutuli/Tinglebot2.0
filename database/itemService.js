@@ -35,10 +35,20 @@ const fetchItemByName = async (itemName) => {
             itemName: new RegExp(`^${normalizedItemName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}$`, 'i')
         });
 
-
         if (item) {
-            item.allJobs = item.allJobs ? item.allJobs.split('\n') : ['None'];
-            item.allJobsTags = item.allJobsTags || ['None'];
+            // Validate and handle `allJobs`
+            if (typeof item.allJobs === 'string') {
+                item.allJobs = item.allJobs.split('\n');
+            } else if (Array.isArray(item.allJobs)) {
+                // Already an array, leave it as-is
+                item.allJobs = item.allJobs;
+            } else {
+                // Default to ['None'] if allJobs is invalid or missing
+                item.allJobs = ['None'];
+            }
+
+            // Validate and handle `allJobsTags`
+            item.allJobsTags = Array.isArray(item.allJobsTags) ? item.allJobsTags : ['None'];
         } else {
             console.warn(`❌ No item found for: ${itemName}`);
         }
@@ -51,6 +61,7 @@ const fetchItemByName = async (itemName) => {
         await client.close();
     }
 };
+
 
 
 // ------------------- Fetch item by ID from the database -------------------

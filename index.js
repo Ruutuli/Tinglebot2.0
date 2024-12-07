@@ -21,6 +21,9 @@ const { renameChannels, trackBloodMoonCycle } = require('./scripts/bloodmoon');
 const scheduler = require('./scheduler');
 const { getGuildIds } = require('./utils/getGuildIds');
 
+
+
+
 // Declare the client variable for use across functions
 let client;
 

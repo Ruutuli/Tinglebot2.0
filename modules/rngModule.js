@@ -13,7 +13,17 @@ const encounterProbabilities = {
   tier4: 5
 };
 
-
+// Define the encounter probabilities for Blood Moon
+const encounterProbabilitiesBloodMoon = {
+  noEncounter: 15, // Reduced chance for no encounter
+  tier1: 30,
+  tier2: 20,
+  tier3: 15,
+  tier4: 10,
+  tier5: 5, // New chance for Tier 5
+  tier6: 3, // New chance for Tier 6
+  tier7: 2 // New chance for Tier 7
+};
 
 // Define the initial rarity weights
 const rarityWeights = {

@@ -31,7 +31,45 @@
     "taskType": "writing",
     "taskDescription": "**Darune, Dragon of Power** asks you to write a tale of your OC harnessing their inner strength. Can they withstand the heat? 500 words.",
     "healingStage": 4,
-    "status": "pending",
-    "createdAt": "2024-12-07T03:31:17.474Z"
+    "status": "completed",
+    "createdAt": "2024-12-07T03:31:17.474Z",
+    "submittedAt": "2024-12-07T03:56:10.233Z"
+  },
+  "1733543413740": {
+    "submissionId": "1733543413740",
+    "userId": "126088204016156672",
+    "characterName": "Ze'alous",
+    "healerName": "Foras",
+    "taskType": "art",
+    "taskDescription": "**Foras, Dragon of Courage** asks you to create a lively, full-color drawing of your OC standing tall with the wind in their hair, guided by Foras' courage. Full body, full color required.",
+    "healingStage": 4,
+    "status": "completed",
+    "createdAt": "2024-12-07T03:50:13.740Z",
+    "submittedAt": "2024-12-07T03:53:28.691Z"
+  },
+  "1733545653439": {
+    "submissionId": "1733545653439",
+    "userId": "635948726686580747",
+    "characterName": "Choji",
+    "healerName": "Darune",
+    "taskType": "art",
+    "taskDescription": "**Darune, Dragon of Power** demands that you draw your OC surrounded by flames, invoking his fiery power to cleanse the blight. Minimum requirement: Full Body, Full Color.",
+    "healingStage": 4,
+    "status": "completed",
+    "createdAt": "2024-12-07T04:27:33.439Z",
+    "submittedAt": "2024-12-07T04:41:32.680Z"
+  },
+  "1733546035541": {
+    "submissionId": "1733546035541",
+    "userId": "207945864918990849",
+    "characterName": "Pommé",
+    "healerName": "Darune",
+    "taskType": "item",
+    "taskDescription": "**Darune, Dragon of Power** requires an offering of ONE of the following treasures to satisfy his appetite for power and help cleanse **Pommé**:",
+    "healingStage": 4,
+    "status": "completed",
+    "createdAt": "2024-12-07T04:33:55.541Z",
+    "submittedAt": "2024-12-07T04:46:50.968Z",
+    "itemUsed": "Star Fragment x1"
   }
 }
