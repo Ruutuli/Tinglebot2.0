@@ -34,6 +34,8 @@ async function handleAutocomplete(interaction) {
 // ------------------- Route based on command name and focused option -------------------
 if (commandName === 'vending') {
   await handleVendingAutocomplete(interaction, focusedOption);
+}  else if (commandName === 'blight' && focusedOption.name === 'character_name') {
+    await handleBlightCharacterAutocomplete(interaction, focusedOption);
 } else if (commandName === 'transfer') {
   await handleTransferAutocomplete(interaction, focusedOption);
 } else if (commandName === 'gift') {
@@ -612,28 +614,28 @@ async function handleMountAutocomplete(interaction, focusedOption) {
 async function handleBlightCharacterAutocomplete(interaction, focusedOption) {
   try {
     const userId = interaction.user.id; // Get the user ID from the interaction
-    const characters = await fetchCharactersByUserId(userId); // Fetch user characters
+    const characters = await fetchCharactersByUserId(userId); // Fetch all characters belonging to the user
 
-    // Filter only blighted characters (ensure characters have the 'blighted' status)
+    // Filter characters to include only those with blighted status
     const blightedCharacters = characters.filter(character => character.blighted === true);
 
-    // Map the filtered blighted characters to choices for autocomplete
+    // Map characters to the format required by Discord's autocomplete
     const choices = blightedCharacters.map(character => ({
       name: character.name,
-      value: character.name // Ensure value is the character's name for the autocomplete response
+      value: character.name,
     }));
 
-    // Filter based on user input
+    // Filter choices based on user input
     const filteredChoices = focusedOption.value === ''
-      ? choices.slice(0, 25) // Show the first 25 characters if no input
+      ? choices.slice(0, 25) // Show up to 25 characters if no input is provided
       : choices.filter(choice => choice.name.toLowerCase().includes(focusedOption.value.toLowerCase())).slice(0, 25);
 
-    // Respond with the filtered character choices
+    // Respond with the filtered character names
     await interaction.respond(filteredChoices);
 
   } catch (error) {
-    console.error('Error during blight character autocomplete:', error);
-    await interaction.respond([]); // Respond with an empty array on error
+    console.error('Error handling blight character autocomplete:', error);
+    await interaction.respond([]); // Respond with an empty array in case of error
   }
 }
 

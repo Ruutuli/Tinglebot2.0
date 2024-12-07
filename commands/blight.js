@@ -21,8 +21,9 @@ module.exports = {
         .addStringOption(option =>
           option.setName('character_name')
             .setDescription('The name of the character to roll for blight progression')
-            .setRequired(true)))
-
+            .setRequired(true)
+            .setAutocomplete(true)) // Enable autocomplete for this option
+    )
     // ------------------- Subcommand: Heal a character from blight -------------------
     .addSubcommand(subcommand =>
       subcommand
@@ -76,11 +77,11 @@ module.exports = {
 
   // ------------------- Command Execution Logic -------------------
   async execute(interaction) {
-    const subcommand = interaction.options.getSubcommand(); // Get which subcommand was used
-
+    const subcommand = interaction.options.getSubcommand();
+  
     if (subcommand === 'roll') {
-      const characterName = interaction.options.getString('character_name');
-      await rollForBlightProgression(interaction, characterName);
+      const characterName = interaction.options.getString('character_name'); // Fetch the character name
+      await rollForBlightProgression(interaction, characterName); // Pass it to the roll function
 
     } else if (subcommand === 'heal') {
       const characterName = interaction.options.getString('character_name');

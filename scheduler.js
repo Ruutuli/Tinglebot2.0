@@ -60,23 +60,23 @@ module.exports = (client) => {
   );
 
   // // ------------------- Daily Blight Roll Call -------------------
-  // // Scheduled to run at 8:05 PM EST daily to post roll call reminders and check for missed rolls
-  // cron.schedule(
-  //   '15 20 * * *', // 8:15 PM EST for testing
-  //   async () => {
-  //     try {
-  //       console.log('⏰ Sending daily blight roll call...');
-  //       await postBlightRollCall(client); // Pass client object
-  //       await checkMissedRolls(client); // Pass client object
-  //       console.log('✅ Blight roll call and missed roll checks completed.');
-  //     } catch (error) {
-  //       console.error('❌ Error during blight roll call:', error);
-  //     }
-  //   },
-  //   {
-  //     timezone: 'America/New_York', // Set to Eastern Standard Time
-  //   }
-  // );
+  // Scheduled to run at 8:05 PM EST daily to post roll call reminders and check for missed rolls
+  cron.schedule(
+    '00 20 * * *', // 8:15 PM EST for testing
+    async () => {
+      try {
+        console.log('⏰ Sending daily blight roll call...');
+        await postBlightRollCall(client); // Pass client object
+        await checkMissedRolls(client); // Pass client object
+        console.log('✅ Blight roll call and missed roll checks completed.');
+      } catch (error) {
+        console.error('❌ Error during blight roll call:', error);
+      }
+    },
+    {
+      timezone: 'America/New_York', // Set to Eastern Standard Time
+    }
+  );
 
   // ------------------- Monthly Blood Moon Announcement -------------------
   // Scheduled to run on the 13th of every Hyrulean month at 8 PM EST

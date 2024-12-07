@@ -389,7 +389,10 @@ async function rollForBlightProgression(interaction, characterName) {
 // ------------------- Post Blight Roll Call -------------------
 // Posts the daily roll call reminder at 8 PM EST
 async function postBlightRollCall(client) {
-  const channel = client.channels.cache.get('651614266046152705'); // ID of the channel
+  const channelId = process.env.BLIGHT_NOTIFICATIONS_CHANNEL_ID;
+  const roleId = process.env.BLIGHT_REMINDER_ROLE_ID;
+
+  const channel = client.channels.cache.get(channelId); // Use the channel ID from the environment variable
 
   if (!channel) {
     console.error('Channel not found for posting blight roll call.');
@@ -397,24 +400,24 @@ async function postBlightRollCall(client) {
   }
 
   // Role mention placed outside the embed
-  const roleMention = '<@&798387447967907910>';
+  const roleMention = `<@&${roleId}>`;
 
   const embed = new EmbedBuilder()
     .setColor('#AD1457') // Updated color
     .setTitle('📢 Daily Blight Roll Call! Please roll to see if your Blight gets any worse!')
     .setDescription(
       `**__INSTRUCTIONS__** ▻\n
-  Use this command:  
-  \`/blight roll character_name\`  
-  ➸ And you're done until the next time!
-  
-  **~~────────────────────~~**  
-  ▹ [Blight Information](https://www.rootsofthewild.com/blight 'Blight Information')  
-  ▹ [Currently Available Blight Healers](https://discord.com/channels/603960955839447050/651614266046152705/845481974671736842 'Blight Healers')  
-  **~~────────────────────~~**  
-  :clock8: Blight calls happen every day around 8 PM EST!  
-  :alarm_clock: You must complete your roll before the next call for it to be counted!  
-  :warning: Remember, if you miss a roll you __automatically progress to the next stage__.
+      Use this command:  
+      \`/blight roll character_name\`  
+      ➸ And you're done until the next time!
+      
+      **~~────────────────────~~**  
+      ▹ [Blight Information](https://www.rootsofthewild.com/blight 'Blight Information')  
+      ▹ [Currently Available Blight Healers](https://discord.com/channels/603960955839447050/651614266046152705/845481974671736842 'Blight Healers')  
+      **~~────────────────────~~**  
+      :clock8: Blight calls happen every day around 8 PM EST!  
+      :alarm_clock: You must complete your roll before the next call for it to be counted!  
+      :warning: Remember, if you miss a roll you __automatically progress to the next stage__.
       `
     )
     .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png') // Added the image at the bottom of the embed

@@ -42,10 +42,17 @@ const fetchCharacterByName = async (characterName) => {
 };
 
 
+// ------------------- Fetch Blighted characters -------------------
+const fetchBlightedCharactersByUserId = async (userId) => {
+  await connectToTinglebot();
+  return await Character.find({ userId, blighted: true }).lean().exec();
+};
+
+
 // ------------------- Fetch all characters -------------------
 const fetchAllCharacters = async () => {
-    await connectToTinglebot();
-    return await Character.find().lean().exec();
+  await connectToTinglebot();
+  return await Character.find().lean().exec();
 };
 
 // ------------------- Fetch character by ID -------------------
@@ -223,5 +230,6 @@ module.exports = {
     updatePetRolls,
     upgradePetLevel,
     updatePetToCharacter,
-    resetPetRollsForAllCharacters
+    resetPetRollsForAllCharacters,
+    fetchBlightedCharactersByUserId
 };
