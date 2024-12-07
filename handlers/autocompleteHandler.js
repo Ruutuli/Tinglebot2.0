@@ -4,6 +4,7 @@
 const { connectToTinglebot } = require('../database/connection');
 const { fetchUserIdByUsername } = require('../database/userService');
 const {
+  fetchBlightedCharactersByUserId,
   fetchCharactersByUserId,
   fetchCharacterByNameAndUserId,
   getCharacterInventoryCollection,
@@ -34,8 +35,8 @@ async function handleAutocomplete(interaction) {
 // ------------------- Route based on command name and focused option -------------------
 if (commandName === 'vending') {
   await handleVendingAutocomplete(interaction, focusedOption);
-}  else if (commandName === 'blight' && focusedOption.name === 'character_name') {
-    await handleBlightCharacterAutocomplete(interaction, focusedOption);
+}  else if (commandName === 'blight' && focusedOption.name === 'character_name' || focusedOption.name === 'healer_name') {
+  await handleBlightCharacterAutocomplete(interaction, focusedOption);
 } else if (commandName === 'transfer') {
   await handleTransferAutocomplete(interaction, focusedOption);
 } else if (commandName === 'gift') {
@@ -613,29 +614,28 @@ async function handleMountAutocomplete(interaction, focusedOption) {
 // ------------------- Blight Character Autocomplete Logic -------------------
 async function handleBlightCharacterAutocomplete(interaction, focusedOption) {
   try {
-    const userId = interaction.user.id; // Get the user ID from the interaction
-    const characters = await fetchCharactersByUserId(userId); // Fetch all characters belonging to the user
+    const userId = interaction.user.id;
 
-    // Filter characters to include only those with blighted status
-    const blightedCharacters = characters.filter(character => character.blighted === true);
+    if (focusedOption.name === 'character_name') {
+      // Fetch only blighted characters and include their village in the name
+      const blightedCharacters = await fetchBlightedCharactersByUserId(userId);
+      const choices = blightedCharacters.map(character => ({
+        name: `${character.name} - ${capitalize(character.currentVillage)}`,
+        value: character.name
+      }));
+      await respondWithFilteredChoices(interaction, focusedOption, choices);
 
-    // Map characters to the format required by Discord's autocomplete
-    const choices = blightedCharacters.map(character => ({
-      name: character.name,
-      value: character.name,
-    }));
-
-    // Filter choices based on user input
-    const filteredChoices = focusedOption.value === ''
-      ? choices.slice(0, 25) // Show up to 25 characters if no input is provided
-      : choices.filter(choice => choice.name.toLowerCase().includes(focusedOption.value.toLowerCase())).slice(0, 25);
-
-    // Respond with the filtered character names
-    await interaction.respond(filteredChoices);
-
+    } else if (focusedOption.name === 'healer_name') {
+      // Map healers with their respective village names
+      const choices = healers.map(healer => ({
+        name: `${healer.name} - ${capitalize(healer.village)}`,
+        value: healer.name
+      }));
+      await respondWithFilteredChoices(interaction, focusedOption, choices);
+    }
   } catch (error) {
     console.error('Error handling blight character autocomplete:', error);
-    await interaction.respond([]); // Respond with an empty array in case of error
+    await safeRespondWithError(interaction);
   }
 }
 

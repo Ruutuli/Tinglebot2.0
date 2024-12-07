@@ -34,22 +34,22 @@ module.exports = {
             .setDescription('The name of the character to heal from blight')
             .setRequired(true)
             .setAutocomplete(true))
-        .addStringOption(option =>
-          option.setName('healer_name')
-            .setDescription('Select the healer performing the healing')
-            .setRequired(true)
-            .addChoices(
-              { name: 'Aemu', value: 'Aemu' },
-              { name: 'Darune', value: 'Darune' },
-              { name: 'Elde', value: 'Elde' },
-              { name: 'Foras', value: 'Foras' },
-              { name: 'Ginger', value: 'Ginger' },
-              { name: 'Korelii', value: 'Korelii' },
-              { name: 'Nihme', value: 'Nihme' },
-              { name: 'Sahira', value: 'Sahira' },
-              { name: 'Sanskar', value: 'Sanskar' },
-              { name: 'Sigrid', value: 'Sigrid' }
-            )))
+            .addStringOption(option =>
+              option.setName('healer_name')
+                .setDescription('Select the healer performing the healing')
+                .setRequired(true)
+                .addChoices(
+                  { name: 'Aemu - Rudania', value: 'Aemu' },
+                  { name: 'Darune - Rudania', value: 'Darune' },
+                  { name: 'Elde - Vhintl', value: 'Elde' },
+                  { name: 'Foras - Vhintl', value: 'Foras' },
+                  { name: 'Ginger - Vhintl', value: 'Ginger' },
+                  { name: 'Korelii - Inariko', value: 'Korelii' },
+                  { name: 'Nihme - Inariko', value: 'Nihme' },
+                  { name: 'Sahira - Rudania', value: 'Sahira' },
+                  { name: 'Sanskar - Inariko', value: 'Sanskar' },
+                  { name: 'Sigrid - Inariko', value: 'Sigrid' }
+                )))
 
     // ------------------- Subcommand: Submit a completed task for blight healing -------------------
     .addSubcommand(subcommand =>
