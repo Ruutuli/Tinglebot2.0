@@ -43,7 +43,7 @@ module.exports = {
                   { name: 'Darune - Rudania', value: 'Darune' },
                   { name: 'Elde - Vhintl', value: 'Elde' },
                   { name: 'Foras - Vhintl', value: 'Foras' },
-                  { name: 'Ginger - Vhintl', value: 'Ginger' },
+                  { name: 'Ginger - Vhintl', value: 'Ginger-Sage' },
                   { name: 'Korelii - Inariko', value: 'Korelii' },
                   { name: 'Nihme - Inariko', value: 'Nihme' },
                   { name: 'Sahira - Rudania', value: 'Sahira' },
@@ -86,7 +86,7 @@ module.exports = {
     } else if (subcommand === 'heal') {
       const characterName = interaction.options.getString('character_name');
       const healerName = interaction.options.getString('healer_name');
-      await healBlight(interaction, characterName, healerName);
+      await healBlight(interaction, characterName, healerName);  
 
     } else if (subcommand === 'submit') {
       const submissionId = interaction.options.getString('submission_id');

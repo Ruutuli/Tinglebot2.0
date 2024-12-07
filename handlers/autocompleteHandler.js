@@ -70,7 +70,6 @@ if (commandName === 'vending') {
 } else if (commandName === 'travel' && focusedOption.name === 'destination') {
   await handleVillageBasedCommandsAutocomplete(interaction, focusedOption);
 } else if (commandName === 'blight' && focusedOption.name === 'item') {
-  console.log('Handling blight item autocomplete...');
   await handleBlightItemAutocomplete(interaction, focusedOption); 
 } else if (commandName === 'blight' && focusedOption.name === 'character_name') {
   await handleBlightCharacterAutocomplete(interaction, focusedOption); 
@@ -642,7 +641,6 @@ async function handleBlightCharacterAutocomplete(interaction, focusedOption) {
 // ------------------- Blight Item Autocomplete Logic -------------------
 async function handleBlightItemAutocomplete(interaction, focusedOption) {
   try {
-    console.log('Blight item autocomplete triggered'); // Log when autocomplete is triggered
 
     // Fetch all mod characters and their healing items
     const allItems = [];
@@ -656,9 +654,7 @@ async function handleBlightItemAutocomplete(interaction, focusedOption) {
       });
     });
 
-    console.log('All healing items:', allItems); // Log all items
-
-    // Filter and respond with matching item choices (based on what the user types)
+       // Filter and respond with matching item choices (based on what the user types)
     const choices = allItems.map(item => `${item.name} x${item.quantity}`);
     const filteredChoices = choices.filter(choice =>
       choice.toLowerCase().includes(focusedOption.value.toLowerCase())

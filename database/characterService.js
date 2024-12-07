@@ -210,7 +210,6 @@ async function resetPetRollsForAllCharacters() {
   }
 }
 
-
 // ------------------- Export all functions -------------------
 module.exports = {
     getCharactersInVillage,
@@ -231,5 +230,5 @@ module.exports = {
     upgradePetLevel,
     updatePetToCharacter,
     resetPetRollsForAllCharacters,
-    fetchBlightedCharactersByUserId
+    fetchBlightedCharactersByUserId,
 };

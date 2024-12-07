@@ -1,19 +1,25 @@
 // ------------------- Imports -------------------
 require('dotenv').config();
 
-// Standard library imports
+// ------------------- Node.js Standard Modules -------------------
 const fs = require('fs');
+const { v4: uuidv4 } = require('uuid')
 
-// Third-party library imports
+// ------------------- Third-Party Libraries -------------------
 const { EmbedBuilder } = require('discord.js');
 
-// Local module imports
+// ------------------- Models -------------------
 const Character = require('../models/CharacterModel');
+
+// ------------------- Utilities -------------------
 const { getModCharacterByName } = require('../modules/modCharacters');
 const { removeItemInventoryDatabase } = require('../utils/inventoryUtils');
-const { authorizeSheets, appendSheetData, extractSpreadsheetId } = require('../utils/googleSheetsUtils');
-const { saveSubmissionToStorage } = require('../utils/storage');
+const { authorizeSheets, updateDataInSheet, appendSheetData, extractSpreadsheetId } = require('../utils/googleSheetsUtils');
+const { saveSubmissionToStorage, deleteSubmissionFromStorage  } = require('../utils/storage');
+
+// ------------------- Services -------------------
 const { appendSpentTokens, updateTokenBalance, getTokenBalance, getOrCreateToken } = require('../database/tokenService');
+const { fetchCharacterByNameAndUserId } = require('../database/characterService');
 
 // Channel ID for Blight Notifications
 const channelId = process.env.BLIGHT_NOTIFICATIONS_CHANNEL_ID;
@@ -168,23 +174,29 @@ async function healBlight(interaction, characterName, healerName) {
 // Submits the healing task once the user completes the required task
 async function submitHealingTask(interaction, submissionId, item = null, link = null, tokens = false) {
   try {
+    // ------------------- Defer the Interaction -------------------
+    await interaction.deferReply({ ephemeral: false }); // Ensures the interaction does not expire
+
+    // ------------------- Load and Validate Submission -------------------
     const blightSubmissions = loadBlightSubmissions();
     const submission = blightSubmissions[submissionId];
 
     if (!submission) {
-      await interaction.reply({ content: `Submission with ID "${submissionId}" not found.`, ephemeral: true });
+      await interaction.editReply({ content: `Submission with ID "${submissionId}" not found.` });
       return;
     }
 
+    // Fetch the character associated with the submission
     const character = await Character.findOne({ name: submission.characterName });
     if (!character) {
-      await interaction.reply({ content: `Character "${submission.characterName}" not found.`, ephemeral: true });
+      await interaction.editReply({ content: `Character "${submission.characterName}" not found.` });
       return;
     }
 
+    // Fetch the healer specified in the submission
     const healer = getModCharacterByName(submission.healerName);
     if (!healer) {
-      await interaction.reply({ content: `Healer "${submission.healerName}" not found.`, ephemeral: true });
+      await interaction.editReply({ content: `Healer "${submission.healerName}" not found.` });
       return;
     }
 
@@ -193,7 +205,7 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
       const currentTokenBalance = await getTokenBalance(interaction.user.id);
 
       if (currentTokenBalance <= 0) {
-        await interaction.reply({ content: 'You do not have enough tokens to forfeit.', ephemeral: true });
+        await interaction.editReply({ content: 'You do not have enough tokens to forfeit.' });
         return;
       }
 
@@ -204,41 +216,28 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
       saveBlightSubmissions(blightSubmissions);
 
       const token = await getOrCreateToken(interaction.user.id);
-      const guildId = interaction.guild.id;
-      const channelId = interaction.channel.id;
+      const embed = new EmbedBuilder()
+        .setColor('#AA926A')
+        .setTitle(`Blight Healing Completed for ${submission.characterName}`)
+        .setDescription(`You have forfeited **${currentTokenBalance} tokens** in exchange for healing **${submission.characterName}**.`)
+        .setThumbnail(healer.iconUrl)
+        .setFooter({ text: 'Healing status successfully updated.' })
+        .setTimestamp();
 
-      const message = await interaction.reply({
-        embeds: [
-          new EmbedBuilder()
-            .setColor('#AA926A')
-            .setTitle(`Blight Healing Completed for ${submission.characterName}`)
-            .setDescription(`You have forfeited **${currentTokenBalance} tokens** in exchange for healing **${submission.characterName}**.`)
-            .addFields({ name: 'Token Tracker', value: `[View your token tracker](${token.tokenTrackerLink})` })
-            .setThumbnail(healer.iconUrl)
-            .setAuthor({ name: submission.characterName, iconURL: character.icon })
-            .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
-            .setFooter({ text: 'Healing status successfully updated.' })
-            .setTimestamp(),
-        ],
-        fetchReply: true,
-      });
-
-      const messageLink = `https://discord.com/channels/${guildId}/${channelId}/${message.id}`;
-      await appendSpentTokens(interaction.user.id, 'Blight Healing Token Forfeit', currentTokenBalance, messageLink);
+      await interaction.editReply({ embeds: [embed] });
 
       character.blighted = false;
       character.blightStage = 0;
       await character.save();
 
-      delete blightSubmissions[submissionId];
-      saveBlightSubmissions(blightSubmissions);
+      deleteSubmissionFromStorage(submissionId);
       return;
     }
 
     // ------------------- Item Submission -------------------
     if (submission.taskType === 'item') {
       if (!item) {
-        await interaction.reply({ content: `You must provide an item to submit for healing by **${healer.name}**.`, ephemeral: true });
+        await interaction.editReply({ content: `You must provide an item to submit for healing by **${healer.name}**.`, ephemeral: true });
         return;
       }
 
@@ -248,20 +247,64 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
       const requiredItem = healingItems.find(i => i.name === itemName && i.quantity === itemQuantityInt);
 
       if (!requiredItem) {
-        await interaction.reply({ content: `The item **${item}** is not valid for healing by **${healer.name}**. Please check the required items.`, ephemeral: true });
+        await interaction.editReply({ content: `The item **${item}** is not valid for healing by **${healer.name}**.`, ephemeral: true });
         return;
       }
 
       const hasItem = await removeItemInventoryDatabase(character._id, requiredItem.name, requiredItem.quantity, interaction);
       if (!hasItem) {
-        await interaction.reply({ content: `You do not have the required item (**${requiredItem.name}**) to be healed by **${healer.name}**.`, ephemeral: true });
+        console.error(`Inventory Check Failed: Required item (${requiredItem.name}) not found or insufficient quantity.`);
+        console.error(`Character ID: ${character._id}, Item Name: ${requiredItem.name}, Quantity: ${requiredItem.quantity}`);
+        console.error(`Full Inventory: ${JSON.stringify(character.inventory, null, 2)}`);
+        
+        await interaction.editReply({ content: `You do not have the required item (**${requiredItem.name}**) to be healed.`, ephemeral: true });
         return;
       }
+    
 
       submission.status = 'completed';
       submission.submittedAt = new Date().toISOString();
       submission.itemUsed = item;
-      saveBlightSubmissions(blightSubmissions);
+
+      
+ // Update character's blight status
+ character.blighted = false;
+ character.blightStage = 0;
+ await character.save();
+
+ saveBlightSubmissions(blightSubmissions);
+
+      // Log the healing to Google Sheets
+      const inventoryLink = character.inventory || character.inventoryLink;
+      if (inventoryLink) {
+        const spreadsheetId = extractSpreadsheetId(inventoryLink);
+        const range = 'loggedInventory!A2:M';
+        const uniqueSyncId = uuidv4();
+        const formattedDateTime = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
+        const auth = await authorizeSheets();
+
+        const values = [[
+          character.name, // Character Name
+          itemName, // Item Name
+          `-${itemQuantityInt}`, // Quantity (Negative for usage)
+          'Healing', // Category
+          submission.taskType, // Type
+          '', // Subtype
+          'Blight Healing', // How it was obtained
+          character.job, // Job
+          '', // Perk
+          character.currentVillage, // Location
+          interaction.url, // Link
+          formattedDateTime, // Date/Time
+          uniqueSyncId // Sync ID
+        ]];
+
+        try {
+          await appendSheetData(auth, spreadsheetId, range, values);
+        } catch (error) {
+          console.error('Error appending to Google Sheets:', error);
+        }
+      }
 
       const embed = new EmbedBuilder()
         .setColor('#AA926A')
@@ -269,12 +312,12 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
         .setDescription(`Item submission received.\n\n**Item**: ${itemName} x${itemQuantityInt}`)
         .setThumbnail(healer.iconUrl)
         .setAuthor({ name: submission.characterName, iconURL: character.icon })
-        .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
         .setFooter({ text: 'Healing status successfully updated.' })
         .setTimestamp();
 
-      await interaction.reply({ embeds: [embed], ephemeral: false });
-      delete blightSubmissions[submissionId];
+      await interaction.editReply({ embeds: [embed], ephemeral: false });
+
+      deleteSubmissionFromStorage(submissionId);
       saveBlightSubmissions(blightSubmissions);
       return;
     }
@@ -282,7 +325,7 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
     // ------------------- Art or Writing Submission -------------------
     if (['art', 'writing'].includes(submission.taskType)) {
       if (!link) {
-        await interaction.reply({ content: 'You must provide a link to your submission for healing.', ephemeral: true });
+        await interaction.editReply({ content: 'You must provide a link to your submission for healing.' });
         return;
       }
 
@@ -296,27 +339,27 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
         .setDescription(`${submission.taskType.charAt(0).toUpperCase() + submission.taskType.slice(1)} submission received.`)
         .addFields({ name: 'Submitted Link', value: `[View Submission](${link})` })
         .setThumbnail(healer.iconUrl)
-        .setAuthor({ name: submission.characterName, iconURL: character.icon })
-        .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
         .setFooter({ text: 'Healing status successfully updated.' })
         .setTimestamp();
 
-      await interaction.reply({ embeds: [embed], ephemeral: false });
+        await interaction.editReply({
+          embeds: [embed],
+          ephemeral: false, // Set this to false for a public message
+        });
 
       character.blighted = false;
       character.blightStage = 0;
       await character.save();
 
-      delete blightSubmissions[submissionId];
-      saveBlightSubmissions(blightSubmissions);
+      deleteSubmissionFromStorage(submissionId);
       return;
     }
-
   } catch (error) {
     console.error('Error submitting healing task:', error);
-    await interaction.reply({ content: 'An error occurred while submitting your healing task.', ephemeral: true });
+    await interaction.editReply({ content: 'An error occurred while submitting your healing task.' });
   }
 }
+
 
 // ------------------- Roll for Blight Progression -------------------
 async function rollForBlightProgression(interaction, characterName) {
@@ -509,5 +552,5 @@ module.exports = {
   submitHealingTask,
   rollForBlightProgression,
   postBlightRollCall,
-  checkMissedRolls
+  checkMissedRolls,
 };

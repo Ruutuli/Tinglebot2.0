@@ -44,7 +44,6 @@ function saveSubmissionToStorage(submissionId, submissionData) {
       console.error('Invalid data passed to saveSubmissionToStorage:', { submissionId, submissionData });
       return;
   }
-  console.log(`Saving submission with ID: ${submissionId}`, submissionData);
   const submissions = safeReadJSON(storageFile);
   submissions[submissionId] = submissionData;
   fs.writeFileSync(storageFile, JSON.stringify(submissions, null, 2));
