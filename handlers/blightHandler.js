@@ -438,7 +438,7 @@ async function checkMissedRolls(client) {
     const blightedCharacters = await Character.find({ blighted: true });
 
     // Ensure there is a channel to post to
-    const channel = client.channels.cache.get('651614266046152705'); // Replace with the actual channel ID
+    const channelId = process.env.BLIGHT_NOTIFICATIONS_CHANNEL_ID;
     if (!channel) {
       console.error('Channel not found for missed roll notifications.');
       return;
