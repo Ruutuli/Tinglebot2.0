@@ -103,17 +103,21 @@ async function updateBattleProgress(battleId, updatedProgress, outcome) {
 // Deletes the battle progress for a specific battle ID
 async function deleteBattleProgressById(battleId) {
     ensureBattleProgressFileExists();  // Ensure the file exists
-    
+
+    console.log(`[DEBUG] Attempting to delete battle progress for ID: ${battleId}`);
     const battleProgress = JSON.parse(fs.readFileSync(BATTLE_PROGRESS_PATH, 'utf8'));  // Read existing progress data
 
-    // If progress for the battle ID exists, delete it
     if (battleProgress[battleId]) {
+        console.log(`[DEBUG] Found battle ID: ${battleId} in battle progress. Proceeding to delete.`);
         delete battleProgress[battleId];  // Remove the entry for the battle ID
         fs.writeFileSync(BATTLE_PROGRESS_PATH, JSON.stringify(battleProgress, null, 2));  // Save the file after deletion
+        console.log(`[DEBUG] Successfully deleted battle progress for ID: ${battleId}`);
     } else {
-        console.error(`Error: Battle ID: ${battleId} not found in battle progress.`);  // Log if ID not found
+        console.error(`[DEBUG] Battle ID: ${battleId} not found in battle progress.`);
     }
 }
+
+
 
 // ------------------- Generate Unique Battle ID -------------------
 // Generates a unique battle ID based on the current timestamp

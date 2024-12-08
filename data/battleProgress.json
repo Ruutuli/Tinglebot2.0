@@ -1,15 +1,28 @@
 {
-  "1733651161438": {
-    "battleId": "1733651161438",
+  "1733653126762": {
+    "battleId": "1733653126762",
     "characters": [
       "Alden"
     ],
-    "monster": "Black Hinox",
-    "tier": 6,
+    "monster": "Golden Moblin",
+    "tier": 5,
     "monsterHearts": {
-      "max": 12,
-      "current": 12
+      "max": 10,
+      "current": 10
     },
-    "progress": "\n1315253035957489674"
+    "progress": "\n1315261278377476150"
+  },
+  "1733653389973": {
+    "battleId": "1733653389973",
+    "characters": [
+      "Alden"
+    ],
+    "monster": "Thunder Wizzrobe",
+    "tier": 5,
+    "monsterHearts": {
+      "max": 10,
+      "current": 10
+    },
+    "progress": "\n1315262382682931211"
   }
 }

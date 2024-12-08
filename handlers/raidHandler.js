@@ -1,8 +1,8 @@
 // ------------------- Import Dependencies -------------------
 const { EmbedBuilder } = require('discord.js');
-const { storeBattleProgress, generateBattleId } = require('../modules/combatModule');
+const { storeBattleProgress, generateBattleId, deleteBattleProgressById } = require('../modules/combatModule');
 const { monsterMapping } = require('../models/MonsterModel');
-
+const { updateVillageHealth, getVillageInfo } = require('../modules/villageModule');
 
 // ------------------- Function to Trigger a Raid -------------------
 async function triggerRaid(character, monster, interaction, threadId, isBloodMoon) {
@@ -85,26 +85,74 @@ async function triggerRaid(character, monster, interaction, threadId, isBloodMoo
       return;
   }
 
-  // ------------------- Store Battle Progress -------------------
-  try {
-      await storeBattleProgress(
-          battleId,
-          character,
-          monster,
-          monster.tier,
-          monsterHearts,
-          threadId,
-          isBloodMoon ? '🔴 Blood Moon Raid initiated!' : 'Raid initiated! Player turn next.'
-      );
+// ------------------- Function to Apply Damage After Timer -------------------
+function applyVillageDamage(threadId, villageName, battleId) {
+    console.log(`[RAID] The raid timer expired for thread ID: ${threadId}. Applying damage to village: ${villageName}.`);
 
-      console.log(`[RAID] Raid successfully triggered for monster "${monster.name}" (Tier ${monster.tier}) by character "${character.name}"`);
-      return battleId;
-  } catch (error) {
-      console.error(`[RAID] Failed to trigger raid:`, error);
-      await interaction.followUp(`❌ **Failed to trigger the raid. Please try again later.**`);
-  }
+    const damageAmount = 10; // Arbitrary damage value
+    console.log(`[RAID] Attempting to apply ${damageAmount} damage to village: ${villageName}.`);
+
+    updateVillageHealth(villageName, -damageAmount)
+        .then(() => {
+            console.log(`[RAID] Successfully applied ${damageAmount} damage to village: ${villageName}.`);
+
+            const thread = interaction.guild.channels.cache.get(threadId);
+            if (thread) {
+                console.log(`[RAID] Sending failure notification to thread ID: ${threadId}.`);
+                thread.send(`⏰ The raid has failed! The timer expired, and the monster overwhelmed your village.`)
+                    .then(() => console.log(`[RAID] Failure notification sent to thread ID: ${threadId}.`))
+                    .catch(err => console.error(`[RAID] Failed to send notification to thread ID: ${threadId}.`, err));
+
+                thread.setArchived(true)
+                    .then(() => console.log(`[RAID] Thread ID: ${threadId} successfully archived.`))
+                    .catch(err => console.error(`[RAID] Failed to archive thread ID: ${threadId}.`, err));
+            } else {
+                console.error(`[RAID] Could not find thread with ID: ${threadId}.`);
+            }
+
+            logRaidFailure(battleId, villageName)
+                .then(() => {
+                    // Delete the raid from battleProgress.json
+                    console.log(`[RAID] Deleting battle progress for ID: ${battleId}`);
+                    deleteBattleProgressById(battleId)
+                        .then(() => console.log(`[RAID] Battle progress deleted for raid ID: ${battleId}.`))
+                        .catch(err => console.error(`[RAID] Failed to delete battle progress for raid ID: ${battleId}.`, err));
+                    
+                })
+                .catch(err => console.error(`[RAID] Failed to log raid failure for raid ID: ${battleId}.`, err));
+        })
+        .catch(err => {
+            console.error(`[RAID] Failed to apply ${damageAmount} damage to village: ${villageName}.`, err);
+        });
 }
 
+
+    // ------------------- Store Battle Progress -------------------
+    try {
+        await storeBattleProgress(
+            battleId,
+            character,
+            monster,
+            monster.tier,
+            monsterHearts,
+            threadId,
+            isBloodMoon ? '🔴 Blood Moon Raid initiated!' : 'Raid initiated! Player turn next.'
+        );
+
+        console.log(`[RAID] Raid successfully triggered for monster "${monster.name}" (Tier ${monster.tier}) by character "${character.name}"`);
+
+        // Start a 30-second (for testing) or 30-minute timer
+        const timerDuration = 30 * 1000; // 30 seconds for testing
+        setTimeout(() => {
+            applyVillageDamage(threadId, character.currentVillage || "Unknown Village", battleId);
+        }, timerDuration);
+
+        return battleId;
+    } catch (error) {
+        console.error(`[RAID] Failed to trigger raid:`, error);
+        await interaction.followUp(`❌ **Failed to trigger the raid. Please try again later.**`);
+    }
+}
 
 // ------------------- Export Function -------------------
 module.exports = { triggerRaid };
