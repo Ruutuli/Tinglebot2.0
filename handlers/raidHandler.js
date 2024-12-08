@@ -3,6 +3,7 @@ const { EmbedBuilder } = require('discord.js');
 const { storeBattleProgress, generateBattleId } = require('../modules/combatModule');
 const { monsterMapping } = require('../models/MonsterModel');
 
+
 // ------------------- Function to Trigger a Raid -------------------
 async function triggerRaid(character, monster, interaction, threadId, isBloodMoon) {
   console.log(`[DEBUG] triggerRaid called with threadId: ${threadId}`);
