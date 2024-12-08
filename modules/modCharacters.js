@@ -200,7 +200,7 @@ const modCharacters = [
     village: 'Vhintl',
     category: 'Dragon',
     type: 'Courage',
-    owner: 'Chari',
+    owner: 'Roots.Admin',
     iconUrl: 'https://storage.googleapis.com/tinglebot/Mod%20Characters/%5BRotW%5D%20modCharacters_Dragon_Courage_Foras_True%20Form%20ICON.png',
     getHealingRequirements: (characterName) => {
       return [

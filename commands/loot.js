@@ -20,7 +20,7 @@ const { getJobPerk, isValidJob } = require('../modules/jobsModule');
 const { getVillageRegionByName } = require('../modules/locationsModule');
 const { getEncounterOutcome } = require('../modules/damageModule');
 const { capitalizeWords } = require('../modules/formattingModule');
-const { createWeightedItemList, getMonsterEncounterFromList, getMonstersByCriteria, calculateFinalValue } = require('../modules/rngModule');
+const { createWeightedItemList, getMonsterEncounterFromList, getMonstersByCriteria, calculateFinalValue, getRandomBloodMoonEncounter  } = require('../modules/rngModule');
 const { triggerRaid } = require('../handlers/raidHandler')
 
 // Flavor Text and Messages
@@ -106,30 +106,53 @@ if (!region) {
   return;
 }
 
-const { triggerRaid } = require('../handlers/raidHandler');
-
 // Check if Blood Moon is active
 const bloodMoonActive = isBloodMoonActive();
 let encounteredMonster;
 
 if (bloodMoonActive) {
-  // Fetch a powerful monster
-  encounteredMonster = await getMonstersAboveTier(5);
-  if (encounteredMonster) {
-    console.log(`[LOOT] Blood Moon active: High-tier monster encountered "${encounteredMonster.name}" (Tier ${encounteredMonster.tier})`);
-    await interaction.followUp(`🌕 **Blood Moon is active: A powerful monster has appeared!**`);
+  try {
+    // Determine encounter type using Blood Moon probabilities
+    const encounterType = getRandomBloodMoonEncounter();
 
-    if (encounteredMonster.tier > 4) {
-      console.log(`[LOOT] Initiating raid for monster "${encounteredMonster.name}" (Tier ${encounteredMonster.tier})`);
-      await triggerRaid(character, encounteredMonster, interaction);
-      return; // Stop further processing since raid has started
+    if (encounterType === 'No Encounter') {
+      console.log(`[LOOT] Blood Moon active: No encounter this time.`);
+      await interaction.followUp(`🌕 **Blood Moon is active: No monsters encountered this time.**`);
+      return;
     }
-  } else {
-    console.log(`[LOOT] Blood Moon active: Normal monster encountered.`);
-    await interaction.followUp(`🌕 **Blood Moon is active: A normal monster has been encountered.**`);
+
+    // Fetch monsters of the encountered tier
+    const tier = parseInt(encounterType.replace('tier', ''), 10);
+    if (isNaN(tier)) {
+      console.error(`[LOOT] Invalid encounter type "${encounterType}" detected.`);
+      await interaction.followUp(`🌕 **Blood Moon is active, but no valid monsters could be determined.**`);
+      return;
+    }
+
     const monstersByCriteria = await getMonstersByCriteria(currentVillage, job);
-    encounteredMonster = monstersByCriteria[Math.floor(Math.random() * monstersByCriteria.length)];
+    const filteredMonsters = monstersByCriteria.filter(monster => monster.tier === tier);
+
+    if (filteredMonsters.length > 0) {
+      encounteredMonster = filteredMonsters[Math.floor(Math.random() * filteredMonsters.length)];
+      console.log(`[LOOT] Blood Moon Encounter: Monster "${encounteredMonster.name}" (Tier ${encounteredMonster.tier})`);
+
+      // Check if it qualifies for a raid
+      if (encounteredMonster.tier > 4) {
+        console.log(`[LOOT] Initiating raid for monster "${encounteredMonster.name}" (Tier ${encounteredMonster.tier})`);
+        await triggerRaid(character, encounteredMonster, interaction);
+        return; // Stop further processing since raid has started
+      }
+    } else {
+      console.log(`[LOOT] Blood Moon Encounter: No suitable monsters found for tier ${tier}.`);
+      await interaction.followUp(`🌕 **Blood Moon is active: A monster was expected, but none could be found for this tier.**`);
+      return;
+    }
+  } catch (err) {
+    console.error(`[LOOT] Error during Blood Moon encounter logic: ${err}`);
+    await interaction.followUp(`🌕 **Blood Moon is active, but an error occurred while determining an encounter.**`);
+    return;
   }
+
 } else {
   // Normal encounter logic
   console.log(`[LOOT] Blood Moon is inactive: Normal encounter.`);

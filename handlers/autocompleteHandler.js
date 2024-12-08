@@ -51,7 +51,7 @@ if (commandName === 'vending') {
   await handleMountAutocomplete(interaction, focusedOption);
 } else if (commandName === 'travel' && focusedOption.name === 'charactername') {
   await handleTravelAutocomplete(interaction, focusedOption);
-} else if (['explore','test', 'editcharacter', 'deletecharacter', 'setbirthday', 'viewcharacter', 'testinventorysetup', 'syncinventory', 'crafting', 'gather', 'loot', 'gear'].includes(commandName) && focusedOption.name === 'charactername') {
+} else if (['explore','raid', 'editcharacter', 'deletecharacter', 'setbirthday', 'viewcharacter', 'testinventorysetup', 'syncinventory', 'crafting', 'gather', 'loot', 'gear'].includes(commandName) && focusedOption.name === 'charactername') {
   await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, commandName);
 } else if (commandName === 'gear' && focusedOption.name === 'itemname') {
   await handleGearAutocomplete(interaction, focusedOption);

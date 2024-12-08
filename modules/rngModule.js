@@ -15,15 +15,19 @@ const encounterProbabilities = {
 
 // Define the encounter probabilities for Blood Moon
 const encounterProbabilitiesBloodMoon = {
-  noEncounter: 15, // Reduced chance for no encounter
-  tier1: 30,
-  tier2: 20,
-  tier3: 15,
+  noEncounter: 10,  // Reduce chance of no encounter
+  tier1: 10,
+  tier2: 10,
+  tier3: 10,
   tier4: 10,
-  tier5: 5, // New chance for Tier 5
-  tier6: 3, // New chance for Tier 6
-  tier7: 2 // New chance for Tier 7
+  tier5: 10,
+  tier6: 10,
+  tier7: 10,
+  tier8: 10,
+  tier9: 10,
+  tier10: 10
 };
+
 
 // Define the initial rarity weights
 const rarityWeights = {
@@ -154,6 +158,20 @@ function getRandomEncounter() {
   return encounter;
 }
 
+// Function to determine a Blood Moon encounter
+function getRandomBloodMoonEncounter() {
+  const randomValue = Math.random() * 100;
+
+  let cumulative = 0;
+  for (const [tier, probability] of Object.entries(encounterProbabilitiesBloodMoon)) {
+    cumulative += probability;
+    if (randomValue < cumulative) {
+      return tier;
+    }
+  }
+  return 'No Encounter';
+}
+
 // Create a function to determine a monster encounter from the already fetched list
 async function getMonsterEncounterFromList(monsters) {
   try {
@@ -256,5 +274,6 @@ module.exports = {
   getRandomTravelEncounter,
   encounterProbabilitiesTravel,
   getMonstersByRegion,
-  
+  getRandomBloodMoonEncounter,
+  encounterProbabilitiesBloodMoon   
 };

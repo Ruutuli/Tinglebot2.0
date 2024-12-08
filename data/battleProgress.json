@@ -76,5 +76,44 @@
       "current": 10
     },
     "progress": "\nRaid initiated! Player turn next."
+  },
+  "1733606593095": {
+    "battleId": "1733606593095",
+    "characters": [
+      "Alden"
+    ],
+    "monster": "Igneo Talus",
+    "tier": 6,
+    "monsterHearts": {
+      "max": 12,
+      "current": 12
+    },
+    "progress": "\nRaid initiated! Player turn next.\n💥💀 The monster Igneo Talus attacks! Alden loses ❤️❤️ 2 hearts!"
+  },
+  "1733606747903": {
+    "battleId": "1733606747903",
+    "characters": [
+      "Alden"
+    ],
+    "monster": "Thunder Wizzrobe",
+    "tier": 5,
+    "monsterHearts": {
+      "max": 10,
+      "current": 10
+    },
+    "progress": "\nBattle initiated! Player turn next."
+  },
+  "1733622545318": {
+    "battleId": "1733622545318",
+    "characters": [
+      "Alden"
+    ],
+    "monster": "Black Hinox",
+    "tier": 6,
+    "monsterHearts": {
+      "max": 12,
+      "current": 12
+    },
+    "progress": "\nBattle initiated! Player turn next."
   }
 }
