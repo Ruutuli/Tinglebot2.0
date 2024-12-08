@@ -115,5 +115,384 @@
       "current": 12
     },
     "progress": "\nBattle initiated! Player turn next."
+  },
+  "1733630476363": {
+    "battleId": "1733630476363",
+    "characters": [
+      "Alden"
+    ],
+    "monster": "Thunder Wizzrobe",
+    "tier": 5,
+    "monsterHearts": {
+      "max": 10,
+      "current": 10
+    },
+    "progress": "\nRaid initiated! Player turn next."
+  },
+  "1733630802612": {
+    "battleId": "1733630802612",
+    "characters": [
+      "Alden"
+    ],
+    "monster": "Black Hinox",
+    "tier": 6,
+    "monsterHearts": {
+      "max": 12,
+      "current": 12
+    },
+    "progress": "\nRaid initiated! Player turn next."
+  },
+  "1733632862784": {
+    "battleId": "1733632862784",
+    "characters": [
+      "Alden"
+    ],
+    "monster": "Black Hinox",
+    "tier": 6,
+    "monsterHearts": {
+      "max": 12,
+      "current": 12
+    },
+    "progress": "\nRaid initiated! Player turn next."
+  },
+  "1733633369988": {
+    "battleId": "1733633369988",
+    "characters": [
+      "Alden"
+    ],
+    "monster": "Black Hinox",
+    "tier": 6,
+    "monsterHearts": {
+      "max": 12,
+      "current": 12
+    },
+    "progress": "\nRaid initiated! Player turn next."
+  },
+  "1733633392514": {
+    "battleId": "1733633392514",
+    "characters": [
+      "Alden"
+    ],
+    "monster": "Black Hinox",
+    "tier": 6,
+    "monsterHearts": {
+      "max": 12,
+      "current": 12
+    },
+    "progress": "\nRaid initiated! Player turn next."
+  },
+  "1733633690012": {
+    "battleId": "1733633690012",
+    "characters": [
+      "Alden"
+    ],
+    "monster": "Boss Bokoblin",
+    "tier": 10,
+    "monsterHearts": {
+      "max": 20,
+      "current": 20
+    },
+    "progress": "\nRaid initiated! Player turn next."
+  },
+  "1733633700233": {
+    "battleId": "1733633700233",
+    "characters": [
+      "Alden"
+    ],
+    "monster": "Boss Bokoblin",
+    "tier": 10,
+    "monsterHearts": {
+      "max": 20,
+      "current": 20
+    },
+    "progress": "\nRaid initiated! Player turn next."
+  },
+  "1733634256703": {
+    "battleId": "1733634256703",
+    "characters": [
+      "Alden"
+    ],
+    "monster": "Thunder Wizzrobe",
+    "tier": 5,
+    "monsterHearts": {
+      "max": 10,
+      "current": 10
+    },
+    "progress": "\nRaid initiated! Player turn next."
+  },
+  "1733634408784": {
+    "battleId": "1733634408784",
+    "characters": [
+      "Alden"
+    ],
+    "monster": "Black Hinox",
+    "tier": 6,
+    "monsterHearts": {
+      "max": 12,
+      "current": 12
+    },
+    "progress": "\nRaid initiated! Player turn next."
+  },
+  "1733634469418": {
+    "battleId": "1733634469418",
+    "characters": [
+      "Alden"
+    ],
+    "monster": "Boss Bokoblin",
+    "tier": 10,
+    "monsterHearts": {
+      "max": 20,
+      "current": 20
+    },
+    "progress": "\nRaid initiated! Player turn next."
+  },
+  "1733634967566": {
+    "battleId": "1733634967566",
+    "characters": [
+      "Alden"
+    ],
+    "monster": "Boss Bokoblin",
+    "tier": 10,
+    "monsterHearts": {
+      "max": 20,
+      "current": 20
+    },
+    "progress": "\nRaid initiated! Player turn next."
+  },
+  "1733634974910": {
+    "battleId": "1733634974910",
+    "characters": [
+      "Alden"
+    ],
+    "monster": "Black Hinox",
+    "tier": 6,
+    "monsterHearts": {
+      "max": 12,
+      "current": 12
+    },
+    "progress": "\nRaid initiated! Player turn next."
+  },
+  "1733635001365": {
+    "battleId": "1733635001365",
+    "characters": [
+      "Alden"
+    ],
+    "monster": "Gloom Hands",
+    "tier": 5,
+    "monsterHearts": {
+      "max": 10,
+      "current": 10
+    },
+    "progress": "\nRaid initiated! Player turn next."
+  },
+  "1733637530571": {
+    "battleId": "1733637530571",
+    "characters": [
+      "Alden"
+    ],
+    "monster": "Black Hinox",
+    "tier": 6,
+    "monsterHearts": {
+      "max": 12,
+      "current": 12
+    },
+    "progress": "\n1315195863890657290"
+  },
+  "1733637817908": {
+    "battleId": "1733637817908",
+    "characters": [
+      "Alden"
+    ],
+    "monster": "Black Hinox",
+    "tier": 6,
+    "monsterHearts": {
+      "max": 12,
+      "current": 12
+    },
+    "progress": "\n1315197069157208064"
+  },
+  "1733638035219": {
+    "battleId": "1733638035219",
+    "characters": [
+      "Alden"
+    ],
+    "monster": "Black Hinox",
+    "tier": 6,
+    "monsterHearts": {
+      "max": 12,
+      "current": 12
+    },
+    "progress": "\n1315197980407758919"
+  },
+  "1733638485063": {
+    "battleId": "1733638485063",
+    "characters": [
+      "Alden"
+    ],
+    "monster": "Golden Moblin",
+    "tier": 5,
+    "monsterHearts": {
+      "max": 10,
+      "current": 10
+    },
+    "progress": "\n1315199867559350353"
+  },
+  "1733639002658": {
+    "battleId": "1733639002658",
+    "characters": [
+      "Alden"
+    ],
+    "monster": "Boss Bokoblin",
+    "tier": 10,
+    "monsterHearts": {
+      "max": 20,
+      "current": 20
+    },
+    "progress": "\n1315202038342090824"
+  },
+  "1733640133448": {
+    "battleId": "1733640133448",
+    "characters": [
+      "Alden"
+    ],
+    "monster": "Boss Bokoblin",
+    "tier": 10,
+    "monsterHearts": {
+      "max": 20,
+      "current": 20
+    },
+    "progress": "\n1315206780615393370"
+  },
+  "1733641159344": {
+    "battleId": "1733641159344",
+    "characters": [
+      "Alden"
+    ],
+    "monster": "Boss Bokoblin",
+    "tier": 10,
+    "monsterHearts": {
+      "max": 20,
+      "current": 20
+    },
+    "progress": "\n1315211084088475678"
+  },
+  "1733641424973": {
+    "battleId": "1733641424973",
+    "characters": [
+      "Alden"
+    ],
+    "monster": "Boss Bokoblin",
+    "tier": 10,
+    "monsterHearts": {
+      "max": 20,
+      "current": 20
+    },
+    "progress": "\n1315212199911755827"
+  },
+  "1733641756021": {
+    "battleId": "1733641756021",
+    "characters": [
+      "Alden"
+    ],
+    "monster": "Black Hinox",
+    "tier": 6,
+    "monsterHearts": {
+      "max": 12,
+      "current": 12
+    },
+    "progress": "\n1315213588541083658"
+  },
+  "1733642021457": {
+    "battleId": "1733642021457",
+    "characters": [
+      "Alden"
+    ],
+    "monster": "Gloom Hands",
+    "tier": 5,
+    "monsterHearts": {
+      "max": 10,
+      "current": 10
+    },
+    "progress": "\n1315214701918949397"
+  },
+  "1733642197229": {
+    "battleId": "1733642197229",
+    "characters": [
+      "Alden"
+    ],
+    "monster": "Black Hinox",
+    "tier": 6,
+    "monsterHearts": {
+      "max": 12,
+      "current": 12
+    },
+    "progress": "\n1315215438879391745"
+  },
+  "1733642582566": {
+    "battleId": "1733642582566",
+    "characters": [
+      "Alden"
+    ],
+    "monster": "Golden Moblin",
+    "tier": 5,
+    "monsterHearts": {
+      "max": 10,
+      "current": 10
+    },
+    "progress": "\n1315217055213158432"
+  },
+  "1733642587203": {
+    "battleId": "1733642587203",
+    "characters": [
+      "Alden"
+    ],
+    "monster": "Boss Bokoblin",
+    "tier": 10,
+    "monsterHearts": {
+      "max": 20,
+      "current": 20
+    },
+    "progress": "\n1315217074821398578"
+  },
+  "1733643132380": {
+    "battleId": "1733643132380",
+    "characters": [
+      "Alden"
+    ],
+    "monster": "Boss Bokoblin",
+    "tier": 10,
+    "monsterHearts": {
+      "max": 20,
+      "current": 20
+    },
+    "progress": "\n1315219361346359306"
+  },
+  "1733643416622": {
+    "battleId": "1733643416622",
+    "characters": [
+      "Alden"
+    ],
+    "monster": "Black Hinox",
+    "tier": 6,
+    "monsterHearts": {
+      "max": 12,
+      "current": 12
+    },
+    "progress": "\n1315220552276774922"
+  },
+  "1733644488597": {
+    "battleId": "1733644488597",
+    "characters": [
+      "Alden",
+      "David Jr",
+      "Knuckle"
+    ],
+    "monster": "Black Hinox",
+    "tier": 6,
+    "monsterHearts": {
+      "max": 12,
+      "current": 9
+    },
+    "progress": "\n1315225048394498109\n⚔️🏹 Alden attacks! The monster loses 💙💙2 hearts!\n💥💀 The monster Black Hinox attacks! David Jr loses ❤️ 1 heart!\n⚔️🏹 Knuckle attacks! The monster loses 💙1 heart!\n💥💀 The monster Black Hinox attacks! Alden loses ❤️ 1 heart!\n💥💀 The monster Black Hinox attacks! David Jr loses ❤️❤️❤️❤️ 4 hearts!\n⚔️🏹 Alden attacks! But the monster dodges. 💫\n💥💀 The monster Black Hinox attacks! Alden loses ❤️ 1 heart!\n💥💀 The monster Black Hinox attacks! Alden loses ALL hearts! You are KO'd.\nAlden has been defeated by the Black Hinox!"
   }
 }

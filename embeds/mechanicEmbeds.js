@@ -152,44 +152,53 @@ const createTradeEmbed = async (fromCharacter, toCharacter, fromItems, toItems, 
 };
 
 // ------------------- Function to create monster encounter embed -------------------
-const createMonsterEncounterEmbed = (character, monster, outcomeMessage, heartsRemaining, lootItem) => {
+const createMonsterEncounterEmbed = (character, monster, outcomeMessage, heartsRemaining, lootItem, isBloodMoon = false) => {
     const settings = getCommonEmbedSettings(character);
     const nameMapping = monster.nameMapping || monster.name;
     const monsterDetails = monsterMapping[nameMapping.replace(/\s+/g, '')] || { name: monster.name, image: 'https://via.placeholder.com/100x100' };
 
-    const embed = new EmbedBuilder()
-        .setColor(settings.color)
-        .setTitle(`${capitalizeWords(character.homeVillage)} ${capitalizeWords(character.job)}: ${character.name} encountered a ${monsterDetails.name || monster.name}!`)
-        .setAuthor({ name: `${character.name} 🔗`, iconURL: settings.author.iconURL, url: settings.author.url })
-        .addFields(
-            { name: '__❤️ Hearts__', value: `> ${heartsRemaining}/${character.maxHearts}`, inline: false },
-            { name: '🔹 __Outcome__', value: `> ${outcomeMessage}`, inline: false }
-        )
-        .setImage(settings.image.url);
+            const embed = new EmbedBuilder()
+            .setColor(isBloodMoon ? '#FF4500' : settings.color)
+            .setTitle(
+                `${capitalizeWords(character.homeVillage)} ${capitalizeWords(character.job)}: ${character.name} encountered a ${monsterDetails.name || monster.name}!`
+            )
+            .setAuthor({ name: `${character.name} 🔗`, iconURL: settings.author.iconURL, url: settings.author.url })
+            .addFields(
+                { name: '__❤️ Hearts__', value: `> ${heartsRemaining}/${character.maxHearts}`, inline: false },
+                { name: '🔹 __Outcome__', value: `> ${outcomeMessage}`, inline: false }
+            )
+            .setFooter({ text: isBloodMoon ? '🔴 The Blood Moon rises... luckily you didn’t run into anything stronger.' : '' })
+            .setImage(settings.image.url);
 
-    if (lootItem) {
-        embed.addFields({ name: '💥 __Loot__', value: `${formatItemDetails(lootItem.itemName, lootItem.quantity, lootItem.emoji)}`, inline: false });
-    }
+        if (lootItem) {
+            embed.addFields({ name: '💥 __Loot__', value: `${formatItemDetails(lootItem.itemName, lootItem.quantity, lootItem.emoji)}`, inline: false });
+        }
 
-    if (isValidImageUrl(monsterDetails.image)) {
-        embed.setThumbnail(monsterDetails.image);
-    }
+        if (isValidImageUrl(monsterDetails.image)) {
+            embed.setThumbnail(monsterDetails.image);
+        }
 
-    return embed;
+        return embed;
 };
+
 
 // ------------------- Function to create no encounter embed -------------------
-const createNoEncounterEmbed = (character) => {
+const createNoEncounterEmbed = (character, isBloodMoon = false) => {
     const settings = getCommonEmbedSettings(character);
-    const noEncounterMessage = getNoEncounterMessage();
+    const noEncounterMessage = getNoEncounterMessage(); // Retain normal no-encounter message
 
     return new EmbedBuilder()
-        .setColor(settings.color)
-        .setTitle(`${capitalizeWords(character.homeVillage)} ${capitalizeWords(character.job)}: ${character.name} encountered no monsters.`)
+        .setColor(isBloodMoon ? '#FF4500' : settings.color) // Fiery red for Blood Moon
+        .setTitle(
+            `${capitalizeWords(character.homeVillage)} ${capitalizeWords(character.job)}: ${character.name} encountered no monsters.`
+        )
         .setAuthor({ name: `${character.name} 🔗`, iconURL: settings.author.iconURL, url: settings.author.url })
         .addFields({ name: '🔹 __Outcome__', value: `> ${noEncounterMessage}`, inline: false })
-        .setImage(settings.image.url);
+        .setImage(settings.image.url)
+        .setFooter({ text: isBloodMoon ? '🔴 The Blood Moon rises... but nothing stirs in the shadows.' : 'Better luck next time!' });
 };
+
+
 
 // ------------------- Function to create KO embed -------------------
 const createKOEmbed = (character) => {

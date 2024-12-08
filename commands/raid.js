@@ -97,46 +97,56 @@ module.exports = {
         const updatedMonsterData = monsterMapping[currentMonster.nameMapping] || {};
         const updatedMonsterImage = updatedMonsterData.image || currentMonster.image;
 
-        // ------------------- Create Embed for Battle Result -------------------
-        const embed = new EmbedBuilder()
+      // ------------------- Create Embed for Battle Result -------------------
+      const embed = new EmbedBuilder()
           .setTitle(`${character.name}'s Turn!`)
           .setDescription(`${battleResult}\n${buffMessage || ''}`)
           .addFields(
-            { name: `__Monster Hearts__`, value: `💙 ${monsterHeartsCurrent}/${monsterHeartsMax}`, inline: false },
-            { name: `__${character.name} Hearts__`, value: `❤️ ${character.currentHearts}/${character.maxHearts}`, inline: false },
-            { name: '__Dice Roll__', value: diceRollMessage, inline: false },
-            {
-              name: '__Turn Order__',
-              value: updatedBattleProgress.characters.join('\n'), // Turn order of characters in the battle displayed on new lines
-              inline: false
-            }
+              { name: `__Monster Hearts__`, value: `💙 ${monsterHeartsCurrent}/${monsterHeartsMax}`, inline: false },
+              { name: `__${character.name} Hearts__`, value: `❤️ ${character.currentHearts}/${character.maxHearts}`, inline: false },
+              { name: '__Dice Roll__', value: diceRollMessage, inline: false },
+              {
+                  name: '__Turn Order__',
+                  value: updatedBattleProgress.characters.join('\n'), // Turn order of characters in the battle displayed on new lines
+                  inline: false
+              }
           )
           .setAuthor({ name: character.name, iconURL: character.icon })
           .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png') // Restore default image
           .setFooter({
-            text: `Use /raid id:${battleId} charactername: to join or continue the battle!\nUse /itemheal charactername: to heal during the battle!`
+              text: `Use /raid id:${battleId} charactername: to join or continue the battle!\nUse /itemheal charactername: to heal during the battle!`
           })
           .setColor('#FF0000');
 
-        // Set monster image as thumbnail
-        if (updatedMonsterImage && updatedMonsterImage.startsWith('http')) {
+      // Set monster image as thumbnail
+      if (updatedMonsterImage && updatedMonsterImage.startsWith('http')) {
           embed.setThumbnail(updatedMonsterImage);
-        }
+      }
 
-        await interaction.editReply({ embeds: [embed], content: '' });
+      // Determine the next character in the turn order
+      const currentIndex = updatedBattleProgress.characters.indexOf(character.name);
+      const nextIndex = (currentIndex + 1) % updatedBattleProgress.characters.length; // Loop back to the first character if at the end
+      const nextCharacterName = updatedBattleProgress.characters[nextIndex];
 
-        // ------------------- Process Battle Conclusion -------------------
-        console.log('Checking if monster hearts are 0 or lower...');
-        if (updatedBattleProgress.monsterHearts.current <= 0) { // Make sure you're using the updated value
+      // Fetch user ID of the next character (assuming you have a way to map character names to user IDs)
+      const nextCharacter = await fetchCharacterByNameAndUserId(nextCharacterName, interaction.user.id); // Update this if your logic differs
+
+      // Send embed with a message tagging the next character
+      await interaction.editReply({ embeds: [embed], content: `<@${nextCharacter.userId}> **${nextCharacter.name} is next!**` });
+
+      // ------------------- Process Battle Conclusion -------------------
+      console.log('Checking if monster hearts are 0 or lower...');
+      if (updatedBattleProgress.monsterHearts.current <= 0) { // Make sure you're using the updated value
           console.log('Monster hearts are 0 or lower. Monster defeated, triggering loot handling...');
 
           // Trigger loot handling for all characters
           await processLoot(updatedBattleProgress, currentMonster, interaction, battleId);
 
           return; // End the function after loot is processed
-        }
+      }
 
-        console.log('Monster hearts are greater than 0. Continuing battle...');
+      console.log('Monster hearts are greater than 0. Continuing battle...');
+
       } catch (error) {
         console.error('Error during battle:', error);
         await interaction.editReply('⚠️ **An error occurred during the battle.**');

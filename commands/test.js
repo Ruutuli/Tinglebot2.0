@@ -84,8 +84,6 @@ const embed = new EmbedBuilder()
   })
   .setColor('#FF0000');
 
-
-// Only set the thumbnail if the image URL is valid
 if (monsterImage && monsterImage.startsWith('http')) {
   embed.setThumbnail(monsterImage);  // Set the monster's image as a thumbnail
 }
