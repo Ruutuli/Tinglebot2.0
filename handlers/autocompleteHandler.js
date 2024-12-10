@@ -150,33 +150,74 @@ async function handleVendingAutocomplete(interaction, focusedOption) {
   }
 }
 
+// Handles autocomplete for 'crafting' command ---------------------------------------------------
 // Handles autocomplete for 'crafting' command
 async function handleCraftingAutocomplete(interaction, focusedOption) {
   try {
-    const userId = interaction.user.id;
-    const characterName = interaction.options.getString('charactername'); // Get character name from options
-    const characters = await fetchCharactersByUserId(userId); // Fetch user characters
-    const character = characters.find(c => c.name === characterName); // Find the selected character
+      const userId = interaction.user.id;
+      const characterName = interaction.options.getString('charactername');
 
-    if (!character || !getJobPerk(character.job).perks.includes('CRAFTING')) {
-      return await interaction.respond([]); // Respond with empty if character or perk not found
-    }
+      // Fetch all characters belonging to the user
+      const characters = await fetchCharactersByUserId(userId);
 
-    const inventoryCollection = await getCharacterInventoryCollection(character.name);
-    const characterInventory = await inventoryCollection.find().toArray();
-    const craftableItems = await fetchCraftableItemsAndCheckMaterials(characterInventory);
+      // Find the specific character from the list
+      const character = characters.find(c => c.name === characterName);
+      if (!character) {
+          return await interaction.respond([]);
+      }
 
-    const filteredItems = craftableItems.filter(item => item.craftingTags.includes(character.job.toLowerCase()));
-    const choices = filteredItems.map(item => ({
-      name: item.itemName,
-      value: item.itemName
-    }));
+      // Check the character's job perks
+      const jobPerk = getJobPerk(character.job);
+      if (!jobPerk || !jobPerk.perks.includes('CRAFTING')) {
+          return await interaction.respond([]);
+      }
 
-    await respondWithFilteredChoices(interaction, focusedOption, choices);
+      // Fetch the character's inventory
+      const inventoryCollection = await getCharacterInventoryCollection(character.name);
+      const characterInventory = await inventoryCollection.find().toArray();
+
+      // Determine which items can be crafted based on the inventory
+      const craftableItems = await fetchCraftableItemsAndCheckMaterials(characterInventory);
+      if (craftableItems.length === 0) {
+          return await interaction.respond([]);
+      }
+
+      // Filter the craftable items based on the character's job
+      const filteredItems = craftableItems.filter(item =>
+          item.craftingTags.some(tag => tag.toLowerCase() === character.job.toLowerCase())
+      );
+      if (filteredItems.length === 0) {
+          return await interaction.respond([]);
+      }
+
+      const inputValue = focusedOption.value.toLowerCase(); // User input for filtering
+
+      // Filter based on user input dynamically
+      const matchingItems = filteredItems.filter(item =>
+          item.itemName.toLowerCase().includes(inputValue)
+      );
+
+      const MAX_CHOICES = 25; // Discord's maximum allowed choices
+
+      // Map matching items to autocomplete choices and limit to 25
+      const choices = matchingItems.slice(0, MAX_CHOICES).map(item => ({
+          name: item.itemName,
+          value: item.itemName
+      }));
+
+      // Respond to the interaction with the choices
+      if (!interaction.responded) {
+          await interaction.respond(choices);
+      }
   } catch (error) {
-    await safeRespondWithError(interaction);
+      // Respond with an empty array in case of any errors
+      if (!interaction.responded) {
+          await interaction.respond([]);
+      }
   }
 }
+
+
 
 // Handles autocomplete for 'itemheal' command
 async function handleItemHealAutocomplete(interaction, focusedOption) {

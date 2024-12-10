@@ -82,7 +82,10 @@ module.exports = {
     const characterName = interaction.options.getString('charactername');
     const itemName = interaction.options.getString('itemname');
     const flavorText = interaction.options.getString('flavortext') || '';
-    const quantity = interaction.options.getInteger('quantity');
+    const quantity = interaction.options.getInteger('quantity'); // Should remain as is
+
+    // Debugging log to verify correct quantity assignment
+    console.log('Debug: Quantity extracted for createCraftingEmbed:', quantity);
     const userId = interaction.user.id;
     const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
 
@@ -118,8 +121,11 @@ module.exports = {
       const staminaCost = item.staminaToCraft * quantity;
       await checkAndUseStamina(character, staminaCost);
 
+      // Fetch the updated stamina value
+      const updatedStamina = character.currentStamina;
+
       // Create crafting embed and respond with success
-      const embed = await createCraftingEmbed(item, character, flavorText, materialsUsed, quantity, item.staminaToCraft);
+      const embed = await createCraftingEmbed(item, character, flavorText, materialsUsed, quantity, staminaCost, updatedStamina);
       await interaction.editReply({ content: `✅ **Successfully crafted ${quantity} ${itemName}(s).**`, ephemeral: true });
       await interaction.followUp({ embeds: [embed], ephemeral: false });
 

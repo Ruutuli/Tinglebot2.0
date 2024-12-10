@@ -10,6 +10,68 @@ const { capitalizeWords } = require('../modules/formattingModule');
 
 // Model Imports
 const { monsterMapping } = require('../models/MonsterModel');
+const ItemModel = require('../models/ItemModel');
+
+// ------------------- Function to create crafting embed -------------------
+const createCraftingEmbed = async (item, character, flavorText, materialsUsed, quantity, staminaCost, remainingStamina) => {
+    const action = jobActions[character.job] || "crafted";
+
+    // Debugging: Log the inputs
+    console.log('Debug: Quantity in createCraftingEmbed:', quantity);
+    console.log('Debug: Materials used in createCraftingEmbed:', materialsUsed);
+
+    // Ensure `quantity` is properly handled
+    const itemQuantityText = ` x${quantity}`;
+    const embedTitle = `${character.name} from ${character.currentVillage}: ${action} ${item.itemName}${itemQuantityText}`;
+
+    // Handle flavor text (optional)
+    const flavorTextField = flavorText ? { name: '🌟 **Flavor Text**', value: flavorText, inline: false } : null;
+
+    // Format materials with their actual emojis
+    const DEFAULT_EMOJI = ':small_blue_diamond:';
+    let craftingMaterialText = 'No materials used or invalid data format.';
+    if (Array.isArray(materialsUsed) && materialsUsed.length > 0) {
+        craftingMaterialText = await Promise.all(
+            materialsUsed.map(async (material) => {
+                // Fetch the emoji from the database if available
+                const materialItem = await ItemModel.findOne({ itemName: material.itemName }).select('emoji');
+                const emoji = materialItem?.emoji || DEFAULT_EMOJI;
+                return formatItemDetails(material.itemName, material.quantity, emoji);
+            })
+        ).then(results => results.join('\n'));
+    }
+
+    // Create the crafting embed
+    const embed = new EmbedBuilder()
+        .setColor('#AA926A') // Amber for crafting
+        .setTitle(embedTitle)
+        .setAuthor({
+            name: `${character.name} 🔗`,
+            iconURL: character.icon || DEFAULT_IMAGE_URL,
+            url: character.inventory || ''
+        })
+        .addFields(
+            { name: '📜 **__Materials Used__**', value: craftingMaterialText, inline: false },
+            { name: '⚡ **__Stamina Cost__**', value: `> ${staminaCost}`, inline: true },
+            { name: '💚 **__Remaining Stamina__**', value: `> ${remainingStamina}`, inline: true }
+        );
+
+    // Add flavor text if present
+    if (flavorTextField) {
+        embed.addFields(flavorTextField);
+    }
+
+    // Add a thumbnail and footer
+    embed.setThumbnail(item.image || DEFAULT_IMAGE_URL)
+        .setImage(DEFAULT_IMAGE_URL)
+        .setFooter({
+            text: `${character.name} successfully ${action} this item!`,
+            iconURL: character.icon || DEFAULT_IMAGE_URL
+        });
+
+    return embed;
+};
+
 
 // ------------------- Function to create Writing Submission embed -------------------
 const createWritingSubmissionEmbed = (submissionData) => {
@@ -266,5 +328,6 @@ module.exports = {
     createHealEmbed,
     updateHealEmbed,
     aggregateItems,
-    formatMaterialsList
+    formatMaterialsList,
+    createCraftingEmbed
 };

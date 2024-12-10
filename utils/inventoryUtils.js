@@ -313,10 +313,14 @@ const createRemovedItemDatabase = (character, item, quantity, interaction, obtai
 const processMaterials = async (interaction, character, inventory, craftableItem, quantity) => {
     const materialsUsed = [];
 
+    console.log('Debug: Crafting item', craftableItem.itemName, 'with quantity', quantity);
+
     for (const material of craftableItem.craftingMaterial) {
         const materialName = material.itemName;
         let specificItems = [];
         let requiredQuantity = material.quantity * quantity;
+
+        console.log('Debug: Processing material', materialName, 'Required Quantity:', requiredQuantity);
 
         if (generalCategories[materialName]) {
             const result = await promptUserForSpecificItems(interaction, inventory, materialName, requiredQuantity);
@@ -330,6 +334,8 @@ const processMaterials = async (interaction, character, inventory, craftableItem
 
         let totalQuantity = specificItems.reduce((sum, item) => sum + item.quantity, 0);
 
+        console.log('Debug: Total available for', materialName, ':', totalQuantity);
+
         if (totalQuantity < requiredQuantity) {
             throw new Error(`❌ **Unable to find or insufficient quantity for ${materialName} in ${character.name}'s inventory. Required: ${requiredQuantity}, Found: ${totalQuantity}**`);
         }
@@ -338,14 +344,18 @@ const processMaterials = async (interaction, character, inventory, craftableItem
             if (requiredQuantity <= 0) break;
 
             let removeQuantity = Math.min(requiredQuantity, specificItem.quantity);
+            console.log('Debug: Removing quantity', removeQuantity, 'of', specificItem.itemName);
             await removeItemInventoryDatabase(character._id, specificItem.itemName, removeQuantity, interaction);
             materialsUsed.push({ itemName: specificItem.itemName, quantity: removeQuantity, _id: specificItem._id });
             requiredQuantity -= removeQuantity;
         }
     }
 
+    console.log('Debug: Final materials used:', materialsUsed);
+
     return materialsUsed;
 };
+
 
 module.exports = {
     syncToInventoryDatabase,

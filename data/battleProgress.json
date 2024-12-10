@@ -11,5 +11,20 @@
       "current": 13
     },
     "progress": "\n⚔️🏹 Eyllst attacks! The monster loses 💙💙2 hearts!"
+  },
+  "1733808838978": {
+    "battleId": "1733808838978",
+    "characters": [
+      "Marv",
+      "Feyun",
+      "Pierre"
+    ],
+    "monster": "Silver Lynel",
+    "tier": 9,
+    "monsterHearts": {
+      "max": 18,
+      "current": 12
+    },
+    "progress": "\n1315914383536164897\n💥💀 The monster Silver Lynel attacks! Marv loses ❤️❤️❤️❤️❤️ 5 hearts!\nMarv has been defeated by the Silver Lynel!\n⚔️🏹 Feyun attacks! The monster loses 💙💙💙3 hearts!\n⚔️🏹 Feyun attacks! The monster loses 💙💙💙3 hearts!\n💥💀 The monster Silver Lynel attacks! Feyun loses ❤️❤️❤️❤️❤️❤️ 6 hearts!\nFeyun has been defeated by the Silver Lynel!\n💥💀 The monster Silver Lynel attacks! But Pierre dodges! 💨\n💥💀 The monster Silver Lynel attacks! Pierre loses ❤️❤️❤️❤️ 4 hearts!\nPierre has been defeated by the Silver Lynel!"
   }
 }
