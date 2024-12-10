@@ -13,14 +13,14 @@ module.exports = {
     .setName('raid')
     .setDescription('Join or process an ongoing raid to fight a powerful monster.')
     .addStringOption(option =>
+      option.setName('id')
+        .setDescription('Raid ID to check progress or join')
+        .setRequired(true))
+    .addStringOption(option =>
       option.setName('charactername')
         .setDescription('The name of your character')
         .setRequired(true)
-        .setAutocomplete(true))
-    .addStringOption(option =>
-      option.setName('id')
-        .setDescription('Raid ID to check progress or join')
-        .setRequired(true)),
+        .setAutocomplete(true)),
 
   // ------------------- Main Execution Function -------------------
   async execute(interaction) {
@@ -36,6 +36,15 @@ module.exports = {
         await interaction.editReply('❌ **Character not found.**');
         return;
       }
+
+      // Check if the character's inventory has been synced
+if (!character.inventorySynced) {
+  return interaction.editReply({
+      content: `❌ **You cannot use the raid command because "${character.name}"'s inventory is not set up yet. Please use the </testinventorysetup:1306176790095728732> and then </syncinventory:1306176789894266898> commands to initialize the inventory.**`,
+      ephemeral: true,
+  });
+}
+
 
       // ------------------- Handle KO'd Characters -------------------
       if (character.currentHearts <= 0 || character.ko) {
@@ -99,24 +108,26 @@ module.exports = {
 
       // ------------------- Create Embed for Battle Result -------------------
       const embed = new EmbedBuilder()
-          .setTitle(`${character.name}'s Turn!`)
-          .setDescription(`${battleResult}\n${buffMessage || ''}`)
-          .addFields(
-              { name: `__Monster Hearts__`, value: `💙 ${monsterHeartsCurrent}/${monsterHeartsMax}`, inline: false },
-              { name: `__${character.name} Hearts__`, value: `❤️ ${character.currentHearts}/${character.maxHearts}`, inline: false },
-              { name: '__Dice Roll__', value: diceRollMessage, inline: false },
-              {
-                  name: '__Turn Order__',
-                  value: updatedBattleProgress.characters.join('\n'), // Turn order of characters in the battle displayed on new lines
-                  inline: false
-              }
-          )
-          .setAuthor({ name: character.name, iconURL: character.icon })
-          .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png') // Restore default image
-          .setFooter({
-              text: `Use /raid id:${battleId} charactername: to join or continue the battle!\nUse /itemheal charactername: to heal during the battle!`
-          })
-          .setColor('#FF0000');
+      .setTitle(`${character.name}'s Turn!`)
+      .setDescription(`${battleResult}\n${buffMessage || ''}`)
+      .addFields(
+          { name: `__Monster Hearts__`, value: `💙 ${monsterHeartsCurrent}/${monsterHeartsMax}`, inline: false },
+          { name: `__${character.name} Hearts__`, value: `❤️ ${character.currentHearts}/${character.maxHearts}`, inline: false },
+          { name: '__Dice Roll__', value: diceRollMessage, inline: false },
+          { name: `__Battle ID__`, value: `\`${battleId}\``, inline: false }, // Add backticks to make it a code block
+          {
+              name: '__Turn Order__',
+              value: updatedBattleProgress.characters.join('\n'), // Turn order of characters in the battle displayed on new lines
+              inline: false
+          }
+      )
+      .setAuthor({ name: character.name, iconURL: character.icon })
+      .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png') // Restore default image
+      .setFooter({
+          text: `Use /raid id:${battleId} charactername: to join or continue the battle!\nUse /itemheal charactername: to heal during the battle!`
+      })
+      .setColor('#FF0000');
+  
 
       // Set monster image as thumbnail
       if (updatedMonsterImage && updatedMonsterImage.startsWith('http')) {

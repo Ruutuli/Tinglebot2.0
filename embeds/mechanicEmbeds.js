@@ -16,10 +16,6 @@ const ItemModel = require('../models/ItemModel');
 const createCraftingEmbed = async (item, character, flavorText, materialsUsed, quantity, staminaCost, remainingStamina) => {
     const action = jobActions[character.job] || "crafted";
 
-    // Debugging: Log the inputs
-    console.log('Debug: Quantity in createCraftingEmbed:', quantity);
-    console.log('Debug: Materials used in createCraftingEmbed:', materialsUsed);
-
     // Ensure `quantity` is properly handled
     const itemQuantityText = ` x${quantity}`;
     const embedTitle = `${character.name} from ${character.currentVillage}: ${action} ${item.itemName}${itemQuantityText}`;

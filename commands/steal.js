@@ -86,6 +86,14 @@ module.exports = {
                 return interaction.editReply({ content: '❌ Thief character not found.', ephemeral: true });
             }
 
+            // Check if the thief character's inventory has been synced
+if (!thiefCharacter.inventorySynced) {
+    return interaction.editReply({
+        content: `❌ **You cannot use the steal command because "${thiefCharacter.name}"'s inventory is not set up yet. Please use the </testinventorysetup:1306176790095728732> and then </syncinventory:1306176789894266898> commands to initialize the inventory.**`,
+        ephemeral: true,
+    });
+}
+
             // ------------------- Handle NPC stealing -------------------
             if (targetType === 'npc') {
                 const mappedNPCName = npcNameMapping[targetName]; // Use the mapping directly

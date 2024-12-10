@@ -96,6 +96,13 @@ module.exports = {
         return interaction.editReply({ content: `❌ **Character ${characterName} not found or does not belong to you.**`, ephemeral: true });
       }
 
+      if (!character.inventorySynced) {
+        return interaction.editReply({
+            content: `❌ **You cannot use this command because your character does not have an inventory set up yet. Please use the </testinventorysetup:1306176790095728732> and then </syncinventory:1306176789894266898> command to initialize your inventory.**`,
+            ephemeral: true,
+        });
+    } 
+
       // Fetch the item and validate
       const item = await fetchItemByName(itemName);
       if (!item) {

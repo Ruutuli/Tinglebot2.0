@@ -169,6 +169,14 @@ module.exports = {
                 return interaction.reply('❌ Invalid expedition ID, character, or items selected. Ensure you meet all requirements.');
             }
 
+            // Check if the character's inventory has been synced
+            if (!character.inventorySynced) {
+                return interaction.reply({
+                    content: `❌ **You cannot use this command because your character does not have an inventory set up yet. Please use the </testinventorysetup:1306176790095728732> and then </syncinventory:1306176789894266898> command to initialize your inventory.**`,
+                    ephemeral: true,
+                });
+            }
+
             const items = [];
             for (const itemName of itemNames) {
                 const foundItems = await ItemModel.find({
@@ -338,6 +346,14 @@ module.exports = {
 
         if (!party || !character) {
             return interaction.reply('❌ Expedition ID or character not found.');
+        }
+
+        // Check if the character's inventory has been synced
+        if (!character.inventorySynced) {
+            return interaction.reply({
+                content: `❌ **You cannot use this command because your character does not have an inventory set up yet. Please use the </testinventorysetup:1306176790095728732> and then </syncinventory:1306176789894266898> command to initialize your inventory.**`,
+                ephemeral: true,
+            });
         }
 
    

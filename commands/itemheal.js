@@ -57,6 +57,15 @@ module.exports = {
                 return;
             }
 
+            // Check if the character's inventory has been synced
+if (!character.inventorySynced) {
+    return interaction.editReply({
+        content: `❌ **You cannot use items for healing because \`${character.name}\`'s inventory is not set up yet. Please use the </testinventorysetup:1306176790095728732> and then </syncinventory:1306176789894266898> commands to initialize the inventory.**`,
+        ephemeral: true,
+    });
+}
+
+
             // ------------------- Check if character is at max hearts -------------------
             if (character.currentHearts >= character.maxHearts && !item.staminaRecovered) {
                 const errorEmbed = new EmbedBuilder()

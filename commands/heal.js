@@ -93,6 +93,23 @@ module.exports = {
           return;
         }
 
+        // Check if the character to be healed has their inventory synced
+if (!characterToHeal.inventorySynced) {
+  return interaction.editReply({
+      content: `❌ **You cannot heal \`${characterToHeal.name}\` because their inventory is not set up yet. Please use the </testinventorysetup:1306176790095728732> and then </syncinventory:1306176789894266898> commands to initialize the inventory.**`,
+      ephemeral: true,
+  });
+}
+
+// If a healer is specified, check if their inventory is synced
+if (healerCharacter && !healerCharacter.inventorySynced) {
+  return interaction.editReply({
+      content: `❌ **You cannot perform healing with \`${healerCharacter.name}\` because their inventory is not set up yet.**`,
+      ephemeral: true,
+  });
+}
+
+
         if (characterToHeal.currentVillage.trim().toLowerCase() !== healerCharacter.currentVillage.trim().toLowerCase()) {
           await interaction.editReply({ content: `❌ Both characters must be in the same village to perform the healing. ${characterToHeal.name} is currently in ${characterToHeal.currentVillage}, and ${healerCharacter.name} is in ${healerCharacter.currentVillage}.` });
           return;

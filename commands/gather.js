@@ -42,6 +42,14 @@ module.exports = {
         return;
       }
 
+      // Check if the character's inventory has been synced
+        if (!character.inventorySynced) {
+          return interaction.editReply({
+              content: `❌ **You cannot use this command because your character does not have an inventory set up yet. Please use the </testinventorysetup:1306176790095728732> and then </syncinventory:1306176789894266898> command to initialize your inventory.**`,
+              ephemeral: true,
+          });
+        }
+
       const job = character.job; // Get the character's job
 
       // Validate the character's job for gathering

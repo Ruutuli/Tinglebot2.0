@@ -133,6 +133,23 @@ module.exports = {
         return;
       }
 
+      // Check if the fromCharacter's inventory has been synced
+if (!fromCharacter.inventorySynced) {
+  return interaction.editReply({
+      content: `❌ **You cannot trade items from \`${characterName}\` because their inventory is not set up yet. Please use the </testinventorysetup:1306176790095728732> and then </syncinventory:1306176789894266898> commands to initialize the inventory.**`,
+      ephemeral: true,
+  });
+}
+
+// Check if the toCharacter's inventory has been synced
+if (!toCharacter.inventorySynced) {
+  return interaction.editReply({
+      content: `❌ **You cannot trade items to \`${tradingWithName}\` because their inventory is not set up yet.**`,
+      ephemeral: true,
+  });
+}
+
+
       if (tradeId) {
         // Complete the trade
         const tradeSession = tradeSessions[tradeId];

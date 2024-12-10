@@ -124,6 +124,15 @@ module.exports = {
             return;
         }
 
+        // Check if the character's inventory has been synced
+        if (!character.inventorySynced) {
+          return interaction.editReply({
+              content: `❌ **You cannot use the travel command because "${character.name}"'s inventory is not set up yet. Please use the </testinventorysetup:1306176790095728732> and then </syncinventory:1306176789894266898> commands to initialize the inventory.**`,
+              ephemeral: true,
+          });
+        }
+
+
         // Check if the character is KO'd or has no hearts left
         if (character.currentHearts <= 0 || character.ko) {
             await interaction.editReply({ content: `❌ **Character ${characterName}** is KO'd and cannot travel.` });
