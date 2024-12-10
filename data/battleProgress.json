@@ -1,28 +1,15 @@
 {
-  "1733653126762": {
-    "battleId": "1733653126762",
+  "1733793177460": {
+    "battleId": "1733793177460",
     "characters": [
-      "Alden"
+      "Eyllst"
     ],
-    "monster": "Golden Moblin",
-    "tier": 5,
+    "monster": "White-maned Lynel",
+    "tier": 8,
     "monsterHearts": {
-      "max": 10,
-      "current": 10
+      "max": 16,
+      "current": 13
     },
-    "progress": "\n1315261278377476150"
-  },
-  "1733653389973": {
-    "battleId": "1733653389973",
-    "characters": [
-      "Alden"
-    ],
-    "monster": "Thunder Wizzrobe",
-    "tier": 5,
-    "monsterHearts": {
-      "max": 10,
-      "current": 10
-    },
-    "progress": "\n1315262382682931211"
+    "progress": "\n⚔️🏹 Eyllst attacks! The monster loses 💙💙2 hearts!"
   }
 }

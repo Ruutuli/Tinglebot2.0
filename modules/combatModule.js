@@ -102,22 +102,21 @@ async function updateBattleProgress(battleId, updatedProgress, outcome) {
 // ------------------- Delete Battle Progress -------------------
 // Deletes the battle progress for a specific battle ID
 async function deleteBattleProgressById(battleId) {
-    ensureBattleProgressFileExists();  // Ensure the file exists
-
-    console.log(`[DEBUG] Attempting to delete battle progress for ID: ${battleId}`);
-    const battleProgress = JSON.parse(fs.readFileSync(BATTLE_PROGRESS_PATH, 'utf8'));  // Read existing progress data
-
-    if (battleProgress[battleId]) {
-        console.log(`[DEBUG] Found battle ID: ${battleId} in battle progress. Proceeding to delete.`);
-        delete battleProgress[battleId];  // Remove the entry for the battle ID
-        fs.writeFileSync(BATTLE_PROGRESS_PATH, JSON.stringify(battleProgress, null, 2));  // Save the file after deletion
-        console.log(`[DEBUG] Successfully deleted battle progress for ID: ${battleId}`);
-    } else {
-        console.error(`[DEBUG] Battle ID: ${battleId} not found in battle progress.`);
+    ensureBattleProgressFileExists(); // Ensure the file exists
+    try {
+        const battleProgress = JSON.parse(fs.readFileSync(BATTLE_PROGRESS_PATH, 'utf8')); // Read existing data
+        if (battleProgress[battleId]) {
+            console.log(`[DEBUG] Found battle ID: ${battleId} in battle progress. Proceeding to delete.`);
+            delete battleProgress[battleId]; // Delete the entry
+            fs.writeFileSync(BATTLE_PROGRESS_PATH, JSON.stringify(battleProgress, null, 2)); // Save changes
+            console.log(`[DEBUG] Successfully deleted battle progress for ID: ${battleId}`);
+        } else {
+            console.warn(`[DEBUG] Battle ID: ${battleId} not found in battle progress.`);
+        }
+    } catch (error) {
+        console.error(`[ERROR] Failed to delete battle progress for ID: ${battleId}.`, error);
     }
 }
-
-
 
 // ------------------- Generate Unique Battle ID -------------------
 // Generates a unique battle ID based on the current timestamp
