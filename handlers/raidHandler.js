@@ -121,14 +121,15 @@ function applyVillageDamage(threadId, villageName, battleId, interaction) {
                 const villageLevel = villageInfo ? villageInfo.level : "Unknown";
 
                 const failureEmbed = new EmbedBuilder()
-                    .setTitle(`❌ The Raid Has Failed!`)
-                    .setDescription(
-                        `The village **${capitalizedVillageName}** was overwhelmed by an attack from **Blue-Maned Lynel** and has taken **${damageAmount}** damage!\n\n` +
-                        `**${capitalizedVillageName}** is currently at **level ${villageLevel}**.`
-                    )
-                    .setImage('https://pm1.aminoapps.com/6485/abe8c0c1f74bcc7eab0542eb1358f51be08c8beb_00.jpg')
-                    .setColor('#FF0000')
-                    .setFooter({ text: "Better luck next time!" });
+                .setTitle(`❌ The Raid Has Failed!`)
+                .setDescription(
+                    `The village **${capitalizedVillageName}** was overwhelmed by an attack from **${monster.name}** and has taken **${damageAmount}** damage!\n\n` +
+                    `**${capitalizedVillageName}** is currently at **level ${villageLevel}**.`
+                )
+                .setImage(monster.image || 'https://pm1.aminoapps.com/6485/abe8c0c1f74bcc7eab0542eb1358f51be08c8beb_00.jpg')
+                .setColor('#FF0000')
+                .setFooter({ text: "Better luck next time!" });
+            
 
                 // Log the embed object for debugging
                 console.log(`[DEBUG] Failure embed object:`, failureEmbed.toJSON());

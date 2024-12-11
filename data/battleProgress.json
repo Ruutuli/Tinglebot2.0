@@ -1,41 +1,16 @@
 {
-  "1733875670052": {
-    "battleId": "1733875670052",
+  "1733888795747": {
+    "battleId": "1733888795747",
     "characters": [
-      "David Jr"
+      "David Jr",
+      "Alden"
     ],
-    "monster": "Blue-Maned Lynel",
-    "tier": 7,
+    "monster": "Gloom Hands",
+    "tier": 5,
     "monsterHearts": {
-      "max": 14,
-      "current": 14
+      "max": 10,
+      "current": 5
     },
-    "progress": "\n1316194697064222781"
-  },
-  "1733879912631": {
-    "battleId": "1733879912631",
-    "characters": [
-      "Ze'alous"
-    ],
-    "monster": "Blue-Maned Lynel",
-    "tier": 7,
-    "monsterHearts": {
-      "max": 14,
-      "current": 14
-    },
-    "progress": "\n1316212491373645874\n💥💀 The monster Blue-Maned Lynel attacks! Ze'alous loses ❤️❤️❤️ 3 hearts!\nZe'alous has been defeated by the Blue-Maned Lynel!"
-  },
-  "1733880224384": {
-    "battleId": "1733880224384",
-    "characters": [
-      "David Jr"
-    ],
-    "monster": "Blue-Maned Lynel",
-    "tier": 7,
-    "monsterHearts": {
-      "max": 14,
-      "current": 14
-    },
-    "progress": "\n1316213798964826123"
+    "progress": "\n1316249748763578422\n⚔️🏹 Alden attacks! The monster loses 💙💙💙3 hearts!\n💥💀 The monster Gloom Hands attacks! Alden loses ❤️ 1 heart!\n⚔️🏹 Alden attacks! The monster loses 💙💙2 hearts!"
   }
 }
