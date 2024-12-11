@@ -118,15 +118,18 @@ if (!character.inventorySynced) {
       };
 
       // Generate type dropdown
-      const generateTypeDropdown = () => new ActionRowBuilder().addComponents(
-        new StringSelectMenuBuilder()
-          .setCustomId('type-select')
-          .setPlaceholder('Select a Category')
-          .addOptions(types.map(type => ({
-            label: type,
-            value: type
-          })))
-      );
+      const generateTypeDropdown = () => {
+        const limitedTypes = types.slice(0, 25); // Limit to 25 types
+        return new ActionRowBuilder().addComponents(
+          new StringSelectMenuBuilder()
+            .setCustomId('type-select')
+            .setPlaceholder('Select a Category')
+            .addOptions(limitedTypes.map(type => ({
+              label: type,
+              value: type
+            })))
+        );
+      };
 
       // Generate pagination buttons
       const paginationRow = () => new ActionRowBuilder().addComponents(

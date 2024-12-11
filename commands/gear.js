@@ -161,26 +161,30 @@ module.exports = {
       const itemType = itemDetail.type.includes('2h') ? '2h' : (itemDetail.subtype && itemDetail.subtype.includes('Shield') ? 'shield' : '1h');
 
       // Handle conflicting gear logic
-      if (itemType === '2h') {
-        if (character.gearWeapon) {
-          await updateCharacterById(character._id, { $unset: { gearWeapon: 1 } });
-          unequippedMessage += 'Your existing weapon has been unequipped because you cannot have a 2h weapon and another weapon equipped.';
-        }
-        if (character.gearShield) {
-          await updateCharacterById(character._id, { $unset: { gearShield: 1 } });
-          unequippedMessage += ' Your shield has been unequipped because you cannot have a 2h weapon and a shield equipped.';
-        }
-      } else if (itemType === 'shield') {
-        if (character.gearWeapon?.type?.includes('2h')) {
-          await updateCharacterById(character._id, { $unset: { gearWeapon: 1 } });
-          unequippedMessage += 'Your 2h weapon has been unequipped because you cannot have a shield and a 2h weapon equipped.';
-        }
-      } else if (itemType === '1h') {
-        if (character.gearWeapon?.type?.includes('2h')) {
-          await updateCharacterById(character._id, { $unset: { gearWeapon: 1 } });
-          unequippedMessage += 'Your 2h weapon has been unequipped because you cannot have a 1h weapon and a 2h weapon equipped.';
-        }
-      }
+// Handle conflicting gear logic only for weapons or shields
+if (type === 'weapon' || type === 'shield') {
+  if (itemType === '2h') {
+    if (character.gearWeapon) {
+      await updateCharacterById(character._id, { $unset: { gearWeapon: 1 } });
+      unequippedMessage += 'Your existing weapon has been unequipped because you cannot have a 2h weapon and another weapon equipped.';
+    }
+    if (character.gearShield) {
+      await updateCharacterById(character._id, { $unset: { gearShield: 1 } });
+      unequippedMessage += ' Your shield has been unequipped because you cannot have a 2h weapon and a shield equipped.';
+    }
+  } else if (itemType === 'shield') {
+    if (character.gearWeapon?.type?.includes('2h')) {
+      await updateCharacterById(character._id, { $unset: { gearWeapon: 1 } });
+      unequippedMessage += 'Your 2h weapon has been unequipped because you cannot have a shield and a 2h weapon equipped.';
+    }
+  } else if (itemType === '1h') {
+    if (character.gearWeapon?.type?.includes('2h')) {
+      await updateCharacterById(character._id, { $unset: { gearWeapon: 1 } });
+      unequippedMessage += 'Your 2h weapon has been unequipped because you cannot have a 1h weapon and a 2h weapon equipped.';
+    }
+  }
+}
+
 
       // Create a map to organize the character's gear
       const gearMap = {

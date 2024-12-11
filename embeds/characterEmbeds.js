@@ -3,6 +3,7 @@ const { EmbedBuilder } = require('discord.js');
 const { getCommonEmbedSettings, formatItemDetails, DEFAULT_IMAGE_URL } = require('./embedUtils');
 const { capitalize, capitalizeFirstLetter } = require('../modules/formattingModule');
 const { convertCmToFeetInches } = require('../utils/validation');
+const ItemModel = require('../models/ItemModel'); // Item model for fetching item details
 
 // ------------------- Create Character Embed -------------------
 // Creates a detailed character embed showing key character information

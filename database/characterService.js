@@ -12,35 +12,22 @@ async function getCharactersInVillage(userId, village) {
         character.currentVillage.toLowerCase() === village.toLowerCase());
 }
 
-// // ------------------- Fetch character by name -------------------
-// const fetchCharacterByName = async (characterName) => {
-//     await connectToTinglebot();
-//     const character = await Character.findOne({ name: new RegExp(`^${characterName}$`, 'i') });
-//     if (!character) throw new Error('Character not found');
-//     return character;
-// };
-
 // ------------------- Fetch character by name with enhanced logging -------------------
 const fetchCharacterByName = async (characterName) => {
-    try {
-        console.log(`🔍 Fetching character with name: ${characterName}`);  // Log the name being searched
-        await connectToTinglebot();
-        const character = await Character.findOne({ name: new RegExp(`^${characterName}$`, 'i') });
-        
-        if (!character) {
-            console.error(`❌ Character not found: ${characterName}`);  // Log character not found
-            throw new Error('Character not found');
-        }
-        
-        console.log(`✅ Character found: ${character.name}`);  // Log character found
-        return character;
+  try {
+      await connectToTinglebot();
+      const character = await Character.findOne({ name: new RegExp(`^${characterName}$`, 'i') });
 
-    } catch (error) {
-        console.error(`❌ Error fetching character: ${characterName}. Error message: ${error.message}`);
-        throw error;
-    }
+      if (!character) {
+          throw new Error('Character not found');
+      }
+
+      return character;
+  } catch (error) {
+      console.error(`❌ Error fetching character: ${characterName}. Error message: ${error.message}`);
+      throw error;
+  }
 };
-
 
 // ------------------- Fetch Blighted characters -------------------
 const fetchBlightedCharactersByUserId = async (userId) => {

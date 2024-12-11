@@ -282,33 +282,45 @@ const createKOEmbed = (character) => {
 };
 
 // ------------------- Function to create heal embed -------------------
-const createHealEmbed = (healerCharacter, characterToHeal) => {
-    const settings = getCommonEmbedSettings(healerCharacter);
+const createHealEmbed = (healerCharacter, characterToHeal, heartsToHeal, paymentOffered, healingRequestId) => {
+    if (!characterToHeal) {
+        throw new Error('Character to heal is required.');
+    }
+
+    // Safely handle healerCharacter being undefined
+    const healerName = healerCharacter?.name || 'Any available healer';
+    const healerIcon = healerCharacter?.icon || DEFAULT_IMAGE_URL;
+    const healerUrl = healerCharacter?.inventory || '';
+
+    const settings = healerCharacter ? getCommonEmbedSettings(healerCharacter) : { color: '#AA926A' }; // Default color if no healer
 
     return new EmbedBuilder()
         .setColor(settings.color)
-        .setAuthor({ name: `${healerCharacter.name} 🔗`, iconURL: settings.author.iconURL, url: settings.author.url })
+        .setAuthor({
+            name: `${characterToHeal.name} 🔗`, // Set author to the character requesting healing
+            iconURL: characterToHeal.icon || DEFAULT_IMAGE_URL,
+            url: characterToHeal.inventory || '',
+        })
         .setTitle('✬ Healing Request ✬')
-        .setDescription(`Healing request for ${characterToHeal.name}! ${healerCharacter.name} is ready to offer healing services.`);
+        .setDescription(
+            healerCharacter
+                ? `**${characterToHeal.name}** is requesting healing services from **${healerName}**!`
+                : `**${characterToHeal.name}** is requesting healing! Healing request for any available healer in **${characterToHeal.currentVillage}**.`
+        )
+        .addFields(
+            { name: '📍 Village', value: characterToHeal.currentVillage, inline: true },
+            { name: '❤️ Hearts to Heal', value: `${heartsToHeal}`, inline: true },
+            { name: '💰 Payment Offered', value: paymentOffered || 'None', inline: false },
+            { name: '🆔 Request ID', value: healingRequestId, inline: false }
+        )
+        .setImage(DEFAULT_IMAGE_URL) // Add default image
+        .setFooter({
+            text: 'This request expires 24 hours from now.',
+            iconURL: healerIcon, // Set footer icon to healer icon
+        });
 };
 
-// ------------------- Function to update heal embed -------------------
-const updateHealEmbed = (embed, healerCharacter, characterToHeal, heartsToHeal) => {
-    const newHearts = Math.min(characterToHeal.currentHearts + heartsToHeal, characterToHeal.maxHearts);
-    const newStamina = healerCharacter.currentStamina - heartsToHeal;
 
-    embed.setDescription(`${healerCharacter.name} has accepted the healing request and healed ${characterToHeal.name}.`);
-    embed.data.fields = embed.data.fields.filter(field => 
-        field.name !== '👩‍⚕️ __Healer__' && field.name !== '🟩 __Healer Stamina__'
-    );
-
-    embed.addFields(
-        { name: '👩‍⚕️ __Healer__', value: healerCharacter.name, inline: true },
-        { name: '🟩 __Healer Stamina__', value: `${newStamina}`, inline: true }
-    );
-
-    return embed;
-};
 
 // ------------------- Utility functions -------------------
 const aggregateItems = (items) => {
@@ -335,7 +347,6 @@ module.exports = {
     createNoEncounterEmbed,
     createKOEmbed,
     createHealEmbed,
-    updateHealEmbed,
     aggregateItems,
     formatMaterialsList,
     createCraftingEmbed

@@ -1,16 +1,1 @@
-{
-  "1733888795747": {
-    "battleId": "1733888795747",
-    "characters": [
-      "David Jr",
-      "Alden"
-    ],
-    "monster": "Gloom Hands",
-    "tier": 5,
-    "monsterHearts": {
-      "max": 10,
-      "current": 5
-    },
-    "progress": "\n1316249748763578422\n⚔️🏹 Alden attacks! The monster loses 💙💙💙3 hearts!\n💥💀 The monster Gloom Hands attacks! Alden loses ❤️ 1 heart!\n⚔️🏹 Alden attacks! The monster loses 💙💙2 hearts!"
-  }
-}
+{}

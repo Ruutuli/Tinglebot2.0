@@ -17,6 +17,8 @@ const Character = require('./models/CharacterModel');
 const { resetPetRollsForAllCharacters } = require('./database/characterService');
 const { createScheduledQuest } = require('./database/questService'); // Make sure this path is correct
 const { fetchQuestsFromSheet } = require('./scripts/questAnnouncements');
+const { cleanupExpiredHealingRequests } = require('./utils/storage'); // Adjust the path if needed
+
 
 // ------------------- Scheduler Initialization -------------------
 // Function to set up all scheduled tasks
@@ -185,15 +187,20 @@ cron.schedule(
 );
 
 
-//  // Test Schedule - Every 2 Minutes
-//   cron.schedule(
-//     '*/2 * * * *', // Every 2 minutes
-//     async () => {
-//       console.log('🗓️ Checking for new quests in Google Sheets...');
-//       await fetchQuestsFromSheet(client);
-//     },
-//     {
-//       timezone: 'America/New_York',
-//     }
-//   );
+// Schedule cleanup of expired healing requests to run every day at midnight
+cron.schedule(
+  '0 0 * * *', // Runs daily at midnight
+  async () => {
+    try {
+      console.log('🗑️ Running cleanup of expired healing requests...');
+      cleanupExpiredHealingRequests();
+      console.log('✅ Healing requests cleanup completed.');
+    } catch (error) {
+      console.error('❌ Error during healing requests cleanup:', error.message);
+    }
+  },
+  {
+    timezone: 'America/New_York', // Set to Eastern Standard Time
+  }
+);
 
