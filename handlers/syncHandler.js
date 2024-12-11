@@ -207,8 +207,10 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
                     reason: error.split(': ')[1], // Extract reason from error message
                     itemName: error.includes('Item with name') ? error.split('Item with name ')[1].split(' not found')[0] : 'Unknown'
                 })),
-                now
+                now, // Assuming this is the current timestamp
+                character.inventory // Add the character's inventory link
             );
+            
     } catch (error) {
         console.error(`Error in syncInventory: ${error.message}`, error);
         await editSyncErrorMessage(interaction, `❌ **Sync canceled! An error occurred: ${error.message}**`);

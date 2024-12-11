@@ -62,7 +62,7 @@ const createSyncEmbed = (characterName, googleSheetsUrl) => {
         },
         {
             name: '🔍 Step 5: Exact Formatting',
-            value: 'Items must be EXACTLY as they are on the website. Check [this sheet](https://docs.google.com/spreadsheets) for the correct format.',
+            value: 'Items must be EXACTLY as they are on the website. Check [this sheet](https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?usp=sharing) for the correct format.',
         },
         {
             name: '✅ Confirm Sync',
@@ -78,9 +78,12 @@ const createSyncEmbed = (characterName, googleSheetsUrl) => {
 };
 
 // ------------------- Edit sync message with final summary -------------------
-const editSyncMessage = async (interaction, characterName, totalSyncedItemsCount, skippedLinesDetails, timestamp) => {
+const editSyncMessage = async (interaction, characterName, totalSyncedItemsCount, skippedLinesDetails, timestamp, characterInventoryLink) => {
     try {
-        const inventoryLink = `https://docs.google.com/spreadsheets/d/${interaction.guildId}/edit`; // Replace with actual inventory URL logic
+        // Validate that the inventory link is valid
+        const validatedLink = characterInventoryLink && characterInventoryLink.startsWith('http')
+            ? characterInventoryLink
+            : 'https://docs.google.com/spreadsheets'; // Default fallback URL
 
         let skippedLinesMessage = '';
         if (skippedLinesDetails.length > 0) {
@@ -93,7 +96,7 @@ const editSyncMessage = async (interaction, characterName, totalSyncedItemsCount
             `**${totalSyncedItemsCount} lines synced**\n` +
             `${skippedLinesDetails.length > 0 ? `${skippedLinesDetails.length} skipped` : 'No lines skipped.'}\n\n` +
             `${skippedLinesMessage}\n\n` +
-            `[📄 **View Inventory**](${inventoryLink})\n\n` +
+            `> [View Inventory](${validatedLink})\n\n` +
             `*Synced on ${timestamp}.*`;
 
         await interaction.editReply({
