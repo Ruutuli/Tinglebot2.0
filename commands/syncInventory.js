@@ -5,6 +5,7 @@ const { connectToTinglebot } = require('../database/connection');
 const { isValidGoogleSheetsUrl, extractSpreadsheetId } = require('../utils/validation');
 const { createSyncEmbed, createSetupInstructionsEmbed } = require('../embeds/instructionsEmbeds');
 const { syncInventory } = require('../handlers/syncHandler');
+const { removeInitialItemIfSynced } = require('../utils/inventoryUtils');
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 
 // ------------------- Define the /syncinventory command -------------------

@@ -186,5 +186,65 @@
     "paymentOffered": "No payment specified",
     "status": "pending",
     "timestamp": 1733905365951
+  },
+  "1B5V5C": {
+    "healingRequestId": "1B5V5C",
+    "characterRequesting": "Bow",
+    "village": "rudania",
+    "heartsToHeal": 3,
+    "paymentOffered": "monster claw",
+    "healerName": "Pratyusha",
+    "status": "fulfilled",
+    "timestamp": 1733906139057
+  },
+  "USFFG4": {
+    "healingRequestId": "USFFG4",
+    "characterRequesting": "Bow",
+    "village": "rudania",
+    "heartsToHeal": 7,
+    "paymentOffered": "No payment specified",
+    "healerName": null,
+    "status": "fulfilled",
+    "timestamp": 1733906341910
+  },
+  "YP6OWF": {
+    "healingRequestId": "YP6OWF",
+    "characterRequesting": "Bow",
+    "village": "rudania",
+    "heartsToHeal": 7,
+    "paymentOffered": "No payment specified",
+    "healerName": null,
+    "status": "fulfilled",
+    "timestamp": 1733906411359
+  },
+  "K6B9LL": {
+    "healingRequestId": "K6B9LL",
+    "characterRequesting": "Bow",
+    "village": "rudania",
+    "heartsToHeal": 7,
+    "paymentOffered": "No payment specified",
+    "healerName": "Pratyusha",
+    "status": "fulfilled",
+    "timestamp": 1733906470918
+  },
+  "MNGAXU": {
+    "healingRequestId": "MNGAXU",
+    "characterRequesting": "Bow",
+    "village": "rudania",
+    "heartsToHeal": 7,
+    "paymentOffered": "Monster Claw x1",
+    "healerName": "Pratyusha",
+    "status": "fulfilled",
+    "timestamp": 1733906701648
+  },
+  "VEXOB4": {
+    "healingRequestId": "VEXOB4",
+    "characterRequesting": "Bow",
+    "village": "rudania",
+    "heartsToHeal": 7,
+    "paymentOffered": "Monster Claw",
+    "healerName": "Pratyusha",
+    "status": "fulfilled",
+    "timestamp": 1733906996788
   }
 }

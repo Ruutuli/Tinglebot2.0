@@ -197,6 +197,13 @@ async function resetPetRollsForAllCharacters() {
   }
 }
 
+// ------------------- updateCharacterInventorySynced  -------------------
+const updateCharacterInventorySynced = async (characterId) => {
+  await updateCharacterById(characterId, { inventorySynced: true });
+  await removeInitialItemIfSynced(characterId);
+};
+
+
 // ------------------- Export all functions -------------------
 module.exports = {
     getCharactersInVillage,
@@ -218,4 +225,5 @@ module.exports = {
     updatePetToCharacter,
     resetPetRollsForAllCharacters,
     fetchBlightedCharactersByUserId,
+    updateCharacterInventorySynced 
 };

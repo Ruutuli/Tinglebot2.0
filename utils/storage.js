@@ -76,8 +76,6 @@ function deleteSubmissionFromStorage(submissionId) {
 
 // Path to the file where healing requests are stored
 const healingRequestsFile = path.join(__dirname, '../data/healingRequests.json');
-console.log('Healing Requests File Path:', healingRequestsFile);
-
 
 // Ensure the file exists
 if (!fs.existsSync(healingRequestsFile)) {

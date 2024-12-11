@@ -5,7 +5,7 @@ const {
     writeBatchData, getSheetIdByTitle
 } = require('../utils/googleSheetsUtils');
 const { fetchCharacterByNameAndUserId, getCharacterInventoryCollection } = require('../database/characterService');
-const { syncToInventoryDatabase } = require('../utils/inventoryUtils');
+const { syncToInventoryDatabase, removeInitialItemIfSynced  } = require('../utils/inventoryUtils');
 const {
     editSyncMessage, editCharacterNotFoundMessage, editSyncErrorMessage
 } = require('../embeds/instructionsEmbeds');
@@ -120,8 +120,10 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
                     const item = await ItemModel.findOne({ itemName });
                     if (!item) throw new Error(`Item with name ${itemName} not found.`);
 
-                    const quantity = parseInt(qty, 10);
+                    const cleanedQty = String(qty).replace(/,/g, ''); // Remove commas
+                    const quantity = parseInt(cleanedQty, 10);
                     if (isNaN(quantity)) throw new Error(`Invalid quantity for item ${itemName}: ${qty}`);
+                    
 
                     const inventoryItem = {
                         characterId: character._id,
@@ -194,6 +196,10 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
                 console.log('Updating inventorySynced status...');
                 character.inventorySynced = true;
                 await character.save();
+                
+                // Remove Initial Item if necessary
+                await removeInitialItemIfSynced(character._id);
+                console.log('Initial Item removal process completed.');
                 console.log('inventorySynced status updated successfully.');
             } catch (updateError) {
                 console.error('Failed to update inventorySynced status:', updateError);

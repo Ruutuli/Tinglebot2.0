@@ -85,7 +85,6 @@ module.exports = {
     const quantity = interaction.options.getInteger('quantity'); // Should remain as is
 
     // Debugging log to verify correct quantity assignment
-    console.log('Debug: Quantity extracted for createCraftingEmbed:', quantity);
     const userId = interaction.user.id;
     const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
 

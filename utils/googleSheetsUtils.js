@@ -80,9 +80,16 @@ async function fetchSheetData(auth, spreadsheetId, range) {
             spreadsheetId,
             range
         });
-        return response.data.values;
+
+        // Sanitize data to remove commas from numeric strings
+        const sanitizedValues = response.data.values.map(row => 
+            row.map(cell => (typeof cell === 'string' && cell.includes(',')) ? cell.replace(/,/g, '') : cell)
+        );
+
+        return sanitizedValues;
     });
 }
+
 
 // ------------------- Append Data to Google Sheets -------------------
 // Appends data to a specified range in Google Sheets

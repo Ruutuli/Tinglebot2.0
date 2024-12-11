@@ -222,15 +222,12 @@ const updateCharacterAttack = async (characterId) => {
 // ------------------- Function to check and use stamina -------------------
 const checkAndUseStamina = async (character, staminaCost) => {
   try {
-      console.log(`Checking stamina for character: ${character.name}, Current Stamina: ${character.currentStamina}`);
       if (character.currentStamina < staminaCost) {
           throw new Error(`❌ Not enough stamina. Required: ${staminaCost}, Available: ${character.currentStamina}`);
       }
 
       character.currentStamina -= staminaCost;
-      console.log(`New stamina after deduction: ${character.currentStamina}, Attempting to save...`);
       await character.save();  // Save character data after deducting stamina
-      console.log(`Stamina saved successfully for ${character.name}`);
 
       return character.currentStamina;
   } catch (error) {
