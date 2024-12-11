@@ -17,7 +17,7 @@ const { handleModalSubmission } = require('./handlers/modalHandler');
 const { handleSelectMenuInteraction } = require('./handlers/selectMenuHandler');
 
 // ------------------- Scripts and Utilities -------------------
-const { renameChannels, trackBloodMoonCycle } = require('./scripts/bloodmoon');
+const { renameChannels, trackBloodMoonCycle, currentDayInCycle } = require('./scripts/bloodmoon');
 const scheduler = require('./scheduler');
 const { getGuildIds } = require('./utils/getGuildIds');
 
@@ -67,17 +67,27 @@ async function initializeClient() {
   client.once('ready', async () => {
     console.log('🤖 Bot is online');
 
-    // ------------------- Simplified Blood Moon Code Log -------------------
-    await renameChannels(client);
-    console.log('🌕 Blood Moon functionality active');
-
-    cron.schedule('0 0 * * *', () => {
-      trackBloodMoonCycle(client, '1286562327218622475');
-    }, {
-      timezone: 'America/New_York',
-    });
-
-    scheduler(client);
+     // ------------------- Check Blood Moon Status on Startup -------------------
+     const { isBloodMoonActive, currentDayInCycle } = require('./scripts/bloodmoon');
+     console.log(`[Startup] Current Day in Cycle: ${currentDayInCycle}`);
+     if (isBloodMoonActive()) {
+         console.log(`[Startup] Blood Moon is ACTIVE on Day ${currentDayInCycle}.`);
+     } else {
+         console.log(`[Startup] Blood Moon is NOT active. Day ${currentDayInCycle} in cycle.`);
+     }
+ 
+     // ------------------- Simplified Blood Moon Code Log -------------------
+     console.log('🌕 Blood Moon functionality active');
+ 
+     cron.schedule('0 0 * * *', () => {
+         trackBloodMoonCycle(client, process.env.RUDANIA_TOWN_HALL);
+         trackBloodMoonCycle(client, process.env.INARIKO_TOWN_HALL);
+         trackBloodMoonCycle(client, process.env.VHINTL_TOWN_HALL);
+     }, {
+         timezone: 'America/New_York',
+     });
+ 
+     scheduler(client);
 
     try {
       await generateVendingStockList();

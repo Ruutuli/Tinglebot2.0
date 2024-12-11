@@ -12,8 +12,8 @@ const authorIconUrl = 'https://static.wikia.nocookie.net/zelda_gamepedia_en/imag
 // ------------------- Constants for Blood Moon Tracking -------------------
 const BLOOD_MOON_CYCLE = 26;
 const BLOOD_MOON_PERIOD_DAYS = [25, 26, 27];
-// let currentDayInCycle = 1;
-currentDayInCycle = 25; // Manually set for testing
+let currentDayInCycle = 1;
+// currentDayInCycle = 25; // Manually set for testing
 console.log(`Current Day in Cycle: ${currentDayInCycle}`);
 
 // ------------------- Function to send the Blood Moon announcement -------------------
@@ -74,10 +74,19 @@ async function sendBloodMoonEndAnnouncement(client, channelId) {
 // ------------------- Function to Track the Blood Moon Cycle -------------------
 function trackBloodMoonCycle(client, channelId) {
   currentDayInCycle = (currentDayInCycle % BLOOD_MOON_CYCLE) + 1;
+
+  // Log the current day in the cycle
+  console.log(`[Blood Moon Tracker] Current Day in Cycle: ${currentDayInCycle}`);
+
+  // Check if the Blood Moon is active and log its status
   if (BLOOD_MOON_PERIOD_DAYS.includes(currentDayInCycle)) {
+    console.log(`[Blood Moon Tracker] Blood Moon is ACTIVE on Day ${currentDayInCycle}.`);
     triggerBloodMoonPeriod(client, channelId);
+  } else {
+    console.log(`[Blood Moon Tracker] Blood Moon is NOT active. Day ${currentDayInCycle} in cycle.`);
   }
 
+  // Reset channel names after the cycle ends (example day 28 or other condition)
   if (currentDayInCycle === 28) {
     revertChannelNames(client);
   }
@@ -87,7 +96,7 @@ function trackBloodMoonCycle(client, channelId) {
 function triggerBloodMoonPeriod(client, channelId) {
   if (currentDayInCycle === 25) {
     sendBloodMoonAnnouncement(client, channelId, 'Blood Moon approaches... Prepare yourself!');
-    renameChannels(client);
+    renameChannels(client); // Only rename channels on day 25
   } else if (currentDayInCycle === 26) {
     sendBloodMoonAnnouncement(client, channelId, 'The Blood Moon is now upon us! Tread carefully...');
   } else if (currentDayInCycle === 27) {
@@ -160,26 +169,6 @@ async function revertChannelNames(client) {
 }
 
 
-
-// ------------------- Function to Trigger Blood Moon Preemptively -------------------
-async function triggerBloodMoonNow(client, channelId) {
-  try {
-    // Log initiation in the console
-    console.log("Initiating Blood Moon preemptively...");
-
-    // Send Blood Moon announcement
-    await sendBloodMoonAnnouncement(client, channelId, 'The Blood Moon rises! Be wary of its glow.');
-
-    // Rename channel to reflect the Blood Moon
-    await renameChannels(client);
-
-    // Log success
-    console.log("Blood Moon triggered successfully.");
-  } catch (error) {
-    console.error("Error triggering Blood Moon:", error);
-  }
-}
-
 // ------------------- Function to Check Blood Moon Active -------------------
 function isBloodMoonActive() {
   const isActive = BLOOD_MOON_PERIOD_DAYS.includes(currentDayInCycle);
@@ -194,7 +183,7 @@ module.exports = {
   adjustEncounterForBloodMoon,
   renameChannels,
   revertChannelNames,
-  triggerBloodMoonNow,
   sendBloodMoonEndAnnouncement,
-  isBloodMoonActive
+  isBloodMoonActive,
+  currentDayInCycle
 };

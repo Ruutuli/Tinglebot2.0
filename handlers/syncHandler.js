@@ -39,9 +39,7 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
     let skippedLinesCount = 0;
 
     try {
-        console.log('Connecting to the database...');
         await connectToTinglebot();
-        console.log('Database connected successfully.');
 
         console.log(`Fetching character: ${characterName} for user: ${userId}`);
         let character = await fetchCharacterByNameAndUserId(characterName, userId);

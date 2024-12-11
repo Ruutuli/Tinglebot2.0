@@ -87,7 +87,9 @@ module.exports = (client) => {
     async () => {
       try {
         console.log('🌕 Posting Blood Moon announcement...');
-        await sendBloodMoonAnnouncement(client, process.env.BLOODMOON_ANNOUNCMENTS_CHANNEL_ID); // Use environment variable for channel ID
+        await sendBloodMoonAnnouncement(client, process.env.RUDANIA_TOWN_HALL);
+        await sendBloodMoonAnnouncement(client, process.env.INARIKO_TOWN_HALL);
+        await sendBloodMoonAnnouncement(client, process.env.VHINTL_TOWN_HALL);        
         console.log('✅ Blood Moon announcement posted successfully.');
       } catch (error) {
         console.error('❌ Error during Blood Moon announcement:', error);
