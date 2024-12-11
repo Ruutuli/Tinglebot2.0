@@ -189,13 +189,26 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
 
         console.log(`Sync completed for character: ${character.name} at ${now}`);
 
-        await editSyncMessage(
-            interaction,
-            character.name,
-            totalSyncedItemsCount,
-            skippedLinesCount,
-            now
-        );
+        // Update the inventorySynced status to true
+            try {
+                console.log('Updating inventorySynced status...');
+                character.inventorySynced = true;
+                await character.save();
+                console.log('inventorySynced status updated successfully.');
+            } catch (updateError) {
+                console.error('Failed to update inventorySynced status:', updateError);
+            }
+
+            await editSyncMessage(
+                interaction,
+                character.name,
+                totalSyncedItemsCount,
+                errors.map(error => ({
+                    reason: error.split(': ')[1], // Extract reason from error message
+                    itemName: error.includes('Item with name') ? error.split('Item with name ')[1].split(' not found')[0] : 'Unknown'
+                })),
+                now
+            );
     } catch (error) {
         console.error(`Error in syncInventory: ${error.message}`, error);
         await editSyncErrorMessage(interaction, `❌ **Sync canceled! An error occurred: ${error.message}**`);

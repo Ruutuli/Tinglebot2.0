@@ -78,10 +78,23 @@ const createSyncEmbed = (characterName, googleSheetsUrl) => {
 };
 
 // ------------------- Edit sync message with final summary -------------------
-const editSyncMessage = async (interaction, characterName, totalSyncedItemsCount, skippedLinesCount, timestamp) => {
+const editSyncMessage = async (interaction, characterName, totalSyncedItemsCount, skippedLinesDetails, timestamp) => {
     try {
         const inventoryLink = `https://docs.google.com/spreadsheets/d/${interaction.guildId}/edit`; // Replace with actual inventory URL logic
-        const finalMessage = `✅ **Sync completed for ${characterName}!**\n\n**${totalSyncedItemsCount} lines synced**\n**${skippedLinesCount} skipped**\n\n[📄 **View Inventory**](${inventoryLink})\n\n*Synced on ${timestamp}.*`;
+
+        let skippedLinesMessage = '';
+        if (skippedLinesDetails.length > 0) {
+            skippedLinesMessage = '**Skipped Lines:**\n' +
+                skippedLinesDetails.map((detail) => `- ${detail.reason}`).join('\n') +
+                '\n\n⚠️ Please double-check the spelling or formatting of these items in your sheet. Please let a mod know if any lines were skipped!';
+        }
+
+        const finalMessage = `✅ **Sync completed for ${characterName}!**\n\n` +
+            `**${totalSyncedItemsCount} lines synced**\n` +
+            `${skippedLinesDetails.length > 0 ? `${skippedLinesDetails.length} skipped` : 'No lines skipped.'}\n\n` +
+            `${skippedLinesMessage}\n\n` +
+            `[📄 **View Inventory**](${inventoryLink})\n\n` +
+            `*Synced on ${timestamp}.*`;
 
         await interaction.editReply({
             content: finalMessage,
@@ -93,6 +106,7 @@ const editSyncMessage = async (interaction, characterName, totalSyncedItemsCount
         throw error;
     }
 };
+
 
 // ------------------- Edit message for sync error -------------------
 const editSyncErrorMessage = async (interaction, errorMessage) => {

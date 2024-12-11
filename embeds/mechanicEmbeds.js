@@ -211,33 +211,46 @@ const createTradeEmbed = async (fromCharacter, toCharacter, fromItems, toItems, 
 
 // ------------------- Function to create monster encounter embed -------------------
 const createMonsterEncounterEmbed = (character, monster, outcomeMessage, heartsRemaining, lootItem, isBloodMoon = false) => {
-    const settings = getCommonEmbedSettings(character);
+    const settings = getCommonEmbedSettings(character) || {};
     const nameMapping = monster.nameMapping || monster.name;
     const monsterDetails = monsterMapping[nameMapping.replace(/\s+/g, '')] || { name: monster.name, image: 'https://via.placeholder.com/100x100' };
 
-            const embed = new EmbedBuilder()
-            .setColor(isBloodMoon ? '#FF4500' : settings.color)
-            .setTitle(
-                `${capitalizeWords(character.homeVillage)} ${capitalizeWords(character.job)}: ${character.name} encountered a ${monsterDetails.name || monster.name}!`
-            )
-            .setAuthor({ name: `${character.name} 🔗`, iconURL: settings.author.iconURL, url: settings.author.url })
-            .addFields(
-                { name: '__❤️ Hearts__', value: `> ${heartsRemaining}/${character.maxHearts}`, inline: false },
-                { name: '🔹 __Outcome__', value: `> ${outcomeMessage}`, inline: false }
-            )
-            .setFooter({ text: isBloodMoon ? '🔴 The Blood Moon rises... luckily you didn’t run into anything stronger.' : '' })
-            .setImage(settings.image.url);
+    // Safeguard for settings
+    const authorIconURL = settings.author?.iconURL || 'https://via.placeholder.com/100x100';
+    const settingsImageURL = settings.image?.url || 'https://via.placeholder.com/100x100';
 
-        if (lootItem) {
-            embed.addFields({ name: '💥 __Loot__', value: `${formatItemDetails(lootItem.itemName, lootItem.quantity, lootItem.emoji)}`, inline: false });
-        }
+    // Ensure footer text is valid
+    const footerText = isBloodMoon
+        ? '🔴 The Blood Moon rises... luckily you didn’t run into anything stronger.'
+        : '';
 
-        if (isValidImageUrl(monsterDetails.image)) {
-            embed.setThumbnail(monsterDetails.image);
-        }
+    // Embed creation
+    const embed = new EmbedBuilder()
+        .setColor(isBloodMoon ? '#FF4500' : settings.color || '#000000') // Default color
+        .setTitle(
+            `${capitalizeWords(character.homeVillage)} ${capitalizeWords(character.job)}: ${character.name} encountered a ${monsterDetails.name || monster.name}!`
+        )
+        .setAuthor({ name: `${character.name} 🔗`, iconURL: authorIconURL, url: settings.author?.url || '' })
+        .addFields(
+            { name: '__❤️ Hearts__', value: `> ${heartsRemaining || 'Unknown'}/${character.maxHearts || 'Unknown'}`, inline: false },
+            { name: '🔹 __Outcome__', value: `> ${outcomeMessage || 'No outcome specified.'}`, inline: false }
+        )
+        .setFooter({ text: footerText || 'Encounter completed.', iconURL: authorIconURL }) // Fallback text and icon
+        .setImage(settingsImageURL);
 
-        return embed;
+    if (lootItem) {
+        embed.addFields({ name: '💥 __Loot__', value: `${formatItemDetails(lootItem.itemName, lootItem.quantity, lootItem.emoji)}`, inline: false });
+    }
+
+    if (isValidImageUrl(monsterDetails.image)) {
+        embed.setThumbnail(monsterDetails.image);
+    } else {
+        embed.setThumbnail('https://via.placeholder.com/100x100'); // Default thumbnail
+    }
+
+    return embed;
 };
+
 
 
 // ------------------- Function to create no encounter embed -------------------
