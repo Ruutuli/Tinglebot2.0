@@ -9,9 +9,6 @@ const Monster = require('../models/MonsterModel');  // Model for monster-related
 // Import buff calculation functions from buffModule
 const { calculateAttackBuff, calculateDefenseBuff, applyBuffs } = require('../modules/buffModule');
 
-// Import character-related services
-const { fetchCharacterByNameAndUserId } = require('../database/characterService');  // Import this to avoid "undefined" error
-
 // Import high-tier encounter outcomes
 const {
   getTier5EncounterOutcome,
@@ -27,9 +24,10 @@ const {
 const getEncounterOutcome = async (character, monster, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess) => {
   try {
     const tier = monster.tier;
+
     let outcome;
 
-    // Determine the outcome based on adjusted random value and monster tier
+    // Outcome calculation logic with detailed logging
     if (adjustedRandomValue <= 25) {
       outcome = tier === 1 ? { result: '1 HEART', hearts: 1, canLoot: false }
               : tier === 2 ? { result: '2 HEARTS', hearts: 2, canLoot: false }
@@ -50,20 +48,22 @@ const getEncounterOutcome = async (character, monster, damageValue, adjustedRand
       outcome = { result: 'Win!/Loot', canLoot: true, hearts: 0 };
     }
 
-    // Apply hearts reduction and KO handling if applicable
     if (outcome.hearts) {
-      await useHearts(character._id, outcome.hearts);  // Deduct hearts from character
+      await useHearts(character._id, outcome.hearts);
       if (outcome.result === 'KO') {
-        await handleKO(character._id);  // Handle KO if necessary
+        console.log('[DAMAGE DEBUG] KO Detected. Handling...');
+        await handleKO(character._id);
       }
     }
 
     return { ...outcome, attackSuccess, defenseSuccess, damageValue, adjustedRandomValue };
   } catch (error) {
-    console.error('Error in getEncounterOutcome:', error);  // Log error
+    console.error('[DAMAGE ERROR] Encounter Outcome Calculation Failed:', error);
     throw error;
   }
 };
+
+
 
 // ------------------- Process Battle Logic -------------------
 // Manages the battle logic by calculating buffs, updating battle progress, and determining the outcome.

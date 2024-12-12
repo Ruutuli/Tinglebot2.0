@@ -47,7 +47,6 @@ const generateDamageMessage = (damage) => {
       "⚡️😖 Overwhelmed... you lose all hearts and fall...",
     ]
   };
-
   return getRandomMessage(messages[damage] || ["No damage taken."]);
 };
 
@@ -209,14 +208,22 @@ const getFailedToDefeatMessage = (character, randomMonster, originalDamage) => {
 
 // Modified function to include check for attack buff
 const generateFinalOutcomeMessage = (randomValue, defenseSuccess = false, attackSuccess = false, adjustedRandomValue = 0, finalDamage = 0) => {
+  console.log(`[DEBUG3] Input to generateFinalOutcomeMessage - randomValue: ${randomValue}, defenseSuccess: ${defenseSuccess}, attackSuccess: ${attackSuccess}, adjustedRandomValue: ${adjustedRandomValue}, finalDamage: ${finalDamage}`);
+
+  let message;
+
   if (attackSuccess) {
-    return generateAttackBuffMessage(defenseSuccess, attackSuccess, adjustedRandomValue, finalDamage);
+    message = generateAttackBuffMessage(defenseSuccess, attackSuccess, adjustedRandomValue, finalDamage);
   } else if (defenseSuccess) {
-    return generateDefenseBuffMessage(defenseSuccess, attackSuccess, adjustedRandomValue);
+    message = generateDefenseBuffMessage(defenseSuccess, attackSuccess, adjustedRandomValue);
   } else {
-    return generateDamageMessage(finalDamage);
+    message = generateDamageMessage(finalDamage);
   }
+
+  console.log(`[DEBUG4] Output from generateFinalOutcomeMessage: ${message}`);
+  return message;
 };
+
 
 // Type Action Map
 // ===============

@@ -142,6 +142,8 @@ const calculateFinalValue = (character) => {
 function getRandomEncounter() {
   const randomValue = Math.random() * 100;
 
+  console.log('[RNG DEBUG] Random Encounter Roll:', randomValue);
+
   let encounter;
   if (randomValue < encounterProbabilities.noEncounter) {
     encounter = 'No Encounter';
@@ -155,8 +157,11 @@ function getRandomEncounter() {
     encounter = 'Tier 4';
   }
 
+  console.log('[RNG DEBUG] Encounter type selected:', encounter, `Thresholds: Tier 1 (${encounterProbabilities.tier1}), Tier 2 (${encounterProbabilities.tier2}), Tier 3 (${encounterProbabilities.tier3}), Tier 4 (${encounterProbabilities.tier4})`);
+
   return encounter;
 }
+
 
 // Function to determine a Blood Moon encounter
 function getRandomBloodMoonEncounter() {
@@ -177,20 +182,39 @@ async function getMonsterEncounterFromList(monsters) {
   try {
     const encounterType = getRandomEncounter();
     if (encounterType === 'No Encounter') {
+      console.log('[ENCOUNTER DEBUG] No encounter triggered.');
       return { encounter: 'No Encounter', monsters: [] };
     }
 
-    const tier = parseInt(encounterType.split(' ')[1], 10);
-    const filteredMonsters = monsters.filter(monster => monster.tier <= tier);
+    let tier = parseInt(encounterType.split(' ')[1], 10);
+
+    let filteredMonsters = monsters.filter(monster => monster.tier === tier);
+
+    // Fallback logic: if no monsters are available for the selected tier, try lower tiers
+    while (filteredMonsters.length === 0 && tier > 1) {
+      tier--; // Decrease the tier to try lower levels
+      console.log(`[ENCOUNTER DEBUG] No monsters found for Tier ${tier + 1}. Trying Tier ${tier}...`);
+      filteredMonsters = monsters.filter(monster => monster.tier === tier);
+    }
+
+    if (filteredMonsters.length === 0) {
+      console.log('[ENCOUNTER DEBUG] No monsters available for any tier.');
+      return { encounter: 'No Encounter', monsters: [] };
+    }
+
+    const selectedMonster = filteredMonsters[Math.floor(Math.random() * filteredMonsters.length)];
 
     return {
-      encounter: encounterType,
-      monsters: filteredMonsters.length > 0 ? filteredMonsters : monsters
+      encounter: `Tier ${tier}`,
+      monsters: [selectedMonster],
     };
   } catch (error) {
+    console.error('[ENCOUNTER ERROR]', error);
     return { encounter: 'Error', monsters: [] };
   }
 }
+
+
 
 // Create a function to get monsters by village and job criteria
 async function getMonstersByCriteria(village, job) {

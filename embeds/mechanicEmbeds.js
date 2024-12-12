@@ -7,6 +7,8 @@ const { getCommonEmbedSettings, formatItemDetails, getArticleForItem, DEFAULT_IM
 const { isValidImageUrl } = require('../utils/validation');
 const { getNoEncounterMessage, typeActionMap } = require('../modules/flavorTextModule');
 const { capitalizeWords, capitalize } = require('../modules/formattingModule');
+const { getVillageColorByName } = require('../modules/locationsModule'); // Import from locationsModule.js
+
 
 // Model Imports
 const { monsterMapping } = require('../models/MonsterModel');
@@ -221,11 +223,20 @@ const createMonsterEncounterEmbed = (character, monster, outcomeMessage, heartsR
     // KO message addition
     const koMessage = heartsRemaining === 0 ? '\n💥 **KO! You have been defeated and can’t continue!**' : '';
 
+    // Determine if the character is visiting
+    const isVisiting = character.homeVillage !== character.currentVillage;
+    const locationPrefix = isVisiting
+        ? `${capitalizeWords(character.homeVillage)} ${capitalizeWords(character.job)} is visiting ${capitalizeWords(character.currentVillage)}`
+        : `${capitalizeWords(character.homeVillage)} ${capitalizeWords(character.job)}`;
+
+    // Get embed color based on current village
+    const embedColor = getVillageColorByName(character.currentVillage) || '#000000'; // Default to black if no color is found
+
     // Embed creation
     const embed = new EmbedBuilder()
-        .setColor(isBloodMoon ? '#FF4500' : settings.color || '#000000') // Default color
+        .setColor(isBloodMoon ? '#FF4500' : embedColor) // Use Blood Moon color if applicable, otherwise village color
         .setTitle(
-            `${capitalizeWords(character.homeVillage)} ${capitalizeWords(character.job)}: ${character.name} encountered a ${monsterDetails.name || monster.name}!`
+            `${locationPrefix}: ${character.name} encountered a ${monsterDetails.name || monster.name}!`
         )
         .setAuthor({ name: `${character.name} 🔗`, iconURL: authorIconURL, url: settings.author?.url || '' })
         .addFields(
@@ -248,10 +259,7 @@ const createMonsterEncounterEmbed = (character, monster, outcomeMessage, heartsR
     return embed;
 };
 
-
-
-
-// ------------------- Function to create no encounter embed -------------------
+// ------------------- Functifon to create no encounter embed -------------------
 const createNoEncounterEmbed = (character, isBloodMoon = false) => {
     const settings = getCommonEmbedSettings(character);
     const noEncounterMessage = getNoEncounterMessage(); // Retain normal no-encounter message

@@ -6,6 +6,8 @@
 // Third-Party Libraries
 const { SlashCommandBuilder } = require('discord.js'); // Used to create slash commands for Discord bots
 const { v4: uuidv4 } = require('uuid'); // Generates unique identifiers
+require('dotenv').config();
+
 
 // Database Services
 const {
@@ -74,6 +76,15 @@ const {
   useHearts,
 } = require('../modules/characterStatsModule');
 
+
+
+const villageChannels = {
+  Rudania: process.env.RUDANIA_TOWN_HALL,
+  Inariko: process.env.INARIKO_TOWN_HALL,
+  Vhintl: process.env.VHINTL_TOWN_HALL,
+};
+
+
 // ------------------- Command Definition -------------------
 
 // Define the `loot` slash command, allowing users to loot items based on their character's job and location
@@ -88,6 +99,7 @@ module.exports = {
         .setRequired(true)
         .setAutocomplete(true)
     ),
+    
     
   // ------------------- Main Execution Logic -------------------
   async execute(interaction) {
@@ -107,7 +119,19 @@ module.exports = {
         return;
       }
 
-      // ------------------- Step 2: Check Hearts and Job Validity -------------------
+      // ------------------- Step 2: Validate Interaction Channel -------------------
+      const currentVillage = capitalizeWords(character.currentVillage); // Capitalize village name for consistency
+      const allowedChannel = villageChannels[currentVillage]; // Get the allowed channel from environment variables
+
+      if (!allowedChannel || interaction.channelId !== allowedChannel) {
+        const channelMention = `<#${allowedChannel}>`;
+        await interaction.editReply({
+          content: `❌ **You can only use this command in the ${currentVillage} Town Hall channel!**\n${characterName} is currently in ${currentVillage}! This command must be used in ${channelMention}.`,
+        });
+        return;
+      }
+
+      // ------------------- Step 3: Check Hearts and Job Validity -------------------
       if (character.currentHearts === 0) {
         const embed = createKOEmbed(character); // Create embed for KO status
         await interaction.editReply({ embeds: [embed] });
@@ -132,8 +156,7 @@ module.exports = {
         return;
       }
 
-      // ------------------- Step 3: Determine Region and Encounter -------------------
-      const currentVillage = capitalizeWords(character.currentVillage); // Capitalize village name for consistency
+      // ------------------- Step 4: Determine Region and Encounter -------------------
       const region = getVillageRegionByName(currentVillage); // Get the region based on village
       if (!region) {
         // Reply if no region is found for the village
@@ -143,8 +166,9 @@ module.exports = {
         });
         return;
       }
+
     
-      // ------------------- Step 4: Blood Moon Encounter Handling -------------------
+      // ------------------- Step 5: Blood Moon Encounter Handling -------------------
       const bloodMoonActive = isBloodMoonActive(); // Determine Blood Moon status
       console.log(`[Blood Moon Status] Current Day: ${new Date().getDate()}, Active: ${bloodMoonActive}`);      
       let encounteredMonster;
@@ -212,28 +236,31 @@ module.exports = {
           return;
         }
       } else {
-    // ------------------- Normal Encounter Logic -------------------
-    encounteredMonster = await handleNormalEncounter(
-      interaction,
-      currentVillage,
-      job,
-      character,
-      bloodMoonActive
-  );
+ // ------------------- Normal Encounter Logic -------------------
+ encounteredMonster = await handleNormalEncounter(
+  interaction,
+  currentVillage,
+  job,
+  character,
+  bloodMoonActive
+);
 
-    if (!encounteredMonster) {
-      console.log(`[LOOT] No valid monster encountered during normal looting.`);
-      return; // Exit if no monster was found
-    }
+if (!encounteredMonster) {
+  console.log(`[LOOT] No valid monster encountered during normal looting.`);
+  
+  // Send a "No Encounter" embed to the user
+  const embed = createNoEncounterEmbed(character, bloodMoonActive); // Blood Moon is inactive here
+  await interaction.editReply({ embeds: [embed] });
+  return; // Stop execution after "No Encounter"
+}
 
-      // ------------------- Handle Looting for All Tiers -------------------
-      if (encounteredMonster.tier > 4) {
-        console.log(`[LOOT] Monster "${encounteredMonster.name}" qualifies for a raid.`);
-        await triggerRaid(character, encounteredMonster, interaction, null, bloodMoonActive); // Pass null for threadId
-        return;
-    }
-  }   
-    
+// ------------------- Handle Looting for All Tiers -------------------
+if (encounteredMonster.tier > 4) {
+  console.log(`[LOOT] Monster "${encounteredMonster.name}" qualifies for a raid.`);
+  await triggerRaid(character, encounteredMonster, interaction, null, bloodMoonActive); // Pass null for threadId
+  return;
+}
+      }
       // ------------------- Step 5: Looting Logic -------------------
       await processLootingLogic(interaction, character, encounteredMonster, bloodMoonActive) ;
 
@@ -312,57 +339,39 @@ module.exports = {
 }
 
 // ------------------- Normal Encounter Logic -------------------
-async function handleNormalEncounter(interaction, currentVillage, job, character, bloodMoonActive)  {
-  console.log(`[LOOT] Blood Moon is inactive: Normal encounter.`);
-  const monstersByCriteria = await getMonstersByCriteria(currentVillage, job);
+async function handleNormalEncounter(interaction, currentVillage, job, character, bloodMoonActive) {
 
+  const monstersByCriteria = await getMonstersByCriteria(currentVillage, job);
   if (monstersByCriteria.length === 0) {
-    console.log(`[LOOT] No monsters found for village "${currentVillage}" and job "${job}".`);
-    await interaction.editReply({
-      content: `❌ **No monsters found for village "${currentVillage}" and job "${job}".**`,
-    });
-    return null;
+    console.log(`[DEBUG] No monsters found for village "${currentVillage}" and job "${job}".`);
+    return null; // No monsters available
   }
 
   const encounterResult = await getMonsterEncounterFromList(monstersByCriteria);
   if (encounterResult.encounter === 'No Encounter') {
-    console.log(`[LOOT] No encounter generated for character "${character.name}" in "${currentVillage}".`);
-    const embed = createNoEncounterEmbed(character, bloodMoonActive); // Pass Blood Moon status
-    await interaction.editReply({ embeds: [embed] });
-    return null;
-}
-
-  if (encounterResult.monsters.length === 0) {
-    console.log(`[LOOT] No suitable monsters found for encounter in "${currentVillage}".`);
-    await interaction.editReply({
-      content: `❌ **No suitable monsters found in "${currentVillage}".**`,
-    });
-    return null;
+    console.log(`[DEBUG] No encounter generated.`);
+    return null; // No encounter happened
   }
 
   const encounteredMonster = encounterResult.monsters[
     Math.floor(Math.random() * encounterResult.monsters.length)
   ];
-  console.log(`[LOOT] Normal Encounter: Monster "${encounteredMonster.name}" (Tier ${encounteredMonster.tier || 'Unknown'})`);
+  console.log(`[DEBUG] Encountered Monster: "${encounteredMonster.name}" (Tier: ${encounteredMonster.tier})`);
   
-  if (encounteredMonster.tier > 4) {
-    console.log(`[LOOT] Initiating raid for monster "${encounteredMonster.name}" (Tier ${encounteredMonster.tier})`);
-    await triggerRaid(character, encounteredMonster, interaction, null, bloodMoonActive); // Pass null for threadId, to let triggerRaid handle thread creation
-    return;
-}
- else {
-    console.log(`[LOOT] Processing looting logic for Tier ${encounteredMonster.tier}`);
-    await processLootingLogic(interaction, character, encounteredMonster, bloodMoonActive) ;
-  }
-  
+  // Return the final encountered monster
   return encounteredMonster;
-  
 }
 
 // ------------------- Looting Logic -------------------
 async function processLootingLogic(interaction, character, encounteredMonster, bloodMoonActive) {
   try {
+    console.log('[DEBUG] Processing loot for encountered monster:', {
+      name: encounteredMonster.name,
+      tier: encounteredMonster.tier,
+    });
+
     const items = await fetchItemsByMonster(encounteredMonster.name); // Fetch items dropped by the encountered monster
+
 
     // Step 1: Calculate Encounter Outcome
     const {
