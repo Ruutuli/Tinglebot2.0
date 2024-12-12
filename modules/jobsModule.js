@@ -1,5 +1,6 @@
 // ------------------- Import necessary modules and functions -------------------
 const { fetchCharacterById, updateCharacterById } = require('../database/characterService');
+const { capitalize } = require('../modules/formattingModule');
 
 // ------------------- Define job data and configurations -------------------
 // Job categories with associated jobs
@@ -92,13 +93,13 @@ const getVillageExclusiveJobs = (village) => village ? villageJobs[village.toLow
 // ------------------- Pagination and data retrieval -------------------
 // Fetch specific job page
 const getJobPage = (pageIndex) => {
-  if (pageIndex < 0 || pageIndex >= jobPages.length) throw new Error('Invalid page index');
+  if (pageIndex < 0 || pageIndex >= jobPages.length) throw new Error('[jobsModule.js]: Invalid page index');
   return jobPages[pageIndex];
 };
 
 // Get general job pages
 const getGeneralJobsPage = (page) => {
-  if (page < 1 || page > 2) throw new Error('Invalid page number for General Jobs');
+  if (page < 1 || page > 2) throw new Error('[jobsModule.js]: Invalid page number for General Jobs');
   return jobPages[page - 1].jobs;
 };
 
@@ -112,7 +113,7 @@ const getAllJobCategories = () => jobPages.filter(page => page.title !== 'All Jo
 const getJobsByCategory = (category, page = 1) => {
   if (category === 'General Jobs') return getGeneralJobsPage(page);
   const pageData = jobPages.find(pageData => pageData.title === category);
-  if (!pageData) throw new Error('Invalid job category');
+  if (!pageData) throw new Error('[jobsModule.js]: Invalid job category');
   return pageData.jobs;
 };
 
@@ -136,10 +137,11 @@ const isVillageExclusiveJob = (job) => {
 const updateJob = async (characterId, newJob) => {
   try {
     const character = await fetchCharacterById(characterId);
-    if (!character) throw new Error('Character not found');
-    character.job = newJob;
-    await updateCharacterById(characterId, { job: newJob });
+    if (!character) throw new Error('[jobsModule.js]: Character not found');
+    character.job = capitalize(newJob);
+    await updateCharacterById(characterId, { job: character.job });
   } catch (error) {
+    console.error('[jobsModule.js]: Error updating job', error.message);
     throw error;
   }
 };
@@ -149,6 +151,7 @@ module.exports = {
   jobPages,
   villageJobs,
   generalJobs,
+  jobPerks,
   getVillageExclusiveJobs,
   getJobPage,
   getAllJobs,
@@ -159,11 +162,7 @@ module.exports = {
   updateJob,
   getGeneralJobsPage,
   isVillageExclusiveJob,
-  jobPerks,
   normalizeJobName,
   isValidJob,
   getProperJobName
 };
-
-
-//this version

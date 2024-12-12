@@ -1,6 +1,7 @@
-// locationsModule.js
+// ------------------- Import necessary modules -------------------
+const { capitalize } = require('../modules/formattingModule'); // Shared utility for capitalization
 
-// Define locations, villages, and roads
+// ------------------- Location data and initialization -------------------
 const locations = {
   Regions: {
     Eldin: {},
@@ -11,9 +12,9 @@ const locations = {
     Hebra: {},
   },
   Villages: {
-    Rudania: { region: 'Eldin', color: '#d7342a' },
-    Inariko: { region: 'Lanayru', color: '#277ecd' },
-    Vhintl: { region: 'Faron', color: '#25c059' },
+    Rudania: { region: 'Eldin', color: '#d7342a', emoji: '<:rudania:899492917452890142>' },
+    Inariko: { region: 'Lanayru', color: '#277ecd', emoji: '<:inariko:899493009073274920>' },
+    Vhintl: { region: 'Faron', color: '#25c059', emoji: '<:vhintl:899492879205007450>' },
   },
   Roads: {
     PathOfScarletLeaves: { from: 'Rudania', to: 'Inariko' },
@@ -21,37 +22,48 @@ const locations = {
   },
 };
 
-const validVillages = ['Rudania', 'Inariko', 'Vhintl'];
+// Extract village names and ensure capitalization
+const validVillages = Object.keys(locations.Villages).map(capitalize);
 
-// Get all village names
-function getAllVillages() {
-  return validVillages;
-}
+// ------------------- Village-related functions -------------------
 
-// Get village color by name
+// Get all village names with proper capitalization
+const getAllVillages = () => validVillages;
+
+// Get village color by name, ensuring capitalization
 const getVillageColorByName = (name) => {
-  return locations.Villages[capitalizeFirstLetter(name)]?.color || null;
+  const villageName = capitalize(name);
+  return locations.Villages[villageName]?.color || null;
+};
+
+// Get village emoji by name, ensuring capitalization
+const getVillageEmojiByName = (name) => {
+  const villageName = capitalize(name);
+  return locations.Villages[villageName]?.emoji || null;
 };
 
 // Validate if the village name is valid
-function isValidVillage(village) {
-  return validVillages.map(v => v.toLowerCase()).includes(village.toLowerCase());
-}
+const isValidVillage = (village) => {
+  return validVillages.includes(capitalize(village));
+};
 
-// Get the region of a village by its name
+// Get the region of a village by its name, ensuring capitalization
 const getVillageRegionByName = (name) => {
-  const village = locations.Villages[capitalizeFirstLetter(name)];
-  return village ? village.region : null;
+  const villageName = capitalize(name);
+  return locations.Villages[villageName]?.region || null;
 };
 
-const capitalizeFirstLetter = (string) => {
-  return string.charAt(0).toUpperCase() + string.slice(1).toLowerCase();
+// ------------------- Logging Utility -------------------
+const logError = (errorMessage) => {
+  console.error(`[locationsModule.js]: ${errorMessage}`);
 };
 
+// ------------------- Exports -------------------
 module.exports = {
   locations,
   getAllVillages,
   getVillageColorByName,
+  getVillageEmojiByName,
   isValidVillage,
   getVillageRegionByName,
 };

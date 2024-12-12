@@ -6,7 +6,7 @@ const { EmbedBuilder } = require('discord.js');
 const { getCommonEmbedSettings, formatItemDetails, getArticleForItem, DEFAULT_IMAGE_URL, jobActions } = require('./embedUtils');
 const { isValidImageUrl } = require('../utils/validation');
 const { getNoEncounterMessage, typeActionMap } = require('../modules/flavorTextModule');
-const { capitalizeWords } = require('../modules/formattingModule');
+const { capitalizeWords, capitalize } = require('../modules/formattingModule');
 
 // Model Imports
 const { monsterMapping } = require('../models/MonsterModel');
@@ -18,7 +18,7 @@ const createCraftingEmbed = async (item, character, flavorText, materialsUsed, q
 
     // Ensure `quantity` is properly handled
     const itemQuantityText = ` x${quantity}`;
-    const embedTitle = `${character.name} from ${character.currentVillage}: ${action} ${item.itemName}${itemQuantityText}`;
+    const embedTitle = `${character.name} the ${capitalize(character.job)} from ${capitalize(character.currentVillage)}: ${action} ${item.itemName}${itemQuantityText}`;
 
     // Handle flavor text (optional)
     const flavorTextField = flavorText ? { name: '🌟 **Flavor Text**', value: flavorText, inline: false } : null;
@@ -67,7 +67,6 @@ const createCraftingEmbed = async (item, character, flavorText, materialsUsed, q
 
     return embed;
 };
-
 
 // ------------------- Function to create Writing Submission embed -------------------
 const createWritingSubmissionEmbed = (submissionData) => {
@@ -219,10 +218,8 @@ const createMonsterEncounterEmbed = (character, monster, outcomeMessage, heartsR
     const authorIconURL = settings.author?.iconURL || 'https://via.placeholder.com/100x100';
     const settingsImageURL = settings.image?.url || 'https://via.placeholder.com/100x100';
 
-    // Ensure footer text is valid
-    const footerText = isBloodMoon
-        ? '🔴 The Blood Moon rises... luckily you didn’t run into anything stronger.'
-        : '';
+    // KO message addition
+    const koMessage = heartsRemaining === 0 ? '\n💥 **KO! You have been defeated and can’t continue!**' : '';
 
     // Embed creation
     const embed = new EmbedBuilder()
@@ -232,10 +229,10 @@ const createMonsterEncounterEmbed = (character, monster, outcomeMessage, heartsR
         )
         .setAuthor({ name: `${character.name} 🔗`, iconURL: authorIconURL, url: settings.author?.url || '' })
         .addFields(
-            { name: '__❤️ Hearts__', value: `> ${heartsRemaining || 'Unknown'}/${character.maxHearts || 'Unknown'}`, inline: false },
-            { name: '🔹 __Outcome__', value: `> ${outcomeMessage || 'No outcome specified.'}`, inline: false }
+            { name: '__❤️ Hearts__', value: `> ${heartsRemaining !== undefined ? heartsRemaining : 'Unknown'}/${character.maxHearts !== undefined ? character.maxHearts : 'Unknown'}`, inline: false },
+            { name: '🔹 __Outcome__', value: `> ${outcomeMessage || 'No outcome specified.'}${koMessage}`, inline: false }
         )
-        .setFooter({ text: footerText || 'Encounter completed.', iconURL: authorIconURL }) // Fallback text and icon
+        .setFooter({ text: isBloodMoon ? '🔴 The Blood Moon rises... luckily you didn’t run into anything stronger.' : 'Encounter completed.', iconURL: authorIconURL })
         .setImage(settingsImageURL);
 
     if (lootItem) {
@@ -250,6 +247,7 @@ const createMonsterEncounterEmbed = (character, monster, outcomeMessage, heartsR
 
     return embed;
 };
+
 
 
 

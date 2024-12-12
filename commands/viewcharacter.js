@@ -1,7 +1,8 @@
 // ------------------- Import necessary modules and services -------------------
 const { SlashCommandBuilder } = require('discord.js');
 const { fetchCharacterByNameAndUserId, fetchCharactersByUserId } = require('../database/characterService');
-const { createCharacterEmbed, createCharacterGearEmbed } = require('../embeds/characterEmbeds');
+const { createCharacterEmbed, createVendorEmbed, createCharacterGearEmbed } = require('../embeds/characterEmbeds');
+const { getJobPerk } = require('../modules/jobsModule');
 const ItemModel = require('../models/ItemModel');
 
 module.exports = {
@@ -31,7 +32,8 @@ module.exports = {
       }
 
       // Create the character embed
-      const embed = createCharacterEmbed(character);
+      
+      const characterEmbed = createCharacterEmbed(character);
 
       // Fetch item details from the database
       const itemNames = [
@@ -61,10 +63,20 @@ module.exports = {
       // Create the gear embed
       const gearEmbed = createCharacterGearEmbed(character, gearMap, 'all');
 
-      // Reply with both embeds
-      await interaction.reply({ embeds: [embed, gearEmbed], ephemeral: true });
+      // Add vendor embed only if the character's job has the vending perk
+      const jobPerkInfo = getJobPerk(character.job);
+      const embeds = [characterEmbed, gearEmbed];
+
+      if (jobPerkInfo?.perks.includes('VENDING') && character.vendorType) {
+        const vendorEmbed = createVendorEmbed(character);
+        if (vendorEmbed) embeds.push(vendorEmbed);
+      }
+
+      // Reply with the embeds
+      await interaction.reply({ embeds, ephemeral: true });
 
     } catch (error) {
+      console.error('Error executing viewcharacter command:', error);
       await interaction.reply({ content: '❌ An error occurred while fetching the character.', ephemeral: true });
     }
   },
@@ -86,7 +98,9 @@ module.exports = {
         }));
 
         // Filter and respond with the top 25 matching choices
-        const filteredChoices = choices.filter(choice => choice.name.toLowerCase().includes(focusedOption.value.toLowerCase())).slice(0, 25);
+        const filteredChoices = choices.filter(choice =>
+          choice.name.toLowerCase().includes(focusedOption.value.toLowerCase())).slice(0, 25);
+
         await interaction.respond(filteredChoices);
       }
     } catch (error) {

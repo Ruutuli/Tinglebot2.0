@@ -366,8 +366,20 @@ if (bloodMoonActive && randomChance < .25) {
     await interaction.editReply({ embeds: [embed] }); // Send the embed as a reply
   }
 } catch (error) {
-      await interaction.editReply({ content: '⚠️ **An error occurred while trying to gather items.**' });
-    }
+  console.error(`[Gather Command Error]`, {
+    message: error.message,
+    stack: error.stack,
+    interactionData: {
+      userId: interaction.user.id,
+      characterName: interaction.options.getString('charactername'),
+      guildId: interaction.guildId,
+      channelId: interaction.channelId,
+    },
+  });
+  await interaction.editReply({
+    content: `⚠️ **An error occurred during the gathering process. Debug info: ${error.message}.**`,
+  });
+}
   },
 
   // ------------------- Autocomplete Handler -------------------

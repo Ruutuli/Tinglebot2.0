@@ -2,7 +2,7 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
 const { fetchCharacterByNameAndUserId } = require('../database/characterService');
 const { connectToTinglebot } = require('../database/connection');
-const { authorizeSheets, appendSheetData } = require('../utils/googleSheetsUtils');
+const { authorizeSheets, appendSheetData, getSheetIdByTitle, readSheetData } = require('../utils/googleSheetsUtils');
 const { extractSpreadsheetId } = require('../utils/validation');
 const Character = require('../models/CharacterModel');
 const { createSetupInstructionsEmbed } = require('../embeds/instructionsEmbeds');
@@ -26,26 +26,53 @@ module.exports = {
     try {
       // ------------------- Ensure Mongoose connection before proceeding -------------------
       await connectToTinglebot();
+      console.log('✅ Connected to Tinglebot database.');
 
       // ------------------- Fetch character by name and user ID -------------------
       const character = await fetchCharacterByNameAndUserId(characterName, userId);
       if (!character) {
-        throw new Error(`Character with name **${characterName}** not found.`);
+        throw new Error(`Character with name "${characterName}" not found.`);
       }
+      console.log(`✅ Character "${characterName}" found.`);
 
       // ------------------- Get the inventory URL -------------------
       const inventoryUrl = character.inventory;
       const spreadsheetId = extractSpreadsheetId(inventoryUrl);
 
       if (!spreadsheetId) {
-        await sendSetupInstructions(interaction, true, character._id, character.name, inventoryUrl);
+        console.error('❌ Invalid Google Sheets URL detected.');
+        await sendSetupInstructions(interaction, 'invalid_url', character._id, characterName, inventoryUrl);
         return;
       }
+      console.log('✅ Spreadsheet ID extracted successfully.');
 
       // ------------------- Authorize Google Sheets API -------------------
       const auth = await authorizeSheets();
+      console.log('✅ Authorized Google Sheets API.');
 
-      // ------------------- Format the current date and time -------------------
+      // ------------------- Get the sheet ID for "loggedInventory" -------------------
+      const sheetId = await getSheetIdByTitle(auth, spreadsheetId, 'loggedInventory');
+      if (!sheetId) {
+        console.error('❌ "loggedInventory" sheet not found in the spreadsheet.');
+        await sendSetupInstructions(interaction, 'missing_sheet', character._id, characterName, inventoryUrl);
+        return;
+      }
+      console.log('✅ "loggedInventory" sheet ID retrieved successfully.');
+
+      // ------------------- Check for missing headers -------------------
+      const expectedHeaders = [
+        'Character Name', 'Item Name', 'Qty of Item', 'Category', 'Type',
+        'Subtype', 'Obtain', 'Job', 'Perk', 'Location', 'Link', 'Date/Time', 'Confirmed Sync'
+      ];
+      const sheetData = await readSheetData(auth, spreadsheetId, 'loggedInventory!A1:M1');
+      if (!sheetData || !expectedHeaders.every(header => sheetData[0]?.includes(header))) {
+        console.error('❌ Missing or incorrect headers in "loggedInventory" sheet.');
+        await sendSetupInstructions(interaction, 'missing_headers', character._id, characterName, inventoryUrl);
+        return;
+      }
+      console.log('✅ Headers in "loggedInventory" sheet are correct.');
+
+      // ------------------- Append test message to Google Sheets -------------------
       const dateTimeNow = new Date().toLocaleString('en-US', {
         month: 'numeric',
         day: 'numeric',
@@ -54,86 +81,65 @@ module.exports = {
         minute: 'numeric',
         hour12: true
       });
-
       const testMessage = `✅ ${character.name} setup has been successfully tested on ${dateTimeNow}.`;
 
-      // ------------------- Append test message to Google Sheets -------------------
       await appendSheetData(auth, spreadsheetId, 'loggedInventory', [[testMessage]]);
+      console.log('✅ Test message appended to "loggedInventory" sheet.');
 
       // ------------------- Reply to the interaction with a confirmation message -------------------
       await interaction.reply({
         content: `✅ **Success!**\n\n🛠️ **Inventory setup for** **${character.name}** **has been successfully tested.**\n\n📄 **See your inventory [here](<${inventoryUrl}>)**.\n\n🔄 **Once ready, use the** \`/syncinventory\` **command to sync your character's inventory.**`,
         ephemeral: true
       });
+      console.log('✅ Interaction reply sent to the user.');
 
     } catch (error) {
-      let errorMessage = 'An unexpected error occurred while executing this command. Please try again later.';
+      console.error('❌ Error details:', error);
 
       // ------------------- Handle specific error cases -------------------
+      let errorMessage;
       switch (true) {
-        case error.name === 'ValidationError':
-          errorMessage = handleValidationError(error);
+        case error.message.includes('Character with name'):
+          errorMessage = `❌ **Error:** ${error.message}`;
           break;
-        case error.message.includes('Invalid URL'):
-          errorMessage = 'The provided URL is not a valid Google Sheets URL. Please check and try again.';
+        case error.message.includes('invalid_url'):
+          errorMessage = '❌ **Error:** The provided URL is not valid. Please check and try again.';
           break;
-        case error.message.includes('Invalid Google Sheets URL') || error.message.includes('Requested entity was not found'):
-          await sendSetupInstructions(interaction, error.message.includes('Invalid Google Sheets URL'), character._id, characterName, inventoryUrl);
-          return;
-        case error.message.includes('404'):
-          errorMessage = 'The Google Sheets document could not be found. Please check the URL and try again.';
+        case error.message.includes('missing_sheet'):
+          errorMessage = '❌ **Error:** The Google Sheets document is missing the required "loggedInventory" tab.';
+          break;
+        case error.message.includes('missing_headers'):
+          errorMessage = '❌ **Error:** The "loggedInventory" sheet is missing the required headers.';
           break;
         case error.message.includes('403'):
-          errorMessage = 'Access to the Google Sheets document is forbidden. Please ensure it is shared with the bot\'s service account email.';
+          errorMessage = '❌ **Error:** Access to the Google Sheets document is forbidden. Please ensure it is shared with the bot\'s service account email.';
           break;
-        case error.message.includes('Inventory URL array is empty or not valid'):
-          errorMessage = 'The inventory URL array is empty or not valid. Please ensure you have a valid Google Sheets URL in your inventory.';
+        case error.message.includes('404'):
+          errorMessage = '❌ **Error:** The Google Sheets document could not be found. Please check the URL and try again.';
           break;
-        case error.message.includes('Cast to Number failed'):
-          errorMessage = '⚠️ **Error:** The value entered is not a valid number. Please enter a numeric value for the number of hearts or stamina.';
-          break;
-        case error.message.includes('Google Sheets') || error.message.includes('Inventory'):
-          errorMessage = handleGoogleSheetsError(error);
-          await sendSetupInstructions(interaction, false, character._id, characterName, inventoryUrl);
-          return;
         default:
-          errorMessage = `An unexpected error occurred: ${error.message}`;
+          errorMessage = `❌ **Error:** An unexpected error occurred: ${error.message}`;
       }
 
-      await respondToInteraction(interaction, errorMessage);
-      logErrorDetails(error);
+      await interaction.reply({
+        content: errorMessage,
+        ephemeral: true
+      });
     }
   }
 };
 
-// ------------------- Additional helper functions -------------------
+// ------------------- Helper function to send setup instructions -------------------
+async function sendSetupInstructions(interaction, errorType, characterId, characterName, googleSheetsUrl) {
+  const errorMessages = {
+    invalid_url: 'The provided URL is not valid.',
+    missing_sheet: 'The Google Sheets document is missing the required "loggedInventory" tab.',
+    missing_headers: 'The "loggedInventory" sheet is missing the required headers.',
+  };
 
-// Function to send setup instructions embed
-async function sendSetupInstructions(interaction, isInvalidUrl, characterId, characterName, googleSheetsUrl) {
-  const embed = createSetupInstructionsEmbed(characterName, googleSheetsUrl, isInvalidUrl ? 'The provided URL is not valid.' : 'The Google Sheets document could not be found.');
+  const errorMessage = errorMessages[errorType] || 'An unexpected error occurred. Please check your setup.';
+  const embed = createSetupInstructionsEmbed(characterName, googleSheetsUrl, errorMessage);
+
   await interaction.reply({ embeds: [embed], ephemeral: true });
+  console.log(`🔄 Setup instructions sent to the user: ${errorMessage}`);
 }
-
-// Function to handle validation errors
-function handleValidationError(error) {
-  return 'Validation error occurred.';
-}
-
-// Function to handle Google Sheets related errors
-function handleGoogleSheetsError(error) {
-  return 'Google Sheets error occurred.';
-}
-
-// Function to respond to interaction with a message
-async function respondToInteraction(interaction, message) {
-  await interaction.reply({
-    content: message,
-    ephemeral: true
-  });
-}
-
-// Function to log error details
-function logErrorDetails(error) {
-  console.error('❌ Error details:', error);
-}
-

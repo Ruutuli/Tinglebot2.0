@@ -1,8 +1,14 @@
-// ------------------- Import necessary modules and handlers -------------------
+// ------------------- Import necessary modules -------------------
+
+// Environment Variables
 require('dotenv').config();
-const { Client, GatewayIntentBits, Collection } = require('discord.js');
+
+// Standard Libraries
 const fs = require('fs');
 const path = require('path');
+
+// Third-Party Modules
+const { Client, GatewayIntentBits, Collection } = require('discord.js');
 const cron = require('node-cron');
 
 // ------------------- Database Connections -------------------
@@ -17,32 +23,32 @@ const { handleModalSubmission } = require('./handlers/modalHandler');
 const { handleSelectMenuInteraction } = require('./handlers/selectMenuHandler');
 
 // ------------------- Scripts and Utilities -------------------
-const { renameChannels, trackBloodMoonCycle, currentDayInCycle } = require('./scripts/bloodmoon');
+const { renameChannels, trackBloodMoonCycle, currentDayInCycle, isBloodMoonActive } = require('./scripts/bloodmoon');
 const scheduler = require('./scheduler');
 const { getGuildIds } = require('./utils/getGuildIds');
 
-
-
-
-// Declare the client variable for use across functions
+// ------------------- Global Variables -------------------
 let client;
 
 // ------------------- Initialize Databases -------------------
+// Establishes connections to required databases
 async function initializeDatabases() {
   try {
     await connectToTinglebot();
     await connectToInventories();
-    console.log('✅ Databases connected');
+    console.log('[index.js]: ✅ Databases connected');
   } catch (err) {
-    console.error('❌ Database initialization error:', err);
+    console.error('[index.js]: ❌ Database initialization error:', err);
     throw err;
   }
 }
 
 // ------------------- Initialize Client -------------------
+// Sets up the Discord client, commands, and interactions
 async function initializeClient() {
   await initializeDatabases();
 
+  // Configure client with necessary intents
   client = new Client({
     intents: [
       GatewayIntentBits.Guilds,
@@ -53,8 +59,11 @@ async function initializeClient() {
     ],
   });
 
+  // Load commands
   client.commands = new Collection();
-  const commandFiles = fs.readdirSync(path.join(__dirname, 'commands')).filter(file => file.endsWith('.js'));
+  const commandFiles = fs
+    .readdirSync(path.join(__dirname, 'commands'))
+    .filter(file => file.endsWith('.js'));
 
   for (const file of commandFiles) {
     const command = require(`./commands/${file}`);
@@ -63,64 +72,59 @@ async function initializeClient() {
     }
   }
 
-  // ------------------- On Bot Ready -------------------
+  // ------------------- Bot Ready Event -------------------
   client.once('ready', async () => {
-    console.log('🤖 Bot is online');
+    console.log('[index.js]: 🤖 Bot is online');
 
-     // ------------------- Check Blood Moon Status on Startup -------------------
-     const { isBloodMoonActive, currentDayInCycle } = require('./scripts/bloodmoon');
-     console.log(`[Startup] Current Day in Cycle: ${currentDayInCycle}`);
-     if (isBloodMoonActive()) {
-         console.log(`[Startup] Blood Moon is ACTIVE on Day ${currentDayInCycle}.`);
-     } else {
-         console.log(`[Startup] Blood Moon is NOT active. Day ${currentDayInCycle} in cycle.`);
-     }
- 
-     // ------------------- Simplified Blood Moon Code Log -------------------
-     console.log('🌕 Blood Moon functionality active');
- 
-     cron.schedule('0 0 * * *', () => {
-         trackBloodMoonCycle(client, process.env.RUDANIA_TOWN_HALL);
-         trackBloodMoonCycle(client, process.env.INARIKO_TOWN_HALL);
-         trackBloodMoonCycle(client, process.env.VHINTL_TOWN_HALL);
-     }, {
-         timezone: 'America/New_York',
-     });
- 
-     scheduler(client);
+    // Blood Moon Status on Startup
+    console.log(`[index.js]: [Startup] Current Day in Cycle: ${currentDayInCycle}`);
+    if (isBloodMoonActive()) {
+      console.log(`[index.js]: [Startup] Blood Moon is ACTIVE on Day ${currentDayInCycle}.`);
+    } else {
+      console.log(`[index.js]: [Startup] Blood Moon is NOT active. Day ${currentDayInCycle} in cycle.`);
+    }
 
+    // Schedule Blood Moon Tracking
+    cron.schedule('0 0 * * *', () => {
+      trackBloodMoonCycle(client, process.env.RUDANIA_TOWN_HALL);
+      trackBloodMoonCycle(client, process.env.INARIKO_TOWN_HALL);
+      trackBloodMoonCycle(client, process.env.VHINTL_TOWN_HALL);
+    }, { timezone: 'America/New_York' });
+
+    scheduler(client);
+
+    // Generate Vending Stock
     try {
       await generateVendingStockList();
-      console.log('🛍️ Vending stock generated');
+      console.log('[index.js]: 🛍️ Vending stock generated');
     } catch (error) {
-      console.error('❌ Vending stock generation error:', error);
+      console.error('[index.js]: ❌ Vending stock generation error:', error);
     }
   });
 
-// ------------------- Interaction Handlers -------------------
-client.on('interactionCreate', async interaction => {
-  try {
+  // ------------------- Interaction Handlers -------------------
+  client.on('interactionCreate', async interaction => {
+    try {
       if (interaction.isButton()) {
-          await handleComponentInteraction(interaction); // Handles buttons
-      } else if (interaction.isStringSelectMenu()) { // Handles dropdowns
-          console.log(`Dropdown interaction detected: ${interaction.customId}`); // Debugging log
-          await handleSelectMenuInteraction(interaction); 
+        await handleComponentInteraction(interaction);
+      } else if (interaction.isStringSelectMenu()) {
+        console.log(`[index.js]: Dropdown interaction detected: ${interaction.customId}`);
+        await handleSelectMenuInteraction(interaction);
       } else if (interaction.isCommand()) {
-          const command = client.commands.get(interaction.commandName);
-          if (command) await command.execute(interaction); // Executes slash commands
+        const command = client.commands.get(interaction.commandName);
+        if (command) await command.execute(interaction);
       } else if (interaction.isAutocomplete()) {
-          await handleAutocomplete(interaction); // Handles autocomplete
+        await handleAutocomplete(interaction);
       } else if (interaction.isModalSubmit()) {
-          await handleModalSubmission(interaction); // Handles modals
+        await handleModalSubmission(interaction);
       }
-  } catch (error) {
-      console.error('❌ Interaction error:', error);
-  }
-});
-
+    } catch (error) {
+      console.error('[index.js]: ❌ Interaction error:', error);
+    }
+  });
 
   client.login(process.env.DISCORD_TOKEN);
 }
 
-// Initialize the client
+// ------------------- Initialize the Client -------------------
 initializeClient();

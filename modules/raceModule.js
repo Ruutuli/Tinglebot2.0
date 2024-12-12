@@ -1,8 +1,8 @@
-// raceModule.js
+// ------------------- Import necessary modules -------------------
+const { capitalize } = require('../modules/formattingModule');
 
-const { capitalize } = require('../modules/formattingModule'); // Importing capitalize function
-
-// List of races with their display names and values
+// ------------------- Race data and initialization -------------------
+// Define a list of races with their display names and values
 const races = [
   { name: 'Gerudo', value: 'gerudo' },
   { name: 'Goron', value: 'goron' },
@@ -15,29 +15,43 @@ const races = [
   { name: 'Sheikah', value: 'sheikah' },
   { name: 'Twili', value: 'twili' },
   { name: 'Zora', value: 'zora' }
-].sort((a, b) => a.name.localeCompare(b.name)); // Ensure sorting by name
+].sort((a, b) => a.name.localeCompare(b.name)); // Sort races alphabetically for consistency
 
-// Get all races with their names properly capitalized
+// ------------------- Race-related functions -------------------
+
+// Fetch all races with names properly capitalized
 const getAllRaces = () => races.map(race => capitalize(race.name));
 
-// Check if a given race name is valid
-const isValidRace = (raceName) => races.some(race => race.name.toLowerCase() === raceName.toLowerCase());
+// Validate if a race name is valid
+const isValidRace = (raceName) => {
+  return races.some(race => race.name.toLowerCase() === raceName.toLowerCase());
+};
 
-// Get the race value by its name
+// Get the value of a race by its name
 const getRaceValueByName = (name) => {
   const race = races.find(race => race.name.toLowerCase() === name.toLowerCase());
   return race ? race.value : null;
 };
 
+// ------------------- Error Handling Utility -------------------
+const logError = (errorMessage) => {
+  console.error(`[raceModule.js]: ${errorMessage}`);
+};
+
+// Example usage of error logging for invalid inputs
+const getRaceValueOrLogError = (name) => {
+  const value = getRaceValueByName(name);
+  if (!value) {
+    logError(`Invalid race name provided: ${name}`);
+  }
+  return value;
+};
+
+// ------------------- Exports -------------------
 module.exports = {
   getAllRaces,
   isValidRace,
-  getRaceValueByName
+  getRaceValueByName,
+  getRaceValueOrLogError
 };
 
-/*
-Notes:
-- Added comments to describe the purpose of each function.
-- Ensured proper handling of race names with capitalization.
-- Sorted races by name for consistent display.
-*/

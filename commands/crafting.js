@@ -39,13 +39,14 @@ const {
 const { 
   formatDateTime, 
   capitalizeFirstLetter, 
-  capitalizeWords 
+  capitalizeWords, capitalize
 } = require('../modules/formattingModule'); // Formatting utilities
 const { promptUserForSpecificItems } = require('../utils/itemUtils'); // Utility to prompt user for item specifics
 const { handleCraftingAutocomplete } = require('../handlers/autocompleteHandler'); // Autocomplete handling
 const { getJobPerk } = require('../modules/jobsModule'); // Job perks handling
 const generalCategories = require('../models/GeneralItemCategories'); // Item category model
 const ItemModel = require('../models/ItemModel'); // Item model for database interaction
+
 
 // ------------------- Crafting Command Definition -------------------
 // Defines the crafting slash command and its subcommands/options
