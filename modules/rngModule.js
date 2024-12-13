@@ -142,8 +142,6 @@ const calculateFinalValue = (character) => {
 function getRandomEncounter() {
   const randomValue = Math.random() * 100;
 
-  console.log('[RNG DEBUG] Random Encounter Roll:', randomValue);
-
   let encounter;
   if (randomValue < encounterProbabilities.noEncounter) {
     encounter = 'No Encounter';
@@ -156,8 +154,6 @@ function getRandomEncounter() {
   } else {
     encounter = 'Tier 4';
   }
-
-  console.log('[RNG DEBUG] Encounter type selected:', encounter, `Thresholds: Tier 1 (${encounterProbabilities.tier1}), Tier 2 (${encounterProbabilities.tier2}), Tier 3 (${encounterProbabilities.tier3}), Tier 4 (${encounterProbabilities.tier4})`);
 
   return encounter;
 }
@@ -214,8 +210,6 @@ async function getMonsterEncounterFromList(monsters) {
   }
 }
 
-
-
 // Create a function to get monsters by village and job criteria
 async function getMonstersByCriteria(village, job) {
   try {
@@ -241,7 +235,6 @@ async function getMonstersByCriteria(village, job) {
     return [];
   }
 }
-
 
 // Define the encounter probabilities for travel
 const encounterProbabilitiesTravel = {

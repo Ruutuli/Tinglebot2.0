@@ -168,7 +168,7 @@ module.exports = {
       }
 
     
-      // ------------------- Step 5: Blood Moon Encounter Handling -------------------
+      // ------------------- Step 4: Blood Moon Encounter Handling -------------------
       const bloodMoonActive = isBloodMoonActive(); // Determine Blood Moon status
       console.log(`[Blood Moon Status] Current Day: ${new Date().getDate()}, Active: ${bloodMoonActive}`);      
       let encounteredMonster;
@@ -177,7 +177,6 @@ module.exports = {
         try {
           // Handle Blood Moon-specific encounter logic
           const encounterType = getRandomBloodMoonEncounter();
-          console.log(`[DEBUG] Encounter Type Rolled: ${encounterType}`);
           
           // Normalize the encounter type
           const normalizedEncounterType = encounterType.trim().toLowerCase();
@@ -343,50 +342,35 @@ async function handleNormalEncounter(interaction, currentVillage, job, character
 
   const monstersByCriteria = await getMonstersByCriteria(currentVillage, job);
   if (monstersByCriteria.length === 0) {
-    console.log(`[DEBUG] No monsters found for village "${currentVillage}" and job "${job}".`);
     return null; // No monsters available
   }
 
   const encounterResult = await getMonsterEncounterFromList(monstersByCriteria);
   if (encounterResult.encounter === 'No Encounter') {
-    console.log(`[DEBUG] No encounter generated.`);
     return null; // No encounter happened
   }
 
   const encounteredMonster = encounterResult.monsters[
     Math.floor(Math.random() * encounterResult.monsters.length)
   ];
-  console.log(`[DEBUG] Encountered Monster: "${encounteredMonster.name}" (Tier: ${encounteredMonster.tier})`);
   
   // Return the final encountered monster
   return encounteredMonster;
 }
 
 // ------------------- Looting Logic -------------------
-// ------------------- Looting Logic -------------------
 async function processLootingLogic(interaction, character, encounteredMonster, bloodMoonActive) {
   try {
-    console.log('[DEBUG] Processing loot for encountered monster:', {
-      name: encounteredMonster.name,
-      tier: encounteredMonster.tier,
-    });
-
-    // Step 1: Generate Dice Rolls
-    const originalRoll = Math.floor(Math.random() * 100) + 1; // Random number between 1 and 100
-    const adjustedRandomValue = calculateFinalValue(character).adjustedRandomValue || originalRoll; // Calculate adjusted roll
-
-    console.log(`[DEBUG] Dice roll: ${originalRoll}, Adjusted: ${adjustedRandomValue}`);
-
     const items = await fetchItemsByMonster(encounteredMonster.name); // Fetch items dropped by the encountered monster
 
-    // Step 2: Calculate Encounter Outcome
+    // Step 1: Calculate Encounter Outcome
     const {
       damageValue,
+      adjustedRandomValue,
       attackSuccess,
       defenseSuccess,
-    } = calculateFinalValue(character); // Adjustments based on character stats
-
-    const weightedItems = createWeightedItemList(items, adjustedRandomValue); // Generate loot weight
+    } = calculateFinalValue(character);
+    const weightedItems = createWeightedItemList(items, adjustedRandomValue); // Generate a weighted list of potential loot
     const outcome = await getEncounterOutcome(
       character,
       encounteredMonster,
@@ -396,7 +380,7 @@ async function processLootingLogic(interaction, character, encounteredMonster, b
       defenseSuccess
     );
 
-    // Step 3: Update Hearts and Handle KO
+    // Step 2: Update Hearts and Handle KO
     let heartsRemaining = character.currentHearts;
     if (outcome.hearts) {
       await useHearts(character._id, outcome.hearts); // Deduct hearts
@@ -407,10 +391,10 @@ async function processLootingLogic(interaction, character, encounteredMonster, b
     }
     await updateCurrentHearts(character._id, heartsRemaining); // Update character hearts
 
-    // Step 4: Generate Outcome Message
+    // Step 3: Generate Outcome Message
     const outcomeMessage = generateOutcomeMessage(outcome); // Refactored to a separate helper function
 
-    // Step 5: Loot Item Logic
+    // Step 4: Loot Item Logic
     if (outcome.canLoot && weightedItems.length > 0 && !outcome.hearts) {
       const lootedItem = generateLootedItem(encounteredMonster, weightedItems); // Refactored to a helper function
 
@@ -422,11 +406,8 @@ async function processLootingLogic(interaction, character, encounteredMonster, b
           outcomeMessage,
           heartsRemaining,
           lootedItem,
-          bloodMoonActive,
-          originalRoll,
-          adjustedRandomValue
-        );
-
+          bloodMoonActive // Pass Blood Moon status
+      );
         await interaction.editReply({
           content: `❌ **Invalid Google Sheets URL for "${character.name}".**`,
           embeds: [embed],
@@ -470,17 +451,14 @@ async function processLootingLogic(interaction, character, encounteredMonster, b
 
       await appendSheetData(auth, spreadsheetId, range, values); // Append loot details to Google Sheets
 
-      const embed = createMonsterEncounterEmbed(
-        character,
-        encounteredMonster,
-        outcomeMessage,
-        heartsRemaining,
-        lootedItem,
-        bloodMoonActive,
-        originalRoll,
-        adjustedRandomValue
-      );
-
+const embed = createMonsterEncounterEmbed(
+    character,
+    encounteredMonster,
+    outcomeMessage,
+    heartsRemaining,
+    lootedItem,
+    bloodMoonActive // Pass Blood Moon status
+);
       await interaction.editReply({ embeds: [embed] }); // Reply with the loot details
     } else {
       const embed = createMonsterEncounterEmbed(
@@ -489,9 +467,7 @@ async function processLootingLogic(interaction, character, encounteredMonster, b
         outcomeMessage,
         heartsRemaining,
         null,
-        bloodMoonActive,
-        originalRoll,
-        adjustedRandomValue
+        bloodMoonActive 
       );
       await interaction.editReply({ embeds: [embed] }); // Reply if no loot was obtained
     }
@@ -502,7 +478,6 @@ async function processLootingLogic(interaction, character, encounteredMonster, b
     });
   }
 }
-
 
 // ------------------- Helper Function: Generate Outcome Message -------------------
 function generateOutcomeMessage(outcome) {

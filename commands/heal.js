@@ -14,7 +14,7 @@ const { useStamina, recoverHearts } = require('../modules/characterStatsModule')
 const { createHealEmbed, createHealingEmbed } = require('../embeds/mechanicEmbeds');
 
 // Models
-const { saveHealingRequestToStorage, cleanupExpiredHealingRequests, retrieveHealingRequestFromStorage } = require('../utils/storage');
+const { saveHealingRequestToStorage, cleanupExpiredHealingRequests, retrieveHealingRequestFromStorage, deleteHealingRequestFromStorage } = require('../utils/storage');
 
 // ------------------- Main Heal Command Module -------------------
 module.exports = {
@@ -100,6 +100,7 @@ module.exports = {
           heartsToHeal,
           paymentOffered,
           healerName: healerName || null,
+          requesterUserId: interaction.user.id, // Store the requester's user ID
           status: 'pending',
           timestamp: Date.now(),
         };
@@ -126,56 +127,61 @@ module.exports = {
     if (subcommand === 'fulfill') {
       const requestId = interaction.options.getString('requestid');
       const healerName = interaction.options.getString('healername');
-  
+    
       try {
-          await interaction.deferReply();
-  
-          const healingRequest = retrieveHealingRequestFromStorage(requestId);
-          if (!healingRequest) {
-              await interaction.editReply(`❌ **Error:** No healing request found with ID **${requestId}**.`);
-              return;
-          }
-  
-          if (healingRequest.status !== 'pending') {
-              await interaction.editReply(`❌ **Error:** Healing request **${requestId}** has already been fulfilled or expired.`);
-              return;
-          }
-  
-          const healerCharacter = await fetchCharacterByName(healerName);
-          if (!healerCharacter) {
-              await interaction.editReply(`❌ **Error:** Healer character **${healerName}** not found.`);
-              return;
-          }
-  
-          if (healingRequest.village.toLowerCase() !== healerCharacter.currentVillage.toLowerCase()) {
-              await interaction.editReply(
-                  `❌ **Error:** The healer **${healerCharacter.name}** must be in the same village (**${healingRequest.village}**) to fulfill the request.`
-              );
-              return;
-          }
-  
-          // Deduct stamina from the healer
-          const staminaCost = healingRequest.heartsToHeal; // 1 stamina per heart
-          await useStamina(healerCharacter._id, staminaCost);
-  
-          // Heal the character
-          const characterToHeal = await fetchCharacterByName(healingRequest.characterRequesting);
-          await recoverHearts(characterToHeal._id, healingRequest.heartsToHeal);
-  
-          // Update healing request status
-          healingRequest.status = 'fulfilled';
-          saveHealingRequestToStorage(requestId, healingRequest);
-  
-          // Create and send healing embed
-          const embed = createHealingEmbed(healerCharacter, characterToHeal, healingRequest.heartsToHeal, staminaCost, requestId);
-          await interaction.followUp({ embeds: [embed] });
-  
+        await interaction.deferReply();
+    
+        const healingRequest = retrieveHealingRequestFromStorage(requestId);
+        if (!healingRequest) {
+          await interaction.editReply(`❌ **Error:** No healing request found with ID **${requestId}**.`);
+          return;
+        }
+    
+        if (healingRequest.status !== 'pending') {
+          await interaction.editReply(`❌ **Error:** Healing request **${requestId}** has already been fulfilled or expired.`);
+          return;
+        }
+    
+        const healerCharacter = await fetchCharacterByName(healerName);
+        if (!healerCharacter) {
+          await interaction.editReply(`❌ **Error:** Healer character **${healerName}** not found.`);
+          return;
+        }
+    
+        const characterToHeal = await fetchCharacterByName(healingRequest.characterRequesting);
+        if (!characterToHeal) {
+          await interaction.editReply(`❌ **Error:** The character to be healed, **${healingRequest.characterRequesting}**, could not be found.`);
+          return;
+        }
+    
+        if (healingRequest.village.toLowerCase() !== healerCharacter.currentVillage.toLowerCase()) {
+          await interaction.editReply(
+            `❌ The healing cannot be completed because **${characterToHeal.name}** is in **${capitalizeFirstLetter(healingRequest.village)}**, but **${healerCharacter.name}** is currently in **${capitalizeFirstLetter(healerCharacter.currentVillage)}**. Both must be in the same village for healing to occur.`
+          );
+          return;
+        }
+    
+        const staminaCost = healingRequest.heartsToHeal;
+        await useStamina(healerCharacter._id, staminaCost);
+        await recoverHearts(characterToHeal._id, healingRequest.heartsToHeal, healerCharacter._id);
+    
+        healingRequest.status = 'fulfilled';
+        saveHealingRequestToStorage(requestId, healingRequest);
+    
+        // Delete the fulfilled request from storage
+        deleteHealingRequestFromStorage(requestId);
+    
+        const originalRequesterId = healingRequest.requesterUserId;
+        const message = `<@${originalRequesterId}>, your character **${characterToHeal.name}** has been healed by **${healerCharacter.name}**!`;
+        const embed = createHealingEmbed(healerCharacter, characterToHeal, healingRequest.heartsToHeal, staminaCost, requestId);
+    
+        await interaction.followUp({ content: message, embeds: [embed] });
+    
       } catch (error) {
-          console.error('❌ Error during healing request fulfillment:', error.message);
-          await interaction.editReply('❌ **Error:** An issue occurred while fulfilling the healing request.');
+        console.error('❌ Error during healing request fulfillment:', error.message);
+        await interaction.editReply('❌ **Error:** An issue occurred while fulfilling the healing request.');
       }
-  }
-  
+    }
   },    
 
   // ------------------- Autocomplete Handler -------------------

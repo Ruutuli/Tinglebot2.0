@@ -23,11 +23,6 @@ const {
 // Determines the outcome of the battle based on character stats, monster stats, buffs, and dice rolls.
 const getEncounterOutcome = async (character, monster, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess) => {
   try {
-    console.log(`[OUTCOME DEBUG] Character: ${character.name}`);
-    console.log(`[OUTCOME DEBUG] Monster: ${monster.name}`);
-    console.log(`[OUTCOME DEBUG] Adjusted Random Value: ${adjustedRandomValue}`);
-    console.log(`[OUTCOME DEBUG] Attack Success: ${attackSuccess}`);
-    console.log(`[OUTCOME DEBUG] Defense Success: ${defenseSuccess}`);
 
     const tier = monster.tier;
     let outcome;
@@ -61,7 +56,6 @@ const getEncounterOutcome = async (character, monster, damageValue, adjustedRand
       }
     }
 
-    console.log(`[DEBUG] Final Outcome:`, outcome);
     return { ...outcome, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess };
   }  catch (error) {
     console.error('[DAMAGE ERROR] Encounter Outcome Calculation Failed:', error);

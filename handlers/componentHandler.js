@@ -214,10 +214,6 @@ async function handleViewCharacter(interaction, characterId) {
 
 // handleJobSelect
 async function handleJobSelect(interaction, characterId, updatedJob) {
-    console.log(`[DEBUG] Job button clicked.`);
-    console.log(`[DEBUG] Character ID: ${characterId}`);
-    console.log(`[DEBUG] Selected Job: ${updatedJob}`);
-
     try {
         await connectToTinglebot();
         const character = await fetchCharacterById(characterId);
@@ -266,17 +262,11 @@ async function handleJobSelect(interaction, characterId, updatedJob) {
 
 // handleJobPage
 async function handleJobPage(interaction, characterId, pageIndexString) {
-    console.log(`[DEBUG] Job page navigation clicked.`);
-    console.log(`[DEBUG] Character ID: ${characterId}`);
-    console.log(`[DEBUG] Page index: ${pageIndexString}`);
-
     try {
         const pageIndex = parseInt(pageIndexString, 10);
         const jobs = getGeneralJobsPage(pageIndex);
 
-        console.log(`[DEBUG] Jobs on page ${pageIndex}:`, jobs);
-
-        const jobButtons = jobs.map((job) =>
+       const jobButtons = jobs.map((job) =>
             new ButtonBuilder()
                 .setCustomId(`job-select|${characterId}|${job}`)
                 .setLabel(job)

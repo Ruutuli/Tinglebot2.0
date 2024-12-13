@@ -98,8 +98,6 @@ function saveHealingRequestToStorage(healingRequestId, healingRequestData) {
   }
 }
 
-
-
 // ------------------- Retrieve Healing Request from Storage -------------------
 function retrieveHealingRequestFromStorage(healingRequestId) {
   const healingRequests = safeReadJSON(healingRequestsFile);
@@ -115,7 +113,6 @@ function retrieveHealingRequestFromStorage(healingRequestId) {
   return request || null;
 }
 
-
 // ------------------- Delete Healing Request from Storage -------------------
 function deleteHealingRequestFromStorage(healingRequestId) {
   const healingRequests = safeReadJSON(healingRequestsFile);
@@ -125,6 +122,31 @@ function deleteHealingRequestFromStorage(healingRequestId) {
     fs.writeFileSync(healingRequestsFile, JSON.stringify(healingRequests, null, 2)); // Save changes
   } else {
     console.warn(`Healing Request ID not found in storage: ${healingRequestId}`);
+  }
+}
+
+// ------------------- Cleanup Expired Healing Requests -------------------
+function cleanupExpiredHealingRequests() {
+  try {
+    const healingRequests = safeReadJSON(healingRequestsFile);
+
+    const currentTime = Date.now();
+    let updated = false;
+
+    for (const requestId in healingRequests) {
+      const request = healingRequests[requestId];
+      if (currentTime - request.timestamp > 24 * 60 * 60 * 1000) { // Older than 24 hours
+        console.log(`[storage.js] Removing expired healing request with ID: ${requestId}`);
+        delete healingRequests[requestId];
+        updated = true;
+      }
+    }
+
+    if (updated) {
+      fs.writeFileSync(healingRequestsFile, JSON.stringify(healingRequests, null, 2), 'utf-8');
+    }
+  } catch (error) {
+    console.error('[storage.js] Error cleaning up expired healing requests:', error.message);
   }
 }
 
@@ -138,5 +160,6 @@ module.exports = {
   saveHealingRequestToStorage,
   retrieveHealingRequestFromStorage,
   deleteHealingRequestFromStorage,
+  cleanupExpiredHealingRequests
 
 };

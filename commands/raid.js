@@ -10,6 +10,11 @@ const { processBattle } = require('../modules/damageModule');
 const { storeBattleProgress, getBattleProgressById } = require('../modules/combatModule');
 const { monsterMapping } = require('../models/MonsterModel');
 const { processLoot } = require('../modules/lootModule');
+const {
+  createMonsterEncounterEmbed,
+  createNoEncounterEmbed,
+  createKOEmbed,
+} = require('../embeds/mechanicEmbeds');
 
 // ------------------- Command Setup -------------------
 
@@ -30,18 +35,13 @@ module.exports = {
 // ------------------- Main Execution Function -------------------
 async execute(interaction) {
   try {
-    console.log("[DEBUG] Command execution started.");
-
     // ------------------- Defer the Reply -------------------
     await interaction.deferReply();
-    console.log("[DEBUG] Reply deferred.");
 
     // Extract options from the interaction
     const battleId = interaction.options.getString('id');
     const characterName = interaction.options.getString('charactername');
     const userId = interaction.user.id;
-
-    console.log(`[DEBUG] Received inputs - Battle ID: ${battleId}, Character Name: ${characterName}, User ID: ${userId}`);
 
     // ------------------- Fetch the Character -------------------
     const character = await fetchCharacterByNameAndUserId(characterName, userId);
@@ -50,8 +50,6 @@ async execute(interaction) {
       await interaction.editReply('❌ **Character not found.**');
       return;
     }
-
-    console.log(`[DEBUG] Fetched character: ${character.name}`);
 
     if (!character.inventorySynced) {
       console.log("[ERROR] Inventory not synced.");
@@ -64,11 +62,16 @@ async execute(interaction) {
 
     if (character.currentHearts <= 0 || character.ko) {
       console.log(`[ERROR] Character ${character.name} is KO'd.`);
-      await interaction.editReply(`❌ **${character.name} is KO'd and cannot take any further actions.**`);
+      
+      const koEmbed = createKOEmbed(character);
+      await interaction.editReply({
+        content: `❌ **${character.name} is KO'd and cannot take any further actions.**`,
+        embeds: [koEmbed], // Add KO embed here
+      });
+      
       return;
     }
-
-    console.log("[DEBUG] Character is valid and ready.");
+    
 
     // ------------------- Retrieve Existing Raid Progress -------------------
     const battleProgress = await getBattleProgressById(battleId);
@@ -78,8 +81,6 @@ async execute(interaction) {
       return;
     }
 
-    console.log("[DEBUG] Fetched raid progress:", battleProgress);
-
     const currentMonster = await fetchMonsterByName(battleProgress.monster);
     if (!currentMonster) {
       console.log("[ERROR] Monster not found.");
@@ -87,11 +88,9 @@ async execute(interaction) {
       return;
     }
 
-    console.log(`[DEBUG] Fetched monster: ${currentMonster.name}`);
 
     // ------------------- Generate a Random Dice Roll -------------------
     const originalRoll = Math.floor(Math.random() * 100) + 1;
-    console.log(`[DEBUG] Dice roll generated: ${originalRoll}`);
 
     try {
       // ------------------- Process the Battle -------------------
@@ -118,9 +117,6 @@ async execute(interaction) {
         const buffSource = attackSuccess ? 'weapon' : 'armor';
         buffMessage = `🛡️ **Your ${buffSource} helped!**\n\n`;
       }
-    
-      console.log(`[DEBUG] Battle result: ${battleResult}`);
-      console.log(`[DEBUG] Buff message: ${buffMessage}`);
       
       // ------------------- Create Embed -------------------
       const updatedBattleProgress = await getBattleProgressById(battleId);
@@ -129,8 +125,6 @@ async execute(interaction) {
     
       const monsterData = monsterMapping[currentMonster.nameMapping] || {};
 const monsterImage = monsterData.image || currentMonster.image || null; // Ensure monsterImage is defined
-
-console.log(`[DEBUG] Monster image: ${monsterImage}`);
 
 const embed = new EmbedBuilder()
   .setTitle(`${character.name}'s Turn!`)
@@ -158,11 +152,9 @@ if (monsterImage && monsterImage.startsWith('http')) {
 
 // Post the embed
 await interaction.editReply({ embeds: [embed] });
-console.log('[DEBUG] Embed posted successfully.');
     
       // Check if monster is defeated
       if (updatedBattleProgress.monsterHearts.current <= 0) {
-        console.log('[DEBUG] Monster defeated.');
         await processLoot(updatedBattleProgress, currentMonster, interaction, battleId);
       }
     } catch (error) {

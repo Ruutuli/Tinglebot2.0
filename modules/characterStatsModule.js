@@ -47,16 +47,22 @@ const recoverHearts = async (characterId, hearts, healerId = null) => {
     const character = await Character.findById(characterId);
     if (!character) throw new Error('Character not found');
 
-    if (character.ko && !healerId) {
-      throw new Error(`${character.name} is KO'd and cannot heal without a healer.`);
-    }
-
     if (character.ko) {
-      character.ko = false; // Revive character if KO'd
+      if (!healerId) {
+        throw new Error(`${character.name} is KO'd and cannot heal without a healer.`);
+      }
+    
+      const healer = await Character.findById(healerId);
+      if (!healer || healer.job !== 'Healer') {
+        throw new Error(`Invalid healer or ${healer?.name} is not a healer.`);
+      }
+    
+      character.ko = false; // Revive the character
       character.currentHearts = Math.min(hearts, character.maxHearts);
     } else {
       character.currentHearts = Math.min(character.currentHearts + hearts, character.maxHearts);
     }
+    
 
     await character.save();
     return createSimpleCharacterEmbed(character, `❤️ +${hearts} hearts recovered`);

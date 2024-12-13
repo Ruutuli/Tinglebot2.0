@@ -6,7 +6,7 @@ const { authorizeSheets, appendSheetData } = require('../utils/googleSheetsUtils
 const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../utils/validation');
 const { v4: uuidv4 } = require('uuid');
 const { EmbedBuilder } = require('discord.js');
-const { createWeightedItemList, calculateFinalValue } = require('../modules/rngModule');
+const { createWeightedItemList, calculateFinalValue, getFleeOutcome  } = require('../modules/rngModule');
 const { getEncounterOutcome } = require('../modules/damageModule');
 const { generateDamageMessage, generateVictoryMessage } = require('../modules/flavorTextModule');
 const { createMonsterEncounterEmbed, createKOEmbed } = require('../embeds/mechanicEmbeds');
@@ -32,16 +32,31 @@ async function handleTravelInteraction(interaction, character, day, totalTravelD
 
         // Handle different travel choices based on customId
         if (customId === 'recover') {
-            if (character.currentStamina >= 1 && character.currentHearts < character.maxHearts) {
-                await recoverHearts(character._id, 1);
-                character.currentHearts = Math.min(character.currentHearts + 1, character.maxHearts);
-                await useStamina(character._id, 1);
-                decision = `💖 ${character.name} recovered a heart.`;
-                outcomeMessage = `${character.name} decided to recover a heart (-1 stamina) / (+1 heart)`;
-                heartsGained = 1;
-                staminaLost = 1;
+            console.log(`Debug: Current Stamina = ${character.currentStamina}, Current Hearts = ${character.currentHearts}, Max Hearts = ${character.maxHearts}`);
+            
+            if (character.currentStamina >= 1) { // Ensure enough stamina
+                if (character.currentHearts < character.maxHearts) { // Ensure hearts can be recovered
+                    // Subtract stamina and heal a heart
+                    await useStamina(character._id, 1); // Update stamina in the database
+                    character.currentStamina -= 1; // Update stamina in memory
+                    await recoverHearts(character._id, 1); // Heal a heart in the database
+                    character.currentHearts = Math.min(character.currentHearts + 1, character.maxHearts); // Update hearts in memory
+        
+                    decision = `💖 ${character.name} recovered a heart.`;
+                    outcomeMessage = `${character.name} decided to recover a heart (-1 stamina) / (+1 heart)`;
+        
+                    heartsGained = 1;
+                    staminaLost = 1;
+                } else {
+                    decision = `❌ ${character.name} is already at full hearts.`;
+                    outcomeMessage = `${character.name} attempted to recover a heart but is already at full hearts.`;
+                }
+            } else {
+                decision = `❌ ${character.name} doesn't have enough stamina to recover a heart.`;
+                outcomeMessage = `${character.name} attempted to recover a heart but didn't have enough stamina.`;
             }
-        } else if (customId === 'gather') {
+        }
+         else if (customId === 'gather') {
             // Handle gathering resources
             const items = await fetchAllItems();
             const availableItems = items.filter(item => item[currentPath]);
@@ -219,15 +234,17 @@ async function handleTravelInteraction(interaction, character, day, totalTravelD
 
         await encounterMessage.edit({ embeds: [updatedEmbed], components: [] });
 
-        // Update the travel log
-        if (heartsLost > 0 || heartsGained > 0 || staminaLost > 0) {
-            let logSummary = '';
-            if (heartsLost > 0) logSummary += `- Lost ${heartsLost} Hearts\n`;
-            if (heartsGained > 0) logSummary += `- Gained ${heartsGained} Hearts\n`;
-            if (staminaLost > 0) logSummary += `- Lost ${staminaLost} Stamina\n`;
-            travelLog.push(logSummary.trim());
-        }
+// Update the travel log
+if (heartsLost > 0 || heartsGained > 0 || staminaLost > 0) {
+    let logSummary = '';
+    if (heartsLost > 0) logSummary += `Lost ${heartsLost} Heart(s)\n`;
+    if (heartsGained > 0) logSummary += `Gained ${heartsGained} Heart(s)\n`;
+    if (staminaLost > 0) logSummary += `Lost ${staminaLost} Stamina\n`;
 
+    if (logSummary.trim()) {
+        travelLog.unshift(logSummary.trim()); // Add this summary at the top of the log
+    }
+}
         return decision;
     } catch (error) {
         console.error(`❌ Error during travel interaction handling: ${error.message}`, error);

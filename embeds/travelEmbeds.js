@@ -110,28 +110,34 @@ const createStopInInarikoEmbed = (character, nextChannelId) => {
 
 // ------------------- Create embed for final travel announcement -------------------
 const createFinalTravelEmbed = (character, destination, paths, totalTravelDuration, travelLog) => {
-    // ------------------- Use village emojis for destination -------------------
-    const startEmoji = villageEmojis[character.currentVillage.toLowerCase()] || '';
     const destEmoji = villageEmojis[destination.toLowerCase()] || '';
 
-    // ------------------- Fix: Remove empty or invalid log entries -------------------
-    const finalLog = travelLog
-        .filter(logEntry => logEntry && logEntry.trim() !== '' && !logEntry.match(/^\s*\.\s*$/)) // Ensure no empty entries or random dots
-        .join('\n\n')
-        .trim();
-    
-    const heartsAndStaminaSummary = finalLog.match(/Lost \d+ Hearts|Gained \d+ Hearts|Lost \d+ Stamina/g);
-    const detailedLog = finalLog.replace(/Lost \d+ Hearts|Gained \d+ Hearts|Lost \d+ Stamina/g, '').trim();
+    // Clean and format the travel log
+    const cleanedLog = travelLog
+        .filter(entry => entry && entry.trim() !== '') // Remove empty or invalid entries
+        .map(entry => entry.trim()) // Trim whitespace around each entry
+        .join('\n'); // Combine entries with single line breaks
 
     return new EmbedBuilder()
         .setTitle(`✅ ${character.name} has arrived at ${destEmoji} ${capitalizeFirstLetter(destination)}!`)
-        .setDescription(`**Travel Path:** ${paths.map(path => `${pathEmojis[path]} ${capitalizeFirstLetter(path.replace(/([a-z])([A-Z])/g, '$1 $2'))}`).join(', ')}\n**Total Travel Duration:** ${totalTravelDuration} days\n**❤️ __Hearts:__** ${character.currentHearts}/${character.maxHearts}\n**🟩 __Stamina:__** ${character.currentStamina}/${character.maxStamina}\n${heartsAndStaminaSummary ? heartsAndStaminaSummary.join('\n') : ''}`)
-        .addFields({ name: 'Travel Log', value: detailedLog || 'No significant events.' })
+        .setDescription(
+            `**Travel Path:** ${paths.map(path => 
+                `${pathEmojis[path]} ${capitalizeFirstLetter(path.replace(/([a-z])([A-Z])/g, '$1 $2'))}`
+            ).join(', ')}\n` +
+            `**Total Travel Duration:** ${totalTravelDuration} days\n` +
+            `**❤️ __Hearts:__** ${character.currentHearts}/${character.maxHearts}\n` +
+            `**🟩 __Stamina:__** ${character.currentStamina}/${character.maxStamina}`
+        )
+        .addFields({
+            name: '📖 Travel Log',
+            value: cleanedLog || 'No significant events occurred during the journey.',
+        })
         .setColor('#AA926A')
-        .setAuthor({ name: 'Travel Announcement', iconURL: character.icon })
+        .setAuthor({ name: 'Travel Summary', iconURL: character.icon })
         .setImage(DEFAULT_IMAGE_URL)
         .setTimestamp();
 };
+
 
 // ------------------- Export the functions -------------------
 module.exports = {

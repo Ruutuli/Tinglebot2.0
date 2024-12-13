@@ -7,10 +7,6 @@ const calculateAttackBuff = (character) => {
   const attackStat = character.attack || 0;  // Default to 0 if no attack stat is available
   const attackChance = attackStat * 10;  // Higher attack stat increases the chance of applying the buff
   const success = Math.random() < attackChance / 100;
-  console.log(`[buffModule debug] Calculating Attack Buff:`);
-  console.log(`[buffModule debug] Attack Stat: ${attackStat}`);
-  console.log(`[buffModule debug] Attack Chance: ${attackChance}%`);
-  console.log(`[buffModule debug] Attack Buff Success: ${success}`);
   return success;
 };
 
@@ -21,41 +17,35 @@ const calculateDefenseBuff = (character) => {
   const defenseStat = character.defense || 0;  // Default to 0 if no defense stat is available
   const defenseChance = defenseStat * 2;  // Lower defense stat decreases the chance of applying the buff
   const success = Math.random() < defenseChance / 100;
-  console.log(`[buffModule debug] Calculating Defense Buff:`);
-  console.log(`[buffModule debug] Defense Stat: ${defenseStat}`);
-  console.log(`[buffModule debug] Defense Chance: ${defenseChance}%`);
-  console.log(`[buffModule debug] Defense Buff Success: ${success}`);
   return success;
 };
 
 // ------------------- Apply buffs to random value -------------------
 // This function adjusts the provided random value by applying any successful attack or defense buffs.
 // It ensures the final adjusted value is within the valid range of 1 to 100.
+let lastDebugValues = {
+  initialRandomValue: null,
+  adjustedRandomValue: null,
+};
+
 const applyBuffs = (randomValue, attackSuccess, defenseSuccess, attackStat, defenseStat) => {
   let adjustedRandomValue = randomValue || 0;  // Ensure the random value is valid by defaulting to 0 if undefined
 
-  console.log(`[buffModule debug] Initial Random Value: ${randomValue}`);
-  
+  lastDebugValues.initialRandomValue = randomValue;
+
   // If attack buff is successful, increase the random value by a factor of the attack stat
   if (attackSuccess) {
-    adjustedRandomValue += attackStat * 10;
-    console.log(`[buffModule debug] Attack Buff Applied: +${attackStat * 10}`);
+      adjustedRandomValue += attackStat * 10;
   }
 
   // If defense buff is successful, increase the random value by a factor of the defense stat
   if (defenseSuccess) {
-    adjustedRandomValue += defenseStat * 2;
-    console.log(`[buffModule debug] Defense Buff Applied: +${defenseStat * 2}`);
+      adjustedRandomValue += defenseStat * 2;
   }
 
   // Ensure the final adjusted value is between 1 and 100
   adjustedRandomValue = Math.max(1, Math.min(adjustedRandomValue, 100));
-  console.log(`[buffModule debug] Adjusted Random Value (Clamped): ${adjustedRandomValue}`);
-
-  if (isNaN(adjustedRandomValue)) {
-    console.error(`[buffModule debug] ⚠️ Adjusted Random Value is invalid: ${adjustedRandomValue}`);
-    adjustedRandomValue = randomValue;  // Fallback to the original random value
-  }
+  lastDebugValues.adjustedRandomValue = adjustedRandomValue;
 
   return adjustedRandomValue;
 };
@@ -66,4 +56,5 @@ module.exports = {
   calculateAttackBuff,
   calculateDefenseBuff,
   applyBuffs,
+  getLastDebugValues: () => lastDebugValues,
 };

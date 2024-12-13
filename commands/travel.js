@@ -53,6 +53,12 @@ const PATH_CHANNELS = {
   leafDewWay: process.env.LEAF_DEW_WAY_CHANNEL_ID,
 };
 
+// Validate that channels are correctly loaded
+if (!PATH_CHANNELS.pathOfScarletLeaves || !PATH_CHANNELS.leafDewWay) {
+  console.error("❌ Channel IDs not properly loaded from .env file. Please verify your .env configuration.");
+  throw new Error("Missing required channel IDs in .env file");
+}
+
 // ------------------- Helper function to get channel name -------------------
 function getChannelNameById(client, channelId) {
   const channel = client.channels.cache.get(channelId);
@@ -153,89 +159,116 @@ module.exports = {
             return;
         }
         
-        // ------------------- Ensure correct travel path/channel -------------------
-        const currentChannel = interaction.channelId;
+// Determine the path(s) and total travel duration
+const totalTravelDuration = calculateTravelDuration(startingVillage, destination, mode);
+if (totalTravelDuration === -1) {
+    await interaction.editReply({
+        content: `❌ Travel path between **${capitalizeFirstLetter(startingVillage)}** and **${capitalizeFirstLetter(destination)}** is not defined.`
+    });
+    return;
+}
 
-        // If traveling between Inariko and Vhintl, ensure it's done in "leaf-dew-way"
-        if ((startingVillage === 'inariko' && destination === 'vhintl') || (startingVillage === 'vhintl' && destination === 'inariko')) {
-            if (currentChannel !== PATH_CHANNELS.leafDewWay) {
-                await interaction.editReply({ content: `❌ **You're trying to travel on the wrong road!** You must travel on 🥬 <#${PATH_CHANNELS.leafDewWay}>.` });
-                return;
-            }
-        }
+// ------------------- Ensure correct travel path/channel -------------------
+const currentChannel = interaction.channelId;
 
-        // If traveling between Rudania and Inariko, ensure it's done in "path-of-scarlet-leaves"
-        if ((startingVillage === 'inariko' && destination === 'rudania') || (startingVillage === 'rudania' && destination === 'inariko')) {
-            if (currentChannel !== PATH_CHANNELS.pathOfScarletLeaves) {
-                await interaction.editReply({ content: `❌ **You're trying to travel on the wrong road!** You must travel on 🍂 <#${PATH_CHANNELS.pathOfScarletLeaves}>.` });
-                return;
-            }
-        }
-
-        // Determine the path(s) and total travel duration
-        const totalTravelDuration = calculateTravelDuration(startingVillage, destination, mode);
-        let paths = [];
-        let stopInInariko = false;
-
-        if (totalTravelDuration === 4) {
-            if (startingVillage === 'rudania') {
-                paths = ['pathOfScarletLeaves', 'leafDewWay'];
-            } else {
-                paths = ['leafDewWay', 'pathOfScarletLeaves'];
-            }
-            stopInInariko = true;
-        } else if (totalTravelDuration === 2) {
-            paths = [startingVillage === 'rudania' || destination === 'rudania' ? 'pathOfScarletLeaves' : 'leafDewWay'];
-        } else {
-            await interaction.editReply({ content: `❌ Travel path between **${capitalizeFirstLetter(startingVillage)}** and **${capitalizeFirstLetter(destination)}** is not defined.` });
+// Validate channel for 4-day travel routes
+if (totalTravelDuration === 4) {
+    if (startingVillage === 'rudania' && destination === 'vhintl') {
+        if (currentChannel !== PATH_CHANNELS.pathOfScarletLeaves) {
+            await interaction.editReply({
+                content: `❌ **${character.name}** is trying to travel from **Rudania** to **Vhintl**, but you're on the wrong road! You must start in 🍂 [Path of Scarlet Leaves](<#${PATH_CHANNELS.pathOfScarletLeaves}>).`
+            });
             return;
         }
+    } else if (startingVillage === 'vhintl' && destination === 'rudania') {
+        if (currentChannel !== PATH_CHANNELS.leafDewWay) {
+            await interaction.editReply({
+                content: `❌ **${character.name}** is trying to travel from **Vhintl** to **Rudania**, but you're on the wrong road! You must start in 🥬 [Leaf-Dew Way](<#${PATH_CHANNELS.leafDewWay}>).`
+            });
+            return;
+        }
+    }
+}
 
-        // Initial travel announcement
-        const initialEmbed = createInitialTravelEmbed(character, startingVillage, destination, paths, totalTravelDuration);
-        await interaction.followUp({ embeds: [initialEmbed] });
+// Validate channel for 2-day travel routes
+if ((startingVillage === 'inariko' && destination === 'vhintl') || (startingVillage === 'vhintl' && destination === 'inariko')) {
+    if (currentChannel !== PATH_CHANNELS.leafDewWay) {
+        await interaction.editReply({
+            content: `❌ **${character.name}** is trying to travel from **${capitalizeFirstLetter(startingVillage)}** to **${capitalizeFirstLetter(destination)}**, but you're on the wrong road! You must travel on 🥬 [Leaf-Dew Way](<#${PATH_CHANNELS.leafDewWay}>).`
+        });
+        return;
+    }
+}
 
-        let travelLog = [];
-        let travelingMessages = [];
-        let lastSafeDayMessage = null;
+if ((startingVillage === 'inariko' && destination === 'rudania') || (startingVillage === 'rudania' && destination === 'inariko')) {
+    if (currentChannel !== PATH_CHANNELS.pathOfScarletLeaves) {
+        await interaction.editReply({
+            content: `❌ **${character.name}** is trying to travel from **${capitalizeFirstLetter(startingVillage)}** to **${capitalizeFirstLetter(destination)}**, but you're on the wrong road! You must travel on 🍂 [Path of Scarlet Leaves](<#${PATH_CHANNELS.pathOfScarletLeaves}>).`
+        });
+        return;
+    }
+}
 
-  // ------------------- Helper function to process each travel day -------------------
-const processTravelDay = async (day) => {
-  if (day > totalTravelDuration) {
-    // Arrival announcement
-    character.currentVillage = destination;
-    await character.save();
-    
-    // ------------------- Add a check for the correct road/channel based on travel route -------------------
-    let finalChannelId;
-    const currentPath = paths[Math.floor((day - 1) / 2)]; // Assign currentPath here before using it
+// Set up paths
+let paths = [];
+let stopInInariko = false;
 
-    if ((destination === 'inariko' && startingVillage === 'rudania') || (destination === 'rudania' && startingVillage === 'inariko')) {
-      // Always post in "path-of-scarlet-leaves" for Rudania-Inariko travel
-      finalChannelId = PATH_CHANNELS.pathOfScarletLeaves;
-    } else if ((destination === 'inariko' && startingVillage === 'vhintl') || (destination === 'vhintl' && startingVillage === 'inariko')) {
-      // Always post in "leaf-dew-way" for Inariko-Vhintl travel
-      finalChannelId = PATH_CHANNELS.leafDewWay;
-    } else if (currentPath === 'pathOfScarletLeaves' && ((startingVillage === 'inariko' && destination === 'vhintl') || (startingVillage === 'vhintl' && destination === 'inariko'))) {
-      // Check if the user is attempting to post in the wrong channel
-      await interaction.followUp({ content: `❌ **You're trying to travel on the wrong road!** You must travel on 🥬 **leaf-dew-way**.` });
-      return;
+if (totalTravelDuration === 4) {
+    if (startingVillage === 'rudania') {
+        paths = ['pathOfScarletLeaves', 'leafDewWay'];
     } else {
-      // Default path based on destination
-      finalChannelId = destination === 'vhintl' || destination === 'inariko' ? PATH_CHANNELS.leafDewWay : PATH_CHANNELS.pathOfScarletLeaves;
+        paths = ['leafDewWay', 'pathOfScarletLeaves'];
+    }
+    stopInInariko = true;
+} else if (totalTravelDuration === 2) {
+    paths = [startingVillage === 'rudania' || destination === 'rudania' ? 'pathOfScarletLeaves' : 'leafDewWay'];
+}
+
+// Initial travel announcement
+const initialEmbed = createInitialTravelEmbed(character, startingVillage, destination, paths, totalTravelDuration);
+await interaction.followUp({ embeds: [initialEmbed] });
+
+let travelLog = [];
+let travelingMessages = [];
+let lastSafeDayMessage = null;
+
+
+// ------------------- Helper function to process each travel day -------------------
+const processTravelDay = async (day) => {
+    if (day > totalTravelDuration) {
+        // Arrival announcement
+        character.currentVillage = destination;
+        await character.save();
+
+        // Add a check for the correct road/channel based on travel route
+        let finalChannelId;
+        const currentPath = paths[Math.floor((day - 1) / 2)]; // Assign currentPath here before using it
+
+        if ((destination === 'inariko' && startingVillage === 'rudania') || (destination === 'rudania' && startingVillage === 'inariko')) {
+            // Always post in "path-of-scarlet-leaves" for Rudania-Inariko travel
+            finalChannelId = PATH_CHANNELS.pathOfScarletLeaves;
+        } else if ((destination === 'inariko' && startingVillage === 'vhintl') || (destination === 'vhintl' && startingVillage === 'inariko')) {
+            // Always post in "leaf-dew-way" for Inariko-Vhintl travel
+            finalChannelId = PATH_CHANNELS.leafDewWay;
+        } else {
+            // Default path based on destination
+            finalChannelId = destination === 'vhintl' || destination === 'inariko' 
+                ? PATH_CHANNELS.leafDewWay 
+                : PATH_CHANNELS.pathOfScarletLeaves;
+        }
+
+        const finalChannel = await interaction.client.channels.fetch(finalChannelId);
+        const finalEmbed = createFinalTravelEmbed(character, destination, paths, totalTravelDuration, travelLog);
+        await finalChannel.send({ embeds: [finalEmbed] });
+
+        // Delete only the traveling messages
+        for (const msg of travelingMessages) {
+            await msg.delete();
+        }
+
+        return;
     }
 
-    const finalChannel = await interaction.client.channels.fetch(finalChannelId);
-    const finalEmbed = createFinalTravelEmbed(character, destination, paths, totalTravelDuration, travelLog);
-    await finalChannel.send({ embeds: [finalEmbed] });
-
-    // Delete only the traveling messages
-    for (const msg of travelingMessages) {
-      await msg.delete();
-    }
-
-    return;
-  }
 
  // Post "Character is traveling..."
  const currentPath = paths[Math.floor((day - 1) / 2)]; // Use currentPath after assigning it

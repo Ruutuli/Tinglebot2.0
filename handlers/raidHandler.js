@@ -7,7 +7,6 @@ const { capitalizeFirstLetter } = require('../modules/locationsModule');
 
 // ------------------- Function to Trigger a Raid -------------------
 async function triggerRaid(character, monster, interaction, threadId, isBloodMoon) {
-  console.log(`[DEBUG] triggerRaid called with threadId: ${threadId}`);
 
   // ------------------- Define Monster Hearts -------------------
   const monsterHearts = {
@@ -17,7 +16,6 @@ async function triggerRaid(character, monster, interaction, threadId, isBloodMoo
 
   // ------------------- Generate Battle ID -------------------
   const battleId = generateBattleId();
-  console.log(`[DEBUG] Battle ID generated: ${battleId}`);
 
   // ------------------- Create Embed -------------------
   const monsterData = monsterMapping[monster.nameMapping] || {};
@@ -50,7 +48,6 @@ async function triggerRaid(character, monster, interaction, threadId, isBloodMoo
   let thread;
   try {
       if (!threadId) {
-          console.log(`[DEBUG] No threadId provided. Sending embed and attempting to create a thread.`);
 
           const emoji = isBloodMoon ? '🔴' : '🛡️';
           const threadName = `${emoji} ${character.currentVillage || 'Unknown Village'} - ${monster.name} (Tier ${monster.tier})`;
@@ -68,26 +65,21 @@ async function triggerRaid(character, monster, interaction, threadId, isBloodMoo
           );
 
           threadId = thread.id; // Update threadId with the new thread's ID
-          console.log(`[RAID] New thread created: ${thread.name} with ID: ${threadId}`);
 
           // Ping the user who initiated the raid
           await thread.send(`<@${interaction.user.id}> has initiated a raid! Prepare to face ${monster.name} (Tier ${monster.tier}).`);
       } else {
-          console.log(`[DEBUG] Using existing threadId: ${threadId}`);
           thread = interaction.guild.channels.cache.get(threadId);
 
           if (!thread) {
-              console.error(`[RAID] Thread with ID "${threadId}" could not be found.`);
               await interaction.followUp(`❌ **Unable to locate the raid thread. Please try again later.**`);
               return;
           }
 
           // Send the embed to the existing thread
-          console.log(`[DEBUG] Sending embed to existing thread: ${thread.name}`);
           await thread.send({ embeds: [embed] });
       }
   } catch (error) {
-      console.error(`[RAID] Failed during thread handling: ${error.message}`);
       await interaction.followUp(`❌ **Unable to create or update a thread for the raid. Please try again later.**`);
       return;
   }
@@ -99,21 +91,15 @@ function capitalizeFirstLetter(string) {
 
 // ------------------- Function to Apply Damage After Timer -------------------
 function applyVillageDamage(threadId, villageName, battleId, interaction) {
-    console.log(`[RAID] The raid timer expired for thread ID: ${threadId}. Applying damage to village: ${villageName}.`);
 
     const damageAmount = 10; // Arbitrary damage value
     const capitalizedVillageName = capitalizeFirstLetter(villageName);
 
-    console.log(`[RAID] Attempting to apply ${damageAmount} damage to village: ${capitalizedVillageName}.`);
-
     updateVillageHealth(villageName, -damageAmount)
         .then(async () => {
-            console.log(`[RAID] Successfully applied ${damageAmount} damage to village: ${capitalizedVillageName}.`);
 
             const guild = interaction.guild; // Ensure interaction.guild is used directly
-            console.log(`[DEBUG] Attempting to fetch thread with ID: ${threadId}`);
             const thread = guild.channels.cache.get(threadId);
-            console.log(`[DEBUG] Fetched thread: ${thread ? thread.name : 'Thread not found'}`);
 
             if (thread) {
                 // Retrieve additional village information
@@ -132,35 +118,30 @@ function applyVillageDamage(threadId, villageName, battleId, interaction) {
             
 
                 // Log the embed object for debugging
-                console.log(`[DEBUG] Failure embed object:`, failureEmbed.toJSON());
 
                 // Send the embed to the thread
                 thread.send({ embeds: [failureEmbed] })
-                    .then(() => console.log(`[RAID] Failure embed sent to thread ID: ${threadId}.`))
+
                     .catch(err => {
-                        console.error(`[RAID] Failed to send failure embed to thread ID: ${threadId}.`, err);
-                        console.error(`[DEBUG] Check bot permissions or embed structure.`);
+
                     });
 
                 // Archive the thread
                 thread.setArchived(true)
-                    .then(() => console.log(`[RAID] Thread ID: ${threadId} successfully archived.`))
-                    .catch(err => console.error(`[RAID] Failed to archive thread ID: ${threadId}.`, err));
+
             } else {
-                console.error(`[RAID] Could not find thread with ID: ${threadId}.`);
+
             }
 
             // Log the failure to the console
-            console.log(`[RAID] Raid failed for Battle ID: ${battleId}, Village: ${capitalizedVillageName}`);
+
 
             // Delete the raid from battleProgress.json
-            console.log(`[RAID] Deleting battle progress for ID: ${battleId}`);
+
             deleteBattleProgressById(battleId)
-                .then(() => console.log(`[RAID] Battle progress deleted for ID: ${battleId}`))
-                .catch(err => console.error(`[RAID] Error deleting battle progress for ID: ${battleId}`, err));
+
         })
         .catch(err => {
-            console.error(`[RAID] Failed to apply ${damageAmount} damage to village: ${capitalizedVillageName}.`, err);
         });
 }
 
@@ -178,8 +159,6 @@ function applyVillageDamage(threadId, villageName, battleId, interaction) {
             isBloodMoon ? '🔴 Blood Moon Raid initiated!' : 'Raid initiated! Player turn next.'
         );
 
-        console.log(`[RAID] Raid successfully triggered for monster "${monster.name}" (Tier ${monster.tier}) by character "${character.name}"`);
-
         // Start a 30-second (for testing) or 30-minute timer
         const timerDuration = 10 * 60 * 1000; // 10 minutes
         setTimeout(() => {
@@ -189,7 +168,6 @@ function applyVillageDamage(threadId, villageName, battleId, interaction) {
 
         return battleId;
     } catch (error) {
-        console.error(`[RAID] Failed to trigger raid:`, error);
         await interaction.followUp(`❌ **Failed to trigger the raid. Please try again later.**`);
     }
 }

@@ -8,7 +8,7 @@ const { isValidImageUrl } = require('../utils/validation');
 const { getNoEncounterMessage, typeActionMap } = require('../modules/flavorTextModule');
 const { capitalizeWords, capitalize, capitalizeFirstLetter } = require('../modules/formattingModule');
 const { getVillageColorByName } = require('../modules/locationsModule'); // Import from locationsModule.js
-
+const { getLastDebugValues } = require('../modules/buffModule');
 
 // Model Imports
 const { monsterMapping } = require('../models/MonsterModel');
@@ -211,16 +211,17 @@ const createTradeEmbed = async (fromCharacter, toCharacter, fromItems, toItems, 
 };
 
 // ------------------- Function to create monster encounter embed -------------------
+
 const createMonsterEncounterEmbed = (
     character,
     monster,
     outcomeMessage,
     heartsRemaining,
     lootItem,
-    isBloodMoon = false,
-    originalRoll = null,
-    adjustedRandomValue = null
+    isBloodMoon = false
 ) => {
+    // Retrieve the last debug values dynamically
+    const { initialRandomValue, adjustedRandomValue } = getLastDebugValues();
     const settings = getCommonEmbedSettings(character) || {};
     const nameMapping = monster.nameMapping || monster.name;
     const monsterDetails = monsterMapping[nameMapping.replace(/\s+/g, '')] || { name: monster.name, image: 'https://via.placeholder.com/100x100' };
@@ -255,15 +256,14 @@ const createMonsterEncounterEmbed = (
         embed.addFields({ name: '💥 __Loot__', value: `${formatItemDetails(lootItem.itemName, lootItem.quantity, lootItem.emoji)}`, inline: false });
     }
 
-    // Add dice roll field if values are provided
-    if (originalRoll !== null && adjustedRandomValue !== null) {
+    // Add dice roll field if debug values are provided
+    if (initialRandomValue !== null && adjustedRandomValue !== null) {
         embed.addFields({
-            name: '__Dice Roll__',
-            value: `🎲 ${originalRoll} -> ${adjustedRandomValue}`,
+            name: '__🎲 Dice Roll__',
+            value: `> \`${initialRandomValue} -> ${adjustedRandomValue}\``,
             inline: false,
         });
     }
-    
 
     if (isValidImageUrl(monsterDetails.image)) {
         embed.setThumbnail(monsterDetails.image);
@@ -281,10 +281,23 @@ const createNoEncounterEmbed = (character, isBloodMoon = false) => {
     const settings = getCommonEmbedSettings(character);
     const noEncounterMessage = getNoEncounterMessage(); // Retain normal no-encounter message
 
+    // Determine visiting status
+    const isVisiting = character.homeVillage.toLowerCase() !== character.currentVillage.toLowerCase();
+    const locationPrefix = isVisiting
+        ? `${capitalizeWords(character.homeVillage)} ${capitalizeWords(character.job)} is visiting ${capitalizeWords(character.currentVillage)}`
+        : `${capitalizeWords(character.currentVillage)} ${capitalizeWords(character.job)}`;
+
+    // Determine embed color based on visiting status and Blood Moon
+    const embedColor = isBloodMoon
+        ? '#FF4500' // Fiery red for Blood Moon
+        : isVisiting
+            ? getVillageColorByName(character.currentVillage) || '#000000' // Use current village's color if visiting
+            : settings.color || '#000000'; // Default color if not visiting or no settings color
+
     return new EmbedBuilder()
-        .setColor(isBloodMoon ? '#FF4500' : settings.color) // Fiery red for Blood Moon
+        .setColor(embedColor)
         .setTitle(
-            `${capitalizeWords(character.homeVillage)} ${capitalizeWords(character.job)}: ${character.name} encountered no monsters.`
+            `${locationPrefix}: ${character.name} encountered no monsters.`
         )
         .setAuthor({ name: `${character.name} 🔗`, iconURL: settings.author.iconURL, url: settings.author.url })
         .addFields({ name: '🔹 __Outcome__', value: `> ${noEncounterMessage}`, inline: false })

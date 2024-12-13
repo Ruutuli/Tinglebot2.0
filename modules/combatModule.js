@@ -106,15 +106,11 @@ async function deleteBattleProgressById(battleId) {
     try {
         const battleProgress = JSON.parse(fs.readFileSync(BATTLE_PROGRESS_PATH, 'utf8')); // Read existing data
         if (battleProgress[battleId]) {
-            console.log(`[DEBUG] Found battle ID: ${battleId} in battle progress. Proceeding to delete.`);
             delete battleProgress[battleId]; // Delete the entry
             fs.writeFileSync(BATTLE_PROGRESS_PATH, JSON.stringify(battleProgress, null, 2)); // Save changes
-            console.log(`[DEBUG] Successfully deleted battle progress for ID: ${battleId}`);
         } else {
-            console.warn(`[DEBUG] Battle ID: ${battleId} not found in battle progress.`);
         }
     } catch (error) {
-        console.error(`[ERROR] Failed to delete battle progress for ID: ${battleId}.`, error);
     }
 }
 
