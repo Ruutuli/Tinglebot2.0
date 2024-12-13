@@ -70,37 +70,37 @@ async function canChangeVillage(character, newVillage) {
     return validationResult;
 }
 
-// Check if a character can change their job
 async function canChangeJob(character, newJob) {
-    // Ensure character and newJob are defined
+
     if (!character || !newJob) {
-        return {
-            valid: false,
-            message: 'Character or job information is missing.'
-        };
+        console.error(`[ERROR] Character or job information is missing.`);
+        return { valid: false, message: '❌ Character or job information is missing.' };
     }
 
-    // Ensure character.homeVillage is defined
     if (!character.homeVillage) {
-        return {
-            valid: false,
-            message: 'Character home village is missing.'
-        };
+        console.error(`[ERROR] Character home village is missing.`);
+        return { valid: false, message: '❌ Character home village is missing.' };
     }
 
-    // Get the village associated with the new job
     const jobVillage = isVillageExclusiveJob(newJob);
 
-    // Check if the job is village-exclusive and if the character's home village matches
-    if (jobVillage && jobVillage.toLowerCase() !== character.homeVillage.toLowerCase()) {
+    if (!jobVillage) {
+        return { valid: true, message: '' };
+    }
+
+    if (jobVillage.toLowerCase() !== character.homeVillage.toLowerCase()) {
+        console.warn(`[WARNING] Validation failed: Job exclusive to ${jobVillage}, character in ${character.homeVillage}`);
         return {
             valid: false,
-            message: `⚠️ **${character.name}** cannot have **${newJob}** because they live in **${capitalizeFirstLetter(character.homeVillage)}**.`
+            message: `❌ **${character.name}** cannot have the job **${newJob}**. **${newJob}** is exclusive to **${capitalizeFirstLetter(jobVillage)}**, but **${character.name}**'s home village is **${capitalizeFirstLetter(character.homeVillage)}**.`,
         };
     }
 
+    console.log(`[INFO] Job validation passed.`);
     return { valid: true, message: '' };
 }
+
+
 
 // Validate the character's inventory
 function validateCharacterInventory(inventory) {

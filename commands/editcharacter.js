@@ -2,42 +2,40 @@
 // This module allows users to edit various attributes of an existing character.
 
 // ------------------- Import Section -------------------
-// Grouped based on third-party and local module imports
-const { 
-  ActionRowBuilder, 
-  ButtonBuilder, 
-  ButtonStyle, 
-  EmbedBuilder, 
-  SlashCommandBuilder 
-} = require('discord.js'); // Discord.js for building embeds, buttons, and slash commands
-const { connectToTinglebot } = require('../database/connection'); // Database connection
-const { 
-  createCharacterInventory, 
-  deleteCharacterInventoryCollection, 
-  fetchCharacterById, 
-  fetchCharacterByNameAndUserId, 
-  updateCharacterById 
-} = require('../database/characterService'); // Character-related database services
-const { createCharacterEmbed } = require('../embeds/characterEmbeds'); // Embeds for character display
-const { getGeneralJobsPage, getJobsByCategory } = require('../modules/jobsModule'); // Jobs handling
-const { getVillageColorByName } = require('../modules/locationsModule'); // Village color utility
-const { isValidRace } = require('../modules/raceModule'); // Race validation utility
-const { 
-  updateHearts, 
-  updateStamina 
-} = require('../modules/characterStatsModule'); // Character stats updates
-const { handleAutocomplete } = require('../handlers/autocompleteHandler'); // Autocomplete handler
-const { 
-  canChangeJob, 
-  canChangeVillage, 
-  isUniqueCharacterName 
-} = require('../utils/validation'); // Validation utilities
-const Character = require('../models/CharacterModel'); // Character model
+// Third-party module imports
 const axios = require('axios'); // For downloading and handling external resources (e.g., icons)
-const bucket = require('../config/gcsService'); // Google Cloud Storage service
+const { ActionRowBuilder,   ButtonBuilder,   ButtonStyle,   EmbedBuilder,   SlashCommandBuilder } = require('discord.js'); // Discord.js for building embeds, buttons, and slash commands
 const { v4: uuidv4 } = require('uuid'); // UUID generator for unique file names
 const path = require('path'); // Path handling utility
-const { convertCmToFeetInches } = require('../utils/validation'); // Utility for converting height
+
+// Local module imports
+
+// Config
+const bucket = require('../config/gcsService'); // Google Cloud Storage service
+
+// Models
+const Character = require('../models/CharacterModel'); // Character model
+
+// Embeds
+const { createCharacterEmbed } = require('../embeds/characterEmbeds'); // Embeds for character display
+
+// Database
+const { connectToTinglebot } = require('../database/connection'); // Database connection
+const { createCharacterInventory,   deleteCharacterInventoryCollection,   fetchCharacterById,   fetchCharacterByNameAndUserId,   updateCharacterById } = require('../database/characterService'); // Character-related database services
+
+// Handlers
+const { handleAutocomplete } = require('../handlers/autocompleteHandler'); // Autocomplete handler
+
+// Modules
+const { getGeneralJobsPage,   getJobsByCategory } = require('../modules/jobsModule'); // Jobs handling
+const { getVillageColorByName } = require('../modules/locationsModule'); // Village color utility
+const { isValidRace } = require('../modules/raceModule'); // Race validation utility
+const { updateHearts,   updateStamina } = require('../modules/characterStatsModule'); // Character stats updates
+const { capitalizeFirstLetter } = require('../modules/formattingModule'); // Formatting utility
+
+// Utilities
+const { canChangeJob,   canChangeVillage,   isUniqueCharacterName,   convertCmToFeetInches } = require('../utils/validation'); // Validation utilities
+
 
 // ------------------- Helper Function: Fetch Icon Data -------------------
 // Fetches the image data from the provided icon URL
@@ -111,17 +109,38 @@ module.exports = {
 
       // ------------------- Handle Each Category Update -------------------
       if (category === 'job') {
-        const validationResult = await canChangeJob(character, updatedInfo);
-        if (!validationResult.valid) {
-          await interaction.followUp({ content: validationResult.message, ephemeral: true });
-          return;
+        
+        try {
+            // Validate the job change
+            const validationResult = await canChangeJob(character, updatedInfo);
+    
+            if (!validationResult.valid) {
+                console.warn(`[WARNING] Job validation failed: ${validationResult.message}`);
+                await interaction.followUp({ content: validationResult.message, ephemeral: true });
+                return;
+            }
+    
+            // Check for job category selection
+            if (['General Jobs', 'Inariko Exclusive Jobs', 'Rudania Exclusive Jobs', 'Vhintl Exclusive Jobs'].includes(updatedInfo)) {
+                await handleJobCategorySelection(interaction, character, updatedInfo);
+                return;
+            }
+    
+            // Update the character's job
+            character.job = updatedInfo;
+            console.log(`[INFO] Job successfully updated for character ${character.name} from ${previousValue} to ${updatedInfo}`);
+            updateMessage = `✅ **${character.name}'s job has been updated from ${previousValue} to ${updatedInfo}.**`;
+    
+        } catch (error) {
+            // Log the error details
+            console.error(`[ERROR] An error occurred while processing job update: ${error.message}`);
+            console.error(error.stack);
+            await interaction.followUp({
+                content: '⚠️ An unexpected error occurred while updating the job. Please try again later.',
+                ephemeral: true,
+            });
         }
-        if (['General Jobs', 'Inariko Exclusive Jobs', 'Rudania Exclusive Jobs', 'Vhintl Exclusive Jobs'].includes(updatedInfo)) {
-          await handleJobCategorySelection(interaction, character, updatedInfo);
-          return;
-        }
-        character.job = updatedInfo;
-        updateMessage = `✅ **${character.name}'s job has been updated from ${previousValue} to ${updatedInfo}.**`;
+        
       } else if (category === 'homeVillage') {
         const validationResult = await canChangeVillage(character, updatedInfo);
         if (!validationResult.valid) {
@@ -225,19 +244,21 @@ module.exports = {
 // ------------------- Helper Function: Job Category Selection -------------------
 // Handles the selection of jobs when editing a character's job
 async function handleJobCategorySelection(interaction, character, updatedInfo) {
+
   let jobs;
   let pageIndex = 1;
 
   if (updatedInfo === 'General Jobs') {
-    jobs = getGeneralJobsPage(pageIndex);
+      jobs = getGeneralJobsPage(pageIndex);
   } else {
-    jobs = getJobsByCategory(updatedInfo);
+      jobs = getJobsByCategory(updatedInfo);
   }
 
+
   const jobButtons = jobs.map(job => new ButtonBuilder()
-    .setCustomId(`job-select|${character._id}|${job}`)
-    .setLabel(job)
-    .setStyle(ButtonStyle.Primary)
+      .setCustomId(`job-select|${character._id}|${job}`)
+      .setLabel(job)
+      .setStyle(ButtonStyle.Primary)
   );
 
   const rows = [];
@@ -245,30 +266,31 @@ async function handleJobCategorySelection(interaction, character, updatedInfo) {
 
   const embedColor = getVillageColorByName(updatedInfo.split(' ')[0]) || '#00CED1';
   const embed = new EmbedBuilder()
-    .setTitle(`${updatedInfo}`)
-    .setDescription('Select a job from the buttons below:')
-    .setColor(embedColor);
+      .setTitle(`${updatedInfo}`)
+      .setDescription('Select a job from the buttons below:')
+      .setColor(embedColor);
 
   let components = [...rows];
   if (updatedInfo === 'General Jobs') {
-    const previousPageIndex = pageIndex - 1;
-    const nextPageIndex = pageIndex + 1;
-    const navigationButtons = [
-      new ButtonBuilder()
-        .setCustomId(`job-page|${character._id}|${previousPageIndex}`)
-        .setLabel('Previous')
-        .setStyle(ButtonStyle.Secondary)
-        .setDisabled(previousPageIndex < 1),
-      new ButtonBuilder()
-        .setCustomId(`job-page|${character._id}|${nextPageIndex}`)
-        .setLabel('Next')
-        .setStyle(ButtonStyle.Secondary)
-        .setDisabled(nextPageIndex > 2)
-    ];
+      const previousPageIndex = pageIndex - 1;
+      const nextPageIndex = pageIndex + 1;
+      const navigationButtons = [
+          new ButtonBuilder()
+              .setCustomId(`job-page|${character._id}|${previousPageIndex}`)
+              .setLabel('Previous')
+              .setStyle(ButtonStyle.Secondary)
+              .setDisabled(previousPageIndex < 1),
+          new ButtonBuilder()
+              .setCustomId(`job-page|${character._id}|${nextPageIndex}`)
+              .setLabel('Next')
+              .setStyle(ButtonStyle.Secondary)
+              .setDisabled(nextPageIndex > 2)
+      ];
 
-    const navigationRow = new ActionRowBuilder().addComponents(navigationButtons);
-    components.push(navigationRow);
+      const navigationRow = new ActionRowBuilder().addComponents(navigationButtons);
+      components.push(navigationRow);
   }
 
   await interaction.followUp({ embeds: [embed], components, ephemeral: true });
 }
+

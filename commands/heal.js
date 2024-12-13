@@ -3,16 +3,15 @@
 const { SlashCommandBuilder } = require('discord.js');
 
 // Database Imports
-const {
-  fetchCharacterByName,
-  fetchCharactersByUserId,
-} = require('../database/characterService');
+const {  fetchCharacterByName,  fetchCharactersByUserId,} = require('../database/characterService');
 
 // Utility Imports
 const { v4: uuidv4 } = require('uuid');
+const { capitalizeWords, capitalize, capitalizeFirstLetter } = require('../modules/formattingModule');
+const { useStamina, recoverHearts } = require('../modules/characterStatsModule');
 
 // Embed Imports
-const { createHealEmbed } = require('../embeds/mechanicEmbeds');
+const { createHealEmbed, createHealingEmbed } = require('../embeds/mechanicEmbeds');
 
 // Models
 const { saveHealingRequestToStorage, cleanupExpiredHealingRequests, retrieveHealingRequestFromStorage } = require('../utils/storage');
@@ -84,13 +83,6 @@ module.exports = {
       const paymentOffered = interaction.options.getString('payment') || 'No payment specified';
       const healerName = interaction.options.getString('healer');
 
-      console.log('Healing Request Variables:', {
-        characterName,
-        heartsToHeal,
-        paymentOffered,
-        healerName,
-      });
-
       try {
         await interaction.deferReply();
 
@@ -112,14 +104,14 @@ module.exports = {
           timestamp: Date.now(),
         };
 
-        console.log('Saving Healing Request:', healingRequestData);
         saveHealingRequestToStorage(healingRequestId, healingRequestData);
 
         const embed = createHealEmbed(null, characterToHeal, heartsToHeal, paymentOffered, healingRequestId);
 
         const content = healerName
-          ? `🔔 @${healerName}, **${characterToHeal.name}** is requesting healing from **${healerName}**!`
-          : `🔔 @Job Perk: Healing, Healing request for any eligible healer in **${characterToHeal.currentVillage}**!`;
+        ? `🔔 @${healerName}, **${characterToHeal.name}** is requesting healing from **${healerName}**!`
+        : `🔔 @Job Perk: Healing, Healing request for any eligible healer in **${capitalizeFirstLetter(characterToHeal.currentVillage)}**!`;
+      
 
         await interaction.followUp({
           content,
@@ -134,60 +126,57 @@ module.exports = {
     if (subcommand === 'fulfill') {
       const requestId = interaction.options.getString('requestid');
       const healerName = interaction.options.getString('healername');
-
-      console.log('Fulfill Healing Request Variables:', { requestId, healerName });
-
+  
       try {
-        await interaction.deferReply();
-
-        const healingRequest = retrieveHealingRequestFromStorage(requestId);
-        if (!healingRequest) {
-          await interaction.editReply(`❌ **Error:** No healing request found with ID **${requestId}**.`);
-          return;
-        }
-
-        if (healingRequest.status !== 'pending') {
-          await interaction.editReply(`❌ **Error:** Healing request **${requestId}** has already been fulfilled or expired.`);
-          return;
-        }
-
-        const healerCharacter = await fetchCharacterByName(healerName);
-        if (!healerCharacter) {
-          await interaction.editReply(`❌ **Error:** Healer character **${healerName}** not found.`);
-          return;
-        }
-
-        if (
-          healingRequest.village.toLowerCase() !== healerCharacter.currentVillage.toLowerCase()
-        ) {
-          await interaction.editReply(
-            `❌ **Error:** The healer **${healerCharacter.name}** must be in the same village (**${healingRequest.village}**) to fulfill the request.`
-          );
-          return;
-        }
-
-        healingRequest.status = 'fulfilled';
-        saveHealingRequestToStorage(requestId, healingRequest);
-
-        await interaction.followUp({
-          content: `✅ Healing request **${requestId}** for **${healingRequest.characterRequesting}** has been fulfilled by **${healerCharacter.name}**!`,
-        });
+          await interaction.deferReply();
+  
+          const healingRequest = retrieveHealingRequestFromStorage(requestId);
+          if (!healingRequest) {
+              await interaction.editReply(`❌ **Error:** No healing request found with ID **${requestId}**.`);
+              return;
+          }
+  
+          if (healingRequest.status !== 'pending') {
+              await interaction.editReply(`❌ **Error:** Healing request **${requestId}** has already been fulfilled or expired.`);
+              return;
+          }
+  
+          const healerCharacter = await fetchCharacterByName(healerName);
+          if (!healerCharacter) {
+              await interaction.editReply(`❌ **Error:** Healer character **${healerName}** not found.`);
+              return;
+          }
+  
+          if (healingRequest.village.toLowerCase() !== healerCharacter.currentVillage.toLowerCase()) {
+              await interaction.editReply(
+                  `❌ **Error:** The healer **${healerCharacter.name}** must be in the same village (**${healingRequest.village}**) to fulfill the request.`
+              );
+              return;
+          }
+  
+          // Deduct stamina from the healer
+          const staminaCost = healingRequest.heartsToHeal; // 1 stamina per heart
+          await useStamina(healerCharacter._id, staminaCost);
+  
+          // Heal the character
+          const characterToHeal = await fetchCharacterByName(healingRequest.characterRequesting);
+          await recoverHearts(characterToHeal._id, healingRequest.heartsToHeal);
+  
+          // Update healing request status
+          healingRequest.status = 'fulfilled';
+          saveHealingRequestToStorage(requestId, healingRequest);
+  
+          // Create and send healing embed
+          const embed = createHealingEmbed(healerCharacter, characterToHeal, healingRequest.heartsToHeal, staminaCost, requestId);
+          await interaction.followUp({ embeds: [embed] });
+  
       } catch (error) {
-        console.error('❌ Error during healing request fulfillment:', error.message);
-        await interaction.editReply('❌ **Error:** An issue occurred while fulfilling the healing request.');
+          console.error('❌ Error during healing request fulfillment:', error.message);
+          await interaction.editReply('❌ **Error:** An issue occurred while fulfilling the healing request.');
       }
-    }
-  },
-
-  // ------------------- Scheduled Cleanup -------------------
-  async cleanupExpiredRequests() {
-    console.log('Running scheduled cleanup for expired healing requests...');
-    try {
-      cleanupExpiredHealingRequests();
-    } catch (error) {
-      console.error('❌ Error during cleanup of expired healing requests:', error.message);
-    }
-  },
+  }
+  
+  },    
 
   // ------------------- Autocomplete Handler -------------------
   async autocomplete(interaction) {

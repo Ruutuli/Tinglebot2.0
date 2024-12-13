@@ -30,7 +30,6 @@ const submissionStore = new Map();
 function safeReadJSON(filePath) {
   try {
     const data = fs.readFileSync(filePath, 'utf-8');
-    console.log('File Read Content:', data);
     return data ? JSON.parse(data) : {};
   } catch (error) {
     console.error(`Error reading JSON file at ${filePath}:`, error.message);
@@ -94,7 +93,6 @@ function saveHealingRequestToStorage(healingRequestId, healingRequestData) {
 
     // Write back to file
     fs.writeFileSync(healingRequestsFile, JSON.stringify(healingRequests, null, 2), 'utf-8');
-    console.log(`Healing request ${healingRequestId} saved to ${healingRequestsFile}`);
   } catch (error) {
     console.error(`Error saving healing request ${healingRequestId}:`, error.message);
   }
@@ -130,37 +128,6 @@ function deleteHealingRequestFromStorage(healingRequestId) {
   }
 }
 
-
-function cleanupExpiredHealingRequests(postNotification) {
-  try {
-    const healingRequests = safeReadJSON(healingRequestsFile);
-    const now = Date.now();
-    const twentyFourHours = 24 * 60 * 60 * 1000;
-
-    for (const [id, request] of Object.entries(healingRequests)) {
-      if (now - request.timestamp > twentyFourHours) {
-        console.log(`Deleting expired healing request: ${id}`);
-
-        // If a notification function is provided, send the notification
-        if (postNotification) {
-          postNotification(
-            `🕒 Healing request **${id}** for **${request.characterRequesting}** in **${request.village}** has expired.`
-          );
-        }
-
-        delete healingRequests[id];
-      }
-    }
-
-    // Write updated data back to the file
-    fs.writeFileSync(healingRequestsFile, JSON.stringify(healingRequests, null, 2), 'utf-8');
-  } catch (error) {
-    console.error('Error during cleanup of expired healing requests:', error.message);
-  }
-}
-
-
-
 // ------------------- Exported Functions -------------------
 // Export functions and in-memory store for external use
 module.exports = {
@@ -171,5 +138,5 @@ module.exports = {
   saveHealingRequestToStorage,
   retrieveHealingRequestFromStorage,
   deleteHealingRequestFromStorage,
-  cleanupExpiredHealingRequests
+
 };

@@ -42,20 +42,29 @@ const updateCurrentStamina = async (characterId, stamina, updateUsageDate = fals
 };
 
 // ------------------- Function to recover hearts -------------------
-const recoverHearts = async (characterId, hearts) => {
+const recoverHearts = async (characterId, hearts, healerId = null) => {
   try {
     const character = await Character.findById(characterId);
     if (!character) throw new Error('Character not found');
-    if (character.ko) throw new Error(`${character.name} is KO'd and cannot heal normally.`);
 
-    const newHearts = Math.min(character.currentHearts + hearts, character.maxHearts);
-    await updateCurrentHearts(characterId, newHearts);
+    if (character.ko && !healerId) {
+      throw new Error(`${character.name} is KO'd and cannot heal without a healer.`);
+    }
 
+    if (character.ko) {
+      character.ko = false; // Revive character if KO'd
+      character.currentHearts = Math.min(hearts, character.maxHearts);
+    } else {
+      character.currentHearts = Math.min(character.currentHearts + hearts, character.maxHearts);
+    }
+
+    await character.save();
     return createSimpleCharacterEmbed(character, `❤️ +${hearts} hearts recovered`);
   } catch (error) {
     throw error;
   }
 };
+
 
 // ------------------- Function to recover stamina -------------------
 const recoverStamina = async (characterId, stamina) => {

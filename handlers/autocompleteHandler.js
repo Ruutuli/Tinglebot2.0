@@ -576,46 +576,34 @@ async function handleHealAutocomplete(interaction, focusedOption) {
   try {
     const userId = interaction.user.id;
 
+    // Autocomplete for 'charactername'
     if (focusedOption.name === 'charactername') {
       const characters = await fetchCharactersByUserId(userId);
       const choices = characters.map(character => ({
         name: `${character.name} - ${capitalize(character.currentVillage)}`,
-        value: character.name
+        value: character.name,
       }));
       await respondWithFilteredChoices(interaction, focusedOption, choices);
-    } else if (focusedOption.name === 'healer') {
-      const allCharacters = await fetchAllCharacters();
-      const healerCharacters = allCharacters.filter(character => character.job.toLowerCase() === 'healer');
-      const choices = healerCharacters.map(character => ({
-        name: `${character.name} - ${capitalize(character.currentVillage)}`,
-        value: character.name
-      }));
-      await respondWithFilteredChoices(interaction, focusedOption, choices);
-    } else if (['item1', 'item2', 'item3'].includes(focusedOption.name)) {
-      const characterName = interaction.options.getString('charactername');
-      if (!characterName) return await interaction.respond([]);
 
-      const character = await fetchCharacterByNameAndUserId(characterName, userId);
-      if (!character) return await interaction.respond([]);
-
-      const inventoryCollection = await getCharacterInventoryCollection(character.name);
-      const inventory = await inventoryCollection.find().toArray();
-
-      const itemNames = inventory.map(item => item.itemName);
-      const items = await Item.find({ itemName: { $in: itemNames } }).exec();
-
-      const choices = items.map(item => {
-        const inventoryItem = inventory.find(i => i.itemName === item.itemName);
-        let displayText = `${item.itemName} - QTY:${inventoryItem.quantity}`;
-        return { name: displayText, value: item.itemName };
-      });
-
-      await respondWithFilteredChoices(interaction, focusedOption, choices);
+    // Autocomplete for 'healer' or 'healername'
+  } else if (focusedOption.name === 'healername') {
+    const userId = interaction.user.id; // Get the ID of the user making the request
+    const userCharacters = await fetchCharactersByUserId(userId); // Fetch characters owned by the user
+    const healerCharacters = userCharacters.filter(character => character.job.toLowerCase() === 'healer'); // Filter by Healer job
+  
+    const choices = healerCharacters.map(character => ({
+      name: `${character.name} - ${capitalize(character.currentVillage)}`, // Format with name and village
+      value: character.name, // Value for the autocomplete
+    }));
+  
+    await respondWithFilteredChoices(interaction, focusedOption, choices); // Respond with filtered list
     }
   } catch (error) {
+    console.error('Error handling heal autocomplete:', error);
     await safeRespondWithError(interaction);
   }
 }
+
 
 // Handles 'travel' command autocomplete
 async function handleTravelAutocomplete(interaction, focusedOption) {

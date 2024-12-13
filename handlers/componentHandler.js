@@ -44,6 +44,7 @@ const {
 const { capitalizeFirstLetter, capitalizeWords } = require('../modules/formattingModule');
 const { calculateTokens, generateTokenBreakdown } = require('../utils/tokenUtils');
 const { createArtSubmissionEmbed } = require('../embeds/mechanicEmbeds');
+const { canChangeJob,   canChangeVillage,   isUniqueCharacterName,   convertCmToFeetInches } = require('../utils/validation'); // Validation utilities
 
 // ------------------- Utility Button Rows -------------------
 function getCancelButtonRow() {
@@ -208,70 +209,117 @@ async function handleViewCharacter(interaction, characterId) {
 
     const gearEmbed = createCharacterGearEmbed(character, gearMap, 'all');
     await interaction.reply({ embeds: [embed, gearEmbed], ephemeral: true });
-}
+} 
 
+
+// handleJobSelect
 async function handleJobSelect(interaction, characterId, updatedJob) {
-    await connectToTinglebot();
-    const character = await fetchCharacterById(characterId);
+    console.log(`[DEBUG] Job button clicked.`);
+    console.log(`[DEBUG] Character ID: ${characterId}`);
+    console.log(`[DEBUG] Selected Job: ${updatedJob}`);
 
-    if (!character) {
-        await interaction.reply({ content: '❌ Character not found.', ephemeral: true });
-        return;
+    try {
+        await connectToTinglebot();
+        const character = await fetchCharacterById(characterId);
+
+        if (!character) {
+            console.error(`[ERROR] Character not found for ID: ${characterId}`);
+            await interaction.reply({ content: '❌ Character not found.', ephemeral: true });
+            return;
+        }
+
+        // Run job validation
+        const validationResult = await canChangeJob(character, updatedJob);
+
+
+        if (!validationResult.valid) {
+            console.warn(`[WARNING] Job validation failed: ${validationResult.message}`);
+            await interaction.reply({ content: validationResult.message, ephemeral: true });
+            return;
+        }
+
+        const previousJob = character.job;
+
+        // Perform job change
+        character.job = updatedJob;
+        await character.save();
+
+        console.log(`[INFO] Job successfully updated for ${character.name} from ${previousJob} to ${updatedJob}`);
+
+        const embed = createCharacterEmbed(character);
+        await interaction.update({
+            content: `✅ **${character.name}'s job has been updated from ${previousJob} to ${updatedJob}.**`,
+            embeds: [embed],
+            components: [],
+            ephemeral: true,
+        });
+    } catch (error) {
+        console.error(`[ERROR] An error occurred while handling job selection: ${error.message}`);
+        console.error(error.stack);
+        await interaction.reply({
+            content: '⚠️ An error occurred while updating the job. Please try again.',
+            ephemeral: true,
+        });
     }
-
-    const previousJob = character.job;
-    character.job = updatedJob;
-    await character.save();
-
-    const embed = createCharacterEmbed(character);
-    await interaction.update({
-        content: `✅ **${character.name}'s job has been updated from ${previousJob} to ${updatedJob}.**`,
-        embeds: [embed],
-        components: [],
-        ephemeral: true,
-    });
 }
 
+
+// handleJobPage
 async function handleJobPage(interaction, characterId, pageIndexString) {
-    const pageIndex = parseInt(pageIndexString, 10);
-    const jobs = getGeneralJobsPage(pageIndex);
+    console.log(`[DEBUG] Job page navigation clicked.`);
+    console.log(`[DEBUG] Character ID: ${characterId}`);
+    console.log(`[DEBUG] Page index: ${pageIndexString}`);
 
-    const jobButtons = jobs.map((job) =>
-        new ButtonBuilder()
-            .setCustomId(`job-select|${characterId}|${job}`)
-            .setLabel(job)
-            .setStyle(ButtonStyle.Primary)
-    );
+    try {
+        const pageIndex = parseInt(pageIndexString, 10);
+        const jobs = getGeneralJobsPage(pageIndex);
 
-    const rows = [];
-    while (jobButtons.length) {
-        rows.push(new ActionRowBuilder().addComponents(jobButtons.splice(0, 5)));
+        console.log(`[DEBUG] Jobs on page ${pageIndex}:`, jobs);
+
+        const jobButtons = jobs.map((job) =>
+            new ButtonBuilder()
+                .setCustomId(`job-select|${characterId}|${job}`)
+                .setLabel(job)
+                .setStyle(ButtonStyle.Primary)
+        );
+
+        const rows = [];
+        while (jobButtons.length) {
+            rows.push(new ActionRowBuilder().addComponents(jobButtons.splice(0, 5)));
+        }
+
+        const previousPageIndex = pageIndex - 1;
+        const nextPageIndex = pageIndex + 1;
+
+        const navigationButtons = [
+            new ButtonBuilder()
+                .setCustomId(`job-page|${characterId}|${previousPageIndex}`)
+                .setLabel('Previous')
+                .setStyle(ButtonStyle.Secondary)
+                .setDisabled(previousPageIndex < 1),
+            new ButtonBuilder()
+                .setCustomId(`job-page|${characterId}|${nextPageIndex}`)
+                .setLabel('Next')
+                .setStyle(ButtonStyle.Secondary)
+                .setDisabled(nextPageIndex > 2),
+        ];
+
+        const navigationRow = new ActionRowBuilder().addComponents(navigationButtons);
+
+        const embed = new EmbedBuilder()
+            .setTitle('General Jobs')
+            .setDescription('Select a job from the buttons below:')
+            .setColor(getVillageColorByName('General') || '#00CED1');
+
+        await interaction.update({ embeds: [embed], components: [...rows, navigationRow], ephemeral: true });
+    } catch (error) {
+        console.error(`[ERROR] An error occurred while handling job page navigation: ${error.message}`);
+        console.error(error.stack);
+        await interaction.reply({
+            content: '⚠️ An error occurred while navigating the job pages. Please try again.',
+            ephemeral: true,
+        });
     }
-
-    const previousPageIndex = pageIndex - 1;
-    const nextPageIndex = pageIndex + 1;
-
-    const navigationButtons = [
-        new ButtonBuilder()
-            .setCustomId(`job-page|${characterId}|${previousPageIndex}`)
-            .setLabel('Previous')
-            .setStyle(ButtonStyle.Secondary)
-            .setDisabled(previousPageIndex < 1),
-        new ButtonBuilder()
-            .setCustomId(`job-page|${characterId}|${nextPageIndex}`)
-            .setLabel('Next')
-            .setStyle(ButtonStyle.Secondary)
-            .setDisabled(nextPageIndex > 2),
-    ];
-
-    const navigationRow = new ActionRowBuilder().addComponents(navigationButtons);
-
-    const embed = new EmbedBuilder()
-        .setTitle('General Jobs')
-        .setDescription('Select a job from the buttons below:')
-        .setColor(getVillageColorByName('General') || '#00CED1');
-
-    await interaction.update({ embeds: [embed], components: [...rows, navigationRow], ephemeral: true });
 }
 
 // ------------------- Component Interaction Handler -------------------

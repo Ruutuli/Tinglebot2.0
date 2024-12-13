@@ -149,7 +149,7 @@ if (!toCharacter.inventorySynced) {
       // ------------------- Perform the transfer and update Google Sheets -------------------
       for (const { name, quantity } of items) {
         await removeItemInventoryDatabase(fromCharacter._id, name, quantity);
-        await addItemInventoryDatabase(toCharacter._id, name, quantity, '', '', interaction, 'manual-transfer');
+        await addItemInventoryDatabase(toCharacter._id, name, quantity, interaction);
 
         const itemDetails = await ItemModel.findOne({ itemName: new RegExp(`^${name}$`, 'i') }).exec();
         const category = itemDetails?.category.join(', ') || '';

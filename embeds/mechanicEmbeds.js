@@ -6,7 +6,7 @@ const { EmbedBuilder } = require('discord.js');
 const { getCommonEmbedSettings, formatItemDetails, getArticleForItem, DEFAULT_IMAGE_URL, jobActions } = require('./embedUtils');
 const { isValidImageUrl } = require('../utils/validation');
 const { getNoEncounterMessage, typeActionMap } = require('../modules/flavorTextModule');
-const { capitalizeWords, capitalize } = require('../modules/formattingModule');
+const { capitalizeWords, capitalize, capitalizeFirstLetter } = require('../modules/formattingModule');
 const { getVillageColorByName } = require('../modules/locationsModule'); // Import from locationsModule.js
 
 
@@ -211,30 +211,35 @@ const createTradeEmbed = async (fromCharacter, toCharacter, fromItems, toItems, 
 };
 
 // ------------------- Function to create monster encounter embed -------------------
-const createMonsterEncounterEmbed = (character, monster, outcomeMessage, heartsRemaining, lootItem, isBloodMoon = false) => {
+const createMonsterEncounterEmbed = (
+    character,
+    monster,
+    outcomeMessage,
+    heartsRemaining,
+    lootItem,
+    isBloodMoon = false,
+    originalRoll = null,
+    adjustedRandomValue = null
+) => {
     const settings = getCommonEmbedSettings(character) || {};
     const nameMapping = monster.nameMapping || monster.name;
     const monsterDetails = monsterMapping[nameMapping.replace(/\s+/g, '')] || { name: monster.name, image: 'https://via.placeholder.com/100x100' };
 
-    // Safeguard for settings
     const authorIconURL = settings.author?.iconURL || 'https://via.placeholder.com/100x100';
     const settingsImageURL = settings.image?.url || 'https://via.placeholder.com/100x100';
 
-    // KO message addition
     const koMessage = heartsRemaining === 0 ? '\n💥 **KO! You have been defeated and can’t continue!**' : '';
 
-    // Determine if the character is visiting
-    const isVisiting = character.homeVillage !== character.currentVillage;
+    // Ensure a case-insensitive comparison for homeVillage and currentVillage
+    const isVisiting = character.homeVillage.toLowerCase() !== character.currentVillage.toLowerCase();
     const locationPrefix = isVisiting
         ? `${capitalizeWords(character.homeVillage)} ${capitalizeWords(character.job)} is visiting ${capitalizeWords(character.currentVillage)}`
-        : `${capitalizeWords(character.homeVillage)} ${capitalizeWords(character.job)}`;
+        : `${capitalizeWords(character.currentVillage)} ${capitalizeWords(character.job)}`;
 
-    // Get embed color based on current village
-    const embedColor = getVillageColorByName(character.currentVillage) || '#000000'; // Default to black if no color is found
+    const embedColor = getVillageColorByName(character.currentVillage) || '#000000'; // Default color
 
-    // Embed creation
     const embed = new EmbedBuilder()
-        .setColor(isBloodMoon ? '#FF4500' : embedColor) // Use Blood Moon color if applicable, otherwise village color
+        .setColor(isBloodMoon ? '#FF4500' : embedColor) // Use Blood Moon color or village color
         .setTitle(
             `${locationPrefix}: ${character.name} encountered a ${monsterDetails.name || monster.name}!`
         )
@@ -250,6 +255,16 @@ const createMonsterEncounterEmbed = (character, monster, outcomeMessage, heartsR
         embed.addFields({ name: '💥 __Loot__', value: `${formatItemDetails(lootItem.itemName, lootItem.quantity, lootItem.emoji)}`, inline: false });
     }
 
+    // Add dice roll field if values are provided
+    if (originalRoll !== null && adjustedRandomValue !== null) {
+        embed.addFields({
+            name: '__Dice Roll__',
+            value: `🎲 ${originalRoll} -> ${adjustedRandomValue}`,
+            inline: false,
+        });
+    }
+    
+
     if (isValidImageUrl(monsterDetails.image)) {
         embed.setThumbnail(monsterDetails.image);
     } else {
@@ -258,6 +273,8 @@ const createMonsterEncounterEmbed = (character, monster, outcomeMessage, heartsR
 
     return embed;
 };
+
+
 
 // ------------------- Functifon to create no encounter embed -------------------
 const createNoEncounterEmbed = (character, isBloodMoon = false) => {
@@ -281,11 +298,27 @@ const createNoEncounterEmbed = (character, isBloodMoon = false) => {
 const createKOEmbed = (character) => {
     const settings = getCommonEmbedSettings(character);
 
+    // Determine if the character is visiting
+    const isVisiting = character.homeVillage !== character.currentVillage;
+    const locationPrefix = isVisiting
+        ? `${capitalizeWords(character.homeVillage)} ${capitalizeWords(character.job)} is visiting ${capitalizeWords(character.currentVillage)}`
+        : `${capitalizeWords(character.homeVillage)} ${capitalizeWords(character.job)}`;
+
     return new EmbedBuilder()
-        .setColor('#FF0000')
-        .setAuthor({ name: `${character.name} 🔗`, iconURL: settings.author.iconURL, url: settings.author.url })
-        .setTitle(`💥 ${capitalizeWords(character.homeVillage)} ${capitalizeWords(character.job)}: ${character.name} is KO'd!`);
+        .setColor('#FF0000') // Set to red
+        .setAuthor({
+            name: `${character.name} 🔗`,
+            iconURL: settings.author.iconURL,
+            url: settings.author.url
+        })
+        .setTitle(`💥 ${locationPrefix}: ${character.name} is KO'd!`)
+        .setDescription(
+            `> KO status can only be healed by fairies or Healers.\n` +
+            `> Use </itemheal:1306176789755858979> or </heal request:1306176789755858977> to heal your character.`
+        )
+        .setImage('https://storage.googleapis.com/tinglebot/Graphics/border%20blood%20moon.png'); // Updated image URL
 };
+
 
 // ------------------- Function to create heal embed -------------------
 const createHealEmbed = (healerCharacter, characterToHeal, heartsToHeal, paymentOffered, healingRequestId) => {
@@ -311,21 +344,78 @@ const createHealEmbed = (healerCharacter, characterToHeal, heartsToHeal, payment
         .setDescription(
             healerCharacter
                 ? `**${characterToHeal.name}** is requesting healing services from **${healerName}**!`
-                : `**${characterToHeal.name}** is requesting healing! Healing request for any available healer in **${characterToHeal.currentVillage}**.`
+                : `**${characterToHeal.name}** is requesting healing! Healing request for any available healer in **${capitalizeFirstLetter(characterToHeal.currentVillage)}**.` // Capitalize village
         )
         .addFields(
-            { name: '📍 Village', value: characterToHeal.currentVillage, inline: true },
-            { name: '❤️ Hearts to Heal', value: `${heartsToHeal}`, inline: true },
-            { name: '💰 Payment Offered', value: paymentOffered || 'None', inline: false },
-            { name: '🆔 Request ID', value: healingRequestId, inline: false }
+            { name: '__📍 Village__', value: `> ${capitalizeFirstLetter(characterToHeal.currentVillage)}`, inline: true }, // Capitalize village
+            { name: '__❤️ Hearts to Heal__', value: `> ${heartsToHeal}`, inline: true },
+            { name: '__💰 Payment Offered__', value: `> ${paymentOffered || 'None'}`, inline: false },
+            {
+                name: '__💡 Payment Instructions__',
+                value: `> _User will need to use </gift:1306176789755858976> to transfer payment to the healer._`,
+                inline: false,
+            },
+            {
+                name: '__🛠 Healing Instructions__',
+                value: `> Healers, please use </heal fulfill:1306176789755858977> to heal **${characterToHeal.name}**!`,
+                inline: false,
+            },
+            { name: '__🆔 Request ID__', value: `> \`${healingRequestId}\``, inline: false }
         )
+        
         .setImage(DEFAULT_IMAGE_URL) // Add default image
         .setFooter({
             text: 'This request expires 24 hours from now.',
-            iconURL: healerIcon, // Set footer icon to healer icon
-        });
+            iconURL: healerCharacter ? healerIcon : null, // Use healer icon or leave blank
+        });        
 };
 
+
+// ------------------- Function to create HEALED  embed -------------------
+const createHealingEmbed = (healerCharacter, characterToHeal, heartsHealed, staminaRecovered, healingRequestId) => {
+    if (!characterToHeal || !healerCharacter) {
+        throw new Error('Both healer and character to heal are required.');
+    }
+
+    // Healer and character details
+    const healerName = healerCharacter.name || 'Unknown Healer';
+    const characterName = characterToHeal.name || 'Unknown Character';
+    const healerIcon = healerCharacter.icon || DEFAULT_IMAGE_URL;
+    const characterIcon = characterToHeal.icon || DEFAULT_IMAGE_URL;
+
+    // Calculate new hearts and stamina values
+    const newHearts = Math.min(characterToHeal.currentHearts + heartsHealed, characterToHeal.maxHearts);
+    const newStamina = Math.min(healerCharacter.currentStamina - staminaRecovered, healerCharacter.maxStamina);
+
+    return new EmbedBuilder()
+        .setColor('#59A914') // Green healing color
+        .setTitle('✬ Healing Completed ✬')
+        .setDescription(`**${healerName}** successfully healed **${characterName}**!`)
+        .addFields(
+            {
+                name: `${characterName} has been healed!`,
+                value: `❤️ Healed: **${heartsHealed} hearts**\n` +
+                       `❤️ Hearts: **${characterToHeal.currentHearts}/${characterToHeal.maxHearts} → ${newHearts}/${characterToHeal.maxHearts}**`,
+                inline: false,
+            },
+            {
+                name: `${healerName} used their skills to heal`,
+                value: `🟩 Stamina Used: **${staminaRecovered}**\n` +
+                       `🟩 Stamina: **${healerCharacter.currentStamina}/${healerCharacter.maxStamina} → ${newStamina}/${healerCharacter.maxStamina}**`,
+                inline: false,
+            }
+        )
+        .setAuthor({
+            name: `${characterName} 🔗`,
+            iconURL: characterIcon,
+            url: characterToHeal.inventory || '',
+        })
+        .setFooter({
+            text: 'Healing process successfully completed.',
+            iconURL: healerIcon,
+        })
+        .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'); // Custom image
+};
 
 
 // ------------------- Utility functions -------------------
@@ -355,5 +445,6 @@ module.exports = {
     createHealEmbed,
     aggregateItems,
     formatMaterialsList,
-    createCraftingEmbed
+    createCraftingEmbed,
+    createHealingEmbed
 };

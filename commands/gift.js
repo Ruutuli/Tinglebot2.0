@@ -137,10 +137,22 @@ if (!toCharacter.inventorySynced) {
     const toCharacterOwnerId = toCharacter.userId;
 
     // ------------------- Check if both characters are in the same village -------------------
-    if (fromCharacter.currentVillage.trim().toLowerCase() !== toCharacter.currentVillage.trim().toLowerCase()) {
-      await interaction.editReply(`❌ Both characters must be in the same village to perform the gift.`);
-      return;
-    }
+// Function to capitalize the first letter of each word
+function capitalizeWords(str) {
+  return str.replace(/\b\w/g, char => char.toUpperCase());
+}
+
+if (fromCharacter.currentVillage.trim().toLowerCase() !== toCharacter.currentVillage.trim().toLowerCase()) {
+  const fromVillageCapitalized = capitalizeWords(fromCharacter.currentVillage.trim());
+  const toVillageCapitalized = capitalizeWords(toCharacter.currentVillage.trim());
+
+  await interaction.editReply(
+    `❌ \`${fromCharacter.name}\` is in **${fromVillageCapitalized}**, and \`${toCharacter.name}\` is in **${toVillageCapitalized}**. Both characters must be in the same village for gifting. ` +
+    `Please use the </travel:1306176790095728736> command to travel your character to \`${toVillageCapitalized}\`.`
+  );
+  return;
+}
+
 
     // ------------------- Check item availability in fromCharacter's inventory -------------------
     const fromInventoryCollection = await getCharacterInventoryCollection(fromCharacter.name);

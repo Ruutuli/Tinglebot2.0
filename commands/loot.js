@@ -363,6 +363,7 @@ async function handleNormalEncounter(interaction, currentVillage, job, character
 }
 
 // ------------------- Looting Logic -------------------
+// ------------------- Looting Logic -------------------
 async function processLootingLogic(interaction, character, encounteredMonster, bloodMoonActive) {
   try {
     console.log('[DEBUG] Processing loot for encountered monster:', {
@@ -370,17 +371,22 @@ async function processLootingLogic(interaction, character, encounteredMonster, b
       tier: encounteredMonster.tier,
     });
 
+    // Step 1: Generate Dice Rolls
+    const originalRoll = Math.floor(Math.random() * 100) + 1; // Random number between 1 and 100
+    const adjustedRandomValue = calculateFinalValue(character).adjustedRandomValue || originalRoll; // Calculate adjusted roll
+
+    console.log(`[DEBUG] Dice roll: ${originalRoll}, Adjusted: ${adjustedRandomValue}`);
+
     const items = await fetchItemsByMonster(encounteredMonster.name); // Fetch items dropped by the encountered monster
 
-
-    // Step 1: Calculate Encounter Outcome
+    // Step 2: Calculate Encounter Outcome
     const {
       damageValue,
-      adjustedRandomValue,
       attackSuccess,
       defenseSuccess,
-    } = calculateFinalValue(character);
-    const weightedItems = createWeightedItemList(items, adjustedRandomValue); // Generate a weighted list of potential loot
+    } = calculateFinalValue(character); // Adjustments based on character stats
+
+    const weightedItems = createWeightedItemList(items, adjustedRandomValue); // Generate loot weight
     const outcome = await getEncounterOutcome(
       character,
       encounteredMonster,
@@ -390,7 +396,7 @@ async function processLootingLogic(interaction, character, encounteredMonster, b
       defenseSuccess
     );
 
-    // Step 2: Update Hearts and Handle KO
+    // Step 3: Update Hearts and Handle KO
     let heartsRemaining = character.currentHearts;
     if (outcome.hearts) {
       await useHearts(character._id, outcome.hearts); // Deduct hearts
@@ -401,10 +407,10 @@ async function processLootingLogic(interaction, character, encounteredMonster, b
     }
     await updateCurrentHearts(character._id, heartsRemaining); // Update character hearts
 
-    // Step 3: Generate Outcome Message
+    // Step 4: Generate Outcome Message
     const outcomeMessage = generateOutcomeMessage(outcome); // Refactored to a separate helper function
 
-    // Step 4: Loot Item Logic
+    // Step 5: Loot Item Logic
     if (outcome.canLoot && weightedItems.length > 0 && !outcome.hearts) {
       const lootedItem = generateLootedItem(encounteredMonster, weightedItems); // Refactored to a helper function
 
@@ -416,8 +422,11 @@ async function processLootingLogic(interaction, character, encounteredMonster, b
           outcomeMessage,
           heartsRemaining,
           lootedItem,
-          bloodMoonActive // Pass Blood Moon status
-      );
+          bloodMoonActive,
+          originalRoll,
+          adjustedRandomValue
+        );
+
         await interaction.editReply({
           content: `❌ **Invalid Google Sheets URL for "${character.name}".**`,
           embeds: [embed],
@@ -461,14 +470,17 @@ async function processLootingLogic(interaction, character, encounteredMonster, b
 
       await appendSheetData(auth, spreadsheetId, range, values); // Append loot details to Google Sheets
 
-const embed = createMonsterEncounterEmbed(
-    character,
-    encounteredMonster,
-    outcomeMessage,
-    heartsRemaining,
-    lootedItem,
-    bloodMoonActive // Pass Blood Moon status
-);
+      const embed = createMonsterEncounterEmbed(
+        character,
+        encounteredMonster,
+        outcomeMessage,
+        heartsRemaining,
+        lootedItem,
+        bloodMoonActive,
+        originalRoll,
+        adjustedRandomValue
+      );
+
       await interaction.editReply({ embeds: [embed] }); // Reply with the loot details
     } else {
       const embed = createMonsterEncounterEmbed(
@@ -477,7 +489,9 @@ const embed = createMonsterEncounterEmbed(
         outcomeMessage,
         heartsRemaining,
         null,
-        bloodMoonActive 
+        bloodMoonActive,
+        originalRoll,
+        adjustedRandomValue
       );
       await interaction.editReply({ embeds: [embed] }); // Reply if no loot was obtained
     }
@@ -488,6 +502,7 @@ const embed = createMonsterEncounterEmbed(
     });
   }
 }
+
 
 // ------------------- Helper Function: Generate Outcome Message -------------------
 function generateOutcomeMessage(outcome) {

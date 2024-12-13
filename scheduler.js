@@ -102,18 +102,6 @@ module.exports = (client) => {
     }
   }, { timezone: 'America/New_York' });
 
-  // ------------------- Cleanup Expired Healing Requests -------------------
-  cron.schedule('0 0 * * *', async () => {
-    try {
-      console.log('🗑️ Running cleanup of expired healing requests...');
-      await cleanupExpiredHealingRequests();
-      console.log('✅ Healing requests cleanup completed.');
-    } catch (error) {
-      console.error('❌ [Scheduler.js] Error during healing requests cleanup:', error);
-    }
-  }, { timezone: 'America/New_York' });
-
-  console.log('[scheduler]📅 All scheduled tasks are set up.');
 };
 
 // ------------------- Birthday Announcement Logic -------------------
