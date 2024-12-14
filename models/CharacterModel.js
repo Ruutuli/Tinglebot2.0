@@ -67,6 +67,8 @@ const characterSchema = new Schema({
   inJail: { type: Boolean, default: false },              // Status for whether the character is in jail
   jailReleaseTime: { type: Date, default: null },         // Time when the character will be released from jail
   canBeStolenFrom: { type: Boolean, default: true },      // Whether the character can be stolen from (default true)
+  failedFleeAttempts: { type: Number, default: 0 }, // Tracks the number of failed flee attempts
+
 
   // New field for pets
   pets: { type: [PetSchema], default: [] }                // Array of pets associated with the character

@@ -3,6 +3,8 @@
 const Monster = require('../models/MonsterModel');
 const { getVillageRegionByName } = require('../modules/locationsModule');
 const { applyBuffs, calculateAttackBuff, calculateDefenseBuff } = require('../modules/buffModule');
+const { useStamina, useHearts, handleKO } = require('../modules/characterStatsModule');
+
 
 // Define the encounter probabilities
 const encounterProbabilities = {
@@ -281,6 +283,93 @@ async function getMonstersByRegion(region) {
   }
 }
 
+// Function to attempt fleeing
+function calculateWeightedDamage(tier) {
+  // Create an array of weights from tier down to 1
+  const weights = Array.from({ length: tier }, (_, i) => tier - i);
+
+  // Create a cumulative weight array for random selection
+  const cumulativeWeights = weights.reduce((acc, weight, index) => {
+      acc.push(weight + (acc[index - 1] || 0));
+      return acc;
+  }, []);
+
+  // Generate a random number within the total weight range
+  const totalWeight = cumulativeWeights[cumulativeWeights.length - 1];
+  const randomWeight = Math.random() * totalWeight;
+
+  // Determine the damage based on the random weight
+  for (let i = 0; i < cumulativeWeights.length; i++) {
+      if (randomWeight <= cumulativeWeights[i]) {
+          return i + 1; // Damage is index + 1 (1-based damage values)
+      }
+  }
+
+  // Default fallback (shouldn't occur)
+  return 1;
+}
+
+async function attemptFlee(character, monster) {
+  try {
+      console.log(`[FLEE ATTEMPT] Starting flee attempt for character: ${character.name}`);
+      console.log(`[FLEE ATTEMPT] Initial Stamina: ${character.currentStamina}`);
+
+      // // Deduct 1 stamina
+      // await useStamina(character._id, 1);
+      // character.currentStamina -= 1; // Update local value for logging
+      // console.log(`[FLEE ATTEMPT] Stamina after deduction: ${character.currentStamina}`);
+
+      // Calculate flee success chance
+      const baseFleeChance = 0.5; // Base 50% chance
+      const bonusFleeChance = character.failedFleeAttempts * 0.05; // 5% bonus per failed attempt
+      const fleeChance = Math.min(baseFleeChance + bonusFleeChance, 0.95); // Cap at 95%
+      const fleeRoll = Math.random();
+      console.log(`[FLEE ATTEMPT] Flee Chance: ${fleeChance * 100}%, Roll: ${fleeRoll}`);
+
+      if (fleeRoll < fleeChance) {
+          console.log("[FLEE ATTEMPT] Flee was successful!");
+          character.failedFleeAttempts = 0; // Reset failed flee attempts
+          await character.save(); // Save the character changes
+          return { success: true, message: "You successfully fled!" };
+      }
+
+      console.log("[FLEE ATTEMPT] Flee failed! Monster will attempt to attack...");
+      character.failedFleeAttempts += 1; // Increment failed flee attempts
+      await character.save(); // Save the character changes
+
+      // Calculate monster damage based on weighted probability
+      const monsterDamage = calculateWeightedDamage(monster.tier);
+
+      console.log(`[FLEE ATTEMPT] Weighted damage calculated for Tier ${monster.tier}: ${monsterDamage} hearts.`);
+
+      // Apply the damage to the character
+      await useHearts(character._id, monsterDamage);
+      character.currentHearts -= monsterDamage; // Update local value for logging
+
+      if (character.currentHearts <= 0) {
+          console.log(`[FLEE ATTEMPT] Character is KO'd after taking ${monsterDamage} hearts of damage.`);
+          await handleKO(character._id); // Handle KO logic
+          return {
+              success: false,
+              attacked: true,
+              damage: monsterDamage,
+              message: `The monster attacked and knocked you out!`,
+          };
+      }
+
+      return {
+          success: false,
+          attacked: true,
+          damage: monsterDamage,
+          message: `The monster attacked and dealt ${monsterDamage} hearts of damage!`,
+      };
+  } catch (error) {
+      console.error("[FLEE ATTEMPT ERROR] An error occurred during the flee attempt:", error);
+      throw error;
+  }
+}
+
+
 module.exports = {
   createWeightedItemList,
   getMonsterEncounterFromList,
@@ -292,5 +381,6 @@ module.exports = {
   encounterProbabilitiesTravel,
   getMonstersByRegion,
   getRandomBloodMoonEncounter,
-  encounterProbabilitiesBloodMoon   
+  encounterProbabilitiesBloodMoon,
+  attemptFlee 
 };

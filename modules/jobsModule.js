@@ -146,6 +146,11 @@ const updateJob = async (characterId, newJob) => {
   }
 };
 
+// Check if character has a specific perk
+const hasPerk = (character, perk) => {
+  return character.perk && character.perk.toUpperCase() === perk.toUpperCase();
+};
+
 // ------------------- Exports -------------------
 module.exports = {
   jobPages,
@@ -164,5 +169,6 @@ module.exports = {
   isVillageExclusiveJob,
   normalizeJobName,
   isValidJob,
-  getProperJobName
+  getProperJobName,
+  hasPerk
 };

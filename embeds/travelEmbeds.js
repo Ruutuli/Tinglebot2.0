@@ -114,7 +114,12 @@ const createFinalTravelEmbed = (character, destination, paths, totalTravelDurati
 
     // Clean and format the travel log
     const cleanedLog = travelLog
-        .filter(entry => entry && entry.trim() !== '') // Remove empty or invalid entries
+        .filter(entry => {
+            // Keep entries that are either day headers or meaningful log entries
+            const isDayLog = entry.startsWith('Day');
+            const isMeaningfulEntry = !entry.match(/^Lost \d+ (Stamina|Heart)/i); // Exclude isolated "Lost X Stamina/Heart" lines
+            return isDayLog || isMeaningfulEntry;
+        })
         .map(entry => entry.trim()) // Trim whitespace around each entry
         .join('\n'); // Combine entries with single line breaks
 
@@ -137,6 +142,7 @@ const createFinalTravelEmbed = (character, destination, paths, totalTravelDurati
         .setImage(DEFAULT_IMAGE_URL)
         .setTimestamp();
 };
+
 
 
 // ------------------- Export the functions -------------------

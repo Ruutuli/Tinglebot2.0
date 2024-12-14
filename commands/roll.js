@@ -1,7 +1,7 @@
 // ------------------- Importing necessary modules -------------------
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const MersenneTwister = require('mersenne-twister');
-const { evaluate } = require('../utils/mathParser'); 
+const { evaluate } = require('../utils/mathParser');
 
 // ------------------- Initialize Mersenne Twister for random number generation -------------------
 const mt = new MersenneTwister();
@@ -40,8 +40,12 @@ class Roll {
     const d = p.match(/([1-9]\d*)?[dDfF]([1-9fF]\d*)?([aAdDkKlLter+])?([0-9=<>]*)?/);
     if (d) {
       const ex = this.handleDice(d);
-      self.pretty.push(ex.pretty);
-      self.expressions.push(ex.expression);
+      if (ex.error) {
+        self.errors.push(ex.error);
+      } else {
+        self.pretty.push(ex.pretty);
+        self.expressions.push(ex.expression);
+      }
     } else if (p.match(/[0-9?:><=+\-*/()]/)) {
       self.expressions.push(p);
       self.pretty.push(p);
@@ -50,25 +54,45 @@ class Roll {
     }
   }
 
-  // ------------------- Handle the dice roll and return the expression and pretty print version -------------------
-  static handleDice(d) {
-    const count = d[1] ? parseInt(d[1]) : 1;
-    const die = d[2] ? parseInt(d[2]) : 20;
-    const adv = d[3] && d[3].toLowerCase().includes('a');
-    const dis = d[3] && d[3].toLowerCase().includes('d');
-    const ex = Array(count).fill(0).map(() => 1 + Math.floor(mt.random() * die));
+// ------------------- Handle the dice roll and return the expression and pretty print version -------------------
+static handleDice(d) {
+  // Extract dice count and sides, ensuring they are valid integers
+  const count = d[1] ? parseInt(d[1]) : 1; // Defaults to 1 if not specified
+  const die = d[2] ? parseInt(d[2]) : 20; // Defaults to 20 sides if not specified
 
-    if (adv || dis) {
+  // ------------------- Add validation for dice count and sides -------------------
+  if (!Number.isInteger(count) || count <= 0) {
+      return { error: `❌ The number of dice must be a positive integer greater than 0. You requested ${count}.` };
+  }
+  if (!Number.isInteger(die) || die <= 0) {
+      return { error: `❌ The number of sides on a die must be a positive integer greater than 0. You requested ${die}.` };
+  }
+
+  // ------------------- Add limits to dice count and die sides -------------------
+  if (count > 100) {
+      return { error: `❌ Maximum allowed number of dice is 100. You requested ${count}.` };
+  }
+  if (die > 1000) {
+      return { error: `❌ Maximum allowed sides on a die is 1000. You requested ${die}.` };
+  }
+
+  // ------------------- Generate dice rolls -------------------
+  const adv = d[3] && d[3].toLowerCase().includes('a');
+  const dis = d[3] && d[3].toLowerCase().includes('d');
+  const ex = Array(count).fill(0).map(() => 1 + Math.floor(mt.random() * die));
+
+  if (adv || dis) {
       const ex2 = Array(count).fill(0).map(() => 1 + Math.floor(mt.random() * die));
       const exs = evaluate(ex.join('+'));
       const ex2s = evaluate(ex2.join('+'));
       const [best, worst] = [Math.max(exs, ex2s), Math.min(exs, ex2s)];
       const final = adv ? best : worst;
       return { pretty: `${ex.join(' ')} > ${ex2.join(' ')}`, expression: final.toString() };
-    }
-
-    return { pretty: ex.join('+'), expression: ex.join('+') };
   }
+
+  return { pretty: ex.join('+'), expression: ex.join('+') };
+}
+
 
   // ------------------- Generate a random color for the embed message -------------------
   static getRandomColor() {
@@ -129,6 +153,10 @@ module.exports = {
 
     // Parse the roll and determine the outcome
     const roll = Roll.parseRoll(expression);
+    if (roll.errors.length) {
+      return await interaction.reply({ content: roll.errors.join('\n'), ephemeral: true });
+    }
+
     let advText = '';
     if (advantage) {
       advText = advantage === 'a' ? '_Rolling with Advantage_' : '_Rolling with Disadvantage_';

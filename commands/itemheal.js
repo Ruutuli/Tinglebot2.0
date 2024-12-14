@@ -7,7 +7,7 @@ const {
     getCharacterInventoryCollection 
 } = require('../database/characterService');
 const { fetchItemByName } = require('../database/itemService');
-const { updateCurrentHearts, healKoCharacter, updateCurrentStamina } = require('../modules/characterStatsModule'); // Added updateCurrentStamina
+const { updateCurrentHearts, healKoCharacter, updateCurrentStamina } = require('../modules/characterStatsModule');
 const { removeItemInventoryDatabase } = require('../utils/inventoryUtils');
 const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../utils/validation');
 const { authorizeSheets, appendSheetData } = require('../utils/googleSheetsUtils');
@@ -57,21 +57,31 @@ module.exports = {
                 return;
             }
 
-            // Check if the character's inventory has been synced
-if (!character.inventorySynced) {
-    return interaction.editReply({
-        content: `❌ **You cannot use items for healing because \`${character.name}\`'s inventory is not set up yet. Please use the </testinventorysetup:1306176790095728732> and then </syncinventory:1306176789894266898> commands to initialize the inventory.**`,
-        ephemeral: true,
-    });
-}
+            if (!character.inventorySynced) {
+                return interaction.editReply({
+                    content: `❌ **Inventory not set up. Please initialize and sync the inventory before using items.**`,
+                    ephemeral: true,
+                });
+            }
 
+            // ------------------- Handle KO status -------------------
+            if (character.ko && item.itemName.toLowerCase() !== 'fairy') {
+                const errorEmbed = new EmbedBuilder()
+                    .setColor('#FF0000')
+                    .setTitle('⚠️ Healing Failed ⚠️')
+                    .setDescription(`**${item.itemName}** cannot be used to recover from KO. Please use a Fairy or request services from a Healer.`)
+                    .setFooter({ text: 'Healing Error' });
+
+                await interaction.editReply({ embeds: [errorEmbed], ephemeral: true });
+                return;
+            }
 
             // ------------------- Check if character is at max hearts -------------------
             if (character.currentHearts >= character.maxHearts && !item.staminaRecovered) {
                 const errorEmbed = new EmbedBuilder()
                     .setColor('#FF0000')
                     .setTitle('⚠️ Healing Failed ⚠️')
-                    .setDescription(`${character.name} could not be healed as they are already at maximum health.`)
+                    .setDescription(`${character.name} is already at maximum health.`)
                     .setFooter({ text: 'Healing Error' });
 
                 await interaction.editReply({ embeds: [errorEmbed], ephemeral: true });
@@ -79,31 +89,31 @@ if (!character.inventorySynced) {
             }
 
             // ------------------- Validate if the item can be used for healing -------------------
-            const restrictedItems = ['oil jar', 'goron spice']; // Restricted items
+            const restrictedItems = ['oil jar', 'goron spice'];
             if (restrictedItems.includes(item.itemName.toLowerCase())) {
                 const embed = new EmbedBuilder()
                     .setTitle('⚠️ Woah there! ⚠️')
-                    .setDescription(`**${character.name}** tried to eat **${item.itemName}**. That's not exactly gourmet, maybe don’t eat that! 🍳`)
+                    .setDescription(`**${character.name}** tried to use **${item.itemName}**. Not a suitable choice!`)
                     .setColor('#FF6347')
                     .setThumbnail(item.image)
-                    .setFooter({ text: 'Let’s stick to food next time!' });
+                    .setFooter({ text: 'Stick to proper healing items!' });
 
                 await interaction.editReply({ embeds: [embed], ephemeral: true });
                 return;
             }
 
-            // ------------------- Handle KO status (Fairy can revive KO'd characters) -------------------
+            // ------------------- Healing Logic -------------------
             let healAmount = 0;
             let staminaRecovered = 0;
+
             if (character.ko && item.itemName.toLowerCase() === 'fairy') {
-                await healKoCharacter(character._id); 
+                await healKoCharacter(character._id);
                 character.currentHearts = character.maxHearts;
                 await updateCurrentHearts(character._id, character.currentHearts);
                 await interaction.editReply({ content: `💫 ${character.name} has been revived and fully healed using a ${item.itemName}!`, ephemeral: false });
                 return;
             }
 
-            // ------------------- Handle regular healing -------------------
             if (item.itemName.toLowerCase() === 'fairy') {
                 healAmount = character.maxHearts - character.currentHearts;
                 character.currentHearts = character.maxHearts;
@@ -114,21 +124,17 @@ if (!character.inventorySynced) {
                 await updateCurrentHearts(character._id, character.currentHearts);
             }
 
-            // ------------------- Handle stamina recovery -------------------
             if (item.staminaRecovered) {
                 staminaRecovered = Math.min(item.staminaRecovered * quantity, character.maxStamina - character.currentStamina);
                 character.currentStamina += staminaRecovered;
                 await updateCurrentStamina(character._id, character.currentStamina);
             }
 
-            // ------------------- Remove used items from inventory -------------------
             const inventoryCollection = await getCharacterInventoryCollection(character.name);
             await removeItemInventoryDatabase(character._id, item.itemName, quantity, inventoryCollection);
 
-            // ------------------- Update Google Sheets if inventory link is valid -------------------
-            const inventoryLink = character.inventory || character.inventoryLink;
-            if (isValidGoogleSheetsUrl(inventoryLink)) {
-                const spreadsheetId = extractSpreadsheetId(inventoryLink);
+            if (isValidGoogleSheetsUrl(character.inventory || character.inventoryLink)) {
+                const spreadsheetId = extractSpreadsheetId(character.inventory || character.inventoryLink);
                 const auth = await authorizeSheets();
                 const range = 'loggedInventory!A2:M';
                 const uniqueSyncId = uuidv4();
@@ -156,7 +162,6 @@ if (!character.inventorySynced) {
                 await appendSheetData(auth, spreadsheetId, range, values);
             }
 
-            // ------------------- Create and send embed with healing and stamina recovery details -------------------
             let description = `**${character.name}** used **${item.itemName}** ${item.emoji || ''}`;
             if (healAmount > 0) {
                 description += ` to heal **${healAmount}** hearts!`;
@@ -166,17 +171,17 @@ if (!character.inventorySynced) {
             }
 
             const embed = new EmbedBuilder()
-                .setColor('#59A914') // Green healing color
+                .setColor('#59A914')
                 .setTitle('✬ Healing ✬')
                 .setAuthor({
-                    name: `${character.name} 🔗`, 
-                    iconURL: character.icon, 
-                    url: character.inventory // Inventory link added to the author
+                    name: `${character.name} 🔗`,
+                    iconURL: character.icon,
+                    url: character.inventory
                 })
                 .setDescription(description)
                 .addFields({
-                    name: '__❤️ Hearts__', 
-                    value: `**${character.currentHearts - healAmount}/${character.maxHearts} → ${character.currentHearts}/${character.maxHearts}**`, 
+                    name: '__❤️ Hearts__',
+                    value: `**${character.currentHearts - healAmount}/${character.maxHearts} → ${character.currentHearts}/${character.maxHearts}**`,
                     inline: true
                 })
                 .addFields({
@@ -185,12 +190,12 @@ if (!character.inventorySynced) {
                     inline: true
                 })
                 .setFooter({ text: 'Healing and Stamina Recovery Successful' })
-                .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png') // Custom image added
-                .setThumbnail(item.image); // Add item image as a thumbnail
+                .setThumbnail(item.image);
 
             await interaction.editReply({ embeds: [embed] });
 
         } catch (error) {
+            console.error(`[itemheal.js]: Error during healing process: ${error.message}`);
             await interaction.editReply({ content: `❌ An error occurred during the healing process.`, ephemeral: true });
         }
     }
