@@ -51,7 +51,7 @@ module.exports = (client) => {
   }, { timezone: 'America/New_York' });
 
   // ------------------- Daily Blight Roll Call -------------------
-  cron.schedule('0 20 * * *', async () => {
+  cron.schedule('00 20 * * *', async () => {
     try {
       console.log('v⏰ Sending daily blight roll call...');
       await postBlightRollCall(client);
@@ -102,16 +102,52 @@ module.exports = (client) => {
     }
   }, { timezone: 'America/New_York' });
 
- // ------------------- Daily Cleanup of Expired Healing Requests -------------------
- cron.schedule('0 0 * * *', async () => {
-  try {
-    console.log('[scheduler]🧹 Running daily cleanup of expired healing requests...');
-    cleanupExpiredHealingRequests(); // Add this function in `storage.js` as shown below
-    console.log('[scheduler]✅ Expired healing requests cleaned up successfully.');
-  } catch (error) {
-    console.error('❌ [scheduler.js] Error during daily cleanup of healing requests:', error.message);
-  }
-}, { timezone: 'America/New_York' });
+  // ------------------- Daily Cleanup of Expired Healing Requests -------------------
+  cron.schedule('0 0 * * *', async () => {
+    try {
+      console.log('[scheduler]🧹 Running daily cleanup of expired healing requests...');
+      cleanupExpiredHealingRequests();
+      console.log('[scheduler]✅ Expired healing requests cleaned up successfully.');
+    } catch (error) {
+      console.error('❌ [scheduler.js] Error during daily cleanup of healing requests:', error.message);
+    }
+  }, { timezone: 'America/New_York' });
+
+  // ------------------- Daily Debuff Expiry Check with DM Notifications -------------------
+  cron.schedule('13 0 * * *', async () => {
+    try {
+      console.log('[scheduler]⏰ Checking for expired debuffs...');
+
+      const now = new Date();
+      const charactersWithActiveDebuffs = await Character.find({
+        'debuff.active': true,
+        'debuff.endDate': { $lte: now }
+      });
+
+      for (const character of charactersWithActiveDebuffs) {
+        character.debuff.active = false; // Deactivate the debuff
+        character.debuff.endDate = null; // Clear the end date
+        await character.save(); // Save the updated character state
+
+        console.log(`[scheduler]✅ Debuff removed for character: ${character.name}`);
+
+        // Notify the user via DM
+        try {
+          const user = await client.users.fetch(character.userId);
+          if (user) {
+            await user.send(`💖 Your character **${character.name}**'s week-long debuff has ended! You can now heal them with items or a Healer.`);
+            console.log(`[scheduler]✅ Notified user ${user.username} about debuff removal for ${character.name}.`);
+          }
+        } catch (dmError) {
+          console.error(`❌ [scheduler] Failed to DM user:`, dmError);
+        }
+      }
+
+      console.log('[scheduler]✅ Completed debuff expiry check.');
+    } catch (error) {
+      console.error('❌ [scheduler] Error during debuff expiry check:', error);
+    }
+  }, { timezone: 'America/New_York' });
 };
 
 // ------------------- Birthday Announcement Logic -------------------

@@ -182,18 +182,33 @@ if (customId === 'recover') {
         const embed = createKOEmbed(character);
         await interaction.followUp({ embeds: [embed] }); // Notify user of KO with an embed
         decision = `KO'd during the fight.`;
-        outcomeMessage = `💀 ${character.name} was KO'd during the fight and wakes up in their origin village with 0 hearts and 0 stamina.`;
-
+        outcomeMessage = `💀 ${character.name} was KO'd during the fight and wakes up in their recovery village with 0 hearts and 0 stamina. They are now recovering from the ordeal.`;
+    
         // Update character stats
         heartsLost = character.currentHearts;
         staminaLost = character.currentStamina;
         character.currentHearts = 0;
         character.currentStamina = 0;
-
+    
+        // Apply debuff: set recovery status for 7 days
+        character.debuff = {
+            active: true,
+            endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days from now
+        };
+    
+        // Redirect character to recovery village
+        character.currentVillage = (character.currentVillage === 'rudania' || character.currentVillage === 'vhintl')
+            ? 'inariko'
+            : character.homeVillage;
+    
+        character.ko = true; // Mark character as KO'd
+    
         // Persist updates to the database
         await updateCurrentHearts(character._id, character.currentHearts);
         await useStamina(character._id, character.currentStamina);
-        await handleKO(character._id);
+        await character.save();
+    
+        return decision;    
     } else {
         // ------------------- Non-KO Outcomes -------------------
         await useHearts(character._id, encounterOutcome.hearts); // Deduct hearts

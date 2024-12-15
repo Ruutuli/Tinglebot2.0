@@ -148,8 +148,10 @@ const updateJob = async (characterId, newJob) => {
 
 // Check if character has a specific perk
 const hasPerk = (character, perk) => {
-  return character.perk && character.perk.toUpperCase() === perk.toUpperCase();
+  const jobPerk = jobPerks.find(j => j.job.toLowerCase() === character.job.toLowerCase());
+  return jobPerk && jobPerk.perk.toUpperCase().includes(perk.toUpperCase());
 };
+
 
 // ------------------- Exports -------------------
 module.exports = {
@@ -172,3 +174,6 @@ module.exports = {
   getProperJobName,
   hasPerk
 };
+
+
+// THIS VERSION

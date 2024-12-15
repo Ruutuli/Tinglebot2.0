@@ -367,7 +367,16 @@ async function rollForBlightProgression(interaction, characterName) {
     const character = await Character.findOne({ name: characterName });
 
     if (!character) {
-      await interaction.reply({ content: `Character "${characterName}" not found.`, ephemeral: false });
+      await interaction.reply({ content: `Character "${characterName}" not found.`, ephemeral: true });
+      return;
+    }
+
+    // Validation: Ensure the character is blighted
+    if (!character.blighted) {
+      await interaction.reply({
+        content: `**WOAH! ${characterName} is not blighted! You don’t need to roll for them!** 🌟`,
+        ephemeral: true
+      });
       return;
     }
 
@@ -375,7 +384,7 @@ async function rollForBlightProgression(interaction, characterName) {
     const timeSinceLastRoll = Date.now() - lastRollDate.getTime();
 
     if (timeSinceLastRoll < 24 * 60 * 60 * 1000) {
-      await interaction.reply({ content: `You must wait 24 hours before rolling again for **${characterName}**.` });
+      await interaction.reply({ content: `You must wait 24 hours before rolling again for **${characterName}**.`, ephemeral: true });
       return;
     }
 
@@ -403,7 +412,7 @@ async function rollForBlightProgression(interaction, characterName) {
       embedTitle = `☠ Your Blight Sickness IS ON THE EDGE of STAGE 5 ☠`;
       embedDescription = `You are close to death. You have 7 days to complete your healing prompt, or your OC will die.`;
     } else {
-      stage = character.stage || 1;
+      stage = character.blightStage || 1;
       embedTitle = `Your Blight Sickness DOES NOT advance to the next stage.`;
       embedDescription = `You remain at **Stage ${stage}**. You can still be healed by Oracles, Sages & Dragons.`;
     }
@@ -425,9 +434,10 @@ async function rollForBlightProgression(interaction, characterName) {
 
   } catch (error) {
     console.error('Error rolling for blight progression:', error);
-    await interaction.reply({ content: 'An error occurred while processing your request.' });
+    await interaction.reply({ content: 'An error occurred while processing your request.', ephemeral: true });
   }
 }
+
 
 // ------------------- Post Blight Roll Call -------------------
 // Posts the daily roll call reminder at 8 PM EST
@@ -482,8 +492,10 @@ async function checkMissedRolls(client) {
 
     // Ensure there is a channel to post to
     const channelId = process.env.BLIGHT_NOTIFICATIONS_CHANNEL_ID;
+    const channel = client.channels.cache.get(channelId); // Fixed: Defined the channel here using the channelId
+
     if (!channel) {
-      console.error('Channel not found for missed roll notifications.');
+      console.error('[blightHandler]❌ Channel not found for missed roll notifications.');
       return;
     }
 
@@ -533,16 +545,17 @@ async function checkMissedRolls(client) {
 
           await channel.send({ content: `<@${character.userId}>`, embeds: [embed] });
 
-          console.log(`Character ${character.name} has progressed to Stage ${character.blightStage} due to missed roll.`);
+          console.log(`[blightHandler]✅ Character ${character.name} has progressed to Stage ${character.blightStage} due to missed roll.`);
         } else {
-          console.log(`Character ${character.name} is already at Stage 5 (Death).`);
+          console.log(`[blightHandler]⚠️ Character ${character.name} is already at Stage 5 (Death).`);
         }
       }
     }
   } catch (error) {
-    console.error('❌ Error checking missed rolls:', error);
+    console.error('[blightHandler]❌ Error checking missed rolls:', error);
   }
 }
+
 
 // ------------------- Module Exports -------------------
 module.exports = {

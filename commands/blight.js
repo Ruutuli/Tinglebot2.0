@@ -81,8 +81,8 @@ module.exports = {
   
     if (subcommand === 'roll') {
       const characterName = interaction.options.getString('character_name'); // Fetch the character name
-      await rollForBlightProgression(interaction, characterName); // Pass it to the roll function
-
+      await rollForBlightProgression(interaction, characterName); // Validate and execute the roll
+    
     } else if (subcommand === 'heal') {
       const characterName = interaction.options.getString('character_name');
       const healerName = interaction.options.getString('healer_name');

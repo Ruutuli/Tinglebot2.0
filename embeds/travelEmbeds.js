@@ -1,7 +1,7 @@
 // ------------------- Import necessary modules and functions -------------------
 const { EmbedBuilder } = require('discord.js');
 const { getCommonEmbedSettings, formatItemDetails } = require('../embeds/embedUtils');
-const { capitalizeFirstLetter } = require('../modules/formattingModule');
+const { capitalizeFirstLetter, capitalizeWords } = require('../modules/formattingModule');
 const { monsterMapping } = require('../models/MonsterModel');
 const { isValidImageUrl } = require('../utils/validation');
 
@@ -60,13 +60,12 @@ const createMonsterEncounterEmbed = (character, monster, outcomeMessage, heartsR
 
 // ------------------- Create embed for initial travel announcement -------------------
 const createInitialTravelEmbed = (character, startingVillage, destination, paths, totalTravelDuration) => {
-    // ------------------- Use village emojis for starting and destination villages -------------------
     const startEmoji = villageEmojis[startingVillage.toLowerCase()] || '';
     const destEmoji = villageEmojis[destination.toLowerCase()] || '';
 
     return new EmbedBuilder()
         .setTitle(`**${character.name}** is traveling from ${startEmoji} **${capitalizeFirstLetter(startingVillage)}** to ${destEmoji} **${capitalizeFirstLetter(destination)}**.`)
-        .setDescription(`**Travel Path:** ${paths.map(path => `${pathEmojis[path]} ${capitalizeFirstLetter(path.replace(/([a-z])([A-Z])/g, '$1 $2'))}`).join(', ')}\n**Total Travel Duration:** ${totalTravelDuration} days\n**❤️ __Hearts:__** ${character.currentHearts}/${character.maxHearts}\n**🟩 __Stamina:__** ${character.currentStamina}/${character.maxStamina}`)
+        .setDescription(`**Travel Path:** ${paths.map(path => `${pathEmojis[path]} ${capitalizeWords(path.replace(/([a-z])([A-Z])/g, '$1 $2'))}`).join(', ')}\n**Total Travel Duration:** ${totalTravelDuration} days\n**❤️ __Hearts:__** ${character.currentHearts}/${character.maxHearts}\n**🟩 __Stamina:__** ${character.currentStamina}/${character.maxStamina}`)
         .setColor('#AA926A')
         .setAuthor({ name: 'Travel Announcement', iconURL: character.icon })
         .setImage(DEFAULT_IMAGE_URL)
@@ -88,7 +87,7 @@ const createSafeTravelDayEmbed = (character, day, totalTravelDuration, pathEmoji
 
     return new EmbedBuilder()
         .setAuthor({
-            name: `🗺️ Day ${day}/${totalTravelDuration} of travel on ${pathEmoji} ${capitalizeFirstLetter(currentPath.replace(/([a-z])([A-Z])/g, '$1 $2'))}`,
+            name: `🗺️ Day ${day}/${totalTravelDuration} of travel on ${pathEmoji} ${capitalizeWords(currentPath.replace(/([a-z])([A-Z])/g, '$1 $2'))}`,
             iconURL: character.icon,
         })
         .setTitle(`**${character.name}** is traveling`)
@@ -127,7 +126,7 @@ const createFinalTravelEmbed = (character, destination, paths, totalTravelDurati
         .setTitle(`✅ ${character.name} has arrived at ${destEmoji} ${capitalizeFirstLetter(destination)}!`)
         .setDescription(
             `**Travel Path:** ${paths.map(path => 
-                `${pathEmojis[path]} ${capitalizeFirstLetter(path.replace(/([a-z])([A-Z])/g, '$1 $2'))}`
+                `${pathEmojis[path]} ${capitalizeWords(path.replace(/([a-z])([A-Z])/g, '$1 $2'))}`
             ).join(', ')}\n` +
             `**Total Travel Duration:** ${totalTravelDuration} days\n` +
             `**❤️ __Hearts:__** ${character.currentHearts}/${character.maxHearts}\n` +
@@ -142,6 +141,7 @@ const createFinalTravelEmbed = (character, destination, paths, totalTravelDurati
         .setImage(DEFAULT_IMAGE_URL)
         .setTimestamp();
 };
+
 
 
 

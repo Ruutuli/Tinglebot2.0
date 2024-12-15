@@ -1,10 +1,6 @@
-// ------------------- Import necessary modules -------------------
-// ------------------- Import necessary modules -------------------
+// ------------------- Import necessary modules ------------------- THIS VERSION!!!!!!!!!!!!!!!!!!!!!!!!!!!
 require('dotenv').config();
-const { v4: uuidv4 } = require('uuid');
-const sharp = require('sharp');
-const axios = require('axios');
-const fs = require('fs');
+const { getCommonEmbedSettings, formatItemDetails } = require('../embeds/embedUtils');
 
 // Discord.js modules
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, SlashCommandBuilder } = require('discord.js');
@@ -33,13 +29,14 @@ const { authorizeSheets, appendSheetData } = require('../utils/googleSheetsUtils
 const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../utils/validation');
 
 
+
 const DEFAULT_IMAGE_URL = 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png';
 
 // ------------------- Define path channels -------------------
 const PATH_CHANNELS = {
-  pathOfScarletLeaves: process.env.PATH_OF_SCARLET_LEAVES_CHANNEL_ID,
-  leafDewWay: process.env.LEAF_DEW_WAY_CHANNEL_ID,
-};
+    pathOfScarletLeaves: '1305487405985431583',
+    leafDewWay: '1305487571228557322',
+  };
 
 
 
@@ -56,23 +53,33 @@ function getChannelNameById(client, channelId) {
 }
 
 // ------------------- Helper function to calculate travel duration -------------------
-function calculateTravelDuration(currentVillage, destination, mode) {
-  const travelTimes = {
-    'on foot': {
-      'rudania-inariko': 2,
-      'inariko-vhintl': 2,
-      'rudania-vhintl': 4
-    },
-    'on mount': {
-      'rudania-inariko': 1,
-      'inariko-vhintl': 1,
-      'rudania-vhintl': 2
-    }
-  };
+function calculateTravelDuration(currentVillage, destination, mode, character) {
+    const travelTimes = {
+      'on foot': {
+        'rudania-inariko': 2,
+        'inariko-vhintl': 2,
+        'rudania-vhintl': 4
+      },
+      'on mount': {
+        'rudania-inariko': 1,
+        'inariko-vhintl': 1,
+        'rudania-vhintl': 2
+      }
+    };
 
-  const key = `${currentVillage}-${destination}`;
-  return travelTimes[mode][key] || travelTimes[mode][`${destination}-${currentVillage}`] || -1;
+    const key = `${currentVillage}-${destination}`;
+    const baseDuration = travelTimes[mode][key] || travelTimes[mode][`${destination}-${currentVillage}`] || -1;
+
+    // Check for the Delivering perk and adjust duration
+    if (baseDuration > 0 && hasPerk(character, 'DELIVERING')) {
+      console.log(`[travel.js]: Delivering perk active for ${character.name}, halving travel duration.`);
+      return Math.max(1, Math.ceil(baseDuration / 2)); // Ensure duration is at least 1
+    }
+
+    return baseDuration;
 }
+
+  
 
 // ------------------- Travel command -------------------
 module.exports = {
@@ -102,23 +109,28 @@ module.exports = {
     await handleTravelAutocomplete(interaction); // Reference the handler
   },
 
-  // ------------------- Execute travel command -------------------
-  async execute(interaction) {
+// ------------------- Execute travel command -------------------
+async execute(interaction) {
     try {
-        await interaction.deferReply(); // Defer the interaction to prevent timeout
-
-        // Get the input options
-        const characterName = interaction.options.getString('charactername');
-        const destination = interaction.options.getString('destination').toLowerCase();
-        const mode = interaction.options.getString('mode');
-        const userId = interaction.user.id;
-
-        // Fetch the character data
-        const character = await fetchCharacterByNameAndUserId(characterName, userId);
-        if (!character) {
-            await interaction.editReply({ content: `❌ **Character ${characterName}** not found or does not belong to you.` });
-            return;
-        }
+      await interaction.deferReply();
+  
+      const characterName = interaction.options.getString('charactername');
+      const destination = interaction.options.getString('destination').toLowerCase();
+      const mode = interaction.options.getString('mode');
+      const userId = interaction.user.id;
+  
+      const character = await fetchCharacterByNameAndUserId(characterName, userId);
+      if (!character) {
+        await interaction.editReply({ content: `❌ **Character ${characterName}** not found or does not belong to you.` });
+        return;
+      }
+  
+      // Check if the character is debuffed
+      if (character.debuff.active) {
+        const remainingDays = Math.ceil((character.debuff.endDate - new Date()) / (1000 * 60 * 60 * 24));
+        await interaction.editReply({ content: `❌ **${character.name}** is currently recovering and cannot travel for ${remainingDays} more day(s).` });
+        return;
+      }
 
         // Check if the character's inventory has been synced
         if (!character.inventorySynced) {
@@ -150,7 +162,7 @@ module.exports = {
         }
         
 // Determine the path(s) and total travel duration
-const totalTravelDuration = calculateTravelDuration(startingVillage, destination, mode);
+const totalTravelDuration = calculateTravelDuration(startingVillage, destination, mode, character);
 if (totalTravelDuration === -1) {
     await interaction.editReply({
         content: `❌ Travel path between **${capitalizeFirstLetter(startingVillage)}** and **${capitalizeFirstLetter(destination)}** is not defined.`
@@ -166,7 +178,7 @@ if (totalTravelDuration === 4) {
     if (startingVillage === 'rudania' && destination === 'vhintl') {
         if (currentChannel !== PATH_CHANNELS.pathOfScarletLeaves) {
             await interaction.editReply({
-                content: `❌ **${character.name}** is trying to travel from **Rudania** to **Vhintl**, but you're on the wrong road! You must start in <#${PATH_CHANNELS.pathOfScarletLeaves}>`
+                content: `❌ **${character.name}** is trying to travel from **Rudania** to **Vhintl**, but you're on the wrong road! You must start in <#${PATH_CHANNELS.pathOfScarletLeaves}>.`
             });
             return;
         }
@@ -180,39 +192,87 @@ if (totalTravelDuration === 4) {
     }
 }
 
-// Validate channel for 2-day travel routes
-if ((startingVillage === 'inariko' && destination === 'vhintl') || (startingVillage === 'vhintl' && destination === 'inariko')) {
-    if (currentChannel !== PATH_CHANNELS.leafDewWay) {
-        await interaction.editReply({
-            content: `❌ **${character.name}** is trying to travel from **${capitalizeFirstLetter(startingVillage)}** to **${capitalizeFirstLetter(destination)}**, but you're on the wrong road! You must travel on <#${PATH_CHANNELS.leafDewWay}>.`
-        });
-        return;
+// Validate channel for 2-day travel routes with Delivering perk
+if (totalTravelDuration === 2 && hasPerk(character, 'DELIVERING')) {
+    if ((startingVillage === 'vhintl' && destination === 'rudania') || 
+        (startingVillage === 'rudania' && destination === 'vhintl')) {
+        if (currentChannel !== PATH_CHANNELS.leafDewWay && currentChannel !== PATH_CHANNELS.pathOfScarletLeaves) {
+            await interaction.editReply({
+                content: `❌ **${character.name}** is trying to travel from **${capitalizeFirstLetter(startingVillage)}** to **${capitalizeFirstLetter(destination)}**, but you're on the wrong road! Start in either <#${PATH_CHANNELS.pathOfScarletLeaves}> (Day 1) or <#${PATH_CHANNELS.leafDewWay}> (Day 2).`
+            });
+            return;
+        }
     }
 }
 
-if ((startingVillage === 'inariko' && destination === 'rudania') || (startingVillage === 'rudania' && destination === 'inariko')) {
-    if (currentChannel !== PATH_CHANNELS.pathOfScarletLeaves) {
-        await interaction.editReply({
-            content: `❌ **${character.name}** is trying to travel from **${capitalizeFirstLetter(startingVillage)}** to **${capitalizeFirstLetter(destination)}**, but you're on the wrong road! You must travel on <#${PATH_CHANNELS.pathOfScarletLeaves}>`
-        });
-        return;
+// Validate channel for standard 2-day travel routes
+if (totalTravelDuration === 2 && !hasPerk(character, 'DELIVERING')) {
+    if ((startingVillage === 'inariko' && destination === 'vhintl') || (startingVillage === 'vhintl' && destination === 'inariko')) {
+        if (currentChannel !== PATH_CHANNELS.leafDewWay) {
+            await interaction.editReply({
+                content: `❌ **${character.name}** is trying to travel from **${capitalizeFirstLetter(startingVillage)}** to **${capitalizeFirstLetter(destination)}**, but you're on the wrong road! You must travel on <#${PATH_CHANNELS.leafDewWay}>.`
+            });
+            return;
+        }
+    }
+
+    if ((startingVillage === 'inariko' && destination === 'rudania') || (startingVillage === 'rudania' && destination === 'inariko')) {
+        if (currentChannel !== PATH_CHANNELS.pathOfScarletLeaves) {
+            await interaction.editReply({
+                content: `❌ **${character.name}** is trying to travel from **${capitalizeFirstLetter(startingVillage)}** to **${capitalizeFirstLetter(destination)}**, but you're on the wrong road! You must travel on <#${PATH_CHANNELS.pathOfScarletLeaves}>.`
+            });
+            return;
+        }
     }
 }
 
-// Set up paths
+// ------------------- Set up paths -------------------
 let paths = [];
 let stopInInariko = false;
 
 if (totalTravelDuration === 4) {
     if (startingVillage === 'rudania') {
         paths = ['pathOfScarletLeaves', 'leafDewWay'];
-    } else {
+    } else if (startingVillage === 'vhintl') {
         paths = ['leafDewWay', 'pathOfScarletLeaves'];
+    } else {
+        console.error(`[travel.js]: Invalid route for 4-day duration between ${startingVillage} and ${destination}.`);
+        throw new Error(`Invalid route for 4-day duration between ${startingVillage} and ${destination}.`);
     }
-    stopInInariko = true;
+    stopInInariko = true; // Ensure stopping logic for multi-day travel
 } else if (totalTravelDuration === 2) {
-    paths = [startingVillage === 'rudania' || destination === 'rudania' ? 'pathOfScarletLeaves' : 'leafDewWay'];
+    if ((startingVillage === 'rudania' && destination === 'inariko') || (startingVillage === 'inariko' && destination === 'rudania')) {
+        paths = ['pathOfScarletLeaves'];
+    } else if ((startingVillage === 'vhintl' && destination === 'inariko') || (startingVillage === 'inariko' && destination === 'vhintl')) {
+        paths = ['leafDewWay'];
+    } else if (hasPerk(character, 'DELIVERING') && 
+               ((startingVillage === 'vhintl' && destination === 'rudania') || 
+                (startingVillage === 'rudania' && destination === 'vhintl'))) {
+        // Specific paths for Delivering perk
+        paths = startingVillage === 'rudania' 
+            ? ['pathOfScarletLeaves', 'leafDewWay'] 
+            : ['leafDewWay', 'pathOfScarletLeaves'];
+        stopInInariko = true; // Ensure stopping logic is applied
+    } else {
+        console.error(`[travel.js]: Invalid route for 2-day duration between ${startingVillage} and ${destination}.`);
+        throw new Error(`Invalid route for 2-day duration between ${startingVillage} and ${destination}.`);
+    }
+} else if (totalTravelDuration === 1) {
+    if ((startingVillage === 'rudania' && destination === 'inariko') || (startingVillage === 'inariko' && destination === 'rudania')) {
+        paths = ['pathOfScarletLeaves'];
+    } else if ((startingVillage === 'vhintl' && destination === 'inariko') || (startingVillage === 'inariko' && destination === 'vhintl')) {
+        paths = ['leafDewWay'];
+    } else {
+        console.error(`[travel.js]: Invalid route for 1-day duration between ${startingVillage} and ${destination}.`);
+        throw new Error(`Invalid route for 1-day duration between ${startingVillage} and ${destination}.`);
+    }
+} else {
+    console.error(`[travel.js]: No valid paths for total travel duration: ${totalTravelDuration}.`);
+    throw new Error(`No valid paths for total travel duration: ${totalTravelDuration}.`);
 }
+
+console.log(`[travel.js]: Paths determined: ${paths.join(', ')} for travel from ${startingVillage} to ${destination}.`);
+
 
 // Initial travel announcement
 const initialEmbed = createInitialTravelEmbed(character, startingVillage, destination, paths, totalTravelDuration);
@@ -224,14 +284,29 @@ let lastSafeDayMessage = null;
 
 // ------------------- Helper function to process each travel day -------------------
 const processTravelDay = async (day) => {
-  if (day > totalTravelDuration) {
-      // Arrival announcement
-      character.currentVillage = destination;
-      await character.save();
+    const adjustedDuration = hasPerk(character, 'DELIVERING') 
+        ? Math.ceil(totalTravelDuration / 2) 
+        : totalTravelDuration;
 
-      // Add a check for the correct road/channel based on travel route
-      let finalChannelId;
-      const currentPath = paths[Math.floor((day - 1) / 2)]; // Assign currentPath here before using it
+    console.log(`[travel.js]: Delivering perk active: ${hasPerk(character, 'DELIVERING')}`);
+    console.log(`[travel.js]: Processing Day ${day}. Total Adjusted Duration: ${adjustedDuration}`);
+    console.log(`[travel.js]: StopInInariko: ${stopInInariko}`);
+
+    if (day > adjustedDuration) {
+        console.log(`[travel.js]: Journey complete on Day ${day}.`);
+        // Arrival announcement
+        character.currentVillage = destination;
+        await character.save();
+
+        console.log(`[travel.js]: Character ${character.name} has completed their journey to ${destination}.`);
+
+
+        // Fetch the final channel based on destination
+        let finalChannelId = PATH_CHANNELS[paths[paths.length - 1]]; // Use the last path for the final channel
+        if (!finalChannelId) {
+            console.error(`[travel.js]: Final channel ID for destination "${destination}" is undefined.`);
+            throw new Error(`Final channel ID for destination "${destination}" is undefined.`);
+        }
 
       if ((destination === 'inariko' && startingVillage === 'rudania') || (destination === 'rudania' && startingVillage === 'inariko')) {
           finalChannelId = PATH_CHANNELS.pathOfScarletLeaves;
@@ -244,15 +319,13 @@ const processTravelDay = async (day) => {
       }
 
       const finalChannel = await interaction.client.channels.fetch(finalChannelId);
-      const finalEmbed = createFinalTravelEmbed(character, destination, paths, totalTravelDuration, travelLog);
 
-      // Attach a default image to the embed
+      const finalEmbed = createFinalTravelEmbed(character, destination, paths, adjustedDuration, travelLog);
       const imageEmbed = new EmbedBuilder()
-          .setImage('https://storage.googleapis.com/tinglebot/Graphics/travel.png') // Replace with a default image URL
-          .setDescription('You arrived safely.');
+          .setImage('https://storage.googleapis.com/tinglebot/Graphics/travel.png') // Replace with a valid image URL
+          .setDescription(`🎉 **${character.name} has arrived safely at ${capitalizeFirstLetter(destination)}!**`);
 
       try {
-          // Send the arrival embeds
           await finalChannel.send({ embeds: [finalEmbed] });
           await finalChannel.send({ embeds: [imageEmbed] });
       } catch (error) {
@@ -260,24 +333,57 @@ const processTravelDay = async (day) => {
           await finalChannel.send({ content: '⚠️ Unable to display the arrival embed.' });
       }
 
-      // Delete only the traveling messages
       for (const msg of travelingMessages) {
           await msg.delete();
       }
 
-      return;
+      return; // End processing as the journey is complete
   }
 
- // Post "Character is traveling..."
- const currentPath = paths[Math.floor((day - 1) / 2)]; // Use currentPath after assigning it
- const pathEmoji = pathEmojis[currentPath];
- const channelId = PATH_CHANNELS[currentPath];
- const channel = await interaction.client.channels.fetch(channelId);
+  // ------------------- Helper function for Day Interactions -------------------
+const handleDayInteractions = async (day, channel, currentPath, pathEmoji) => {
+    const encounterType = Math.random() < 0.5 ? 'No Encounter' : getRandomTravelEncounter();
 
- const travelingEmbed = createTravelingEmbed(character);
- const travelingMessage = await channel.send({ embeds: [travelingEmbed] });
- travelingMessages.push(travelingMessage);
- await new Promise(resolve => setTimeout(resolve, 3000));
+    if (encounterType === 'No Encounter') {
+        const safeTravelEmbed = createSafeTravelDayEmbed(character, day, totalTravelDuration, pathEmoji, currentPath);
+        await channel.send({ embeds: [safeTravelEmbed] });
+        console.log(`[travel.js]: Safe travel day for Day ${day}.`);
+    } else {
+        // Handle encounter logic (e.g., monsters)
+        console.log(`[travel.js]: Encounter detected for Day ${day}.`);
+    }
+};
+
+    // Determine the current path for the day
+    const currentPath = paths[Math.floor((day - 1) / 2)];
+    if (!currentPath) {
+        console.error(`[travel.js]: Current path is undefined for day ${day}. Paths: ${paths}`);
+        throw new Error(`Current path is undefined for day ${day}. Paths: ${paths.join(', ')}`);
+    }
+    console.log(`[travel.js]: Current path for Day ${day}: ${currentPath}.`);
+
+    const channelId = PATH_CHANNELS[currentPath];
+    if (!channelId) {
+        console.error(`[travel.js]: Channel ID for path "${currentPath}" is undefined.`);
+        throw new Error(`Channel ID for path "${currentPath}" is undefined.`);
+    }
+
+    const pathEmoji = pathEmojis[currentPath];
+    if (!pathEmoji) {
+        console.error(`[travel.js]: pathEmoji for "${currentPath}" is undefined.`);
+        throw new Error(`pathEmoji for "${currentPath}" is undefined.`);
+    }
+
+    console.log(`[travel.js]: Using pathEmoji "${pathEmoji}" for path "${currentPath}".`);
+
+    const channel = await interaction.client.channels.fetch(channelId);
+    const travelingEmbed = createTravelingEmbed(character);
+    const travelingMessage = await channel.send({ embeds: [travelingEmbed] });
+    travelingMessages.push(travelingMessage);
+
+    console.log(`[travel.js]: Posted traveling message in ${currentPath} for Day ${day}.`);
+
+    await new Promise(resolve => setTimeout(resolve, 3000));
 
 // ------------------- Determine Encounter Type -------------------
 const encounterType = Math.random() < 0.5 ? 'No Encounter' : getRandomTravelEncounter();
@@ -354,19 +460,146 @@ if (encounterType !== 'No Encounter') {
                 dailyLogEntry += `> ${decision}\n`;
             }
 
-            // Log the day and proceed to the next day
-            travelLog.push(dailyLogEntry);
+// KO Check at the end of the day
+// KO Check at the end of the day
+if (character.currentHearts <= 0 || character.ko) {
+    character.ko = true; // Ensure KO flag is set
+
+    // Determine the recovery village
+    const recoveryVillage = (character.currentVillage === 'rudania' || character.currentVillage === 'vhintl') 
+        ? 'inariko' 
+        : character.currentVillage;
+
+    // Update the character's location, stamina, and add debuff
+    character.currentVillage = recoveryVillage;
+    character.currentStamina = 0; // Deplete stamina
+    character.debuff = {
+        active: true,
+        endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days from now
+    };
+
+    await character.save(); // Save the updated character state
+
+    // Create the KO embed directly
+    const koEmbed = new EmbedBuilder()
+        .setTitle(`💀 **${character.name} is KO'd!**`)
+        .setDescription(
+            `**${character.name}** woke up in **${capitalizeFirstLetter(recoveryVillage)}** and needs time to recover from their ordeal.\n\n` +
+            `**❤️ __Hearts:__** ${character.currentHearts}/${character.maxHearts}\n` +
+            `**🟩 __Stamina:__** ${character.currentStamina}/${character.maxStamina}\n\n` +
+            `🔔 **${character.name}** is out of commission and a debuff has been applied. They will recover in 7 days.`
+        )
+        .setColor('#FF0000')
+        .setImage('https://storage.googleapis.com/tinglebot/Graphics/KORecovery.png') // Example image URL
+        .setTimestamp();
+
+    // Send the embed message
+    await interaction.channel.send({ embeds: [koEmbed] });
+
+    return; // Stop further processing for the day
+}
+
+    // ------------------- Stop at Inariko for multi-day travel -------------------
+    if (day === 1 && stopInInariko && hasPerk(character, 'DELIVERING')) {
+        console.log(`[travel.js]: Stopping at Inariko on Day ${day}.`);
+    
+        const nextChannelId = PATH_CHANNELS[paths[1]]; // Transition to the second path for Day 2
+        const stopEmbed = createStopInInarikoEmbed(character, nextChannelId);
+    
+        const channel = await interaction.client.channels.fetch(PATH_CHANNELS[paths[0]]);
+        console.log(`[travel.js]: Fetching channel for current path "${paths[0]}" to post stop message.`);
+        await channel.send({ embeds: [stopEmbed] });
+    
+        travelLog.push(`> 🛑 Stopped in Inariko. Please move to <#${nextChannelId}> to continue your journey.\n`);
+    
+        const imageEmbed = new EmbedBuilder()
+            .setImage('https://storage.googleapis.com/tinglebot/Graphics/stopatlanayru.png')
+            .setDescription('🛑 A serene view accompanies the stop.');
+    
+        try {
+            await channel.send({ embeds: [imageEmbed] });
+        } catch (error) {
+            console.error(`[travel.js]: Error sending stop-in-Inariko image embed: ${error.message}`);
+        }
+    
+        console.log(`[travel.js]: Stop message posted for Day ${day}. Moving to Day 2.`);
+        await processTravelDay(day + 1); // Explicitly call Day 2 processing
+        return; // Prevent further processing for Day 1
+    }
+    
+   
+    // ------------------- Final Day Logic -------------------
+    if (day === adjustedDuration && hasPerk(character, 'DELIVERING')) {
+        console.log(`[travel.js]: Final Day ${day} reached. Preparing to post Day 2/2 travel message.`);
+    
+        // Explicitly fetch and post Day 2/2 travel message
+        const currentPath = paths[1] || paths[0]; // Use the second path or fallback to the first
+        const pathEmoji = pathEmojis[currentPath];
+        const dayTravelEmbed = createTravelingEmbed(character, day, totalTravelDuration, pathEmoji, currentPath);
+    
+        const channelId = PATH_CHANNELS[currentPath];
+        const channel = await interaction.client.channels.fetch(channelId);
+    
+        if (!channel) {
+            console.error(`[travel.js]: Failed to fetch channel for path "${currentPath}".`);
+            throw new Error(`Channel not found for path "${currentPath}".`);
+        }
+    
+        console.log(`[travel.js]: Posting Day 2/2 travel message in channel "${currentPath}".`);
+        await channel.send({ embeds: [dayTravelEmbed] });
+    
+        // Process interactions for Day 2
+        console.log(`[travel.js]: Processing interactions for Day ${day}/${adjustedDuration} on path "${currentPath}".`);
+        await handleDayInteractions(day, channel, currentPath, pathEmoji);
+    
+        // Log Day 2/2
+        travelLog.push(`> **Day ${day}:** Traveled on ${currentPath}.\n`);
+    
+        // Finalize the journey
+        console.log(`[travel.js]: Finalizing journey for ${character.name} on Day ${day}.`);
+        character.currentVillage = destination;
+        await character.save();
+    
+        const finalChannelId = PATH_CHANNELS[paths[paths.length - 1]] || channelId;
+        const finalChannel = await interaction.client.channels.fetch(finalChannelId);
+    
+        const finalEmbed = createFinalTravelEmbed(character, destination, paths, adjustedDuration, travelLog);
+        const imageEmbed = new EmbedBuilder()
+            .setImage('https://storage.googleapis.com/tinglebot/Graphics/travel.png')
+            .setDescription(`🎉 **${character.name} has arrived safely at ${capitalizeFirstLetter(destination)}!**`);
+    
+        try {
+            console.log(`[travel.js]: Posting final journey embeds in channel "${finalChannelId}".`);
+            await finalChannel.send({ embeds: [finalEmbed] });
+            await finalChannel.send({ embeds: [imageEmbed] });
+        } catch (error) {
+            console.error(`[travel.js]: Error sending arrival embeds: ${error.message}`);
+            await finalChannel.send({ content: '⚠️ Unable to display the arrival embed.' });
+        }
+    
+        console.log(`[travel.js]: Journey complete for ${character.name}.`);
+        return; // End processing
+    }
+    
+    
+// ------------------- Log the day and proceed to the next day -------------------
+    travelLog.push(`> **Day ${day}:** Traveled on ${currentPath}.\n`);
 
             if (day === 2 && stopInInariko) {
-                const nextChannelId = PATH_CHANNELS[paths[1]];
+                const nextChannelId = PATH_CHANNELS[paths[1]]; // Use the second path for Day 2
+                if (!nextChannelId) {
+                    console.error(`[travel.js]: Next channel ID for path "${paths[1]}" is undefined.`);
+                    throw new Error(`Next channel ID for path "${paths[1]}" is undefined.`);
+                }
+            
                 const stopEmbed = createStopInInarikoEmbed(character, nextChannelId);
                 await channel.send({ embeds: [stopEmbed] });
                 travelLog.push(`> 🛑 Stopped in Inariko for rest and supplies.\n`);
             
                 // Attach a custom image for the stop
                 const imageEmbed = new EmbedBuilder()
-                    .setImage('https://storage.googleapis.com/tinglebot/Graphics/stopatlanayru.png') // Replace with the desired image URL
-                    .setDescription('A serene view accompanies the stop.');
+                    .setImage('https://storage.googleapis.com/tinglebot/Graphics/stopatlanayru.png') // Replace with a valid image URL
+                    .setDescription('🛑 A serene view accompanies the stop.');
             
                 try {
                     await channel.send({ embeds: [imageEmbed] });
@@ -378,8 +611,10 @@ if (encounterType !== 'No Encounter') {
                 await new Promise(resolve => setTimeout(resolve, 3000));
             }
             
+            
 
-            await processTravelDay(day + 1); // Process the next day
+            console.log(`[travel.js]: Moving to Day ${day + 1}.`);
+            await processTravelDay(day + 1);
         });
 
         return; // Exit after handling the encounter
@@ -393,22 +628,23 @@ if (encounterType !== 'No Encounter') {
 
     // ------------------- Create Buttons for Safe Travel Actions -------------------
     const buttons = new ActionRowBuilder()
-        .addComponents(
-            new ButtonBuilder()
-                .setCustomId('recover')
-                .setLabel('💖 Recover a Heart')
-                .setStyle(ButtonStyle.Primary)
-                .setDisabled(character.currentStamina === 0), // Disable if no stamina
-            new ButtonBuilder()
-                .setCustomId('gather')
-                .setLabel('🌿 Gather')
-                .setStyle(ButtonStyle.Secondary)
-                .setDisabled(character.currentStamina === 0), // Disable if no stamina
-            new ButtonBuilder()
-                .setCustomId('do_nothing')
-                .setLabel('✨ Do Nothing')
-                .setStyle(ButtonStyle.Secondary)
-        );
+    .addComponents(
+        new ButtonBuilder()
+            .setCustomId('recover')
+            .setLabel('💖 Recover a Heart')
+            .setStyle(ButtonStyle.Primary)
+            .setDisabled(character.currentHearts >= character.maxHearts || character.currentStamina === 0), // Disable if full hearts or no stamina
+        new ButtonBuilder()
+            .setCustomId('gather')
+            .setLabel('🌿 Gather')
+            .setStyle(ButtonStyle.Success)
+            .setDisabled(character.currentStamina === 0), // Disable if no stamina
+        new ButtonBuilder()
+            .setCustomId('do_nothing')
+            .setLabel('✨ Do Nothing')
+            .setStyle(ButtonStyle.Secondary)
+    );
+
 
     // ------------------- Send Safe Travel Message -------------------
     await safeTravelMessage.edit({
@@ -468,6 +704,46 @@ collector.on('collect', async (i) => {
             dailyLogEntry += `> ${decision}\n`;
         }
 
+
+// KO Check at the end of the day
+if (character.currentHearts <= 0 || character.ko) {
+    character.ko = true; // Ensure KO flag is set
+
+    // Determine the recovery village
+    const recoveryVillage = (character.currentVillage === 'rudania' || character.currentVillage === 'vhintl') 
+        ? 'inariko' 
+        : character.currentVillage;
+
+    // Update the character's location, stamina, and add debuff
+    character.currentVillage = recoveryVillage;
+    character.currentStamina = 0; // Deplete stamina
+    character.debuff = {
+        active: true,
+        endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days from now
+    };
+
+    await character.save(); // Save the updated character state
+
+    // Create the KO embed directly
+    const koEmbed = new EmbedBuilder()
+        .setTitle(`💀 **${character.name} is KO'd!**`)
+        .setDescription(
+            `**${character.name}** woke up in **${capitalizeFirstLetter(recoveryVillage)}** and needs time to recover from their ordeal.\n\n` +
+            `**❤️ __Hearts:__** ${character.currentHearts}/${character.maxHearts}\n` +
+            `**🟩 __Stamina:__** ${character.currentStamina}/${character.maxStamina}\n\n` +
+            `🔔 **${character.name}** is out of commission and a debuff has been applied. They will recover in 7 days.`
+        )
+        .setColor('#FF0000')
+        .setImage('https://storage.googleapis.com/tinglebot/Graphics/KORecovery.png') // Example image URL
+        .setTimestamp();
+
+    // Send the embed message
+    await interaction.channel.send({ embeds: [koEmbed] });
+
+    return; // Stop further processing for the day
+}
+
+
         // Log the day and proceed to the next day
         travelLog.push(dailyLogEntry);
 
@@ -480,7 +756,7 @@ collector.on('collect', async (i) => {
             // Attach a custom image for the stop
             const imageEmbed = new EmbedBuilder()
                 .setImage('https://storage.googleapis.com/tinglebot/Graphics/stopatlanayru.png') // Replace with the desired image URL
-                .setDescription('A serene view accompanies the stop.');
+                .setDescription('🛑 A serene view accompanies the stop.');
         
             try {
                 await channel.send({ embeds: [imageEmbed] });
@@ -492,7 +768,7 @@ collector.on('collect', async (i) => {
             await new Promise(resolve => setTimeout(resolve, 3000));
         }
         
-
+        console.log(`[travel.js]: Transitioning to Day 2.`)
         await processTravelDay(day + 1); // Process the next day
       });
     
