@@ -17,7 +17,7 @@ const Item = require('../models/ItemModel');
 const { getAllRaces } = require('../modules/raceModule');
 const { getJobPerk } = require('../modules/jobsModule');
 const { getAllVillages } = require('../modules/locationsModule');
-const { capitalize } = require('../modules/formattingModule');
+const { capitalize, capitalizeFirstLetter } = require('../modules/formattingModule');
 const { getModCharacterByName, modCharacters } = require('../modules/modCharacters');
 const { loadBlightSubmissions } = require('../handlers/blightHandler');
 const { distractionItems, staminaRecoveryItems } = require('../modules/mountModule');
@@ -576,30 +576,37 @@ async function handleHealAutocomplete(interaction, focusedOption) {
   try {
     const userId = interaction.user.id;
 
-    // Autocomplete for 'charactername'
+    // Autocomplete for 'charactername' (request target character)
     if (focusedOption.name === 'charactername') {
-      const characters = await fetchCharactersByUserId(userId);
-      const choices = characters.map(character => ({
-        name: `${character.name} - ${capitalize(character.currentVillage)}`,
+      const userCharacters = await fetchCharactersByUserId(userId); // Fetch user's characters
+      const choices = userCharacters.map(character => ({
+        name: `${character.name} - ${capitalizeFirstLetter(character.currentVillage)}`,
         value: character.name,
       }));
       await respondWithFilteredChoices(interaction, focusedOption, choices);
 
-    // Autocomplete for 'healer' or 'healername'
-  } else if (focusedOption.name === 'healername') {
-    const userId = interaction.user.id; // Get the ID of the user making the request
-    const userCharacters = await fetchCharactersByUserId(userId); // Fetch characters owned by the user
-    const healerCharacters = userCharacters.filter(character => character.job.toLowerCase() === 'healer'); // Filter by Healer job
-  
-    const choices = healerCharacters.map(character => ({
-      name: `${character.name} - ${capitalize(character.currentVillage)}`, // Format with name and village
-      value: character.name, // Value for the autocomplete
-    }));
-  
-    await respondWithFilteredChoices(interaction, focusedOption, choices); // Respond with filtered list
+    // Autocomplete for 'healer' (global healers for /heal request)
+    } else if (focusedOption.name === 'healer') {
+      const allCharacters = await fetchAllCharacters(); // Fetch all characters globally
+      const healerCharacters = allCharacters.filter(character => character.job.toLowerCase() === 'healer'); // Filter healers
+      const choices = healerCharacters.map(character => ({
+        name: `${character.name} - ${capitalizeFirstLetter(character.currentVillage)}`,
+        value: character.name,
+      }));
+      await respondWithFilteredChoices(interaction, focusedOption, choices);
+
+    // Autocomplete for 'healername' (user-owned healers for /heal fulfill)
+    } else if (focusedOption.name === 'healername') {
+      const userCharacters = await fetchCharactersByUserId(userId); // Fetch user's characters
+      const healerCharacters = userCharacters.filter(character => character.job.toLowerCase() === 'healer'); // Filter healers
+      const choices = healerCharacters.map(character => ({
+        name: `${character.name} - ${capitalizeFirstLetter(character.currentVillage)}`,
+        value: character.name,
+      }));
+      await respondWithFilteredChoices(interaction, focusedOption, choices);
     }
   } catch (error) {
-    console.error('Error handling heal autocomplete:', error);
+    console.error('[autocompleteHandler.js]: Error handling heal autocomplete:', error);
     await safeRespondWithError(interaction);
   }
 }

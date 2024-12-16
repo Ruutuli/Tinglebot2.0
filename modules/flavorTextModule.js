@@ -242,7 +242,7 @@ const typeActionMap = {
 'Legs': { action: 'equipped', color: '#FF33A1' },
 'Natural': { action: 'collected', color: '#D2B48C' },
 'Ore': { action: 'excavated', color: '#708090' },
-'Ancient Parts': { action: 'found an ancient', color: '#CC7722' },
+'Ancient Parts': { action: 'found', color: '#CC7722' },
 'Creature': { action: 'captured', color: '#008080' },
 'Mushroom': { action: 'foraged', color: '#FF0000' },
 'Plant': { action: 'picked', color: '#00FF00' },

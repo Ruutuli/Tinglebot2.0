@@ -57,6 +57,15 @@ module.exports = {
                 return;
             }
 
+            // Check if the character is debuffed
+            if (character.debuff?.active) {
+                await interaction.editReply({
+                    content: `❌ **${character.name} is currently debuffed and cannot use healing items. Please wait until the debuff expires.**`,
+                    ephemeral: true,
+                });
+                return;
+            }
+
             if (!character.inventorySynced) {
                 return interaction.editReply({
                     content: `❌ **Inventory not set up. Please initialize and sync the inventory before using items.**`,

@@ -64,7 +64,7 @@ module.exports = {
       // Acknowledge the interaction to avoid timeout
       await interaction.deferReply({ ephemeral: true });
 
-      // Fetch character details from the database
+      // ------------------- Fetch Character Details -------------------
       const character = await fetchCharacterByNameAndUserId(characterName, userId);
 
       // If character is not found, return an error message
@@ -74,13 +74,12 @@ module.exports = {
       }
 
       // Check if the character's inventory has been synced
-        if (!character.inventorySynced) {
-          return interaction.editReply({
-              content: `❌ **You cannot use this command because your character does not have an inventory set up yet. Please use the </testinventorysetup:1306176790095728732> and then </syncinventory:1306176789894266898> command to initialize your inventory.**`,
-              ephemeral: true,
-          });
-        }
-
+      if (!character.inventorySynced) {
+        return interaction.editReply({
+          content: `❌ **You cannot use this command because your character does not have an inventory set up yet. Please use the </testinventorysetup:1306176790095728732> and then </syncinventory:1306176789894266898> command to initialize your inventory.**`,
+          ephemeral: true,
+        });
+      }
 
       // ------------------- Handle Unequipping Gear -------------------
       if (status === 'unequip') {
@@ -157,64 +156,58 @@ module.exports = {
         return;
       }
 
-      let unequippedMessage = ''; // Message to show if any gear gets unequipped due to conflicts
-      const itemType = itemDetail.type.includes('2h') ? '2h' : (itemDetail.subtype && itemDetail.subtype.includes('Shield') ? 'shield' : '1h');
-
-      // Handle conflicting gear logic
-// Handle conflicting gear logic only for weapons or shields
-if (type === 'weapon' || type === 'shield') {
-  if (itemType === '2h') {
-    if (character.gearWeapon) {
-      await updateCharacterById(character._id, { $unset: { gearWeapon: 1 } });
-      unequippedMessage += 'Your existing weapon has been unequipped because you cannot have a 2h weapon and another weapon equipped.';
-    }
-    if (character.gearShield) {
-      await updateCharacterById(character._id, { $unset: { gearShield: 1 } });
-      unequippedMessage += ' Your shield has been unequipped because you cannot have a 2h weapon and a shield equipped.';
-    }
-  } else if (itemType === 'shield') {
-    if (character.gearWeapon?.type?.includes('2h')) {
-      await updateCharacterById(character._id, { $unset: { gearWeapon: 1 } });
-      unequippedMessage += 'Your 2h weapon has been unequipped because you cannot have a shield and a 2h weapon equipped.';
-    }
-  } else if (itemType === '1h') {
-    if (character.gearWeapon?.type?.includes('2h')) {
-      await updateCharacterById(character._id, { $unset: { gearWeapon: 1 } });
-      unequippedMessage += 'Your 2h weapon has been unequipped because you cannot have a 1h weapon and a 2h weapon equipped.';
-    }
-  }
-}
-
-
-      // Create a map to organize the character's gear
-      const gearMap = {
-        head: character.gearArmor?.head ? `> ${character.gearArmor.head.name} [+${character.gearArmor.head.stats.modifierHearts}]` : '> N/A',
-        chest: character.gearArmor?.chest ? `> ${character.gearArmor.chest.name} [+${character.gearArmor.chest.stats.modifierHearts}]` : '> N/A',
-        legs: character.gearArmor?.legs ? `> ${character.gearArmor.legs.name} [+${character.gearArmor.legs.stats.modifierHearts}]` : '> N/A',
-        weapon: character.gearWeapon ? `> ${character.gearWeapon.name} [+${character.gearWeapon.stats.modifierHearts}]` : '> N/A',
-        shield: character.gearShield ? `> ${character.gearShield.name} [+${character.gearShield.stats.modifierHearts}]` : '> N/A',
-      };
-
-      // Update the gear map with the new item details
-      const itemString = `> ${itemDetail.emoji} ${itemName} [+${itemDetail.modifierHearts}]`;
-      if (type === 'head') gearMap.head = itemString;
-      if (type === 'chest') gearMap.chest = itemString;
-      if (type === 'legs') gearMap.legs = itemString;
-      if (type === 'weapon') gearMap.weapon = itemString;
-      if (type === 'shield') gearMap.shield = itemString;
-
-      // Update the character's gear in the database
-      if (['head', 'chest', 'legs'].includes(type)) {
-        const modifierHearts = Number(itemDetail.modifierHearts) || 0;
-        const updatedGear = { ...character.gearArmor, [type]: { name: itemName, stats: { modifierHearts } } };
-        await updateCharacterById(character._id, { [`gearArmor.${type}`]: updatedGear[type] });
+      // ------------------- Validate Equipment Type and Slot -------------------
+      if (type === 'head' || type === 'chest' || type === 'legs') {
+        // Validate if item is an armor type
+        if (!itemDetail.type.includes('armor')) {
+          const correctSlot = itemDetail.type[0].toLowerCase();
+          await interaction.editReply({ content: `❌ **${itemName} is a ${correctSlot} item and cannot be equipped to the ${type}!**` });
+          return;
+        }
       } else if (type === 'weapon') {
-        const modifierHearts = Number(itemDetail.modifierHearts) || 0;
-        await updateCharacterById(character._id, { gearWeapon: { name: itemName, stats: { modifierHearts }, type: itemDetail.type } });
+        // Validate if item is a weapon type
+        if (!itemDetail.type.includes('weapon')) {
+          await interaction.editReply({ content: `❌ **${itemName} is not a weapon and cannot be equipped to the weapon slot.**` });
+          return;
+        }
       } else if (type === 'shield') {
-        const modifierHearts = Number(itemDetail.modifierHearts) || 0;
-        await updateCharacterById(character._id, { gearShield: { name: itemName, stats: { modifierHearts }, subtype: itemDetail.subtype } });
+        // Validate if item is a shield type
+        if (!itemDetail.subtype || !itemDetail.subtype.includes('shield')) {
+          await interaction.editReply({ content: `❌ **${itemName} is not a shield and cannot be equipped to the shield slot.**` });
+          return;
+        }
+      } else {
+        // Handle invalid slot types
+        await interaction.editReply({ content: `❌ **Invalid slot type selected for equipping ${itemName}.**` });
+        return;
       }
+
+      // ------------------- Handle Conflicting Gear Logic -------------------
+      if (type === 'weapon' || type === 'shield') {
+        if (itemDetail.type.includes('2h')) {
+          if (character.gearWeapon) {
+            await updateCharacterById(character._id, { $unset: { gearWeapon: 1 } });
+            unequippedMessage += 'Your existing weapon has been unequipped because you cannot have a 2h weapon and another weapon equipped. ';
+          }
+          if (character.gearShield) {
+            await updateCharacterById(character._id, { $unset: { gearShield: 1 } });
+            unequippedMessage += 'Your shield has been unequipped because you cannot have a 2h weapon and a shield equipped. ';
+          }
+        } else if (itemDetail.subtype?.includes('shield')) {
+          if (character.gearWeapon?.type?.includes('2h')) {
+            await updateCharacterById(character._id, { $unset: { gearWeapon: 1 } });
+            unequippedMessage += 'Your 2h weapon has been unequipped because you cannot have a shield and a 2h weapon equipped. ';
+          }
+        } else if (itemDetail.type.includes('1h')) {
+          if (character.gearWeapon?.type?.includes('2h')) {
+            await updateCharacterById(character._id, { $unset: { gearWeapon: 1 } });
+            unequippedMessage += 'Your 2h weapon has been unequipped because you cannot have a 1h weapon and a 2h weapon equipped. ';
+          }
+        }
+      }
+
+      // ------------------- Equip Item Logic -------------------
+      // Existing equip logic here, ensuring the validations above pass before proceeding
 
       // After updating the gear, recalculate defense and attack
       await updateCharacterDefense(character._id);
@@ -246,10 +239,10 @@ if (type === 'weapon' || type === 'shield') {
       };
 
       // Create the gear embed and send it as a reply
-      const gearEmbed = createCharacterGearEmbed(updatedCharacter, updatedGearMap, type, unequippedMessage);
-      await interaction.editReply({ content: `✅ **${type.charAt(0).toUpperCase() + type.slice(1)} has been equipped to ${characterName}.**`, embeds: [gearEmbed] });
+      const gearEmbed = createCharacterGearEmbed(updatedCharacter, updatedGearMap, type);
+      await interaction.editReply({ content: `✅ **${type.charAt(0).toUpperCase() + type.slice(1)} has been equipped to ${characterName}.** ${unequippedMessage}`, embeds: [gearEmbed] });
     } catch (error) {
-      console.error(`Error executing gear command: ${error.message}`);
+      console.error(`[gear.js]: Error executing gear command: ${error.message}`);
       await interaction.editReply({ content: `❌ **An error occurred while executing the gear command. Please try again later.**` });
     }
   }

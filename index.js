@@ -26,6 +26,7 @@ const { handleSelectMenuInteraction } = require('./handlers/selectMenuHandler');
 const { renameChannels, trackBloodMoonCycle, currentDayInCycle, isBloodMoonActive } = require('./scripts/bloodmoon');
 const scheduler = require('./scheduler');
 const { getGuildIds } = require('./utils/getGuildIds');
+const { initializeRandomEncounterBot } = require('./scripts/randomEncounters');
 
 // ------------------- Global Variables -------------------
 let client;
@@ -100,6 +101,14 @@ async function initializeClient() {
     } catch (error) {
       console.error('[index.js]: ❌ Vending stock generation error:', error);
     }
+
+    // Initialize Random Encounter Functionality
+    try {
+      initializeRandomEncounterBot(client);
+      console.log('[index.js]: ⚔️ Random encounter functionality initialized');
+    } catch (error) {
+      console.error('[index.js]: ❌ Error initializing random encounters:', error);
+    }
   });
 
   // ------------------- Interaction Handlers -------------------
@@ -123,6 +132,7 @@ async function initializeClient() {
     }
   });
 
+  // ------------------- Login the Bot -------------------
   client.login(process.env.DISCORD_TOKEN);
 }
 

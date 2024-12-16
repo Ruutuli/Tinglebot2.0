@@ -110,11 +110,18 @@ module.exports = {
       const characterName = interaction.options.getString('charactername'); // Fetch the character name from user input
       const userId = interaction.user.id; // Get the ID of the interacting user
 
-      const character = await fetchCharacterByNameAndUserId(characterName, userId); // Fetch character data from the database
+      const character = await fetchCharacterByNameAndUserId(characterName, userId);
       if (!character) {
-        // Reply if the character is not found or does not belong to the user
         await interaction.editReply({
           content: `❌ **Character "${characterName}" not found or doesn't belong to you!**`,
+        });
+        return;
+      }
+      
+      // Check if the character is debuffed
+      if (character.debuff?.active) {
+        await interaction.editReply({
+          content: `❌ **${character.name} is currently debuffed and cannot loot. Please wait until the debuff expires.**`,
         });
         return;
       }

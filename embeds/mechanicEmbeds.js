@@ -145,13 +145,20 @@ const createGatherEmbed = (character, randomItem) => {
     const settings = getCommonEmbedSettings(character);
     const action = typeActionMap[randomItem.type[0]]?.action || 'found';
     const article = getArticleForItem(randomItem.itemName);
-    const itemColor = settings.color;
+
+    // Determine visiting status
+    const isVisiting = character.homeVillage.toLowerCase() !== character.currentVillage.toLowerCase();
+    const locationPrefix = isVisiting
+        ? `${capitalizeWords(character.homeVillage)} ${capitalizeWords(character.job)} is visiting ${capitalizeWords(character.currentVillage)}`
+        : `${capitalizeWords(character.currentVillage)} ${capitalizeWords(character.job)}`;
+
+    const embedColor = getVillageColorByName(character.currentVillage) || settings.color || '#000000';
 
     return new EmbedBuilder()
-        .setTitle(`${capitalizeWords(character.homeVillage)} ${character.job}: ${character.name} ${action} ${article} ${randomItem.itemName}!`)
-        .setColor(itemColor)
-        .setAuthor({ name: `${character.name} 🔗`, iconURL: character.icon, url: character.inventory })
-        .setThumbnail(randomItem.image)
+        .setTitle(`${locationPrefix}: ${character.name} ${action} ${article} ${randomItem.itemName}!`)
+        .setColor(embedColor)
+        .setAuthor({ name: `${character.name} 🔗`, iconURL: character.icon || DEFAULT_IMAGE_URL, url: character.inventory || '' })
+        .setThumbnail(randomItem.image || DEFAULT_IMAGE_URL)
         .setImage(DEFAULT_IMAGE_URL);
 };
 

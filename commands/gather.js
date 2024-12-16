@@ -17,7 +17,7 @@ const { createWeightedItemList, calculateFinalValue } = require('../modules/rngM
 const { useHearts, handleKO, updateCurrentHearts  } = require('../modules/characterStatsModule');
 const { generateVictoryMessage, generateDamageMessage, generateFinalOutcomeMessage } = require('../modules/flavorTextModule');
 const { getEncounterOutcome } = require('../modules/damageModule');
-
+const { capitalizeWords } = require('../modules/formattingModule');
 
 // Utilities
 const { addItemInventoryDatabase } = require('../utils/inventoryUtils');
@@ -28,8 +28,11 @@ const { isBloodMoonActive } = require('../scripts/bloodmoon');
 // Embeds
 const { createGatherEmbed, createMonsterEncounterEmbed } = require('../embeds/mechanicEmbeds');
 
-// Commands
-const { processLootingLogic } = require('../commands/loot');
+const villageChannels = {
+  Rudania: process.env.RUDANIA_TOWN_HALL,
+  Inariko: process.env.INARIKO_TOWN_HALL,
+  Vhintl: process.env.VHINTL_TOWN_HALL,
+};
 
 // ------------------- Command Definition -------------------
 module.exports = {
@@ -42,47 +45,72 @@ module.exports = {
         .setRequired(true)
         .setAutocomplete(true)),
 
-  // ------------------- Command Execution Logic -------------------
-  async execute(interaction) {
-    try {
-      await interaction.deferReply();
+// ------------------- Command Execution Logic -------------------
+async execute(interaction) {
+  try {
+    await interaction.deferReply();
 
-      const characterName = interaction.options.getString('charactername');
-      const userId = interaction.user.id;
+    const characterName = interaction.options.getString('charactername');
+    const userId = interaction.user.id;
 
-      const character = await fetchCharacterByNameAndUserId(characterName, userId);
-      if (!character) {
-          await interaction.editReply({ content: `❌ **Character ${characterName} not found or does not belong to you.**` });
-          return;
-      }
-      
+    // ------------------- Step 1: Validate Character -------------------
+    const character = await fetchCharacterByNameAndUserId(characterName, userId);
+    if (!character) {
+      await interaction.editReply({
+        content: `❌ **Character ${characterName} not found or does not belong to you.**`,
+      });
+      return;
+    }
+    
+    // Check if the character is debuffed
+    if (character.debuff?.active) {
+      await interaction.editReply({
+        content: `❌ **${character.name} is currently debuffed and cannot gather. Please wait until the debuff expires.**`,
+      });
+      return;
+    }
 
-      if (!character.inventorySynced) {
-        return interaction.editReply({
-          content: `❌ **Inventory not set up. Use the necessary commands to initialize it.**`,
-          ephemeral: true,
-        });
-      }
+    // ------------------- Step 2: Validate Interaction Channel -------------------
+    const currentVillage = capitalizeWords(character.currentVillage); // Capitalize village name for consistency
+    const allowedChannel = villageChannels[currentVillage]; // Get the allowed channel from environment variables
 
-      const job = character.job;
+    if (!allowedChannel || interaction.channelId !== allowedChannel) {
+      const channelMention = `<#${allowedChannel}>`;
+      await interaction.editReply({
+        content: `❌ **You can only use this command in the ${currentVillage} Town Hall channel!**\n${characterName} is currently in ${currentVillage}! This command must be used in ${channelMention}.`,
+      });
+      return;
+    }
 
-      if (!isValidJob(job)) {
-        await interaction.editReply({ content: `❌ **Invalid job ${job} for gathering items.**` });
-        return;
-      }
+    // ------------------- Step 3: Validate Inventory -------------------
+    if (!character.inventorySynced) {
+      return interaction.editReply({
+        content: `❌ **Inventory not set up. Use the necessary commands to initialize it.**`,
+        ephemeral: true,
+      });
+    }
 
-      const jobPerk = getJobPerk(job);
-      if (!jobPerk || !jobPerk.perks.includes('GATHERING')) {
-        await interaction.editReply({ content: `❌ **${character.name} cannot gather items as a ${job} without the GATHERING perk.**` });
-        return;
-      }
+    // ------------------- Step 4: Validate Job -------------------
+    const job = character.job;
 
-      const currentVillage = character.currentVillage;
-      const region = getVillageRegionByName(currentVillage);
-      if (!region) {
-        await interaction.editReply({ content: `❌ **No region found for the village ${currentVillage}.**` });
-        return;
-      }
+    if (!isValidJob(job)) {
+      await interaction.editReply({ content: `❌ **Invalid job ${job} for gathering items.**` });
+      return;
+    }
+
+    const jobPerk = getJobPerk(job);
+    if (!jobPerk || !jobPerk.perks.includes('GATHERING')) {
+      await interaction.editReply({ content: `❌ **${character.name} cannot gather items as a ${job} without the GATHERING perk.**` });
+      return;
+    }
+
+    // ------------------- Step 5: Validate Region -------------------
+    const region = getVillageRegionByName(currentVillage);
+    if (!region) {
+      await interaction.editReply({ content: `❌ **No region found for the village ${currentVillage}.**` });
+      return;
+    }
+    
 // ------------------- Helper Function: Generate Outcome Message -------------------
 function generateOutcomeMessage(outcome) {
   if (outcome.hearts) {
@@ -144,18 +172,14 @@ function generateLootedItem(encounteredMonster, weightedItems) {
   return lootedItem;
 }
 
-
-        // ------------------- Encounter Determination -------------------
-
+// ------------------- Encounter Determination -------------------
 
 // Determine Blood Moon and encounter probabilities
 const randomChance = Math.random();
 const bloodMoonActive = isBloodMoonActive();
 
-
 // Check for Blood Moon or Monster Encounter (25% chance for monsters during Blood Moon)
 if (bloodMoonActive && randomChance < .25) {
-
 
     // Fetch all monsters and filter by region and tier
     const allMonsters = await fetchAllMonsters();
@@ -165,7 +189,6 @@ if (bloodMoonActive && randomChance < .25) {
 
     if (monstersByRegion.length > 0) {
         const encounteredMonster = monstersByRegion[Math.floor(Math.random() * monstersByRegion.length)];
-
 
         // Calculate encounter values
         const { damageValue, adjustedRandomValue, attackSuccess, defenseSuccess } = calculateFinalValue(character);
@@ -289,7 +312,6 @@ if (bloodMoonActive && randomChance < .25) {
         return;
     }
 } else {
-
 
     // Normal gathering logic (75% during Blood Moon or non-Blood Moon scenario)
     const items = await fetchAllItems();
