@@ -112,20 +112,38 @@ if (!toCharacter.inventorySynced) {
 
       const fromInventoryCollection = await getCharacterInventoryCollection(fromCharacter.name);
 
-      // ------------------- Check if all items are available in sufficient quantity -------------------
-      for (const { name, quantity } of items) {
-        const fromInventory = await fromInventoryCollection.findOne({ itemName: new RegExp(`^${name}$`, 'i') });
+// ------------------- Check if all items are available in sufficient quantity -------------------
+console.log(`[TRANSFER]: Starting item availability check for character: ${fromCharacterName}`);
 
-        if (!fromInventory || fromInventory.quantity < quantity) {
-          allItemsAvailable = false;
-          unavailableItems.push(`${name} - QTY:${fromInventory ? fromInventory.quantity : 0}`);
-        }
-      }
+for (const { name, quantity } of items) {
+  console.log(`[TRANSFER]: Checking availability for item: ${name} (Required: ${quantity})`);
 
-      if (!allItemsAvailable) {
-        await interaction.editReply(`❌ \`${fromCharacterName}\` does not have enough of the following items to transfer: ${unavailableItems.join(', ')}`);
-        return;
-      }
+  // Retrieve all inventory entries for the item (case-insensitive match)
+  const fromInventoryEntries = await fromInventoryCollection.find({ itemName: new RegExp(`^${name}$`, 'i') }).toArray();
+
+  // Calculate total quantity by summing up all matching entries
+  const totalQuantity = fromInventoryEntries.reduce((sum, entry) => sum + entry.quantity, 0);
+
+  // Logging total quantity for debugging
+  console.log(`[TRANSFER]: Total quantity of '${name}' in inventory: ${totalQuantity} (Required: ${quantity})`);
+
+  if (totalQuantity < quantity) {
+    // If insufficient total quantity
+    console.log(`[TRANSFER]: Insufficient quantity for item '${name}' (Available: ${totalQuantity}, Required: ${quantity}).`);
+    unavailableItems.push(`${name} - QTY:${totalQuantity}`);
+    allItemsAvailable = false;
+  } else {
+    console.log(`[TRANSFER]: Sufficient quantity available for '${name}' (Total: ${totalQuantity}, Required: ${quantity}).`);
+  }
+}
+
+if (!allItemsAvailable) {
+  console.log(`[TRANSFER]: Items unavailable for transfer: ${unavailableItems.join(', ')}`);
+  await interaction.editReply(`❌ \`${fromCharacterName}\` does not have enough of the following items to transfer: ${unavailableItems.join(', ')}`);
+  return;
+}
+
+
 
       // ------------------- Validate Google Sheets URLs -------------------
       const fromInventoryLink = fromCharacter.inventory || fromCharacter.inventoryLink;

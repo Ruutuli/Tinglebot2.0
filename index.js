@@ -112,25 +112,42 @@ async function initializeClient() {
   });
 
   // ------------------- Interaction Handlers -------------------
-  client.on('interactionCreate', async interaction => {
-    try {
-      if (interaction.isButton()) {
-        await handleComponentInteraction(interaction);
-      } else if (interaction.isStringSelectMenu()) {
-        console.log(`[index.js]: Dropdown interaction detected: ${interaction.customId}`);
-        await handleSelectMenuInteraction(interaction);
-      } else if (interaction.isCommand()) {
-        const command = client.commands.get(interaction.commandName);
-        if (command) await command.execute(interaction);
-      } else if (interaction.isAutocomplete()) {
-        await handleAutocomplete(interaction);
-      } else if (interaction.isModalSubmit()) {
-        await handleModalSubmission(interaction);
+// ------------------- Interaction Handlers -------------------
+client.on('interactionCreate', async interaction => {
+  try {
+    const allowedChannels = [
+      '1305487405985431583', // Path of Scarlet Leaves
+      '1305487571228557322'  // Leaf Dew Way
+    ];
+
+    if (interaction.isCommand()) {
+      // Check if the command is in an allowed channel
+      if (allowedChannels.includes(interaction.channelId) && interaction.commandName !== 'travel') {
+        await interaction.reply({
+          content: `🚫 Only the \`/travel\` command is allowed in this channel.`,
+          ephemeral: true
+        });
+        return;
       }
-    } catch (error) {
-      console.error('[index.js]: ❌ Interaction error:', error);
+
+      // Execute the command
+      const command = client.commands.get(interaction.commandName);
+      if (command) await command.execute(interaction);
+    } else if (interaction.isButton()) {
+      await handleComponentInteraction(interaction);
+    } else if (interaction.isStringSelectMenu()) {
+      console.log(`[index.js]: Dropdown interaction detected: ${interaction.customId}`);
+      await handleSelectMenuInteraction(interaction);
+    } else if (interaction.isAutocomplete()) {
+      await handleAutocomplete(interaction);
+    } else if (interaction.isModalSubmit()) {
+      await handleModalSubmission(interaction);
     }
-  });
+  } catch (error) {
+    console.error('[index.js]: ❌ Interaction error:', error);
+  }
+});
+
 
   // ------------------- Login the Bot -------------------
   client.login(process.env.DISCORD_TOKEN);

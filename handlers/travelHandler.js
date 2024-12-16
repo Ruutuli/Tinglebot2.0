@@ -25,17 +25,20 @@ const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../utils/valid
 // This function handles all travel-related interactions, including fighting, gathering, fleeing, etc.
 async function handleTravelInteraction(interaction, character, day, totalTravelDuration, pathEmoji, currentPath, encounterMessage, monster, travelLog) {
     try {
-        if (interaction.isButton) {
-            await interaction.deferUpdate(); // Ensure the interaction is deferred to avoid timeout errors
+        // ------------------- Defer Interaction Handling -------------------
+        if (interaction.isButton()) {
+            await interaction.deferUpdate(); // Defer button interactions
+        } else if (interaction.isCommand()) {
+            await interaction.deferReply(); // Defer slash command interactions
         } else {
-            await interaction.deferReply();
+            throw new Error(`Unsupported interaction type: ${interaction.type}`);
         }
 
-                // Dynamically fetch and set the perk based on the character's job
-                const jobPerk = getJobPerk(character.job);
-                character.perk = jobPerk ? jobPerk.perks[0] : undefined;
-        
-                console.log(`[LOG] Job Perk for ${character.name}: ${character.perk || 'None'}`);
+        // Dynamically fetch and set the perk based on the character's job
+        const jobPerk = getJobPerk(character.job);
+        character.perk = jobPerk ? jobPerk.perks[0] : undefined;
+
+        console.log(`[LOG] Job Perk for ${character.name}: ${character.perk || 'None'}`);
 
         const customId = interaction.customId;
         let decision = '';

@@ -14,20 +14,23 @@ async function getCharactersInVillage(userId, village) {
 
 // ------------------- Fetch character by name with enhanced logging -------------------
 const fetchCharacterByName = async (characterName) => {
-  try {
-      await connectToTinglebot();
-      const character = await Character.findOne({ name: new RegExp(`^${characterName}$`, 'i') });
+    try {
+        await connectToTinglebot();
+        console.log(`[characterService]: Searching for character "${characterName}"`);
+        const character = await Character.findOne({ name: new RegExp(`^${characterName.trim()}$`, 'i') });
+        
+        if (!character) {
+            console.error(`[characterService]: Character "${characterName}" not found in database.`);
+            throw new Error('Character not found');
+        }
 
-      if (!character) {
-          throw new Error('Character not found');
-      }
-
-      return character;
-  } catch (error) {
-      console.error(`❌ Error fetching character: ${characterName}. Error message: ${error.message}`);
-      throw error;
-  }
+        return character;
+    } catch (error) {
+        console.error(`❌ Error fetching character: ${characterName}. Error message: ${error.message}`);
+        throw error;
+    }
 };
+
 
 // ------------------- Fetch Blighted characters -------------------
 const fetchBlightedCharactersByUserId = async (userId) => {

@@ -66,39 +66,27 @@ async execute(interaction) {
   await interaction.deferReply({ ephemeral: true });
   await connectToTinglebot(); // Connect to the database
 
-  // Define the maximum crafting quantity
-  const MAX_CRAFT_QUANTITY = 5;
-
   // Get user input from the command options
   const characterName = interaction.options.getString('charactername');
   const itemName = interaction.options.getString('itemname');
   const flavorText = interaction.options.getString('flavortext') || '';
   const quantity = interaction.options.getInteger('quantity');
   const userId = interaction.user.id;
-  const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
-
-  // Check if quantity exceeds the maximum allowed limit
-  if (quantity > MAX_CRAFT_QUANTITY) {
-      return interaction.editReply({
-          content: `❌ **You cannot craft more than ${MAX_CRAFT_QUANTITY} items at a time. Please reduce the quantity.**`,
-          ephemeral: true
-      });
-  }
 
   try {
       // Fetch the character and validate
       const character = await fetchCharacterByNameAndUserId(characterName, userId);
       if (!character) {
         return interaction.editReply({
-          content: `❌ **Character ${characterName} not found or does not belong to you.**`,
+          content: `❌ **Character "${characterName}" not found or does not belong to you.**`,
           ephemeral: true,
         });
       }
-      
+
       // Check if the character is debuffed
       if (character.debuff?.active) {
         return interaction.editReply({
-          content: `❌ **${character.name} is currently debuffed and cannot craft. Please wait until the debuff expires.**`,
+          content: `❌ **"${character.name}" is currently debuffed and cannot craft. Please wait until the debuff expires.**`,
           ephemeral: true,
         });
       }
@@ -114,7 +102,7 @@ async execute(interaction) {
       const item = await fetchItemByName(itemName);
       if (!item) {
           return interaction.editReply({
-              content: `❌ **No item found with the name ${itemName}.**`,
+              content: `❌ **No item found with the name "${itemName}".**`,
               ephemeral: true
           });
       }
@@ -124,7 +112,16 @@ async execute(interaction) {
       const requiredJobs = item.craftingTags.join(', ');
       if (!jobPerk || !jobPerk.perks.includes('CRAFTING') || !item.craftingTags.map(tag => tag.toLowerCase()).includes(character.job.toLowerCase())) {
           return interaction.editReply({
-              content: `❌ **${character.name} cannot craft ${itemName} because they lack the required job(s): ${requiredJobs}.**`,
+              content: `❌ **"${character.name}" cannot craft "${itemName}" because they lack the required job(s): ${requiredJobs}.**`,
+              ephemeral: true
+          });
+      }
+
+      // Early Stamina Check
+      const staminaCost = item.staminaToCraft * quantity;
+      if (character.currentStamina < staminaCost) {
+          return interaction.editReply({
+              content: `❌ **Not enough stamina to craft ${quantity} "${itemName}". Required: ${staminaCost}, Available: ${character.currentStamina}.**`,
               ephemeral: true
           });
       }
@@ -138,16 +135,7 @@ async execute(interaction) {
           return interaction.editReply({ content: '❌ **Crafting canceled.**', ephemeral: true });
       }
 
-      // Calculate stamina cost and check availability
-      const staminaCost = item.staminaToCraft * quantity;
-      if (character.currentStamina < staminaCost) {
-          return interaction.editReply({
-              content: `❌ **Not enough stamina to craft ${quantity} ${itemName}(s). Required: ${staminaCost}, Available: ${character.currentStamina}.**`,
-              ephemeral: true
-          });
-      }
-
-      // Deduct stamina and update only after successful material processing
+      // Deduct stamina after successful material processing
       await checkAndUseStamina(character, staminaCost);
 
       // Fetch the updated stamina value
@@ -156,7 +144,7 @@ async execute(interaction) {
       // Create crafting embed and respond with success
       const embed = await createCraftingEmbed(item, character, flavorText, materialsUsed, quantity, staminaCost, updatedStamina);
       await interaction.editReply({
-          content: `✅ **Successfully crafted ${quantity} ${itemName}(s).**`,
+          content: `✅ **Successfully crafted ${quantity} "${itemName}".**`,
           ephemeral: true
       });
       await interaction.followUp({ embeds: [embed], ephemeral: false });
@@ -172,22 +160,19 @@ async execute(interaction) {
               [
                   character.name, item.itemName, quantity.toString(), item.category.join(', '),
                   item.type.join(', '), item.subtype.join(', '), 'Crafting', character.job, '',
-                  character.currentVillage, interactionUrl, formatDateTime(new Date()), uniqueSyncId
+                  character.currentVillage, `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`, formatDateTime(new Date()), uniqueSyncId
               ]
           ];
 
           await appendSheetData(auth, spreadsheetId, range, values);
-          await logMaterialsToGoogleSheets(auth, spreadsheetId, range, character, materialsUsed, item, interactionUrl, formatDateTime(new Date()));
+          await logMaterialsToGoogleSheets(auth, spreadsheetId, range, character, materialsUsed, item, `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`, formatDateTime(new Date()));
           await addItemInventoryDatabase(character._id, item.itemName, quantity, item.category.join(', '), item.type.join(', '), interaction);
       }
   } catch (error) {
-      // Log error and ensure stamina is not deducted for failed crafting
-      await interaction.editReply({
-          content: `❌ **An error occurred while crafting ${itemName}: ${error.message}**`,
-          ephemeral: true
-      });
+      console.error(`[crafting.js]: Error while crafting "${itemName}" for character "${characterName}". Details:`, error);
   }
 },
+
 
 
   // ------------------- Autocomplete Handler -------------------

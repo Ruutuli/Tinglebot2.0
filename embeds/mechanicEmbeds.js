@@ -29,14 +29,31 @@ const createCraftingEmbed = async (item, character, flavorText, materialsUsed, q
     const DEFAULT_EMOJI = ':small_blue_diamond:';
     let craftingMaterialText = 'No materials used or invalid data format.';
     if (Array.isArray(materialsUsed) && materialsUsed.length > 0) {
-        craftingMaterialText = await Promise.all(
+        const formattedMaterials = await Promise.all(
             materialsUsed.map(async (material) => {
-                // Fetch the emoji from the database if available
                 const materialItem = await ItemModel.findOne({ itemName: material.itemName }).select('emoji');
                 const emoji = materialItem?.emoji || DEFAULT_EMOJI;
                 return formatItemDetails(material.itemName, material.quantity, emoji);
             })
-        ).then(results => results.join('\n'));
+        );
+
+        // Ensure materials list does not exceed 1024 characters
+        craftingMaterialText = formattedMaterials.join('\n');
+        if (craftingMaterialText.length > 1024) {
+            const splitMaterials = [];
+            let chunk = "";
+
+            formattedMaterials.forEach((line) => {
+                if ((chunk + line + "\n").length > 1024) {
+                    splitMaterials.push(chunk.trim());
+                    chunk = "";
+                }
+                chunk += line + "\n";
+            });
+            if (chunk) splitMaterials.push(chunk.trim());
+
+            craftingMaterialText = splitMaterials;
+        }
     }
 
     // Create the crafting embed
@@ -49,7 +66,14 @@ const createCraftingEmbed = async (item, character, flavorText, materialsUsed, q
             url: character.inventory || ''
         })
         .addFields(
-            { name: '📜 **__Materials Used__**', value: craftingMaterialText, inline: false },
+            // Handle materials as either a single field or multiple if truncated
+            ...(Array.isArray(craftingMaterialText)
+                ? craftingMaterialText.map((chunk, index) => ({
+                    name: `📜 **__Materials Used__** (Part ${index + 1})`,
+                    value: chunk,
+                    inline: false
+                }))
+                : [{ name: '📜 **__Materials Used__**', value: craftingMaterialText, inline: false }]),
             { name: '⚡ **__Stamina Cost__**', value: `> ${staminaCost}`, inline: true },
             { name: '💚 **__Remaining Stamina__**', value: `> ${remainingStamina}`, inline: true }
         );
@@ -69,6 +93,7 @@ const createCraftingEmbed = async (item, character, flavorText, materialsUsed, q
 
     return embed;
 };
+
 
 // ------------------- Function to create Writing Submission embed -------------------
 const createWritingSubmissionEmbed = (submissionData) => {
@@ -346,7 +371,6 @@ const createHealEmbed = (healerCharacter, characterToHeal, heartsToHeal, payment
         throw new Error('Character to heal is required.');
     }
 
-    // Safely handle healerCharacter being undefined
     const healerName = healerCharacter?.name || 'Any available healer';
     const healerIcon = healerCharacter?.icon || DEFAULT_IMAGE_URL;
     const healerUrl = healerCharacter?.inventory || '';
@@ -356,7 +380,7 @@ const createHealEmbed = (healerCharacter, characterToHeal, heartsToHeal, payment
     return new EmbedBuilder()
         .setColor(settings.color)
         .setAuthor({
-            name: `${characterToHeal.name} 🔗`, // Set author to the character requesting healing
+            name: `${characterToHeal.name} 🔗`,
             iconURL: characterToHeal.icon || DEFAULT_IMAGE_URL,
             url: characterToHeal.inventory || '',
         })
@@ -364,10 +388,10 @@ const createHealEmbed = (healerCharacter, characterToHeal, heartsToHeal, payment
         .setDescription(
             healerCharacter
                 ? `**${characterToHeal.name}** is requesting healing services from **${healerName}**!`
-                : `**${characterToHeal.name}** is requesting healing! Healing request for any available healer in **${capitalizeFirstLetter(characterToHeal.currentVillage)}**.` // Capitalize village
+                : `**${characterToHeal.name}** is requesting healing! Healing request for any available healer in **${capitalizeFirstLetter(characterToHeal.currentVillage)}**.`
         )
         .addFields(
-            { name: '__📍 Village__', value: `> ${capitalizeFirstLetter(characterToHeal.currentVillage)}`, inline: true }, // Capitalize village
+            { name: '__📍 Village__', value: `> ${capitalizeFirstLetter(characterToHeal.currentVillage)}`, inline: true },
             { name: '__❤️ Hearts to Heal__', value: `> ${heartsToHeal}`, inline: true },
             { name: '__💰 Payment Offered__', value: `> ${paymentOffered || 'None'}`, inline: false },
             {
@@ -376,19 +400,24 @@ const createHealEmbed = (healerCharacter, characterToHeal, heartsToHeal, payment
                 inline: false,
             },
             {
-                name: '__🛠 Healing Instructions__',
+                name: '__🩹 Healing Instructions__',
                 value: `> Healers, please use </heal fulfill:1306176789755858977> to heal **${characterToHeal.name}**!`,
                 inline: false,
             },
-            { name: '__🆔 Request ID__', value: `> \`${healingRequestId}\``, inline: false }
+            { name: '__🆔 Request ID__', value: `> \`${healingRequestId}\``, inline: false },
+            {
+                name: '__❌ Cancel Request__',
+                value: `> _If you no longer want this request fulfilled, react with a ❌._`,
+                inline: false,
+            }
         )
-        
-        .setImage(DEFAULT_IMAGE_URL) // Add default image
+        .setImage(DEFAULT_IMAGE_URL)
         .setFooter({
             text: 'This request expires 24 hours from now.',
-            iconURL: healerCharacter ? healerIcon : null, // Use healer icon or leave blank
-        });        
+            iconURL: healerCharacter ? healerIcon : null,
+        });
 };
+
 
 
 // ------------------- Function to create HEALED  embed -------------------

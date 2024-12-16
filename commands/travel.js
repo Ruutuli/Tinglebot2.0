@@ -401,22 +401,6 @@ const processTravelDay = async (day) => {
   
       return; // End processing as the journey is complete
     }
-
-// ------------------- Helper function for Day Interactions -------------------
-const handleDayInteractions = async (day, channel, currentPath, pathEmoji) => {
-    const encounterType = Math.random() < 0.5 ? 'No Encounter' : getRandomTravelEncounter();
-  
-    if (encounterType === 'No Encounter') {
-      // Create and send an embed for a safe travel day
-      const safeTravelEmbed = createSafeTravelDayEmbed(character, day, totalTravelDuration, pathEmoji, currentPath);
-      await channel.send({ embeds: [safeTravelEmbed] });
-      console.log(`[travel.js]: Safe travel day for Day ${day}.`);
-    } else {
-      // Handle encounter logic (e.g., monster encounters)
-      console.log(`[travel.js]: Encounter detected for Day ${day}.`);
-      // Encounter logic should be implemented here
-    }
-  };
   
   // ------------------- Determine the current path for the day -------------------
   const currentPath = getCurrentPath(day, paths, hasPerk(character, 'DELIVERING'));
