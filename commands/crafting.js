@@ -83,13 +83,16 @@ async execute(interaction) {
         });
       }
 
-      // Check if the character is debuffed
-      if (character.debuff?.active) {
-        return interaction.editReply({
-          content: `❌ **"${character.name}" is currently debuffed and cannot craft. Please wait until the debuff expires.**`,
-          ephemeral: true,
-        });
-      }
+// Check if the character is debuffed
+if (character.debuff?.active) {
+  const debuffEndDate = new Date(character.debuff.endDate);
+  const unixTimestamp = Math.floor(debuffEndDate.getTime() / 1000);
+  await interaction.editReply({
+      content: `❌ **${character.name} is currently debuffed and cannot craft. Please wait until the debuff expires.**\n🕒 **Debuff Expires:** <t:${unixTimestamp}:F>`,
+      ephemeral: true,
+  });
+  return;
+}
 
       if (!character.inventorySynced) {
           return interaction.editReply({

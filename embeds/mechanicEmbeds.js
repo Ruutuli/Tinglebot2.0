@@ -366,7 +366,7 @@ const createKOEmbed = (character) => {
 
 
 // ------------------- Function to create heal embed -------------------
-const createHealEmbed = (healerCharacter, characterToHeal, heartsToHeal, paymentOffered, healingRequestId) => {
+const createHealEmbed = (healerCharacter, characterToHeal, heartsToHeal, paymentOffered, healingRequestId, isFulfilled = false) => {
     if (!characterToHeal) {
         throw new Error('Character to heal is required.');
     }
@@ -377,7 +377,7 @@ const createHealEmbed = (healerCharacter, characterToHeal, heartsToHeal, payment
 
     const settings = healerCharacter ? getCommonEmbedSettings(healerCharacter) : { color: '#AA926A' }; // Default color if no healer
 
-    return new EmbedBuilder()
+    const embed = new EmbedBuilder()
         .setColor(settings.color)
         .setAuthor({
             name: `${characterToHeal.name} 🔗`,
@@ -403,19 +403,39 @@ const createHealEmbed = (healerCharacter, characterToHeal, heartsToHeal, payment
                 name: '__🩹 Healing Instructions__',
                 value: `> Healers, please use </heal fulfill:1306176789755858977> to heal **${characterToHeal.name}**!`,
                 inline: false,
+            }
+        )
+        .setImage(DEFAULT_IMAGE_URL)
+        .setFooter({
+            text: isFulfilled
+                ? 'Healing process successfully completed.'
+                : 'This request expires 24 hours from now.',
+            iconURL: healerCharacter ? healerIcon : null,
+        });
+
+    // Replace Request ID with "Healed by" if fulfilled
+    if (isFulfilled && healerCharacter) {
+        embed.addFields({
+            name: '__✅ Status__',
+            value: `> This request has been fulfilled! Healed by: **${healerName}**.`,
+            inline: false,
+        });
+    } else {
+        embed.addFields(
+            {
+                name: '__🆔 Request ID__',
+                value: `> \`${healingRequestId}\``,
+                inline: false,
             },
-            { name: '__🆔 Request ID__', value: `> \`${healingRequestId}\``, inline: false },
             {
                 name: '__❌ Cancel Request__',
                 value: `> _If you no longer want this request fulfilled, react with a ❌._`,
                 inline: false,
             }
-        )
-        .setImage(DEFAULT_IMAGE_URL)
-        .setFooter({
-            text: 'This request expires 24 hours from now.',
-            iconURL: healerCharacter ? healerIcon : null,
-        });
+        );
+    }
+
+    return embed;
 };
 
 

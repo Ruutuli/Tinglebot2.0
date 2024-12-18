@@ -62,13 +62,16 @@ async execute(interaction) {
       return;
     }
     
-    // Check if the character is debuffed
-    if (character.debuff?.active) {
-      await interaction.editReply({
-        content: `❌ **${character.name} is currently debuffed and cannot gather. Please wait until the debuff expires.**`,
-      });
-      return;
-    }
+// Check if the character is debuffed
+if (character.debuff?.active) {
+  const debuffEndDate = new Date(character.debuff.endDate);
+  const unixTimestamp = Math.floor(debuffEndDate.getTime() / 1000);
+  await interaction.editReply({
+      content: `❌ **${character.name} is currently debuffed and cannot gather. Please wait until the debuff expires.**\n🕒 **Debuff Expires:** <t:${unixTimestamp}:F>`,
+      ephemeral: true,
+  });
+  return;
+}
 
     // ------------------- Step 2: Validate Interaction Channel -------------------
     const currentVillage = capitalizeWords(character.currentVillage); // Capitalize village name for consistency

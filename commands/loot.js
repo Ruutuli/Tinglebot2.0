@@ -118,10 +118,12 @@ module.exports = {
         return;
       }
       
-      // Check if the character is debuffed
       if (character.debuff?.active) {
+        const debuffEndDate = new Date(character.debuff.endDate);
+        const unixTimestamp = Math.floor(debuffEndDate.getTime() / 1000);
         await interaction.editReply({
-          content: `❌ **${character.name} is currently debuffed and cannot loot. Please wait until the debuff expires.**`,
+            content: `❌ **${character.name} is currently debuffed and cannot loot. Please wait until the debuff expires.**\n🕒 **Debuff Expires:** <t:${unixTimestamp}:F>`,
+            ephemeral: true,
         });
         return;
       }
