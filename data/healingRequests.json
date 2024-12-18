@@ -57,5 +57,41 @@
     "status": "fulfilled",
     "timestamp": 1734488910526,
     "messageId": "1318766815102631936"
+  },
+  "6ICWI7": {
+    "healingRequestId": "6ICWI7",
+    "characterRequesting": "David Jr",
+    "village": "inariko",
+    "heartsToHeal": 1,
+    "paymentOffered": "No payment specified",
+    "healerName": null,
+    "requesterUserId": "211219306137124865",
+    "status": "fulfilled",
+    "timestamp": 1734505972321,
+    "messageId": "1318838381932843021"
+  },
+  "Q5AJL0": {
+    "healingRequestId": "Q5AJL0",
+    "characterRequesting": "David Jr",
+    "village": "inariko",
+    "heartsToHeal": 1,
+    "paymentOffered": "No payment specified",
+    "healerName": null,
+    "requesterUserId": "211219306137124865",
+    "status": "fulfilled",
+    "timestamp": 1734506112430,
+    "messageId": "1318838969550766122"
+  },
+  "0XBTTS": {
+    "healingRequestId": "0XBTTS",
+    "characterRequesting": "David Jr",
+    "village": "inariko",
+    "heartsToHeal": 1,
+    "paymentOffered": "No payment specified",
+    "healerName": null,
+    "requesterUserId": "211219306137124865",
+    "status": "fulfilled",
+    "timestamp": 1734506627239,
+    "messageId": "1318841128346193933"
   }
 }

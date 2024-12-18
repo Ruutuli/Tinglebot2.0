@@ -373,7 +373,6 @@ const createHealEmbed = (healerCharacter, characterToHeal, heartsToHeal, payment
 
     const healerName = healerCharacter?.name || 'Any available healer';
     const healerIcon = healerCharacter?.icon || DEFAULT_IMAGE_URL;
-    const healerUrl = healerCharacter?.inventory || '';
 
     const settings = healerCharacter ? getCommonEmbedSettings(healerCharacter) : { color: '#AA926A' }; // Default color if no healer
 
@@ -386,14 +385,29 @@ const createHealEmbed = (healerCharacter, characterToHeal, heartsToHeal, payment
         })
         .setTitle('✬ Healing Request ✬')
         .setDescription(
-            healerCharacter
-                ? `**${characterToHeal.name}** is requesting healing services from **${healerName}**!`
-                : `**${characterToHeal.name}** is requesting healing! Healing request for any available healer in **${capitalizeFirstLetter(characterToHeal.currentVillage)}**.`
-        )
-        .addFields(
-            { name: '__📍 Village__', value: `> ${capitalizeFirstLetter(characterToHeal.currentVillage)}`, inline: true },
-            { name: '__❤️ Hearts to Heal__', value: `> ${heartsToHeal}`, inline: true },
-            { name: '__💰 Payment Offered__', value: `> ${paymentOffered || 'None'}`, inline: false },
+            isFulfilled
+                ? `✅ This healing request has been fulfilled by **${healerName}**.`
+                : healerCharacter
+                    ? `**${characterToHeal.name}** is requesting healing services from **${healerName}**!`
+                    : `**${characterToHeal.name}** is requesting healing! Healing request for any available healer in **${capitalizeFirstLetter(characterToHeal.currentVillage)}**.`
+        );
+
+    // Always include village, hearts, and payment fields
+    embed.addFields(
+        { name: '__📍 Village__', value: `> ${capitalizeFirstLetter(characterToHeal.currentVillage)}`, inline: true },
+        { name: '__❤️ Hearts to Heal__', value: `> ${heartsToHeal}`, inline: true },
+        { name: '__💰 Payment Offered__', value: `> ${paymentOffered || 'None'}`, inline: false }
+    );
+
+    // Add specific fields based on request status
+    if (isFulfilled) {
+        embed.addFields({
+            name: '__✅ Status__',
+            value: `> This request has been fulfilled by **${healerName}**.`,
+            inline: false,
+        });
+    } else {
+        embed.addFields(
             {
                 name: '__💡 Payment Instructions__',
                 value: `> _User will need to use </gift:1306176789755858976> to transfer payment to the healer._`,
@@ -403,25 +417,7 @@ const createHealEmbed = (healerCharacter, characterToHeal, heartsToHeal, payment
                 name: '__🩹 Healing Instructions__',
                 value: `> Healers, please use </heal fulfill:1306176789755858977> to heal **${characterToHeal.name}**!`,
                 inline: false,
-            }
-        )
-        .setImage(DEFAULT_IMAGE_URL)
-        .setFooter({
-            text: isFulfilled
-                ? 'Healing process successfully completed.'
-                : 'This request expires 24 hours from now.',
-            iconURL: healerCharacter ? healerIcon : null,
-        });
-
-    // Replace Request ID with "Healed by" if fulfilled
-    if (isFulfilled && healerCharacter) {
-        embed.addFields({
-            name: '__✅ Status__',
-            value: `> This request has been fulfilled! Healed by: **${healerName}**.`,
-            inline: false,
-        });
-    } else {
-        embed.addFields(
+            },
             {
                 name: '__🆔 Request ID__',
                 value: `> \`${healingRequestId}\``,
@@ -434,6 +430,13 @@ const createHealEmbed = (healerCharacter, characterToHeal, heartsToHeal, payment
             }
         );
     }
+
+    embed.setImage(DEFAULT_IMAGE_URL).setFooter({
+        text: isFulfilled
+            ? 'Healing process successfully completed.'
+            : 'This request expires 24 hours from now.',
+        iconURL: healerCharacter ? healerIcon : null,
+    });
 
     return embed;
 };

@@ -176,8 +176,7 @@ if (subcommand === 'request') {
   }
 }
 
-    // ------------------- Handle /heal fulfill -------------------
-// ------------------- Handle /heal fulfill -------------------
+ // ------------------- Handle /heal fulfill -------------------
 if (subcommand === 'fulfill') {
   const requestId = interaction.options.getString('requestid');
   const healerName = interaction.options.getString('healername');
@@ -259,7 +258,7 @@ if (subcommand === 'fulfill') {
       await useStamina(healerCharacter._id, staminaCost);
       await recoverHearts(characterToHeal._id, healingRequest.heartsToHeal, healerCharacter._id);
 
-      // Mark request as fulfilled and remove it from storage
+      // Mark request as fulfilled and save updated status
       healingRequest.status = 'fulfilled';
       saveHealingRequestToStorage(requestId, healingRequest);
 
@@ -272,9 +271,9 @@ if (subcommand === 'fulfill') {
               healerCharacter,
               characterToHeal,
               healingRequest.heartsToHeal,
-              healingRequest.paymentOffered,
-              null, // No Request ID since fulfilled
-              true  // Mark as fulfilled
+              healingRequest.paymentOffered, // Keep payment details
+              null,                         // No Request ID since fulfilled
+              true                          // Mark as fulfilled
           );
 
           await originalMessage.edit({
