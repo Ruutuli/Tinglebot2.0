@@ -113,14 +113,10 @@ const createFinalTravelEmbed = (character, destination, paths, totalTravelDurati
 
     // Clean and format the travel log
     const cleanedLog = travelLog
-        .filter(entry => {
-            // Keep entries that are either day headers or meaningful log entries
-            const isDayLog = entry.startsWith('Day');
-            const isMeaningfulEntry = !entry.match(/^Lost \d+ (Stamina|Heart)/i); // Exclude isolated "Lost X Stamina/Heart" lines
-            return isDayLog || isMeaningfulEntry;
-        })
-        .map(entry => entry.trim()) // Trim whitespace around each entry
-        .join('\n'); // Combine entries with single line breaks
+    .filter(entry => entry && !entry.match(/^Lost \d+ (Stamina|Heart)/i))
+    .map(entry => entry.trim()) // Ensure each entry is cleanly trimmed
+    .join('\n\n'); // Add an extra line break between entries
+
 
     return new EmbedBuilder()
         .setTitle(`✅ ${character.name} has arrived at ${destEmoji} ${capitalizeFirstLetter(destination)}!`)

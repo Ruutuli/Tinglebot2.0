@@ -28,42 +28,43 @@ function resetSubmissionState() {
 }
 
 // ------------------- Calculate Tokens -------------------
-function calculateTokens({ baseSelections, typeMultiplierSelections, productMultiplierValue, addOnsApplied, characterCount, typeMultiplierCount }) {
+function calculateTokens({
+  baseSelections,
+  typeMultiplierSelections,
+  productMultiplierValue,
+  addOnsApplied,
+  characterCount,
+  typeMultiplierCount = 1, // Use the correct count value
+}) {
   const validCharacterCount = characterCount || 1;
-  const validTypeMultiplierCount = typeMultiplierCount || 1;
 
-  // Structure to track counts for each selection
   const baseCounts = baseSelections.reduce((acc, base) => {
     acc[base] = (acc[base] || 0) + 1;
     return acc;
   }, {});
 
   const typeMultiplierCounts = typeMultiplierSelections.reduce((acc, multiplier) => {
-    acc[multiplier] = (acc[multiplier] || 0) + 1;
+    acc[multiplier] = (acc[multiplier] || 0) + typeMultiplierCount; // Multiply by typeMultiplierCount
     return acc;
   }, {});
 
   const validProductMultiplier = artModule.productMultipliers[productMultiplierValue] || 1;
 
-  // Calculate base total, accounting for counts and character multiplier
   const baseTotal = Object.entries(baseCounts).reduce((total, [base, count]) => {
     const baseValue = artModule.baseTokens[base] || 0;
-    return total + (baseValue * validCharacterCount);
+    return total + baseValue * validCharacterCount;
   }, 0);
 
-  // Correct type multiplier total, factoring in type multiplier count
   const typeMultiplierTotal = Object.entries(typeMultiplierCounts).reduce((total, [multiplier, count]) => {
     const multiplierValue = artModule.typeMultipliers[multiplier] || 1;
-    return total * Math.pow(multiplierValue, count); // Use multiplication logic for multipliers
-  }, 1);  
+    return total * Math.pow(multiplierValue, count); // Correct multiplication
+  }, 1);
 
-  // Calculate add-on total
   const addOnTotal = addOnsApplied.reduce((total, addOn) => {
     const addOnValue = artModule.addOns[addOn] || 0;
-    return total + (addOnValue * validCharacterCount);
+    return total + addOnValue * validCharacterCount;
   }, 0);
 
-  // Apply multipliers (base * typeMultiplier * productMultiplier) and include add-on total
   const totalTokens = Math.ceil((baseTotal * typeMultiplierTotal) * validProductMultiplier + addOnTotal);
 
   return {

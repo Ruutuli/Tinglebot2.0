@@ -441,7 +441,7 @@ const processTravelDay = async (day) => {
 const encounterType = Math.random() < 0.5 ? 'No Encounter' : getRandomTravelEncounter();
 
 // ------------------- Initialize Daily Log Entry -------------------
-let dailyLogEntry = `**__Day ${day}:__**\n`;
+dailyLogEntry = `**Day ${day}:**\n`; // Start the day entry cleanly
 
 // ------------------- Handle Encounter -------------------
 if (encounterType !== 'No Encounter') {
@@ -449,6 +449,7 @@ if (encounterType !== 'No Encounter') {
     const monsters = await getMonstersByPath(currentPath);
   
     if (monsters.length > 0) {
+      
       // ------------------- Filter Monsters by Tier -------------------
       const tier = parseInt(encounterType.split(' ')[1], 10); // Extract the tier from the encounter type
       const filteredMonsters = monsters.filter(monster => monster.tier <= tier); // Filter monsters of the same or lower tier
@@ -602,7 +603,8 @@ if (day === adjustedDuration && hasPerk(character, 'DELIVERING')) {
     console.log(`[travel.js]: Processing interactions for Day ${day}/${adjustedDuration} on path "${currentPath}".`);
 
     // Log Day 2/2
-    travelLog.push(`> **Day ${day}:** Traveled on ${currentPath}.\n`);
+    travelLog.push(dailyLogEntry);
+    
 
     // Finalize the journey
     console.log(`[travel.js]: Finalizing journey for ${character.name} on Day ${day}.`);
@@ -631,7 +633,8 @@ if (day === adjustedDuration && hasPerk(character, 'DELIVERING')) {
 }
 
 // ------------------- Log the day and proceed to the next day -------------------
-travelLog.push(`> **Day ${day}:** Traveled on ${currentPath}.\n`);
+travelLog.push(dailyLogEntry);
+
 
 if (day === 2 && stopInInariko) {
     const nextChannelId = PATH_CHANNELS[paths[1]]; // Use the second path for Day 2
@@ -642,7 +645,7 @@ if (day === 2 && stopInInariko) {
             
     const stopEmbed = createStopInInarikoEmbed(character, nextChannelId);
     await channel.send({ embeds: [stopEmbed] });
-    travelLog.push(`> 🛑 Stopped in Inariko for rest and supplies.\n`);
+    travelLog.push(`\n\n🛑 Stopped in Inariko for rest and supplies.\n\n`);
             
     // Attach a custom image for the stop
     const imageEmbed = new EmbedBuilder()
@@ -798,7 +801,8 @@ if (day === halfway && stopInInariko) {
     const nextChannelId = PATH_CHANNELS[paths[1]];
     const stopEmbed = createStopInInarikoEmbed(character, nextChannelId);
     await channel.send({ embeds: [stopEmbed] });
-    travelLog.push(`> 🛑 Stopped in Inariko for rest and supplies.\n`);
+    travelLog.push(`\n\n🛑 Stopped in Inariko for rest and supplies.\n\n`);
+
         
     // Attach a custom image for the stop
     const imageEmbed = new EmbedBuilder()

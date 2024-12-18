@@ -161,14 +161,30 @@ if (customId === 'recover') {
 
 // ------------------- Do Nothing Action -------------------
 } else if (customId === 'do_nothing') {
-    // ------------------- Decision Logic -------------------
-    decision = `✨ ${character.name} did nothing.`;
-    outcomeMessage = `${character.name} decided not to do anything today and just made camp.`;
+    // ------------------- Random Flavor Texts -------------------
+    const flavorTexts = [
+        `${character.name} lay under a blanket of stars, listening to the distant howl of wolves. 🌌🐺`,
+        `${character.name} built a small campfire and enjoyed the crackling warmth. 🔥🌙`,
+        `${character.name} stumbled upon ancient ruins and marveled at their mysterious carvings before setting up camp. 🏛️✨`,
+        `${character.name} heard the gentle sound of a nearby stream and drifted to sleep with a calm heart. 💧🌿`,
+        `${character.name} found a quiet grove to rest, where fireflies danced in the moonlight. 🌳✨`,
+        `${character.name} roasted some foraged mushrooms over the fire and thought of home. 🍄🔥`,
+        `${character.name} wrapped themselves in their cloak, feeling the chill of the mountain air. 🧥❄️`,
+        `${character.name} caught a glimpse of a shooting star and made a silent wish. 🌠🙏`,
+        `${character.name} discovered a meadow where wildflowers bloomed under the moonlight. 🌺🌕`,
+        `${character.name} gazed at the constellations and felt at peace. 🌌✨`
+    ];
 
-    // ------------------- Update Embed with the Do Nothing Outcome -------------------
+    // Select a random flavor text
+    const randomFlavorText = flavorTexts[Math.floor(Math.random() * flavorTexts.length)];
+
+    // Decision and Outcome
+    decision = `✨ ${randomFlavorText}`;
+    outcomeMessage = `${randomFlavorText}`;
+
+    // Update the embed description with flavor text
     const description = `🌸 It's a nice and safe day of traveling. What do you want to do next?\n> ${decision}\n\n**❤️ __Hearts:__** ${character.currentHearts}/${character.maxHearts}\n**🟩 __Stamina:__** ${character.currentStamina}/${character.maxStamina}`;
     
-    // Edit the safe travel message to reflect the action
     await encounterMessage.edit({
         embeds: [new EmbedBuilder(encounterMessage.embeds[0].toJSON()).setDescription(description)],
         components: [] // Remove buttons after the action
@@ -304,6 +320,15 @@ if (customId === 'recover') {
     // ------------------- Attempt Flee -------------------
     const fleeResult = await attemptFlee(character, monster);
     console.log(`[FLEE ATTEMPT] Result: ${fleeResult.success ? 'Success' : 'Failure'}`);
+    let logEntry;
+
+    if (fleeResult.success) {
+        logEntry = `Attempted to flee and succeeded! Lost 1 stamina.`;
+    } else if (fleeResult.attacked) {
+        logEntry = `Attempted to flee and failed! Lost ${fleeResult.damage} hearts and 1 stamina.`;
+    } else {
+        logEntry = `Attempted to flee but failed without damage. Lost 1 stamina.`;
+    }
 
     if (fleeResult.success) {
         // ------------------- Successful Flee -------------------
@@ -405,17 +430,17 @@ if (customId === 'recover') {
 
 // ------------------- Update the Travel Log -------------------
 if (heartsLost > 0 || heartsGained > 0 || staminaLost > 0) {
-    let logSummary = ''; // Initialize an empty log summary string
+    let logSummary = '';
+    if (heartsLost > 0) logSummary += `Lost ${heartsLost} Heart(s). `;
+    if (heartsGained > 0) logSummary += `Gained ${heartsGained} Heart(s). `;
+    if (staminaLost > 0) logSummary += `Lost ${staminaLost} stamina. `;
 
-    // Log the resources lost or gained during the interaction
-    if (heartsLost > 0) logSummary += `Lost ${heartsLost} Heart(s)\n`; // Log hearts lost
-    if (heartsGained > 0) logSummary += `Gained ${heartsGained} Heart(s)\n`; // Log hearts gained
-    if (staminaLost > 0) logSummary += `Lost ${staminaLost} Stamina\n`; // Log stamina lost
-
-    if (logSummary.trim()) {
-        travelLog.unshift(logSummary.trim()); // Add this summary to the top of the travel log
+    // Add log entry only if it's not already captured in the main action
+    if (!logSummary.includes('gathered') && !logSummary.includes('fought') && logSummary.trim()) {
+        travelLog.push(logSummary.trim());
     }
 }
+
 
 // ------------------- Return the Decision -------------------
 return decision;

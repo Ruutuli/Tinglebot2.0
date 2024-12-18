@@ -114,31 +114,34 @@ async function handleCancelSubmission(interaction) {
     const submissionData = submissionStore.get(userId);
 
     if (submissionData && submissionData.submissionId) {
-      console.log('Deleting submission from storage:', submissionData.submissionId);
+      console.log('[handleCancelSubmission]: Deleting submission from storage:', submissionData.submissionId);
 
       // Remove submission from persistent storage
       deleteSubmissionFromStorage(submissionData.submissionId);
     } else {
-      console.warn('No submission data found in memory for user:', userId);
+      console.warn('[handleCancelSubmission]: No submission data found in memory for user:', userId);
     }
 
     // Reset and clear in-memory data
-    resetSubmissionState();
+    resetSubmissionState(); // Reset global state if any
     submissionStore.delete(userId);
+
+    console.log('[handleCancelSubmission]: Submission state reset for user:', userId);
 
     // Notify the user
     await interaction.update({
-      content: '🚫 **Submission canceled**. Please restart the process if you wish to submit again.',
+      content: '🚫 **Submission canceled.** Please restart the process if you wish to submit again.',
       components: [], // Remove all action components
     });
   } catch (error) {
-    console.error('Error canceling submission:', error);
+    console.error('[handleCancelSubmission]: Error canceling submission:', error);
     await interaction.followUp({
-      content: '⚠️ **Error canceling submission.** Please try again.',
+      content: '⚠️ **Error canceling submission. Please try again.**',
       ephemeral: true,
     });
   }
 }
+
 
 // ------------------- Handle Submit Action -------------------
 // Handles the action triggered by confirmation or cancellation

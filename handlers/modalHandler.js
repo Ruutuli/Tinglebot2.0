@@ -51,13 +51,16 @@ if (customId === 'baseCountModal') {
   const userId = interaction.user.id;
   const submissionData = submissionStore.get(userId) || {};
   submissionData.typeMultiplierCount = multiplierCount; // Store multiplier count
-  submissionStore.set(userId, submissionData);
+  submissionStore.set(userId, submissionData); // Save back to submissionStore
 
   await interaction.update({
-      content: `☑️  **${multiplierCount} type multiplier(s)** selected. Select another Type Multiplier or click "Next Section ➡️" when you are done.`,
-      components: [getTypeMultiplierMenu(true), getCancelButtonRow()],
+    content: `☑️  **${multiplierCount} type multiplier(s)** selected. Select another Type Multiplier or click "Next Section ➡️" when you are done.`,
+    components: [getTypeMultiplierMenu(true), getCancelButtonRow()],
   });
+
+  console.log(`[modalHandler]: Updated typeMultiplierCount for user ${userId} to ${multiplierCount}`);
 }
+
 
   // Handle the add-on count modal submission
   if (customId.startsWith('addOnCountModal_')) {

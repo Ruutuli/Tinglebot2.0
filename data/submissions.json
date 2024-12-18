@@ -1,27 +1,27 @@
 {
-  "424812685729726475-1734162395810": {
-    "submissionId": "424812685729726475-1734162395810",
-    "fileUrl": "https://storage.googleapis.com/tinglebot/Submissions/672600b1-37dc-449a-8262-8ec590143e15-Screenshot_20241214_012146_Discord.png",
-    "fileName": "Screenshot_20241214_012146_Discord.png",
-    "title": "testing",
-    "userId": "424812685729726475",
-    "username": "just.a.crow.ya.know",
-    "userAvatar": "https://cdn.discordapp.com/avatars/424812685729726475/a_8efef4ebced1062efb23d2e678598fcf.gif",
+  "211219306137124865-1734480212990": {
+    "submissionId": "211219306137124865-1734480212990",
+    "fileUrl": "https://storage.googleapis.com/tinglebot/Submissions/46c45dde-0d6d-4a96-b531-32af854773fd-NOODORUYU.png",
+    "fileName": "NOODORUYU.png",
+    "title": "NOODORUYU.png",
+    "userId": "211219306137124865",
+    "username": "ruutuli",
+    "userAvatar": "https://cdn.discordapp.com/avatars/211219306137124865/edf10b1b9dd270d45658f493b0477dc7.webp",
     "category": "art",
     "questEvent": "N/A",
     "questBonus": "N/A",
     "baseSelections": [
-      "waistup"
+      "chibi"
     ],
     "typeMultiplierSelections": [
-      "humanoid"
+      "simple"
     ],
-    "productMultiplierValue": "flatColor",
+    "productMultiplierValue": "pixel",
     "addOnsApplied": [],
     "characterCount": 2,
     "typeMultiplierCount": 2,
-    "finalTokenAmount": 90,
+    "finalTokenAmount": 30,
     "tokenCalculation": "N/A",
-    "messageUrl": "https://discord.com/channels/1305484048063529002/1317243912158707742/1317397526705606677"
+    "messageUrl": "https://discord.com/channels/1305484048063529002/1305486549252706335/1318730473144324126"
   }
 }
