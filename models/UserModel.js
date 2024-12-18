@@ -8,6 +8,7 @@ const userSchema = new mongoose.Schema({
   timezone: { type: String, default: 'UTC' }, // User's timezone (default to UTC)
   tokens: { type: Number, default: 0 }, // Number of tokens the user has
   tokenTracker: { type: String, default: '' }, // URL to token tracker
+  tokensSynced: { type: Boolean, default: false }, // Track if tokens are synced
   blightedcharacter: { type: Boolean, default: false } // Is the character blighted?
   // Add other fields as necessary
 });

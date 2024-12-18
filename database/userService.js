@@ -47,30 +47,30 @@ const getUserById = async (discordId) => {
 async function updateUserTokens(discordId, amount, activity, link = '') {
     await connectToTinglebot();
     const user = await User.findOne({ discordId });
-
+  
     if (!user) {
-        throw new Error('User not found');
+      throw new Error('User not found');
     }
-
+  
     // Update token balance
     user.tokens += amount;
     await user.save();
-
+  
     // Log the token update in the Google Sheets if the user has a token tracker
     if (user.tokenTracker) {
-        const auth = await authorizeSheets();
-        const spreadsheetId = extractSpreadsheetId(user.tokenTracker);
-        const range = 'loggedInventory!B7:G';
-        const dateTime = new Date().toISOString();
-        const values = [
-            ['', '', '', '', '', ''],
-            [activity, link, '', amount.toString(), '', dateTime]
-        ];
-        await appendSheetData(auth, spreadsheetId, range, values);
+      const auth = await authorizeSheets();
+      const spreadsheetId = extractSpreadsheetId(user.tokenTracker);
+      const range = "loggedTracker!B:F";
+      const dateTime = new Date().toISOString();
+      const values = [
+        ['Update', activity, link, amount.toString(), dateTime]
+      ];
+      await appendSheetData(auth, spreadsheetId, range, values);
     }
-
+  
     return user;
-}
+  }
+  
 
 // ------------------- Update user's token tracker link -------------------
 async function updateUserTokenTracker(discordId, tokenTracker) {

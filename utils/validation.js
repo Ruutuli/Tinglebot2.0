@@ -129,7 +129,7 @@ function validateCharacterInventory(inventory) {
 // Validate if a given URL is a valid Google Sheets URL
 function isValidGoogleSheetsUrl(url) {
     const regex = /^https:\/\/docs\.google\.com\/spreadsheets\/d\/[a-zA-Z0-9-_]+\/(edit|view)(\?[^#]+)?(#.+)?$/;
-    return regex.test(url);
+    return regex.test(url); // Validate the URL passed as an argument
 }
 
 // Extract the spreadsheet ID from a Google Sheets URL

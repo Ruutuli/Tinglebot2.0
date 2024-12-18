@@ -5,14 +5,8 @@
 // Grouped imports logically by related functionality
 const Token = require('../models/TokenModel');
 const { connectToTinglebot } = require('../database/connection');
-const {
-  authorizeSheets,
-  fetchSheetData,
-  appendSheetData,
-  extractSpreadsheetId,
-  isValidGoogleSheetsUrl
-} = require('../utils/googleSheetsUtils');
 const User = require('../models/UserModel');
+const { readSheetData, appendSheetData, authorizeSheets, extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../utils/googleSheetsUtils');
 
 // ------------------- Get Token Balance -------------------
 // Fetches the token balance for a user
@@ -31,25 +25,26 @@ async function getTokenBalance(userId) {
 // Fetches a token for the user or creates a new one if none exists
 async function getOrCreateToken(userId, tokenTrackerLink = '') {
   await connectToTinglebot();
-  let token = await Token.findOne({ userId });
+  let user = await User.findOne({ discordId: userId });
 
-  if (!token) {
-    // Create a new token for the user if none exists
-    token = new Token({
-      userId,
+  if (!user) {
+    console.log('[tokenService.js]: Creating new user with tokenTracker:', tokenTrackerLink);
+    user = new User({
+      discordId: userId,
       tokens: 0,
-      tokenTrackerLink,
-      hasSynced: false
+      tokenTracker: tokenTrackerLink || '', // Ensure tokenTracker is set to an empty string if not provided
+      tokensSynced: false,
     });
-    await token.save();
+    await user.save();
   } else if (tokenTrackerLink) {
-    // Update token tracker link if provided
-    token.tokenTrackerLink = tokenTrackerLink;
-    await token.save();
+    console.log('[tokenService.js]: Updating tokenTrackerLink for user:', { userId, tokenTrackerLink });
+    user.tokenTracker = tokenTrackerLink; // Update tokenTracker if a new link is provided
+    await user.save();
   }
 
-  return token;
+  return user;
 }
+
 
 // ------------------- Update Token Balance -------------------
 // Updates the token balance for a user by a specific amount
@@ -71,56 +66,67 @@ async function updateTokenBalance(userId, amount) {
 // Syncs the user's token tracker with Google Sheets data and updates token balance
 async function syncTokenTracker(userId) {
   await connectToTinglebot();
-  const token = await getOrCreateToken(userId);
+  const user = await getOrCreateToken(userId); // Retrieve user with tokenTracker
 
-  if (token.hasSynced) {
-    throw new Error('Tokens have already been synced.');
-  }
+  console.log('[syncTokenTracker]: Retrieved user with tokenTracker:', user.tokenTracker); // Log the tokenTracker
 
-  const tokenTrackerLink = token.tokenTrackerLink;
-  if (!isValidGoogleSheetsUrl(tokenTrackerLink)) {
+  if (!user.tokenTracker || !isValidGoogleSheetsUrl(user.tokenTracker)) {
     const errorMessage = 'Invalid Google Sheets URL';
-    console.error(errorMessage, { userId, tokenTrackerLink });
+    console.error(errorMessage, { userId, tokenTracker: user.tokenTracker });
     throw new Error(errorMessage);
   }
 
-  const spreadsheetId = extractSpreadsheetId(tokenTrackerLink);
+  const spreadsheetId = extractSpreadsheetId(user.tokenTracker);
+  console.log('[syncTokenTracker]: Extracted Spreadsheet ID:', spreadsheetId); // Log extracted ID
   const auth = await authorizeSheets();
 
   try {
-    // Fetch earned and spent token data from Google Sheets
-    const earnedData = await fetchSheetData(auth, spreadsheetId, 'Token Tracker!B7:E');
-    const spentData = await fetchSheetData(auth, spreadsheetId, 'Token Tracker!F7:G');
+    console.log('Reading data from Google Sheets...');
+    const range = "loggedTracker!B7:F"; // Corrected tab name
+    const tokenData = await readSheetData(auth, spreadsheetId, range);
+
+    if (!tokenData || tokenData.length === 0) {
+      throw new Error('No data found in the specified range.');
+    }
+    console.log('[syncTokenTracker]: Fetched token data:', tokenData); // Log fetched data
 
     let totalEarned = 0;
     let totalSpent = 0;
 
-    // Sum up earned tokens
-    earnedData.forEach(row => {
-      const earnedAmount = parseInt(row[3], 10) || 0;
-      totalEarned += earnedAmount;
+    // Process each row of data
+    tokenData.forEach((row, index) => {
+      const type = row[3]?.toLowerCase(); // Column E: 'earned' or 'spent'
+      const amount = parseInt(row[4], 10); // Column F: Token amount
+
+      if (!type || isNaN(amount)) {
+        console.warn(`[syncTokenTracker]: Skipping row ${index + 7} due to invalid data.`);
+        return; // Skip rows with invalid data
+      }
+
+      if (type === 'earned') {
+        totalEarned += amount;
+      } else if (type === 'spent') {
+        totalSpent += Math.abs(amount); // Use absolute value for proper calculation
+      }
     });
 
-    // Sum up spent tokens
-    spentData.forEach(row => {
-      const spentAmount = parseInt(row[1], 10) || 0;
-      totalSpent += spentAmount;
-    });
+    console.log('[syncTokenTracker]: Total earned:', totalEarned);
+    console.log('[syncTokenTracker]: Total spent:', totalSpent);
 
-    // Update token balance and mark as synced
-    token.tokens = totalEarned - totalSpent;
-    token.hasSynced = true;
-    await token.save();
+    // Update user token balance and mark as synced
+    user.tokens = totalEarned - totalSpent;
+    user.tokensSynced = true;
+    await user.save();
 
-    // Append an "Initial Sync" row to the Google Sheet
-    const syncRow = [
-      'Initial Sync', '', 'sync', '0', 'Initial Sync', '0'
-    ];
-    await appendSheetData(auth, spreadsheetId, 'Token Tracker!B7:E', [syncRow]);
+    console.log('[syncTokenTracker]: Token balance updated successfully.');
 
-    return token;
+    // Optionally append an "Initial Sync" row to the Google Sheet
+    const syncRow = ['Initial Sync', 'You can delete this!', '', 'sync', '0'];
+    await appendSheetData(auth, spreadsheetId, "loggedTracker!B:F", [syncRow]);
+
+    return user;
   } catch (error) {
-    console.error('Error fetching data from Google Sheets:', error);
+    console.error('Error syncing token tracker:', error);
     throw new Error('Error syncing token tracker.');
   }
 }

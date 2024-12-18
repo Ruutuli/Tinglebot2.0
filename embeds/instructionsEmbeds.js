@@ -128,31 +128,61 @@ const editSyncErrorMessage = async (interaction, errorMessage) => {
 // ------------------- Create token tracker setup embed -------------------
 const createTokenTrackerSetupEmbed = (username, googleSheetsUrl, errorMessage = '') => {
     const fields = [
-        { name: '1. Open your Token Tracker Link', value: `[📄 Token Tracker](${googleSheetsUrl})` },
-        { name: '2. Create a new tab named "Token Tracker".', value: '🔖' },
-        { name: '3. Make sure there are headers for these ranges B7:G7 that read:', value: '```EARNED, SUBMISSION, LINK, CATEGORIES, TOKEN AMOUNT, PURCHASE NAME, TOKEN AMOUNT```' },
-        { name: '4. Share the Google Sheet with this email with edit permissions:', value: '📧 tinglebot@rotw-tinglebot.iam.gserviceaccount.com' },
-        { name: `5. Use \`/testtokentracker username:${username}\` to test if it's set up correctly.`, value: '✅' }
+        { 
+            name: '1. Open the Example Template', 
+            value: `[📄 Token Tracker Example Template](https://docs.google.com/spreadsheets/d/1zAEqKbAMEdV0oGz7lNAhHaAPt_eIseMMSnyIXr-hovc/edit?usp=sharing)` 
+        },
+        { 
+            name: '2. Make a Copy of the Template', 
+            value: '🔖 Go to **File > Make a Copy** in the menu to create your own sheet.' 
+        },
+        { 
+            name: '3. Create a New Tab Named "loggedTracker"', 
+            value: '📂 Ensure you have a tab named exactly `loggedTracker` in your Google Sheet.' 
+        },
+        { 
+            name: '4. Add Headers to Your Tracker', 
+            value: `Ensure these headers are present in the in these cells of the **loggedTracker** tab B7:F7:
+            \`\`\`SUBMISSION | LINK | CATEGORIES | TYPE | TOKEN AMOUNT
+            \`\`\`` 
+        },
+        { 
+            name: '5. Share Your Google Sheet', 
+            value: '📧 Share the sheet with this email address with **edit permissions**:\n`tinglebot@rotw-tinglebot.iam.gserviceaccount.com`' 
+        },
+        { 
+            name: `6. Test Your Setup`, 
+            value: `✅ Use the command \`/tokens test\` to check if your token tracker is set up correctly for **${username}**.` 
+        }
     ];
 
     if (errorMessage) {
-        fields.push({ name: 'Error', value: `❌ **${errorMessage}**` });
+        fields.push({ 
+            name: 'Error', 
+            value: `❌ **${errorMessage}**` 
+        });
     } else {
-        fields.push({ name: 'Success', value: '🎉 Token Tracker is set up correctly! 🎉' });
+        fields.push({ 
+            name: 'Success', 
+            value: '🎉 Your token tracker setup appears to be correct! 🎉' 
+        });
     }
 
     return new EmbedBuilder()
         .setTitle(`📋 Setup Instructions for ${username}`)
-        .setDescription(`Ensure your token tracker link is formatted as follows:
+        .setDescription(`Follow these steps to set up your Google Sheets token tracker:
+        
+        **Ensure your Google Sheets URL follows this format:**
         \`\`\`
         https://docs.google.com/spreadsheets/d/1AbcDefGhijk/edit
         \`\`\`
-        Follow these steps to set up your Google Sheets token tracker:`)
+        Make sure all steps are completed before testing.`)
         .addFields(fields)
         .setColor(getRandomColor())
         .setTimestamp()
-        .setImage(DEFAULT_IMAGE_URL);
+        .setFooter({ text: 'Need help? Contact a mod for assistance!' });
 };
+
 
 // ------------------- Export the functions -------------------
 module.exports = {
