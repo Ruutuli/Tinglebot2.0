@@ -23,5 +23,158 @@
     "finalTokenAmount": 30,
     "tokenCalculation": "N/A",
     "messageUrl": "https://discord.com/channels/1305484048063529002/1305486549252706335/1318730473144324126"
+  },
+  "211219306137124865-1734516103556": {
+    "submissionId": "211219306137124865-1734516103556",
+    "userId": "211219306137124865",
+    "username": "ruutuli",
+    "userAvatar": "https://cdn.discordapp.com/avatars/211219306137124865/edf10b1b9dd270d45658f493b0477dc7.webp",
+    "category": "writing",
+    "title": "Untitled Writing Submission",
+    "wordCount": 250,
+    "finalTokenAmount": 25,
+    "link": "google.com",
+    "description": "You can put what ocs are here",
+    "questEvent": "N/A",
+    "tokenTracker": "https://docs.google.com/spreadsheets/d/1zAEqKbAMEdV0oGz7lNAhHaAPt_eIseMMSnyIXr-hovc/edit?usp=sharing",
+    "messageUrl": "https://discord.com/channels/1305484048063529002/1305486549252706335/1318880876393660416"
+  },
+  "635948726686580747-1734570246875": {
+    "submissionId": "635948726686580747-1734570246875",
+    "fileUrl": "https://storage.googleapis.com/tinglebot/Submissions/0260968b-edba-47d5-a837-c05055f073d9-Fiddle_Blight_Healing_1.jpg",
+    "fileName": "Fiddle_Blight_Healing_1.jpg",
+    "title": "Fiddle Blight Healing",
+    "userId": "635948726686580747",
+    "username": "forestfern",
+    "userAvatar": "https://cdn.discordapp.com/avatars/635948726686580747/ab2f891195d9e6d35f52a7d9b155e4d4.webp",
+    "category": "art",
+    "questEvent": "N/A",
+    "questBonus": "N/A",
+    "baseSelections": [
+      "fullbody",
+      "waistup",
+      "other"
+    ],
+    "typeMultiplierSelections": [
+      "humanoid",
+      "simple"
+    ],
+    "productMultiplierValue": "fullColor",
+    "addOnsApplied": [
+      "complexBg",
+      "simpleProp"
+    ],
+    "characterCount": 1,
+    "typeMultiplierCount": 1,
+    "finalTokenAmount": 135,
+    "tokenCalculation": "N/A",
+    "messageUrl": "https://discord.com/channels/1305484048063529002/1317243912158707742/1319108357939920929"
+  },
+  "211219306137124865-1734576429007": {
+    "submissionId": "211219306137124865-1734576429007",
+    "fileUrl": "https://storage.googleapis.com/tinglebot/Submissions/9fc27e13-75c7-43fd-b702-f1ddbeab987d-arthur.png",
+    "fileName": "arthur.png",
+    "title": "arthur.png",
+    "userId": "211219306137124865",
+    "username": "ruutuli",
+    "userAvatar": "https://cdn.discordapp.com/avatars/211219306137124865/edf10b1b9dd270d45658f493b0477dc7.webp",
+    "category": "art",
+    "questEvent": "N/A",
+    "questBonus": "N/A",
+    "baseSelections": [
+      "other"
+    ],
+    "typeMultiplierSelections": [
+      "other"
+    ],
+    "productMultiplierValue": "lineArt",
+    "addOnsApplied": [],
+    "characterCount": 4,
+    "typeMultiplierCount": 4,
+    "finalTokenAmount": 40,
+    "tokenCalculation": "N/A",
+    "messageUrl": "https://discord.com/channels/1305484048063529002/1317243912158707742/1319133998110347336"
+  },
+  "211219306137124865-1734576991923": {
+    "submissionId": "211219306137124865-1734576991923",
+    "fileUrl": "https://storage.googleapis.com/tinglebot/Submissions/4ad43a3e-5e7d-4e85-9033-9271983042a3-roots_adopt_1.png",
+    "fileName": "roots_adopt_1.png",
+    "title": "roots_adopt_1.png",
+    "userId": "211219306137124865",
+    "username": "ruutuli",
+    "userAvatar": "https://cdn.discordapp.com/avatars/211219306137124865/edf10b1b9dd270d45658f493b0477dc7.webp",
+    "category": "art",
+    "questEvent": "N/A",
+    "questBonus": "N/A",
+    "baseSelections": [
+      "fullbody"
+    ],
+    "typeMultiplierSelections": [
+      "humanoid",
+      "other"
+    ],
+    "productMultiplierValue": "fullColor",
+    "addOnsApplied": [
+      "complexProp"
+    ],
+    "characterCount": 2,
+    "typeMultiplierCount": 2,
+    "finalTokenAmount": 520,
+    "tokenCalculation": "N/A",
+    "messageUrl": "https://discord.com/channels/1305484048063529002/1317243912158707742/1319136428776751165"
+  },
+  "207945864918990849-1734586762132": {
+    "submissionId": "207945864918990849-1734586762132",
+    "fileUrl": "https://storage.googleapis.com/tinglebot/Submissions/88372580-501f-4943-9b5b-d1b1083e192e-Live_Pomme_reaction.png",
+    "fileName": "Live_Pomme_reaction.png",
+    "title": "Live Pomme Reaction",
+    "userId": "207945864918990849",
+    "username": "pandamunk",
+    "userAvatar": "https://cdn.discordapp.com/avatars/207945864918990849/7c1020116fff578f3fb37b8835e59802.webp",
+    "category": "art",
+    "questEvent": "N/A",
+    "questBonus": "N/A",
+    "baseSelections": [
+      "other"
+    ],
+    "typeMultiplierSelections": [
+      "simple"
+    ],
+    "productMultiplierValue": "pixel",
+    "addOnsApplied": [
+      "simpleProp"
+    ],
+    "characterCount": 1,
+    "typeMultiplierCount": 1,
+    "finalTokenAmount": 25,
+    "tokenCalculation": "N/A",
+    "messageUrl": "https://discord.com/channels/1305484048063529002/1317243912158707742/1319177437371957340"
+  },
+  "207945864918990849-1734586853499": {
+    "submissionId": "207945864918990849-1734586853499",
+    "fileUrl": "https://storage.googleapis.com/tinglebot/Submissions/445f8c0f-d021-4062-a9a3-115d654a53ac-Pomme_Pepe_Silvia.jpg",
+    "fileName": "Pomme_Pepe_Silvia.jpg",
+    "title": "Pepe Sheikea Silvia",
+    "userId": "207945864918990849",
+    "username": "pandamunk",
+    "userAvatar": "https://cdn.discordapp.com/avatars/207945864918990849/7c1020116fff578f3fb37b8835e59802.webp",
+    "category": "art",
+    "questEvent": "N/A",
+    "questBonus": "N/A",
+    "baseSelections": [
+      "waistup"
+    ],
+    "typeMultiplierSelections": [
+      "humanoid"
+    ],
+    "productMultiplierValue": "sketch",
+    "addOnsApplied": [
+      "simpleBg"
+    ],
+    "characterCount": 1,
+    "typeMultiplierCount": 1,
+    "finalTokenAmount": 28,
+    "tokenCalculation": "N/A",
+    "messageUrl": "https://discord.com/channels/1305484048063529002/1317243912158707742/1319177790624366602"
   }
 }

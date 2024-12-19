@@ -5,7 +5,7 @@ const { EmbedBuilder } = require('discord.js');
 // Utility Imports
 const { getCommonEmbedSettings, formatItemDetails, getArticleForItem, DEFAULT_IMAGE_URL, jobActions } = require('./embedUtils');
 const { isValidImageUrl } = require('../utils/validation');
-const { getNoEncounterMessage, typeActionMap } = require('../modules/flavorTextModule');
+const { getNoEncounterMessage, typeActionMap, generateGatherFlavorText, generateCraftingFlavorText  } = require('../modules/flavorTextModule');
 const { capitalizeWords, capitalize, capitalizeFirstLetter } = require('../modules/formattingModule');
 const { getVillageColorByName } = require('../modules/locationsModule'); // Import from locationsModule.js
 const { getLastDebugValues } = require('../modules/buffModule');
@@ -13,6 +13,8 @@ const { getLastDebugValues } = require('../modules/buffModule');
 // Model Imports
 const { monsterMapping } = require('../models/MonsterModel');
 const ItemModel = require('../models/ItemModel');
+const Character = require('../models/CharacterModel');
+
 
 // ------------------- Function to create crafting embed -------------------
 const createCraftingEmbed = async (item, character, flavorText, materialsUsed, quantity, staminaCost, remainingStamina) => {
@@ -20,10 +22,22 @@ const createCraftingEmbed = async (item, character, flavorText, materialsUsed, q
 
     // Ensure `quantity` is properly handled
     const itemQuantityText = ` x${quantity}`;
-    const embedTitle = `${character.name} the ${capitalize(character.job)} from ${capitalize(character.currentVillage)}: ${action} ${item.itemName}${itemQuantityText}`;
+    
+    // Determine if the character is visiting a different village
+    const isVisiting = character.homeVillage.toLowerCase() !== character.currentVillage.toLowerCase();
+    const locationPrefix = isVisiting
+        ? `${capitalizeWords(character.homeVillage)} ${capitalizeWords(character.job)} is visiting ${capitalizeWords(character.currentVillage)}`
+        : `${capitalizeWords(character.currentVillage)} ${capitalizeWords(character.job)}`;
 
-    // Handle flavor text (optional)
-    const flavorTextField = flavorText ? { name: '🌟 **Flavor Text**', value: flavorText, inline: false } : null;
+    const embedTitle = `${locationPrefix}: ${character.name} ${action} ${item.itemName}${itemQuantityText}`;
+
+    // Generate crafting-specific flavor text based on the job
+    const craftingFlavorText = generateCraftingFlavorText(character.job);
+
+    // Combine crafting flavor text with the optional custom flavor text
+    const combinedFlavorText = flavorText
+        ? `${craftingFlavorText}\n\n🌟 **Custom Flavor Text:** ${flavorText}`
+        : craftingFlavorText;
 
     // Format materials with their actual emojis
     const DEFAULT_EMOJI = ':small_blue_diamond:';
@@ -56,10 +70,15 @@ const createCraftingEmbed = async (item, character, flavorText, materialsUsed, q
         }
     }
 
+    // Dynamically fetch updated stamina to ensure accuracy
+    const latestCharacter = await Character.findById(character._id);
+    const updatedStamina = latestCharacter ? latestCharacter.currentStamina : remainingStamina;
+
     // Create the crafting embed
     const embed = new EmbedBuilder()
         .setColor('#AA926A') // Amber for crafting
         .setTitle(embedTitle)
+        .setDescription(combinedFlavorText) // Add job-specific flavor text in the description
         .setAuthor({
             name: `${character.name} 🔗`,
             iconURL: character.icon || DEFAULT_IMAGE_URL,
@@ -75,13 +94,8 @@ const createCraftingEmbed = async (item, character, flavorText, materialsUsed, q
                 }))
                 : [{ name: '📜 **__Materials Used__**', value: craftingMaterialText, inline: false }]),
             { name: '⚡ **__Stamina Cost__**', value: `> ${staminaCost}`, inline: true },
-            { name: '💚 **__Remaining Stamina__**', value: `> ${remainingStamina}`, inline: true }
+            { name: '💚 **__Remaining Stamina__**', value: `> ${updatedStamina}`, inline: true }
         );
-
-    // Add flavor text if present
-    if (flavorTextField) {
-        embed.addFields(flavorTextField);
-    }
 
     // Add a thumbnail and footer
     embed.setThumbnail(item.image || DEFAULT_IMAGE_URL)
@@ -93,6 +107,7 @@ const createCraftingEmbed = async (item, character, flavorText, materialsUsed, q
 
     return embed;
 };
+
 
 
 // ------------------- Function to create Writing Submission embed -------------------
@@ -171,6 +186,9 @@ const createGatherEmbed = (character, randomItem) => {
     const action = typeActionMap[randomItem.type[0]]?.action || 'found';
     const article = getArticleForItem(randomItem.itemName);
 
+    // Generate flavor text
+    const flavorText = generateGatherFlavorText(randomItem.type[0]);
+
     // Determine visiting status
     const isVisiting = character.homeVillage.toLowerCase() !== character.currentVillage.toLowerCase();
     const locationPrefix = isVisiting
@@ -179,13 +197,27 @@ const createGatherEmbed = (character, randomItem) => {
 
     const embedColor = getVillageColorByName(character.currentVillage) || settings.color || '#000000';
 
+    // Define village-specific footer images
+    const villageImages = {
+        Inariko: "https://storage.googleapis.com/tinglebot/Graphics/Inariko-Footer.png",
+        Rudania: "https://storage.googleapis.com/tinglebot/Graphics/Rudania-Footer.png",
+        Vhintl: "https://storage.googleapis.com/tinglebot/Graphics/Vhintl-Footer.png"
+    };
+
+    const villageImage = villageImages[capitalizeWords(character.currentVillage)] || DEFAULT_IMAGE_URL;
+
+    // Validate and set thumbnail
+    const thumbnailUrl = isValidImageUrl(randomItem.image) ? randomItem.image : DEFAULT_IMAGE_URL;
+
     return new EmbedBuilder()
         .setTitle(`${locationPrefix}: ${character.name} ${action} ${article} ${randomItem.itemName}!`)
+        .setDescription(flavorText)
         .setColor(embedColor)
         .setAuthor({ name: `${character.name} 🔗`, iconURL: character.icon || DEFAULT_IMAGE_URL, url: character.inventory || '' })
-        .setThumbnail(randomItem.image || DEFAULT_IMAGE_URL)
-        .setImage(DEFAULT_IMAGE_URL);
+        .setThumbnail(thumbnailUrl)
+        .setImage(villageImage); // Use the village-specific image
 };
+
 
 // ------------------- Function to create transfer embed -------------------
 const createTransferEmbed = (fromCharacter, toCharacter, items, interactionUrl, fromCharacterIcon, toCharacterIcon) => {
@@ -243,7 +275,6 @@ const createTradeEmbed = async (fromCharacter, toCharacter, fromItems, toItems, 
 };
 
 // ------------------- Function to create monster encounter embed -------------------
-
 const createMonsterEncounterEmbed = (
     character,
     monster,
@@ -259,7 +290,6 @@ const createMonsterEncounterEmbed = (
     const monsterDetails = monsterMapping[nameMapping.replace(/\s+/g, '')] || { name: monster.name, image: 'https://via.placeholder.com/100x100' };
 
     const authorIconURL = settings.author?.iconURL || 'https://via.placeholder.com/100x100';
-    const settingsImageURL = settings.image?.url || 'https://via.placeholder.com/100x100';
 
     const koMessage = heartsRemaining === 0 ? '\n💥 **KO! You have been defeated and can’t continue!**' : '';
 
@@ -270,6 +300,16 @@ const createMonsterEncounterEmbed = (
         : `${capitalizeWords(character.currentVillage)} ${capitalizeWords(character.job)}`;
 
     const embedColor = getVillageColorByName(character.currentVillage) || '#000000'; // Default color
+
+    // Define village-specific footer images
+    const villageImages = {
+        Inariko: "https://storage.googleapis.com/tinglebot/Graphics/Inariko-Footer.png",
+        Rudania: "https://storage.googleapis.com/tinglebot/Graphics/Rudania-Footer.png",
+        Vhintl: "https://storage.googleapis.com/tinglebot/Graphics/Vhintl-Footer.png"
+    };
+
+    // Select the appropriate footer image for the current village
+    const villageImage = villageImages[capitalizeWords(character.currentVillage)] || 'https://via.placeholder.com/100x100';
 
     const embed = new EmbedBuilder()
         .setColor(isBloodMoon ? '#FF4500' : embedColor) // Use Blood Moon color or village color
@@ -282,7 +322,7 @@ const createMonsterEncounterEmbed = (
             { name: '🔹 __Outcome__', value: `> ${outcomeMessage || 'No outcome specified.'}${koMessage}`, inline: false }
         )
         .setFooter({ text: isBloodMoon ? '🔴 The Blood Moon rises... luckily you didn’t run into anything stronger.' : 'Encounter completed.', iconURL: authorIconURL })
-        .setImage(settingsImageURL);
+        .setImage(villageImage);
 
     if (lootItem) {
         embed.addFields({ name: '💥 __Loot__', value: `${formatItemDetails(lootItem.itemName, lootItem.quantity, lootItem.emoji)}`, inline: false });
@@ -307,11 +347,12 @@ const createMonsterEncounterEmbed = (
 };
 
 
-
 // ------------------- Functifon to create no encounter embed -------------------
 const createNoEncounterEmbed = (character, isBloodMoon = false) => {
     const settings = getCommonEmbedSettings(character);
-    const noEncounterMessage = getNoEncounterMessage(); // Retain normal no-encounter message
+
+    // Pass the character's current village to get a specific no encounter message
+    const noEncounterMessage = getNoEncounterMessage(character.currentVillage);
 
     // Determine visiting status
     const isVisiting = character.homeVillage.toLowerCase() !== character.currentVillage.toLowerCase();
@@ -326,6 +367,16 @@ const createNoEncounterEmbed = (character, isBloodMoon = false) => {
             ? getVillageColorByName(character.currentVillage) || '#000000' // Use current village's color if visiting
             : settings.color || '#000000'; // Default color if not visiting or no settings color
 
+    // Define village-specific footer images
+    const villageImages = {
+        inariko: "https://storage.googleapis.com/tinglebot/Graphics/Inariko-Footer.png",
+        rudania: "https://storage.googleapis.com/tinglebot/Graphics/Rudania-Footer.png",
+        vhintl: "https://storage.googleapis.com/tinglebot/Graphics/Vhintl-Footer.png",
+    };
+
+    // Select the appropriate footer image for the current village
+    const villageImage = villageImages[character.currentVillage.toLowerCase()] || 'https://via.placeholder.com/100x100';
+
     return new EmbedBuilder()
         .setColor(embedColor)
         .setTitle(
@@ -333,10 +384,9 @@ const createNoEncounterEmbed = (character, isBloodMoon = false) => {
         )
         .setAuthor({ name: `${character.name} 🔗`, iconURL: settings.author.iconURL, url: settings.author.url })
         .addFields({ name: '🔹 __Outcome__', value: `> ${noEncounterMessage}`, inline: false })
-        .setImage(settings.image.url)
+        .setImage(villageImage)
         .setFooter({ text: isBloodMoon ? '🔴 The Blood Moon rises... but nothing stirs in the shadows.' : 'Better luck next time!' });
 };
-
 
 
 // ------------------- Function to create KO embed -------------------

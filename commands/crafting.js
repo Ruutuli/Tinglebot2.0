@@ -18,7 +18,7 @@ const { fetchItemByName } = require('../database/itemService'); // Item-related 
 const { addItemInventoryDatabase, processMaterials } = require('../utils/inventoryUtils'); // Inventory utility functions
 const { appendSheetData, authorizeSheets } = require('../utils/googleSheetsUtils'); // Google Sheets interaction
 const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../utils/validation'); // Validation utilities
-const { formatDateTime } = require('../modules/formattingModule'); // Formatting utilities
+const { formatDateTime, capitalizeWords  } = require('../modules/formattingModule'); // Formatting utilities
 
 // Module Imports
 const { checkAndUseStamina } = require('../modules/characterStatsModule'); // Character stamina management
@@ -73,32 +73,51 @@ async execute(interaction) {
   const quantity = interaction.options.getInteger('quantity');
   const userId = interaction.user.id;
 
+  // ------------------- Add Village Channel Validation -------------------
+  const villageChannels = {
+      Rudania: process.env.RUDANIA_TOWN_HALL,
+      Inariko: process.env.INARIKO_TOWN_HALL,
+      Vhintl: process.env.VHINTL_TOWN_HALL,
+  };
+
   try {
       // Fetch the character and validate
       const character = await fetchCharacterByNameAndUserId(characterName, userId);
       if (!character) {
-        return interaction.editReply({
-          content: `❌ **Character "${characterName}" not found or does not belong to you.**`,
-          ephemeral: true,
-        });
+          return interaction.editReply({
+              content: `❌ **Character "${characterName}" not found or does not belong to you.**`,
+              ephemeral: true,
+          });
       }
 
-// Check if the character is debuffed
-if (character.debuff?.active) {
-  const debuffEndDate = new Date(character.debuff.endDate);
-  const unixTimestamp = Math.floor(debuffEndDate.getTime() / 1000);
-  await interaction.editReply({
-      content: `❌ **${character.name} is currently debuffed and cannot craft. Please wait until the debuff expires.**\n🕒 **Debuff Expires:** <t:${unixTimestamp}:F>`,
-      ephemeral: true,
-  });
-  return;
-}
+      // Check if the character is debuffed
+      if (character.debuff?.active) {
+          const debuffEndDate = new Date(character.debuff.endDate);
+          const unixTimestamp = Math.floor(debuffEndDate.getTime() / 1000);
+          await interaction.editReply({
+              content: `❌ **${character.name} is currently debuffed and cannot craft. Please wait until the debuff expires.**\n🕒 **Debuff Expires:** <t:${unixTimestamp}:F>`,
+              ephemeral: true,
+          });
+          return;
+      }
 
       if (!character.inventorySynced) {
           return interaction.editReply({
               content: `❌ **Your character's inventory is not synced. Please initialize your inventory with </testinventorysetup:1306176790095728732> and sync it with </syncinventory:1306176789894266898>.**`,
               ephemeral: true
           });
+      }
+
+      // ------------------- Validate Village Channel -------------------
+      const currentVillage = capitalizeWords(character.currentVillage); // Capitalize village name for consistency
+      const allowedChannel = villageChannels[currentVillage]; // Get the allowed channel from environment variables
+
+      if (!allowedChannel || interaction.channelId !== allowedChannel) {
+          const channelMention = `<#${allowedChannel}>`;
+          await interaction.editReply({
+              content: `❌ **You can only use this command in the ${currentVillage} Town Hall channel!**\n${character.name} is currently in ${currentVillage}! This command must be used in ${channelMention}.`,
+          });
+          return;
       }
 
       // Fetch the item and validate
@@ -129,6 +148,19 @@ if (character.debuff?.active) {
           });
       }
 
+      // Deduct stamina before crafting
+      let updatedStamina;
+      try {
+          updatedStamina = await checkAndUseStamina(character, staminaCost);
+          console.log(`[crafting.js]: Stamina deducted. Remaining: ${updatedStamina}`);
+      } catch (error) {
+          console.error(`[crafting.js]: Error deducting stamina for character "${characterName}" while crafting "${itemName}". Details:`, error);
+          return interaction.followUp({
+              content: `⚠️ **Crafting cannot be completed due to insufficient stamina. Please try again.**`,
+              ephemeral: true
+          });
+      }
+
       // Fetch inventory and process materials
       const inventoryCollection = await getCharacterInventoryCollection(character.name);
       const inventory = await inventoryCollection.find().toArray();
@@ -137,12 +169,6 @@ if (character.debuff?.active) {
       if (materialsUsed === 'canceled') {
           return interaction.editReply({ content: '❌ **Crafting canceled.**', ephemeral: true });
       }
-
-      // Deduct stamina after successful material processing
-      await checkAndUseStamina(character, staminaCost);
-
-      // Fetch the updated stamina value
-      const updatedStamina = character.currentStamina - staminaCost;
 
       // Create crafting embed and respond with success
       const embed = await createCraftingEmbed(item, character, flavorText, materialsUsed, quantity, staminaCost, updatedStamina);
@@ -175,7 +201,6 @@ if (character.debuff?.active) {
       console.error(`[crafting.js]: Error while crafting "${itemName}" for character "${characterName}". Details:`, error);
   }
 },
-
 
 
   // ------------------- Autocomplete Handler -------------------

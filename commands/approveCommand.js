@@ -7,7 +7,7 @@ const { SlashCommandBuilder } = require('discord.js');
 const { retrieveSubmissionFromStorage, deleteSubmissionFromStorage } = require('../utils/storage');
 const { appendDataToSheet } = require('../utils/googleSheetsUtils');
 const { getUserGoogleSheetId } = require('../database/tokenService');
-const { updateTokenBalance, appendEarnedTokens } = require('../database/tokenService');
+const { updateTokenBalance, appendEarnedTokens, getOrCreateToken  } = require('../database/tokenService');
 const fs = require('fs');
 
 // ------------------- Helper Functions -------------------
@@ -70,66 +70,78 @@ async function replyToAdmin(interaction, messageContent) {
 // ------------------- Approve Submission -------------------
 // Handles approving the submission and updating user tokens
 async function approveSubmission(interaction, submissionId) {
-  console.log(`Attempting to retrieve submission with ID: ${submissionId}`);
-
-  const submission = await retrieveSubmissionFromStorage(submissionId);
-
-  if (!submission) {
-      console.error(`Submission not found for ID: ${submissionId}`);
-      return replyToAdmin(interaction, `⚠️ Submission with ID \`${submissionId}\` not found.`);
-  }
-
-  const userId = submission.userId;
-  const spreadsheetId = await getUserGoogleSheetId(userId);
-
-  if (!spreadsheetId) {
-      return replyToAdmin(interaction, `⚠️ No Google Sheets linked for user \`${userId}\`.`);
-  }
-
-  const category = submission.category || 'art'; // Determine if submission is 'art' or 'writing'
-  const tokenAmount = submission.finalTokenAmount;
-  const fileName = submission.fileName || submission.title || submissionId; // Use title for writing
-  const messageUrl = submission.messageUrl;
+  console.log(`[approveCommand.js]: Attempting to retrieve submission with ID: ${submissionId}`);
 
   try {
-      // Handle missing messageUrl for writing submissions
-      if (!messageUrl) {
-        console.error('Invalid message URL in submission:', submission);
-        throw new Error('Message URL is invalid or undefined.');
+    const submission = await retrieveSubmissionFromStorage(submissionId);
+
+    if (!submission) {
+      console.error(`[approveCommand.js]: Submission not found for ID: ${submissionId}`);
+      return replyToAdmin(interaction, `⚠️ Submission with ID \`${submissionId}\` not found.`);
     }
+
+    console.log(`[approveCommand.js]: Retrieved submission:`, submission);
+
+    const userId = submission.userId;
+    console.log(`[approveCommand.js]: Fetching or creating user for discordId: ${userId}`);
     
-    // React with ☑️ and notify the user
+    const user = await getOrCreateToken(userId);
+
+    if (!user) {
+      console.error(`[approveCommand.js]: User not found or failed to create for discordId: ${userId}`);
+      return replyToAdmin(interaction, `⚠️ User with ID \`${userId}\` not found.`);
+    }
+
+    console.log(`[approveCommand.js]: Retrieved or created user:`, user);
+
+    const spreadsheetId = await getUserGoogleSheetId(userId);
+
+    if (!spreadsheetId) {
+      console.error(`[approveCommand.js]: No Google Sheets linked for user ${userId}`);
+      return replyToAdmin(interaction, `⚠️ No Google Sheets linked for user \`${userId}\`.`);
+    }
+
+    console.log(`[approveCommand.js]: Retrieved spreadsheetId: ${spreadsheetId}`);
+
+    const category = submission.category || 'art';
+    const tokenAmount = submission.finalTokenAmount;
+    const fileName = submission.fileName || submission.title || submissionId;
+    const messageUrl = submission.messageUrl;
+
+    if (!messageUrl) {
+      console.error(`[approveCommand.js]: Invalid or undefined message URL in submission:`, submission);
+      throw new Error('Message URL is invalid or undefined.');
+    }
+
     await reactToMessage(interaction, messageUrl, '☑️');
+    console.log(`[approveCommand.js]: Reacted to message with ☑️`);
+
     await notifyUser(
-        interaction,
-        userId,
-        `☑️ Your submission \`${submissionId}\` has been approved! ${tokenAmount} tokens have been added to your balance.`
-      
-          );
-      
+      interaction,
+      userId,
+      `☑️ Your submission \`${submissionId}\` has been approved! ${tokenAmount} tokens have been added to your balance.`
+    );
+    console.log(`[approveCommand.js]: Notified user ${userId}`);
 
-      // Update token balance
-      await updateTokenBalance(userId, tokenAmount);
+    await updateTokenBalance(userId, tokenAmount);
+    console.log(`[approveCommand.js]: Token balance updated for user ${userId} with ${tokenAmount} tokens`);
+    
+    const submissionLink = submission.messageUrl || 'N/A';
+    await appendEarnedTokens(userId, fileName, category, tokenAmount, submissionLink);
+    console.log(`[approveCommand.js]: Appended earned tokens for user ${userId}`);
 
-      // Append token data to Google Sheets
-      const submissionLink = submission.messageUrl || 'N/A'; // Always use the message URL
-      await appendEarnedTokens(userId, fileName, category, tokenAmount, submissionLink);
-      
+    await replyToAdmin(
+      interaction,
+      `☑️ Submission \`${submissionId}\` has been approved, and ${tokenAmount} tokens have been added to the user's balance.`
+    );
 
-      // Reply to the admin
-      await replyToAdmin(
-          interaction,
-          `☑️ Submission \`${submissionId}\` has been approved and ${tokenAmount} tokens have been added to the user's balance.`
-      );
-
-      // Delete the submission from storage
-      await deleteSubmissionFromStorage(submissionId);
+    await deleteSubmissionFromStorage(submissionId);
+    console.log(`[approveCommand.js]: Submission ${submissionId} successfully approved.`);
   } catch (error) {
-      console.error(`Error updating tokens or Google Sheets: ${error.message}`);
-      return replyToAdmin(interaction, '⚠️ Error updating tokens or Google Sheets. Please try again later.');
+    console.error(`[approveCommand.js]: Error during approval process: ${error.message}`);
+    await replyToAdmin(interaction, '⚠️ An error occurred while processing the submission. Please try again later.');
   }
 }
-
 
 
 // ------------------- Deny Submission -------------------

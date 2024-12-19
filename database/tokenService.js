@@ -7,6 +7,7 @@ const Token = require('../models/TokenModel');
 const { connectToTinglebot } = require('../database/connection');
 const User = require('../models/UserModel');
 const { readSheetData, appendSheetData, authorizeSheets, extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../utils/googleSheetsUtils');
+const { google } = require('googleapis')
 
 // ------------------- Get Token Balance -------------------
 // Fetches the token balance for a user
@@ -28,39 +29,47 @@ async function getOrCreateToken(userId, tokenTrackerLink = '') {
   let user = await User.findOne({ discordId: userId });
 
   if (!user) {
-    console.log('[tokenService.js]: Creating new user with tokenTracker:', tokenTrackerLink);
+    console.log(`[tokenService.js]: Creating a new user for discordId: ${userId}`);
     user = new User({
       discordId: userId,
       tokens: 0,
-      tokenTracker: tokenTrackerLink || '', // Ensure tokenTracker is set to an empty string if not provided
+      tokenTracker: tokenTrackerLink || '',
       tokensSynced: false,
     });
     await user.save();
-  } else if (tokenTrackerLink) {
-    console.log('[tokenService.js]: Updating tokenTrackerLink for user:', { userId, tokenTrackerLink });
-    user.tokenTracker = tokenTrackerLink; // Update tokenTracker if a new link is provided
+  } else if (tokenTrackerLink && !user.tokenTracker) {
+    console.log(`[tokenService.js]: Updating tokenTrackerLink for user ${userId}`);
+    user.tokenTracker = tokenTrackerLink;
     await user.save();
   }
 
   return user;
 }
 
-
 // ------------------- Update Token Balance -------------------
 // Updates the token balance for a user by a specific amount
 async function updateTokenBalance(userId, amount) {
   await connectToTinglebot();
-  const token = await Token.findOne({ userId });
+  let token = await Token.findOne({ userId });
+
   if (!token) {
-    throw new Error('User not found');
+    console.log(`[tokenService.js]: Creating a new token record for user ${userId}`);
+    token = new Token({
+      userId,
+      tokens: amount, // Initialize with the current amount
+    });
+    await token.save();
+    return token;
   }
 
   // Adjust token balance
   token.tokens += amount;
   await token.save();
 
+  console.log(`[tokenService.js]: Updated token balance for user ${userId}. New balance: ${token.tokens}`);
   return token;
 }
+
 
 // ------------------- Sync Token Tracker -------------------
 // Syncs the user's token tracker with Google Sheets data and updates token balance
@@ -135,30 +144,54 @@ async function syncTokenTracker(userId) {
 // Appends a new entry with earned token data to the user's Google Sheet in the "Earned" section
 async function appendEarnedTokens(userId, fileName, category, amount, fileUrl = '') {
   const token = await getOrCreateToken(userId);
-  const tokenTrackerLink = token.tokenTrackerLink;
+  const tokenTrackerLink = token.tokenTracker;
 
   if (!isValidGoogleSheetsUrl(tokenTrackerLink)) {
-      throw new Error('Invalid Google Sheets URL');
+    throw new Error(`[tokenService.js]: Invalid Google Sheets URL for user ${userId}`);
   }
 
   const spreadsheetId = extractSpreadsheetId(tokenTrackerLink);
   const auth = await authorizeSheets();
 
-  const newRow = [
-      fileName,       // Column B - Submission
-      fileUrl,        // Column C - Link
-      category,       // Column D - Category (art, writing, etc.)
-      'earned',       // Column E - Type (earned)
-      `${amount}`     // Column F - Token Amount (earned tokens are positive)
-  ];
+  // Define the range to check for the next available row
+  const checkRange = 'loggedTracker!B7:F';
+  let nextRow = 7; // Default to the first row after the headers
 
   try {
-      await appendSheetData(auth, spreadsheetId, 'Token Tracker!B7:F', [newRow]);
+    // Fetch existing data to determine the next available row
+    const response = await google.sheets({ version: 'v4', auth }).spreadsheets.values.get({
+      spreadsheetId,
+      range: checkRange,
+    });
+
+    const rows = response.data.values || [];
+    nextRow += rows.length; // Adjust nextRow based on existing data
+
+    const appendRange = `loggedTracker!B${nextRow}:F`;
+
+    // Prepare the data row
+    const newRow = [
+      fileName,  // Column B - Submission
+      fileUrl,   // Column C - Link
+      category,  // Column D - Category
+      'earned',  // Column E - Type
+      `${amount}` // Column F - Token Amount
+    ];
+
+    // Append data to the determined row
+    await google.sheets({ version: 'v4', auth }).spreadsheets.values.update({
+      spreadsheetId,
+      range: appendRange,
+      valueInputOption: 'USER_ENTERED',
+      resource: { values: [newRow] },
+    });
+
+    console.log(`[tokenService.js]: Appended earned tokens for user ${userId} at row ${nextRow}`);
   } catch (error) {
-      throw new Error('Error appending earned token data to the Google Sheet.');
+    console.error(`[tokenService.js]: Error appending earned token data: ${error.message}`);
+    throw new Error('Error appending earned token data to the Google Sheet.');
   }
 }
-
 
 // ------------------- Append Spent Tokens to Google Sheets -------------------
 // Appends a new entry with spent token data to the user's Google Sheet in the "Spent" section
@@ -185,7 +218,7 @@ async function appendSpentTokens(userId, purchaseName, amount, link = '') {
 
   try {
     // Append data to Token Tracker!B7:F
-    await appendSheetData(auth, spreadsheetId, 'Token Tracker!B7:F', [newRow]);
+    await appendSheetData(auth, spreadsheetId, 'loggedTracker!B7:F', [newRow]);
   } catch (error) {
     console.error('Error appending spent token data to Google Sheets:', error.message);
     throw new Error('Error appending spent token data to the Google Sheet.');
@@ -199,17 +232,20 @@ async function getUserGoogleSheetId(userId) {
     const user = await User.findOne({ discordId: userId });
 
     if (user && user.tokenTracker) {
-      const spreadsheetId = extractSpreadsheetIdFromUrl(user.tokenTracker);
-      return spreadsheetId;
+      if (!isValidGoogleSheetsUrl(user.tokenTracker)) {
+        throw new Error(`[tokenService.js]: Invalid Google Sheets URL for user ${userId}`);
+      }
+      return extractSpreadsheetIdFromUrl(user.tokenTracker);
     } else {
-      console.error(`No Token Tracker linked for user ${userId}`);
+      console.error(`[tokenService.js]: No Token Tracker linked for user ${userId}`);
       return null;
     }
   } catch (error) {
-    console.error(`Error retrieving Token Tracker ID for user ${userId}:`, error.message);
+    console.error(`[tokenService.js]: Error retrieving Token Tracker ID for user ${userId}:`, error.message);
     return null;
   }
 }
+
 
 // ------------------- Extract Spreadsheet ID from URL -------------------
 // Helper function to extract Spreadsheet ID from Google Sheets URL

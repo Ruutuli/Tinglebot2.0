@@ -116,23 +116,26 @@ module.exports = {
             let healAmount = 0;
             let staminaRecovered = 0;
 
-            if (character.ko && item.itemName.toLowerCase() === 'fairy') {
-                await healKoCharacter(character._id);
-                character.currentHearts = character.maxHearts;
-                await updateCurrentHearts(character._id, character.currentHearts);
-                await interaction.editReply({ content: `💫 ${character.name} has been revived and fully healed using a ${item.itemName}!`, ephemeral: false });
-                return;
-            }
-
-            if (item.itemName.toLowerCase() === 'fairy') {
-                healAmount = character.maxHearts - character.currentHearts;
-                character.currentHearts = character.maxHearts;
-                await updateCurrentHearts(character._id, character.currentHearts);
-            } else if (item.modifierHearts) {
-                healAmount = Math.min(item.modifierHearts * quantity, character.maxHearts - character.currentHearts);
-                character.currentHearts += healAmount;
-                await updateCurrentHearts(character._id, character.currentHearts);
-            }
+// ------------------- Healing Logic -------------------
+if (character.ko && item.itemName.toLowerCase() === 'fairy') {
+    await healKoCharacter(character._id);
+    character.currentHearts = character.maxHearts;
+    await updateCurrentHearts(character._id, character.currentHearts);
+    await interaction.editReply({ content: `💫 ${character.name} has been revived and fully healed using a ${item.itemName}!`, ephemeral: false });
+    return;
+  } else if (character.ko) {
+    await interaction.editReply({
+      content: `❌ ${item.itemName} cannot revive a KO'd character. Use a Fairy or consult a Healer.`,
+      ephemeral: true,
+    });
+    return;
+  }
+  
+  if (item.modifierHearts) {
+    healAmount = Math.min(item.modifierHearts * quantity, character.maxHearts - character.currentHearts);
+    character.currentHearts += healAmount;
+    await updateCurrentHearts(character._id, character.currentHearts);
+  }
 
             if (item.staminaRecovered) {
                 staminaRecovered = Math.min(item.staminaRecovered * quantity, character.maxStamina - character.currentStamina);

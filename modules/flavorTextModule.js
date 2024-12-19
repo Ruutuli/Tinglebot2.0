@@ -165,20 +165,46 @@ const generateAttackAndDefenseBuffMessage = (isVictory) => {
 // =====================
 
 // Messages for no encounter
-const getNoEncounterMessage = () => {
-  const messages = [
-    "🌲🕊️ A quiet day. No monsters were encountered.",
-    "🌿☀️ The area is peaceful. No monsters in sight.",
-    "🌸🌼 Nothing stirs. No monsters to be found.",
-    "🌳🦋 All is calm. No monsters appear.",
-    "🌲🕊️ A serene day with no threats.",
-    "🌸🌼 Peaceful surroundings; no monsters encountered.",
-    "🌿🦋 You hear the wind rustling through the trees, but nothing more.",
-    "🌸🦋 A butterfly lands upon a flower. There is no danger today.",
-    "🌼🌿 The birds are singing. You are at peace.",
-  ];
-  return getRandomMessage(messages);
+const getNoEncounterMessage = (currentVillage) => {
+    // Normalize the village name to avoid case-sensitivity issues
+    const villageKey = currentVillage ? currentVillage.toLowerCase() : 'default';
+
+    // Village-specific messages
+    const villageMessages = {
+        rudania: [
+            "🔥 The air is warm, and no monsters disturb the peace.",
+            "🔥⚒️ The forges hum, but the valley is quiet. No monsters today.",
+            "🌋 A distant rumble from the volcano, but no threats nearby.",
+            "🎉 The sounds of celebration drown out any sign of danger.",
+            "🪓 The farmlands are safe, and no monsters prowl.",
+        ],
+        inariko: [
+            "💦 The river flows quietly. No monsters are here.",
+            "🏞️ Peaceful waters surround you, undisturbed by threats.",
+            "📖 The wisdom of the past guards this place. No danger today.",
+            "🌀 The gentle whirl of the waterwheel is all you hear.",
+            "❄️ The crisp mountain air carries no sign of danger.",
+        ],
+        vhintl: [
+            "🌿 The forest whispers softly, but no monsters reply.",
+            "🕸️ Even the Skulltulas seem to sleep today. All is calm.",
+            "🌧️ The rain falls gently through the trees, masking all sound.",
+            "🪶 A Rito song drifts through the canopy, warding off danger.",
+            "🍃 The mists of the forest conceal no threats today.",
+        ],
+        default: [
+            "🌲🕊️ A quiet day. No monsters were encountered.",
+            "🌿☀️ The area is peaceful. No monsters in sight.",
+            "🌸🌼 Nothing stirs. No monsters to be found.",
+            "🌳🦋 All is calm. No monsters appear.",
+        ],
+    };
+
+    // Return messages for the specific village or fallback to default
+    const messages = villageMessages[villageKey] || villageMessages.default;
+    return getRandomMessage(messages);
 };
+
 
 // Miscellaneous Messages
 // ======================
@@ -264,6 +290,173 @@ const typeActionMap = {
 'Inedible': { action: 'found an inedible', color: '#696969' },
 };
 
+const generateGatherFlavorText = (itemType) => {
+  const typeToFlavorText = {
+    '1h': [
+        "⚔️ A well-worn tool, etched with marks of countless journeys, was unearthed.",
+        "🛡️ A dependable one-handed weapon, sturdy and true, was found.",
+        "⚔️ This blade carries the weight of forgotten tales.",
+        "🗡️ A finely crafted tool, its balance perfect for swift action."
+    ],
+    '2h': [
+        "⚔️ A heavy two-handed weapon, forged for strength, was uncovered.",
+        "💪 This tool, built for power, whispers of battles long past.",
+        "⚔️ A mighty find, its weight a testament to its craftsmanship.",
+        "🪓 A weapon of the ancients, built for enduring strength, was discovered."
+    ],
+    'Ancient Parts': [
+        "🔮 Relics of a bygone era, humming with faint energy, were gathered.",
+        "🏺 Fragments of the past, their purpose lost to time, were carefully collected.",
+        "🔧 Strange components, worn by ages yet intricate in design, were uncovered.",
+        "🌌 Echoes of forgotten civilizations linger in these ancient mechanisms."
+    ],
+    'Creature': [
+        "🌾 The lands yielded curious creatures, elusive and fleeting.",
+        "🌿 Hidden within the leaves, the secrets of nature stirred and were caught.",
+        "🍃 The wilderness offered glimpses of life, quick and unpredictable.",
+        "✨ Among the grasses and shadows, living treasures were carefully gathered.",
+        "🪴 Creatures moved in harmony with the land, their presence a fleeting mystery."
+    ],
+    'Dairy': [
+        "🥛 Rich and wholesome dairy, a gift from gentle hands, was collected.",
+        "🧀 The day's yield included provisions crafted with care and tradition.",
+        "🍶 Fresh and nourishing, the bounty speaks of peaceful homesteads.",
+        "🐄 The livestock’s offerings, simple yet vital, ensured a good harvest."
+    ],
+    'Fish': [
+        "🎣 The shimmering waters surrendered their hidden bounty.",
+        "🐟 Quick and silent, the river’s life was skillfully caught.",
+        "🌊 The depths revealed their secrets, glimmering and fleeting.",
+        "✨ The tranquil waters whispered of abundance, offering their treasures."
+    ],
+    'Fruit': [
+        "🍎 The trees offered their bounty, ripe and fragrant with the season's best.",
+        "🍇 Sweet and vibrant, the fruits of the land were gathered with care.",
+        "🍊 Hidden among the leaves, nature’s flavors were plentiful and inviting.",
+        "🌿 The orchard whispered of life’s abundance, yielding its colorful harvest."
+    ],
+    'Meat': [
+        "🍖 The land provided its sustenance, a reminder of nature’s cycle.",
+        "🐄 The fields and pastures yielded provisions essential to the journey ahead.",
+        "🍗 Carefully prepared, this resource will sustain even the most arduous travels.",
+        "🥩 The fruits of careful labor ensured a hearty supply for the days ahead."
+    ],
+    'Monster': [
+        "👹 The remnants of a defeated foe bore rare and curious materials.",
+        "🔮 Echoes of dark magic lingered in the remains, now collected.",
+        "👾 The battle's spoils included components shrouded in mystery.",
+        "🌌 Strange remnants, imbued with power, tell of an ancient conflict."
+    ],
+    'Mushroom': [
+        "🍄 The forest floor offered its earthy treasures, rich and varied.",
+        "🌧️ Shrouded in mist, hidden fungi thrived and were gently gathered.",
+        "🌲 Quiet corners of the wild held delicate and valuable mushrooms.",
+        "🌿 The damp earth revealed its bounty, fragrant and full of life."
+    ],
+    'Natural': [
+        "🌳 The land yielded its gifts, timeless and versatile.",
+        "🪵 A harvest of materials, raw and brimming with potential, was gathered.",
+        "🌿 The land offered resources, their use bound only by imagination.",
+        "🌱 Nature’s offerings spoke of resilience and quiet abundance."
+    ],
+    'Ore': [
+        "⛏️ Deep within the rock, shimmering stones awaited discovery.",
+        "💎 Precious minerals, the lifeblood of the mountains, were unearthed.",
+        "🏔️ The veins of the earth gave forth their treasures, long hidden.",
+        "🌋 The glow of raw ore hinted at ancient secrets, locked within stone."
+    ],
+    'Plant': [
+        "🌿 Vibrant herbs and plants whispered of hidden knowledge.",
+        "🍃 The forest floor revealed its botanical riches, delicate and rare.",
+        "🌱 The land yielded flora both useful and mysterious.",
+        "🌻 The land’s greenery spoke of life’s quiet persistence and beauty."
+    ],
+    'Protein': [
+        "🥩 A vital source of strength was carefully gathered and prepared.",
+        "🍗 The provisions ensured sustenance for journeys yet to come.",
+        "🍖 The bounty, simple yet nourishing, was a gift from the land.",
+        "🐾 Nature’s energy, preserved in its purest form, was secured."
+    ],
+    'default': [
+        "✨ The search was fruitful, yielding items of value and wonder.",
+        "💼 The hard work uncovered treasures hidden by time and nature.",
+        "🏞️ The land revealed its secrets, shared with those who sought them.",
+        "🌟 Quiet effort brought forth a bounty of unexpected riches.",
+        "💡 Among the ordinary, extraordinary finds awaited discovery.",
+        "🏔️ The journey was rewarded with a wealth of resources and promise."
+    ],
+};
+
+
+  // Use the provided type, or fall back to the default if the type is unknown
+  const flavorOptions = typeToFlavorText[itemType] || typeToFlavorText['default'];
+
+  // Randomly select a flavor text from the options
+  return getRandomMessage(flavorOptions || ["A successful gathering trip!"]);
+};
+
+const generateCraftingFlavorText = (job) => {
+  console.log(`[generateCraftingFlavorText]: Job provided: ${job}`);
+  
+  const jobToFlavorText = {
+    researcher: [
+      "📚 With keen focus, the Researcher transcribed their findings into a practical creation.",
+      "🔍 Experimentation and study bore fruit, crafting something of great potential.",
+      "🌟 Guided by knowledge, the Researcher brought an innovative idea to life."
+    ],
+    blacksmith: [
+      "⚒️ The Blacksmith worked tirelessly, the hammer's rhythm echoing through the forge.",
+      "🔥 Sparks danced in the air as molten metal took shape under the Blacksmith's hand.",
+      "🛡️ After hours of labor, the Blacksmith unveiled a creation fit to withstand Hyrule's fiercest battles."
+    ],
+    "mask maker": [
+      "🎭 In the Mask Maker's hands, ordinary materials transformed into something mystical.",
+      "🖌️ Each brushstroke carried intent, weaving stories into the mask’s design.",
+      "🌟 The Mask Maker’s craft captured the spirit of a forgotten legend."
+    ],
+    weaver: [
+      "🧵 The Weaver's loom hummed softly, threads intertwining into a tapestry of purpose.",
+      "🪡 With precision and patience, the Weaver created a fabric imbued with meaning.",
+      "✨ Each stitch told a story, the Weaver's art weaving past and present together."
+    ],
+    artist: [
+      "🎨 With deliberate strokes, the Artist painted a scene that seemed to come alive.",
+      "🖌️ Colors blended seamlessly, revealing a vision known only to the Artist's heart.",
+      "🌟 The Artist's masterpiece shimmered with emotion, as if Hyrule itself had inspired it."
+    ],
+    cook: [
+      "🍳 The Cook's kitchen bustled with energy, aromas hinting at something delicious to come.",
+      "🧂 With a steady hand, the Cook crafted a dish both hearty and full of flavor.",
+      "🍲 As the pot simmered, the Cook smiled, knowing the meal would fortify even the bravest adventurer."
+    ],
+    craftsman: [
+      "🛠️ The Craftsman’s tools danced across the workbench, shaping raw materials into something extraordinary.",
+      "🔧 Each motion was deliberate, as if the Craftsman could see the finished piece before it began.",
+      "✨ By the end of the day, the Craftsman stood back to admire their elegant and functional creation."
+    ],
+    witch: [
+      "🔮 The Witch's cauldron bubbled, its contents glowing faintly with magical energy.",
+      "🌙 Chanting softly, the Witch infused the brew with ancient knowledge and power.",
+      "🧹 A swirl of light marked the completion of the Witch’s spellbound creation."
+    ],
+    default: [
+      "✨ With effort and care, a new creation was brought into the world.",
+      "🔧 Through determination, a simple idea became a reality.",
+      "🌟 Creativity and skill combined to forge something extraordinary."
+    ]
+  };
+
+  const normalizedJob = job.trim().toLowerCase();
+  const jobToFlavorTextNormalized = Object.fromEntries(
+    Object.entries(jobToFlavorText).map(([key, value]) => [key.toLowerCase(), value])
+  );
+
+  const flavorOptions = jobToFlavorTextNormalized[normalizedJob] || jobToFlavorTextNormalized['default'];
+  return getRandomMessage(flavorOptions || ["A successful crafting session!"]);
+};
+
+
+
 // Module Exports
 // ==============
 
@@ -292,4 +485,6 @@ module.exports = {
   // Type Action Map
   typeActionMap,
   getArticleForItem,
+  generateGatherFlavorText,
+  generateCraftingFlavorText
 };

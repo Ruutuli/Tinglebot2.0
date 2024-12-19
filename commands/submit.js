@@ -72,6 +72,26 @@ module.exports = {
   async execute(interaction) {
     const subcommand = interaction.options.getSubcommand(); // Determine which subcommand was invoked
 
+    // ------------------- Fetch User Data and Validate Token Sync -------------------
+  const user = interaction.user;
+  const userData = await User.findOne({ discordId: user.id });
+
+  if (!userData) {
+    await interaction.reply({
+      content: '❌ **User data not found. Please try again later.**',
+      ephemeral: true,
+    });
+    return;
+  }
+
+  if (!userData.tokensSynced) {
+    await interaction.reply({
+      content: '❌ **You cannot use this command until your tokens are synced. Please sync your token tracker first.**',
+      ephemeral: true,
+    });
+    return;
+  }
+
     // ------------------- Handle Art Submission -------------------
     if (subcommand === 'art') {
       try {
@@ -169,6 +189,13 @@ module.exports = {
         const title = interaction.options.getString('title') || 'Untitled Writing Submission';
         const link = interaction.options.getString('link');
         const wordCount = interaction.options.getInteger('word_count');
+        if (wordCount < 0) {
+          await interaction.editReply({
+            content: '❌ **Word count cannot be negative. Please provide a valid word count.**',
+            ephemeral: true,
+          });
+          return;
+        }
         const description = interaction.options.getString('description') || 'No description provided.';
         const questId = interaction.options.getString('questid') || 'N/A';
     

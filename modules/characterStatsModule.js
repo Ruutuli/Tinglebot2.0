@@ -93,16 +93,16 @@ const useHearts = async (characterId, hearts) => {
     const character = await Character.findById(characterId);
     if (!character) throw new Error('Character not found');
 
-    const newHearts = Math.max(character.currentHearts - hearts, 0);
+    const newHearts = Math.max(character.currentHearts - hearts, 0); // Ensure hearts don't drop below 0
     await updateCurrentHearts(characterId, newHearts);
 
     if (newHearts === 0) {
-      await Character.updateOne({ _id: characterId }, { $set: { ko: true } });
-      await handleKO(characterId);
+      await handleKO(characterId); // KO only when hearts reach 0
     }
 
     return createSimpleCharacterEmbed(character, `❤️ -${hearts} hearts used`);
   } catch (error) {
+    console.error(`[characterStatsModule.js]: Error in useHearts: ${error.message}`);
     throw error;
   }
 };
@@ -111,7 +111,9 @@ const useHearts = async (characterId, hearts) => {
 const handleKO = async (characterId) => {
   try {
     await Character.updateOne({ _id: characterId }, { $set: { ko: true, currentHearts: 0 } });
+    console.log(`[characterStatsModule.js]: Character ID ${characterId} is KO'd.`);
   } catch (error) {
+    console.error(`[characterStatsModule.js]: Error in handleKO: ${error.message}`);
     throw error;
   }
 };
@@ -242,11 +244,13 @@ const checkAndUseStamina = async (character, staminaCost) => {
       }
 
       character.currentStamina -= staminaCost;
-      await character.save();  // Save character data after deducting stamina
+      await character.save(); // Save character data after deducting stamina
 
-      return character.currentStamina;
+      // Fetch updated character data to ensure consistency
+      const updatedCharacter = await Character.findById(character._id);
+      return updatedCharacter.currentStamina;
   } catch (error) {
-      console.error(`Error updating stamina for character: ${error.message}`);
+      console.error(`[characterStatsModule.js]: Error updating stamina for character: ${error.message}`);
       throw error;
   }
 };
