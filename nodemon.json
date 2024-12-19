@@ -1,7 +1,18 @@
 {
-  "watch": ["embeds/", "index.js", "commands/", "handlers/", "database/", "models/", "modules/", "utils/", "dashboard/, scripts/"],
+  "watch": [
+    "embeds/",
+    "index.js",
+    "commands/",
+    "handlers/",
+    "database/",
+    "models/",
+    "modules/",
+    "utils/",
+    "dashboard/",
+    "scripts/"
+  ],
   "ignore": ["node_modules/"],
   "ext": "js,json",
-  "exec": "node server.js", 
+  "exec": "node server.js",
   "legacy-watch": true
 }

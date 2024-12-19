@@ -5,7 +5,8 @@
 
 // // Local service and module imports
 // const { getMonstersAboveTier } = require('../database/monsterService');
-// const { triggerRaid } = require('../handlers/raidHandler');
+// const { monsterMapping } = require('../models/MonsterModel'); // Import monsterMapping
+// const { storeBattleProgress } = require('../modules/combatModule'); // Import battle storage and retrieval
 
 // // Environment configuration
 // require('dotenv').config();
@@ -26,7 +27,9 @@
 
 // const messageActivity = new Map();
 
-// function trackMessageActivity(channelId, userId) {
+// function trackMessageActivity(channelId, userId, isBot) {
+//   if (isBot) return; // Ignore bot messages
+
 //   const currentTime = Date.now();
 
 //   if (!messageActivity.has(channelId)) {
@@ -45,8 +48,6 @@
 //   activity.users.add(userId); // Track unique users
 
 //   messageActivity.set(channelId, activity);
-
-//   console.log(`[RANDOM ENCOUNTER LOG] Tracked message in channel ID ${channelId} by user ID ${userId}`);
 // }
 
 // // ------------------- Check for Random Encounter -------------------
@@ -64,8 +65,6 @@
 
 //     // Check if thresholds are met
 //     if (messageCount >= MESSAGE_THRESHOLD) {
-//       console.log(`[RANDOM ENCOUNTER] Threshold met for channel ID ${channelId}`);
-
 //       messageActivity.set(channelId, { messages: [], users: new Set() }); // Reset activity for the channel
 
 //       // Randomly pick a village channel for the encounter
@@ -74,7 +73,7 @@
 //       const randomChannel = client.channels.cache.get(randomChannelId);
 
 //       if (randomChannel && randomChannel.type === ChannelType.GuildText) {
-//         console.log(`[RANDOM ENCOUNTER] Triggering encounter in channel ${randomChannel.name}`);
+//         console.log(`[RANDOM ENCOUNTER LOG] Checking for random encounter in channel: ${randomChannel.name}`);
 //         await triggerRandomEncounter(randomChannel);
 //       }
 //     }
@@ -83,60 +82,109 @@
 
 // // ------------------- Create Encounter Embed -------------------
 
-// function createEncounterEmbed(monster) {
+// function createEncounterEmbed(monster, battleId, villageName) {
 //   const fallbackImage = 'https://via.placeholder.com/150'; // Default image in case no monster image is found.
+//   const monsterData = monsterMapping[monster.nameMapping] || {}; // Retrieve mapped data
+//   const monsterImage = monsterData.image || monster.image || fallbackImage; // Prioritize mapped image
 
-//   // Create and return an embed for the monster encounter
+//   console.log(`[EMBED LOG] Creating embed for monster: ${monster.name}, Thumbnail: ${monsterImage}`);
+
 //   return new EmbedBuilder()
-//     .setTitle(`⚔️ Encounter: ${monster.name}`)
-//     .setDescription(`A dangerous **${monster.name}** (Tier ${monster.tier}) has appeared! Prepare for battle.`)
-//     .addFields(
-//       { name: 'Tier', value: `Tier ${monster.tier}`, inline: true },
-//       { name: 'Hearts', value: `${monster.hearts} ❤️`, inline: true }
+//     .setTitle(`🛡️ **A ${monster.name} Appears!**`)
+//     .setDescription(
+//       `Use </raid:1319205813990199328> id:${battleId} to join or continue the raid!
+// ` +
+//       `Use </itemheal:1306176789755858979> to heal during the raid!`
 //     )
-//     .setThumbnail(monster.image || fallbackImage)
-//     .setColor('#FF4500')
-//     .setFooter({ text: 'Join the thread to participate in the encounter!' });
+//     .addFields(
+//       { name: `__Monster Hearts__`, value: `💙 ${monster.hearts}/${monster.hearts}`, inline: false },
+//       { name: `__Tier__`, value: `Tier ${monster.tier}`, inline: false },
+//       { name: `__Battle ID__`, value: `\`${battleId}\``, inline: false }
+//     )
+//     .setThumbnail(monsterImage.startsWith('http') ? monsterImage : fallbackImage) // Ensure thumbnail is valid
+//     .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png') // Main image
+//     .setFooter({ text: "You have 10 minutes to complete this raid!" })
+//     .setColor('#FF4500');
 // }
 
 // // ------------------- Trigger Random Encounter -------------------
 
 // async function triggerRandomEncounter(channel) {
 //     try {
+//       console.log(`[RANDOM ENCOUNTER LOG] Attempting to fetch monster data.`);
 //       const monster = await getMonstersAboveTier(5); // Fetch a random monster tier 5-10
-//       console.log('[RANDOM ENCOUNTER] Monster object fetched:', monster);
   
-//       // Check if the monster object has the required properties
 //       if (!monster || !monster.name || !monster.tier) {
 //         console.error('[RANDOM ENCOUNTER] Monster data is incomplete:', monster);
 //         await channel.send('❌ **Error: Unable to create encounter. Monster data is incomplete.**');
 //         return;
 //       }
   
-//       // Create a thread for the encounter
-//       const thread = await channel.threads.create({
-//         name: `Encounter: ${monster.name}`,
-//         autoArchiveDuration: 1440, // Archive after 24 hours
-//         reason: 'Random Encounter',
-//       });
+//       console.log(`[RANDOM ENCOUNTER LOG] Monster selected: ${monster.name}, Tier: ${monster.tier}, Image: ${monster.image}`);
   
-//       console.log(`[RANDOM ENCOUNTER] Thread created for monster: ${monster.name} in channel ${channel.name}`);
+//       // Generate a unique Battle ID for the encounter
+//       const battleId = Date.now();
   
-//       // Create and send the encounter embed
-//       const encounterEmbed = createEncounterEmbed(monster);
+//       // Determine the village name for the message
+//       const villageName = Object.keys(villageChannels).find(key => villageChannels[key] === channel.id) || 'Unknown Village';
   
-//       await channel.send({
-//         content: `A wild **${monster.name}** has appeared! 🧟\nJoin the encounter in the thread: <#${thread.id}>!`,
+//       // Post the combined embed in the main channel
+//       const encounterEmbed = createEncounterEmbed(monster, battleId, villageName);
+//       const sentMessage = await channel.send({
+//         content: `A ${monster.name} has appeared! This is a random attack! Any **${villageName}** Residents or Visitors, please help!`,
 //         embeds: [encounterEmbed],
 //       });
   
-//       // Pass the validated monster object to triggerRaid
-//       await triggerRaid(null, monster, null, thread.id);
+//       if (!sentMessage || !sentMessage.id) {
+//         console.error('[RANDOM ENCOUNTER LOG] Failed to send the message or retrieve its ID.');
+//         return;
+//       }
+  
+//       console.log(`[RANDOM ENCOUNTER LOG] Message sent with ID: ${sentMessage.id}, Content: ${sentMessage.content}`);
+  
+//       // Retry logic for creating a thread
+//       let thread;
+//       let retries = 3;
+//       while (retries > 0) {
+//         try {
+//           thread = await sentMessage.startThread({
+//             name: `⚠️ ${villageName} Attack: ${monster.name}`,
+//             autoArchiveDuration: 1440, // Archive after 24 hours
+//             reason: 'Random Encounter',
+//           });
+//           break; // Exit retry loop if successful
+//         } catch (error) {
+//           retries -= 1;
+//           console.error(`[RANDOM ENCOUNTER LOG] Failed to create thread, retries left: ${retries}`, error);
+//           if (retries === 0) throw error;
+//           await new Promise(res => setTimeout(res, 1000)); // Wait 1 second before retrying
+//         }
+//       }
+  
+//       if (!thread || !thread.id) {
+//         console.error('[RANDOM ENCOUNTER LOG] Failed to create thread on the message.');
+//         return;
+//       }
+  
+//       console.log(`[RANDOM ENCOUNTER LOG] Thread created with ID: ${thread.id}, Name: ${thread.name}`);
+  
+//       // Store the raid progress in the database
+//       await storeBattleProgress(
+//         battleId,
+//         { name: '⠀', icon: 'https://via.placeholder.com/50' }, // Placeholder for initiating character
+//         monster,
+//         monster.tier,
+//         { current: monster.hearts, max: monster.hearts },
+//         thread.id,
+//         'Random Encounter initiated. Player turn next.'
+//       );
+  
+//       console.log(`[RANDOM ENCOUNTER LOG] Raid saved to database with Battle ID: ${battleId}`);
+  
 //     } catch (error) {
 //       console.error('[RANDOM ENCOUNTER] Error triggering encounter:', error);
 //     }
 //   }
-  
   
 
 // // ------------------- Initialize the Bot -------------------
@@ -144,7 +192,7 @@
 // function initializeRandomEncounterBot(client) {
 //   client.on('messageCreate', (message) => {
 //     if (message.author.bot) return; // Ignore bot messages
-//     trackMessageActivity(message.channel.id, message.author.id);
+//     trackMessageActivity(message.channel.id, message.author.id, message.author.bot);
 //   });
 
 //   setInterval(() => checkForRandomEncounters(client), CHECK_INTERVAL);

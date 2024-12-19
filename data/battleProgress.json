@@ -1,1 +1,54 @@
-{}
+{
+  "1734603450890": {
+    "battleId": 1734603450890,
+    "characters": [
+      "⠀"
+    ],
+    "monster": "Gloom Hands",
+    "tier": 5,
+    "monsterHearts": {
+      "max": 10,
+      "current": 10
+    },
+    "progress": "\n1319247231307747380"
+  },
+  "1734603470891": {
+    "battleId": 1734603470891,
+    "characters": [
+      "⠀"
+    ],
+    "monster": "Blizzard Wizzrobe",
+    "tier": 5,
+    "monsterHearts": {
+      "max": 10,
+      "current": 10
+    },
+    "progress": "\n1319247315541819452"
+  },
+  "1734603511276": {
+    "battleId": 1734603511276,
+    "characters": [
+      "⠀"
+    ],
+    "monster": "Hinox",
+    "tier": 5,
+    "monsterHearts": {
+      "max": 10,
+      "current": 10
+    },
+    "progress": "\n1319247484408565774"
+  },
+  "1734603570994": {
+    "battleId": 1734603570994,
+    "characters": [
+      "⠀"
+    ],
+    "monster": "Rare Talus",
+    "tier": 7,
+    "monsterHearts": {
+      "max": 14,
+      "current": 14
+    },
+    "progress": "\n1319247735148380210"
+  }
+}
