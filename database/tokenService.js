@@ -3,23 +3,19 @@
 
 // ------------------- Imports -------------------
 // Grouped imports logically by related functionality
-const Token = require('../models/TokenModel');
 const { connectToTinglebot } = require('../database/connection');
 const User = require('../models/UserModel');
 const { readSheetData, appendSheetData, authorizeSheets, extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../utils/googleSheetsUtils');
-const { google } = require('googleapis')
+const { google } = require('googleapis');
 
 // ------------------- Get Token Balance -------------------
 // Fetches the token balance for a user
 async function getTokenBalance(userId) {
-  await connectToTinglebot();
-  const token = await Token.findOne({ userId });
-  
-  if (!token) {
+  const user = await User.findOne({ discordId: userId });
+  if (!user) {
     throw new Error('User not found');
   }
-
-  return token.tokens; // Return the token balance
+  return user.tokens;  
 }
 
 // ------------------- Get or Create Token -------------------
@@ -50,26 +46,25 @@ async function getOrCreateToken(userId, tokenTrackerLink = '') {
 // Updates the token balance for a user by a specific amount
 async function updateTokenBalance(userId, amount) {
   await connectToTinglebot();
-  let token = await Token.findOne({ userId });
+  let user = await User.findOne({ discordId: userId });
 
-  if (!token) {
-    console.log(`[tokenService.js]: Creating a new token record for user ${userId}`);
-    token = new Token({
-      userId,
-      tokens: amount, // Initialize with the current amount
+  if (!user) {
+    console.log(`[tokenService.js]: Creating a new user record for discordId: ${userId}`);
+    user = new User({
+      discordId: userId,
+      tokens: amount,
     });
-    await token.save();
-    return token;
+    await user.save();
+    return user;
   }
 
   // Adjust token balance
-  token.tokens += amount;
-  await token.save();
+  user.tokens += amount;
+  await user.save();
 
-  console.log(`[tokenService.js]: Updated token balance for user ${userId}. New balance: ${token.tokens}`);
-  return token;
+  console.log(`[tokenService.js]: Updated token balance for user ${userId}. New balance: ${user.tokens}`);
+  return user;
 }
-
 
 // ------------------- Sync Token Tracker -------------------
 // Syncs the user's token tracker with Google Sheets data and updates token balance
@@ -143,8 +138,8 @@ async function syncTokenTracker(userId) {
 // ------------------- Append Earned Tokens to Google Sheets -------------------
 // Appends a new entry with earned token data to the user's Google Sheet in the "Earned" section
 async function appendEarnedTokens(userId, fileName, category, amount, fileUrl = '') {
-  const token = await getOrCreateToken(userId);
-  const tokenTrackerLink = token.tokenTracker;
+  const user = await getOrCreateToken(userId);
+  const tokenTrackerLink = user.tokenTracker;
 
   if (!isValidGoogleSheetsUrl(tokenTrackerLink)) {
     throw new Error(`[tokenService.js]: Invalid Google Sheets URL for user ${userId}`);
@@ -196,8 +191,8 @@ async function appendEarnedTokens(userId, fileName, category, amount, fileUrl = 
 // ------------------- Append Spent Tokens to Google Sheets -------------------
 // Appends a new entry with spent token data to the user's Google Sheet in the "Spent" section
 async function appendSpentTokens(userId, purchaseName, amount, link = '') {
-  const token = await getOrCreateToken(userId);
-  const tokenTrackerLink = token.tokenTrackerLink;
+  const user = await getOrCreateToken(userId);
+  const tokenTrackerLink = user.tokenTracker;
 
   if (!isValidGoogleSheetsUrl(tokenTrackerLink)) {
     const errorMessage = 'Invalid Google Sheets URL';
@@ -246,7 +241,6 @@ async function getUserGoogleSheetId(userId) {
   }
 }
 
-
 // ------------------- Extract Spreadsheet ID from URL -------------------
 // Helper function to extract Spreadsheet ID from Google Sheets URL
 function extractSpreadsheetIdFromUrl(url) {
@@ -265,4 +259,3 @@ module.exports = {
   getUserGoogleSheetId,
   getTokenBalance 
 };
-

@@ -107,129 +107,157 @@ module.exports = {
       let updateMessage = ''; // Message to inform user of the update
       const previousValue = character[category]; // Store the previous value for reference
 
-      // ------------------- Handle Each Category Update -------------------
-      if (category === 'job') {
-        
-        try {
-            // Validate the job change
-            const validationResult = await canChangeJob(character, updatedInfo);
-    
-            if (!validationResult.valid) {
-                console.warn(`[WARNING] Job validation failed: ${validationResult.message}`);
-                await interaction.followUp({ content: validationResult.message, ephemeral: true });
-                return;
-            }
-    
-            // Check for job category selection
-            if (['General Jobs', 'Inariko Exclusive Jobs', 'Rudania Exclusive Jobs', 'Vhintl Exclusive Jobs'].includes(updatedInfo)) {
-                await handleJobCategorySelection(interaction, character, updatedInfo);
-                return;
-            }
-    
-            // Update the character's job
-            character.job = updatedInfo;
-            console.log(`[INFO] Job successfully updated for character ${character.name} from ${previousValue} to ${updatedInfo}`);
-            updateMessage = `✅ **${character.name}'s job has been updated from ${previousValue} to ${updatedInfo}.**`;
-    
-        } catch (error) {
-            // Log the error details
-            console.error(`[ERROR] An error occurred while processing job update: ${error.message}`);
-            console.error(error.stack);
-            await interaction.followUp({
-                content: '⚠️ An unexpected error occurred while updating the job. Please try again later.',
-                ephemeral: true,
-            });
-        }
-        
-      } else if (category === 'homeVillage') {
-        const validationResult = await canChangeVillage(character, updatedInfo);
-        if (!validationResult.valid) {
+
+// ------------------- Handle Each Category Update -------------------
+if (category === 'job') {
+  try {
+      // Validate the job change
+      const validationResult = await canChangeJob(character, updatedInfo);
+
+      if (!validationResult.valid) {
+          console.warn(`[WARNING] Job validation failed: ${validationResult.message}`);
           await interaction.followUp({ content: validationResult.message, ephemeral: true });
           return;
-        }
-        character.homeVillage = updatedInfo;
-        character.currentVillage = updatedInfo;
-        updateMessage = `✅ **${character.name}'s village has been updated from ${previousValue} to ${updatedInfo}.**`;
-      } else if (category === 'name') {
-        const uniqueNameCheck = await isUniqueCharacterName(character.userId, updatedInfo);
-        if (!uniqueNameCheck) {
-          await interaction.followUp({ content: `⚠️ **${updatedInfo}** is already in use by another character. Please choose a different name.`, ephemeral: true });
-          return;
-        }
-        const previousName = character.name;
-        character.name = updatedInfo;
-        updateMessage = `✅ **${character.name}'s name has been updated from ${previousName} to ${updatedInfo}.**`;
-        await deleteCharacterInventoryCollection(previousName);
-        await createCharacterInventory(character.name, character._id, character.job);
-      } else if (category === 'hearts') {
-        await updateHearts(character._id, updatedInfo);
-        character.currentHearts = updatedInfo;
-        character.maxHearts = updatedInfo;
-        updateMessage = `✅ **${character.name}'s hearts have been updated from ${previousValue} to ${updatedInfo}.**`;
-      } else if (category === 'stamina') {
-        await updateStamina(character._id, updatedInfo);
-        character.currentStamina = updatedInfo;
-        character.maxStamina = updatedInfo;
-        updateMessage = `✅ **${character.name}'s stamina has been updated from ${previousValue} to ${updatedInfo}.**`;
-      } else if (category === 'pronouns') {
-        character.pronouns = updatedInfo;
-        updateMessage = `✅ **${character.name}'s pronouns have been updated from ${previousValue} to ${updatedInfo}.**`;
-      } else if (category === 'race') {
-        if (!isValidRace(updatedInfo)) {
-          await interaction.followUp({ content: `⚠️ **${updatedInfo}** is not a valid race.`, ephemeral: true });
-          return;
-        }
-        character.race = updatedInfo;
-        updateMessage = `✅ **${character.name}'s race has been updated from ${previousValue} to ${updatedInfo}.**`;
-      } else if (category === 'icon') {
-        if (newIcon) {
-          try {
-            const response = await axios.get(newIcon.url, { responseType: 'arraybuffer' });
-            const iconData = Buffer.from(response.data, 'binary');
-            const blob = bucket.file(uuidv4() + path.extname(newIcon.name));
-            const blobStream = blob.createWriteStream({ resumable: false });
-            blobStream.end(iconData);
-
-            await new Promise((resolve, reject) => {
-              blobStream.on('finish', resolve);
-              blobStream.on('error', reject);
-            });
-
-            const publicIconUrl = `https://storage.googleapis.com/${bucket.name}/${blob.name}`;
-            character.icon = publicIconUrl;
-            updateMessage = `✅ **${character.name}'s icon has been updated.**`;
-          } catch (error) {
-            await interaction.followUp({ content: `⚠️ **There was an error uploading the icon: ${error.message}**`, ephemeral: true });
-            return;
-          }
-        } else {
-          await interaction.followUp({ content: '⚠️ **Please provide a valid icon attachment.**', ephemeral: true });
-          return;
-        }
-      } else if (category === 'app_link') {
-        character.appLink = updatedInfo;
-        updateMessage = `✅ **${character.name}'s application link has been updated from ${previousValue} to ${updatedInfo}.**`;
-      } else if (category === 'inventory') {
-        character.inventory = updatedInfo;
-        updateMessage = `✅ **${character.name}'s inventory link has been updated from ${previousValue} to ${updatedInfo}.**`;
-      } else if (category === 'age') {
-        character.age = updatedInfo;
-        updateMessage = `✅ **${character.name}'s age has been updated from ${previousValue} to ${updatedInfo}.**`;
-      } else if (category === 'height') {
-        const heightInCm = parseInt(updatedInfo, 10);
-        if (isNaN(heightInCm)) {
-          await interaction.followUp({ content: `⚠️ **${updatedInfo}** is not a valid number for height. Please enter height in centimeters.`, ephemeral: true });
-          return;
-        }
-        character.height = heightInCm;
-        const heightInFeetInches = convertCmToFeetInches(heightInCm);
-        updateMessage = `✅ **${character.name}'s height has been updated from ${previousValue} to ${heightInCm} cm | ${heightInFeetInches}.**`;
       }
 
-      await character.save();
-      const updatedCharacter = await fetchCharacterById(character._id);
-      const embed = createCharacterEmbed(updatedCharacter); // Create a character embed with updated data
-      await interaction.followUp({ content: updateMessage, embeds: [embed], ephemeral: true });
+      // Check for job category selection
+      if (['General Jobs', 'Inariko Exclusive Jobs', 'Rudania Exclusive Jobs', 'Vhintl Exclusive Jobs'].includes(updatedInfo)) {
+          await handleJobCategorySelection(interaction, character, updatedInfo);
+          return;
+      }
+
+      // Update the character's job
+      character.job = updatedInfo;
+      console.log(`[INFO] Job successfully updated for character ${character.name} from ${previousValue} to ${updatedInfo}`);
+      updateMessage = `✅ **${character.name}'s job has been updated from ${previousValue} to ${updatedInfo}.**`;
+
+  } catch (error) {
+      // Log the error details
+      console.error(`[ERROR] An error occurred while processing job update: ${error.message}`);
+      console.error(error.stack);
+      await interaction.followUp({
+          content: '⚠️ An unexpected error occurred while updating the job. Please try again later.',
+          ephemeral: true,
+      });
+  }
+} else if (category === 'homeVillage') {
+  const validationResult = await canChangeVillage(character, updatedInfo);
+  if (!validationResult.valid) {
+      await interaction.followUp({ content: validationResult.message, ephemeral: true });
+      return;
+  }
+  character.homeVillage = updatedInfo;
+  character.currentVillage = updatedInfo;
+  updateMessage = `✅ **${character.name}'s village has been updated from ${previousValue} to ${updatedInfo}.**`;
+} else if (category === 'name') {
+  const uniqueNameCheck = await isUniqueCharacterName(character.userId, updatedInfo);
+  if (!uniqueNameCheck) {
+      await interaction.followUp({ content: `⚠️ **${updatedInfo}** is already in use by another character. Please choose a different name.`, ephemeral: true });
+      return;
+  }
+  const previousName = character.name;
+  character.name = updatedInfo;
+  updateMessage = `✅ **${character.name}'s name has been updated from ${previousName} to ${updatedInfo}.**`;
+  await deleteCharacterInventoryCollection(previousName);
+  await createCharacterInventory(character.name, character._id, character.job);
+} else if (category === 'hearts') {
+  const hearts = parseInt(updatedInfo, 10);
+  if (isNaN(hearts) || hearts < 0) {
+      await interaction.followUp({
+          content: `⚠️ **${updatedInfo}** is not valid for hearts. Please provide a non-negative number.`,
+          ephemeral: true,
+      });
+      return;
+  }
+  await updateHearts(character._id, hearts);
+  character.currentHearts = hearts;
+  character.maxHearts = hearts;
+  updateMessage = `✅ **${character.name}'s hearts have been updated from ${previousValue} to ${hearts}.**`;
+} else if (category === 'stamina') {
+  const stamina = parseInt(updatedInfo, 10);
+  if (isNaN(stamina) || stamina < 0) {
+      await interaction.followUp({
+          content: `⚠️ **${updatedInfo}** is not valid for stamina. Please provide a non-negative number.`,
+          ephemeral: true,
+      });
+      return;
+  }
+  await updateStamina(character._id, stamina);
+  character.currentStamina = stamina;
+  character.maxStamina = stamina;
+  updateMessage = `✅ **${character.name}'s stamina has been updated from ${previousValue} to ${stamina}.**`;
+} else if (category === 'pronouns') {
+  character.pronouns = updatedInfo;
+  updateMessage = `✅ **${character.name}'s pronouns have been updated from ${previousValue} to ${updatedInfo}.**`;
+} else if (category === 'race') {
+  if (!isValidRace(updatedInfo)) {
+      await interaction.followUp({ content: `⚠️ **${updatedInfo}** is not a valid race.`, ephemeral: true });
+      return;
+  }
+  character.race = updatedInfo;
+  updateMessage = `✅ **${character.name}'s race has been updated from ${previousValue} to ${updatedInfo}.**`;
+} else if (category === 'icon') {
+  if (newIcon) {
+      try {
+          const response = await axios.get(newIcon.url, { responseType: 'arraybuffer' });
+          const iconData = Buffer.from(response.data, 'binary');
+          const blob = bucket.file(uuidv4() + path.extname(newIcon.name));
+          const blobStream = blob.createWriteStream({ resumable: false });
+          blobStream.end(iconData);
+
+          await new Promise((resolve, reject) => {
+              blobStream.on('finish', resolve);
+              blobStream.on('error', reject);
+          });
+
+          const publicIconUrl = `https://storage.googleapis.com/${bucket.name}/${blob.name}`;
+          character.icon = publicIconUrl;
+          updateMessage = `✅ **${character.name}'s icon has been updated.**`;
+      } catch (error) {
+          await interaction.followUp({ content: `⚠️ **There was an error uploading the icon: ${error.message}**`, ephemeral: true });
+          return;
+      }
+  } else {
+      await interaction.followUp({ content: '⚠️ **Please provide a valid icon attachment.**', ephemeral: true });
+      return;
+  }
+} else if (category === 'app_link') {
+  character.appLink = updatedInfo;
+  updateMessage = `✅ **${character.name}'s application link has been updated from ${previousValue} to ${updatedInfo}.**`;
+} else if (category === 'inventory') {
+  character.inventory = updatedInfo;
+  updateMessage = `✅ **${character.name}'s inventory link has been updated from ${previousValue} to ${updatedInfo}.**`;
+} else if (category === 'age') {
+  const age = parseInt(updatedInfo, 10);
+  if (isNaN(age) || age < 0) {
+      await interaction.followUp({
+          content: `⚠️ **${updatedInfo}** is not a valid age. Please provide a non-negative number.`,
+          ephemeral: true,
+      });
+      return;
+  }
+  character.age = age;
+  updateMessage = `✅ **${character.name}'s age has been updated to ${age}.**`;
+} else if (category === 'height') {
+  const heightInCm = parseInt(updatedInfo, 10);
+  if (isNaN(heightInCm) || heightInCm < 0) {
+      await interaction.followUp({
+          content: `⚠️ **${updatedInfo}** is not valid for height. Please provide a non-negative number in centimeters.`,
+          ephemeral: true,
+      });
+      return;
+  }
+  character.height = heightInCm;
+  const heightInFeetInches = convertCmToFeetInches(heightInCm);
+  updateMessage = `✅ **${character.name}'s height has been updated from ${previousValue} to ${heightInCm} cm (${heightInFeetInches}).**`;
+}
+
+// Save the updated character and respond to the user
+await character.save();
+const updatedCharacter = await fetchCharacterById(character._id);
+const embed = createCharacterEmbed(updatedCharacter); // Create a character embed with updated data
+await interaction.followUp({ content: updateMessage, embeds: [embed], ephemeral: true });
+
     } catch (error) {
       await interaction.followUp({ content: `⚠️ **There was an error updating the character: ${error.message}**`, ephemeral: true });
     }

@@ -11,7 +11,6 @@ const Inventory = require('./models/InventoryModel');
 const Item = require('./models/ItemModel');
 const Monster = require('./models/MonsterModel');
 const Settings = require('./models/SettingsModel');
-const Token = require('./models/TokenModel');
 const User = require('./models/UserModel');
 const Vending = require('./models/VendingModel');
 
