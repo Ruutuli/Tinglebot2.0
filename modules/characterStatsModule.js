@@ -48,6 +48,7 @@ const recoverHearts = async (characterId, hearts, healerId = null) => {
     if (!character) throw new Error('Character not found');
 
     if (character.ko) {
+      console.log(`[StatModule DEBUG] Skipping heart deduction. Character ${character.name} is already KO'd.`);
       if (!healerId) {
         throw new Error(`${character.name} is KO'd and cannot heal without a healer.`);
       }
@@ -93,11 +94,21 @@ const useHearts = async (characterId, hearts) => {
     const character = await Character.findById(characterId);
     if (!character) throw new Error('Character not found');
 
-    const newHearts = Math.max(character.currentHearts - hearts, 0); // Ensure hearts don't drop below 0
+    if (character.ko) {
+      console.log(`[StatModule DEBUG] Skipping heart deduction. Character ${character.name} is already KO'd.`);
+      return; // Prevent redundant deduction if KO
+    }
+
+    const currentHearts = character.currentHearts;
+    const newHearts = Math.max(currentHearts - hearts, 0);
+
+    console.log(`[StatModule DEBUG] Deducting hearts for ${character.name}. Current: ${currentHearts}, Deducting: ${hearts}, Result: ${newHearts}`);
+
     await updateCurrentHearts(characterId, newHearts);
 
     if (newHearts === 0) {
-      await handleKO(characterId); // KO only when hearts reach 0
+      console.log(`[StatModule DEBUG] Triggering KO for ${character.name}`);
+      await handleKO(characterId);
     }
 
     return createSimpleCharacterEmbed(character, `❤️ -${hearts} hearts used`);
@@ -110,6 +121,7 @@ const useHearts = async (characterId, hearts) => {
 // ------------------- Function to handle KO -------------------
 const handleKO = async (characterId) => {
   try {
+    console.log(`[StatModule DEBUG] Handling KO for Character ID ${characterId}`);
     await Character.updateOne({ _id: characterId }, { $set: { ko: true, currentHearts: 0 } });
     console.log(`[characterStatsModule.js]: Character ID ${characterId} is KO'd.`);
   } catch (error) {

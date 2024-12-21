@@ -25,6 +25,7 @@ const { submissionStore } = require('../utils/storage');
 // ------------------- Modal Submission Handler -------------------
 // Handles the response after a modal is submitted
 async function handleModalSubmission(interaction) {
+  console.info(`[modalHandler]: Handling modal submission. CustomId=${interaction.customId}`);
   const customId = interaction.customId;
 
 // Handle the base count modal submission
@@ -137,11 +138,13 @@ async function triggerAddOnCountModal(interaction, addOn) {
   await interaction.showModal(modal);
 }
 
+
+
 // ------------------- Exported Handlers -------------------
 // Export all modal handling functions for external usage
 module.exports = {
   handleModalSubmission,
   triggerBaseCountModal,
   triggerMultiplierCountModal,
-  triggerAddOnCountModal,
+  triggerAddOnCountModal
 };

@@ -283,7 +283,6 @@ const createMonsterEncounterEmbed = (
     lootItem,
     isBloodMoon = false
 ) => {
-    // Retrieve the last debug values dynamically
     const { initialRandomValue, adjustedRandomValue } = getLastDebugValues();
     const settings = getCommonEmbedSettings(character) || {};
     const nameMapping = monster.nameMapping || monster.name;
@@ -293,26 +292,23 @@ const createMonsterEncounterEmbed = (
 
     const koMessage = heartsRemaining === 0 ? '\n💥 **KO! You have been defeated and can’t continue!**' : '';
 
-    // Ensure a case-insensitive comparison for homeVillage and currentVillage
     const isVisiting = character.homeVillage.toLowerCase() !== character.currentVillage.toLowerCase();
     const locationPrefix = isVisiting
         ? `${capitalizeWords(character.homeVillage)} ${capitalizeWords(character.job)} is visiting ${capitalizeWords(character.currentVillage)}`
         : `${capitalizeWords(character.currentVillage)} ${capitalizeWords(character.job)}`;
 
-    const embedColor = getVillageColorByName(character.currentVillage) || '#000000'; // Default color
+    const embedColor = getVillageColorByName(character.currentVillage) || '#000000';
 
-    // Define village-specific footer images
     const villageImages = {
         Inariko: "https://storage.googleapis.com/tinglebot/Graphics/Inariko-Footer.png",
         Rudania: "https://storage.googleapis.com/tinglebot/Graphics/Rudania-Footer.png",
         Vhintl: "https://storage.googleapis.com/tinglebot/Graphics/Vhintl-Footer.png"
     };
 
-    // Select the appropriate footer image for the current village
     const villageImage = villageImages[capitalizeWords(character.currentVillage)] || 'https://via.placeholder.com/100x100';
 
     const embed = new EmbedBuilder()
-        .setColor(isBloodMoon ? '#FF4500' : embedColor) // Use Blood Moon color or village color
+        .setColor(isBloodMoon ? '#FF4500' : embedColor)
         .setTitle(
             `${locationPrefix}: ${character.name} encountered a ${monsterDetails.name || monster.name}!`
         )
@@ -321,14 +317,16 @@ const createMonsterEncounterEmbed = (
             { name: '__❤️ Hearts__', value: `> ${heartsRemaining !== undefined ? heartsRemaining : 'Unknown'}/${character.maxHearts !== undefined ? character.maxHearts : 'Unknown'}`, inline: false },
             { name: '🔹 __Outcome__', value: `> ${outcomeMessage || 'No outcome specified.'}${koMessage}`, inline: false }
         )
-        .setFooter({ text: isBloodMoon ? '🔴 The Blood Moon rises... luckily you didn’t run into anything stronger.' : 'Encounter completed.', iconURL: authorIconURL })
+        .setFooter({ 
+            text: `Tier: ${monster.tier}${isBloodMoon ? ' 🔴 Blood Moon' : ''}`, 
+            iconURL: authorIconURL 
+        })
         .setImage(villageImage);
 
     if (lootItem) {
         embed.addFields({ name: '💥 __Loot__', value: `${formatItemDetails(lootItem.itemName, lootItem.quantity, lootItem.emoji)}`, inline: false });
     }
 
-    // Add dice roll field if debug values are provided
     if (initialRandomValue !== null && adjustedRandomValue !== null) {
         embed.addFields({
             name: '__🎲 Dice Roll__',
@@ -340,7 +338,7 @@ const createMonsterEncounterEmbed = (
     if (isValidImageUrl(monsterDetails.image)) {
         embed.setThumbnail(monsterDetails.image);
     } else {
-        embed.setThumbnail('https://via.placeholder.com/100x100'); // Default thumbnail
+        embed.setThumbnail('https://via.placeholder.com/100x100');
     }
 
     return embed;

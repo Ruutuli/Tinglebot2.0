@@ -96,6 +96,8 @@ module.exports = {
 
       // Connect to the database
       await connectToTinglebot();
+      
+      
 
       // Fetch the character based on name and user ID
       const character = await fetchCharacterByNameAndUserId(characterName, userId);
@@ -105,9 +107,10 @@ module.exports = {
       }
 
       let updateMessage = ''; // Message to inform user of the update
-      const previousValue = character[category]; // Store the previous value for reference
+      let previousValue = character[category] !== undefined ? character[category] : 'N/A';
 
-
+      let updatedValue;
+      
 // ------------------- Handle Each Category Update -------------------
 if (category === 'job') {
   try {
@@ -162,6 +165,8 @@ if (category === 'job') {
   await createCharacterInventory(character.name, character._id, character.job);
 } else if (category === 'hearts') {
   const hearts = parseInt(updatedInfo, 10);
+
+  // Validate that hearts is a non-negative number
   if (isNaN(hearts) || hearts < 0) {
       await interaction.followUp({
           content: `⚠️ **${updatedInfo}** is not valid for hearts. Please provide a non-negative number.`,
@@ -169,10 +174,41 @@ if (category === 'job') {
       });
       return;
   }
+
+  // Capture the previous value before updating
+  previousValue = character.currentHearts;
+
+  // Update hearts in the database
   await updateHearts(character._id, hearts);
+
+  // Reflect the updated value in the character object
   character.currentHearts = hearts;
   character.maxHearts = hearts;
+
+  updatedValue = hearts; // Assign to updatedValue for notification
   updateMessage = `✅ **${character.name}'s hearts have been updated from ${previousValue} to ${hearts}.**`;
+} else if (category === 'stamina') {
+  const stamina = parseInt(updatedInfo, 10);
+
+  // Validate that stamina is a non-negative number
+  if (isNaN(stamina) || stamina < 0) {
+      await interaction.followUp({
+          content: `⚠️ **${updatedInfo}** is not valid for stamina. Please provide a non-negative number.`,
+          ephemeral: true,
+      });
+      return;
+  }
+
+  previousValue = character.currentStamina; // Capture previous value
+  await updateStamina(character._id, stamina);
+
+  // Reflect the updated value in the character object
+  character.currentStamina = stamina;
+  character.maxStamina = stamina;
+
+  updatedValue = stamina; // Assign to updatedValue for notification
+  updateMessage = `✅ **${character.name}'s stamina has been updated from ${previousValue} to ${stamina}.**`;
+
 } else if (category === 'stamina') {
   const stamina = parseInt(updatedInfo, 10);
   if (isNaN(stamina) || stamina < 0) {
@@ -185,6 +221,8 @@ if (category === 'job') {
   await updateStamina(character._id, stamina);
   character.currentStamina = stamina;
   character.maxStamina = stamina;
+
+  updatedValue = stamina; // Assign to updatedValue for notification
   updateMessage = `✅ **${character.name}'s stamina has been updated from ${previousValue} to ${stamina}.**`;
 } else if (category === 'pronouns') {
   character.pronouns = updatedInfo;
@@ -256,12 +294,32 @@ if (category === 'job') {
 await character.save();
 const updatedCharacter = await fetchCharacterById(character._id);
 const embed = createCharacterEmbed(updatedCharacter); // Create a character embed with updated data
+
+// ------------------- Send Notification to a Discord Channel -------------------
+const EDIT_NOTIFICATION_CHANNEL_ID = '1319524801408274434'; // Notification channel ID
+try {
+    const notificationChannel = await interaction.client.channels.fetch(EDIT_NOTIFICATION_CHANNEL_ID);
+    if (notificationChannel && notificationChannel.isTextBased()) {
+        const notificationMessage = `📢 **USER EDITED THEIR CHARACTER**\n
+        🌱 **User:** \`${interaction.user.tag}\` 
+        👤 **Character Name:** \`${character.name}\`
+        🛠️ **Edited Category:** \`${category}\`
+        🔄 **Previous Value:** \`${previousValue ?? 'N/A'}\`
+        ✅ **Updated Value:** \`${updatedValue ?? 'N/A'}\``;
+
+        await notificationChannel.send(notificationMessage);
+    }
+} catch (err) {
+    console.error(`[editcharacter.js]: Error sending update notification: ${err.message}`);
+}
+
 await interaction.followUp({ content: updateMessage, embeds: [embed], ephemeral: true });
 
     } catch (error) {
       await interaction.followUp({ content: `⚠️ **There was an error updating the character: ${error.message}**`, ephemeral: true });
     }
   },
+  
 
   // ------------------- Autocomplete Handler -------------------
   async autocomplete(interaction) {

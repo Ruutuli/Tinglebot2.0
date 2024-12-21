@@ -4,15 +4,17 @@ const { Schema } = mongoose;
 
 // ------------------- Define the vending inventory schema -------------------
 const vendingInventorySchema = new Schema({
-  characterId: { type: Schema.Types.ObjectId, ref: 'Character', required: true }, // ID of the character owning the item
-  itemName: { type: String, required: true }, // Name of the vending item
-  itemId: { type: mongoose.Schema.Types.ObjectId, ref: 'Item', required: true }, // Reference to the item ID
-  quantity: { type: Number, default: 1 }, // Quantity of the item
-  tokenPrice: { type: Number, default: 0 }, // Price in tokens
-  artPrice: { type: String, default: '' }, // Art-related pricing
-  otherPrice: { type: String, default: '' }, // Other price types
-  tradesOpen: { type: Boolean, default: true }, // Can the item be traded?
-  otherNotes: { type: String, default: '' } // Additional notes for the vending item
+  characterName: { type: String, required: true },
+  itemName: { type: String, required: true },
+  stockQty: { type: Number, required: true },
+  costEach: { type: Number, required: true },
+  pointsSpent: { type: Number, required: true },
+  boughtFrom: { type: String, default: '' },
+  tokenPrice: { type: Number, required: true },
+  artPrice: { type: Number, default: 0 },
+  otherPrice: { type: Number, default: 0 },
+  tradesOpen: { type: Boolean, default: false },
+  date: { type: Date, default: Date.now },
 });
 
 // ------------------- Export the VendingInventory model -------------------

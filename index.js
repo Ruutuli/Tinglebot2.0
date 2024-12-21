@@ -19,7 +19,7 @@ const { generateVendingStockList } = require('./database/vendingService');
 const { handleAutocomplete } = require('./handlers/autocompleteHandler');
 const { handleComponentInteraction } = require('./handlers/componentHandler');
 const { handleInteraction } = require('./handlers/interactionHandler');
-const { handleModalSubmission } = require('./handlers/modalHandler');
+const { handleModalSubmission, handleButtonModalTrigger  } = require('./handlers/modalHandler');
 const { handleSelectMenuInteraction } = require('./handlers/selectMenuHandler');
 
 // ------------------- Scripts and Utilities -------------------
@@ -94,60 +94,77 @@ async function initializeClient() {
 
     scheduler(client);
 
-    // Generate Vending Stock
-    try {
-      await generateVendingStockList();
-      console.log('[index.js]: 🛍️ Vending stock generated');
-    } catch (error) {
-      console.error('[index.js]: ❌ Vending stock generation error:', error);
-    }
+    // // Generate Vending Stock
+    // try {
+    //   await generateVendingStockList();
+    //   console.log('[index.js]: 🛍️ Vending stock generated');
+    // } catch (error) {
+    //   console.error('[index.js]: ❌ Vending stock generation error:', error);
+    // }
 
-    // Initialize Random Encounter Functionality
-    try {
-      initializeRandomEncounterBot(client);
-      console.log('[index.js]: ⚔️ Random encounter functionality initialized');
-    } catch (error) {
-      console.error('[index.js]: ❌ Error initializing random encounters:', error);
-    }
+    // // Initialize Random Encounter Functionality
+    // try {
+    //   initializeRandomEncounterBot(client);
+    //   console.log('[index.js]: ⚔️ Random encounter functionality initialized');
+    // } catch (error) {
+    //   console.error('[index.js]: ❌ Error initializing random encounters:', error);
+    // }
   });
 
-  // ------------------- Interaction Handlers -------------------
 // ------------------- Interaction Handlers -------------------
 client.on('interactionCreate', async interaction => {
   try {
-    const allowedChannels = [
-      '1305487405985431583', // Path of Scarlet Leaves
-      '1305487571228557322'  // Leaf Dew Way
-    ];
+      console.info(`[index.js]: Interaction created. Type=${interaction.type}, CustomId=${interaction.customId || 'N/A'}`);
 
-    if (interaction.isCommand()) {
-      // Check if the command is in an allowed channel
-      if (allowedChannels.includes(interaction.channelId) && interaction.commandName !== 'travel') {
-        await interaction.reply({
-          content: `🚫 Only the \`/travel\` command is allowed in this channel.`,
-          ephemeral: true
-        });
-        return;
+      const allowedChannels = [
+          '1305487405985431583', // Path of Scarlet Leaves
+          '1305487571228557322'  // Leaf Dew Way
+      ];
+
+      if (interaction.isCommand()) {
+          console.info(`[index.js]: Command interaction detected. CommandName=${interaction.commandName}`);
+          // Check if the command is in an allowed channel
+          if (allowedChannels.includes(interaction.channelId) && interaction.commandName !== 'travel') {
+              console.warn(`[index.js]: Command '${interaction.commandName}' not allowed in channel ${interaction.channelId}.`);
+              await interaction.reply({
+                  content: `🚫 Only the \`/travel\` command is allowed in this channel.`,
+                  ephemeral: true
+              });
+              return;
+          }
+
+          // Execute the command
+          const command = client.commands.get(interaction.commandName);
+          if (command) {
+              console.info(`[index.js]: Executing command '${interaction.commandName}'.`);
+              await command.execute(interaction);
+          }
+      } else if (interaction.isButton()) {
+          console.info(`[index.js]: Button interaction detected. CustomId=${interaction.customId}`);
+          // Route button interactions for modals to modalHandler
+          if (interaction.customId.startsWith('triggerModal-')) {
+              const { handleButtonModalTrigger } = require('./handlers/modalHandler');
+              await handleButtonModalTrigger(interaction);
+          } else {
+              await handleComponentInteraction(interaction);
+          }
+      } else if (interaction.isStringSelectMenu()) {
+          console.info(`[index.js]: Dropdown interaction detected. CustomId=${interaction.customId}`);
+          await handleSelectMenuInteraction(interaction);
+      } else if (interaction.isAutocomplete()) {
+          console.info(`[index.js]: Autocomplete interaction detected.`);
+          await handleAutocomplete(interaction);
+      } else if (interaction.isModalSubmit()) {
+          console.info(`[index.js]: Modal submission detected. CustomId=${interaction.customId}`);
+          const { handleModalSubmission } = require('./handlers/modalHandler');
+          await handleModalSubmission(interaction);
+      } else {
+          console.warn(`[index.js]: Unhandled interaction type: ${interaction.type}`);
       }
-
-      // Execute the command
-      const command = client.commands.get(interaction.commandName);
-      if (command) await command.execute(interaction);
-    } else if (interaction.isButton()) {
-      await handleComponentInteraction(interaction);
-    } else if (interaction.isStringSelectMenu()) {
-      console.log(`[index.js]: Dropdown interaction detected: ${interaction.customId}`);
-      await handleSelectMenuInteraction(interaction);
-    } else if (interaction.isAutocomplete()) {
-      await handleAutocomplete(interaction);
-    } else if (interaction.isModalSubmit()) {
-      await handleModalSubmission(interaction);
-    }
   } catch (error) {
-    console.error('[index.js]: ❌ Interaction error:', error);
+      console.error('[index.js]: ❌ Interaction error:', error);
   }
 });
-
 
   // ------------------- Login the Bot -------------------
   client.login(process.env.DISCORD_TOKEN);

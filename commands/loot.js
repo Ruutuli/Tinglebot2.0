@@ -10,18 +10,12 @@ require('dotenv').config();
 
 
 // Database Services
-const {
-  fetchCharacterByNameAndUserId,
-  fetchCharactersByUserId,
-} = require('../database/characterService');
+const {  fetchCharacterByNameAndUserId,  fetchCharactersByUserId,} = require('../database/characterService');
 const { fetchItemsByMonster } = require('../database/itemService');
 const { getMonstersAboveTier } = require('../database/monsterService');
 
 // Utilities
-const {
-  authorizeSheets,
-  appendSheetData,
-} = require('../utils/googleSheetsUtils');
+const {  authorizeSheets,  appendSheetData,} = require('../utils/googleSheetsUtils');
 const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../utils/validation');
 const { addItemInventoryDatabase } = require('../utils/inventoryUtils');
 const { isBloodMoonActive } = require('../scripts/bloodmoon');
@@ -33,48 +27,28 @@ const { getEncounterOutcome } = require('../modules/damageModule');
 const { capitalizeWords } = require('../modules/formattingModule');
 
 // Modules - RNG Logic
-const {
-  createWeightedItemList,
-  getMonsterEncounterFromList,
-  getMonstersByCriteria,
-  calculateFinalValue,
-  getRandomBloodMoonEncounter,
-} = require('../modules/rngModule');
+const {  createWeightedItemList,  getMonsterEncounterFromList,  getMonstersByCriteria,  calculateFinalValue,  getRandomBloodMoonEncounter,} = require('../modules/rngModule');
 
 // Event Handlers
 const { triggerRaid } = require('../handlers/raidHandler');
 
 // Flavor Text and Messages
 const {
-  generateFinalOutcomeMessage,
-  generateAttackAndDefenseBuffMessage,
-  generateVictoryMessage,
-  generateDamageMessage,
-  generateDefenseBuffMessage,
-  generateDefenseBuffMessageReduced,
-  generateDefenseBuffMessageKOPrevented,
-  getNoItemsFoundMessage,
-  getFailedToDefeatMessage,
-  getNoEncounterMessage,
-  generateAttackBuffMessage,
-} = require('../modules/flavorTextModule');
+  generateFinalOutcomeMessage,  generateAttackAndDefenseBuffMessage,  generateVictoryMessage,  generateDamageMessage,
+  generateDefenseBuffMessage,  generateDefenseBuffMessageReduced,  generateDefenseBuffMessageKOPrevented,
+  getNoItemsFoundMessage,  getFailedToDefeatMessage,  getNoEncounterMessage,  generateAttackBuffMessage,} = require('../modules/flavorTextModule');
 
 // Embeds
 const {
-  createMonsterEncounterEmbed,
-  createNoEncounterEmbed,
-  createKOEmbed,
-} = require('../embeds/mechanicEmbeds');
+  createMonsterEncounterEmbed,  createNoEncounterEmbed,  createKOEmbed,} = require('../embeds/mechanicEmbeds');
 
 // Models
 const { monsterMapping } = require('../models/MonsterModel');
+const Character = require('../models/CharacterModel');
 
 // Character Stats
 const {
-  updateCurrentHearts,
-  handleKO,
-  useHearts,
-} = require('../modules/characterStatsModule');
+  updateCurrentHearts,  handleKO,  useHearts,} = require('../modules/characterStatsModule');
 
 
 
@@ -370,16 +344,17 @@ async function handleNormalEncounter(interaction, currentVillage, job, character
 // ------------------- Looting Logic -------------------
 async function processLootingLogic(interaction, character, encounteredMonster, bloodMoonActive) {
   try {
-    const items = await fetchItemsByMonster(encounteredMonster.name); // Fetch items dropped by the encountered monster
+    console.log(`-----------------`);
+    console.log(`[LOOT.JS DEBUG] Starting looting logic for ${character.name}. Current Hearts: ${character.currentHearts}`);
+
+    const items = await fetchItemsByMonster(encounteredMonster.name);
 
     // Step 1: Calculate Encounter Outcome
-    const {
-      damageValue,
-      adjustedRandomValue,
-      attackSuccess,
-      defenseSuccess,
-    } = calculateFinalValue(character);
-    const weightedItems = createWeightedItemList(items, adjustedRandomValue); // Generate a weighted list of potential loot
+    const { damageValue, adjustedRandomValue, attackSuccess, defenseSuccess } = calculateFinalValue(character);
+
+    console.log(`[LOOT.JS DEBUG] Damage Value: ${damageValue}, Adjusted Random Value: ${adjustedRandomValue}`);
+
+    const weightedItems = createWeightedItemList(items, adjustedRandomValue);
     const outcome = await getEncounterOutcome(
       character,
       encounteredMonster,
@@ -389,23 +364,29 @@ async function processLootingLogic(interaction, character, encounteredMonster, b
       defenseSuccess
     );
 
-    // Step 2: Update Hearts and Handle KO
-    let heartsRemaining = character.currentHearts;
-    if (outcome.hearts) {
-      await useHearts(character._id, outcome.hearts); // Deduct hearts
-      heartsRemaining = Math.max(character.currentHearts - outcome.hearts, 0);
-      if (outcome.result === 'KO') {
-        await handleKO(character._id); // Handle KO logic
-      }
+    console.log(`[LOOT.JS DEBUG] Outcome for ${character.name}:`, outcome);
+
+    // Step 2: Handle KO Logic (if not already handled in getEncounterOutcome)
+    const updatedCharacter = await Character.findById(character._id);
+    if (!updatedCharacter) {
+      throw new Error(`[LOOT.JS DEBUG] Unable to find updated character with ID ${character._id}`);
     }
-    await updateCurrentHearts(character._id, heartsRemaining); // Update character hearts
+
+    console.log(`[LOOT.JS DEBUG] Updated Hearts for ${character.name}: ${updatedCharacter.currentHearts}`);
+
+    if (updatedCharacter.currentHearts === 0 && !updatedCharacter.ko) {
+      console.log(`[LOOT.JS DEBUG] Triggering KO for ${character.name}`);
+      await handleKO(updatedCharacter._id);
+    }
+
+    console.log(`[LOOT.JS DEBUG] Final Hearts for ${character.name}: ${updatedCharacter.currentHearts}`);
 
     // Step 3: Generate Outcome Message
-    const outcomeMessage = generateOutcomeMessage(outcome); // Refactored to a separate helper function
+    const outcomeMessage = generateOutcomeMessage(outcome);
 
     // Step 4: Loot Item Logic
-    if (outcome.canLoot && weightedItems.length > 0 && !outcome.hearts) {
-      const lootedItem = generateLootedItem(encounteredMonster, weightedItems); // Refactored to a helper function
+    if (outcome.canLoot && weightedItems.length > 0) {
+      const lootedItem = generateLootedItem(encounteredMonster, weightedItems);
 
       const inventoryLink = character.inventory || character.inventoryLink;
       if (typeof inventoryLink !== 'string' || !isValidGoogleSheetsUrl(inventoryLink)) {
@@ -413,10 +394,10 @@ async function processLootingLogic(interaction, character, encounteredMonster, b
           character,
           encounteredMonster,
           outcomeMessage,
-          heartsRemaining,
+          updatedCharacter.currentHearts,
           lootedItem,
-          bloodMoonActive // Pass Blood Moon status
-      );
+          bloodMoonActive
+        );
         await interaction.editReply({
           content: `❌ **Invalid Google Sheets URL for "${character.name}".**`,
           embeds: [embed],
@@ -424,10 +405,10 @@ async function processLootingLogic(interaction, character, encounteredMonster, b
         return;
       }
 
-      const spreadsheetId = extractSpreadsheetId(inventoryLink); // Extract ID from the Google Sheets link
-      const auth = await authorizeSheets(); // Authorize access to Google Sheets
+      const spreadsheetId = extractSpreadsheetId(inventoryLink);
+      const auth = await authorizeSheets();
       const range = 'loggedInventory!A2:M';
-      const uniqueSyncId = uuidv4(); // Generate a unique ID for logging
+      const uniqueSyncId = uuidv4();
       const formattedDateTime = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
       const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
 
@@ -456,37 +437,39 @@ async function processLootingLogic(interaction, character, encounteredMonster, b
         lootedItem.category.join(', '),
         lootedItem.type.join(', '),
         interaction
-      ); // Add item to the inventory database
+      );
 
-      await appendSheetData(auth, spreadsheetId, range, values); // Append loot details to Google Sheets
+      await appendSheetData(auth, spreadsheetId, range, values);
 
-const embed = createMonsterEncounterEmbed(
-    character,
-    encounteredMonster,
-    outcomeMessage,
-    heartsRemaining,
-    lootedItem,
-    bloodMoonActive // Pass Blood Moon status
-);
-      await interaction.editReply({ embeds: [embed] }); // Reply with the loot details
+      const embed = createMonsterEncounterEmbed(
+        character,
+        encounteredMonster,
+        outcomeMessage,
+        updatedCharacter.currentHearts,
+        lootedItem,
+        bloodMoonActive
+      );
+      await interaction.editReply({ embeds: [embed] });
     } else {
       const embed = createMonsterEncounterEmbed(
         character,
         encounteredMonster,
         outcomeMessage,
-        heartsRemaining,
+        updatedCharacter.currentHearts,
         null,
-        bloodMoonActive 
+        bloodMoonActive
       );
-      await interaction.editReply({ embeds: [embed] }); // Reply if no loot was obtained
+      await interaction.editReply({ embeds: [embed] });
     }
   } catch (error) {
-    console.error(`[LOOT] Error during loot processing: ${error}`);
+    console.error(`[LOOT] Error during loot processing: ${error.message}`);
     await interaction.editReply({
       content: `❌ **An error occurred while processing the loot.**`,
     });
   }
 }
+
+
 
 // ------------------- Helper Function: Generate Outcome Message -------------------
 function generateOutcomeMessage(outcome) {

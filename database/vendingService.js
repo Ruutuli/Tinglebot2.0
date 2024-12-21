@@ -81,16 +81,29 @@ const generateVendingStockList = async () => {
                     const points = Math.floor(Math.random() * ((250 / 5) - 1) + 1) * 5 + 5;
                     const vendingType = Math.random() < 0.5 ? 'Shopkeeper' : 'Merchant';
 
-                    stockList[villageName].push({
-                        itemName: selectedItem.itemName,
-                        emoji: selectedItem.emoji,
-                        points,
-                        vendingType,
-                        itemRarity: selectedItem.itemRarity,
-                    });
+                    if (!selectedItem.village) {
+                        selectedItem.village = villageName; // Assign default village if none is set
+                    }
+                    
+                    if (selectedItem.village === villageName) {
+                        stockList[villageName].push({
+                            itemName: selectedItem.itemName,
+                            emoji: selectedItem.emoji,
+                            points,
+                            vendingType,
+                            itemRarity: selectedItem.itemRarity,
+                            village: villageName, // Ensure alignment with the correct village
+                        });
+                    
+                        console.log(`[Stock Generation]: Assigned item "${selectedItem.itemName}" to village "${villageName}".`);
+                    } else {
+                        console.warn(
+                            `[Stock Generation Warning]: Skipped "${selectedItem.itemName}" for "${villageName}" (belongs to "${selectedItem.village}").`
+                        );
+                    }
+                 }
                 }
-            }
-        }
+             }
 
         // Generate limited items
         const limitedItems = [];
@@ -126,6 +139,7 @@ const generateVendingStockList = async () => {
     }
 };
 
+
 // ------------------- Get the current month's vending stock list -------------------
 const getCurrentVendingStockList = async () => {
     const client = await connectToDatabase();
@@ -135,13 +149,21 @@ const getCurrentVendingStockList = async () => {
     try {
         const currentMonth = new Date().getMonth() + 1;
         const currentStock = await stockCollection.findOne({ month: currentMonth });
-        return currentStock || null;
+        
+        if (!currentStock) {
+            console.error(`[getCurrentVendingStockList]: No stock data found for month ${currentMonth}.`);
+            return null;
+        }
+
+        return currentStock;
     } catch (error) {
+        console.error(`[getCurrentVendingStockList]: Error fetching stock data:`, error);
         throw error;
     } finally {
         await client.close();
     }
 };
+
 
 // ------------------- Get limited items for the current month -------------------
 const getLimitedItems = async () => {
