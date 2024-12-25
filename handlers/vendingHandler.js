@@ -1,30 +1,37 @@
 // ------------------- Import necessary modules -------------------
-const {
-    EmbedBuilder,
-    StringSelectMenuBuilder,
-    ActionRowBuilder,
-    ButtonBuilder,
-    ButtonStyle,
-    ModalBuilder,
-    TextInputBuilder,
-    TextInputStyle,
-    InteractionType,
-} = require("discord.js");
-const { fetchCharacterByNameAndUserId, updateCharacterById } = require("../database/characterService");
-const { fetchItemByName, addItemInventoryDatabase, removeItemInventoryDatabase } = require("../database/itemService");
-const { connectToTinglebot } = require("../database/connection");
-const {    getCurrentVendingStockList,    updateItemStockByName,    VILLAGE_IMAGES,    VILLAGE_ICONS,} = require("../database/vendingService");
-const { getAllVillages } = require("../modules/locationsModule");
-const { authorizeSheets, isValidGoogleSheetsUrl, extractSpreadsheetId, fetchSheetData, appendSheetData, getSheetIdByTitle, readSheetData } = require('../utils/googleSheetsUtils'); // Ensure these are imported
-const { submissionStore } = require('../utils/storage'); // Store user selections temporarily
-
-
-
-const VendingInventory = require('../models/VendingModel'); // Database model for the vending shop
-const Character = require('../models/CharacterModel');
+// Standard Libraries
 const { google } = require('googleapis');
 const { v4: uuidv4 } = require('uuid');
-const sheets = google.sheets({ version: 'v4'});
+const { MongoClient } = require("mongodb")
+
+// Discord.js Components
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, InteractionType, ModalBuilder, StringSelectMenuBuilder, TextInputBuilder, TextInputStyle } = require("discord.js");
+
+// Database Connections
+const { connectToTinglebot } = require("../database/connection");
+
+// Database Services
+const { fetchCharacterByNameAndUserId, updateCharacterById } = require("../database/characterService");
+const { fetchItemByName} = require("../database/itemService");
+const { getCurrentVendingStockList, updateItemStockByName, updateVendingStock, VILLAGE_ICONS, VILLAGE_IMAGES } = require("../database/vendingService");
+const { getTokenBalance, updateTokenBalance, appendSpentTokens, getOrCreateToken  } = require('../database/tokenService');
+
+// Modules
+
+
+// Utility Functions
+const { appendSheetData, authorizeSheets, extractSpreadsheetId, fetchSheetData, getSheetIdByTitle, isValidGoogleSheetsUrl, readSheetData, writeSheetData } = require("../utils/googleSheetsUtils");
+const {addItemToVendingInventory, connectToInventories, updateInventory } = require("../utils/inventoryUtils.js")
+const { saveSubmissionToStorage, retrieveVendingRequestFromStorage, deleteVendingRequestFromStorage, saveVendingRequestToStorage, retrieveAllVendingRequests } = require('../utils/storage'); 
+
+// Database Models
+const Character = require('../models/CharacterModel');
+const VendingInventory = require('../models/VendingModel');
+const ItemModel = require('../models/ItemModel'); 
+const initializeInventoryModel = require('../models/InventoryModel');
+
+// Google Sheets API
+const sheets = google.sheets({ version: 'v4' });
 
 
 const DEFAULT_IMAGE_URL = "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png";
@@ -43,8 +50,6 @@ async function executeVending(interaction) {
 
     try {
         await connectToTinglebot();
-
-        console.info(`[vendingHandler]: Executing subcommand '${subcommand}' for user ID ${userId}.`);
 
         switch (subcommand) {
             case "collect_points":
@@ -71,6 +76,18 @@ async function executeVending(interaction) {
     }
 }
 
+async function connectToVendingDatabase() {
+    const client = new MongoClient(process.env.MONGODB_INVENTORIES_URI, {});
+    try {
+        await client.connect();
+        return client;
+    } catch (error) {
+        console.error("[connectToVendingDatabase]: Error connecting to vending database:", error);
+        throw error;
+    }
+}
+
+
 // ------------------- Handle the collect_points subcommand -------------------
 async function handleCollectPoints(interaction, userId) {
     try {
@@ -84,7 +101,7 @@ async function handleCollectPoints(interaction, userId) {
         const currentMonthName = currentDate.toLocaleString("default", { month: "long" });
         const currentDay = currentDate.getDate();
 
-        if (currentDay < 1 || currentDay > 21) {
+        if (currentDay < 1 || currentDay > 31) { // fix to 1 -5 later 
             throw new Error(`Points can only be collected between the 1st and 5th of the month. Current day: ${currentDay}`);
         }
 
@@ -122,192 +139,734 @@ async function handleCollectPoints(interaction, userId) {
 }
 // ------------------- Handle the Restock Subcommand -------------------
 // Handles the restock process for a character.
-async function handleRestock(interaction, userId) {
-    console.info(`[vendingHandler]: Starting restock for user ID ${userId}.`);
-
+async function handleRestock(interaction) {
     try {
-        const characterName = interaction.options.getString("charactername");
+        // Acknowledge the interaction
+        await interaction.deferReply({ ephemeral: true });
+
+        // Extract interaction options
+        const characterName = interaction.options.getString('charactername');
+        const itemName = interaction.options.getString('itemname');
+        const stockQty = interaction.options.getInteger('stockqty');
+        const tokenPrice = interaction.options.getInteger('tokenprice') || 'N/A';
+        const artPrice = interaction.options.getInteger('artprice') || 'N/A';
+        const otherPrice = interaction.options.getInteger('otherprice') || 'N/A';
+        const tradesOpen = interaction.options.getBoolean('tradesopen') || false;
+        const userId = interaction.user.id;
+
+        // Define slot and pouch limits
+        const baseSlotLimits = {
+            shopkeeper: 5, // Shopkeeper's starting slots
+            merchant: 3,   // Merchant's starting slots
+        };
+
+        const pouchCapacities = {
+            none: 0,       // No pouch: 0 additional slots
+            bronze: 15,    // Bronze pouch: +15 slots
+            silver: 30,    // Silver pouch: +30 slots
+            gold: 50,      // Gold pouch: +50 slots
+        };
+
+        // Fetch character and validate
         const character = await fetchCharacterByNameAndUserId(characterName, userId);
-        if (!character) throw new Error("Character not found.");
+        if (!character) {
+            throw new Error(`Character '${characterName}' not found.`);
+        }
 
+        // Calculate total slots available
+        const baseSlots = baseSlotLimits[character.job.toLowerCase()] || 0;
+        const additionalSlots = pouchCapacities[character.shopPouch?.toLowerCase() || 'none'];
+        const totalSlots = baseSlots + additionalSlots;
+
+        // Connect to the vending inventory
+        const client = await connectToVendingDatabase();
+        const db = client.db('vending');
+        const inventoryCollection = db.collection(characterName.toLowerCase());
+
+        // Fetch current shop inventory
+        const shopItems = await inventoryCollection.find({}).toArray();
+        const currentSlotsUsed = shopItems.reduce((slots, item) => {
+            if (item.stackable) {
+                return slots + Math.ceil(item.stockQty / 10); // Stackable items: 10 per slot
+            } else {
+                return slots + item.stockQty; // Craftable items: 1 slot per item
+            }
+        }, 0);
+
+        // Fetch item details from database
+        const itemDetails = await fetchItemByName(itemName);
+        if (!itemDetails) {
+            throw new Error(`Item '${itemName}' not found in the database.`);
+        }
+
+        // Determine stacking rules based on item properties
+        const isCraftable = itemDetails.crafting || false;
+        const isStackable = !isCraftable; // If not craftable, it is stackable
+        
+        const slotsRequired = isCraftable
+            ? stockQty // Craftable items: 1 slot per item
+            : Math.ceil(stockQty / 10); // Stackable items: 10 per slot
+        
+        if (currentSlotsUsed + slotsRequired > totalSlots) {
+            // Construct detailed reason message
+            const reason = isCraftable
+                ? `This is a crafting item! You tried to stock **${stockQty} of this item**. Each crafting item takes up **1 slot per unit**.`
+                : `This is a stackable item! You tried to stock **${stockQty} of this item**. Stackable items take up **1 slot for every 10 units**.`;
+        
+            throw new Error(
+                `Not enough space in the shop. **${characterName}'s** shop has **${totalSlots} slots**. ` +
+                `${currentSlotsUsed} are already used. Adding '**${itemDetails.itemName}**' would require ${slotsRequired} slots, exceeding the limit.\n\n` +
+                reason
+            );
+        }      
+
+        // Fetch the current vending stock
         const stockList = await getCurrentVendingStockList();
-        const availableItems = stockList.stockList[capitalizeFirstLetter(character.currentVillage)]
-            ?.filter((item) => item.vendingType === character.job);
-
-        if (!availableItems || availableItems.length === 0) throw new Error("No items available.");
-
-        const pouchSize = character.pouchSize || 3;
-        const selectedItems = await handleItemSelection(interaction, availableItems, pouchSize);
-
-        if (selectedItems.length === 0) {
-            await interaction.reply({ content: `No items selected.`, ephemeral: true });
-            return;
+        if (!stockList || !stockList.stockList) {
+            throw new Error('No vending stock available for this month.');
         }
 
-        for (const item of selectedItems) {
-            await triggerQuantityModal(interaction, item.itemName);
-        }
+        // Validate item in current village stock or limited items
+        const currentVillage = character.currentVillage.toLowerCase().trim();
+        const villageStock = stockList.stockList[currentVillage] || [];
+        const limitedItems = stockList.limitedItems || [];
 
-        // Modal submissions will be handled by `handleModalSubmission`
-    } catch (error) {
-        console.error(`[vendingHandler]: Error during restock:`, error);
-        if (!interaction.replied) {
-            await interaction.reply({ content: `Error: ${error.message}`, ephemeral: true });
-        }
-    }
-}
-
-
-// ------------------- Handle Item Selection -------------------
-// Handles the item selection process for all slots at once.
-async function handleItemSelection(interaction, availableItems, pouchSize) {
-    try {
-        // Prepare dropdown menu options
-        const options = availableItems.map((item) => ({
-            label: item.itemName,
-            value: item.itemName,
-            description: `${item.itemName} - ${item.points} Points`,
-        }));
-
-        const dropdown = new ActionRowBuilder().addComponents(
-            new StringSelectMenuBuilder()
-                .setCustomId("selectItems")
-                .setPlaceholder("Select up to 3 items")
-                .addOptions(options)
-                .setMinValues(1)
-                .setMaxValues(Math.min(3, pouchSize))
+        const limitedItem = limitedItems.find(
+            item => item.itemName.toLowerCase() === itemName.toLowerCase()
         );
 
-        // Check interaction state and defer or reply as needed
-        if (!interaction.deferred && !interaction.replied) {
-            await interaction.reply({
-                content: `🛒 **Item Selection**\nChoose up to 3 items for your restock.`,
-                components: [dropdown],
-                ephemeral: true,
-            });
-        } else {
-            await interaction.followUp({
-                content: `🛒 **Item Selection**\nChoose up to 3 items for your restock.`,
-                components: [dropdown],
-                ephemeral: true,
-            });
+        const villageItem = villageStock.find(
+            item =>
+                item.itemName.toLowerCase() === itemName.toLowerCase() &&
+                item.vendingType.toLowerCase() === character.job.toLowerCase()
+        );
+
+        const itemPointsCost = limitedItem
+            ? limitedItem.points
+            : villageItem?.points;
+
+        if (!itemPointsCost) {
+            throw new Error(`Item '${itemName}' is not valid for '${characterName}'.`);
         }
 
-        // Wait for user to make a selection
-        const selection = await interaction.channel.awaitMessageComponent({
-            filter: (i) => i.user.id === interaction.user.id,
-            time: 60000,
+        if (limitedItem && limitedItem.stock < stockQty) {
+            throw new Error(
+                `Insufficient stock for limited item '${itemName}'. Only ${limitedItem.stock} available.`
+            );
+        }
+
+        const pointsSpent = stockQty * itemPointsCost;
+
+        // Deduct points from the character
+        const remainingPoints = (character.vendingPoints || 0) - pointsSpent;
+        if (remainingPoints < 0) {
+            throw new Error(`Insufficient points. ${characterName} only has ${character.vendingPoints} points.`);
+        }
+
+        await updateCharacterById(character._id, { vendingPoints: remainingPoints });
+
+        // Deduct limited item stock if applicable
+        if (limitedItem) {
+            await updateItemStockByName(itemName, stockQty);
+        }
+
+        // Add item to the character's vending sub-collection
+        await addItemToVendingInventory(character.name.toLowerCase(), {
+            characterName,
+            itemName,
+            stockQty,
+            costEach: itemPointsCost,
+            pointsSpent,
+            boughtFrom: character.currentVillage,
+            tokenPrice,
+            artPrice,
+            otherPrice,
+            tradesOpen,
+            stackable: !isCraftable,
+            date: new Date()
         });
 
-        await selection.deferUpdate();
-        return availableItems.filter((item) => selection.values.includes(item.itemName));
-    } catch (error) {
-        console.error(`[handleItemSelection]: Error handling selection:`, error);
-        if (!interaction.replied) {
-            await interaction.followUp({ content: "❌ No selection made. Restock canceled.", ephemeral: true });
+        // Update the shop spreadsheet
+        const spreadsheetId = extractSpreadsheetId(character.shopLink);
+        if (!spreadsheetId) {
+            throw new Error(`Invalid or missing shop link for '${characterName}'.`);
         }
-        return [];
+
+        try {
+            const auth = await authorizeSheets();
+            const currentMonthYear = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
+            const values = [
+                [
+                    characterName,
+                    itemName,
+                    stockQty,
+                    itemPointsCost,
+                    pointsSpent,
+                    character.currentVillage,
+                    tokenPrice,
+                    artPrice,
+                    otherPrice,
+                    tradesOpen ? 'Yes' : 'No',
+                    currentMonthYear
+                ]
+            ];
+
+            await appendSheetData(auth, spreadsheetId, 'vendingShop!A:K', values);
+        } catch (error) {
+            console.error(`[handleRestock]: Error updating spreadsheet for '${characterName}':`, error);
+            throw new Error('Failed to update shop spreadsheet. Please check the Google Sheets configuration.');
+        }
+
+        // Create embed for the response
+        const embed = new EmbedBuilder()
+            .setTitle('✅ **Restock Successful!**')
+            .setDescription(`✨ **${characterName}'s Shop Restocked!**`)
+            .addFields(
+                { name: '📦 **Item**', value: `\`${itemName}\``, inline: true },
+                { name: '🔢 **Quantity**', value: `\`${stockQty}\``, inline: true },
+                { name: '🛠️ **Slots Required**', value: `\`${slotsRequired}\``, inline: true },
+                { name: '💰 **Remaining Points**', value: `\`${remainingPoints}\``, inline: true }
+            )
+            .setColor('#25c059');
+
+        // Edit the deferred reply
+        await interaction.editReply({ embeds: [embed] });
+    } catch (error) {
+        console.error('[handleRestock]: Error during restock:', error);
+        await interaction.editReply({ content: `❌ **Error:** ${error.message}` });
     }
 }
 
-
-// ------------------- Handle Item Quantity -------------------
-// Handles the modal interaction to get the quantity of an item.
-async function handleItemQuantity(interaction, item, itemNumber) {
+// ------------------- Handle the barter subcommand -------------------
+async function handleBarter(interaction) {
     try {
-        console.info(`[vendingHandler]: Preparing to trigger modal for item: ${item.itemName}.`);
+        const userCharacterName = interaction.options.getString('charactername'); // User's character
+        const vendorCharacterName = interaction.options.getString('vendorcharacter'); // Vendor character
+        const itemName = interaction.options.getString('itemname');
+        const quantity = interaction.options.getInteger('quantity');
+        const paymentMethod = interaction.options.getString('paymentmethod');
+        const notes = interaction.options.getString('notes') || 'No additional notes provided.';
 
-        // Ensure interaction state is suitable for modal
-        if (!interaction.deferred && !interaction.replied) {
-            throw new Error("Interaction must be deferred or replied before triggering a modal.");
+        // Fetch user's character and vendor character
+        const userCharacter = await fetchCharacterByNameAndUserId(userCharacterName, interaction.user.id);
+        const vendorCharacter = await Character.findOne({ name: vendorCharacterName });
+
+        if (!userCharacter || !vendorCharacter) {
+            throw new Error(`Either the user's character '${userCharacterName}' or vendor character '${vendorCharacterName}' was not found.`);
         }
 
-        await triggerQuantityModal(interaction, item.itemName);
-
-        // Await modal submission
-        const modalSubmit = await interaction.awaitModalSubmit({
-            filter: (i) => i.customId === `itemQuantity-${item.itemName}` && i.user.id === interaction.user.id,
-            time: 60000,
-        });
-
-        const quantity = parseInt(modalSubmit.fields.getTextInputValue("quantityInput"), 10);
-        if (isNaN(quantity) || quantity <= 0) {
-            throw new Error("Invalid quantity provided.");
+        // Ensure both characters are in the same village
+        if (userCharacter.currentVillage.toLowerCase() !== vendorCharacter.currentVillage.toLowerCase()) {
+            throw new Error(
+                `Both characters must be in the same village to barter. ` +
+                `**${userCharacter.name}** is in **${userCharacter.currentVillage}**, ` +
+                `but **${vendorCharacter.name}** is in **${vendorCharacter.currentVillage}**.`
+            );
         }
 
-        console.info(`[vendingHandler]: Modal submission received for ${item.itemName}. Quantity: ${quantity}`);
-        await modalSubmit.deferUpdate();
-        return quantity;
+        // Restrict payment methods for characters owned by the same user
+        if (userCharacter.userId === vendorCharacter.userId && paymentMethod !== 'token') {
+            throw new Error(
+                `Payment method '${paymentMethod}' is not allowed when the buyer and vendor characters have the same owner. ` +
+                `You can only use **tokens** for this transaction.`
+            );
+        }
+
+        // Proceed with barter logic
+        const client = await connectToVendingDatabase();
+        const db = client.db('vending');
+        const inventoryCollection = db.collection(vendorCharacterName.toLowerCase());
+
+        // Fetch the item from the vendor's inventory
+        const item = await inventoryCollection.findOne({ itemName });
+        if (!item) {
+            throw new Error(`Item '${itemName}' not found in ${vendorCharacterName}'s inventory.`);
+        }
+
+        // Validate stock availability
+        if (item.stockQty < quantity) {
+            throw new Error(`Insufficient stock of '${itemName}'. Available: ${item.stockQty}, Requested: ${quantity}.`);
+        }
+
+        // Handle different payment methods
+        let totalPrice = null;
+        switch (paymentMethod) {
+            case 'art':
+            case 'other': {
+                const priceDescription = paymentMethod === 'art' ? item.artPrice : item.otherPrice;
+                if (!priceDescription || priceDescription.trim().toLowerCase() === 'n/a') {
+                    throw new Error(`The item '${itemName}' cannot be sold using the payment method '${paymentMethod}' as the price is 'N/A'.`);
+                }
+
+                const fulfillmentId = `${vendorCharacter._id.toString().slice(-5)}${Date.now().toString().slice(-5)}`;
+                const embed = new EmbedBuilder()
+                    .setTitle('⏳ Fulfillment Required!')
+                    .setDescription(
+                        `Your barter request for **${quantity}x ${itemName}** from **${vendorCharacterName}** has been placed on hold.\n\n` +
+                        `**What to do next:**\n` +
+                        `1. Fulfill your part of the barter as described below.\n` +
+                        `2. Once completed, the vendor will fulfill your request.`
+                    )
+                    .addFields(
+                        { name: '🛠️ **Requirements**', value: priceDescription, inline: false },
+                        { name: '🔢 **Fulfillment ID**', value: `\`${fulfillmentId}\``, inline: true },
+                        { name: '🛒 **Quantity Requested**', value: `${quantity}`, inline: true },
+                        { name: '📦 **Item**', value: itemName, inline: true },
+                        { name: '📜 **Notes**', value: notes, inline: false }
+                    )
+                    .setColor('#FFA500')
+                    .setFooter({ text: `Awaiting fulfillment by ${vendorCharacterName}.` });
+
+                const message = await interaction.reply({ embeds: [embed], ephemeral: false, fetchReply: true });
+
+                saveVendingRequestToStorage(fulfillmentId, {
+                    fulfillmentId,
+                    userCharacterName,
+                    vendorCharacterName,
+                    itemName,
+                    quantity,
+                    priceDescription,
+                    paymentMethod,
+                    buyerId: interaction.user.id,
+                    buyerUsername: interaction.user.username,
+                    notes,
+                    createdAt: new Date(),
+                    messageId: message.id,
+                });
+                return;
+            }
+
+            case 'token': {
+                const sellPricePerUnit = userCharacter.userId === vendorCharacter.userId
+                    ? (await ItemModel.findOne({ itemName }))?.sellPrice || 0
+                    : item.tokenPrice;
+            
+                totalPrice = sellPricePerUnit * quantity;
+            
+                const buyerTokens = await getTokenBalance(interaction.user.id);
+                if (buyerTokens < totalPrice) {
+                    throw new Error(`Insufficient tokens! This purchase costs ${totalPrice} tokens, but you only have ${buyerTokens}.`);
+                }
+            
+                // Deduct tokens from the buyer
+                await updateTokenBalance(interaction.user.id, -totalPrice);
+            
+                if (userCharacter.userId !== vendorCharacter.userId) {
+                    // Add tokens to the vendor only if they are different users
+                    await updateTokenBalance(vendorCharacter.userId, totalPrice);
+                }
+            
+                // Update vendor's stock
+                const updatedStock = item.stockQty - quantity;
+                if (updatedStock === 0) {
+                    await inventoryCollection.deleteOne({ itemName });
+                } else {
+                    await inventoryCollection.updateOne({ itemName }, { $set: { stockQty: updatedStock } });
+                }
+            
+                // Fetch user object
+                const user = await getOrCreateToken(interaction.user.id);
+            
+                // Log transaction to user's token tracker
+                try {
+                    const tokenTrackerLink = user.tokenTracker || 'https://example.com/tokens/default';
+                    const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
+                    const formattedDateTime = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
+            
+                    const tokenRow = [
+                        `${userCharacter.name} - ${itemName} x${quantity} - Barter with ${vendorCharacter.name}`,
+                        interactionUrl,
+                        'purchase',
+                        'spent',
+                        `-${totalPrice}`
+                    ];
+            
+                    if (user.tokenTracker) {
+                        const spreadsheetId = extractSpreadsheetId(user.tokenTracker);
+                        const auth = await authorizeSheets();
+                        await appendSheetData(auth, spreadsheetId, 'loggedTracker!B7:F', [tokenRow]);
+                    }
+                } catch (sheetError) {
+                    console.error(`[handleBarter]: Failed to log transaction to Google Sheets: ${sheetError.message}`);
+                }
+            
+                // Create a success embed
+                const embedSuccess = new EmbedBuilder()
+                    .setTitle('✅ Barter Successful!')
+                    .setDescription(
+                        userCharacter.userId === vendorCharacter.userId
+                            ? `**${userCharacter.name}** purchased **${quantity}x ${itemName}** for **${totalPrice} tokens**.`
+                            : `You successfully bartered for **${quantity}x ${itemName}** from **${vendorCharacter.name}**.`
+                    )
+                    .addFields(
+                        { name: '💰 **Final Price Per Unit**', value: `${sellPricePerUnit} Tokens`, inline: true },
+                        { name: '💰 **Total Price**', value: `${totalPrice} Tokens`, inline: true },
+                        { name: '📦 **Quantity Purchased**', value: `${quantity}`, inline: true },
+                        { name: '📜 **Notes**', value: notes, inline: false }
+                    )
+                    .setColor('#25c059');
+            
+                await interaction.reply({ embeds: [embedSuccess], ephemeral: false });
+                return;
+            }                                
+         
+            case 'trade': {
+                if (!item.tradesOpen) {
+                    throw new Error(`Sorry, this vendor isn't accepting trades for '${itemName}'!`);
+                }
+
+                const tradeDescription = notes || 'No trade details provided.';
+                const tradeFulfillmentId = `${vendorCharacter._id.toString().slice(-5)}${Date.now().toString().slice(-5)}`;
+                const tradeEmbed = new EmbedBuilder()
+                    .setTitle('⏳ Trade Fulfillment Required!')
+                    .setDescription(
+                        `Your barter request for **${quantity}x ${itemName}** from **${vendorCharacterName}** has been placed on hold.\n\n` +
+                        `**What to do next:**\n` +
+                        `- **Vendor**: React to this message with a ✅ to confirm acceptance of the trade.\n` +
+                        `- **Buyer**: Once the vendor accepts, use the **/gift** command to send the traded items to the vendor.\n` +
+                        `- **Vendor**: Fulfill the barter request once the trade is completed.`
+                    )
+                    .addFields(
+                        { name: '🔢 **Fulfillment ID**', value: `\`${tradeFulfillmentId}\``, inline: true },
+                        { name: '🛒 **Quantity Requested**', value: `${quantity}`, inline: true },
+                        { name: '📦 **Item**', value: itemName, inline: true },
+                        { name: '📜 **Trade Details**', value: tradeDescription, inline: false }
+                    )
+                    .setColor('#FFA500')
+                    .setFooter({ text: `Awaiting trade completion by ${vendorCharacterName}.` });
+
+                const tradeMessage = await interaction.reply({ embeds: [tradeEmbed], ephemeral: false, fetchReply: true });
+
+                const tradeFulfillmentData = {
+                    fulfillmentId: tradeFulfillmentId,
+                    userCharacterName,
+                    vendorCharacterName,
+                    itemName,
+                    quantity,
+                    tradeDescription,
+                    paymentMethod,
+                    buyerId: interaction.user.id,
+                    buyerUsername: interaction.user.username,
+                    notes,
+                    createdAt: new Date(),
+                    messageId: tradeMessage.id,
+                };
+                saveVendingRequestToStorage(tradeFulfillmentId, tradeFulfillmentData);
+                return;
+            }
+
+            default:
+                throw new Error('Invalid payment method.');
+        }
     } catch (error) {
-        console.error(`[vendingHandler]: Error handling quantity for item ${item.itemName}:`, error);
-        return null;
-    }
-}
-
-
-// ------------------- Display Summary and Confirm -------------------
-async function displaySummaryAndConfirm(interaction, submissionState) {
-    const { selectedItems, totalPoints, characterName } = submissionState;
-
-    const totalCost = selectedItems.reduce((sum, { item, quantity }) => sum + item.points * quantity, 0);
-    if (totalCost > totalPoints) {
-        await interaction.followUp({
-            content: `❌ You do not have enough points to purchase these items.\n\n💰 **Total Cost**: ${totalCost} Points\n💳 **Available Points**: ${totalPoints}`,
+        console.error('[handleBarter]: Error during barter:', error);
+        await interaction.reply({
+            content: `❌ An error occurred during the barter: ${error.message}`,
             ephemeral: true,
         });
-        return;
     }
+}
 
-    const summary = selectedItems
-        .map(({ item, quantity }) => `- **${item.itemName}** x ${quantity} (${item.points * quantity} Points)`)
-        .join("\n");
 
-    const confirmRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-            .setCustomId("confirmRestock")
-            .setLabel("Yes, Confirm")
-            .setStyle(ButtonStyle.Success),
-        new ButtonBuilder()
-            .setCustomId("cancelRestock")
-            .setLabel("No, Cancel")
-            .setStyle(ButtonStyle.Danger)
-    );
+// ------------------- Reaction Listener for Trade Acceptance -------------------
+let botClient;
 
-    await interaction.followUp({
-        content: `🛍️ **Restock Summary for ${characterName}:**\n\n${summary}\n\n💰 **Total Cost**: ${totalCost} Points\n\nDo you want to proceed?`,
-        components: [confirmRow],
-        ephemeral: true,
+function initializeReactionHandler(client) {
+    botClient = client;
+
+    client.on('messageReactionAdd', async (reaction, user) => {
+        try {
+            if (reaction.emoji.name !== '✅' || user.bot) return; // Ensure it's a green checkmark and not from a bot
+    
+            const messageId = reaction.message.id;
+    
+            // Retrieve the fulfillment request by message ID
+            const allRequests = retrieveAllVendingRequests(); // Replace with your actual function to fetch all requests
+            const fulfillmentData = allRequests.find(request => request.messageId === messageId);
+    
+            if (!fulfillmentData) return;
+    
+            const {
+                buyerId,
+                userCharacterName,
+                vendorCharacterName,
+                itemName,
+                quantity,
+            } = fulfillmentData;
+    
+            // Check if the user reacting is the vendor
+            const vendorCharacter = await Character.findOne({ name: vendorCharacterName });
+            if (!vendorCharacter || vendorCharacter.userId !== user.id) {
+                console.warn(`[messageReactionAdd]: User ${user.username} is not authorized to accept this trade.`);
+                return;
+            }
+    
+            // Notify the buyer
+            const buyer = await client.users.fetch(buyerId);
+            await buyer.send(
+                `🎉 Your trade barter for **${quantity}x ${itemName}** with **${vendorCharacterName}** has been accepted! ` +
+                `Please use the **/gift** command to send the traded items to the vendor.`
+            );
+    
+            // Update the trade message to reflect acceptance
+            const embed = reaction.message.embeds[0];
+            if (embed) {
+                const updatedEmbed = EmbedBuilder.from(embed)
+                    .setTitle('✅ **Trade Accepted!**')
+                    .setDescription(
+                        `The barter for **${quantity}x ${itemName}** has been accepted by **${vendorCharacterName}**.
+    
+    ` +
+                        `**What to do next:**
+    ` +
+                        `- **Buyer**: Use the **/gift** command to send the traded items to **${vendorCharacterName}**.
+    ` +
+                        `- **Vendor**: Fulfill the barter request once the trade is completed.`
+                    )
+                    .addFields(
+                        { name: '🔢 **Quantity Accepted**', value: `${quantity}`, inline: true },
+                        { name: '📦 **Item**', value: itemName, inline: true },
+                        { name: '🛒 **Vendor**', value: vendorCharacterName, inline: true }
+                    )
+                    .setColor('#25c059');
+                await reaction.message.edit({ embeds: [updatedEmbed] });
+            }
+        } catch (error) {
+            console.error(`[messageReactionAdd]: Error handling reaction: ${error.message}`);
+        }
     });
 }
 
-
-// ------------------- Handle the barter subcommand -------------------
-async function handleBarter(interaction, userId) {
+// ------------------- Handle the Fulfill Subcommand -------------------
+async function handleFulfill(interaction) {
     try {
-        const buyerName = interaction.options.getString("buyername");
-        const vendorName = interaction.options.getString("vendorname");
-        const itemName = interaction.options.getString("item");
+        const fulfillmentId = interaction.options.getString('id'); // Get the fulfillment ID
 
-        const buyer = await fetchCharacterByNameAndUserId(buyerName, userId);
-        const vendor = await fetchCharacterByNameAndUserId(vendorName, userId);
-        if (!buyer || !vendor) throw new Error("Buyer or vendor not found.");
+        // Retrieve the fulfillment data
+        const fulfillmentData = retrieveVendingRequestFromStorage(fulfillmentId);
+        if (!fulfillmentData) {
+            throw new Error(`Fulfillment ID '${fulfillmentId}' not found.`);
+        }
 
-        const item = await fetchItemByName(buyer.inventory, itemName);
-        if (!item) throw new Error(`${buyerName} does not have ${itemName} in their inventory.`);
+        const {
+            userCharacterName,
+            vendorCharacterName,
+            itemName,
+            quantity,
+            buyerId,
+            messageId,
+        } = fulfillmentData;
 
-        const price = item.points;
-        if (vendor.vendingPoints < price) throw new Error(`${vendorName} does not have enough points to buy ${itemName}.`);
+        // Fetch the vendor character
+        const vendorCharacter = await Character.findOne({ name: vendorCharacterName });
+        if (!vendorCharacter) {
+            throw new Error(`Vendor character '${vendorCharacterName}' not found.`);
+        }
 
-        await removeItemInventoryDatabase(buyer._id, itemName);
-        await addItemInventoryDatabase(vendor._id, itemName);
+        // Ensure the user executing the command owns the vendor character
+        if (vendorCharacter.userId !== interaction.user.id) {
+            throw new Error(`You do not own the vendor character '${vendorCharacterName}' and cannot fulfill this request.`);
+        }
 
-        await updateCharacterById(buyer._id, { vendingPoints: buyer.vendingPoints + price });
-        await updateCharacterById(vendor._id, { vendingPoints: vendor.vendingPoints - price });
+        // Connect to the vending inventory database
+        const client = await connectToVendingDatabase();
+        const db = client.db('vending');
+        const vendorInventory = db.collection(vendorCharacterName.toLowerCase());
 
-        await interaction.reply({ content: `${buyerName} sold ${itemName} to ${vendorName} for ${price} points.`, ephemeral: true });
+        // Fetch the item from the vendor's inventory
+        const item = await vendorInventory.findOne({ itemName });
+        if (!item) {
+            throw new Error(`Item '${itemName}' not found in ${vendorCharacterName}'s inventory.`);
+        }
+
+        // Validate stock availability
+        if (item.stockQty < quantity) {
+            throw new Error(
+                `Vendor does not have enough stock for '${itemName}'. Available: ${item.stockQty}, Requested: ${quantity}.`
+            );
+        }
+
+        // Deduct the stock from the vendor's inventory
+        const updatedStock = item.stockQty - quantity;
+        if (updatedStock === 0) {
+            await vendorInventory.deleteOne({ itemName }); // Remove the item if stock reaches zero
+        } else {
+            await vendorInventory.updateOne(
+                { itemName },
+                { $set: { stockQty: updatedStock } }
+            );
+        }
+
+        // Add the item to the buyer's inventory
+        const Inventory = await initializeInventoryModel();
+        const buyerCharacter = await Character.findOne({ name: userCharacterName });
+
+        if (!buyerCharacter) {
+            throw new Error(`Buyer character '${userCharacterName}' not found.`);
+        }
+
+        const existingItem = await Inventory.findOne({
+            characterId: buyerCharacter._id,
+            itemName,
+        });
+
+        if (existingItem) {
+            await Inventory.updateOne(
+                { characterId: buyerCharacter._id, itemName },
+                { $inc: { quantity } }
+            );
+        } else {
+            await Inventory.create({
+                characterId: buyerCharacter._id,
+                itemName,
+                itemId: item._id, // Add the itemId from the vendor's inventory
+                quantity,
+                date: new Date(),
+            });
+        }
+
+        // Fetch item details for autofill
+        const itemDetails = await ItemModel.findOne({ itemName });
+        const category = itemDetails?.category || [];
+        const type = itemDetails?.type || [];
+        const subtype = itemDetails?.subtype || [];
+        const buyerJob = buyerCharacter.job || '';
+        const buyerPerk = buyerCharacter.perk || '';
+
+        // Update the buyer's Google Sheet
+        if (buyerCharacter.inventory) {
+            const spreadsheetId = extractSpreadsheetId(buyerCharacter.inventory);
+            const auth = await authorizeSheets();
+
+            const formattedDateTime = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
+            const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
+            const uniqueSyncId = uuidv4(); // Generate a unique sync ID for logging purposes
+
+            const values = [[
+                buyerCharacter.name,             // Character Name
+                itemName,                        // Item Name
+                quantity.toString(),             // Quantity of Item
+                category.join(', '),             // Category
+                type.join(', '),                 // Type
+                subtype.join(', '),              // Subtype
+                `Barter with ${vendorCharacterName}`, // How the item was obtained
+                buyerJob,                        // Job
+                buyerPerk,                       // Perk
+                buyerCharacter.currentVillage,   // Location
+                interactionUrl,                  // Link to the interaction
+                formattedDateTime,               // Date/Time of transaction
+                uniqueSyncId                     // Unique Sync ID
+            ]];
+
+            const range = 'loggedInventory!A2:M'; // Range for appending data
+            await appendSheetData(auth, spreadsheetId, range, values);
+        }
+        // React to the "Fulfillment Required!" message
+        if (messageId) {
+            try {
+                const channel = await interaction.client.channels.fetch(interaction.channelId); // Fetch the current channel
+                if (!channel) {
+                    console.warn(`[handleFulfill]: Channel not found for ID '${interaction.channelId}'.`);
+                } else {
+                    const message = await channel.messages.fetch(messageId); // Fetch the specific message
+                    if (!message) {
+                        console.warn(`[handleFulfill]: Message not found for ID '${messageId}'.`);
+                    } else {
+                        await message.react('✅'); // React with green checkmark
+                        console.log(`[handleFulfill]: Reacted to message ID '${messageId}' with a green checkmark.`);
+                    }
+                }
+            } catch (error) {
+                console.error(`[handleFulfill]: Error reacting to message ID '${messageId}':`, error);
+            }
+        }
+
+        // Notify the buyer
+        const buyer = await interaction.client.users.fetch(buyerId);
+        await buyer.send(
+            `✅ Your barter request for **${quantity}x ${itemName}** from **${vendorCharacterName}** has been fulfilled!`
+        );
+
+        // Respond with an embed
+        const embed = new EmbedBuilder()
+            .setTitle('✅ **Fulfillment Complete**')
+            .setDescription(`The Vendor's Guild has overseen the fulfillment of **${quantity}x ${itemName}**.`)
+            .addFields(
+                { name: '📦 **Item**', value: itemName, inline: true },
+                { name: '🔢 **Quantity**', value: quantity.toString(), inline: true },
+                { name: '🏷️ **Buyer**', value: `[${userCharacterName}](${buyerCharacter.inventory || 'No link available'})`, inline: true },
+                { name: '🏷️ **Vendor**', value: `[${vendorCharacterName}](${vendorCharacter.inventory || 'No link available'})`, inline: true },
+                { name: '🛍️ **Vendor Shop**', value: `[View Shop](${vendorCharacter.shopLink || 'No shop link available'})`, inline: true }
+            )
+            .setColor('#25c059')
+            .setFooter({ text: `Transaction overseen by The Vendor's Guild` });
+
+        await interaction.reply({ embeds: [embed], ephemeral: false });
+
+        // Delete the fulfillment data
+        deleteVendingRequestFromStorage(fulfillmentId);
     } catch (error) {
-        console.error("Error handling barter:", error);
-        await interaction.reply({ content: `An error occurred during the barter: ${error.message}`, ephemeral: true });
+        console.error('[handleFulfill]: Error during fulfillment:', error);
+        await interaction.reply({
+            content: `❌ An error occurred during fulfillment: ${error.message}`,
+            ephemeral: true,
+        });
+    }
+}
+
+// ------------------- Handle the Pouch Upgrade Subcommand -------------------
+async function handlePouchUpgrade(interaction) {
+    try {
+        const characterName = interaction.options.getString('charactername');
+        const pouchType = interaction.options.getString('pouchtype');
+        const userId = interaction.user.id;
+
+        // Fetch the character
+        const character = await fetchCharacterByNameAndUserId(characterName, userId);
+        if (!character) {
+            throw new Error(`Character '${characterName}' not found or does not belong to you.`);
+        }
+
+        // Define pouch capacities and costs
+        const pouchCapacities = { none: 0, bronze: 15, silver: 30, gold: 50 };
+        const pouchCosts = { bronze: 1000, silver: 5000, gold: 10000 };
+
+        // Ensure the user is not downgrading or selecting the same pouch type
+        if (pouchCapacities[pouchType] <= pouchCapacities[character.shopPouch || 'none']) {
+            throw new Error(`You cannot downgrade or select the same pouch type.`);
+        }
+
+        // Fetch the user's current token balance
+        const userTokens = await getTokenBalance(userId);
+        const cost = pouchCosts[pouchType];
+
+        if (userTokens < cost) {
+            throw new Error(`Upgrading to ${pouchType} costs ${cost} tokens, but you only have ${userTokens}.`);
+        }
+
+        // Deduct tokens and upgrade the pouch
+        await updateTokenBalance(userId, -cost); // Deduct tokens
+        character.shopPouch = pouchType;
+        await character.save();
+
+        // Respond with success
+        const embed = new EmbedBuilder()
+            .setTitle('✅ **Pouch Upgrade Successful!**')
+            .setDescription(`**${character.name}** has successfully upgraded their pouch to **${capitalizeFirstLetter(pouchType)}**.`)
+            .addFields(
+                { name: '🛍️ **New Capacity**', value: `${pouchCapacities[pouchType]} slots`, inline: true },
+                { name: '💰 **Tokens Spent**', value: `${cost}`, inline: true },
+                { name: '💰 **Remaining Tokens**', value: `${userTokens - cost}`, inline: true }
+            )
+            .setColor('#25c059');
+
+        await interaction.reply({ embeds: [embed], ephemeral: false });
+    } catch (error) {
+        console.error('[handlePouchUpgrade]: Error:', error);
+        await interaction.reply({
+            content: `❌ **Error:** ${error.message}`,
+            ephemeral: true,
+        });
     }
 }
 
@@ -369,106 +928,139 @@ async function viewVendingStock(interaction) {
 }
 
 // ------------------- View Vendor Shop -------------------
-async function handleViewShop(interaction, userId) {
+const VIEW_SHOP_IMAGE_URL = "https://t3.ftcdn.net/jpg/05/48/37/72/360_F_548377272_4TSQyUy8y5gWP9m1vdWOa1RE9AmkphIp.png";
+
+// Helper function to capitalize the first letter of a string
+function capitalizeFirstLetter(string) {
+    return string.charAt(0).toUpperCase() + string.slice(1).toLowerCase();
+}
+
+async function handleViewShop(interaction) {
     try {
         const characterName = interaction.options.getString("charactername");
 
-        // Fetch character data
-        const character = await fetchCharacterByNameAndUserId(characterName, userId);
-        if (!character) throw new Error(`Character '${characterName}' not found for user ID ${userId}.`);
-
-        // Create an embed for shop details
-        const shopEmbed = new EmbedBuilder()
-            .setTitle(`🛍️ ${character.name}'s Shop Details`)
-            .setDescription(`View the current details for **${character.name}**'s shop.`)
-            .setColor("#AA926A")
-            .addFields(
-                { name: '💰 Vending Points', value: character.vendingPoints.toString(), inline: true },
-                { name: '🛠️ Vendor Type', value: character.vendorType || 'None', inline: true },
-                { name: '👜 Shop Pouch', value: character.shopPouch || 'None', inline: true },
-                { name: '📅 Last Collected Month', value: character.lastCollectedMonth > 0 ? character.lastCollectedMonth.toString() : 'Not Collected', inline: true }
-            )
-            .setThumbnail(character.iconURL || DEFAULT_IMAGE_URL)
-            .setFooter({ text: `Requested by ${interaction.user.username}`, iconURL: interaction.user.displayAvatarURL() });
-
-        // Reply with the embed
-        await interaction.reply({ embeds: [shopEmbed], ephemeral: false });
-    } catch (error) {
-        console.error(`[vendingHandler]: Error viewing shop for user ID ${userId}: ${error.message}`);
-        await interaction.reply({
-            content: `❌ An error occurred while fetching the shop details: ${error.message}`,
-            ephemeral: true,
-        });
-    }
-}
-
-// ------------------- Sync Vending Items -------------------
-const normalize = (value) => value?.toLowerCase().trim();
-
-async function handleSyncVending(interaction) {
-    try {
-        await interaction.deferReply({ ephemeral: true });
-
-        const characterName = interaction.options.getString('charactername');
-        const userId = interaction.user.id;
-
-        // Fetch the character by name and user ID
-        const character = await fetchCharacterByNameAndUserId(characterName, userId);
+        // Fetch the character from the database
+        const character = await Character.findOne({ name: characterName });
         if (!character) {
-            await interaction.editReply(`❌ Character '${characterName}' not found.`);
-            return;
+            throw new Error(`Character '${characterName}' not found.`);
         }
 
-        // Fetch the vending stock
-        const stockList = await getCurrentVendingStockList();
-        if (!stockList || !stockList.stockList) {
-            await interaction.editReply(`❌ No stock data available.`);
-            return;
+        // Connect to the vending inventory database
+        const client = await connectToVendingDatabase();
+        const db = client.db('vending');
+        const inventoryCollection = db.collection(characterName.toLowerCase());
+
+        // Fetch all items in the character's vending inventory
+        const items = await inventoryCollection.find({}).toArray();
+        if (!items || items.length === 0) {
+            throw new Error(`No items found in ${characterName}'s shop.`);
         }
 
-        // Match the character's current village with the stock list
-        const normalizedVillage = normalize(character.currentVillage);
-        const villageStock = stockList.stockList[normalizedVillage] || [];
+        // Create item descriptions for pagination
+        const itemDescriptionsArray = await Promise.all(
+            items.map(async (item) => {
+                const itemDetails = await ItemModel.findOne({ itemName: item.itemName });
+                const emoji = itemDetails?.emoji || '🔹';
+                return `**${emoji} ${item.itemName}** - \`qty: ${item.stockQty}\`\n> **Token Price:** ${item.tokenPrice || 'N/A'}\n> **Art Price:** ${item.artPrice || 'N/A'}\n> **Other Price:** ${item.otherPrice || 'N/A'}\n> **Trades Open:** ${item.tradesOpen ? 'Yes' : 'No'}`;
+            })
+        );
 
-        // Log retrieved data for debugging
-        console.log(`[Sync Validation]: Normalized Village: "${normalizedVillage}"`);
-        console.log(`[Sync Validation]: Stock for Village:`, villageStock);
+        // Paginate items (4 items per page)
+        const itemsPerPage = 4;
+        const totalPages = Math.ceil(itemDescriptionsArray.length / itemsPerPage);
 
-        if (!villageStock || villageStock.length === 0) {
-            await interaction.editReply(`❌ No stock data available for "${character.currentVillage}".`);
-            return;
-        }
+        // Function to generate the embed for a specific page
+        const generateEmbed = (page) => {
+            const start = (page - 1) * itemsPerPage;
+            const end = start + itemsPerPage;
+            const pageItems = itemDescriptionsArray.slice(start, end).join("\n\n");
 
-        // Prepare for syncing
-        const itemsToSync = [];
-        const errors = [];
-        const data = []; // Example data placeholder for input spreadsheet
+            const formattedVillage = capitalizeFirstLetter(character.currentVillage);
 
-        // Process and validate items
-        for (const row of data) {
-            const [itemName, stockQty, vendingType] = row;
+            return new EmbedBuilder()
+                .setTitle(`🛍️ ${characterName}'s Shop (Page ${page}/${totalPages})`)
+                .setDescription(`${pageItems}\n\n💡 Use </vending barter:1306176790095728737> to buy from this character!`)
+                .setColor("#25c059")
+                .setThumbnail(character.icon || DEFAULT_IMAGE_URL)
+                .setImage(VIEW_SHOP_IMAGE_URL)
+                .setFooter({
+                    text: `${characterName}: ${character.job} is currently in ${formattedVillage}!`,
+                    iconURL: interaction.user.displayAvatarURL(),
+                });
+        };
 
-            // Match the item in the stock
-            const stockItem = villageStock.find(
-                (item) => normalize(item.itemName) === normalize(itemName) && item.vendingType === vendingType
+        // Create buttons for pagination
+        const buttons = (currentPage) => {
+            return new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setCustomId('prev_page')
+                    .setLabel('Previous')
+                    .setStyle(ButtonStyle.Primary)
+                    .setDisabled(currentPage === 1),
+                new ButtonBuilder()
+                    .setCustomId('next_page')
+                    .setLabel('Next')
+                    .setStyle(ButtonStyle.Primary)
+                    .setDisabled(currentPage === totalPages)
             );
+        };
 
-            if (stockItem) {
-                itemsToSync.push({ itemName, stockQty });
-            } else {
-                errors.push(`❌ **${itemName}** not found or invalid for village **${character.currentVillage}**.`);
+        // Initial page setup
+        let currentPage = 1;
+        const embed = generateEmbed(currentPage);
+
+        // Send the initial message
+        const message = await interaction.reply({
+            embeds: [embed],
+            components: [buttons(currentPage)],
+            fetchReply: true,
+        });
+
+        // Create a collector for button interactions
+        const collector = message.createMessageComponentCollector({
+            filter: (btnInteraction) => btnInteraction.user.id === interaction.user.id,
+            time: 60000, // 1 minute
+        });
+
+        collector.on('collect', async (btnInteraction) => {
+            if (btnInteraction.customId === 'prev_page') {
+                currentPage--;
+            } else if (btnInteraction.customId === 'next_page') {
+                currentPage++;
             }
-        }
 
-        // Respond to the interaction
-        await interaction.editReply({
-            content: `✅ Synced Items:\n${itemsToSync.map(i => `- ${i.itemName} (Qty: ${i.stockQty})`).join('\n') || 'None'}\n\n` +
-                     `⚠️ Errors:\n${errors.join('\n') || 'None'}`,
-            ephemeral: true,
+            // Update the embed and buttons
+            await btnInteraction.update({
+                embeds: [generateEmbed(currentPage)],
+                components: [buttons(currentPage)],
+            });
+        });
+
+        collector.on('end', async () => {
+            // Disable buttons when collector ends
+            await message.edit({
+                components: [
+                    new ActionRowBuilder().addComponents(
+                        new ButtonBuilder()
+                            .setCustomId('prev_page')
+                            .setLabel('Previous')
+                            .setStyle(ButtonStyle.Primary)
+                            .setDisabled(true),
+                        new ButtonBuilder()
+                            .setCustomId('next_page')
+                            .setLabel('Next')
+                            .setStyle(ButtonStyle.Primary)
+                            .setDisabled(true)
+                    ),
+                ],
+            });
         });
     } catch (error) {
-        console.error('[handleSyncVending]: Error:', error);
-        await interaction.editReply('❌ An error occurred while syncing vending items. Please try again later.');
+        console.error(`[handleViewShop]: Error viewing shop for user '${interaction.user.id}':`, error);
+        await interaction.reply({
+            content: `❌ An error occurred while viewing the shop: ${error.message}`,
+            ephemeral: true,
+        });
     }
 }
 
@@ -733,15 +1325,114 @@ const createVendingSetupEmbed = (characterName, shopLink, pouch, points, invento
     return embed;
 };
 
+// ------------------- Handle the Edit Shop Subcommand -------------------
+async function handleEditShop(interaction) {
+    try {
+        await interaction.deferReply({ ephemeral: true });
 
+        // Extract interaction options
+        const characterName = interaction.options.getString('charactername');
+        const itemName = interaction.options.getString('itemname');
+        const tokenPrice = interaction.options.getInteger('tokenprice');
+        const artPrice = interaction.options.getString('artprice');
+        const otherPrice = interaction.options.getString('otherprice');
+        const tradesOpen = interaction.options.getBoolean('tradesopen');
+        const userId = interaction.user.id;
+
+        // Fetch the character by name and user ID
+        const character = await fetchCharacterByNameAndUserId(characterName, userId);
+        if (!character) {
+            throw new Error(`Character '${characterName}' not found or does not belong to you.`);
+        }
+
+        // Connect to the vending inventory database
+        const client = await connectToVendingDatabase();
+        const db = client.db('vending');
+        const inventoryCollection = db.collection(characterName.toLowerCase());
+
+        // Fetch the item from the vending inventory
+        const item = await inventoryCollection.findOne({ itemName });
+        if (!item) {
+            throw new Error(`Item '${itemName}' not found in ${characterName}'s shop.`);
+        }
+
+        // Update the prices and trades open status in the database
+        const updateFields = {};
+        if (tokenPrice !== null) updateFields.tokenPrice = tokenPrice;
+        if (artPrice) updateFields.artPrice = artPrice;
+        if (otherPrice) updateFields.otherPrice = otherPrice;
+        if (tradesOpen !== null) updateFields.tradesOpen = tradesOpen;
+
+        if (Object.keys(updateFields).length === 0) {
+            throw new Error('No fields were provided for update.');
+        }
+
+        await inventoryCollection.updateOne({ itemName }, { $set: updateFields });
+
+        // Update the prices and trades open status in the Google Sheet
+        const spreadsheetId = extractSpreadsheetId(character.shopLink);
+        if (!spreadsheetId) {
+            throw new Error(`Invalid or missing shop link for '${characterName}'.`);
+        }
+
+        const auth = await authorizeSheets();
+        const sheetData = await readSheetData(auth, spreadsheetId, 'vendingShop!A:K');
+
+        // Find the row matching the item name and rewrite it
+        const rowIndex = sheetData.findIndex(row => row[1] === itemName);
+        if (rowIndex === -1) {
+            throw new Error(`Item '${itemName}' not found in the shop spreadsheet.`);
+        }
+
+        const updatedRow = [
+            characterName,
+            itemName,
+            sheetData[rowIndex][2], // StockQty
+            sheetData[rowIndex][3], // CostEach
+            sheetData[rowIndex][4], // PointsSpent
+            sheetData[rowIndex][5], // BoughtFrom
+            tokenPrice !== null ? tokenPrice : sheetData[rowIndex][6], // TokenPrice
+            artPrice || sheetData[rowIndex][7], // ArtPrice
+            otherPrice || sheetData[rowIndex][8], // OtherPrice
+            tradesOpen !== null ? (tradesOpen ? 'Yes' : 'No') : sheetData[rowIndex][9], // TradesOpen
+            sheetData[rowIndex][10], // MonthYear
+        ];
+
+        const range = `vendingShop!A${rowIndex + 1}:K${rowIndex + 1}`; // Define the specific row range to update
+        await writeSheetData(auth, spreadsheetId, range, [updatedRow]);
+
+        // Create success message
+        const embed = new EmbedBuilder()
+            .setTitle('✅ **Item Updated Successfully!**')
+            .setDescription(`The details for **${itemName}** in **${characterName}'s** shop have been updated.`)
+            .addFields(
+                { name: '💰 **Token Price**', value: `${tokenPrice !== null ? tokenPrice : item.tokenPrice || 'N/A'}`, inline: true },
+                { name: '🎨 **Art Price**', value: `${artPrice || item.artPrice || 'N/A'}`, inline: true },
+                { name: '📜 **Other Price**', value: `${otherPrice || item.otherPrice || 'N/A'}`, inline: true },
+                { name: '🔄 **Trades Open**', value: `${tradesOpen !== null ? (tradesOpen ? 'Yes' : 'No') : item.tradesOpen ? 'Yes' : 'No'}`, inline: true }
+            )
+            .setColor('#25c059');
+
+        await interaction.editReply({ embeds: [embed] });
+    } catch (error) {
+        console.error('[handleEditShop]: Error editing shop item:', error);
+        await interaction.editReply({
+            content: `❌ An error occurred while editing the shop item: ${error.message}`,
+            ephemeral: true,
+        });
+    }
+}
 
 
 module.exports = {
     executeVending,
     viewVendingStock,
     handleViewShop,
-    handleSyncVending,
     handleShopLink,
     handleVendingSetup,
-    createVendingSetupEmbed
+    createVendingSetupEmbed,
+    handleFulfill,
+    handleEditShop,
+    initializeReactionHandler,
+    handlePouchUpgrade
 };

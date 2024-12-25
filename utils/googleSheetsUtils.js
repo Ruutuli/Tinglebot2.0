@@ -302,6 +302,7 @@ function logErrorDetails(error) {
     console.error('❌ Error details:', error);
 }
 
+
 // ------------------- Export Functions -------------------
 // Exporting all functions for external use
 module.exports = {

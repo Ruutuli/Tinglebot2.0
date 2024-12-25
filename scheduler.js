@@ -17,11 +17,15 @@ const { sendBloodMoonAnnouncement } = require('./scripts/bloodmoon');
 const { resetPetRollsForAllCharacters } = require('./database/characterService');
 const { createScheduledQuest } = require('./database/questService'); 
 const { fetchQuestsFromSheet } = require('./scripts/questAnnouncements');
+const { cleanupExpiredVendingRequests } = require('./utils/storage');
 
 // Models and utilities
 const Settings = require('./models/SettingsModel');
 const Character = require('./models/CharacterModel');
 const { cleanupExpiredHealingRequests } = require('./utils/storage'); 
+const { authorizeSheets, appendSheetData, getSheetIdByTitle } = require('./utils/googleSheetsUtils');
+const { getCurrentVendingStockList } = require('./database/vendingService');
+
 
 // ------------------- Scheduler Initialization -------------------
 // Function to set up all scheduled tasks
@@ -39,16 +43,95 @@ module.exports = (client) => {
     }
   }, { timezone: 'America/New_York' });
 
-  // ------------------- Monthly Vending Stock Generation -------------------
-  cron.schedule('0 0 1 * *', async () => {
-    try {
-      console.log('[scheduler]🛍️ Generating monthly vending stock list...');
-      await generateVendingStockList();
-      console.log('[scheduler]✅ Vending stock list generated successfully.');
-    } catch (error) {
-      console.error('❌ [Scheduler.js] Error generating vending stock list:', error);
-    }
-  }, { timezone: 'America/New_York' });
+// ------------------- Monthly Push to Google Sheets -------------------
+cron.schedule('0 2 1 * *', async () => {
+  try {
+      console.log('[scheduler]📊 Starting monthly vending stock push to Google Sheets...');
+      
+      // Authenticate with Google Sheets
+      const auth = await authorizeSheets();
+
+      // Spreadsheet ID and tab details
+      const spreadsheetId = '163UPIMTyHLLCei598sP5Ezonpgl2W-DaSxn8JBSRRSw';
+      const tabName = 'monthlyVending';
+
+      // Clear only columns A:D
+      const clearRange = `${tabName}!A1:D1000`;
+      await clearSheetFormatting(auth, spreadsheetId, clearRange);
+      console.log(`[scheduler]🧹 Cleared columns A:D in tab "${tabName}".`);
+
+      // Fetch the current month's vending stock
+      const stockList = await getCurrentVendingStockList();
+      if (!stockList) {
+          console.error('[scheduler]❌ No vending stock data available for the current month.');
+          return;
+      }
+
+      // Determine the current month and year
+      const now = new Date();
+      const monthYear = `${now.toLocaleString('default', { month: 'long' })} ${now.getFullYear()}`;
+
+      // Write the header "Vending for Month Year" in A1
+      const headerTitle = `Vending for ${monthYear}`;
+      await writeSheetData(auth, spreadsheetId, `${tabName}!A1`, [[headerTitle]]);
+      console.log(`[scheduler]📝 Header written: "${headerTitle}"`);
+
+      // Write column headers in A2:D2
+      const columnHeaders = ['Village Name', 'Item Name', 'Points Cost', 'Vending Type'];
+      await writeSheetData(auth, spreadsheetId, `${tabName}!A2:D2`, [columnHeaders]);
+      console.log(`[scheduler]📝 Column headers written: ${columnHeaders.join(', ')}`);
+
+      // Format data for Google Sheets
+      const formattedVillageData = [];
+      for (const [village, items] of Object.entries(stockList.stockList)) {
+          for (const item of items) {
+              formattedVillageData.push([
+                  village,                       // Village name
+                  item.itemName,                 // Item name
+                  item.points,                   // Points cost
+                  item.vendingType,              // Vending type (Shopkeeper/Merchant)
+              ]);
+          }
+      }
+
+      // Log the number of village entries
+      console.log(`[scheduler]🛒 Preparing to push ${formattedVillageData.length} village entries to Google Sheets...`);
+
+      // Write village stock data starting in A3
+      const villageDataRange = `${tabName}!A3:D`;
+      await writeSheetData(auth, spreadsheetId, villageDataRange, formattedVillageData);
+
+      // Handle limited items
+      const limitedItems = stockList.limitedItems || [];
+      if (limitedItems.length > 0) {
+          // Calculate starting row for limited items
+          const limitedItemsStartRow = formattedVillageData.length + 3; // Adjust for spacing
+          const headersRange = `${tabName}!B${limitedItemsStartRow}:C${limitedItemsStartRow}`;
+          const dataRange = `${tabName}!B${limitedItemsStartRow + 1}:C`;
+
+          // Write headers for limited items
+          const limitedItemsHeaders = ['Item Name', 'Points Cost'];
+          await writeSheetData(auth, spreadsheetId, headersRange, [limitedItemsHeaders]);
+
+          // Write limited items data
+          const formattedLimitedItems = limitedItems.map(item => [
+              item.itemName,
+              item.points,
+          ]);
+          await writeSheetData(auth, spreadsheetId, dataRange, formattedLimitedItems);
+
+          console.log(`[scheduler]✅ Successfully appended ${limitedItems.length} limited items to Google Sheets.`);
+      } else {
+          console.log('[scheduler]ℹ️ No limited items to append.');
+      }
+
+      console.log('[scheduler]✅ Successfully updated Google Sheets with vending stock and limited items.');
+  } catch (error) {
+      // Log failure with details
+      console.error('[scheduler]❌ Error updating Google Sheets:', error.message);
+      console.error(error.stack);
+  }
+}, { timezone: 'America/New_York' });
 
   // ------------------- Daily Blight Roll Call -------------------
   cron.schedule('00 20 * * *', async () => {
@@ -99,6 +182,17 @@ module.exports = (client) => {
       console.log('✅ Pet rolls reset successfully.');
     } catch (error) {
       console.error('❌ [Scheduler.js] Error during pet rolls reset:', error);
+    }
+  }, { timezone: 'America/New_York' });
+
+  // ------------------- Daily Cleanup of Expired Vending Requests -------------------
+  cron.schedule('0 0 * * *', async () => {
+    try {
+        console.log('[scheduler]🧹 Running daily cleanup of expired vending requests...');
+        cleanupExpiredVendingRequests();
+        console.log('[scheduler]✅ Expired vending requests cleaned up successfully.');
+    } catch (error) {
+        console.error('[scheduler]❌ Error during daily cleanup of vending requests:', error.message);
     }
   }, { timezone: 'America/New_York' });
 

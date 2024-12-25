@@ -150,6 +150,85 @@ function cleanupExpiredHealingRequests() {
   }
 }
 
+// ------------------- File Path for Vending Requests -------------------
+const vendingRequestsFile = path.join(__dirname, '../data/vendingRequests.json');
+
+// Ensure the vending requests file exists
+if (!fs.existsSync(vendingRequestsFile)) {
+    console.error('Vending Requests storage file does not exist. Creating a new one.');
+    fs.writeFileSync(vendingRequestsFile, JSON.stringify({}));
+}
+
+// ------------------- Save Vending Request to Storage -------------------
+function saveVendingRequestToStorage(requestId, requestData) {
+    try {
+        const vendingRequests = safeReadJSON(vendingRequestsFile);
+
+        // Append the new request
+        vendingRequests[requestId] = requestData;
+
+        // Write back to file
+        fs.writeFileSync(vendingRequestsFile, JSON.stringify(vendingRequests, null, 2), 'utf-8');
+    } catch (error) {
+        console.error(`Error saving vending request ${requestId}:`, error.message);
+    }
+}
+
+// ------------------- Retrieve Vending Request from Storage -------------------
+function retrieveVendingRequestFromStorage(requestId) {
+    const vendingRequests = safeReadJSON(vendingRequestsFile);
+    return vendingRequests[requestId] || null;
+}
+
+// ------------------- Delete Vending Request from Storage -------------------
+function deleteVendingRequestFromStorage(requestId) {
+    const vendingRequests = safeReadJSON(vendingRequestsFile);
+
+    if (vendingRequests[requestId]) {
+        delete vendingRequests[requestId]; // Remove entry by ID
+        fs.writeFileSync(vendingRequestsFile, JSON.stringify(vendingRequests, null, 2)); // Save changes
+    } else {
+        console.warn(`Vending Request ID not found in storage: ${requestId}`);
+    }
+}
+
+// ------------------- Retrieve All Vending Requests from Storage -------------------
+function retrieveAllVendingRequests() {
+  try {
+      const vendingRequests = safeReadJSON(vendingRequestsFile);
+      return Object.values(vendingRequests); // Return an array of all requests
+  } catch (error) {
+      console.error('[storage.js] Error retrieving all vending requests:', error.message);
+      return [];
+  }
+}
+
+// ------------------- Cleanup Expired Vending Requests -------------------
+function cleanupExpiredVendingRequests() {
+  try {
+      const vendingRequests = safeReadJSON(vendingRequestsFile);
+      const currentTime = Date.now();
+      const oneMonthInMillis = 30 * 24 * 60 * 60 * 1000; // 30 days in milliseconds
+      let updated = false;
+
+      for (const requestId in vendingRequests) {
+          const request = vendingRequests[requestId];
+          if (currentTime - new Date(request.createdAt).getTime() > oneMonthInMillis) {
+              console.log(`[storage.js] Removing expired vending request with ID: ${requestId}`);
+              delete vendingRequests[requestId];
+              updated = true;
+          }
+      }
+
+      if (updated) {
+          fs.writeFileSync(vendingRequestsFile, JSON.stringify(vendingRequests, null, 2), 'utf-8');
+          console.log('[storage.js] Expired vending requests cleaned up successfully.');
+      }
+  } catch (error) {
+      console.error('[storage.js] Error cleaning up expired vending requests:', error.message);
+  }
+}
+
 // ------------------- Exported Functions -------------------
 // Export functions and in-memory store for external use
 module.exports = {
@@ -160,6 +239,11 @@ module.exports = {
   saveHealingRequestToStorage,
   retrieveHealingRequestFromStorage,
   deleteHealingRequestFromStorage,
-  cleanupExpiredHealingRequests
+  cleanupExpiredHealingRequests,
+  saveVendingRequestToStorage,
+  retrieveVendingRequestFromStorage,
+  deleteVendingRequestFromStorage,
+  retrieveAllVendingRequests,
+  cleanupExpiredVendingRequests
 
 };

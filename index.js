@@ -21,6 +21,7 @@ const { handleComponentInteraction } = require('./handlers/componentHandler');
 const { handleInteraction } = require('./handlers/interactionHandler');
 const { handleModalSubmission, handleButtonModalTrigger  } = require('./handlers/modalHandler');
 const { handleSelectMenuInteraction } = require('./handlers/selectMenuHandler');
+const { executeVending, initializeReactionHandler } = require('./handlers/vendingHandler');
 
 // ------------------- Scripts and Utilities -------------------
 const { renameChannels, trackBloodMoonCycle, currentDayInCycle, isBloodMoonActive } = require('./scripts/bloodmoon');
@@ -76,6 +77,9 @@ async function initializeClient() {
   // ------------------- Bot Ready Event -------------------
   client.once('ready', async () => {
     console.log('[index.js]: 🤖 Bot is online');
+
+        // Initialize the reaction handler
+        initializeReactionHandler(client);
 
     // Blood Moon Status on Startup
     console.log(`[index.js]: [Startup] Current Day in Cycle: ${currentDayInCycle}`);

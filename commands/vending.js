@@ -4,8 +4,10 @@ const {
     executeVending,
     viewVendingStock,
     handleViewShop,
-    handleSyncVending,
     handleVendingSetup,
+    handleEditShop,
+    handleFulfill,
+    handlePouchUpgrade
 } = require('../handlers/vendingHandler');
 
 // ------------------- Define the vending command with various subcommands -------------------
@@ -40,33 +42,176 @@ module.exports = {
                         .setRequired(true)
                         .setAutocomplete(true)
                 )
+                .addStringOption(option =>
+                    option
+                        .setName('itemname')
+                        .setDescription('The name of the item.')
+                        .setRequired(true)
+                        .setAutocomplete(true)
+                )
+                .addIntegerOption(option =>
+                    option
+                        .setName('stockqty')
+                        .setDescription('The quantity of stock to add.')
+                        .setRequired(true)
+                )
+                .addIntegerOption(option =>
+                    option
+                        .setName('tokenprice')
+                        .setDescription('The price in tokens.')
+                        .setRequired(false)
+                )
+                .addIntegerOption(option =>
+                    option
+                        .setName('artprice')
+                        .setDescription('The price in art currency.')
+                        .setRequired(false)
+                )
+                .addIntegerOption(option =>
+                    option
+                        .setName('otherprice')
+                        .setDescription('The price in other currency.')
+                        .setRequired(false)
+                )
+                .addBooleanOption(option =>
+                    option
+                        .setName('tradesopen')
+                        .setDescription('Is this item open for trades?')
+                        .setRequired(false)
+                )
         )
-        // ------------------- Subcommand: Stock -------------------
+        // ------------------- Subcommand: Barter -------------------
         .addSubcommand(subcommand =>
-          subcommand
-              .setName('barter')
-              .setDescription('Handle a barter transaction.')
-              .addStringOption(option =>
-                  option
-                      .setName('vendorname')
-                      .setDescription('Name of the vendor.')
-                      .setRequired(true)
-              )
-              .addStringOption(option =>
-                  option
-                      .setName('item')
-                      .setDescription('Item name for barter.')
-                      .setRequired(true)
-              )
-              .addIntegerOption(option =>
-                  option
-                      .setName('price')
-                      .setDescription('Price agreed for barter.')
-                      .setRequired(true)
-              )
-      )
-
-
+            subcommand
+                .setName('barter')
+                .setDescription('Handle a barter transaction between your character and a vendor.')
+                .addStringOption(option =>
+                    option
+                        .setName('charactername')
+                        .setDescription('Your character initiating the barter.')
+                        .setRequired(true)
+                        .setAutocomplete(true)
+                )
+                .addStringOption(option =>
+                    option
+                        .setName('vendorcharacter')
+                        .setDescription('The vendor character involved in the barter.')
+                        .setRequired(true)
+                        .setAutocomplete(true)
+                )
+                .addStringOption(option =>
+                    option
+                        .setName('itemname')
+                        .setDescription('The name of the item to barter for.')
+                        .setRequired(true)
+                        .setAutocomplete(true)
+                )
+                .addIntegerOption(option =>
+                    option
+                        .setName('quantity')
+                        .setDescription('The quantity to barter.')
+                        .setRequired(true)
+                )
+                .addStringOption(option =>
+                    option
+                        .setName('paymentmethod')
+                        .setDescription('The payment method: art, token, or other.')
+                        .setRequired(true)
+                        .addChoices(
+                            { name: 'Art', value: 'art' },
+                            { name: 'Token', value: 'token' },
+                            { name: 'Other', value: 'other' },
+                            { name: 'Trade', value: 'trade' }
+                        )
+                )
+                .addStringOption(option =>
+                    option
+                        .setName('notes')
+                        .setDescription('Optional notes about the barter transaction.')
+                        .setRequired(false)
+                )
+        )
+        
+        // ------------------- Subcommand: Edit Shop -------------------
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('editshop')
+                .setDescription('Edit the details of items in your vending shop.')
+                .addStringOption(option =>
+                    option
+                        .setName('charactername')
+                        .setDescription('The name of your character.')
+                        .setRequired(true)
+                        .setAutocomplete(true)
+                )
+                .addStringOption(option =>
+                    option
+                        .setName('itemname')
+                        .setDescription('The name of the item to edit.')
+                        .setRequired(true)
+                        .setAutocomplete(true)
+                )
+                .addIntegerOption(option =>
+                    option
+                        .setName('tokenprice')
+                        .setDescription('The new price in tokens.')
+                        .setRequired(false)
+                )
+                .addStringOption(option =>
+                    option
+                        .setName('artprice')
+                        .setDescription('The new price in art currency.')
+                        .setRequired(false)
+                )
+                .addStringOption(option =>
+                    option
+                        .setName('otherprice')
+                        .setDescription('The new price in other currency.')
+                        .setRequired(false)
+                )
+                .addBooleanOption(option =>
+                    option
+                        .setName('tradesopen')
+                        .setDescription('Whether trades are open for this item.')
+                        .setRequired(false)
+                )
+        )
+        // ------------------- Subcommand: Fulfill -------------------
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('fulfill')
+                .setDescription('Fulfill a barter request.')
+                .addStringOption(option =>
+                    option
+                        .setName('id')
+                        .setDescription('The fulfillment ID of the barter request.')
+                        .setRequired(true)
+                )
+        )
+         // ------------------- Subcommand: Pouch -------------------
+         .addSubcommand(subcommand =>
+            subcommand
+                .setName('pouch')
+                .setDescription('Upgrade your vending character\'s pouch size.')
+                .addStringOption(option =>
+                    option
+                        .setName('charactername')
+                        .setDescription('The name of the vending character.')
+                        .setRequired(true)
+                        .setAutocomplete(true)
+                )
+                .addStringOption(option =>
+                    option
+                        .setName('pouchtype')
+                        .setDescription('The pouch type to upgrade to.')
+                        .setRequired(true)
+                        .addChoices(
+                            { name: 'Bronze (15 slots)', value: 'bronze' },
+                            { name: 'Silver (30 slots)', value: 'silver' },
+                            { name: 'Gold (50 slots)', value: 'gold' }
+                        )
+                )
+            )
         // ------------------- Subcommand: Setup -------------------
         .addSubcommand(subcommand =>
             subcommand
@@ -117,22 +262,7 @@ module.exports = {
                         .setRequired(true)
                         .setAutocomplete(true)
                 )
-        )
-
-        // ------------------- Subcommand: Sync -------------------
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('sync')
-                .setDescription('Sync items from the vending shop to the database.')
-                .addStringOption(option =>
-                    option
-                        .setName('charactername')
-                        .setDescription('The name of the character whose shop to sync.')
-                        .setRequired(true)
-                        .setAutocomplete(true)
-                )
-        )
-
+        )        
         // ------------------- Subcommand: View Stock -------------------
         .addSubcommand(subcommand =>
             subcommand
@@ -151,8 +281,12 @@ module.exports = {
             await handleViewShop(interaction, interaction.user.id);
         } else if (subcommand === 'setup') {
             await handleVendingSetup(interaction);
-        } else if (subcommand === 'sync') {
-            await handleSyncVending(interaction);
+        } else if (subcommand === 'editshop') {
+            await handleEditShop(interaction);
+        } else if (subcommand === 'fulfill') {
+            await handleFulfill(interaction); 
+        } else if (subcommand === 'pouch') {
+            await handlePouchUpgrade(interaction);
         } else {
             await executeVending(interaction);
         }

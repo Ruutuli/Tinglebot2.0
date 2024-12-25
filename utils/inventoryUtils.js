@@ -381,6 +381,31 @@ async function removeInitialItemIfSynced(characterId) {
     }
 }
 
+const addItemToVendingInventory = async (collectionName, item) => {
+    try {
+        const inventoriesConnection = await connectToInventories();
+        const db = inventoriesConnection.useDb('vending');
+        const inventoryCollection = db.collection(collectionName);
+
+        const existingItem = await inventoryCollection.findOne({
+            characterName: item.characterName,
+            itemName: item.itemName
+        });
+
+        if (existingItem) {
+            await inventoryCollection.updateOne(
+                { characterName: item.characterName, itemName: item.itemName },
+                { $inc: { stockQty: item.stockQty } }
+            );
+        } else {
+            await inventoryCollection.insertOne(item);
+        }
+    } catch (error) {
+        throw error;
+    }
+};
+
+
 
 module.exports = {
     syncToInventoryDatabase,
@@ -390,5 +415,6 @@ module.exports = {
     createNewItemDatabase,
     createRemovedItemDatabase,
     addItemsToDatabase,
-    removeInitialItemIfSynced
+    removeInitialItemIfSynced,
+    addItemToVendingInventory
 };
