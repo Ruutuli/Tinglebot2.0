@@ -5,6 +5,7 @@ const { EmbedBuilder } = require('discord.js'); // Discord.js Embed builder for 
 // ------------------- Import custom modules and handlers -------------------
 const { getEncounterById } = require('../modules/mountModule'); // Module to retrieve encounter details by ID
 const { proceedWithRoll } = require('../handlers/mountComponentHandler'); // Handler to proceed with rolling logic
+const { fetchCharacterByNameAndUserId } = require('../database/characterService'); // Import fetchCharacterByNameAndUserId
 
 // ------------------- Define and export the mount command -------------------
 module.exports = {
@@ -42,24 +43,32 @@ module.exports = {
         }
 
         // Fetch character information
-const character = await fetchCharacterByNameAndUserId(characterName, interaction.user.id);
-if (!character) {
-    return interaction.reply({
-        content: `❌ **Character "${characterName}" not found or doesn't belong to you.**`,
-        ephemeral: true,
-    });
-}
+        try {
+            const character = await fetchCharacterByNameAndUserId(characterName, interaction.user.id);
+            if (!character) {
+                return interaction.reply({
+                    content: `❌ **Character "${characterName}" not found or doesn't belong to you.**`,
+                    ephemeral: true,
+                });
+            }
 
-// Check if the character's inventory has been synced
-if (!character.inventorySynced) {
-    return interaction.reply({
-        content: `❌ **You cannot use the mount command because "${character.name}"'s inventory is not set up yet. Please use the </testinventorysetup:1306176790095728732> and then </syncinventory:1306176789894266898> commands to initialize the inventory.**`,
-        ephemeral: true,
-    });
-}
+            // Check if the character's inventory has been synced
+            if (!character.inventorySynced) {
+                return interaction.reply({
+                    content: `❌ **You cannot use the mount command because "${character.name}"'s inventory is not set up yet. Please use the </testinventorysetup:1306176790095728732> and then </syncinventory:1306176789894266898> commands to initialize the inventory.**`,
+                    ephemeral: true,
+                });
+            }
 
-        // Proceed with rolling logic for the character in the encounter
-        await proceedWithRoll(interaction, characterName, encounterId);
+            // Proceed with rolling logic for the character in the encounter
+            await proceedWithRoll(interaction, characterName, encounterId);
+        } catch (error) {
+            console.error('[mount.js]: ❌ Error fetching character or proceeding with roll:', error);
+            await interaction.reply({
+                content: '❌ **An error occurred while processing your request. Please try again later.**',
+                ephemeral: true,
+            });
+        }
     },
 
     // ------------------- Autocomplete handler for character name input -------------------
@@ -72,4 +81,3 @@ if (!character.inventorySynced) {
         }
     }
 };
-

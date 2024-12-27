@@ -21,54 +21,66 @@ const {
 
 // ------------------- Calculate encounter outcome -------------------
 // Determines the outcome of the battle based on character stats, monster stats, buffs, and dice rolls.
+// This logic is limited to tiers 1–4. KO is no longer possible for these tiers.
 const getEncounterOutcome = async (character, monster, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess) => {
   try {
-
-    const tier = monster.tier;
+    const tier = monster.tier; // Monster's tier determines damage and outcome
     let outcome;
 
-    // Outcome calculation logic with detailed logging
+    // ------------------- Outcome calculation based on adjustedRandomValue and tier -------------------
     if (adjustedRandomValue <= 25) {
-      outcome = tier === 1 ? { result: '1 HEART', hearts: 1, canLoot: false }
-              : tier === 2 ? { result: '2 HEARTS', hearts: 2, canLoot: false }
-              : { result: 'KO', hearts: character.currentHearts, canLoot: false };
+      // High damage range
+      outcome = {
+        result: `${tier} HEART(S)`, // Tiers 1-4 directly correlate to damage hearts
+        hearts: tier,
+        canLoot: false,
+      };
     } else if (adjustedRandomValue <= 50) {
-      outcome = tier === 1 ? { result: 'Win!/Loot', canLoot: true, hearts: 0 }
-              : tier === 2 ? { result: '1 HEART', hearts: 1, canLoot: false }
-              : tier === 3 ? { result: '2 HEARTS', hearts: 2, canLoot: false }
-              : { result: '3 HEARTS', hearts: 3, canLoot: false };
+      // Medium damage or loot
+      outcome =
+        tier === 1
+          ? { result: 'Win!/Loot', canLoot: true, hearts: 0 }
+          : { result: `${tier - 1} HEART(S)`, hearts: tier - 1, canLoot: false };
     } else if (adjustedRandomValue <= 75) {
-      outcome = (tier === 1 || tier === 2) ? { result: 'Win!/Loot', canLoot: true, hearts: 0 }
-              : tier === 3 ? { result: '1 HEART', hearts: 1, canLoot: false }
-              : { result: '2 HEARTS', hearts: 2, canLoot: false };
+      // Low damage or loot
+      outcome =
+        tier <= 2
+          ? { result: 'Win!/Loot', canLoot: true, hearts: 0 }
+          : { result: `${tier - 2} HEART(S)`, hearts: tier - 2, canLoot: false };
     } else if (adjustedRandomValue <= 89) {
-      outcome = (tier <= 3) ? { result: 'Win!/Loot', canLoot: true, hearts: 0 }
-              : { result: '1 HEART', hearts: 1, canLoot: false };
+      // Mostly loot for lower tiers
+      outcome = {
+        result: 'Win!/Loot',
+        canLoot: true,
+        hearts: 0,
+      };
     } else {
+      // Guaranteed loot
       outcome = { result: 'Win!/Loot', canLoot: true, hearts: 0 };
     }
 
-    if (outcome.hearts) {
-      await useHearts(character._id, outcome.hearts);
-      if (outcome.result === 'KO') {
-        console.log('[DAMAGE DEBUG] KO Detected. Handling...');
-        await handleKO(character._id);
-      }
+    // ------------------- Handle heart usage -------------------
+    if (outcome.hearts > 0) {
+      await useHearts(character._id, outcome.hearts); // Deduct hearts from the character
     }
 
-    return { ...outcome, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess };
-  }  catch (error) {
+    // ------------------- Return complete encounter outcome -------------------
+    return {
+      ...outcome,
+      damageValue,
+      adjustedRandomValue,
+      attackSuccess,
+      defenseSuccess,
+    };
+  } catch (error) {
     console.error('[DAMAGE ERROR] Encounter Outcome Calculation Failed:', error);
     throw error;
   }
 };
 
-
-
 // ------------------- Process Battle Logic -------------------
 // Manages the battle logic by calculating buffs, updating battle progress, and determining the outcome.
 async function processBattle(character, monster, battleId, originalRoll, interaction) {
-  
   // Fetch the current battle progress
   const battleProgress = await getBattleProgressById(battleId);
   if (!battleProgress) {
@@ -78,33 +90,49 @@ async function processBattle(character, monster, battleId, originalRoll, interac
 
   try {
     // Calculate attack and defense buffs
-    const attackSuccess = calculateAttackBuff(character);  // Calculate attack buff
-    const defenseSuccess = calculateDefenseBuff(character);  // Calculate defense buff
-    const adjustedRandomValue = applyBuffs(originalRoll, attackSuccess, defenseSuccess, character.attack, character.defense);
+    const attackSuccess = calculateAttackBuff(character); // Calculate attack buff
+    const defenseSuccess = calculateDefenseBuff(character); // Calculate defense buff
+    const adjustedRandomValue = applyBuffs(
+      originalRoll,
+      attackSuccess,
+      defenseSuccess,
+      character.attack,
+      character.defense
+    );
 
     // Determine the outcome based on the monster's tier
     let outcome;
-    switch (monster.tier) {
-      case 5:
-        outcome = await getTier5EncounterOutcome(character, monster, character.attack, adjustedRandomValue, attackSuccess, defenseSuccess);
-        break;
-      case 6:
-        outcome = await getTier6EncounterOutcome(character, monster, character.attack, adjustedRandomValue, attackSuccess, defenseSuccess);
-        break;
-      case 7:
-        outcome = await getTier7EncounterOutcome(character, monster, character.attack, adjustedRandomValue, attackSuccess, defenseSuccess);
-        break;
-      case 8:
-        outcome = await getTier8EncounterOutcome(character, monster, character.attack, adjustedRandomValue, attackSuccess, defenseSuccess);
-        break;
-      case 9:
-        outcome = await getTier9EncounterOutcome(character, monster, character.attack, adjustedRandomValue, attackSuccess, defenseSuccess);
-        break;
-      case 10:
-        outcome = await getTier10EncounterOutcome(character, monster, character.attack, adjustedRandomValue, attackSuccess, defenseSuccess);
-        break;
-      default:
-        throw new Error(`Unsupported monster tier: ${monster.tier}`);
+    if (monster.tier <= 4) {
+      // Use existing encounter outcome logic for tiers 1–4
+      outcome = await getEncounterOutcome(character, monster, character.attack, adjustedRandomValue, attackSuccess, defenseSuccess);
+    } else {
+      // Use specific high-tier encounter logic for tiers 5–10
+      switch (monster.tier) {
+        case 5:
+          outcome = await getTier5EncounterOutcome(character, monster, character.attack, adjustedRandomValue, attackSuccess, defenseSuccess);
+          break;
+        case 6:
+          outcome = await getTier6EncounterOutcome(character, monster, character.attack, adjustedRandomValue, attackSuccess, defenseSuccess);
+          break;
+        case 7:
+          outcome = await getTier7EncounterOutcome(character, monster, character.attack, adjustedRandomValue, attackSuccess, defenseSuccess);
+          break;
+        case 8:
+          outcome = await getTier8EncounterOutcome(character, monster, character.attack, adjustedRandomValue, attackSuccess, defenseSuccess);
+          break;
+        case 9:
+          outcome = await getTier9EncounterOutcome(character, monster, character.attack, adjustedRandomValue, attackSuccess, defenseSuccess);
+          break;
+        case 10:
+          outcome = await getTier10EncounterOutcome(character, monster, character.attack, adjustedRandomValue, attackSuccess, defenseSuccess);
+          if (outcome.result === 'KO') {
+            console.log('[DAMAGE DEBUG] KO Detected. Handling...');
+            await handleKO(character._id); // Handle character knockout for Tier 10
+          }
+          break;
+        default:
+          throw new Error(`Unsupported monster tier: ${monster.tier}`);
+      }
     }
 
     if (!outcome) {
@@ -118,8 +146,8 @@ async function processBattle(character, monster, battleId, originalRoll, interac
 
     return { ...outcome, originalRoll, adjustedRandomValue, attackSuccess, defenseSuccess };
   } catch (error) {
-    console.error('Error during battle processing:', error);  // Log any errors during processing
-    return null;  // Return null if any error occurs
+    console.error('Error during battle processing:', error); // Log any errors during processing
+    return null; // Return null if any error occurs
   }
 }
 

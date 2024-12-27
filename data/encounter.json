@@ -1,0 +1,53 @@
+{
+  "bcf3a3e0": {
+    "users": [
+      {
+        "characterName": "Alden",
+        "userId": "211219306137124865"
+      }
+    ],
+    "mountType": "Horse",
+    "rarity": "Regular",
+    "mountLevel": "High",
+    "mountStamina": 6,
+    "environment": "Plains",
+    "village": "Vhintl",
+    "actions": [],
+    "tameStatus": false,
+    "traits": {}
+  },
+  "b0537b76": {
+    "users": [
+      {
+        "characterName": "Alden",
+        "userId": "211219306137124865"
+      }
+    ],
+    "mountType": "Donkey",
+    "rarity": "Regular",
+    "mountLevel": "Basic",
+    "mountStamina": 2,
+    "environment": "Plains",
+    "village": "Rudania",
+    "actions": [],
+    "tameStatus": true,
+    "traits": {}
+  },
+  "a89b951d": {
+    "users": [
+      {
+        "characterName": "Alden",
+        "userId": "211219306137124865"
+      }
+    ],
+    "mountType": "Horse",
+    "rarity": "Regular",
+    "mountLevel": "Mid",
+    "mountStamina": 3,
+    "environment": "Tall grass",
+    "village": "Rudania",
+    "actions": [],
+    "tameStatus": false,
+    "traits": {}
+  }
+}

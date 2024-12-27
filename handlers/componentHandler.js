@@ -2,15 +2,21 @@
 // Handles button interactions, component interactions, and template commands
 
 // ------------------- Imports -------------------
-// Discord.js Imports
+
+// Standard Libraries
+const { v4: uuidv4 } = require('uuid');
+
+// Discord.js Components
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
 
-// Database Service Imports
+// Database Connections
 const { connectToTinglebot } = require('../database/connection');
+
+// Database Services
 const { fetchCharacterById, getCharactersInVillage } = require('../database/characterService');
 const { getUserById } = require('../database/userService');
 
-// Model Imports
+// Database Models
 const ItemModel = require('../models/ItemModel');
 
 // Embed and Command Imports
@@ -24,16 +30,23 @@ const {
     createButtonsRow,
 } = require('../commands/help');
 
-// Module Imports
+// Modules
 const { getGeneralJobsPage } = require('../modules/jobsModule');
 const { getVillageColorByName } = require('../modules/locationsModule');
+const { capitalizeFirstLetter, capitalizeWords } = require('../modules/formattingModule');
 
 // Handler Imports
 const { syncInventory } = require('../handlers/syncHandler');
-const {
-    handleTameInteraction,
-    handleMountComponentInteraction,
+const { 
+    handleTameInteraction, 
+    handleMountComponentInteraction, 
+    handleUseItemInteraction,
+    handleTraitPaymentInteraction,
+    handleTraitSelection,
+    handleMountNameSubmission,
+    handleRegisterMountModal
 } = require('./mountComponentHandler');
+const { handleModalSubmission } = require('./modalHandler');
 
 // Utility Imports
 const {
@@ -41,10 +54,22 @@ const {
     saveSubmissionToStorage,
     deleteSubmissionFromStorage,
 } = require('../utils/storage');
-const { capitalizeFirstLetter, capitalizeWords } = require('../modules/formattingModule');
 const { calculateTokens, generateTokenBreakdown } = require('../utils/tokenUtils');
 const { createArtSubmissionEmbed } = require('../embeds/mechanicEmbeds');
-const { canChangeJob,   canChangeVillage,   isUniqueCharacterName,   convertCmToFeetInches } = require('../utils/validation'); // Validation utilities
+const { canChangeJob, canChangeVillage, isUniqueCharacterName, convertCmToFeetInches } = require('../utils/validation'); // Validation utilities
+
+
+
+// Google Sheets API Imports
+const { 
+    appendSheetData, 
+    authorizeSheets, 
+    extractSpreadsheetId, 
+    fetchSheetData, 
+    getSheetIdByTitle, 
+    isValidGoogleSheetsUrl, 
+    readSheetData 
+} = require("../utils/googleSheetsUtils");
 
 // ------------------- Utility Button Rows -------------------
 function getCancelButtonRow() {
@@ -314,11 +339,10 @@ async function handleJobPage(interaction, characterId, pageIndexString) {
 
 // ------------------- Component Interaction Handler -------------------
 async function handleComponentInteraction(interaction) {
-    const [action, characterId] = interaction.customId.split('|');
+    const [action] = interaction.customId.split('|');
 
     if (
-        [
-            'sync-yes',
+        [   'sync-yes',
             'sync-no',
             'confirm',
             'cancel',
@@ -332,6 +356,17 @@ async function handleComponentInteraction(interaction) {
         await handleMountComponentInteraction(interaction);
     } else if (action === 'tame') {
         await handleTameInteraction(interaction);
+    } else if (action === 'use-item') {
+        await handleUseItemInteraction(interaction);
+    } else if (action === 'pay-traits') {
+        await handleTraitPaymentInteraction(interaction);
+    } else if (action === 'trait-select') {
+        await handleTraitSelection(interaction);
+    } else if (action === 'register-mount') {
+        await handleRegisterMountModal(interaction);
+    } else if (interaction.isModalSubmit()) {
+        console.info(`[componentHandler]: Redirecting modal interaction to modalHandler.`);
+        await handleModalSubmission(interaction); 
     } else {
         console.warn(`Unhandled component interaction: ${interaction.customId}`);
     }

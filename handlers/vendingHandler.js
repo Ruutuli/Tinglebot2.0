@@ -1158,7 +1158,7 @@ async function handleVendingSetup(interaction) {
         // Validate headers in the "vendingShop" tab
         const expectedHeaders = [
             'CHARACTER NAME', 'ITEM NAME', 'STOCK QTY', 'COST EACH', 'POINTS SPENT',
-            'BOUGHT FROM', 'TOKEN PRICE', 'ART PRICE', 'OTHER PRICE', 'TRADES OPEN?', 'DATE', 'CONFIRMED SYNC'
+            'BOUGHT FROM', 'TOKEN PRICE', 'ART PRICE', 'OTHER PRICE', 'TRADES OPEN?', 'DATE'
         ];
         const sheetData = await readSheetData(auth, spreadsheetId, 'vendingShop!A1:L1');
         if (!sheetData || !expectedHeaders.every(header => sheetData[0]?.includes(header))) {
@@ -1166,19 +1166,20 @@ async function handleVendingSetup(interaction) {
             return;
         }
 
-        // Determine pouch size based on type
+        // Define pouch sizes based on type
         const pouchSizes = {
-            bronze: 5,
-            silver: 10,
-            gold: 15,
-            none: 3
+            bronze: 15,
+            silver: 30,
+            gold: 50,
+            none: character.job.toLowerCase() === 'merchant' ? 3 : 5
         };
+
         const pouchSize = pouchSizes[pouch] || 3; // Default to 3 for "none"
 
         // Update character data
         await updateCharacterById(character._id, {
             shopLink,
-            vendingType: character.job,
+            vendingType: character.job, // Set vendorType to match the character's job
             shopPouch: pouch,
             pouchSize,
             vendingPoints: points,
@@ -1205,23 +1206,23 @@ async function checkEditorPermission(auth, spreadsheetId, email) {
     try {
         const sheets = google.sheets({ version: 'v4', auth });
 
-        // Log the file ID being checked
-        console.log(`[vendingHandler]: Checking access for file ID: ${spreadsheetId}`);
+        console.log(`[checkEditorPermission]: Checking access for spreadsheetId: ${spreadsheetId}`);
         
         // Attempt to fetch spreadsheet details
         const response = await sheets.spreadsheets.get({ spreadsheetId });
-        console.log(`[vendingHandler]: Spreadsheet access confirmed for file ID: ${spreadsheetId}`);
+        console.log(`[checkEditorPermission]: Access confirmed for spreadsheetId: ${spreadsheetId}`);
         return true; // If no error, access is confirmed
     } catch (error) {
-        console.error(`[vendingHandler]: Error checking access for file ID: ${spreadsheetId}`, {
-            fileId: spreadsheetId,
-            error: error.response?.data || error.message,
-        });
+        const errorDetails = error.response?.data || error.message;
+        console.error(`[checkEditorPermission]: Error for spreadsheetId: ${spreadsheetId}`, errorDetails);
+        
+        // Log specific error details for 404
+        if (error.response?.status === 404) {
+            console.error(`[checkEditorPermission]: Spreadsheet not found or inaccessible. Ensure the ID is correct and the bot's service account has permission.`);
+        }
         return false;
     }
 }
-
-
 
 // ------------------- Permission Error Embed -------------------
 const sendPermissionErrorEmbed = async (interaction, email, shopLink) => {
@@ -1272,7 +1273,7 @@ async function sendSetupInstructions(interaction, errorType, characterId, charac
                 '1. Open the `vendingShop` tab in your Google Sheets document.',
                 '2. Use this [Google Sheets Template](https://docs.google.com/spreadsheets/d/163UPIMTyHLLCei598sP5Ezonpgl2W-DaSxn8JBSRRSw/edit?gid=440335447#gid=440335447) for reference.',
                 '3. Ensure the following headers are present in Row 1 (Columns A-L):',
-                '   ```\n   CHARACTER NAME | ITEM NAME | STOCK QTY | COST EACH | POINTS SPENT |\n   BOUGHT FROM | TOKEN PRICE | ART PRICE | OTHER PRICE | TRADES OPEN? |\n   DATE | CONFIRMED SYNC\n   ```',
+                '   ```\n   CHARACTER NAME | ITEM NAME | STOCK QTY | COST EACH | POINTS SPENT |\n   BOUGHT FROM | TOKEN PRICE | ART PRICE | OTHER PRICE | TRADES OPEN? |\n   DATE ```',
                 '4. Ensure there are no typos (copy them exactly from the template).',
                 '5. Save your changes and try running the `/vending setup` command again.'
             ]

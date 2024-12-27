@@ -21,6 +21,8 @@ const {
 const { getCancelButtonRow } = require('./componentHandler');
 const { submissionStore } = require('../utils/storage');
 
+const { handleMountNameSubmission } = require('./mountComponentHandler');
+
 
 // ------------------- Modal Submission Handler -------------------
 // Handles the response after a modal is submitted
@@ -28,8 +30,17 @@ async function handleModalSubmission(interaction) {
   console.info(`[modalHandler]: Handling modal submission. CustomId=${interaction.customId}`);
   const customId = interaction.customId;
 
+  if (customId.startsWith('mount-name-modal')) {
+    console.info('[modalHandler]: Redirecting to handleMountNameSubmission.');
+    await handleMountNameSubmission(interaction); // Existing function in mountComponentHandler.js
+} else {
+    console.warn(`[modalHandler]: Unhandled modal submission. CustomId=${customId}`);
+}
+
+
+  
 // Handle the base count modal submission
-if (customId === 'baseCountModal') {
+ if (customId === 'baseCountModal') {
   const baseCount = parseInt(interaction.fields.getTextInputValue('baseCountInput'), 10) || 1;
 
 

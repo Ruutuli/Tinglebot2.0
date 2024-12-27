@@ -41,7 +41,7 @@ function storeEncounter(encounterId, encounterData) {
           encounterProgress = JSON.parse(fileData);
       }
 
-      // Ensure the users array includes both userId and characterName
+      // Ensure the encounter object includes all necessary fields
       encounterProgress[encounterId] = {
           users: encounterData.users || [], // Ensure users array with userId and characterName is included
           mountType: encounterData.mountType || 'Unknown',
@@ -51,18 +51,18 @@ function storeEncounter(encounterId, encounterData) {
           environment: encounterData.environment || 'Plains', // Default to 'Plains'
           village: encounterData.village || 'Unknown',
           actions: encounterData.actions || [],
-          tameStatus: encounterData.tameStatus || false // Default to false
+          tameStatus: encounterData.tameStatus || false, // Default to false
+          traits: encounterData.traits || {} // Include traits to store customization
       };
 
       // Write back to the file
       fs.writeFileSync(ENCOUNTER_PATH, JSON.stringify(encounterProgress, null, 2));
-      console.log(`Encounter ${encounterId} updated successfully!`);
+      console.log(`Encounter ${encounterId} updated successfully with traits:`, encounterProgress[encounterId].traits);
   } catch (error) {
       console.error('Error storing encounter:', error.message);
       throw new Error('Failed to store encounter data.');
   }
 }
-
 
 // ------------------- Retrieve encounter data by ID -------------------
 function getEncounterById(encounterId) {
@@ -312,25 +312,7 @@ const distractionItems = {
   'Raw Gourmet Meat': { type: 'distraction', bonus: 3, mounts: ['Wolfos', 'Bear', 'Dodongo'] },
 };
 
-const staminaRecoveryItems = {
-  'Roasted Endura Carrot': { type: 'stamina', recovery: 1 },
-  'Toasty Stamella Shroom': { type: 'stamina', recovery: 1 },
-  'Buttered Stambulb': { type: 'stamina', recovery: 1 },
-  'Cooked Stambulb': { type: 'stamina', recovery: 1 },
-  'Honeyed Fruits': { type: 'stamina', recovery: 1 },
-  'Honey Candy': { type: 'stamina', recovery: 2 },
-  'Akkala Buns': { type: 'stamina', recovery: 2 },
-  'Honeyed Apple': { type: 'stamina', recovery: 3 },
-  'Fragrant Seafood Stew': { type: 'stamina', recovery: 3 },
-  'Glazed Mushrooms': { type: 'stamina', recovery: 3 },
-  'Glazed Meat': { type: 'stamina', recovery: 3 },
-  'Glazed Seafood': { type: 'stamina', recovery: 3 },
-  'Glazed Veggies': { type: 'stamina', recovery: 4 },
-  'Honey Crepe': { type: 'stamina', recovery: 6 },
-
-  // Elixirs
-  'Enduring Elixir': { type: 'stamina', recovery: 4 },
-  'Energizing Elixir': { type: 'stamina', recovery: 7 },
+const boostingItems = {
   'Hasty Elixir': { type: 'buff', bonus: 3, action: 'rush' },
   'Sneaky Elixir': { type: 'buff', bonus: 3, action: 'sneak' },
 };
@@ -354,14 +336,652 @@ function useDistractionItem(itemName, mountType) {
 }
 
 // ------------------- Use Item for Stamina Recovery -------------------
-function useStaminaItem(itemName) {
-  const item = staminaRecoveryItems[itemName];
+function useBoostingItems(itemName) {
+  const item = boostingItems[itemName];
 
-  if (item && item.type === 'stamina') {
+  if (item && item.type === 'stamina') { // edit this later 
     return item.recovery; // Return the stamina recovery value
   }
 
   return 0; // No stamina recovery if item is invalid
+}
+
+// ------------------- Horse Trait Options -------------------
+const horseTraits = {
+  coatMane: {
+    roll: [1, 24],
+    traits: {
+      1: 'Black Coat + Black Mane',
+      2: 'Black Coat + White Mane',
+      3: 'Black Coat + Grey Mane',
+      4: 'Grey Coat + Black Mane',
+      5: 'Grey Coat + White Mane',
+      6: 'Grey Coat + Grey Mane',
+      7: 'Red Coat + Black Mane',
+      8: 'Red Coat + White Mane',
+      9: 'Red Coat + Red Mane',
+      10: 'Brown Coat + Black Mane',
+      11: 'Brown Coat + White Mane',
+      12: 'Brown Coat + Brown Mane',
+      13: 'Light Brown Coat + Black Mane',
+      14: 'Light Brown Coat + White Mane',
+      15: 'Light Brown Coat + Brown Mane',
+      16: 'Teal Coat + Black Mane',
+      17: 'Teal Coat + White Mane',
+      18: 'Light Blue Coat + White Mane',
+      19: 'Light Blue Coat + Blue Mane',
+      20: 'Light Blue Coat + Blonde Mane',
+      21: 'Pink Coat + Blonde Mane',
+      22: 'Pink Coat + White Mane',
+      23: 'Buckskin Coat + Black Mane',
+      24: 'Buckskin Coat + White Mane',
+    },
+  },
+  coatPattern: {
+    roll: [1, 5],
+    traits: {
+      1: 'Solid',
+      2: 'Half and Half',
+      3: 'Some Spots',
+      4: 'Spotted Butt',
+      5: 'Full Spots (Dapple)',
+    },
+  },
+  snoutPattern: {
+    roll: [1, 5],
+    traits: {
+      1: 'Plain',
+      2: 'Star',
+      3: 'Stripe',
+      4: 'Blaze',
+      5: 'Snip',
+    },
+  },
+  eyeColor: {
+    roll: [1, 5],
+    traits: {
+      1: 'Brown',
+      2: 'Blue',
+      3: 'Green',
+      4: 'Grey',
+      5: 'Amber',
+    },
+  },
+  muzzleColor: {
+    roll: [1, 4],
+    traits: {
+      1: 'Pink and White',
+      2: 'Coat Color, Darker',
+      3: 'Black',
+      4: 'White',
+    },
+  },
+  hoofColor: {
+    roll: [1, 4],
+    traits: {
+      1: 'Light Brown',
+      2: 'Brown',
+      3: 'Grey',
+      4: 'Black',
+    },
+  },
+  ankleHairColor: {
+    roll: [1, 4],
+    traits: {
+      1: 'White',
+      2: 'Black',
+      3: 'Coat Color, Darker',
+      4: 'Coat Color, Lighter',
+    },
+  },
+  ankleHairStyle: {
+    roll: [1, 2],
+    traits: {
+      1: 'Short',
+      2: 'Fluffy',
+    },
+  },
+};
+
+// ------------------- Donkey Trait Options -------------------
+const donkeyTraits = {
+  coatColor: {
+    roll: [1, 7],
+    traits: {
+      1: 'Light Brown',
+      2: 'Brown',
+      3: 'Grey',
+      4: 'Red',
+      5: 'White and Grey',
+      6: 'Pink',
+      7: 'Teal',
+    },
+  },
+  coatStyle: {
+    roll: [1, 2],
+    traits: {
+      1: 'Regular',
+      2: 'Fluffy',
+    },
+  },
+  rareColors: {
+    roll: [1, 4], // Only used for rare donkeys
+    traits: {
+      1: 'Full White, Regular or Fluffy',
+      2: 'Black, Regular or Fluffy',
+      3: 'Piebald, Regular or Fluffy',
+      4: 'Golden, Regular or Fluffy',
+    },
+  },
+  coatPattern: {
+    roll: [1, 3],
+    traits: {
+      1: 'Solid',
+      2: 'Spotted',
+      3: 'Dun Stripe',
+    },
+  },
+};
+
+// ------------------- Ostrich Trait Options -------------------
+const ostrichTraits = {
+  commonColors: {
+    roll: [1, 6],
+    traits: {
+      1: 'Red and Yellow',
+      2: 'Black and Tan',
+      3: 'Brown',
+      4: 'Brown and Blue',
+      5: 'Black and Pink',
+      6: 'Full Black',
+    },
+  },
+  rareColors: {
+    roll: [1, 5], // Only used for rare ostriches
+    traits: {
+      1: 'Yellow',
+      2: 'Cassowary',
+      3: 'Full White',
+      4: 'Brown with Spots',
+      5: 'Golden (Metallic)',
+    },
+  },
+};
+
+// ------------------- Bullbo Trait Options -------------------
+const bullboTraits = {
+  commonColors: {
+    roll: [1, 6],
+    traits: {
+      1: 'Brown',
+      2: 'Tan',
+      3: 'Grey',
+      4: 'Black',
+      5: 'Red',
+      6: 'Olive',
+    },
+  },
+  rareColors: {
+    roll: [1, 5], // Only used for rare bullbos
+    traits: {
+      1: 'Full White',
+      2: 'Red and Black (Ganon)',
+      3: 'Light Blue',
+      4: 'Piebald',
+      5: 'Golden',
+    },
+  },
+};
+
+// ------------------- Dodongo Trait Options -------------------
+const dodongoTraits = {
+  commonColors: {
+    roll: [1, 10],
+    traits: {
+      1: 'Green',
+      2: 'Brown',
+      3: 'Yellow',
+      4: 'Grey',
+      5: 'Blue',
+      6: 'Black with Red Tail',
+      7: 'Grey and Green',
+      8: 'Blue and Yellow',
+      9: 'Black with Yellow Mouth',
+      10: 'Yellow and Red',
+    },
+  },
+  rareColors: {
+    roll: [1, 6], // Only used for rare dodongos
+    traits: {
+      1: 'Full Red',
+      2: 'Full White',
+      3: 'Full Black',
+      4: 'Full Pink (Kodongo)',
+      5: 'Grey and Red (Dongorongo)',
+      6: 'Golden',
+    },
+  },
+};
+
+// ------------------- Mountain Goat Trait Options -------------------
+const mountainGoatTraits = {
+  commonColors: {
+    roll: [1, 14],
+    traits: {
+      1: 'White and Light Brown',
+      2: 'Teal',
+      3: 'White with Spots',
+      4: 'Teal with Spots',
+      5: 'Tricolor',
+      6: 'Brown',
+      7: 'Brown and Black',
+      8: 'Grey',
+      9: 'Grey with Spots',
+      10: 'Brown with Spots',
+      11: 'Light Brown',
+      12: 'Light Brown with Spots',
+      13: 'Black',
+      14: 'Black and White',
+    },
+  },
+  rareColors: {
+    roll: [1, 6], // Only used for rare mountain goats
+    traits: {
+      1: 'Ordon Goat (Blue)',
+      2: 'Ordon Goat (White)',
+      3: 'Ordon Goat (Golden)',
+      4: 'Markhor Goat (White)',
+      5: 'Markhor Goat (Black)',
+      6: 'Full White',
+    },
+  },
+};
+
+// ------------------- Water Buffalo Trait Options -------------------
+const waterBuffaloTraits = {
+  commonColors: {
+    roll: [1, 6],
+    traits: {
+      1: 'Brown Male',
+      2: 'Brown Female',
+      3: 'Grey Male',
+      4: 'Grey Female',
+      5: 'Light Brown Male',
+      6: 'Light Brown Female',
+    },
+  },
+  rareColors: {
+    roll: [1, 5], // Only used for rare water buffalo
+    traits: {
+      1: 'Piebald (M or F)',
+      2: 'Full White (M or F)',
+      3: 'Black (M or F)',
+      4: 'Teal (M or F)',
+      5: 'Golden (M or F)',
+    },
+  },
+};
+
+// ------------------- Deer Trait Options -------------------
+const deerTraits = {
+  commonColors: {
+    roll: [1, 6],
+    traits: {
+      1: 'Brown Male',
+      2: 'Brown Female',
+      3: 'Red Male',
+      4: 'Red Female',
+      5: 'Brown with Spots Male',
+      6: 'Brown with Spots Female',
+    },
+  },
+  rareColors: {
+    roll: [1, 5], // Only used for rare deer
+    traits: {
+      1: 'Full White (M or F)',
+      2: 'White with Spots (M or F)',
+      3: 'Black (M or F)',
+      4: 'Piebald (M or F)',
+      5: 'Golden (M or F)',
+    },
+  },
+};
+
+// ------------------- Wolfos Trait Options -------------------
+const wolfosTraits = {
+  commonColors: {
+    roll: [1, 6],
+    traits: {
+      1: 'Grey',
+      2: 'White',
+      3: 'Blue',
+      4: 'Black',
+      5: 'Brown',
+      6: 'Red',
+    },
+  },
+  rareColors: {
+    roll: [1, 4], // Only used for rare wolfos
+    traits: {
+      1: 'Golden',
+      2: 'Olive',
+      3: 'Wosu (White with Darker Stripes)',
+      4: 'Frost (White with Icey Aura)',
+    },
+  },
+};
+
+// ------------------- Bear Trait Options -------------------
+const bearTraits = {
+  commonColors: {
+    roll: [1, 6],
+    traits: {
+      1: 'Full Black',
+      2: 'Brown with Honey Colored Snout',
+      3: 'Full Brown',
+      4: 'Black with Tan Snout',
+      5: 'Blonde',
+      6: 'Cinnamon',
+    },
+  },
+  rareColors: {
+    roll: [1, 5], // Only used for rare bears
+    traits: {
+      1: 'Light Blue',
+      2: 'Full White',
+      3: 'Piebald',
+      4: 'Grey (Glacier)',
+      5: 'Golden',
+    },
+  },
+
+};
+// ------------------- Moose Trait Options -------------------
+const mooseTraits = {
+  commonColors: {
+      roll: [1, 100], // Updated to reflect 100 total options
+      traits: {
+          1: 'Brown Male',
+          2: 'Brown Female',
+          3: 'Grey Male',
+          4: 'Grey Female',
+          5: 'Light Brown Male',
+          6: 'Light Brown Female',
+      },
+  },
+  rareColors: {
+      roll: [1, 5], // Only used for rare moose
+      traits: {
+          1: 'Piebald (M or F)',
+          2: 'Full White (M or F)',
+          3: 'Black (M or F)',
+          4: 'Teal (M or F)',
+          5: 'Golden (M or F)',
+      },
+  },
+};
+
+
+// ------------------- Generate Horse Traits -------------------
+function generateHorseTraits(isRare = false) {
+  const traits = {};
+
+  if (horseTraits.coatMane) {
+    const rollCoatMane = rollDie(horseTraits.coatMane.roll[1]);
+    console.log(`Horse coat mane roll: ${rollCoatMane}`);
+    traits.coatMane = horseTraits.coatMane.traits[rollCoatMane] || 'Undefined Coat Mane';
+  }
+
+  if (horseTraits.coatPattern) {
+    const rollCoatPattern = rollDie(horseTraits.coatPattern.roll[1]);
+    console.log(`Horse coat pattern roll: ${rollCoatPattern}`);
+    traits.coatPattern = horseTraits.coatPattern.traits[rollCoatPattern] || 'Undefined Coat Pattern';
+  }
+
+  if (horseTraits.snoutPattern) {
+    const rollSnoutPattern = rollDie(horseTraits.snoutPattern.roll[1]);
+    console.log(`Horse snout pattern roll: ${rollSnoutPattern}`);
+    traits.snoutPattern = horseTraits.snoutPattern.traits[rollSnoutPattern] || 'Undefined Snout Pattern';
+  }
+
+  if (horseTraits.eyeColor) {
+    const rollEyeColor = rollDie(horseTraits.eyeColor.roll[1]);
+    console.log(`Horse eye color roll: ${rollEyeColor}`);
+    traits.eyeColor = horseTraits.eyeColor.traits[rollEyeColor] || 'Undefined Eye Color';
+  }
+
+  if (horseTraits.muzzleColor) {
+    const rollMuzzleColor = rollDie(horseTraits.muzzleColor.roll[1]);
+    console.log(`Horse muzzle color roll: ${rollMuzzleColor}`);
+    traits.muzzleColor = horseTraits.muzzleColor.traits[rollMuzzleColor] || 'Undefined Muzzle Color';
+  }
+
+  if (horseTraits.hoofColor) {
+    const rollHoofColor = rollDie(horseTraits.hoofColor.roll[1]);
+    console.log(`Horse hoof color roll: ${rollHoofColor}`);
+    traits.hoofColor = horseTraits.hoofColor.traits[rollHoofColor] || 'Undefined Hoof Color';
+  }
+
+  if (horseTraits.ankleHairColor) {
+    const rollAnkleHairColor = rollDie(horseTraits.ankleHairColor.roll[1]);
+    console.log(`Horse ankle hair color roll: ${rollAnkleHairColor}`);
+    traits.ankleHairColor = horseTraits.ankleHairColor.traits[rollAnkleHairColor] || 'Undefined Ankle Hair Color';
+  }
+
+  if (horseTraits.ankleHairStyle) {
+    const rollAnkleHairStyle = rollDie(horseTraits.ankleHairStyle.roll[1]);
+    console.log(`Horse ankle hair style roll: ${rollAnkleHairStyle}`);
+    traits.ankleHairStyle = horseTraits.ankleHairStyle.traits[rollAnkleHairStyle] || 'Undefined Ankle Hair Style';
+  }
+
+  return traits;
+}
+
+// ------------------- Generate Donkey Traits -------------------
+function generateDonkeyTraits(isRare = false) {
+  const traits = {};
+
+  if (donkeyTraits.coatColor) {
+    const rollCoatColor = rollDie(donkeyTraits.coatColor.roll[1]);
+    console.log(`Donkey coat color roll: ${rollCoatColor}`);
+    traits.coatColor = donkeyTraits.coatColor.traits[rollCoatColor] || 'Undefined Coat Color';
+  }
+
+  if (donkeyTraits.coatStyle) {
+    const rollCoatStyle = rollDie(donkeyTraits.coatStyle.roll[1]);
+    console.log(`Donkey coat style roll: ${rollCoatStyle}`);
+    traits.coatStyle = donkeyTraits.coatStyle.traits[rollCoatStyle] || 'Undefined Coat Style';
+  }
+
+  if (donkeyTraits.coatPattern) {
+    const rollCoatPattern = rollDie(donkeyTraits.coatPattern.roll[1]);
+    console.log(`Donkey coat pattern roll: ${rollCoatPattern}`);
+    traits.coatPattern = donkeyTraits.coatPattern.traits[rollCoatPattern] || 'Undefined Coat Pattern';
+  }
+
+  if (isRare && donkeyTraits.rareColors) {
+    const rollRareColor = rollDie(donkeyTraits.rareColors.roll[1]);
+    console.log(`Donkey rare color roll: ${rollRareColor}`);
+    traits.rareColor = donkeyTraits.rareColors.traits[rollRareColor] || 'Undefined Rare Color';
+  }
+
+  return traits;
+}
+
+// ------------------- Generate Ostrich Traits -------------------
+function generateOstrichTraits(isRare = false) {
+  const traits = {};
+
+  if (ostrichTraits.commonColors) {
+    const rollCommonColor = rollDie(ostrichTraits.commonColors.roll[1]);
+    console.log(`Ostrich common color roll: ${rollCommonColor}`);
+    traits.commonColor = ostrichTraits.commonColors.traits[rollCommonColor] || 'Undefined Common Color';
+  }
+
+  if (isRare && ostrichTraits.rareColors) {
+    const rollRareColor = rollDie(ostrichTraits.rareColors.roll[1]);
+    console.log(`Ostrich rare color roll: ${rollRareColor}`);
+    traits.rareColor = ostrichTraits.rareColors.traits[rollRareColor] || 'Undefined Rare Color';
+  }
+
+  return traits;
+}
+
+// ------------------- Generate Bullbo Traits -------------------
+function generateBullboTraits(isRare = false) {
+  const traits = {};
+
+  if (bullboTraits.commonColors) {
+    const rollCommonColor = rollDie(bullboTraits.commonColors.roll[1]);
+    console.log(`Bullbo common color roll: ${rollCommonColor}`);
+    traits.commonColor = bullboTraits.commonColors.traits[rollCommonColor] || 'Undefined Common Color';
+  }
+
+  if (isRare && bullboTraits.rareColors) {
+    const rollRareColor = rollDie(bullboTraits.rareColors.roll[1]);
+    console.log(`Bullbo rare color roll: ${rollRareColor}`);
+    traits.rareColor = bullboTraits.rareColors.traits[rollRareColor] || 'Undefined Rare Color';
+  }
+
+  return traits;
+}
+
+// ------------------- Generate Dodongo Traits -------------------
+function generateDodongoTraits(isRare = false) {
+  const traits = {};
+
+  if (dodongoTraits.commonColors) {
+    const rollCommonColor = rollDie(dodongoTraits.commonColors.roll[1]);
+    console.log(`Dodongo common color roll: ${rollCommonColor}`);
+    traits.commonColor = dodongoTraits.commonColors.traits[rollCommonColor] || 'Undefined Common Color';
+  }
+
+  if (isRare && dodongoTraits.rareColors) {
+    const rollRareColor = rollDie(dodongoTraits.rareColors.roll[1]);
+    console.log(`Dodongo rare color roll: ${rollRareColor}`);
+    traits.rareColor = dodongoTraits.rareColors.traits[rollRareColor] || 'Undefined Rare Color';
+  }
+
+  return traits;
+}
+
+// ------------------- Generate Mountain Goat Traits -------------------
+function generateMountainGoatTraits(isRare = false) {
+  const traits = {};
+
+  if (mountainGoatTraits.commonColors) {
+    const rollCommonColor = rollDie(mountainGoatTraits.commonColors.roll[1]);
+    console.log(`Mountain Goat common color roll: ${rollCommonColor}`);
+    traits.commonColor = mountainGoatTraits.commonColors.traits[rollCommonColor] || 'Undefined Common Color';
+  }
+
+  if (isRare && mountainGoatTraits.rareColors) {
+    const rollRareColor = rollDie(mountainGoatTraits.rareColors.roll[1]);
+    console.log(`Mountain Goat rare color roll: ${rollRareColor}`);
+    traits.rareColor = mountainGoatTraits.rareColors.traits[rollRareColor] || 'Undefined Rare Color';
+  }
+
+  return traits;
+}
+
+// ------------------- Generate Water Buffalo Traits -------------------
+function generateWaterBuffaloTraits(isRare = false) {
+  const traits = {};
+
+  if (waterBuffaloTraits.commonColors) {
+    const rollCommonColor = rollDie(waterBuffaloTraits.commonColors.roll[1]);
+    console.log(`Water Buffalo common color roll: ${rollCommonColor}`);
+    traits.commonColor = waterBuffaloTraits.commonColors.traits[rollCommonColor] || 'Undefined Common Color';
+  }
+
+  if (isRare && waterBuffaloTraits.rareColors) {
+    const rollRareColor = rollDie(waterBuffaloTraits.rareColors.roll[1]);
+    console.log(`Water Buffalo rare color roll: ${rollRareColor}`);
+    traits.rareColor = waterBuffaloTraits.rareColors.traits[rollRareColor] || 'Undefined Rare Color';
+  }
+
+  return traits;
+}
+
+// ------------------- Generate Deer Traits -------------------
+function generateDeerTraits(isRare = false) {
+  const traits = {};
+
+  if (deerTraits.commonColors) {
+    const rollCommonColor = rollDie(deerTraits.commonColors.roll[1]);
+    console.log(`Deer common color roll: ${rollCommonColor}`);
+    traits.commonColor = deerTraits.commonColors.traits[rollCommonColor] || 'Undefined Common Color';
+  }
+
+  if (isRare && deerTraits.rareColors) {
+    const rollRareColor = rollDie(deerTraits.rareColors.roll[1]);
+    console.log(`Deer rare color roll: ${rollRareColor}`);
+    traits.rareColor = deerTraits.rareColors.traits[rollRareColor] || 'Undefined Rare Color';
+  }
+
+  return traits;
+}
+
+// ------------------- Generate Wolfos Traits -------------------
+function generateWolfosTraits(isRare = false) {
+  const traits = {};
+
+  if (wolfosTraits.commonColors) {
+    const rollCommonColor = rollDie(wolfosTraits.commonColors.roll[1]);
+    console.log(`Wolfos common color roll: ${rollCommonColor}`);
+    traits.commonColor = wolfosTraits.commonColors.traits[rollCommonColor] || 'Undefined Common Color';
+  }
+
+  if (isRare && wolfosTraits.rareColors) {
+    const rollRareColor = rollDie(wolfosTraits.rareColors.roll[1]);
+    console.log(`Wolfos rare color roll: ${rollRareColor}`);
+    traits.rareColor = wolfosTraits.rareColors.traits[rollRareColor] || 'Undefined Rare Color';
+  }
+
+  return traits;
+}
+
+// ------------------- Generate Bear Traits -------------------
+function generateBearTraits(isRare = false) {
+  const traits = {};
+
+  if (bearTraits.commonColors) {
+    const rollCommonColor = rollDie(bearTraits.commonColors.roll[1]);
+    console.log(`Bear common color roll: ${rollCommonColor}`);
+    traits.commonColor = bearTraits.commonColors.traits[rollCommonColor] || 'Undefined Common Color';
+  }
+
+  if (isRare && bearTraits.rareColors) {
+    const rollRareColor = rollDie(bearTraits.rareColors.roll[1]);
+    console.log(`Bear rare color roll: ${rollRareColor}`);
+    traits.rareColor = bearTraits.rareColors.traits[rollRareColor] || 'Undefined Rare Color';
+  }
+
+  return traits;
+}
+
+// ------------------- Generate Moose Traits -------------------
+function generateMooseTraits(isRare = false) {
+  const traits = {};
+
+  if (mooseTraits.commonColors) {
+      const rollCommonColor = rollDie(mooseTraits.commonColors.roll[1]);
+      console.log(`Moose common color roll: ${rollCommonColor}`);
+      traits.commonColor = mooseTraits.commonColors.traits[rollCommonColor] || 'Undefined Common Color';
+  }
+
+  if (isRare && mooseTraits.rareColors) {
+      const rollRareColor = rollDie(mooseTraits.rareColors.roll[1]);
+      console.log(`Moose rare color roll: ${rollRareColor}`);
+      traits.rareColor = mooseTraits.rareColors.traits[rollRareColor] || 'Undefined Rare Color';
+  }
+
+  return traits;
+}
+
+// ------------------- Roll a Die -------------------
+function rollDie(sides) {
+  return Math.max(1, Math.min(Math.floor(Math.random() * sides) + 1, sides));
 }
 
 // ------------------- Exports -------------------
@@ -383,6 +1003,29 @@ module.exports = {
   getRandomLevel,
   deleteEncounterById,
   useDistractionItem,
-  useStaminaItem,
-  distractionItems,
+  useBoostingItems,
+  generateHorseTraits,
+  generateDonkeyTraits,
+  generateOstrichTraits,
+  generateBullboTraits,
+  generateDodongoTraits,
+  generateMountainGoatTraits,
+  generateWaterBuffaloTraits,
+  generateDeerTraits,
+  generateWolfosTraits,
+  generateBearTraits,
+  horseTraits,
+  donkeyTraits,
+  ostrichTraits,
+  bullboTraits,
+  dodongoTraits,
+  mountainGoatTraits,
+  waterBuffaloTraits,
+  deerTraits,
+  wolfosTraits,
+  bearTraits,
+  mooseTraits,
+  generateMooseTraits,
+  generateMountainGoatTraits,
+  mountainGoatTraits
 };
