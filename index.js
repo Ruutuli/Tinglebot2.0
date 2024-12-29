@@ -118,15 +118,12 @@ async function initializeClient() {
 // ------------------- Interaction Handlers -------------------
 client.on('interactionCreate', async interaction => {
   try {
-      console.info(`[index.js]: Interaction created. Type=${interaction.type}, CustomId=${interaction.customId || 'N/A'}`);
-
       const allowedChannels = [
           '1305487405985431583', // Path of Scarlet Leaves
           '1305487571228557322'  // Leaf Dew Way
       ];
 
       if (interaction.isCommand()) {
-          console.info(`[index.js]: Command interaction detected. CommandName=${interaction.commandName}`);
           // Check if the command is in an allowed channel
           if (allowedChannels.includes(interaction.channelId) && interaction.commandName !== 'travel') {
               console.warn(`[index.js]: Command '${interaction.commandName}' not allowed in channel ${interaction.channelId}.`);
@@ -153,13 +150,10 @@ client.on('interactionCreate', async interaction => {
               await handleComponentInteraction(interaction);
           }
       } else if (interaction.isStringSelectMenu()) {
-          console.info(`[index.js]: Dropdown interaction detected. CustomId=${interaction.customId}`);
           await handleSelectMenuInteraction(interaction);
       } else if (interaction.isAutocomplete()) {
-          console.info(`[index.js]: Autocomplete interaction detected.`);
           await handleAutocomplete(interaction);
       } else if (interaction.isModalSubmit()) {
-          console.info(`[index.js]: Modal submission detected. CustomId=${interaction.customId}`);
           const { handleModalSubmission } = require('./handlers/modalHandler');
           await handleModalSubmission(interaction);
       } else {

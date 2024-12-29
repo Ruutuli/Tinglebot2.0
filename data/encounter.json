@@ -1,53 +1,44 @@
 {
-  "bcf3a3e0": {
+  "c848555e": {
     "users": [
       {
-        "characterName": "Alden",
-        "userId": "211219306137124865"
+        "characterName": "Sable",
+        "userId": "308795936530759680"
       }
     ],
-    "mountType": "Horse",
+    "mountType": "Dodongo",
     "rarity": "Regular",
     "mountLevel": "High",
-    "mountStamina": 6,
-    "environment": "Plains",
-    "village": "Vhintl",
+    "mountStamina": 5,
+    "environment": "Tall grass",
+    "village": "Rudania",
     "actions": [],
-    "tameStatus": false,
-    "traits": {}
+    "tameStatus": true,
+    "traits": {
+      "commonColors": "Grey and Green"
+    },
+    "totalSpent": 0
   },
-  "b0537b76": {
+  "1add522b": {
     "users": [
       {
-        "characterName": "Alden",
-        "userId": "211219306137124865"
+        "characterName": "Thyme",
+        "userId": "207945864918990849"
       }
     ],
     "mountType": "Donkey",
     "rarity": "Regular",
-    "mountLevel": "Basic",
-    "mountStamina": 2,
-    "environment": "Plains",
-    "village": "Rudania",
+    "mountLevel": "Mid",
+    "mountStamina": 4,
+    "environment": "Mountainous",
+    "village": "Inariko",
     "actions": [],
     "tameStatus": true,
-    "traits": {}
-  },
-  "a89b951d": {
-    "users": [
-      {
-        "characterName": "Alden",
-        "userId": "211219306137124865"
-      }
-    ],
-    "mountType": "Horse",
-    "rarity": "Regular",
-    "mountLevel": "Mid",
-    "mountStamina": 3,
-    "environment": "Tall grass",
-    "village": "Rudania",
-    "actions": [],
-    "tameStatus": false,
-    "traits": {}
+    "traits": {
+      "coatColor": "White and Grey",
+      "coatStyle": "Fluffy",
+      "coatPattern": "Solid"
+    },
+    "totalSpent": 80
   }
 }

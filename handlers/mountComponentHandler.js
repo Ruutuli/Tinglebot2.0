@@ -1,24 +1,53 @@
 // ------------------- Imports -------------------
 
-// Discord.js Components
-const { StringSelectMenuBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
-
-// Database Services
-const { fetchCharacterByName, fetchCharacterByNameAndUserId, getCharacterInventoryCollection } = require('../database/characterService');
-const Mount = require('../models/MountModel');
-const Character = require('../models/CharacterModel');
-
-// Modules
+// ------------------- Discord.js Components -------------------
 const { 
+    ActionRowBuilder, 
+    ButtonBuilder, 
+    ButtonStyle, 
+    ModalBuilder, 
+    StringSelectMenuBuilder, 
+    TextInputBuilder, 
+    TextInputStyle,
+    EmbedBuilder
+} = require('discord.js');
+const { v4: uuidv4 } = require('uuid');
+
+// ------------------- Database Services -------------------
+const { 
+    fetchCharacterByName, 
+    fetchCharacterByNameAndUserId, 
+    getCharacterInventoryCollection,  
+} = require('../database/characterService');
+const {
+    addItemInventoryDatabase,
+    removeItemInventoryDatabase,
+  } = require('../utils/inventoryUtils');
+const { updateTokenBalance, getOrCreateToken  } = require('../database/tokenService');
+
+// ------------------- Database Models -------------------
+const Character = require('../models/CharacterModel');
+const Mount = require('../models/MountModel');
+const User = require('../models/UserModel')
+
+// ------------------- Modules -------------------
+const { 
+    customizationCosts,
+    bearTraits, 
+    bullboTraits, 
+    deerTraits, 
     deleteEncounterById, 
     distractionItems, 
+    dodongoTraits, 
+    donkeyTraits, 
     generateBearTraits, 
     generateBullboTraits, 
     generateDeerTraits, 
-    generateDonkeyTraits, 
     generateDodongoTraits, 
-    generateMountainGoatTraits, 
+    generateDonkeyTraits, 
+    generateHorseTraits, 
     generateMooseTraits, 
+    generateMountainGoatTraits, 
     generateOstrichTraits, 
     generateWaterBuffaloTraits, 
     generateWolfosTraits, 
@@ -31,21 +60,27 @@ const {
     getRandomMount, 
     horseTraits, 
     mooseTraits, 
+    mountainGoatTraits, 
     ostrichTraits, 
     storeEncounter, 
     useDistractionItem, 
     waterBuffaloTraits, 
-    wolfosTraits, 
-    bearTraits, 
-    bullboTraits, 
-    deerTraits, 
-    donkeyTraits, 
-    dodongoTraits, 
-    mountainGoatTraits 
+    wolfosTraits 
 } = require('../modules/mountModule');
+const { 
+    checkAndUseStamina, 
+    useStamina 
+} = require('../modules/characterStatsModule');
 
-// Utility Imports
-const { useStamina, checkAndUseStamina } = require('../modules/characterStatsModule');
+// ------------------- Utility Functions -------------------
+const { 
+    appendSheetData, 
+    authorizeSheets, 
+    extractSpreadsheetId, 
+    isValidGoogleSheetsUrl 
+} = require('../utils/googleSheetsUtils');
+
+// --------------------------------------------------------------
 
 // Import the village emojis
 const villageEmojis = {
@@ -88,7 +123,7 @@ function formatEncounterData(encounter, characterName, characterStamina, charact
                 inline: false,
             },
         ],
-        color: 0x00FF00,
+        color: 0xAA926A ,
         image: {
             url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png',
         },
@@ -173,7 +208,7 @@ async function proceedWithRoll(interaction, characterName, encounterId) {
         return;
     }
 
-    const roll = 20 //Math.floor(Math.random() * 20) + 1; // Set roll to 20 for testing (use Math.random for real rolls)
+    const roll = 20; //Math.floor(Math.random() * 20) + 1; // Set roll to 20 for testing (use Math.random for real rolls)
     const encounter = getEncounterById(encounterId);
 
     if (!encounter) {
@@ -290,6 +325,120 @@ async function handleMountComponentInteraction(interaction) {
             return;
         }
 
+        if (action === 'distract') {
+            try {
+                // Ensure distractionItems is valid
+                if (!distractionItems || typeof distractionItems !== 'object') {
+                    console.error('[handleMountComponentInteraction]: distractionItems is undefined or not an object.');
+                    await interaction.editReply({
+                        embeds: [{
+                            title: '❌ Error',
+                            description: 'Distraction items data is not available. Please try again later.',
+                            color: 0xFF0000,
+                        }],
+                        components: [],
+                        ephemeral: true
+                    });
+                    return;
+                }
+        
+                // Fetch the character's inventory
+                const inventoryCollection = await getCharacterInventoryCollection(character.name);
+                const inventoryItems = await inventoryCollection.find({}, { projection: { itemName: 1, quantity: 1, _id: 1 } }).toArray();
+        
+                // Normalize item names for comparison
+                const normalizedDistractionItems = Object.keys(distractionItems).reduce((acc, key) => {
+                    acc[key.toLowerCase().trim()] = distractionItems[key];
+                    return acc;
+                }, {});
+        
+                // Filter items matching distraction items and applicable for the current mount type
+                const mountType = encounter.mountType;
+                const availableItems = inventoryItems.filter(item => {
+                    if (!item.itemName) {
+                        console.warn('[handleMountComponentInteraction]: Item with no name found in inventory:', item);
+                        return false;
+                    }
+                    const normalizedItemName = item.itemName.toLowerCase().trim();
+                    const distractionItem = normalizedDistractionItems[normalizedItemName];
+        
+                    // Check if the item is valid for all mounts or specific to the current mountType
+                    return distractionItem && (distractionItem.forAllMounts || distractionItem.mounts?.includes(mountType));
+                });
+        
+                // Deduplicate items by name and sum their quantities
+                const deduplicatedItems = availableItems.reduce((acc, item) => {
+                    const normalizedItemName = item.itemName.toLowerCase().trim();
+                    if (!acc[normalizedItemName]) {
+                        acc[normalizedItemName] = { ...item, quantity: parseInt(item.quantity, 10) };
+                    } else {
+                        acc[normalizedItemName].quantity += parseInt(item.quantity, 10);
+                    }
+                    return acc;
+                }, {});
+        
+                // Convert deduplicated items back to an array
+                const uniqueItems = Object.values(deduplicatedItems);
+        
+                if (uniqueItems.length === 0) {
+                    await interaction.editReply({
+                        embeds: [{
+                            title: '❌ No Distraction Items Available',
+                            description: `You do not have any items in your inventory that can distract a **${mountType}**. Try a different strategy!`,
+                            color: 0xFF0000,
+                            thumbnail: { url: getMountThumbnail(encounter.mountType) },
+                            image: { url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png' },
+                        }],
+                        components: [],
+                        ephemeral: false
+                    });
+                    return;
+                }
+        
+                // Create unique buttons for distraction items
+                const distractionButtons = uniqueItems.map(item =>
+                    new ButtonBuilder()
+                        .setCustomId(`use-item|${item.itemName}|${encounterId}`) // Use encounterId here
+                        .setLabel(`${item.itemName} (${item.quantity})`)
+                        .setStyle(ButtonStyle.Primary)
+                );
+        
+                const actionRows = createActionRows(distractionButtons);
+        
+                // Log generated buttons for debugging
+                console.log('[handleMountComponentInteraction]: Generated distraction buttons:', distractionButtons);
+        
+                // Remove action buttons after distract interaction
+                await interaction.message.edit({
+                    components: [], // Remove distract action buttons
+                });
+        
+                await interaction.editReply({
+                    embeds: [{
+                        title: `🎯 Distract Attempt`,
+                        description: `🛠️ Choose an item from your inventory to distract the **${mountType}**.`,
+                        color: 0xAA926A ,
+                        thumbnail: { url: getMountThumbnail(encounter.mountType) },
+                        image: { url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png' },
+                    }],
+                    components: actionRows,
+                    ephemeral: false,
+                });
+            } catch (error) {
+                console.error('[handleMountComponentInteraction]: Error while filtering distraction items:', error);
+                await interaction.editReply({
+                    embeds: [{
+                        title: '❌ Error',
+                        description: 'An error occurred while processing distraction items. Please try again later.',
+                        color: 0xFF0000,
+                    }],
+                    components: [],
+                    ephemeral: true,
+                });
+            }
+            return; // Prevent further processing until a button is clicked
+        }        
+         
         const staminaResult = await useStamina(character._id, 1);
         if (staminaResult.exhausted) {
             deleteEncounterById(encounterId);
@@ -304,7 +453,7 @@ async function handleMountComponentInteraction(interaction) {
                 components: []
             });
             return;
-        }
+        }       
 
         const roll = Math.floor(Math.random() * 20) + 1;
         let adjustedRoll = roll;
@@ -325,10 +474,8 @@ async function handleMountComponentInteraction(interaction) {
 
         // Determine success based on roll
         if (action === 'sneak' && adjustedRoll >= 5) success = true;
-        if (action === 'distract' && adjustedRoll >= 7) success = true;
         if (action === 'corner' && adjustedRoll >= 7) success = true;
         if (action === 'rush' && adjustedRoll >= 17) success = true;
-        if (action === 'glide' && adjustedRoll >= 17) success = true;
 
         let message = `**${character.name}** tried a **${action}** strategy and rolled a **${roll}**.`;
         if (bonusMessage) message += ` ${bonusMessage} applied, adjusted roll is **${adjustedRoll}**.`;
@@ -347,7 +494,7 @@ async function handleMountComponentInteraction(interaction) {
                 embeds: [{
                     title: `${getMountEmoji(encounter.mountType)} ${action.charAt(0).toUpperCase() + action.slice(1)} Attempt!`,
                     description: message,
-                    color: 0x00FF00,
+                    color: 0xAA926A ,
                     author: { name: character.name, icon_url: character.icon },
                     thumbnail: { url: getMountThumbnail(encounter.mountType) },
                     image: { url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png' }
@@ -383,7 +530,7 @@ async function handleMountComponentInteraction(interaction) {
         }
     }
 }
-  
+
 // ------------------- Handle Tame Interaction -------------------
 // Handles the taming attempt by rolling for successes and applying stamina costs.
 async function handleTameInteraction(interaction) {
@@ -481,38 +628,54 @@ async function handleTameInteraction(interaction) {
         );
 
         // Check for success
-        if (nat20) {
-            message += `🎉 **Natural 20! Automatic Success!** ${characterName} has successfully tamed the mount! 🐴\n\n`;
-        } else if (successes >= mountStamina) {
+        if (nat20 || successes >= mountStamina) {
             message += `🎉 **Success!** ${characterName} has successfully tamed the mount! 🐴\n\n`;
+
+            // Add mount details
+            const mountDetails = `**Mount Details**\n` +
+                `> **Mount Species**: ${encounter.mountType}\n` +
+                `> **Rarity**: It's a **${encounter.rarity}** mount!\n` +
+                `> **Mount Level**: ${encounter.mountLevel}\n` +
+                `> **Mount Stamina**: ${encounter.mountStamina}\n`;
+            message += mountDetails;
+
+            message += `\nWould you like to customize any traits of the mount?`;
+
+            // Update encounter tame status
+            encounter.tameStatus = true;
+            storeEncounter(encounterId, encounter);
+
+            // **Edit: Disable the "Tame the Mount" button**
+            await interaction.message.edit({
+                components: [], // Clear buttons to disable further taming attempts
+            });
+
+            await interaction.editReply({
+                embeds: [{
+                    title: `${getMountEmoji(encounter.mountType)} Tamed ${encounter.mountType} Successfully!`,
+                    description: message,
+                    color: 0xAA926A ,
+                    author: { name: character.name, icon_url: character.icon },
+                    thumbnail: { url: getMountThumbnail(encounter.mountType) },
+                    image: { url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png' }
+                }],
+                components: [actionRow],
+                ephemeral: false
+            });
+        } else {
+            message += `🚫 **Failed!** The mount escaped. Try again if you have enough stamina.`;
+
+            // Provide retry instructions
+            await interaction.editReply({
+                embeds: [{
+                    title: `${getMountEmoji(encounter.mountType)} Tame Attempt Failed`,
+                    description: message,
+                    color: 0xFF0000,
+                    author: { name: character.name, icon_url: character.icon },
+                }],
+                ephemeral: false
+            });
         }
-
-        // Add mount details
-        const mountDetails = `**Mount Details**\n` +
-            `> **Mount Species**: ${encounter.mountType}\n` +
-            `> **Rarity**: It's a **${encounter.rarity}** mount!\n` +
-            `> **Mount Level**: ${encounter.mountLevel}\n` +
-            `> **Mount Stamina**: ${encounter.mountStamina}\n`;
-        message += mountDetails;
-
-        message += `\nWould you like to customize any traits of the mount?`;
-
-        // Update encounter tame status
-        encounter.tameStatus = true;
-        storeEncounter(encounterId, encounter);
-
-        await interaction.editReply({
-            embeds: [{
-                title: `${getMountEmoji(encounter.mountType)} Tamed ${encounter.mountType} Successfully!`,
-                description: message,
-                color: 0x00FF00,
-                author: { name: character.name, icon_url: character.icon },
-                thumbnail: { url: getMountThumbnail(encounter.mountType) },
-                image: { url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png' }
-            }],
-            components: [actionRow],
-            ephemeral: false
-        });
     } catch (error) {
         console.error('[handleTameInteraction]: Error handling tame interaction:', error);
         if (!interaction.replied && !interaction.deferred) {
@@ -533,7 +696,13 @@ async function handleUseItemInteraction(interaction) {
     try {
         // Parse the interaction ID to extract item name and encounter ID
         const [_, itemName, encounterId] = interaction.customId.split('|');
+
+        console.log(`[handleUseItemInteraction]: Parsed encounterId: ${encounterId}, itemName: ${itemName}`);
+
+        // Retrieve the encounter by ID
         const encounter = getEncounterById(encounterId);
+
+        console.log(`[handleUseItemInteraction]: Retrieved encounter:`, encounter);
 
         // Ensure the interaction is deferred publicly for processing
         if (!interaction.deferred && !interaction.replied) {
@@ -542,11 +711,12 @@ async function handleUseItemInteraction(interaction) {
 
         // Check if the encounter exists
         if (!encounter) {
+            console.error(`[handleUseItemInteraction]: Encounter not found for ID: ${encounterId}`);
             await interaction.editReply({
-                embeds: [{ 
-                    title: '❌ Encounter Not Found', 
-                    description: 'Please try again.', 
-                    color: 0xFF0000 
+                embeds: [{
+                    title: '❌ Encounter Not Found',
+                    description: 'Please try again.',
+                    color: 0xFF0000,
                 }],
                 ephemeral: false,
             });
@@ -562,10 +732,39 @@ async function handleUseItemInteraction(interaction) {
             await interaction.editReply({
                 embeds: [{
                     title: '❌ Invalid Item',
-                    description: 'This item cannot be used to distract the current mount.',
+                    description: `The item **${itemName}** cannot be used to distract the current mount.`,
                     color: 0xFF0000,
                 }],
+                components: [],
                 ephemeral: false,
+            });
+            return;
+        }
+
+        // Retrieve the character information
+        const userInEncounter = encounter.users.find(user => user.userId === interaction.user.id);
+        if (!userInEncounter) {
+            await interaction.editReply({
+                embeds: [{
+                    title: '❌ Character Not Found',
+                    description: 'The character linked to this encounter could not be identified.',
+                    color: 0xFF0000,
+                }],
+                ephemeral: true,
+            });
+            return;
+        }
+        const characterName = userInEncounter.characterName;
+        const character = await fetchCharacterByName(characterName);
+
+        if (!character) {
+            await interaction.editReply({
+                embeds: [{
+                    title: '❌ Character Not Found',
+                    description: 'The character does not exist in the system.',
+                    color: 0xFF0000,
+                }],
+                ephemeral: true,
             });
             return;
         }
@@ -575,33 +774,12 @@ async function handleUseItemInteraction(interaction) {
         const adjustedRoll = roll + bonus;
         const success = adjustedRoll >= 7;
 
-        // Build the result message
         let message = `🎲 **Rolled a ${roll}**, with a distraction bonus of **+${bonus}**, for a total of **${adjustedRoll}**.\n\n`;
 
         if (success) {
-            message += `🎉 **Success!** You distracted the mount effectively!\n\n🟢 **The mount is now vulnerable to your next action!**`;
+            message += `🎉 **Success!** You distracted the mount effectively with **${itemName}**!\n\n🟢 **The mount is now vulnerable to your next action!**\n\n`;
+            message += `**${character.name}** currently has **${character.currentStamina}** stamina remaining.`;
 
-            // Find the character in the encounter
-            const character = encounter.users.find(user => user.userId === interaction.user.id);
-            if (!character) {
-                await interaction.editReply({
-                    embeds: [{
-                        title: `❌ Character Not Found`,
-                        description: `Unable to proceed with the encounter. Please ensure your character is properly registered.`,
-                        color: 0xFF0000,
-                        thumbnail: { 
-                            url: getMountThumbnail(encounter.mountType) || 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png' 
-                        },
-                        image: { 
-                            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png' 
-                        },
-                    }],
-                    components: [],
-                });
-                return;
-            }
-
-            // Add a button for taming the mount
             const actionRow = new ActionRowBuilder().addComponents(
                 new ButtonBuilder()
                     .setCustomId(`tame|${encounter.village}|${encounterId}`)
@@ -609,48 +787,71 @@ async function handleUseItemInteraction(interaction) {
                     .setStyle(ButtonStyle.Success)
             );
 
+            await interaction.message.edit({ components: [] });
             await interaction.editReply({
                 embeds: [{
                     title: `${getMountEmoji(mountType)} 🎯 Distract Success!`,
                     description: `${message}\n\n**Prepare to tame the mount!**`,
-                    color: 0x00FF00,
-                    thumbnail: { 
-                        url: getMountThumbnail(encounter.mountType) || 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png' 
-                    },
-                    image: { 
-                        url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png' 
-                    },
+                    color: 0xAA926A ,
+                    thumbnail: { url: getMountThumbnail(mountType) },
+                    image: { url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png' },
                 }],
                 components: [actionRow],
                 ephemeral: false,
             });
         } else {
-            message += `🚫 **The mount evaded despite your efforts!**\n\n💡 **Tip:** Use distraction items or bonuses to improve your chances.`;
+            message += `🚫 **The mount evaded despite your efforts with **${itemName}**!**\n\n💡 **Tip:** Use distraction items or bonuses to improve your chances.\n\n`;
+            message += `**${character.name}** currently has **${character.currentStamina}** stamina remaining.`;
 
-            // Add a retry button for another distraction attempt
-            const retryButton = new ActionRowBuilder().addComponents(
-                new ButtonBuilder()
-                    .setCustomId(`distract|${encounter.village}|${encounterId}`)
-                    .setLabel('🔄 Try Distracting Again')
-                    .setStyle(ButtonStyle.Primary)
-            );
-
+            const retryButtons = createActionButtons(encounterId, encounter.village, encounter.glideUsed);
+            await interaction.message.edit({ components: [] });
             await interaction.editReply({
                 embeds: [{
                     title: `${getMountEmoji(mountType)} ❌ Distract Failed`,
                     description: message,
                     color: 0xFF0000,
-                    thumbnail: { 
-                        url: getMountThumbnail(encounter.mountType) || 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png' 
-                    },
-                    image: { 
-                        url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png' 
-                    },
+                    thumbnail: { url: getMountThumbnail(mountType) },
+                    image: { url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png' },
                 }],
-                components: [retryButton],
+                components: [retryButtons],
                 ephemeral: false,
             });
         }
+
+        // Remove the item from the inventory
+        const inventoryCollection = await getCharacterInventoryCollection(character.name);
+        await removeItemInventoryDatabase(character._id, itemName, 1, inventoryCollection);
+
+        // Log the usage in Google Sheets
+if (isValidGoogleSheetsUrl(character.inventory || character.inventoryLink)) {
+    const spreadsheetId = extractSpreadsheetId(character.inventory || character.inventoryLink);
+    const auth = await authorizeSheets();
+    const range = 'loggedInventory!A2:M'; // Range for appending data to Google Sheets
+    const uniqueSyncId = uuidv4(); // Generate a unique sync ID for logging purposes
+    const formattedDateTime = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
+    const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`; // Interaction URL for referencing the log
+
+    // Prepare the data to be appended to Google Sheets
+    const values = [[
+        character.name,             // Character Name
+        itemName,                   // Item Name
+        '-1',                       // Quantity of Item (negative for removal)
+        randomItem.category.join(', '), // Category
+        randomItem.type.join(', '),     // Type
+        randomItem.subtype.join(', '),  // Subtype
+        'Mount distraction',        // How the item was obtained
+        character.job,              // Job
+        '',                         // Perk (optional)
+        character.currentVillage,   // Location
+        interactionUrl,             // Link to the interaction
+        formattedDateTime,          // Date/Time of the event
+        uniqueSyncId                // Unique Sync ID
+    ]];
+
+    // Append data to Google Sheets
+    await appendSheetData(auth, spreadsheetId, range, values);
+}
+
 
         // Update the encounter with the distraction result
         encounter.distractionResult = success;
@@ -662,13 +863,15 @@ async function handleUseItemInteraction(interaction) {
                 embeds: [{
                     title: '❌ Error',
                     description: 'Something went wrong. Please try again later.',
-                    color: 0xFF0000
+                    color: 0xFF0000,
                 }],
-                ephemeral: true
+                ephemeral: true,
             });
         }
     }
 }
+
+
 
 // ------------------- handlePostTameInteraction -------------------
 async function handlePostTameInteraction(interaction, encounterId) {
@@ -702,7 +905,7 @@ async function handlePostTameInteraction(interaction, encounterId) {
         const embedMessage = {
             title: `${getMountEmoji(mountType)} 🎉 Mount Tamed!`,
             description: `🎉 **Congratulations!** You have successfully tamed a **${rarity}** mount!\n\nDo you want to customize any of its traits?`,
-            color: rarity === 'Rare' ? 0xFFD700 : 0x00FF00,
+            color: rarity === 'Rare' ? 0xFFD700 : 0xAA926A ,
             thumbnail: {
                 url: getMountThumbnail(mountType) || 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png',
             },
@@ -754,11 +957,10 @@ function createActionRows(buttons) {
     return actionRows;
 }
 
-// ------------------- handleTraitPaymentInteraction -------------------
+// ------------------- Handle Trait Payment Interaction -------------------
 async function handleTraitPaymentInteraction(interaction) {
     try {
-        // Parse the interaction ID to retrieve response and encounter ID
-        const [_, response, encounterId] = interaction.customId.split('|');
+        const [_, response, encounterId, customizationType] = interaction.customId.split('|');
         const encounter = getEncounterById(encounterId);
 
         // Ensure the interaction is deferred publicly for processing
@@ -779,10 +981,104 @@ async function handleTraitPaymentInteraction(interaction) {
             return;
         }
 
-        if (response === 'yes') {
-            const mountType = encounter.mountType;
+        const mountType = encounter.mountType;
 
-            // Map mount types to their respective trait data
+        if (response === 'yes' && customizationType) {
+            // Customization Cost Handling
+            const cost = customizationCosts[mountType]?.[traitKey] || 0;
+console.log(`[handleTraitSelection]: Fetching cost for Trait Key: ${traitKey}, Mount Type: ${mountType}`);
+console.log(`[handleTraitSelection]: Customization Costs for ${mountType}:`, customizationCosts[mountType]);
+console.log(`[handleTraitSelection]: Resolved cost: ${cost}`);
+            encounter.totalSpent += cost;
+            storeEncounter(encounterId, encounter);
+     
+            if (!cost) {
+                await interaction.editReply({
+                    embeds: [{
+                        title: '❌ Invalid Customization',
+                        description: 'The customization type is not valid for this mount.',
+                        color: 0xFF0000,
+                    }],
+                    ephemeral: true,
+                });
+                return;
+            }
+
+            // Fetch character and validate tokens
+            const userInEncounter = encounter.users.find(user => user.userId === interaction.user.id);
+            const character = await fetchCharacterByName(userInEncounter.characterName);
+
+            if (!character) {
+                await interaction.editReply({
+                    embeds: [{
+                        title: '❌ Character Not Found',
+                        description: 'Could not retrieve your character. Please try again later.',
+                        color: 0xFF0000,
+                    }],
+                    ephemeral: true,
+                });
+                return;
+            }
+
+            if (character.tokens < cost) {
+                await interaction.editReply({
+                    embeds: [{
+                        title: '❌ Insufficient Tokens',
+                        description: `You need **${cost} tokens** for this customization. You currently have **${character.tokens} tokens**.`,
+                        color: 0xFF0000,
+                    }],
+                    ephemeral: true,
+                });
+                return;
+            }
+
+            // Deduct tokens and save
+            if (isNaN(character.tokens) || isNaN(cost)) {
+                throw new Error(`Invalid token value or cost. Tokens: ${character.tokens}, Cost: ${cost}`);
+            }
+            character.tokens -= cost;
+            await character.save();
+
+            // Update encounter total spent
+            encounter.totalSpent += cost;
+            storeEncounter(encounterId, encounter);
+
+            // Log customization in Google Sheets
+            if (isValidGoogleSheetsUrl(character.inventory || character.inventoryLink)) {
+                const spreadsheetId = extractSpreadsheetId(character.inventory || character.inventoryLink);
+                const auth = await authorizeSheets();
+                const range = 'customizationLog!A2:M';
+                const uniqueSyncId = uuidv4();
+                const formattedDateTime = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
+
+                const values = [[
+                    character.name,
+                    mountType,
+                    customizationType,
+                    `-${cost}`,
+                    character.job,
+                    character.currentVillage,
+                    formattedDateTime,
+                    uniqueSyncId
+                ]];
+                await appendSheetData(auth, spreadsheetId, range, values);
+                
+            }
+
+// Respond with success
+await interaction.editReply({
+    embeds: [{
+        title: '🎨 Customization Successful!',
+        description: `You successfully customized your **${mountType}** with **${customizationType}** for **${cost} tokens**.\n\n💳 **Remaining Tokens:** ${character.tokens}`,
+        color: 0xAA926A,
+        thumbnail: { url: getMountThumbnail(mountType) },
+        image: { url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png' }
+    }],
+                ephemeral: false,
+            });            
+
+        } else if (response === 'yes') {
+            // Handle trait selection for customization
             const mountTraitsMap = {
                 Horse: horseTraits,
                 Donkey: donkeyTraits,
@@ -799,7 +1095,6 @@ async function handleTraitPaymentInteraction(interaction) {
 
             const traitsData = mountTraitsMap[mountType];
 
-            // Handle unsupported mount types
             if (!traitsData) {
                 await interaction.editReply({
                     embeds: [{
@@ -812,12 +1107,10 @@ async function handleTraitPaymentInteraction(interaction) {
                 return;
             }
 
-            // Retrieve the first trait and its options
             const traitKeys = Object.keys(traitsData);
             const firstTrait = traitKeys[0];
             const traitOptions = traitsData[firstTrait]?.traits;
 
-            // Handle missing trait options
             if (!traitOptions) {
                 console.error(`Traits for first trait '${firstTrait}' are undefined.`);
                 await interaction.editReply({
@@ -831,29 +1124,32 @@ async function handleTraitPaymentInteraction(interaction) {
                 return;
             }
 
-            // Generate buttons for the first trait
             const buttons = Object.entries(traitOptions).map(([key, value]) =>
                 new ButtonBuilder()
                     .setCustomId(`trait-select|${encounterId}|${firstTrait}|${key}`)
-                    .setLabel(value)
-                    .setStyle(ButtonStyle.Primary)
+                    .setLabel(`${value} (${customizationCosts[mountType]?.[firstTrait] || 0}t)`) // Add token cost to label
+                    .setStyle(ButtonStyle.Primary)            
             );
+            
 
             buttons.push(
                 new ButtonBuilder()
                     .setCustomId(`trait-select|${encounterId}|${firstTrait}|random`)
-                    .setLabel('None (Random)')
+                    .setLabel('Random (0t)')
                     .setStyle(ButtonStyle.Secondary)
             );
 
-            // Split buttons into rows of 5 or fewer
             const actionRows = createActionRows(buttons);
+
+            await interaction.message.edit({
+                components: [], // Remove Yes/No buttons after click
+            });
 
             await interaction.editReply({
                 embeds: [{
                     title: `🎨 Customize Your ${mountType}`,
-                    description: `🛠️ **Select** **${firstTrait.replace(/([A-Z])/g, ' $1')}** for your mount!`,
-                    color: 0x00FF00,
+                    description: `🛠️ **Select ${firstTrait.replace(/([A-Z])/g, ' $1')}** for your mount!\n\n💰 **Each option shows the token cost.**`,
+                    color: 0xAA926A ,
                     thumbnail: {
                         url: getMountThumbnail(mountType) || 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png',
                     },
@@ -866,9 +1162,12 @@ async function handleTraitPaymentInteraction(interaction) {
             });
 
         } else if (response === 'no') {
-            // Generate traits for the mount based on type and rarity
+            await interaction.message.edit({
+                components: [], // Clear the Yes/No buttons
+            });
+            // Handle random trait generation
             let traits;
-            switch (encounter.mountType) {
+            switch (mountType) {
                 case 'Horse':
                     traits = generateHorseTraits(encounter.rarity === 'Rare');
                     break;
@@ -904,37 +1203,35 @@ async function handleTraitPaymentInteraction(interaction) {
                     break;
                 default:
                     traits = { error: 'Unknown mount type.' };
-                    console.error(`Unknown mount type: ${encounter.mountType}`);
+                    console.error(`Unknown mount type: ${mountType}`);
             }
 
             if (!traits || Object.keys(traits).length === 0) {
-                console.error(`Trait generation failed for mount type: ${encounter.mountType}`);
+                console.error(`Trait generation failed for mount type: ${mountType}`);
                 traits = { error: 'Failed to generate traits.' };
             }
 
-            // Construct trait descriptions
             const traitDescriptions = Object.entries(traits)
                 .map(([key, value]) => `**${key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}:** ${value}`)
                 .join('\n');
 
-            const mountEmoji = getMountEmoji(encounter.mountType);
+            const mountEmoji = getMountEmoji(mountType);
 
             const embedMessage = {
-                title: `${mountEmoji} 🎉 Traits for Your Tamed ${encounter.mountType}`,
+                title: `${mountEmoji} 🎉 Traits for Your Tamed ${mountType}`,
                 description: `👀 **Here's a detailed look at your mount's traits:**\n\n${traitDescriptions}\n\n🟢 **Ready to name and register your new companion?**`,
-                color: 0x00FF00,
+                color: 0xAA926A ,
                 thumbnail: {
-                    url: getMountThumbnail(encounter.mountType) || 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png',
+                    url: getMountThumbnail(mountType) || 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png',
                 },
                 image: {
                     url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png',
                 },
                 footer: {
-                    text: `Congratulations on your new ${encounter.mountType}!`,
+                    text: `Congratulations on your new ${mountType}!`,
                 },
             };
 
-            // Add a button to register the mount
             const actionRow = new ActionRowBuilder().addComponents(
                 new ButtonBuilder()
                     .setCustomId(`register-mount|${encounterId}`)
@@ -949,7 +1246,7 @@ async function handleTraitPaymentInteraction(interaction) {
             });
         }
     } catch (error) {
-        console.error('[handleTraitPaymentInteraction]: Error handling trait payment interaction:', error);
+        console.error('[handleTraitPaymentInteraction]: Error processing trait payment:', error);
         if (!interaction.replied && !interaction.deferred) {
             await interaction.reply({
                 embeds: [{
@@ -963,7 +1260,7 @@ async function handleTraitPaymentInteraction(interaction) {
     }
 }
 
-// ------------------- handle Trait Selection -------------------
+// ------------------- Handle Trait Selection -------------------
 async function handleTraitSelection(interaction) {
     try {
         const [_, encounterId, traitKey, selection] = interaction.customId.split('|');
@@ -971,7 +1268,7 @@ async function handleTraitSelection(interaction) {
 
         // Validate the encounter
         if (!encounter) {
-            console.error(`Encounter not found for ID: ${encounterId}`);
+            console.error(`[handleTraitSelection]: Encounter not found. ID: ${encounterId}`);
             await interaction.reply({
                 embeds: [{
                     title: '❌ Encounter Not Found',
@@ -984,7 +1281,15 @@ async function handleTraitSelection(interaction) {
         }
 
         const mountType = encounter.mountType;
-        console.log(`Mount Type: ${mountType}`);
+        console.log(`[handleTraitSelection]: Mount Type: ${mountType}, Encounter ID: ${encounterId}`);
+
+        // Initialize or validate totalSpent
+        if (typeof encounter.totalSpent !== 'number' || isNaN(encounter.totalSpent)) {
+            encounter.totalSpent = 0; // Initialize if undefined
+            console.log(`[handleTraitSelection]: Initialized totalSpent to 0.`);
+        } else {
+            console.log(`[handleTraitSelection]: Existing totalSpent: ${encounter.totalSpent}`);
+        }
 
         // Map mount types to trait data
         const mountTraitsMap = {
@@ -1003,7 +1308,7 @@ async function handleTraitSelection(interaction) {
 
         const traitsData = mountTraitsMap[mountType];
         if (!traitsData) {
-            console.error(`Traits data not found for Mount Type: ${mountType}`);
+            console.error(`[handleTraitSelection]: Traits data not found for Mount Type: ${mountType}`);
             await interaction.reply({
                 embeds: [{
                     title: '❌ Unsupported Mount Type',
@@ -1020,40 +1325,81 @@ async function handleTraitSelection(interaction) {
             ? Object.values(traitsData[traitKey].traits)[Math.floor(Math.random() * Object.values(traitsData[traitKey].traits).length)]
             : traitsData[traitKey].traits[selection];
 
-        console.log(`Selected Trait Key: ${traitKey}, Selection: ${selection}, Selected Value: ${selectedValue}`);
+        console.log(`[handleTraitSelection]: Trait Key: ${traitKey}, Selection: ${selection}, Selected Value: ${selectedValue}`);
 
-        // Update traits and save encounter
+        // Deduct tokens for this customization
+        const cost = selection === 'random' ? 0 : customizationCosts[mountType]?.[traitKey] || 0;
+        console.log(`[handleTraitSelection]: Resolved cost: ${cost}`);
+        console.log(`[handleTraitSelection]: Fetching cost for Trait Key: ${traitKey}, Mount Type: ${mountType}`);
+        console.log(`[handleTraitSelection]: Customization Costs for ${mountType}:`, customizationCosts[mountType]);
+        console.log(`[handleTraitSelection]: Cost for ${traitKey}: ${cost}`);
+
+        const user = await getOrCreateToken(interaction.user.id); // Fetch user tokens
+        if (typeof user.tokens !== 'number') {
+            console.error('[handleTraitSelection]: User tokens are invalid or not a number.');
+            throw new Error(`Invalid tokens for user ${interaction.user.id}. Value: ${user.tokens}`);
+        }
+
+        if (cost > 0) {
+            if (user.tokens < cost) {
+                console.warn(`[handleTraitSelection]: Insufficient tokens. Needed: ${cost}, Available: ${user.tokens}`);
+                await interaction.reply({
+                    embeds: [{
+                        title: '❌ Insufficient Tokens',
+                        description: `You need **${cost} tokens** for this customization. You currently have **${user.tokens} tokens**.`,
+                        color: 0xFF0000,
+                    }],
+                    ephemeral: true,
+                });
+                return;
+            }
+
+            user.tokens -= cost;
+            await user.save();
+            console.log(`[handleTraitSelection]: Deducted ${cost} tokens. Remaining: ${user.tokens}`);
+
+            // Log token usage in Google Sheets
+            if (isValidGoogleSheetsUrl(user.tokenTracker)) {
+                const spreadsheetId = extractSpreadsheetId(user.tokenTracker);
+                const auth = await authorizeSheets();
+
+                const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
+                const values = [
+                    [`${mountType} Customization - ${traitKey}`, interactionUrl, 'Other', 'spent', `-${cost}`]
+                ];
+
+                await appendSheetData(auth, spreadsheetId, 'loggedTracker!B7:F', values);
+                console.log(`[handleTraitSelection]: Logged token usage to Google Sheets for user ${interaction.user.id}.`);
+            }
+        }
+
+        // Update and persist totalSpent
+        encounter.totalSpent += cost;
+        console.log(`[handleTraitSelection]: Updated totalSpent: ${encounter.totalSpent}`);
+
+        // Update traits and persist encounter
         encounter.traits = encounter.traits || {};
         encounter.traits[traitKey] = selectedValue;
-        storeEncounter(encounterId, encounter);
 
-        // Re-fetch encounter to confirm update
-        encounter = getEncounterById(encounterId);
-        if (!encounter?.traits) {
-            console.error('Traits not found after re-fetching encounter.');
-            await interaction.followUp({
-                embeds: [{
-                    title: '❌ Error',
-                    description: 'Failed to retrieve updated traits. Please try again.',
-                    color: 0xFF0000,
-                }],
-                ephemeral: true,
-            });
-            return;
+        // Track explicitly customized traits
+        encounter.customizedTraits = encounter.customizedTraits || [];
+        if (selection !== 'random' && !encounter.customizedTraits.includes(traitKey)) {
+            encounter.customizedTraits.push(traitKey);
         }
+        storeEncounter(encounterId, encounter);
 
         // Provide feedback for selected trait
         await interaction.update({
             embeds: [{
                 title: `🎨 ${mountType} Customization`,
-                description: `🛠️ **${traitKey.replace(/([A-Z])/g, ' $1')}** has been selected as **${selectedValue}**!`,
-                color: 0x00FF00,
+                description: `🛠️ **${traitKey.replace(/([A-Z])/g, ' $1')}** has been set to **${selectedValue}**!`,
+                color: 0xAA926A,
                 thumbnail: {
-                    url: getMountThumbnail(mountType) || 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png',
+                    url: getMountThumbnail(mountType) || 'https://example.com/default-thumbnail.png',
                 },
                 image: {
-                    url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png',
-                },
+                    url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+                }
             }],
             components: [],
         });
@@ -1064,28 +1410,26 @@ async function handleTraitSelection(interaction) {
         const currentIndex = filteredTraitKeys.indexOf(traitKey);
         const nextTrait = filteredTraitKeys[currentIndex + 1];
 
-        console.log(`Current Trait: ${traitKey}, Next Trait: ${nextTrait}`);
+        console.log(`[handleTraitSelection]: Current Trait: ${traitKey}, Next Trait: ${nextTrait}`);
 
         if (nextTrait) {
             const nextOptions = traitsData[nextTrait]?.traits;
-
             if (!nextOptions) {
-                console.error(`Traits for next trait '${nextTrait}' are undefined.`);
+                console.error(`[handleTraitSelection]: Traits for next trait '${nextTrait}' are undefined.`);
                 return;
             }
 
-            // Generate buttons for next trait
             const buttons = Object.entries(nextOptions).map(([key, value]) =>
                 new ButtonBuilder()
                     .setCustomId(`trait-select|${encounterId}|${nextTrait}|${key}`)
-                    .setLabel(value)
+                    .setLabel(`${value} (${customizationCosts[mountType]?.[nextTrait] || 0}t)`)
                     .setStyle(ButtonStyle.Primary)
             );
 
             buttons.push(
                 new ButtonBuilder()
                     .setCustomId(`trait-select|${encounterId}|${nextTrait}|random`)
-                    .setLabel('None (Random)')
+                    .setLabel('Random (0t)')
                     .setStyle(ButtonStyle.Secondary)
             );
 
@@ -1094,28 +1438,24 @@ async function handleTraitSelection(interaction) {
             await interaction.followUp({
                 embeds: [{
                     title: `🎨 Customize Your ${mountType}`,
-                    description: `🛠️ Select **${nextTrait.replace(/([A-Z])/g, ' $1')}** for your mount to make it truly unique!`,
-                    color: 0x00FF00,
-                    thumbnail: {
-                        url: getMountThumbnail(mountType) || 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png',
-                    },
+                    description: `🛠️ Select **${nextTrait.replace(/([A-Z])/g, ' $1')}** for your mount`,
+                    color: 0xAA926A,
                     image: {
-                        url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png',
-                    },
+                        url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+                    }
                 }],
                 components: actionRows,
                 ephemeral: false,
             });
+
         } else {
             // Finalize customization if no next trait
             const traitDescriptions = Object.entries(encounter.traits)
-                .map(([key, value]) => {
-                    const formattedKey = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
-                    return `**${formattedKey}:** ${value}`;
-                })
-                .join('\n');
-
-            console.log(`Final Traits for ${mountType}:`, encounter.traits);
+            .map(([key, value]) => {
+                const formattedKey = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+                return `**${formattedKey}:** ${value}`;
+            })
+            .join('\n');
 
             const registerButton = new ActionRowBuilder().addComponents(
                 new ButtonBuilder()
@@ -1127,14 +1467,14 @@ async function handleTraitSelection(interaction) {
             await interaction.followUp({
                 embeds: [{
                     title: `${getMountEmoji(mountType)} 🎉 Customization Complete!`,
-                    description: `🎉 **Here's your fully customized mount:**\n\n${traitDescriptions}`,
-                    color: 0x00FF00,
+                    description: `🎉 **Here's your ${mountType} mount!**\n\n${traitDescriptions}\n\n💰 **Total Tokens Spent:** ${encounter.totalSpent}\n### Mount Details\n> **Mount Species**: ${mountType}\n> **Rarity**: It's a **${encounter.rarity}** mount!\n> **Mount Level**: ${encounter.mountLevel}\n> **Mount Stamina**: ${encounter.mountStamina}\n> **Village**: ${villageEmojis[encounter.village.toLowerCase()] || ''} ${encounter.village}`,
+                    color: 0xAA926A,
                     thumbnail: {
-                        url: getMountThumbnail(mountType) || 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png',
+                        url: getMountThumbnail(mountType) || 'https://example.com/default-thumbnail.png',
                     },
                     image: {
                         url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png',
-                    },
+                    }
                 }],
                 components: [registerButton],
             });
@@ -1208,7 +1548,8 @@ async function handleRegisterMountModal(interaction) {
     }
 }
 
-// ------------------- handle Mount Name Submission -------------------
+// ------------------- Handle Mount Name Submission -------------------
+// ------------------- Handle Mount Name Submission -------------------
 async function handleMountNameSubmission(interaction) {
     try {
         // Extract the encounter ID and mount name from the interaction
@@ -1218,7 +1559,7 @@ async function handleMountNameSubmission(interaction) {
 
         // Validate the encounter
         if (!encounter) {
-            console.error(`Encounter not found for ID: ${encounterId}`);
+            console.error(`[handleMountNameSubmission]: Encounter not found for ID: ${encounterId}`);
             await interaction.reply({
                 embeds: [{
                     title: '❌ Encounter Not Found',
@@ -1230,10 +1571,10 @@ async function handleMountNameSubmission(interaction) {
             return;
         }
 
-        // Validate that the user is part of the encounter
+        // Retrieve the user from the encounter
         const userInEncounter = encounter.users.find(user => user.userId === interaction.user.id);
         if (!userInEncounter) {
-            console.error(`User ${interaction.user.id} is not part of the encounter.`);
+            console.error(`[handleMountNameSubmission]: User ${interaction.user.id} is not part of the encounter.`);
             await interaction.reply({
                 embeds: [{
                     title: '❌ Unauthorized',
@@ -1246,13 +1587,13 @@ async function handleMountNameSubmission(interaction) {
         }
 
         // Fetch the character associated with the user
-        const character = await Character.findOne({ name: userInEncounter.characterName });
-        if (!character) {
-            console.error(`Character not found for name: ${userInEncounter.characterName}`);
+        const characterName = userInEncounter.characterName;
+        if (!characterName) {
+            console.error(`[handleMountNameSubmission]: Character name is missing in the encounter data.`);
             await interaction.reply({
                 embeds: [{
                     title: '❌ Character Not Found',
-                    description: 'Could not find your character in the database.',
+                    description: 'Could not find the character associated with this mount. Please ensure you are properly registered in the encounter.',
                     color: 0xFF0000,
                 }],
                 ephemeral: true,
@@ -1260,7 +1601,69 @@ async function handleMountNameSubmission(interaction) {
             return;
         }
 
-        // Construct the mount data
+        const character = await Character.findOne({ name: characterName });
+        if (!character) {
+            console.error(`[handleMountNameSubmission]: Character not found for name: ${characterName}`);
+            await interaction.reply({
+                embeds: [{
+                    title: '❌ Character Not Found',
+                    description: `Could not find the character "${characterName}" in the database.`,
+                    color: 0xFF0000,
+                }],
+                ephemeral: true,
+            });
+            return;
+        }
+
+        // Deduct tokens from the user
+        const user = await User.findOne({ discordId: interaction.user.id });
+        const tokenCost = 20;
+        if (user.tokens < tokenCost) {
+            console.warn(`[handleMountNameSubmission]: Insufficient tokens. Available: ${user.tokens}, Required: ${tokenCost}`);
+            await interaction.reply({
+                embeds: [{
+                    title: '❌ Insufficient Tokens',
+                    description: `You need **${tokenCost} tokens** to register a mount, but you only have **${user.tokens} tokens**.`,
+                    color: 0xFF0000,
+                }],
+                ephemeral: true,
+            });
+            return;
+        }
+
+        user.tokens -= tokenCost;
+        await user.save();
+        console.info(`[handleMountNameSubmission]: Tokens deducted successfully. Remaining tokens: ${user.tokens}`);
+
+        // Log the token deduction in Google Sheets
+        let sheetLogged = false;
+        if (isValidGoogleSheetsUrl(user.tokenTracker)) {
+            const spreadsheetId = extractSpreadsheetId(user.tokenTracker);
+            const auth = await authorizeSheets();
+            const range = 'loggedTracker!B7:F';
+            const formattedDateTime = new Date().toLocaleString('en-US', { timeZone: user.timezone || 'UTC' });
+            const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
+            const values = [
+                [
+                    `${mountName} - Mount Registration`,  // Column 1: The mount's name and action
+                    interactionUrl,               // Column 2: Link to the interaction
+                    'Other',                      // Column 3: Category
+                    'spent',                      // Column 4: Action
+                    `- ${tokenCost}`,             // Column 5: Deducted Tokens
+                ]
+            ];
+
+            await appendSheetData(auth, spreadsheetId, range, values);
+            sheetLogged = true;
+            console.info(`[handleMountNameSubmission]: Token deduction logged to Google Sheets successfully.`);
+        }
+
+        // Ensure traits are properly formatted as strings
+        const traits = encounter.traits
+    ? Object.entries(encounter.traits).map(([key, value]) => `${key}: ${value}`)
+    : [];
+
+        // Register the mount
         const mountData = {
             discordId: interaction.user.id,
             characterId: character._id,
@@ -1270,23 +1673,30 @@ async function handleMountNameSubmission(interaction) {
             name: mountName,
             stamina: encounter.mountStamina,
             owner: character.name,
-            traits: Object.values(encounter.traits).map(value => String(value)), // Ensure traits are strings
-            region: encounter.village, // Align with schema
+            traits: traits, // Properly formatted traits
+            region: encounter.village,
         };
 
-        // Save the new mount and update the character
         const newMount = new Mount(mountData);
         await newMount.save();
+        console.info(`[handleMountNameSubmission]: Mount "${mountName}" registered successfully for character: ${character.name}`);
 
+        // Update the character's mount status after successful registration
         character.mount = true;
         await character.save();
+        console.info(`[handleMountNameSubmission]: Mount status updated for character: ${character.name}`);
+
+        // Disable the "Name and Register Your Mount!" button
+        await interaction.message.edit({
+            components: [], // Clear buttons after action
+        });
 
         // Provide success feedback to the user
         await interaction.reply({
             embeds: [{
                 title: `🎉 Mount Registered!`,
                 description: `🐴 **Your mount "${mountName}" has been successfully registered to "${character.name}"!**\n\nEnjoy your adventures with your new companion!`,
-                color: 0x00FF00,
+                color: 0xAA926A,
                 thumbnail: {
                     url: getMountThumbnail(encounter.mountType) || 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png',
                 },
@@ -1309,6 +1719,86 @@ async function handleMountNameSubmission(interaction) {
     }
 }
 
+// ------------------- Handle View Mount Subcommand -------------------
+// ------------------- Handle View Mount Subcommand -------------------
+async function handleViewMount(interaction) {
+    const characterName = interaction.options.getString('charactername');
+
+    try {
+        // Fetch the character
+        const character = await fetchCharacterByNameAndUserId(characterName, interaction.user.id);
+        if (!character) {
+            return interaction.reply({
+                embeds: [{
+                    title: '❌ Character Not Found',
+                    description: `We couldn't find a character named **${characterName}** that belongs to you. Please check and try again.`,
+                    color: 0xFF0000,
+                }],
+                ephemeral: true,
+            });
+        }
+
+        // Fetch the mount associated with the character
+        const mount = await Mount.findOne({ characterId: character._id });
+        if (!mount) {
+            return interaction.reply({
+                embeds: [{
+                    title: '❌ No Mount Registered',
+                    description: `The character **${character.name}** does not have a registered mount.`,
+                    color: 0xFF0000,
+                }],
+                ephemeral: true,
+            });
+        }
+
+        // Get the emoji for the mount species
+        const speciesEmoji = getMountEmoji(mount.species);
+
+        // Format traits into a clean list
+        const formattedTraits = mount.traits && mount.traits.length
+            ? mount.traits.map(trait => `> ${trait}`).join('\n')
+            : 'No traits available';
+
+        // Build the embed message for the mount
+        const mountEmbed = new EmbedBuilder()
+            .setTitle(`${speciesEmoji} **${mount.name}** - Mount Details`)
+            .setDescription(`✨ **Mount Stats for**: **${character.name}**`)
+            .addFields(
+                    { name: '🌟 **__Species__**', value: `> ${mount.species || 'Unknown'}`, inline: true },
+                    { name: '#️⃣ **__Level__**', value: `> ${mount.level || 'Unknown'}`, inline: true },
+                    { name: '🥕 **__Stamina__**', value: `> ${mount.stamina || 'Unknown'}`, inline: true },
+                    { name: '👤 **__Owner__**', value: `> ${mount.owner || 'Unknown'}`, inline: true },
+                    { name: '🌍 **__Region__**', value: `> ${mount.region || 'Unknown'}`, inline: true },
+                    { name: '✨ **__Traits__**', value: `${formattedTraits}`, inline: false }
+                )                
+            .setColor(0xAA926A)
+            .setThumbnail(getMountThumbnail(mount.species))
+            .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png') // Consistent image
+            .setFooter({
+                text: `${character.name}'s Mount Stats`,
+                iconURL: character.icon // Use the character's icon for the footer
+            })
+            .setTimestamp();
+
+        // Send the embed to the user
+        await interaction.reply({
+            embeds: [mountEmbed],
+            ephemeral: false,
+        });
+    } catch (error) {
+        console.error('[handleViewMount]: Error viewing mount:', error);
+        await interaction.reply({
+            embeds: [{
+                title: '❌ Error Viewing Mount',
+                description: 'An error occurred while fetching the mount details. Please try again later.',
+                color: 0xFF0000,
+            }],
+            ephemeral: true,
+        });
+    }
+}
+
+
 // ------------------- Export Functions -------------------
 // Export the core interaction and taming functions for use in other modules.
 module.exports = {
@@ -1323,5 +1813,6 @@ module.exports = {
     handleTraitSelection,
     handleUseItemInteraction,
     proceedWithRoll,
-    trackCharacterInEncounter
+    trackCharacterInEncounter,
+    handleViewMount
 }

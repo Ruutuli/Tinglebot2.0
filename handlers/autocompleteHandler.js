@@ -821,26 +821,39 @@ async function handleLookupAutocomplete(interaction, focusedOption) {
 // ------------------- Handles autocomplete for mount selection -------------------
 async function handleMountAutocomplete(interaction, focusedOption) {
   try {
-    //format Extract user ID from the interaction
+    // Extract user ID from the interaction
     const userId = interaction.user.id;
 
-    //format Fetch all characters associated with the user
+    // Fetch all characters associated with the user
     const characters = await fetchCharactersByUserId(userId);
 
-    //format Map characters to the appropriate format for autocomplete
-    const choices = characters.map(character => ({
-      name: `${character.name} - ${capitalize(character.currentVillage)}`, //format Display character name and current village
-      value: character.name, //format Use character name as the value
-    }));
+    // Determine the subcommand being used
+    const subcommand = interaction.options.getSubcommand();
 
-    //format Filter choices based on user input and respond
+    // Apply specific filtering and formatting based on the subcommand
+    const choices = characters
+      .filter(character => {
+        // For `/mount view`, only include characters with `mount: true`
+        if (subcommand === 'view') {
+          return character.mount;
+        }
+        return true; // Include all characters for other subcommands
+      })
+      .map(character => ({
+        // Include village information for `/mount encounter`, but exclude it for `/mount view`
+        name: subcommand === 'view' ? character.name : `${character.name} - ${capitalize(character.currentVillage)}`,
+        value: character.name, // Use character name as the value
+      }));
+
+    // Filter choices based on user input and respond
     await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
-    //format Log and handle errors gracefully
-    console.error('[autocompleteHandler.js]: Error handling mount autocomplete:', error);
+    // Log and handle errors gracefully
+    console.error('[handleMountAutocomplete]: Error handling mount autocomplete:', error);
     await safeRespondWithError(interaction);
   }
 }
+
 
 // ------------------- Handles autocomplete for shop interactions -------------------
 async function handleShopsAutocomplete(interaction, focusedOption) {

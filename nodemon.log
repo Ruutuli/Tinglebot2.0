@@ -1,0 +1,5 @@
+🔄 Started refreshing guild (/) commands for guild ID: 1305484048063529002
+(node:26244) Warning: Accessing non-existent property 'handleModalSubmission' of module exports inside circular dependency
+(Use `node --trace-warnings ...` to show where the warning was created)
+✅ Successfully reloaded application (/) commands for guild ID: 1305484048063529002.
+✅ Successfully reloaded all guild (/) commands.

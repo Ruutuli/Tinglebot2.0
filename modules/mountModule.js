@@ -16,6 +16,52 @@ const villageEmojis = {
   vhintl: '<:vhintl:899492879205007450>',
 };
 
+// ------------------- Customization Costs -------------------
+const customizationCosts = {
+  Horse: {
+      coatMane: 100,
+      coatPattern: 20,
+      snoutPattern: 20,
+      eyeColor: 20,
+      muzzleColor: 10,
+      ankleHairColor: 10,
+      hoofColor: 10,
+      ankleHairStyle: 5,
+  },
+  Donkey: {
+      coatColor: 60,
+      coatStyle: 20,
+      coatPattern: 20,
+  },
+  Ostrich: {
+      commonColors: 100,
+  },
+  Bullbo: {
+      commonColors: 100,
+  },
+  Dodongo: {
+      commonColors: 100,
+  },
+  MountainGoat: {
+      commonColors: 100,
+  },
+  WaterBuffalo: {
+      commonColors: 100,
+  },
+  Moose: {
+      commonColors: 100,
+  },
+  Deer: {
+      commonColors: 100,
+  },
+  Wolfos: {
+      commonColors: 100,
+  },
+  Bear: {
+      commonColors: 100,
+  },
+};
+
 // ------------------- Ensure the encounter file exists -------------------
 function ensureEncounterFileExists() {
   if (!fs.existsSync(ENCOUNTER_PATH)) {
@@ -52,17 +98,17 @@ function storeEncounter(encounterId, encounterData) {
           village: encounterData.village || 'Unknown',
           actions: encounterData.actions || [],
           tameStatus: encounterData.tameStatus || false, // Default to false
-          traits: encounterData.traits || {} // Include traits to store customization
+          traits: encounterData.traits || {}, // Include traits to store customization
+          totalSpent: encounterData.totalSpent || 0, // Ensure totalSpent is included and defaults to 0
       };
 
       // Write back to the file
       fs.writeFileSync(ENCOUNTER_PATH, JSON.stringify(encounterProgress, null, 2));
-      console.log(`Encounter ${encounterId} updated successfully with traits:`, encounterProgress[encounterId].traits);
   } catch (error) {
-      console.error('Error storing encounter:', error.message);
       throw new Error('Failed to store encounter data.');
   }
 }
+
 
 // ------------------- Retrieve encounter data by ID -------------------
 function getEncounterById(encounterId) {
@@ -815,7 +861,7 @@ function generateOstrichTraits(isRare = false) {
   if (ostrichTraits.commonColors) {
     const rollCommonColor = rollDie(ostrichTraits.commonColors.roll[1]);
     console.log(`Ostrich common color roll: ${rollCommonColor}`);
-    traits.commonColor = ostrichTraits.commonColors.traits[rollCommonColor] || 'Undefined Common Color';
+    traits.commonColors = ostrichTraits.commonColors.traits[rollCommonColor] || 'Undefined Common Color';
   }
 
   if (isRare && ostrichTraits.rareColors) {
@@ -834,7 +880,7 @@ function generateBullboTraits(isRare = false) {
   if (bullboTraits.commonColors) {
     const rollCommonColor = rollDie(bullboTraits.commonColors.roll[1]);
     console.log(`Bullbo common color roll: ${rollCommonColor}`);
-    traits.commonColor = bullboTraits.commonColors.traits[rollCommonColor] || 'Undefined Common Color';
+    traits.commonColors = bullboTraits.commonColors.traits[rollCommonColor] || 'Undefined Common Color';
   }
 
   if (isRare && bullboTraits.rareColors) {
@@ -853,7 +899,7 @@ function generateDodongoTraits(isRare = false) {
   if (dodongoTraits.commonColors) {
     const rollCommonColor = rollDie(dodongoTraits.commonColors.roll[1]);
     console.log(`Dodongo common color roll: ${rollCommonColor}`);
-    traits.commonColor = dodongoTraits.commonColors.traits[rollCommonColor] || 'Undefined Common Color';
+    traits.commonColors = dodongoTraits.commonColors.traits[rollCommonColor] || 'Undefined Common Color';
   }
 
   if (isRare && dodongoTraits.rareColors) {
@@ -872,7 +918,7 @@ function generateMountainGoatTraits(isRare = false) {
   if (mountainGoatTraits.commonColors) {
     const rollCommonColor = rollDie(mountainGoatTraits.commonColors.roll[1]);
     console.log(`Mountain Goat common color roll: ${rollCommonColor}`);
-    traits.commonColor = mountainGoatTraits.commonColors.traits[rollCommonColor] || 'Undefined Common Color';
+    traits.commonColors = mountainGoatTraits.commonColors.traits[rollCommonColor] || 'Undefined Common Color';
   }
 
   if (isRare && mountainGoatTraits.rareColors) {
@@ -891,7 +937,7 @@ function generateWaterBuffaloTraits(isRare = false) {
   if (waterBuffaloTraits.commonColors) {
     const rollCommonColor = rollDie(waterBuffaloTraits.commonColors.roll[1]);
     console.log(`Water Buffalo common color roll: ${rollCommonColor}`);
-    traits.commonColor = waterBuffaloTraits.commonColors.traits[rollCommonColor] || 'Undefined Common Color';
+    traits.commonColors = waterBuffaloTraits.commonColors.traits[rollCommonColor] || 'Undefined Common Color';
   }
 
   if (isRare && waterBuffaloTraits.rareColors) {
@@ -910,7 +956,7 @@ function generateDeerTraits(isRare = false) {
   if (deerTraits.commonColors) {
     const rollCommonColor = rollDie(deerTraits.commonColors.roll[1]);
     console.log(`Deer common color roll: ${rollCommonColor}`);
-    traits.commonColor = deerTraits.commonColors.traits[rollCommonColor] || 'Undefined Common Color';
+    traits.commonColors = deerTraits.commonColors.traits[rollCommonColor] || 'Undefined Common Color';
   }
 
   if (isRare && deerTraits.rareColors) {
@@ -929,7 +975,7 @@ function generateWolfosTraits(isRare = false) {
   if (wolfosTraits.commonColors) {
     const rollCommonColor = rollDie(wolfosTraits.commonColors.roll[1]);
     console.log(`Wolfos common color roll: ${rollCommonColor}`);
-    traits.commonColor = wolfosTraits.commonColors.traits[rollCommonColor] || 'Undefined Common Color';
+    traits.commonColors = wolfosTraits.commonColors.traits[rollCommonColor] || 'Undefined Common Color';
   }
 
   if (isRare && wolfosTraits.rareColors) {
@@ -948,7 +994,7 @@ function generateBearTraits(isRare = false) {
   if (bearTraits.commonColors) {
     const rollCommonColor = rollDie(bearTraits.commonColors.roll[1]);
     console.log(`Bear common color roll: ${rollCommonColor}`);
-    traits.commonColor = bearTraits.commonColors.traits[rollCommonColor] || 'Undefined Common Color';
+    traits.commonColors = bearTraits.commonColors.traits[rollCommonColor] || 'Undefined Common Color';
   }
 
   if (isRare && bearTraits.rareColors) {
@@ -967,7 +1013,7 @@ function generateMooseTraits(isRare = false) {
   if (mooseTraits.commonColors) {
       const rollCommonColor = rollDie(mooseTraits.commonColors.roll[1]);
       console.log(`Moose common color roll: ${rollCommonColor}`);
-      traits.commonColor = mooseTraits.commonColors.traits[rollCommonColor] || 'Undefined Common Color';
+      traits.commonColors = mooseTraits.commonColors.traits[rollCommonColor] || 'Undefined Common Color';
   }
 
   if (isRare && mooseTraits.rareColors) {
@@ -986,6 +1032,8 @@ function rollDie(sides) {
 
 // ------------------- Exports -------------------
 module.exports = {
+  customizationCosts,
+  distractionItems,
   speciesOptions,
   mountEmojis,
   regionalMounts,

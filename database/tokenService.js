@@ -25,19 +25,20 @@ async function getOrCreateToken(userId, tokenTrackerLink = '') {
   let user = await User.findOne({ discordId: userId });
 
   if (!user) {
-    console.log(`[tokenService.js]: Creating a new user for discordId: ${userId}`);
     user = new User({
-      discordId: userId,
-      tokens: 0,
-      tokenTracker: tokenTrackerLink || '',
-      tokensSynced: false,
+        discordId: userId,
+        tokens: 0, // Ensure tokens are initialized to 0
+        tokenTracker: tokenTrackerLink || '',
+        tokensSynced: false,
     });
+    console.log(`[getOrCreateToken]: New user created with 0 tokens for Discord ID: ${userId}`);
     await user.save();
-  } else if (tokenTrackerLink && !user.tokenTracker) {
-    console.log(`[tokenService.js]: Updating tokenTrackerLink for user ${userId}`);
+} else if (tokenTrackerLink && !user.tokenTracker) {
+    console.log(`[getOrCreateToken]: Updating tokenTrackerLink for existing user ${userId}`);
     user.tokenTracker = tokenTrackerLink;
     await user.save();
-  }
+}
+
 
   return user;
 }
