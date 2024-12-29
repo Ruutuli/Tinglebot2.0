@@ -32,6 +32,7 @@ const ItemModel = require('../models/ItemModel'); // Duplicate import removed
 const Party = require('../models/PartyModel');
 const ShopStock = require('../models/ShopsModel');
 const Character = require('../models/CharacterModel')
+const Mount = require('../models/MountModel');
 
 // ------------------- Modules -------------------
 const { getAllRaces } = require('../modules/raceModule');
@@ -56,76 +57,78 @@ async function handleAutocomplete(interaction) {
     const commandName = interaction.commandName; // Get the command name from the interaction
 
 // ------------------- Route based on command name and focused option -------------------
-    if (commandName === 'blight' && focusedOption.name === 'character_name' || focusedOption.name === 'healer_name') {
-      await handleBlightCharacterAutocomplete(interaction, focusedOption);
-    } else if (commandName === 'blight' && focusedOption.name === 'item') {
-      await handleBlightItemAutocomplete(interaction, focusedOption);
-    } else if (commandName === 'crafting' && focusedOption.name === 'itemname') {
-      await handleCraftingAutocomplete(interaction, focusedOption);
-    } else if (commandName === 'createcharacter' && focusedOption.name === 'homevillage') {
-      await handleCreateCharacterVillageAutocomplete(interaction, focusedOption);
-    } else if (commandName === 'createcharacter' && focusedOption.name === 'race') {
-      await handleCreateCharacterRaceAutocomplete(interaction, focusedOption);
-    } else if (commandName === 'editcharacter' && focusedOption.name === 'updatedinfo') {
-      await handleEditCharacterAutocomplete(interaction, focusedOption);
-    } else if (['shops', 'explore', 'raid', 'editcharacter', 'deletecharacter', 'setbirthday', 'viewcharacter', 'testinventorysetup', 'syncinventory', 'crafting', 'gather', 'loot', 'gear'].includes(commandName) && focusedOption.name === 'charactername') {
-      await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, commandName);
-    } else if (commandName === 'explore' && ['item1', 'item2', 'item3'].includes(focusedOption.name)) {
-      await handleExploreItemAutocomplete(interaction, focusedOption);
-    } else if (commandName === 'explore' && focusedOption.name === 'charactername') {
-      await handleExploreRollCharacterAutocomplete(interaction, focusedOption);
-    } else if (commandName === 'gear' && focusedOption.name === 'itemname') {
-      await handleGearAutocomplete(interaction, focusedOption);
-    } else if (commandName === 'gift') {
-      await handleGiftAutocomplete(interaction, focusedOption);
-    } else if (commandName === 'heal') {
-      await handleHealAutocomplete(interaction, focusedOption);
-    } else if (commandName === 'itemheal') {
-      await handleItemHealAutocomplete(interaction, focusedOption);
-    } else if (commandName === 'lookup' && (focusedOption.name === 'item' || focusedOption.name === 'ingredient')) {
-      await handleLookupAutocomplete(interaction, focusedOption);
-    } else if (commandName === 'mount' && focusedOption.name === 'charactername') {
-      await handleMountAutocomplete(interaction, focusedOption);
-    } else if (commandName === 'shops' && focusedOption.name === 'itemname') {
-      await handleShopsAutocomplete(interaction, focusedOption);
-    } else if (commandName === 'trade') {
-      await handleTradeAutocomplete(interaction, focusedOption);
-    } else if (commandName === 'transfer') {
-      await handleTransferAutocomplete(interaction, focusedOption);
-    } else if (commandName === 'travel' && focusedOption.name === 'charactername') {
-      await handleTravelAutocomplete(interaction, focusedOption);
-    } else if (commandName === 'travel' && focusedOption.name === 'destination') {
-      await handleVillageBasedCommandsAutocomplete(interaction, focusedOption);
-    } else if (commandName === 'viewinventory' && focusedOption.name === 'charactername') {
-      await handleViewInventoryAutocomplete(interaction, focusedOption);
-    } else if (commandName === 'vending') {
-      await handleVendingAutocomplete(interaction, focusedOption);
-    } else if (commandName === 'steal' && focusedOption.name === 'target') {
-      // Handle the /steal command's target option autocomplete
-      const npcChoices = [
-        'NPC - Hank the Herbalist',
-        'NPC - Sue the Fisherman',
-        'NPC - Lukan the Orchard Keeper',
-        'NPC - Myti the Scout',
-        'NPC - Cree the Monster Hunter',
-        'NPC - Cece the Mushroom Forager',
-        'NPC - Walton the Korok',
-        'NPC - Jengo the Miner',
-        'NPC - Jasz the Hunter',
-        'NPC - Lecia the Scholar',
-        'NPC - Tye the Botanist',
-        'NPC - Lil Tim the Cucco'
-      ];
-      const filteredNPCs = npcChoices.filter(choice => choice.toLowerCase().includes(focusedOption.value.toLowerCase()));
-      await interaction.respond(filteredNPCs.map(choice => ({ name: choice, value: choice })));
-    } else if (commandName === 'steal' && focusedOption.name === 'rarity') {
-      // Handle the /steal command's rarity option autocomplete
-      const choices = ['common', 'uncommon', 'rare'];
-      const filtered = choices.filter(choice => choice.startsWith(focusedOption.value.toLowerCase()));
-      await interaction.respond(filtered.map(choice => ({ name: choice, value: choice })));
-    } else {
-      await interaction.respond([]);
-    }
+if (commandName === 'blight' && focusedOption.name === 'character_name' || focusedOption.name === 'healer_name') {
+  await handleBlightCharacterAutocomplete(interaction, focusedOption);
+} else if (commandName === 'blight' && focusedOption.name === 'item') {
+  await handleBlightItemAutocomplete(interaction, focusedOption);
+} else if (commandName === 'crafting' && focusedOption.name === 'itemname') {
+  await handleCraftingAutocomplete(interaction, focusedOption);
+} else if (commandName === 'createcharacter' && focusedOption.name === 'homevillage') {
+  await handleCreateCharacterVillageAutocomplete(interaction, focusedOption);
+} else if (commandName === 'createcharacter' && focusedOption.name === 'race') {
+  await handleCreateCharacterRaceAutocomplete(interaction, focusedOption);
+} else if (commandName === 'editcharacter' && focusedOption.name === 'updatedinfo') {
+  await handleEditCharacterAutocomplete(interaction, focusedOption);
+} else if (['shops', 'explore', 'raid', 'editcharacter', 'deletecharacter', 'setbirthday', 'viewcharacter', 'testinventorysetup', 'syncinventory', 'crafting', 'gather', 'loot', 'gear'].includes(commandName) && focusedOption.name === 'charactername') {
+  await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, commandName);
+} else if (commandName === 'explore' && ['item1', 'item2', 'item3'].includes(focusedOption.name)) {
+  await handleExploreItemAutocomplete(interaction, focusedOption);
+} else if (commandName === 'explore' && focusedOption.name === 'charactername') {
+  await handleExploreRollCharacterAutocomplete(interaction, focusedOption);
+} else if (commandName === 'gear' && focusedOption.name === 'itemname') {
+  await handleGearAutocomplete(interaction, focusedOption);
+} else if (commandName === 'gift') {
+  await handleGiftAutocomplete(interaction, focusedOption);
+} else if (commandName === 'heal') {
+  await handleHealAutocomplete(interaction, focusedOption);
+} else if (commandName === 'itemheal') {
+  await handleItemHealAutocomplete(interaction, focusedOption);
+} else if (commandName === 'lookup' && (focusedOption.name === 'item' || focusedOption.name === 'ingredient')) {
+  await handleLookupAutocomplete(interaction, focusedOption);
+} else if ((commandName === 'stable' || commandName === 'mount') && focusedOption.name === 'charactername') {
+  await handleMountAutocomplete(interaction, focusedOption); // Autocomplete for all characters
+} else if ((commandName === 'stable' || commandName === 'mount') && focusedOption.name === 'mountname') {
+  await handleMountNameAutocomplete(interaction, focusedOption); // Autocomplete for stored mounts only
+} else if (commandName === 'shops' && focusedOption.name === 'itemname') {
+  await handleShopsAutocomplete(interaction, focusedOption);
+} else if (commandName === 'trade') {
+  await handleTradeAutocomplete(interaction, focusedOption);
+} else if (commandName === 'transfer') {
+  await handleTransferAutocomplete(interaction, focusedOption);
+} else if (commandName === 'travel' && focusedOption.name === 'charactername') {
+  await handleTravelAutocomplete(interaction, focusedOption);
+} else if (commandName === 'travel' && focusedOption.name === 'destination') {
+  await handleVillageBasedCommandsAutocomplete(interaction, focusedOption);
+} else if (commandName === 'viewinventory' && focusedOption.name === 'charactername') {
+  await handleViewInventoryAutocomplete(interaction, focusedOption);
+} else if (commandName === 'vending') {
+  await handleVendingAutocomplete(interaction, focusedOption);
+} else if (commandName === 'steal' && focusedOption.name === 'target') {
+  // Handle the /steal command's target option autocomplete
+  const npcChoices = [
+    'NPC - Hank the Herbalist',
+    'NPC - Sue the Fisherman',
+    'NPC - Lukan the Orchard Keeper',
+    'NPC - Myti the Scout',
+    'NPC - Cree the Monster Hunter',
+    'NPC - Cece the Mushroom Forager',
+    'NPC - Walton the Korok',
+    'NPC - Jengo the Miner',
+    'NPC - Jasz the Hunter',
+    'NPC - Lecia the Scholar',
+    'NPC - Tye the Botanist',
+    'NPC - Lil Tim the Cucco'
+  ];
+  const filteredNPCs = npcChoices.filter(choice => choice.toLowerCase().includes(focusedOption.value.toLowerCase()));
+  await interaction.respond(filteredNPCs.map(choice => ({ name: choice, value: choice })));
+} else if (commandName === 'steal' && focusedOption.name === 'rarity') {
+  // Handle the /steal command's rarity option autocomplete
+  const choices = ['common', 'uncommon', 'rare'];
+  const filtered = choices.filter(choice => choice.startsWith(focusedOption.value.toLowerCase()));
+  await interaction.respond(filtered.map(choice => ({ name: choice, value: choice })));
+} else {
+  await interaction.respond([]);
+}
 
     } catch (error) {
       // Catch and handle errors
@@ -818,10 +821,9 @@ async function handleLookupAutocomplete(interaction, focusedOption) {
   }
 }
 
-// ------------------- Handles autocomplete for mount selection -------------------
+// ------------------- Handles autocomplete for mount and stable selection -------------------
 async function handleMountAutocomplete(interaction, focusedOption) {
   try {
-    // Extract user ID from the interaction
     const userId = interaction.user.id;
 
     // Fetch all characters associated with the user
@@ -830,30 +832,30 @@ async function handleMountAutocomplete(interaction, focusedOption) {
     // Determine the subcommand being used
     const subcommand = interaction.options.getSubcommand();
 
-    // Apply specific filtering and formatting based on the subcommand
+    // Apply specific filtering for different subcommands
     const choices = characters
       .filter(character => {
-        // For `/mount view`, only include characters with `mount: true`
-        if (subcommand === 'view') {
-          return character.mount;
+        if (subcommand === 'retrieve' || subcommand === 'store' || subcommand === 'sell') {
+          // Include only characters with mounts for these subcommands
+          return true;
+        } else if (subcommand === 'view') {
+          // Include all characters for view
+          return true;
         }
-        return true; // Include all characters for other subcommands
+        return false; // Default case (shouldn't trigger)
       })
       .map(character => ({
-        // Include village information for `/mount encounter`, but exclude it for `/mount view`
-        name: subcommand === 'view' ? character.name : `${character.name} - ${capitalize(character.currentVillage)}`,
-        value: character.name, // Use character name as the value
+        name: character.name, // Show character name
+        value: character.name, // Use character name as value
       }));
 
-    // Filter choices based on user input and respond
+    // Filter choices and respond
     await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
-    // Log and handle errors gracefully
     console.error('[handleMountAutocomplete]: Error handling mount autocomplete:', error);
     await safeRespondWithError(interaction);
   }
 }
-
 
 // ------------------- Handles autocomplete for shop interactions -------------------
 async function handleShopsAutocomplete(interaction, focusedOption) {
@@ -1399,6 +1401,44 @@ async function handleVillageBasedCommandsAutocomplete(interaction, focusedOption
   }
 }
 
+// ------------------- Handles autocomplete for mount names -------------------
+// ------------------- Handles autocomplete for mount names -------------------
+async function handleMountNameAutocomplete(interaction, focusedOption) {
+  try {
+    const userId = interaction.user.id;
+    const characterName = interaction.options.getString('charactername');
+
+    // Ensure a character name is provided
+    if (!characterName) {
+      await interaction.respond([]);
+      return;
+    }
+
+    // Fetch the character by name and user ID
+    const character = await fetchCharacterByNameAndUserId(characterName, userId);
+
+    // Ensure the character exists
+    if (!character) {
+      await interaction.respond([]);
+      return;
+    }
+
+    // Fetch only mounts belonging to the character
+    const mounts = await Mount.find({ owner: character.name });
+
+    // Map mounts to autocomplete choices
+    const choices = mounts.map(mount => ({
+      name: mount.name, // Display mount name
+      value: mount.name // Use mount name as value
+    })).slice(0, 25); // Limit to 25 results
+
+    await interaction.respond(choices);
+  } catch (error) {
+    console.error('Error handling mount name autocomplete:', error);
+    await interaction.respond([]);
+  }
+}
+
 
 // ------------------- Export Functions -------------------
 module.exports = {
@@ -1428,6 +1468,7 @@ module.exports = {
   handleViewInventoryAutocomplete,
   handleViewVendingShopAutocomplete,
   handleVendingEditShopAutocomplete,
-  handleVillageBasedCommandsAutocomplete
+  handleVillageBasedCommandsAutocomplete,
+  handleMountNameAutocomplete
 };
 

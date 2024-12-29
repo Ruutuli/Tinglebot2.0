@@ -1669,7 +1669,6 @@ async function handleMountNameSubmission(interaction) {
             characterId: character._id,
             species: encounter.mountType,
             level: encounter.mountLevel,
-            appearance: encounter.traits,
             name: mountName,
             stamina: encounter.mountStamina,
             owner: character.name,

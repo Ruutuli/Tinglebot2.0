@@ -1030,6 +1030,49 @@ function rollDie(sides) {
   return Math.max(1, Math.min(Math.floor(Math.random() * sides) + 1, sides));
 }
 
+// ------------------- Calculate Mount Price -------------------
+function calculateMountPrice(mount) {
+  const basePrices = {
+    Basic: 50,  // Base price for Basic level mounts
+    Mid: 100,   // Base price for Mid level mounts
+    High: 250,  // Base price for High level mounts
+  };
+
+  const regionalMounts = {
+    'Ostrich': 'Rudania',
+    'Bullbo': 'Rudania',
+    'Dodongo': 'Rudania',
+    'Mountain Goat': 'Inariko',
+    'Water Buffalo': 'Inariko',
+    'Moose': 'Inariko',
+    'Deer': 'Vhintl',
+    'Wolfos': 'Vhintl',
+    'Bear': 'Vhintl',
+    'Horse': 'All Villages',
+    'Donkey': 'All Villages',
+  };
+
+  const basePrice = basePrices[mount.level] || 50; // Default to Basic price if level is undefined
+  const rarityMultiplier = mount.isRare ? 2 : 1;   // Rare mounts double the price
+  const mountRegion = regionalMounts[mount.species];
+  const regionalBonus = mountRegion && mountRegion !== 'All Villages' && mount.region === mountRegion ? 50 : 0; // Regional bonus only if matches
+
+  // Log details of the calculation
+  console.log('[mountModule.js]: Calculating base price for mount:', mount.name);
+  console.log(`[mountModule.js]: Base price based on level (${mount.level}): ${basePrice}`);
+  console.log(`[mountModule.js]: Rarity multiplier (isRare: ${mount.isRare}): ${rarityMultiplier}`);
+  console.log(`[mountModule.js]: Regional bonus (species: ${mount.species}, region: ${mount.region}): ${regionalBonus}`);
+
+  const finalPrice = (basePrice + regionalBonus) * rarityMultiplier;
+
+  // Log the final calculated price
+  console.log(`[mountModule.js]: Final calculated price for mount "${mount.name}": ${finalPrice}`);
+
+  return finalPrice;
+}
+
+
+
 // ------------------- Exports -------------------
 module.exports = {
   customizationCosts,
@@ -1075,5 +1118,6 @@ module.exports = {
   mooseTraits,
   generateMooseTraits,
   generateMountainGoatTraits,
-  mountainGoatTraits
+  mountainGoatTraits,
+  calculateMountPrice
 };

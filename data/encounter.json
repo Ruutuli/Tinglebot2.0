@@ -40,5 +40,61 @@
       "coatPattern": "Solid"
     },
     "totalSpent": 80
+  },
+  "fff8d585": {
+    "users": [
+      {
+        "characterName": "Alden",
+        "userId": "211219306137124865"
+      }
+    ],
+    "mountType": "Donkey",
+    "rarity": "Regular",
+    "mountLevel": "Mid",
+    "mountStamina": 3,
+    "environment": "Plains",
+    "village": "Vhintl",
+    "actions": [],
+    "tameStatus": true,
+    "traits": {},
+    "totalSpent": 0
+  },
+  "6747db4b": {
+    "users": [
+      {
+        "characterName": "Alden",
+        "userId": "211219306137124865"
+      }
+    ],
+    "mountType": "Donkey",
+    "rarity": "Regular",
+    "mountLevel": "High",
+    "mountStamina": 5,
+    "environment": "Mountainous",
+    "village": "Rudania",
+    "actions": [],
+    "tameStatus": true,
+    "traits": {},
+    "totalSpent": 0
+  },
+  "b0026f6c": {
+    "users": [
+      {
+        "characterName": "Alden",
+        "userId": "211219306137124865"
+      }
+    ],
+    "mountType": "Ostrich",
+    "rarity": "Regular",
+    "mountLevel": "Basic",
+    "mountStamina": 1,
+    "environment": "Tall grass",
+    "village": "Rudania",
+    "actions": [],
+    "tameStatus": true,
+    "traits": {
+      "commonColors": "Brown and Blue"
+    },
+    "totalSpent": 100
   }
 }

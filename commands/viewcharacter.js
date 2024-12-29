@@ -4,6 +4,9 @@ const { fetchCharacterByNameAndUserId, fetchCharactersByUserId } = require('../d
 const { createCharacterEmbed, createVendorEmbed, createCharacterGearEmbed } = require('../embeds/characterEmbeds');
 const { getJobPerk } = require('../modules/jobsModule');
 const ItemModel = require('../models/ItemModel');
+const Mount = require('../models/MountModel');
+const { getMountEmoji, getMountThumbnail } = require('../modules/mountModule');
+const { getCommonEmbedSettings, formatItemDetails, getArticleForItem, DEFAULT_IMAGE_URL, jobActions } = require('../embeds/embedUtils');
 
 module.exports = {
   // ------------------- Slash command definition -------------------
@@ -31,8 +34,10 @@ module.exports = {
         return;
       }
 
+      // Get common embed settings
+      const settings = getCommonEmbedSettings(character);
+
       // Create the character embed
-      
       const characterEmbed = createCharacterEmbed(character);
 
       // Fetch item details from the database
@@ -70,6 +75,35 @@ module.exports = {
       if (jobPerkInfo?.perks.includes('VENDING') && character.vendorType) {
         const vendorEmbed = createVendorEmbed(character);
         if (vendorEmbed) embeds.push(vendorEmbed);
+      }
+
+      // Fetch the mount associated with the character
+      const mount = await Mount.findOne({ characterId: character._id });
+      if (mount) {
+        const speciesEmoji = getMountEmoji(mount.species);
+        const formattedTraits = mount.traits && mount.traits.length
+          ? mount.traits.map(trait => `> ${trait}`).join('\n')
+          : 'No traits available';
+
+        const mountEmbed = {
+          title: `${speciesEmoji} **${mount.name}** - Mount Details`,
+          description: `✨ **Mount Stats for**: **${character.name}**`,
+          fields: [
+            { name: '🌟 **__Species__**', value: `> ${mount.species || 'Unknown'}`, inline: true },
+            { name: '#️⃣ **__Level__**', value: `> ${mount.level || 'Unknown'}`, inline: true },
+            { name: '🥕 **__Stamina__**', value: `> ${mount.stamina || 'Unknown'}`, inline: true },
+            { name: '👤 **__Owner__**', value: `> ${mount.owner || 'Unknown'}`, inline: true },
+            { name: '🌍 **__Region__**', value: `> ${mount.region || 'Unknown'}`, inline: true },
+            { name: '✨ **__Traits__**', value: `${formattedTraits}`, inline: false }
+          ],
+          color: parseInt(settings.color.replace('#', ''), 16),
+          thumbnail: { url: getMountThumbnail(mount.species) },
+          image: { url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png' },
+          footer: { text: `${character.name}'s Mount Stats`, iconURL: character.icon },
+          timestamp: new Date(),
+        };
+
+        embeds.push(mountEmbed);
       }
 
       // Reply with the embeds

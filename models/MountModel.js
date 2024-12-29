@@ -21,10 +21,6 @@ const MountSchema = new mongoose.Schema({
     required: true,
     enum: ['Basic', 'Mid', 'High', 'Legendary'], // The defined levels
   },
-  appearance: {
-    type: Object, // Store appearance details as an object
-    required: true
-  },
   name: {
     type: String,
     required: true
@@ -52,8 +48,24 @@ const MountSchema = new mongoose.Schema({
     type: String,
     required: false,
     enum: ['Rudania', 'Inariko', 'Vhintl', 'Global'] // Example regions
+  },
+  isStored: { // Tracks if the mount is in storage
+    type: Boolean,
+    default: false
+  },
+  storageLocation: { // Specifies where the mount is stored
+    type: String,
+    default: null
+  },
+  storedAt: { // Timestamp for when the mount was stored
+    type: Date,
+    default: null
+  },
+  removedFromStorageAt: { // Timestamp for when the mount was removed from storage
+    type: Date,
+    default: null
   }
-}, { timestamps: true }); // Ensure this closing bracket is here for the schema
+}, { timestamps: true }); // Include timestamps for creation and updates
 
 // ------------------- Export the Mount Model -------------------
 module.exports = mongoose.model('Mount', MountSchema);
