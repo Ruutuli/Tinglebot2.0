@@ -990,20 +990,18 @@ async function handleViewShop(interaction) {
         };
 
         // Create buttons for pagination
-        const buttons = (currentPage) => {
-            return new ActionRowBuilder().addComponents(
-                new ButtonBuilder()
-                    .setCustomId('prev_page')
-                    .setLabel('Previous')
-                    .setStyle(ButtonStyle.Primary)
-                    .setDisabled(currentPage === 1),
-                new ButtonBuilder()
-                    .setCustomId('next_page')
-                    .setLabel('Next')
-                    .setStyle(ButtonStyle.Primary)
-                    .setDisabled(currentPage === totalPages)
-            );
-        };
+        const createButtons = (currentPage) => new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId('prev_page')
+                .setLabel('Previous')
+                .setStyle(ButtonStyle.Primary)
+                .setDisabled(currentPage === 1),
+            new ButtonBuilder()
+                .setCustomId('next_page')
+                .setLabel('Next')
+                .setStyle(ButtonStyle.Primary)
+                .setDisabled(currentPage === totalPages)
+        );
 
         // Initial page setup
         let currentPage = 1;
@@ -1012,7 +1010,7 @@ async function handleViewShop(interaction) {
         // Send the initial message
         const message = await interaction.reply({
             embeds: [embed],
-            components: [buttons(currentPage)],
+            components: [createButtons(currentPage)],
             fetchReply: true,
         });
 
@@ -1023,46 +1021,58 @@ async function handleViewShop(interaction) {
         });
 
         collector.on('collect', async (btnInteraction) => {
-            if (btnInteraction.customId === 'prev_page') {
-                currentPage--;
-            } else if (btnInteraction.customId === 'next_page') {
-                currentPage++;
-            }
+            try {
+                if (btnInteraction.customId === 'prev_page') {
+                    currentPage = Math.max(1, currentPage - 1);
+                } else if (btnInteraction.customId === 'next_page') {
+                    currentPage = Math.min(totalPages, currentPage + 1);
+                } else {
+                    console.warn(`[Pagination]: Unhandled button interaction: ${btnInteraction.customId}`);
+                    return;
+                }
 
-            // Update the embed and buttons
-            await btnInteraction.update({
-                embeds: [generateEmbed(currentPage)],
-                components: [buttons(currentPage)],
-            });
+                // Update the embed and buttons
+                await btnInteraction.update({
+                    embeds: [generateEmbed(currentPage)],
+                    components: [createButtons(currentPage)],
+                });
+            } catch (error) {
+                if (error.code === 10008) {
+                    console.error('[handleViewShop]: Message not found or interaction expired.');
+                    collector.stop();
+                } else {
+                    console.error('[handleViewShop]: Error handling button interaction:', error);
+                }
+            }
         });
 
         collector.on('end', async () => {
-            // Disable buttons when collector ends
-            await message.edit({
-                components: [
-                    new ActionRowBuilder().addComponents(
-                        new ButtonBuilder()
-                            .setCustomId('prev_page')
-                            .setLabel('Previous')
-                            .setStyle(ButtonStyle.Primary)
-                            .setDisabled(true),
-                        new ButtonBuilder()
-                            .setCustomId('next_page')
-                            .setLabel('Next')
-                            .setStyle(ButtonStyle.Primary)
-                            .setDisabled(true)
-                    ),
-                ],
-            });
+            try {
+                // Disable buttons when collector ends
+                await message.edit({
+                    components: [],
+                });
+            } catch (error) {
+                if (error.code !== 10008) {
+                    console.error('[handleViewShop]: Error disabling buttons:', error);
+                }
+            }
         });
     } catch (error) {
         console.error(`[handleViewShop]: Error viewing shop for user '${interaction.user.id}':`, error);
-        await interaction.reply({
-            content: `❌ An error occurred while viewing the shop: ${error.message}`,
-            ephemeral: true,
-        });
+        try {
+            await interaction.reply({
+                content: `❌ An error occurred while viewing the shop: ${error.message}`,
+                ephemeral: true,
+            });
+        } catch (replyError) {
+            if (replyError.code !== 10008) {
+                console.error('[handleViewShop]: Error sending reply:', replyError);
+            }
+        }
     }
 }
+
 
 // ------------------- shop link -------------------
 async function handleShopLink(interaction) {
@@ -1424,6 +1434,96 @@ async function handleEditShop(interaction) {
     }
 }
 
+// ------------------- Handle the Vending Sync Subcommand -------------------
+async function handleVendingSync(interaction) {
+    try {
+        const characterName = interaction.options.getString('charactername');
+        const userId = interaction.user.id;
+
+        // Fetch the character
+        const character = await fetchCharacterByNameAndUserId(characterName, userId);
+        if (!character) {
+            throw new Error(`Character '${characterName}' not found or does not belong to you.`);
+        }
+
+        console.log(`[handleVendingSync]: Retrieved character details:`, character);
+
+        if (character.vendingSync) {
+            throw new Error(`The sync has already been completed for **${characterName}**.`);
+        }
+
+        const shopLink = character.shopLink;
+        console.log(`[handleVendingSync]: Retrieved shop link for character '${characterName}': '${shopLink}'`);
+
+        if (!shopLink) {
+            throw new Error(`No shop link found for **${characterName}**. Please set up a shop link using the "/vending setup" command.`);
+        }
+
+        // Extract the spreadsheet ID
+        const spreadsheetId = extractSpreadsheetId(shopLink);
+        if (!spreadsheetId) {
+            throw new Error('Invalid shop link. Unable to extract the spreadsheet ID.');
+        }
+
+        // Authorize Google Sheets
+        const auth = await authorizeSheets();
+
+        // Read the vendingShop sheet data
+        const sheetData = await readSheetData(auth, spreadsheetId, 'vendingShop!A:K');
+        if (!sheetData || sheetData.length === 0) {
+            throw new Error('The vendingShop sheet is empty or could not be read.');
+        }
+
+        const headerRow = sheetData[0];
+        const rows = sheetData.slice(1);
+
+        // Ensure the header contains a "Date" column
+        const dateColumnIndex = headerRow.indexOf('DATE');
+        if (dateColumnIndex === -1) {
+            throw new Error('The vendingShop sheet does not contain a DATE column.');
+        }
+
+        // Filter rows marked as "Old Stock"
+        const oldStockRows = rows.filter(row => row[dateColumnIndex]?.toLowerCase() === 'old stock');
+        if (oldStockRows.length === 0) {
+            throw new Error('No rows marked as "Old Stock" found in the vendingShop sheet.');
+        }
+
+        // Add items to the vending inventory
+        for (const row of oldStockRows) {
+            const [characterName, itemName, stockQty] = row;
+            const quantity = parseInt(stockQty, 10);
+
+            if (!itemName || isNaN(quantity)) {
+                console.warn(`[handleVendingSync]: Skipping invalid row: ${JSON.stringify(row)}`);
+                continue;
+            }
+
+            await addItemToVendingInventory(characterName.toLowerCase(), {
+                characterName,
+                itemName,
+                stockQty: quantity,
+                date: new Date(),
+            });
+        }
+
+        // Mark the character as synced
+        await updateCharacterById(character._id, { vendingSync: true });
+
+        // Reply with success
+        await interaction.reply({
+            content: `✅ Successfully synced **${oldStockRows.length} items** from "Old Stock" for **${characterName}**.`,
+            ephemeral: true,
+        });
+    } catch (error) {
+        console.error('[handleVendingSync]: Error syncing vending inventory:', error);
+        await interaction.reply({
+            content: `❌ An error occurred while syncing: ${error.message}`,
+            ephemeral: true,
+        });
+    }
+}
+
 
 module.exports = {
     executeVending,
@@ -1433,7 +1533,8 @@ module.exports = {
     handleVendingSetup,
     createVendingSetupEmbed,
     handleFulfill,
-    handleEditShop,
+    handleEditShop, 
     initializeReactionHandler,
-    handlePouchUpgrade
+    handlePouchUpgrade,
+    handleVendingSync
 };

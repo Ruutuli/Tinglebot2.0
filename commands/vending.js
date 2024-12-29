@@ -7,7 +7,8 @@ const {
     handleVendingSetup,
     handleEditShop,
     handleFulfill,
-    handlePouchUpgrade
+    handlePouchUpgrade,
+    handleVendingSync 
 } = require('../handlers/vendingHandler');
 
 // ------------------- Define the vending command with various subcommands -------------------
@@ -78,6 +79,18 @@ module.exports = {
                         .setName('tradesopen')
                         .setDescription('Is this item open for trades?')
                         .setRequired(false)
+                )
+        )
+        // ------------------- Subcommand: Sync -------------------
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('sync')
+                .setDescription('Sync old stock from the shop spreadsheet to the vending inventory.')
+                .addStringOption(option =>
+                    option.setName('charactername')
+                        .setDescription('The name of the character.')
+                        .setRequired(true)
+                        .setAutocomplete(true)
                 )
         )
         // ------------------- Subcommand: Barter -------------------
@@ -271,24 +284,26 @@ module.exports = {
         ),
 
     // ------------------- Execute the appropriate command based on user input -------------------
-    async execute(interaction) {
-        const subcommand = interaction.options.getSubcommand();
+async execute(interaction) {
+    const subcommand = interaction.options.getSubcommand();
 
-        // Route to the appropriate handler based on subcommand
-        if (subcommand === 'viewstock') {
-            await viewVendingStock(interaction);
-        } else if (subcommand === 'viewshop') {
-            await handleViewShop(interaction, interaction.user.id);
-        } else if (subcommand === 'setup') {
-            await handleVendingSetup(interaction);
-        } else if (subcommand === 'editshop') {
-            await handleEditShop(interaction);
-        } else if (subcommand === 'fulfill') {
-            await handleFulfill(interaction); 
-        } else if (subcommand === 'pouch') {
-            await handlePouchUpgrade(interaction);
-        } else {
-            await executeVending(interaction);
-        }
-    },
+    // Route to the appropriate handler based on subcommand
+    if (subcommand === 'viewstock') {
+        await viewVendingStock(interaction);
+    } else if (subcommand === 'viewshop') {
+        await handleViewShop(interaction, interaction.user.id);
+    } else if (subcommand === 'setup') {
+        await handleVendingSetup(interaction);
+    } else if (subcommand === 'editshop') {
+        await handleEditShop(interaction);
+    } else if (subcommand === 'fulfill') {
+        await handleFulfill(interaction); 
+    } else if (subcommand === 'pouch') {
+        await handlePouchUpgrade(interaction);
+    } else if (subcommand === 'sync') {
+        await handleVendingSync(interaction); // Added sync handler
+    } else {
+        await executeVending(interaction);
+    }
+},
 };

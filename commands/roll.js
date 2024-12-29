@@ -54,45 +54,44 @@ class Roll {
     }
   }
 
-// ------------------- Handle the dice roll and return the expression and pretty print version -------------------
-static handleDice(d) {
-  // Extract dice count and sides, ensuring they are valid integers
-  const count = d[1] ? parseInt(d[1]) : 1; // Defaults to 1 if not specified
-  const die = d[2] ? parseInt(d[2]) : 20; // Defaults to 20 sides if not specified
+  // ------------------- Handle the dice roll and return the expression and pretty print version -------------------
+  static handleDice(d) {
+    // Extract dice count and sides, ensuring they are valid integers
+    const count = d[1] ? parseInt(d[1]) : 1; // Defaults to 1 if not specified
+    const die = d[2] ? parseInt(d[2]) : 20; // Defaults to 20 sides if not specified
 
-  // ------------------- Add validation for dice count and sides -------------------
-  if (!Number.isInteger(count) || count <= 0) {
-      return { error: `❌ The number of dice must be a positive integer greater than 0. You requested ${count}.` };
+    // ------------------- Add validation for dice count and sides -------------------
+    if (!Number.isInteger(count) || count <= 0) {
+        return { error: `❌ The number of dice must be a positive integer greater than 0. You requested ${count}.` };
+    }
+    if (!Number.isInteger(die) || die <= 0) {
+        return { error: `❌ The number of sides on a die must be a positive integer greater than 0. You requested ${die}.` };
+    }
+
+    // ------------------- Add limits to dice count and die sides -------------------
+    if (count > 100) {
+        return { error: `❌ Maximum allowed number of dice is 100. You requested ${count}.` };
+    }
+    if (die > 1000) {
+        return { error: `❌ Maximum allowed sides on a die is 1000. You requested ${die}.` };
+    }
+
+    // ------------------- Generate dice rolls -------------------
+    const adv = d[3] && d[3].toLowerCase().includes('a');
+    const dis = d[3] && d[3].toLowerCase().includes('d');
+    const ex = Array(count).fill(0).map(() => 1 + Math.floor(mt.random() * die));
+
+    if (adv || dis) {
+        const ex2 = Array(count).fill(0).map(() => 1 + Math.floor(mt.random() * die));
+        const exs = evaluate(ex.join('+'));
+        const ex2s = evaluate(ex2.join('+'));
+        const [best, worst] = [Math.max(exs, ex2s), Math.min(exs, ex2s)];
+        const final = adv ? best : worst;
+        return { pretty: `${ex.join(' ')} > ${ex2.join(' ')}`, expression: final.toString() };
+    }
+
+    return { pretty: ex.join('+'), expression: ex.join('+') };
   }
-  if (!Number.isInteger(die) || die <= 0) {
-      return { error: `❌ The number of sides on a die must be a positive integer greater than 0. You requested ${die}.` };
-  }
-
-  // ------------------- Add limits to dice count and die sides -------------------
-  if (count > 100) {
-      return { error: `❌ Maximum allowed number of dice is 100. You requested ${count}.` };
-  }
-  if (die > 1000) {
-      return { error: `❌ Maximum allowed sides on a die is 1000. You requested ${die}.` };
-  }
-
-  // ------------------- Generate dice rolls -------------------
-  const adv = d[3] && d[3].toLowerCase().includes('a');
-  const dis = d[3] && d[3].toLowerCase().includes('d');
-  const ex = Array(count).fill(0).map(() => 1 + Math.floor(mt.random() * die));
-
-  if (adv || dis) {
-      const ex2 = Array(count).fill(0).map(() => 1 + Math.floor(mt.random() * die));
-      const exs = evaluate(ex.join('+'));
-      const ex2s = evaluate(ex2.join('+'));
-      const [best, worst] = [Math.max(exs, ex2s), Math.min(exs, ex2s)];
-      const final = adv ? best : worst;
-      return { pretty: `${ex.join(' ')} > ${ex2.join(' ')}`, expression: final.toString() };
-  }
-
-  return { pretty: ex.join('+'), expression: ex.join('+') };
-}
-
 
   // ------------------- Generate a random color for the embed message -------------------
   static getRandomColor() {
@@ -141,6 +140,14 @@ module.exports = {
     const sides = interaction.options.getInteger('sides');
     const flavor = interaction.options.getString('flavor');
     const advantage = interaction.options.getString('advantage');
+
+    // Validate inputs before proceeding
+    if (dice <= 0) {
+      return await interaction.reply({ content: `❌ The number of dice must be a positive integer greater than 0. You requested ${dice}.`, ephemeral: true });
+    }
+    if (sides <= 0) {
+      return await interaction.reply({ content: `❌ The number of sides on a die must be a positive integer greater than 0. You requested ${sides}.`, ephemeral: true });
+    }
 
     // Construct the roll expression
     let expression = `${dice}d${sides}`;

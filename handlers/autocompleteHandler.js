@@ -841,6 +841,9 @@ async function handleMountAutocomplete(interaction, focusedOption) {
         } else if (subcommand === 'view') {
           // Include all characters for view
           return true;
+        } else if (subcommand === 'encounter') {
+          // Include only characters owned by the user (specific for encounter)
+          return true;
         }
         return false; // Default case (shouldn't trigger)
       })
@@ -1047,7 +1050,7 @@ async function handleTravelAutocomplete(interaction, focusedOption) {
 async function handleVendingAutocomplete(interaction, focusedOption) {
   try {
       const userId = interaction.user.id; // Extract user ID from the interaction
-      const subcommand = interaction.options.getSubcommand(); // Get the subcommand (e.g., restock, barter, editshop, pouch)
+      const subcommand = interaction.options.getSubcommand(); // Get the subcommand (e.g., restock, barter, editshop, pouch, sync, viewshop)
 
       console.log('[handleVendingAutocomplete]: Interaction received.', {
           focusedOptionName: focusedOption.name,
@@ -1057,7 +1060,7 @@ async function handleVendingAutocomplete(interaction, focusedOption) {
 
       if (subcommand === 'barter') {
           if (focusedOption.name === 'charactername') {
-              console.log('[handleVendingAutocomplete]: Handling charactername autocomplete.');
+              console.log('[handleVendingAutocomplete]: Handling charactername autocomplete for barter.');
 
               // Fetch characters owned by the user
               const characters = await fetchCharactersByUserId(userId);
@@ -1099,7 +1102,7 @@ async function handleVendingAutocomplete(interaction, focusedOption) {
                   await interaction.respond([]);
               }
           } else if (focusedOption.name === 'itemname') {
-              console.log(`[handleVendingAutocomplete]: Handling itemname autocomplete for subcommand: ${subcommand}.`);
+              console.log(`[handleVendingAutocomplete]: Handling itemname autocomplete for barter.`);
 
               const vendorCharacter = interaction.options.getString('vendorcharacter');
               if (!vendorCharacter) {
@@ -1168,6 +1171,51 @@ async function handleVendingAutocomplete(interaction, focusedOption) {
               await respondWithFilteredChoices(interaction, focusedOption, choices); // Respond with vending characters
           } else {
               console.warn(`[handleVendingAutocomplete]: Unsupported focused option '${focusedOption.name}' for subcommand 'pouch'.`);
+              await interaction.respond([]);
+          }
+      } else if (subcommand === 'sync') {
+          if (focusedOption.name === 'charactername') {
+              console.log('[handleVendingAutocomplete]: Handling charactername autocomplete for sync.');
+
+              // Fetch characters owned by the user
+              const characters = await fetchCharactersByUserId(userId);
+              if (!characters || characters.length === 0) {
+                  console.warn('[handleVendingAutocomplete]: No characters found for the user.');
+                  return await interaction.respond([]);
+              }
+
+              // Filter characters based on vendingSync status
+              const unsyncedCharacters = characters.filter(character => !character.vendingSync);
+              const choices = unsyncedCharacters.map(character => ({
+                  name: `${character.name}`,
+                  value: character.name,
+              }));
+
+              await respondWithFilteredChoices(interaction, focusedOption, choices); // Respond with unsynced characters
+          } else {
+              console.warn(`[handleVendingAutocomplete]: Unsupported focused option '${focusedOption.name}' for subcommand 'sync'.`);
+              await interaction.respond([]);
+          }
+      } else if (subcommand === 'viewshop') {
+          if (focusedOption.name === 'charactername') {
+              console.log('[handleVendingAutocomplete]: Handling charactername autocomplete for viewshop.');
+
+              // Fetch characters owned by the user
+              const characters = await Character.find({ vendingSetup: true }); // Only fetch characters with vendingSetup true
+              if (!characters || characters.length === 0) {
+                  console.warn('[handleVendingAutocomplete]: No characters found with vending setup enabled.');
+                  return await interaction.respond([]);
+              }
+
+              // Map characters to autocomplete choices
+              const choices = characters.map(character => ({
+                  name: `${character.name} (${character.currentVillage})`,
+                  value: character.name,
+              }));
+
+              await respondWithFilteredChoices(interaction, focusedOption, choices); // Respond with characters for viewshop
+          } else {
+              console.warn(`[handleVendingAutocomplete]: Unsupported focused option '${focusedOption.name}' for subcommand 'viewshop'.`);
               await interaction.respond([]);
           }
       } else {
