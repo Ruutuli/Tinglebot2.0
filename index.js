@@ -106,13 +106,13 @@ async function initializeClient() {
     //   console.error('[index.js]: ❌ Vending stock generation error:', error);
     // }
 
-    // // Initialize Random Encounter Functionality
-    // try {
-    //   initializeRandomEncounterBot(client);
-    //   console.log('[index.js]: ⚔️ Random encounter functionality initialized');
-    // } catch (error) {
-    //   console.error('[index.js]: ❌ Error initializing random encounters:', error);
-    // }
+    // Initialize Random Encounter Functionality
+    try {
+      initializeRandomEncounterBot(client);
+      console.log('[index.js]: ⚔️ Random encounter functionality initialized');
+    } catch (error) {
+      console.error('[index.js]: ❌ Error initializing random encounters:', error);
+    }
   });
 
 // ------------------- Interaction Handlers -------------------
@@ -152,8 +152,9 @@ client.on('interactionCreate', async interaction => {
       } else if (interaction.isStringSelectMenu()) {
           await handleSelectMenuInteraction(interaction);
       } else if (interaction.isAutocomplete()) {
-          await handleAutocomplete(interaction);
-      } else if (interaction.isModalSubmit()) {
+        console.log(`[index.js] Autocomplete interaction detected: ${interaction.commandName}`);
+        await handleAutocomplete(interaction); // Ensure proper routing
+    } else if (interaction.isModalSubmit()) {
           const { handleModalSubmission } = require('./handlers/modalHandler');
           await handleModalSubmission(interaction);
       } else {

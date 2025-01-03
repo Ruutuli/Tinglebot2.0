@@ -66,21 +66,45 @@ async function getMonstersAboveTier(minTier = 5) {
         return null;
     }
 }
-  
-  // ------------------- Export functions -------------------
-  module.exports = {
-      fetchAllMonsters,
-      fetchMonsterByName,
-      getMonsterDetailsByMapping,
-      getMonstersAboveTier // Updated this to default to tier 5 and above
-  };
-  
+
+// ------------------- getMonstersAboveTierByRegion -------------------
+
+// Fetch all monsters above a specified tier (minimum tier 5) for a specific region
+async function getMonstersAboveTierByRegion(minTier = 5, region) {
+    try {
+        if (!region) {
+            console.error('❌ No region provided for filtering monsters.');
+            return null;
+        }
+
+        const filter = {
+            tier: { $gte: minTier }, // Tier filter
+            [region.toLowerCase()]: true, // Region-specific filter
+        };
+
+        const monsters = await Monster.find(filter).exec();
+        if (!monsters || monsters.length === 0) {
+            console.error(`❌ No monsters found above tier ${minTier} for region: ${region}.`);
+            return null;
+        }
+
+        // Randomly select a monster from the filtered results
+        const randomMonster = monsters[Math.floor(Math.random() * monsters.length)];
+
+        console.log(`🧟 Monster selected for region ${region}: ${randomMonster.name}, Tier: ${randomMonster.tier}, Hearts: ${randomMonster.hearts}`);
+        return randomMonster;
+    } catch (error) {
+        console.error(`Error fetching monsters above tier ${minTier} for region ${region}:`, error);
+        return null;
+    }
+}
 
 // ------------------- Export functions -------------------
 module.exports = {
     fetchAllMonsters,
     fetchMonsterByName,
     getMonsterDetailsByMapping,
-    getMonstersAboveTier
+    getMonstersAboveTier,
+    getMonstersAboveTierByRegion
 };
 

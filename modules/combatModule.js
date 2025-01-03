@@ -33,20 +33,37 @@ async function storeBattleProgress(battleId, character, monster, tier, monsterHe
     if (!battleProgress[battleId]) {
         battleProgress[battleId] = {
             battleId,
-            characters: [character.name],  // Store the character's name
+            characters: [character], // Store the full character object
             monster: monster.name,
             tier: tier,
             monsterHearts: {
                 max: monster.hearts,
-                current: monsterHearts.current
+                current: monsterHearts.current,
             },
-            progress: ''  // Initialize progress message
+            progress: '', // Initialize progress message
         };
     } else {
-        // Add character to existing battle if not already present
-        if (!battleProgress[battleId].characters.includes(character.name)) {
-            battleProgress[battleId].characters.push(character.name);
+        // Prevent duplicate entries for the same character
+        const isSameCharacter = battleProgress[battleId].characters.some(
+            (char) => char.userId === character.userId && char.name === character.name
+        );
+
+        if (!isSameCharacter) {
+            // Prevent multiple characters from the same user
+            const existingUserCharacter = battleProgress[battleId].characters.find(
+                (char) => char.userId === character.userId
+            );
+
+            if (existingUserCharacter) {
+                throw new Error(
+                    `User "${character.userId}" already has a character (${existingUserCharacter.name}) in this raid.`
+                );
+            }
+
+            // Add character to existing battle
+            battleProgress[battleId].characters.push(character);
         }
+
         // Update monster's current hearts, ensuring it doesn't drop below zero
         battleProgress[battleId].monsterHearts.current = Math.max(monsterHearts.current, 0);
     }

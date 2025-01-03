@@ -25,6 +25,7 @@ const {
 } = require('../database/characterService');
 const { fetchItemByName, fetchCraftableItemsAndCheckMaterials } = require('../database/itemService');
 const { getCurrentVendingStockList, updateItemStockByName, updateVendingStock, VILLAGE_ICONS, VILLAGE_IMAGES } = require("../database/vendingService");
+const { connectToInventories } = require('../database/connection');
 
 // ------------------- Database Models -------------------
 const Item = require('../models/ItemModel');
@@ -33,6 +34,8 @@ const Party = require('../models/PartyModel');
 const ShopStock = require('../models/ShopsModel');
 const Character = require('../models/CharacterModel')
 const Mount = require('../models/MountModel');
+const { Village } = require('../models/VillageModel');
+const initializeInventoryModel = require('../models/InventoryModel');
 
 // ------------------- Modules -------------------
 const { getAllRaces } = require('../modules/raceModule');
@@ -99,6 +102,10 @@ if (commandName === 'blight' && focusedOption.name === 'character_name' || focus
   await handleTravelAutocomplete(interaction, focusedOption);
 } else if (commandName === 'travel' && focusedOption.name === 'destination') {
   await handleVillageBasedCommandsAutocomplete(interaction, focusedOption);
+} else if (commandName === 'village' && focusedOption.name === 'itemname') {
+  await handleVillageMaterialsAutocomplete(interaction);
+} else if (commandName === 'village' && focusedOption.name === 'charactername') {
+  await handleVillageUpgradeCharacterAutocomplete(interaction);
 } else if (commandName === 'viewinventory' && focusedOption.name === 'charactername') {
   await handleViewInventoryAutocomplete(interaction, focusedOption);
 } else if (commandName === 'vending') {
@@ -1450,7 +1457,6 @@ async function handleVillageBasedCommandsAutocomplete(interaction, focusedOption
 }
 
 // ------------------- Handles autocomplete for mount names -------------------
-// ------------------- Handles autocomplete for mount names -------------------
 async function handleMountNameAutocomplete(interaction, focusedOption) {
   try {
     const userId = interaction.user.id;
@@ -1487,6 +1493,115 @@ async function handleMountNameAutocomplete(interaction, focusedOption) {
   }
 }
 
+// ------------------- handle Village Materials Autocomplete -------------------
+async function handleVillageMaterialsAutocomplete(interaction) {
+  const focusedValue = interaction.options.getFocused(); // User input
+  const villageName = interaction.options.getString('name');
+  const characterName = interaction.options.getString('charactername'); // Selected character name
+  const userId = interaction.user.id;
+
+  console.log(`[autocomplete] Triggered for user: ${userId}, village: ${villageName}, character: ${characterName}, input: "${focusedValue}"`);
+
+  try {
+      // Fetch village details
+      const village = await Village.findOne({ name: { $regex: `^${villageName}$`, $options: 'i' } });
+      if (!village) {
+          console.warn(`[autocomplete] Village "${villageName}" not found.`);
+          return interaction.respond([]);
+      }
+
+      const nextLevel = village.level + 1;
+
+      // Extract required materials
+      const materials = village.materials instanceof Map ? Object.fromEntries(village.materials) : village.materials;
+      const requiredMaterials = Object.keys(materials).filter(
+          (materialName) => materials[materialName].required?.[nextLevel] !== undefined
+      );
+
+      if (!requiredMaterials.length) {
+          console.warn(`[autocomplete] No required materials for level ${nextLevel}.`);
+          return interaction.respond([]);
+      }
+
+      // Validate character name
+      if (!characterName) {
+          console.warn(`[autocomplete] No character name provided.`);
+          return interaction.respond([]);
+      }
+
+      const character = await Character.findOne({ userId, name: { $regex: `^${characterName}$`, $options: 'i' } }).lean();
+      if (!character) {
+          console.warn(`[autocomplete] Character "${characterName}" not found for user: ${userId}.`);
+          return interaction.respond([]);
+      }
+
+      const inventoriesConnection = await connectToInventories();
+      const db = inventoriesConnection.useDb('inventories');
+      const inventoryCollection = db.collection(character.name.toLowerCase());
+
+      // Fetch character's inventory
+      const inventoryItems = await inventoryCollection.find({}).toArray();
+      const materialsMap = {};
+
+      // Match inventory items with required materials
+      inventoryItems.forEach((item) => {
+          const lowerCaseItemName = item.itemName.toLowerCase();
+          const matchingMaterial = requiredMaterials.find((material) => material.toLowerCase() === lowerCaseItemName);
+
+          if (matchingMaterial) {
+              if (!materialsMap[matchingMaterial]) {
+                  materialsMap[matchingMaterial] = 0;
+              }
+              materialsMap[matchingMaterial] += item.quantity;
+          }
+      });
+
+      // Combine duplicates and format response
+      const filteredMaterials = Object.entries(materialsMap)
+          .filter(([itemname]) => itemname.toLowerCase().includes(focusedValue.toLowerCase()))
+          .map(([itemname, quantity]) => ({
+              name: `${itemname} (qty ${quantity})`,
+              value: itemname,
+          }));
+
+      console.log(`[autocomplete] Responding with ${filteredMaterials.length} options.`);
+      await interaction.respond(filteredMaterials.slice(0, 25)); // Respond with up to 25 matches
+  } catch (error) {
+      console.error(`[autocomplete] Error:`, error);
+      await interaction.respond([]); // Safely respond with no results
+  }
+}
+
+// ------------------- handle Village Upgrade Character Autocomplete -------------------
+async function handleVillageUpgradeCharacterAutocomplete(interaction) {
+  const userId = interaction.user.id;
+  const villageName = interaction.options.getString('name'); // Get the selected village name
+
+  try {
+      if (!villageName) {
+          console.warn('[handleVillageUpgradeCharacterAutocomplete]: No village name provided.');
+          return interaction.respond([]);
+      }
+
+      const characters = await fetchCharactersByUserId(userId);
+
+      const focusedValue = interaction.options.getFocused().toLowerCase();
+      const choices = characters
+          .filter(character => 
+              character.homeVillage?.toLowerCase() === villageName.toLowerCase() && 
+              character.name.toLowerCase().includes(focusedValue)
+          )
+          .map(character => ({
+              name: `${character.name}`,
+              value: character.name
+          }));
+
+      await interaction.respond(choices.slice(0, 25)); // Respond with up to 25 matches
+  } catch (error) {
+      console.error('[handleVillageUpgradeCharacterAutocomplete]: Error:', error);
+      await interaction.respond([]); // Safely respond with no results
+  }
+}
 
 // ------------------- Export Functions -------------------
 module.exports = {
@@ -1517,6 +1632,8 @@ module.exports = {
   handleViewVendingShopAutocomplete,
   handleVendingEditShopAutocomplete,
   handleVillageBasedCommandsAutocomplete,
-  handleMountNameAutocomplete
+  handleMountNameAutocomplete,
+  handleVillageMaterialsAutocomplete,
+  handleVillageUpgradeCharacterAutocomplete
 };
 
