@@ -10,7 +10,7 @@ require('dotenv').config();
 
 
 // Database Services
-const {  fetchCharacterByNameAndUserId,  fetchCharactersByUserId,} = require('../database/characterService');
+const {  fetchCharacterByNameAndUserId, fetchCharactersByUserId, updateCharacterById} = require('../database/characterService');
 const { fetchItemsByMonster } = require('../database/itemService');
 const { getMonstersAboveTier } = require('../database/monsterService');
 
@@ -115,29 +115,51 @@ module.exports = {
       }
 
       // ------------------- Step 3: Check Hearts and Job Validity -------------------
-      if (character.currentHearts === 0) {
-        const embed = createKOEmbed(character); // Create embed for KO status
-        await interaction.editReply({ embeds: [embed] });
-        return;
-      }
+if (character.currentHearts === 0) {
+  const embed = createKOEmbed(character); // Create embed for KO status
+  await interaction.editReply({ embeds: [embed] });
+  return;
+}
 
-      const job = character.job; // Retrieve character's job
-      if (!isValidJob(job)) {
-        // Reply if the job is invalid
-        await interaction.editReply({
-          content: `❌ **Invalid job "${job}" for looting.**`,
-        });
-        return;
-      }
+// Determine job based on jobVoucher or default job
+let job = (character.jobVoucher === true || character.jobVoucher === "true") ? character.jobVoucherJob : character.job;
+console.log(`[Loot Command]: Determined job for ${character.name} is "${job}"`);
 
-      const jobPerk = getJobPerk(job); // Retrieve job-specific perks
-      if (!jobPerk || !jobPerk.perks.includes('LOOTING')) {
-        // Reply if the job lacks the required LOOTING perk
-        await interaction.editReply({
-          content: `❌ **"${character.name}" cannot loot as they lack the LOOTING perk.**`,
-        });
-        return;
-      }
+if (!job || typeof job !== 'string' || !job.trim() || !isValidJob(job)) {
+  console.log(`[Loot Command]: Invalid or unsupported job detected for ${character.name}. Job: "${job}"`);
+  await interaction.editReply({
+      content: `❌ **Oh no! ${character.name} can't loot as an invalid or unsupported job (${job || "None"}).**\n✨ **Why not try a Job Voucher to explore exciting new roles?**`,
+      ephemeral: true,
+  });
+  return;
+}
+
+// Check for looting perks
+const jobPerk = getJobPerk(job);
+console.log(`[Loot Command]: Retrieved job perks for ${job}:`, jobPerk);
+
+if (!jobPerk || !jobPerk.perks.includes('LOOTING')) {
+  console.log(`[Loot Command]: ${character.name} lacks looting skills for job: "${job}"`);
+  await interaction.editReply({
+      content: `❌ **Hmm, ${character.name} can’t loot as a ${job} because they lack the necessary looting skills.**\n🔄 **Consider switching to a role better suited for looting, or use a Job Voucher to try something new!**`,
+      ephemeral: true,
+  });
+  return;
+}
+
+// Handle active job voucher
+if (character.jobVoucher) {
+  console.log(`[Loot Command]: Job voucher detected for ${character.name}. Consuming voucher.`);
+  character.jobVoucher = false;
+  character.jobVoucherJob = null;
+  await updateCharacterById(character._id, { jobVoucher: false, jobVoucherJob: null });
+
+  await interaction.followUp({
+      content: `> 🎫 **${character.name}** has redeemed their Job Voucher to become a **${job}!**`,
+      ephemeral: true,
+  });
+}
+
 
       // ------------------- Step 4: Determine Region and Encounter -------------------
       const region = getVillageRegionByName(currentVillage); // Get the region based on village
@@ -255,30 +277,39 @@ if (encounteredMonster.tier > 4) {
   },
 
   // ------------------- Autocomplete Logic -------------------
-  async autocomplete(interaction) {
-    try {
+  // ------------------- Autocomplete Logic -------------------
+async autocomplete(interaction) {
+  try {
       const focusedOption = interaction.options.getFocused(true); // Identify the currently focused option
       const userId = interaction.user.id;
 
       if (focusedOption.name === 'charactername') {
-        const characters = await fetchCharactersByUserId(userId); // Fetch user characters
-        const lootingCharacters = filterLootingEligibleCharacters(characters);
+          const characters = await fetchCharactersByUserId(userId); // Fetch user characters
 
-        // Create and filter autocomplete choices
-        const choices = lootingCharacters.map(character => ({
-          name: character.name,
-          value: character.name,
-        }));
-        const filteredChoices = choices
-          .filter(choice => choice.name.toLowerCase().includes(focusedOption.value.toLowerCase()))
-          .slice(0, 25); // Limit to 25 choices
+          // Filter looting-eligible characters
+          const lootingCharacters = characters.filter(character => {
+              const jobPerk = getJobPerk(character.job);
+              return (jobPerk && jobPerk.perks.includes('LOOTING')) || (character.jobVoucher === true || character.jobVoucher === "true");
+          });
 
-        await interaction.respond(filteredChoices); // Respond with choices
+          console.log('[Loot Autocomplete]: Eligible characters:', lootingCharacters.map(c => c.name));
+
+          // Create and filter autocomplete choices
+          const choices = lootingCharacters.map(character => ({
+              name: character.name,
+              value: character.name,
+          }));
+          const filteredChoices = choices
+              .filter(choice => choice.name.toLowerCase().includes(focusedOption.value.toLowerCase()))
+              .slice(0, 25); // Limit to 25 choices
+
+          await interaction.respond(filteredChoices); // Respond with choices
       }
-    } catch (error) {
-      console.error(`[LOOT] Autocomplete Error: ${error}`);
-    }
-  },
+  } catch (error) {
+      console.error(`[Loot Autocomplete Error]: ${error.message}`);
+      await interaction.respond([]); // Respond with empty array on error
+  }
+},
 };
 
   // ------------------- Blood Moon Rerolls Logic -------------------

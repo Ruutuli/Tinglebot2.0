@@ -149,7 +149,7 @@ async execute(interaction) {
                   `${battleResult}\n${buffMessage}\n` +
                   `📢 **Commands to Engage:**\n` +
                   `> 🔥 **Continue the Raid:** Use </raid:1319247998412132384> \n` +
-                  `> 💊 **Heal During Raid:** Use </itemheal:1306176789755858979> \n`
+                  `> 💊 **Heal During Raid:** Use </item:1306176789755858979> \n`
               )
               .addFields(
                   { name: `💙 __Monster Hearts__`, value: `> ${monsterHeartsCurrent} / ${monsterHeartsMax}`, inline: false },

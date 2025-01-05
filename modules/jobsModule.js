@@ -5,10 +5,10 @@ const { capitalize } = require('../modules/formattingModule');
 // ------------------- Define job data and configurations -------------------
 // Job categories with associated jobs
 const jobPages = [
-  { title: 'General Jobs (Page 1)', jobs: ['Adventurer', 'Artist', 'Cook', 'Courier', 'Craftsman', 'Farmer', 'Forager', 'Graveskeeper', 'Guard', 'Healer', 'Herbalist'] },
-  { title: 'General Jobs (Page 2)', jobs: ['Hunter', 'Merchant', 'Mercenary', 'Minstrel', 'Priest', 'Scout', 'Shopkeeper', 'Stablehand', 'Villager', 'Witch'] },
+  { title: 'General Jobs (Page 1)', jobs: ['Adventurer', 'Artist', "Bandit", 'Cook', 'Courier', 'Craftsman', 'Farmer', 'Forager', 'Graveskeeper', 'Guard', 'Healer'] },
+  { title: 'General Jobs (Page 2)', jobs: ['Herbalist', 'Hunter', 'Merchant', 'Mercenary', 'Priest', 'Scout', 'Shopkeeper', 'Stablehand', 'Villager', 'Witch'] },
   { title: 'Inariko Exclusive Jobs', jobs: ['Fisherman', 'Researcher', 'Scholar', 'Teacher'] },
-  { title: 'Rudania Exclusive Jobs', jobs: ['AB (Meat)', 'AB (Live)', 'Blacksmith', 'Miner', 'Performer'] },
+  { title: 'Rudania Exclusive Jobs', jobs: ['AB (Meat)', 'AB (Live)', 'Blacksmith', 'Miner', 'Entertainer'] },
   { title: 'Vhintl Exclusive Jobs', jobs: ['Beekeeper', 'Fortune Teller', 'Mask Maker', 'Weaver'] },
   { title: 'All Jobs', jobs: [] } // This will be populated dynamically
 ];
@@ -16,7 +16,7 @@ const jobPages = [
 // Village-specific job assignments
 const villageJobs = {
   inariko: ['Fisherman', 'Researcher', 'Scholar', 'Teacher'],
-  rudania: ['AB (Meat)', 'AB (Live)', 'Blacksmith', 'Miner', 'Performer'],
+  rudania: ['AB (Meat)', 'AB (Live)', 'Blacksmith', 'Miner', 'Entertainer'],
   vhintl: ['Beekeeper', 'Fortune Teller', 'Mask Maker', 'Weaver']
 };
 
@@ -41,7 +41,7 @@ const jobPerks = [
   { job: 'AB (Live)', perk: 'GATHERING', village: 'RUDANIA' },
   { job: 'Blacksmith', perk: 'CRAFTING', village: 'RUDANIA' },
   { job: 'Miner', perk: 'GATHERING', village: 'RUDANIA' },
-  { job: 'Performer', perk: 'ENTERTAINING', village: 'RUDANIA' },
+  { job: 'Entertainer', perk: 'BOOSTING', village: 'RUDANIA' },
   { job: 'Beekeeper', perk: 'GATHERING', village: 'VHINTL' },
   { job: 'Fortune Teller', perk: 'BOOST', village: 'VHINTL' },
   { job: 'Mask Maker', perk: 'CRAFTING', village: 'VHINTL' },
@@ -61,7 +61,6 @@ const jobPerks = [
   { job: 'Hunter', perk: 'GATHERING / LOOTING', village: null },
   { job: 'Merchant', perk: 'VENDING', village: null },
   { job: 'Mercenary', perk: 'LOOTING', village: null },
-  { job: 'Minstrel', perk: 'ENTERTAINING', village: null },
   { job: 'Priest', perk: 'BOOST', village: null },
   { job: 'Scout', perk: 'LOOTING', village: null },
   { job: 'Shopkeeper', perk: 'VENDING', village: null },
@@ -81,7 +80,10 @@ const jobNameMap = {
 const getProperJobName = (job) => jobNameMap[job] || job;
 
 // Normalize job names for comparison
-const normalizeJobName = (job) => job.replace(/[\s()]/g, '').toLowerCase();
+const normalizeJobName = (job) => {
+  if (!job) return ''; // Return an empty string if job is null or undefined
+  return job.replace(/[\s()]/g, '').toLowerCase();
+};
 
 // Validate if a job is valid
 const validJobs = jobPerks.map(job => normalizeJobName(job.job));

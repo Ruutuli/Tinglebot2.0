@@ -16,23 +16,28 @@ const { v4: uuidv4 } = require('uuid');
 // ------------------- Main Command Module -------------------
 module.exports = {
     data: new SlashCommandBuilder()
-        .setName('itemheal')
-        .setDescription('Use an item to heal yourself')
-        .addStringOption(option =>
-            option.setName('charactername')
-                .setDescription('The name of your character')
-                .setRequired(true)
-                .setAutocomplete(true))
-        .addStringOption(option =>
-            option.setName('itemname')
-                .setDescription('The item to use for healing')
-                .setRequired(true)
-                .setAutocomplete(true))
-        .addIntegerOption(option =>
-            option.setName('quantity')
-                .setDescription('The number of items to use for healing')
-                .setRequired(false)
-                .setMinValue(1)),
+    .setName('item')
+    .setDescription('Use an item for various purposes')
+    .addStringOption(option =>
+        option.setName('charactername')
+            .setDescription('The name of your character')
+            .setRequired(true)
+            .setAutocomplete(true))
+    .addStringOption(option =>
+        option.setName('itemname')
+            .setDescription('The item to use')
+            .setRequired(true)
+            .setAutocomplete(true))
+    .addIntegerOption(option =>
+        option.setName('quantity')
+            .setDescription('The number of items to use')
+            .setRequired(false)
+            .setMinValue(1))
+    .addStringOption(option =>
+        option.setName('jobname')
+            .setDescription('The job to perform using the voucher')
+            .setRequired(false)
+            .setAutocomplete(true)),      
 
     // ------------------- Main execute function for item healing -------------------
     async execute(interaction) {
@@ -56,6 +61,50 @@ module.exports = {
                 await interaction.editReply({ content: `❌ Item not found.`, ephemeral: true });
                 return;
             }
+
+            if (item.itemName.toLowerCase() === 'job voucher') {
+                if (character.jobVoucher === true) {
+                    await interaction.editReply({
+                        content: `❌ A job voucher is already active for **${character.name}** with the job **${character.jobVoucherJob}**. Complete a job before using another voucher.`,
+                        ephemeral: true
+                    });
+                    return;
+                }
+            
+                const jobName = interaction.options.getString('jobname');
+                if (!jobName) {
+                    await interaction.editReply({
+                        content: `❌ You must specify a job to use with the job voucher.`,
+                        ephemeral: true
+                    });
+                    return;
+                }
+            
+                // Activate job voucher and set the job
+                character.jobVoucher = true;
+                character.jobVoucherJob = jobName;
+                await updateCharacterById(character._id, { jobVoucher: true, jobVoucherJob: jobName });
+            
+                // Deduct the voucher from inventory
+                const inventoryCollection = await getCharacterInventoryCollection(character.name);
+                await removeItemInventoryDatabase(character._id, item.itemName, quantity, inventoryCollection);
+            
+                // Enhanced message with additional character details
+                const message = `
+            🎫 **${character.name}** has used a Job Voucher to perform the job **${jobName}**!
+            🔍 **Details:**
+            - 🌍 Current Village: **${character.currentVillage || "Unknown"}**
+            - 🏷️ Normal Job: **${character.job || "Unemployed"}**
+            
+            ✨ Use it wisely and make the most of this opportunity!
+            `;
+            
+                await interaction.editReply({
+                    content: message,
+                    ephemeral: false
+                });
+                return;
+            }            
 
             if (character.debuff?.active) {
                 const debuffEndDate = new Date(character.debuff.endDate);

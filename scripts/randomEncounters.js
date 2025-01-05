@@ -94,7 +94,7 @@ function createEncounterEmbed(monster, battleId, villageName) {
     .setDescription(
       `📢 **Commands to Engage:**\n` +
       `> 🔥 **Join the Raid:** Use </raid:1319247998412132384> \n` +
-      `> 💊 **Heal During Raid:** Use </itemheal:1306176789755858979> \n\n`
+      `> 💊 **Heal During Raid:** Use </item:1306176789755858979> \n\n`
     )
     .addFields(
       { name: `💙 __Monster Hearts__`, value: `> ${monster.hearts} / ${monster.hearts}`, inline: false },

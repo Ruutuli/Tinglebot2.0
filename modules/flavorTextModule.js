@@ -420,8 +420,6 @@ const generateCraftingFlavorText = (job) => {
       "✨ Each stitch told a story, the Weaver's art weaving past and present together."
     ],
     artist: [
-      "🎨 With deliberate strokes, the Artist painted a scene that seemed to come alive.",
-      "🖌️ Colors blended seamlessly, revealing a vision known only to the Artist's heart.",
       "🌟 The Artist's masterpiece shimmered with emotion, as if Hyrule itself had inspired it."
     ],
     cook: [

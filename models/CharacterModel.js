@@ -36,6 +36,7 @@ const characterSchema = new Schema({
     default: function() { return this.homeVillage; }
   },
   job: { type: String, required: true },                // Character's job
+  jobDateChanged: { type: Date, default: null },        // Tracks the date of the last job change
   icon: { type: String, required: true },               // Character icon
   birthday: { type: String, default: '' },              // Character's birthday
 
@@ -88,7 +89,8 @@ const characterSchema = new Schema({
   canBeStolenFrom: { type: Boolean, default: true },    // Whether the character can be stolen from
 
   // ------------------- Additional features -------------------
-  jobVoucher: { type: String, default: '' },            // Job voucher
+  jobVoucher: { type: Boolean, default: true },         // Job voucher
+  jobVoucherJob: { type: String, default: null },       // Stores the job selected for the voucher
   mount: { type: Boolean, default: false },             // Mount status
   pets: { type: [PetSchema], default: [] },             // Pets associated with the character
   spiritOrbs: { type: Number, default: 0 }              // Number of spirit orbs

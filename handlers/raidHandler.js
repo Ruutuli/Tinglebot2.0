@@ -26,7 +26,7 @@ async function triggerRaid(character, monster, interaction, threadId, isBloodMoo
         .setTitle(isBloodMoon ? `🔴 **Blood Moon Raid initiated!**` : `🛡️ **Raid initiated!**`)
         .setDescription(
             `Use </raid:1315149690634768405> id:${battleId} to join or continue the raid!\n
-            Use </itemheal:1306176789755858979> to heal during the raid!`
+            Use </item:1306176789755858979> to heal during the raid!`
         )
         .addFields(
             { name: `__Monster Hearts__`, value: `💙 ${monsterHearts.current}/${monsterHearts.max}`, inline: false },

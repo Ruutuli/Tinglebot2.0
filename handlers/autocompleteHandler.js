@@ -39,7 +39,7 @@ const initializeInventoryModel = require('../models/InventoryModel');
 
 // ------------------- Modules -------------------
 const { getAllRaces } = require('../modules/raceModule');
-const { getJobPerk } = require('../modules/jobsModule');
+const { getJobPerk, getGeneralJobsPage, getVillageExclusiveJobs } = require('../modules/jobsModule');
 const { getAllVillages } = require('../modules/locationsModule');
 const { capitalize, capitalizeFirstLetter } = require('../modules/formattingModule');
 const { getModCharacterByName, modCharacters } = require('../modules/modCharacters');
@@ -66,13 +66,15 @@ if (commandName === 'blight' && focusedOption.name === 'character_name' || focus
   await handleBlightItemAutocomplete(interaction, focusedOption);
 } else if (commandName === 'crafting' && focusedOption.name === 'itemname') {
   await handleCraftingAutocomplete(interaction, focusedOption);
+} else if (commandName === 'changejob' && focusedOption.name === 'newjob') {
+  await handleChangeJobNewJobAutocomplete(interaction, focusedOption);
 } else if (commandName === 'createcharacter' && focusedOption.name === 'homevillage') {
   await handleCreateCharacterVillageAutocomplete(interaction, focusedOption);
 } else if (commandName === 'createcharacter' && focusedOption.name === 'race') {
   await handleCreateCharacterRaceAutocomplete(interaction, focusedOption);
 } else if (commandName === 'editcharacter' && focusedOption.name === 'updatedinfo') {
   await handleEditCharacterAutocomplete(interaction, focusedOption);
-} else if (['shops', 'explore', 'raid', 'editcharacter', 'deletecharacter', 'setbirthday', 'viewcharacter', 'testinventorysetup', 'syncinventory', 'crafting', 'gather', 'loot', 'gear'].includes(commandName) && focusedOption.name === 'charactername') {
+} else if (['changejob', 'shops', 'explore', 'raid', 'editcharacter', 'deletecharacter', 'setbirthday', 'viewcharacter', 'testinventorysetup', 'syncinventory', 'crafting', 'gather', 'loot', 'gear'].includes(commandName) && focusedOption.name === 'charactername') {
   await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, commandName);
 } else if (commandName === 'explore' && ['item1', 'item2', 'item3'].includes(focusedOption.name)) {
   await handleExploreItemAutocomplete(interaction, focusedOption);
@@ -84,8 +86,12 @@ if (commandName === 'blight' && focusedOption.name === 'character_name' || focus
   await handleGiftAutocomplete(interaction, focusedOption);
 } else if (commandName === 'heal') {
   await handleHealAutocomplete(interaction, focusedOption);
-} else if (commandName === 'itemheal') {
-  await handleItemHealAutocomplete(interaction, focusedOption);
+} else if (commandName === 'item') {
+  if (focusedOption.name === 'jobname') {
+      await handleItemJobVoucherAutocomplete(interaction, focusedOption); // New handler for jobname
+  } else {
+      await handleItemHealAutocomplete(interaction, focusedOption); // Existing handler for other options
+  }
 } else if (commandName === 'lookup' && (focusedOption.name === 'item' || focusedOption.name === 'ingredient')) {
   await handleLookupAutocomplete(interaction, focusedOption);
 } else if ((commandName === 'stable' || commandName === 'mount') && focusedOption.name === 'charactername') {
@@ -244,47 +250,56 @@ async function handleBlightItemAutocomplete(interaction, focusedOption) {
 // ------------------- Handles character-based commands autocomplete -------------------
 async function handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, commandName) {
   try {
-    //format Get the user ID from the interaction
+    // Extract the user ID from the interaction
     const userId = interaction.user.id;
 
-    //format Fetch characters associated with the user ID
+    // Fetch characters associated with the user ID
     let characters = await fetchCharactersByUserId(userId);
 
-    //format Apply filters based on the specific command
+    // Apply filters based on the specific command
     if (commandName === 'crafting') {
       characters = characters.filter(character => {
-        const jobPerk = getJobPerk(character.job);
-        return jobPerk && jobPerk.perks.includes('CRAFTING'); //format Filter for crafting-specific perks
+          const jobPerk = getJobPerk(character.job);
+          // Include characters with crafting perks or an active job voucher
+          return (jobPerk && jobPerk.perks.includes('CRAFTING')) || (character.jobVoucher && character.jobVoucher !== false);
       });
-    } else if (commandName === 'gather') {
+
+      // Log characters eligible for crafting
+    } else       if (commandName === 'gather') {
       characters = characters.filter(character => {
-        const jobPerk = getJobPerk(character.job);
-        return jobPerk && jobPerk.perks.includes('GATHERING'); //format Filter for gathering-specific perks
+          const jobPerk = getJobPerk(character.job);
+          return (jobPerk && jobPerk.perks.includes('GATHERING')) || (character.jobVoucher && character.jobVoucher !== false);
       });
+
+      console.log('[Autocomplete]: Eligible characters for gathering:', characters.map(c => c.name));
+  
+      // Log characters eligible for gathering or with job vouchers
     } else if (commandName === 'loot') {
       characters = characters.filter(character => {
-        const jobPerk = getJobPerk(character.job);
-        return jobPerk && jobPerk.perks.includes('LOOTING'); //format Filter for looting-specific perks
+          const jobPerk = getJobPerk(character.job);
+          return jobPerk && jobPerk.perks.includes('LOOTING') || (character.jobVoucher && character.jobVoucher !== false);
       });
+
+      // Log characters eligible for looting
     } else if (commandName === 'syncinventory') {
-      characters = characters.filter(character => !character.inventorySynced); //format Filter unsynced inventories
+      characters = characters.filter(character => !character.inventorySynced); // Filter unsynced inventories
     }
 
-    //format No filtering required for the "mount" command
+    // No filtering required for the "mount" command
     if (commandName === 'mount') {
-      //format Use all characters without filters
     }
 
-    //format Format the choices for Discord's autocomplete response
+    // Format the choices for Discord's autocomplete response
     const choices = characters.map(character => ({
-      name: character.name, //format Display character name
-      value: character.name, //format Use character name as the value
+      name: character.name, // Display character name
+      value: character.name, // Use character name as the value
     }));
 
-    //format Send the filtered choices as an autocomplete response
+    // Send the filtered choices as an autocomplete response
     await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
-    //format Handle errors gracefully
+    // Handle errors gracefully
+    console.error(`[Autocomplete Handler]: Error handling ${commandName} autocomplete:`, error);
     await safeRespondWithError(interaction);
   }
 }
@@ -293,69 +308,72 @@ async function handleCharacterBasedCommandsAutocomplete(interaction, focusedOpti
 
 async function handleCraftingAutocomplete(interaction, focusedOption) {
   try {
-      //format Extract user ID and character name from the interaction
+      // Extract user ID and character name from the interaction
       const userId = interaction.user.id;
       const characterName = interaction.options.getString('charactername');
 
-      //format Fetch all characters belonging to the user
+      // Fetch all characters belonging to the user
       const characters = await fetchCharactersByUserId(userId);
 
-      //format Find the specific character from the list
+      // Find the specific character from the list
       const character = characters.find(c => c.name === characterName);
       if (!character) {
-          //format Respond with an empty array if the character is not found
+          // Respond with an empty array if the character is not found
           return await interaction.respond([]);
       }
 
-      //format Check the character's job perks to ensure crafting eligibility
-      const jobPerk = getJobPerk(character.job);
+      // Determine the character's job based on the Job Voucher or default job
+      const job = character.jobVoucher ? character.jobVoucherJob : character.job;
+
+      // Check the character's job perks to ensure crafting eligibility
+      const jobPerk = getJobPerk(job);
       if (!jobPerk || !jobPerk.perks.includes('CRAFTING')) {
-          //format Respond with an empty array if the character cannot craft
+          // Respond with an empty array if the character cannot craft
           return await interaction.respond([]);
       }
 
-      //format Fetch the character's inventory
+      // Fetch the character's inventory
       const inventoryCollection = await getCharacterInventoryCollection(character.name);
       const characterInventory = await inventoryCollection.find().toArray();
 
-      //format Determine which items can be crafted based on the inventory
+      // Determine which items can be crafted based on the inventory
       const craftableItems = await fetchCraftableItemsAndCheckMaterials(characterInventory);
       if (craftableItems.length === 0) {
-          //format Respond with an empty array if no craftable items are found
+          // Respond with an empty array if no craftable items are found
           return await interaction.respond([]);
       }
 
-      //format Filter craftable items based on the character's job
+      // Filter craftable items based on the character's job
       const filteredItems = craftableItems.filter(item =>
-          item.craftingTags.some(tag => tag.toLowerCase() === character.job.toLowerCase())
+          item.craftingTags.some(tag => tag.toLowerCase() === job.toLowerCase())
       );
       if (filteredItems.length === 0) {
-          //format Respond with an empty array if no items match the character's job
+          // Respond with an empty array if no items match the character's job
           return await interaction.respond([]);
       }
 
-      //format Get the user's input value for dynamic filtering
+      // Get the user's input value for dynamic filtering
       const inputValue = focusedOption.value.toLowerCase();
 
-      //format Filter items dynamically based on the user's input
+      // Filter items dynamically based on the user's input
       const matchingItems = filteredItems.filter(item =>
           item.itemName.toLowerCase().includes(inputValue)
       );
 
-      const MAX_CHOICES = 25; //format Discord's maximum allowed autocomplete choices
+      const MAX_CHOICES = 25; // Discord's maximum allowed autocomplete choices
 
-      //format Map matching items to autocomplete choices and limit to the maximum allowed
+      // Map matching items to autocomplete choices and limit to the maximum allowed
       const choices = matchingItems.slice(0, MAX_CHOICES).map(item => ({
-          name: item.itemName, //format Display item name
-          value: item.itemName, //format Use item name as the value
+          name: item.itemName, // Display item name
+          value: item.itemName, // Use item name as the value
       }));
 
-      //format Respond to the interaction with the filtered choices
+      // Respond to the interaction with the filtered choices
       if (!interaction.responded) {
           await interaction.respond(choices);
       }
   } catch (error) {
-      //format Handle errors gracefully by responding with an empty array
+      // Handle errors gracefully by responding with an empty array
       if (!interaction.responded) {
           await interaction.respond([]);
       }
@@ -754,52 +772,50 @@ async function handleHealAutocomplete(interaction, focusedOption) {
 // ------------------- Handles autocomplete for item healing requests -------------------
 async function handleItemHealAutocomplete(interaction, focusedOption) {
   try {
-    //format Extract user ID from the interaction
     const userId = interaction.user.id;
 
     if (focusedOption.name === 'charactername') {
-      //format Fetch characters owned by the user
+      // Fetch characters owned by the user
       const characters = await fetchCharactersByUserId(userId);
 
-      //format Map characters to the appropriate format for autocomplete
+      // Map characters to the appropriate format for autocomplete
       const choices = characters.map(character => ({
-        name: character.name, //format Display character name
-        value: character.name, //format Use character name as value
+        name: character.name, // Display character name
+        value: character.name, // Use character name as value
       }));
 
-      //format Filter choices based on user input (if any) and respond
+      // Filter choices based on user input and respond
       await respondWithFilteredChoices(interaction, focusedOption, choices);
-
     } else if (focusedOption.name === 'itemname') {
-      //format Handle item autocomplete logic for the selected character
+      // Handle item autocomplete logic for the selected character
       const characterName = interaction.options.getString('charactername');
       if (!characterName) return await interaction.respond([]);
 
-      //format Fetch the specified character's details
+      // Fetch the specified character's details
       const character = await fetchCharacterByNameAndUserId(characterName, userId);
       if (!character) return await interaction.respond([]);
 
-      //format Fetch the character's inventory
+      // Fetch the character's inventory
       const inventoryCollection = await getCharacterInventoryCollection(character.name);
       const inventory = await inventoryCollection.find().toArray();
 
-      //format Filter inventory to include recipes and fairy items
+      // Include items like "Job Voucher" and other special items
       const choices = inventory
         .filter(item =>
-          (item.category && item.category.includes('Recipe')) || //format Include items in the Recipe category
-          item.itemName.toLowerCase() === 'fairy' //format Include "Fairy" item
+          (item.category && item.category.includes('Recipe')) || // Include recipes
+          item.itemName.toLowerCase() === 'fairy' || // Include "Fairy" item
+          item.itemName.toLowerCase() === 'job voucher' // Include "Job Voucher"
         )
         .map(item => ({
-          name: `${item.itemName} - QTY:${item.quantity}`, //format Display item name and quantity
-          value: item.itemName, //format Use item name as value
+          name: `${item.itemName} - QTY:${item.quantity}`, // Display item name and quantity
+          value: item.itemName, // Use item name as value
         }));
 
-      //format Respond with filtered item choices
+      // Respond with filtered item choices
       await respondWithFilteredChoices(interaction, focusedOption, choices);
     }
   } catch (error) {
-    //format Log and handle errors gracefully
-    console.error('[autocompleteHandler.js]: Error handling item heal autocomplete:', error);
+    console.error('[autocompleteHandler.js]: Error handling item autocomplete:', error);
     await safeRespondWithError(interaction);
   }
 }
@@ -1603,6 +1619,88 @@ async function handleVillageUpgradeCharacterAutocomplete(interaction) {
   }
 }
 
+// ------------------- handle Change Job New Job Autocomplete -------------------
+async function handleChangeJobNewJobAutocomplete(interaction, focusedOption) {
+  try {
+    const userId = interaction.user.id;
+    const characterName = interaction.options.getString('charactername');
+
+    // Fetch the character
+    const character = await fetchCharacterByNameAndUserId(characterName, userId);
+    if (!character) {
+      console.warn(`[handleChangeJobNewJobAutocomplete] Character not found for userId: ${userId}, characterName: ${characterName}`);
+      await interaction.respond([]);
+      return;
+    }
+    // Fetch general and village-specific jobs
+    const generalJobs = getGeneralJobsPage(1).concat(getGeneralJobsPage(2));
+    const villageJobs = getVillageExclusiveJobs(character.homeVillage);
+
+    // Combine and filter jobs
+    const allJobs = [...generalJobs, ...villageJobs];
+    const filteredJobs = focusedOption.value
+      ? allJobs.filter(job =>
+          job.toLowerCase().includes(focusedOption.value.toLowerCase())
+        )
+      : allJobs;
+    // Respond with filtered jobs (limit to 25)
+    const formattedChoices = filteredJobs.map(job => ({
+      name: job,
+      value: job,
+    }));
+
+    await interaction.respond(formattedChoices.slice(0, 25));
+  } catch (error) {
+    console.error(`[handleChangeJobNewJobAutocomplete] Error:`, error);
+    await interaction.respond([]);
+  }
+}
+
+// ------------------- handle Item Job Voucher Autocomplete -------------------
+async function handleItemJobVoucherAutocomplete(interaction, focusedOption) {
+  try {
+      const userId = interaction.user.id;
+      const characterName = interaction.options.getString('charactername');
+
+      if (!characterName) {
+          console.warn(`[handleItemJobVoucherAutocomplete] No character name provided.`);
+          await interaction.respond([]);
+          return;
+      }
+
+      // Fetch the character details
+      const character = await fetchCharacterByNameAndUserId(characterName, userId);
+      if (!character) {
+          console.warn(`[handleItemJobVoucherAutocomplete] Character not found for userId: ${userId}, characterName: ${characterName}`);
+          await interaction.respond([]);
+          return;
+      }
+
+      // Fetch general and current village-specific jobs
+      const generalJobs = getGeneralJobsPage(1).concat(getGeneralJobsPage(2)); // General jobs
+      const villageJobs = getVillageExclusiveJobs(character.currentVillage); // Jobs for the current village
+
+      // Combine and filter jobs
+      const allJobs = [...generalJobs, ...villageJobs];
+      const filteredJobs = focusedOption.value
+          ? allJobs.filter(job =>
+              job.toLowerCase().includes(focusedOption.value.toLowerCase())
+          )
+          : allJobs;
+
+      // Format and respond with filtered job options (limit to 25)
+      const formattedChoices = filteredJobs.map(job => ({
+          name: job,
+          value: job,
+      }));
+
+      await interaction.respond(formattedChoices.slice(0, 25));
+  } catch (error) {
+      console.error(`[handleItemJobVoucherAutocomplete] Error:`, error);
+      await interaction.respond([]); // Respond with an empty array in case of error
+  }
+}
+
 // ------------------- Export Functions -------------------
 module.exports = {
   handleAutocomplete,
@@ -1634,6 +1732,8 @@ module.exports = {
   handleVillageBasedCommandsAutocomplete,
   handleMountNameAutocomplete,
   handleVillageMaterialsAutocomplete,
-  handleVillageUpgradeCharacterAutocomplete
+  handleVillageUpgradeCharacterAutocomplete,
+  handleChangeJobNewJobAutocomplete,
+  handleItemJobVoucherAutocomplete
 };
 
