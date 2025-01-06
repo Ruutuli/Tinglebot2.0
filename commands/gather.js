@@ -9,7 +9,7 @@ const { v4: uuidv4 } = require('uuid');
 
 // Database Services
 const { fetchCharacterByNameAndUserId, fetchCharactersByUserId, updateCharacterById } = require('../database/characterService');
-const { fetchAllItems, fetchItemsByMonster } = require('../database/itemService');
+const { fetchAllItems, fetchItemsByMonster,fetchItemByName  } = require('../database/itemService');
 const { fetchAllMonsters } = require('../database/monsterService');
 
 // Modules
@@ -132,16 +132,52 @@ if (!jobPerk || !jobPerk.perks.includes('GATHERING')) {
 
 // Handle active job voucher
 if (character.jobVoucher) {
-    console.log(`[Gather Command]: Job voucher detected for ${character.name}. Consuming voucher.`);
-    // Consume the job voucher
-    character.jobVoucher = false;
-    character.jobVoucherJob = null;
-    await updateCharacterById(character._id, { jobVoucher: false, jobVoucherJob: null });
+  console.log(`[Gather Command]: Job voucher detected for ${character.name}. Consuming voucher.`);
+  character.jobVoucher = false;
+  character.jobVoucherJob = null;
+  await updateCharacterById(character._id, { jobVoucher: false, jobVoucherJob: null });
 
-    await interaction.followUp({
-        content: `🎫 ** ${character.name} has redeemed their Job Voucher to step into the shoes of a ${job}.**\n🌟 **Let’s see what treasures they can gather in this new role!**`,
-        ephemeral: true
-    });
+  // Fetch job voucher details from the database
+  const jobVoucherItem = await fetchItemByName('Job Voucher');
+  if (!jobVoucherItem) {
+      console.error('[Gather Command]: Job Voucher item details could not be found in the database.');
+      await interaction.followUp({
+          content: `❌ **Error: Could not log Job Voucher usage. Please contact support.**`,
+          ephemeral: true
+      });
+      return;
+  }
+
+  // Log job voucher usage to Google Sheets
+  const inventoryLink = character.inventory || character.inventoryLink;
+  if (typeof inventoryLink === 'string' && isValidGoogleSheetsUrl(inventoryLink)) {
+      const spreadsheetId = extractSpreadsheetId(inventoryLink);
+      const auth = await authorizeSheets();
+      const range = 'loggedInventory!A2:M';
+      const formattedDateTime = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
+      const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
+      const uniqueSyncId = uuidv4();
+
+      const values = [
+          [
+              character.name,                        // Character Name
+              jobVoucherItem.itemName,              // Item Name (Job Voucher)
+              '-1',                                  // Quantity Used
+              jobVoucherItem.category.join(', '),   // Category from database
+              jobVoucherItem.type.join(', '),       // Type from database
+              jobVoucherItem.subtype.join(', ') || '', // Subtype from database
+              `Redeemed for gathering as ${job}`,   // Action/Use Description
+              job,                                  // Associated Job
+              '',                                   // Perk (if applicable)
+              character.currentVillage,             // Village
+              interactionUrl,                       // Link to interaction
+              formattedDateTime,                    // Timestamp
+              uniqueSyncId                          // Unique Sync ID
+          ]
+      ];
+
+      await appendSheetData(auth, spreadsheetId, range, values);
+  }
 }
 
 

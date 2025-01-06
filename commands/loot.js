@@ -11,7 +11,7 @@ require('dotenv').config();
 
 // Database Services
 const {  fetchCharacterByNameAndUserId, fetchCharactersByUserId, updateCharacterById} = require('../database/characterService');
-const { fetchItemsByMonster } = require('../database/itemService');
+const { fetchItemsByMonster, fetchItemByName } = require('../database/itemService');
 const { getMonstersAboveTier } = require('../database/monsterService');
 
 // Utilities
@@ -134,19 +134,6 @@ if (!job || typeof job !== 'string' || !job.trim() || !isValidJob(job)) {
   return;
 }
 
-// Check for looting perks
-const jobPerk = getJobPerk(job);
-console.log(`[Loot Command]: Retrieved job perks for ${job}:`, jobPerk);
-
-if (!jobPerk || !jobPerk.perks.includes('LOOTING')) {
-  console.log(`[Loot Command]: ${character.name} lacks looting skills for job: "${job}"`);
-  await interaction.editReply({
-      content: `❌ **Hmm, ${character.name} can’t loot as a ${job} because they lack the necessary looting skills.**\n🔄 **Consider switching to a role better suited for looting, or use a Job Voucher to try something new!**`,
-      ephemeral: true,
-  });
-  return;
-}
-
 // Handle active job voucher
 if (character.jobVoucher) {
   console.log(`[Loot Command]: Job voucher detected for ${character.name}. Consuming voucher.`);
@@ -154,12 +141,61 @@ if (character.jobVoucher) {
   character.jobVoucherJob = null;
   await updateCharacterById(character._id, { jobVoucher: false, jobVoucherJob: null });
 
-  await interaction.followUp({
-      content: `> 🎫 **${character.name}** has redeemed their Job Voucher to become a **${job}!**`,
-      ephemeral: true,
-  });
+  // Fetch job voucher details and log them
+  const jobVoucherItem = await fetchItemByName('Job Voucher');
+  if (!jobVoucherItem) {
+      console.error('[Loot Command]: Job Voucher item details could not be found in the database.');
+      await interaction.followUp({
+          content: `❌ **Error: Could not log Job Voucher usage. Please contact support.**`,
+          ephemeral: true
+      });
+      return;
+  }
+
+  // Log job voucher usage to Google Sheets
+  const inventoryLink = character.inventory || character.inventoryLink;
+  if (typeof inventoryLink === 'string' && isValidGoogleSheetsUrl(inventoryLink)) {
+      const spreadsheetId = extractSpreadsheetId(inventoryLink);
+      const auth = await authorizeSheets();
+      const range = 'loggedInventory!A2:M';
+      const formattedDateTime = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
+      const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
+      const uniqueSyncId = uuidv4();
+
+      const values = [
+          [
+              character.name,
+              jobVoucherItem.itemName,
+              '-1',
+              jobVoucherItem.category.join(', '),
+              jobVoucherItem.type.join(', '),
+              jobVoucherItem.subtype.join(', ') || '',
+              `Redeemed for looting as ${job}`,
+              job,
+              '',
+              character.currentVillage,
+              interactionUrl,
+              formattedDateTime,
+              uniqueSyncId
+          ]
+      ];
+
+      await appendSheetData(auth, spreadsheetId, range, values);
+  }
 }
 
+// Validate job perks after consuming the voucher
+const jobPerk = getJobPerk(job);
+console.log(`[Loot Command]: Retrieved job perks for ${job}:`, jobPerk);
+
+if (!jobPerk || !jobPerk.perks.includes('LOOTING')) {
+  console.log(`[Loot Command]: ${character.name} lacks looting skills for job: "${job}"`);
+  await interaction.editReply({
+      content: `❌ **Hmm, ${character.name} can’t loot as a ${job} because they lack the necessary looting skills.**`,
+      ephemeral: true,
+  });
+  return;
+}
 
       // ------------------- Step 4: Determine Region and Encounter -------------------
       const region = getVillageRegionByName(currentVillage); // Get the region based on village

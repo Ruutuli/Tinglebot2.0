@@ -11,7 +11,7 @@ const { SlashCommandBuilder } = require('@discordjs/builders'); // Discord.js fo
 
 // Database Service Imports
 const { connectToTinglebot } = require('../database/connection'); // Database connection
-const { fetchCharacterByNameAndUserId, getCharacterInventoryCollection } = require('../database/characterService'); // Character-related services
+const { fetchCharacterByNameAndUserId, getCharacterInventoryCollection, updateCharacterById } = require('../database/characterService'); // Character-related services
 const { fetchItemByName } = require('../database/itemService'); // Item-related services
 
 // Utility Function Imports
@@ -120,24 +120,88 @@ async execute(interaction) {
           return;
       }
 
-      // Fetch the item and validate
-      const item = await fetchItemByName(itemName);
-      if (!item) {
-          return interaction.editReply({
-              content: `❌ **No item found with the name "${itemName}".**`,
-              ephemeral: true
-          });
-      }
+// Fetch the item and validate
+const item = await fetchItemByName(itemName);
+if (!item) {
+    return interaction.editReply({
+        content: `❌ **No item found with the name "${itemName}".**`,
+        ephemeral: true
+    });
+}
 
-      // Check if the character can craft the item
-      const jobPerk = getJobPerk(character.job);
-      const requiredJobs = item.craftingTags.join(', ');
-      if (!jobPerk || !jobPerk.perks.includes('CRAFTING') || !item.craftingTags.map(tag => tag.toLowerCase()).includes(character.job.toLowerCase())) {
-          return interaction.editReply({
-              content: `❌ **"${character.name}" cannot craft "${itemName}" because they lack the required job(s): ${requiredJobs}.**`,
-              ephemeral: true
-          });
-      }
+// ------------------- Validate Job and Job Voucher -------------------
+let job = character.jobVoucher ? character.jobVoucherJob : character.job; // Use job voucher job if active
+console.log(`[Crafting Command]: Determined job for ${character.name} is "${job}"`);
+
+// Check if the character's job is valid for crafting
+const jobPerk = getJobPerk(job);
+const requiredJobs = item.craftingTags.join(', ');
+if (
+    !jobPerk || 
+    !jobPerk.perks.includes('CRAFTING') || 
+    !item.craftingTags.map(tag => tag.toLowerCase()).includes(job.toLowerCase())
+) {
+    return interaction.editReply({
+        content: `❌ **"${character.name}" cannot craft "${itemName}" because they lack the required job(s): ${requiredJobs}.**`,
+        ephemeral: true
+    });
+}
+
+// Consume the job voucher if active
+if (character.jobVoucher) {
+  console.log(`[Crafting Command]: Job voucher detected for ${character.name}. Consuming voucher.`);
+  character.jobVoucher = false;
+  character.jobVoucherJob = null;
+  await updateCharacterById(character._id, { jobVoucher: false, jobVoucherJob: null });
+
+  await interaction.followUp({
+      content: `🎫 **${character.name} has redeemed their Job Voucher to craft as a ${job}.**`,
+      ephemeral: true
+  });
+
+  // Fetch job voucher details from the database
+  const jobVoucherItem = await fetchItemByName('Job Voucher');
+  if (!jobVoucherItem) {
+      console.error('[Crafting Command]: Job Voucher item details could not be found in the database.');
+      return interaction.followUp({
+          content: `❌ **Error: Could not log Job Voucher usage. Please contact support.**`,
+          ephemeral: true
+      });
+  }
+
+  // Log job voucher usage to Google Sheets
+  const inventoryLink = character.inventory || character.inventoryLink;
+  if (typeof inventoryLink === 'string' && isValidGoogleSheetsUrl(inventoryLink)) {
+      const spreadsheetId = extractSpreadsheetId(inventoryLink);
+      const auth = await authorizeSheets();
+      const range = 'loggedInventory!A2:M';
+      const formattedDateTime = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
+      const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
+      const uniqueSyncId = uuidv4();
+
+      const values = [
+          [
+              character.name,                         // Character Name
+              jobVoucherItem.itemName,               // Item Name (Job Voucher)
+              '-1',                                   // Quantity Used
+              jobVoucherItem.category.join(', '),    // Category from the database
+              jobVoucherItem.type.join(', '),        // Type from the database
+              jobVoucherItem.subtype.join(', ') || '', // Subtype from the database (optional)
+              `Redeemed for crafting as ${job}`,     // Action/Use Description
+              job,                                   // Associated Job
+              '',                                    // Perk (if applicable)
+              character.currentVillage,              // Village
+              interactionUrl,                        // Link to interaction
+              formattedDateTime,                     // Timestamp
+              uniqueSyncId                           // Unique Sync ID
+          ]
+      ];
+
+      await appendSheetData(auth, spreadsheetId, range, values);
+  }
+}
+
+
 
       // Early Stamina Check
       const staminaCost = item.staminaToCraft * quantity;

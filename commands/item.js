@@ -1,5 +1,5 @@
 // ------------------- Import necessary modules -------------------
-const { SlashCommandBuilder } = require('@discordjs/builders');
+const { SlashCommandBuilder  } = require('@discordjs/builders');
 const { EmbedBuilder } = require('discord.js');
 const { 
     fetchCharacterByNameAndUserId, 
@@ -9,8 +9,12 @@ const {
 const { fetchItemByName } = require('../database/itemService');
 const { updateCurrentHearts, healKoCharacter, updateCurrentStamina } = require('../modules/characterStatsModule');
 const { removeItemInventoryDatabase } = require('../utils/inventoryUtils');
+const { getJobPerk } = require('../modules/jobsModule');
 const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../utils/validation');
 const { authorizeSheets, appendSheetData } = require('../utils/googleSheetsUtils');
+const { capitalizeWords } = require('../modules/formattingModule');
+const initializeInventoryModel = require('../models/InventoryModel');
+const { getVillageEmojiByName } = require('../modules/locationsModule');
 const { v4: uuidv4 } = require('uuid');
 
 // ------------------- Main Command Module -------------------
@@ -89,23 +93,48 @@ module.exports = {
                 const inventoryCollection = await getCharacterInventoryCollection(character.name);
                 await removeItemInventoryDatabase(character._id, item.itemName, quantity, inventoryCollection);
             
-                // Enhanced message with additional character details
-                const message = `
-            🎫 **${character.name}** has used a Job Voucher to perform the job **${jobName}**!
-            🔍 **Details:**
-            - 🌍 Current Village: **${character.currentVillage || "Unknown"}**
-            - 🏷️ Normal Job: **${character.job || "Unemployed"}**
-            
-            ✨ Use it wisely and make the most of this opportunity!
-            `;
-            
-                await interaction.editReply({
-                    content: message,
-                    ephemeral: false
-                });
-                return;
-            }            
+// Capitalize the current village
+const currentVillage = capitalizeWords(character.currentVillage || 'Unknown');
 
+// Get the emoji for the current village
+const villageEmoji = getVillageEmojiByName(currentVillage) || '🌍';
+
+// Fetch the perk for the specified job
+const jobPerkInfo = getJobPerk(jobName);
+
+let perkDescription = '';
+if (jobPerkInfo) {
+    const { perks, village } = jobPerkInfo;
+    perkDescription = `**${character.name}** has used a Job Voucher to perform the **${jobName}** job (${perks.join(', ')}). ${
+        village ? `This job is exclusive to the **${village}** village.` : ''
+    }\n\nUse the following commands to make the most of this job voucher: ${
+        perks.includes('GATHERING') ? '`/gather` ' : ''
+    }${
+        perks.includes('CRAFTING') ? '`/craft` ' : ''
+    }${
+        perks.includes('LOOTING') ? '`/loot` ' : ''
+    }`.trim();
+} else {
+    perkDescription = `**${character.name}** has used a Job Voucher to perform the job **${jobName}**.`;
+}
+
+// Update Embed with Perk Description
+const embed = new EmbedBuilder()
+    .setColor('#FFD700') // Gold color for the embed
+    .setTitle('🎫 Job Voucher Activated!')
+    .setDescription(perkDescription)
+    .addFields(
+        { name: `${villageEmoji} Current Village`, value: `**${currentVillage}**`, inline: true },
+        { name: '🏷️ Normal Job', value: `**${character.job || "Unemployed"}**`, inline: true }
+    )
+    .setThumbnail(item.image || 'https://via.placeholder.com/150') // Thumbnail for the item
+    .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png') // Large image for the embed
+    .setFooter({ text: '✨ Good luck in your new role! Make the most of this opportunity!' });
+
+await interaction.editReply({ embeds: [embed], ephemeral: true });
+                return;
+            }           
+                  
             if (character.debuff?.active) {
                 const debuffEndDate = new Date(character.debuff.endDate);
                 const unixTimestamp = Math.floor(debuffEndDate.getTime() / 1000);
