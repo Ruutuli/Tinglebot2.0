@@ -96,5 +96,70 @@
       "commonColors": "Brown and Blue"
     },
     "totalSpent": 100
+  },
+  "38f98157": {
+    "users": [],
+    "mountType": "Donkey",
+    "rarity": "To be determined",
+    "mountLevel": "High",
+    "mountStamina": "To be determined",
+    "environment": "To be determined",
+    "village": "Rudania",
+    "actions": [],
+    "tameStatus": false,
+    "traits": {},
+    "totalSpent": 0
+  },
+  "69dd4a7b": {
+    "users": [],
+    "mountType": "Horse",
+    "rarity": "To be determined",
+    "mountLevel": "High",
+    "mountStamina": "To be determined",
+    "environment": "To be determined",
+    "village": "Vhintl",
+    "actions": [],
+    "tameStatus": false,
+    "traits": {},
+    "totalSpent": 0
+  },
+  "dbadf8b7": {
+    "users": [],
+    "mountType": "Donkey",
+    "rarity": "To be determined",
+    "mountLevel": "Mid",
+    "mountStamina": "To be determined",
+    "environment": "To be determined",
+    "village": "Inariko",
+    "actions": [],
+    "tameStatus": false,
+    "traits": {},
+    "totalSpent": 0
+  },
+  "1d9d93e4": {
+    "users": [],
+    "mountType": "Donkey",
+    "rarity": "To be determined",
+    "mountLevel": "Mid",
+    "mountStamina": "To be determined",
+    "environment": "To be determined",
+    "village": "Vhintl",
+    "actions": [],
+    "tameStatus": false,
+    "traits": {},
+    "totalSpent": 0
+  },
+  "c4b24c17": {
+    "users": [],
+    "mountType": "Horse",
+    "rarity": "To be determined",
+    "mountLevel": "Basic",
+    "mountStamina": "To be determined",
+    "environment": "To be determined",
+    "village": "Rudania",
+    "actions": [],
+    "tameStatus": false,
+    "traits": {},
+    "totalSpent": 0
   }
 }

@@ -259,34 +259,48 @@ async function handleCharacterBasedCommandsAutocomplete(interaction, focusedOpti
     // Apply filters based on the specific command
     if (commandName === 'crafting') {
       characters = characters.filter(character => {
-          const jobPerk = getJobPerk(character.job);
-          // Include characters with crafting perks or an active job voucher
-          return (jobPerk && jobPerk.perks.includes('CRAFTING')) || (character.jobVoucher && character.jobVoucher !== false);
+        const job = character.jobVoucher ? character.jobVoucherJob : character.job; // Check job voucher or default job
+        const jobPerk = getJobPerk(job);
+
+        // Include characters with crafting perks or active job vouchers
+        return jobPerk && jobPerk.perks.includes('CRAFTING');
       });
 
-      // Log characters eligible for crafting
-    } else       if (commandName === 'gather') {
+      console.log('[Autocomplete]: Eligible characters for crafting:', characters.map(c => c.name));
+
+    } else if (commandName === 'gather') {
       characters = characters.filter(character => {
-          const jobPerk = getJobPerk(character.job);
-          return (jobPerk && jobPerk.perks.includes('GATHERING')) || (character.jobVoucher && character.jobVoucher !== false);
+        const job = character.jobVoucher ? character.jobVoucherJob : character.job; // Check job voucher or default job
+        const jobPerk = getJobPerk(job);
+
+        // Include characters with gathering perks or active job vouchers
+        return jobPerk && jobPerk.perks.includes('GATHERING');
       });
 
       console.log('[Autocomplete]: Eligible characters for gathering:', characters.map(c => c.name));
-  
-      // Log characters eligible for gathering or with job vouchers
+
     } else if (commandName === 'loot') {
       characters = characters.filter(character => {
-          const jobPerk = getJobPerk(character.job);
-          return jobPerk && jobPerk.perks.includes('LOOTING') || (character.jobVoucher && character.jobVoucher !== false);
+        const job = character.jobVoucher ? character.jobVoucherJob : character.job; // Check job voucher or default job
+        const jobPerk = getJobPerk(job);
+
+        // Include characters with looting perks or active job vouchers
+        return jobPerk && jobPerk.perks.includes('LOOTING');
       });
 
-      // Log characters eligible for looting
+      console.log('[Autocomplete]: Eligible characters for looting:', characters.map(c => c.name));
+
     } else if (commandName === 'syncinventory') {
-      characters = characters.filter(character => !character.inventorySynced); // Filter unsynced inventories
+      characters = characters.filter(character => {
+        return !character.inventorySynced; // Filter unsynced inventories
+      });
+
+      console.log('[Autocomplete]: Characters needing inventory sync:', characters.map(c => c.name));
     }
 
     // No filtering required for the "mount" command
     if (commandName === 'mount') {
+      console.log('[Autocomplete]: Mount command does not require filtering.');
     }
 
     // Format the choices for Discord's autocomplete response
@@ -730,40 +744,46 @@ async function handleGiftAutocomplete(interaction, focusedOption) {
 // ------------------- Handles autocomplete for healing requests -------------------
 async function handleHealAutocomplete(interaction, focusedOption) {
   try {
-    //format Extract user ID from the interaction
+    // Extract user ID from the interaction
     const userId = interaction.user.id;
 
-    //format Autocomplete for 'charactername' (target character for the heal request)
+    // Autocomplete for 'charactername' (target character for the heal request)
     if (focusedOption.name === 'charactername') {
-      const userCharacters = await fetchCharactersByUserId(userId); //format Fetch user's characters
+      const userCharacters = await fetchCharactersByUserId(userId); // Fetch user's characters
       const choices = userCharacters.map(character => ({
-        name: `${character.name} - ${capitalizeFirstLetter(character.currentVillage)}`, //format Display character name and current village
-        value: character.name, //format Use character name as value
+        name: `${character.name} - ${capitalizeFirstLetter(character.currentVillage)}`, // Display character name and current village
+        value: character.name, // Use character name as value
       }));
       await respondWithFilteredChoices(interaction, focusedOption, choices);
 
-    //format Autocomplete for 'healer' (global healers available for /heal request)
+    // Autocomplete for 'healer' (global healers available for /heal request)
     } else if (focusedOption.name === 'healer') {
-      const allCharacters = await fetchAllCharacters(); //format Fetch all characters globally
-      const healerCharacters = allCharacters.filter(character => character.job.toLowerCase() === 'healer'); //format Filter only healers
+      const allCharacters = await fetchAllCharacters(); // Fetch all characters globally
+      const healerCharacters = allCharacters.filter(character =>
+        character.job.toLowerCase() === 'healer' || // Characters with the Healer job
+        (character.jobVoucher === true && character.jobVoucherJob.toLowerCase() === 'healer') // Characters with active job voucher for Healer
+      );
       const choices = healerCharacters.map(character => ({
-        name: `${character.name} - ${capitalizeFirstLetter(character.currentVillage)}`, //format Display character name and current village
-        value: character.name, //format Use character name as value
+        name: `${character.name} - ${capitalizeFirstLetter(character.currentVillage)}`, // Display character name and current village
+        value: character.name, // Use character name as value
       }));
       await respondWithFilteredChoices(interaction, focusedOption, choices);
 
-    //format Autocomplete for 'healername' (user-owned healers for /heal fulfill request)
+    // Autocomplete for 'healername' (user-owned healers for /heal fulfill request)
     } else if (focusedOption.name === 'healername') {
-      const userCharacters = await fetchCharactersByUserId(userId); //format Fetch user's characters
-      const healerCharacters = userCharacters.filter(character => character.job.toLowerCase() === 'healer'); //format Filter only healers
+      const userCharacters = await fetchCharactersByUserId(userId); // Fetch user's characters
+      const healerCharacters = userCharacters.filter(character =>
+        character.job.toLowerCase() === 'healer' || // Characters with the Healer job
+        (character.jobVoucher === true && character.jobVoucherJob.toLowerCase() === 'healer') // Characters with active job voucher for Healer
+      );
       const choices = healerCharacters.map(character => ({
-        name: `${character.name} - ${capitalizeFirstLetter(character.currentVillage)}`, //format Display character name and current village
-        value: character.name, //format Use character name as value
+        name: `${character.name} - ${capitalizeFirstLetter(character.currentVillage)}`, // Display character name and current village
+        value: character.name, // Use character name as value
       }));
       await respondWithFilteredChoices(interaction, focusedOption, choices);
     }
   } catch (error) {
-    //format Handle errors gracefully and log them for debugging
+    // Handle errors gracefully and log them for debugging
     console.error('[autocompleteHandler.js]: Error handling heal autocomplete:', error);
     await safeRespondWithError(interaction);
   }
@@ -1676,6 +1696,11 @@ async function handleItemJobVoucherAutocomplete(interaction, focusedOption) {
           return;
       }
 
+      console.log(`[handleItemJobVoucherAutocomplete] Character details:`, {
+          name: character.name,
+          currentVillage: character.currentVillage,
+      });
+
       // Fetch general and current village-specific jobs
       const generalJobs = getGeneralJobsPage(1).concat(getGeneralJobsPage(2)); // General jobs
       const villageJobs = getVillageExclusiveJobs(character.currentVillage); // Jobs for the current village
@@ -1700,6 +1725,7 @@ async function handleItemJobVoucherAutocomplete(interaction, focusedOption) {
       await interaction.respond([]); // Respond with an empty array in case of error
   }
 }
+
 
 // ------------------- Export Functions -------------------
 module.exports = {

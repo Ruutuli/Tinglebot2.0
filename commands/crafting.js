@@ -23,6 +23,7 @@ const { formatDateTime, capitalizeWords  } = require('../modules/formattingModul
 // Module Imports
 const { checkAndUseStamina } = require('../modules/characterStatsModule'); // Character stamina management
 const { getJobPerk } = require('../modules/jobsModule'); // Job perks handling
+const { validateJobVoucher, activateJobVoucher, fetchJobVoucherItem, deactivateJobVoucher } = require('../modules/jobVoucherModule');
 
 // Embed Imports
 const { createCraftingEmbed } = require('../embeds/mechanicEmbeds'); // Embeds for crafting messages
@@ -133,75 +134,69 @@ if (!item) {
 let job = character.jobVoucher ? character.jobVoucherJob : character.job; // Use job voucher job if active
 console.log(`[Crafting Command]: Determined job for ${character.name} is "${job}"`);
 
-// Check if the character's job is valid for crafting
+if (character.jobVoucher) {
+  console.log(`[Crafting Command]: Job voucher detected for ${character.name}. Validating voucher.`);
+  const voucherValidation = await validateJobVoucher(character, job);
+  if (!voucherValidation.success) {
+      await interaction.editReply({
+          content: voucherValidation.message,
+          ephemeral: true,
+      });
+      return;
+  }
+
+  // Restrict crafting items with stamina cost > 5
+  if (item.staminaToCraft > 5) {
+      console.log(`[Crafting Command]: Item "${itemName}" requires ${item.staminaToCraft} stamina to craft, exceeding the allowed limit for job vouchers.`);
+      await interaction.editReply({
+          content: `❌ **Items requiring more than 5 stamina to craft cannot be crafted with an active job voucher.**\n"${itemName}" requires **${item.staminaToCraft} stamina**.`,
+          ephemeral: false,
+      });
+      return;
+  }
+}
+
+// Validate job perks and crafting tags
 const jobPerk = getJobPerk(job);
 const requiredJobs = item.craftingTags.join(', ');
+
 if (
-    !jobPerk || 
-    !jobPerk.perks.includes('CRAFTING') || 
+    !jobPerk ||
+    !jobPerk.perks.includes('CRAFTING') ||
     !item.craftingTags.map(tag => tag.toLowerCase()).includes(job.toLowerCase())
 ) {
     return interaction.editReply({
         content: `❌ **"${character.name}" cannot craft "${itemName}" because they lack the required job(s): ${requiredJobs}.**`,
-        ephemeral: true
+        ephemeral: true,
     });
 }
 
-// Consume the job voucher if active
+// Handle job voucher activation after validation
 if (character.jobVoucher) {
-  console.log(`[Crafting Command]: Job voucher detected for ${character.name}. Consuming voucher.`);
-  character.jobVoucher = false;
-  character.jobVoucherJob = null;
-  await updateCharacterById(character._id, { jobVoucher: false, jobVoucherJob: null });
+    console.log(`[Crafting Command]: Activating job voucher for ${character.name}.`);
+    const { success: itemSuccess, item: jobVoucherItem, message: itemError } = await fetchJobVoucherItem();
+    if (!itemSuccess) {
+        await interaction.editReply({
+            content: itemError,
+            ephemeral: true,
+        });
+        return;
+    }
 
-  await interaction.followUp({
-      content: `🎫 **${character.name} has redeemed their Job Voucher to craft as a ${job}.**`,
-      ephemeral: true
-  });
+    const activationResult = await activateJobVoucher(character, job, jobVoucherItem, 1, interaction);
+    if (!activationResult.success) {
+        await interaction.editReply({
+            content: activationResult.message,
+            ephemeral: true,
+        });
+        return;
+    }
 
-  // Fetch job voucher details from the database
-  const jobVoucherItem = await fetchItemByName('Job Voucher');
-  if (!jobVoucherItem) {
-      console.error('[Crafting Command]: Job Voucher item details could not be found in the database.');
-      return interaction.followUp({
-          content: `❌ **Error: Could not log Job Voucher usage. Please contact support.**`,
-          ephemeral: true
-      });
-  }
-
-  // Log job voucher usage to Google Sheets
-  const inventoryLink = character.inventory || character.inventoryLink;
-  if (typeof inventoryLink === 'string' && isValidGoogleSheetsUrl(inventoryLink)) {
-      const spreadsheetId = extractSpreadsheetId(inventoryLink);
-      const auth = await authorizeSheets();
-      const range = 'loggedInventory!A2:M';
-      const formattedDateTime = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
-      const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
-      const uniqueSyncId = uuidv4();
-
-      const values = [
-          [
-              character.name,                         // Character Name
-              jobVoucherItem.itemName,               // Item Name (Job Voucher)
-              '-1',                                   // Quantity Used
-              jobVoucherItem.category.join(', '),    // Category from the database
-              jobVoucherItem.type.join(', '),        // Type from the database
-              jobVoucherItem.subtype.join(', ') || '', // Subtype from the database (optional)
-              `Redeemed for crafting as ${job}`,     // Action/Use Description
-              job,                                   // Associated Job
-              '',                                    // Perk (if applicable)
-              character.currentVillage,              // Village
-              interactionUrl,                        // Link to interaction
-              formattedDateTime,                     // Timestamp
-              uniqueSyncId                           // Unique Sync ID
-          ]
-      ];
-
-      await appendSheetData(auth, spreadsheetId, range, values);
-  }
+    await interaction.followUp({
+        content: activationResult.message,
+        ephemeral: true,
+    });
 }
-
-
 
       // Early Stamina Check
       const staminaCost = item.staminaToCraft * quantity;
@@ -261,6 +256,17 @@ if (character.jobVoucher) {
           await logMaterialsToGoogleSheets(auth, spreadsheetId, range, character, materialsUsed, item, `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`, formatDateTime(new Date()));
           await addItemInventoryDatabase(character._id, item.itemName, quantity, item.category.join(', '), item.type.join(', '), interaction);
       }
+
+
+      // Deactivate job voucher after successful crafting
+if (character.jobVoucher) {
+  const deactivationResult = await deactivateJobVoucher(character._id);
+  if (!deactivationResult.success) {
+      console.error(`[Crafting Command]: Failed to deactivate job voucher for ${character.name}`);
+  } else {
+      console.log(`[Crafting Command]: Job voucher deactivated for ${character.name}`);
+  }
+}
   } catch (error) {
       console.error(`[crafting.js]: Error while crafting "${itemName}" for character "${characterName}". Details:`, error);
   }

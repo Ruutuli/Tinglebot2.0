@@ -25,6 +25,7 @@ const { getJobPerk, isValidJob } = require('../modules/jobsModule');
 const { getVillageRegionByName } = require('../modules/locationsModule');
 const { getEncounterOutcome } = require('../modules/damageModule');
 const { capitalizeWords } = require('../modules/formattingModule');
+const { activateJobVoucher,validateJobVoucher, fetchJobVoucherItem, deactivateJobVoucher } = require('../modules/jobVoucherModule'); // Importing jobVoucherModule
 
 // Modules - RNG Logic
 const {  createWeightedItemList,  getMonsterEncounterFromList,  getMonstersByCriteria,  calculateFinalValue,  getRandomBloodMoonEncounter,} = require('../modules/rngModule');
@@ -114,7 +115,7 @@ module.exports = {
         return;
       }
 
-      // ------------------- Step 3: Check Hearts and Job Validity -------------------
+// ------------------- Step 3: Check Hearts and Job Validity -------------------
 if (character.currentHearts === 0) {
   const embed = createKOEmbed(character); // Create embed for KO status
   await interaction.editReply({ embeds: [embed] });
@@ -122,9 +123,10 @@ if (character.currentHearts === 0) {
 }
 
 // Determine job based on jobVoucher or default job
-let job = (character.jobVoucher === true || character.jobVoucher === "true") ? character.jobVoucherJob : character.job;
+let job = character.jobVoucher ? character.jobVoucherJob : character.job;
 console.log(`[Loot Command]: Determined job for ${character.name} is "${job}"`);
 
+// Validate job
 if (!job || typeof job !== 'string' || !job.trim() || !isValidJob(job)) {
   console.log(`[Loot Command]: Invalid or unsupported job detected for ${character.name}. Job: "${job}"`);
   await interaction.editReply({
@@ -134,57 +136,20 @@ if (!job || typeof job !== 'string' || !job.trim() || !isValidJob(job)) {
   return;
 }
 
-// Handle active job voucher
+// Validate job voucher (without consuming it)
 if (character.jobVoucher) {
-  console.log(`[Loot Command]: Job voucher detected for ${character.name}. Consuming voucher.`);
-  character.jobVoucher = false;
-  character.jobVoucherJob = null;
-  await updateCharacterById(character._id, { jobVoucher: false, jobVoucherJob: null });
-
-  // Fetch job voucher details and log them
-  const jobVoucherItem = await fetchItemByName('Job Voucher');
-  if (!jobVoucherItem) {
-      console.error('[Loot Command]: Job Voucher item details could not be found in the database.');
-      await interaction.followUp({
-          content: `❌ **Error: Could not log Job Voucher usage. Please contact support.**`,
-          ephemeral: true
+  console.log(`[Loot Command]: Job voucher detected for ${character.name}. Validating voucher.`);
+  const voucherValidation = await validateJobVoucher(character, job);
+  if (!voucherValidation.success) {
+      await interaction.editReply({
+          content: voucherValidation.message,
+          ephemeral: true,
       });
       return;
   }
-
-  // Log job voucher usage to Google Sheets
-  const inventoryLink = character.inventory || character.inventoryLink;
-  if (typeof inventoryLink === 'string' && isValidGoogleSheetsUrl(inventoryLink)) {
-      const spreadsheetId = extractSpreadsheetId(inventoryLink);
-      const auth = await authorizeSheets();
-      const range = 'loggedInventory!A2:M';
-      const formattedDateTime = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
-      const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
-      const uniqueSyncId = uuidv4();
-
-      const values = [
-          [
-              character.name,
-              jobVoucherItem.itemName,
-              '-1',
-              jobVoucherItem.category.join(', '),
-              jobVoucherItem.type.join(', '),
-              jobVoucherItem.subtype.join(', ') || '',
-              `Redeemed for looting as ${job}`,
-              job,
-              '',
-              character.currentVillage,
-              interactionUrl,
-              formattedDateTime,
-              uniqueSyncId
-          ]
-      ];
-
-      await appendSheetData(auth, spreadsheetId, range, values);
-  }
 }
 
-// Validate job perks after consuming the voucher
+// Validate job perks
 const jobPerk = getJobPerk(job);
 console.log(`[Loot Command]: Retrieved job perks for ${job}:`, jobPerk);
 
@@ -195,6 +160,33 @@ if (!jobPerk || !jobPerk.perks.includes('LOOTING')) {
       ephemeral: true,
   });
   return;
+}
+
+// Handle job voucher activation after validation
+if (character.jobVoucher) {
+  console.log(`[Loot Command]: Activating job voucher for ${character.name}.`);
+  const { success: itemSuccess, item: jobVoucherItem, message: itemError } = await fetchJobVoucherItem();
+  if (!itemSuccess) {
+      await interaction.editReply({
+          content: itemError,
+          ephemeral: true,
+      });
+      return;
+  }
+
+  const activationResult = await activateJobVoucher(character, job, jobVoucherItem, 1, interaction);
+  if (!activationResult.success) {
+      await interaction.editReply({
+          content: activationResult.message,
+          ephemeral: true,
+      });
+      return;
+  }
+
+  await interaction.followUp({
+      content: activationResult.message,
+      ephemeral: true,
+  });
 }
 
       // ------------------- Step 4: Determine Region and Encounter -------------------
@@ -304,6 +296,16 @@ if (encounteredMonster.tier > 4) {
       // ------------------- Step 5: Looting Logic -------------------
       await processLootingLogic(interaction, character, encounteredMonster, bloodMoonActive) ;
 
+      // ------------------- Deactivate Job Voucher -------------------
+if (character.jobVoucher) {
+  const deactivationResult = await deactivateJobVoucher(character._id);
+  if (!deactivationResult.success) {
+      console.error(`[Loot Command]: Failed to deactivate job voucher for ${character.name}`);
+  } else {
+      console.log(`[Loot Command]: Job voucher deactivated for ${character.name}`);
+  }
+}
+
     } catch (error) {
       console.error(`[LOOT] Error during command execution: ${error}`);
       await interaction.editReply({
@@ -311,42 +313,8 @@ if (encounteredMonster.tier > 4) {
       });
     }
   },
-
-  // ------------------- Autocomplete Logic -------------------
-  // ------------------- Autocomplete Logic -------------------
-async autocomplete(interaction) {
-  try {
-      const focusedOption = interaction.options.getFocused(true); // Identify the currently focused option
-      const userId = interaction.user.id;
-
-      if (focusedOption.name === 'charactername') {
-          const characters = await fetchCharactersByUserId(userId); // Fetch user characters
-
-          // Filter looting-eligible characters
-          const lootingCharacters = characters.filter(character => {
-              const jobPerk = getJobPerk(character.job);
-              return (jobPerk && jobPerk.perks.includes('LOOTING')) || (character.jobVoucher === true || character.jobVoucher === "true");
-          });
-
-          console.log('[Loot Autocomplete]: Eligible characters:', lootingCharacters.map(c => c.name));
-
-          // Create and filter autocomplete choices
-          const choices = lootingCharacters.map(character => ({
-              name: character.name,
-              value: character.name,
-          }));
-          const filteredChoices = choices
-              .filter(choice => choice.name.toLowerCase().includes(focusedOption.value.toLowerCase()))
-              .slice(0, 25); // Limit to 25 choices
-
-          await interaction.respond(filteredChoices); // Respond with choices
-      }
-  } catch (error) {
-      console.error(`[Loot Autocomplete Error]: ${error.message}`);
-      await interaction.respond([]); // Respond with empty array on error
-  }
-},
 };
+
 
   // ------------------- Blood Moon Rerolls Logic -------------------
   async function handleBloodMoonRerolls(interaction, monstersByCriteria, tier, character, job, currentVillage, bloodMoonActive) {

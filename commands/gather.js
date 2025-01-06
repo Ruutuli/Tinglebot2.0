@@ -20,6 +20,7 @@ const { getJobPerk, normalizeJobName, isValidJob } = require('../modules/jobsMod
 const { getVillageRegionByName } = require('../modules/locationsModule');
 const { useHearts, handleKO, updateCurrentHearts } = require('../modules/characterStatsModule');
 const { capitalizeWords } = require('../modules/formattingModule');
+const { validateJobVoucher, activateJobVoucher, fetchJobVoucherItem, deactivateJobVoucher } = require('../modules/jobVoucherModule');
 
 // Utilities
 const { addItemInventoryDatabase } = require('../utils/inventoryUtils');
@@ -103,8 +104,8 @@ if (!character.inventorySynced) {
   return;
 }
 
-// ------------------- Step 4: Validate Job -------------------
-let job = (character.jobVoucher === true || character.jobVoucher === "true") ? character.jobVoucherJob : character.job;
+// -------------------// ------------------- Step 4: Validate Job -------------------
+let job = character.jobVoucher ? character.jobVoucherJob : character.job;
 console.log(`[Gather Command]: Determined job for ${character.name} is "${job}"`);
 
 // Validate job
@@ -117,9 +118,21 @@ if (!job || typeof job !== 'string' || !job.trim() || !isValidJob(job)) {
     return;
 }
 
+// Validate job voucher (without consuming it)
+if (character.jobVoucher) {
+    console.log(`[Gather Command]: Job voucher detected for ${character.name}. Validating voucher.`);
+    const voucherValidation = await validateJobVoucher(character, job);
+    if (!voucherValidation.success) {
+        await interaction.editReply({
+            content: voucherValidation.message,
+            ephemeral: true,
+        });
+        return;
+    }
+}
+
 // Check for gathering perks
 const jobPerk = getJobPerk(job);
-console.log(`[Gather Command]: Retrieved job perks for ${job}:`, jobPerk);
 
 if (!jobPerk || !jobPerk.perks.includes('GATHERING')) {
     console.log(`[Gather Command]: ${character.name} lacks gathering skills for job: "${job}"`);
@@ -130,58 +143,34 @@ if (!jobPerk || !jobPerk.perks.includes('GATHERING')) {
     return;
 }
 
-// Handle active job voucher
+// Handle job voucher activation after validation
 if (character.jobVoucher) {
-  console.log(`[Gather Command]: Job voucher detected for ${character.name}. Consuming voucher.`);
-  character.jobVoucher = false;
-  character.jobVoucherJob = null;
-  await updateCharacterById(character._id, { jobVoucher: false, jobVoucherJob: null });
+    console.log(`[Gather Command]: Activating job voucher for ${character.name}.`);
+    const { success: itemSuccess, item: jobVoucherItem, message: itemError } = await fetchJobVoucherItem();
+    if (!itemSuccess) {
+        await interaction.editReply({
+            content: itemError,
+            ephemeral: true,
+        });
+        return;
+    }
 
-  // Fetch job voucher details from the database
-  const jobVoucherItem = await fetchItemByName('Job Voucher');
-  if (!jobVoucherItem) {
-      console.error('[Gather Command]: Job Voucher item details could not be found in the database.');
-      await interaction.followUp({
-          content: `❌ **Error: Could not log Job Voucher usage. Please contact support.**`,
-          ephemeral: true
-      });
-      return;
-  }
+    const activationResult = await activateJobVoucher(character, job, jobVoucherItem, 1, interaction);
+    if (!activationResult.success) {
+        await interaction.editReply({
+            content: activationResult.message,
+            ephemeral: true,
+        });
+        return;
+    }
 
-  // Log job voucher usage to Google Sheets
-  const inventoryLink = character.inventory || character.inventoryLink;
-  if (typeof inventoryLink === 'string' && isValidGoogleSheetsUrl(inventoryLink)) {
-      const spreadsheetId = extractSpreadsheetId(inventoryLink);
-      const auth = await authorizeSheets();
-      const range = 'loggedInventory!A2:M';
-      const formattedDateTime = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
-      const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
-      const uniqueSyncId = uuidv4();
-
-      const values = [
-          [
-              character.name,                        // Character Name
-              jobVoucherItem.itemName,              // Item Name (Job Voucher)
-              '-1',                                  // Quantity Used
-              jobVoucherItem.category.join(', '),   // Category from database
-              jobVoucherItem.type.join(', '),       // Type from database
-              jobVoucherItem.subtype.join(', ') || '', // Subtype from database
-              `Redeemed for gathering as ${job}`,   // Action/Use Description
-              job,                                  // Associated Job
-              '',                                   // Perk (if applicable)
-              character.currentVillage,             // Village
-              interactionUrl,                       // Link to interaction
-              formattedDateTime,                    // Timestamp
-              uniqueSyncId                          // Unique Sync ID
-          ]
-      ];
-
-      await appendSheetData(auth, spreadsheetId, range, values);
-  }
+    await interaction.followUp({
+        content: activationResult.message,
+        ephemeral: true,
+    });
 }
 
-
-// ------------------- Step 5: Validate Region -------------------
+// ------------------- Step 6: Validate Region -------------------
 const region = getVillageRegionByName(currentVillage); // Determine the region for the character's current village
 
 if (!region) {
@@ -504,6 +493,16 @@ if (bloodMoonActive && randomChance < 0.25) {
   await interaction.editReply({ embeds: [embed] }); // Send the embed as a reply
 }
 
+// ------------------- Deactivate Job Voucher -------------------
+if (character.jobVoucher) {
+  const deactivationResult = await deactivateJobVoucher(character._id);
+  if (!deactivationResult.success) {
+      console.error(`[Gather Command]: Failed to deactivate job voucher for ${character.name}`);
+  } else {
+      console.log(`[Gather Command]: Job voucher deactivated for ${character.name}`);
+  }
+}
+
 // ------------------- Error Handling -------------------
 } catch (error) {
   console.error(`[Gather Command Error]`, {
@@ -523,61 +522,7 @@ if (bloodMoonActive && randomChance < 0.25) {
   });
  }
 },
-
-// ------------------- Autocomplete Handler -------------------
-async autocomplete(interaction) {
-  try {
-    // Retrieve the focused option and user ID from the interaction
-    const focusedOption = interaction.options.getFocused(true);
-    const userId = interaction.user.id;
-
-    if (focusedOption.name === 'charactername') {
-      // Fetch all characters associated with the user
-      const characters = await fetchCharactersByUserId(userId);
-
-      // Log all fetched characters for debugging
-      console.log('[Gather Autocomplete]: All fetched characters:', characters.map(c => c.name));
-
-      // Filter characters based on gathering perks or active job vouchers
-      const gatheringCharacters = characters.filter(character => {
-        const jobPerk = getJobPerk(character.job);
-        return (
-          (jobPerk && jobPerk.perks.includes('GATHERING')) || 
-          (character.jobVoucher === true || character.jobVoucher === "true")
-        );
-      });
-
-      // Log eligible characters after filtering
-      console.log('[Gather Autocomplete]: Eligible characters:', gatheringCharacters.map(c => c.name));
-
-      // Create choices for the autocomplete dropdown
-      const choices = gatheringCharacters.map(character => ({
-        name: character.name,
-        value: character.name,
-      }));
-
-      // Filter choices based on user input and limit to 25 options
-      const filteredChoices = choices
-        .filter(choice => choice.name.toLowerCase().includes(focusedOption.value.toLowerCase()))
-        .slice(0, 25);
-
-      // Log the final filtered choices
-      console.log('[Gather Autocomplete]: Final choices sent to user:', filteredChoices);
-
-      // Respond with the filtered choices
-      await interaction.respond(filteredChoices);
-    }
-  } catch (error) {
-    // Log error details for debugging
-    console.error(`[Autocomplete Handler Error]:`, {
-      message: error.message,
-      stack: error.stack,
-    });
-
-    // Respond with an empty array if an error occurs
-    await interaction.respond([]);
-  }
- }
+ 
 };
 
 

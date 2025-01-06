@@ -12,6 +12,8 @@ const {
   deleteHealingRequestFromStorage 
 } = require('../utils/storage');
 const { createHealEmbed, createHealingEmbed } = require('../embeds/mechanicEmbeds');
+const { validateJobVoucher, activateJobVoucher, fetchJobVoucherItem, deactivateJobVoucher } = require('../modules/jobVoucherModule');
+
 
 module.exports = {
   // ------------------- Command Data Definition -------------------
@@ -205,12 +207,61 @@ if (subcommand === 'fulfill') {
           return;
       }
 
-      if (healerCharacter.job.toLowerCase() !== 'healer') {
-          await interaction.editReply(
-              `❌ **Error:** Only characters with the **Healer** job can fulfill healing requests.`
-          );
-          return;
-      }
+// Validate the job (including job voucher logic)
+let job = healerCharacter.jobVoucher ? healerCharacter.jobVoucherJob : healerCharacter.job;
+console.log(`[Heal Command]: Determined job for ${healerCharacter.name} is "${job}"`);
+
+// Normalize `jobVoucher` to handle unexpected values gracefully
+const isJobVoucherActive = !!(healerCharacter.jobVoucher === true || healerCharacter.jobVoucher === 'true' || healerCharacter.jobVoucher === 1);
+
+if (isJobVoucherActive) {
+    console.log(`[Heal Command]: Job voucher detected for ${healerCharacter.name}. Validating voucher.`);
+    const voucherValidation = await validateJobVoucher(healerCharacter, job);
+    if (!voucherValidation.success) {
+        await interaction.editReply({
+            content: voucherValidation.message,
+            ephemeral: true,
+        });
+        return;
+    }
+}
+
+
+// Ensure the healer's job is valid for healing
+if (job.toLowerCase() !== 'healer') {
+    await interaction.editReply(
+        `❌ **Error:** Only characters with the **Healer** job can fulfill healing requests.`
+    );
+    return;
+}
+
+// Handle job voucher activation after validation
+if (healerCharacter.jobVoucher) {
+    console.log(`[Heal Command]: Activating job voucher for ${healerCharacter.name}.`);
+    const { success: itemSuccess, item: jobVoucherItem, message: itemError } = await fetchJobVoucherItem();
+    if (!itemSuccess) {
+        await interaction.editReply({
+            content: itemError,
+            ephemeral: true,
+        });
+        return;
+    }
+
+    const activationResult = await activateJobVoucher(healerCharacter, job, jobVoucherItem, 1, interaction);
+    if (!activationResult.success) {
+        await interaction.editReply({
+            content: activationResult.message,
+            ephemeral: true,
+        });
+        return;
+    }
+
+    await interaction.followUp({
+        content: activationResult.message,
+        ephemeral: true,
+    });
+}
+
 
       // Fetch the character to be healed
       const characterToHeal = await fetchCharacterByName(healingRequest.characterRequesting);
