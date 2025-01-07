@@ -252,7 +252,6 @@ async function handleJobSelect(interaction, characterId, updatedJob) {
         // Run job validation
         const validationResult = await canChangeJob(character, updatedJob);
 
-
         if (!validationResult.valid) {
             console.warn(`[WARNING] Job validation failed: ${validationResult.message}`);
             await interaction.reply({ content: validationResult.message, ephemeral: true });
@@ -267,13 +266,37 @@ async function handleJobSelect(interaction, characterId, updatedJob) {
 
         console.log(`[INFO] Job successfully updated for ${character.name} from ${previousJob} to ${updatedJob}`);
 
+        // Create an embed for the updated character
         const embed = createCharacterEmbed(character);
+
+        // Main update message
         await interaction.update({
             content: `✅ **${character.name}'s job has been updated from ${previousJob} to ${updatedJob}.**`,
             embeds: [embed],
             components: [],
             ephemeral: true,
         });
+
+        // Post notification to the designated channel
+        const EDIT_NOTIFICATION_CHANNEL_ID = '1319524801408274434'; // Replace with your actual channel ID
+        try {
+            const notificationChannel = await interaction.client.channels.fetch(EDIT_NOTIFICATION_CHANNEL_ID);
+            if (notificationChannel && notificationChannel.isTextBased()) {
+                const notificationMessage = `📢 **USER EDITED THEIR CHARACTER**\n
+🌱 **User:** \`${interaction.user.tag}\`
+👤 **Character Name:** \`${character.name}\`
+🛠️ **Edited Category:** \`Job\`
+🔄 **Previous Value:** \`${previousJob || 'N/A'}\`
+✅ **Updated Value:** \`${updatedJob}\``;
+
+                await notificationChannel.send(notificationMessage);
+            } else {
+                console.error(`[componentHandler]: Notification channel is not text-based or unavailable.`);
+            }
+        } catch (err) {
+            console.error(`[componentHandler]: Error sending update notification: ${err.message}`);
+        }
+
     } catch (error) {
         console.error(`[ERROR] An error occurred while handling job selection: ${error.message}`);
         console.error(error.stack);
@@ -283,7 +306,6 @@ async function handleJobSelect(interaction, characterId, updatedJob) {
         });
     }
 }
-
 
 // handleJobPage
 async function handleJobPage(interaction, characterId, pageIndexString) {

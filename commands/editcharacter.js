@@ -36,12 +36,19 @@ const { capitalizeFirstLetter } = require('../modules/formattingModule'); // For
 // Utilities
 const { canChangeJob,   canChangeVillage,   isUniqueCharacterName,   convertCmToFeetInches } = require('../utils/validation'); // Validation utilities
 
-
 // ------------------- Helper Function: Fetch Icon Data -------------------
 // Fetches the image data from the provided icon URL
 async function fetchIconData(iconUrl) {
   const response = await axios.get(iconUrl, { responseType: 'arraybuffer' });
   return Buffer.from(response.data, 'binary');
+}
+
+// ------------------- Helper Function: Capture Previous and Updated Values -------------------
+// This function captures the previous and updated values for a specific category.
+function capturePreviousAndUpdatedValues(character, category, updatedInfo) {
+  const previousValue = character[category] !== undefined ? character[category] : 'N/A';
+  const updatedValue = updatedInfo !== undefined ? updatedInfo : 'N/A';
+  return { previousValue, updatedValue };
 }
 
 // ------------------- Command Definition -------------------
@@ -97,8 +104,6 @@ module.exports = {
       // Connect to the database
       await connectToTinglebot();
       
-      
-
       // Fetch the character based on name and user ID
       const character = await fetchCharacterByNameAndUserId(characterName, userId);
       if (!character) {
@@ -112,6 +117,8 @@ module.exports = {
       let updatedValue;
       
 // ------------------- Handle Each Category Update -------------------
+
+// ------------------- Job Update Section -------------------
 if (category === 'job') {
   try {
       // Validate the job change
@@ -143,6 +150,8 @@ if (category === 'job') {
           ephemeral: true,
       });
   }
+
+// ------------------- Home Village Update Section -------------------
 } else if (category === 'homeVillage') {
   const validationResult = await canChangeVillage(character, updatedInfo);
   if (!validationResult.valid) {
@@ -152,17 +161,29 @@ if (category === 'job') {
   character.homeVillage = updatedInfo;
   character.currentVillage = updatedInfo;
   updateMessage = `✅ **${character.name}'s village has been updated from ${previousValue} to ${updatedInfo}.**`;
+
+// ------------------- Name Update Section -------------------
 } else if (category === 'name') {
   const uniqueNameCheck = await isUniqueCharacterName(character.userId, updatedInfo);
   if (!uniqueNameCheck) {
-      await interaction.followUp({ content: `⚠️ **${updatedInfo}** is already in use by another character. Please choose a different name.`, ephemeral: true });
+      await interaction.followUp({ 
+          content: `⚠️ **${updatedInfo}** is already in use by another character. Please choose a different name.`, 
+          ephemeral: true 
+      });
       return;
   }
-  const previousName = character.name;
-  character.name = updatedInfo;
-  updateMessage = `✅ **${character.name}'s name has been updated from ${previousName} to ${updatedInfo}.**`;
+
+  const previousName = character.name; // Capture previous name
+  character.name = updatedInfo; // Update character name
+  const { updatedValue } = capturePreviousAndUpdatedValues(character, category, updatedInfo); // Ensure updatedValue is correct
+
+  updateMessage = `✅ **${character.name}'s name has been updated from ${previousName} to ${updatedValue}.**`;
+
+  // Additional steps for inventory and other dependencies
   await deleteCharacterInventoryCollection(previousName);
   await createCharacterInventory(character.name, character._id, character.job);
+
+// ------------------- Hearts Update Section -------------------
 } else if (category === 'hearts') {
   const hearts = parseInt(updatedInfo, 10);
 
@@ -187,6 +208,8 @@ if (category === 'job') {
 
   updatedValue = hearts; // Assign to updatedValue for notification
   updateMessage = `✅ **${character.name}'s hearts have been updated from ${previousValue} to ${hearts}.**`;
+
+// ------------------- Stamina Update Section -------------------
 } else if (category === 'stamina') {
   const stamina = parseInt(updatedInfo, 10);
 
@@ -209,24 +232,12 @@ if (category === 'job') {
   updatedValue = stamina; // Assign to updatedValue for notification
   updateMessage = `✅ **${character.name}'s stamina has been updated from ${previousValue} to ${stamina}.**`;
 
-} else if (category === 'stamina') {
-  const stamina = parseInt(updatedInfo, 10);
-  if (isNaN(stamina) || stamina < 0) {
-      await interaction.followUp({
-          content: `⚠️ **${updatedInfo}** is not valid for stamina. Please provide a non-negative number.`,
-          ephemeral: true,
-      });
-      return;
-  }
-  await updateStamina(character._id, stamina);
-  character.currentStamina = stamina;
-  character.maxStamina = stamina;
-
-  updatedValue = stamina; // Assign to updatedValue for notification
-  updateMessage = `✅ **${character.name}'s stamina has been updated from ${previousValue} to ${stamina}.**`;
+// ------------------- Pronouns Update Section -------------------
 } else if (category === 'pronouns') {
   character.pronouns = updatedInfo;
   updateMessage = `✅ **${character.name}'s pronouns have been updated from ${previousValue} to ${updatedInfo}.**`;
+
+// ------------------- Race Update Section -------------------
 } else if (category === 'race') {
   if (!isValidRace(updatedInfo)) {
       await interaction.followUp({ content: `⚠️ **${updatedInfo}** is not a valid race.`, ephemeral: true });
@@ -234,6 +245,8 @@ if (category === 'job') {
   }
   character.race = updatedInfo;
   updateMessage = `✅ **${character.name}'s race has been updated from ${previousValue} to ${updatedInfo}.**`;
+
+// ------------------- Icon Update Section -------------------
 } else if (category === 'icon') {
   if (newIcon) {
       try {
@@ -259,14 +272,26 @@ if (category === 'job') {
       await interaction.followUp({ content: '⚠️ **Please provide a valid icon attachment.**', ephemeral: true });
       return;
   }
+
+// ------------------- Application Link Update Section -------------------
 } else if (category === 'app_link') {
+  previousValue = character.appLink || 'N/A'; // Capture previous value
+  updatedValue = updatedInfo || 'N/A'; // Assign updated value
+
   character.appLink = updatedInfo;
-  updateMessage = `✅ **${character.name}'s application link has been updated from ${previousValue} to ${updatedInfo}.**`;
+  updateMessage = `✅ **${character.name}'s application link has been updated from ${previousValue} to ${updatedValue}.**`;
+
+// ------------------- Inventory Update Section -------------------
 } else if (category === 'inventory') {
-  character.inventory = updatedInfo;
-  updateMessage = `✅ **${character.name}'s inventory link has been updated from ${previousValue} to ${updatedInfo}.**`;
+  const { previousValue, updatedValue } = capturePreviousAndUpdatedValues(character, category, updatedInfo);
+
+  character.inventory = updatedValue; // Update field
+  updateMessage = `✅ **${character.name}'s inventory link has been updated from ${previousValue} to ${updatedValue}.**`;
+
+// ------------------- Age Update Section -------------------
 } else if (category === 'age') {
   const age = parseInt(updatedInfo, 10);
+
   if (isNaN(age) || age < 0) {
       await interaction.followUp({
           content: `⚠️ **${updatedInfo}** is not a valid age. Please provide a non-negative number.`,
@@ -274,8 +299,13 @@ if (category === 'job') {
       });
       return;
   }
-  character.age = age;
-  updateMessage = `✅ **${character.name}'s age has been updated to ${age}.**`;
+
+  const { previousValue, updatedValue } = capturePreviousAndUpdatedValues(character, category, updatedInfo);
+
+  character.age = updatedValue; // Update character age
+  updateMessage = `✅ **${character.name}'s age has been updated from ${previousValue} to ${updatedValue}.**`;
+
+// ------------------- Height Update Section -------------------
 } else if (category === 'height') {
   const heightInCm = parseInt(updatedInfo, 10);
   if (isNaN(heightInCm) || heightInCm < 0) {
@@ -290,10 +320,19 @@ if (category === 'job') {
   updateMessage = `✅ **${character.name}'s height has been updated from ${previousValue} to ${heightInCm} cm (${heightInFeetInches}).**`;
 }
 
+// ------------------- Save Character and Log Updates -------------------
+
 // Save the updated character and respond to the user
 await character.save();
+
+// Fetch updated character for confirmation
 const updatedCharacter = await fetchCharacterById(character._id);
-const embed = createCharacterEmbed(updatedCharacter); // Create a character embed with updated data
+
+// Log a clear error if the validation fails
+if (updatedCharacter[category] !== updatedValue) {}
+
+// Create an embed with updated character details
+const embed = createCharacterEmbed(updatedCharacter);
 
 // ------------------- Send Notification to a Discord Channel -------------------
 const EDIT_NOTIFICATION_CHANNEL_ID = '1319524801408274434'; // Notification channel ID
@@ -301,17 +340,20 @@ try {
     const notificationChannel = await interaction.client.channels.fetch(EDIT_NOTIFICATION_CHANNEL_ID);
     if (notificationChannel && notificationChannel.isTextBased()) {
         const notificationMessage = `📢 **USER EDITED THEIR CHARACTER**\n
-        🌱 **User:** \`${interaction.user.tag}\` 
-        👤 **Character Name:** \`${character.name}\`
-        🛠️ **Edited Category:** \`${category}\`
-        🔄 **Previous Value:** \`${previousValue ?? 'N/A'}\`
-        ✅ **Updated Value:** \`${updatedValue ?? 'N/A'}\``;
+🌱 **User:** \`${interaction.user.tag}\` 
+👤 **Character Name:** \`${character.name}\`
+🛠️ **Edited Category:** \`${category}\`
+🔄 **Previous Value:** \`${previousValue || 'N/A'}\`
+✅ **Updated Value:** \`${updatedValue || updatedCharacter[category] || 'N/A'}\``;
 
         await notificationChannel.send(notificationMessage);
+    } else {
+        console.error(`[editcharacter.js]: Notification channel is not text-based or unavailable.`);
     }
 } catch (err) {
     console.error(`[editcharacter.js]: Error sending update notification: ${err.message}`);
 }
+
 
 await interaction.followUp({ content: updateMessage, embeds: [embed], ephemeral: true });
 
@@ -320,7 +362,6 @@ await interaction.followUp({ content: updateMessage, embeds: [embed], ephemeral:
     }
   },
   
-
   // ------------------- Autocomplete Handler -------------------
   async autocomplete(interaction) {
     await handleAutocomplete(interaction);

@@ -14,8 +14,8 @@ const { applyVillageDamage } = require('../modules/villageModule');
 require('dotenv').config();
 
 // Constants
-const MESSAGE_THRESHOLD = 100; // Number of messages to trigger an encounter
-const MIN_ACTIVE_USERS = 1; // Minimum unique users required for an encounter
+const MESSAGE_THRESHOLD = 25; // Number of messages to trigger an encounter
+const MIN_ACTIVE_USERS = 4; // Minimum unique users required for an encounter
 const TIME_WINDOW = 10 * 60 * 1000; // 10 minutes in milliseconds
 const CHECK_INTERVAL = 20 * 1000; // Check every 20 seconds
 
@@ -144,7 +144,7 @@ async function triggerRandomEncounter(channel) {
       reason: 'Random Encounter',
     });
 
-    const timerDuration = 30 * 1000; // 30 seconds
+    const timerDuration = 10 * 60 * 1000; // 10 minutes
     setTimeout(async () => {
       try {
         await applyVillageDamage(selectedVillage, monster, thread);

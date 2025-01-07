@@ -1,67 +1,132 @@
-require('dotenv').config(); // Load environment variables from .env
+// ------------------- Import Necessary Libraries -------------------
+const { Client, GatewayIntentBits } = require('discord.js');
+const { google } = require('googleapis');
+const schedule = require('node-schedule');
+require('dotenv').config();
 
-const { REST } = require('@discordjs/rest');
-const { Routes } = require('discord-api-types/v9');
+// ------------------- Discord Bot Setup -------------------
+const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+const QUEST_CHANNEL_ID = '1305486549252706335';
 
-// Load variables from .env
-const token = process.env.DISCORD_TOKEN;
-const clientId = process.env.CLIENT_ID;
-const guildIds = process.env.GUILD_IDS.split(','); // Ensure this is properly formatted as a comma-separated string in your .env file
+// ------------------- Google Sheets API Setup -------------------
+const SHEET_ID = '1M106nBghmgng9xigxkVpUXuKIF60QXXKiAERlG1a0Gs';
+const GOOGLE_CREDENTIALS = JSON.parse(process.env.GOOGLE_CREDENTIALS);
 
-const rest = new REST({ version: '9' }).setToken(token);
+const sheets = google.sheets({
+    version: 'v4',
+    auth: new google.auth.JWT(
+        GOOGLE_CREDENTIALS.client_email,
+        null,
+        GOOGLE_CREDENTIALS.private_key,
+        ['https://www.googleapis.com/auth/spreadsheets.readonly']
+    )
+});
 
-(async () => {
+// ------------------- Function to Fetch Quest Data -------------------
+async function fetchQuestData() {
     try {
-        console.log('Fetching commands...\n');
-
-        // Fetch Guild-Specific Commands
-        for (const guildId of guildIds) {
-            console.log(`Guild Commands for Guild ID: ${guildId}`);
-            const guildCommands = await rest.get(
-                Routes.applicationGuildCommands(clientId, guildId)
-            );
-
-            guildCommands.forEach(command => {
-                console.log(`Name: ${command.name}, ID: ${command.id}`);
-
-                // Log subcommands if they exist
-                if (command.options) {
-                    command.options.forEach(option => {
-                        if (option.type === 1) { // Type 1 = Subcommand
-                            console.log(`  Subcommand: ${option.name}`);
-                        } else if (option.type === 2) { // Type 2 = Subcommand Group
-                            console.log(`  Subcommand Group: ${option.name}`);
-                            option.options.forEach(subOption => {
-                                console.log(`    Subcommand: ${subOption.name}`);
-                            });
-                        }
-                    });
-                }
-            });
-        }
-
-        // Fetch Global Commands
-        console.log('\nGlobal Commands:');
-        const globalCommands = await rest.get(Routes.applicationCommands(clientId));
-        globalCommands.forEach(command => {
-            console.log(`Name: ${command.name}, ID: ${command.id}`);
-
-            // Log subcommands if they exist
-            if (command.options) {
-                command.options.forEach(option => {
-                    if (option.type === 1) {
-                        console.log(`  Subcommand: ${option.name}`);
-                    } else if (option.type === 2) {
-                        console.log(`  Subcommand Group: ${option.name}`);
-                        option.options.forEach(subOption => {
-                            console.log(`    Subcommand: ${subOption.name}`);
-                        });
-                    }
-                }); // Corrected missing closing parenthesis and semicolon here
-            }
+        const response = await sheets.spreadsheets.values.get({
+            spreadsheetId: SHEET_ID,
+            range: 'loggedQuests!A2:Q', // Adjust range as per sheet layout
         });
-
+        return response.data.values || [];
     } catch (error) {
-        console.error('Error fetching commands:', error);
+        console.error('[QUESTS]: Error fetching data from Google Sheets:', error);
+        return [];
     }
-})();
+}
+
+// ------------------- Function to Format Quest Message -------------------
+function formatQuestMessage(quest) {
+    const [
+        title,
+        description,
+        questType,
+        location,
+        timeLimit,
+        minRequirements,
+        rewards,
+        rewardsCap,
+        signupDeadline,
+        participantCap,
+        postRequirement,
+        specialNote,
+        roles,
+        participants,
+        status,
+        image,
+        date
+    ] = quest;
+
+    return `📜 **Quest Title:** ${title}
+
+📝 **Description:** ${description}
+📍 **Location:** ${location}
+⏳ **Time Limit:** ${timeLimit}
+🔑 **Minimum Requirements:** ${minRequirements}
+🎁 **Rewards:** ${rewards} (Cap: ${rewardsCap})
+📅 **Signup Deadline:** ${signupDeadline}
+👥 **Participant Cap:** ${participantCap}
+💬 **Post Requirement:** ${postRequirement}
+✨ **Special Note:** ${specialNote || 'None'}
+🎭 **Roles:** ${roles || 'None'}
+📌 **Date:** ${date}
+
+${
+        image ? `🌄 **Image:** [Link](${image})` : ''
+    }`;
+}
+
+// ------------------- Function to Post Quests to Discord -------------------
+async function postQuests() {
+    const questChannel = await client.channels.fetch(QUEST_CHANNEL_ID);
+
+    if (!questChannel) {
+        console.error('[QUESTS]: Channel not found!');
+        return;
+    }
+
+    const questData = await fetchQuestData();
+
+    if (!questData.length) {
+        console.error('[QUESTS]: No quest data found.');
+        return;
+    }
+
+    for (const quest of questData) {
+        const questMessage = formatQuestMessage(quest);
+
+        try {
+            await questChannel.send(questMessage);
+        } catch (error) {
+            console.error(`[QUESTS]: Error posting quest: ${quest[0]}`, error);
+        }
+    }
+}
+
+// ------------------- Schedule Quest Posting -------------------
+schedule.scheduleJob('0 9 1 */2 *', async () => { // Runs at 9:00 AM on the 1st day of every other month
+    console.log('[QUESTS]: Scheduled task running to post quests.');
+    await postQuests();
+});
+
+// ------------------- Discord Bot Test Command -------------------
+client.on('messageCreate', async (message) => {
+    if (message.content === '!testQuests' && message.channelId === QUEST_CHANNEL_ID) {
+        console.log('[TEST]: Triggering quest posting manually.');
+        await postQuests();
+        message.reply('✅ Quests have been posted for testing!');
+    }
+});
+
+// ------------------- Discord Bot Event Listeners -------------------
+client.once('ready', () => {
+    console.log(`[BOT]: Logged in as ${client.user.tag}`);
+});
+
+client.on('error', (error) => {
+    console.error('[BOT]: Discord client error:', error);
+});
+
+// ------------------- Login Bot -------------------
+client.login(process.env.DISCORD_BOT_TOKEN);

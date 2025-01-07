@@ -111,17 +111,31 @@
     "totalSpent": 0
   },
   "69dd4a7b": {
-    "users": [],
+    "users": [
+      {
+        "characterName": "Sable",
+        "userId": "308795936530759680"
+      }
+    ],
     "mountType": "Horse",
-    "rarity": "To be determined",
+    "rarity": "Regular",
     "mountLevel": "High",
-    "mountStamina": "To be determined",
-    "environment": "To be determined",
+    "mountStamina": 5,
+    "environment": "Plains",
     "village": "Vhintl",
     "actions": [],
-    "tameStatus": false,
-    "traits": {},
-    "totalSpent": 0
+    "tameStatus": true,
+    "traits": {
+      "coatMane": "Light Blue Coat + White Mane",
+      "coatPattern": "Full Spots (Dapple)",
+      "snoutPattern": "Star",
+      "eyeColor": "Blue",
+      "muzzleColor": "White",
+      "hoofColor": "Black",
+      "ankleHairColor": "White",
+      "ankleHairStyle": "Fluffy"
+    },
+    "totalSpent": 195
   },
   "dbadf8b7": {
     "users": [],
@@ -137,26 +151,62 @@
     "totalSpent": 0
   },
   "1d9d93e4": {
-    "users": [],
+    "users": [
+      {
+        "characterName": "Sheikito",
+        "userId": "424812685729726475"
+      }
+    ],
     "mountType": "Donkey",
-    "rarity": "To be determined",
+    "rarity": "Regular",
     "mountLevel": "Mid",
-    "mountStamina": "To be determined",
-    "environment": "To be determined",
+    "mountStamina": 3,
+    "environment": "Plains",
     "village": "Vhintl",
     "actions": [],
-    "tameStatus": false,
-    "traits": {},
-    "totalSpent": 0
+    "tameStatus": true,
+    "traits": {
+      "coatColor": "Pink",
+      "coatStyle": "Fluffy",
+      "coatPattern": "Spotted"
+    },
+    "totalSpent": 100
   },
   "c4b24c17": {
-    "users": [],
+    "users": [
+      {
+        "characterName": "Pratyusha",
+        "userId": "424812685729726475"
+      }
+    ],
     "mountType": "Horse",
-    "rarity": "To be determined",
+    "rarity": "Regular",
     "mountLevel": "Basic",
+    "mountStamina": 2,
+    "environment": "Forest",
+    "village": "Rudania",
+    "actions": [],
+    "tameStatus": true,
+    "traits": {
+      "coatMane": "Buckskin Coat + Black Mane",
+      "coatPattern": "Solid",
+      "snoutPattern": "Stripe",
+      "eyeColor": "Amber",
+      "muzzleColor": "Black",
+      "hoofColor": "Black",
+      "ankleHairColor": "Black",
+      "ankleHairStyle": "Short"
+    },
+    "totalSpent": 195
+  },
+  "99c1c7c8": {
+    "users": [],
+    "mountType": "Bear",
+    "rarity": "To be determined",
+    "mountLevel": "High",
     "mountStamina": "To be determined",
     "environment": "To be determined",
-    "village": "Rudania",
+    "village": "Inariko",
     "actions": [],
     "tameStatus": false,
     "traits": {},

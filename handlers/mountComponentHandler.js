@@ -208,7 +208,7 @@ async function proceedWithRoll(interaction, characterName, encounterId) {
         return;
     }
 
-    const roll = 20; //Math.floor(Math.random() * 20) + 1; // Set roll to 20 for testing (use Math.random for real rolls)
+    const roll = Math.floor(Math.random() * 20) + 1; // Set roll to 20 for testing (use Math.random for real rolls)
     const encounter = getEncounterById(encounterId);
 
     if (!encounter) {
