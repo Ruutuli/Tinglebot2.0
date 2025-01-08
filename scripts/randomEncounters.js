@@ -14,7 +14,7 @@ const { applyVillageDamage } = require('../modules/villageModule');
 require('dotenv').config();
 
 // Constants
-const MESSAGE_THRESHOLD = 25; // Number of messages to trigger an encounter
+const MESSAGE_THRESHOLD = 1000; // Number of messages to trigger an encounter
 const MIN_ACTIVE_USERS = 4; // Minimum unique users required for an encounter
 const TIME_WINDOW = 10 * 60 * 1000; // 10 minutes in milliseconds
 const CHECK_INTERVAL = 20 * 1000; // Check every 20 seconds

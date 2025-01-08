@@ -145,5 +145,27 @@
     "typeMultiplierCount": 1,
     "finalTokenAmount": 0,
     "tokenCalculation": "N/A"
+  },
+  "1736313627349": {
+    "submissionId": "1736313627349",
+    "userId": "211219306137124865",
+    "characterName": "Knuckle",
+    "healerName": "Darune",
+    "taskType": "art",
+    "taskDescription": "**Darune, Dragon of Power** demands that you draw your OC surrounded by flames, invoking his fiery power to cleanse the blight. Minimum requirement: Full Body, Full Color.",
+    "healingStage": 5,
+    "status": "pending",
+    "createdAt": "2025-01-08T06:06:04.598Z"
+  },
+  "1736314182464": {
+    "submissionId": "1736314182464",
+    "userId": "211219306137124865",
+    "characterName": "Alden",
+    "healerName": "Korelii",
+    "taskType": "art",
+    "taskDescription": "**Korelii: Sage of Water** asks you to draw the story of how your OC came to be infected by blight. Show the moment, if you can, or maybe the immediate aftermath even! Goro, I just kinda like any old art, really! Minimum requirement: Line Art.",
+    "healingStage": 5,
+    "status": "pending",
+    "createdAt": "2025-01-08T05:57:51.407Z"
   }
 }

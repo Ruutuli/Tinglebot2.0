@@ -19,7 +19,8 @@ const { getBaseSelectMenu } = require('../utils/menuUtils');
 const { submissionStore, saveSubmissionToStorage } = require('../utils/storage');
 const { uploadSubmissionImage } = require('../utils/uploadUtils');
 const { createArtSubmissionEmbed, createWritingSubmissionEmbed } = require('../embeds/mechanicEmbeds');
-const User = require('../models/UserModel'); // User model for database queries
+const User = require('../models/UserModel'); 
+const { generateUniqueId } = require('../utils/uniqueIdUtils');
 
 // ------------------- Command Registration -------------------
 // Defines the `/submit` command, allowing users to submit art or writing and claim tokens
@@ -132,7 +133,7 @@ module.exports = {
         });
         
 
-        const submissionId = `${user.id}-${Date.now()}`;
+        const submissionId = generateUniqueId('A');
         console.log('Generated Submission ID:', submissionId);
         
         const submissionData = {
@@ -213,7 +214,7 @@ module.exports = {
         const finalTokenAmount = calculateWritingTokens(wordCount);
     
         // Create a unique submission ID
-        const submissionId = `${user.id}-${Date.now()}`;
+        const submissionId = generateUniqueId('W');
         submissionStore.set(submissionId, {
           submissionId,
           userId: user.id,

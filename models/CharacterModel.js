@@ -77,6 +77,7 @@ const characterSchema = new Schema({
   blighted: { type: Boolean, default: false },          // Blighted status
   blightStage: { type: Number, default: 0 },            // Stage of blight (0-5)
   lastRollDate: { type: Date, default: null },          // Date of last roll for blighted characters
+  deathDeadline: { type: Date, default: null },
   ko: { type: Boolean, default: false },                // KO status
   debuff: {                                             // Tracks debuff status for KO recovery
     active: { type: Boolean, default: false },          // Whether the debuff is active

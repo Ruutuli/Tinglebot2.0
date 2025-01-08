@@ -2,6 +2,11 @@
 const { connectToTinglebot, connectToInventories } = require('./database/connection'); // Adjust the path if necessary
 const Character = require('./models/CharacterModel');  // Adjust the path to CharacterModel if necessary
 
+// ------------------- Generate Random Blight Stage -------------------
+function getRandomBlightStage() {
+  return Math.floor(Math.random() * 4) + 1; // Generates a random number between 1 and 4
+}
+
 // ------------------- Update All Characters -------------------
 async function updateAllCharacters() {
   try {
@@ -9,13 +14,22 @@ async function updateAllCharacters() {
     await connectToTinglebot();
     console.log('✅ Connected to the Tinglebot database.');
 
-    // Update all characters to be blighted: true and blightStage: 1
-    const result = await Character.updateMany({}, {
-      blighted: true,
-      blightStage: 1
-    });
+    // Fetch all characters
+    const characters = await Character.find({});
+    console.log(`🔄 Updating ${characters.length} characters...\n`);
 
-    console.log(`✅ Successfully updated ${result.nModified} characters.`);
+    // Iterate over each character and randomize the blight stage
+    for (const character of characters) {
+      const randomBlightStage = getRandomBlightStage();
+      character.blighted = true;
+      character.blightStage = randomBlightStage;
+      await character.save(); // Save the updated character
+
+      // Log the character name and assigned blight stage
+      console.log(`🟢 ${character.name} -> Blight Stage: ${randomBlightStage}`);
+    }
+
+    console.log(`\n✅ Successfully updated ${characters.length} characters with randomized blight stages.`);
   } catch (error) {
     console.error('❌ Error updating characters:', error);
   } finally {

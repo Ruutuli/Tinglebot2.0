@@ -145,6 +145,45 @@ cron.schedule('0 2 1 * *', async () => {
     }
   }, { timezone: 'America/New_York' });
 
+  // ------------------- Daily Blight Death Check -------------------
+cron.schedule('0 0 * * *', async () => {
+  try {
+    console.log('[scheduler]☠ Checking for characters who have died due to blight...');
+
+    const now = new Date();
+    const doomedCharacters = await Character.find({ 
+      blightStage: 5, 
+      deathDeadline: { $lte: now }
+    });
+
+    for (const character of doomedCharacters) {
+      // Mark the character as dead
+      character.blighted = false;
+      character.blightStage = 0;
+      character.deathDeadline = null; // Clear the deadline
+      character.status = 'dead'; // Example field to mark death
+      await character.save();
+
+      console.log(`[scheduler]☠ Character ${character.name} has died due to blight.`);
+
+      // Notify the user
+      try {
+        const user = await client.users.fetch(character.userId);
+        if (user) {
+          await user.send(`☠ **Your character ${character.name} has succumbed to the blight and has died.**`);
+          console.log(`[scheduler]✅ User ${user.username} notified about ${character.name}'s death.`);
+        }
+      } catch (error) {
+        console.error(`[scheduler]❌ Failed to notify user about ${character.name}'s death:`, error.message);
+      }
+    }
+
+    console.log('[scheduler]✅ Blight death check completed.');
+  } catch (error) {
+    console.error('[scheduler]❌ Error during blight death check:', error.message);
+  }
+}, { timezone: 'America/New_York' });
+
   // ------------------- Monthly Blood Moon Announcement -------------------
   cron.schedule('0 20 13 * *', async () => {
     try {
