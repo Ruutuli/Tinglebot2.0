@@ -80,7 +80,7 @@ function getAddOnsMenu(includeComplete = false) {
   ];
 
   if (includeComplete) {
-    addOnOptions.push({ label: 'Complete ✅', value: 'complete' });
+    addOnOptions.push({ label: 'Next Section ➡️', value: 'complete' });
   }
 
   return new ActionRowBuilder().addComponents(
@@ -92,10 +92,34 @@ function getAddOnsMenu(includeComplete = false) {
   );
 }
 
+
+// ------------------- Special Works Menu -------------------
+function getSpecialWorksMenu(includeComplete = false) {
+  const specialWorkOptions = [
+    { label: 'Comic: Simple Panel (10 Tokens)', value: 'comicSimple' },
+    { label: 'Comic: Complex Panel (20 Tokens)', value: 'comicComplex' },
+    { label: 'Animation: Simple Frame (10 Tokens)', value: 'frameSimple' },
+    { label: 'Animation: Complex Frame (20 Tokens)', value: 'frameComplex' },
+  ];
+
+  if (includeComplete) {
+    specialWorkOptions.push({ label: 'Complete ✅', value: 'complete' });
+  }
+
+  return new ActionRowBuilder().addComponents(
+    new StringSelectMenuBuilder()
+      .setCustomId('specialWorksSelect')
+      .setPlaceholder('Select special works')
+      .addOptions(specialWorkOptions)
+      .setMaxValues(1)
+  );
+}
+
 // ------------------- Export Functions -------------------
 module.exports = {
   getBaseSelectMenu,
   getTypeMultiplierMenu,
   getProductMultiplierMenu,
   getAddOnsMenu,
+  getSpecialWorksMenu
 };

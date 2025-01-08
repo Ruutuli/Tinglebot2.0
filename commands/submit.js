@@ -127,8 +127,10 @@ module.exports = {
           typeMultiplierSelections: [],
           productMultiplierValue: 1,
           addOnsApplied: [],
+          specialWorksApplied: [], // Add this line
           characterCount: 1,
         });
+        
 
         const submissionId = `${user.id}-${Date.now()}`;
         console.log('Generated Submission ID:', submissionId);
@@ -148,6 +150,7 @@ module.exports = {
             typeMultiplierSelections: [],
             productMultiplierValue: 'default',
             addOnsApplied: [],
+            specialWorksApplied: [], 
             characterCount: 1,
             typeMultiplierCount: 1,
             finalTokenAmount: 0,

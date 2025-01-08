@@ -39,11 +39,21 @@ const addOns = {
   complexBg: 40
 };
 
+// ------------------- Special Works ------------------- 
+// Additional costs for special works like comics and animation
+const specialWorks = {
+  comicSimple: 10,
+  comicComplex: 20,
+  frameSimple: 10,
+  frameComplex: 20,
+};
+
 // ------------------- Export all constants -------------------
 module.exports = {
   baseTokens,
   typeMultipliers,
   productMultipliers,
-  addOns
+  addOns,
+  specialWorks
 };
 

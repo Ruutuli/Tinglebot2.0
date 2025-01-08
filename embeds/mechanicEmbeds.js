@@ -108,8 +108,6 @@ const createCraftingEmbed = async (item, character, flavorText, materialsUsed, q
     return embed;
 };
 
-
-
 // ------------------- Function to create Writing Submission embed -------------------
 const createWritingSubmissionEmbed = (submissionData) => {
     return new EmbedBuilder()
