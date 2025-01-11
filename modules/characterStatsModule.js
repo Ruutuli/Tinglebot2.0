@@ -48,29 +48,33 @@ const recoverHearts = async (characterId, hearts, healerId = null) => {
     if (!character) throw new Error('Character not found');
 
     if (character.ko) {
-      console.log(`[StatModule DEBUG] Skipping heart deduction. Character ${character.name} is already KO'd.`);
+      console.log(`[StatModule DEBUG] Character ${character.name} is KO'd. Validating healer...`);
       if (!healerId) {
         throw new Error(`${character.name} is KO'd and cannot heal without a healer.`);
       }
-    
+
       const healer = await Character.findById(healerId);
-      if (!healer || healer.job !== 'Healer') {
-        throw new Error(`Invalid healer or ${healer?.name} is not a healer.`);
+      if (!healer) throw new Error('Healer not found.');
+      const healerJob = healer.jobVoucherJob || healer.job; // Support job vouchers
+      if (healerJob.toLowerCase() !== 'healer') {
+        throw new Error(`Invalid healer or ${healer.name} is not a healer.`);
       }
-    
+
+      console.log(`[StatModule DEBUG] Reviving character ${character.name} with healer ${healer.name}.`);
       character.ko = false; // Revive the character
       character.currentHearts = Math.min(hearts, character.maxHearts);
     } else {
       character.currentHearts = Math.min(character.currentHearts + hearts, character.maxHearts);
     }
-    
 
     await character.save();
     return createSimpleCharacterEmbed(character, `❤️ +${hearts} hearts recovered`);
   } catch (error) {
+    console.error(`[characterStatsModule.js]: Error in recoverHearts: ${error.message}`);
     throw error;
   }
 };
+
 
 
 // ------------------- Function to recover stamina -------------------

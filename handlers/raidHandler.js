@@ -23,26 +23,30 @@ async function triggerRaid(character, monster, interaction, threadId, isBloodMoo
     const monsterImage = monsterData.image || monster.image;
 
     const embed = new EmbedBuilder()
-        .setTitle(isBloodMoon ? `🔴 **Blood Moon Raid initiated!**` : `🛡️ **Raid initiated!**`)
-        .setDescription(
-            `Use </raid:1315149690634768405> id:${battleId} to join or continue the raid!\n
-            Use </item:1306176789755858979> to heal during the raid!`
-        )
-        .addFields(
-            { name: `__Monster Hearts__`, value: `💙 ${monsterHearts.current}/${monsterHearts.max}`, inline: false },
-            { name: `__${character.name} Hearts__`, value: `❤️ ${character.currentHearts}/${character.maxHearts}`, inline: false },
-            { name: `__Battle ID__`, value: `\`${battleId}\``, inline: false } // Add backticks to make it a code block
-        )
-        .setAuthor({ name: character.name, iconURL: character.icon })
-        .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
-        .setFooter({
-            text: `You have 10 minutes to complete this raid!`
-        })
-        .setColor(isBloodMoon ? '#FF4500' : '#FF0000');
+    .setTitle(isBloodMoon ? `🔴 **Blood Moon Raid initiated!**` : `🛡️ **Raid initiated!**`)
+    .setDescription(
+        `Use </raid:1315149690634768405> id:${battleId} to join or continue the raid!\n
+        Use </item:1306176789755858979> to heal during the raid!`
+    )
+    .addFields(
+        { name: `__Monster Hearts__`, value: `💙 ${monsterHearts.current}/${monsterHearts.max}`, inline: false },
+        { name: `__${character.name || 'Unknown Adventurer'} Hearts__`, value: `❤️ ${character.currentHearts}/${character.maxHearts}`, inline: false },
+        { name: `__Battle ID__`, value: `\`${battleId}\``, inline: false }
+    )
+    .setAuthor({
+        name: character.name || 'Unknown Adventurer',
+        iconURL: character.icon || 'https://via.placeholder.com/100'
+    })
+    .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+    .setFooter({
+        text: `You have 10 minutes to complete this raid!`
+    })
+    .setColor(isBloodMoon ? '#FF4500' : '#FF0000');
 
-    if (monsterImage && monsterImage.startsWith('http')) {
-        embed.setThumbnail(monsterImage);
-    }
+if (monsterImage && monsterImage.startsWith('http')) {
+    embed.setThumbnail(monsterImage);
+}
+
 
     let thread;
     try {

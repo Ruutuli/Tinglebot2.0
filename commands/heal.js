@@ -180,176 +180,180 @@ if (subcommand === 'request') {
 
  // ------------------- Handle /heal fulfill -------------------
 if (subcommand === 'fulfill') {
-  const requestId = interaction.options.getString('requestid');
-  const healerName = interaction.options.getString('healername');
+    const requestId = interaction.options.getString('requestid');
+    const healerName = interaction.options.getString('healername');
 
-  try {
-      await interaction.deferReply();
+    try {
+        await interaction.deferReply();
 
-      // Retrieve the healing request
-      const healingRequest = retrieveHealingRequestFromStorage(requestId);
-      if (!healingRequest) {
-          await interaction.editReply(`❌ **Error:** No healing request found with ID **${requestId}**.`);
-          return;
-      }
+        // ------------------- Retrieve Healing Request -------------------
+        const healingRequest = retrieveHealingRequestFromStorage(requestId);
+        if (!healingRequest) {
+            await interaction.editReply(`❌ **Error:** No healing request found with ID **${requestId}**.`);
+            return;
+        }
 
-      if (healingRequest.status !== 'pending') {
-          await interaction.editReply(
-              `❌ **Error:** Healing request **${requestId}** has already been fulfilled or expired.`
-          );
-          return;
-      }
+        if (healingRequest.status !== 'pending') {
+            await interaction.editReply(
+                `❌ **Error:** Healing request **${requestId}** has already been fulfilled or expired.`
+            );
+            return;
+        }
 
-      // Fetch the healer's character
-      const healerCharacter = await fetchCharacterByNameAndUserId(healerName, interaction.user.id);
-      if (!healerCharacter) {
-          await interaction.editReply(`❌ **Error:** You do not own the healer character **${healerName}**!`);
-          return;
-      }
+        // ------------------- Fetch Healer's Character -------------------
+        const healerCharacter = await fetchCharacterByNameAndUserId(healerName, interaction.user.id);
+        if (!healerCharacter) {
+            console.error(`[heal.js]: Invalid healer character "${healerName}".`);
+            await interaction.editReply(`❌ **Error:** You do not own the healer character "${healerName}"!`);
+            return;
+        }
 
-// Validate the job (including job voucher logic)
-let job = healerCharacter.jobVoucher ? healerCharacter.jobVoucherJob : healerCharacter.job;
-console.log(`[Heal Command]: Determined job for ${healerCharacter.name} is "${job}"`);
+        // Determine the healer's job
+        const job = healerCharacter.jobVoucher && healerCharacter.jobVoucherJob
+            ? healerCharacter.jobVoucherJob
+            : healerCharacter.job;
 
-// Normalize `jobVoucher` to handle unexpected values gracefully
-const isJobVoucherActive = !!(healerCharacter.jobVoucher === true || healerCharacter.jobVoucher === 'true' || healerCharacter.jobVoucher === 1);
+        console.log(`[heal.js]: Healer Character: ${JSON.stringify(healerCharacter, null, 2)}`);
+        console.log(`[heal.js]: Determined Job: ${job}`);
 
-if (isJobVoucherActive) {
-    console.log(`[Heal Command]: Job voucher detected for ${healerCharacter.name}. Validating voucher.`);
-    const voucherValidation = await validateJobVoucher(healerCharacter, job);
-    if (!voucherValidation.success) {
-        await interaction.editReply({
-            content: voucherValidation.message,
-            ephemeral: true,
-        });
-        return;
+        // ------------------- Validate Job Voucher -------------------
+        if (healerCharacter.jobVoucher) {
+            console.log(`[heal.js]: Job voucher detected for ${healerCharacter.name}. Validating voucher.`);
+            const voucherValidation = await validateJobVoucher(healerCharacter, job);
+            console.log(`[heal.js]: Job voucher validation result for ${healerCharacter.name}:`, voucherValidation);
+
+            if (!voucherValidation.success) {
+                console.error(`[heal.js]: Job voucher validation failed for ${healerCharacter.name}.`);
+                await interaction.editReply({
+                    content: voucherValidation.message,
+                    ephemeral: true,
+                });
+                return;
+            }
+        }
+
+        // ------------------- Validate Healer's Job -------------------
+        if (job.toLowerCase() !== 'healer') {
+            console.error(`[heal.js]: Invalid job "${job}" for healer "${healerCharacter.name}". Only "Healer" is allowed.`);
+            await interaction.editReply(
+                `❌ **Error:** Only characters with the **Healer** job can fulfill healing requests.`
+            );
+            return;
+        }
+
+        // ------------------- Activate Job Voucher -------------------
+        if (healerCharacter.jobVoucher) {
+            console.log(`[heal.js]: Activating job voucher for ${healerCharacter.name}.`);
+            const { success: itemSuccess, item: jobVoucherItem, message: itemError } = await fetchJobVoucherItem();
+
+            if (!itemSuccess) {
+                await interaction.editReply({
+                    content: itemError,
+                    ephemeral: true,
+                });
+                return;
+            }
+
+            const activationResult = await activateJobVoucher(healerCharacter, job, jobVoucherItem, 1, interaction);
+            if (!activationResult.success) {
+                await interaction.editReply({
+                    content: activationResult.message,
+                    ephemeral: true,
+                });
+                return;
+            }
+
+            await interaction.followUp({
+                content: activationResult.message,
+                ephemeral: true,
+            });
+        }
+
+        // ------------------- Fetch Character to Be Healed -------------------
+        const characterToHeal = await fetchCharacterByName(healingRequest.characterRequesting);
+        if (!characterToHeal) {
+            await interaction.editReply(
+                `❌ **Error:** The character to be healed, **${healingRequest.characterRequesting}**, could not be found.`
+            );
+            return;
+        }
+
+        // Check if the character has a debuff preventing healing
+        if (characterToHeal.debuff?.active) {
+            await interaction.editReply(
+                `❌ **Error:** Healing cannot be completed because **${characterToHeal.name}** is currently affected by a debuff. Please wait until the debuff expires.`
+            );
+            return;
+        }
+
+        // ------------------- Validate Location and Request Details -------------------
+        if (healingRequest.village.toLowerCase() !== healerCharacter.currentVillage.toLowerCase()) {
+            await interaction.editReply(
+                `❌ Healing cannot be completed because **${characterToHeal.name}** is in **${capitalizeFirstLetter(healingRequest.village)}**, while **${healerCharacter.name}** is in **${capitalizeFirstLetter(healerCharacter.currentVillage)}**. Both must be in the same village.`
+            );
+            return;
+        }
+
+        if (healingRequest.healerName && healingRequest.healerName !== healerCharacter.name) {
+            await interaction.editReply(
+                `❌ **Error:** This healing request is specifically for **${healingRequest.healerName}**, not **${healerCharacter.name}**.`
+            );
+            return;
+        }
+
+        // ------------------- Check Healer's Stamina -------------------
+        const staminaCost = healingRequest.heartsToHeal;
+        if (healerCharacter.currentStamina < staminaCost) {
+            await interaction.editReply(
+                `❌ **Oops!** Healing cannot be completed because **${healerCharacter.name}**'s stamina is too low. Let them rest and try again later!`
+            );
+            return;
+        }
+
+        // ------------------- Process Healing -------------------
+        await useStamina(healerCharacter._id, staminaCost);
+        await recoverHearts(characterToHeal._id, healingRequest.heartsToHeal, healerCharacter._id);
+
+        // Mark the request as fulfilled and save its updated status
+        healingRequest.status = 'fulfilled';
+        saveHealingRequestToStorage(requestId, healingRequest);
+
+        // ------------------- Edit Original Request Message -------------------
+        const channel = interaction.channel;
+        const originalMessage = await channel.messages.fetch(healingRequest.messageId);
+
+        if (originalMessage) {
+            const updatedEmbed = createHealEmbed(
+                healerCharacter,
+                characterToHeal,
+                healingRequest.heartsToHeal,
+                healingRequest.paymentOffered, // Keep payment details
+                null,                         // No Request ID since fulfilled
+                true                          // Mark as fulfilled
+            );
+
+            await originalMessage.edit({ embeds: [updatedEmbed] });
+        }
+
+        // ------------------- Notify Requester and Send Embed -------------------
+        const originalRequesterId = healingRequest.requesterUserId;
+        const message = `<@${originalRequesterId}>, your character **${characterToHeal.name}** has been healed by **${healerCharacter.name}**!`;
+
+        const embed = createHealingEmbed(
+            healerCharacter,             // Healer's details
+            characterToHeal,             // Character being healed
+            healingRequest.heartsToHeal, // Hearts healed
+            staminaCost,                 // Stamina used
+            `Healed by: **${healerCharacter.name}**` // Fulfillment message
+        );
+
+        await interaction.followUp({ content: message, embeds: [embed] });
+    } catch (error) {
+        console.error(`[heal.js]: Error during healing request fulfillment: ${error.message}`);
+        await interaction.editReply('❌ **Error:** An issue occurred while fulfilling the healing request.');
     }
 }
 
-
-// Ensure the healer's job is valid for healing
-if (job.toLowerCase() !== 'healer') {
-    await interaction.editReply(
-        `❌ **Error:** Only characters with the **Healer** job can fulfill healing requests.`
-    );
-    return;
-}
-
-// Handle job voucher activation after validation
-if (healerCharacter.jobVoucher) {
-    console.log(`[Heal Command]: Activating job voucher for ${healerCharacter.name}.`);
-    const { success: itemSuccess, item: jobVoucherItem, message: itemError } = await fetchJobVoucherItem();
-    if (!itemSuccess) {
-        await interaction.editReply({
-            content: itemError,
-            ephemeral: true,
-        });
-        return;
-    }
-
-    const activationResult = await activateJobVoucher(healerCharacter, job, jobVoucherItem, 1, interaction);
-    if (!activationResult.success) {
-        await interaction.editReply({
-            content: activationResult.message,
-            ephemeral: true,
-        });
-        return;
-    }
-
-    await interaction.followUp({
-        content: activationResult.message,
-        ephemeral: true,
-    });
-}
-
-
-      // Fetch the character to be healed
-      const characterToHeal = await fetchCharacterByName(healingRequest.characterRequesting);
-      if (!characterToHeal) {
-          await interaction.editReply(
-              `❌ **Error:** The character to be healed, **${healingRequest.characterRequesting}**, could not be found.`
-          );
-          return;
-      }
-
-      // Check for debuffs preventing healing
-      if (characterToHeal.debuff?.active) {
-          await interaction.editReply(
-              `❌ **Error:** Healing cannot be completed because **${characterToHeal.name}** is currently affected by a debuff. Please wait until the debuff expires.`
-          );
-          return;
-      }
-
-      // Verify healer and character are in the same village
-      if (healingRequest.village.toLowerCase() !== healerCharacter.currentVillage.toLowerCase()) {
-          await interaction.editReply(
-              `❌ Healing cannot be completed because **${characterToHeal.name}** is in **${capitalizeFirstLetter(healingRequest.village)}**, while **${healerCharacter.name}** is in **${capitalizeFirstLetter(healerCharacter.currentVillage)}**. Both must be in the same village.`
-          );
-          return;
-      }
-
-      // Verify the healer matches the specific request, if applicable
-      if (healingRequest.healerName && healingRequest.healerName !== healerCharacter.name) {
-          await interaction.editReply(
-              `❌ **Error:** This healing request is specifically for **${healingRequest.healerName}**, not **${healerCharacter.name}**.`
-          );
-          return;
-      }
-
-      // Check healer's stamina
-      const staminaCost = healingRequest.heartsToHeal;
-      if (healerCharacter.currentStamina < staminaCost) {
-          await interaction.editReply(
-              `❌ **Oops!** Healing cannot be completed because **${healerCharacter.name}**'s stamina is too low. Let them rest and try again later!`
-          );
-          return;
-      }
-
-      // Process healing
-      await useStamina(healerCharacter._id, staminaCost);
-      await recoverHearts(characterToHeal._id, healingRequest.heartsToHeal, healerCharacter._id);
-
-      // Mark request as fulfilled and save updated status
-      healingRequest.status = 'fulfilled';
-      saveHealingRequestToStorage(requestId, healingRequest);
-
-      // Edit the original request message
-      const channel = interaction.channel;
-      const originalMessage = await channel.messages.fetch(healingRequest.messageId);
-
-      if (originalMessage) {
-          const updatedEmbed = createHealEmbed(
-              healerCharacter,
-              characterToHeal,
-              healingRequest.heartsToHeal,
-              healingRequest.paymentOffered, // Keep payment details
-              null,                         // No Request ID since fulfilled
-              true                          // Mark as fulfilled
-          );
-
-          await originalMessage.edit({
-              embeds: [updatedEmbed],
-          });
-      }
-
-      // Notify requester and send the fulfilled embed
-      const originalRequesterId = healingRequest.requesterUserId;
-      const message = `<@${originalRequesterId}>, your character **${characterToHeal.name}** has been healed by **${healerCharacter.name}**!`;
-
-      const embed = createHealingEmbed(
-          healerCharacter,             // Healer's details
-          characterToHeal,             // Character being healed
-          healingRequest.heartsToHeal, // Hearts healed
-          staminaCost,                 // Stamina used
-          `Healed by: **${healerCharacter.name}**` // Fulfillment message
-      );
-
-      await interaction.followUp({ content: message, embeds: [embed] });
-  } catch (error) {
-      console.error('[heal.js]: Error during healing request fulfillment:', error.message);
-      await interaction.editReply('❌ **Error:** An issue occurred while fulfilling the healing request.');
-  }
-}
 
   },
 

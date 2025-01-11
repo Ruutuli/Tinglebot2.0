@@ -75,10 +75,11 @@ async execute(interaction) {
       // ------------------- Retrieve Existing Raid Progress -------------------
       const battleProgress = await getBattleProgressById(battleId);
       if (!battleProgress) {
-          console.log("[ERROR] Raid not found.");
-          await interaction.editReply(`❌ **No raid found with ID \`${battleId}\`.**`);
+          console.error(`[ERROR] No battle progress found for Battle ID: ${battleId}`);
+          await interaction.editReply('❌ **An error occurred during the battle: Battle progress not found.**');
           return;
       }
+      
 
       const currentMonster = await fetchMonsterByName(battleProgress.monster);
       if (!currentMonster) {

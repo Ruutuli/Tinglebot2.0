@@ -288,8 +288,6 @@ async function handleCharacterBasedCommandsAutocomplete(interaction, focusedOpti
         return jobPerk && jobPerk.perks.includes('LOOTING');
       });
 
-      console.log('[Autocomplete]: Eligible characters for looting:', characters.map(c => c.name));
-
     } else if (commandName === 'syncinventory') {
       characters = characters.filter(character => {
         return !character.inventorySynced; // Filter unsynced inventories

@@ -1,12 +1,34 @@
 // ------------------- Imports -------------------
+// Standard Libraries
+const { v4: uuidv4 } = require('uuid');
+
+// Discord.js Components
 const { SlashCommandBuilder } = require('@discordjs/builders');
 const { EmbedBuilder } = require('discord.js');
+
+// Database Connections
+// (Add imports for database connection modules here if applicable)
+
+// Database Services
+const { fetchAllItems, fetchItemsByMonster } = require('../database/itemService');
+
+// Modules
+const { calculateFinalValue, createWeightedItemList, getMonsterEncounterFromList, getMonstersByRegion } = require('../modules/rngModule');
+const { processBattle, getEncounterOutcome } = require('../modules/damageModule');
+const { storeBattleProgress } = require('../modules/combatModule');
+const { triggerRaid } = require('../handlers/raidHandler');
+
+// Utility Functions
+const { addItemInventoryDatabase } = require('../utils/inventoryUtils');
+const { authorizeSheets, appendSheetData, extractSpreadsheetId } = require('../utils/googleSheetsUtils');
+
+// Database Models
 const Party = require('../models/PartyModel');
 const Character = require('../models/CharacterModel');
 const ItemModel = require('../models/ItemModel');
 const MonsterModel = require('../models/MonsterModel');
-const { fetchAllItems } = require('../database/itemService');
-const { getMonstersByRegion, createWeightedItemList,getMonsterEncounterFromList } = require('../modules/rngModule');
+
+// Embeds
 const { createExplorationItemEmbed, createExplorationMonsterEmbed } = require('../embeds/exploringEmbeds');
 
 // ------------------- Utility Functions -------------------
@@ -162,20 +184,31 @@ module.exports = {
             ];
             const userId = interaction.user.id;
 
-            const party = await Party.findOne({ partyId: expeditionId });
-            const character = await Character.findOne({ name: characterName, userId }).lean();
+            const party = await Party.findOne({ partyId: expeditionId }).lean();
+const character = await Character.findOne({ name: characterName, userId });
 
-            if (!party || !character) {
-                return interaction.reply('❌ Invalid expedition ID, character, or items selected. Ensure you meet all requirements.');
-            }
+if (!party || !character) {
+    return interaction.editReply('❌ Expedition ID or character not found.');
+}
 
-            // Check if the character's inventory has been synced
-            if (!character.inventorySynced) {
-                return interaction.reply({
-                    content: `❌ **You cannot use this command because your character does not have an inventory set up yet. Please use the </testinventorysetup:1306176790095728732> and then </syncinventory:1306176789894266898> command to initialize your inventory.**`,
-                    ephemeral: true,
-                });
-            }
+if (!character.inventorySynced) {
+    return interaction.editReply({
+        content: `❌ **You cannot use this command because your character does not have an inventory set up yet. Please use the </testinventorysetup:1306176790095728732> and then </syncinventory:1306176789894266898> command to initialize your inventory.**`,
+        ephemeral: true,
+    });
+}
+
+// ------------------- Validate Character Name and Icon -------------------
+if (!character.name || typeof character.name !== 'string') {
+    console.error(`[ERROR] Character name is invalid or undefined for Character ID: ${character._id}`);
+    return interaction.editReply('❌ **Character name is invalid or missing. Please check your character settings.**');
+}
+
+if (!character.icon || !character.icon.startsWith('http')) {
+    console.warn(`[WARN] Character icon is invalid or undefined for Character ID: ${character._id}. Defaulting to placeholder.`);
+    character.icon = 'https://via.placeholder.com/100'; // Fallback to a default icon
+}
+
 
             const items = [];
             for (const itemName of itemNames) {
@@ -331,57 +364,275 @@ module.exports = {
                 ephemeral: false 
             });            
 
-        // ------------------- Roll for Encounter -------------------
-    } else  if (subcommand === 'roll') {
+// ------------------- Roll for Encounter -------------------
+} else if (subcommand === 'roll') {
+    try {
+        // Defer the reply to indicate a delay in processing
+        await interaction.deferReply();
+
+        // ------------------- Retrieve Command Options -------------------
         const expeditionId = interaction.options.getString('id');
         const characterName = interaction.options.getString('charactername');
         const userId = interaction.user.id;
 
-        console.log(`Rolling for encounter - Expedition ID: ${expeditionId}, Character Name: ${characterName}, User ID: ${userId}`);
-        
-        const party = await Party.findOne({ partyId: expeditionId });
+        // ------------------- Fetch Expedition and Character Data -------------------
+        const party = await Party.findOne({ partyId: expeditionId }).lean();
         const character = await Character.findOne({ name: characterName, userId });
 
-        console.log(`Party found: ${party ? true : false}, Character found: ${character ? character.name : 'Not found'}`);
-
         if (!party || !character) {
-            return interaction.reply('❌ Expedition ID or character not found.');
+            return interaction.editReply('❌ Expedition ID or character not found.');
         }
 
-        // Check if the character's inventory has been synced
         if (!character.inventorySynced) {
-            return interaction.reply({
+            return interaction.editReply({
                 content: `❌ **You cannot use this command because your character does not have an inventory set up yet. Please use the </testinventorysetup:1306176790095728732> and then </syncinventory:1306176789894266898> command to initialize your inventory.**`,
                 ephemeral: true,
             });
         }
 
-   
+        // ------------------- Calculate Party Stats -------------------
+        let totalHearts = 0;
+        let totalStamina = 0;
+
+        const charactersWithData = await Promise.all(
+            party.characters.map(async (char) => {
+                const charData = await Character.findById(char._id).lean();
+                totalHearts += charData.currentHearts || 0;
+                totalStamina += charData.currentStamina || 0;
+
+                // Combine the original Party model character data with fresh Character model data
+                return { ...char, currentHearts: charData.currentHearts, currentStamina: charData.currentStamina };
+            })
+        );
+
+        // ------------------- Generate Items Carried String -------------------
+        const itemsCarried = charactersWithData
+            .flatMap(char => (char.items || []).map(item =>
+                `${item.itemName} - Heals ${item.modifierHearts || 0} ❤️ | ${item.staminaRecovered || 0} 🟩`
+            ))
+            .join('\n') || "None";
+
+        // ------------------- Determine Encounter Type -------------------
         const location = `${party.square} ${party.quadrant}`;
-        const encounterType = Math.random() < 0.5 ? 'monster' : 'item';
-        console.log(`Encounter Type: ${encounterType}`);
-    
-        if (encounterType === 'monster') {
-            const monsters = await getMonstersByRegion(party.region.toLowerCase());
-            const selectedMonster = monsters.length > 0 ? monsters[Math.floor(Math.random() * monsters.length)] : null;
-            if (selectedMonster) {
-                const embed = createExplorationMonsterEmbed(party, character, selectedMonster, expeditionId, location);
-                await interaction.reply({ embeds: [embed] });
-            } else {
-                await interaction.reply('❌ No monsters available.');
+        const encounterType = Math.random() < 1 ? 'monster' : 'item';
+
+// ------------------- Handle Monster Encounter -------------------
+if (encounterType === 'monster') {
+    const monsters = await getMonstersByRegion(party.region.toLowerCase());
+    const selectedMonster = monsters.length > 0 ? monsters[Math.floor(Math.random() * monsters.length)] : null;
+
+    if (selectedMonster) {
+        console.log(`[ENCOUNTER] Monster Encountered: ${selectedMonster.name}, Tier: ${selectedMonster.tier}`);
+
+        if (selectedMonster.tier > 4) {
+            const battleId = Date.now(); // Generate a unique battle ID
+            const monsterHearts = { max: selectedMonster.hearts, current: selectedMonster.hearts };
+
+            console.log(`[DEBUG] Triggering raid for Tier ${selectedMonster.tier} monster: ${selectedMonster.name}`);
+            await storeBattleProgress(
+                battleId,
+                character,
+                selectedMonster,
+                selectedMonster.tier,
+                monsterHearts,
+                null, // Thread ID (optional)
+                'Raid started: Player turn next.'
+            );
+
+            try {
+                // Start the raid
+   // Defer the reply to prepare for followUp usage
+await interaction.deferReply();
+
+await triggerRaid(
+    character,
+    selectedMonster,
+    interaction, // Pass the interaction after deferring
+    null,        // No threadId initially
+    false        // Not a Blood Moon Raid
+);
+
+
+                if (!raidOutcome) {
+                    console.error(`[ERROR] Raid outcome is undefined for battle ID: ${battleId}`);
+                    await interaction.editReply('❌ **An error occurred during the raid.**');
+                    return;
+                }
+
+                // Adjust party hearts after the raid
+                const koCharacters = raidOutcome.koCharacters || [];
+                for (const koChar of koCharacters) {
+                    const characterIndex = party.characters.findIndex(char => char._id.toString() === koChar._id.toString());
+                    if (characterIndex !== -1) {
+                        totalHearts -= koChar.currentHearts;
+                        party.characters[characterIndex].currentHearts = 0;
+                    }
+                }
+
+                await Party.updateOne({ partyId: expeditionId }, { characters: party.characters });
+
+                // Generate raid outcome embed
+                const embed = createExplorationMonsterEmbed(
+                    party,
+                    character,
+                    selectedMonster,
+                    expeditionId,
+                    location,
+                    totalHearts,
+                    totalStamina,
+                    itemsCarried
+                );
+
+                embed.addFields(
+                    { name: `💙 __Monster Hearts__`, value: `${monsterHearts.current}/${monsterHearts.max}`, inline: true },
+                    { name: '🆔 **__Expedition ID__**', value: expeditionId || 'Unknown', inline: true },
+                    { name: '📍 **__Current Location__**', value: location || "Unknown Location", inline: true },
+                    { name: `⚔️ __Raid Outcome__`, value: raidOutcome.result, inline: false }
+                );
+
+                await interaction.editReply({ embeds: [embed] });
+
+            } catch (error) {
+                console.error(`[ERROR] Raid processing failed for battle ID: ${battleId}`, error);
+                await interaction.editReply('❌ **An error occurred during the raid.**');
             }
         } else {
-            const allItems = await fetchAllItems();
-            const availableItems = allItems.filter(item => item[party.region.toLowerCase()]);
-            const selectedItem = availableItems.length > 0 ? availableItems[Math.floor(Math.random() * availableItems.length)] : null;
-            if (selectedItem) {
-                const embed = createExplorationItemEmbed(party, character, selectedItem, expeditionId, location);
-                await interaction.reply({ embeds: [embed] });
+            // Handle normal encounter logic for Tier 4 and below
+            console.log(`[ENCOUNTER] Normal encounter with ${selectedMonster.name} (Tier ${selectedMonster.tier}).`);
+
+            const { damageValue, adjustedRandomValue, attackSuccess, defenseSuccess } = calculateFinalValue(character);
+
+            console.log(`[ENCOUNTER] Damage: ${damageValue}, Adjusted Random Value: ${adjustedRandomValue}`);
+
+            const outcome = await getEncounterOutcome(
+                character,
+                selectedMonster,
+                damageValue,
+                adjustedRandomValue,
+                attackSuccess,
+                defenseSuccess
+            );
+
+
+            const updatedCharacter = await Character.findById(character._id);
+
+            if (updatedCharacter.currentHearts === 0 && !updatedCharacter.ko) {
+                console.log(`[ENCOUNTER] ${character.name} is KO'd.`);
+                totalHearts -= outcome.hearts; // Deduct the damage dealt from party hearts
+                await handleKO(updatedCharacter._id);
             } else {
-                await interaction.reply('❌ No items available.');
+                totalHearts -= outcome.hearts; // Deduct the damage dealt from party hearts
+                console.log(`[ENCOUNTER] ${character.name} took ${outcome.hearts} hearts of damage. Remaining party hearts: ${totalHearts}`);
+            }
+            
+            // Update party hearts in the database
+            await Party.updateOne(
+                { partyId: expeditionId },
+                { $set: { totalHearts } }
+            );
+            
+
+            const embed = createExplorationMonsterEmbed(
+                party,
+                character,
+                selectedMonster,
+                expeditionId,
+                location,
+                totalHearts,
+                totalStamina,
+                itemsCarried
+            );
+
+            embed.addFields(
+                { name: `❤️ __${character.name} Hearts__`, value: `${updatedCharacter.currentHearts}/${updatedCharacter.maxHearts}`, inline: true },
+                { name: '🆔 **__Expedition ID__**', value: expeditionId || 'Unknown', inline: true },
+                { name: '📍 **__Current Location__**', value: location || "Unknown Location", inline: true },
+                { name: `⚔️ __Battle Outcome__`, value: outcome.result, inline: false }
+            );
+
+            await interaction.editReply({ embeds: [embed] });
+
+            if (outcome.canLoot) {
+                const items = await fetchItemsByMonster(selectedMonster.name);
+                const lootedItem = items.length > 0
+                    ? items[Math.floor(Math.random() * items.length)]
+                    : null;
+
+                if (lootedItem) {
+                    await addItemInventoryDatabase(
+                        character._id,
+                        lootedItem.itemName,
+                        1, // Quantity
+                        lootedItem.category?.join(', ') || 'Unknown',
+                        lootedItem.type?.join(', ') || 'Unknown',
+                        interaction
+                    );
+
+                    embed.addFields({
+                        name: `🎉 __Loot Found__`,
+                        value: `${lootedItem.emoji || ''} **${lootedItem.itemName}**`,
+                        inline: false
+                    });
+
+                    await interaction.editReply({ embeds: [embed] });
+                }
             }
         }
+    } else {
+        console.log('[ENCOUNTER] No monster found.');
+        await interaction.editReply('❌ No monsters available.');
     }
+}
+
+
+        // ------------------- Handle Item Encounter -------------------
+else {
+    const allItems = await fetchAllItems();
+    const availableItems = allItems.filter(item => item[party.region.toLowerCase()]);
+    const selectedItem = availableItems.length > 0 ? availableItems[Math.floor(Math.random() * availableItems.length)] : null;
+
+    if (selectedItem) {
+        const embed = createExplorationItemEmbed(
+            party,
+            character,
+            selectedItem,
+            expeditionId,
+            location,
+            totalHearts,
+            totalStamina,
+            itemsCarried
+        );
+
+        // Ensure gatheredItems exists before pushing
+        if (!party.gatheredItems) {
+            party.gatheredItems = [];
+        }
+
+        // Add the gathered item to the array
+        party.gatheredItems.push({
+            characterId: character._id,
+            characterName: character.name,
+            itemName: selectedItem.itemName,
+            quantity: 1,
+            emoji: selectedItem.emoji || '',
+        });
+        await Party.updateOne({ partyId: expeditionId }, { gatheredItems: party.gatheredItems });
+
+        // Send the response to the user
+        await interaction.editReply({ embeds: [embed] });
+    } else {
+        await interaction.editReply('❌ No items available for this region.');
+    }
+}
+    } catch (error) {
+        console.error(`[Roll Command Error]`, error);
+        await interaction.editReply('❌ An error occurred while processing the roll command.');
+    }
+}
+
+
+
+
     
     }
 };

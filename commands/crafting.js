@@ -131,29 +131,35 @@ if (!item) {
 }
 
 // ------------------- Validate Job and Job Voucher -------------------
-let job = character.jobVoucher ? character.jobVoucherJob : character.job; // Use job voucher job if active
+// Determine job based on jobVoucher or default job
+let job = character.jobVoucher && character.jobVoucherJob ? character.jobVoucherJob : character.job;
 console.log(`[Crafting Command]: Determined job for ${character.name} is "${job}"`);
 
+// Validate job voucher
 if (character.jobVoucher) {
-  console.log(`[Crafting Command]: Job voucher detected for ${character.name}. Validating voucher.`);
-  const voucherValidation = await validateJobVoucher(character, job);
-  if (!voucherValidation.success) {
-      await interaction.editReply({
-          content: voucherValidation.message,
-          ephemeral: true,
-      });
-      return;
-  }
+    console.log(`[Crafting Command]: Job voucher detected for ${character.name}. Validating voucher.`);
+    const voucherValidation = await validateJobVoucher(character, job);
+    if (!voucherValidation.success) {
+        if (character.jobVoucherJob === null) {
+            console.log(`[Crafting Command]: Job voucher is unrestricted. Proceeding with job: "${job}".`);
+        } else {
+            await interaction.editReply({
+                content: voucherValidation.message,
+                ephemeral: true,
+            });
+            return;
+        }
+    }
 
-  // Restrict crafting items with stamina cost > 5
-  if (item.staminaToCraft > 5) {
-      console.log(`[Crafting Command]: Item "${itemName}" requires ${item.staminaToCraft} stamina to craft, exceeding the allowed limit for job vouchers.`);
-      await interaction.editReply({
-          content: `❌ **Items requiring more than 5 stamina to craft cannot be crafted with an active job voucher.**\n"${itemName}" requires **${item.staminaToCraft} stamina**.`,
-          ephemeral: false,
-      });
-      return;
-  }
+    // Restrict crafting items with stamina cost > 5
+    if (item.staminaToCraft > 5) {
+        console.log(`[Crafting Command]: Item "${itemName}" requires ${item.staminaToCraft} stamina to craft, exceeding the allowed limit for job vouchers.`);
+        await interaction.editReply({
+            content: `❌ **Items requiring more than 5 stamina to craft cannot be crafted with an active job voucher.**\n"${itemName}" requires **${item.staminaToCraft} stamina**.`,
+            ephemeral: true,
+        });
+        return;
+    }
 }
 
 // Validate job perks and crafting tags
@@ -170,6 +176,7 @@ if (
         ephemeral: true,
     });
 }
+
 
 // Handle job voucher activation after validation
 if (character.jobVoucher) {

@@ -121,6 +121,10 @@ const getJobsByCategory = (category, page = 1) => {
 
 // Fetch job perks by job name
 const getJobPerk = (job) => {
+  if (!job || typeof job !== 'string' || !job.trim()) {
+      console.error(`[jobsModule.js]: Invalid job provided: ${job}`);
+      return null;
+  }
   const perkInfo = jobPerks.find(perk => perk.job.toLowerCase().trim() === job.toLowerCase().trim());
   return perkInfo ? { perks: perkInfo.perk.split(' / ').map(perk => perk.trim()), village: perkInfo.village } : null;
 };

@@ -104,13 +104,14 @@ if (!character.inventorySynced) {
   return;
 }
 
-// -------------------// ------------------- Step 4: Validate Job -------------------
-let job = character.jobVoucher ? character.jobVoucherJob : character.job;
-console.log(`[Gather Command]: Determined job for ${character.name} is "${job}"`);
+// ------------------- Step 4: Validate Job -------------------
+// Determine the job, prioritizing the voucher job if it exists and is valid
+let job = character.jobVoucher && character.jobVoucherJob ? character.jobVoucherJob : character.job;
 
 // Validate job
 if (!job || typeof job !== 'string' || !job.trim() || !isValidJob(job)) {
-    console.log(`[Gather Command]: Invalid or unsupported job detected for ${character.name}. Job: "${job}"`);
+    console.log(`[Gather Command Debug]: Job validation failed for ${character.name}.`);
+    console.log(`[Gather Command Debug]: Invalid Job: ${job}`);
     await interaction.editReply({
         content: `❌ **Oh no! ${character.name} can't gather as an invalid or unsupported job (${job || "None"}).**\n✨ **Why not try a Job Voucher to explore exciting new roles?**`,
         ephemeral: true,
@@ -120,9 +121,11 @@ if (!job || typeof job !== 'string' || !job.trim() || !isValidJob(job)) {
 
 // Validate job voucher (without consuming it)
 if (character.jobVoucher) {
-    console.log(`[Gather Command]: Job voucher detected for ${character.name}. Validating voucher.`);
+    console.log(`[Gather Command Debug]: Job voucher detected for ${character.name}. Validating voucher.`);
     const voucherValidation = await validateJobVoucher(character, job);
     if (!voucherValidation.success) {
+        console.log(`[Gather Command Debug]: Job voucher validation failed for ${character.name}.`);
+        console.log(`[Gather Command Debug]: Voucher Validation Message: ${voucherValidation.message}`);
         await interaction.editReply({
             content: voucherValidation.message,
             ephemeral: true,
@@ -133,15 +136,17 @@ if (character.jobVoucher) {
 
 // Check for gathering perks
 const jobPerk = getJobPerk(job);
+console.log(`[Gather Command Debug]: Job Perk for "${job}":`, jobPerk);
 
 if (!jobPerk || !jobPerk.perks.includes('GATHERING')) {
-    console.log(`[Gather Command]: ${character.name} lacks gathering skills for job: "${job}"`);
+    console.log(`[Gather Command Debug]: ${character.name} lacks gathering skills for job: "${job}"`);
     await interaction.editReply({
         content: `❌ **Hmm, ${character.name} can’t gather as a ${job} because they lack the necessary gathering skills.**\n🔄 **Consider switching to a role better suited for gathering, or use a Job Voucher to try something fresh!**`,
         ephemeral: true,
     });
     return;
 }
+    
 
 // Handle job voucher activation after validation
 if (character.jobVoucher) {

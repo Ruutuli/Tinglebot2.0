@@ -20,6 +20,15 @@ const PartySchema = new Schema({
       }]
     }
   ],
+  gatheredItems: [
+    {
+      characterId: { type: mongoose.Schema.Types.ObjectId, required: true }, // Character ID
+      characterName: { type: String, required: true }, // Character Name
+      itemName: { type: String, required: true }, // Item Name
+      quantity: { type: Number, default: 1 }, // Quantity of Item
+      emoji: { type: String, default: '' }, // Emoji for the Item
+    }
+  ],
   messageId: { type: String }, 
   status: { type: String, default: 'open', enum: ['open', 'started'] }
 });

@@ -369,7 +369,6 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
   }
 }
 
-
 // ------------------- Roll for Blight Progression -------------------
 async function rollForBlightProgression(interaction, characterName) {
   try {
@@ -389,13 +388,36 @@ async function rollForBlightProgression(interaction, characterName) {
       return;
     }
 
-    const lastRollDate = character.lastRollDate || new Date(0);
-    const timeSinceLastRoll = Date.now() - lastRollDate.getTime();
+    const now = new Date();
+const estNow = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
 
-    if (timeSinceLastRoll < 24 * 60 * 60 * 1000) {
-      await interaction.reply({ content: `You must wait 24 hours before rolling again for **${characterName}**.`, ephemeral: true });
-      return;
-    }
+// Calculate the start and end of the current Blight Call window
+const currentCallStart = new Date(estNow);
+currentCallStart.setDate(estNow.getDate() - (estNow.getHours() < 20 ? 1 : 0)); // Go back a day if before 8 PM
+currentCallStart.setHours(20, 0, 0, 0); // Set to 8 PM EST of the previous day
+
+const nextCallStart = new Date(currentCallStart);
+nextCallStart.setDate(currentCallStart.getDate() + 1); // Set to 8 PM EST of the current day
+
+console.log(`[blightHandler]⏰ Current Blight Call Window: ${currentCallStart} to ${nextCallStart}`);
+
+const lastRollDate = character.lastRollDate || new Date(0); // Default to epoch if no roll date exists
+
+// Check if the last roll occurred within the current Blight Call window
+if (lastRollDate >= currentCallStart && lastRollDate < nextCallStart) {
+  console.log(`[blightHandler]⛔ Roll attempt blocked. "${characterName}" already rolled during the current window.`);
+  await interaction.reply({
+    content: `**${characterName}** has already rolled during the current Blight Call window. You can roll again after **8 PM EST**.`,
+    ephemeral: true,
+  });
+  return;
+}
+
+console.log(`[blightHandler]✅ Roll allowed for "${characterName}". Updating lastRollDate.`);
+
+// Update lastRollDate after a successful roll
+character.lastRollDate = estNow;
+await character.save();
 
     const user = interaction.user;
     const roll = Math.floor(Math.random() * 1000) + 1;
@@ -403,33 +425,56 @@ async function rollForBlightProgression(interaction, characterName) {
     let embedDescription;
     let embedTitle;
     const blightEmoji = '<:blight_eye:805576955725611058>';
-
     if (roll <= 25) {
       stage = 2;
       embedTitle = `${blightEmoji} Your Blight Sickness ADVANCES to STAGE 2 ${blightEmoji}`;
-      embedDescription = `You are now at **Stage 2**. You can still be healed by Oracles, Sages & Dragons.`;
+      embedDescription = `⚠️ Infected areas spread inside and out, and the blight begins traveling towards vital organs. Fatigue fades but nausea typically persists. Infected now experience an increase in physical strength.\n\nThis can still be healed by **Sages, Oracles, and Dragons**\n\n To request blight healing, please use </blight heal:1306176789634355241>.`;
     } else if (roll <= 40) {
       stage = 3;
       embedTitle = `${blightEmoji} Your Blight Sickness ADVANCES to STAGE 3 ${blightEmoji}`;
-      embedDescription = `You are now at **Stage 3**. You can now only be healed by Oracles or Dragons.`;
+      embedDescription = `⚠️ Visible infected areas and feverish symptoms fade. Frequent nosebleeds and sputum have a malice-like appearance and can infect others.\n\nThe infected experiences hallucinations, further increased strength, and aggressive mood swings. Monsters no longer attack.\n\nYou can only be healed by **Oracles or Dragons**\n\n To request blight healing, please use </blight heal:1306176789634355241>.`;
     } else if (roll <= 67) {
       stage = 4;
       embedTitle = `${blightEmoji} Your Blight Sickness ADVANCES to STAGE 4 ${blightEmoji}`;
-      embedDescription = `You are now at **Stage 4**. Only Dragons can heal you.`;
+      embedDescription = `⚠️ All outward signs of infection have subsided - except the eyes. Infected individual's eyes now look like the eyes of Malice.\n\nAt this stage vital organs begin to fail, and all sense of self is replaced by an uncontrollable desire to destroy. Any contact with bodily fluids risks infecting others.\n\nYou can only be healed by **Dragons** at this stage.\n\n To request blight healing, please use </blight heal:1306176789634355241>`;
     } else if (roll <= 100) {
       stage = 5;
+      character.deathDeadline = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // Set 7-day deadline
+      
       embedTitle = `☠ Your Blight Sickness IS ON THE EDGE of STAGE 5 ☠`;
-      embedDescription = `You are close to death. You have 7 days to complete your healing prompt, or your OC will die.`;
-    
-      // Set the death deadline
-      character.deathDeadline = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days from now
+      embedDescription = `⚠️ You are close to death. You have **7 days** to complete your healing prompt, or your OC will die.\n\n` +
+        `🕒 **Deadline**: <t:${Math.floor(character.deathDeadline.getTime() / 1000)}:F>\n\n` +
+        `To request blight healing, please use </blight heal:1306176789634355241>.`;
+      
     } else {
       stage = character.blightStage || 1;
+    
       embedTitle = `Your Blight Sickness DOES NOT advance to the next stage.`;
-      embedDescription = `You remain at **Stage ${stage}**. You can still be healed by Oracles, Sages & Dragons.`;
+    
+      // Handle each stage's message
+      switch (stage) {
+        case 1:
+          embedDescription = `You remain at **Stage 1**.\nInfected areas appear like blight-colored bruises on the body. Side effects include fatigue, nausea, and feverish symptoms.\n\nAt this stage, it can be cured by having one of the **Sages, Oracles, or Dragons** heal you.\n\n To request blight healing, please use </blight heal:1306176789634355241>`;
+          break;
+        case 2:
+          embedDescription = `You remain at **Stage 2**.\nInfected areas spread inside and out, and the blight begins traveling towards vital organs. Fatigue fades but nausea typically persists. Infected now experience an increase in physical strength.\n\nThis can still be healed by **Sages, Oracles, and Dragons**.\n\n To request blight healing, please use </blight heal:1306176789634355241>`;
+          break;
+        case 3:
+          embedDescription = `You remain at **Stage 3**.\nVisible infected areas and feverish symptoms fade. Frequent nosebleeds and sputum have a malice-like appearance and can infect others.\n\nThe infected experiences hallucinations, further increased strength, and aggressive mood swings. Monsters no longer attack.\n\nYou can only be healed by **Oracles or Dragons**.\n\n To request blight healing, please use </blight heal:1306176789634355241>`;
+          break;
+        case 4:
+          embedDescription = `You remain at **Stage 4**.\nAll outward signs of infection have subsided - except the eyes. Infected individual's eyes now look like the eyes of Malice.\n\nAt this stage, vital organs begin to fail, and all sense of self is replaced by an uncontrollable desire to destroy. Any contact with bodily fluids risks infecting others.\n\nYou can only be healed by **Dragons** at this stage.\n\n To request blight healing, please use </blight heal:1306176789634355241>`;
+          break;
+        case 5:
+          embedDescription = `You remain at **Stage 5**.\n\n⚠️ The blight has reached its final stage. **You must be healed before the deadline to avoid death.**\n\n To request blight healing, please use </blight heal:1306176789634355241>\n\n🕒 **Deadline**: ${character.deathDeadline?.toLocaleString('en-US', { timeZone: 'America/New_York' })}`;
+          break;
+        default:
+          console.error(`Unknown stage detected for character: ${character.name}, Stage: ${stage}`);
+          embedDescription = `Unknown stage detected. Please contact support for assistance.`;
+          break;
+      }
     }
     
-
     character.blightStage = stage;
     character.lastRollDate = new Date();
     await character.save();
@@ -450,7 +495,6 @@ async function rollForBlightProgression(interaction, characterName) {
     await interaction.reply({ content: 'An error occurred while processing your request.', ephemeral: true });
   }
 }
-
 
 // ------------------- Post Blight Roll Call -------------------
 // Posts the daily roll call reminder at 8 PM EST
@@ -484,6 +528,7 @@ async function postBlightRollCall(client) {
       :clock8: Blight calls happen every day around 8 PM EST!  
       :alarm_clock: You must complete your roll before the next call for it to be counted!  
       :warning: Remember, if you miss a roll you __automatically progress to the next stage__.
+      ▹To request blight healing, please use </blight heal:1306176789634355241>
       `
     )
     .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png') // Added the image at the bottom of the embed
@@ -515,19 +560,19 @@ async function checkMissedRolls(client) {
     // Blight stage descriptions
     const blightStages = {
       1: {
-        description: `Infected areas appear like blight-colored bruises on the body. Side effects include fatigue, nausea, and feverish symptoms.\n\nAt this stage it can be cured by sages, oracles, or dragons.`,
+        description: `Infected areas appear like blight-colored bruises on the body. Side effects include fatigue, nausea, and feverish symptoms.\n\nAt this stage it can be cured by **sages, oracles, or dragons**.`,
       },
       2: {
-        description: `Infected areas spread inside and out, and the blight begins traveling towards vital organs. Fatigue fades but nausea typically persists. Infected now experience an increase in physical strength.\n\nThis can still be healed by sages, oracles, and dragons.`,
+        description: `Infected areas spread inside and out, and the blight begins traveling towards vital organs. Fatigue fades but nausea typically persists. Infected now experience an increase in physical strength.\n\nThis can still be healed by **sages, oracles, and dragons**.`,
       },
       3: {
-        description: `Visible infected areas and feverish symptoms fade. Frequent nosebleeds and sputum have a malice-like appearance and can infect others. The infected experiences hallucinations, further increased strength, and aggressive mood swings. Monsters no longer attack.\n\nYou can only be healed by oracles or dragons.`,
+        description: `Visible infected areas and feverish symptoms fade. Frequent nosebleeds and sputum have a malice-like appearance and can infect others. The infected experiences hallucinations, further increased strength, and aggressive mood swings. Monsters no longer attack.\n\nYou can only be healed by **oracles or dragons**.`,
       },
       4: {
-        description: `All outward signs of infection have subsided - except the eyes. Infected individual's eyes now look like the eyes of Malice.\n\nAt this stage vital organs begin to fail, and all sense of self is replaced by an uncontrollable desire to destroy. Any contact with bodily fluids risks infecting others.\n\nYou can only be healed by dragons at this stage.`,
+        description: `All outward signs of infection have subsided - except the eyes. Infected individual's eyes now look like the eyes of Malice.\n\nAt this stage vital organs begin to fail, and all sense of self is replaced by an uncontrollable desire to destroy. Any contact with bodily fluids risks infecting others.\n\nYou can only be healed by **dragons** at this stage.`,
       },
       5: {
-        description: `Death. There is no longer hope of healing.`,
+        description: `The final stage...`,
       }
     };
 
@@ -540,48 +585,72 @@ async function checkMissedRolls(client) {
         // Progress to the next stage automatically
         if (character.blightStage < 5) {
           character.blightStage += 1;
+          
+          if (character.blightStage === 5) {
+            // Set the death deadline when reaching Stage 5
+            character.deathDeadline = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days from now
+          }
+          
           await character.save();
-
+        
           // Get the blight stage description
           const blightStageInfo = blightStages[character.blightStage] || { description: 'Unknown stage.' };
+        
+        // Notify in the channel about the progression
+const embed = new EmbedBuilder()
+.setColor('#AD1457') // Same color as the blight roll call
+.setTitle(
+  `⚠️ ${character.name} has progressed to Blight Stage ${character.blightStage}`
+)
+.setDescription(
+  `${blightStageInfo.description}\n\n${
+    character.blightStage === 5
+      ? `❗ **Missed Roll**: Your blight has progressed because you missed your daily roll.\n\n` +
+        `The blight has reached its final stage—a death sentence. Perhaps a last-ditch effort can bring you salvation...\n\nYou can only be saved by a **Dragon**\n` +
+        `🕒 **Deadline**: <t:${Math.floor(
+          character.deathDeadline.getTime() / 1000
+        )}:F>\n\n⚠️ **You must be healed before the deadline to avoid certain death.**`
+      : '❗ **Missed Roll**: Your blight has progressed because you missed your daily roll. Missing further rolls will cause additional progression.'
+  }`
+)
+.setFooter({ text: `Missed roll - your blight has progressed!` })
+.setAuthor({
+  name: 'Blight Progression Alert',
+  iconURL:
+    'https://static.wixstatic.com/media/7573f4_a510c95090fd43f5ae17e20d80c1289e~mv2.png/v1/fill/w_30,h_30,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/icon%20-%20blight.png',
+})
+.setThumbnail(character.icon) // Add character icon as the thumbnail
+.setImage('https://storage.googleapis.com/tinglebot/border%20blight.png') // Same image as roll call
+.setTimestamp();
 
-          // Notify in the channel about the progression
-          const embed = new EmbedBuilder()
-            .setColor('#AD1457') // Same color as the blight roll call
-            .setTitle(`${character.name} has progressed to Blight Stage ${character.blightStage}`)
-            .setDescription(`${blightStageInfo.description}\n\n❗ **Missed Roll**: Your blight has progressed because you missed your daily roll. Missing further rolls will cause additional progression.`)
-            .setFooter({ text: `Missed roll - your blight has progressed!` })
-            .setAuthor({ name: 'Blight Progression Alert', iconURL: 'https://static.wixstatic.com/media/7573f4_a510c95090fd43f5ae17e20d80c1289e~mv2.png/v1/fill/w_30,h_30,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/icon%20-%20blight.png' })
-            .setThumbnail(character.icon) // Add character icon as the thumbnail
-            .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png') // Same image as roll call
-            .setTimestamp();
+await channel.send({ content: `<@${character.userId}>`, embeds: [embed] });
 
-          await channel.send({ content: `<@${character.userId}>`, embeds: [embed] });
+console.log(
+`[blightHandler]✅ Character ${character.name} has progressed to Stage ${character.blightStage} due to missed roll.`
+);
 
-          console.log(`[blightHandler]✅ Character ${character.name} has progressed to Stage ${character.blightStage} due to missed roll.`);
         } else {
           console.log(`[blightHandler]⚠️ Character ${character.name} is already at Stage 5 (Death).`);
-
+        
           // Mark the character as dead
           character.blighted = false;
           character.blightStage = 0;
           character.deathDeadline = null; // Clear the deadline
-          character.status = 'dead'; // Example field to mark death
           await character.save();
-
+        
           // Send the dramatic death alert
           const embed = new EmbedBuilder()
-          .setColor('#AD1457') // Dramatic red for death
-          .setTitle(`<:blight_eye:805576955725611058> **Blight Death Alert** <:blight_eye:805576955725611058>`)
-          .setDescription(`**${character.name}** has succumbed to Stage 5 Blight..\n\n *This character and all of their items have been removed...*`)
-          .setThumbnail(character.icon || 'https://example.com/default-icon.png') // Use the character's icon or a default image
-          .setFooter({ text: 'Blight Death Announcement', iconURL: 'https://example.com/blight-icon.png' })
-          .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png') // Same image as roll call
-          .setTimestamp();
-
+            .setColor('#D32F2F') // Dramatic red for death
+            .setTitle(`<:blight_eye:805576955725611058> **Blight Death Alert** <:blight_eye:805576955725611058>`)
+            .setDescription(`**${character.name}** has succumbed to Stage 5 Blight..\n\n *This character and all of their items have been removed...*`)
+            .setThumbnail(character.icon || 'https://example.com/default-icon.png') // Use the character's icon or a default image
+            .setFooter({ text: 'Blight Death Announcement', iconURL: 'https://example.com/blight-icon.png' })
+            .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png') // Same image as roll call
+            .setTimestamp();
+        
           await channel.send({ embeds: [embed] });
           console.log(`📨 Notification sent to the Community Board for ${character.name}'s death.`);
-        }
+        }        
       }
     }
   } catch (error) {

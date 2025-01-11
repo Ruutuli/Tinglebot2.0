@@ -167,5 +167,16 @@
     "healingStage": 5,
     "status": "pending",
     "createdAt": "2025-01-08T05:57:51.407Z"
+  },
+  "B550616": {
+    "submissionId": "B550616",
+    "userId": "322920629944975360",
+    "characterName": "Marx",
+    "healerName": "Foras",
+    "taskType": "writing",
+    "taskDescription": "**Courage comes in all forms!** Share with **Foras, Dragon of Courage** and write about a time your character exhibited emotional courage! \nPerhaps explore what they felt, or if they overcame their struggle, or even if they learned from their experience. Did they have any trouble? Perhaps they leaned on someone to help them through? Write at least 500 words!",
+    "healingStage": 2,
+    "status": "pending",
+    "createdAt": "2025-01-11T01:22:31.678Z"
   }
 }

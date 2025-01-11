@@ -123,31 +123,37 @@ if (character.currentHearts === 0) {
 }
 
 // Determine job based on jobVoucher or default job
-let job = character.jobVoucher ? character.jobVoucherJob : character.job;
+// Determine job based on jobVoucher or default job
+let job = character.jobVoucher && character.jobVoucherJob ? character.jobVoucherJob : character.job;
 console.log(`[Loot Command]: Determined job for ${character.name} is "${job}"`);
 
 // Validate job
 if (!job || typeof job !== 'string' || !job.trim() || !isValidJob(job)) {
-  console.log(`[Loot Command]: Invalid or unsupported job detected for ${character.name}. Job: "${job}"`);
-  await interaction.editReply({
-      content: `❌ **Oh no! ${character.name} can't loot as an invalid or unsupported job (${job || "None"}).**\n✨ **Why not try a Job Voucher to explore exciting new roles?**`,
-      ephemeral: true,
-  });
-  return;
+    console.log(`[Loot Command]: Invalid or unsupported job detected for ${character.name}. Job: "${job}"`);
+    await interaction.editReply({
+        content: `❌ **Oh no! ${character.name} can't loot as an invalid or unsupported job (${job || "None"}).**\n✨ **Why not try a Job Voucher to explore exciting new roles?**`,
+        ephemeral: true,
+    });
+    return;
 }
 
 // Validate job voucher (without consuming it)
 if (character.jobVoucher) {
-  console.log(`[Loot Command]: Job voucher detected for ${character.name}. Validating voucher.`);
-  const voucherValidation = await validateJobVoucher(character, job);
-  if (!voucherValidation.success) {
-      await interaction.editReply({
-          content: voucherValidation.message,
-          ephemeral: true,
-      });
-      return;
-  }
+    console.log(`[Loot Command]: Job voucher detected for ${character.name}. Validating voucher.`);
+    const voucherValidation = await validateJobVoucher(character, job);
+    if (!voucherValidation.success) {
+        if (character.jobVoucherJob === null) {
+            console.log(`[Loot Command]: Job voucher is unrestricted. Proceeding with job: "${job}".`);
+        } else {
+            await interaction.editReply({
+                content: voucherValidation.message,
+                ephemeral: true,
+            });
+            return;
+        }
+    }
 }
+
 
 // Validate job perks
 const jobPerk = getJobPerk(job);

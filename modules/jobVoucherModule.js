@@ -11,22 +11,28 @@ const { v4: uuidv4 } = require('uuid');
 // ------------------- Validate Job Voucher -------------------
 async function validateJobVoucher(character, jobName) {
     if (!character.jobVoucher) {
-      return {
-        success: false,
-        message: '❌ No active job voucher found.',
-      };
+        return {
+            success: false,
+            message: '❌ No active job voucher found.',
+        };
     }
-  
+
+    // Allow unrestricted job vouchers
+    if (!character.jobVoucherJob) {
+        console.log(`[Job Voucher Validation]: Voucher is not locked to any specific job. Proceeding with job: ${jobName}`);
+        return { success: true };
+    }
+
     if (character.jobVoucherJob !== jobName) {
-      return {
-        success: false,
-        message: `❌ The job voucher is locked to **${character.jobVoucherJob}**, not **${jobName}**. Please use the correct job.`,
-      };
+        return {
+            success: false,
+            message: `❌ The job voucher is locked to **${character.jobVoucherJob}**, not **${jobName}**. Please use the correct job.`,
+        };
     }
-  
+
     return { success: true };
-  }
-  
+}
+
 
 // ------------------- Activate Job Voucher -------------------
 async function activateJobVoucher(character, jobName, item, quantity = 1, interaction) {

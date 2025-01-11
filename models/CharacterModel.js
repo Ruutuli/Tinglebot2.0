@@ -88,6 +88,8 @@ const characterSchema = new Schema({
   inJail: { type: Boolean, default: false },            // Jail status
   jailReleaseTime: { type: Date, default: null },       // Jail release time
   canBeStolenFrom: { type: Boolean, default: true },    // Whether the character can be stolen from
+  lastGatherDate: { type: Date, default: null },        // Date of last gather action
+  lastLootDate: { type: Date, default: null },          // Date of last loot action
 
   // ------------------- Additional features -------------------
   jobVoucher: { type: Boolean, default: true },         // Job voucher

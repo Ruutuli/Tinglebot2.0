@@ -24,7 +24,7 @@ const { handleSelectMenuInteraction } = require('./handlers/selectMenuHandler');
 const { executeVending, initializeReactionHandler } = require('./handlers/vendingHandler');
 
 // ------------------- Scripts and Utilities -------------------
-const { renameChannels, trackBloodMoonCycle, currentDayInCycle, isBloodMoonActive } = require('./scripts/bloodmoon');
+const { renameChannels, trackBloodMoonCycle, currentDayInCycle, isBloodMoonActive, calculateCurrentDayInCycle } = require('./scripts/bloodmoon');
 const scheduler = require('./scheduler');
 const { getGuildIds } = require('./utils/getGuildIds');
 const { initializeRandomEncounterBot } = require('./scripts/randomEncounters');
@@ -81,22 +81,16 @@ async function initializeClient() {
         // Initialize the reaction handler
         initializeReactionHandler(client);
 
-    // Blood Moon Status on Startup
-    console.log(`[index.js]: [Startup] Current Day in Cycle: ${currentDayInCycle}`);
-    if (isBloodMoonActive()) {
-      console.log(`[index.js]: [Startup] Blood Moon is ACTIVE on Day ${currentDayInCycle}.`);
-    } else {
-      console.log(`[index.js]: [Startup] Blood Moon is NOT active. Day ${currentDayInCycle} in cycle.`);
-    }
+  // Blood Moon Initialization
+  const currentDayInCycle = calculateCurrentDayInCycle();
+  console.log(`[index.js]: [Startup] Current Day in Cycle: ${currentDayInCycle}`);
+  if (isBloodMoonActive()) {
+    console.log(`[index.js]: [Startup] Blood Moon is ACTIVE on Day ${currentDayInCycle}.`);
+  } else {
+    console.log(`[index.js]: [Startup] Blood Moon is NOT active. Day ${currentDayInCycle} in cycle.`);
+  }
 
-    // Schedule Blood Moon Tracking
-    cron.schedule('0 0 * * *', () => {
-      trackBloodMoonCycle(client, process.env.RUDANIA_TOWN_HALL);
-      trackBloodMoonCycle(client, process.env.INARIKO_TOWN_HALL);
-      trackBloodMoonCycle(client, process.env.VHINTL_TOWN_HALL);
-    }, { timezone: 'America/New_York' });
-
-    scheduler(client);
+  scheduler(client);
 
     // // Generate Vending Stock
     // try {

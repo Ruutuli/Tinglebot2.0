@@ -84,9 +84,11 @@ async function processBattle(character, monster, battleId, originalRoll, interac
   // Fetch the current battle progress
   const battleProgress = await getBattleProgressById(battleId);
   if (!battleProgress) {
-    console.error('Error: Battle progress not found for battleId:', battleId);
-    return null;
+      console.error(`[ERROR] No battle progress found for Battle ID: ${battleId}`);
+      await interaction.editReply('❌ **An error occurred during the battle: Battle progress not found.**');
+      return;
   }
+  
 
   try {
     // Calculate attack and defense buffs

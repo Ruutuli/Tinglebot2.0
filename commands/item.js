@@ -89,63 +89,62 @@ module.exports = {
                 character.jobVoucherJob = jobName;
                 await updateCharacterById(character._id, { jobVoucher: true, jobVoucherJob: jobName });
             
-                // Deduct the voucher from inventory
+                // Do not remove the voucher from the inventory database
                 const inventoryCollection = await getCharacterInventoryCollection(character.name);
-                await removeItemInventoryDatabase(character._id, item.itemName, quantity, inventoryCollection);
             
-// Capitalize the current village
-const currentVillage = capitalizeWords(character.currentVillage || 'Unknown');
-
-// Get the emoji for the current village
-const villageEmoji = getVillageEmojiByName(currentVillage) || '🌍';
-
-// Fetch the perk for the specified job
-const jobPerkInfo = getJobPerk(jobName);
-
-let perkDescription = '';
-if (jobPerkInfo) {
-    const { perks, village } = jobPerkInfo;
-
-    // Determine the job and perk description
-    if (perks.length > 0) {
-        perkDescription = `**${character.name}** has used a Job Voucher to perform the ${perks.join(' Perk ')} job, **${jobName}**.`;
-    } else {
-        perkDescription = `**${character.name}** has used a Job Voucher to perform the **${jobName}** job.`;
-    }
-
-    // Conditionally include commands based on unlocked perks
-    const commands = [
-        perks.includes('GATHERING') ? '</gather:1306176789755858974>' : null,
-        perks.includes('CRAFTING') ? '</crafting:1306176789634355242>' : null,
-        perks.includes('LOOTING') ? '</loot:1316682863143424121>' : null,
-        perks.includes('HEALING') ? '</heal fufill:1306176789755858977>' : null
-    ].filter(Boolean); // Remove null values
-
-    if (commands.length) {
-        perkDescription += `\n\nUse the following commands to make the most of this Job Voucher:\n${commands.join('\n')}`;
-    }
-} else {
-    perkDescription = `**${character.name}** has used a Job Voucher to perform the job **${jobName}**.`;
-}
-
-// ------------------- Embed Configuration -------------------
-const embed = new EmbedBuilder()
-    .setColor('#FFD700') // Gold color for the embed
-    .setTitle('🎫 Job Voucher Activated!')
-    .setDescription(perkDescription)
-    .addFields(
-        { name: `${villageEmoji} Current Village`, value: `**${currentVillage}**`, inline: true },
-        { name: '🏷️ Normal Job', value: `**${character.job || "Unemployed"}**`, inline: true }
-    )
-    .setThumbnail(item.image || 'https://via.placeholder.com/150') // Thumbnail for the item
-    .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png') // Large image for the embed
-    .setFooter({ text: '✨ Good luck in your new role! Make the most of this opportunity!' });
-
-// Send the updated embed
-await interaction.editReply({ embeds: [embed], ephemeral: true });
-return;
-
-            }           
+                // Capitalize the current village
+                const currentVillage = capitalizeWords(character.currentVillage || 'Unknown');
+            
+                // Get the emoji for the current village
+                const villageEmoji = getVillageEmojiByName(currentVillage) || '🌍';
+            
+                // Fetch the perk for the specified job
+                const jobPerkInfo = getJobPerk(jobName);
+            
+                let perkDescription = '';
+                if (jobPerkInfo) {
+                    const { perks, village } = jobPerkInfo;
+            
+                    // Determine the job and perk description
+                    if (perks.length > 0) {
+                        perkDescription = `**${character.name}** has used a Job Voucher to perform the ${perks.join(' Perk ')} job, **${jobName}**.`;
+                    } else {
+                        perkDescription = `**${character.name}** has used a Job Voucher to perform the **${jobName}** job.`;
+                    }
+            
+                    // Conditionally include commands based on unlocked perks
+                    const commands = [
+                        perks.includes('GATHERING') ? '</gather:1306176789755858974>' : null,
+                        perks.includes('CRAFTING') ? '</crafting:1306176789634355242>' : null,
+                        perks.includes('LOOTING') ? '</loot:1316682863143424121>' : null,
+                        perks.includes('HEALING') ? '</heal fufill:1306176789755858977>' : null
+                    ].filter(Boolean); // Remove null values
+            
+                    if (commands.length) {
+                        perkDescription += `\n\nUse the following commands to make the most of this Job Voucher:\n${commands.join('\n')}`;
+                    }
+                } else {
+                    perkDescription = `**${character.name}** has used a Job Voucher to perform the job **${jobName}**.`;
+                }
+            
+                // ------------------- Embed Configuration -------------------
+                const embed = new EmbedBuilder()
+                    .setColor('#FFD700') // Gold color for the embed
+                    .setTitle('🎫 Job Voucher Activated!')
+                    .setDescription(perkDescription)
+                    .addFields(
+                        { name: `${villageEmoji} Current Village`, value: `**${currentVillage}**`, inline: true },
+                        { name: '🏷️ Normal Job', value: `**${character.job || "Unemployed"}**`, inline: true }
+                    )
+                    .setThumbnail(item.image || 'https://via.placeholder.com/150') // Thumbnail for the item
+                    .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png') // Large image for the embed
+                    .setFooter({ text: '✨ Good luck in your new role! Make the most of this opportunity!' });
+            
+                // Send the updated embed
+                await interaction.editReply({ embeds: [embed], ephemeral: true });
+                return;
+            }
+                     
                   
             if (character.debuff?.active) {
                 const debuffEndDate = new Date(character.debuff.endDate);

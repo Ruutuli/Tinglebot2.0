@@ -1,6 +1,8 @@
 // exploringEmbeds.js
 const { EmbedBuilder } = require('discord.js');
 const { getCharacterItems, formatCharacterItems, calculateTotalHeartsAndStamina } = require('../modules/exploreModule');
+const { monsterMapping } = require('../models/MonsterModel');
+
 
 const regionColors = {
     'eldin': '#FF0000',
@@ -10,43 +12,53 @@ const regionColors = {
     'gerudo': '#FFA500',
     'hebra': '#800080'
 };
-const regionImage = 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png';
+
+const regionImages = {
+    'eldin': 'https://storage.googleapis.com/tinglebot/Graphics/Rudania-Footer.png',
+    'lanayru': 'https://storage.googleapis.com/tinglebot/Graphics/Inariko-Footer.png',
+    'faron': 'https://storage.googleapis.com/tinglebot/Graphics/Vhintl-Footer.png',
+    'central_hyrule': 'https://storage.googleapis.com/tinglebot/Graphics/Central-Hyrule-Region.png',
+    'gerudo': 'https://storage.googleapis.com/tinglebot/Graphics/Gerudo-Region.png',
+    'hebra': 'https://storage.googleapis.com/tinglebot/Graphics/Hebra-Region.png'
+};
 
 const createExplorationItemEmbed = (party, character, item, expeditionId, location, totalHearts, totalStamina, itemsCarried) => {
     const embed = new EmbedBuilder()
-        .setTitle(`🗺️ **Expedition in ${party.region.charAt(0).toUpperCase() + party.region.slice(1)}!**`)
+        .setTitle(`🗺️ **Expedition: ${character.name} Found an Item!**`)
+        .setDescription(`✨ **${character.name || "Adventurer"}** discovered ${item.emoji || ''} **${item.itemName}** during exploration!\n\n`)
         .setColor(regionColors[party.region] || '#00ff99')
-        .setImage(regionImage)
-        .setDescription(`**${character.name || "Adventurer"}** found an item during exploration! 🎒`)
+        .setThumbnail(item.image || 'https://via.placeholder.com/100x100')
+        .setImage(regionImages[party.region] || 'https://via.placeholder.com/100x100') // Dynamically set region-specific image
         .addFields(
             { name: '🆔 **__Expedition ID__**', value: expeditionId, inline: true },
             { name: '📍 **__Current Location__**', value: location || "Unknown Location", inline: true },
-            { name: '❤️ **__Party Hearts__**', value: `${totalHearts}`, inline: true },
-            { name: '🟩 **__Party Stamina__**', value: `${totalStamina}`, inline: true },
-            { name: '🔹 **__Items Carried__**', value: itemsCarried, inline: false },
-            { name: 'Item Found', value: item?.itemName || "Unknown Item", inline: true }
+            { name: '❤️ **__Party Hearts__**', value: `${totalHearts}`, inline: false },
+            { name: '🟩 **__Party Stamina__**', value: `${totalStamina}`, inline: false },
+            { name: '🔹 **__Items Carried__**', value: itemsCarried || 'None', inline: false }
         )
-        .setFooter({ text: '🧭 Adventure awaits!' });
     return embed;
 };
 
 const createExplorationMonsterEmbed = (party, character, monster, expeditionId, location, totalHearts, totalStamina, itemsCarried) => {
+    // Fallback to Monster Mapping for Image if not directly provided
+    const monsterImage = monster.image || monsterMapping[monster.nameMapping]?.image || 'https://via.placeholder.com/100x100';
+
     const embed = new EmbedBuilder()
-        .setTitle(`🗺️ **Expedition in ${party.region.charAt(0).toUpperCase() + party.region.slice(1)}!**`)
+        .setTitle(`🗺️ **Expedition: ${character.name} Encountered a Monster!**`)
+        .setDescription(`**${character.name || "Adventurer"}** encountered ${monster.emoji || ''} **${monster.name || "Unknown Monster"}** during exploration!`)
         .setColor(regionColors[party.region] || '#00ff99')
-        .setImage(regionImage)
-        .setDescription(`**${character.name || "Adventurer"}** encountered a monster! 👾`)
+        .setThumbnail(monsterImage) // Set monster image dynamically
+        .setImage(regionImages[party.region] || 'https://via.placeholder.com/100x100') // Region-specific image
         .addFields(
-            { name: '🆔 **__Expedition ID__**', value: expeditionId, inline: true },
+            { name: '🆔 **__Expedition ID__**', value: expeditionId || 'Unknown', inline: true },
             { name: '📍 **__Current Location__**', value: location || "Unknown Location", inline: true },
-            { name: '❤️ **__Party Hearts__**', value: `${totalHearts}`, inline: true },
-            { name: '🟩 **__Party Stamina__**', value: `${totalStamina}`, inline: true },
-            { name: '🔹 **__Items Carried__**', value: itemsCarried, inline: false },
-            { name: 'Monster Encountered', value: monster?.name || "Unknown Monster", inline: true }
+            { name: '❤️ **__Party Hearts__**', value: `${totalHearts}`, inline: false },
+            { name: '🟩 **__Party Stamina__**', value: `${totalStamina}`, inline: false },
+            { name: '🔹 **__Items Carried__**', value: itemsCarried || 'None', inline: false }
         )
-        .setFooter({ text: '🧭 Adventure awaits!' });
     return embed;
 };
+
 
 module.exports = {
     createExplorationItemEmbed,

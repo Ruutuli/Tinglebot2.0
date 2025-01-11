@@ -18,18 +18,19 @@ async function updateAllCharacters() {
     const characters = await Character.find({});
     console.log(`🔄 Updating ${characters.length} characters...\n`);
 
-    // Iterate over each character and randomize the blight stage
+    // Iterate over each character, randomize the blight stage, and reset lastRollDate
     for (const character of characters) {
       const randomBlightStage = getRandomBlightStage();
       character.blighted = true;
       character.blightStage = randomBlightStage;
+      character.lastRollDate = null; // Reset the lastRollDate
       await character.save(); // Save the updated character
 
-      // Log the character name and assigned blight stage
-      console.log(`🟢 ${character.name} -> Blight Stage: ${randomBlightStage}`);
+      // Log the character name, assigned blight stage, and reset lastRollDate
+      console.log(`🟢 ${character.name} -> Blight Stage: ${randomBlightStage}, lastRollDate reset.`);
     }
 
-    console.log(`\n✅ Successfully updated ${characters.length} characters with randomized blight stages.`);
+    console.log(`\n✅ Successfully updated ${characters.length} characters with randomized blight stages and reset lastRollDate.`);
   } catch (error) {
     console.error('❌ Error updating characters:', error);
   } finally {
