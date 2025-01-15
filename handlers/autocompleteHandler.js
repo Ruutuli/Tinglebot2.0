@@ -1,49 +1,48 @@
 // ------------------- Autocomplete Handler for Various Commands -------------------
 
-// ------------------- Standard Libraries -------------------
-
-// None in this case
-
-// ------------------- Discord.js Components -------------------
-
-// None in this case
-
 // ------------------- Database Connections -------------------
-const { connectToTinglebot } = require('../database/connection');
-const { MongoClient } = require("mongodb"); // Ensure MongoClient is imported for database access
+const { connectToInventories, connectToTinglebot } = require('../database/connection');
+const { MongoClient } = require("mongodb");
 
 // ------------------- Database Services -------------------
+const { connectToVendingDatabase } = require('./vendingHandler');
 const { fetchUserIdByUsername } = require('../database/userService');
 const {
-  fetchBlightedCharactersByUserId,
-  fetchCharactersByUserId,
-  fetchCharacterByNameAndUserId,
-  getCharacterInventoryCollection,
+  fetchAllCharacters,
   fetchAllCharactersExceptUser,
+  fetchBlightedCharactersByUserId,
   fetchCharacterByName,
-  fetchAllCharacters
+  fetchCharacterByNameAndUserId,
+  fetchCharactersByUserId,
+  getCharacterInventoryCollection
 } = require('../database/characterService');
-const { fetchItemByName, fetchCraftableItemsAndCheckMaterials } = require('../database/itemService');
-const { getCurrentVendingStockList, updateItemStockByName, updateVendingStock, VILLAGE_ICONS, VILLAGE_IMAGES } = require("../database/vendingService");
-const { connectToInventories } = require('../database/connection');
+const { fetchCraftableItemsAndCheckMaterials, fetchItemByName } = require('../database/itemService');
+const {
+  connectToDatabase,
+  getCurrentVendingStockList,
+  updateItemStockByName,
+  updateVendingStock,
+  VILLAGE_ICONS,
+  VILLAGE_IMAGES
+} = require("../database/vendingService");
 
-// ------------------- Database Models -------------------
+// ------------------- Models -------------------
+const Character = require('../models/CharacterModel');
+const initializeInventoryModel = require('../models/InventoryModel');
 const Item = require('../models/ItemModel');
-const ItemModel = require('../models/ItemModel'); // Duplicate import removed
+const Mount = require('../models/MountModel');
 const Party = require('../models/PartyModel');
 const ShopStock = require('../models/ShopsModel');
-const Character = require('../models/CharacterModel')
-const Mount = require('../models/MountModel');
 const { Village } = require('../models/VillageModel');
-const initializeInventoryModel = require('../models/InventoryModel');
+const VendingModel = require('../models/VendingModel'); // Adjust the path as necessary
 
 // ------------------- Modules -------------------
-const { getAllRaces } = require('../modules/raceModule');
-const { getJobPerk, getGeneralJobsPage, getVillageExclusiveJobs } = require('../modules/jobsModule');
-const { getAllVillages } = require('../modules/locationsModule');
 const { capitalize, capitalizeFirstLetter } = require('../modules/formattingModule');
-const { getModCharacterByName, modCharacters } = require('../modules/modCharacters');
+const { getGeneralJobsPage, getJobPerk, getVillageExclusiveJobs } = require('../modules/jobsModule');
+const { getAllVillages } = require('../modules/locationsModule');
+const { modCharacters, getModCharacterByName } = require('../modules/modCharacters');
 const { distractionItems, staminaRecoveryItems } = require('../modules/mountModule');
+const { getAllRaces } = require('../modules/raceModule');
 
 // ------------------- Handlers -------------------
 const { loadBlightSubmissions } = require('../handlers/blightHandler');
@@ -1091,14 +1090,9 @@ async function handleTravelAutocomplete(interaction, focusedOption) {
 async function handleVendingAutocomplete(interaction, focusedOption) {
   try {
       const userId = interaction.user.id; // Extract user ID from the interaction
-      const subcommand = interaction.options.getSubcommand(); // Get the subcommand (e.g., restock, barter, editshop, pouch, sync, viewshop)
+      const subcommand = interaction.options.getSubcommand(); // Get the subcommand (e.g., restock, barter, editshop, pouch, sync, viewshop, collect_points)
 
-      console.log('[handleVendingAutocomplete]: Interaction received.', {
-          focusedOptionName: focusedOption.name,
-          subcommand,
-          userId,
-      });
-
+      // ------------------- Handle 'barter' subcommand -------------------
       if (subcommand === 'barter') {
           if (focusedOption.name === 'charactername') {
               console.log('[handleVendingAutocomplete]: Handling charactername autocomplete for barter.');
@@ -1117,6 +1111,7 @@ async function handleVendingAutocomplete(interaction, focusedOption) {
               }));
 
               await respondWithFilteredChoices(interaction, focusedOption, choices); // Respond with user characters
+
           } else if (focusedOption.name === 'vendorcharacter') {
               console.log('[handleVendingAutocomplete]: Handling vendorcharacter autocomplete.');
 
@@ -1138,10 +1133,12 @@ async function handleVendingAutocomplete(interaction, focusedOption) {
                   }));
 
                   await respondWithFilteredChoices(interaction, focusedOption, choices); // Respond with vendor characters
+
               } catch (error) {
                   console.error('[handleVendingAutocomplete]: Error fetching vendor characters:', error);
                   await interaction.respond([]);
               }
+
           } else if (focusedOption.name === 'itemname') {
               console.log(`[handleVendingAutocomplete]: Handling itemname autocomplete for barter.`);
 
@@ -1179,6 +1176,7 @@ async function handleVendingAutocomplete(interaction, focusedOption) {
 
                   await client.close(); // Close the database connection
                   await interaction.respond(filteredItems); // Respond with filtered items
+
               } catch (error) {
                   console.error('[handleVendingAutocomplete]: Error fetching inventory for vendor:', error);
                   await interaction.respond([]);
@@ -1187,6 +1185,8 @@ async function handleVendingAutocomplete(interaction, focusedOption) {
               console.warn(`[handleVendingAutocomplete]: Unsupported focused option '${focusedOption.name}' for subcommand 'barter'.`);
               await interaction.respond([]);
           }
+
+      // ------------------- Handle 'pouch' subcommand -------------------
       } else if (subcommand === 'pouch') {
           if (focusedOption.name === 'charactername') {
               console.log('[handleVendingAutocomplete]: Handling charactername autocomplete for pouch.');
@@ -1210,33 +1210,43 @@ async function handleVendingAutocomplete(interaction, focusedOption) {
               }));
 
               await respondWithFilteredChoices(interaction, focusedOption, choices); // Respond with vending characters
+
           } else {
               console.warn(`[handleVendingAutocomplete]: Unsupported focused option '${focusedOption.name}' for subcommand 'pouch'.`);
               await interaction.respond([]);
           }
-      } else if (subcommand === 'sync') {
-          if (focusedOption.name === 'charactername') {
-              console.log('[handleVendingAutocomplete]: Handling charactername autocomplete for sync.');
 
-              // Fetch characters owned by the user
-              const characters = await fetchCharactersByUserId(userId);
-              if (!characters || characters.length === 0) {
-                  console.warn('[handleVendingAutocomplete]: No characters found for the user.');
-                  return await interaction.respond([]);
-              }
+     // ------------------- Handle 'sync' subcommand -------------------
+} else if (subcommand === 'sync') {
+  if (focusedOption.name === 'charactername') {
+      console.log('[handleVendingAutocomplete]: Handling charactername autocomplete for sync.');
 
-              // Filter characters based on vendingSync status
-              const unsyncedCharacters = characters.filter(character => !character.vendingSync);
-              const choices = unsyncedCharacters.map(character => ({
-                  name: `${character.name}`,
-                  value: character.name,
-              }));
+      // Fetch characters owned by the user
+      const characters = await fetchCharactersByUserId(userId);
 
-              await respondWithFilteredChoices(interaction, focusedOption, choices); // Respond with unsynced characters
-          } else {
-              console.warn(`[handleVendingAutocomplete]: Unsupported focused option '${focusedOption.name}' for subcommand 'sync'.`);
-              await interaction.respond([]);
-          }
+      // Filter characters by job (Shopkeeper or Merchant)
+      const eligibleCharacters = characters.filter(character =>
+          ['shopkeeper', 'merchant'].includes(character.job?.toLowerCase())
+      );
+
+      if (!eligibleCharacters || eligibleCharacters.length === 0) {
+          console.warn('[handleVendingAutocomplete]: No eligible characters found for sync.');
+          return await interaction.respond([]);
+      }
+
+      // Map eligible characters to autocomplete choices
+      const choices = eligibleCharacters.map(character => ({
+          name: `${character.name} (${character.currentVillage})`,
+          value: character.name,
+      }));
+
+      await respondWithFilteredChoices(interaction, focusedOption, choices); // Respond with eligible characters
+  } else {
+      console.warn(`[handleVendingAutocomplete]: Unsupported focused option '${focusedOption.name}' for subcommand 'sync'.`);
+      await interaction.respond([]);
+  }
+
+      // ------------------- Handle 'viewshop' subcommand -------------------
       } else if (subcommand === 'viewshop') {
           if (focusedOption.name === 'charactername') {
               console.log('[handleVendingAutocomplete]: Handling charactername autocomplete for viewshop.');
@@ -1255,10 +1265,126 @@ async function handleVendingAutocomplete(interaction, focusedOption) {
               }));
 
               await respondWithFilteredChoices(interaction, focusedOption, choices); // Respond with characters for viewshop
+
           } else {
               console.warn(`[handleVendingAutocomplete]: Unsupported focused option '${focusedOption.name}' for subcommand 'viewshop'.`);
               await interaction.respond([]);
           }
+     // ------------------- Handle 'editshop' subcommand -------------------
+    } else if (subcommand === 'editshop') {
+      if (focusedOption.name === 'charactername') {
+          console.log('[handleVendingAutocomplete]: Handling charactername autocomplete for editshop.');
+  
+          // Fetch characters owned by the user
+          const characters = await fetchCharactersByUserId(userId);
+  
+          // Filter characters by job (Shopkeeper or Merchant)
+          const eligibleCharacters = characters.filter(character =>
+              ['shopkeeper', 'merchant'].includes(character.job?.toLowerCase())
+          );
+  
+          if (!eligibleCharacters || eligibleCharacters.length === 0) {
+              console.warn('[handleVendingAutocomplete]: No eligible characters found for editshop.');
+              return await interaction.respond([]);
+          }
+  
+          // Map eligible characters to autocomplete choices
+          const choices = eligibleCharacters.map(character => ({
+              name: `${character.name} (${character.currentVillage})`,
+              value: character.name,
+          }));
+  
+          await respondWithFilteredChoices(interaction, focusedOption, choices); // Respond with eligible characters
+        } else if (focusedOption.name === 'itemname') {
+          console.log('[handleVendingAutocomplete]: Handling itemname autocomplete for editshop.');
+      
+          const characterName = interaction.options.getString('charactername');
+          if (!characterName) {
+              console.warn('[handleVendingAutocomplete]: No character name selected.');
+              return await interaction.respond([]);
+          }
+      
+          try {
+              // Fetch the character from the database
+              const character = await Character.findOne({ name: characterName });
+              if (!character) {
+                  console.warn(`[handleVendingAutocomplete]: Character '${characterName}' not found.`);
+                  return await interaction.respond([]);
+              }
+      
+              // Connect to the vending inventory database
+              const client = await connectToVendingDatabase();
+              const db = client.db('vending');
+              const inventoryCollection = db.collection(characterName.toLowerCase());
+      
+              // Fetch items from the character's vending inventory
+              const shopItems = await inventoryCollection.find({}).toArray();
+      
+              const searchQuery = focusedOption.value.toLowerCase();
+      
+              // Create an array for autocomplete results
+              const results = [];
+      
+              // Add the hardcoded "Shop Image" option
+              results.push({
+                  name: 'Shop Image (Set your shop image)',
+                  value: 'Shop Image',
+              });
+      
+              // Add filtered shop items to the results
+              if (shopItems && shopItems.length > 0) {
+                  const filteredItems = shopItems
+                      .filter(item => item.itemName.toLowerCase().includes(searchQuery))
+                      .map(item => ({
+                          name: `${item.itemName} - Qty: ${item.stockQty}`,
+                          value: item.itemName,
+                      }));
+      
+                  results.push(...filteredItems);
+              }
+      
+              // Limit the results to 25 options
+              await interaction.respond(results.slice(0, 25));
+          } catch (error) {
+              console.error('[handleVendingAutocomplete]: Error fetching items for editshop:', error.message);
+              await interaction.respond([]); // Respond with an empty array on error
+          }
+      } else {
+          console.warn(`[handleVendingAutocomplete]: Unsupported focused option '${focusedOption.name}' for subcommand 'editshop'.`);
+          await interaction.respond([]);
+      }   
+    
+      // ------------------- Handle 'collect_points' subcommand -------------------
+      } else if (subcommand === 'collect_points') {
+          if (focusedOption.name === 'charactername') {
+              console.log('[handleVendingAutocomplete]: Handling charactername autocomplete for collect_points.');
+
+              // Fetch characters owned by the user
+              const characters = await fetchCharactersByUserId(userId);
+
+              // Filter characters by job (Shopkeeper or Merchant)
+              const eligibleCharacters = characters.filter(character =>
+                  ['shopkeeper', 'merchant'].includes(character.job?.toLowerCase())
+              );
+
+              if (!eligibleCharacters || eligibleCharacters.length === 0) {
+                  console.warn('[handleVendingAutocomplete]: No eligible characters found for collect_points.');
+                  return await interaction.respond([]);
+              }
+
+              // Map eligible characters to autocomplete choices
+              const choices = eligibleCharacters.map(character => ({
+                  name: `${character.name} (${character.currentVillage})`,
+                  value: character.name,
+              }));
+
+              await respondWithFilteredChoices(interaction, focusedOption, choices); // Respond with eligible characters
+
+          } else {
+              console.warn(`[handleVendingAutocomplete]: Unsupported focused option '${focusedOption.name}' for subcommand 'collect_points'.`);
+              await interaction.respond([]);
+          }
+
       } else {
           console.warn(`[handleVendingAutocomplete]: Unsupported subcommand '${subcommand}' or option name '${focusedOption.name}'.`);
           await interaction.respond([]);
@@ -1268,6 +1394,7 @@ async function handleVendingAutocomplete(interaction, focusedOption) {
       await safeRespondWithError(interaction);
   }
 }
+
 
 // ------------------- Handles autocomplete for vending restock items -------------------
 async function handleVendingRestockAutocomplete(interaction, focusedOption) {

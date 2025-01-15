@@ -21,8 +21,10 @@ const { getTokenBalance, updateTokenBalance, appendSpentTokens, getOrCreateToken
 
 // Utility Functions
 const { appendSheetData, authorizeSheets, extractSpreadsheetId, fetchSheetData, getSheetIdByTitle, isValidGoogleSheetsUrl, readSheetData, writeSheetData } = require("../utils/googleSheetsUtils");
-const {addItemToVendingInventory, connectToInventories, updateInventory } = require("../utils/inventoryUtils.js")
+const {addItemToVendingInventory, connectToInventories, updateInventory, addItemInventoryDatabase } = require("../utils/inventoryUtils.js")
 const { saveSubmissionToStorage, retrieveVendingRequestFromStorage, deleteVendingRequestFromStorage, saveVendingRequestToStorage, retrieveAllVendingRequests } = require('../utils/storage'); 
+const { uploadSubmissionImage } = require('../utils/uploadUtils'); // Replace with the correct path to uploadUtils.js
+
 
 // Database Models
 const Character = require('../models/CharacterModel');
@@ -87,7 +89,6 @@ async function connectToVendingDatabase() {
     }
 }
 
-
 // ------------------- Handle the collect_points subcommand -------------------
 async function handleCollectPoints(interaction, userId) {
     try {
@@ -96,22 +97,37 @@ async function handleCollectPoints(interaction, userId) {
 
         if (!character) throw new Error(`Character '${characterName}' not found for user ID ${userId}.`);
 
+        // Validate character's job
+        const allowedJobs = ['Shopkeeper', 'Merchant'];
+        if (!allowedJobs.includes(character.job)) {
+            throw new Error(
+                `Only characters with the job **Shopkeeper** or **Merchant** can collect vending points. ` +
+                `Current job: **${character.job}**.`
+            );
+        }
+
         const currentDate = new Date();
         const currentMonth = currentDate.getMonth() + 1;
         const currentMonthName = currentDate.toLocaleString("default", { month: "long" });
         const currentDay = currentDate.getDate();
 
-        if (currentDay < 1 || currentDay > 31) { // fix to 1 -5 later 
+        if (currentDay < 1 || currentDay > 31) { // Fix to 1-5 later
             throw new Error(`Points can only be collected between the 1st and 5th of the month. Current day: ${currentDay}`);
         }
 
         if (character.lastCollectedMonth === currentMonth) {
             const embed = new EmbedBuilder()
                 .setTitle("📅 Points Already Collected")
-                .setDescription(`The Vendor's Guild Records show that **${character.name}** has already collected points for **${currentMonthName}**.`)
-                .setColor("#FF0000")
-                .setThumbnail(character.iconURL)
-                .setImage(DEFAULT_IMAGE_URL);
+                .setDescription(
+                    `The Vendor's Guild Records show that **${character.name}** has already collected points for **${currentMonthName}**.\n\n` +
+                    `**Current Points:** ${character.vendingPoints || 0}` // Display current points
+                )
+                .setColor("#AA926A") // Gold color
+                .setThumbnail(character.icon || DEFAULT_IMAGE_URL) // Fallback if the icon is missing
+                .setImage(DEFAULT_IMAGE_URL) // Default image
+                .addFields(
+                    { name: "🔗 **Vending Shop Link**", value: `> [Click here to view shop](${character.shopLink || 'No shop link available'})`, inline: false }
+                );
 
             await interaction.reply({ embeds: [embed], ephemeral: true });
             return;
@@ -123,10 +139,15 @@ async function handleCollectPoints(interaction, userId) {
 
         const embed = new EmbedBuilder()
             .setTitle("✅ Monthly Points Collected")
-            .setDescription(`The Vendors Guild has credited **${character.name}** with **${MONTHLY_VENDING_POINTS}** points for **${currentMonthName}**!\n\n**Current Points:** ${updatedPoints}`)
-            .setColor("#25c059")
-            .setImage(DEFAULT_IMAGE_URL)
-            .setThumbnail(character.iconURL);
+            .setDescription(
+                `The Vendors Guild has credited **${character.name}** with **${MONTHLY_VENDING_POINTS}** points for **${currentMonthName}**!\n\n**Current Points:** ${updatedPoints}`
+            )
+            .setColor("#AA926A") // Gold color
+            .setThumbnail(character.icon || DEFAULT_IMAGE_URL) // Fallback if the icon is missing
+            .setImage(DEFAULT_IMAGE_URL) // Default image
+            .addFields(
+                { name: "🔗 **Vending Shop Link**", value: `[Click here to view shop](${character.shopLink || 'No shop link available'})`, inline: false }
+            );
 
         await interaction.reply({ embeds: [embed], ephemeral: false });
     } catch (error) {
@@ -137,6 +158,8 @@ async function handleCollectPoints(interaction, userId) {
         });
     }
 }
+
+
 // ------------------- Handle the Restock Subcommand -------------------
 // Handles the restock process for a character.
 async function handleRestock(interaction) {
@@ -327,7 +350,7 @@ async function handleRestock(interaction) {
                 { name: '🛠️ **Slots Required**', value: `\`${slotsRequired}\``, inline: true },
                 { name: '💰 **Remaining Points**', value: `\`${remainingPoints}\``, inline: true }
             )
-            .setColor('#25c059');
+            .setColor('#AA926A');
 
         // Edit the deferred reply
         await interaction.editReply({ embeds: [embed] });
@@ -337,23 +360,47 @@ async function handleRestock(interaction) {
     }
 }
 
+// removed updateBuyerInventory to repalce with addItemInventoryDatabase 
+
 // ------------------- Handle the barter subcommand -------------------
 async function handleBarter(interaction) {
     try {
-        const userCharacterName = interaction.options.getString('charactername'); // User's character
-        const vendorCharacterName = interaction.options.getString('vendorcharacter'); // Vendor character
+        // ------------------- Extract interaction options -------------------
+        const userCharacterName = interaction.options.getString('charactername');
+        const vendorCharacterName = interaction.options.getString('vendorcharacter');
         const itemName = interaction.options.getString('itemname');
         const quantity = interaction.options.getInteger('quantity');
         const paymentMethod = interaction.options.getString('paymentmethod');
+        const userId = interaction.user.id;
+
+        // ------------------- Initialize Variables for Success Response -------------------
+        let sellPricePerUnit = 0; // Declare for use in success embed
+        let totalPrice = 0; // Declare for use in success embed
+
+        // ------------------- Fetch and validate user data -------------------
+        const user = await getOrCreateToken(userId);
+        if (!user) {
+            throw new Error(`[handleBarter]: Unable to retrieve user data for user ID: ${userId}`);
+        }
+        console.log(`[handleBarter]: Fetched user data for ID ${userId}. Tracker Link: ${user.tokenTracker || 'No tracker'}`);
+
+        // ------------------- Validate input -------------------
+        if (!quantity || quantity <= 0) {
+            throw new Error(`Invalid quantity specified: ${quantity}. Please provide a positive integer.`);
+        }
+        if (!['art', 'other', 'token', 'trade'].includes(paymentMethod)) {
+            throw new Error(`Invalid payment method: ${paymentMethod}. Allowed methods are 'art', 'other', 'token', and 'trade'.`);
+        }
         const notes = interaction.options.getString('notes') || 'No additional notes provided.';
 
-        // Fetch user's character and vendor character
-        const userCharacter = await fetchCharacterByNameAndUserId(userCharacterName, interaction.user.id);
+        // ------------------- Validate characters -------------------
+        const userCharacter = await fetchCharacterByNameAndUserId(userCharacterName, userId);
         const vendorCharacter = await Character.findOne({ name: vendorCharacterName });
 
         if (!userCharacter || !vendorCharacter) {
-            throw new Error(`Either the user's character '${userCharacterName}' or vendor character '${vendorCharacterName}' was not found.`);
+            throw new Error(`[handleBarter]: Character validation failed. User's character: ${userCharacterName}, Vendor: ${vendorCharacterName}`);
         }
+        console.log(`[handleBarter]: Characters validated. User: ${userCharacter.name}, Vendor: ${vendorCharacter.name}`);
 
         // Ensure both characters are in the same village
         if (userCharacter.currentVillage.toLowerCase() !== vendorCharacter.currentVillage.toLowerCase()) {
@@ -372,12 +419,11 @@ async function handleBarter(interaction) {
             );
         }
 
-        // Proceed with barter logic
+        // ------------------- Fetch item from vendor's inventory -------------------
         const client = await connectToVendingDatabase();
         const db = client.db('vending');
         const inventoryCollection = db.collection(vendorCharacterName.toLowerCase());
 
-        // Fetch the item from the vendor's inventory
         const item = await inventoryCollection.findOne({ itemName });
         if (!item) {
             throw new Error(`Item '${itemName}' not found in ${vendorCharacterName}'s inventory.`);
@@ -388,14 +434,14 @@ async function handleBarter(interaction) {
             throw new Error(`Insufficient stock of '${itemName}'. Available: ${item.stockQty}, Requested: ${quantity}.`);
         }
 
-        // Handle different payment methods
-        let totalPrice = null;
+        // ------------------- Handle different payment methods -------------------
         switch (paymentMethod) {
             case 'art':
             case 'other': {
+                // ------------------- Art/Other Payment Handling -------------------
                 const priceDescription = paymentMethod === 'art' ? item.artPrice : item.otherPrice;
                 if (!priceDescription || priceDescription.trim().toLowerCase() === 'n/a') {
-                    throw new Error(`The item '${itemName}' cannot be sold using the payment method '${paymentMethod}' as the price is 'N/A'.`);
+                    throw new Error(`🎨 The item **${itemName}** cannot be sold using the payment method **${paymentMethod.charAt(0).toUpperCase() + paymentMethod.slice(1)}** because the price is unavailable. Please choose a different payment method or contact the vendor for assistance.`);
                 }
 
                 const fulfillmentId = `${vendorCharacter._id.toString().slice(-5)}${Date.now().toString().slice(-5)}`;
@@ -414,7 +460,7 @@ async function handleBarter(interaction) {
                         { name: '📦 **Item**', value: itemName, inline: true },
                         { name: '📜 **Notes**', value: notes, inline: false }
                     )
-                    .setColor('#FFA500')
+                    .setColor('#AA926A')
                     .setFooter({ text: `Awaiting fulfillment by ${vendorCharacterName}.` });
 
                 const message = await interaction.reply({ embeds: [embed], ephemeral: false, fetchReply: true });
@@ -433,84 +479,64 @@ async function handleBarter(interaction) {
                     createdAt: new Date(),
                     messageId: message.id,
                 });
+
+               // Add the item to the buyer's inventory
+               console.log(`[handleBarter]: Adding item '${itemName}' to buyer's inventory.`);
+               await addItemInventoryDatabase(userCharacter._id, itemName, quantity, interaction, 'Vending');
+               console.log(`[handleBarter]: Item '${itemName}' successfully added to buyer's inventory.`);               
                 return;
             }
 
             case 'token': {
-                const sellPricePerUnit = userCharacter.userId === vendorCharacter.userId
-                    ? (await ItemModel.findOne({ itemName }))?.sellPrice || 0
-                    : item.tokenPrice;
-            
+                // ------------------- Token Payment Handling -------------------
+                     sellPricePerUnit = userCharacter.userId === vendorCharacter.userId
+                    ? parseFloat((await ItemModel.findOne({ itemName }))?.sellPrice || 0) // Vendor's default sell price
+                    : parseFloat(item.tokenPrice || 0); // Item's token price in vendor's inventory
+
+                // Validate the calculated price
+                if (isNaN(sellPricePerUnit) || sellPricePerUnit <= 0) {
+                    throw new Error(
+                        `The item **${itemName}** cannot be purchased with **Tokens**. Try a different payment method or contact the vendor for clarification.`
+                    );
+                }
+
                 totalPrice = sellPricePerUnit * quantity;
-            
+
+                // Validate the buyer's token balance
                 const buyerTokens = await getTokenBalance(interaction.user.id);
                 if (buyerTokens < totalPrice) {
-                    throw new Error(`Insufficient tokens! This purchase costs ${totalPrice} tokens, but you only have ${buyerTokens}.`);
+                    throw new Error(
+                        `Insufficient tokens! This purchase costs ${totalPrice} tokens, but you only have ${buyerTokens}.`
+                    );
                 }
-            
-                // Deduct tokens from the buyer
-                await updateTokenBalance(interaction.user.id, -totalPrice);
-            
+
+                // Deduct tokens and update the vendor's stock
+                await updateTokenBalance(interaction.user.id, -totalPrice); // Deduct from buyer
                 if (userCharacter.userId !== vendorCharacter.userId) {
-                    // Add tokens to the vendor only if they are different users
-                    await updateTokenBalance(vendorCharacter.userId, totalPrice);
+                    await updateTokenBalance(vendorCharacter.userId, totalPrice); // Add to vendor if different users
                 }
-            
-                // Update vendor's stock
+
+                // Update vendor's inventory
                 const updatedStock = item.stockQty - quantity;
                 if (updatedStock === 0) {
-                    await inventoryCollection.deleteOne({ itemName });
+                    await inventoryCollection.deleteOne({ itemName }); // Remove item if stock is depleted
                 } else {
-                    await inventoryCollection.updateOne({ itemName }, { $set: { stockQty: updatedStock } });
+                    await inventoryCollection.updateOne(
+                        { itemName },
+                        { $set: { stockQty: updatedStock } }
+                    );
                 }
-            
-                // Fetch user object
-                const user = await getOrCreateToken(interaction.user.id);
-            
-                // Log transaction to user's token tracker
-                try {
-                    const tokenTrackerLink = user.tokenTracker || 'https://example.com/tokens/default';
-                    const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
-                    const formattedDateTime = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
-            
-                    const tokenRow = [
-                        `${userCharacter.name} - ${itemName} x${quantity} - Barter with ${vendorCharacter.name}`,
-                        interactionUrl,
-                        'purchase',
-                        'spent',
-                        `-${totalPrice}`
-                    ];
-            
-                    if (user.tokenTracker) {
-                        const spreadsheetId = extractSpreadsheetId(user.tokenTracker);
-                        const auth = await authorizeSheets();
-                        await appendSheetData(auth, spreadsheetId, 'loggedTracker!B7:F', [tokenRow]);
-                    }
-                } catch (sheetError) {
-                    console.error(`[handleBarter]: Failed to log transaction to Google Sheets: ${sheetError.message}`);
-                }
-            
-                // Create a success embed
-                const embedSuccess = new EmbedBuilder()
-                    .setTitle('✅ Barter Successful!')
-                    .setDescription(
-                        userCharacter.userId === vendorCharacter.userId
-                            ? `**${userCharacter.name}** purchased **${quantity}x ${itemName}** for **${totalPrice} tokens**.`
-                            : `You successfully bartered for **${quantity}x ${itemName}** from **${vendorCharacter.name}**.`
-                    )
-                    .addFields(
-                        { name: '💰 **Final Price Per Unit**', value: `${sellPricePerUnit} Tokens`, inline: true },
-                        { name: '💰 **Total Price**', value: `${totalPrice} Tokens`, inline: true },
-                        { name: '📦 **Quantity Purchased**', value: `${quantity}`, inline: true },
-                        { name: '📜 **Notes**', value: notes, inline: false }
-                    )
-                    .setColor('#25c059');
-            
-                await interaction.reply({ embeds: [embedSuccess], ephemeral: false });
-                return;
-            }                                
-         
+
+               // Add the item to the buyer's inventory
+               console.log(`[handleBarter]: Adding item '${itemName}' to buyer's inventory.`);
+               await addItemInventoryDatabase(userCharacter._id, itemName, quantity, interaction, 'Vending');
+               console.log(`[handleBarter]: Item '${itemName}' successfully added to buyer's inventory.`);               
+
+                break;
+            }
+           
             case 'trade': {
+                // ------------------- Trade Payment Handling -------------------
                 if (!item.tradesOpen) {
                     throw new Error(`Sorry, this vendor isn't accepting trades for '${itemName}'!`);
                 }
@@ -532,12 +558,12 @@ async function handleBarter(interaction) {
                         { name: '📦 **Item**', value: itemName, inline: true },
                         { name: '📜 **Trade Details**', value: tradeDescription, inline: false }
                     )
-                    .setColor('#FFA500')
+                    .setColor('#AA926A')
                     .setFooter({ text: `Awaiting trade completion by ${vendorCharacterName}.` });
 
                 const tradeMessage = await interaction.reply({ embeds: [tradeEmbed], ephemeral: false, fetchReply: true });
 
-                const tradeFulfillmentData = {
+                saveVendingRequestToStorage(tradeFulfillmentId, {
                     fulfillmentId: tradeFulfillmentId,
                     userCharacterName,
                     vendorCharacterName,
@@ -550,14 +576,78 @@ async function handleBarter(interaction) {
                     notes,
                     createdAt: new Date(),
                     messageId: tradeMessage.id,
-                };
-                saveVendingRequestToStorage(tradeFulfillmentId, tradeFulfillmentData);
+                });
+
+               // Add the item to the buyer's inventory
+               console.log(`[handleBarter]: Adding item '${itemName}' to buyer's inventory.`);
+               await addItemInventoryDatabase(userCharacter._id, itemName, quantity, interaction, 'Vending');
+               console.log(`[handleBarter]: Item '${itemName}' successfully added to buyer's inventory.`);
+               
                 return;
             }
 
             default:
                 throw new Error('Invalid payment method.');
         }
+
+        // ------------------- Log transaction in Google Sheets -------------------
+        if (userCharacter.inventory) {
+            const spreadsheetId = extractSpreadsheetId(userCharacter.inventory);
+            try {
+                const auth = await authorizeSheets();
+                const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
+                const formattedDateTime = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
+                const uniqueSyncId = uuidv4();
+
+                const itemDetails = await ItemModel.findOne({ itemName });
+                if (!itemDetails) {
+                    throw new Error(`Item '${itemName}' not found in the database.`);
+                }
+
+                const category = itemDetails?.category || [];
+                const type = itemDetails?.type || [];
+                const subtype = itemDetails?.subtype || [];
+
+                const values = [[
+                    userCharacter.name,
+                    itemName,
+                    quantity.toString(),
+                    category.join(', '),
+                    type.join(', '),
+                    subtype.join(', '),
+                    `Bought from ${vendorCharacter.name}`,
+                    userCharacter.job || 'N/A',
+                    userCharacter.perk || 'N/A',
+                    userCharacter.currentVillage,
+                    interactionUrl,
+                    formattedDateTime,
+                    uniqueSyncId
+                ]];
+
+                const range = 'loggedInventory!A2:M';
+                await appendSheetData(auth, spreadsheetId, range, values);
+            } catch (sheetError) {
+                console.error(`[handleBarter]: Failed to log purchase to buyer's Google Sheets: ${sheetError.message}`);
+            }
+        }
+
+// ------------------- Success Response -------------------
+const embedSuccess = new EmbedBuilder()
+    .setTitle('✅ Barter Successful!')
+    .setDescription(
+        `You successfully bartered for **${quantity}x ${itemName}** from **${vendorCharacter.name}**.`
+    )
+    .addFields(
+        { name: '💰 **Final Price Per Unit**', value: `${sellPricePerUnit} Tokens`, inline: true },
+        { name: '💰 **Total Price**', value: `${totalPrice} Tokens`, inline: true },
+        { name: '📦 **Quantity Purchased**', value: `${quantity}`, inline: true },
+        { name: '📜 **Notes**', value: notes, inline: false }
+    )
+    .setColor('#AA926A');
+
+await interaction.reply({ embeds: [embedSuccess], ephemeral: false });
+
+
     } catch (error) {
         console.error('[handleBarter]: Error during barter:', error);
         await interaction.reply({
@@ -566,7 +656,6 @@ async function handleBarter(interaction) {
         });
     }
 }
-
 
 // ------------------- Reaction Listener for Trade Acceptance -------------------
 let botClient;
@@ -628,7 +717,7 @@ function initializeReactionHandler(client) {
                         { name: '📦 **Item**', value: itemName, inline: true },
                         { name: '🛒 **Vendor**', value: vendorCharacterName, inline: true }
                     )
-                    .setColor('#25c059');
+                    .setColor('#AA926A');
                 await reaction.message.edit({ embeds: [updatedEmbed] });
             }
         } catch (error) {
@@ -697,41 +786,15 @@ async function handleFulfill(interaction) {
             );
         }
 
-        // Add the item to the buyer's inventory
-        const Inventory = await initializeInventoryModel();
+        // Add the item to the buyer's inventory using addItemInventoryDatabase
         const buyerCharacter = await Character.findOne({ name: userCharacterName });
-
         if (!buyerCharacter) {
             throw new Error(`Buyer character '${userCharacterName}' not found.`);
         }
 
-        const existingItem = await Inventory.findOne({
-            characterId: buyerCharacter._id,
-            itemName,
-        });
-
-        if (existingItem) {
-            await Inventory.updateOne(
-                { characterId: buyerCharacter._id, itemName },
-                { $inc: { quantity } }
-            );
-        } else {
-            await Inventory.create({
-                characterId: buyerCharacter._id,
-                itemName,
-                itemId: item._id, // Add the itemId from the vendor's inventory
-                quantity,
-                date: new Date(),
-            });
-        }
-
-        // Fetch item details for autofill
-        const itemDetails = await ItemModel.findOne({ itemName });
-        const category = itemDetails?.category || [];
-        const type = itemDetails?.type || [];
-        const subtype = itemDetails?.subtype || [];
-        const buyerJob = buyerCharacter.job || '';
-        const buyerPerk = buyerCharacter.perk || '';
+        console.log(`[handleFulfill]: Adding item '${itemName}' to buyer's inventory.`);
+        await addItemInventoryDatabase(buyerCharacter._id, itemName, quantity, interaction, 'Vending');
+        console.log(`[handleFulfill]: Item '${itemName}' successfully added to buyer's inventory.`);
 
         // Update the buyer's Google Sheet
         if (buyerCharacter.inventory) {
@@ -746,13 +809,10 @@ async function handleFulfill(interaction) {
                 buyerCharacter.name,             // Character Name
                 itemName,                        // Item Name
                 quantity.toString(),             // Quantity of Item
-                category.join(', '),             // Category
-                type.join(', '),                 // Type
-                subtype.join(', '),              // Subtype
-                `Barter with ${vendorCharacterName}`, // How the item was obtained
-                buyerJob,                        // Job
-                buyerPerk,                       // Perk
-                buyerCharacter.currentVillage,   // Location
+                'Vending',                       // How the item was obtained
+                buyerCharacter.job || '',
+                buyerCharacter.perk || '',
+                buyerCharacter.currentVillage,
                 interactionUrl,                  // Link to the interaction
                 formattedDateTime,               // Date/Time of transaction
                 uniqueSyncId                     // Unique Sync ID
@@ -761,6 +821,7 @@ async function handleFulfill(interaction) {
             const range = 'loggedInventory!A2:M'; // Range for appending data
             await appendSheetData(auth, spreadsheetId, range, values);
         }
+
         // React to the "Fulfillment Required!" message
         if (messageId) {
             try {
@@ -789,17 +850,19 @@ async function handleFulfill(interaction) {
 
         // Respond with an embed
         const embed = new EmbedBuilder()
-            .setTitle('✅ **Fulfillment Complete**')
-            .setDescription(`The Vendor's Guild has overseen the fulfillment of **${quantity}x ${itemName}**.`)
-            .addFields(
-                { name: '📦 **Item**', value: itemName, inline: true },
-                { name: '🔢 **Quantity**', value: quantity.toString(), inline: true },
-                { name: '🏷️ **Buyer**', value: `[${userCharacterName}](${buyerCharacter.inventory || 'No link available'})`, inline: true },
-                { name: '🏷️ **Vendor**', value: `[${vendorCharacterName}](${vendorCharacter.inventory || 'No link available'})`, inline: true },
-                { name: '🛍️ **Vendor Shop**', value: `[View Shop](${vendorCharacter.shopLink || 'No shop link available'})`, inline: true }
-            )
-            .setColor('#25c059')
-            .setFooter({ text: `Transaction overseen by The Vendor's Guild` });
+        .setTitle('✅ **Fulfillment Complete**')
+        .setDescription(`The Vendor's Guild has overseen the fulfillment of **${quantity}x ${itemName}**.`)
+        .addFields(
+            { name: '📦 **Item**', value: itemName, inline: true },
+            { name: '🔢 **Quantity**', value: quantity.toString(), inline: true },
+            { name: '🏷️ **Buyer**', value: `[${userCharacterName}](${buyerCharacter.inventory || 'No link available'})`, inline: true },
+            { name: '🏷️ **Vendor**', value: `[${vendorCharacterName}](${vendorCharacter.inventory || 'No link available'})`, inline: true },
+            { name: '🛍️ **Vendor Shop**', value: `[View Shop](${vendorCharacter.shopLink || 'No shop link available'})`, inline: true }
+        )
+        .setColor('#AA926A') // Set the gold color
+        .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png') // Set the image
+        .setFooter({ text: `Transaction overseen by The Vendor's Guild` });
+    
 
         await interaction.reply({ embeds: [embed], ephemeral: false });
 
@@ -858,7 +921,8 @@ async function handlePouchUpgrade(interaction) {
                 { name: '💰 **Tokens Spent**', value: `${cost}`, inline: true },
                 { name: '💰 **Remaining Tokens**', value: `${userTokens - cost}`, inline: true }
             )
-            .setColor('#25c059');
+            .setColor('#AA926A') // Set the gold color
+            .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png');
 
         await interaction.reply({ embeds: [embed], ephemeral: false });
     } catch (error) {
@@ -935,6 +999,16 @@ function capitalizeFirstLetter(string) {
     return string.charAt(0).toUpperCase() + string.slice(1).toLowerCase();
 }
 
+// Helper function to validate a URL
+function isValidUrl(url) {
+    try {
+        new URL(url);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
 async function handleViewShop(interaction) {
     try {
         const characterName = interaction.options.getString("charactername");
@@ -944,6 +1018,10 @@ async function handleViewShop(interaction) {
         if (!character) {
             throw new Error(`Character '${characterName}' not found.`);
         }
+
+        // Validate the shop image URL
+        const shopImage = isValidUrl(character.shopImage) ? character.shopImage : VIEW_SHOP_IMAGE_URL;
+        console.log(`[handleViewShop]: Using shop image URL: ${shopImage}`);
 
         // Connect to the vending inventory database
         const client = await connectToVendingDatabase();
@@ -980,9 +1058,9 @@ async function handleViewShop(interaction) {
             return new EmbedBuilder()
                 .setTitle(`🛍️ ${characterName}'s Shop (Page ${page}/${totalPages})`)
                 .setDescription(`${pageItems}\n\n💡 Use </vending barter:1306176790095728737> to buy from this character!`)
-                .setColor("#25c059")
+                .setColor("#AA926A")
                 .setThumbnail(character.icon || DEFAULT_IMAGE_URL)
-                .setImage(VIEW_SHOP_IMAGE_URL)
+                .setImage(shopImage) // Use validated shop image
                 .setFooter({
                     text: `${characterName}: ${character.job} is currently in ${formattedVillage}!`,
                     iconURL: interaction.user.displayAvatarURL(),
@@ -1312,7 +1390,6 @@ async function sendSetupInstructions(interaction, errorType, characterId, charac
     console.log(`[vendingHandler]: Setup instructions sent for error: ${errorType}`);
 }
 
-
 // ------------------- Helper: Create Vending Setup Embed -------------------
 const createVendingSetupEmbed = (characterName, shopLink, pouch, points, inventorySlots, errorMessage = '') => {
     const embed = new EmbedBuilder()
@@ -1330,7 +1407,8 @@ const createVendingSetupEmbed = (characterName, shopLink, pouch, points, invento
                 { name: '📦 Inventory Slots', value: `**${inventorySlots} slots**`, inline: true },
                 { name: '💰 Starting Points', value: `**${points} points**`, inline: true },
                 { name: '🛠️ Next Steps', value: '1. Use `/vending restock` to add items to your vending inventory.\n2. Set prices for each item in your shop.\n3. Use `/vending sync` to finalize your inventory.' }
-            );
+                .setColor('#AA926A') // Set the gold color
+                .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png') );
     }
 
     return embed;
@@ -1344,6 +1422,7 @@ async function handleEditShop(interaction) {
         // Extract interaction options
         const characterName = interaction.options.getString('charactername');
         const itemName = interaction.options.getString('itemname');
+        const shopImageFile = interaction.options.getAttachment('shopimagefile'); // Get the uploaded file
         const tokenPrice = interaction.options.getInteger('tokenprice');
         const artPrice = interaction.options.getString('artprice');
         const otherPrice = interaction.options.getString('otherprice');
@@ -1354,6 +1433,30 @@ async function handleEditShop(interaction) {
         const character = await fetchCharacterByNameAndUserId(characterName, userId);
         if (!character) {
             throw new Error(`Character '${characterName}' not found or does not belong to you.`);
+        }
+
+        // Handle special case for "Shop Image"
+        if (itemName.toLowerCase() === 'shop image') {
+            if (!shopImageFile) {
+                throw new Error('No shop image file uploaded. Please upload a valid image.');
+            }
+
+            // Upload the shop image
+            const sanitizedCharacterName = characterName.replace(/\s+/g, ''); // Remove spaces
+            const imageName = `${sanitizedCharacterName}_shop_image_${Date.now()}`; // Include timestamp in the name
+            const uploadedImageUrl = await uploadSubmissionImage(shopImageFile.url, imageName);
+            console.log(`[handleEditShop]: Uploaded shop image for ${characterName}. Saved as: ${imageName}`);
+
+            // Update the shop image for the character
+            await Character.updateOne(
+                { name: characterName },
+                { $set: { shopImage: uploadedImageUrl } }
+            );
+
+            await interaction.editReply({
+                content: `✅ Shop image updated successfully for **${characterName}**!`,
+            });
+            return;
         }
 
         // Connect to the vending inventory database
@@ -1422,7 +1525,8 @@ async function handleEditShop(interaction) {
                 { name: '📜 **Other Price**', value: `${otherPrice || item.otherPrice || 'N/A'}`, inline: true },
                 { name: '🔄 **Trades Open**', value: `${tradesOpen !== null ? (tradesOpen ? 'Yes' : 'No') : item.tradesOpen ? 'Yes' : 'No'}`, inline: true }
             )
-            .setColor('#25c059');
+            .setColor('#AA926A') // Set the gold color
+            .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png');
 
         await interaction.editReply({ embeds: [embed] });
     } catch (error) {
@@ -1536,5 +1640,6 @@ module.exports = {
     handleEditShop, 
     initializeReactionHandler,
     handlePouchUpgrade,
-    handleVendingSync
+    handleVendingSync,
+    connectToVendingDatabase
 };

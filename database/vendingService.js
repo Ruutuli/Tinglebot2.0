@@ -305,6 +305,7 @@ module.exports = {
     VILLAGE_ICONS,
     getLimitedItems,
     updateItemStockByName,
-    updateVendingStock
+    updateVendingStock,
+    connectToDatabase
 };
 

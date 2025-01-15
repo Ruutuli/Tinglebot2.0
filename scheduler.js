@@ -2,29 +2,35 @@
 // Manages all scheduled tasks such as daily stamina recovery, blight roll checks, Blood Moon announcements, and birthday announcements
 
 // ------------------- Imports -------------------
-// Load environment variables
+// ------------------- Load Environment Variables -------------------
 require('dotenv').config();
 
-// Standard libraries and third-party modules
+// ------------------- Standard Libraries and Third-Party Modules -------------------
 const cron = require('node-cron');
+
+// ------------------- Discord.js Components -------------------
 const { EmbedBuilder } = require('discord.js');
 
-// Local modules for core functionality
-const { recoverDailyStamina } = require('./modules/characterStatsModule'); 
-const { generateVendingStockList } = require('./database/vendingService'); 
-const { checkMissedRolls, postBlightRollCall } = require('./handlers/blightHandler'); 
-const { sendBloodMoonAnnouncement, trackBloodMoonCycle  } = require('./scripts/bloodmoon'); 
+// ------------------- Database Connections -------------------
+const { recoverDailyStamina } = require('./modules/characterStatsModule');
+
+// ------------------- Database Services -------------------
+const { generateVendingStockList, getCurrentVendingStockList } = require('./database/vendingService');
+const { checkMissedRolls, postBlightRollCall } = require('./handlers/blightHandler');
 const { resetPetRollsForAllCharacters } = require('./database/characterService');
-const { createScheduledQuest } = require('./database/questService'); 
+const { createScheduledQuest } = require('./database/questService');
+
+// ------------------- Modules -------------------
+const { sendBloodMoonAnnouncement, trackBloodMoonCycle } = require('./scripts/bloodmoon');
 const { fetchQuestsFromSheet } = require('./scripts/questAnnouncements');
-const { cleanupExpiredVendingRequests } = require('./utils/storage');
 
-// Models and utilities
-
-const Character = require('./models/CharacterModel');
-const { cleanupExpiredHealingRequests } = require('./utils/storage'); 
+// ------------------- Utility Functions -------------------
+const { cleanupExpiredVendingRequests, cleanupExpiredHealingRequests } = require('./utils/storage');
 const { authorizeSheets, appendSheetData, getSheetIdByTitle } = require('./utils/googleSheetsUtils');
-const { getCurrentVendingStockList } = require('./database/vendingService');
+const { convertToHyruleanDate } = require('./modules/calendarModule');
+
+// ------------------- Database Models -------------------
+const Character = require('./models/CharacterModel');
 
 
 // ------------------- Scheduler Initialization -------------------
@@ -146,7 +152,7 @@ cron.schedule('0 2 1 * *', async () => {
   }, { timezone: 'America/New_York' });
 
   // ------------------- Daily Blight Death Check -------------------
-cron.schedule('0 0 * * *', async () => {
+  cron.schedule('0 20 * * *', async () => {
   try {
     console.log('[scheduler]☠ Checking for characters who have died due to blight...');
 
@@ -184,7 +190,7 @@ cron.schedule('0 0 * * *', async () => {
 }, { timezone: 'America/New_York' });
 
   // ------------------- Monthly Blood Moon Announcement -------------------
-  cron.schedule('0 20 13 * *', async () => {
+  cron.schedule('0 20 1 * *', async () => {
     try {
       console.log('🌕 Posting Blood Moon announcement...');
       const channels = [
@@ -269,7 +275,7 @@ cron.schedule('0 0 * * *', async () => {
   }, { timezone: 'America/New_York' });
 
   // ------------------- Daily Debuff Expiry Check with DM Notifications -------------------
-  cron.schedule('13 0 * * *', async () => {
+  cron.schedule('0 0 * * *', async () => {
     try {
       console.log('[scheduler]⏰ Checking for expired debuffs...');
 
@@ -332,18 +338,6 @@ async function executeBirthdayAnnouncements(client) {
   // Function to convert the real-world date to "January 10"
   const formatRealWorldDate = (date) => {
     return date.toLocaleString("en-US", { month: "long", day: "numeric" });
-  };
-
-  // Function to convert the real-world date to Hyrulean date
-  const convertToHyruleanDate = (date) => {
-    const hyruleanMonths = [
-      "Yowaka", "Naydra", "Farosh", "Dinraal", "Ocarina", "Goddess",
-      "Triforce", "Courage", "Wisdom", "Power", "Hero", "Master Sword"
-    ];
-    const monthIndex = date.getMonth(); // 0-based index for month
-    const day = date.getDate(); // Day of the month
-
-    return `${hyruleanMonths[monthIndex]} Ita ${day}`;
   };
 
   const realWorldDate = formatRealWorldDate(estNow);

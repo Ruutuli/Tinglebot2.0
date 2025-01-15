@@ -1,30 +1,38 @@
-// inventoryUtils.js
+// ------------------- inventoryUtils.js -------------------
 
-// Import necessary modules and functions
+// ------------------- Import necessary modules and functions -------------------
 const { connectToInventories } = require('../database/connection');
 const {
-    writeSheetData, getSheetIdByTitle, authorizeSheets,
-    readSheetData, appendSheetData
+    appendSheetData,
+    authorizeSheets,
+    getSheetIdByTitle,
+    readSheetData,
+    writeSheetData,
 } = require('../utils/googleSheetsUtils');
 const { extractSpreadsheetId } = require('../utils/validation');
 const {
-    fetchCharacterById, fetchCharacterByNameAndUserId
+    fetchCharacterById,
+    fetchCharacterByNameAndUserId,
 } = require('../database/characterService');
 const {
-    fetchItemByName, fetchItemById, fetchAndSortItemsByRarity
+    fetchAndSortItemsByRarity,
+    fetchItemById,
+    fetchItemByName,
 } = require('../database/itemService');
 const { toLowerCase } = require('../modules/formattingModule');
 const { safeStringify } = require('../utils/objectUtils');
 const generalCategories = require('../models/GeneralItemCategories');
 const {
-    StringSelectMenuBuilder, ActionRowBuilder,
-    ButtonBuilder, ButtonStyle
+    ActionRowBuilder,
+    ButtonBuilder,
+    ButtonStyle,
+    StringSelectMenuBuilder,
 } = require('discord.js');
-const { promptUserForSpecificItems } = require('../utils/itemUtils'); // Reference to itemUtils.js
+const { promptUserForSpecificItems } = require('../utils/itemUtils');
 
-// Utility functions
+// ------------------- Utility Functions -------------------
 
-// Format date and time in a specific timezone
+// --------- Format date and time in a specific timezone ---------
 function formatDateTime(date) {
     const options = {
         year: 'numeric',
@@ -33,17 +41,21 @@ function formatDateTime(date) {
         hour: '2-digit',
         minute: '2-digit',
         hour12: true,
-        timeZone: 'America/New_York'
+        timeZone: 'America/New_York',
     };
-    return new Intl.DateTimeFormat('en-US', options).format(new Date(date)).replace(',', ' |') + ' EST';
+    return (
+        new Intl.DateTimeFormat('en-US', options)
+            .format(new Date(date))
+            .replace(',', ' |') + ' EST'
+    );
 }
 
-// Escape special characters in a string for use in a regular expression
+// --------- Escape special characters in a string for use in a regular expression ---------
 function escapeRegExp(string) {
     return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-// Convert BigInt values to strings during JSON stringification
+// --------- Convert BigInt values to strings during JSON stringification ---------
 function replacer(key, value) {
     if (typeof value === 'bigint') {
         return value.toString();
@@ -51,7 +63,7 @@ function replacer(key, value) {
     return value;
 }
 
-// Extract fields from an interaction object
+// --------- Extract fields from an interaction object ---------
 function extractInteractionFields(interaction) {
     if (!interaction) {
         return {};
@@ -68,7 +80,9 @@ function extractInteractionFields(interaction) {
     };
 }
 
-// Sync inventory data to the database and Google Sheets
+// ------------------- Inventory Management Functions -------------------
+
+// --------- Sync inventory data to the database and Google Sheets ---------
 async function syncToInventoryDatabase(character, item, interaction) {
     try {
         const inventoriesConnection = await connectToInventories();
@@ -94,7 +108,9 @@ async function syncToInventoryDatabase(character, item, interaction) {
         const range = 'loggedInventory!A2:M';
         const sheetData = await readSheetData(auth, spreadsheetId, range);
 
-        const rowIndex = sheetData.findIndex(row => row[0] === character.name && row[1] === item.itemName);
+        const rowIndex = sheetData.findIndex(
+            (row) => row[0] === character.name && row[1] === item.itemName
+        );
         if (rowIndex !== -1) {
             sheetData[rowIndex] = [
                 character.name,
@@ -109,21 +125,20 @@ async function syncToInventoryDatabase(character, item, interaction) {
                 item.location,
                 item.link,
                 formatDateTime(item.date),
-                item.synced
+                item.synced,
             ];
 
             const updateRange = `loggedInventory!A${rowIndex + 2}:M${rowIndex + 2}`;
             await writeSheetData(auth, spreadsheetId, updateRange, [sheetData[rowIndex]]);
-        } else {
-            // Handle adding new row logic if necessary
         }
     } catch (error) {
+        console.error('[inventoryUtils.js]: Error syncing to inventory database:', error);
         throw error;
     }
 }
 
-// Add an item to the inventory database
-const addItemInventoryDatabase = async (characterId, itemName, quantity, interaction) => {
+// --------- Add an item to the inventory database ---------
+async function addItemInventoryDatabase(characterId, itemName, quantity, interaction, obtain = '') {
     try {
         if (!interaction) {
             throw new Error('Interaction object is undefined.');
@@ -138,23 +153,31 @@ const addItemInventoryDatabase = async (characterId, itemName, quantity, interac
         const db = inventoriesConnection.useDb('inventories');
         const inventoryCollection = db.collection(character.name.toLowerCase());
 
+        // Check for an existing item with the same `itemName` and `obtain` method
         const inventoryItem = await inventoryCollection.findOne({
             characterId,
-            itemName: new RegExp(`^${escapeRegExp(String(itemName).trim().toLowerCase())}$`, 'i')
+            itemName: new RegExp(`^${escapeRegExp(String(itemName).trim().toLowerCase())}$`, 'i'),
+            obtain,
         });
 
         if (inventoryItem) {
-            const cleanedQuantity = typeof quantity === 'string' ? parseInt(quantity.replace(/,/g, ''), 10) : quantity;
-            const newQuantity = inventoryItem.quantity + cleanedQuantity;            
+            // Update quantity if item exists with the same obtain method
+            const cleanedQuantity =
+                typeof quantity === 'string'
+                    ? parseInt(quantity.replace(/,/g, ''), 10)
+                    : quantity;
+            const newQuantity = inventoryItem.quantity + cleanedQuantity;
             await inventoryCollection.updateOne(
-                { characterId, itemName: inventoryItem.itemName },
+                { characterId, itemName: inventoryItem.itemName, obtain },
                 { $set: { quantity: newQuantity } }
             );
         } else {
+            // Insert a new item if no match is found
             const item = await fetchItemByName(itemName);
             if (!item) {
                 throw new Error(`Item with name ${itemName} not found`);
             }
+
             const newItem = {
                 characterId,
                 itemName: item.itemName,
@@ -166,16 +189,18 @@ const addItemInventoryDatabase = async (characterId, itemName, quantity, interac
                 location: character.currentVillage,
                 link: extractInteractionFields(interaction),
                 date: new Date(),
-                obtain: ['Crafting']
+                obtain, // Dynamically set obtain method
             };
             await inventoryCollection.insertOne(newItem);
         }
     } catch (error) {
+        console.error('[inventoryUtils.js]: Error adding item to inventory database:', error);
         throw error;
     }
-};
+}
 
-// Remove an item from the inventory database
+
+// --------- Remove an item from the inventory database ---------
 async function removeItemInventoryDatabase(characterId, itemName, quantity, interaction) {
     try {
         const character = await fetchCharacterById(characterId);
@@ -190,7 +215,7 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
 
         const inventoryItem = await inventoryCollection.findOne({
             characterId: character._id,
-            itemName: new RegExp(`^${escapeRegExp(String(itemName).trim().toLowerCase())}$`, 'i')
+            itemName: new RegExp(`^${escapeRegExp(String(itemName).trim().toLowerCase())}$`, 'i'),
         });
 
         if (!inventoryItem) {
@@ -213,11 +238,12 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
 
         return true;
     } catch (error) {
+        console.error('[inventoryUtils.js]: Error removing item from inventory database:', error);
         throw error;
     }
 }
 
-// Add multiple items to the database
+// --------- Add multiple items to the database ---------
 const addItemsToDatabase = async (character, items, interaction) => {
     try {
         const inventoriesConnection = await connectToInventories();
@@ -243,32 +269,35 @@ const addItemsToDatabase = async (character, items, interaction) => {
                     ...item,
                     characterId: character._id,
                     characterName: character.name,
-                    date: new Date()
+                    date: new Date(),
                 });
             }
         }
 
-        const spreadsheetId = getSheetIdByName(character.inventory);
+        const spreadsheetId = getSheetIdByTitle(character.inventory);
 
         if (interaction) {
-            const sheetRows = items.map(item => [
+            const sheetRows = items.map((item) => [
                 character.name,
                 item.itemName,
                 item.quantity,
                 new Date().toISOString(),
-                `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`
+                `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`,
             ]);
             await appendSheetData(spreadsheetId, 'Inventory', sheetRows);
         }
     } catch (error) {
+        console.error('[inventoryUtils.js]: Error adding multiple items to database:', error);
         throw error;
     }
 };
 
-// Create a new item in the database
+// --------- Create a new item in the database ---------
 const createNewItemDatabase = (character, itemName, quantity, category, type, interaction) => {
     itemName = String(itemName).trim().toLowerCase();
-    const link = interaction ? `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}` : '';
+    const link = interaction
+        ? `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`
+        : '';
     return {
         characterId: character._id,
         characterName: character.name,
@@ -283,14 +312,17 @@ const createNewItemDatabase = (character, itemName, quantity, category, type, in
         link,
         date: new Date(),
         obtain: 'Crafting',
-        synced: ''
+        synced: '',
     };
 };
 
-// Create a removed item entry in the database
+// --------- Create a removed item entry in the database ---------
+// This function generates a removed item entry when an item is removed from the character's inventory.
 const createRemovedItemDatabase = (character, item, quantity, interaction, obtainMethod = 'Manual Entry') => {
     const itemName = String(item.itemName).trim().toLowerCase();
-    const link = interaction ? `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}` : '';
+    const link = interaction
+        ? `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`
+        : '';
     return {
         characterId: character._id,
         characterName: character.name,
@@ -306,11 +338,12 @@ const createRemovedItemDatabase = (character, item, quantity, interaction, obtai
         link,
         date: new Date(),
         obtain: obtainMethod,
-        synced: ''
+        synced: '',
     };
 };
 
-// Process materials required for crafting an item
+// --------- Process materials required for crafting an item ---------
+// This function ensures the required materials for crafting are available and processes their removal.
 const processMaterials = async (interaction, character, inventory, craftableItem, quantity) => {
     const materialsUsed = [];
 
@@ -326,13 +359,15 @@ const processMaterials = async (interaction, character, inventory, craftableItem
             }
             specificItems = result;
         } else {
-            specificItems = inventory.filter(item => item.itemName === materialName);
+            specificItems = inventory.filter((item) => item.itemName === materialName);
         }
 
         let totalQuantity = specificItems.reduce((sum, item) => sum + item.quantity, 0);
 
         if (totalQuantity < requiredQuantity) {
-            throw new Error(`❌ **Unable to find or insufficient quantity for ${materialName} in ${character.name}'s inventory. Required: ${requiredQuantity}, Found: ${totalQuantity}**`);
+            throw new Error(
+                `❌ **Unable to find or insufficient quantity for ${materialName} in ${character.name}'s inventory. Required: ${requiredQuantity}, Found: ${totalQuantity}**`
+            );
         }
 
         for (const specificItem of specificItems) {
@@ -345,11 +380,11 @@ const processMaterials = async (interaction, character, inventory, craftableItem
         }
     }
 
-
     return materialsUsed;
 };
 
-// Remove Initial Item if inventorySynced is true
+// --------- Remove Initial Item if inventorySynced is true ---------
+// This function removes the "Initial Item" from a synced inventory.
 async function removeInitialItemIfSynced(characterId) {
     try {
         const character = await fetchCharacterById(characterId);
@@ -365,22 +400,24 @@ async function removeInitialItemIfSynced(characterId) {
 
             const initialItem = await inventoryCollection.findOne({
                 characterId: character._id,
-                itemName: "Initial Item",
+                itemName: 'Initial Item',
             });
 
             if (initialItem) {
                 await inventoryCollection.deleteOne({ _id: initialItem._id });
-                console.log("Initial Item removed from inventory.");
+                console.log('Initial Item removed from inventory.');
             } else {
-                console.log("Initial Item not found in inventory.");
+                console.log('Initial Item not found in inventory.');
             }
         }
     } catch (error) {
-        console.error(`Error removing Initial Item: ${error.message}`);
+        console.error(`[inventoryUtils.js]: Error removing Initial Item: ${error.message}`);
         throw error;
     }
 }
 
+// --------- Add item to vending inventory ---------
+// This function adds items to a vending inventory collection, updating stock quantities as needed.
 const addItemToVendingInventory = async (collectionName, item) => {
     try {
         const inventoriesConnection = await connectToInventories();
@@ -389,7 +426,7 @@ const addItemToVendingInventory = async (collectionName, item) => {
 
         const existingItem = await inventoryCollection.findOne({
             characterName: item.characterName,
-            itemName: item.itemName
+            itemName: item.itemName,
         });
 
         if (existingItem) {
@@ -401,20 +438,21 @@ const addItemToVendingInventory = async (collectionName, item) => {
             await inventoryCollection.insertOne(item);
         }
     } catch (error) {
+        console.error('[inventoryUtils.js]: Error adding item to vending inventory:', error);
         throw error;
     }
 };
 
-
+// --------- Remaining functions are listed in a similar detailed way ---------
 
 module.exports = {
-    syncToInventoryDatabase,
-    addItemInventoryDatabase,
-    removeItemInventoryDatabase,
-    processMaterials,
-    createNewItemDatabase,
-    createRemovedItemDatabase,
-    addItemsToDatabase,
-    removeInitialItemIfSynced,
-    addItemToVendingInventory
+    syncToInventoryDatabase,     // Synchronizes inventory data with the database and Google Sheets.
+    addItemInventoryDatabase,    // Adds a single item to the inventory database for a character.
+    removeItemInventoryDatabase, // Removes a specified quantity of an item from the inventory database.
+    processMaterials,            // Processes materials needed for crafting and updates the inventory.
+    createNewItemDatabase,       // Creates a new item entry in the database for a character.
+    createRemovedItemDatabase,   // Creates a record for a removed item from a character's inventory.
+    addItemsToDatabase,          // Adds multiple items to the inventory database for a character.
+    removeInitialItemIfSynced,   // Removes the 'Initial Item' if the inventory is synced.
+    addItemToVendingInventory,   // Adds an item to the vending inventory or updates its stock.
 };

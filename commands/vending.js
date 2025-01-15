@@ -160,9 +160,15 @@ module.exports = {
                 .addStringOption(option =>
                     option
                         .setName('itemname')
-                        .setDescription('The name of the item to edit.')
+                        .setDescription('The name of the item to edit (use "Shop Image" to set shop image).')
                         .setRequired(true)
                         .setAutocomplete(true)
+                )
+                .addAttachmentOption(option =>
+                    option
+                        .setName('shopimagefile')
+                        .setDescription('Upload the shop image file (if item is "Shop Image").')
+                        .setRequired(false) // Make it optional for non-shop image updates
                 )
                 .addIntegerOption(option =>
                     option
@@ -188,7 +194,8 @@ module.exports = {
                         .setDescription('Whether trades are open for this item.')
                         .setRequired(false)
                 )
-        )
+        )        
+        
         // ------------------- Subcommand: Fulfill -------------------
         .addSubcommand(subcommand =>
             subcommand

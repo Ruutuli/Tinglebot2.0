@@ -4,19 +4,22 @@
 // ------------------- Imports -------------------
 // Grouped imports logically by related functionality
 const { connectToTinglebot } = require('../database/connection');
-const User = require('../models/UserModel');
+const User = require('../models/UserModel')
 const { readSheetData, appendSheetData, authorizeSheets, extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../utils/googleSheetsUtils');
 const { google } = require('googleapis');
 
 // ------------------- Get Token Balance -------------------
 // Fetches the token balance for a user
 async function getTokenBalance(userId) {
-  const user = await User.findOne({ discordId: userId });
-  if (!user) {
-    throw new Error('User not found');
+  try {
+      const user = await User.findOne({ discordId: userId }); // Ensure `discordId` is used
+      return user?.tokens || 0; // Return tokens or 0 if user not found
+  } catch (error) {
+      console.error('[tokenService:getTokenBalance]: Error fetching token balance:', error);
+      throw error;
   }
-  return user.tokens;  
 }
+
 
 // ------------------- Get or Create Token -------------------
 // Fetches a token for the user or creates a new one if none exists
@@ -45,26 +48,35 @@ async function getOrCreateToken(userId, tokenTrackerLink = '') {
 
 // ------------------- Update Token Balance -------------------
 // Updates the token balance for a user by a specific amount
-async function updateTokenBalance(userId, amount) {
-  await connectToTinglebot();
-  let user = await User.findOne({ discordId: userId });
+async function updateTokenBalance(userId, change) {
+  try {
+      console.log(`[updateTokenBalance]: Updating token balance for user ID: ${userId} with change: ${change}`);
+      if (isNaN(change)) {
+          throw new Error(`[updateTokenBalance]: Invalid token change value provided: ${change}`);
+      }
 
-  if (!user) {
-    console.log(`[tokenService.js]: Creating a new user record for discordId: ${userId}`);
-    user = new User({
-      discordId: userId,
-      tokens: amount,
-    });
-    await user.save();
-    return user;
+      const user = await User.findOneAndUpdate(
+          { discordId: userId },
+          {},
+          { new: true, upsert: true, setDefaultsOnInsert: true }
+      );
+
+      const currentBalance = user.tokens || 0;
+      const newBalance = currentBalance + change;
+
+      if (newBalance < 0) {
+          throw new Error(`[updateTokenBalance]: Insufficient tokens. Current balance: ${currentBalance}, Change: ${change}`);
+      }
+
+      user.tokens = newBalance;
+      await user.save();
+
+      console.log(`[updateTokenBalance]: Token balance updated successfully for user ID ${userId}. New balance: ${newBalance}`);
+      return newBalance;
+  } catch (error) {
+      console.error(`[updateTokenBalance]: Error updating token balance for user ID ${userId}:`, error);
+      throw error;
   }
-
-  // Adjust token balance
-  user.tokens += amount;
-  await user.save();
-
-  console.log(`[tokenService.js]: Updated token balance for user ${userId}. New balance: ${user.tokens}`);
-  return user;
 }
 
 // ------------------- Sync Token Tracker -------------------
@@ -192,34 +204,34 @@ async function appendEarnedTokens(userId, fileName, category, amount, fileUrl = 
 // ------------------- Append Spent Tokens to Google Sheets -------------------
 // Appends a new entry with spent token data to the user's Google Sheet in the "Spent" section
 async function appendSpentTokens(userId, purchaseName, amount, link = '') {
-  const user = await getOrCreateToken(userId);
-  const tokenTrackerLink = user.tokenTracker;
-
-  if (!isValidGoogleSheetsUrl(tokenTrackerLink)) {
-    const errorMessage = 'Invalid Google Sheets URL';
-    console.error(errorMessage, { userId, tokenTrackerLink });
-    throw new Error(errorMessage);
-  }
-
-  const spreadsheetId = extractSpreadsheetId(tokenTrackerLink);
-  const auth = await authorizeSheets();
-
-  const newRow = [
-    purchaseName,    // Column B - Purchase Name
-    link,            // Column C - Link (if applicable)
-    '',              // Column D - Categories (empty for spent tokens)
-    'spent',         // Column E - Type (spent)
-    `-${amount}`     // Column F - Token Amount (spent tokens are negative)
-  ];
-
   try {
-    // Append data to Token Tracker!B7:F
-    await appendSheetData(auth, spreadsheetId, 'loggedTracker!B7:F', [newRow]);
+      console.log(`[appendSpentTokens]: Appending spent tokens for user ID: ${userId}, Purchase: ${purchaseName}, Amount: ${amount}`);
+      const user = await getOrCreateToken(userId);
+      const tokenTrackerLink = user.tokenTracker;
+
+      if (!isValidGoogleSheetsUrl(tokenTrackerLink)) {
+          throw new Error(`[appendSpentTokens]: Invalid Google Sheets URL for user ID: ${userId}`);
+      }
+
+      const spreadsheetId = extractSpreadsheetId(tokenTrackerLink);
+      const auth = await authorizeSheets();
+
+      const newRow = [
+          purchaseName,
+          link,
+          '',
+          'spent',
+          `-${amount}`
+      ];
+
+      await appendSheetData(auth, spreadsheetId, 'loggedTracker!B7:F', [newRow]);
+      console.log(`[appendSpentTokens]: Successfully appended spent tokens for user ID: ${userId}`);
   } catch (error) {
-    console.error('Error appending spent token data to Google Sheets:', error.message);
-    throw new Error('Error appending spent token data to the Google Sheet.');
+      console.error('[appendSpentTokens]: Error appending spent token data:', error);
+      throw error;
   }
 }
+
 
 // ------------------- Get User's Google Sheets ID -------------------
 // Retrieves the user's Google Sheets ID based on their Discord ID

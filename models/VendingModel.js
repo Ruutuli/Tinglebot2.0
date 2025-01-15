@@ -14,6 +14,7 @@ const vendingInventorySchema = new Schema({
   otherPrice: { type: Number, default: 0 }, // Price in other currency
   tradesOpen: { type: Boolean, default: false }, // Whether trades are open
   date: { type: Date, default: Date.now }, // Date of addition
+  shopImage: { type: String, default: '' }, // Shop image link
 });
 
 // ------------------- Export the VendingInventory schema -------------------

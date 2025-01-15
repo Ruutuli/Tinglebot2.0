@@ -72,6 +72,7 @@ const characterSchema = new Schema({
   lastCollectedMonth: { type: Number, default: 0 },     // Last month points were collected
   vendingSetup: { type: Boolean, default: false },     // Vending setup status
   vendingSync: { type: Boolean, default: false },     // Vending sync status
+  shopImage: { type: String, default: '' },            // Shop image link
 
   // ------------------- Special status -------------------
   blighted: { type: Boolean, default: false },          // Blighted status

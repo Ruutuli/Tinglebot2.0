@@ -9,5 +9,16 @@
     "healingStage": 2,
     "status": "pending",
     "createdAt": "2025-01-11T01:22:31.678Z"
+  },
+  "B410879": {
+    "submissionId": "B410879",
+    "userId": "424812685729726475",
+    "characterName": "Bow",
+    "healerName": "Foras",
+    "taskType": "item",
+    "taskDescription": "**Foras, Dragon of Courage** is quite prone to chatter as they fuss over **Bow**...! Perhaps your OC could offer them a gift to show their gratitude! A fairy provides you with some clues as to what you could leave them!:\n\n- \"Foras has a favourite fruit! It's red, naturally insulated and kinda looks like it's covered in scales, perfect for a dragon! But Foras is big, we might need like... 50 of them!”\n- \"Did you know Foras is fond of the koroks? Some say they come from the same place. You should bring Foras some of those leaves they like! Maybe like.. 10 of them just to be safe!\"\n- \"Oh Foras might like some flowers, I hear there's some purple ones that like to grow way up high! 5 of these should do!”\n- \"Here's a secret, Foras has a favourite dish. You should bring them some of that heart soup, they'll totally love it, hehe! 1 bowl should do. Or 2 Omelets made of veggies, I hear they like that too!\"\n- \"Oh yeah, you could give Foras a shiny rock!! Either 1 of those green gemstones, or 1 of those special rainbow feather rocks, but those are a lot harder to find! Hmm.. maybe just like.. 50 feathers from those silly farm birds might work just as well?\"",
+    "healingStage": 5,
+    "status": "pending",
+    "createdAt": "2025-01-12T04:07:06.628Z"
   }
 }

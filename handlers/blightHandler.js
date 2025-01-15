@@ -638,17 +638,25 @@ console.log(
           character.deathDeadline = null; // Clear the deadline
           await character.save();
         
-          // Send the dramatic death alert
-          const embed = new EmbedBuilder()
-            .setColor('#D32F2F') // Dramatic red for death
-            .setTitle(`<:blight_eye:805576955725611058> **Blight Death Alert** <:blight_eye:805576955725611058>`)
-            .setDescription(`**${character.name}** has succumbed to Stage 5 Blight..\n\n *This character and all of their items have been removed...*`)
-            .setThumbnail(character.icon || 'https://example.com/default-icon.png') // Use the character's icon or a default image
-            .setFooter({ text: 'Blight Death Announcement', iconURL: 'https://example.com/blight-icon.png' })
-            .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png') // Same image as roll call
-            .setTimestamp();
-        
+        // Send the dramatic death alert
+        const embed = new EmbedBuilder()
+          .setColor('#D32F2F') // Dramatic red for death
+          .setTitle(`<:blight_eye:805576955725611058> **Blight Death Alert** <:blight_eye:805576955725611058>`)
+          .setDescription(`**${character.name}** has succumbed to Stage 5 Blight..\n\n *This character and all of their items have been removed...*`)
+          .setThumbnail(character.icon || 'https://example.com/default-icon.png') // Use the character's icon or a default image
+          .setFooter({ text: 'Blight Death Announcement', iconURL: 'https://example.com/blight-icon.png' })
+          .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png') // Same image as roll call
+          .setTimestamp();
+
+        // Verify and mention the user
+        if (character.userId) {
+          await channel.send({ content: `<@${character.userId}>`, embeds: [embed] });
+        } else {
+          console.error(`[Blight Death Alert] Missing userId for character: ${character.name}`);
           await channel.send({ embeds: [embed] });
+        }
+
+
           console.log(`📨 Notification sent to the Community Board for ${character.name}'s death.`);
         }        
       }

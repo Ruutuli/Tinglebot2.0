@@ -54,19 +54,27 @@ async function simulateBlightDeath() {
         const channel = await client.channels.fetch(channelId);
         if (channel) {
           const embed = new EmbedBuilder()
-          .setColor('#AD1457') // Dramatic red for death
-          .setTitle(`<:blight_eye:805576955725611058> **Blight Death Alert** <:blight_eye:805576955725611058>`)
-          .setDescription(`**${character.name}** has succumbed to Stage 5 Blight..\n\n *This character and all of their items have been removed...*`)
-          .setThumbnail(character.icon || 'https://example.com/default-icon.png') // Use the character's icon or a default image
-          .setFooter({ text: 'Blight Death Announcement', iconURL: 'https://example.com/blight-icon.png' })
-          .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png') // Same image as roll call
-          .setTimestamp();
-
-          await channel.send({ embeds: [embed] });
+            .setColor('#AD1457') // Dramatic red for death
+            .setTitle(`<:blight_eye:805576955725611058> **Blight Death Alert** <:blight_eye:805576955725611058>`)
+            .setDescription(`**${doomedCharacter.name}** has succumbed to Stage 5 Blight..\n\n *This character and all of their items have been removed...*`)
+            .setThumbnail(doomedCharacter.icon || 'https://example.com/default-icon.png') // Use the character's icon or a default image
+            .setFooter({ text: 'Blight Death Announcement', iconURL: 'https://example.com/blight-icon.png' })
+            .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png') // Same image as roll call
+            .setTimestamp();
+        
+          // Verify userId and send message
+          if (doomedCharacter.userId) {
+            await channel.send({ content: `<@${doomedCharacter.userId}>`, embeds: [embed] });
+          } else {
+            console.error(`[simulateBlightDeath] Missing userId for character: ${doomedCharacter.name}`);
+            await channel.send({ embeds: [embed] });
+          }
+        
           console.log(`📨 Notification sent to the Community Board for ${doomedCharacter.name}'s death.`);
         } else {
           console.error('❌ Could not find the Blight Notifications channel.');
         }
+        
       } else {
         console.log(`✅ Character "Luar" is still alive or not at risk of death.`);
       }
