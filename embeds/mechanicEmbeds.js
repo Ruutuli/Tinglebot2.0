@@ -146,6 +146,9 @@ const createArtSubmissionEmbed = (submissionData, user, tokenCalculation) => {
             { name: 'Submission ID', value: `\`${submissionData.submissionId || 'N/A'}\``, inline: false },
             { name: 'Art Title', value: submissionData.title || submissionData.fileName, inline: false }, // Add title field
             { name: 'Member', value: `<@${submissionData.userId || 'unknown'}>`, inline: true },
+            { name: 'Collaboration', value: submissionData.collab 
+            ? `Tokens will be split equally with ${submissionData.collab}.` 
+            : 'No collaborator added.', inline: false },
             { name: 'Upload Link', value: submissionData.fileUrl ? `[View Uploaded Image](${submissionData.fileUrl})` : 'N/A', inline: true },
             { 
                 name: 'Token Tracker Link', 
@@ -167,6 +170,14 @@ const createArtSubmissionEmbed = (submissionData, user, tokenCalculation) => {
                 value: `${submissionData.finalTokenAmount || 0} Tokens`, 
                 inline: true 
             },
+            {
+                name: 'Collab Total Each',
+                value: submissionData.collab
+                    ? `${Math.floor(submissionData.finalTokenAmount / 2) || 0} Tokens`
+                    : 'N/A',
+                inline: true,
+            },            
+            
             { 
                 name: 'Token Calculation', 
                 value: tokenCalculation || 'N/A', 

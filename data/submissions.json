@@ -1,9 +1,285 @@
 {
-  "211219306137124865-1736303411595": {
-    "submissionId": "211219306137124865-1736303411595",
-    "fileUrl": "https://storage.googleapis.com/tinglebot/Submissions/3d9fa1eb-f6f2-43fc-b222-0c563ba0d3b2-asame_screenshot_edit.png",
-    "fileName": "asame_screenshot_edit.png",
-    "title": "asame_screenshot_edit.png",
+  "A778372": {
+    "submissionId": "A778372",
+    "fileUrl": "https://storage.googleapis.com/tinglebot/Submissions/c0119c18-4127-476d-9248-b6592db61971-20230530_191343.jpg",
+    "fileName": "20230530_191343.jpg",
+    "title": "20230530_191343.jpg",
+    "userId": "635948726686580747",
+    "username": "forestfern",
+    "userAvatar": "https://cdn.discordapp.com/avatars/635948726686580747/ab2f891195d9e6d35f52a7d9b155e4d4.webp",
+    "category": "art",
+    "questEvent": "N/A",
+    "questBonus": "N/A",
+    "baseSelections": [
+      "fullbody"
+    ],
+    "typeMultiplierSelections": [
+      "humanoid",
+      "simple"
+    ],
+    "productMultiplierValue": "sketch",
+    "addOnsApplied": [
+      {
+        "addOn": "simpleBg",
+        "count": 1
+      }
+    ],
+    "specialWorksApplied": [],
+    "characterCount": 4,
+    "typeMultiplierCount": 3,
+    "finalTokenAmount": 200,
+    "tokenCalculation": "N/A",
+    "messageUrl": "https://discord.com/channels/1305484048063529002/1317243912158707742/1329645585392865373"
+  },
+  "A505127": {
+    "submissionId": "A505127",
+    "fileUrl": "https://storage.googleapis.com/tinglebot/Submissions/9313e09f-6488-47b7-8e16-344a317e33d5-20240331_203115.jpg",
+    "fileName": "20240331_203115.jpg",
+    "title": "20240331_203115.jpg",
+    "userId": "635948726686580747",
+    "username": "forestfern",
+    "userAvatar": "https://cdn.discordapp.com/avatars/635948726686580747/ab2f891195d9e6d35f52a7d9b155e4d4.webp",
+    "category": "art",
+    "questEvent": "N/A",
+    "questBonus": "N/A",
+    "baseSelections": [
+      "waistup"
+    ],
+    "typeMultiplierSelections": [
+      "humanoid"
+    ],
+    "productMultiplierValue": "sketch",
+    "addOnsApplied": [
+      {
+        "addOn": "simpleProp",
+        "count": 2
+      }
+    ],
+    "specialWorksApplied": [],
+    "characterCount": 3,
+    "typeMultiplierCount": 3,
+    "finalTokenAmount": 98,
+    "tokenCalculation": "N/A",
+    "messageUrl": "https://discord.com/channels/1305484048063529002/1317243912158707742/1329647208165019770"
+  },
+  "A120568": {
+    "submissionId": "A120568",
+    "fileUrl": "https://storage.googleapis.com/tinglebot/Submissions/a83803d5-2e14-4a12-a174-806c83e60023-20231104_173448.jpg",
+    "fileName": "20231104_173448.jpg",
+    "title": "20231104_173448.jpg",
+    "userId": "635948726686580747",
+    "username": "forestfern",
+    "userAvatar": "https://cdn.discordapp.com/avatars/635948726686580747/ab2f891195d9e6d35f52a7d9b155e4d4.webp",
+    "category": "art",
+    "questEvent": "N/A",
+    "questBonus": "N/A",
+    "baseSelections": [
+      "waistup"
+    ],
+    "typeMultiplierSelections": [
+      "humanoid"
+    ],
+    "productMultiplierValue": "lineArt",
+    "addOnsApplied": [
+      {
+        "addOn": "complexProp",
+        "count": 1
+      }
+    ],
+    "specialWorksApplied": [],
+    "characterCount": 1,
+    "typeMultiplierCount": 1,
+    "finalTokenAmount": 35,
+    "tokenCalculation": "N/A",
+    "messageUrl": "https://discord.com/channels/1305484048063529002/1317243912158707742/1329647939764748380"
+  },
+  "A501504": {
+    "submissionId": "A501504",
+    "fileUrl": "https://storage.googleapis.com/tinglebot/Submissions/5ae8b03b-4f6c-4654-b040-0bbb02d24cdd-Kalinko_SS_2023_Watermark.png",
+    "fileName": "Kalinko_SS_2023_Watermark.png",
+    "title": "Kalinko_SS_2023_Watermark",
+    "userId": "216371568438149120",
+    "username": "metalpipeart",
+    "userAvatar": "https://cdn.discordapp.com/avatars/216371568438149120/cbc571c39d8ce3859fd0718fe4d95e28.webp",
+    "category": "art",
+    "questEvent": "N/A",
+    "questBonus": "N/A",
+    "baseSelections": [
+      "fullbody",
+      "fullbody"
+    ],
+    "typeMultiplierSelections": [
+      "humanoid"
+    ],
+    "productMultiplierValue": "flatColor",
+    "addOnsApplied": [],
+    "specialWorksApplied": [],
+    "characterCount": 1,
+    "typeMultiplierCount": 1,
+    "finalTokenAmount": 120,
+    "tokenCalculation": "N/A",
+    "messageUrl": "https://discord.com/channels/1305484048063529002/1317243912158707742/1329648268573151362"
+  },
+  "A252831": {
+    "submissionId": "A252831",
+    "fileUrl": "https://storage.googleapis.com/tinglebot/Submissions/ebce96a5-43a2-42ac-a383-818a00ddc24a-20230614_141008.jpg",
+    "fileName": "20230614_141008.jpg",
+    "title": "20230614_141008.jpg",
+    "userId": "635948726686580747",
+    "username": "forestfern",
+    "userAvatar": "https://cdn.discordapp.com/avatars/635948726686580747/ab2f891195d9e6d35f52a7d9b155e4d4.webp",
+    "category": "art",
+    "questEvent": "N/A",
+    "questBonus": "N/A",
+    "baseSelections": [
+      "fullbody"
+    ],
+    "typeMultiplierSelections": [
+      "humanoid"
+    ],
+    "productMultiplierValue": "sketch",
+    "addOnsApplied": [
+      {
+        "addOn": "complexBg",
+        "count": 1
+      },
+      {
+        "addOn": "simpleProp",
+        "count": 1
+      }
+    ],
+    "specialWorksApplied": [],
+    "characterCount": 1,
+    "typeMultiplierCount": 1,
+    "finalTokenAmount": 65,
+    "tokenCalculation": "N/A",
+    "messageUrl": "https://discord.com/channels/1305484048063529002/1317243912158707742/1329648370066653207"
+  },
+  "A168825": {
+    "submissionId": "A168825",
+    "fileUrl": "https://storage.googleapis.com/tinglebot/Submissions/133d29e4-1d8e-4e3c-830d-eb57205c5bb5-20230613_230528.jpg",
+    "fileName": "20230613_230528.jpg",
+    "title": "20230613_230528.jpg",
+    "userId": "635948726686580747",
+    "username": "forestfern",
+    "userAvatar": "https://cdn.discordapp.com/avatars/635948726686580747/ab2f891195d9e6d35f52a7d9b155e4d4.webp",
+    "category": "art",
+    "questEvent": "N/A",
+    "questBonus": "N/A",
+    "baseSelections": [],
+    "typeMultiplierSelections": [],
+    "productMultiplierValue": "default",
+    "addOnsApplied": [],
+    "specialWorksApplied": [],
+    "characterCount": 1,
+    "typeMultiplierCount": 1,
+    "finalTokenAmount": 0,
+    "tokenCalculation": "N/A"
+  },
+  "A143199": {
+    "submissionId": "A143199",
+    "fileUrl": "https://storage.googleapis.com/tinglebot/Submissions/f980115d-e96a-45f2-89c9-addb27150a31-20230823_164524.jpg",
+    "fileName": "20230823_164524.jpg",
+    "title": "Never Be a Sock",
+    "userId": "635948726686580747",
+    "username": "forestfern",
+    "userAvatar": "https://cdn.discordapp.com/avatars/635948726686580747/ab2f891195d9e6d35f52a7d9b155e4d4.webp",
+    "category": "art",
+    "questEvent": "Get Socked Idiot",
+    "questBonus": "N/A",
+    "baseSelections": [
+      "fullbody"
+    ],
+    "typeMultiplierSelections": [
+      "simple"
+    ],
+    "productMultiplierValue": "sketch",
+    "addOnsApplied": [
+      {
+        "addOn": "complexBg",
+        "count": 1
+      }
+    ],
+    "specialWorksApplied": [],
+    "characterCount": 1,
+    "typeMultiplierCount": 1,
+    "finalTokenAmount": 45,
+    "tokenCalculation": "N/A",
+    "messageUrl": "https://discord.com/channels/1305484048063529002/1317243912158707742/1329649917165174794"
+  },
+  "A699663": {
+    "submissionId": "A699663",
+    "fileUrl": "https://storage.googleapis.com/tinglebot/Submissions/cce69743-3d62-42a6-b3cb-948946b245a1-20240222_053541.jpg",
+    "fileName": "20240222_053541.jpg",
+    "title": "Another Sockrifice",
+    "userId": "635948726686580747",
+    "username": "forestfern",
+    "userAvatar": "https://cdn.discordapp.com/avatars/635948726686580747/ab2f891195d9e6d35f52a7d9b155e4d4.webp",
+    "category": "art",
+    "questEvent": "HaHaHA",
+    "questBonus": "N/A",
+    "baseSelections": [
+      "chibi"
+    ],
+    "typeMultiplierSelections": [
+      "simple"
+    ],
+    "productMultiplierValue": "sketch",
+    "addOnsApplied": [
+      {
+        "addOn": "simpleBg",
+        "count": 1
+      }
+    ],
+    "specialWorksApplied": [
+      "comicSimple",
+      {
+        "work": "comicSimple",
+        "count": 2
+      }
+    ],
+    "characterCount": 3,
+    "typeMultiplierCount": 3,
+    "finalTokenAmount": 74,
+    "tokenCalculation": "N/A",
+    "messageUrl": "https://discord.com/channels/1305484048063529002/1317243912158707742/1329651072134025227"
+  },
+  "A320265": {
+    "submissionId": "A320265",
+    "fileUrl": "https://storage.googleapis.com/tinglebot/Submissions/edee4a26-3193-45a2-bb5d-7e2781809592-1627848435.metalpipe_pancake_zora.png",
+    "fileName": "1627848435.metalpipe_pancake_zora.png",
+    "title": "Pancakes!",
+    "userId": "216371568438149120",
+    "username": "metalpipeart",
+    "userAvatar": "https://cdn.discordapp.com/avatars/216371568438149120/cbc571c39d8ce3859fd0718fe4d95e28.webp",
+    "category": "art",
+    "questEvent": "N/A",
+    "questBonus": "N/A",
+    "baseSelections": [
+      "chibi"
+    ],
+    "typeMultiplierSelections": [
+      "humanoid"
+    ],
+    "productMultiplierValue": "flatColor",
+    "addOnsApplied": [
+      {
+        "addOn": "simpleProp",
+        "count": 1
+      }
+    ],
+    "specialWorksApplied": [],
+    "characterCount": 1,
+    "typeMultiplierCount": 1,
+    "finalTokenAmount": 60,
+    "tokenCalculation": "N/A",
+    "messageUrl": "https://discord.com/channels/1305484048063529002/1317243912158707742/1329651157517467740"
+  },
+  "A845419": {
+    "submissionId": "A845419",
+    "fileUrl": "https://storage.googleapis.com/tinglebot/Submissions/76e8e350-a462-49ee-9267-ecd81ae093e3-kaiyacomm_e1.png",
+    "fileName": "kaiyacomm_e1.png",
+    "title": "kaiyacomm_e1.png",
     "userId": "211219306137124865",
     "username": "ruutuli",
     "userAvatar": "https://cdn.discordapp.com/avatars/211219306137124865/edf10b1b9dd270d45658f493b0477dc7.webp",
@@ -20,11 +296,22 @@
     "finalTokenAmount": 0,
     "tokenCalculation": "N/A"
   },
-  "211219306137124865-1736303807272": {
-    "submissionId": "211219306137124865-1736303807272",
-    "fileUrl": "https://storage.googleapis.com/tinglebot/Submissions/363e7da0-7577-4d8f-a086-80037505e707-haoasa.png",
-    "fileName": "haoasa.png",
-    "title": "haoasa.png",
+  "B411875": {
+    "submissionId": "B411875",
+    "userId": "207945864918990849",
+    "characterName": "Ayame",
+    "healerName": "Foras",
+    "taskType": "item",
+    "taskDescription": "**Foras, Dragon of Courage** is quite prone to chatter as they fuss over **Ayame**...! Perhaps your OC could offer them a gift to show their gratitude! A fairy provides you with some clues as to what you could leave them!:\n\n- \"Foras has a favourite fruit! It's red, naturally insulated and kinda looks like it's covered in scales, perfect for a dragon! But Foras is big, we might need like... 50 of them!”\n- \"Did you know Foras is fond of the koroks? Some say they come from the same place. You should bring Foras some of those leaves they like! Maybe like.. 10 of them just to be safe!\"\n- \"Oh Foras might like some flowers, I hear there's some purple ones that like to grow way up high! 5 of these should do!”\n- \"Here's a secret, Foras has a favourite dish. You should bring them some of that heart soup, they'll totally love it, hehe! 1 bowl should do. Or 2 Omelets made of veggies, I hear they like that too!\"\n- \"Oh yeah, you could give Foras a shiny rock!! Either 1 of those green gemstones, or 1 of those special rainbow feather rocks, but those are a lot harder to find! Hmm.. maybe just like.. 50 feathers from those silly farm birds might work just as well?\"",
+    "healingStage": 4,
+    "status": "pending",
+    "createdAt": "2025-01-17T06:28:29.112Z"
+  },
+  "A273154": {
+    "submissionId": "A273154",
+    "fileUrl": "https://storage.googleapis.com/tinglebot/Submissions/6ec3046a-2f33-4437-ab84-358346b90d6c-kaiyacomm_e1_size112.png",
+    "fileName": "kaiyacomm_e1_size112.png",
+    "title": "kaiyacomm_e1_size112.png",
     "userId": "211219306137124865",
     "username": "ruutuli",
     "userAvatar": "https://cdn.discordapp.com/avatars/211219306137124865/edf10b1b9dd270d45658f493b0477dc7.webp",
@@ -41,11 +328,11 @@
     "finalTokenAmount": 0,
     "tokenCalculation": "N/A"
   },
-  "211219306137124865-1736307193537": {
-    "submissionId": "211219306137124865-1736307193537",
-    "fileUrl": "https://storage.googleapis.com/tinglebot/Submissions/27593341-b653-4d06-992e-5323472ced62-akeneeee.png",
-    "fileName": "akeneeee.png",
-    "title": "akeneeee.png",
+  "A372992": {
+    "submissionId": "A372992",
+    "fileUrl": "https://storage.googleapis.com/tinglebot/Submissions/c5dd1ae1-038c-490d-b1ed-1e1bb0f0e6ee-kaiyacomm_e1_size112.png",
+    "fileName": "kaiyacomm_e1_size112.png",
+    "title": "kaiyacomm_e1_size112.png",
     "userId": "211219306137124865",
     "username": "ruutuli",
     "userAvatar": "https://cdn.discordapp.com/avatars/211219306137124865/edf10b1b9dd270d45658f493b0477dc7.webp",
@@ -62,11 +349,11 @@
     "finalTokenAmount": 0,
     "tokenCalculation": "N/A"
   },
-  "211219306137124865-1736308122387": {
-    "submissionId": "211219306137124865-1736308122387",
-    "fileUrl": "https://storage.googleapis.com/tinglebot/Submissions/b927593d-6f00-41e8-8127-d1d7df98e34f-eric.png",
-    "fileName": "eric.png",
-    "title": "eric.png",
+  "A848261": {
+    "submissionId": "A848261",
+    "fileUrl": "https://storage.googleapis.com/tinglebot/Submissions/410f9ca8-4ae0-45d9-8679-2b1032580665-kaiyacomm_e1.png",
+    "fileName": "kaiyacomm_e1.png",
+    "title": "kaiyacomm_e1.png",
     "userId": "211219306137124865",
     "username": "ruutuli",
     "userAvatar": "https://cdn.discordapp.com/avatars/211219306137124865/edf10b1b9dd270d45658f493b0477dc7.webp",
@@ -83,11 +370,11 @@
     "finalTokenAmount": 0,
     "tokenCalculation": "N/A"
   },
-  "211219306137124865-1736308772849": {
-    "submissionId": "211219306137124865-1736308772849",
-    "fileUrl": "https://storage.googleapis.com/tinglebot/Submissions/205ff75d-c937-46aa-8bf1-ccc37f1c2bd8-howembarrasing.png",
-    "fileName": "howembarrasing.png",
-    "title": "howembarrasing.png",
+  "A464570": {
+    "submissionId": "A464570",
+    "fileUrl": "https://storage.googleapis.com/tinglebot/Submissions/9321a95a-fb31-4025-b9e1-af4187075eb0-kaiyacomm_e1_size112.png",
+    "fileName": "kaiyacomm_e1_size112.png",
+    "title": "kaiyacomm_e1_size112.png",
     "userId": "211219306137124865",
     "username": "ruutuli",
     "userAvatar": "https://cdn.discordapp.com/avatars/211219306137124865/edf10b1b9dd270d45658f493b0477dc7.webp",
@@ -104,11 +391,11 @@
     "finalTokenAmount": 0,
     "tokenCalculation": "N/A"
   },
-  "211219306137124865-1736309230862": {
-    "submissionId": "211219306137124865-1736309230862",
-    "fileUrl": "https://storage.googleapis.com/tinglebot/Submissions/78eed894-989f-4572-abdf-24dd34a6f0aa-NOODORUYU.png",
-    "fileName": "NOODORUYU.png",
-    "title": "NOODORUYU.png",
+  "A408065": {
+    "submissionId": "A408065",
+    "fileUrl": "https://storage.googleapis.com/tinglebot/Submissions/3842d312-0072-4d6b-962a-9c8ce16afd34-kaiyacomm_e1_size112.png",
+    "fileName": "kaiyacomm_e1_size112.png",
+    "title": "kaiyacomm_e1_size112.png",
     "userId": "211219306137124865",
     "username": "ruutuli",
     "userAvatar": "https://cdn.discordapp.com/avatars/211219306137124865/edf10b1b9dd270d45658f493b0477dc7.webp",
@@ -125,9 +412,202 @@
     "finalTokenAmount": 0,
     "tokenCalculation": "N/A"
   },
-  "211219306137124865-1736309587556": {
-    "submissionId": "211219306137124865-1736309587556",
-    "fileUrl": "https://storage.googleapis.com/tinglebot/Submissions/507f9279-0ee9-4a14-9727-5d26812d7794-infinite_nodus_oren.png",
+  "A807442": {
+    "submissionId": "A807442",
+    "fileUrl": "https://storage.googleapis.com/tinglebot/Submissions/2340d095-1a13-4167-ae39-d71816461970-kaiyacomm_e1_size112.png",
+    "fileName": "kaiyacomm_e1_size112.png",
+    "title": "kaiyacomm_e1_size112.png",
+    "userId": "211219306137124865",
+    "username": "ruutuli",
+    "userAvatar": "https://cdn.discordapp.com/avatars/211219306137124865/edf10b1b9dd270d45658f493b0477dc7.webp",
+    "category": "art",
+    "questEvent": "N/A",
+    "questBonus": "N/A",
+    "baseSelections": [],
+    "typeMultiplierSelections": [],
+    "productMultiplierValue": "default",
+    "addOnsApplied": [],
+    "specialWorksApplied": [],
+    "characterCount": 1,
+    "typeMultiplierCount": 1,
+    "finalTokenAmount": 0,
+    "tokenCalculation": "N/A"
+  },
+  "A328766": {
+    "submissionId": "A328766",
+    "fileUrl": "https://storage.googleapis.com/tinglebot/Submissions/359796e3-1b30-4e30-8d4f-b303926e2e21-kaiyacomm_e1.png",
+    "fileName": "kaiyacomm_e1.png",
+    "title": "kaiyacomm_e1.png",
+    "userId": "211219306137124865",
+    "username": "ruutuli",
+    "userAvatar": "https://cdn.discordapp.com/avatars/211219306137124865/edf10b1b9dd270d45658f493b0477dc7.webp",
+    "category": "art",
+    "questEvent": "N/A",
+    "questBonus": "N/A",
+    "baseSelections": [
+      "chibi"
+    ],
+    "typeMultiplierSelections": [
+      "simple",
+      "humanoid"
+    ],
+    "productMultiplierValue": "fullColor",
+    "addOnsApplied": [],
+    "specialWorksApplied": [],
+    "characterCount": 1,
+    "typeMultiplierCount": 1,
+    "finalTokenAmount": 90,
+    "tokenCalculation": "N/A",
+    "messageUrl": "https://discord.com/channels/1305484048063529002/1305486549252706335/1329717275959492729"
+  },
+  "A761640": {
+    "submissionId": "A761640",
+    "fileUrl": "https://storage.googleapis.com/tinglebot/Submissions/04c8f4dc-c9b1-4470-8072-a748dbdf8711-kaiyacomm_e1_size112.png",
+    "fileName": "kaiyacomm_e1_size112.png",
+    "title": "kaiyacomm_e1_size112.png",
+    "userId": "211219306137124865",
+    "username": "ruutuli",
+    "userAvatar": "https://cdn.discordapp.com/avatars/211219306137124865/edf10b1b9dd270d45658f493b0477dc7.webp",
+    "category": "art",
+    "questEvent": "N/A",
+    "questBonus": "N/A",
+    "baseSelections": [],
+    "typeMultiplierSelections": [],
+    "productMultiplierValue": "default",
+    "addOnsApplied": [],
+    "specialWorksApplied": [],
+    "characterCount": 1,
+    "typeMultiplierCount": 1,
+    "finalTokenAmount": 0,
+    "tokenCalculation": "N/A"
+  },
+  "A212535": {
+    "submissionId": "A212535",
+    "fileUrl": "https://storage.googleapis.com/tinglebot/Submissions/b1b2bb8a-e067-4291-b5e4-fee71528c1da-poe.png",
+    "fileName": "poe.png",
+    "title": "poe.png",
+    "userId": "211219306137124865",
+    "username": "ruutuli",
+    "userAvatar": "https://cdn.discordapp.com/avatars/211219306137124865/edf10b1b9dd270d45658f493b0477dc7.webp",
+    "category": "art",
+    "questEvent": "N/A",
+    "questBonus": "N/A",
+    "baseSelections": [],
+    "typeMultiplierSelections": [],
+    "productMultiplierValue": "default",
+    "addOnsApplied": [],
+    "specialWorksApplied": [],
+    "characterCount": 1,
+    "typeMultiplierCount": 1,
+    "finalTokenAmount": 0,
+    "tokenCalculation": "N/A"
+  },
+  "A854716": {
+    "submissionId": "A854716",
+    "fileUrl": "https://storage.googleapis.com/tinglebot/Submissions/d55f131e-de93-41a2-b7d2-1d6c8c68a065-azian.png",
+    "fileName": "azian.png",
+    "title": "azian.png",
+    "userId": "211219306137124865",
+    "username": "ruutuli",
+    "userAvatar": "https://cdn.discordapp.com/avatars/211219306137124865/edf10b1b9dd270d45658f493b0477dc7.webp",
+    "category": "art",
+    "questEvent": "N/A",
+    "questBonus": "N/A",
+    "baseSelections": [],
+    "typeMultiplierSelections": [],
+    "productMultiplierValue": "default",
+    "addOnsApplied": [],
+    "specialWorksApplied": [],
+    "characterCount": 1,
+    "typeMultiplierCount": 1,
+    "finalTokenAmount": 0,
+    "tokenCalculation": "N/A"
+  },
+  "A809749": {
+    "submissionId": "A809749",
+    "fileUrl": "https://storage.googleapis.com/tinglebot/Submissions/0da86ce2-7b53-4787-b234-a45eb3d3a0b8-azian.png",
+    "fileName": "azian.png",
+    "title": "azian.png",
+    "userId": "211219306137124865",
+    "username": "ruutuli",
+    "userAvatar": "https://cdn.discordapp.com/avatars/211219306137124865/edf10b1b9dd270d45658f493b0477dc7.webp",
+    "category": "art",
+    "questEvent": "N/A",
+    "questBonus": "N/A",
+    "baseSelections": [
+      "chibi"
+    ],
+    "typeMultiplierSelections": [
+      "simple",
+      "humanoid"
+    ],
+    "productMultiplierValue": "flatColor",
+    "addOnsApplied": [],
+    "specialWorksApplied": [],
+    "characterCount": 1,
+    "typeMultiplierCount": 1,
+    "finalTokenAmount": 113,
+    "tokenCalculation": "N/A",
+    "typeMultiplierCounts": {
+      "simple": 3,
+      "humanoid": 1
+    },
+    "messageUrl": "https://discord.com/channels/1305484048063529002/1305486549252706335/1329724430376767589"
+  },
+  "A233028": {
+    "submissionId": "A233028",
+    "fileUrl": "https://storage.googleapis.com/tinglebot/Submissions/147314c7-95cf-4f1d-928a-9fbf672043d1-azian.png",
+    "fileName": "azian.png",
+    "title": "azian.png",
+    "userId": "211219306137124865",
+    "username": "ruutuli",
+    "userAvatar": "https://cdn.discordapp.com/avatars/211219306137124865/edf10b1b9dd270d45658f493b0477dc7.webp",
+    "category": "art",
+    "questEvent": "N/A",
+    "questBonus": "N/A",
+    "baseSelections": [],
+    "typeMultiplierSelections": [],
+    "productMultiplierValue": "default",
+    "addOnsApplied": [],
+    "specialWorksApplied": [],
+    "characterCount": 1,
+    "typeMultiplierCount": 1,
+    "finalTokenAmount": 0,
+    "tokenCalculation": "N/A"
+  },
+  "A578332": {
+    "submissionId": "A578332",
+    "fileUrl": "https://storage.googleapis.com/tinglebot/Submissions/45197ec5-b022-4b77-b0f8-6c10efbb5b37-azian.png",
+    "fileName": "azian.png",
+    "title": "azian.png",
+    "userId": "211219306137124865",
+    "username": "ruutuli",
+    "userAvatar": "https://cdn.discordapp.com/avatars/211219306137124865/edf10b1b9dd270d45658f493b0477dc7.webp",
+    "category": "art",
+    "questEvent": "N/A",
+    "questBonus": "N/A",
+    "baseSelections": [
+      "chibi"
+    ],
+    "typeMultiplierSelections": [
+      "humanoid"
+    ],
+    "productMultiplierValue": "flatColor",
+    "addOnsApplied": [],
+    "specialWorksApplied": [],
+    "characterCount": 1,
+    "typeMultiplierCount": 1,
+    "finalTokenAmount": 45,
+    "tokenCalculation": "N/A",
+    "collab": "<@985400911734136912>",
+    "typeMultiplierCounts": {
+      "humanoid": 1
+    },
+    "messageUrl": "https://discord.com/channels/1305484048063529002/1305486549252706335/1329731955159339041"
+  },
+  "A511738": {
+    "submissionId": "A511738",
+    "fileUrl": "https://storage.googleapis.com/tinglebot/Submissions/c366c456-4f48-49c4-ab15-b29f04019ebb-infinite_nodus_oren.png",
     "fileName": "infinite_nodus_oren.png",
     "title": "infinite_nodus_oren.png",
     "userId": "211219306137124865",
@@ -144,50 +624,155 @@
     "characterCount": 1,
     "typeMultiplierCount": 1,
     "finalTokenAmount": 0,
-    "tokenCalculation": "N/A"
+    "tokenCalculation": "N/A",
+    "collab": "<@985400911734136912>"
   },
-  "1736313627349": {
-    "submissionId": "1736313627349",
+  "A704211": {
+    "submissionId": "A704211",
+    "fileUrl": "https://storage.googleapis.com/tinglebot/Submissions/9be8a84c-e012-48b3-a366-487a3cc89417-infinite_nodus_oren.png",
+    "fileName": "infinite_nodus_oren.png",
+    "title": "infinite_nodus_oren.png",
     "userId": "211219306137124865",
-    "characterName": "Knuckle",
-    "healerName": "Darune",
-    "taskType": "art",
-    "taskDescription": "**Darune, Dragon of Power** demands that you draw your OC surrounded by flames, invoking his fiery power to cleanse the blight. Minimum requirement: Full Body, Full Color.",
-    "healingStage": 5,
-    "status": "pending",
-    "createdAt": "2025-01-08T06:06:04.598Z"
+    "username": "ruutuli",
+    "userAvatar": "https://cdn.discordapp.com/avatars/211219306137124865/edf10b1b9dd270d45658f493b0477dc7.webp",
+    "category": "art",
+    "questEvent": "N/A",
+    "questBonus": "N/A",
+    "baseSelections": [],
+    "typeMultiplierSelections": [],
+    "productMultiplierValue": "default",
+    "addOnsApplied": [],
+    "specialWorksApplied": [],
+    "characterCount": 1,
+    "typeMultiplierCount": 1,
+    "finalTokenAmount": 0,
+    "tokenCalculation": "N/A",
+    "collab": null
   },
-  "1736314182464": {
-    "submissionId": "1736314182464",
+  "A934259": {
+    "submissionId": "A934259",
+    "fileUrl": "https://storage.googleapis.com/tinglebot/Submissions/1a91be69-8880-4dfe-871b-c945553cbf6e-asame_screenshot_edit.png",
+    "fileName": "asame_screenshot_edit.png",
+    "title": "asame_screenshot_edit.png",
     "userId": "211219306137124865",
-    "characterName": "Alden",
-    "healerName": "Korelii",
-    "taskType": "art",
-    "taskDescription": "**Korelii: Sage of Water** asks you to draw the story of how your OC came to be infected by blight. Show the moment, if you can, or maybe the immediate aftermath even! Goro, I just kinda like any old art, really! Minimum requirement: Line Art.",
-    "healingStage": 5,
-    "status": "pending",
-    "createdAt": "2025-01-08T05:57:51.407Z"
+    "username": "ruutuli",
+    "userAvatar": "https://cdn.discordapp.com/avatars/211219306137124865/edf10b1b9dd270d45658f493b0477dc7.webp",
+    "category": "art",
+    "questEvent": "N/A",
+    "questBonus": "N/A",
+    "baseSelections": [
+      "chibi"
+    ],
+    "typeMultiplierSelections": [
+      "humanoid"
+    ],
+    "productMultiplierValue": "flatColor",
+    "addOnsApplied": [],
+    "specialWorksApplied": [],
+    "characterCount": 1,
+    "typeMultiplierCount": 1,
+    "finalTokenAmount": 45,
+    "tokenCalculation": "N/A",
+    "collab": "<@985400911734136912>",
+    "typeMultiplierCounts": {
+      "humanoid": 1
+    },
+    "messageUrl": "https://discord.com/channels/1305484048063529002/1305486549252706335/1329737434723909734"
   },
-  "B550616": {
-    "submissionId": "B550616",
-    "userId": "322920629944975360",
-    "characterName": "Marx",
-    "healerName": "Foras",
-    "taskType": "writing",
-    "taskDescription": "**Courage comes in all forms!** Share with **Foras, Dragon of Courage** and write about a time your character exhibited emotional courage! \nPerhaps explore what they felt, or if they overcame their struggle, or even if they learned from their experience. Did they have any trouble? Perhaps they leaned on someone to help them through? Write at least 500 words!",
-    "healingStage": 2,
-    "status": "pending",
-    "createdAt": "2025-01-11T01:22:31.678Z"
+  "A436706": {
+    "submissionId": "A436706",
+    "fileUrl": "https://storage.googleapis.com/tinglebot/Submissions/f3bea2e7-136e-46ed-ad21-7518b1f8666c-NOODORUYU.png",
+    "fileName": "NOODORUYU.png",
+    "title": "NOODORUYU.png",
+    "userId": "211219306137124865",
+    "username": "ruutuli",
+    "userAvatar": "https://cdn.discordapp.com/avatars/211219306137124865/edf10b1b9dd270d45658f493b0477dc7.webp",
+    "category": "art",
+    "questEvent": "N/A",
+    "questBonus": "N/A",
+    "baseSelections": [],
+    "typeMultiplierSelections": [],
+    "productMultiplierValue": "default",
+    "addOnsApplied": [],
+    "specialWorksApplied": [],
+    "characterCount": 1,
+    "typeMultiplierCount": 1,
+    "finalTokenAmount": 0,
+    "tokenCalculation": "N/A",
+    "collab": "<@985400911734136912>"
   },
-  "B410879": {
-    "submissionId": "B410879",
-    "userId": "424812685729726475",
-    "characterName": "Bow",
-    "healerName": "Foras",
-    "taskType": "item",
-    "taskDescription": "**Foras, Dragon of Courage** is quite prone to chatter as they fuss over **Bow**...! Perhaps your OC could offer them a gift to show their gratitude! A fairy provides you with some clues as to what you could leave them!:\n\n- \"Foras has a favourite fruit! It's red, naturally insulated and kinda looks like it's covered in scales, perfect for a dragon! But Foras is big, we might need like... 50 of them!”\n- \"Did you know Foras is fond of the koroks? Some say they come from the same place. You should bring Foras some of those leaves they like! Maybe like.. 10 of them just to be safe!\"\n- \"Oh Foras might like some flowers, I hear there's some purple ones that like to grow way up high! 5 of these should do!”\n- \"Here's a secret, Foras has a favourite dish. You should bring them some of that heart soup, they'll totally love it, hehe! 1 bowl should do. Or 2 Omelets made of veggies, I hear they like that too!\"\n- \"Oh yeah, you could give Foras a shiny rock!! Either 1 of those green gemstones, or 1 of those special rainbow feather rocks, but those are a lot harder to find! Hmm.. maybe just like.. 50 feathers from those silly farm birds might work just as well?\"",
-    "healingStage": 5,
-    "status": "pending",
-    "createdAt": "2025-01-12T04:07:06.628Z"
+  "A143258": {
+    "submissionId": "A143258",
+    "fileUrl": "https://storage.googleapis.com/tinglebot/Submissions/727c0643-9663-4368-ad10-12f3b7ce5e91-asame.png",
+    "fileName": "asame.png",
+    "title": "asame.png",
+    "userId": "211219306137124865",
+    "username": "ruutuli",
+    "userAvatar": "https://cdn.discordapp.com/avatars/211219306137124865/edf10b1b9dd270d45658f493b0477dc7.webp",
+    "category": "art",
+    "questEvent": "N/A",
+    "questBonus": "N/A",
+    "baseSelections": [],
+    "typeMultiplierSelections": [],
+    "productMultiplierValue": "default",
+    "addOnsApplied": [],
+    "specialWorksApplied": [],
+    "characterCount": 1,
+    "typeMultiplierCount": 1,
+    "finalTokenAmount": 0,
+    "tokenCalculation": "N/A",
+    "collab": null
+  },
+  "A261212": {
+    "submissionId": "A261212",
+    "fileUrl": "https://storage.googleapis.com/tinglebot/Submissions/9971598e-df98-4219-abda-f2d5bb1b12cd-Kaiya_VT_Ref.png",
+    "fileName": "Kaiya_VT_Ref.png",
+    "title": "Kaiya_VT_Ref.png",
+    "userId": "211219306137124865",
+    "username": "ruutuli",
+    "userAvatar": "https://cdn.discordapp.com/avatars/211219306137124865/edf10b1b9dd270d45658f493b0477dc7.webp",
+    "category": "art",
+    "questEvent": "N/A",
+    "questBonus": "N/A",
+    "baseSelections": [],
+    "typeMultiplierSelections": [],
+    "productMultiplierValue": "default",
+    "addOnsApplied": [],
+    "specialWorksApplied": [],
+    "characterCount": 1,
+    "typeMultiplierCount": 1,
+    "finalTokenAmount": 0,
+    "tokenCalculation": "N/A",
+    "collab": "<@985400911734136912>"
+  },
+  "A416531": {
+    "submissionId": "A416531",
+    "fileUrl": "https://storage.googleapis.com/tinglebot/Submissions/c2aa3d1f-f8db-43b2-8941-39971792dfdc-asame.png",
+    "fileName": "asame.png",
+    "title": "asame.png",
+    "userId": "211219306137124865",
+    "username": "ruutuli",
+    "userAvatar": "https://cdn.discordapp.com/avatars/211219306137124865/edf10b1b9dd270d45658f493b0477dc7.webp",
+    "category": "art",
+    "questEvent": "N/A",
+    "questBonus": "N/A",
+    "baseSelections": [
+      "fullbody"
+    ],
+    "typeMultiplierSelections": [
+      "anthro"
+    ],
+    "productMultiplierValue": "pixel",
+    "addOnsApplied": [],
+    "specialWorksApplied": [],
+    "characterCount": 1,
+    "typeMultiplierCount": 1,
+    "finalTokenAmount": 120,
+    "tokenCalculation": "N/A",
+    "collab": null,
+    "typeMultiplierCounts": {
+      "anthro": 1
+    },
+    "messageUrl": "https://discord.com/channels/1305484048063529002/1305486549252706335/1329753109303660575"
   }
 }

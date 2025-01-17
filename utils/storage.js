@@ -41,7 +41,6 @@ function safeReadJSON(filePath) {
 // Saves a submission to the persistent storage (file system)
 function saveSubmissionToStorage(submissionId, submissionData) {
   if (!submissionId || !submissionData) {
-    console.error('[storage]: Invalid data passed to saveSubmissionToStorage:', { submissionId, submissionData });
     return;
   }
 
@@ -54,7 +53,6 @@ function saveSubmissionToStorage(submissionId, submissionData) {
 // Retrieves a submission by its ID from persistent storage
 function retrieveSubmissionFromStorage(submissionId) {
   const submissions = safeReadJSON(storageFile);
-  console.log('Current submissions in storage:', Object.keys(submissions));  
   return submissions[submissionId] || null;
 }
 
@@ -64,11 +62,9 @@ function deleteSubmissionFromStorage(submissionId) {
   const submissions = safeReadJSON(storageFile);
 
   if (submissions[submissionId]) {
-      console.log(`Deleting submission with ID: ${submissionId}`);
       delete submissions[submissionId]; // Remove entry by ID
       fs.writeFileSync(storageFile, JSON.stringify(submissions, null, 2)); // Save changes
   } else {
-      console.warn(`Submission ID not found in storage: ${submissionId}`);
   }
 }
 
@@ -77,7 +73,6 @@ const healingRequestsFile = path.join(__dirname, '../data/healingRequests.json')
 
 // Ensure the file exists
 if (!fs.existsSync(healingRequestsFile)) {
-  console.error('Healing Requests storage file does not exist. Creating a new one.');
   fs.writeFileSync(healingRequestsFile, JSON.stringify({}));
 }
 
@@ -135,7 +130,6 @@ function cleanupExpiredHealingRequests() {
     for (const requestId in healingRequests) {
       const request = healingRequests[requestId];
       if (currentTime - request.timestamp > 24 * 60 * 60 * 1000) { // Older than 24 hours
-        console.log(`[storage.js] Removing expired healing request with ID: ${requestId}`);
         delete healingRequests[requestId];
         updated = true;
       }
@@ -213,7 +207,6 @@ function cleanupExpiredVendingRequests() {
       for (const requestId in vendingRequests) {
           const request = vendingRequests[requestId];
           if (currentTime - new Date(request.createdAt).getTime() > oneMonthInMillis) {
-              console.log(`[storage.js] Removing expired vending request with ID: ${requestId}`);
               delete vendingRequests[requestId];
               updated = true;
           }
@@ -221,7 +214,6 @@ function cleanupExpiredVendingRequests() {
 
       if (updated) {
           fs.writeFileSync(vendingRequestsFile, JSON.stringify(vendingRequests, null, 2), 'utf-8');
-          console.log('[storage.js] Expired vending requests cleaned up successfully.');
       }
   } catch (error) {
       console.error('[storage.js] Error cleaning up expired vending requests:', error.message);

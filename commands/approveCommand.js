@@ -1,5 +1,4 @@
 // ------------------- Approve/Deny Command -------------------
-// This file allows admins to approve or deny submissions via commands
 
 // ------------------- Imports -------------------
 // Grouped and organized imports: Standard libraries, third-party libraries, and local modules
@@ -11,10 +10,9 @@ const { updateTokenBalance, appendEarnedTokens, getOrCreateToken  } = require('.
 const fs = require('fs');
 
 // ------------------- Helper Functions -------------------
-// Condensed logic for common operations
+
 
 // ------------------- React to Message -------------------
-// Reacts to a message with a specific emoji
 async function reactToMessage(interaction, messageUrl, emoji) {
   if (!messageUrl || typeof messageUrl !== 'string') {
     console.error('Invalid message URL:', messageUrl);
@@ -50,14 +48,12 @@ async function reactToMessage(interaction, messageUrl, emoji) {
 }
 
 // ------------------- Notify User -------------------
-// Sends a notification message to the user
 async function notifyUser(interaction, userId, messageContent) {
   const user = await interaction.client.users.fetch(userId);
   await user.send(messageContent);
 }
 
 // ------------------- Reply to Admin -------------------
-// Sends a reply to the admin who initiated the command
 async function replyToAdmin(interaction, messageContent) {
   if (!interaction.replied) {
     await interaction.reply({
@@ -68,73 +64,61 @@ async function replyToAdmin(interaction, messageContent) {
 }
 
 // ------------------- Approve Submission -------------------
-// Handles approving the submission and updating user tokens
+// Handles approving a submission and updating user tokens
 async function approveSubmission(interaction, submissionId) {
   console.log(`[approveCommand.js]: Attempting to retrieve submission with ID: ${submissionId}`);
+
+  // Defer interaction to prevent timeout
+  await interaction.deferReply({ ephemeral: true });
 
   try {
     const submission = await retrieveSubmissionFromStorage(submissionId);
 
     if (!submission) {
-      console.error(`[approveCommand.js]: Submission not found for ID: ${submissionId}`);
-      return replyToAdmin(interaction, `⚠️ Submission with ID \`${submissionId}\` not found.`);
+      throw new Error(`Submission with ID \`${submissionId}\` not found.`);
     }
 
-    console.log(`[approveCommand.js]: Retrieved submission:`, submission);
-
-    const userId = submission.userId;
-    console.log(`[approveCommand.js]: Fetching or creating user for discordId: ${userId}`);
-    
-    const user = await getOrCreateToken(userId);
-
-    if (!user) {
-      console.error(`[approveCommand.js]: User not found or failed to create for discordId: ${userId}`);
-      return replyToAdmin(interaction, `⚠️ User with ID \`${userId}\` not found.`);
-    }
-
-    console.log(`[approveCommand.js]: Retrieved or created user:`, user);
-
-    const spreadsheetId = await getUserGoogleSheetId(userId);
-
-    if (!spreadsheetId) {
-      console.error(`[approveCommand.js]: No Google Sheets linked for user ${userId}`);
-      return replyToAdmin(interaction, `⚠️ No Google Sheets linked for user \`${userId}\`.`);
-    }
-
-    console.log(`[approveCommand.js]: Retrieved spreadsheetId: ${spreadsheetId}`);
-
-    const category = submission.category || 'art';
-    const tokenAmount = submission.finalTokenAmount;
-    const fileName = submission.fileName || submission.title || submissionId;
-    const messageUrl = submission.messageUrl;
+    const { userId, collab, category = 'art', finalTokenAmount: tokenAmount, fileName = submissionId, messageUrl } = submission;
 
     if (!messageUrl) {
-      console.error(`[approveCommand.js]: Invalid or undefined message URL in submission:`, submission);
       throw new Error('Message URL is invalid or undefined.');
     }
 
+    const user = await getOrCreateToken(userId);
+    if (!user) {
+      throw new Error(`User with ID \`${userId}\` not found.`);
+    }
+
     await reactToMessage(interaction, messageUrl, '☑️');
-    console.log(`[approveCommand.js]: Reacted to message with ☑️`);
 
-    await notifyUser(
-      interaction,
-      userId,
-      `☑️ Your submission \`${submissionId}\` has been approved! ${tokenAmount} tokens have been added to your balance.`
-    );
-    console.log(`[approveCommand.js]: Notified user ${userId}`);
+    if (collab) {
+      const splitTokens = Math.floor(tokenAmount / 2);
+      const collaboratorId = collab.replace(/[<@>]/g, '');
 
-    await updateTokenBalance(userId, tokenAmount);
-    console.log(`[approveCommand.js]: Token balance updated for user ${userId} with ${tokenAmount} tokens`);
-    
-    const submissionLink = submission.messageUrl || 'N/A';
-    await appendEarnedTokens(userId, fileName, category, tokenAmount, submissionLink);
-    console.log(`[approveCommand.js]: Appended earned tokens for user ${userId}`);
+      // Update tokens for both users
+      await updateTokenBalance(userId, splitTokens);
+      await appendEarnedTokens(userId, fileName, category, splitTokens, messageUrl);
 
-    await replyToAdmin(
-      interaction,
-      `☑️ Submission \`${submissionId}\` has been approved, and ${tokenAmount} tokens have been added to the user's balance.`
-    );
+      await updateTokenBalance(collaboratorId, splitTokens);
+      await appendEarnedTokens(collaboratorId, fileName, category, splitTokens, messageUrl);
 
+      // Notify both users
+      await notifyUser(interaction, userId, `☑️ Your submission \`${submissionId}\` has been approved! You have received ${splitTokens} tokens.`);
+      await notifyUser(interaction, collaboratorId, `☑️ A submission you collaborated on (\`${submissionId}\`) has been approved! You have received ${splitTokens} tokens.`);
+
+      console.log(`[approveCommand.js]: Tokens split between user ${userId} and collaborator ${collaboratorId}.`);
+    } else {
+      // Update tokens for the main user only
+      await updateTokenBalance(userId, tokenAmount);
+      await appendEarnedTokens(userId, fileName, category, tokenAmount, messageUrl);
+
+      // Notify the user
+      await notifyUser(interaction, userId, `☑️ Your submission \`${submissionId}\` has been approved! ${tokenAmount} tokens have been added to your balance.`);
+
+      console.log(`[approveCommand.js]: Tokens updated for user ${userId}.`);
+    }
+
+    await interaction.editReply(`☑️ Submission \`${submissionId}\` has been approved.`);
     await deleteSubmissionFromStorage(submissionId);
     console.log(`[approveCommand.js]: Submission ${submissionId} successfully approved.`);
   } catch (error) {
@@ -144,8 +128,8 @@ async function approveSubmission(interaction, submissionId) {
 }
 
 
+
 // ------------------- Deny Submission -------------------
-// Handles denying a submission and notifying the user
 async function denySubmission(interaction, submissionId, reason) {
   const submission = await retrieveSubmissionFromStorage(submissionId);
 
@@ -174,9 +158,7 @@ async function denySubmission(interaction, submissionId, reason) {
   await deleteSubmissionFromStorage(submissionId);
 }
 
-
 // ------------------- Command Definition -------------------
-// Defines the command for approving or denying submissions or blight tasks
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('approve')

@@ -48,14 +48,16 @@ async function handleSubmissionCompletion(interaction) {
       throw new Error('File URL or File Name missing.');
     }
 
-    // Recalculate tokens
-    const { totalTokens } = calculateTokens({
-      baseSelections: baseSelections || [],
-      typeMultiplierSelections: typeMultiplierSelections || [],
-      productMultiplierValue: productMultiplierValue || 1,
-      addOnsApplied: addOnsApplied || [],
-      characterCount: characterCount || 1,
-    });
+// Recalculate tokens
+const { totalTokens } = calculateTokens({
+  baseSelections: baseSelections || [],
+  typeMultiplierSelections: typeMultiplierSelections || [],
+  productMultiplierValue: productMultiplierValue || 1,
+  addOnsApplied: addOnsApplied || [],
+  characterCount: characterCount || 1,
+  collab: submissionData.collab || null, // Include collab
+});
+
 
     // Update the final token amount
     submissionData.finalTokenAmount = totalTokens;
@@ -66,7 +68,7 @@ async function handleSubmissionCompletion(interaction) {
         title: 'Submission Complete!',
         description: `Your submission has been confirmed. Your art has been uploaded successfully and your token count has been finalized.`,
         fields: [
-          { name: 'Final Token Amount', value: `${totalTokens} Tokens`, inline: true },
+          { name: 'Final Token Total Amount', value: `${totalTokens} Tokens`, inline: true },
         ],
         image: { url: fileUrl },
         color: 0x00ff00,
@@ -182,7 +184,21 @@ async function handleSubmitAction(interaction) {
     const fileUrl = submission.fileUrl;
 
     try {
-      await appendEarnedTokens(userId, fileName, 'art', tokenAmount, fileUrl);
+      if (submissionData.collab) {
+        // Split tokens between the user and collaborator
+        const splitTokens = submissionData.finalTokenAmount / 2;
+    
+        // Update the main user's tokens
+        await appendEarnedTokens(user.id, submissionData.fileName, 'art', splitTokens, submissionData.fileUrl);
+    
+        // Update the collaborator's tokens
+        const collaboratorId = submissionData.collab.replace(/[<@>]/g, ''); // Extract user ID
+        await appendEarnedTokens(collaboratorId, submissionData.fileName, 'art', splitTokens, submissionData.fileUrl);
+    } else {
+        // No collaboration, assign all tokens to the main user
+        await appendEarnedTokens(user.id, submissionData.fileName, 'art', submissionData.finalTokenAmount, submissionData.fileUrl);
+    }
+    
       console.log(`Token data for submission ${submissionId} has been appended to Google Sheets.`);
     } catch (error) {
       console.error(`Error appending token data for submission ${submissionId}: ${error.message}`);

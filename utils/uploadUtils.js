@@ -17,8 +17,6 @@ async function uploadSubmissionImage(imageUrl, imageName) {
     const destination = `Submissions/${uuidv4()}-${imageName}`;
     const file = bucket.file(destination);
 
-    console.log(`Uploading image to Google Cloud: ${destination}`);
-
     // Fetch the image from the provided URL
     const response = await fetch(imageUrl);
     const arrayBuffer = await response.arrayBuffer();  // Convert response to ArrayBuffer
@@ -34,7 +32,6 @@ async function uploadSubmissionImage(imageUrl, imageName) {
 
     // Construct the public URL for the uploaded image
     const publicUrl = `https://storage.googleapis.com/${bucket.name}/${destination}`;
-    console.log(`Image uploaded successfully: ${publicUrl}`);
 
     return publicUrl;
 
@@ -52,8 +49,6 @@ async function uploadPetImage(imageUrl, imageName) {
     const destination = `pets/${uuidv4()}-${imageName}`;
     const file = bucket.file(destination);
 
-    console.log(`Uploading image to Google Cloud in "pets" folder: ${destination}`);
-
     // Fetch the image from the provided URL
     const response = await fetch(imageUrl);
     const arrayBuffer = await response.arrayBuffer();
@@ -69,7 +64,6 @@ async function uploadPetImage(imageUrl, imageName) {
 
     // Construct the public URL for the uploaded image
     const publicUrl = `https://storage.googleapis.com/${bucket.name}/${destination}`;
-    console.log(`Image uploaded successfully: ${publicUrl}`);
 
     return publicUrl;
   } catch (error) {

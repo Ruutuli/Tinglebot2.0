@@ -7,6 +7,7 @@
 const artModule = require('../modules/artModule');
 const { capitalizeFirstLetter } = require('../modules/formattingModule');
 
+
 // ------------------- Global Variables -------------------
 // Variables for managing the state of token calculations
 let finalTokenAmount = 0;
@@ -39,8 +40,9 @@ function calculateTokens({
   productMultiplierValue,
   addOnsApplied = [],
   characterCount = 1,
-  typeMultiplierCount = 1,
+  typeMultiplierCounts = {}, // Include multiplier counts
   specialWorksApplied = [],
+  collab = null, // Add collab as a parameter
 }) {
   const validCharacterCount = characterCount || 1;
 
@@ -53,7 +55,8 @@ function calculateTokens({
   // Type Multiplier Calculation
   const typeMultiplierTotal = typeMultiplierSelections.reduce((sum, multiplier) => {
     const multiplierValue = artModule.typeMultipliers[multiplier] || 1;
-    return sum + multiplierValue * typeMultiplierCount;
+    const count = typeMultiplierCounts[multiplier] || 1; // Default to 1 if no count is provided
+    return sum + multiplierValue * count; // Sum values considering individual counts
   }, 0);
 
   // Product Multiplier Calculation
@@ -81,6 +84,7 @@ function calculateTokens({
 
   return {
     totalTokens,
+    splitTokens: collab ? totalTokens / 2 : totalTokens, // Split if collaborator exists
     breakdown: {
       baseTotal,
       typeMultiplierTotal,
@@ -102,8 +106,9 @@ function generateTokenBreakdown({
   addOnsApplied = [],
   specialWorksApplied = [],
   characterCount = 1,
-  typeMultiplierCount = 1,
+  typeMultiplierCounts = {}, // Add typeMultiplierCounts here
   finalTokenAmount,
+  collab = null, // Add collab parameter
 }) {
   const baseSection = baseSelections
     .map(base => {
@@ -115,7 +120,8 @@ function generateTokenBreakdown({
   const typeMultiplierSection = typeMultiplierSelections
     .map(multiplier => {
       const multiplierValue = artModule.typeMultipliers[multiplier] || 1;
-      return `${capitalizeFirstLetter(multiplier)} (${multiplierValue} × ${typeMultiplierCount}) = ${multiplierValue * typeMultiplierCount}`;
+      const count = typeMultiplierCounts[multiplier] || 1;
+      return `${capitalizeFirstLetter(multiplier)} (${multiplierValue} × ${count}) = ${multiplierValue * count}`;
     })
     .join(' + ');
 
@@ -138,18 +144,23 @@ function generateTokenBreakdown({
     })
     .join('\n');
 
-  return `
-\`\`\`
-${baseSection}
-${typeMultiplierSection.length > 0 ? '× (' + typeMultiplierSection + ')' : ''}
-× ${productMultiplierLabel} (${productMultiplierValueFinal})
-${addOnSection.length > 0 ? addOnSection : ''}
-${specialWorksSection.length > 0 ? specialWorksSection : ''}
----------------------
-= ${finalTokenAmount} Tokens
-\`\`\`
-`.trim();
+  // Construct the breakdown
+  let breakdown = '```\n';
+
+  if (baseSection) breakdown += ` ${baseSection}\n`;
+  if (typeMultiplierSection) breakdown += `× (${typeMultiplierSection})\n`;
+  breakdown += `× ${productMultiplierLabel} (${productMultiplierValueFinal})\n`;
+  if (addOnSection) breakdown += `${addOnSection}\n`;
+  if (specialWorksSection) breakdown += `${specialWorksSection}\n`;
+  breakdown += `\n---------------------\n`;
+  breakdown += `= ${finalTokenAmount} Tokens\n`;
+  if (collab) breakdown += `\nCollab Total Each: ${Math.floor(finalTokenAmount / 2)} Tokens\n`;
+  breakdown += '```';
+
+  return breakdown;
 }
+
+
 
 // ------------------- Calculate Writing Tokens -------------------
 // Calculates tokens for writing submissions based on word count

@@ -49,18 +49,22 @@ async function handleSelectMenuInteraction(interaction) {
   const userId = interaction.user.id;
   const customId = interaction.customId;
 
-  // Initialize user-specific data
-  let submissionData = submissionStore.get(userId) || {
-    baseSelections: [],
-    typeMultiplierSelections: [],
-    productMultiplierValue: 1,
-    addOnsApplied: [],
-    characterCount: 1,
-  };
+// Initialize user-specific data
+let submissionData = submissionStore.get(userId) || {
+  baseSelections: [],
+  typeMultiplierSelections: [],
+  productMultiplierValue: 1,
+  addOnsApplied: [],
+  characterCount: 1,
+  typeMultiplierCounts: {}, // Initialize typeMultiplierCounts
+  collab: null, // Initialize collab
+};
+
 
   // ------------------- Base Selection -------------------
   if (customId === 'baseSelect') {
     const selectedBase = interaction.values[0];
+
     if (selectedBase !== 'complete') {
       submissionData.baseSelections.push(selectedBase);
       submissionStore.set(userId, submissionData);
@@ -80,6 +84,7 @@ async function handleSelectMenuInteraction(interaction) {
   // ------------------- Type Multiplier Selection -------------------
   else if (customId === 'typeMultiplierSelect') {
     const selectedMultiplier = interaction.values[0];
+
     if (selectedMultiplier !== 'complete') {
       submissionData.typeMultiplierSelections.push(selectedMultiplier);
       submissionStore.set(userId, submissionData);
@@ -99,6 +104,7 @@ async function handleSelectMenuInteraction(interaction) {
   // ------------------- Product Multiplier Selection -------------------
   else if (customId === 'productMultiplierSelect') {
     submissionData.productMultiplierValue = interaction.values[0];
+
     submissionStore.set(userId, submissionData);
 
     await interaction.update({
@@ -110,6 +116,7 @@ async function handleSelectMenuInteraction(interaction) {
   // ------------------- Add-Ons Selection -------------------
   else if (customId === 'addOnsSelect') {
     const selectedAddOn = interaction.values[0];
+
     if (selectedAddOn !== 'complete') {
       submissionData.addOnsApplied = submissionData.addOnsApplied || [];
 
@@ -132,6 +139,7 @@ async function handleSelectMenuInteraction(interaction) {
   // ------------------- Special Works Selection -------------------
   else if (customId === 'specialWorksSelect') {
     const selectedWork = interaction.values[0];
+
     if (selectedWork !== 'complete') {
       // Ensure specialWorksApplied is initialized
       submissionData.specialWorksApplied = submissionData.specialWorksApplied || [];
@@ -154,7 +162,6 @@ async function confirmSubmission(interaction) {
   const submissionData = submissionStore.get(userId);
 
   if (!submissionData) {
-    console.error('[confirmSubmission]: Submission data not found for user:', userId);
     await interaction.reply({
       content: '❌ **Submission data not found. Please restart the submission process.**',
       ephemeral: true,
@@ -167,40 +174,44 @@ async function confirmSubmission(interaction) {
     typeMultiplierSelections = [],
     productMultiplierValue = 1,
     addOnsApplied = [],
-    specialWorksApplied = [], // Include Special Works
+    specialWorksApplied = [],
     characterCount = 1,
-    typeMultiplierCount = 1, // Ensure correct value is used
+    typeMultiplierCounts = {}, // Include typeMultiplierCounts
   } = submissionData;
-
+  
   // Calculate tokens
   const { totalTokens } = calculateTokens({
     baseSelections,
     typeMultiplierSelections,
     productMultiplierValue,
     addOnsApplied,
-    specialWorksApplied, // Include Special Works in token calculation
+    specialWorksApplied,
     characterCount,
-    typeMultiplierCount,
+    typeMultiplierCounts, // Pass typeMultiplierCounts
+    collab: submissionData.collab || null,
   });
+  
 
-  // Generate breakdown message
-  const breakdownMessage = generateTokenBreakdown({
-    baseSelections,
-    typeMultiplierSelections,
-    productMultiplierValue,
-    addOnsApplied,
-    specialWorksApplied, // Include Special Works in breakdown
-    characterCount,
-    typeMultiplierCount,
-    finalTokenAmount: totalTokens,
-  });
+// Generate breakdown message
+const breakdownMessage = generateTokenBreakdown({
+  baseSelections,
+  typeMultiplierSelections,
+  productMultiplierValue,
+  addOnsApplied,
+  specialWorksApplied,
+  characterCount,
+  typeMultiplierCounts,
+  finalTokenAmount: totalTokens,
+  collab: submissionData.collab || null, // Retrieve collab from submissionData
+});
+
 
   submissionData.finalTokenAmount = totalTokens;
   submissionStore.set(userId, submissionData);
 
   // Display breakdown including Special Works
   await interaction.update({
-    content: `${breakdownMessage}\n\n☑️ **Final Token Calculation:** ${totalTokens} Tokens`,
+    content: `${breakdownMessage}\n\n☑️ **Final Total Token Calculation:** ${totalTokens} Tokens`,
     components: [
       new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('confirm').setLabel('✅ Confirm').setStyle(ButtonStyle.Success),

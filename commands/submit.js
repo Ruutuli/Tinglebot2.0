@@ -41,6 +41,11 @@ module.exports = {
             .setDescription('Provide a title for your art submission (defaults to file name if not provided).')
             .setRequired(false))
         .addStringOption(option =>
+          option.setName('collab')
+            .setDescription('Tag a collaborator to split tokens. Format: @username')
+            .setRequired(false)
+            .setRequired(true))
+        .addStringOption(option =>
           option.setName('questid')
             .setDescription('Provide a quest ID if this submission is for a quest.')
             .setRequired(false)))
@@ -65,9 +70,37 @@ module.exports = {
             .setDescription('Provide a brief description of your submission.')
             .setRequired(false))
         .addStringOption(option =>
+          option.setName('collab')
+            .setDescription('Tag a collaborator to split tokens. Format: @username')
+            .setRequired(false)
+            .setRequired(true))         
+        .addStringOption(option =>
           option.setName('questid')
             .setDescription('Provide a quest ID if this submission is for a quest.')
             .setRequired(false))),
+
+// ------------------- Autocomplete Handling -------------------
+async onAutocomplete(interaction) {
+  const focusedOption = interaction.options.getFocused(true);
+
+  if (focusedOption.name === 'collab') {
+    const searchQuery = focusedOption.value.toLowerCase(); // User input
+    const members = await interaction.guild.members.fetch(); // Fetch all server members
+    const matchingMembers = members.filter(member =>
+      member.user.username.toLowerCase().includes(searchQuery) || // Match username
+      member.displayName.toLowerCase().includes(searchQuery)     // Match nickname
+    );
+
+    // Limit results to 25 (Discord API maximum for autocomplete)
+    const results = matchingMembers.map(member => ({
+      name: member.displayName || member.user.username,
+      value: `<@${member.user.id}>`, // Tag format
+    })).slice(0, 25);
+
+    await interaction.respond(results); // Send autocomplete suggestions
+  }
+},
+
 
   // ------------------- Main Command Execution -------------------
   async execute(interaction) {
@@ -102,6 +135,7 @@ module.exports = {
         const attachedFile = interaction.options.getAttachment('file');
         const title = interaction.options.getString('title') || attachedFile.name; // Default to file name if no title is provided
         const questId = interaction.options.getString('questid') || 'N/A';
+        const collab = interaction.options.getString('collab');
 
         // Check if a file is attached
         if (!attachedFile) {
@@ -128,35 +162,36 @@ module.exports = {
           typeMultiplierSelections: [],
           productMultiplierValue: 1,
           addOnsApplied: [],
-          specialWorksApplied: [], // Add this line
+          specialWorksApplied: [],
           characterCount: 1,
+          collab: collab || null, // Pass the collab parameter
         });
         
-
         const submissionId = generateUniqueId('A');
         console.log('Generated Submission ID:', submissionId);
         
         const submissionData = {
-            submissionId,
-            fileUrl: googleImageUrl,
-            fileName,
-            title,
-            userId: user.id,
-            username: user.username,
-            userAvatar: user.displayAvatarURL({ dynamic: true }),
-            category: 'art',
-            questEvent: questId,
-            questBonus: 'N/A',
-            baseSelections: [],
-            typeMultiplierSelections: [],
-            productMultiplierValue: 'default',
-            addOnsApplied: [],
-            specialWorksApplied: [], 
-            characterCount: 1,
-            typeMultiplierCount: 1,
-            finalTokenAmount: 0,
-            tokenCalculation: 'N/A',
-        };
+          submissionId,
+          fileUrl: googleImageUrl,
+          fileName,
+          title,
+          userId: user.id,
+          username: user.username,
+          userAvatar: user.displayAvatarURL({ dynamic: true }),
+          category: 'art',
+          questEvent: questId,
+          questBonus: 'N/A',
+          baseSelections: [],
+          typeMultiplierSelections: [],
+          productMultiplierValue: 'default',
+          addOnsApplied: [],
+          specialWorksApplied: [],
+          characterCount: 1,
+          typeMultiplierCount: 1,
+          finalTokenAmount: 0,
+          tokenCalculation: 'N/A',
+          collab: collab || null, // Store collaborator
+      };      
         
         console.log('Storing submission data:', submissionData);
         submissionStore.set(user.id, submissionData);
@@ -202,6 +237,7 @@ module.exports = {
         }
         const description = interaction.options.getString('description') || 'No description provided.';
         const questId = interaction.options.getString('questid') || 'N/A';
+        const collab = interaction.options.getString('collab');
     
         // Fetch user data from the database
         const userData = await User.findOne({ discordId: user.id });
@@ -259,7 +295,9 @@ module.exports = {
   // Handles interactions during the submission process (dropdowns, buttons, modals).
   async interactionCreate(interaction) {
     try {
-      if (interaction.isButton()) {
+      if (interaction.isAutocomplete()) {
+        await this.onAutocomplete(interaction); // Handle autocomplete
+      } else if (interaction.isButton()) {
         await handleButtonInteraction(interaction);
       } else if (interaction.isStringSelectMenu()) {
         await handleSelectMenuInteraction(interaction);
