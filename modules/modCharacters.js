@@ -42,9 +42,13 @@ const modCharacters = [
         ];
     },
 
-    roleplayResponse: (characterName) => {
+    roleplayResponseBefore: (characterName) => {
         return `Aemu grins brightly, full of confidence, but you can sense a hint of nervous energy. "Don't worry, **${characterName}**, I've got this! Together, we’ll beat this blight! Just, uh... make sure to keep faith in me, okay? I've got a lot to prove!"`;
+    },
+    roleplayResponseAfter: (characterName) => {
+        return `Aemu beams with pride as the blight fades away. "We did it, **${characterName}**! The power of Din has restored you! Keep that strength with you, okay? You've got this!"`;
     }
+    
 },
 
 //---------------- Elde ----------------
@@ -91,11 +95,15 @@ A little fairy gives you some hints as to what you could offer:
       ];
   },
 
-  roleplayResponse: (characterName) => {
-      return `Elde rests perched above on a tree branch, silently eyeing you as you approach. 
+  roleplayResponseBefore: (characterName) => {
+    return `Elde rests perched above on a tree branch, silently eyeing you as you approach. 
 Did you find them... or did they find you? Regardless, their quiet presence seems reassuring. 
 "... ${characterName}, right? I can sense the blight on you, let me help with that."`;
-  }
+},
+roleplayResponseAfter: (characterName) => {
+    return `Elde offers a small, knowing smile as the blight is dispelled. "Courage brought you here, **${characterName}**, and courage will guide you forward."`;
+}
+
 },
 
 //---------------- Nihme ----------------
@@ -136,9 +144,13 @@ How has your character been dealing with blight at their stage? Even behavioral 
       ];
   },
 
-  roleplayResponse: (characterName) => {
-      return `Nihme peers over her book, a soft smile gracing her lips. "Oh, hello there, **${characterName}**. You need guidance? Well, I'm here to help. Let's tackle this blight together, one step at a time."`;
-  }
+  roleplayResponseBefore: (characterName) => {
+    return `Nihme peers over her book, a soft smile gracing her lips. "Oh, hello there, **${characterName}**. You need guidance? Well, I'm here to help. Let's tackle this blight together, one step at a time."`;
+},
+roleplayResponseAfter: (characterName) => {
+    return `Nihme nods approvingly, closing her book. "The blight is gone, **${characterName}**, but the lessons it taught you remain. Use them wisely."`;
+}
+
 },
 
 // ------------------- Dragons -------------------
@@ -188,9 +200,13 @@ How has your character been dealing with blight at their stage? Even behavioral 
       ];
   },
 
-  roleplayResponse: (characterName) => {
-      return `Sanskar raises an eyebrow, amused. "You, **${characterName}**, seek wisdom? Isn't that something you should already have? Prove your wisdom - and we'll see about your request."`;
-  }
+  roleplayResponseBefore: (characterName) => {
+    return `Sanskar raises an eyebrow, amused. "You, **${characterName}**, seek wisdom? Isn't that something you should already have? Prove your wisdom - and we'll see about your request."`;
+},
+roleplayResponseAfter: (characterName) => {
+    return `Sanskar smirks, his eyes glowing faintly. "You’ve been healed, **${characterName}**."`;
+}
+
 },
 
 //---------------- Darune ----------------
@@ -222,8 +238,13 @@ How has your character been dealing with blight at their stage? Even behavioral 
         }
       ];
     },
-    roleplayResponse: (characterName) => 
-      `Darune huffs, his fiery gaze focused on you. "You dare to seek my help, **${characterName}**? Fine. But know this—you'll owe me. Blight or no blight, I don’t offer my strength freely."`
+    roleplayResponseBefore: (characterName) => {
+        return `Darune huffs, his fiery gaze focused on you. "You dare to seek my help, **${characterName}**? Fine. But know this—you'll owe me. Blight or no blight, I don’t offer my strength freely."`;
+    },
+    roleplayResponseAfter: (characterName) => {
+        return `A soothing warmth washes over you, healing you of your blighted affliction. Darune's golden gaze observes you, making sure that everything seems alright. When they are sure you are now fine, their lips pull back into a smug grin, "Perfection, **${characterName}**, if I do say so myself.~ Do you not agree?" Before you can answer, he quiets you with a raised dragons claw, "Now, be a good human, and try not to become blighted again, hm?"`;
+    }
+    
   },
 
   //---------------- Foras ---------------- 
@@ -270,9 +291,13 @@ Perhaps explore what they felt, or if they overcame their struggle, or even if t
         ];
     },
 
-    roleplayResponse: (characterName) => {
+    roleplayResponseBefore: (characterName) => {
         return `Foras chuckles warmly, ruffling their feathers. "Oh, **${characterName}**, don't worry! With my help, you’ll be back on your feet in no time. I quite enjoy helping after all! In fact this one time I— Oh what’s this? An offering for me?"`;
+    },
+    roleplayResponseAfter: (characterName) => {
+        return `Foras twirls in the air with joy. "It’s done, **${characterName}**! That blight didn’t stand a chance. Go on, live boldly!"`;
     }
+    
 },
 
   // ------------------- Sages -------------------
@@ -333,10 +358,12 @@ Perhaps explore what they felt, or if they overcame their struggle, or even if t
             }
         ];
     },
-
-    roleplayResponse: (characterName) => {
-        return `Sahira seems relieved it worked, before putting on a more serious face, "Your Warlock Queen has cured you, go in peace, subject!"`;
-    }
+        roleplayResponseBefore: (characterName) => {
+            return `Sahira adjusts her crown with dramatic flair. "Ah, **${characterName}**, you seek the blessing of light? Very well. Prepare to witness the magnificence of your Warlock Queen!"`;
+        },
+        roleplayResponseAfter: (characterName) => {
+            return `Sahira seems relieved it worked, before putting on a more serious face, "Your Warlock Queen has cured you, go in peace, subject!"`;
+        }
 },
 
   //---------------- Korelii ----------------
@@ -387,9 +414,12 @@ Perhaps explore what they felt, or if they overcame their struggle, or even if t
         ];
     },
 
-    roleplayResponse: (characterName) => {
-        return `Korelii gives a proud grin, "There you go, Goro! All better! Keep safe now!" He offers a parting wave before trotting back into the waters.`;
-    }
+        roleplayResponseBefore: (characterName) => {
+            return `Korelii greets you with a proud grin. "Ah, **${characterName}**! You look like you’ve been through a lot, Goro. Let’s take care of that blight for you."`;
+        },
+        roleplayResponseAfter: (characterName) => {
+            return `Korelii gives a proud grin, "There you go, Goro! All better! Keep safe now!" He offers a parting wave before trotting back into the waters.`;
+        }
 },
 
   //---------------- Ginger ----------------
@@ -446,8 +476,11 @@ Perhaps explore what they felt, or if they overcame their struggle, or even if t
         ];
     },
 
-    roleplayResponse: (characterName) => {
+    roleplayResponseBefore: (characterName) => {
         return `Ginger-Sage beckons you to sit and rest. "You look tired, **${characterName}**. Let me help you."`;
+    },
+    roleplayResponseAfter: (characterName) => {
+        return `Ginger-Sage gently pats your hand as the blight dissipates. "There, **${characterName}**. The forest always watches over its own. Be kind to it in return."`;
     }
 },
 
@@ -492,8 +525,11 @@ Perhaps explore what they felt, or if they overcame their struggle, or even if t
         ];
     },
 
-    roleplayResponse: (characterName) => {
+    roleplayResponseBefore: (characterName) => {
         return `Sigrid watches from the shadows. "Fear is a powerful thing, **${characterName}**. But you can conquer it. Only then will the blight relinquish its hold on you."`;
+    },
+    roleplayResponseAfter: (characterName) => {
+        return `Sigrid steps back into the shadows as the blight fades. "It's done, **${characterName}**. Remember, only by facing the darkness can you truly find the light."`;
     }
 }
 ];

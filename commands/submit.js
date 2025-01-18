@@ -43,8 +43,7 @@ module.exports = {
         .addStringOption(option =>
           option.setName('collab')
             .setDescription('Tag a collaborator to split tokens. Format: @username')
-            .setRequired(false)
-            .setRequired(true))
+            .setRequired(false))
         .addStringOption(option =>
           option.setName('questid')
             .setDescription('Provide a quest ID if this submission is for a quest.')
@@ -72,8 +71,7 @@ module.exports = {
         .addStringOption(option =>
           option.setName('collab')
             .setDescription('Tag a collaborator to split tokens. Format: @username')
-            .setRequired(false)
-            .setRequired(true))         
+            .setRequired(false))         
         .addStringOption(option =>
           option.setName('questid')
             .setDescription('Provide a quest ID if this submission is for a quest.')
@@ -133,7 +131,7 @@ async onAutocomplete(interaction) {
 
         const user = interaction.user;
         const attachedFile = interaction.options.getAttachment('file');
-        const title = interaction.options.getString('title') || attachedFile.name; // Default to file name if no title is provided
+        const title = interaction.options.getString('title')?.trim() || attachedFile.name; // Use user-input title or default to file name
         const questId = interaction.options.getString('questid') || 'N/A';
         const collab = interaction.options.getString('collab');
 
@@ -225,7 +223,7 @@ async onAutocomplete(interaction) {
         await interaction.deferReply({ ephemeral: true }); // Ensure the entire flow starts as ephemeral
     
         const user = interaction.user;
-        const title = interaction.options.getString('title') || 'Untitled Writing Submission';
+        const title = interaction.options.getString('title')?.trim() || attachedFile.name; // Use user-input title or default to file name
         const link = interaction.options.getString('link');
         const wordCount = interaction.options.getInteger('word_count');
         if (wordCount < 0) {

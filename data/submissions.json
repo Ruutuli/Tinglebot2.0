@@ -745,34 +745,26 @@
     "tokenCalculation": "N/A",
     "collab": "<@985400911734136912>"
   },
-  "A416531": {
-    "submissionId": "A416531",
-    "fileUrl": "https://storage.googleapis.com/tinglebot/Submissions/c2aa3d1f-f8db-43b2-8941-39971792dfdc-asame.png",
-    "fileName": "asame.png",
-    "title": "asame.png",
+  "B488800": {
+    "submissionId": "B488800",
     "userId": "211219306137124865",
-    "username": "ruutuli",
-    "userAvatar": "https://cdn.discordapp.com/avatars/211219306137124865/edf10b1b9dd270d45658f493b0477dc7.webp",
-    "category": "art",
-    "questEvent": "N/A",
-    "questBonus": "N/A",
-    "baseSelections": [
-      "fullbody"
-    ],
-    "typeMultiplierSelections": [
-      "anthro"
-    ],
-    "productMultiplierValue": "pixel",
-    "addOnsApplied": [],
-    "specialWorksApplied": [],
-    "characterCount": 1,
-    "typeMultiplierCount": 1,
-    "finalTokenAmount": 120,
-    "tokenCalculation": "N/A",
-    "collab": null,
-    "typeMultiplierCounts": {
-      "anthro": 1
-    },
-    "messageUrl": "https://discord.com/channels/1305484048063529002/1305486549252706335/1329753109303660575"
+    "characterName": "David Jr",
+    "healerName": "Nihme",
+    "taskType": "writing",
+    "taskDescription": "**Nihme: Oracle of Wisdom** asks you to write about how your OC has learned an important lesson through wisdom. Share their journey of growth. 500 words or less.",
+    "healingStage": 1,
+    "status": "pending",
+    "createdAt": "2025-01-18T06:10:50.883Z"
+  },
+  "B735350": {
+    "submissionId": "B735350",
+    "userId": "211219306137124865",
+    "characterName": "Tingle",
+    "healerName": "Sigrid",
+    "taskType": "item",
+    "taskDescription": "**Sigrid: Sage of Shadow** could always use a hand feeding the people of Inariko (and Sute). Provide him with an offering of Hunted items:",
+    "healingStage": 1,
+    "status": "pending",
+    "createdAt": "2025-01-18T07:57:50.318Z"
   }
 }

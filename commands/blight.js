@@ -77,8 +77,19 @@ module.exports = {
 
   // ------------------- Command Execution Logic -------------------
   async execute(interaction) {
+    const communityBoardChannelId = process.env.COMMUNITY_BOARD; // Fetch the Community Board ID from the environment variables
+
+    // Check if the command is executed in the Community Board channel
+    if (interaction.channelId !== communityBoardChannelId) {
+      await interaction.reply({
+        content: `❌ This command can only be used in the Community Board channel. Please go to <#${communityBoardChannelId}> to use this command.`,
+        ephemeral: true, // Show the message only to the user who attempted the command
+      });
+      return;
+    }
+
     const subcommand = interaction.options.getSubcommand();
-  
+    
     if (subcommand === 'roll') {
       const characterName = interaction.options.getString('character_name'); // Fetch the character name
       await rollForBlightProgression(interaction, characterName); // Validate and execute the roll

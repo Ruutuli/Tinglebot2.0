@@ -65,29 +65,48 @@ function convertToHyruleanDate(date) {
     return 'Invalid date';
 }
 
+const BLOOD_MOON_CYCLE = 26;
+
 // ------------------- Convert Hyrulean Date to Blood Moon Cycle Day -------------------
 function getBloodMoonCycleDay(hyruleanDate) {
     console.log(`Hyrulean Date received: "${hyruleanDate}"`); // Log the received Hyrulean date
 
-    // Use a regular expression to extract the day number from the Hyrulean date string
-    const dayMatch = hyruleanDate.match(/\d+/); // Find the first number in the string
+    // Split the Hyrulean date into month name and day
+    const [monthName, dayString] = hyruleanDate.split(' ');
+    const dayInMonth = parseInt(dayString, 10);
 
-    if (!dayMatch) {
+    if (isNaN(dayInMonth)) {
         console.error(`Failed to extract day from Hyrulean date: "${hyruleanDate}"`);
-        return NaN; // Handle the case where no number is found
+        return NaN; // Handle invalid day input
     }
 
-    const dayInMonth = parseInt(dayMatch[0], 10); // Convert the extracted day to an integer
+    // Find the matching Blood Moon date in the predefined dates
+    const bloodmoonDate = bloodmoonDates.find(
+        (entry) => entry.month === monthName && entry.day === dayInMonth
+    );
 
-    // Return the day in the Blood Moon cycle (1 to 26)
-    // No need to add 1; the modulo ensures the day stays within 1-26
-    return (dayInMonth % 26 === 0) ? 26 : (dayInMonth % 26); // Keep it in range 1 to 26
+    if (!bloodmoonDate) {
+        console.error(`No matching Blood Moon date found for: "${hyruleanDate}"`);
+        return NaN; // Handle case where the date is not in the Blood Moon cycle
+    }
+
+    // Determine the position of the matched date in the cycle
+    const cycleIndex = bloodmoonDates.findIndex(
+        (entry) => entry.realDate === bloodmoonDate.realDate
+    );
+
+    // Calculate the Blood Moon cycle day
+    const cycleDay = (cycleIndex % BLOOD_MOON_CYCLE) + 1;
+
+    console.log(`Calculated Blood Moon Cycle Day: ${cycleDay}`);
+    return cycleDay;
 }
 
 // ------------------- Export the functions -------------------
 module.exports = {
+    bloodmoonDates,
     getHyruleanMonth,
     isBloodmoon,
     convertToHyruleanDate,
-    getBloodMoonCycleDay 
+    getBloodMoonCycleDay,
 };

@@ -78,7 +78,7 @@ async function approveSubmission(interaction, submissionId) {
       throw new Error(`Submission with ID \`${submissionId}\` not found.`);
     }
 
-    const { userId, collab, category = 'art', finalTokenAmount: tokenAmount, fileName = submissionId, messageUrl } = submission;
+    const { userId, collab, category = 'art', finalTokenAmount: tokenAmount, title = fileName, messageUrl } = submission;
 
     if (!messageUrl) {
       throw new Error('Message URL is invalid or undefined.');
@@ -97,10 +97,10 @@ async function approveSubmission(interaction, submissionId) {
 
       // Update tokens for both users
       await updateTokenBalance(userId, splitTokens);
-      await appendEarnedTokens(userId, fileName, category, splitTokens, messageUrl);
+      await appendEarnedTokens(userId, title, category, tokenAmount, messageUrl);;
 
       await updateTokenBalance(collaboratorId, splitTokens);
-      await appendEarnedTokens(collaboratorId, fileName, category, splitTokens, messageUrl);
+      await appendEarnedTokens(collaboratorId, title, category, splitTokens, messageUrl);
 
       // Notify both users
       await notifyUser(interaction, userId, `☑️ Your submission \`${submissionId}\` has been approved! You have received ${splitTokens} tokens.`);
@@ -110,7 +110,7 @@ async function approveSubmission(interaction, submissionId) {
     } else {
       // Update tokens for the main user only
       await updateTokenBalance(userId, tokenAmount);
-      await appendEarnedTokens(userId, fileName, category, tokenAmount, messageUrl);
+      await appendEarnedTokens(userId, title, category, tokenAmount, messageUrl);
 
       // Notify the user
       await notifyUser(interaction, userId, `☑️ Your submission \`${submissionId}\` has been approved! ${tokenAmount} tokens have been added to your balance.`);

@@ -24,10 +24,28 @@ const { handleSelectMenuInteraction } = require('./handlers/selectMenuHandler');
 const { executeVending, initializeReactionHandler } = require('./handlers/vendingHandler');
 
 // ------------------- Scripts and Utilities -------------------
-const { renameChannels, trackBloodMoonCycle, currentDayInCycle, isBloodMoonActive, calculateCurrentDayInCycle } = require('./scripts/bloodmoon');
+const { renameChannels, trackBloodMoon, isBloodMoonDay } = require('./scripts/bloodmoon');
+const { convertToHyruleanDate } = require('./modules/calendarModule');
 const scheduler = require('./scheduler');
 const { getGuildIds } = require('./utils/getGuildIds');
 const { initializeRandomEncounterBot } = require('./scripts/randomEncounters');
+
+
+// ------------------- Blood Moon Status Checker -------------------
+function logBloodMoonStatus() {
+  const today = new Date();
+  const hyruleanDate = convertToHyruleanDate(today);
+  let isBloodMoon = false;
+
+  try {
+    isBloodMoon = isBloodMoonDay();
+  } catch (error) {
+    console.error(`[index.js]: Error checking Blood Moon status: ${error.message}`);
+  }
+
+  console.log(`[index.js]: 🌕 Blood Moon Today (Real Date: ${today.toISOString().slice(0, 10)}, Hyrulean Date: ${hyruleanDate}): ${isBloodMoon}`);
+}
+
 
 // ------------------- Global Variables -------------------
 let client;
@@ -81,16 +99,10 @@ async function initializeClient() {
         // Initialize the reaction handler
         initializeReactionHandler(client);
 
-  // Blood Moon Initialization
-  const currentDayInCycle = calculateCurrentDayInCycle();
-  console.log(`[index.js]: [Startup] Current Day in Cycle: ${currentDayInCycle}`);
-  if (isBloodMoonActive()) {
-    console.log(`[index.js]: [Startup] Blood Moon is ACTIVE on Day ${currentDayInCycle}.`);
-  } else {
-    console.log(`[index.js]: [Startup] Blood Moon is NOT active. Day ${currentDayInCycle} in cycle.`);
-  }
-
-  scheduler(client);
+   // Log Blood Moon Status
+   logBloodMoonStatus();
+ 
+   scheduler(client);
 
     // // Generate Vending Stock
     // try {

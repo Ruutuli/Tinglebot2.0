@@ -95,11 +95,24 @@ const deleteCharacterById = async (characterId) => {
 
 // ------------------- Get the inventory collection for a specific character -------------------
 const getCharacterInventoryCollection = async (characterName) => {
-    await connectToInventories();
-    const collectionName = characterName.trim().toLowerCase();
-    return await getInventoryCollection(collectionName);
-    
+  try {
+      console.log(`[getCharacterInventoryCollection]: Fetching inventory for character "${characterName}"`); // Log character name
+
+      if (typeof characterName !== 'string') {
+          throw new TypeError(`Expected a string for characterName, but received ${typeof characterName}`);
+      }
+
+      await connectToInventories();
+      const collectionName = characterName.trim().toLowerCase(); // Ensure it's a string
+      console.log(`[getCharacterInventoryCollection]: Connected to collection "${collectionName}"`); // Log collection name
+
+      return await getInventoryCollection(collectionName);
+  } catch (error) {
+      console.error(`[getCharacterInventoryCollection]: Error fetching inventory for character "${characterName}":`, error); // Log errors
+      throw error;
+  }
 };
+
 
 // ------------------- Create a new inventory for a character -------------------
 const createCharacterInventory = async (characterName, characterId, job) => {

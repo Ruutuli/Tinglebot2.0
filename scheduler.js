@@ -21,7 +21,7 @@ const { resetPetRollsForAllCharacters } = require('./database/characterService')
 const { createScheduledQuest } = require('./database/questService');
 
 // ------------------- Modules -------------------
-const { sendBloodMoonAnnouncement, trackBloodMoonCycle } = require('./scripts/bloodmoon');
+const {sendBloodMoonAnnouncement, sendBloodMoonEndAnnouncement, isBloodMoonDay, renameChannels, revertChannelNames} = require('./scripts/bloodmoon');
 const { fetchQuestsFromSheet } = require('./scripts/questAnnouncements');
 
 // ------------------- Utility Functions -------------------
@@ -140,7 +140,7 @@ cron.schedule('0 2 1 * *', async () => {
 }, { timezone: 'America/New_York' });
 
   // ------------------- Daily Blight Roll Call -------------------
-  cron.schedule('00 20 * * *', async () => {
+  cron.schedule('0 20 * * *', async () => { // set back to 20 after testing 
   try {
       console.log('v⏰ Sending daily blight roll call...');
       await postBlightRollCall(client);
@@ -189,47 +189,36 @@ cron.schedule('0 2 1 * *', async () => {
   }
 }, { timezone: 'America/New_York' });
 
-  // ------------------- Monthly Blood Moon Announcement -------------------
-  cron.schedule('0 20 1 * *', async () => {
-    try {
-      console.log('🌕 Posting Blood Moon announcement...');
-      const channels = [
-        process.env.RUDANIA_TOWN_HALL,
-        process.env.INARIKO_TOWN_HALL,
-        process.env.VHINTL_TOWN_HALL,
-      ];
-      for (const channelId of channels) {
-        await sendBloodMoonAnnouncement(client, channelId);
-      }
-      console.log('✅ Blood Moon announcement posted successfully.');
-    } catch (error) {
-      console.error('❌ [Scheduler.js] Error during Blood Moon announcement:', error);
-    }
-  }, { timezone: 'America/New_York' });
-
-
-   // ------------------- Blood Moon Tracking -------------------
+   // ------------------- Daily Blood Moon Tracking and Announcement -------------------
    cron.schedule(
-    '0 0 * * *',
-    () => {
+    '0 0 * * *', // Run daily at midnight
+    async () => {
       const channels = [
         process.env.RUDANIA_TOWN_HALL,
         process.env.INARIKO_TOWN_HALL,
         process.env.VHINTL_TOWN_HALL,
       ];
 
-      channels.forEach(channelId => {
+      for (const channelId of channels) {
         try {
-          trackBloodMoonCycle(client, channelId);
+          if (isBloodMoonDay()) {
+            console.log('[scheduler] 🌕 Blood Moon is ACTIVE.');
+            await renameChannels(client);
+            await sendBloodMoonAnnouncement(client, channelId, 'The Blood Moon is upon us! Beware!');
+          } else {
+            console.log('[scheduler] 🌑 No Blood Moon today.');
+            await revertChannelNames(client);
+          }
         } catch (error) {
-          console.error(`[scheduler]: ❌ Error tracking Blood Moon for channel ${channelId}:`, error.message);
+          console.error(`[scheduler] ❌ Error during Blood Moon tracking for channel ${channelId}:`, error.message);
         }
-      });
+      }
     },
     { timezone: 'America/New_York' }
   );
-  console.log('[scheduler]: 🌕 Blood Moon tracking scheduled at midnight daily.');
- 
+
+  console.log('[scheduler] 🌕 Blood Moon scheduling tasks initialized.');
+
   // ------------------- Daily Birthday Announcements -------------------
   cron.schedule('0 0 * * *', async () => {
     try {

@@ -20,7 +20,8 @@ const { generateUniqueId } = require('../utils/uniqueIdUtils');
 
 // ------------------- Services -------------------
 const { appendSpentTokens, updateTokenBalance, getTokenBalance, getOrCreateToken } = require('../database/tokenService');
-const { fetchCharacterByNameAndUserId } = require('../database/characterService');
+const { getCharacterInventoryCollection, fetchCharacterById  } = require('../database/characterService');
+const { fetchItemByName } = require('../database/itemService');
 
 // Channel ID for Blight Notifications
 const channelId = process.env.BLIGHT_NOTIFICATIONS_CHANNEL_ID;
@@ -112,7 +113,7 @@ async function healBlight(interaction, characterName, healerName) {
     }
 
     const healingRequirement = getRandomHealingRequirement(healer, characterName);
-    const roleplayResponse = healer.roleplayResponse(characterName);
+    const roleplayResponse = healer.roleplayResponseBefore(characterName);
 
     // ------------------- Check for Existing Submission and Update if Found -------------------
     const blightSubmissions = loadBlightSubmissions();
@@ -140,35 +141,52 @@ async function healBlight(interaction, characterName, healerName) {
 
     // ------------------- Send the Healing Request Embed -------------------
     const embed = new EmbedBuilder()
-      .setColor('#AA926A')
-      .setTitle(`${healer.name} from the village of ${healer.village} has heard your request to heal ${characterName}.`)
-      .setDescription(`${roleplayResponse}`)
-      .setAuthor({
-        name: `${characterName}`, // Character's name
-        iconURL: character.icon // Character's icon as the author icon
-      })
-      .setThumbnail(healer.iconUrl) // Set the healer's icon as the embed's thumbnail
-      .addFields(
-        { name: '<:bb0:854499720797618207> __Healing Requiremen__t', value: `> ${healingRequirement.description}` },
-        { name: '<:bb0:854499720797618207> __Submission ID__', value: `\`\`\`${submissionId}\`\`\`` },
-        {
-          name: '<:bb0:854499720797618207> __Alternative Option__',
-          value: `> If you cannot fulfill this request, you can forfeit all of your total tokens to be healed. Use </blight submit:1306176789634355241> to forfeit your tokens.`
-        }
-      )
-      .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
-      .setFooter({ text: 'Use the Submission ID when you submit your task with </blight submit>' })
-      .setTimestamp();
+    .setColor('#AA926A')
+    .setTitle(`${healer.name} from the village of ${healer.village} has heard your request to heal ${characterName}.`)
+    .setDescription(`${roleplayResponse}`)
+    .setAuthor({ name: `${characterName}`, iconURL: character.icon })
+    .setThumbnail(healer.iconUrl)
+    .addFields(
+      {
+        name: '<:bb0:854499720797618207> __Healing Requirement__',
+        value: `> **Type**: ${
+          healingRequirement.type === 'art'
+            ? '🎨 Art'
+            : healingRequirement.type === 'writing'
+            ? '✍️ Writing'
+            : '🍎 Item'
+        }\n> ${healingRequirement.description}`,
+      },
+      { name: '<:bb0:854499720797618207> __Submission ID__', value: `\`\`\`${submissionId}\`\`\`` },
+      {
+        name: '<:bb0:854499720797618207> __Alternative Option__',
+        value: `> If you cannot fulfill this request, you can forfeit all of your total tokens to be healed. Use </blight submit:1306176789634355241> to forfeit your tokens.`,
+      }
+    )
+    .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+    .setFooter({ text: 'Use the Submission ID when you submit your task with /blight submit' })
+    .setTimestamp();
 
-    await interaction.reply({
+  // Mention the user in the channel
+  await interaction.reply({
+    content: `<@${interaction.user.id}>`,
+    embeds: [embed],
+    ephemeral: false,
+  });
+
+  // Attempt to send the embed as a DM
+  try {
+    await interaction.user.send({
+      content: `Hi <@${interaction.user.id}>, here are the details of your healing request:`,
       embeds: [embed],
-      ephemeral: false
     });
-
   } catch (error) {
-    console.error('Error healing blight:', error);
-    await interaction.reply({ content: 'An error occurred while processing your request.', ephemeral: true });
+    console.error(`Failed to send DM to user ${interaction.user.id}:`, error);
   }
+} catch (error) {
+  console.error('Error healing blight:', error);
+  await interaction.reply({ content: 'An error occurred while processing your request.', ephemeral: true });
+}
 }
 
 // ------------------- Submit Healing Task -------------------
@@ -202,130 +220,201 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
     }
 
     // ------------------- Token Forfeit Option -------------------
-    if (tokens) {
-      const currentTokenBalance = await getTokenBalance(interaction.user.id);
+if (tokens) {
+  const currentTokenBalance = await getTokenBalance(interaction.user.id);
 
-      if (currentTokenBalance <= 0) {
-        await interaction.editReply({ content: 'You do not have enough tokens to forfeit.' });
-        return;
-      }
-
-      await updateTokenBalance(interaction.user.id, -currentTokenBalance);
-      submission.status = 'completed';
-      submission.submittedAt = new Date().toISOString();
-      submission.forfeitTokens = true;
-      saveBlightSubmissions(blightSubmissions);
-
-      const token = await getOrCreateToken(interaction.user.id);
-      const embed = new EmbedBuilder()
-        .setColor('#AA926A')
-        .setTitle(`Blight Healing Completed for ${submission.characterName}`)
-        .setDescription(`You have forfeited **${currentTokenBalance} tokens** in exchange for healing **${submission.characterName}**.`)
-        .setThumbnail(healer.iconUrl)
-        .setFooter({ text: 'Healing status successfully updated.' })
-        .setTimestamp();
-
-      await interaction.editReply({ embeds: [embed] });
-
-      character.blighted = false;
-      character.blightStage = 0;
-      await character.save();
-
-      deleteSubmissionFromStorage(submissionId);
+  if (currentTokenBalance <= 0) {
+      await interaction.editReply({ content: 'You do not have enough tokens to forfeit. You must have more than 0 tokens to use this option.' });
       return;
-    }
+  }
 
-    // ------------------- Item Submission -------------------
-    if (submission.taskType === 'item') {
-      if (!item) {
-        await interaction.editReply({ content: `You must provide an item to submit for healing by **${healer.name}**.`, ephemeral: true });
-        return;
-      }
+  await updateTokenBalance(interaction.user.id, -currentTokenBalance);
+  submission.status = 'completed';
+  submission.submittedAt = new Date().toISOString();
+  submission.forfeitTokens = true;
 
-      const healingItems = healer.getHealingRequirements(submission.characterName).find(req => req.type === 'item').items;
-      const [itemName, itemQuantity] = item.split(' x');
-      const itemQuantityInt = parseInt(itemQuantity, 10);
-      const requiredItem = healingItems.find(i => i.name === itemName && i.quantity === itemQuantityInt);
+  // Ensure Blight healing prompt is removed from the database
+  delete blightSubmissions[submissionId];
+  saveBlightSubmissions(blightSubmissions);
+  deleteSubmissionFromStorage(submissionId);
 
-      if (!requiredItem) {
-        await interaction.editReply({ content: `The item **${item}** is not valid for healing by **${healer.name}**.`, ephemeral: true });
-        return;
-      }
-
-      const hasItem = await removeItemInventoryDatabase(character._id, requiredItem.name, requiredItem.quantity, interaction);
-      if (!hasItem) {
-        console.error(`Inventory Check Failed: Required item (${requiredItem.name}) not found or insufficient quantity.`);
-        console.error(`Character ID: ${character._id}, Item Name: ${requiredItem.name}, Quantity: ${requiredItem.quantity}`);
-        console.error(`Full Inventory: ${JSON.stringify(character.inventory, null, 2)}`);
-        
-        await interaction.editReply({ content: `You do not have the required item (**${requiredItem.name}**) to be healed.`, ephemeral: true });
-        return;
-      }
-    
-      submission.status = 'completed';
-      submission.submittedAt = new Date().toISOString();
-      submission.itemUsed = item;
-      delete blightSubmissions[submissionId]; // Remove the completed submission
-      saveBlightSubmissions(blightSubmissions); // Save updated submissions
-      deleteSubmissionFromStorage(submissionId); // Ensure persistent deletion     
- 
- // Update character's blight status
- character.blighted = false;
- character.blightStage = 0;
- await character.save();
-
- saveBlightSubmissions(blightSubmissions);
-
-      // Log the healing to Google Sheets
-      const inventoryLink = character.inventory || character.inventoryLink;
-      if (inventoryLink) {
-        const spreadsheetId = extractSpreadsheetId(inventoryLink);
-        const range = 'loggedInventory!A2:M';
-        const uniqueSyncId = uuidv4();
-        const formattedDateTime = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
-        const auth = await authorizeSheets();
-
-        const values = [[
-          character.name, // Character Name
-          itemName, // Item Name
-          `-${itemQuantityInt}`, // Quantity (Negative for usage)
-          'Healing', // Category
-          submission.taskType, // Type
-          '', // Subtype
-          'Blight Healing', // How it was obtained
-          character.job, // Job
-          '', // Perk
-          character.currentVillage, // Location
-          interaction.url, // Link
-          formattedDateTime, // Date/Time
-          uniqueSyncId // Sync ID
-        ]];
-
-        try {
-          await appendSheetData(auth, spreadsheetId, range, values);
-        } catch (error) {
-          console.error('Error appending to Google Sheets:', error);
-        }
-      }
-
-      const embed = new EmbedBuilder()
+  const token = await getOrCreateToken(interaction.user.id);
+  const embed = new EmbedBuilder()
       .setColor('#AA926A')
-      .setTitle(`${submission.characterName} has been healed of their blight by ${submission.healerName}!`)
-      .setDescription(`${healer.roleplayResponse(submission.characterName)}`) // Roleplay response as the description
-      .addFields({ name: 'Submitted Item', value: `**Item**: ${itemName} x${itemQuantityInt}` }) // Item as a separate field
+      .setTitle(`Blight Healing Completed for ${submission.characterName}`)
+      .setDescription(`You have forfeited **${currentTokenBalance} tokens** in exchange for healing **${submission.characterName}**.`)
       .setThumbnail(healer.iconUrl)
-      .setAuthor({ name: submission.characterName, iconURL: character.icon })
-      .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png') // Add image URL
+      .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+      .setDescription(`${healer.roleplayResponseAfter(submission.characterName)}
+
+You have forfeited **${currentTokenBalance} tokens** in exchange for healing **${submission.characterName}**.`)
       .setFooter({ text: 'Healing status successfully updated.' })
       .setTimestamp();
-    
-    await interaction.editReply({ embeds: [embed], ephemeral: false });
-    
 
-      deleteSubmissionFromStorage(submissionId);
-      saveBlightSubmissions(blightSubmissions);
+  await interaction.editReply({ embeds: [embed] });
+
+  character.blighted = false;
+  character.blightStage = 0;
+  await character.save();
+
+  return;
+}
+
+   // ------------------- Item Submission -------------------
+if (submission.taskType === 'item') {
+  if (!item) {
+      await interaction.editReply({
+          content: `You must provide an item to submit for healing by **${healer.name}**.`,
+          ephemeral: true,
+      });
       return;
-    }
+  }
+
+  const healingItems = healer.getHealingRequirements(submission.characterName).find(req => req.type === 'item').items;
+  const [itemName, itemQuantity] = item.split(' x');
+  const itemQuantityInt = parseInt(itemQuantity, 10);
+  const requiredItem = healingItems.find(i => i.name === itemName && i.quantity === itemQuantityInt);
+
+  if (!requiredItem) {
+      await interaction.editReply({
+          content: `**${itemName} x${itemQuantityInt}** doesn’t seem to be one of the items **${healer.name}** mentioned! Please check the requirements and try again with the correct item.`,
+          ephemeral: true,
+      });
+      return;
+  }
+
+  // Utility to escape special characters in a string for use in regular expressions
+  function escapeRegExp(string) {
+      return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // Escapes special characters
+  }
+
+  const hasItem = async (characterId, itemName, requiredQuantity) => {
+      try {
+          console.log(`[hasItem]: Fetching inventory for character ID: ${characterId}`);
+
+          const character = await fetchCharacterById(characterId);
+          const collection = await getCharacterInventoryCollection(character.name);
+
+          console.log(`[hasItem]: Connected to inventory collection.`);
+
+          // Fetch all inventory items for the character
+          const inventoryItems = await collection.find({}).toArray();
+
+          // Consolidate quantities for items with the same name
+          const totalQuantity = inventoryItems
+              .filter(item => item.itemName.toLowerCase() === itemName.toLowerCase())
+              .reduce((sum, item) => sum + item.quantity, 0);
+
+          console.log(`[hasItem]: Total quantity for item "${itemName}": ${totalQuantity}`);
+
+          return {
+              available: totalQuantity >= requiredQuantity,
+              quantity: totalQuantity,
+          };
+      } catch (error) {
+          console.error(`[hasItem]: Error fetching inventory for character ID ${characterId}:`, error);
+          throw error;
+      }
+  };
+
+  // Validation usage
+  const validationResult = await hasItem(character._id, requiredItem.name, requiredItem.quantity);
+
+  console.log(`[submitHealingTask]: Validation result for item "${requiredItem.name}":`, validationResult);
+
+  if (!validationResult.available) {
+      console.log(`[submitHealingTask]: Insufficient quantity for "${requiredItem.name}". ` +
+          `Required: ${requiredItem.quantity}, Available: ${validationResult.quantity}`);
+      await interaction.editReply({
+          content: `**${character.name}** does not have enough of the required item **${requiredItem.name}**. ` +
+              `**${character.name}** currently has **${validationResult.quantity}**, but **${requiredItem.quantity}** is needed.`,
+          ephemeral: true,
+      });
+      return;
+  }
+
+  // Remove item from inventory
+  const removed = await removeItemInventoryDatabase(character._id, itemName, itemQuantityInt, interaction);
+  if (!removed) {
+      throw new Error(`Failed to remove ${itemName} x${itemQuantityInt} from inventory.`);
+  }
+
+  const itemDetails = await fetchItemByName(itemName); // Fetch item details from the database
+  const itemEmoji = itemDetails?.emoji || requiredItem.emoji || ''; // Use fetched emoji or fallback to requiredItem.emoji
+
+  const replyMessage = await interaction.editReply({
+      embeds: [
+          new EmbedBuilder()
+              .setColor('#AA926A')
+              .setTitle(`${submission.characterName} has been healed of their blight by ${submission.healerName}!`)
+              .setDescription(`${healer.roleplayResponseAfter(submission.characterName)}`)
+              .addFields(
+                  { name: 'Submitted Item', value: `${itemEmoji} **Item**: ${itemName} x${itemQuantityInt}` },
+                  { name: 'Inventory Link', value: `[View Inventory](${character.inventory})` }
+              )
+              .setThumbnail(healer.iconUrl)
+              .setAuthor({ name: submission.characterName, iconURL: character.icon })
+              .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+              .setFooter({ text: 'Healing status successfully updated.' })
+              .setTimestamp()
+      ]
+  });
+
+  const messageLink = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${replyMessage.id}`;
+
+  // Log the healing to Google Sheets
+  const inventoryLink = character.inventory || character.inventoryLink;
+  if (inventoryLink) {
+      const spreadsheetId = extractSpreadsheetId(inventoryLink);
+      const range = 'loggedInventory!A2:M';
+      const uniqueSyncId = uuidv4();
+      const formattedDateTime = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
+      const auth = await authorizeSheets();
+
+      const values = [[
+          character.name,         // Character Name
+          itemName,               // Item Name
+          `-${itemQuantityInt}`,  // Quantity (Negative for usage)
+          'Healing',              // Category
+          submission.taskType,    // Type
+          '',                     // Subtype
+          'Blight Healing',       // How it was obtained
+          character.job,          // Job
+          '',                     // Perk
+          character.currentVillage, // Location
+          messageLink,            // Link to the reply message
+          formattedDateTime,      // Date/Time
+          uniqueSyncId            // Sync ID
+      ]];
+
+      try {
+          await appendSheetData(auth, spreadsheetId, range, values);
+      } catch (error) {
+          console.error('Error appending to Google Sheets:', error);
+      }
+  }
+
+  const embed = new EmbedBuilder()
+      .setColor('#AA926A')
+      .setTitle(`${submission.characterName} has been healed of their blight by ${submission.healerName}!`)
+      .setDescription(`${healer.roleplayResponseAfter(submission.characterName)}`)
+      .addFields(
+          { name: 'Submitted Item', value: `${requiredItem.emoji || itemEmoji} **Item**: ${itemName} x${itemQuantityInt}` },
+          { name: 'Inventory Link', value: `[View Inventory](${character.inventory})` }
+      )
+      .setThumbnail(healer.iconUrl)
+      .setAuthor({ name: submission.characterName, iconURL: character.icon })
+      .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+      .setFooter({ text: 'Healing status successfully updated.' })
+      .setTimestamp();
+
+  await interaction.editReply({ embeds: [embed], ephemeral: false });
+
+  deleteSubmissionFromStorage(submissionId);
+  saveBlightSubmissions(blightSubmissions);
+  return;
+}
+
 
     // ------------------- Art or Writing Submission -------------------
     if (['art', 'writing'].includes(submission.taskType)) {
@@ -343,7 +432,7 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
       const embed = new EmbedBuilder()
       .setColor('#AA926A')
       .setTitle(`${submission.characterName} has been healed of their blight by ${submission.healerName}!`)
-      .setDescription(`${healer.roleplayResponse(submission.characterName)}`) // Roleplay response as the description
+      .setDescription(`${healer.roleplayResponseAfter(submission.characterName)}`) // Roleplay response after healing
       .addFields(
         { name: 'Submitted Link', value: `[View Submission](${link})` } // Link as a field
       )
@@ -581,84 +670,104 @@ async function checkMissedRolls(client) {
       const lastRollDate = character.lastRollDate || new Date(0); // Default to epoch if no roll has been made
       const timeSinceLastRoll = Date.now() - lastRollDate.getTime();
 
-      if (timeSinceLastRoll > 24 * 60 * 60 * 1000) { // 24 hours in milliseconds
-        // Progress to the next stage automatically
-        if (character.blightStage < 5) {
-          character.blightStage += 1;
-          
-          if (character.blightStage === 5) {
-            // Set the death deadline when reaching Stage 5
-            character.deathDeadline = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days from now
-          }
-          
-          await character.save();
-        
-          // Get the blight stage description
-          const blightStageInfo = blightStages[character.blightStage] || { description: 'Unknown stage.' };
-        
-        // Notify in the channel about the progression
-const embed = new EmbedBuilder()
-.setColor('#AD1457') // Same color as the blight roll call
-.setTitle(
-  `⚠️ ${character.name} has progressed to Blight Stage ${character.blightStage}`
-)
-.setDescription(
-  `${blightStageInfo.description}\n\n${
-    character.blightStage === 5
-      ? `❗ **Missed Roll**: Your blight has progressed because you missed your daily roll.\n\n` +
-        `The blight has reached its final stage—a death sentence. Perhaps a last-ditch effort can bring you salvation...\n\nYou can only be saved by a **Dragon**\n` +
-        `🕒 **Deadline**: <t:${Math.floor(
-          character.deathDeadline.getTime() / 1000
-        )}:F>\n\n⚠️ **You must be healed before the deadline to avoid certain death.**`
-      : '❗ **Missed Roll**: Your blight has progressed because you missed your daily roll. Missing further rolls will cause additional progression.'
-  }`
-)
-.setFooter({ text: `Missed roll - your blight has progressed!` })
-.setAuthor({
-  name: 'Blight Progression Alert',
-  iconURL:
-    'https://static.wixstatic.com/media/7573f4_a510c95090fd43f5ae17e20d80c1289e~mv2.png/v1/fill/w_30,h_30,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/icon%20-%20blight.png',
-})
-.setThumbnail(character.icon) // Add character icon as the thumbnail
-.setImage('https://storage.googleapis.com/tinglebot/border%20blight.png') // Same image as roll call
-.setTimestamp();
+      // Check if the character's death deadline has passed
+      if (character.blightStage === 5 && character.deathDeadline) {
+        const now = new Date();
 
-await channel.send({ content: `<@${character.userId}>`, embeds: [embed] });
+        if (now > character.deathDeadline) {
+          console.log(`[blightHandler]⚠️ Character ${character.name}'s death deadline has passed.`);
 
-console.log(
-`[blightHandler]✅ Character ${character.name} has progressed to Stage ${character.blightStage} due to missed roll.`
-);
-
-        } else {
-          console.log(`[blightHandler]⚠️ Character ${character.name} is already at Stage 5 (Death).`);
-        
           // Mark the character as dead
           character.blighted = false;
           character.blightStage = 0;
           character.deathDeadline = null; // Clear the deadline
           await character.save();
-        
-        // Send the dramatic death alert
-        const embed = new EmbedBuilder()
-          .setColor('#D32F2F') // Dramatic red for death
-          .setTitle(`<:blight_eye:805576955725611058> **Blight Death Alert** <:blight_eye:805576955725611058>`)
-          .setDescription(`**${character.name}** has succumbed to Stage 5 Blight..\n\n *This character and all of their items have been removed...*`)
-          .setThumbnail(character.icon || 'https://example.com/default-icon.png') // Use the character's icon or a default image
-          .setFooter({ text: 'Blight Death Announcement', iconURL: 'https://example.com/blight-icon.png' })
-          .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png') // Same image as roll call
-          .setTimestamp();
 
-        // Verify and mention the user
-        if (character.userId) {
-          await channel.send({ content: `<@${character.userId}>`, embeds: [embed] });
-        } else {
-          console.error(`[Blight Death Alert] Missing userId for character: ${character.name}`);
-          await channel.send({ embeds: [embed] });
-        }
+          // Send the dramatic death alert
+          const embed = new EmbedBuilder()
+            .setColor('#D32F2F') // Dramatic red for death
+            .setTitle(`<:blight_eye:805576955725611058> **Blight Death Alert** <:blight_eye:805576955725611058>`)
+            .setDescription(`**${character.name}** has succumbed to Stage 5 Blight.\n\n *This character and all of their items have been removed...*`)
+            .setThumbnail(character.icon || 'https://example.com/default-icon.png') // Use the character's icon or a default image
+            .setFooter({ text: 'Blight Death Announcement', iconURL: 'https://example.com/blight-icon.png' })
+            .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png') // Same image as roll call
+            .setTimestamp();
 
+          // Verify and mention the user
+          if (character.userId) {
+            await channel.send({ content: `<@${character.userId}>`, embeds: [embed] });
+          } else {
+            console.error(`[Blight Death Alert] Missing userId for character: ${character.name}`);
+            await channel.send({ embeds: [embed] });
+          }
 
           console.log(`📨 Notification sent to the Community Board for ${character.name}'s death.`);
-        }        
+          continue; // Skip to the next character
+        } else {
+          // Notify about the character still being alive with a deadline
+          const embed = new EmbedBuilder()
+            .setColor('#AD1457')
+            .setTitle(`⚠️ ${character.name} is at Blight Stage 5`)
+            .setDescription(
+              `❗ **Missed Roll**: Your blight is at the final stage and you are on the edge of death.\n\n` +
+              `🕒 **Deadline**: <t:${Math.floor(character.deathDeadline.getTime() / 1000)}:F>\n\n` +
+              `⚠️ **You must be healed before the deadline to avoid certain death.**`
+            )
+            .setFooter({ text: 'Blight Stage 5 Alert' })
+            .setThumbnail(character.icon || 'https://example.com/default-icon.png')
+            .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png')
+            .setTimestamp();
+
+          await channel.send({ content: `<@${character.userId}>`, embeds: [embed] });
+          console.log(`⚠️ Notification sent for ${character.name}'s Stage 5 deadline.`);
+          continue; // Skip to the next character
+        }
+      }
+
+      if (timeSinceLastRoll > 24 * 60 * 60 * 1000) { // 24 hours in milliseconds
+        // Progress to the next stage automatically
+        if (character.blightStage < 5) {
+          character.blightStage += 1;
+
+          if (character.blightStage === 5) {
+            // Set the death deadline when reaching Stage 5
+            character.deathDeadline = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days from now
+          }
+
+          await character.save();
+
+          // Get the blight stage description
+          const blightStageInfo = blightStages[character.blightStage] || { description: 'Unknown stage.' };
+
+          // Notify in the channel about the progression
+          const embed = new EmbedBuilder()
+            .setColor('#AD1457') // Same color as the blight roll call
+            .setTitle(`⚠️ ${character.name} has progressed to Blight Stage ${character.blightStage}`)
+            .setDescription(`${blightStageInfo.description}\n\n${
+              character.blightStage === 5
+                ? `❗ **Missed Roll**: Your blight has progressed because you missed your daily roll.\n\n` +
+                  `The blight has reached its final stage—a death sentence. Perhaps a last-ditch effort can bring you salvation...\n\nYou can only be saved by a **Dragon**\n` +
+                  `🕒 **Deadline**: <t:${Math.floor(character.deathDeadline.getTime() / 1000)}:F>\n\n⚠️ **You must be healed before the deadline to avoid certain death.**`
+                : '❗ **Missed Roll**: Your blight has progressed because you missed your daily roll. Missing further rolls will cause additional progression.'
+            }`)
+            .setFooter({ text: `Missed roll - your blight has progressed!` })
+            .setAuthor({
+              name: 'Blight Progression Alert',
+              iconURL: 'https://static.wixstatic.com/media/7573f4_a510c95090fd43f5ae17e20d80c1289e~mv2.png/v1/fill/w_30,h_30,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/icon%20-%20blight.png',
+            })
+            .setThumbnail(character.icon) // Add character icon as the thumbnail
+            .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png') // Same image as roll call
+            .setTimestamp();
+
+          await channel.send({ content: `<@${character.userId}>`, embeds: [embed] });
+
+          console.log(
+            `[blightHandler]✅ Character ${character.name} has progressed to Stage ${character.blightStage} due to missed roll.`
+          );
+
+        } else {
+          console.log(`[blightHandler]⚠️ Character ${character.name} is already at Stage 5 (Death).`);
+        }
       }
     }
   } catch (error) {
