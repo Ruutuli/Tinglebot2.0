@@ -32,6 +32,7 @@ const { getVillageColorByName } = require('../modules/locationsModule'); // Vill
 const { isValidRace } = require('../modules/raceModule'); // Race validation utility
 const { updateHearts,   updateStamina } = require('../modules/characterStatsModule'); // Character stats updates
 const { capitalizeFirstLetter } = require('../modules/formattingModule'); // Formatting utility
+const { roles } = require('../modules/rolesModule');
 
 // Utilities
 const { canChangeJob,   canChangeVillage,   isUniqueCharacterName,   convertCmToFeetInches } = require('../utils/validation'); // Validation utilities
@@ -115,6 +116,54 @@ module.exports = {
       let previousValue = character[category] !== undefined ? character[category] : 'N/A';
 
       let updatedValue;
+
+// ------------------- Update Roles -------------------
+if (['race', 'homeVillage'].includes(category)) {
+  const member = interaction.member;
+
+  console.log(`[Roles]: Updating roles for user "${member.user.tag}".`);
+  console.log(`[Roles]: Category to update: "${category}", Previous Value: "${previousValue}", Updated Value: "${updatedInfo}".`);
+
+  // Map category to role list in rolesModule
+  const roleCategory = {
+    race: 'Races',
+    homeVillage: 'Villages'
+  }[category];
+
+  // Define roles to modify
+  const roleToRemove = roles[roleCategory]?.find(r =>
+    r.name === (category === 'homeVillage' ? `${previousValue} Resident` : `Race: ${previousValue}`)
+  );
+  const roleToAdd = roles[roleCategory]?.find(r =>
+    r.name === (category === 'homeVillage' ? `${updatedInfo} Resident` : `Race: ${updatedInfo}`)
+  );
+
+  // Remove the old role
+  if (roleToRemove) {
+    const role = interaction.guild.roles.cache.find(r => r.name === roleToRemove.name);
+    if (role) {
+      await member.roles.remove(role);
+      console.log(`[Roles]: Removed role "${role.name}" from user "${member.user.tag}".`);
+    } else {
+      console.warn(`[Roles]: Role "${roleToRemove.name}" not found in the guild.`);
+    }
+  } else {
+    console.log(`[Roles]: No role to remove for "${previousValue}".`);
+  }
+
+  // Add the new role
+  if (roleToAdd) {
+    const role = interaction.guild.roles.cache.find(r => r.name === roleToAdd.name);
+    if (role) {
+      await member.roles.add(role);
+      console.log(`[Roles]: Assigned role "${role.name}" to user "${member.user.tag}".`);
+    } else {
+      console.warn(`[Roles]: Role "${roleToAdd.name}" not found in the guild.`);
+    }
+  } else {
+    console.log(`[Roles]: No role to add for "${updatedInfo}".`);
+  }
+}
       
 // ------------------- Handle Each Category Update -------------------
 
@@ -371,53 +420,63 @@ await interaction.followUp({ content: updateMessage, embeds: [embed], ephemeral:
 // ------------------- Helper Function: Job Category Selection -------------------
 // Handles the selection of jobs when editing a character's job
 async function handleJobCategorySelection(interaction, character, updatedInfo) {
-
   let jobs;
   let pageIndex = 1;
 
+  // Determine the list of jobs based on the updatedInfo
   if (updatedInfo === 'General Jobs') {
-      jobs = getGeneralJobsPage(pageIndex);
+    jobs = getGeneralJobsPage(pageIndex);
   } else {
-      jobs = getJobsByCategory(updatedInfo);
+    jobs = getJobsByCategory(updatedInfo);
   }
 
-
-  const jobButtons = jobs.map(job => new ButtonBuilder()
-      .setCustomId(`job-select|${character._id}|${job}`)
+  // Create buttons for each job
+  const jobButtons = jobs.map(job =>
+    new ButtonBuilder()
+      .setCustomId(`job-select|${character._id}|${job}`) // Include job name in custom ID
       .setLabel(job)
       .setStyle(ButtonStyle.Primary)
   );
 
+  // Organize buttons into rows (maximum 5 per row)
   const rows = [];
-  while (jobButtons.length) rows.push(new ActionRowBuilder().addComponents(jobButtons.splice(0, 5)));
+  while (jobButtons.length) {
+    rows.push(new ActionRowBuilder().addComponents(jobButtons.splice(0, 5)));
+  }
 
+  // Set up embed and navigation for multiple pages of jobs
   const embedColor = getVillageColorByName(updatedInfo.split(' ')[0]) || '#00CED1';
   const embed = new EmbedBuilder()
-      .setTitle(`${updatedInfo}`)
-      .setDescription('Select a job from the buttons below:')
-      .setColor(embedColor);
+    .setTitle(`${updatedInfo}`)
+    .setDescription('Select a job from the buttons below:')
+    .setColor(embedColor);
 
   let components = [...rows];
   if (updatedInfo === 'General Jobs') {
-      const previousPageIndex = pageIndex - 1;
-      const nextPageIndex = pageIndex + 1;
-      const navigationButtons = [
-          new ButtonBuilder()
-              .setCustomId(`job-page|${character._id}|${previousPageIndex}`)
-              .setLabel('Previous')
-              .setStyle(ButtonStyle.Secondary)
-              .setDisabled(previousPageIndex < 1),
-          new ButtonBuilder()
-              .setCustomId(`job-page|${character._id}|${nextPageIndex}`)
-              .setLabel('Next')
-              .setStyle(ButtonStyle.Secondary)
-              .setDisabled(nextPageIndex > 2)
-      ];
+    const previousPageIndex = pageIndex - 1;
+    const nextPageIndex = pageIndex + 1;
+    const navigationButtons = [
+      new ButtonBuilder()
+        .setCustomId(`job-page|${character._id}|${previousPageIndex}`)
+        .setLabel('Previous')
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(previousPageIndex < 1),
+      new ButtonBuilder()
+        .setCustomId(`job-page|${character._id}|${nextPageIndex}`)
+        .setLabel('Next')
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(nextPageIndex > 2)
+    ];
 
-      const navigationRow = new ActionRowBuilder().addComponents(navigationButtons);
-      components.push(navigationRow);
+    const navigationRow = new ActionRowBuilder().addComponents(navigationButtons);
+    components.push(navigationRow);
   }
 
+  // Send the job selection embed with buttons
   await interaction.followUp({ embeds: [embed], components, ephemeral: true });
+
+  console.log(`[Job Selection]: Job selection buttons sent for user "${interaction.user.tag}".`);
 }
+
+
 

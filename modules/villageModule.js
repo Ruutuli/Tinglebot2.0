@@ -46,7 +46,9 @@ async function getVillageInfo(villageName) {
 async function damageVillage(villageName, damageAmount) {
     try {
         const village = await Village.findOne({ name: { $regex: `^${villageName}$`, $options: 'i' } });
-        if (!village) throw new Error(`Village "${villageName}" not found.`);
+        if (!village) {
+            throw new Error(`[damageVillage] Village "${villageName}" not found. Ensure the name is correct.`);
+        }
 
         const maxHealth = village.levelHealth[village.level.toString()] || 100; // Maximum health for the current level
         const percentageDamage = Math.min(damageAmount / maxHealth, 1); // Cap percentage at 100%
@@ -109,7 +111,7 @@ async function damageVillage(villageName, damageAmount) {
         await village.save();
         return { village, removedResources };
     } catch (error) {
-        console.error(`[damageVillage] Error:`, error);
+        console.error(`[damageVillage] Error for village "${villageName}":`, error.message);
         throw error;
     }
 }
@@ -118,6 +120,11 @@ async function damageVillage(villageName, damageAmount) {
 // ------------------- apply Village Damage -------------------
 async function applyVillageDamage(villageName, monster, thread) {
     try {
+        if (!villageName) throw new Error(`[applyVillageDamage] Invalid village name: "${villageName}".`);
+        if (!monster || !monster.tier) {
+            throw new Error(`[applyVillageDamage] Invalid monster data: ${JSON.stringify(monster)}.`);
+        }
+
         // Determine damage based on monster tier
         const damageAmount = Math.ceil(monster.tier * 1.5); // Damage based on monster tier
         console.log(`[applyVillageDamage] Calculated damage: ${damageAmount} (Monster Tier: ${monster.tier})`);
@@ -169,8 +176,6 @@ async function applyVillageDamage(villageName, monster, thread) {
         console.error('[applyVillageDamage] Error applying village damage:', error);
     }
 }
-
-
 
 // ------------------- Exported Functions -------------------
 module.exports = {

@@ -15,7 +15,6 @@ const { monsterMapping } = require('../models/MonsterModel');
 const ItemModel = require('../models/ItemModel');
 const Character = require('../models/CharacterModel');
 
-
 // ------------------- Function to create crafting embed -------------------
 const createCraftingEmbed = async (item, character, flavorText, materialsUsed, quantity, staminaCost, remainingStamina) => {
     const action = jobActions[character.job] || "crafted";
@@ -31,13 +30,21 @@ const createCraftingEmbed = async (item, character, flavorText, materialsUsed, q
 
     const embedTitle = `${locationPrefix}: ${character.name} ${action} ${item.itemName}${itemQuantityText}`;
 
+    // Determine the job for flavor text (use job voucher job if active)
+    const jobForFlavorText = character.jobVoucher ? character.jobVoucherJob : character.job;
+
     // Generate crafting-specific flavor text based on the job
-    const craftingFlavorText = generateCraftingFlavorText(character.job);
+    const craftingFlavorText = generateCraftingFlavorText(jobForFlavorText);
+
+    // Add a message if a job voucher is active
+    const jobVoucherMessage = character.jobVoucher
+        ? `🎫 **Job Voucher activated for ${character.name} to perform the job ${jobForFlavorText}.**\n\n`
+        : '';
 
     // Combine crafting flavor text with the optional custom flavor text
     const combinedFlavorText = flavorText
-        ? `${craftingFlavorText}\n\n🌟 **Custom Flavor Text:** ${flavorText}`
-        : craftingFlavorText;
+        ? `${jobVoucherMessage}${craftingFlavorText}\n\n🌟 **Custom Flavor Text:** ${flavorText}`
+        : `${jobVoucherMessage}${craftingFlavorText}`;
 
     // Format materials with their actual emojis
     const DEFAULT_EMOJI = ':small_blue_diamond:';
@@ -78,7 +85,7 @@ const createCraftingEmbed = async (item, character, flavorText, materialsUsed, q
     const embed = new EmbedBuilder()
         .setColor('#AA926A') // Amber for crafting
         .setTitle(embedTitle)
-        .setDescription(combinedFlavorText) // Add job-specific flavor text in the description
+        .setDescription(combinedFlavorText) // Add job-specific flavor text and job voucher message in the description
         .setAuthor({
             name: `${character.name} 🔗`,
             iconURL: character.icon || DEFAULT_IMAGE_URL,
@@ -107,6 +114,7 @@ const createCraftingEmbed = async (item, character, flavorText, materialsUsed, q
 
     return embed;
 };
+
 
 // ------------------- Function to create Writing Submission embed -------------------
 const createWritingSubmissionEmbed = (submissionData) => {
@@ -299,7 +307,7 @@ const createMonsterEncounterEmbed = (
 
     const authorIconURL = settings.author?.iconURL || 'https://via.placeholder.com/100x100';
 
-    const koMessage = heartsRemaining === 0 ? '\n💥 **KO! You have been defeated and can’t continue!**' : '';
+    const koMessage = heartsRemaining === 0 ? '\n> 💥 **KO! You have been defeated and can’t continue!**' : '';
 
     const isVisiting = character.homeVillage.toLowerCase() !== character.currentVillage.toLowerCase();
     const locationPrefix = isVisiting
@@ -327,7 +335,7 @@ const createMonsterEncounterEmbed = (
             { name: '🔹 __Outcome__', value: `> ${outcomeMessage || 'No outcome specified.'}${koMessage}`, inline: false }
         )
         .setFooter({ 
-            text: `Tier: ${monster.tier}${isBloodMoon ? ' 🔴 Blood Moon' : ''}`, 
+            text: `Tier: ${monster.tier}${isBloodMoon ? ' 🔴 Blood Moon Encounter' : ''}`, 
             iconURL: authorIconURL 
         })
         .setImage(villageImage);

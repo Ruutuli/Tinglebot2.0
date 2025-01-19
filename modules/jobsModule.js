@@ -41,7 +41,7 @@ const jobPerks = [
   { job: 'AB (Live)', perk: 'GATHERING', village: 'RUDANIA' },
   { job: 'Blacksmith', perk: 'CRAFTING', village: 'RUDANIA' },
   { job: 'Miner', perk: 'GATHERING', village: 'RUDANIA' },
-  { job: 'Entertainer', perk: 'BOOSTING', village: 'RUDANIA' },
+  { job: 'Entertainer', perk: 'BOOST', village: 'RUDANIA' },
   { job: 'Beekeeper', perk: 'GATHERING', village: 'VHINTL' },
   { job: 'Fortune Teller', perk: 'BOOST', village: 'VHINTL' },
   { job: 'Mask Maker', perk: 'CRAFTING', village: 'VHINTL' },

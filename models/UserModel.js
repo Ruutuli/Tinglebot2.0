@@ -10,6 +10,7 @@ const userSchema = new mongoose.Schema({
   tokenTracker: { type: String, default: '' }, // URL to token tracker
   tokensSynced: { type: Boolean, default: false }, // Track if tokens are synced
   blightedcharacter: { type: Boolean, default: false }, // Is the character blighted?
+  characterSlot: { type: Number, default: 2 }, // Number of character slots available to the user
 });
 
 // ------------------- Export the User model -------------------

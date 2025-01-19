@@ -13,6 +13,6 @@
   ],
   "ignore": ["node_modules/"],
   "ext": "js,json",
-  "exec": "node server.js",
+  "exec": "node index.js",
   "legacy-watch": true
 }

@@ -1,6 +1,6 @@
 // ------------------- Import necessary modules -------------------
 const mongoose = require('mongoose');
-const { connectToTinglebot } = require('./database/connection'); // Use your connection.js file
+const { connectToTinglebot } = require('../database/connection'); // Use your connection.js file
 
 (async function cleanJobVoucherField() {
     try {

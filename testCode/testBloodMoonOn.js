@@ -1,6 +1,6 @@
 require('dotenv').config();
 const { Client, GatewayIntentBits } = require('discord.js');
-const { triggerBloodMoonNow, renameChannels } = require('./scripts/bloodmoon');
+const { triggerBloodMoonNow, renameChannels } = require('../scripts/bloodmoon');
 
 const client = new Client({
   intents: [
@@ -23,11 +23,8 @@ client.once('ready', async () => {
     await Promise.all([
       triggerBloodMoonNow(client, rudaniaChannelId),
       triggerBloodMoonNow(client, inarikoChannelId),
-      triggerBloodMoonNow(client, vhintlChannelId)
+      triggerBloodMoonNow(client, vhintlChannelId),
     ]);
-
-    // Rename all channels to Blood Moon state in parallel
-    await renameChannels(client);
 
     console.log('🌕 Blood Moon ON successfully triggered for all channels!');
   } catch (error) {

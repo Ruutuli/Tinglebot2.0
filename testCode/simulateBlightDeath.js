@@ -1,7 +1,7 @@
 // ------------------- Imports -------------------
 require('dotenv').config();
-const { connectToTinglebot } = require('./database/connection'); // Adjust path if necessary
-const Character = require('./models/CharacterModel'); // Adjust path if necessary
+const { connectToTinglebot } = require('../database/connection'); // Adjust path if necessary
+const Character = require('../models/CharacterModel'); // Adjust path if necessary
 const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js'); // Discord.js
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 

@@ -1,7 +1,7 @@
 // ------------------- Import necessary modules -------------------
 require('dotenv').config();
-const { authorizeSheets, writeSheetData, clearSheetFormatting } = require('./utils/googleSheetsUtils');
-const { getCurrentVendingStockList } = require('./database/vendingService');
+const { authorizeSheets, writeSheetData, clearSheetFormatting } = require('../utils/googleSheetsUtils');
+const { getCurrentVendingStockList } = require('../database/vendingService');
 const { google } = require('googleapis');
 
 // ------------------- Manual Google Sheets Update Script -------------------

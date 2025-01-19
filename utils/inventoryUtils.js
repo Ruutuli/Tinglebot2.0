@@ -187,7 +187,6 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
                 type: item.type.join(', '),
                 subtype: item.subtype ? item.subtype.join(', ') : '',
                 location: character.currentVillage,
-                link: extractInteractionFields(interaction),
                 date: new Date(),
                 obtain, // Dynamically set obtain method
             };

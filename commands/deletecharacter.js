@@ -12,6 +12,9 @@ const {
 } = require('../database/characterService'); // Character-related database services
 const { deleteInventorySheetData } = require('../utils/googleSheetsUtils'); // Google Sheets handling for deleting inventory data
 const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../utils/validation'); // Validation utilities for Google Sheets URL
+const { roles } = require('../modules/rolesModule');
+const { capitalizeFirstLetter, capitalizeWords  } = require('../modules/formattingModule'); // Formatting utility
+const { getJobPerk } = require('../modules/jobsModule');
 
 // ------------------- Command Definition -------------------
 // Define the slash command for deleting a character
@@ -61,6 +64,62 @@ module.exports = {
       // Connect to the inventory database and delete the character's inventory collection
       await connectToInventories(); 
       await deleteCharacterInventoryCollection(character.name); // Delete inventory collection from MongoDB
+
+// ------------------- Remove Roles -------------------
+const member = interaction.member;
+
+// Normalize job name for role matching
+const normalizedJob = `Job: ${capitalizeWords(character.job)}`;
+
+// Define roles to remove
+const rolesToRemove = [
+  roles.Races.find(r => r.name === `Race: ${character.race}`),
+  roles.Villages.find(v => v.name === `${capitalizeFirstLetter(character.homeVillage)} Resident`),
+  roles.Jobs.find(j => j.name === normalizedJob)
+];
+
+// Logging for debugging the job role
+console.log(`[Roles]: Attempting to remove job role "${normalizedJob}" for user "${member.user.tag}".`);
+
+// Fetch the job perks associated with the character's job
+const { perks: jobPerks } = getJobPerk(character.job) || { perks: [] };
+
+// Add job perks to the list of roles to remove
+for (const perk of jobPerks) {
+  const perkRole = roles.JobPerks.find(r => r.name === `Job Perk: ${perk}`);
+  if (perkRole) {
+    rolesToRemove.push(perkRole);
+  }
+}
+
+// Attempt to remove each role from the member
+for (const roleData of rolesToRemove) {
+  if (!roleData) {
+    console.warn(`[Roles]: Role data not found in rolesModule for user "${member.user.tag}". Skipping.`);
+    continue;
+  }
+
+  const role = interaction.guild.roles.cache.find(r => r.name === roleData.name);
+  if (role) {
+    await member.roles.remove(role);
+    console.log(`[Roles]: Removed role "${roleData.name}" from user "${member.user.tag}".`);
+  } else {
+    console.warn(`[Roles]: Role "${roleData.name}" not found in the guild. Skipping removal.`);
+  }
+}
+
+// Explicit logging for job role issues
+if (!roles.Jobs.find(j => j.name === normalizedJob)) {
+  console.error(`[Roles]: Job role "${normalizedJob}" is not defined in rolesModule. Verify the rolesModule.js configuration.`);
+}
+
+if (!interaction.guild.roles.cache.find(r => r.name === normalizedJob)) {
+  console.error(`[Roles]: Job role "${normalizedJob}" is not found in the guild. Ensure the role exists.`);
+}
+
+// Logging for debugging
+console.log(`[Roles]: Completed role removal process for user "${member.user.tag}".`);
+
 
       // Delete the character from the database
       await deleteCharacterById(character._id); 

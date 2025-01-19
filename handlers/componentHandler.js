@@ -31,9 +31,10 @@ const {
 } = require('../commands/help');
 
 // Modules
-const { getGeneralJobsPage } = require('../modules/jobsModule');
+const { getJobPerk, getGeneralJobsPage } = require('../modules/jobsModule');
 const { getVillageColorByName } = require('../modules/locationsModule');
 const { capitalizeFirstLetter, capitalizeWords } = require('../modules/formattingModule');
+const { roles } = require('../modules/rolesModule');
 
 // Handler Imports
 const { syncInventory } = require('../handlers/syncHandler');
@@ -236,7 +237,6 @@ async function handleViewCharacter(interaction, characterId) {
     await interaction.reply({ embeds: [embed, gearEmbed], ephemeral: true });
 } 
 
-
 // handleJobSelect
 async function handleJobSelect(interaction, characterId, updatedJob) {
     try {
@@ -260,8 +260,83 @@ async function handleJobSelect(interaction, characterId, updatedJob) {
 
         const previousJob = character.job;
 
-        // Perform job change
+        // Define roles to modify
+        const member = interaction.member;
+        const roleToRemove = roles.Jobs.find(r => r.name === `Job: ${previousJob}`);
+        const roleToAdd = roles.Jobs.find(r => r.name === `Job: ${updatedJob}`);
+
+        // Remove the old job role
+        if (roleToRemove) {
+            const role = interaction.guild.roles.cache.find(r => r.name === roleToRemove.name);
+            if (role) {
+                await member.roles.remove(role);
+                console.log(`[Roles]: Removed role "${role.name}" from user "${member.user.tag}".`);
+            } else {
+                console.warn(`[Roles]: Role "${roleToRemove.name}" not found in the guild.`);
+            }
+        } else {
+            console.log(`[Roles]: No role to remove for "Job: ${previousJob}".`);
+        }
+
+        // Add the new job role
+        if (roleToAdd) {
+            const role = interaction.guild.roles.cache.find(r => r.name === roleToAdd.name);
+            if (role) {
+                await member.roles.add(role);
+                console.log(`[Roles]: Assigned role "${role.name}" to user "${member.user.tag}".`);
+            } else {
+                console.warn(`[Roles]: Role "${roleToAdd.name}" not found in the guild.`);
+            }
+        } else {
+            console.log(`[Roles]: No role to add for "Job: ${updatedJob}".`);
+        }
+
+        // Handle job perks
+        const previousPerk = roles.JobPerks.find(perk => perk.name === `Job Perk: ${character.jobPerk}`);
+        // Handle job perks
+const jobPerkData = getJobPerk(updatedJob) || { perks: [] }; // Get new job's perks
+const newPerks = jobPerkData.perks;
+
+// Fetch the previous job's perk data
+const previousPerkData = getJobPerk(previousJob) || { perks: [] };
+const previousPerks = previousPerkData.perks;
+
+// Remove the old perk roles
+for (const perk of previousPerks) {
+    const perkRole = roles.JobPerks.find(r => r.name === `Job Perk: ${perk}`);
+    if (perkRole) {
+        const guildRole = interaction.guild.roles.cache.find(r => r.name === perkRole.name);
+        if (guildRole) {
+            await member.roles.remove(guildRole);
+            console.log(`[Roles]: Removed perk role "${guildRole.name}" from user "${member.user.tag}".`);
+        } else {
+            console.warn(`[Roles]: Perk role "${perkRole.name}" not found in the guild.`);
+        }
+    } else {
+        console.warn(`[Roles]: No perk role found for "${perk}".`);
+    }
+}
+
+// Add the new perk roles
+for (const perk of newPerks) {
+    const perkRole = roles.JobPerks.find(r => r.name === `Job Perk: ${perk}`);
+    if (perkRole) {
+        const guildRole = interaction.guild.roles.cache.find(r => r.name === perkRole.name);
+        if (guildRole) {
+            await member.roles.add(guildRole);
+            console.log(`[Roles]: Assigned perk role "${guildRole.name}" to user "${member.user.tag}".`);
+        } else {
+            console.warn(`[Roles]: Perk role "${perkRole.name}" not found in the guild.`);
+        }
+    } else {
+        console.warn(`[Roles]: No perk role found for "${perk}".`);
+    }
+}
+
+
+        // Update character's job and perk
         character.job = updatedJob;
+        character.jobPerk = newPerks.join(' / ');
         await character.save();
 
         console.log(`[INFO] Job successfully updated for ${character.name} from ${previousJob} to ${updatedJob}`);
@@ -286,8 +361,8 @@ async function handleJobSelect(interaction, characterId, updatedJob) {
 🌱 **User:** \`${interaction.user.tag}\`
 👤 **Character Name:** \`${character.name}\`
 🛠️ **Edited Category:** \`Job\`
-🔄 **Previous Value:** \`${previousJob || 'N/A'}\`
-✅ **Updated Value:** \`${updatedJob}\``;
+🔄 **Previous Value:** \`Job: ${previousJob || 'N/A'}\`
+✅ **Updated Value:** \`Job: ${updatedJob}\``;
 
                 await notificationChannel.send(notificationMessage);
             } else {
@@ -306,6 +381,8 @@ async function handleJobSelect(interaction, characterId, updatedJob) {
         });
     }
 }
+
+
 
 // handleJobPage
 async function handleJobPage(interaction, characterId, pageIndexString) {

@@ -237,7 +237,16 @@ if (character.jobVoucher) {
       }
 
       // Create crafting embed and respond with success
-      const embed = await createCraftingEmbed(item, character, flavorText, materialsUsed, quantity, staminaCost, updatedStamina);
+      const embed = await createCraftingEmbed(
+        item,
+        character,
+        flavorText,
+        materialsUsed,
+        quantity,
+        staminaCost,
+        updatedStamina,
+        character.jobVoucher ? character.jobVoucherJob : null // Pass job voucher job if active
+      );      
       await interaction.editReply({
           content: `✅ **Successfully crafted ${quantity} "${itemName}".**`,
           ephemeral: true
@@ -261,7 +270,18 @@ if (character.jobVoucher) {
 
           await appendSheetData(auth, spreadsheetId, range, values);
           await logMaterialsToGoogleSheets(auth, spreadsheetId, range, character, materialsUsed, item, `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`, formatDateTime(new Date()));
-          await addItemInventoryDatabase(character._id, item.itemName, quantity, item.category.join(', '), item.type.join(', '), interaction);
+
+// Add crafted item to the database with the correct link and obtain field
+await addItemInventoryDatabase(
+  character._id,
+  item.itemName,
+  quantity,
+  interaction, // Interaction is needed for validation and logging
+  'Crafting' // Explicitly pass 'Crafting' as the obtain method
+);
+
+
+        
       }
 
 

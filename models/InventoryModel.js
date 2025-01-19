@@ -15,9 +15,8 @@ const inventorySchema = new Schema({
   job: { type: String }, // Associated job
   perk: { type: String }, // Associated perk
   location: { type: String }, // Item location
-  link: { type: String }, // Associated link
   date: { type: Date }, // Date associated with the item
-  obtain: { type: [String], default: [] }, // How the item was obtained
+  obtain: { type: String, default: '' },
   synced: { type: String, unique: true } // Unique identifier for synced items
 });
 

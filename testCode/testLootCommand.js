@@ -1,8 +1,8 @@
 const fs = require('fs');
 const path = require('path');
 const { execute } = require(path.resolve(__dirname, './commands/loot'));
-const { getAllVillages } = require('./modules/locationsModule');
-const { updateCharacterById, fetchCharacterById } = require('./database/characterService');
+const { getAllVillages } = require('../modules/locationsModule');
+const { updateCharacterById, fetchCharacterById } = require('../database/characterService');
 
 // Character ID of the test character (Alden)
 const characterId = "6686ea8f06daf7531045b4b2"; // Replace with the actual ID

@@ -1,6 +1,6 @@
 require('dotenv').config();
 const { Client, GatewayIntentBits } = require('discord.js');
-const { revertChannelNames } = require('./scripts/bloodmoon');
+const { revertChannelNames } = require('../scripts/bloodmoon');
 
 // Initialize the Discord client
 const client = new Client({

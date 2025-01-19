@@ -4,6 +4,7 @@ const path = require('path');  // For handling and transforming file paths
 const Monster = require('../models/MonsterModel');  // Model for handling monster data
 const { useHearts, handleKO } = require('../modules/characterStatsModule');  // Import functions to manage character hearts and KO status
 const { calculateAttackBuff, calculateDefenseBuff, applyBuffs } = require('../modules/buffModule');  // Buff-related logic
+const { generateUniqueId } = require('../utils/uniqueIdUtils');
 
 // ------------------- Constants -------------------
 const BATTLE_PROGRESS_PATH = path.join(__dirname, '..', 'data', 'battleProgress.json');  // Path to the JSON file for storing battle progress
@@ -24,55 +25,32 @@ function ensureBattleProgressFileExists() {
 
 // ------------------- Store Battle Progress in JSON -------------------
 // Stores battle progress for a specific battle ID, including character and monster states
-async function storeBattleProgress(battleId, character, monster, tier, monsterHearts, progress) {
+async function storeBattleProgress(character, monster, tier, monsterHearts, progress) {
     ensureBattleProgressFileExists();  // Ensure the file is ready for updates
 
     const battleProgress = JSON.parse(fs.readFileSync(BATTLE_PROGRESS_PATH, 'utf8'));  // Read existing battle progress
 
+    // Generate a unique battle ID with "R" prefix
+    const battleId = generateUniqueId('R');
+
     // Initialize a new entry if no progress exists for the battle ID
-    if (!battleProgress[battleId]) {
-        battleProgress[battleId] = {
-            battleId,
-            characters: [character], // Store the full character object
-            monster: monster.name,
-            tier: tier,
-            monsterHearts: {
-                max: monster.hearts,
-                current: monsterHearts.current,
-            },
-            progress: '', // Initialize progress message
-        };
-    } else {
-        // Prevent duplicate entries for the same character
-        const isSameCharacter = battleProgress[battleId].characters.some(
-            (char) => char.userId === character.userId && char.name === character.name
-        );
-
-        if (!isSameCharacter) {
-            // Prevent multiple characters from the same user
-            const existingUserCharacter = battleProgress[battleId].characters.find(
-                (char) => char.userId === character.userId
-            );
-
-            if (existingUserCharacter) {
-                throw new Error(
-                    `User "${character.userId}" already has a character (${existingUserCharacter.name}) in this raid.`
-                );
-            }
-
-            // Add character to existing battle
-            battleProgress[battleId].characters.push(character);
-        }
-
-        // Update monster's current hearts, ensuring it doesn't drop below zero
-        battleProgress[battleId].monsterHearts.current = Math.max(monsterHearts.current, 0);
-    }
-
-    // Append progress message to the log
-    battleProgress[battleId].progress += `\n${progress}`;
+    battleProgress[battleId] = {
+        battleId,
+        characters: [character], // Store the full character object
+        monster: monster.name,
+        tier: tier,
+        monsterHearts: {
+            max: monster.hearts,
+            current: monsterHearts.current,
+        },
+        progress: progress ? `\n${progress}` : '', // Initialize progress message
+    };
 
     // Save the updated battle progress back to the JSON file
     fs.writeFileSync(BATTLE_PROGRESS_PATH, JSON.stringify(battleProgress, null, 2));
+
+    console.log(`[storeBattleProgress] Battle ID "${battleId}" stored successfully.`);
+    return battleId; // Return the generated battle ID
 }
 
 // ------------------- Get Battle Progress by ID from JSON -------------------

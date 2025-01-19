@@ -107,17 +107,17 @@ module.exports = {
             
                     // Determine the job and perk description
                     if (perks.length > 0) {
-                        perkDescription = `**${character.name}** has used a Job Voucher to perform the ${perks.join(' Perk ')} job, **${jobName}**.`;
+                        perkDescription = `**${character.name}** has used a Job Voucher to perform the **${perks.join(' Perk ')}** job, **${jobName}**.`;
                     } else {
                         perkDescription = `**${character.name}** has used a Job Voucher to perform the **${jobName}** job.`;
                     }
             
                     // Conditionally include commands based on unlocked perks
                     const commands = [
-                        perks.includes('GATHERING') ? '</gather:1306176789755858974>' : null,
-                        perks.includes('CRAFTING') ? '</crafting:1306176789634355242>' : null,
-                        perks.includes('LOOTING') ? '</loot:1316682863143424121>' : null,
-                        perks.includes('HEALING') ? '</heal fufill:1306176789755858977>' : null
+                        perks.includes('GATHERING') ? '> </gather:1306176789755858974>' : null,
+                        perks.includes('CRAFTING') ? '> </crafting:1306176789634355242>' : null,
+                        perks.includes('LOOTING') ? '> </loot:1316682863143424121>' : null,
+                        perks.includes('HEALING') ? '> </heal fufill:1306176789755858977>' : null
                     ].filter(Boolean); // Remove null values
             
                     if (commands.length) {

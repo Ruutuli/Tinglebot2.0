@@ -207,73 +207,71 @@ if (character.jobVoucher) {
       }
 
     
-      // ------------------- Step 4: Blood Moon Encounter Handling -------------------
-      const bloodMoonActive = isBloodMoonActive(); // Determine Blood Moon status
-      console.log(`[Blood Moon Status] Current Day: ${new Date().getDate()}, Active: ${bloodMoonActive}`);      
-      let encounteredMonster;
+// ------------------- Step 4: Blood Moon Encounter Handling -------------------
+const bloodMoonActive = isBloodMoonActive(); // Determine Blood Moon status
+console.log(`[Blood Moon Status] Current Day: ${new Date().getDate()}, Active: ${bloodMoonActive}`);      
+let encounteredMonster;
 
-      if (bloodMoonActive) {
-        try {
-          // Handle Blood Moon-specific encounter logic
-          const encounterType = getRandomBloodMoonEncounter();
-          
-          // Normalize the encounter type
-          const normalizedEncounterType = encounterType.trim().toLowerCase();
-          
-          // Handle "no encounter" cases
-          if (normalizedEncounterType === 'noencounter' || normalizedEncounterType === 'no encounter') {
-            console.log(`[LOOT] No encounter generated for this roll.`);
-            const embed = createNoEncounterEmbed(character, bloodMoonActive); // Pass Blood Moon status
-            await interaction.followUp({ embeds: [embed] });
-            return;
-          }
-          
-          // Process other encounter types (tiers)
-          const tier = parseInt(normalizedEncounterType.replace('tier', ''), 10);
-          if (isNaN(tier)) {
-            console.error(`[LOOT] Invalid encounter type "${encounterType}" detected.`);
-            await interaction.followUp(`🌕 **Blood Moon is active, but no valid monsters could be determined.**`);
-            return;
-          }
-          
-      
-          // Fetch and filter monsters matching the criteria
-          const monstersByCriteria = await getMonstersByCriteria(currentVillage, job);
-          const filteredMonsters = monstersByCriteria.filter(monster => monster.tier === tier);
+if (bloodMoonActive) {
+  console.log(`[LOOT] Blood Moon is active. Generating encounter...`);
+  try {
+    // Handle Blood Moon-specific encounter logic
+    const encounterType = getRandomBloodMoonEncounter();
+    console.log(`[LOOT] Encounter Type: ${encounterType}`);
+    
+    // Normalize the encounter type
+    const normalizedEncounterType = encounterType.trim().toLowerCase();
+    
+    // Handle "no encounter" cases
+    if (normalizedEncounterType === 'noencounter' || normalizedEncounterType === 'no encounter') {
+      console.log(`[LOOT] No encounter generated for this roll.`);
+      const embed = createNoEncounterEmbed(character, true); // Pass `true` for Blood Moon
+      await interaction.followUp({ embeds: [embed] });
+      return;
+    }
+    
+    // Process other encounter types (tiers)
+    const tier = parseInt(normalizedEncounterType.replace('tier', ''), 10);
+    if (isNaN(tier)) {
+      console.error(`[LOOT] Invalid encounter type "${encounterType}" detected.`);
+      await interaction.followUp(`🌕 **Blood Moon is active, but no valid monsters could be determined.**`);
+      return;
+    }
+    
+    // Fetch and filter monsters matching the criteria
+    const monstersByCriteria = await getMonstersByCriteria(currentVillage, job);
+    const filteredMonsters = monstersByCriteria.filter(monster => monster.tier === tier);
 
-          // Proceed if a monster is found; else attempt reroll logic
-          if (filteredMonsters.length > 0) {
-            encounteredMonster = filteredMonsters[Math.floor(Math.random() * filteredMonsters.length)];
-            console.log(
-              `[LOOT] Blood Moon Encounter: Monster "${encounteredMonster.name}" (Tier ${encounteredMonster.tier})`
-            );
+    // Proceed if a monster is found; else attempt reroll logic
+    if (filteredMonsters.length > 0) {
+      encounteredMonster = filteredMonsters[Math.floor(Math.random() * filteredMonsters.length)];
+      console.log(`[LOOT] Blood Moon Encounter: Monster "${encounteredMonster.name}" (Tier ${encounteredMonster.tier})`);
 
-            if (encounteredMonster.tier > 4) {
-              console.log(`[LOOT] Initiating raid for monster "${encounteredMonster.name}" (Tier ${encounteredMonster.tier})`);
-              await triggerRaid(character, encounteredMonster, interaction, null, bloodMoonActive); // Pass null for threadId, to let triggerRaid handle thread creation
-              return;
-          }
-          
-          } else {
-            await handleBloodMoonRerolls(
-              interaction,
-              monstersByCriteria,
-              tier,
-              character,
-              job,
-              currentVillage,
-              bloodMoonActive
-          );
-            return; // Stop if reroll is needed and executed
-          }
-        } catch (error) {
-          console.error(`[LOOT] Error during Blood Moon encounter logic: ${error}`);
-          await interaction.followUp(
-            `🌕 **Blood Moon is active, but an error occurred while determining an encounter.**`
-          );
-          return;
-        }
-      } else {
+      if (encounteredMonster.tier > 4) {
+        console.log(`[LOOT] Initiating raid for monster "${encounteredMonster.name}" (Tier ${encounteredMonster.tier})`);
+        await triggerRaid(character, encounteredMonster, interaction, null, true); // Pass `true` for Blood Moon
+        return;
+      }
+    } else {
+      console.log(`[LOOT] No monsters found matching the criteria. Initiating reroll logic.`);
+      await handleBloodMoonRerolls(
+        interaction,
+        monstersByCriteria,
+        tier,
+        character,
+        job,
+        currentVillage,
+        true // Blood Moon status
+      );
+      return; // Stop if reroll is needed and executed
+    }
+  } catch (error) {
+    console.error(`[LOOT] Error during Blood Moon encounter logic: ${error.message}`);
+    await interaction.followUp(`🌕 **Blood Moon is active, but an error occurred while determining an encounter.**`);
+    return;
+  }
+} else {
+  console.log(`[LOOT] Blood Moon is not active. Proceeding with normal encounter logic.`);
  // ------------------- Normal Encounter Logic -------------------
  encounteredMonster = await handleNormalEncounter(
   interaction,

@@ -1,6 +1,6 @@
 // ------------------- Imports -------------------
-const { connectToTinglebot, connectToInventories } = require('./database/connection'); // Adjust the path if necessary
-const Character = require('./models/CharacterModel');  // Adjust the path to CharacterModel if necessary
+const { connectToTinglebot, connectToInventories } = require('../database/connection'); // Adjust the path if necessary
+const Character = require('../models/CharacterModel');  // Adjust the path to CharacterModel if necessary
 
 // ------------------- Update Characters -------------------
 async function updateAllCharacters() {

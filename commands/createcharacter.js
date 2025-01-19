@@ -5,7 +5,9 @@
 // Grouped based on standard, third-party, and local module imports
 const { EmbedBuilder, SlashCommandBuilder } = require('discord.js'); // Discord.js for building embeds and slash commands
 const { createCharacterAutocomplete, createCharacterInteraction } = require('../handlers/characterInteractionHandler'); // Handlers for character interactions
-const { createJobOptions, generalJobs, villageJobs } = require('../modules/jobsModule'); // Job options and village-specific job lists
+const { createJobOptions, generalJobs, villageJobs, getJobPerk } = require('../modules/jobsModule'); // Job options and village-specific job lists
+const { roles } = require('../modules/rolesModule'); // Roles module for assigning roles
+const { capitalizeFirstLetter, capitalizeWords } = require('../modules/formattingModule');
 
 // ------------------- Command Definition -------------------
 // Define the slash command for creating a character with subcommands for each village and general job options
@@ -13,7 +15,7 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('createcharacter')
     .setDescription('Create a new character')
-    
+
     // ------------------- Rudania Subcommand -------------------
     .addSubcommand(subcommand =>
       subcommand.setName('rudania')
@@ -133,15 +135,101 @@ module.exports = {
         .addAttachmentOption(option => 
           option.setName('icon').setDescription('Upload an icon image of the character').setRequired(true))),
 
-  // ------------------- Command Execution Logic -------------------
-  // Handles the execution of the character creation interaction
-  async execute(interaction) {
-    try {
+ // ------------------- Command Execution Logic -------------------
+// Handles the execution of the character creation interaction
+async execute(interaction) {
+  try {
+      const userId = interaction.user.id; // Discord user ID
+      const User = require('../models/UserModel'); // Import User model
+      const Character = require('../models/CharacterModel'); // Import Character model (adjust path as needed)
+
+      // Fetch the user from the database
+      const user = await User.findOne({ discordId: userId });
+
+      // Check if user exists and has available slots
+      if (!user || user.characterSlot <= 0) {
+          await interaction.reply({
+              content: "❌ You do not have enough character slots available to create a new character.",
+              ephemeral: true
+          });
+          return; // Ensure no further code is executed
+      }
+
+      // Check if a character with the provided name already exists
+      const characterName = interaction.options.getString('name');
+      const existingCharacter = await Character.findOne({ name: characterName });
+
+      if (existingCharacter) {
+          await interaction.reply({
+              content: `❌ A character with the name "${characterName}" already exists. Please choose a different name.`,
+              ephemeral: true
+          });
+          return; // Stop further execution
+      }
+
+      // Proceed with character creation logic
+      const race = interaction.options.getString('race');
+      const village = interaction.options.getString('village');
+      const job = interaction.options.getString('job');
+
+      // Normalize values for matching role formats
+      const formattedRace = `Race: ${race}`;
+      const formattedVillage = `${capitalizeFirstLetter(village)} Resident`;
+      const formattedJob = `Job: ${capitalizeWords(job)}`;
+
+      // Fetch job perks
+      const { perks: jobPerks } = getJobPerk(job) || { perks: [] };
+
+      // Assign roles to the user
+      const member = interaction.member;
+      const roleNames = [formattedRace, formattedVillage, formattedJob];
+
+      for (const roleName of roleNames) {
+          const role = interaction.guild.roles.cache.find(r => r.name === roleName);
+          if (role) {
+              await member.roles.add(role);
+              console.log(`[Roles]: Assigned role "${roleName}" to user "${member.user.tag}".`);
+          } else {
+              console.warn(`[Roles]: Role "${roleName}" not found in the guild.`);
+          }
+      }
+
+      // Add job perk roles
+      for (const perk of jobPerks) {
+          const perkRoleName = `Job Perk: ${perk}`;
+          const perkRole = interaction.guild.roles.cache.find(r => r.name === perkRoleName);
+          if (perkRole) {
+              await member.roles.add(perkRole);
+              console.log(`[Roles]: Assigned perk role "${perkRole.name}" to user "${member.user.tag}".`);
+          } else {
+              console.warn(`[Roles]: Perk role "${perkRoleName}" not found in the guild.`);
+          }
+      }
+
+      // Decrement character slots
+      user.characterSlot -= 1;
+      await user.save();
+
+      // Handle character interaction
       await createCharacterInteraction(interaction);
-    } catch (error) {
-      // Error handling (empty, can be expanded as needed)
-    }
-  },
+
+      // Send a confirmation reply
+      await interaction.followUp({
+          content: "🎉 Your character has been successfully created! Your remaining character slots: " + user.characterSlot,
+          ephemeral: true
+      });
+  } catch (error) {
+      console.error('[CreateCharacter]: Error during character creation:', error.message);
+
+      // Reply with an error if not already replied
+      if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({
+              content: "❌ An error occurred during character creation. Please try again later.",
+              ephemeral: true
+          });
+      }
+  }
+},
 
   // ------------------- Autocomplete Interaction Handler -------------------
   // Provides autocomplete for character options (e.g., race or job)

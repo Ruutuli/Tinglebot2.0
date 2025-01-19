@@ -129,6 +129,30 @@ async function revertChannelNames(client) {
 }
 
 
+// ------------------- Blood Moon Trigger -------------------
+async function triggerBloodMoonNow(client, channelId) {
+  try {
+    console.log(`[BloodMoon.js]: Triggering Blood Moon for channel ${channelId}`);
+    await sendBloodMoonAnnouncement(client, channelId, 'The Blood Moon is upon us! Beware!');
+    await renameChannels(client);
+  } catch (error) {
+    console.error(`[BloodMoon.js] [triggerBloodMoonNow] Error: ${error.message}`);
+  }
+}
+
+// ------------------- Blood Moon Activation Status -------------------
+function isBloodMoonActive() {
+  try {
+    const active = isBloodMoonDay();
+    console.log(`[BloodMoon.js]: Blood Moon active status: ${active}`);
+    return active;
+  } catch (error) {
+    console.error(`[BloodMoon.js] [isBloodMoonActive] Error: ${error.message}`);
+    return false;
+  }
+}
+
+
 // ------------------- Export Functions -------------------
 module.exports = {
   sendBloodMoonAnnouncement,
@@ -136,5 +160,7 @@ module.exports = {
   trackBloodMoon,
   renameChannels,
   revertChannelNames,
-  isBloodMoonDay
+  isBloodMoonDay,
+  triggerBloodMoonNow,
+  isBloodMoonActive
 };

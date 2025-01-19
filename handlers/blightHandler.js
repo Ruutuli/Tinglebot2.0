@@ -748,9 +748,9 @@ async function checkMissedRolls(client) {
                 ? `❗ **Missed Roll**: Your blight has progressed because you missed your daily roll.\n\n` +
                   `The blight has reached its final stage—a death sentence. Perhaps a last-ditch effort can bring you salvation...\n\nYou can only be saved by a **Dragon**\n` +
                   `🕒 **Deadline**: <t:${Math.floor(character.deathDeadline.getTime() / 1000)}:F>\n\n⚠️ **You must be healed before the deadline to avoid certain death.**`
-                : '❗ **Missed Roll**: Your blight has progressed because you missed your daily roll. Missing further rolls will cause additional progression.'
+                : '❗ **Missed Roll**: The blight has progressed because you missed your daily roll. Missing further rolls will cause additional progression.'
             }`)
-            .setFooter({ text: `Missed roll - your blight has progressed!` })
+            .setFooter({ text: `Missed roll - The blight has progressed!` })
             .setAuthor({
               name: 'Blight Progression Alert',
               iconURL: 'https://static.wixstatic.com/media/7573f4_a510c95090fd43f5ae17e20d80c1289e~mv2.png/v1/fill/w_30,h_30,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/icon%20-%20blight.png',
