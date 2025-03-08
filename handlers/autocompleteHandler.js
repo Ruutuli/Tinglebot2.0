@@ -16,7 +16,7 @@ const {
   fetchCharactersByUserId,
   getCharacterInventoryCollection
 } = require('../database/characterService');
-const { fetchCraftableItemsAndCheckMaterials, fetchItemByName } = require('../database/itemService');
+const { fetchCraftableItemsAndCheckMaterials, fetchItemByName,fetchItemsByCategory,fetchAllItems  } = require('../database/itemService');
 const {
   connectToDatabase,
   getCurrentVendingStockList,
@@ -59,22 +59,29 @@ async function handleAutocomplete(interaction) {
     const commandName = interaction.commandName; // Get the command name from the interaction
 
 // ------------------- Route based on command name and focused option -------------------
-if (commandName === 'blight' && focusedOption.name === 'character_name' || focusedOption.name === 'healer_name') {
+
+if (commandName === 'blight' && (focusedOption.name === 'character_name' || focusedOption.name === 'healer_name')) {
   await handleBlightCharacterAutocomplete(interaction, focusedOption);
 } else if (commandName === 'blight' && focusedOption.name === 'item') {
   await handleBlightItemAutocomplete(interaction, focusedOption);
-} else if (commandName === 'crafting' && focusedOption.name === 'itemname') {
-  await handleCraftingAutocomplete(interaction, focusedOption);
 } else if (commandName === 'changejob' && focusedOption.name === 'newjob') {
   await handleChangeJobNewJobAutocomplete(interaction, focusedOption);
+} else if (commandName === 'changejob' && focusedOption.name === 'charactername') {
+  await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, commandName);
+} else if (commandName === 'crafting' && focusedOption.name === 'itemname') {
+  await handleCraftingAutocomplete(interaction, focusedOption);
+} else if (commandName === 'crafting' && focusedOption.name === 'charactername') {
+  await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, commandName);
 } else if (commandName === 'createcharacter' && focusedOption.name === 'homevillage') {
   await handleCreateCharacterVillageAutocomplete(interaction, focusedOption);
 } else if (commandName === 'createcharacter' && focusedOption.name === 'race') {
   await handleCreateCharacterRaceAutocomplete(interaction, focusedOption);
+} else if (commandName === 'customweapon' && interaction.options.getSubcommand() === 'submit' && focusedOption.name === 'baseweapon') {
+  await handleBaseWeaponAutocomplete(interaction);
+} else if (commandName === 'customweapon' && interaction.options.getSubcommand() === 'submit' && focusedOption.name === 'subtype') {
+  await handleSubtypeAutocomplete(interaction);
 } else if (commandName === 'editcharacter' && focusedOption.name === 'updatedinfo') {
   await handleEditCharacterAutocomplete(interaction, focusedOption);
-} else if (['changejob', 'shops', 'explore', 'raid', 'editcharacter', 'deletecharacter', 'setbirthday', 'viewcharacter', 'testinventorysetup', 'syncinventory', 'crafting', 'gather', 'loot', 'gear'].includes(commandName) && focusedOption.name === 'charactername') {
-  await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, commandName);
 } else if (commandName === 'explore' && ['item1', 'item2', 'item3'].includes(focusedOption.name)) {
   await handleExploreItemAutocomplete(interaction, focusedOption);
 } else if (commandName === 'explore' && focusedOption.name === 'charactername') {
@@ -85,20 +92,35 @@ if (commandName === 'blight' && focusedOption.name === 'character_name' || focus
   await handleGiftAutocomplete(interaction, focusedOption);
 } else if (commandName === 'heal') {
   await handleHealAutocomplete(interaction, focusedOption);
+} else if (commandName === 'item' && focusedOption.name === 'jobname') {
+  await handleItemJobVoucherAutocomplete(interaction, focusedOption);
 } else if (commandName === 'item') {
-  if (focusedOption.name === 'jobname') {
-      await handleItemJobVoucherAutocomplete(interaction, focusedOption); // New handler for jobname
-  } else {
-      await handleItemHealAutocomplete(interaction, focusedOption); // Existing handler for other options
-  }
+  await handleItemHealAutocomplete(interaction, focusedOption);
 } else if (commandName === 'lookup' && (focusedOption.name === 'item' || focusedOption.name === 'ingredient')) {
   await handleLookupAutocomplete(interaction, focusedOption);
-} else if ((commandName === 'stable' || commandName === 'mount') && focusedOption.name === 'charactername') {
-  await handleMountAutocomplete(interaction, focusedOption); // Autocomplete for all characters
-} else if ((commandName === 'stable' || commandName === 'mount') && focusedOption.name === 'mountname') {
-  await handleMountNameAutocomplete(interaction, focusedOption); // Autocomplete for stored mounts only
+} else if (commandName === 'modgive' && (focusedOption.name === 'character' || focusedOption.name === 'charactername')) {
+  await handleModGiveCharacterAutocomplete(interaction, focusedOption);
+} else if (commandName === 'modgive' && focusedOption.name === 'item') {
+  await handleModGiveItemAutocomplete(interaction, focusedOption);
+} else if ((commandName === 'mount' || commandName === 'stable') && focusedOption.name === 'charactername') {
+  await handleMountAutocomplete(interaction, focusedOption);
+} else if ((commandName === 'mount' || commandName === 'stable') && focusedOption.name === 'mountname') {
+  await handleMountNameAutocomplete(interaction, focusedOption);
 } else if (commandName === 'shops' && focusedOption.name === 'itemname') {
   await handleShopsAutocomplete(interaction, focusedOption);
+} else if (commandName === 'steal' && focusedOption.name === 'charactername') {
+  await handleStealCharacterAutocomplete(interaction, focusedOption);
+} else if (commandName === 'steal' && focusedOption.name === 'target') {
+  const npcChoices = [
+    'Hank', 'Sue', 'Lukan', 'Myti', 'Cree', 'Cece',
+    'Walton', 'Jengo', 'Jasz', 'Lecia', 'Tye', 'Lil Tim'
+  ];
+  const filteredNPCs = npcChoices.filter(choice => choice.toLowerCase().includes(focusedOption.value.toLowerCase()));
+  await interaction.respond(filteredNPCs.map(choice => ({ name: choice, value: choice })));
+} else if (commandName === 'steal' && focusedOption.name === 'rarity') {
+  const choices = ['common', 'uncommon', 'rare'];
+  const filtered = choices.filter(choice => choice.startsWith(focusedOption.value.toLowerCase()));
+  await interaction.respond(filtered.map(choice => ({ name: choice, value: choice })));
 } else if (commandName === 'trade') {
   await handleTradeAutocomplete(interaction, focusedOption);
 } else if (commandName === 'transfer') {
@@ -107,45 +129,27 @@ if (commandName === 'blight' && focusedOption.name === 'character_name' || focus
   await handleTravelAutocomplete(interaction, focusedOption);
 } else if (commandName === 'travel' && focusedOption.name === 'destination') {
   await handleVillageBasedCommandsAutocomplete(interaction, focusedOption);
-} else if (commandName === 'village' && focusedOption.name === 'itemname') {
-  await handleVillageMaterialsAutocomplete(interaction);
-} else if (commandName === 'village' && focusedOption.name === 'charactername') {
-  await handleVillageUpgradeCharacterAutocomplete(interaction);
-} else if (commandName === 'viewinventory' && focusedOption.name === 'charactername') {
-  await handleViewInventoryAutocomplete(interaction, focusedOption);
 } else if (commandName === 'vending') {
   await handleVendingAutocomplete(interaction, focusedOption);
-} else if (commandName === 'steal' && focusedOption.name === 'target') {
-  // Handle the /steal command's target option autocomplete
-  const npcChoices = [
-    'NPC - Hank the Herbalist',
-    'NPC - Sue the Fisherman',
-    'NPC - Lukan the Orchard Keeper',
-    'NPC - Myti the Scout',
-    'NPC - Cree the Monster Hunter',
-    'NPC - Cece the Mushroom Forager',
-    'NPC - Walton the Korok',
-    'NPC - Jengo the Miner',
-    'NPC - Jasz the Hunter',
-    'NPC - Lecia the Scholar',
-    'NPC - Tye the Botanist',
-    'NPC - Lil Tim the Cucco'
-  ];
-  const filteredNPCs = npcChoices.filter(choice => choice.toLowerCase().includes(focusedOption.value.toLowerCase()));
-  await interaction.respond(filteredNPCs.map(choice => ({ name: choice, value: choice })));
-} else if (commandName === 'steal' && focusedOption.name === 'rarity') {
-  // Handle the /steal command's rarity option autocomplete
-  const choices = ['common', 'uncommon', 'rare'];
-  const filtered = choices.filter(choice => choice.startsWith(focusedOption.value.toLowerCase()));
-  await interaction.respond(filtered.map(choice => ({ name: choice, value: choice })));
+} else if (commandName === 'village' && focusedOption.name === 'charactername') {
+  await handleVillageUpgradeCharacterAutocomplete(interaction);
+} else if (commandName === 'village' && focusedOption.name === 'itemname') {
+  await handleVillageMaterialsAutocomplete(interaction);
+} else if (commandName === 'viewinventory' && focusedOption.name === 'charactername') {
+  await handleViewInventoryAutocomplete(interaction, focusedOption);
+} else if (['changejob', 'shops', 'explore', 'raid', 'editcharacter', 'deletecharacter', 'setbirthday', 'viewcharacter', 'testinventorysetup', 'syncinventory', 'crafting', 'gather', 'loot', 'gear', 'customweapon'].includes(commandName) && focusedOption.name === 'charactername') {
+  await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, commandName);
 } else {
   await interaction.respond([]);
 }
 
-    } catch (error) {
-      // Catch and handle errors
-      await safeRespondWithError(interaction);
-    }
+} catch (error) {
+  // Catch and handle errors
+  await safeRespondWithError(interaction);
+}
+
+
+
   }
 
 
@@ -1851,6 +1855,162 @@ async function handleItemJobVoucherAutocomplete(interaction, focusedOption) {
   }
 }
 
+// ------------------- handle Base Weapon Autocomplete -------------------
+async function handleBaseWeaponAutocomplete(interaction) {
+  try {
+      const focusedValue = interaction.options.getFocused(); // User's input
+
+      // Fetch weapons from the database using the category filter
+      const items = await fetchItemsByCategory('Weapon');
+
+      // Handle case when no items are found
+      if (!items || items.length === 0) {
+          console.warn(`[handleBaseWeaponAutocomplete]: No weapons found in the database.`);
+          return interaction.respond([]); // Respond with an empty array
+      }
+
+      // Filter items based on the user's input and format for Discord
+      const choices = items
+          .filter(item => item.itemName.toLowerCase().includes(focusedValue.toLowerCase())) // Match input
+          .slice(0, 25) // Limit to 25 results
+          .map(item => ({ name: item.itemName, value: item.itemName })); // Format for Discord
+
+      await interaction.respond(choices); // Respond with filtered choices
+  } catch (error) {
+      console.error('[handleBaseWeaponAutocomplete]: Error fetching base weapons:', error);
+      await interaction.respond([]); // Respond with an empty array on error
+  }
+}
+
+// ------------------- handle Subtype Autocomplete -------------------
+
+async function handleSubtypeAutocomplete(interaction) {
+  try {
+      const focusedValue = interaction.options.getFocused(); // User input
+
+      // Fetch all unique weapon subtypes
+      const items = await fetchItemsByCategory('Weapon'); // Use category filter for weapons
+
+      if (!items || items.length === 0) {
+          console.warn('[handleSubtypeAutocomplete]: No weapons found in the database.');
+          return interaction.respond([]);
+      }
+
+      // Extract unique subtypes
+      const subtypes = [...new Set(items.flatMap(item => item.subtype))]; // Flatten and deduplicate
+
+      // Filter subtypes based on user input
+      const filteredSubtypes = subtypes
+          .filter(subtype => subtype && subtype.toLowerCase().includes(focusedValue.toLowerCase()))
+          .slice(0, 25); // Limit to 25 results
+
+      // Format choices for Discord
+      const choices = filteredSubtypes.map(subtype => ({ name: subtype, value: subtype }));
+
+      await interaction.respond(choices);
+  } catch (error) {
+      console.error('[handleSubtypeAutocomplete]: Error fetching subtypes:', error);
+      await interaction.respond([]); // Respond with an empty array on error
+  }
+}
+
+// ------------------- Handles autocomplete for /steal charactername (Only Bandits) -------------------
+async function handleStealCharacterAutocomplete(interaction, focusedOption) {
+  try {
+      const userId = interaction.user.id; // Get the user's Discord ID
+      console.log(`[handleStealCharacterAutocomplete]: Autocomplete triggered for user: ${userId}`);
+
+      // Fetch all characters owned by the user
+      const characters = await fetchCharactersByUserId(userId);
+
+      if (!characters || characters.length === 0) {
+          console.warn(`[handleStealCharacterAutocomplete]: No characters found for user: ${userId}`);
+          return await interaction.respond([]); // Return empty list
+      }
+
+      // Filter only characters with the job "Bandit" (case-insensitive)
+      const banditCharacters = characters.filter(character =>
+          character.job.toLowerCase() === 'bandit' &&
+          character.name.toLowerCase().includes(focusedOption.value.toLowerCase()) // Match input text
+      );
+
+      if (banditCharacters.length === 0) {
+          console.warn(`[handleStealCharacterAutocomplete]: No Bandit characters found for user: ${userId}`);
+          return await interaction.respond([]); // Return empty list if no Bandits found
+      }
+
+      // Format results for autocomplete, limiting to 25 choices (Discord limit)
+      const filteredCharacters = banditCharacters.slice(0, 25).map(character => ({
+          name: character.name, // Display name
+          value: character.name // Value returned to command
+      }));
+
+      console.log(`[handleStealCharacterAutocomplete]: Found ${filteredCharacters.length} matching Bandit characters.`);
+
+      // Respond with filtered character names
+      await interaction.respond(filteredCharacters);
+  } catch (error) {
+      console.error('[handleStealCharacterAutocomplete]: Error fetching characters:', error);
+      await interaction.respond([]); // Return empty list on failure
+  }
+}
+
+
+// ------------------- Handles Autocomplete for `/modgive` Character Selection -------------------
+async function handleModGiveCharacterAutocomplete(interaction, focusedOption) {
+  try {
+    const characters = await fetchAllCharacters();
+
+    if (!characters || characters.length === 0) {
+      return await interaction.respond([]);
+    }
+
+    // Filter based on user input
+    const searchQuery = focusedOption.value.toLowerCase();
+    const filteredCharacters = characters
+      .filter(character => character.name.toLowerCase().includes(searchQuery)) // Allow typing to search
+      .map(character => ({
+        name: character.name,
+        value: character.name,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name)) // Alphabetize results
+      .slice(0, 25); // Limit to 25 choices (Discord API limit)
+
+    await interaction.respond(filteredCharacters);
+  } catch (error) {
+    console.error('[handleModGiveCharacterAutocomplete]: Error:', error);
+    await safeRespondWithError(interaction);
+  }
+}
+
+
+// ------------------- Handles Autocomplete for `/modgive` Item Selection -------------------
+async function handleModGiveItemAutocomplete(interaction, focusedOption) {
+  try {
+    const items = await fetchAllItems(); // Fetch all items
+
+    if (!items || items.length === 0) {
+      return await interaction.respond([]);
+    }
+
+    // Filter based on user input
+    const searchQuery = focusedOption.value.toLowerCase();
+    const filteredItems = items
+      .filter(item => item.itemName.toLowerCase().includes(searchQuery)) // Allow typing to search
+      .map(item => ({
+        name: item.itemName,
+        value: item.itemName,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name)) // Alphabetize results
+      .slice(0, 25); // Limit to 25 choices (Discord API limit)
+
+    await interaction.respond(filteredItems);
+  } catch (error) {
+    console.error('[handleModGiveItemAutocomplete]: Error:', error);
+    await safeRespondWithError(interaction);
+  }
+}
+
 
 // ------------------- Export Functions -------------------
 module.exports = {
@@ -1885,6 +2045,10 @@ module.exports = {
   handleVillageMaterialsAutocomplete,
   handleVillageUpgradeCharacterAutocomplete,
   handleChangeJobNewJobAutocomplete,
-  handleItemJobVoucherAutocomplete
+  handleItemJobVoucherAutocomplete,
+  handleBaseWeaponAutocomplete,
+  handleStealCharacterAutocomplete,
+  handleModGiveCharacterAutocomplete,
+  handleModGiveItemAutocomplete
 };
 

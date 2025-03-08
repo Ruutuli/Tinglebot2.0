@@ -137,7 +137,7 @@ async function syncToInventoryDatabase(character, item, interaction) {
     }
 }
 
-// --------- Add an item to the inventory database ---------
+// ------------------- Add an item to the inventory database -------------------
 async function addItemInventoryDatabase(characterId, itemName, quantity, interaction, obtain = '') {
     try {
         if (!interaction) {
@@ -148,55 +148,67 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
         if (!character) {
             throw new Error(`Character with ID ${characterId} not found`);
         }
+        console.log(`[inventoryUtils]: Found character: ${character.name}, ID: ${character._id}`);
 
         const inventoriesConnection = await connectToInventories();
         const db = inventoriesConnection.useDb('inventories');
-        const inventoryCollection = db.collection(character.name.toLowerCase());
 
-        // Check for an existing item with the same `itemName` and `obtain` method
+        // Ensure collection name is correct
+        const collectionName = character.name.toLowerCase().replace(/\s+/g, '_');
+        const inventoryCollection = db.collection(collectionName);
+
+        console.log(`[inventoryUtils]: Checking inventory for character "${character.name}" in collection "${collectionName}"`);
+
+        // Fetch item from database
+        const item = await fetchItemByName(itemName);
+        if (!item) {
+            throw new Error(`Item with name "${itemName}" not found`);
+        }
+
+        console.log(`[inventoryUtils]: Found item: ${item.itemName}, ID: ${item._id}`);
+
+        // Check for an existing item with the same `itemName`
         const inventoryItem = await inventoryCollection.findOne({
             characterId,
-            itemName: new RegExp(`^${escapeRegExp(String(itemName).trim().toLowerCase())}$`, 'i'),
+            itemName: new RegExp(`^${escapeRegExp(itemName.trim().toLowerCase())}$`, 'i'),
             obtain,
         });
 
         if (inventoryItem) {
-            // Update quantity if item exists with the same obtain method
-            const cleanedQuantity =
-                typeof quantity === 'string'
-                    ? parseInt(quantity.replace(/,/g, ''), 10)
-                    : quantity;
-            const newQuantity = inventoryItem.quantity + cleanedQuantity;
+            // Update quantity if item exists
+            const newQuantity = inventoryItem.quantity + quantity;
+            console.log(`[inventoryUtils]: Updating existing item "${itemName}" - New Quantity: ${newQuantity}`);
+
             await inventoryCollection.updateOne(
                 { characterId, itemName: inventoryItem.itemName, obtain },
                 { $set: { quantity: newQuantity } }
             );
         } else {
             // Insert a new item if no match is found
-            const item = await fetchItemByName(itemName);
-            if (!item) {
-                throw new Error(`Item with name ${itemName} not found`);
-            }
-
             const newItem = {
                 characterId,
                 itemName: item.itemName,
                 itemId: item._id,
                 quantity,
-                category: item.category.join(', '),
-                type: item.type.join(', '),
-                subtype: item.subtype ? item.subtype.join(', ') : '',
-                location: character.currentVillage,
+                category: Array.isArray(item.category) ? item.category.join(', ') : 'Misc',
+                type: Array.isArray(item.type) ? item.type.join(', ') : 'Unknown',
+                subtype: Array.isArray(item.subtype) ? item.subtype.join(', ') : '',
+                location: character.currentVillage || 'Unknown',
                 date: new Date(),
-                obtain, // Dynamically set obtain method
+                obtain,
             };
+
+            console.log(`[inventoryUtils]: Adding new item "${itemName}" to collection "${collectionName}"`);
             await inventoryCollection.insertOne(newItem);
         }
+
+        return true;
     } catch (error) {
         console.error('[inventoryUtils.js]: Error adding item to inventory database:', error);
         throw error;
     }
 }
+
 
 
 // --------- Remove an item from the inventory database ---------

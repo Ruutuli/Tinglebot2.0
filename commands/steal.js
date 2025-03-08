@@ -41,11 +41,16 @@ module.exports = {
         .addStringOption(option =>
             option.setName('charactername')
                 .setDescription('The name of the character attempting to steal')
-                .setRequired(true))
-        .addStringOption(option =>
-            option.setName('targettype')
-                .setDescription('The type of target (player or npc)')
-                .setRequired(true))
+                .setRequired(true)
+                .setAutocomplete(true)) 
+                .addStringOption(option =>
+                    option.setName('targettype')
+                        .setDescription('The type of target')
+                        .setRequired(true)
+                        .addChoices(
+                            { name: 'NPC', value: 'npc' },
+                            { name: 'Player', value: 'player' }
+                        ))
         .addStringOption(option =>
             option.setName('target')
                 .setDescription('The name of the target character or NPC to steal from')
@@ -57,18 +62,35 @@ module.exports = {
                 .setRequired(true)
                 .setAutocomplete(true)),
 
-    // ------------------- Autocomplete for NPC names -------------------
-    async autocomplete(interaction) {
-        const focusedValue = interaction.options.getFocused();
+// ------------------- Autocomplete for NPC names -------------------
+async autocomplete(interaction) {
+    try {
+        const focusedValue = interaction.options.getFocused().toLowerCase().trim(); // Normalize user input
+        console.log(`[Autocomplete] Triggered for NPCs with input: "${focusedValue}"`);
+
+        // Ensure NPC name mapping exists
+        if (!npcNameMapping || Object.keys(npcNameMapping).length === 0) {
+            console.warn('[Autocomplete] NPC name mapping is empty or undefined.');
+            return await interaction.respond([]); // Return empty response
+        }
 
         // Filter NPC names based on user input
-        const filtered = Object.keys(npcNameMapping).filter(choice => choice.toLowerCase().includes(focusedValue.toLowerCase()));
+        const filteredNPCs = Object.keys(npcNameMapping)
+            .filter(npc => npc.toLowerCase().includes(focusedValue))
+            .slice(0, 25); // Limit to 25 results for performance
+
+        // Log the number of matches found
+        console.log(`[Autocomplete] Found ${filteredNPCs.length} matching NPCs.`);
 
         // Send filtered response for autocomplete
         await interaction.respond(
-            filtered.map(choice => ({ name: choice, value: choice }))
+            filteredNPCs.map(npc => ({ name: npc, value: npc }))
         );
-    },
+    } catch (error) {
+        console.error('[Autocomplete] Error fetching NPC names:', error);
+        await interaction.respond([]); // Safely return an empty list on failure
+    }
+},
 
     // ------------------- Main Execute Function -------------------
     async execute(interaction) {

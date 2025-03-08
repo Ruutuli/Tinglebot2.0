@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en" class="semi-dark">
+
+<head>
+	<!-- Required meta tags -->
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<!--favicon-->
+	<link rel="icon" href="assets/images/favicon-32x32.png" type="image/png" />
+	<!--plugins-->
+	<link href="assets/plugins/simplebar/css/simplebar.css" rel="stylesheet" />
+	<link href="assets/plugins/perfect-scrollbar/css/perfect-scrollbar.css" rel="stylesheet" />
+	<link href="assets/plugins/metismenu/css/metisMenu.min.css" rel="stylesheet" />
+	<!-- loader-->
+	<link href="assets/css/pace.min.css" rel="stylesheet" />
+	<script src="assets/js/pace.min.js"></script>
+	<!-- Bootstrap CSS -->
+	<link href="assets/css/bootstrap.min.css" rel="stylesheet">
+	<link href="assets/css/bootstrap-extended.css" rel="stylesheet">
+	<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500&display=swap" rel="stylesheet">
+	<link href="assets/css/app.css" rel="stylesheet">
+	<link href="assets/css/icons.css" rel="stylesheet">
+	<!-- Theme Style CSS -->
+	<link rel="stylesheet" href="assets/css/dark-theme.css" />
+	<link rel="stylesheet" href="assets/css/semi-dark.css" />
+	<link rel="stylesheet" href="assets/css/header-colors.css" />
+	<title>ROTW - Tinglebot Admin Dashboard</title>
+</head>
+
+<body>
+	<!--wrapper-->
+	<div class="wrapper">
+		<!--sidebar wrapper -->
+		<div class="sidebar-wrapper" data-simplebar="true">
+			<div class="sidebar-header">
+				<div>
+					<img src="assets/images/logo-icon.png" class="logo-icon" alt="logo icon">
+				</div>
+				<div>
+					<h4 class="logo-text">Tinglebot</h4>
+				</div>
+				<div class="toggle-icon ms-auto"><i class='bx bx-arrow-back'></i>
+				</div>
+			 </div>
+			<!--navigation-->
+			<ul class="metismenu" id="menu">
+                <li>
+                    <a href="index.html">
+                        <div class="parent-icon"><i class='bx bx-home-alt'></i></div>
+                        <div class="menu-title">Dashboard</div>
+                    </a>
+                </li>
+
+                <li>
+                    <a href="members.html">
+                        <div class="parent-icon"><i class='bx bx-user'></i></div>
+                        <div class="menu-title">Members</div>
+                    </a>
+                </li>
+                
+				<li>
+                    <a href="javascript:;" class="has-arrow">
+                        <div class="parent-icon"><i class="lni lni-database"></i></div>
+                        <div class="menu-title">Database</div>
+                    </a>
+                    <ul id="database-menu">
+                        <!-- Dynamic content will be generated here -->
+                    </ul>
+                </li>
+
+                <li>
+                    <a href="javascript:;" class="has-arrow">
+                        <div class="parent-icon"><i class="lni lni-files"></i></div>
+                        <div class="menu-title">Internal JSONs</div>
+                    </a>
+                    <ul id="internal-jsons-menu">
+                        <!-- Dynamic content will be generated here -->
+                    </ul>
+                </li>
+			<!--end navigation-->
+		</div>
+		<!--end sidebar wrapper -->
+		<!--start header -->
+<header>
+    <div class="topbar d-flex align-items-center">
+        <nav class="navbar navbar-expand gap-3">
+
+            <div class="top-menu ms-auto">
+                <ul class="navbar-nav align-items-center gap-1">
+                    
+
+                    <!-- Notifications Dropdown -->
+                    <li class="nav-item dropdown dropdown-large">
+                        <a class="nav-link dropdown-toggle dropdown-toggle-nocaret position-relative" href="#" data-bs-toggle="dropdown">
+                            <span class="alert-count">7</span>
+                            <i class='bx bx-bell'></i>
+                        </a>
+                        <div class="dropdown-menu dropdown-menu-end">
+                            <a href="javascript:void(0);">
+                                <div class="msg-header">
+                                    <p class="msg-header-title">Notifications</p>
+                                    <p class="msg-header-badge">8 New</p>
+                                </div>
+                            </a>
+                            <div class="header-notifications-list">
+                                <a class="dropdown-item" href="javascript:void(0);">
+                                    <div class="d-flex align-items-center">
+                                        <div class="user-online">
+                                            <img src="assets/images/avatars/avatar-1.png" class="msg-avatar" alt="User Avatar">
+                                        </div>
+                                        <div class="flex-grow-1">
+                                            <h6 class="msg-name">Daisy Anderson <span class="msg-time float-end">5 sec ago</span></h6>
+                                            <p class="msg-info">The standard chunk of lorem</p>
+                                        </div>
+                                    </div>
+                                </a>
+                            </div>
+                            <a href="javascript:void(0);">
+                                <div class="text-center msg-footer">
+                                    <button class="btn btn-primary w-100">View All Notifications</button>
+                                </div>
+                            </a>
+                        </div>
+                    </li>
+                </ul>
+            </div>
+
+            <!-- User Profile Dropdown -->
+            <div class="user-box dropdown px-3">
+                <a class="d-flex align-items-center nav-link dropdown-toggle gap-3 dropdown-toggle-nocaret" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                    <img src="assets/images/avatars/avatar-2.png" class="user-img" alt="User Avatar">
+                    <div class="user-info">
+                        <p class="user-name mb-0">Pauline Seitz</p>
+                        <p class="designation mb-0">Web Designer</p>
+                    </div>
+                </a>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li>
+                        <a class="dropdown-item d-flex align-items-center" href="javascript:void(0);">
+                            <i class="bx bx-user fs-5"></i> <span>Profile</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a class="dropdown-item d-flex align-items-center" href="javascript:void(0);">
+                            <i class="bx bx-cog fs-5"></i> <span>Settings</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a class="dropdown-item d-flex align-items-center" href="javascript:void(0);">
+                            <i class="bx bx-log-out-circle"></i> <span>Logout</span>
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </nav>
+    </div>
+</header>
+<!--end header -->
+
+		<!--start page wrapper -->
+		<div class="page-wrapper">
+			<div class="page-content">
+
+                
+<!-- Edit Entry Modal -->
+<div class="modal fade" id="editEntryModal" tabindex="-1" aria-labelledby="editEntryModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editEntryModalLabel">Edit Entry</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editEntryForm">
+                    <input type="hidden" id="editItemId">
+                    <input type="hidden" id="editFileName">
+                    <div id="editFields"></div>
+                    <button type="submit" class="btn btn-success mt-3">Save Changes</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<!--// Accordion Section //-->
+<div class="card">
+    <div class="card-header">
+        <h5 class="card-title fw-bold text-uppercase">Internal Data Records</h5>
+    </div>
+    <div class="card-body">
+        <div class="accordion" id="accordion-container">
+            <!-- Dynamic Content Here -->
+        </div>
+    </div>
+</div>
+
+
+<!--// End Table Section //-->
+
+
+                    
+                    
+                </div>
+                
+
+
+
+
+
+
+                
+			  
+			</div>
+		</div>
+		<!--end page wrapper -->
+		<!--start overlay-->
+		<div class="overlay toggle-icon"></div>
+		<!--end overlay-->
+		<!--Start Back To Top Button--> <a href="javaScript:;" class="back-to-top"><i class='bx bxs-up-arrow-alt'></i></a>
+		<!--End Back To Top Button-->
+		<footer class="page-footer">
+			<p class="mb-0">Copyright © 2024. All right reserved.</p>
+		</footer>
+	</div>
+	
+	<!-- Bootstrap JS -->
+	<script src="assets/js/bootstrap.bundle.min.js"></script>
+	<!--plugins-->
+	<script src="assets/js/jquery.min.js"></script>
+	<script src="assets/plugins/simplebar/js/simplebar.min.js"></script>
+	<script src="assets/plugins/metismenu/js/metisMenu.min.js"></script>
+	<script src="assets/plugins/perfect-scrollbar/js/perfect-scrollbar.js"></script>
+	<!--app JS-->
+	<script src="assets/js/app.js"></script>
+</body>
+
+</html>

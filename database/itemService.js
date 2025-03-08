@@ -25,43 +25,33 @@ const fetchAllItems = async () => {
 };
 
 // ------------------- Fetch item by name from the database -------------------
-const fetchItemByName = async (itemName) => {
+async function fetchItemByName(itemName) {
     const client = await connectToInventories();
     const db = client.db('tinglebot');
     const normalizedItemName = itemName.trim().toLowerCase();
 
     try {
+        console.log(`[fetchItemByName]: Searching for item "${normalizedItemName}"`);
+
+        // Fetch items that match exactly (case-insensitive)
         const item = await db.collection('items').findOne({
-            itemName: new RegExp(`^${normalizedItemName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}$`, 'i')
+            itemName: new RegExp(`^${normalizedItemName}$`, 'i')
         });
 
-        if (item) {
-            // Validate and handle `allJobs`
-            if (typeof item.allJobs === 'string') {
-                item.allJobs = item.allJobs.split('\n');
-            } else if (Array.isArray(item.allJobs)) {
-                // Already an array, leave it as-is
-                item.allJobs = item.allJobs;
-            } else {
-                // Default to ['None'] if allJobs is invalid or missing
-                item.allJobs = ['None'];
-            }
-
-            // Validate and handle `allJobsTags`
-            item.allJobsTags = Array.isArray(item.allJobsTags) ? item.allJobsTags : ['None'];
-        } else {
-            console.warn(`❌ No item found for: ${itemName}`);
+        if (!item) {
+            console.warn(`[fetchItemByName]: No item found for "${normalizedItemName}"`);
+            return null;
         }
 
+        console.log(`[fetchItemByName]: Found item: ${item.itemName}, ID: ${item._id}`);
         return item;
     } catch (error) {
-        console.error("❌ Error fetching item by name:", error);
+        console.error("[fetchItemByName]: Error fetching item by name:", error);
         throw error;
     } finally {
         await client.close();
     }
-};
-
+}
 
 
 // ------------------- Fetch item by ID from the database -------------------
@@ -230,6 +220,30 @@ const fetchItemRarityByName = async (itemName) => {
 };
 
 
+// ------------------- Fetch items by category from the database -------------------
+const fetchItemsByCategory = async (category) => {
+    const client = await connectToInventories();
+    const db = client.db('tinglebot');
+
+    try {
+        // Fetch items matching the category
+        const items = await db.collection('items').find({
+            category: { $regex: `^${category}$`, $options: 'i' } // Case-insensitive match
+        }).toArray();
+
+        if (!items || items.length === 0) {
+            console.warn(`❌ No items found in category: ${category}`);
+            return []; // Return empty array if no matches are found
+        }
+
+        return items;
+    } catch (error) {
+        console.error("❌ Error fetching items by category:", error);
+        throw error;
+    } finally {
+        await client.close();
+    }
+};
 
 
 // ------------------- Export functions -------------------
@@ -243,6 +257,7 @@ module.exports = {
     fetchAllItems,
     fetchAndSortItemsByRarity,
     getIngredientItems,
-    fetchItemRarityByName
+    fetchItemRarityByName,
+    fetchItemsByCategory
 };
 

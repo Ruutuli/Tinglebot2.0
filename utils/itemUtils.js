@@ -7,7 +7,8 @@ const {
     getSheetIdByTitle,
     authorizeSheets,
     readSheetData,
-    appendSheetData
+    appendSheetData,
+    getSheetsClient 
 } = require('../utils/googleSheetsUtils');
 const { extractSpreadsheetId } = require('../utils/validation');
 const { fetchCharacterById, fetchCharacterByNameAndUserId } = require('../database/characterService');
@@ -17,6 +18,7 @@ const { safeStringify } = require('../utils/objectUtils');
 const { StringSelectMenuBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const generalCategories = require('../models/GeneralItemCategories');
 const ItemModel = require('../models/ItemModel');
+
 
 // Function to create a new inventory item entry
 const createNewItemDatabase = (character, itemName, quantity, category, type, interaction) => {
@@ -253,6 +255,31 @@ const promptUserForSpecificItems = async (interaction, inventory, generalCategor
 
     return selectedItems;
 };
+
+
+async function getSheetIdByName(sheetName) {
+    try {
+        const auth = await authorizeSheets();
+        const sheets = getSheetsClient(auth);
+        const spreadsheetId = 'your-spreadsheet-id'; // Replace with your spreadsheet ID
+
+        const response = await sheets.spreadsheets.get({
+            spreadsheetId,
+        });
+
+        const sheet = response.data.sheets.find(sheet => sheet.properties.title === sheetName);
+        if (!sheet) {
+            console.error(`[itemUtils.js]: Sheet "${sheetName}" not found in spreadsheet "${spreadsheetId}".`);
+            throw new Error(`Sheet "${sheetName}" not found.`);
+        }
+
+        return sheet.properties.sheetId;
+    } catch (error) {
+        console.error(`[itemUtils.js]: Error in getSheetIdByName for "${sheetName}":`, error.message);
+        throw error;
+    }
+}
+
 
 // Exporting the functions
 module.exports = {
