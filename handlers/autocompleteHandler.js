@@ -80,6 +80,16 @@ if (commandName === 'blight' && (focusedOption.name === 'character_name' || focu
   await handleBaseWeaponAutocomplete(interaction);
 } else if (commandName === 'customweapon' && interaction.options.getSubcommand() === 'submit' && focusedOption.name === 'subtype') {
   await handleSubtypeAutocomplete(interaction);
+} else if (commandName === 'deliver' && focusedOption.name === 'sender') {
+  await handleCourierSenderAutocomplete(interaction, focusedOption);
+} else if (commandName === 'deliver' && interaction.options.getSubcommand() === 'request' && focusedOption.name === 'courier') {
+  await handleCourierAutocomplete(interaction, focusedOption);
+} else if (commandName === 'deliver' && focusedOption.name === 'recipient') {
+  await handleRecipientAutocomplete(interaction, focusedOption);
+} else if (commandName === 'deliver' && focusedOption.name === 'item') {
+  await handleDeliverItemAutocomplete(interaction, focusedOption);
+} else if (commandName === 'deliver' &&  ['accept', 'fulfill'].includes(interaction.options.getSubcommand()) &&  focusedOption.name === 'courier') {
+  await handleCourierAcceptAutocomplete(interaction, focusedOption);
 } else if (commandName === 'editcharacter' && focusedOption.name === 'updatedinfo') {
   await handleEditCharacterAutocomplete(interaction, focusedOption);
 } else if (commandName === 'explore' && ['item1', 'item2', 'item3'].includes(focusedOption.name)) {
@@ -147,11 +157,7 @@ if (commandName === 'blight' && (focusedOption.name === 'character_name' || focu
   // Catch and handle errors
   await safeRespondWithError(interaction);
 }
-
-
-
   }
-
 
 // ------------------- Helper Function to Safely Respond with Error -------------------
 async function safeRespondWithError(interaction) {
@@ -2011,6 +2017,119 @@ async function handleModGiveItemAutocomplete(interaction, focusedOption) {
   }
 }
 
+// ------------------- Handles autocomplete for 'courier' characters in deliver command -------------------
+async function handleCourierAutocomplete(interaction, focusedOption) {
+  try {
+    const characters = await fetchAllCharacters(); // Fetch all characters
+    const courierCharacters = characters.filter(c => c.job.toLowerCase() === 'courier'); // Filter couriers only
+
+    const choices = courierCharacters.map(c => ({
+      name: `${c.name} - ${capitalize(c.currentVillage)}`,
+      value: c.name,
+    }));
+
+    await respondWithFilteredChoices(interaction, focusedOption, choices);
+  } catch (error) {
+    console.error('[handleCourierAutocomplete]: Error during courier autocomplete:', error);
+    await safeRespondWithError(interaction);
+  }
+}
+
+// ------------------- Handles autocomplete for 'sender' characters in deliver command -------------------
+async function handleCourierSenderAutocomplete(interaction, focusedOption) {
+  try {
+    const userId = interaction.user.id;
+    const characters = await fetchCharactersByUserId(userId);
+
+    const choices = characters.map(character => ({
+      name: `${character.name} - ${capitalize(character.currentVillage)}`,
+      value: character.name,
+    }));
+
+    await respondWithFilteredChoices(interaction, focusedOption, choices);
+  } catch (error) {
+    console.error('[handleCourierSenderAutocomplete]: Error during sender autocomplete:', error);
+    await safeRespondWithError(interaction);
+  }
+}
+
+// ------------------- Handles autocomplete for 'recipient' characters in deliver command -------------------
+async function handleRecipientAutocomplete(interaction, focusedOption) {
+  try {
+    const userId = interaction.user.id;
+    const allCharacters = await fetchAllCharactersExceptUser(userId);
+
+    const choices = allCharacters.map(character => ({
+      name: `${character.name} - ${capitalize(character.currentVillage)}`,
+      value: character.name,
+    }));
+
+    await respondWithFilteredChoices(interaction, focusedOption, choices);
+  } catch (error) {
+    console.error('[handleRecipientAutocomplete]: Error during recipient autocomplete:', error);
+    await safeRespondWithError(interaction);
+  }
+}
+
+// ------------------- Handles autocomplete for item field in /deliver command -------------------
+async function handleDeliverItemAutocomplete(interaction, focusedOption) {
+  try {
+    const userId = interaction.user.id;
+    const senderName = interaction.options.getString('sender');
+    if (!senderName) return await interaction.respond([]);
+
+    const senderCharacter = await fetchCharacterByNameAndUserId(senderName, userId);
+    if (!senderCharacter) return await interaction.respond([]);
+
+    const inventoryCollection = await getCharacterInventoryCollection(senderCharacter.name);
+    const inventory = await inventoryCollection.find().toArray();
+
+// Group by item name and sum quantities
+const itemMap = new Map();
+for (const item of inventory) {
+  const itemName = item.itemName;
+  if (!itemMap.has(itemName)) {
+    itemMap.set(itemName, item.quantity);
+  } else {
+    itemMap.set(itemName, itemMap.get(itemName) + item.quantity);
+  }
+}
+
+// Format choices
+const choices = Array.from(itemMap.entries()).map(([name, qty]) => ({
+  name: `${name} - QTY:${qty}`,
+  value: name
+}));
+
+    await respondWithFilteredChoices(interaction, focusedOption, choices);
+  } catch (error) {
+    console.error('[handleDeliverItemAutocomplete]: Error fetching deliver item choices:', error);
+    await safeRespondWithError(interaction);
+  }
+}
+
+
+// ------------------- Handles autocomplete for courier characters in /deliver accept command -------------------
+async function handleCourierAcceptAutocomplete(interaction, focusedOption) {
+  try {
+    const userId = interaction.user.id;
+    const characters = await fetchCharactersByUserId(userId); // ✅ Pulls only user-owned characters
+
+    // ✅ Filter only courier job characters
+    const courierCharacters = characters.filter(character => character.job.toLowerCase() === 'courier');
+
+    // Format choices
+    const choices = courierCharacters.map(character => ({
+      name: `${character.name} - ${capitalize(character.currentVillage)}`,
+      value: character.name
+    }));
+
+    await respondWithFilteredChoices(interaction, focusedOption, choices);
+  } catch (error) {
+    console.error('[handleCourierAcceptAutocomplete]: Error during courier accept autocomplete:', error);
+    await safeRespondWithError(interaction);
+  }
+}
 
 // ------------------- Export Functions -------------------
 module.exports = {
@@ -2049,6 +2168,11 @@ module.exports = {
   handleBaseWeaponAutocomplete,
   handleStealCharacterAutocomplete,
   handleModGiveCharacterAutocomplete,
-  handleModGiveItemAutocomplete
+  handleModGiveItemAutocomplete,
+  handleCourierAutocomplete,
+  handleCourierSenderAutocomplete,
+  handleRecipientAutocomplete,
+  handleDeliverItemAutocomplete,
+  handleCourierAcceptAutocomplete
 };
 

@@ -1,210 +1,46 @@
 {
-  "W715975": {
-    "characterName": "Alden",
-    "weaponName": "Crystal Weapon",
-    "baseWeapon": "Silver Longsword",
-    "modifiers": "4",
-    "type": "2h",
-    "subtype": "Sword",
-    "description": "Ooo shiny",
-    "image": "https://storage.googleapis.com/tinglebot/Submissions/6806c63a-fe75-4c1b-ae7c-0dbb16bd2c3f-Crystal_Weapon_W715975",
-    "userId": "211219306137124865",
-    "itemId": "W715975",
-    "status": "approved",
-    "staminaToCraft": 5,
-    "craftingMaterials": [
-      {
-        "_id": "667020be16d372f118977251",
-        "itemName": "Wood",
-        "quantity": 1
-      },
-      {
-        "_id": "667020be16d372f11897741d",
-        "itemName": "Star Fragment",
-        "quantity": 1
-      }
-    ]
+  "D383902": {
+    "sender": "David Jr",
+    "courier": "oog",
+    "recipient": "Kimino",
+    "item": "shock fruit",
+    "quantity": 45,
+    "payment": "You can look at me for free",
+    "flavortext": "Lick it",
+    "status": "pending",
+    "createdAt": "2025-03-23T12:59:14.917Z"
   },
-  "W736010": {
-    "characterName": "Alden",
-    "weaponName": "Sax",
-    "baseWeapon": "Spring-Loaded Hammer",
-    "modifiers": "1",
-    "type": "2h",
-    "subtype": "Hammer",
-    "description": "toot toot",
-    "image": "https://storage.googleapis.com/tinglebot/Submissions/1d0a84ce-f847-41e0-bf46-5971f2491386-Sax_W736010",
-    "userId": "211219306137124865",
-    "itemId": "W736010",
-    "status": "pending"
+  "D995188": {
+    "sender": "Alden",
+    "courier": "oog",
+    "recipient": "Kimino",
+    "item": "hinox toenail",
+    "quantity": 45,
+    "payment": "You can look at me for free",
+    "flavortext": "Lick it",
+    "status": "pending",
+    "createdAt": "2025-03-23T13:08:10.289Z"
   },
-  "W256271": {
-    "characterName": "Alden",
-    "weaponName": "Sax",
-    "baseWeapon": "Spring-Loaded Hammer",
-    "modifiers": "1",
-    "type": "2h",
-    "subtype": "Carver",
-    "description": "toot toot",
-    "image": "https://storage.googleapis.com/tinglebot/Submissions/ab29acc1-0d3b-4d8d-b951-c2633699ed33-Sax_W256271",
-    "userId": "211219306137124865",
-    "itemId": "W256271",
-    "status": "pending"
+  "D658424": {
+    "sender": "Alden",
+    "courier": "oog",
+    "recipient": "Kimino",
+    "item": "hinox toenail",
+    "quantity": 45,
+    "payment": "You can look at me for free",
+    "flavortext": "Lick it",
+    "status": "pending",
+    "createdAt": "2025-03-23T13:11:06.949Z"
   },
-  "W369460": {
-    "characterName": "Alden",
-    "weaponName": "Sax",
-    "baseWeapon": "Lizal Shield",
-    "modifiers": "1",
-    "type": "2h",
-    "subtype": "Carver",
-    "description": "toot toot",
-    "image": "https://storage.googleapis.com/tinglebot/Submissions/12c6a40c-34a2-4131-9bbe-6810b5ef949e-Sax_W369460",
-    "userId": "211219306137124865",
-    "itemId": "W369460",
-    "status": "pending"
-  },
-  "W980137": {
-    "characterName": "Alden",
-    "weaponName": "Sax",
-    "baseWeapon": "Spring-Loaded Hammer",
-    "modifiers": "1",
-    "type": "2h",
-    "subtype": "Bow",
-    "description": "toot toot",
-    "image": "https://storage.googleapis.com/tinglebot/Submissions/15c6117f-2f64-44fb-8451-bfc54cc3ce1f-Sax_W980137",
-    "userId": "211219306137124865",
-    "itemId": "W980137",
-    "status": "pending"
-  },
-  "W141956": {
-    "characterName": "Alden",
-    "weaponName": "Sax",
-    "baseWeapon": "Spring-Loaded Hammer",
-    "modifiers": "1",
-    "type": "2h",
-    "subtype": "Rod",
-    "description": "toot toot",
-    "image": "https://storage.googleapis.com/tinglebot/Submissions/a52f5d3f-5a4f-4cc9-8d6a-c03fa6568c07-Sax_W141956",
-    "userId": "211219306137124865",
-    "itemId": "W141956",
-    "status": "pending"
-  },
-  "W703156": {
-    "characterName": "Alden",
-    "weaponName": "sax",
-    "baseWeapon": "Bokoblin Arm",
-    "modifiers": "2",
-    "type": "1h",
-    "subtype": "Bow",
-    "description": "toot toot",
-    "image": "https://storage.googleapis.com/tinglebot/Submissions/b8967dd6-f55e-4390-bd50-c20c3d3f29e2-sax_W703156",
-    "userId": "211219306137124865",
-    "itemId": "W703156",
-    "status": "pending"
-  },
-  "W758940": {
-    "characterName": "Alden",
-    "weaponName": "sax",
-    "baseWeapon": "Lizalfos Arm",
-    "modifiers": "2",
-    "type": "1h",
-    "subtype": "Rod",
-    "description": "toot toot",
-    "image": "https://storage.googleapis.com/tinglebot/Submissions/eda69daf-c24a-416b-98de-0323306b238e-sax_W758940",
-    "userId": "211219306137124865",
-    "itemId": "W758940",
-    "status": "pending"
-  },
-  "W638045": {
-    "characterName": "Alden",
-    "weaponName": "sax",
-    "baseWeapon": "Lizalfos Arm",
-    "modifiers": "2",
-    "type": "1h",
-    "subtype": "Carver",
-    "description": "toot toot",
-    "image": "https://storage.googleapis.com/tinglebot/Submissions/d5a36289-676a-4de4-8b68-b5cd580ef22f-sax_W638045",
-    "userId": "211219306137124865",
-    "itemId": "W638045",
-    "status": "approved",
-    "staminaToCraft": 6,
-    "craftingMaterials": [
-      {
-        "_id": "667020b816d372f118975d08",
-        "itemName": "Apple",
-        "quantity": 5
-      },
-      {
-        "_id": "667020be16d372f11897741d",
-        "itemName": "Star Fragment",
-        "quantity": 1
-      }
-    ]
-  },
-  "W554127": {
-    "characterName": "Alden",
-    "weaponName": "A child",
-    "baseWeapon": "Bokoblin Arm",
-    "modifiers": "1",
-    "type": "1h",
-    "subtype": "Rod",
-    "description": "A CHILD?!",
-    "image": "https://storage.googleapis.com/tinglebot/Submissions/143a86e0-82fb-4f5d-af20-9ea08bedfa6e-A_child_W554127",
-    "userId": "211219306137124865",
-    "itemId": "W554127",
-    "status": "pending"
-  },
-  "W843261": {
-    "characterName": "Alden",
-    "weaponName": "A child",
-    "baseWeapon": "Spiked Boko Club",
-    "modifiers": "2",
-    "type": "1h",
-    "subtype": "Rod",
-    "description": "A CHILD",
-    "image": "https://storage.googleapis.com/tinglebot/Submissions/a9a99f8c-af4b-464c-ad70-64a400925048-A_child_W843261",
-    "userId": "211219306137124865",
-    "itemId": "W843261",
-    "status": "pending"
-  },
-  "W259977": {
-    "characterName": "Alden",
-    "weaponName": "A child",
-    "baseWeapon": "Spiked Boko Club",
-    "modifiers": "2",
-    "type": "1h",
-    "subtype": "Rod",
-    "description": "A CHILD",
-    "image": "https://storage.googleapis.com/tinglebot/Submissions/5e5cd3c5-f7e0-4330-ae01-abbc6e6673c4-A_child_W259977",
-    "userId": "211219306137124865",
-    "itemId": "W259977",
-    "status": "pending"
-  },
-  "W949082": {
-    "characterName": "Alden",
-    "weaponName": "A child",
-    "baseWeapon": "Spiked Boko Club",
-    "modifiers": "2",
-    "type": "1h",
-    "subtype": "Rod",
-    "description": "A CHILD",
-    "image": "https://storage.googleapis.com/tinglebot/Submissions/c5e47e75-063e-47df-8fc6-9c44eea64c76-A_child_W949082",
-    "userId": "211219306137124865",
-    "itemId": "W949082",
-    "status": "approved",
-    "staminaToCraft": 4,
-    "craftingMaterials": [
-      {
-        "_id": "667020b816d372f118975d08",
-        "itemName": "Apple",
-        "quantity": 4
-      },
-      {
-        "_id": "667020be16d372f11897741d",
-        "itemName": "Star Fragment",
-        "quantity": 1
-      }
-    ]
+  "D726446": {
+    "sender": "Alden",
+    "courier": "oog",
+    "recipient": "Kimino",
+    "item": "gold dust",
+    "quantity": 45,
+    "payment": "You can look at me for free",
+    "flavortext": "Lick it",
+    "status": "pending",
+    "createdAt": "2025-03-23T13:13:45.201Z"
   }
 }

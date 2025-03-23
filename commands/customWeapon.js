@@ -8,7 +8,8 @@ const { connectToInventories } = require('../database/connection');
 
 // ------------------- Database Services -------------------
 const { fetchCharacterByNameAndUserId, updateCharacterById, getCharacterInventoryCollection } = require('../database/characterService');
-const { fetchItemByName } = require('../database/itemService');
+const { fetchItemByName, fetchValidWeaponSubtypes } = require('../database/itemService');
+
 
 // ------------------- Utility Functions -------------------
 const { addItemInventoryDatabase, processMaterials, removeItemInventoryDatabase } = require('../utils/inventoryUtils');
@@ -177,15 +178,28 @@ if (subcommand === 'create') {
         return;
     }
 
-    // Retrieve Submission
-    const weaponSubmission = retrieveSubmissionFromStorage(weaponId);
-    if (!weaponSubmission || weaponSubmission.status !== 'approved') {
-        await interaction.editReply({
-            content: `❌ Approved custom weapon not found or already crafted.`,
-            ephemeral: true,
-        });
-        return;
-    }
+// Retrieve Submission
+const weaponSubmission = retrieveSubmissionFromStorage(weaponId);
+
+if (!weaponSubmission || weaponSubmission.status !== 'approved') {
+    console.error(`[customweapon create]: Submission not found or not approved. Status: ${weaponSubmission?.status}`);
+    await interaction.editReply({
+        content: `❌ Approved custom weapon not found.`,
+        ephemeral: true,
+    });
+    return;
+}
+
+
+// ✅ Prevent reuse of crafted weapons
+if (weaponSubmission.crafted === true) {
+    await interaction.editReply({
+        content: `❌ This weapon has already been crafted and cannot be crafted again.`,
+        ephemeral: true,
+    });
+    return;
+}
+
 
     // ------------------- Ensure Only the Submitting Character Can Craft -------------------
     if (weaponSubmission.characterName !== characterName) {
@@ -262,30 +276,50 @@ if (subcommand === 'create') {
     }
 
     // ------------------- Process Materials & Remove Inventory -------------------
-    try {
-        await processMaterials(interaction, character, inventoryItems, { craftingMaterial: weaponSubmission.craftingMaterials }, 1);
-        await removeItemInventoryDatabase(character._id, 'Star Fragment', 1, interaction);
-        await removeItemInventoryDatabase(character._id, 'Blueprint Voucher', 1, interaction);
-    } catch (error) {
-        console.error(`[customweapon create]: Error removing materials for crafting:`, error);
-        await interaction.editReply({
-            content: `❌ Failed to remove required materials.`,
-            ephemeral: true,
-        });
-        return;
+// ✅ Begin Transaction-safe Crafting
+let materialsRemoved = false;
+let staminaDeducted = false;
+
+try {
+    // ------------------- Process Materials & Remove Inventory -------------------
+    await processMaterials(interaction, character, inventoryItems, { craftingMaterial: weaponSubmission.craftingMaterials }, 1);
+    await removeItemInventoryDatabase(character._id, 'Star Fragment', 1, interaction);
+    await removeItemInventoryDatabase(character._id, 'Blueprint Voucher', 1, interaction);
+
+    materialsRemoved = true;
+
+    // Log stamina before and after deduction
+    const oldStamina = character.currentStamina;
+    await checkAndUseStamina(character, weaponSubmission.staminaToCraft);
+    staminaDeducted = true;
+
+    // Fetch character again to get updated stamina
+    const updatedCharacter = await fetchCharacterByNameAndUserId(character.name, character.userId);
+    const newStamina = updatedCharacter?.currentStamina;
+
+} catch (error) {
+    console.error(`[customweapon create]: Transaction error:`, error);
+
+    if (materialsRemoved) {
+        await addItemInventoryDatabase(character._id, weaponSubmission.craftingMaterials, 1);
+        await addItemInventoryDatabase(character._id, [{ itemName: 'Star Fragment', quantity: 1 }], 1);
+        await addItemInventoryDatabase(character._id, [{ itemName: 'Blueprint Voucher', quantity: 1 }], 1);
     }
 
-    // ------------------- Deduct Stamina -------------------
-    try {
-        await checkAndUseStamina(character, weaponSubmission.staminaToCraft);
-    } catch (error) {
-        console.error(`[customweapon create]: Stamina deduction failed:`, error);
-        await interaction.editReply({
-            content: `❌ Stamina deduction failed. Please try again.`,
-            ephemeral: true,
+    if (staminaDeducted) {
+        await updateCharacterById(character._id, {
+            $inc: { currentStamina: weaponSubmission.staminaToCraft }
         });
-        return;
+        console.log(`[customweapon create]: Rolled back ${weaponSubmission.staminaToCraft} stamina for ${character.name}.`);
     }
+
+    await interaction.editReply({
+        content: `❌ Crafting failed. Materials and stamina have been restored. Error: ${error.message}`,
+        ephemeral: true,
+    });
+    return;
+}
+
 
     // ------------------- Add Custom Weapon to Inventory -------------------
     try {
@@ -304,7 +338,79 @@ if (subcommand === 'create') {
             synced: uuidv4(),
         };
 
-        await inventoryCollection.insertOne(newInventoryItem);
+// ✅ Mark weaponSubmission as crafted
+weaponSubmission.crafted = true;
+saveSubmissionToStorage(weaponId, weaponSubmission);
+
+await inventoryCollection.insertOne(newInventoryItem);
+
+// ✅ Delete submission from storage after crafting is finalized
+deleteSubmissionFromStorage(weaponId);
+
+        // ------------------- Log Crafted Weapon to Google Sheets -------------------
+try {
+    const auth = await authorizeSheets();
+    const spreadsheetId = extractSpreadsheetId(character.inventory || character.inventoryLink);
+    const range = 'loggedInventory!A2:M';
+    const uniqueSyncId = uuidv4();
+    const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
+    const formattedDateTime = formatDateTime(new Date());
+
+// 🛠️ Fetch actual item details from DB for accurate category/type/subtype
+const item = await fetchItemByName(weaponSubmission.weaponName);
+
+const values = [
+  [
+    character.name,
+    weaponSubmission.weaponName,
+    '1',
+    item?.category?.join(', ') || 'Unknown',
+    item?.type?.join(', ') || 'Unknown',
+    item?.subtype?.join(', ') || 'Unknown',
+    'Custom Weapon',
+    character.job || '',
+    '',
+    character.currentVillage,
+    interactionUrl,
+    formattedDateTime,
+    uniqueSyncId
+  ]
+];
+
+    await appendSheetData(auth, spreadsheetId, range, values);
+
+// 🛠️ Append Star Fragment and Blueprint Voucher to materials for proper logging
+const fullMaterialsUsed = await Promise.all([
+    ...weaponSubmission.craftingMaterials.map(async (mat) => {
+        const dbItem = await ItemModel.findOne({ itemName: mat.itemName });
+        const emoji = dbItem?.emoji || ':small_blue_diamond:';
+        return `> ${emoji} **${mat.itemName}** x${mat.quantity}`;
+    }),
+    (async () => {
+        const blueprintItem = await ItemModel.findOne({ itemName: 'Blueprint Voucher' });
+        const blueprintEmoji = (blueprintItem?.itemName === 'Blueprint Voucher' || !blueprintItem?.emoji || blueprintItem.emoji.trim() === '') 
+    ? ':small_blue_diamond:' 
+    : blueprintItem.emoji;
+        return `> ${blueprintEmoji} **Blueprint Voucher** x1`;
+    })()
+]);
+
+
+await logMaterialsToGoogleSheets(
+    auth,
+    spreadsheetId,
+    range,
+    character,
+    [...weaponSubmission.craftingMaterials, { itemName: 'Blueprint Voucher', quantity: 1 }],
+    newInventoryItem,
+    interactionUrl,
+    formattedDateTime
+  );
+  
+} catch (error) {
+    console.error(`[customweapon create]: Failed to log Google Sheets crafting entry:`, error);
+}
+
     } catch (error) {
         console.error(`[customweapon create]: Failed to add ${weaponSubmission.weaponName} to inventory:`, error);
         await interaction.editReply({
@@ -314,28 +420,66 @@ if (subcommand === 'create') {
         return;
     }
 
-    // ------------------- Send Success Message -------------------
-    try {
-        const embed = {
-            title: `🎉 Congratulations!`,
-            description: `You have successfully crafted **${weaponSubmission.weaponName}**! This item has been added to **${characterName}**'s inventory.`,
-            color: 0xAA926A,
-            thumbnail: { url: weaponSubmission.image },
-            fields: [
-                {
-                    name: `What’s next?`,
-                    value: `🛡️ Use the </gear:1306176789755858975> command to equip it and enjoy your new weapon.`,
-                    inline: false,
-                },
-            ],
-            footer: { text: 'Enjoy your new weapon!' },
-            image: { url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png' },
-        };
+// ------------------- Send Success Message -------------------
+try {
+    const updatedStamina = character.currentStamina;
 
-        await interaction.editReply({ content: null, embeds: [embed] });
-    } catch (error) {
-        console.error(`[customweapon create]: Error sending success embed:`, error);
-    }
+   // Fetch material emojis from database
+const fullMaterialsUsed = await Promise.all([
+    ...weaponSubmission.craftingMaterials.map(async (mat) => {
+        const dbItem = await ItemModel.findOne({ itemName: mat.itemName });
+        const emoji = dbItem?.emoji || ':small_blue_diamond:'; // Default to diamond if no emoji found
+        return `> ${emoji} **${mat.itemName}** x${mat.quantity}`;
+    }),
+    (async () => {
+        const blueprintItem = await ItemModel.findOne({ itemName: 'Blueprint Voucher' });
+        const blueprintEmoji = (blueprintItem?.itemName === 'Blueprint Voucher' || !blueprintItem?.emoji || blueprintItem.emoji.trim() === '') 
+    ? ':small_blue_diamond:' 
+    : blueprintItem.emoji;
+
+        return `> ${blueprintEmoji} **Blueprint Voucher** x1`;
+    })()
+]);
+
+// Create the 🎉 Congratulations! embed
+const embed = {
+    title: `🎉 Congratulations!`,
+    description: `You have created your custom weapon, **${weaponSubmission.weaponName}**, with the help of a skilled crafter!! This item has been added to **${characterName}**'s inventory.`,
+    color: 0xAA926A,
+    thumbnail: { url: weaponSubmission.image },
+    fields: [
+        {
+            name: `⚡ Stamina Cost`,
+            value: `> ${weaponSubmission.staminaToCraft}`,
+            inline: true,
+        },
+        {
+            name: `💚 Remaining Stamina`,
+            value: `> ${updatedStamina}`,
+            inline: true,
+        },
+        {
+            name: `📦 Materials Used`,
+            value: fullMaterialsUsed.join('\n'),
+            inline: false,
+        },
+        {
+            name: `What’s next?`,
+            value: `🛡️ Use the </gear:1306176789755858975> command to equip it and enjoy your new weapon.`,
+            inline: false,
+        },
+    ],
+    footer: { text: 'Enjoy your new weapon!' },
+    image: { url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png' },
+};
+
+// Send the response with the embed
+await interaction.editReply({ content: null, embeds: [embed] });
+
+} catch (error) {
+    console.error(`[customweapon create]: Error sending success embed:`, error);
+}
+
 
  // ------------------- Submit Command -------------------
 
@@ -360,6 +504,14 @@ const subtype = interaction.options.getString('subtype');
 const description = interaction.options.getString('description');
 const imageAttachment = interaction.options.getAttachment('image'); // Retrieve the uploaded image
 const weaponId = generateUniqueId('W');
+
+// ------------------- Validate Non-Empty Content -------------------
+if (!weaponName.trim() || !description.trim() || !subtype.trim()) {
+    return interaction.editReply({
+        content: `❌ Submission fields **Weapon Name**, **Description**, and **Subtype** must contain valid text and cannot be blank.`,
+        ephemeral: true,
+    });
+}
 
 // Fetch Character
 try {
@@ -412,20 +564,43 @@ try {
         }
     }
 
-    // Save Submission
-    saveSubmissionToStorage(weaponId, {
-        characterName,
-        weaponName,
-        baseWeapon,
-        modifiers,
-        type,
-        subtype,
-        description,
-        image: uploadedImageUrl || 'https://default.image.url/weapon.png',
-        userId: interaction.user.id,
-        itemId: weaponId, // Include the weapon ID
-        status: 'pending',
+// ------------------- Duplicate Submission Check -------------------
+const allSubmissions = getAllSubmissions(); 
+
+// ❌ Check for duplicate weapon name globally (regardless of character)
+const duplicateNameExists = allSubmissions.some(sub =>
+    sub.weaponName.toLowerCase() === weaponName.toLowerCase() &&
+    sub.status !== 'rejected'
+);
+
+// 🔒 Prevent submission if any existing non-rejected weapon has same name
+if (duplicateNameExists) {
+    return interaction.editReply({
+        content: `❌ A custom weapon named **${weaponName}** has already been submitted or approved. Please choose a different name.`,
+        ephemeral: true,
     });
+}
+
+// Check for duplicate weapon ID collision
+const duplicateIdExists = allSubmissions.some(sub =>
+    sub.itemId === weaponId
+);
+
+if (duplicateIdExists) {
+    return interaction.editReply({
+        content: `❌ Submission failed: The generated Weapon ID \`${weaponId}\` is already in use. Please try submitting again to generate a new ID.`,
+        ephemeral: true,
+    });
+}
+
+// 🔒 Prevent editing if the weaponId already exists and is approved or crafted
+const existingSubmission = retrieveSubmissionFromStorage(weaponId);
+if (existingSubmission && ['approved', 'crafted'].includes(existingSubmission.status)) {
+    return interaction.editReply({
+        content: `❌ This weapon submission has already been **approved** or **crafted**, and cannot be edited or resubmitted.`,
+        ephemeral: true,
+    });
+}
 
     // Create Response Embed
     const embed = {
@@ -461,24 +636,46 @@ try {
             embeds: [embed],
         });
     }
+
+    // 🛠️ Save submission initially without notificationMessageId
+saveSubmissionToStorage(weaponId, {
+    characterName,
+    weaponName,
+    baseWeapon,
+    modifiers,
+    type,
+    subtype,
+    description,
+    image: uploadedImageUrl || 'https://default.image.url/weapon.png',
+    userId: interaction.user.id,
+    itemId: weaponId,
+    status: 'pending',
+    submissionMessageId: submissionMessage?.id
+});
+
+      
     
     
 // ------------------- Send Pending Submission Notification to Approval Channel -------------------
 try {
     const notificationChannel = await interaction.client.channels.fetch('1347628427993153637');
     if (notificationChannel) {
-        // ✅ Create a direct link to the original submission
         const submissionLink = `https://discord.com/channels/${interaction.guild.id}/${interaction.channel.id}/${submissionMessage.id}`;
 
-        await notificationChannel.send({
-            content: `🛠️ **Pending Custom Weapon Submission!**\n⏳ **Please approve within 24 hours!**\n📌 Submitted by <@${interaction.user.id}> on **${submissionDate}**.\n🔍 Awaiting approval!\n\n🆔 **Submission ID:** \`${weaponId}\`\n🔗 [View Submission](${submissionLink})`,
-            embeds: [embed], // ✅ Keeps the original embed
+        const notificationMessage = await notificationChannel.send({
+            content: `🛠️ **Pending Custom Weapon Submission!**\n⏳ **Please approve within 24 hours!**\n📌 Submitted by <@${interaction.user.id}> on **${submissionDate}**.\n🔍 Awaiting approval!\n\n🆔 **Submission ID:** \`${weaponId}\`\n🔗 [View Submission](${submissionLink})`
         });
+
+        // ✅ Safely update submission with notificationMessageId now
+        const updatedSubmission = retrieveSubmissionFromStorage(weaponId);
+        if (updatedSubmission) {
+            updatedSubmission.notificationMessageId = notificationMessage.id;
+            saveSubmissionToStorage(weaponId, updatedSubmission);
+        }
     }
 } catch (error) {
     console.error(`[customweapon submit]: Error sending notification to channel:`, error);
 }
-
 
 
 } catch (error) {
@@ -515,15 +712,50 @@ try {
     const materialsToCraft = interaction.options.getString('materialstocraft');
 
     try {
-        // Retrieve Weapon Submission
-        const weaponSubmission = retrieveSubmissionFromStorage(weaponId);
-        if (!weaponSubmission || weaponSubmission.status !== 'pending') {
-            await interaction.editReply({
-                content: '❌ Weapon not found or already reviewed.',
-                ephemeral: true,
-            });
-            return;
-        }
+// Retrieve Submission
+const weaponSubmission = retrieveSubmissionFromStorage(weaponId);
+
+// ✅ FIXED CONDITION — Expecting to approve a 'pending' weapon, not already approved
+if (!weaponSubmission || weaponSubmission.status !== 'pending') {
+    console.error(`[customweapon approve]: Submission not found or already approved. Status: ${weaponSubmission?.status}`);
+    await interaction.editReply({
+        content: `❌ Pending custom weapon not found or this weapon has already been approved.`,
+        ephemeral: true,
+    });
+    return;
+}
+
+
+
+
+// ✅ Prevent reuse of crafted weapons
+if (weaponSubmission.crafted === true) {
+    await interaction.editReply({
+        content: `❌ This weapon has already been crafted and cannot be crafted again.`,
+        ephemeral: true,
+    });
+    return;
+}
+
+// ------------------- Validate Weapon Submission Fields -------------------
+const validModifiers = ['1', '2', '3', '4'];
+const validTypes = ['1h', '2h'];
+
+const validSubtypes = await fetchValidWeaponSubtypes();
+
+if (
+    !validModifiers.includes(weaponSubmission.modifiers) ||
+    !validTypes.includes(weaponSubmission.type) ||
+    !validSubtypes.includes(weaponSubmission.subtype.toLowerCase())
+) {
+    await interaction.editReply({
+        content: `❌ Weapon submission contains **invalid modifiers, type, or subtype**.\nPlease contact a moderator to review this submission.`,
+        ephemeral: true,
+    });
+    return;
+}
+
+
 
         // Validate Submitter User
         const userId = weaponSubmission.userId;
@@ -599,7 +831,9 @@ try {
         weaponSubmission.status = 'approved';
         weaponSubmission.staminaToCraft = staminaToCraft;
         weaponSubmission.craftingMaterials = craftingMaterials;
+        weaponSubmission.crafted = false; // 🔐 Ensure crafted flag initialized
         saveSubmissionToStorage(weaponId, weaponSubmission);
+        
 
         // Save Weapon to Database
         try {
@@ -607,7 +841,7 @@ try {
                 itemName: weaponSubmission.weaponName,
                 image: weaponSubmission.image,
                 imageType: 'https://static.wixstatic.com/media/7573f4_1fabe54755434389a9cfb24180c4538b~mv2.png',
-                category: ['Weapon'],
+                category: ['Custom Weapon'],
                 categoryGear: 'Weapon',
                 type: [weaponSubmission.type],
                 subtype: [weaponSubmission.subtype],
@@ -646,11 +880,22 @@ try {
                     { name: 'Weapon ID', value: `\`\`\`${weaponId}\`\`\``, inline: false },
                     {
                         name: '__Materials to Craft__',
-                        value: craftingMaterials
-                            .map((mat) => `> :small_blue_diamond: **${mat.itemName}** x${mat.quantity}`)
-                            .join('\n'),
+                        value: (await Promise.all([
+                          ...craftingMaterials.map(async (mat) => {
+                            const item = await ItemModel.findOne({ itemName: mat.itemName });
+                            const emoji = item?.emoji && item.emoji.trim() !== '' ? item.emoji : ':small_blue_diamond:';
+                            return `> ${emoji} **${mat.itemName}** x${mat.quantity}`;
+                          }),
+                          (async () => {
+                            const blueprintItem = await ItemModel.findOne({ itemName: 'Blueprint Voucher' });
+                            const emoji = blueprintItem?.emoji && blueprintItem.emoji.trim() !== '' ? blueprintItem.emoji : ':small_blue_diamond:';
+                            return `> :small_blue_diamond: **Blueprint Voucher** x1`;
+                          })()
+                        ])).join('\n'),
                         inline: false,
-                    },
+                      },
+                      
+                    
                 ],
                 footer: { text: 'Your weapon has been added to the database!' },
                 image: {
@@ -685,11 +930,22 @@ try {
                         { name: 'Weapon ID', value: `\`\`\`${weaponId}\`\`\``, inline: false },
                         {
                             name: '__Materials to Craft__',
-                            value: craftingMaterials
-                                .map((mat) => `> :small_blue_diamond: **${mat.itemName}** x${mat.quantity}`)
-                                .join('\n'),
+                            value: (await Promise.all([
+                              ...craftingMaterials.map(async (mat) => {
+                                const item = await ItemModel.findOne({ itemName: mat.itemName });
+                                const emoji = item?.emoji && item.emoji.trim() !== '' ? item.emoji : ':small_blue_diamond:';
+                                return `> ${emoji} **${mat.itemName}** x${mat.quantity}`;
+                              }),
+                              (async () => {
+                                const blueprintItem = await ItemModel.findOne({ itemName: 'Blueprint Voucher' });
+                                const emoji = blueprintItem?.emoji && blueprintItem.emoji.trim() !== '' ? blueprintItem.emoji : ':small_blue_diamond:';
+                                return `> :small_blue_diamond: **Blueprint Voucher** x1`;
+                              })()
+                            ])).join('\n'),
                             inline: false,
-                        },
+                          },
+                          
+                        
                     ],
                     image: {
                         url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png',
@@ -698,6 +954,22 @@ try {
             ],
             ephemeral: false,
         });
+
+// ✅ React with a checkmark on original submission message
+try {
+    if (weaponSubmission.notificationMessageId) {
+        const notificationChannel = await interaction.client.channels.fetch('1347628427993153637');
+        const originalMsg = await notificationChannel.messages.fetch(weaponSubmission.notificationMessageId);
+        if (originalMsg) {
+            await originalMsg.react('✅');
+        }
+    }
+} catch (err) {
+    console.error(`[customweapon approve]: Failed to react to notification message:`, err.message);
+}
+
+
+
 
     } catch (error) {
         console.error(`[customweapon approve]: An unexpected error occurred:`, error);
@@ -723,46 +995,90 @@ try {
 
 // ------------------- Helper Functions -------------------
 
-// Logs materials used for crafting to Google Sheets
+// ------------------- Logs materials used for crafting to Google Sheets -------------------
 async function logMaterialsToGoogleSheets(auth, spreadsheetId, range, character, materialsUsed, craftedItem, interactionUrl, formattedDateTime) {
     try {
-      const combinedMaterials = combineMaterials(materialsUsed);
-      const usedMaterialsValues = await Promise.all(combinedMaterials.map(async material => {
-        try {
-          const materialObjectId = new mongoose.Types.ObjectId(material._id);
-          let materialItem = await ItemModel.findById(materialObjectId);
-  
-          if (!materialItem) {
-            materialItem = await ItemModel.findOne({ itemName: material.itemName });
-          }
-  
-          if (!materialItem) {
-            return [
-              character.name, material.itemName, `-${material.quantity}`, 'Unknown', 
-              'Unknown', 'Unknown', `Used for ${craftedItem.itemName}`, character.job, '', 
-              character.currentVillage, interactionUrl, formattedDateTime, uuidv4()
-            ];
-          }
-  
-          return [
-            character.name, material.itemName, `-${material.quantity}`, materialItem.category.join(', '), 
-            materialItem.type.join(', '), materialItem.subtype.join(', '), `Used for ${craftedItem.itemName}`, 
-            character.job, '', character.currentVillage, interactionUrl, formattedDateTime, uuidv4()
-          ];
-        } catch (error) {
-          return [
-            character.name, material.itemName, `-${material.quantity}`, 'Unknown', 'Unknown', 
-            'Unknown', `Used for ${craftedItem.itemName}`, character.job, '', 
-            character.currentVillage, interactionUrl, formattedDateTime, uuidv4()
-          ];
-        }
-      }));
-  
-      await appendSheetData(auth, spreadsheetId, range, usedMaterialsValues);
+        const combinedMaterials = combineMaterials(materialsUsed);
+
+        const usedMaterialsValues = await Promise.all(combinedMaterials.map(async (material) => {
+            try {
+                let materialItem = null;
+
+                // Attempt lookup by ID if available
+                if (material._id) {
+                    try {
+                        const materialObjectId = new mongoose.Types.ObjectId(material._id);
+                        materialItem = await ItemModel.findById(materialObjectId);
+                    } catch (_) {
+                        // Silently fail invalid ObjectId — fallback handled below
+                    }
+                }
+
+                // Fallback to itemName lookup
+                if (!materialItem || !materialItem.category || !materialItem.type || !materialItem.subtype) {
+                    materialItem = await ItemModel.findOne({ itemName: material.itemName });
+                }
+
+                // Still not found = use 'Unknown'
+                if (!materialItem) {
+                    return [
+                        character.name,
+                        material.itemName || 'Unknown',
+                        `-${material.quantity || 1}`,
+                        'Unknown',
+                        'Unknown',
+                        'Unknown',
+                        `Used for ${craftedItem.itemName}`,
+                        character.job || '',
+                        '',
+                        character.currentVillage || '',
+                        interactionUrl,
+                        formattedDateTime,
+                        uuidv4()
+                    ];
+                }
+
+                return [
+                    character.name,
+                    material.itemName || 'Unknown',
+                    `-${material.quantity || 1}`,
+                    materialItem.category?.join(', ') || 'Unknown',
+                    materialItem.type?.join(', ') || 'Unknown',
+                    materialItem.subtype?.length ? materialItem.subtype.join(', ') : '',
+                    `Used for ${craftedItem.itemName}`,
+                    character.job || '',
+                    '',
+                    character.currentVillage || '',
+                    interactionUrl,
+                    formattedDateTime,
+                    uuidv4()
+                ];
+            } catch (error) {
+                console.error('[logMaterialsToGoogleSheets]: Error processing material:', error.message);
+                return [
+                    character.name,
+                    material.itemName || 'Unknown',
+                    `-${material.quantity || 1}`,
+                    'Unknown',
+                    'Unknown',
+                    'Unknown',
+                    `Used for ${craftedItem.itemName}`,
+                    character.job || '',
+                    '',
+                    character.currentVillage || '',
+                    interactionUrl,
+                    formattedDateTime,
+                    uuidv4()
+                ];
+            }
+        }));
+
+        await appendSheetData(auth, spreadsheetId, range, usedMaterialsValues);
     } catch (error) {
-      console.error(`Error logging materials to Google Sheets: ${error.message}`);
+        console.error(`[customweapon create]: Failed to log materials to sheet:`, error);
     }
-  }
+}
+
   
   // Combines materials used for crafting to avoid duplicates
   function combineMaterials(materialsUsed) {
@@ -780,3 +1096,33 @@ async function logMaterialsToGoogleSheets(auth, spreadsheetId, range, character,
     return Array.from(materialMap.values());
   }
   
+  // ------------------- Get All Submissions from Storage -------------------
+  function getAllSubmissions() {
+    try {
+        const fs = require('fs');
+        const path = require('path');
+        const submissionsPath = path.join(__dirname, '../data/submissions.json');
+
+        if (!fs.existsSync(submissionsPath)) return [];
+
+        const rawData = fs.readFileSync(submissionsPath, 'utf-8').trim();
+
+        // Handle empty file safely
+        if (!rawData) return [];
+
+        let submissions = {};
+        try {
+            submissions = JSON.parse(rawData);
+        } catch (parseError) {
+            console.error(`[customweapon helper]: Failed to parse submissions.json — it might be corrupt or empty. Returning empty list.`);
+            return [];
+        }
+
+        return Object.values(submissions);
+    } catch (error) {
+        console.error(`[customweapon helper]: Error retrieving all submissions:`, error);
+        return [];
+    }
+}
+
+

@@ -245,6 +245,21 @@ const fetchItemsByCategory = async (category) => {
     }
 };
 
+// ------------------- Fetch All Distinct Weapon Subtypes -------------------
+const fetchValidWeaponSubtypes = async () => {
+    const client = await connectToInventories();
+    const db = client.db('tinglebot');
+    try {
+        const subtypes = await db.collection('items').distinct('subtype');
+        return subtypes.filter(Boolean).map(sub => sub.toLowerCase());
+    } catch (error) {
+        console.error('[itemService]: Error fetching weapon subtypes:', error);
+        return [];
+    } finally {
+        await client.close();
+    }
+};
+
 
 // ------------------- Export functions -------------------
 module.exports = {
@@ -258,6 +273,7 @@ module.exports = {
     fetchAndSortItemsByRarity,
     getIngredientItems,
     fetchItemRarityByName,
-    fetchItemsByCategory
+    fetchItemsByCategory,
+    fetchValidWeaponSubtypes
 };
 
