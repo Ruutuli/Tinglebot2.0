@@ -82,12 +82,14 @@ if (commandName === 'blight' && (focusedOption.name === 'character_name' || focu
   await handleSubtypeAutocomplete(interaction);
 } else if (commandName === 'deliver' && focusedOption.name === 'sender') {
   await handleCourierSenderAutocomplete(interaction, focusedOption);
-} else if (commandName === 'deliver' && interaction.options.getSubcommand() === 'request' && focusedOption.name === 'courier') {
+} else if (commandName === 'deliver' && ['request', 'vendingstock'].includes(interaction.options.getSubcommand()) && focusedOption.name === 'courier') {
   await handleCourierAutocomplete(interaction, focusedOption);
-} else if (commandName === 'deliver' && focusedOption.name === 'recipient') {
-  await handleRecipientAutocomplete(interaction, focusedOption);
-} else if (commandName === 'deliver' && focusedOption.name === 'item') {
-  await handleDeliverItemAutocomplete(interaction, focusedOption);
+} else if (commandName === 'deliver' && interaction.options.getSubcommand() === 'vendingstock' && focusedOption.name === 'recipient') {
+  await handleVendingRecipientAutocomplete(interaction, focusedOption);
+} else if (commandName === 'deliver' && interaction.options.getSubcommand() === 'vendingstock' && focusedOption.name === 'vendor') {
+  await handleRecipientAutocomplete(interaction, focusedOption); // or create a handleVendorAutocomplete if you want it distinct
+} else if (commandName === 'deliver' && interaction.options.getSubcommand() === 'vendingstock' && focusedOption.name === 'vendoritem') {
+  await handleVendorItemAutocomplete(interaction, focusedOption);
 } else if (commandName === 'deliver' &&  ['accept', 'fulfill'].includes(interaction.options.getSubcommand()) &&  focusedOption.name === 'courier') {
   await handleCourierAcceptAutocomplete(interaction, focusedOption);
 } else if (commandName === 'editcharacter' && focusedOption.name === 'updatedinfo') {
@@ -1363,7 +1365,35 @@ async function handleVendingAutocomplete(interaction, focusedOption) {
           console.warn(`[handleVendingAutocomplete]: Unsupported focused option '${focusedOption.name}' for subcommand 'editshop'.`);
           await interaction.respond([]);
       }   
-    
+    // ------------------- Handle 'restock' subcommand -------------------
+} else if (subcommand === 'restock') {
+  if (focusedOption.name === 'charactername') {
+    console.log('[handleVendingAutocomplete]: Handling charactername autocomplete for restock.');
+    const characters = await fetchCharactersByUserId(userId);
+    const vendingCharacters = characters.filter(character =>
+      ['merchant', 'shopkeeper'].includes(character.job?.toLowerCase())
+    );
+
+    if (!vendingCharacters.length) {
+      console.warn('[handleVendingAutocomplete]: No vending characters found for restock.');
+      return await interaction.respond([]);
+    }
+
+    const choices = vendingCharacters.map(character => ({
+      name: `${character.name} (${character.currentVillage})`,
+      value: character.name,
+    }));
+
+    await respondWithFilteredChoices(interaction, focusedOption, choices);
+
+  } else if (focusedOption.name === 'itemname') {
+    console.log('[handleVendingAutocomplete]: Handling itemname autocomplete for restock.');
+    await handleVendingRestockAutocomplete(interaction, focusedOption);
+  } else {
+    console.warn(`[handleVendingAutocomplete]: Unsupported focused option '${focusedOption.name}' for subcommand 'restock'.`);
+    await interaction.respond([]);
+  }
+
       // ------------------- Handle 'collect_points' subcommand -------------------
       } else if (subcommand === 'collect_points') {
           if (focusedOption.name === 'charactername') {
@@ -1403,7 +1433,10 @@ async function handleVendingAutocomplete(interaction, focusedOption) {
       console.error('[handleVendingAutocomplete]: Error handling vending autocomplete:', error);
       await safeRespondWithError(interaction);
   }
+  
 }
+
+
 
 
 // ------------------- Handles autocomplete for vending restock items -------------------
@@ -1411,65 +1444,78 @@ async function handleVendingRestockAutocomplete(interaction, focusedOption) {
   try {
     const characterName = interaction.options.getString('charactername');
     if (!characterName) {
-      return await interaction.respond([]); // No character selected
-    }
-
-    const userId = interaction.user.id; // Get user ID
-
-    // Fetch the character and validate
-    const character = await fetchCharacterByNameAndUserId(characterName, userId);
-    if (!character) {
-      console.warn(`[handleVendingRestockAutocomplete]: Character '${characterName}' not found.`);
+      console.warn('[handleVendingRestockAutocomplete]: No character name provided in interaction options.');
       return await interaction.respond([]);
     }
+
+    const userId = interaction.user.id;
+    console.log(`[handleVendingRestockAutocomplete]: Triggered by userId: ${userId}, characterName: '${characterName}'`);
+
+    // Fetch the character
+    const character = await fetchCharacterByNameAndUserId(characterName, userId);
+    if (!character) {
+      console.warn(`[handleVendingRestockAutocomplete]: Character '${characterName}' not found for userId ${userId}.`);
+      return await interaction.respond([]);
+    }
+
+    console.log(`[handleVendingRestockAutocomplete]: Fetched character '${character.name}' in village '${character.currentVillage}' with job '${character.job}'`);
 
     // Fetch the current vending stock list
     const stockList = await getCurrentVendingStockList();
     if (!stockList || !stockList.stockList) {
-      console.warn(`[handleVendingRestockAutocomplete]: No stock list found.`);
+      console.warn(`[handleVendingRestockAutocomplete]: No vending stock list found.`);
       return await interaction.respond([]);
     }
 
-    // Get the character's current village and normalize the name
     const normalizedVillage = character.currentVillage.toLowerCase().trim();
     const villageStock = stockList.stockList[normalizedVillage] || [];
+    console.log(`[handleVendingRestockAutocomplete]: Found ${villageStock.length} items for village '${normalizedVillage}'`);
 
-    // Filter items based on character's job and vending type
+    // Filter by vending type/job
     const filteredVillageItems = villageStock.filter(
       item => item.vendingType.toLowerCase() === character.job.toLowerCase()
     );
+    console.log(`[handleVendingRestockAutocomplete]: Filtered ${filteredVillageItems.length} items for character job '${character.job}'`);
 
-    // Format limited items to include stock quantity
+    // Format limited items
     const limitedItems = (stockList.limitedItems || []).map(item => ({
       ...item,
       formattedName: `${item.itemName} - ${item.points} points - Qty: ${item.stock}`,
     }));
+    console.log(`[handleVendingRestockAutocomplete]: Loaded ${limitedItems.length} limited items.`);
 
-    // Combine village items and formatted limited items
+    // Combine and format
     const allAvailableItems = [
       ...filteredVillageItems.map(item => ({
         ...item,
-        formattedName: `${item.itemName} - ${item.points} points`, // Format for village items
+        formattedName: `${item.itemName} - ${item.points} points`,
       })),
-      ...limitedItems, // Add formatted limited items
+      ...limitedItems,
     ];
 
-    // Filter items based on the user's input
+    console.log(`[handleVendingRestockAutocomplete]: Total combined available items: ${allAvailableItems.length}`);
+
+    // Filter by user input
     const searchQuery = focusedOption.value.toLowerCase();
     const filteredItems = allAvailableItems
-      .filter(item => item.itemName.toLowerCase().includes(searchQuery)) // Filter by item name
+      .filter(item => item.itemName.toLowerCase().includes(searchQuery))
       .map(item => ({
-        name: item.formattedName, // Display formatted name
-        value: item.itemName, // Use itemName as value
+        name: item.formattedName,
+        value: item.itemName,
       }))
-      .slice(0, 25); // Limit to 25 results
+      .slice(0, 25);
 
-    await interaction.respond(filteredItems); // Respond with filtered items
+    console.log(`[handleVendingRestockAutocomplete]: Responding with ${filteredItems.length} matching items for query '${searchQuery}'`);
+
+    await interaction.respond(filteredItems);
   } catch (error) {
     console.error('[handleVendingRestockAutocomplete]: Error:', error);
-    await interaction.respond([]); // Respond with empty array on error
+    await interaction.respond([]);
   }
 }
+
+
+
 
 // ------------------- Handles autocomplete for vending barter items -------------------
 async function handleVendingBarterAutocomplete(interaction, focusedOption) {
@@ -2131,6 +2177,78 @@ async function handleCourierAcceptAutocomplete(interaction, focusedOption) {
   }
 }
 
+// ------------------- Handles autocomplete for vendingstock recipient (vendor characters only) -------------------
+async function handleVendingRecipientAutocomplete(interaction, focusedOption) {
+  try {
+    const userId = interaction.user.id;
+
+    // Fetch all characters owned by the user
+    const characters = await fetchCharactersByUserId(userId);
+
+    // Filter for vending jobs (shopkeeper or merchant)
+    const vendingCharacters = characters.filter(character => {
+      const job = character.job?.toLowerCase();
+      return job === 'shopkeeper' || job === 'merchant';
+    });
+
+    // Map characters to autocomplete choices with job + village label
+    const choices = vendingCharacters.map(character => ({
+      name: `${character.name} - ${capitalize(character.job || 'Unknown')} - ${capitalize(character.currentVillage || 'Unknown')}`,
+      value: character.name,
+    }));
+
+    // Send back filtered results
+    await respondWithFilteredChoices(interaction, focusedOption, choices);
+  } catch (error) {
+    console.error('[autocompleteHandler.js]: Error handling vendingstock recipient autocomplete:', error);
+    await safeRespondWithError(interaction);
+  }
+}
+
+// ------------------- Handles autocomplete for vendoritem in /deliver vendingstock -------------------
+async function handleVendorItemAutocomplete(interaction, focusedOption) {
+  try {
+    const courierName = interaction.options.getString('courier');
+    const recipientName = interaction.options.getString('recipient');
+    const searchQuery = focusedOption.value.toLowerCase();
+
+    // Validate required selections
+    if (!courierName || !recipientName) return await interaction.respond([]);
+
+    // Fetch character data
+    const courier = await fetchCharacterByName(courierName);
+    const recipient = await fetchCharacterByName(recipientName);
+    if (!courier || !recipient) return await interaction.respond([]);
+
+    const village = courier.currentVillage?.toLowerCase()?.trim();
+    const vendorType = recipient.job?.toLowerCase();
+
+    // Fetch current vending stock list
+    const stockList = await getCurrentVendingStockList();
+    if (!stockList || !stockList.stockList || !stockList.stockList[village]) {
+      return await interaction.respond([]);
+    }
+
+    const villageStock = stockList.stockList[village];
+
+    // Filter items matching recipient’s job (vendor type) and input query
+    const filteredItems = villageStock.filter(item =>
+      item.vendingType?.toLowerCase() === vendorType &&
+      item.itemName?.toLowerCase().includes(searchQuery)
+    );
+
+    const choices = filteredItems.slice(0, 25).map(item => ({
+      name: `${item.itemName} - ${item.points} pts`,
+      value: item.itemName,
+    }));
+
+    await interaction.respond(choices);
+  } catch (err) {
+    console.error('[handleVendorItemAutocomplete]: Error:', err);
+    await safeRespondWithError(interaction);
+  }
+}
+
 // ------------------- Export Functions -------------------
 module.exports = {
   handleAutocomplete,
@@ -2173,6 +2291,8 @@ module.exports = {
   handleCourierSenderAutocomplete,
   handleRecipientAutocomplete,
   handleDeliverItemAutocomplete,
-  handleCourierAcceptAutocomplete
+  handleCourierAcceptAutocomplete,
+  handleVendingRecipientAutocomplete,
+  handleVendorItemAutocomplete
 };
 

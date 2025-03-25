@@ -49,6 +49,17 @@ module.exports = (client) => {
     }
   }, { timezone: 'America/New_York' });
 
+  // ------------------- Monthly Vending Stock Generation -------------------
+cron.schedule('0 0 1 * *', async () => {
+  try {
+    console.log('[scheduler]📦 Generating monthly vending stock...');
+    await generateVendingStockList();
+    console.log('[scheduler]✅ Monthly vending stock generated.');
+  } catch (error) {
+    console.error('[scheduler]❌ Error during monthly vending stock generation:', error.message);
+  }
+}, { timezone: 'America/New_York' });
+
 // ------------------- Monthly Push to Google Sheets -------------------
 cron.schedule('0 2 1 * *', async () => {
   try {

@@ -104,14 +104,6 @@ async function initializeClient() {
  
    scheduler(client);
 
-    // // Generate Vending Stock
-    // try {
-    //   await generateVendingStockList();
-    //   console.log('[index.js]: 🛍️ Vending stock generated');
-    // } catch (error) {
-    //   console.error('[index.js]: ❌ Vending stock generation error:', error);
-    // }
-
     // Initialize Random Encounter Functionality
     try {
       initializeRandomEncounterBot(client);

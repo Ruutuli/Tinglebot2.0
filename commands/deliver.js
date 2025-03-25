@@ -105,41 +105,40 @@ module.exports = {
       .addSubcommand(sub =>
         sub.setName('vendingstock')
           .setDescription('Courier delivery of vending stock to a vendor')
+          
           .addStringOption(opt =>
-            opt.setName('stocksource')
-              .setDescription('The vending stock source character')
+            opt.setName('recipient')
+              .setDescription('Vendor receiving stock (must have a vending job); includes their current village')
               .setRequired(true)
               .setAutocomplete(true)
           )
+      
           .addStringOption(opt =>
             opt.setName('courier')
-              .setDescription('Courier character who will carry the stock')
+              .setDescription('Courier character who will carry the stock; includes their village')
               .setRequired(true)
               .setAutocomplete(true)
           )
+      
           .addStringOption(opt =>
-            opt.setName('vendor')
-              .setDescription('The vendor receiving this stock delivery')
+            opt.setName('vendoritem')
+              .setDescription('Item to deliver from the courier’s village vending stock that matches vendor type')
               .setRequired(true)
               .setAutocomplete(true)
           )
-          .addStringOption(opt =>
-            opt.setName('item')
-              .setDescription('Item to deliver')
-              .setRequired(true)
-              .setAutocomplete(true)
-          )
+      
           .addIntegerOption(opt =>
-            opt.setName('quantity')
+            opt.setName('vendoritem_qty')
               .setDescription('Quantity of item to deliver')
               .setRequired(true)
           )
+      
           .addStringOption(opt =>
             opt.setName('flavortext')
               .setDescription('Optional flavor text or delivery note')
               .setRequired(false)
           )
-      ),
+      ),      
 
   // ------------------- Main Execute Handler -------------------
   async execute(interaction) {
@@ -638,36 +637,45 @@ if (subcommand === 'fulfill') {
   }
 }
 
-
-// ------------------- Delivery Vending Handler ------------------
- 
-
+// ------------------- Delivery Vending Handler -------------------
 if (subcommand === 'vendingstock') {
   try {
-    const stockSource = interaction.options.getString('stocksource');
+    // ------------------- Extract and validate inputs -------------------
+    const recipientName = interaction.options.getString('recipient'); // ✅ formerly 'vendor'
     const courierName = interaction.options.getString('courier');
-    const vendorName = interaction.options.getString('vendor');
-    const rawItemName = interaction.options.getString('item');
+    const rawItemName = interaction.options.getString('vendoritem');
     const itemName = rawItemName.trim();
-    const quantity = interaction.options.getInteger('quantity');
+    const quantity = interaction.options.getInteger('vendoritem_qty');
     const flavortext = interaction.options.getString('flavortext') || null;
 
-    // Validate roles — courier should not match source/vendor
-    if (courierName === stockSource || courierName === vendorName) {
+    // ------------------- Fetch courier character to determine stock source -------------------
+    const courierChar = await fetchCharacterByName(courierName);
+    if (!courierChar) {
       return interaction.reply({
-        content: `❌ Courier must be different from both the stock source and the vendor.`,
+        content: `❌ Courier character **${courierName}** was not found.`,
         ephemeral: true,
       });
     }
 
-    // Generate Delivery ID
+    const courierVillage = courierChar.currentVillage?.trim() || 'Unknown Village';
+    const stockSource = `${capitalizeWords(courierVillage)} Vending Stock`;
+
+    // ------------------- Validate: courier must be different from recipient -------------------
+    if (courierName === recipientName) {
+      return interaction.reply({
+        content: `❌ Courier must be different from the recipient (vendor).`,
+        ephemeral: true,
+      });
+    }
+
+    // ------------------- Generate Delivery ID -------------------
     const deliveryId = generateUniqueId('D');
 
-    // Save delivery task with context
+    // ------------------- Save delivery task to memory and storage -------------------
     const deliveryTask = {
       sender: stockSource,
       courier: courierName,
-      recipient: vendorName,
+      recipient: recipientName,
       item: itemName,
       quantity,
       payment: 'Stock Transfer',
@@ -679,32 +687,58 @@ if (subcommand === 'vendingstock') {
     deliveryTasks[deliveryId] = deliveryTask;
     saveSubmissionToStorage(deliveryId, deliveryTask);
 
-    // Fetch character info for embed links
-    const stockChar = await fetchCharacterByName(stockSource);
-    const courierChar = await fetchCharacterByName(courierName);
-    const vendorChar = await fetchCharacterByName(vendorName);
+    // ------------------- Fetch remaining character and item info -------------------
+    const recipientChar = await fetchCharacterByName(recipientName);
     const itemData = await ItemModel.findOne({ itemName });
     const itemEmoji = itemData?.emoji && itemData.emoji.trim() !== '' ? itemData.emoji : '🔹';
 
-    // Build embed
-    const deliveryEmbed = {
-      title: `📦 Vending Stock Delivery Requested`,
-      description: `**${vendorName}** has requested **${itemData?.itemName || itemName}** from **${stockSource}**'s stock, delivered by **${courierName}**.`,
-      color: 0xAA926A,
-      fields: [
-        { name: `__📤 Stock Source__`, value: `> [**${stockSource}**](${stockChar?.inventory || ''})`, inline: true },
-        { name: `__✉️ Courier__`, value: `> [**${courierName}**](${courierChar?.inventory || ''})`, inline: true },
-        { name: `__📥 Vendor Recipient__`, value: `> [**${vendorName}**](${vendorChar?.inventory || ''})`, inline: true },
-        { name: `__📦 Item to Deliver__`, value: `> ${itemEmoji} **${itemData?.itemName || itemName}** x${quantity}`, inline: false },
-        ...(flavortext ? [{ name: `__📝 Flavor Text__`, value: `> ${flavortext}`, inline: false }] : []),
-        { name: `__📋 Courier Instructions__`, value: `> Please use **</deliver accept:1353035054753775646>** to accept this vending stock task.` },
-        { name: `__🆔 Delivery ID__`, value: `\`\`\`${deliveryId}\`\`\``, inline: false },
-      ],
-      image: { url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png' },
-      timestamp: new Date(),
-    };
+  // ------------------- Build the delivery embed -------------------
+const deliveryEmbed = {
+  title: `📦 Vending Stock Delivery Requested`,
+  description: `**${recipientName}** has requested **${itemData?.itemName || itemName}** from **${stockSource}**, delivered by **${courierName}**.`,
+  color: 0xAA926A,
+  thumbnail: {
+    url: courierChar?.icon || 'https://default.image.url/fallback.png',
+  },
+  author: {
+    name: `Courier: ${courierName}`,
+    icon_url: courierChar?.icon || 'https://default.image.url/fallback.png',
+    url: courierChar?.inventory || '',
+  },
+  footer: {
+    text: `Recipient: ${recipientName}`,
+    icon_url: recipientChar?.icon || 'https://default.image.url/fallback.png',
+    url: recipientChar?.inventory || '',
+  },
+  fields: [
+    { name: `__✉️ Courier__`, value: `> [**${courierName}**](${courierChar?.inventory || ''})`, inline: true },
+    { name: `__📥 Vendor Recipient__`, value: `> [**${recipientName}**](${recipientChar?.inventory || ''})`, inline: true },
+    { name: `__📦 Item to Deliver__`, value: `> ${itemEmoji} **${itemData?.itemName || itemName}** x${quantity}`, inline: false },
+    ...(flavortext ? [{ name: `__📝 Flavor Text__`, value: `> ${flavortext}`, inline: false }] : []),
+    { name: `__📋 Courier Instructions__`, value: `> Please use **</deliver accept:1353035054753775646>** to accept this vending stock task.`, inline: false },
+    { name: `__🆔 Delivery ID__`, value: `\`\`\`${deliveryId}\`\`\``, inline: false },
+  ],
+  image: {
+    url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png',
+  },
+  timestamp: new Date(),
+};
 
-    await interaction.reply({ embeds: [deliveryEmbed] });
+// ------------------- Prepare user mentions (outside embed) -------------------
+const courierUserId = courierChar?.userId || null;
+const recipientUserId = recipientChar?.userId || null;
+
+let mentionMessage = '';
+if (courierUserId && recipientUserId) {
+  mentionMessage = `<@${recipientUserId}> is requesting vending stock delivery from <@${courierUserId}>!`;
+}
+
+
+    // ------------------- Final reply with embed -------------------
+    await interaction.reply({
+      content: mentionMessage,
+      embeds: [deliveryEmbed],
+    });   
 
   } catch (err) {
     console.error('[deliver.js]: Error handling vendingstock delivery:', err);
@@ -714,6 +748,8 @@ if (subcommand === 'vendingstock') {
     });
   }
 }
+
+
 
   },
 };
