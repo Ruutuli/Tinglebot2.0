@@ -92,6 +92,10 @@ if (commandName === 'blight' && (focusedOption.name === 'character_name' || focu
   await handleVendorItemAutocomplete(interaction, focusedOption);
 } else if (commandName === 'deliver' &&  ['accept', 'fulfill'].includes(interaction.options.getSubcommand()) &&  focusedOption.name === 'courier') {
   await handleCourierAcceptAutocomplete(interaction, focusedOption);
+} else if (commandName === 'deliver' && interaction.options.getSubcommand() === 'request' && focusedOption.name === 'recipient') {
+await handleAllRecipientAutocomplete(interaction, focusedOption);
+} else if (commandName === 'deliver' && interaction.options.getSubcommand() === 'request' && focusedOption.name === 'item') {
+  await handleDeliverItemAutocomplete(interaction, focusedOption);
 } else if (commandName === 'editcharacter' && focusedOption.name === 'updatedinfo') {
   await handleEditCharacterAutocomplete(interaction, focusedOption);
 } else if (commandName === 'explore' && ['item1', 'item2', 'item3'].includes(focusedOption.name)) {
@@ -2063,90 +2067,130 @@ async function handleModGiveItemAutocomplete(interaction, focusedOption) {
   }
 }
 
-// ------------------- Handles autocomplete for 'courier' characters in deliver command -------------------
-async function handleCourierAutocomplete(interaction, focusedOption) {
+// Generic helper for character-based autocomplete
+async function handleCharacterAutocomplete(interaction, focusedOption, fetchFn, filterFn, formatFn) {
   try {
-    const characters = await fetchAllCharacters(); // Fetch all characters
-    const courierCharacters = characters.filter(c => c.job.toLowerCase() === 'courier'); // Filter couriers only
-
-    const choices = courierCharacters.map(c => ({
-      name: `${c.name} - ${capitalize(c.currentVillage)}`,
-      value: c.name,
-    }));
-
+    const characters = await fetchFn();
+    const filteredCharacters = characters.filter(filterFn);
+    const choices = filteredCharacters.map(formatFn);
     await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
-    console.error('[handleCourierAutocomplete]: Error during courier autocomplete:', error);
+    console.error('[handleCharacterAutocomplete]: Error during autocomplete:', error);
     await safeRespondWithError(interaction);
   }
 }
 
-// ------------------- Handles autocomplete for 'sender' characters in deliver command -------------------
+// ------------------- Character-based Autocomplete Handlers -------------------
+
+// Handles autocomplete for the sender (user-owned characters)
 async function handleCourierSenderAutocomplete(interaction, focusedOption) {
-  try {
-    const userId = interaction.user.id;
-    const characters = await fetchCharactersByUserId(userId);
-
-    const choices = characters.map(character => ({
-      name: `${character.name} - ${capitalize(character.currentVillage)}`,
-      value: character.name,
-    }));
-
-    await respondWithFilteredChoices(interaction, focusedOption, choices);
-  } catch (error) {
-    console.error('[handleCourierSenderAutocomplete]: Error during sender autocomplete:', error);
-    await safeRespondWithError(interaction);
-  }
+  const userId = interaction.user.id;
+  await handleCharacterAutocomplete(
+    interaction,
+    focusedOption,
+    () => fetchCharactersByUserId(userId),
+    () => true,
+    c => ({ name: `${c.name} - ${capitalize(c.currentVillage)}`, value: c.name })
+  );
 }
 
-// ------------------- Handles autocomplete for 'recipient' characters in deliver command -------------------
+// Handles autocomplete for courier (all characters with job "courier")
+async function handleCourierAutocomplete(interaction, focusedOption) {
+  await handleCharacterAutocomplete(
+    interaction,
+    focusedOption,
+    fetchAllCharacters,
+    c => c.job && c.job.toLowerCase() === 'courier',
+    c => ({ name: `${c.name} - ${capitalize(c.currentVillage)}`, value: c.name })
+  );
+}
+
+// Handles autocomplete for recipient (all characters except the user's)
 async function handleRecipientAutocomplete(interaction, focusedOption) {
+  const userId = interaction.user.id;
+  await handleCharacterAutocomplete(
+    interaction,
+    focusedOption,
+    () => fetchAllCharactersExceptUser(userId),
+    () => true,
+    c => ({ name: `${c.name} - ${capitalize(c.currentVillage)}`, value: c.name })
+  );
+}
+
+// Handles autocomplete for courier in the accept subcommand (user-owned characters with job "courier")
+async function handleCourierAcceptAutocomplete(interaction, focusedOption) {
+  const userId = interaction.user.id;
+  await handleCharacterAutocomplete(
+    interaction,
+    focusedOption,
+    () => fetchCharactersByUserId(userId),
+    c => c.job && c.job.toLowerCase() === 'courier',
+    c => ({ name: `${c.name} - ${capitalize(c.currentVillage)}`, value: c.name })
+  );
+}
+
+// Handles autocomplete for vending recipient (user-owned characters with job "shopkeeper" or "merchant")
+async function handleVendingRecipientAutocomplete(interaction, focusedOption) {
+  const userId = interaction.user.id;
+  await handleCharacterAutocomplete(
+    interaction,
+    focusedOption,
+    () => fetchCharactersByUserId(userId),
+    c => {
+      const job = c.job ? c.job.toLowerCase() : '';
+      return job === 'shopkeeper' || job === 'merchant';
+    },
+    c => ({
+      name: `${c.name} - ${capitalize(c.job || 'Unknown')} - ${capitalize(c.currentVillage || 'Unknown')}`,
+      value: c.name
+    })
+  );
+}
+
+
+async function handleAllRecipientAutocomplete(interaction, focusedOption) {
   try {
-    const userId = interaction.user.id;
-    const allCharacters = await fetchAllCharactersExceptUser(userId);
-
-    const choices = allCharacters.map(character => ({
-      name: `${character.name} - ${capitalize(character.currentVillage)}`,
-      value: character.name,
+    const characters = await fetchAllCharacters(); // Fetch every character in the database
+    const choices = characters.map(c => ({
+      name: `${c.name} - ${capitalize(c.currentVillage)}`,
+      value: c.name
     }));
-
     await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
-    console.error('[handleRecipientAutocomplete]: Error during recipient autocomplete:', error);
+    console.error('[handleAllRecipientAutocomplete]: Error during autocomplete:', error);
     await safeRespondWithError(interaction);
   }
 }
 
-// ------------------- Handles autocomplete for item field in /deliver command -------------------
+
+// ------------------- Item-based Autocomplete Handlers -------------------
+
+// Handles autocomplete for the "item" field in /deliver command (group sender's inventory items)
 async function handleDeliverItemAutocomplete(interaction, focusedOption) {
   try {
     const userId = interaction.user.id;
     const senderName = interaction.options.getString('sender');
     if (!senderName) return await interaction.respond([]);
-
     const senderCharacter = await fetchCharacterByNameAndUserId(senderName, userId);
     if (!senderCharacter) return await interaction.respond([]);
-
     const inventoryCollection = await getCharacterInventoryCollection(senderCharacter.name);
     const inventory = await inventoryCollection.find().toArray();
 
-// Group by item name and sum quantities
-const itemMap = new Map();
-for (const item of inventory) {
-  const itemName = item.itemName;
-  if (!itemMap.has(itemName)) {
-    itemMap.set(itemName, item.quantity);
-  } else {
-    itemMap.set(itemName, itemMap.get(itemName) + item.quantity);
-  }
-}
-
-// Format choices
-const choices = Array.from(itemMap.entries()).map(([name, qty]) => ({
-  name: `${name} - QTY:${qty}`,
-  value: name
-}));
-
+    // Group by item name and sum quantities
+    const itemMap = new Map();
+    for (const item of inventory) {
+      const itemName = item.itemName;
+      if (!itemMap.has(itemName)) {
+        itemMap.set(itemName, item.quantity);
+      } else {
+        itemMap.set(itemName, itemMap.get(itemName) + item.quantity);
+      }
+    }
+    // Format choices
+    const choices = Array.from(itemMap.entries()).map(([name, qty]) => ({
+      name: `${name} - QTY:${qty}`,
+      value: name
+    }));
     await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
     console.error('[handleDeliverItemAutocomplete]: Error fetching deliver item choices:', error);
@@ -2154,58 +2198,7 @@ const choices = Array.from(itemMap.entries()).map(([name, qty]) => ({
   }
 }
 
-
-// ------------------- Handles autocomplete for courier characters in /deliver accept command -------------------
-async function handleCourierAcceptAutocomplete(interaction, focusedOption) {
-  try {
-    const userId = interaction.user.id;
-    const characters = await fetchCharactersByUserId(userId); // ✅ Pulls only user-owned characters
-
-    // ✅ Filter only courier job characters
-    const courierCharacters = characters.filter(character => character.job.toLowerCase() === 'courier');
-
-    // Format choices
-    const choices = courierCharacters.map(character => ({
-      name: `${character.name} - ${capitalize(character.currentVillage)}`,
-      value: character.name
-    }));
-
-    await respondWithFilteredChoices(interaction, focusedOption, choices);
-  } catch (error) {
-    console.error('[handleCourierAcceptAutocomplete]: Error during courier accept autocomplete:', error);
-    await safeRespondWithError(interaction);
-  }
-}
-
-// ------------------- Handles autocomplete for vendingstock recipient (vendor characters only) -------------------
-async function handleVendingRecipientAutocomplete(interaction, focusedOption) {
-  try {
-    const userId = interaction.user.id;
-
-    // Fetch all characters owned by the user
-    const characters = await fetchCharactersByUserId(userId);
-
-    // Filter for vending jobs (shopkeeper or merchant)
-    const vendingCharacters = characters.filter(character => {
-      const job = character.job?.toLowerCase();
-      return job === 'shopkeeper' || job === 'merchant';
-    });
-
-    // Map characters to autocomplete choices with job + village label
-    const choices = vendingCharacters.map(character => ({
-      name: `${character.name} - ${capitalize(character.job || 'Unknown')} - ${capitalize(character.currentVillage || 'Unknown')}`,
-      value: character.name,
-    }));
-
-    // Send back filtered results
-    await respondWithFilteredChoices(interaction, focusedOption, choices);
-  } catch (error) {
-    console.error('[autocompleteHandler.js]: Error handling vendingstock recipient autocomplete:', error);
-    await safeRespondWithError(interaction);
-  }
-}
-
-// ------------------- Handles autocomplete for vendoritem in /deliver vendingstock -------------------
+// Handles autocomplete for vendor items in /deliver vendingstock (based on vendor type and stock list)
 async function handleVendorItemAutocomplete(interaction, focusedOption) {
   try {
     const courierName = interaction.options.getString('courier');
@@ -2228,7 +2221,6 @@ async function handleVendorItemAutocomplete(interaction, focusedOption) {
     if (!stockList || !stockList.stockList || !stockList.stockList[village]) {
       return await interaction.respond([]);
     }
-
     const villageStock = stockList.stockList[village];
 
     // Filter items matching recipient’s job (vendor type) and input query
@@ -2236,18 +2228,17 @@ async function handleVendorItemAutocomplete(interaction, focusedOption) {
       item.vendingType?.toLowerCase() === vendorType &&
       item.itemName?.toLowerCase().includes(searchQuery)
     );
-
     const choices = filteredItems.slice(0, 25).map(item => ({
       name: `${item.itemName} - ${item.points} pts`,
       value: item.itemName,
     }));
-
     await interaction.respond(choices);
   } catch (err) {
     console.error('[handleVendorItemAutocomplete]: Error:', err);
     await safeRespondWithError(interaction);
   }
 }
+
 
 // ------------------- Export Functions -------------------
 module.exports = {
@@ -2287,12 +2278,13 @@ module.exports = {
   handleStealCharacterAutocomplete,
   handleModGiveCharacterAutocomplete,
   handleModGiveItemAutocomplete,
-  handleCourierAutocomplete,
   handleCourierSenderAutocomplete,
+  handleCourierAutocomplete,
   handleRecipientAutocomplete,
-  handleDeliverItemAutocomplete,
   handleCourierAcceptAutocomplete,
   handleVendingRecipientAutocomplete,
-  handleVendorItemAutocomplete
+  handleDeliverItemAutocomplete,
+  handleVendorItemAutocomplete,
+  handleAllRecipientAutocomplete
 };
 

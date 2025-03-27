@@ -1407,12 +1407,14 @@ const createVendingSetupEmbed = (characterName, shopLink, pouch, points, invento
                 { name: '📦 Inventory Slots', value: `**${inventorySlots} slots**`, inline: true },
                 { name: '💰 Starting Points', value: `**${points} points**`, inline: true },
                 { name: '🛠️ Next Steps', value: '1. Use `/vending restock` to add items to your vending inventory.\n2. Set prices for each item in your shop.\n3. Use `/vending sync` to finalize your inventory.' }
-                .setColor('#AA926A') // Set the gold color
-                .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png') );
+            )
+            .setColor('#AA926A') // Set the gold color for the final embed
+            .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png');
     }
 
     return embed;
 };
+
 
 // ------------------- Handle the Edit Shop Subcommand -------------------
 async function handleEditShop(interaction) {
