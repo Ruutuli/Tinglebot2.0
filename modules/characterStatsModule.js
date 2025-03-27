@@ -1,6 +1,8 @@
 // ------------------- Import necessary modules -------------------
 const Character = require('../models/CharacterModel');
 const { createSimpleCharacterEmbed } = require('../embeds/characterEmbeds');
+const initializeInventoryModel = require('../models/InventoryModel');
+const { getCharacterInventoryCollection } = require('../database/characterService');
 
 // ------------------- Function to update hearts (current and max) -------------------
 const updateHearts = async (characterId, hearts) => {
@@ -160,23 +162,50 @@ const exchangeSpiritOrbs = async (characterId, type) => {
   try {
     const character = await Character.findById(characterId);
     if (!character) throw new Error('Character not found');
-    if (character.spiritOrbs < 4) throw new Error('Not enough Spirit Orbs to exchange.');
 
-    character.spiritOrbs -= 4;
+    const { getCharacterInventoryCollection } = require('../database/characterService');
+    const inventoryCollection = await getCharacterInventoryCollection(character.name);
+
+    const orbEntry = await inventoryCollection.findOne({
+      characterId: characterId,
+      itemName: { $regex: /^spirit orb$/i }
+    });
+
+    const orbCount = orbEntry?.quantity || 0;
+
+    if (orbCount < 4) {
+      throw new Error(`${character.name} only has ${orbCount} Spirit Orb(s). You need at least 4 to exchange.`);
+    }
+
+    orbEntry.quantity -= 4;
+
+    if (orbEntry.quantity <= 0) {
+      await inventoryCollection.deleteOne({ _id: orbEntry._id });
+    } else {
+      await inventoryCollection.updateOne(
+        { _id: orbEntry._id },
+        { $set: { quantity: orbEntry.quantity } }
+      );
+    }
+
     if (type === 'hearts') {
       character.maxHearts += 1;
-      character.currentHearts += 1;
+      character.currentHearts = character.maxHearts;
     } else if (type === 'stamina') {
       character.maxStamina += 1;
-      character.currentStamina += 1;
+      character.currentStamina = character.maxStamina;
     }
 
     await character.save();
-    return createSimpleCharacterEmbed(character, `Exchanged 4 Spirit Orbs for ${type}`);
+
+    // Return updated character so the calling file can build a full custom embed
+    return character;
   } catch (error) {
+    console.error(`[characterStatsModule.js]: Error in exchangeSpiritOrbs: ${error.message}`);
     throw error;
   }
 };
+
 
 // ------------------- Function to recover daily stamina -------------------
 const recoverDailyStamina = async () => {

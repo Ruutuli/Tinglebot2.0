@@ -124,6 +124,8 @@ await handleAllRecipientAutocomplete(interaction, focusedOption);
   await handleMountNameAutocomplete(interaction, focusedOption);
 } else if (commandName === 'shops' && focusedOption.name === 'itemname') {
   await handleShopsAutocomplete(interaction, focusedOption);
+} else if (commandName === 'spiritorbs' && focusedOption.name === 'character') {
+  await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, commandName);
 } else if (commandName === 'steal' && focusedOption.name === 'charactername') {
   await handleStealCharacterAutocomplete(interaction, focusedOption);
 } else if (commandName === 'steal' && focusedOption.name === 'target') {
