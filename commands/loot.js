@@ -123,7 +123,6 @@ if (character.currentHearts === 0) {
 }
 
 // Determine job based on jobVoucher or default job
-// Determine job based on jobVoucher or default job
 let job = character.jobVoucher && character.jobVoucherJob ? character.jobVoucherJob : character.job;
 console.log(`[Loot Command]: Determined job for ${character.name} is "${job}"`);
 
@@ -383,7 +382,6 @@ async function handleNormalEncounter(interaction, currentVillage, job, character
 // ------------------- Looting Logic -------------------
 async function processLootingLogic(interaction, character, encounteredMonster, bloodMoonActive) {
   try {
-    console.log(`-----------------`);
     console.log(`[LOOT.JS DEBUG] Starting looting logic for ${character.name}. Current Hearts: ${character.currentHearts}`);
 
     const items = await fetchItemsByMonster(encounteredMonster.name);
@@ -550,13 +548,18 @@ function generateLootedItem(encounteredMonster, weightedItems) {
   const lootedItem = weightedItems[randomIndex];
 
   if (encounteredMonster.name.includes('Chuchu')) {
-    const jellyType = encounteredMonster.name.includes('Ice')
-      ? 'White Chuchu Jelly'
-      : encounteredMonster.name.includes('Fire')
-      ? 'Red Chuchu Jelly'
-      : encounteredMonster.name.includes('Electric')
-      ? 'Yellow Chuchu Jelly'
-      : 'Chuchu Jelly';
+    const jellyMapping = {
+      Ice: 'White Chuchu Jelly',
+      Fire: 'Red Chuchu Jelly',
+      Electric: 'Yellow Chuchu Jelly'
+    };
+    let jellyType = 'Chuchu Jelly';
+    for (const key in jellyMapping) {
+      if (encounteredMonster.name.includes(key)) {
+        jellyType = jellyMapping[key];
+        break;
+      }
+    }
     const quantity = encounteredMonster.name.includes('Large')
       ? 3
       : encounteredMonster.name.includes('Medium')
@@ -570,6 +573,7 @@ function generateLootedItem(encounteredMonster, weightedItems) {
 
   return lootedItem;
 }
+
 
 // ------------------- Helper Function: Filter Looting Eligible Characters -------------------
 function filterLootingEligibleCharacters(characters) {

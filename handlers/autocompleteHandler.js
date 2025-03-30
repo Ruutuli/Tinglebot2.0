@@ -129,16 +129,49 @@ await handleAllRecipientAutocomplete(interaction, focusedOption);
 } else if (commandName === 'steal' && focusedOption.name === 'charactername') {
   await handleStealCharacterAutocomplete(interaction, focusedOption);
 } else if (commandName === 'steal' && focusedOption.name === 'target') {
-  const npcChoices = [
-    'Hank', 'Sue', 'Lukan', 'Myti', 'Cree', 'Cece',
-    'Walton', 'Jengo', 'Jasz', 'Lecia', 'Tye', 'Lil Tim'
-  ];
-  const filteredNPCs = npcChoices.filter(choice => choice.toLowerCase().includes(focusedOption.value.toLowerCase()));
-  await interaction.respond(filteredNPCs.map(choice => ({ name: choice, value: choice })));
+  // Check the target type to determine which autocomplete list to return.
+  const targetType = interaction.options.getString('targettype');
+  if (targetType === 'player') {
+    // ------------------- Fetch Thief's Character -------------------
+    // Get the thief's character using the 'charactername' option.
+    const thiefName = interaction.options.getString('charactername');
+    const thiefCharacter = await fetchCharacterByName(thiefName);
+    if (!thiefCharacter) {
+      return await interaction.respond([]);
+    }
+    // ------------------- Filter Characters by Current Village -------------------
+    // Fetch all characters and filter to those in the same village as the thief, excluding the thief.
+    const allCharacters = await fetchAllCharacters();
+    const filteredCharacters = allCharacters.filter(character =>
+      character.currentVillage.toLowerCase() === thiefCharacter.currentVillage.toLowerCase() &&
+      character.name.toLowerCase() !== thiefCharacter.name.toLowerCase()
+    );    
+    // ------------------- Apply User Input Filter -------------------
+    const filtered = filteredCharacters.filter(character =>
+      character.name.toLowerCase().includes(focusedOption.value.toLowerCase())
+    );
+    // Map the filtered characters to autocomplete choices with village info.
+    const choices = filtered.map(character => ({
+      name: `${character.name} - ${character.currentVillage}`,
+      value: character.name
+    })).slice(0, 25);
+    await interaction.respond(choices);
+  } else {
+    // If target type is NPC, return the predefined NPC choices.
+    const npcChoices = [
+      'Hank', 'Sue', 'Lukan', 'Myti', 'Cree', 'Cece',
+      'Walton', 'Jengo', 'Jasz', 'Lecia', 'Tye', 'Lil Tim'
+    ];
+    const filteredNPCs = npcChoices.filter(choice =>
+      choice.toLowerCase().includes(focusedOption.value.toLowerCase())
+    );
+    await interaction.respond(filteredNPCs.map(choice => ({ name: choice, value: choice })));
+  }
 } else if (commandName === 'steal' && focusedOption.name === 'rarity') {
   const choices = ['common', 'uncommon', 'rare'];
   const filtered = choices.filter(choice => choice.startsWith(focusedOption.value.toLowerCase()));
   await interaction.respond(filtered.map(choice => ({ name: choice, value: choice })));
+
 } else if (commandName === 'trade') {
   await handleTradeAutocomplete(interaction, focusedOption);
 } else if (commandName === 'transfer') {

@@ -38,6 +38,62 @@ const Character = require('./models/CharacterModel');
 module.exports = (client) => {
   console.log('[scheduler]📅 Scheduler initialized');
 
+// ------------------- Jail Release Check -------------------
+cron.schedule('0 0 * * *', async () => {
+  try {
+    console.log('[scheduler]⏰ Checking for characters eligible for jail release...');
+    const now = new Date();
+    const charactersToRelease = await Character.find({ inJail: true, jailReleaseTime: { $lte: now } });
+    if (charactersToRelease.length > 0) {
+      // Fetch the announcement channel using its ID.
+      const announcementChannelId = '1354451878053937215';
+      const announcementChannel = await client.channels.fetch(announcementChannelId);
+      
+      for (const character of charactersToRelease) {
+        // Reset jail status.
+        character.inJail = false;
+        character.failedStealAttempts = 0;
+        character.jailReleaseTime = null;
+        await character.save();
+        console.log(`[scheduler]✅ Released character ${character.name} from jail.`);
+        
+        // Build the release announcement embed.
+        const releaseEmbed = new EmbedBuilder()
+          .setColor('#88cc88')
+          .setTitle('🏛️ Town Hall Proclamation')
+          .setDescription(`The town hall doors creak open and a voice rings out:\n\n> **${character.name}** has served their time and is hereby released from jail.\n\nMay you walk the path of virtue henceforth.`)
+          .setThumbnail(character.icon)
+          .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+          .setTimestamp()
+          .setFooter({ text: 'Town Hall Records • Reformed & Released' });
+        
+        // Send the announcement in the designated channel.
+        if (announcementChannel) {
+          await announcementChannel.send({
+            content: `<@${character.userId}>, your character **${character.name}** has been released from jail.`,
+            embeds: [releaseEmbed]
+          });
+        }
+        
+        // DM the user to notify them.
+        try {
+          const user = await client.users.fetch(character.userId);
+          if (user) {
+            await user.send(`🏛️ **Town Hall Notice**\n\nYour character **${character.name}** has been released from jail. Remember, a fresh start awaits you!`);
+          }          
+        } catch (dmError) {
+          console.error(`[scheduler]❌ Error sending DM for character ${character.name}:`, dmError.message);
+        }
+      }
+    } else {
+      console.log('[scheduler] No characters to release from jail at this time.');
+    }
+  } catch (error) {
+    console.error('[scheduler]❌ Error during jail release check:', error.message);
+  }
+}, { timezone: 'America/New_York' });
+
+
   // ------------------- Daily Stamina Recovery -------------------
   cron.schedule('0 8 * * *', async () => {
     try {
