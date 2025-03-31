@@ -1,245 +1,356 @@
-// ------------------- Import necessary modules and services -------------------
-const { connectToInventories, connectToTinglebot } = require('../database/connection');
+// ------------------- Third-Party Libraries -------------------
 const { ObjectId } = require('mongodb');
+
+// ------------------- Database Connections -------------------
+const { connectToInventories, connectToTinglebot } = require('../database/connection');
+
+// ------------------- Database Models -------------------
 const Character = require('../models/CharacterModel');
+const Pet = require('../models/PetModel');
+
+// ------------------- Database Services / Helpers -------------------
 const { getInventoryCollection } = require('../database/nativeMongoHelper');
 
-// ------------------- Function to get characters in a specific village -------------------
+
+// ------------------- Character Services -------------------
+
+// ------------------- Get Characters in a Specific Village -------------------
+// Fetches all characters for a given user and filters them by their current village (case-insensitive)
 async function getCharactersInVillage(userId, village) {
-    const characters = await fetchCharactersByUserId(userId);
-    // Check if the character's current village matches the encounter village (case-insensitive)
-    return characters.filter(character => 
-        character.currentVillage.toLowerCase() === village.toLowerCase());
+    try {
+        const characters = await fetchCharactersByUserId(userId);
+        return characters.filter(character =>
+            character.currentVillage.toLowerCase() === village.toLowerCase()
+        );
+    } catch (error) {
+        console.error(`[characterService]: logs - Error in getCharactersInVillage: ${error.message}`);
+        throw error;
+    }
 }
 
-// ------------------- Fetch character by name with enhanced logging -------------------
+// ------------------- Fetch Character by Name -------------------
+// Searches for a character by name (case-insensitive) and returns the character if found
 const fetchCharacterByName = async (characterName) => {
     try {
         await connectToTinglebot();
-        console.log(`[characterService]: Searching for character "${characterName}"`);
         const character = await Character.findOne({ name: new RegExp(`^${characterName.trim()}$`, 'i') });
         
         if (!character) {
-            console.error(`[characterService]: Character "${characterName}" not found in database.`);
+            console.error(`[characterService]: logs - Character "${characterName}" not found in database.`);
             throw new Error('Character not found');
         }
-
         return character;
     } catch (error) {
-        console.error(`❌ Error fetching character: ${characterName}. Error message: ${error.message}`);
+        console.error(`❌ Error fetching character "${characterName}": ${error.message}`);
+        throw error;
+    }
+};
+
+// ------------------- Fetch Blighted Characters by User ID -------------------
+// Retrieves all characters for a given user that are marked as blighted
+const fetchBlightedCharactersByUserId = async (userId) => {
+    try {
+        await connectToTinglebot();
+        return await Character.find({ userId, blighted: true }).lean().exec();
+    } catch (error) {
+        console.error(`[characterService]: logs - Error in fetchBlightedCharactersByUserId: ${error.message}`);
+        throw error;
+    }
+};
+
+// ------------------- Fetch All Characters -------------------
+// Retrieves all characters from the database
+const fetchAllCharacters = async () => {
+    try {
+        await connectToTinglebot();
+        return await Character.find().lean().exec();
+    } catch (error) {
+        console.error(`[characterService]: logs - Error in fetchAllCharacters: ${error.message}`);
+        throw error;
+    }
+};
+
+// ------------------- Fetch Character by ID -------------------
+// Retrieves a character using its unique ID
+const fetchCharacterById = async (characterId) => {
+    try {
+        await connectToTinglebot();
+        const character = await Character.findById(characterId);
+        if (!character) {
+            console.error(`[characterService]: logs - Character with ID "${characterId}" not found.`);
+            throw new Error('Character not found');
+        }
+        return character;
+    } catch (error) {
+        console.error(`[characterService]: logs - Error in fetchCharacterById: ${error.message}`);
+        throw error;
+    }
+};
+
+// ------------------- Fetch Characters by User ID -------------------
+// Retrieves all characters associated with a specific user
+const fetchCharactersByUserId = async (userId) => {
+    try {
+        await connectToTinglebot();
+        const characters = await Character.find({ userId }).lean().exec();
+        return characters;
+    } catch (error) {
+        console.error(`[characterService]: logs - Error in fetchCharactersByUserId: ${error.message}`);
+        throw error;
+    }
+};
+
+// ------------------- Fetch Character by Name and User ID -------------------
+// Retrieves a character by matching both the name and user ID
+const fetchCharacterByNameAndUserId = async (characterName, userId) => {
+    try {
+        await connectToTinglebot();
+        const character = await Character.findOne({ name: characterName, userId });
+        return character;
+    } catch (error) {
+        console.error(`[characterService]: logs - Error in fetchCharacterByNameAndUserId: ${error.message}`);
+        throw error;
+    }
+};
+
+// ------------------- Fetch All Characters Except a Specific User -------------------
+// Retrieves all characters that do not belong to the specified user
+const fetchAllCharactersExceptUser = async (userId) => {
+    try {
+        await connectToTinglebot();
+        return await Character.find({ userId: { $ne: userId } }).exec();
+    } catch (error) {
+        console.error(`[characterService]: logs - Error in fetchAllCharactersExceptUser: ${error.message}`);
+        throw error;
+    }
+};
+
+// ------------------- Create a New Character -------------------
+// Creates and saves a new character using the provided character data
+const createCharacter = async (characterData) => {
+    try {
+        await connectToTinglebot();
+        const character = new Character(characterData);
+        await character.save();
+        return character;
+    } catch (error) {
+        console.error(`[characterService]: logs - Error in createCharacter: ${error.message}`);
+        throw error;
+    }
+};
+
+// ------------------- Update a Character by ID -------------------
+// Updates a character's details based on its ID and the provided update data
+const updateCharacterById = async (characterId, updateData) => {
+    try {
+        await connectToTinglebot();
+        return await Character.findByIdAndUpdate(new ObjectId(characterId), updateData, { new: true }).lean().exec();
+    } catch (error) {
+        console.error(`[characterService]: logs - Error in updateCharacterById: ${error.message}`);
+        throw error;
+    }
+};
+
+// ------------------- Delete a Character by ID -------------------
+// Deletes a character from the database using its unique ID
+const deleteCharacterById = async (characterId) => {
+    try {
+        await connectToTinglebot();
+        return await Character.findByIdAndDelete(new ObjectId(characterId)).lean().exec();
+    } catch (error) {
+        console.error(`[characterService]: logs - Error in deleteCharacterById: ${error.message}`);
+        throw error;
+    }
+};
+
+// ------------------- Update Character Inventory Synced -------------------
+// Marks a character's inventory as synced and removes the initial item if synced
+// **Note:** Assumes that removeInitialItemIfSynced is defined elsewhere in your codebase.
+const updateCharacterInventorySynced = async (characterId) => {
+    try {
+        await updateCharacterById(characterId, { inventorySynced: true });
+        await removeInitialItemIfSynced(characterId);
+    } catch (error) {
+        console.error(`[characterService]: logs - Error in updateCharacterInventorySynced: ${error.message}`);
         throw error;
     }
 };
 
 
-// ------------------- Fetch Blighted characters -------------------
-const fetchBlightedCharactersByUserId = async (userId) => {
-  await connectToTinglebot();
-  return await Character.find({ userId, blighted: true }).lean().exec();
-};
+// ------------------- Inventory Services -------------------
 
-
-// ------------------- Fetch all characters -------------------
-const fetchAllCharacters = async () => {
-  await connectToTinglebot();
-  return await Character.find().lean().exec();
-};
-
-// ------------------- Fetch character by ID -------------------
-const fetchCharacterById = async (characterId) => {
-    await connectToTinglebot();
-    const character = await Character.findById(characterId);
-    if (!character) throw new Error('Character not found');
-    return character;
-};
-
-// ------------------- Fetch characters by user ID -------------------
-const fetchCharactersByUserId = async (userId) => {
-  await connectToTinglebot();
-  const characters = await Character.find({ userId }).lean().exec();
-  return characters;
-};
-
-// ------------------- Fetch character by name and user ID -------------------
-const fetchCharacterByNameAndUserId = async (characterName, userId) => {
-  await connectToTinglebot();
-  const character = await Character.findOne({ name: characterName, userId });
-  return character;
-};
-
-// ------------------- Fetch all characters except those belonging to a specific user -------------------
-const fetchAllCharactersExceptUser = async (userId) => {
-    await connectToTinglebot();
-    return await Character.find({ userId: { $ne: userId } }).exec();
-};
-
-// ------------------- Create a new character -------------------
-const createCharacter = async (characterData) => {
-    await connectToTinglebot();
-    const character = new Character(characterData);
-    await character.save();
-    return character;
-};
-
-// ------------------- Update a character by ID -------------------
-const updateCharacterById = async (characterId, updateData) => {
-    await connectToTinglebot();
-    return await Character.findByIdAndUpdate(new ObjectId(characterId), updateData, { new: true }).lean().exec();
-};
-
-// ------------------- Delete a character by ID -------------------
-const deleteCharacterById = async (characterId) => {
-    await connectToTinglebot();
-    return await Character.findByIdAndDelete(new ObjectId(characterId)).lean().exec();
-};
-
-// ------------------- Get the inventory collection for a specific character -------------------
+// ------------------- Get Character Inventory Collection -------------------
+// Retrieves the inventory collection for a specific character by name
 const getCharacterInventoryCollection = async (characterName) => {
-  try {
-      console.log(`[getCharacterInventoryCollection]: Fetching inventory for character "${characterName}"`); // Log character name
-
-      if (typeof characterName !== 'string') {
-          throw new TypeError(`Expected a string for characterName, but received ${typeof characterName}`);
-      }
-
-      await connectToInventories();
-      const collectionName = characterName.trim().toLowerCase(); // Ensure it's a string
-      console.log(`[getCharacterInventoryCollection]: Connected to collection "${collectionName}"`); // Log collection name
-
-      return await getInventoryCollection(collectionName);
-  } catch (error) {
-      console.error(`[getCharacterInventoryCollection]: Error fetching inventory for character "${characterName}":`, error); // Log errors
-      throw error;
-  }
+    try {
+        if (typeof characterName !== 'string') {
+            throw new TypeError(`Expected a string for characterName, but received ${typeof characterName}`);
+        }
+        await connectToInventories();
+        const collectionName = characterName.trim().toLowerCase();
+        return await getInventoryCollection(collectionName);
+    } catch (error) {
+        console.error(`[characterService]: logs - Error in getCharacterInventoryCollection for "${characterName}": ${error.message}`);
+        throw error;
+    }
 };
 
-
-// ------------------- Create a new inventory for a character -------------------
+// ------------------- Create Character Inventory -------------------
+// Initializes a new inventory for a character with default item values
 const createCharacterInventory = async (characterName, characterId, job) => {
-    const collection = await getInventoryCollection(characterName);
-    const initialInventory = {
-        characterId,
-        itemName: 'Initial Item',
-        quantity: 1,
-        category: 'Misc',
-        type: 'Misc',
-        subtype: 'Misc',
-        job,
-        perk: '',
-        location: '',
-        link: '',
-        date: new Date(),
-        obtain: []
-    };
-    await collection.insertOne(initialInventory);
+    try {
+        const collection = await getInventoryCollection(characterName);
+        const initialInventory = {
+            characterId,
+            itemName: 'Initial Item',
+            quantity: 1,
+            category: 'Misc',
+            type: 'Misc',
+            subtype: 'Misc',
+            job,
+            perk: '',
+            location: '',
+            link: '',
+            date: new Date(),
+            obtain: []
+        };
+        await collection.insertOne(initialInventory);
+    } catch (error) {
+        console.error(`[characterService]: logs - Error in createCharacterInventory for "${characterName}": ${error.message}`);
+        throw error;
+    }
 };
 
-// ------------------- Delete a character's inventory collection -------------------
+// ------------------- Delete Character Inventory Collection -------------------
+// Drops the entire inventory collection associated with a specific character
 const deleteCharacterInventoryCollection = async (characterName) => {
-    const collection = await getCharacterInventoryCollection(characterName);
-    await collection.drop();
+    try {
+        const collection = await getCharacterInventoryCollection(characterName);
+        await collection.drop();
+    } catch (error) {
+        console.error(`[characterService]: logs - Error in deleteCharacterInventoryCollection for "${characterName}": ${error.message}`);
+        throw error;
+    }
 };
 
 
-// ------------------- Add a new pet to a character -------------------
+// ------------------- Pet Services -------------------
+
+// ------------------- Add a New Pet to a Character -------------------
+// Adds a new pet object to the specified character's pets array
 async function addPetToCharacter(characterId, petName, species, size, level, perk) {
     try {
-      // Add a new pet object to the character's pets array
-      await Character.findByIdAndUpdate(characterId, {
-        $push: {
-          pets: {
-            name: petName,
-            species: species,
-            size: size,           // Small or Large pet
-            level: level,         // Starting level
-            rollsRemaining: 1,     // Default rolls remaining
-            perks: [perk],        // Perk type (Array in case of future additional perks)
-          }
-        }
-      });
+        await Character.findByIdAndUpdate(characterId, {
+            $push: {
+                pets: {
+                    name: petName,
+                    species: species,
+                    size: size,           // Expected values: Small or Large pet
+                    level: level,         // Starting level of the pet
+                    rollsRemaining: 1,    // Default number of rolls remaining
+                    perks: [perk]         // Array to support future additional perks
+                }
+            }
+        });
     } catch (error) {
-      console.error('Error adding pet:', error);
-      throw error;
+        console.error(`[characterService]: logs - Error in addPetToCharacter: ${error.message}`);
+        throw error;
     }
 }
   
-  // ------------------- Update pet rolls -------------------
-  async function updatePetRolls(characterId, petName, newRolls) {
-    await Character.updateOne(
-      { _id: characterId, 'pets.name': petName },
-      { $set: { 'pets.$.rollsRemaining': newRolls } }
-    );
-  }
+// ------------------- Update Pet Rolls -------------------
+// Updates the 'rollsRemaining' field for a pet identified by its ObjectId or name
+async function updatePetRolls(characterId, petIdentifier, newRolls) {
+    try {
+        let filter;
+        // Determine filter criteria based on whether petIdentifier is a valid ObjectId
+        if (petIdentifier.match(/^[0-9a-fA-F]{24}$/)) {
+            filter = { _id: petIdentifier, owner: characterId };
+        } else {
+            filter = { name: petIdentifier, owner: characterId };
+        }
+        await Pet.updateOne(filter, { $set: { rollsRemaining: newRolls } });
+    } catch (error) {
+        console.error(`[characterService]: logs - updatePetRolls error: ${error.message}`);
+        throw error;
+    }
+}
   
-  // ------------------- Upgrade pet level -------------------
-  async function upgradePetLevel(characterId, petName, newLevel) {
-    await Character.updateOne(
-      { _id: characterId, 'pets.name': petName },
-      { $set: { 'pets.$.level': newLevel } }
-    );
-  }
-
-  // ------------------- Update Pet in Character -------------------
-// Updates an existing pet's information for a specific character
+// ------------------- Upgrade Pet Level -------------------
+// Updates the level of a specific pet belonging to a character
+async function upgradePetLevel(characterId, petName, newLevel) {
+    try {
+        await Character.updateOne(
+            { _id: characterId, 'pets.name': petName },
+            { $set: { 'pets.$.level': newLevel } }
+        );
+    } catch (error) {
+        console.error(`[characterService]: logs - Error in upgradePetLevel: ${error.message}`);
+        throw error;
+    }
+}
+  
+// ------------------- Update Pet in Character -------------------
+// Updates an existing pet's information within a character's pet array
 async function updatePetToCharacter(characterId, petName, updatedPetData) {
-  try {
-    // Find the character by ID and update the pet's details
-    await Character.updateOne(
-      { _id: characterId, "pets.name": petName },
-      { $set: { "pets.$": updatedPetData } }
-    );
-    console.log(`Pet ${petName} updated successfully.`);
-  } catch (error) {
-    console.error(`Failed to update pet ${petName}:`, error);
-    throw new Error('Failed to update pet');
-  }
+    try {
+        await Character.updateOne(
+            { _id: characterId, "pets.name": petName },
+            { $set: { "pets.$": updatedPetData } }
+        );
+    } catch (error) {
+        console.error(`[characterService]: logs - Failed to update pet "${petName}": ${error.message}`);
+        throw new Error('Failed to update pet');
+    }
 }
 
 // ------------------- Reset Pet Rolls for All Characters -------------------
-// Resets pet rolls to the maximum allowed based on pet level
+// Resets the 'rollsRemaining' for every pet to the maximum allowed (minimum of pet level and 3)
 async function resetPetRollsForAllCharacters() {
-  try {
-      const characters = await fetchAllCharacters(); // Fetch all characters from the database
-      for (let character of characters) {
-          character.pets = character.pets.map(pet => {
-              pet.rollsRemaining = Math.min(pet.level, 3); // Set rolls to maximum based on pet's level
-              return pet;
-          });
-          await Character.findByIdAndUpdate(character._id, { pets: character.pets }); // Save changes for each character
-      }
-      console.log('✅ All pet rolls have been reset.');
-  } catch (error) {
-      console.error('❌ Error resetting pet rolls:', error);
-  }
+    try {
+        const characters = await fetchAllCharacters();
+        for (let character of characters) {
+            if (character.pets && Array.isArray(character.pets)) {
+                character.pets = character.pets.map(pet => {
+                    pet.rollsRemaining = Math.min(pet.level, 3);
+                    return pet;
+                });
+                await Character.findByIdAndUpdate(character._id, { pets: character.pets });
+            }
+        }
+    } catch (error) {
+        console.error(`[characterService]: logs - Error in resetPetRollsForAllCharacters: ${error.message}`);
+        throw error;
+    }
 }
 
-// ------------------- updateCharacterInventorySynced  -------------------
-const updateCharacterInventorySynced = async (characterId) => {
-  await updateCharacterById(characterId, { inventorySynced: true });
-  await removeInitialItemIfSynced(characterId);
-};
 
-
-// ------------------- Export all functions -------------------
+// ------------------- Export Functions -------------------
+// Organized exports by functionality for clarity
 module.exports = {
+    // Character Services
     getCharactersInVillage,
     fetchCharacterByName,
     fetchAllCharacters,
     fetchCharacterById,
     fetchCharactersByUserId,
     fetchCharacterByNameAndUserId,
+    fetchAllCharactersExceptUser,
     createCharacter,
     updateCharacterById,
     deleteCharacterById,
-    createCharacterInventory,
+    fetchBlightedCharactersByUserId,
+    updateCharacterInventorySynced,
+
+    // Inventory Services
     getCharacterInventoryCollection,
+    createCharacterInventory,
     deleteCharacterInventoryCollection,
-    fetchAllCharactersExceptUser,
+
+    // Pet Services
     addPetToCharacter,
     updatePetRolls,
     upgradePetLevel,
     updatePetToCharacter,
-    resetPetRollsForAllCharacters,
-    fetchBlightedCharactersByUserId,
-    updateCharacterInventorySynced 
+    resetPetRollsForAllCharacters
 };

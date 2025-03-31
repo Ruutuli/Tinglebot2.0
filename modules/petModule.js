@@ -106,14 +106,14 @@ const flavorText = {
     "Your brave **{petSpecies} {petName}** conquered the hunt and brought back **{itemName}**!"
   ],
   petforage: [
-    "{petName} foraged around and discovered {itemName}!",
-    "On a quiet walk, {petName} stumbled upon {itemName}!",
-    "Your curious {petSpecies} {petName} found {itemName} while foraging."
+    "{petName} foraged around and discovered **{itemName}**!",
+    "On a quiet walk, **{petName}** stumbled upon **{itemName}**!",
+    "Your curious **{petSpecies} {petName}** found **{itemName}** while foraging."
   ],
   petmon: [
-    "{petName} tracked down a monster and brought back {itemName}!",
-    "After a daring adventure, {petName} returned with {itemName} from the hunt!",
-    "Your fierce {petSpecies} {petName} defeated a monster and found {itemName}!"
+    "**{petName}** tracked down a monster and brought back **{itemName}**!",
+    "After a daring adventure, **{petName}** returned with **{itemName}** from the hunt!",
+    "Your fierce **{petSpecies} {petName}** defeated a monster and found **{itemName}**!"
   ],
   // New flavor texts for Chuchu elemental rolls.
   petchu: [
