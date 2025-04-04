@@ -19,6 +19,7 @@
     "bottleneck": "^2.19.5",
     "concurrently": "^8.2.2",
     "cors": "^2.8.5",
+    "csv-parser": "^3.2.0",
     "discord.js": "^14.15.3",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
