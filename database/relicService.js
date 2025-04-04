@@ -1,17 +1,15 @@
-// =================== STANDARD LIBRARIES ===================
-// ------------------- Load environment configuration -------------------
+// ------------------- Standard Library Imports -------------------
 require('dotenv').config();
 
-
-// =================== DATABASE MODELS ===================
-// ------------------- Import local models -------------------
+// ------------------- Local Module Imports -------------------
+// Importing the Relic model and database connection function.
 const RelicModel = require('../models/RelicModel');
 const { connectToTinglebot } = require('../database/connection');
 
+// ------------------- Relic Service Functions -------------------
 
-// =================== RELIC SERVICE FUNCTIONS ===================
-
-// ------------------- Create a new relic entry -------------------
+// ------------------- Create a New Relic -------------------
+// Creates a new relic entry in the database using provided data.
 const createRelic = async (relicData) => {
   try {
     await connectToTinglebot();
@@ -23,7 +21,8 @@ const createRelic = async (relicData) => {
   }
 };
 
-// ------------------- Fetch relics by character name -------------------
+// ------------------- Fetch Relics by Character -------------------
+// Retrieves all relics discovered by the specified character.
 const fetchRelicsByCharacter = async (characterName) => {
   try {
     await connectToTinglebot();
@@ -34,7 +33,8 @@ const fetchRelicsByCharacter = async (characterName) => {
   }
 };
 
-// ------------------- Mark a relic as appraised -------------------
+// ------------------- Appraise a Relic -------------------
+// Marks a relic as appraised and updates its appraisal details.
 const appraiseRelic = async (relicId, appraiserName, description) => {
   try {
     await connectToTinglebot();
@@ -54,7 +54,8 @@ const appraiseRelic = async (relicId, appraiserName, description) => {
   }
 };
 
-// ------------------- Mark a relic as archived (after art is submitted) -------------------
+// ------------------- Archive a Relic -------------------
+// Marks a relic as archived and updates art submission details.
 const archiveRelic = async (relicId, imageUrl) => {
   try {
     await connectToTinglebot();
@@ -73,15 +74,14 @@ const archiveRelic = async (relicId, imageUrl) => {
   }
 };
 
-// ------------------- Mark a relic as deteriorated -------------------
+// ------------------- Mark Relic as Deteriorated -------------------
+// Updates a relic's status to indicate deterioration due to late appraisal or submission.
 const markRelicDeteriorated = async (relicId) => {
   try {
     await connectToTinglebot();
     return await RelicModel.findByIdAndUpdate(
       relicId,
-      {
-        deteriorated: true
-      },
+      { deteriorated: true },
       { new: true }
     );
   } catch (error) {
@@ -90,7 +90,8 @@ const markRelicDeteriorated = async (relicId) => {
   }
 };
 
-// ------------------- Fetch all appraised and archived relics -------------------
+// ------------------- Fetch Archived Relics -------------------
+// Retrieves all relics that have been archived into the Library.
 const fetchArchivedRelics = async () => {
   try {
     await connectToTinglebot();
@@ -101,7 +102,8 @@ const fetchArchivedRelics = async () => {
   }
 };
 
-// ------------------- Fetch a single relic by ID -------------------
+// ------------------- Fetch a Single Relic by ID -------------------
+// Retrieves a relic based on its unique identifier.
 const fetchRelicById = async (relicId) => {
   try {
     await connectToTinglebot();
@@ -112,17 +114,20 @@ const fetchRelicById = async (relicId) => {
   }
 };
 
-async function deleteAllRelics() {
+// ------------------- Delete All Relics -------------------
+// Deletes all relic entries from the database. Use with caution.
+const deleteAllRelics = async () => {
   try {
-    await Relic.deleteMany({});
+    await connectToTinglebot();
+    // Corrected to use RelicModel instead of an undefined Relic.
+    return await RelicModel.deleteMany({});
   } catch (error) {
     console.error('[relicService.js]: ❌ Error deleting relics:', error);
     throw error;
   }
-}
+};
 
-
-// =================== EXPORTS ===================
+// ------------------- Module Exports -------------------
 module.exports = {
   createRelic,
   fetchRelicsByCharacter,

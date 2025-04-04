@@ -1,39 +1,40 @@
+// ------------------- Third-Party Imports -------------------
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
-// ------------------- Relic Schema -------------------
+// ------------------- Relic Schema Definition -------------------
+// This schema defines the structure for relic documents stored in MongoDB.
 const RelicSchema = new Schema({
-  // ------------------- Identification -------------------
-  name: { type: String, required: true }, // Internal relic name
-  emoji: { type: String, default: '🔸' }, // Optional emoji
-  unique: { type: Boolean, default: false }, // True if this is a one-of-a-kind relic
-  duplicateOf: { type: Schema.Types.ObjectId, ref: 'Relic', default: null }, // Reference if duplicate
+  // ------------------- Identification Fields -------------------
+  name: { type: String, required: true },            // Internal relic name.
+  emoji: { type: String, default: '🔸' },              // Optional emoji for visual representation.
+  unique: { type: Boolean, default: false },           // Indicates if the relic is one-of-a-kind.
+  duplicateOf: { type: Schema.Types.ObjectId, ref: 'Relic', default: null }, // Reference relic if duplicate.
 
-  // ------------------- Discovery Info -------------------
-  discoveredBy: { type: String, default: '' }, // Character who found it
-  discoveredDate: { type: Date, default: null }, // Date discovered
-  locationFound: { type: String, default: '' }, // Optional quadrant/ruin/etc
+  // ------------------- Discovery Information -------------------
+  discoveredBy: { type: String, default: '' },         // Character who discovered the relic.
+  discoveredDate: { type: Date, default: null },         // Date when the relic was discovered.
+  locationFound: { type: String, default: '' },        // Location details (e.g., quadrant, ruin).
 
-  // ------------------- Appraisal Info -------------------
-  appraised: { type: Boolean, default: false }, // Whether it's been appraised
-  appraisedBy: { type: String, default: null }, // Name of the appraising character or NPC
-  appraisalDate: { type: Date, default: null }, // When it was appraised
-  appraisalDescription: { type: String, default: '' }, // Description revealed on appraisal
+  // ------------------- Appraisal Information -------------------
+  appraised: { type: Boolean, default: false },        // Indicates if the relic has been appraised.
+  appraisedBy: { type: String, default: null },        // Appraising character or NPC.
+  appraisalDate: { type: Date, default: null },        // Date when appraisal occurred.
+  appraisalDescription: { type: String, default: '' }, // Description revealed during appraisal.
 
-  // ------------------- Visuals & Art -------------------
-  artSubmitted: { type: Boolean, default: false }, // Has the art been provided
-  imageUrl: { type: String, default: '' }, // 1:1 PNG URL for the art
+  // ------------------- Art and Visual Information -------------------
+  artSubmitted: { type: Boolean, default: false },     // Indicates if the art has been submitted.
+  imageUrl: { type: String, default: '' },             // URL of the submitted 1:1 PNG image.
 
   // ------------------- Status Flags -------------------
-  archived: { type: Boolean, default: false }, // Whether it's in the Library Archives
-  deteriorated: { type: Boolean, default: false }, // True if not appraised in time
+  archived: { type: Boolean, default: false },         // Flag indicating if the relic is archived in the Library.
+  deteriorated: { type: Boolean, default: false },     // Indicates if the relic has deteriorated due to late appraisal.
 
-  // ------------------- Lore Fields -------------------
-  description: { type: String, default: '' }, // General description of the relic
-  functionality: { type: String, default: '' }, // What it does / how it works
-  origins: { type: String, default: '' }, // Where it comes from / background
-  uses: { type: String, default: '' }, // How it might be used
-
+  // ------------------- Lore and Description Fields -------------------
+  description: { type: String, default: '' },          // Additional lore or description of the relic.
+  functionality: { type: String, default: '' },        // Details about the relic's abilities or functions.
+  origins: { type: String, default: '' },              // Background or origin information.
+  uses: { type: String, default: '' },                 // Potential uses or applications.
 }, { collection: 'relics' });
 
 module.exports = mongoose.model('Relic', RelicSchema);
