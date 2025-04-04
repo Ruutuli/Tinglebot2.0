@@ -11,6 +11,14 @@ const userSchema = new mongoose.Schema({
   tokensSynced: { type: Boolean, default: false }, // Track if tokens are synced
   blightedcharacter: { type: Boolean, default: false }, // Is the character blighted?
   characterSlot: { type: Number, default: 2 }, // Number of character slots available to the user
+
+  // ------------------- Inactivity tracking fields -------------------
+  status: { type: String, enum: ['active', 'inactive'], default: 'active' }, // Activity status
+  statusChangedAt: { type: Date, default: Date.now }, // When the status was last changed
+
+  // ------------------- Message tracking fields -------------------
+  lastMessageContent: { type: String, default: '' }, // Content of the last message sent
+  lastMessageTimestamp: { type: Date }, // Timestamp of the last message
 });
 
 // ------------------- Export the User model -------------------
