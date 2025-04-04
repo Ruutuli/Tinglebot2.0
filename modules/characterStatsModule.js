@@ -1,10 +1,35 @@
-// ------------------- Import necessary modules -------------------
+// ------------------- characterStatsModule.js -------------------
+// This module manages character statistics such as hearts, stamina, defense, and attack.
+// It provides functions to update, recover, and use these stats, as well as handling
+// special conditions like KO (knockout) and exchanging Spirit Orbs.
+// The module also generates Discord embed messages to display updated stats.
+
+
+// ============================================================================
+// Database Models
+// ------------------- Importing database models -------------------
 const Character = require('../models/CharacterModel');
+
+// ============================================================================
+// Discord.js Components
+// ------------------- Importing Discord.js components -------------------
 const { createSimpleCharacterEmbed } = require('../embeds/characterEmbeds');
-const initializeInventoryModel = require('../models/InventoryModel');
+
+// ============================================================================
+// Database Services
+// ------------------- Importing character service functions -------------------
 const { getCharacterInventoryCollection } = require('../database/characterService');
 
-// ------------------- Function to update hearts (current and max) -------------------
+// ============================================================================
+// Modules
+// ------------------- Importing additional modules -------------------
+const initializeInventoryModel = require('../models/InventoryModel');
+
+
+// ============================================================================
+// Character Statistics Update Functions
+// ------------------- Update Hearts -------------------
+// Updates both current and maximum hearts for a character.
 const updateHearts = async (characterId, hearts) => {
   try {
     await Character.updateOne({ _id: characterId }, { $set: { currentHearts: hearts, maxHearts: hearts } });
@@ -13,7 +38,8 @@ const updateHearts = async (characterId, hearts) => {
   }
 };
 
-// ------------------- Function to update stamina (current and max) -------------------
+// ------------------- Update Stamina -------------------
+// Updates both current and maximum stamina for a character.
 const updateStamina = async (characterId, stamina) => {
   try {
     await Character.updateOne({ _id: characterId }, { $set: { currentStamina: stamina, maxStamina: stamina } });
@@ -22,7 +48,8 @@ const updateStamina = async (characterId, stamina) => {
   }
 };
 
-// ------------------- Function to update current hearts -------------------
+// ------------------- Update Current Hearts -------------------
+// Updates only the current hearts of a character. Throws an error if hearts is NaN.
 const updateCurrentHearts = async (characterId, hearts) => {
   try {
     if (isNaN(hearts)) throw new Error(`Provided hearts value is NaN for character ID: ${characterId}`);
@@ -32,7 +59,8 @@ const updateCurrentHearts = async (characterId, hearts) => {
   }
 };
 
-// ------------------- Function to update current stamina -------------------
+// ------------------- Update Current Stamina -------------------
+// Updates only the current stamina of a character. Optionally updates the last stamina usage date.
 const updateCurrentStamina = async (characterId, stamina, updateUsageDate = false) => {
   try {
     const updateData = { currentStamina: stamina };
@@ -43,14 +71,19 @@ const updateCurrentStamina = async (characterId, stamina, updateUsageDate = fals
   }
 };
 
-// ------------------- Function to recover hearts -------------------
+
+// ============================================================================
+// Recovery Functions
+// ------------------- Recover Hearts -------------------
+// Recovers hearts for a character. If the character is KO, it validates the healer
+// and revives the character with the specified number of hearts.
 const recoverHearts = async (characterId, hearts, healerId = null) => {
   try {
     const character = await Character.findById(characterId);
     if (!character) throw new Error('Character not found');
 
     if (character.ko) {
-      console.log(`[StatModule DEBUG] Character ${character.name} is KO'd. Validating healer...`);
+      console.log(`[characterStatsModule.js]: logs Character ${character.name} is KO'd. Validating healer...`);
       if (!healerId) {
         throw new Error(`${character.name} is KO'd and cannot heal without a healer.`);
       }
@@ -62,7 +95,7 @@ const recoverHearts = async (characterId, hearts, healerId = null) => {
         throw new Error(`Invalid healer or ${healer.name} is not a healer.`);
       }
 
-      console.log(`[StatModule DEBUG] Reviving character ${character.name} with healer ${healer.name}.`);
+      console.log(`[characterStatsModule.js]: logs Reviving character ${character.name} with healer ${healer.name}.`);
       character.ko = false; // Revive the character
       character.currentHearts = Math.min(hearts, character.maxHearts);
     } else {
@@ -72,14 +105,14 @@ const recoverHearts = async (characterId, hearts, healerId = null) => {
     await character.save();
     return createSimpleCharacterEmbed(character, `❤️ +${hearts} hearts recovered`);
   } catch (error) {
-    console.error(`[characterStatsModule.js]: Error in recoverHearts: ${error.message}`);
+    console.error(`[characterStatsModule.js]: logs Error in recoverHearts: ${error.message}`);
     throw error;
   }
 };
 
-
-
-// ------------------- Function to recover stamina -------------------
+// ------------------- Recover Stamina -------------------
+// Recovers stamina for a character by adding the specified stamina value,
+// ensuring it does not exceed the maximum stamina.
 const recoverStamina = async (characterId, stamina) => {
   try {
     const character = await Character.findById(characterId);
@@ -94,49 +127,42 @@ const recoverStamina = async (characterId, stamina) => {
   }
 };
 
-// ------------------- Function to use hearts -------------------
+
+// ============================================================================
+// Usage Functions
+// ------------------- Use Hearts -------------------
+// Deducts hearts from a character. If hearts drop to 0, triggers KO handling.
 const useHearts = async (characterId, hearts) => {
   try {
     const character = await Character.findById(characterId);
     if (!character) throw new Error('Character not found');
 
     if (character.ko) {
-      console.log(`[StatModule DEBUG] Skipping heart deduction. Character ${character.name} is already KO'd.`);
-      return; // Prevent redundant deduction if KO
+      console.log(`[characterStatsModule.js]: logs Skipping heart deduction. Character ${character.name} is already KO'd.`);
+      return; // Prevent redundant deduction if already KO
     }
 
     const currentHearts = character.currentHearts;
     const newHearts = Math.max(currentHearts - hearts, 0);
 
-    console.log(`[StatModule DEBUG] Deducting hearts for ${character.name}. Current: ${currentHearts}, Deducting: ${hearts}, Result: ${newHearts}`);
+    console.log(`[characterStatsModule.js]: logs Deducting hearts for ${character.name}. Current: ${currentHearts}, Deducting: ${hearts}, Result: ${newHearts}`);
 
     await updateCurrentHearts(characterId, newHearts);
 
     if (newHearts === 0) {
-      console.log(`[StatModule DEBUG] Triggering KO for ${character.name}`);
+      console.log(`[characterStatsModule.js]: logs Triggering KO for ${character.name}`);
       await handleKO(characterId);
     }
 
     return createSimpleCharacterEmbed(character, `❤️ -${hearts} hearts used`);
   } catch (error) {
-    console.error(`[characterStatsModule.js]: Error in useHearts: ${error.message}`);
+    console.error(`[characterStatsModule.js]: logs Error in useHearts: ${error.message}`);
     throw error;
   }
 };
 
-// ------------------- Function to handle KO -------------------
-const handleKO = async (characterId) => {
-  try {
-    console.log(`[StatModule DEBUG] Handling KO for Character ID ${characterId}`);
-    await Character.updateOne({ _id: characterId }, { $set: { ko: true, currentHearts: 0 } });
-    console.log(`[characterStatsModule.js]: Character ID ${characterId} is KO'd.`);
-  } catch (error) {
-    console.error(`[characterStatsModule.js]: Error in handleKO: ${error.message}`);
-    throw error;
-  }
-};
-
-// ------------------- Function to use stamina -------------------
+// ------------------- Use Stamina -------------------
+// Deducts stamina from a character. If stamina reaches 0, returns a message indicating exhaustion.
 const useStamina = async (characterId, stamina) => {
   try {
     const character = await Character.findById(characterId);
@@ -145,9 +171,9 @@ const useStamina = async (characterId, stamina) => {
     const newStamina = Math.max(character.currentStamina - stamina, 0);
     await updateCurrentStamina(characterId, newStamina, true);
 
-    // Check if stamina is 0
+    // Check if stamina is exhausted.
     if (newStamina === 0) {
-      console.log(`${character.name} is exhausted! The mount runs off.`);
+      console.log(`[characterStatsModule.js]: logs ${character.name} is exhausted! The mount runs off.`);
       return { message: `**${character.name}** is exhausted! The mount runs off. Better luck next time!`, exhausted: true };
     }
 
@@ -157,12 +183,30 @@ const useStamina = async (characterId, stamina) => {
   }
 };
 
-// ------------------- Function to exchange Spirit Orbs for hearts or stamina -------------------
+
+// ============================================================================
+// KO and Exchange Functions
+// ------------------- Handle KO -------------------
+// Handles a KO state by setting the character's KO flag and current hearts to 0.
+const handleKO = async (characterId) => {
+  try {
+    console.log(`[characterStatsModule.js]: logs Handling KO for Character ID ${characterId}`);
+    await Character.updateOne({ _id: characterId }, { $set: { ko: true, currentHearts: 0 } });
+    console.log(`[characterStatsModule.js]: logs Character ID ${characterId} is KO'd.`);
+  } catch (error) {
+    console.error(`[characterStatsModule.js]: logs Error in handleKO: ${error.message}`);
+    throw error;
+  }
+};
+
+// ------------------- Exchange Spirit Orbs -------------------
+// Exchanges Spirit Orbs for an increase in either hearts or stamina.
 const exchangeSpiritOrbs = async (characterId, type) => {
   try {
     const character = await Character.findById(characterId);
     if (!character) throw new Error('Character not found');
 
+    // Dynamically require the character service function.
     const { getCharacterInventoryCollection } = require('../database/characterService');
     const inventoryCollection = await getCharacterInventoryCollection(character.name);
 
@@ -172,13 +216,11 @@ const exchangeSpiritOrbs = async (characterId, type) => {
     });
 
     const orbCount = orbEntry?.quantity || 0;
-
     if (orbCount < 4) {
       throw new Error(`${character.name} only has ${orbCount} Spirit Orb(s). You need at least 4 to exchange.`);
     }
 
     orbEntry.quantity -= 4;
-
     if (orbEntry.quantity <= 0) {
       await inventoryCollection.deleteOne({ _id: orbEntry._id });
     } else {
@@ -197,17 +239,18 @@ const exchangeSpiritOrbs = async (characterId, type) => {
     }
 
     await character.save();
-
-    // Return updated character so the calling file can build a full custom embed
     return character;
   } catch (error) {
-    console.error(`[characterStatsModule.js]: Error in exchangeSpiritOrbs: ${error.message}`);
+    console.error(`[characterStatsModule.js]: logs Error in exchangeSpiritOrbs: ${error.message}`);
     throw error;
   }
 };
 
 
-// ------------------- Function to recover daily stamina -------------------
+// ============================================================================
+// Daily Recovery Functions
+// ------------------- Recover Daily Stamina -------------------
+// Recovers stamina for all characters daily if they haven't used stamina today.
 const recoverDailyStamina = async () => {
   try {
     const characters = await Character.find({});
@@ -223,7 +266,8 @@ const recoverDailyStamina = async () => {
   }
 };
 
-// ------------------- Function to heal KO character -------------------
+// ------------------- Heal KO Character -------------------
+// Heals a KO'd character using a healer and revives them.
 const healKoCharacter = async (characterId, healerId = null) => {
   try {
     const character = await Character.findById(characterId);
@@ -244,7 +288,11 @@ const healKoCharacter = async (characterId, healerId = null) => {
   }
 };
 
-// ------------------- Function to update character defense -------------------
+
+// ============================================================================
+// Stat Update Functions
+// ------------------- Update Character Defense -------------------
+// Updates the character's defense based on equipped gear.
 const updateCharacterDefense = async (characterId) => {
   try {
     const character = await Character.findById(characterId);
@@ -256,7 +304,6 @@ const updateCharacterDefense = async (characterId) => {
       totalDefense += character.gearArmor.chest?.stats?.get('modifierHearts') || 0;
       totalDefense += character.gearArmor.legs?.stats?.get('modifierHearts') || 0;
     }
-
     if (character.gearShield?.stats) {
       totalDefense += character.gearShield.stats.get('modifierHearts') || 0;
     }
@@ -267,21 +314,25 @@ const updateCharacterDefense = async (characterId) => {
   }
 };
 
-// ------------------- Function to update character attack -------------------
+// ------------------- Update Character Attack -------------------
+// Updates the character's attack based on equipped weapon stats.
 const updateCharacterAttack = async (characterId) => {
   try {
     const character = await Character.findById(characterId);
     if (!character) throw new Error('Character not found');
 
     const totalAttack = character.gearWeapon?.stats?.get('modifierHearts') || 0;
-
     await Character.updateOne({ _id: characterId }, { $set: { attack: totalAttack } });
   } catch (error) {
     throw error;
   }
 };
 
-// ------------------- Function to check and use stamina -------------------
+
+// ============================================================================
+// Stamina Management Functions
+// ------------------- Check and Use Stamina -------------------
+// Checks if a character has enough stamina, deducts it if possible, and returns the updated stamina.
 const checkAndUseStamina = async (character, staminaCost) => {
   try {
       if (character.currentStamina < staminaCost) {
@@ -289,39 +340,38 @@ const checkAndUseStamina = async (character, staminaCost) => {
       }
 
       character.currentStamina -= staminaCost;
-      await character.save(); // Save character data after deducting stamina
+      await character.save();
 
-      // Fetch updated character data to ensure consistency
       const updatedCharacter = await Character.findById(character._id);
       return updatedCharacter.currentStamina;
   } catch (error) {
-      console.error(`[characterStatsModule.js]: Error updating stamina for character: ${error.message}`);
+      console.error(`[characterStatsModule.js]: logs Error updating stamina for character: ${error.message}`);
       throw error;
   }
 };
 
-
-// ------------------- Function to check if stamina is 0 and handle accordingly -------------------
+// ------------------- Handle Zero Stamina -------------------
+// Checks if a character's stamina is 0 and returns an appropriate message.
 const handleZeroStamina = async (characterId) => {
   try {
     const character = await Character.findById(characterId);
     if (!character) throw new Error('Character not found');
 
     if (character.currentStamina === 0) {
-      // Notify or perform an action when stamina is 0
-      console.log(`⚠️ ${character.name} has run out of stamina!`);
-      // You can add further actions here, like sending a message, restricting certain actions, etc.
+      console.log(`[characterStatsModule.js]: logs ⚠️ ${character.name} has run out of stamina!`);
       return `⚠️ ${character.name} has no stamina left!`;
     }
-
     return `${character.name} has ${character.currentStamina} stamina remaining.`;
   } catch (error) {
-    console.error(`Error checking stamina for character: ${error.message}`);
+    console.error(`[characterStatsModule.js]: logs Error checking stamina for character: ${error.message}`);
     throw error;
   }
 };
 
-// ------------------- Export all functions -------------------
+
+// ============================================================================
+// Module Exports
+// ------------------- Exporting all functions -------------------
 module.exports = {
   updateHearts,
   updateStamina,
@@ -340,4 +390,3 @@ module.exports = {
   checkAndUseStamina,
   handleZeroStamina,
 };
-

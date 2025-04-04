@@ -1,44 +1,65 @@
-// ------------------- Submission Handler -------------------
-// Handles finalizing the submission, uploading images, sending confirmation, and canceling the submission
+// ------------------- submissionHandler.js -------------------
+// This module handles finalizing the submission, uploading images, sending confirmation,
+// updating token counts, and canceling the submission process.
 
-// ------------------- Imports -------------------
-// Grouped related imports for clarity
-const { uploadSubmissionImage } = require('../utils/uploadUtils');
+// ============================================================================
+// Discord.js Components
+// ============================================================================
+
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { resetSubmissionState } = require('../utils/tokenUtils');
-const { saveSubmissionToStorage, submissionStore, retrieveSubmissionFromStorage } = require('../utils/storage');
-const { appendEarnedTokens } = require('../database/tokenService');
-const { processSubmissionTokenCalculation } = require('../utils/tokenUtils');
 
-// ------------------- Helper Function -------------------
-// Capitalizes the first letter of a string
+// ============================================================================
+// Database Services
+// ============================================================================
+
+const { appendEarnedTokens } = require('../database/tokenService');
+
+// ============================================================================
+// Utility Functions
+// ============================================================================
+
+const { resetSubmissionState, calculateTokens } = require('../utils/tokenUtils');
+const { saveSubmissionToStorage, submissionStore, retrieveSubmissionFromStorage, deleteSubmissionFromStorage } = require('../utils/storage');
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+// ------------------- Capitalize First Letter -------------------
+// Capitalizes the first letter of a string.
 function capitalizeFirstLetter(string) {
   return string.charAt(0).toUpperCase() + string.slice(1);
 }
 
+// ============================================================================
+// Submission Completion Handler
+// ============================================================================
+
 // ------------------- Handle Submission Completion -------------------
+// Finalizes the submission by retrieving submission data, recalculating tokens, 
+// sending a confirmation message to the user, saving updated submission data, and resetting in-memory state.
 async function handleSubmissionCompletion(interaction) {
   try {
     // Retrieve submission data from the in-memory store
     let submissionData = submissionStore.get(interaction.user.id);
 
     if (!submissionData) {
-        console.error('No submission data found in memory for user:', interaction.user.id);
-    
-        const submissionId = interaction.message.embeds[0]?.fields?.find(field => field.name === 'Submission ID')?.value;
-        if (submissionId) {
-            console.log('Attempting to retrieve submission data from storage using ID:', submissionId);
-            submissionData = retrieveSubmissionFromStorage(submissionId);
-        }
-    
-        if (!submissionData) {
-            console.error('No submission data found in memory or storage:', { userId: interaction.user.id, submissionId });
-            await interaction.reply({
-                content: '❌ **Submission data not found. Please restart the submission process.**',
-                ephemeral: true,
-            });
-            return;
-        }
+      console.error(`[submissionHandler.js]: handleSubmissionCompletion: No submission data found in memory for user: ${interaction.user.id}`);
+
+      const submissionId = interaction.message.embeds[0]?.fields?.find(field => field.name === 'Submission ID')?.value;
+      if (submissionId) {
+        console.error(`[submissionHandler.js]: handleSubmissionCompletion: Attempting to retrieve submission data from storage using ID: ${submissionId}`);
+        submissionData = retrieveSubmissionFromStorage(submissionId);
+      }
+
+      if (!submissionData) {
+        console.error(`[submissionHandler.js]: handleSubmissionCompletion: No submission data found in memory or storage for user: ${interaction.user.id}`);
+        await interaction.reply({
+          content: '❌ **Submission data not found. Please restart the submission process.**',
+          ephemeral: true,
+        });
+        return;
+      }
     }
 
     const { fileUrl, fileName, baseSelections, typeMultiplierSelections, productMultiplierValue, addOnsApplied, characterCount } = submissionData;
@@ -48,57 +69,56 @@ async function handleSubmissionCompletion(interaction) {
       throw new Error('File URL or File Name missing.');
     }
 
-// Recalculate tokens
-const { totalTokens } = calculateTokens({
-  baseSelections: baseSelections || [],
-  typeMultiplierSelections: typeMultiplierSelections || [],
-  productMultiplierValue: productMultiplierValue || 1,
-  addOnsApplied: addOnsApplied || [],
-  characterCount: characterCount || 1,
-  collab: submissionData.collab || null, // Include collab
-});
+    // ------------------- Recalculate Tokens -------------------
+    // Calculate the total tokens based on the submission selections.
+    const { totalTokens } = calculateTokens({
+      baseSelections: baseSelections || [],
+      typeMultiplierSelections: typeMultiplierSelections || [],
+      productMultiplierValue: productMultiplierValue || 1,
+      addOnsApplied: addOnsApplied || [],
+      characterCount: characterCount || 1,
+      collab: submissionData.collab || null, // Include collaboration if applicable
+    });
 
-
-    // Update the final token amount
+    // Update the final token amount in submission data
     submissionData.finalTokenAmount = totalTokens;
 
-    // Send confirmation message
+    // ------------------- Send Confirmation Message -------------------
+    // Sends an embed message confirming the submission and displaying token details.
     const sentMessage = await interaction.followUp({
-      embeds: [{
-        title: 'Submission Complete!',
-        description: `Your submission has been confirmed. Your art has been uploaded successfully and your token count has been finalized.`,
-        fields: [
-          { name: 'Final Token Total Amount', value: `${totalTokens} Tokens`, inline: true },
-        ],
-        image: { url: fileUrl },
-        color: 0x00ff00,
-      }],
+      embeds: [
+        new EmbedBuilder()
+          .setTitle('Submission Complete!')
+          .setDescription(`Your submission has been confirmed. Your art has been uploaded successfully and your token count has been finalized.`)
+          .addFields([{ name: 'Final Token Total Amount', value: `${totalTokens} Tokens`, inline: true }])
+          .setImage(fileUrl)
+          .setColor(0x00ff00)
+      ],
       components: [],
     });
 
-    // Save updated submission data to persistent storage
+    // ------------------- Save Submission Data -------------------
+    // Save updated submission data to persistent storage.
     await saveSubmissionToStorage(submissionData.submissionId, {
       submissionId: submissionData.submissionId,
-      userId: interaction.user.id,
-      fileUrl: fileUrl,
-      fileName: fileName,
-      messageUrl: sentMessage.url || null, // Save message URL here
-      characterCount, // Ensure this is saved
+      userId: user.id,
+      fileUrl,
+      fileName,
+      messageUrl: sentMessage.url || null, // Save message URL
+      characterCount,
       tokenCalculation: submissionData.tokenCalculation || '',
       finalTokenAmount: totalTokens,
       submittedAt: new Date(),
     });
 
-    // Reset in-memory store
-    if (submissionData && submissionData.submissionId) {
-      saveSubmissionToStorage(submissionData.submissionId, submissionData);
-  }
-  
-  console.log('Resetting submission state for user:', interaction.user.id);
-  submissionStore.delete(interaction.user.id);
-  resetSubmissionState();
-}   catch (error) {
-    console.error('Error completing submission:', error);
+    // (Removed duplicate call to saveSubmissionToStorage to avoid redundancy)
+
+    // ------------------- Reset Submission State -------------------
+    // Clear the in-memory submission data and reset any global state.
+    submissionStore.delete(user.id);
+    resetSubmissionState();
+  } catch (error) {
+    console.error(`[submissionHandler.js]: handleSubmissionCompletion: Error completing submission: ${error.message}`);
     await interaction.followUp({
       content: '⚠️ **Error completing submission. Please try again.**',
       ephemeral: true,
@@ -106,8 +126,13 @@ const { totalTokens } = calculateTokens({
   }
 }
 
+// ============================================================================
+// Submission Cancellation Handler
+// ============================================================================
+
 // ------------------- Handle Cancel Submission -------------------
-// Cancels the submission process and resets the state
+// Cancels the submission process, removes persistent data if applicable, 
+// resets the in-memory submission state, and notifies the user.
 async function handleCancelSubmission(interaction) {
   try {
     const userId = interaction.user.id;
@@ -116,27 +141,24 @@ async function handleCancelSubmission(interaction) {
     const submissionData = submissionStore.get(userId);
 
     if (submissionData && submissionData.submissionId) {
-      console.log('[handleCancelSubmission]: Deleting submission from storage:', submissionData.submissionId);
-
+      console.error(`[submissionHandler.js]: handleCancelSubmission: Deleting submission from storage: ${submissionData.submissionId}`);
       // Remove submission from persistent storage
       deleteSubmissionFromStorage(submissionData.submissionId);
     } else {
-      console.warn('[handleCancelSubmission]: No submission data found in memory for user:', userId);
+      console.error(`[submissionHandler.js]: handleCancelSubmission: No submission data found in memory for user: ${userId}`);
     }
 
     // Reset and clear in-memory data
-    resetSubmissionState(); // Reset global state if any
+    resetSubmissionState();
     submissionStore.delete(userId);
 
-    console.log('[handleCancelSubmission]: Submission state reset for user:', userId);
-
-    // Notify the user
+    // Notify the user about cancellation
     await interaction.update({
       content: '🚫 **Submission canceled.** Please restart the process if you wish to submit again.',
       components: [], // Remove all action components
     });
   } catch (error) {
-    console.error('[handleCancelSubmission]: Error canceling submission:', error);
+    console.error(`[submissionHandler.js]: handleCancelSubmission: Error canceling submission: ${error.message}`);
     await interaction.followUp({
       content: '⚠️ **Error canceling submission. Please try again.**',
       ephemeral: true,
@@ -144,9 +166,14 @@ async function handleCancelSubmission(interaction) {
   }
 }
 
+// ============================================================================
+// Submit Action Handler
+// ============================================================================
 
 // ------------------- Handle Submit Action -------------------
-// Handles the action triggered by confirmation or cancellation
+// Processes the user's submit action by checking the customId of the interaction.
+// For confirmation, it finalizes the submission and updates token data;
+// for cancellation, it aborts the process.
 async function handleSubmitAction(interaction) {
   const customId = interaction.customId;
 
@@ -156,10 +183,10 @@ async function handleSubmitAction(interaction) {
     const submissionId = interaction.message.embeds[0]?.fields?.find(field => field.name === 'Submission ID')?.value;
 
     if (!submissionId) {
-      console.error('submissionhandler.js Submission ID is undefined', submissionData);
+      console.error(`[submissionHandler.js]: handleSubmitAction: Submission ID is undefined.`);
       if (!interaction.replied) {
         return interaction.reply({
-          content: `⚠️ Submission ID not found.`,
+          content: '⚠️ **Submission ID not found.**',
           ephemeral: true,
         });
       }
@@ -171,46 +198,39 @@ async function handleSubmitAction(interaction) {
     if (!submission) {
       if (!interaction.replied) {
         return interaction.reply({
-          content: `⚠️ Submission with ID \`${submissionId}\` not found.`,
+          content: `⚠️ **Submission with ID \`${submissionId}\` not found.**`,
           ephemeral: true,
         });
       }
       return; // Exit if no submission is found
     }
 
-    const userId = submission.userId;
-    const fileName = submission.fileName;
-    const tokenAmount = submission.finalTokenAmount;
-    const fileUrl = submission.fileUrl;
+    const user = interaction.user;
 
     try {
-      if (submissionData.collab) {
-        // Split tokens between the user and collaborator
-        const splitTokens = submissionData.finalTokenAmount / 2;
-    
-        // Update the main user's tokens
-        await appendEarnedTokens(user.id, submissionData.fileName, 'art', splitTokens, submissionData.fileUrl);
-    
-        // Update the collaborator's tokens
-        const collaboratorId = submissionData.collab.replace(/[<@>]/g, ''); // Extract user ID
-        await appendEarnedTokens(collaboratorId, submissionData.fileName, 'art', splitTokens, submissionData.fileUrl);
-    } else {
-        // No collaboration, assign all tokens to the main user
-        await appendEarnedTokens(user.id, submissionData.fileName, 'art', submissionData.finalTokenAmount, submissionData.fileUrl);
-    }
-    
-      console.log(`Token data for submission ${submissionId} has been appended to Google Sheets.`);
+      // ------------------- Update Token Data -------------------
+      // If a collaboration exists, split tokens; otherwise, assign all tokens to the main user.
+      if (submission.collab) {
+        const splitTokens = submission.finalTokenAmount / 2;
+        // Update tokens for the main user
+        await appendEarnedTokens(user.id, submission.fileName, 'art', splitTokens, submission.fileUrl);
+        // Update tokens for the collaborator (extracting their user ID)
+        const collaboratorId = submission.collab.replace(/[<@>]/g, '');
+        await appendEarnedTokens(collaboratorId, submission.fileName, 'art', splitTokens, submission.fileUrl);
+      } else {
+        // No collaboration; assign all tokens to the main user.
+        await appendEarnedTokens(user.id, submission.fileName, 'art', submission.finalTokenAmount, submission.fileUrl);
+      }
     } catch (error) {
-      console.error(`Error appending token data for submission ${submissionId}: ${error.message}`);
+      console.error(`[submissionHandler.js]: handleSubmitAction: Error appending token data for submission ${submissionId}: ${error.message}`);
     }
 
     if (!interaction.replied) {
       await interaction.editReply({
-        content: `✅ Submission has been confirmed and approved. Your tokens have been updated!`,
-        components: []
+        content: '✅ **Submission has been confirmed and approved.** Your tokens have been updated!',
+        components: [],
       });
     }
-
   } else if (customId === 'cancel') {
     await handleCancelSubmission(interaction);
   } else {
@@ -220,6 +240,10 @@ async function handleSubmitAction(interaction) {
   }
 }
 
-// ------------------- Exported Handlers -------------------
-// Exported functions for handling submission actions
+// ============================================================================
+// Exported Handlers
+// ============================================================================
+
+// ------------------- Exported Functions -------------------
+// Exports the submission action handlers for use in other parts of the application.
 module.exports = { handleSubmitAction, handleSubmissionCompletion, handleCancelSubmission };

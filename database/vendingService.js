@@ -1,20 +1,38 @@
-// ------------------- Import necessary modules and services -------------------
-const { MongoClient } = require('mongodb');
-const { fetchAllItems } = require('./itemService');
+// =================== STANDARD LIBRARIES ===================
+// ------------------- Configure Environment Variables -------------------
+// Load environment variables from the .env file.
 require('dotenv').config();
 
-// ------------------- Define village names, items per village, and limited item counts -------------------
+// ------------------- Import MongoDB Client -------------------
+// Import the MongoClient from the mongodb package.
+const { MongoClient } = require('mongodb');
+
+
+
+// =================== DATABASE SERVICES ===================
+// ------------------- Import Item Service -------------------
+// Import the fetchAllItems function from the itemService module.
+const { fetchAllItems } = require('./itemService');
+
+
+
+// =================== CONSTANTS ===================
+// ------------------- Village Names and Stock Configuration -------------------
+// Define village names and configuration for items per village and limited items count.
 const VILLAGE_NAMES = ['Rudania', 'Inariko', 'Vhintl'];
 const ITEMS_PER_VILLAGE = 10;
 const LIMITED_ITEMS_COUNT = 5; // Number of limited items
 
-// ------------------- Village images and icons -------------------
+// ------------------- Village Images -------------------
+// URLs for village images.
 const VILLAGE_IMAGES = {
     Rudania: 'https://static.wixstatic.com/media/7573f4_a0d0d9c6b91644f3b67de8612a312e42~mv2.png',
     Inariko: 'https://static.wixstatic.com/media/7573f4_c88757c19bf244aa9418254c43046978~mv2.png',
     Vhintl: 'https://static.wixstatic.com/media/7573f4_968160b5206e4d9aa1b254464d97f9a9~mv2.png',
 };
 
+// ------------------- Village Icons -------------------
+// URLs for village icons.
 const VILLAGE_ICONS = {
     Rudania: 'https://static.wixstatic.com/media/7573f4_ffb523e41dbb43c183283a5afbbc74e1~mv2.png',
     Inariko: 'https://static.wixstatic.com/media/7573f4_066600957d904b1dbce10912d698f5a2~mv2.png',
@@ -23,18 +41,27 @@ const VILLAGE_ICONS = {
 
 const DEFAULT_IMAGE_URL = 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png';
 
-// ------------------- Connect to the MongoDB database -------------------
+
+
+// =================== DATABASE CONNECTIONS ===================
+// ------------------- Connect to the MongoDB Database -------------------
+// Establish a connection to the MongoDB database using the URI from environment variables.
 const connectToDatabase = async () => {
     const client = new MongoClient(process.env.MONGODB_INVENTORIES_URI, {});
     try {
         await client.connect();
         return client;
     } catch (error) {
+        console.error('[vendingService.js]: ❌ Error connecting to database:', error);
         throw error;
     }
 };
 
-// ------------------- Clear existing vending stock from the database -------------------
+
+
+// =================== DATABASE SERVICES ===================
+// ------------------- Clear Existing Vending Stock -------------------
+// Clears all existing records from the 'vending_stock' collection.
 const clearExistingStock = async () => {
     const client = await connectToDatabase();
     const db = client.db('tinglebot');
@@ -43,18 +70,21 @@ const clearExistingStock = async () => {
     try {
         await stockCollection.deleteMany({});
     } catch (error) {
-        console.error('❌ Error clearing vending stock:', error);
+        console.error('[vendingService.js]: ❌ Error clearing vending stock:', error);
     } finally {
         await client.close();
     }
 };
 
-// ------------------- Generate monthly vending stock list -------------------
+// ------------------- Generate Monthly Vending Stock List -------------------
+// Generates a monthly vending stock list by selecting items for each village and limited items.
+// The function filters items for Merchants and Shopkeepers, applies price calculations, and stores the result.
 const generateVendingStockList = async () => {
     const client = await connectToDatabase();
     const db = client.db('tinglebot');
     const stockCollection = db.collection('vending_stock');
 
+    // Priority items for shopkeepers
     const priorityItems = [
         "Leather", "Eldin Ore", "Wood", "Rock Salt", "Goat Butter", "Cotton", "Hylian Rice", "Iron bar",
         "Tabantha Wheat", "Wool", "Fresh Milk", "Goron Ore", "Bird Egg", "Luminous Stone", "Goron Spice",
@@ -69,30 +99,32 @@ const generateVendingStockList = async () => {
 
         const allItems = await fetchAllItems();
 
-        // Filter items for Merchants and Shopkeepers
+        // Filter items for Merchants and Shopkeepers (vending items with rarity between 1 and 10)
         const merchantItems = allItems.filter(item => item.vending && item.itemRarity >= 1 && item.itemRarity <= 10);
         const shopkeeperItems = allItems.filter(item => item.vending && item.itemRarity >= 1 && item.itemRarity <= 10);
 
         if (merchantItems.length === 0 || shopkeeperItems.length === 0) {
-            throw new Error('Insufficient items available for generating stock.');
+            throw new Error('[vendingService.js]: ❌ Insufficient items available for generating stock.');
         }
 
-        // Separate priority items for Shopkeepers
+        // Separate priority items for Shopkeepers (priority items receive higher weight)
         const priorityItemsForShopkeepers = shopkeeperItems.filter(item =>
             priorityItems.includes(item.itemName)
         );
 
-        // Helper function to generate prices ending in 0 or 5
+        // ------------------- Helper Function: Generate Rounded Price -------------------
+        // Generates a random price between min and max, rounded to the nearest multiple of 5.
         const generateRoundedPrice = (min, max) => {
             const randomPrice = min + Math.floor(Math.random() * (max - min + 1));
-            const adjustedPrice = Math.round(randomPrice / 5) * 5; // Ensure price ends in 0 or 5
-            return Math.min(adjustedPrice, max); // Clamp to max
+            const adjustedPrice = Math.round(randomPrice / 5) * 5;
+            return Math.min(adjustedPrice, max);
         };
 
-        // Helper function to apply weighted probability for Shopkeepers
+        // ------------------- Helper Function: Select Item With Weight -------------------
+        // Applies weighted probability to select an item from the list; priority items receive higher weight.
         const selectItemWithWeight = (items, weightThreshold) => {
             const weightedItems = items.flatMap(item => {
-                const weight = priorityItems.includes(item.itemName) ? weightThreshold : 1; // Priority items get 5x weight
+                const weight = priorityItems.includes(item.itemName) ? weightThreshold : 1;
                 return Array(weight).fill(item);
             });
             const randomIndex = Math.floor(Math.random() * weightedItems.length);
@@ -110,7 +142,7 @@ const generateVendingStockList = async () => {
                 const selectedItem = merchantItems[randomIndex];
 
                 if (!stockList[villageName].some(item => item.itemName === selectedItem.itemName)) {
-                    const points = generateRoundedPrice(5, 250); // Merchant items cost 5–250
+                    const points = generateRoundedPrice(5, 250); // Merchant items cost between 5 and 250 points
                     stockList[villageName].push({
                         itemName: selectedItem.itemName,
                         emoji: selectedItem.emoji,
@@ -127,7 +159,7 @@ const generateVendingStockList = async () => {
                 const selectedItem = selectItemWithWeight(shopkeeperItems, 5); // Priority items get 5x weight
 
                 if (!stockList[villageName].some(item => item.itemName === selectedItem.itemName)) {
-                    const points = generateRoundedPrice(50, 300); // Shopkeeper items cost 100–300
+                    const points = generateRoundedPrice(50, 300); // Shopkeeper items cost between 50 and 300 points
                     stockList[villageName].push({
                         itemName: selectedItem.itemName,
                         emoji: selectedItem.emoji,
@@ -140,18 +172,16 @@ const generateVendingStockList = async () => {
             }
         }
 
-        // Generate limited items (rarity 7+ and stock 1-5)
+        // Generate limited items (items with rarity 7+ and unique, with stock between 1 and 5)
         const limitedItems = [];
         while (limitedItems.length < LIMITED_ITEMS_COUNT) {
             const randomIndex = Math.floor(Math.random() * allItems.length);
             const selectedItem = allItems[randomIndex];
 
-            // Ensure uniqueness and proper rarity
             if (!limitedItems.some(item => item.itemName === selectedItem.itemName) &&
                 selectedItem.itemRarity >= 7 && selectedItem.vending) {
-                const points = generateRoundedPrice(250, 500); // Limited items cost 250–500
+                const points = generateRoundedPrice(250, 500); // Limited items cost between 250 and 500 points
                 const stock = Math.floor(Math.random() * 5) + 1;
-
                 limitedItems.push({
                     itemName: selectedItem.itemName,
                     emoji: selectedItem.emoji,
@@ -161,7 +191,7 @@ const generateVendingStockList = async () => {
             }
         }
 
-        // Insert the generated stock list into the database
+        // Insert the generated stock list into the 'vending_stock' collection
         await stockCollection.insertOne({
             month: currentMonth,
             stockList,
@@ -169,14 +199,14 @@ const generateVendingStockList = async () => {
             createdAt: new Date(),
         });
     } catch (error) {
-        console.error('❌ Error generating vending stock list:', error);
+        console.error('[vendingService.js]: ❌ Error generating vending stock list:', error);
     } finally {
         await client.close();
     }
 };
 
-
-// ------------------- Get the current month's vending stock list -------------------
+// ------------------- Get Current Month's Vending Stock List -------------------
+// Retrieves the vending stock list for the current month from the database and normalizes village names.
 const getCurrentVendingStockList = async () => {
     const client = await connectToDatabase();
     const db = client.db('tinglebot');
@@ -184,7 +214,6 @@ const getCurrentVendingStockList = async () => {
 
     try {
         const currentMonth = new Date().getMonth() + 1;
-
         const currentStock = await stockCollection.findOne({ month: currentMonth });
         if (!currentStock) {
             return null;
@@ -199,18 +228,18 @@ const getCurrentVendingStockList = async () => {
 
         return {
             ...currentStock,
-            stockList: normalizedStockList, // Replace with normalized stock list
+            stockList: normalizedStockList,
         };
     } catch (error) {
-        console.error('[getCurrentVendingStockList]: Error:', error);
+        console.error('[vendingService.js]: ❌ Error retrieving current vending stock list:', error);
         throw error;
     } finally {
         await client.close();
     }
 };
 
-
-// ------------------- Get limited items for the current month -------------------
+// ------------------- Get Limited Items for Current Month -------------------
+// Retrieves limited items from the vending stock for the current month.
 const getLimitedItems = async () => {
     const client = await connectToDatabase();
     const db = client.db('tinglebot');
@@ -221,13 +250,15 @@ const getLimitedItems = async () => {
         const currentStock = await stockCollection.findOne({ month: currentMonth });
         return currentStock ? currentStock.limitedItems : [];
     } catch (error) {
+        console.error('[vendingService.js]: ❌ Error retrieving limited items:', error);
         throw error;
     } finally {
         await client.close();
     }
 };
 
-// ------------------- Update the stock quantity of a limited item by name -------------------
+// ------------------- Update Limited Item Stock by Name -------------------
+// Updates the stock quantity of a limited item identified by its name.
 const updateItemStockByName = async (itemName, quantity) => {
     const client = await connectToDatabase();
     const db = client.db('tinglebot');
@@ -238,13 +269,12 @@ const updateItemStockByName = async (itemName, quantity) => {
         const currentStock = await stockCollection.findOne({ month: currentMonth });
 
         if (!currentStock) {
-            throw new Error('No current stock found');
+            throw new Error('[vendingService.js]: No current stock found');
         }
 
         const itemIndex = currentStock.limitedItems.findIndex(item => item.itemName === itemName);
-
         if (itemIndex === -1) {
-            throw new Error('Item not found in limited stock');
+            throw new Error('[vendingService.js]: Item not found in limited stock');
         }
 
         // Update the stock quantity
@@ -256,14 +286,15 @@ const updateItemStockByName = async (itemName, quantity) => {
             { $set: { limitedItems: currentStock.limitedItems } }
         );
     } catch (error) {
+        console.error('[vendingService.js]: ❌ Error updating item stock by name:', error);
         throw error;
     } finally {
         await client.close();
     }
 };
 
-// ------------------- Adds or updates stock for a specific item belonging to a character-------------------
-
+// ------------------- Update Vending Stock for a Character -------------------
+// Adds or updates the vending stock entry for a specific item associated with a character.
 async function updateVendingStock({ characterId, itemName, stockQty, tokenPrice, artPrice, otherPrice, tradesOpen }) {
     const client = await connectToDatabase();
     const db = client.db('tinglebot');
@@ -287,7 +318,7 @@ async function updateVendingStock({ characterId, itemName, stockQty, tokenPrice,
             { upsert: true }
         );
     } catch (error) {
-        console.error('[updateVendingStock]: Error updating stock:', error);
+        console.error('[vendingService.js]: ❌ Error updating vending stock:', error);
         throw error;
     } finally {
         await client.close();
@@ -296,16 +327,17 @@ async function updateVendingStock({ characterId, itemName, stockQty, tokenPrice,
 
 
 
-// ------------------- Export the service functions -------------------
+// =================== EXPORT FUNCTIONS ===================
+// ------------------- Export Vending Service Functions -------------------
+// Exports all service functions and constants for external use.
 module.exports = {
+    connectToDatabase,
     clearExistingStock,
     generateVendingStockList,
     getCurrentVendingStockList,
-    VILLAGE_IMAGES,
-    VILLAGE_ICONS,
     getLimitedItems,
     updateItemStockByName,
     updateVendingStock,
-    connectToDatabase
+    VILLAGE_IMAGES,
+    VILLAGE_ICONS
 };
-

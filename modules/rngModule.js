@@ -1,12 +1,25 @@
-// rngModule.js
+// ------------------- rngModule.js -------------------
+// This module handles random number generation and encounter logic for the game.
+// It defines functions to adjust item rarity weights, create weighted item lists,
+// calculate final values based on damage and buffs, determine random encounters (including Blood Moon encounters),
+// and retrieve monsters based on various criteria such as village, region, or path.
+// It also provides functions to attempt fleeing from an encounter.
 
+// ============================================================================
+// Database Models
+// ------------------- Importing database models -------------------
 const Monster = require('../models/MonsterModel');
+
+// ============================================================================
+// Modules
+// ------------------- Importing custom modules -------------------
 const { getVillageRegionByName } = require('../modules/locationsModule');
 const { applyBuffs, calculateAttackBuff, calculateDefenseBuff } = require('../modules/buffModule');
-const { useStamina, useHearts, handleKO } = require('../modules/characterStatsModule');
+const { useHearts, useStamina, handleKO } = require('../modules/characterStatsModule');
 
-
-// Define the encounter probabilities
+// ============================================================================
+// Encounter Probabilities
+// ------------------- Define encounter probabilities for standard encounters -------------------
 const encounterProbabilities = {
   noEncounter: 25,
   tier1: 40,
@@ -15,9 +28,9 @@ const encounterProbabilities = {
   tier4: 5
 };
 
-// Define the encounter probabilities for Blood Moon
+// ------------------- Define encounter probabilities for Blood Moon -------------------
 const encounterProbabilitiesBloodMoon = {
-  noEncounter: 10,  // Reduce chance of no encounter
+  noEncounter: 10,  // Reduced chance of no encounter
   tier1: 10,
   tier2: 10,
   tier3: 10,
@@ -30,8 +43,9 @@ const encounterProbabilitiesBloodMoon = {
   tier10: 10
 };
 
-
-// Define the initial rarity weights
+// ============================================================================
+// Rarity Weights and Weighted List Creation
+// ------------------- Define initial rarity weights -------------------
 const rarityWeights = {
   '1': 20,
   '2': 18,
@@ -45,14 +59,11 @@ const rarityWeights = {
   '10': 1
 };
 
-// Adjust rarity weights based on the Final Value (FV)
+// ------------------- Adjust Rarity Weights -------------------
+// Adjusts rarity weights based on the provided Final Value (FV) using predefined multipliers.
 const adjustRarityWeights = (fv) => {
   const adjustedWeights = {};
-
-  // Ensure FV is a valid number
   const validFv = isNaN(fv) ? 0 : fv;
-
-  // Define multipliers for each FV range
   const multipliers = {
     '91-200': 5.0,
     '81-100': 4.0,
@@ -66,7 +77,6 @@ const adjustRarityWeights = (fv) => {
     '1-100': 1
   };
 
-  // Apply the appropriate multiplier based on the FV range
   Object.keys(rarityWeights).forEach(rarity => {
     const weight = rarityWeights[rarity];
     let multiplier = 1.0; // Default multiplier
@@ -92,27 +102,21 @@ const adjustRarityWeights = (fv) => {
     } else if (validFv >= 1 && validFv <= 100 && rarity === '1') {
       multiplier = multipliers['1-100'];
     }
-
     adjustedWeights[rarity] = weight * multiplier;
   });
 
   return adjustedWeights;
 };
 
-// Create a weighted item list based on the provided items and their rarities
+// ------------------- Create Weighted Item List -------------------
+// Creates a weighted list of items based on their rarity and a provided Final Value (FV).
 function createWeightedItemList(items, fv) {
   if (!items || items.length === 0) {
     return [];
   }
 
   const adjustedWeights = adjustRarityWeights(fv);
-
-  // Filter out items without defined rarity or invalid rarity
-  const validItems = items.filter(item => {
-    const hasValidRarity = item.itemRarity && adjustedWeights[item.itemRarity] > 0;
-    return hasValidRarity;
-  });
-
+  const validItems = items.filter(item => item.itemRarity && adjustedWeights[item.itemRarity] > 0);
   if (validItems.length === 0) {
     return [];
   }
@@ -128,22 +132,25 @@ function createWeightedItemList(items, fv) {
   return weightedList;
 }
 
-// Function to calculate the Final Value (FV) using damageModule
+// ============================================================================
+// Final Value Calculation
+// ------------------- Calculate Final Value -------------------
+// Calculates the Final Value (FV) for a character by generating a damage value,
+// applying attack and defense buffs, and returning the adjusted random value along with buff details.
 const calculateFinalValue = (character) => {
   const damageValue = Math.floor(Math.random() * 100) + 1;
-
   const attackSuccess = calculateAttackBuff(character);
   const defenseSuccess = calculateDefenseBuff(character);
-
   const adjustedRandomValue = applyBuffs(damageValue, attackSuccess, defenseSuccess, character.attack, character.defense);
-
   return { damageValue, adjustedRandomValue, attackSuccess, defenseSuccess };
 };
 
-// Create a function to determine a random encounter based on probabilities
+// ============================================================================
+// Random Encounter Determination
+// ------------------- Get Random Encounter -------------------
+// Determines a random encounter based on defined encounter probabilities.
 function getRandomEncounter() {
   const randomValue = Math.random() * 100;
-
   let encounter;
   if (randomValue < encounterProbabilities.noEncounter) {
     encounter = 'No Encounter';
@@ -156,15 +163,13 @@ function getRandomEncounter() {
   } else {
     encounter = 'Tier 4';
   }
-
   return encounter;
 }
 
-
-// Function to determine a Blood Moon encounter
+// ------------------- Get Random Blood Moon Encounter -------------------
+// Determines a random encounter during a Blood Moon event using equal probability for tiers.
 function getRandomBloodMoonEncounter() {
   const randomValue = Math.random() * 100;
-
   let cumulative = 0;
   for (const [tier, probability] of Object.entries(encounterProbabilitiesBloodMoon)) {
     cumulative += probability;
@@ -175,62 +180,51 @@ function getRandomBloodMoonEncounter() {
   return 'No Encounter';
 }
 
-// Create a function to determine a monster encounter from the already fetched list
+// ============================================================================
+// Monster Encounter Functions
+// ------------------- Get Monster Encounter from List -------------------
+// Determines a monster encounter from a provided list of monsters based on the random encounter type.
+// If no monsters are found at the selected tier, it falls back to lower tiers.
 async function getMonsterEncounterFromList(monsters) {
   try {
     const encounterType = getRandomEncounter();
     if (encounterType === 'No Encounter') {
-      console.log('[ENCOUNTER DEBUG] No encounter triggered.');
+      console.log('[rngModule.js]: logs No encounter triggered.');
       return { encounter: 'No Encounter', monsters: [] };
     }
 
     let tier = parseInt(encounterType.split(' ')[1], 10);
-
     let filteredMonsters = monsters.filter(monster => monster.tier === tier);
 
-    // Fallback logic: if no monsters are available for the selected tier, try lower tiers
+    // Fallback: if no monsters available for the selected tier, try lower tiers.
     while (filteredMonsters.length === 0 && tier > 1) {
-      tier--; // Decrease the tier to try lower levels
-      console.log(`[ENCOUNTER DEBUG] No monsters found for Tier ${tier + 1}. Trying Tier ${tier}...`);
+      tier--;
+      console.log(`[rngModule.js]: logs No monsters found for Tier ${tier + 1}. Trying Tier ${tier}...`);
       filteredMonsters = monsters.filter(monster => monster.tier === tier);
     }
 
     if (filteredMonsters.length === 0) {
-      console.log('[ENCOUNTER DEBUG] No monsters available for any tier.');
+      console.log('[rngModule.js]: logs No monsters available for any tier.');
       return { encounter: 'No Encounter', monsters: [] };
     }
 
     const selectedMonster = filteredMonsters[Math.floor(Math.random() * filteredMonsters.length)];
-
-    return {
-      encounter: `Tier ${tier}`,
-      monsters: [selectedMonster],
-    };
+    return { encounter: `Tier ${tier}`, monsters: [selectedMonster] };
   } catch (error) {
-    console.error('[ENCOUNTER ERROR]', error);
+    console.error('[rngModule.js]: logs ENCOUNTER ERROR', error);
     return { encounter: 'Error', monsters: [] };
   }
 }
 
-// Create a function to get monsters by village and job criteria
+// ------------------- Get Monsters by Criteria -------------------
+// Retrieves monsters based on village and job criteria.
 async function getMonstersByCriteria(village, job) {
   try {
-    // Get the corresponding region for the village
     const region = getVillageRegionByName(village);
-    if (!region) {
-      return [];
-    }
-
-    // Normalize job and region for the query
+    if (!region) return [];
     const normalizedJob = job.toLowerCase().replace(/\s+/g, '');
     const normalizedRegion = region.toLowerCase().replace(/\s+/g, '');
-
-    // Construct the query to match the job and location fields
-    const query = {
-      [normalizedJob]: true,
-      [normalizedRegion]: true
-    };
-
+    const query = { [normalizedJob]: true, [normalizedRegion]: true };
     const monsters = await Monster.find(query);
     return monsters;
   } catch (error) {
@@ -238,7 +232,8 @@ async function getMonstersByCriteria(village, job) {
   }
 }
 
-// Define the encounter probabilities for travel
+// ------------------- Get Random Travel Encounter -------------------
+// Determines a random encounter based on travel probabilities.
 const encounterProbabilitiesTravel = {
   tier1: 40,
   tier2: 35,
@@ -246,10 +241,8 @@ const encounterProbabilitiesTravel = {
   tier4: 10
 };
 
-// Create a function to determine a random encounter based on travel probabilities
 function getRandomTravelEncounter() {
   const randomValue = Math.random() * 100;
-
   if (randomValue < encounterProbabilitiesTravel.tier1) {
     return 'Tier 1';
   } else if (randomValue < encounterProbabilitiesTravel.tier1 + encounterProbabilitiesTravel.tier2) {
@@ -261,7 +254,8 @@ function getRandomTravelEncounter() {
   }
 }
 
-// Create a function to get monsters by path
+// ------------------- Get Monsters by Path -------------------
+// Retrieves monsters based on a given path criterion.
 async function getMonstersByPath(path) {
   try {
     const query = { [path]: true };
@@ -272,7 +266,8 @@ async function getMonstersByPath(path) {
   }
 }
 
-// Create a function to get monsters by region
+// ------------------- Get Monsters by Region -------------------
+// Retrieves monsters based on a given region.
 async function getMonstersByRegion(region) {
   try {
     const query = { [region]: true };
@@ -283,104 +278,94 @@ async function getMonstersByRegion(region) {
   }
 }
 
-// Function to attempt fleeing
+// ============================================================================
+// Flee and Damage Calculation Functions
+// ------------------- Calculate Weighted Damage -------------------
+// Calculates damage based on a weighted probability using the monster's tier.
 function calculateWeightedDamage(tier) {
-  // Create an array of weights from tier down to 1
   const weights = Array.from({ length: tier }, (_, i) => tier - i);
-
-  // Create a cumulative weight array for random selection
   const cumulativeWeights = weights.reduce((acc, weight, index) => {
       acc.push(weight + (acc[index - 1] || 0));
       return acc;
   }, []);
-
-  // Generate a random number within the total weight range
   const totalWeight = cumulativeWeights[cumulativeWeights.length - 1];
   const randomWeight = Math.random() * totalWeight;
-
-  // Determine the damage based on the random weight
   for (let i = 0; i < cumulativeWeights.length; i++) {
       if (randomWeight <= cumulativeWeights[i]) {
-          return i + 1; // Damage is index + 1 (1-based damage values)
+          return i + 1;
       }
   }
-
-  // Default fallback (shouldn't occur)
-  return 1;
+  return 1; // Fallback damage
 }
 
+// ------------------- Attempt Flee -------------------
+// Attempts to flee from an encounter. Calculates flee chance, applies damage if fleeing fails,
+// and updates character state accordingly.
 async function attemptFlee(character, monster) {
   try {
-      console.log(`[FLEE ATTEMPT] Starting flee attempt for character: ${character.name}`);
-      console.log(`[FLEE ATTEMPT] Initial Stamina: ${character.currentStamina}`);
+    console.log(`[rngModule.js]: logs [FLEE ATTEMPT] Starting flee attempt for character: ${character.name}`);
+    console.log(`[rngModule.js]: logs [FLEE ATTEMPT] Initial Stamina: ${character.currentStamina}`);
+    
+    const baseFleeChance = 0.5; // Base 50% chance
+    const bonusFleeChance = character.failedFleeAttempts * 0.05; // 5% bonus per failed attempt
+    const fleeChance = Math.min(baseFleeChance + bonusFleeChance, 0.95);
+    const fleeRoll = Math.random();
+    console.log(`[rngModule.js]: logs [FLEE ATTEMPT] Flee Chance: ${fleeChance * 100}%, Roll: ${fleeRoll}`);
 
-      // // Deduct 1 stamina
-      // await useStamina(character._id, 1);
-      // character.currentStamina -= 1; // Update local value for logging
-      // console.log(`[FLEE ATTEMPT] Stamina after deduction: ${character.currentStamina}`);
+    if (fleeRoll < fleeChance) {
+      console.log("[rngModule.js]: logs [FLEE ATTEMPT] Flee was successful!");
+      character.failedFleeAttempts = 0;
+      await character.save();
+      return { success: true, message: "You successfully fled!" };
+    }
 
-      // Calculate flee success chance
-      const baseFleeChance = 0.5; // Base 50% chance
-      const bonusFleeChance = character.failedFleeAttempts * 0.05; // 5% bonus per failed attempt
-      const fleeChance = Math.min(baseFleeChance + bonusFleeChance, 0.95); // Cap at 95%
-      const fleeRoll = Math.random();
-      console.log(`[FLEE ATTEMPT] Flee Chance: ${fleeChance * 100}%, Roll: ${fleeRoll}`);
+    console.log("[rngModule.js]: logs [FLEE ATTEMPT] Flee failed! Monster will attempt to attack...");
+    character.failedFleeAttempts += 1;
+    await character.save();
 
-      if (fleeRoll < fleeChance) {
-          console.log("[FLEE ATTEMPT] Flee was successful!");
-          character.failedFleeAttempts = 0; // Reset failed flee attempts
-          await character.save(); // Save the character changes
-          return { success: true, message: "You successfully fled!" };
-      }
-
-      console.log("[FLEE ATTEMPT] Flee failed! Monster will attempt to attack...");
-      character.failedFleeAttempts += 1; // Increment failed flee attempts
-      await character.save(); // Save the character changes
-
-      // Calculate monster damage based on weighted probability
-      const monsterDamage = calculateWeightedDamage(monster.tier);
-
-      console.log(`[FLEE ATTEMPT] Weighted damage calculated for Tier ${monster.tier}: ${monsterDamage} hearts.`);
-
-      // Apply the damage to the character
-      await useHearts(character._id, monsterDamage);
-      character.currentHearts -= monsterDamage; // Update local value for logging
-
-      if (character.currentHearts <= 0) {
-          console.log(`[FLEE ATTEMPT] Character is KO'd after taking ${monsterDamage} hearts of damage.`);
-          await handleKO(character._id); // Handle KO logic
-          return {
-              success: false,
-              attacked: true,
-              damage: monsterDamage,
-              message: `The monster attacked and knocked you out!`,
-          };
-      }
-
+    const monsterDamage = calculateWeightedDamage(monster.tier);
+    console.log(`[rngModule.js]: logs [FLEE ATTEMPT] Weighted damage calculated for Tier ${monster.tier}: ${monsterDamage} hearts.`);
+    
+    await useHearts(character._id, monsterDamage);
+    character.currentHearts -= monsterDamage;
+    
+    if (character.currentHearts <= 0) {
+      console.log(`[rngModule.js]: logs [FLEE ATTEMPT] Character is KO'd after taking ${monsterDamage} hearts of damage.`);
+      await handleKO(character._id);
       return {
-          success: false,
-          attacked: true,
-          damage: monsterDamage,
-          message: `The monster attacked and dealt ${monsterDamage} hearts of damage!`,
+        success: false,
+        attacked: true,
+        damage: monsterDamage,
+        message: "The monster attacked and knocked you out!"
       };
+    }
+
+    return {
+      success: false,
+      attacked: true,
+      damage: monsterDamage,
+      message: `The monster attacked and dealt ${monsterDamage} hearts of damage!`
+    };
   } catch (error) {
-      console.error("[FLEE ATTEMPT ERROR] An error occurred during the flee attempt:", error);
-      throw error;
+    console.error("[rngModule.js]: logs [FLEE ATTEMPT ERROR] An error occurred during the flee attempt:", error);
+    throw error;
   }
 }
 
 
+// ============================================================================
+// Module Exports
+// ------------------- Exporting all functions -------------------
 module.exports = {
   createWeightedItemList,
   getMonsterEncounterFromList,
   getMonstersByCriteria,
   calculateFinalValue,
-  getMonsterEncounterFromList,
   getMonstersByPath,
   getRandomTravelEncounter,
   encounterProbabilitiesTravel,
   getMonstersByRegion,
   getRandomBloodMoonEncounter,
   encounterProbabilitiesBloodMoon,
-  attemptFlee 
+  attemptFlee
 };

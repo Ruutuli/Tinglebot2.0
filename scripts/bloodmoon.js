@@ -1,10 +1,30 @@
-// ------------------- Import Necessary Modules -------------------
+// ------------------- bloodmoon.js -------------------
+// This module manages Blood Moon events for the Discord bot. It sends announcements,
+// tracks Blood Moon activation, and handles channel renaming during Blood Moon periods.
+// The module also provides functions to check Blood Moon activation status and to trigger
+// Blood Moon events immediately.
+
+// ============================================================================
+// Standard Libraries & Third-Party Modules
+// ------------------- Importing third-party modules -------------------
 require('dotenv').config();
-const { EmbedBuilder } = require('discord.js');
-const { convertToHyruleanDate, bloodmoonDates } = require('../modules/calendarModule');
 const cron = require('node-cron');
 
-// ------------------- Announcement Functions -------------------
+// ============================================================================
+// Discord.js Components
+// ------------------- Importing Discord.js components -------------------
+const { EmbedBuilder } = require('discord.js');
+
+// ============================================================================
+// Local Modules
+// ------------------- Importing custom modules -------------------
+const { convertToHyruleanDate, bloodmoonDates } = require('../modules/calendarModule');
+
+
+// ============================================================================
+// Announcement Functions
+// ------------------- sendBloodMoonAnnouncement -------------------
+// Sends a Blood Moon announcement embed message to a specified Discord channel.
 async function sendBloodMoonAnnouncement(client, channelId, message) {
   try {
     const currentDate = new Date();
@@ -23,10 +43,12 @@ async function sendBloodMoonAnnouncement(client, channelId, message) {
     const channel = await client.channels.fetch(channelId);
     await channel.send({ embeds: [embed] });
   } catch (error) {
-    console.error(`[BloodMoon.js] [sendBloodMoonAnnouncement] Error: ${error.message}`);
+    console.error(`[bloodmoon.js]: logs [sendBloodMoonAnnouncement] Error: ${error.message}`);
   }
 }
 
+// ------------------- sendBloodMoonEndAnnouncement -------------------
+// Sends an embed message announcing the end of the Blood Moon event.
 async function sendBloodMoonEndAnnouncement(client, channelId) {
   try {
     const currentDate = new Date();
@@ -45,64 +67,71 @@ async function sendBloodMoonEndAnnouncement(client, channelId) {
     const channel = await client.channels.fetch(channelId);
     await channel.send({ embeds: [embed] });
   } catch (error) {
-    console.error(`[BloodMoon.js] [sendBloodMoonEndAnnouncement] Error: ${error.message}`);
+    console.error(`[bloodmoon.js]: logs [sendBloodMoonEndAnnouncement] Error: ${error.message}`);
   }
 }
 
-// ------------------- Blood Moon Activation Check -------------------
+
+// ============================================================================
+// Blood Moon Activation Check
+// ------------------- normalizeDate -------------------
+// Normalizes a Date object by stripping away time components.
 function normalizeDate(date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
+// ------------------- isBloodMoonDay -------------------
+// Checks if today falls within a Blood Moon period based on predefined dates.
 function isBloodMoonDay() {
   if (!bloodmoonDates || !Array.isArray(bloodmoonDates)) {
-    console.error(`[BloodMoon.js] Error: 'bloodmoonDates' is not defined or not an array.`);
+    console.error(`[bloodmoon.js]: logs Error: 'bloodmoonDates' is not defined or not an array.`);
     return false;
   }
 
-  const today = normalizeDate(new Date()); // Normalize current date
-
+  const today = normalizeDate(new Date());
   return bloodmoonDates.some(({ realDate }) => {
-    // Parse the realDate (MM-DD format) and construct a Date object
-    const [month, day] = realDate.split('-').map(Number); // Convert "MM-DD" into numeric month and day
-    const bloodMoonDate = normalizeDate(new Date(today.getFullYear(), month - 1, day)); // Correctly construct the Blood Moon date
-
-    // Calculate the day before and after
+    const [month, day] = realDate.split('-').map(Number);
+    const bloodMoonDate = normalizeDate(new Date(today.getFullYear(), month - 1, day));
     const dayBefore = new Date(bloodMoonDate);
     dayBefore.setDate(bloodMoonDate.getDate() - 1);
-
     const dayAfter = new Date(bloodMoonDate);
     dayAfter.setDate(bloodMoonDate.getDate() + 1);
-
-    // Check if today falls within the range
     return today >= dayBefore && today <= dayAfter;
   });
 }
 
 
-
-// ------------------- Blood Moon Tracker -------------------
+// ============================================================================
+// Blood Moon Tracker
+// ------------------- trackBloodMoon -------------------
+// Checks Blood Moon status and updates channel names and announcements accordingly.
 async function trackBloodMoon(client, channelId) {
   if (isBloodMoonDay()) {
-    console.log('[BloodMoon.js]: 🌕 Blood Moon is ACTIVE.');
+    console.log('[bloodmoon.js]: logs 🌕 Blood Moon is ACTIVE.');
     await renameChannels(client);
     await sendBloodMoonAnnouncement(client, channelId, 'The Blood Moon is upon us! Beware!');
   } else {
-    console.log('[BloodMoon.js]: 🌑 No Blood Moon today.');
+    console.log('[bloodmoon.js]: logs 🌑 No Blood Moon today.');
     await revertChannelNames(client);
   }
 }
 
-// ------------------- Channel Management -------------------
+
+// ============================================================================
+// Channel Management Functions
+// ------------------- changeChannelName -------------------
+// Changes the name of a Discord channel.
 async function changeChannelName(client, channelId, newName) {
   try {
     const channel = await client.channels.fetch(channelId);
     await channel.setName(newName);
   } catch (error) {
-    console.error(`[BloodMoon.js] [changeChannelName] Error: ${error.message}`);
+    console.error(`[bloodmoon.js]: logs [changeChannelName] Error: ${error.message}`);
   }
 }
 
+// ------------------- renameChannels -------------------
+// Renames channels to indicate Blood Moon activation.
 async function renameChannels(client) {
   const channelMappings = {
     [process.env.RUDANIA_TOWN_HALL]: '🔴🔥》rudania-townhall',
@@ -115,6 +144,8 @@ async function renameChannels(client) {
   }
 }
 
+// ------------------- revertChannelNames -------------------
+// Reverts channel names to their default state and sends end-of-event announcements.
 async function revertChannelNames(client) {
   const channelMappings = {
     [process.env.RUDANIA_TOWN_HALL]: '🔥》rudania-townhall',
@@ -129,31 +160,37 @@ async function revertChannelNames(client) {
 }
 
 
-// ------------------- Blood Moon Trigger -------------------
+// ============================================================================
+// Blood Moon Trigger and Status Functions
+// ------------------- triggerBloodMoonNow -------------------
+// Immediately triggers the Blood Moon event by sending announcements and renaming channels.
 async function triggerBloodMoonNow(client, channelId) {
   try {
-    console.log(`[BloodMoon.js]: Triggering Blood Moon for channel ${channelId}`);
+    console.log(`[bloodmoon.js]: logs Triggering Blood Moon for channel ${channelId}`);
     await sendBloodMoonAnnouncement(client, channelId, 'The Blood Moon is upon us! Beware!');
     await renameChannels(client);
   } catch (error) {
-    console.error(`[BloodMoon.js] [triggerBloodMoonNow] Error: ${error.message}`);
+    console.error(`[bloodmoon.js]: logs [triggerBloodMoonNow] Error: ${error.message}`);
   }
 }
 
-// ------------------- Blood Moon Activation Status -------------------
+// ------------------- isBloodMoonActive -------------------
+// Returns whether the Blood Moon is currently active.
 function isBloodMoonActive() {
   try {
     const active = isBloodMoonDay();
-    console.log(`[BloodMoon.js]: Blood Moon active status: ${active}`);
+    console.log(`[bloodmoon.js]: logs Blood Moon active status: ${active}`);
     return active;
   } catch (error) {
-    console.error(`[BloodMoon.js] [isBloodMoonActive] Error: ${error.message}`);
+    console.error(`[bloodmoon.js]: logs [isBloodMoonActive] Error: ${error.message}`);
     return false;
   }
 }
 
 
-// ------------------- Export Functions -------------------
+// ============================================================================
+// Module Exports
+// ------------------- Exporting functions -------------------
 module.exports = {
   sendBloodMoonAnnouncement,
   sendBloodMoonEndAnnouncement,

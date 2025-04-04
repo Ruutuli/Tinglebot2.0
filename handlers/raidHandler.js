@@ -1,22 +1,34 @@
-// ------------------- Import Dependencies -------------------
-const { EmbedBuilder } = require('discord.js');
-const { storeBattleProgress, generateBattleId, deleteBattleProgressById } = require('../modules/combatModule');
-const { monsterMapping } = require('../models/MonsterModel');
-const { updateVillageHealth, getVillageInfo } = require('../modules/villageModule');
-const { capitalizeFirstLetter } = require('../modules/locationsModule');
-const { damageVillage, applyVillageDamage } = require('../modules/villageModule'); 
+// ------------------- raidHandler.js -------------------
+// This module handles the initiation of raids in the Discord bot.
+// It stores battle progress, creates an embed message, manages threads for raid interactions,
+// and schedules a timer to apply village damage after 10 minutes.
+// -----------------------------------------------------------------------------------------
 
-// ------------------- Function to Trigger a Raid -------------------
+// ------------------- Discord.js Components -------------------
+const { EmbedBuilder } = require('discord.js');
+
+// ------------------- Modules -------------------
+const { applyVillageDamage } = require('../modules/villageModule');
+const { storeBattleProgress } = require('../modules/combatModule');
+
+// ------------------- Database Models -------------------
+const { monsterMapping } = require('../models/MonsterModel');
+
+// ------------------- triggerRaid Function -------------------
+// This function initiates a raid by storing battle progress, creating an embed message, 
+// managing the associated thread, and scheduling a timer for village damage.
 async function triggerRaid(character, monster, interaction, threadId, isBloodMoon) {
     // ------------------- Define Monster Hearts -------------------
+    // Sets up the monster's health (hearts) for the raid.
     const monsterHearts = {
         max: monster.hearts,
         current: monster.hearts,
     };
 
-    let battleId; // Declare battleId to be assigned later
+    let battleId; // Variable to hold the battle identifier
 
-    // ------------------- Store Battle Progress and Generate Battle ID -------------------
+    // ------------------- Store Battle Progress -------------------
+    // Stores initial battle progress and generates a battle ID.
     try {
         battleId = await storeBattleProgress(
             character,
@@ -25,23 +37,22 @@ async function triggerRaid(character, monster, interaction, threadId, isBloodMoo
             monsterHearts,
             isBloodMoon ? '🔴 Blood Moon Raid initiated!' : 'Raid initiated! Player turn next.'
         );
-
-        console.log(`[triggerRaid] Battle ID generated and stored: ${battleId}`);
     } catch (error) {
-        console.error(`[triggerRaid] Failed to store battle progress: ${error.message}`);
+        console.error(`[raidHandler.js]: triggerRaid: Failed to store battle progress: ${error.message}`);
         await interaction.followUp(`❌ **Failed to trigger the raid. Please try again later.**`);
         return;
     }
 
-    // ------------------- Create Embed -------------------
+    // ------------------- Create Embed Message -------------------
+    // Builds an embed message to display raid information.
     const monsterData = monsterMapping[monster.nameMapping] || {};
     const monsterImage = monsterData.image || monster.image;
 
     const embed = new EmbedBuilder()
         .setTitle(isBloodMoon ? `🔴 **Blood Moon Raid initiated!**` : `🛡️ **Raid initiated!**`)
         .setDescription(
-            `Use </raid:1315149690634768405> id:${battleId} to join or continue the raid!\n
-            Use </item:1325543365441228800> to heal during the raid!`
+            `Use \`/raid id:${battleId}\` to join or continue the raid!\n` +
+            `Use \`/item\` to heal during the raid!`
         )
         .addFields(
             { name: `__Monster Hearts__`, value: `💙 ${monsterHearts.current}/${monsterHearts.max}`, inline: false },
@@ -61,14 +72,17 @@ async function triggerRaid(character, monster, interaction, threadId, isBloodMoo
     }
 
     // ------------------- Create or Update Thread -------------------
+    // Handles thread creation for the raid if not provided, or updates the existing thread.
     let thread;
     try {
         if (!threadId) {
             const emoji = isBloodMoon ? '🔴' : '🛡️';
             const threadName = `${emoji} ${character.currentVillage || 'Unknown Village'} - ${monster.name} (Tier ${monster.tier})`;
 
+            // Edit the initial interaction reply with the embed message.
             await interaction.editReply({ embeds: [embed] });
 
+            // Start a new thread from the reply message.
             thread = await interaction.fetchReply().then((message) =>
                 message.startThread({
                     name: threadName,
@@ -79,58 +93,44 @@ async function triggerRaid(character, monster, interaction, threadId, isBloodMoo
 
             threadId = thread.id; // Update threadId with the new thread's ID
 
-            await thread.send(`<@${interaction.user.id}> has initiated a raid! Prepare to face ${monster.name} (Tier ${monster.tier}).`);
+            // Send an initial message in the new thread.
+            await thread.send(`👋 <@${interaction.user.id}> has initiated a raid! Prepare to face **${monster.name} (Tier ${monster.tier})**.`);
         } else {
+            // If a thread ID is provided, fetch the existing thread.
             thread = interaction.guild.channels.cache.get(threadId);
 
             if (!thread) {
-                console.error(`[triggerRaid] Thread not found for ID: ${threadId}`);
+                console.error(`[raidHandler.js]: triggerRaid: Thread not found for ID: ${threadId}`);
                 await interaction.followUp(`❌ **Unable to locate the raid thread. Please try again later.**`);
                 return;
             }
 
+            // Send the embed message to the existing thread.
             await thread.send({ embeds: [embed] });
         }
     } catch (error) {
-        console.error(`[triggerRaid] Error creating/updating thread: ${error.message}`);
+        console.error(`[raidHandler.js]: triggerRaid: Error creating/updating thread: ${error.message}`);
         await interaction.followUp(`❌ **Unable to create or update a thread for the raid. Please try again later.**`);
         return;
     }
 
-    // ------------------- Helper Function -------------------
-    function capitalizeFirstLetter(string) {
-        return string.charAt(0).toUpperCase() + string.slice(1);
-    }
-
-    // ------------------- Store Battle Progress -------------------
-try {
-    const battleId = await storeBattleProgress(
-        character,
-        monster,
-        monster.tier,
-        monsterHearts,
-        isBloodMoon ? '🔴 Blood Moon Raid initiated!' : 'Raid initiated! Player turn next.'
-    );
-
-    const timerDuration = 10 * 60 * 1000; // 10 minutes
-    console.log(`[Timer LOG] Timer set for ${timerDuration / 1000} seconds.`);
+    // ------------------- Schedule Timer for Village Damage -------------------
+    // Sets a timer for 10 minutes to apply damage to the village if the raid is not completed.
+    const timerDuration = 10 * 60 * 1000; // Timer duration set to 10 minutes
+    const villageName = character.currentVillage || "Unknown Village"; // Fallback for village name
 
     setTimeout(async () => {
-        console.log(`[Timer LOG] Timer expired. Calling applyVillageDamage function.`);
         try {
-            const villageName = character.currentVillage || "Unknown Village"; // Ensure a fallback
             await applyVillageDamage(villageName, monster, thread);
-            console.log(`[Timer LOG] applyVillageDamage function executed successfully.`);
         } catch (error) {
-            console.error(`[Timer LOG] Error during applyVillageDamage execution:`, error);
+            console.error(`[raidHandler.js]: Timer: Error during applyVillageDamage execution: ${error.message}`);
         }
     }, timerDuration);
 
-    return battleId; // Return the battleId from storeBattleProgress
-} catch (error) {
-    await interaction.followUp(`❌ **Failed to trigger the raid. Please try again later.**`);
- }
+    // ------------------- Return Battle ID -------------------
+    // Returns the generated battle ID to the caller.
+    return battleId;
 }
 
-// ------------------- Export Function -------------------
+// ------------------- Export the triggerRaid Function -------------------
 module.exports = { triggerRaid };

@@ -1,26 +1,62 @@
-// ------------------- Import necessary modules -------------------
-const { connectToTinglebot } = require('../database/connection');
-const {
-    readSheetData, writeSheetData, authorizeSheets,
-    writeBatchData, getSheetIdByTitle
-} = require('../utils/googleSheetsUtils');
-const { fetchCharacterByNameAndUserId, getCharacterInventoryCollection } = require('../database/characterService');
-const { syncToInventoryDatabase, removeInitialItemIfSynced  } = require('../utils/inventoryUtils');
-const {
-    editSyncMessage, editCharacterNotFoundMessage, editSyncErrorMessage
-} = require('../embeds/instructionsEmbeds');
-const { isValidGoogleSheetsUrl, extractSpreadsheetId } = require('../utils/validation');
-const ItemModel = require('../models/ItemModel');
-const { v4: uuidv4 } = require('uuid');
-const Character = require('../models/CharacterModel');
+// ------------------- syncHandler.js -------------------
+// This module handles the synchronization of a character's inventory from a Google Sheet 
+// to the application's database. It connects to the database, reads data from the sheet, 
+// processes the rows in batches, updates inventory records, and provides feedback via Discord.
 
-// ------------------- Constants for batch processing -------------------
+// ============================================================================
+// Standard Libraries (Third-party)
+// ============================================================================
+
+const { v4: uuidv4 } = require('uuid');
+
+// ============================================================================
+// Database Connections
+// ============================================================================
+
+const { connectToTinglebot } = require('../database/connection');
+
+// ============================================================================
+// Database Services
+// ============================================================================
+
+const { fetchCharacterByNameAndUserId, getCharacterInventoryCollection } = require('../database/characterService');
+
+// ============================================================================
+// Modules
+// ============================================================================
+
+const { editCharacterNotFoundMessage, editSyncErrorMessage, editSyncMessage } = require('../embeds/instructionsEmbeds');
+const { removeInitialItemIfSynced, syncToInventoryDatabase } = require('../utils/inventoryUtils');
+
+// ============================================================================
+// Utility Functions
+// ============================================================================
+
+const { authorizeSheets, getSheetIdByTitle, readSheetData, writeBatchData } = require('../utils/googleSheetsUtils');
+const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../utils/validation');
+
+// ============================================================================
+// Database Models
+// ============================================================================
+
+const Character = require('../models/CharacterModel');
+const ItemModel = require('../models/ItemModel');
+
+// ============================================================================
+// Constants for Batch Processing
+// ============================================================================
+
 const BATCH_SIZE = 25;
 const BATCH_DELAY = 15000; // 15 seconds
 const RETRY_DELAY = 180000; // 3 minutes in milliseconds
 const MAX_RETRIES = 3;
 
-// ------------------- Helper function to format date and time -------------------
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+// ------------------- formatDateTime -------------------
+// Formats a given date into a readable string with EST timezone.
 function formatDateTime(date) {
     const options = {
         year: 'numeric', month: '2-digit', day: '2-digit',
@@ -30,7 +66,14 @@ function formatDateTime(date) {
     return new Date(date).toLocaleString('en-US', options).replace(',', ' |') + ' EST';
 }
 
-// ------------------- Main function to sync inventory -------------------
+// ============================================================================
+// Main Function: syncInventory
+// ============================================================================
+
+// ------------------- syncInventory -------------------
+// Synchronizes the inventory of a character from a Google Sheet to the database.
+// It fetches the character, validates the sheet URL, reads data, processes rows in batches,
+// updates the database, and sends appropriate feedback messages.
 async function syncInventory(characterName, userId, interaction, retryCount = 0, totalSyncedItemsCount = 0) {
     console.log(`syncInventory called for character: ${characterName}, user: ${userId}, retryCount: ${retryCount}`);
 
@@ -39,8 +82,10 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
     let skippedLinesCount = 0;
 
     try {
+        // ------------------- Connect to Database -------------------
         await connectToTinglebot();
 
+        // ------------------- Fetch Character Data -------------------
         console.log(`Fetching character: ${characterName} for user: ${userId}`);
         let character = await fetchCharacterByNameAndUserId(characterName, userId);
         if (!character) {
@@ -50,6 +95,7 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
         }
         console.log(`Character fetched successfully: ${character.name}`);
 
+        // ------------------- Validate Google Sheets URL -------------------
         const inventoryUrl = character.inventory;
         console.log(`Validating Google Sheets URL: ${inventoryUrl}`);
         if (!isValidGoogleSheetsUrl(inventoryUrl)) {
@@ -58,20 +104,23 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
             return;
         }
 
+        // ------------------- Authorize Google Sheets API & Extract Spreadsheet ID -------------------
         console.log('Authorizing Google Sheets API...');
         const auth = await authorizeSheets();
         const spreadsheetId = extractSpreadsheetId(inventoryUrl);
         console.log(`Spreadsheet ID extracted: ${spreadsheetId}`);
 
+        // ------------------- Retrieve Sheet ID -------------------
         console.log('Fetching sheet ID for "loggedInventory"...');
         const sheetId = await getSheetIdByTitle(auth, spreadsheetId, 'loggedInventory');
-        if (!sheetId && sheetId !== 0) {
+        if (sheetId === undefined || sheetId === null) {
             console.log("Sheet 'loggedInventory' not found.");
             await editSyncErrorMessage(interaction, `❌ **Sheet 'loggedInventory' not found in the spreadsheet.**`);
             return;
         }
         console.log(`Sheet ID fetched successfully: ${sheetId}`);
 
+        // ------------------- Read Data from Google Sheets -------------------
         console.log('Reading data from Google Sheets...');
         const range = 'loggedInventory!A2:M';
         const sheetData = await readSheetData(auth, spreadsheetId, range);
@@ -81,13 +130,13 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
             return;
         }
 
-        // Map data with original indices
+        // ------------------- Map and Filter Sheet Data -------------------
+        // Map each row to include its original row index (accounting for headers) and filter rows by character name.
         const mappedData = sheetData.map((row, index) => ({
             row,
-            originalRowIndex: index + 2, // Adding 2 because we skipped headers (A1:M1)
+            originalRowIndex: index + 2 // Adding 2 because header row (A1:M1) is skipped
         }));
 
-        // Filter rows matching the character name
         const filteredData = mappedData.filter(data => data.row[0] === character.name && data.row[1]);
         console.log(`Filtered data size: ${filteredData.length}`);
 
@@ -97,6 +146,7 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
             return;
         }
 
+        // ------------------- Process Rows in Batches -------------------
         console.log(`Fetching inventory collection for character: ${character.name}`);
         const inventoryCollection = await getCharacterInventoryCollection(character.name);
         let batchRequests = [];
@@ -121,7 +171,6 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
                     const cleanedQty = String(qty).replace(/,/g, ''); // Remove commas
                     const quantity = parseInt(cleanedQty, 10);
                     if (isNaN(quantity)) throw new Error(`Invalid quantity for item ${itemName}: ${qty}`);
-                    
 
                     const inventoryItem = {
                         characterId: character._id,
@@ -145,7 +194,7 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
                     await syncToInventoryDatabase(character, inventoryItem, interaction);
                     syncedItemsCount++;
 
-                    // Prepare updated row data
+                    // Prepare updated row data for batch update
                     const updatedRowData = [
                         sheetCharacterName,
                         itemName,
@@ -162,16 +211,17 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
                         inventoryItem.synced
                     ];
 
-                    // Use original row index for the update range
+                    // Determine the update range based on the original row index
                     const updateRange = `loggedInventory!A${originalRowIndex}:M${originalRowIndex}`;
                     batchRequests.push({ range: updateRange, values: [updatedRowData], sheetId });
                 } catch (error) {
-                    console.error(`Error processing row ${originalRowIndex}: ${error.message}`);
+                    console.error(`[syncHandler.js]: syncInventory: Error processing row ${originalRowIndex}: ${error.message}`);
                     errors.push(`Row ${originalRowIndex}: ${error.message}`);
                     skippedLinesCount++;
                 }
             }
 
+            // ------------------- Write Batch Data -------------------
             if (batchRequests.length > 0) {
                 console.log('Writing batch data to Google Sheets...');
                 await writeBatchData(auth, spreadsheetId, batchRequests);
@@ -183,45 +233,49 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
         }
 
         console.log(`Total synced items: ${syncedItemsCount}, Skipped lines: ${skippedLinesCount}`);
-
         totalSyncedItemsCount += syncedItemsCount;
         const now = formatDateTime(new Date());
 
         console.log(`Sync completed for character: ${character.name} at ${now}`);
 
-        // Update the inventorySynced status to true
-            try {
-                console.log('Updating inventorySynced status...');
-                character.inventorySynced = true;
-                await character.save();
-                
-                // Remove Initial Item if necessary
-                await removeInitialItemIfSynced(character._id);
-                console.log('Initial Item removal process completed.');
-                console.log('inventorySynced status updated successfully.');
-            } catch (updateError) {
-                console.error('Failed to update inventorySynced status:', updateError);
-            }
-
-            await editSyncMessage(
-                interaction,
-                character.name,
-                totalSyncedItemsCount,
-                errors.map(error => ({
-                    reason: error.split(': ')[1], // Extract reason from error message
-                    itemName: error.includes('Item with name') ? error.split('Item with name ')[1].split(' not found')[0] : 'Unknown'
-                })),
-                now, // Assuming this is the current timestamp
-                character.inventory // Add the character's inventory link
-            );
+        // ------------------- Update Character Sync Status -------------------
+        try {
+            console.log('Updating inventorySynced status...');
+            character.inventorySynced = true;
+            await character.save();
             
+            // Remove the initial item if necessary
+            await removeInitialItemIfSynced(character._id);
+            console.log('Initial Item removal process completed.');
+            console.log('inventorySynced status updated successfully.');
+        } catch (updateError) {
+            console.error(`[syncHandler.js]: syncInventory: Failed to update inventorySynced status: ${updateError.message}`);
+        }
+
+        // ------------------- Send Sync Completion Message -------------------
+        await editSyncMessage(
+            interaction,
+            character.name,
+            totalSyncedItemsCount,
+            errors.map(error => ({
+                reason: error.split(': ')[1], // Extract reason from error message
+                itemName: error.includes('Item with name') ? error.split('Item with name ')[1].split(' not found')[0] : 'Unknown'
+            })),
+            now, // Current timestamp
+            character.inventory // Character's inventory link
+        );
     } catch (error) {
-        console.error(`Error in syncInventory: ${error.message}`, error);
+        console.error(`[syncHandler.js]: syncInventory: Error in syncInventory: ${error.message}`, error);
         await editSyncErrorMessage(interaction, `❌ **Sync canceled! An error occurred: ${error.message}**`);
     }
 }
 
-// ------------------- Helper function to handle retries -------------------
+// ============================================================================
+// Helper Function: retrySync
+// ============================================================================
+
+// ------------------- retrySync -------------------
+// Handles retry logic by displaying a countdown and retrying the sync process after a delay.
 async function retrySync(interaction, characterName, userId, retryCount, syncedItemsCount, totalSyncedItemsCount, errors) {
     let remainingTime = RETRY_DELAY / 1000;
     const countdownMessage = await interaction.followUp({ content: `⏳ Sync will retry in ${Math.ceil(remainingTime)} seconds.`, ephemeral: true });
@@ -245,9 +299,10 @@ async function retrySync(interaction, characterName, userId, retryCount, syncedI
     }, RETRY_DELAY);
 }
 
+// ============================================================================
+// Exported Functions
+// ============================================================================
+
 module.exports = {
     syncInventory,
 };
-
-
-//This vbersion works

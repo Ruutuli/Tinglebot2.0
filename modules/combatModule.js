@@ -1,140 +1,146 @@
-// ------------------- Standard and Third-Party Imports -------------------
-const fs = require('fs');  // For file system operations
-const path = require('path');  // For handling and transforming file paths
-const Monster = require('../models/MonsterModel');  // Model for handling monster data
-const { useHearts, handleKO } = require('../modules/characterStatsModule');  // Import functions to manage character hearts and KO status
-const { calculateAttackBuff, calculateDefenseBuff, applyBuffs } = require('../modules/buffModule');  // Buff-related logic
-const { generateUniqueId } = require('../utils/uniqueIdUtils');
+// ------------------- combatModule.js -------------------
+// This module manages combat-related operations. It stores battle progress,
+// retrieves and updates battle status, and handles battle outcomes (such as updating hearts and KO status).
+// The battle progress is stored in a JSON file.
 
-// ------------------- Constants -------------------
-const BATTLE_PROGRESS_PATH = path.join(__dirname, '..', 'data', 'battleProgress.json');  // Path to the JSON file for storing battle progress
+// ============================================================================
+// Standard Libraries
+// ------------------- Importing Node.js core modules -------------------
+const fs = require('fs');            // For file system operations
+const path = require('path');        // For handling file paths
 
+// ============================================================================
+// Database Models & Modules
+// ------------------- Importing local modules and models -------------------
+const Monster = require('../models/MonsterModel');  // Monster data model
+const { useHearts, handleKO } = require('../modules/characterStatsModule');  // Character stat management
+const { calculateAttackBuff, calculateDefenseBuff, applyBuffs } = require('../modules/buffModule');  // Buff logic
+const { generateUniqueId } = require('../utils/uniqueIdUtils');  // Unique ID generation
+
+// ============================================================================
+// Constants
+// ------------------- Define file paths and configuration constants -------------------
+const BATTLE_PROGRESS_PATH = path.join(__dirname, '..', 'data', 'battleProgress.json');  // JSON file for battle progress
+
+// ============================================================================
+// File Initialization Functions
 // ------------------- Ensure Battle Progress File Exists -------------------
-// Ensures the battle progress file exists, creating it if necessary
+// Checks if the battle progress file exists and creates or repairs it if necessary.
 function ensureBattleProgressFileExists() {
-    if (!fs.existsSync(BATTLE_PROGRESS_PATH)) {
-        fs.writeFileSync(BATTLE_PROGRESS_PATH, JSON.stringify({}));  // Create an empty file if it doesn't exist
-    } else {
-        try {
-            JSON.parse(fs.readFileSync(BATTLE_PROGRESS_PATH, 'utf8'));  // Validate the existing file content
-        } catch (error) {
-            fs.writeFileSync(BATTLE_PROGRESS_PATH, JSON.stringify({}));  // Overwrite the file if corrupted
-        }
+  if (!fs.existsSync(BATTLE_PROGRESS_PATH)) {
+    fs.writeFileSync(BATTLE_PROGRESS_PATH, JSON.stringify({}));
+  } else {
+    try {
+      JSON.parse(fs.readFileSync(BATTLE_PROGRESS_PATH, 'utf8'));
+    } catch (error) {
+      fs.writeFileSync(BATTLE_PROGRESS_PATH, JSON.stringify({}));
     }
+  }
 }
 
-// ------------------- Store Battle Progress in JSON -------------------
-// Stores battle progress for a specific battle ID, including character and monster states
+// ============================================================================
+// Battle Progress Storage Functions
+// ------------------- Store Battle Progress -------------------
+// Stores battle progress for a battle, including character and monster states, then returns a unique battle ID.
 async function storeBattleProgress(character, monster, tier, monsterHearts, progress) {
-    ensureBattleProgressFileExists();  // Ensure the file is ready for updates
+  ensureBattleProgressFileExists();
+  const battleProgress = JSON.parse(fs.readFileSync(BATTLE_PROGRESS_PATH, 'utf8'));
+  
+  // Generate a unique battle ID with "R" prefix using a utility function.
+  const battleId = generateUniqueId('R');
+  
+  battleProgress[battleId] = {
+    battleId,
+    characters: [character], // Stores full character object
+    monster: monster.name,
+    tier: tier,
+    monsterHearts: {
+      max: monster.hearts,
+      current: monsterHearts.current,
+    },
+    progress: progress ? `\n${progress}` : '',
+  };
 
-    const battleProgress = JSON.parse(fs.readFileSync(BATTLE_PROGRESS_PATH, 'utf8'));  // Read existing battle progress
-
-    // Generate a unique battle ID with "R" prefix
-    const battleId = generateUniqueId('R');
-
-    // Initialize a new entry if no progress exists for the battle ID
-    battleProgress[battleId] = {
-        battleId,
-        characters: [character], // Store the full character object
-        monster: monster.name,
-        tier: tier,
-        monsterHearts: {
-            max: monster.hearts,
-            current: monsterHearts.current,
-        },
-        progress: progress ? `\n${progress}` : '', // Initialize progress message
-    };
-
-    // Save the updated battle progress back to the JSON file
-    fs.writeFileSync(BATTLE_PROGRESS_PATH, JSON.stringify(battleProgress, null, 2));
-
-    console.log(`[storeBattleProgress] Battle ID "${battleId}" stored successfully.`);
-    return battleId; // Return the generated battle ID
+  fs.writeFileSync(BATTLE_PROGRESS_PATH, JSON.stringify(battleProgress, null, 2));
+  console.log(`[combatModule.js]: logs Battle ID "${battleId}" stored successfully.`);
+  return battleId;
 }
 
-// ------------------- Get Battle Progress by ID from JSON -------------------
-// Retrieves the battle progress for a specific battle ID
+// ------------------- Get Battle Progress by ID -------------------
+// Retrieves the battle progress for a specific battle ID.
 async function getBattleProgressById(battleId) {
-    ensureBattleProgressFileExists();  // Ensure the file is accessible
-
-    const battleProgress = JSON.parse(fs.readFileSync(BATTLE_PROGRESS_PATH, 'utf8'));  // Read the file contents
-
-    if (!battleProgress[battleId]) {
-        console.error(`Error: No battle progress found for Battle ID: ${battleId}`);  // Error log if no progress found
-        return null;
-    }
-
-    return battleProgress[battleId];  // Return the progress if found
+  ensureBattleProgressFileExists();
+  const battleProgress = JSON.parse(fs.readFileSync(BATTLE_PROGRESS_PATH, 'utf8'));
+  if (!battleProgress[battleId]) {
+    console.error(`[combatModule.js]: logs Error: No battle progress found for Battle ID: ${battleId}`);
+    return null;
+  }
+  return battleProgress[battleId];
 }
 
-// ------------------- Update Battle Progress in JSON -------------------
-// Updates the battle progress with new information, including the outcome and hearts adjustment
+// ------------------- Update Battle Progress -------------------
+// Updates battle progress by deducting monster hearts, updating character hearts,
+// and appending new progress information.
 async function updateBattleProgress(battleId, updatedProgress, outcome) {
-    ensureBattleProgressFileExists();  // Ensure the file exists
-    
-    const battleProgress = await getBattleProgressById(battleId);  // Get the current progress
+  ensureBattleProgressFileExists();
+  const battleProgress = await getBattleProgressById(battleId);
+  
+  // Deduct monster hearts without going below zero.
+  battleProgress.monsterHearts.current = Math.max(battleProgress.monsterHearts.current - (outcome.hearts || 0), 0);
 
-    // Deduct the monster's hearts based on the outcome, preventing negative heart values
-    battleProgress.monsterHearts.current = Math.max(battleProgress.monsterHearts.current - (outcome.hearts || 0), 0);
-
-    // Update the character's hearts and handle KO status if applicable
-    if (outcome.hearts) {
-        await useHearts(outcome.character._id, outcome.hearts);  // Deduct hearts from the character
-        if (outcome.character.currentHearts === 0) {
-            await handleKO(outcome.character._id);  // Trigger KO logic if hearts reach zero
-            battleProgress.progress += `\n${outcome.character.name} has been KO'd!`;  // Add KO message to progress log
-        }
+  // If hearts are deducted, update the character's hearts and trigger KO if needed.
+  if (outcome.hearts) {
+    await useHearts(outcome.character._id, outcome.hearts);
+    if (outcome.character.currentHearts === 0) {
+      await handleKO(outcome.character._id);
+      battleProgress.progress += `\n${outcome.character.name} has been KO'd!`;
     }
-
-    // Append updated progress message
-    battleProgress.progress += `\n${updatedProgress}`;
-
-    // Save the updated progress back to the JSON file
-    fs.writeFileSync(BATTLE_PROGRESS_PATH, JSON.stringify(battleProgress, null, 2));
+  }
+  
+  battleProgress.progress += `\n${updatedProgress}`;
+  fs.writeFileSync(BATTLE_PROGRESS_PATH, JSON.stringify(battleProgress, null, 2));
 }
 
 // ------------------- Delete Battle Progress -------------------
-// Deletes the battle progress for a specific battle ID
+// Deletes battle progress data for a given battle ID.
 async function deleteBattleProgressById(battleId) {
-    ensureBattleProgressFileExists(); // Ensure the file exists
-    try {
-        const battleProgress = JSON.parse(fs.readFileSync(BATTLE_PROGRESS_PATH, 'utf8')); // Read existing data
-        if (battleProgress[battleId]) {
-            delete battleProgress[battleId]; // Delete the entry
-            fs.writeFileSync(BATTLE_PROGRESS_PATH, JSON.stringify(battleProgress, null, 2)); // Save changes
-        } else {
-        }
-    } catch (error) {
+  ensureBattleProgressFileExists();
+  try {
+    const battleProgress = JSON.parse(fs.readFileSync(BATTLE_PROGRESS_PATH, 'utf8'));
+    if (battleProgress[battleId]) {
+      delete battleProgress[battleId];
+      fs.writeFileSync(BATTLE_PROGRESS_PATH, JSON.stringify(battleProgress, null, 2));
     }
+  } catch (error) {
+    // Minimal error logging; additional handling can be added if needed.
+  }
 }
 
 // ------------------- Generate Unique Battle ID -------------------
-// Generates a unique battle ID based on the current timestamp
+// Generates a simple unique battle ID based on the current timestamp.
 function generateBattleId() {
-    return Date.now().toString();  // Simple timestamp-based ID generation
+  return Date.now().toString();
 }
 
 // ------------------- Update Monster Hearts to Zero -------------------
-// Sets the monster's hearts to zero for a specific battle ID
+// Sets the monster's current hearts to zero for the specified battle.
 async function updateMonsterHeartsToZero(battleId) {
-    ensureBattleProgressFileExists();  // Ensure the file exists
-
-    const battleProgress = JSON.parse(fs.readFileSync(BATTLE_PROGRESS_PATH, 'utf8'));  // Read the progress data
-
-    // If progress exists for the battle ID, update the monster's hearts to zero
-    if (battleProgress[battleId]) {
-        battleProgress[battleId].monsterHearts.current = 0;  // Set monster hearts to zero
-        fs.writeFileSync(BATTLE_PROGRESS_PATH, JSON.stringify(battleProgress, null, 2));  // Save the updated progress
-    }
+  ensureBattleProgressFileExists();
+  const battleProgress = JSON.parse(fs.readFileSync(BATTLE_PROGRESS_PATH, 'utf8'));
+  if (battleProgress[battleId]) {
+    battleProgress[battleId].monsterHearts.current = 0;
+    fs.writeFileSync(BATTLE_PROGRESS_PATH, JSON.stringify(battleProgress, null, 2));
+  }
 }
 
-// ------------------- Export all functions for external use -------------------
+// ============================================================================
+// Module Exports
+// ------------------- Exporting combat module functions -------------------
 module.exports = {
-    storeBattleProgress,
-    getBattleProgressById,
-    generateBattleId,
-    updateBattleProgress,
-    deleteBattleProgressById,
-    updateMonsterHeartsToZero
+  storeBattleProgress,
+  getBattleProgressById,
+  generateBattleId,
+  updateBattleProgress,
+  deleteBattleProgressById,
+  updateMonsterHeartsToZero
 };

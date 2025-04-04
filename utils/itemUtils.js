@@ -1,26 +1,99 @@
-// itemUtils.js
+// ------------------- itemUtils.js -------------------
+// This module provides utility functions for item management in the inventory system,
+// including creating new and removed item entries, adding/removing items from the database,
+// prompting users for specific items based on general categories, and retrieving sheet IDs.
 
-// Import necessary modules and functions
+// ============================================================================
+// Discord.js Components
+// ------------------- Importing Discord.js components -------------------
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } = require('discord.js');
+
+// ============================================================================
+// Database Connections
+// ------------------- Importing database connection functions -------------------
 const { connectToInventories } = require('../database/connection');
-const {
-    writeSheetData,
-    getSheetIdByTitle,
-    authorizeSheets,
-    readSheetData,
-    appendSheetData,
-    getSheetsClient 
-} = require('../utils/googleSheetsUtils');
-const { extractSpreadsheetId } = require('../utils/validation');
+
+// ============================================================================
+// Database Services
+// ------------------- Importing database service functions -------------------
 const { fetchCharacterById, fetchCharacterByNameAndUserId } = require('../database/characterService');
-const { fetchItemByName, fetchItemById, fetchAndSortItemsByRarity } = require('../database/itemService');
+const { fetchAndSortItemsByRarity, fetchItemById, fetchItemByName } = require('../database/itemService');
+
+// ============================================================================
+// Modules
+// ------------------- Importing custom modules -------------------
 const { toLowerCase } = require('../modules/formattingModule');
+
+// ============================================================================
+// Utility Functions
+// ------------------- Importing utility functions -------------------
+const { appendSheetData, authorizeSheets, getSheetIdByTitle, getSheetsClient, readSheetData, writeSheetData } = require('../utils/googleSheetsUtils');
+const { extractSpreadsheetId } = require('../utils/validation');
 const { safeStringify } = require('../utils/objectUtils');
-const { StringSelectMenuBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+
+// ============================================================================
+// Database Models
+// ------------------- Importing database models -------------------
 const generalCategories = require('../models/GeneralItemCategories');
 const ItemModel = require('../models/ItemModel');
 
 
-// Function to create a new inventory item entry
+// ============================================================================
+// General Utility Functions
+// ------------------- Format Date and Time -------------------
+// Formats a given date in EST with a specific format.
+function formatDateTime(date) {
+    const options = {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+        timeZone: 'America/New_York',
+    };
+    return new Intl.DateTimeFormat('en-US', options)
+        .format(new Date(date))
+        .replace(',', ' |') + ' EST';
+}
+
+// ------------------- Escape RegExp -------------------
+// Escapes special characters in a string for use in a regular expression.
+function escapeRegExp(string) {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// ------------------- JSON Replacer for BigInt -------------------
+// Converts BigInt values to strings during JSON stringification.
+function replacer(key, value) {
+    if (typeof value === 'bigint') {
+        return value.toString();
+    }
+    return value;
+}
+
+// ------------------- Extract Interaction Fields -------------------
+// Extracts selected fields from an interaction object.
+function extractInteractionFields(interaction) {
+    if (!interaction) {
+        return {};
+    }
+    return {
+        id: interaction.id || null,
+        applicationId: interaction.applicationId || null,
+        channelId: interaction.channelId || null,
+        guildId: interaction.guildId || null,
+        user: interaction.user || null,
+        commandName: interaction.commandName || null,
+        options: interaction.options || null,
+    };
+}
+
+
+// ============================================================================
+// Inventory Management Functions
+// ------------------- Create New Item Database Entry -------------------
+// Creates a new inventory item entry object for a character.
 const createNewItemDatabase = (character, itemName, quantity, category, type, interaction) => {
     const link = interaction ? `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}` : '';
     return {
@@ -41,7 +114,8 @@ const createNewItemDatabase = (character, itemName, quantity, category, type, in
     };
 };
 
-// Function to create a removed item entry for inventory update
+// ------------------- Create Removed Item Database Entry -------------------
+// Creates a record for an item removed from a character's inventory.
 const createRemovedItemDatabase = (character, item, quantity, interaction, obtainMethod = 'Manual Entry') => {
     const link = interaction ? `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}` : '';
     return {
@@ -51,7 +125,8 @@ const createRemovedItemDatabase = (character, item, quantity, interaction, obtai
         itemName: item.itemName.trim().toLowerCase(),
         quantity: -quantity,
         category: Array.isArray(item.category) ? item.category.join(', ') : item.category,
-        type: Array.isArray(item.type) ? type.join(', ') : type,
+        // Fixed bug: using item.type instead of undefined variable "type"
+        type: Array.isArray(item.type) ? item.type.join(', ') : item.type,
         subtype: item.subtype,
         job: character.job || '',
         perk: character.perk || '',
@@ -63,7 +138,9 @@ const createRemovedItemDatabase = (character, item, quantity, interaction, obtai
     };
 };
 
-// Function to add multiple items to the inventory
+// ------------------- Add Multiple Items to Database -------------------
+// Adds multiple items to the inventory database for a character.
+// Also appends the new items to the Google Sheets "Inventory" sheet.
 const addItemsToDatabase = async (character, items, interaction) => {
     try {
         const inventoriesConnection = await connectToInventories();
@@ -92,7 +169,8 @@ const addItemsToDatabase = async (character, items, interaction) => {
             }
         }
 
-        const spreadsheetId = getSheetIdByName(character.inventory);
+        // Use extractSpreadsheetId instead of getSheetIdByName for obtaining the spreadsheet ID from URL.
+        const spreadsheetId = extractSpreadsheetId(character.inventory);
 
         if (interaction) {
             const sheetRows = items.map(item => [
@@ -109,7 +187,9 @@ const addItemsToDatabase = async (character, items, interaction) => {
     }
 };
 
-// Function to remove the item from the correct collection
+// ------------------- Remove Item from Database -------------------
+// Removes a specified quantity of an item from the inventory database for a character.
+// Also appends the removal to the Google Sheets "Inventory" sheet.
 const removeItemDatabase = async (character, item, quantity, interaction) => {
     try {
         const inventoriesConnection = await connectToInventories();
@@ -135,7 +215,8 @@ const removeItemDatabase = async (character, item, quantity, interaction) => {
             throw new Error(`❌ Item ${item.itemName} not found in inventory`);
         }
 
-        const spreadsheetId = getSheetIdByName(character.inventory);
+        // Use extractSpreadsheetId to get the spreadsheet ID.
+        const spreadsheetId = extractSpreadsheetId(character.inventory);
 
         if (interaction) {
             await appendSheetData(spreadsheetId, 'Inventory', [[
@@ -151,7 +232,8 @@ const removeItemDatabase = async (character, item, quantity, interaction) => {
     }
 };
 
-// Prompt user for specific items from a general category
+// ------------------- Prompt User for Specific Items -------------------
+// Prompts the user to select specific items from a general category when needed for crafting.
 const promptUserForSpecificItems = async (interaction, inventory, generalCategoryItemName, requiredQuantity) => {
     if (!generalCategories[generalCategoryItemName]) {
         throw new Error(`❌ **General category ${generalCategoryItemName} is not defined.**`);
@@ -256,23 +338,19 @@ const promptUserForSpecificItems = async (interaction, inventory, generalCategor
     return selectedItems;
 };
 
-
+// ------------------- Get Sheet ID by Name -------------------
+// Retrieves the sheet ID for a given sheet name using the Google Sheets API.
 async function getSheetIdByName(sheetName) {
     try {
         const auth = await authorizeSheets();
         const sheets = getSheetsClient(auth);
         const spreadsheetId = 'your-spreadsheet-id'; // Replace with your spreadsheet ID
-
-        const response = await sheets.spreadsheets.get({
-            spreadsheetId,
-        });
-
+        const response = await sheets.spreadsheets.get({ spreadsheetId });
         const sheet = response.data.sheets.find(sheet => sheet.properties.title === sheetName);
         if (!sheet) {
             console.error(`[itemUtils.js]: Sheet "${sheetName}" not found in spreadsheet "${spreadsheetId}".`);
             throw new Error(`Sheet "${sheetName}" not found.`);
         }
-
         return sheet.properties.sheetId;
     } catch (error) {
         console.error(`[itemUtils.js]: Error in getSheetIdByName for "${sheetName}":`, error.message);
@@ -280,12 +358,13 @@ async function getSheetIdByName(sheetName) {
     }
 }
 
-
-// Exporting the functions
+// ============================================================================
+// Exported Functions
+// ------------------- Exporting item utility functions -------------------
 module.exports = {
-    createNewItemDatabase,
-    createRemovedItemDatabase,
-    removeItemDatabase,
-    addItemsToDatabase,
-    promptUserForSpecificItems,
+    createNewItemDatabase,       // Creates a new inventory item entry.
+    createRemovedItemDatabase,   // Creates a record for a removed inventory item.
+    removeItemDatabase,          // Removes a specified quantity of an item from the database.
+    addItemsToDatabase,          // Adds multiple items to the inventory database.
+    promptUserForSpecificItems,  // Prompts the user to select specific items from a general category.
 };

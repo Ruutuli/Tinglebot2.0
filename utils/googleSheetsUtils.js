@@ -1,31 +1,35 @@
 // ------------------- Google Sheets Utilities -------------------
 // This module handles Google Sheets API integration for reading, writing, and managing data.
 
-// ------------------- Imports -------------------
-// Grouping imports for readability
+// ============================================================================
+// Standard Libraries
+// ------------------- Importing Node.js core modules -------------------
 const fs = require('fs');
 const path = require('path');
-const { google } = require('googleapis');
+
+// ============================================================================
+// Third-Party Libraries
+// ------------------- Importing third-party modules -------------------
 const Bottleneck = require('bottleneck');
+const { google } = require('googleapis');
 const { GoogleAuth } = require('google-auth-library');
 
-// ------------------- Constants -------------------
-// Service account path and Google Sheets API scopes
+// ============================================================================
+// Constants
+// ------------------- Define configuration constants -------------------
 const SERVICE_ACCOUNT_PATH = path.join(__dirname, '../config/service_account.json');
 const SCOPES = ['https://www.googleapis.com/auth/spreadsheets'];
 
-// Throttling requests to Google API using Bottleneck
+// ------------------- Throttle Settings -------------------
+// Throttles requests to the Google API to prevent rate limiting.
 const limiter = new Bottleneck({
-    minTime: 200,  // Minimum time between API requests (milliseconds)
-    maxConcurrent: 5  // Maximum number of concurrent API requests
+    minTime: 200,    // Minimum time (ms) between API requests
+    maxConcurrent: 5 // Maximum concurrent API requests
 });
 
-// Initialize Google Sheets API
-const auth = new GoogleAuth({ scopes: SCOPES });
-const sheets = google.sheets({ version: 'v4', auth });
-
-// ------------------- Authorize Google Sheets -------------------
-// Authorizes Google Sheets API using the service account
+// ============================================================================
+// Authorization Functions
+// ------------------- Authorize Google Sheets API -------------------
 async function authorizeSheets() {
     return new Promise((resolve, reject) => {
         fs.readFile(SERVICE_ACCOUNT_PATH, (err, content) => {
@@ -33,15 +37,13 @@ async function authorizeSheets() {
                 logErrorDetails(`Error loading service account file: ${err}`);
                 return reject(`Error loading service account file: ${err}`);
             }
-
             const credentials = JSON.parse(content);
             const { client_email, private_key } = credentials;
             const auth = new google.auth.JWT(client_email, null, private_key, SCOPES);
-
             auth.authorize((err, tokens) => {
                 if (err) {
                     logErrorDetails(`Error authorizing service account: ${err}`);
-                    reject(`Error authorizing service account: ${err}`);
+                    return reject(`Error authorizing service account: ${err}`);
                 } else {
                     resolve(auth);
                 }
@@ -50,58 +52,82 @@ async function authorizeSheets() {
     });
 }
 
-// ------------------- API Request Throttling -------------------
-// Makes API requests with throttling
+// ============================================================================
+// API Request Helpers
+// ------------------- Throttle API requests -------------------
 async function makeApiRequest(fn) {
     return limiter.schedule(() => retryWithBackoff(fn));
 }
 
 // ------------------- Retry with Exponential Backoff -------------------
-// Handles retries for API requests with exponential backoff in case of failure
+// Retries API requests with exponential backoff on failure.
 async function retryWithBackoff(fn) {
     const retries = 3;
     const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
     for (let i = 0; i < retries; i++) {
         try {
             return await fn();
         } catch (error) {
             if (i === retries - 1) throw error;
-            await delay(500 * Math.pow(2, i));  // Exponential backoff
+            await delay(500 * Math.pow(2, i)); // Exponential backoff delay
         }
     }
 }
 
-// ------------------- Fetch Data from Google Sheets -------------------
-// Retrieves data from a specified range in Google Sheets
+// ============================================================================
+// Reading Functions
+// ------------------- Fetch Data from Google Sheets with Sanitization -------------------
 async function fetchSheetData(auth, spreadsheetId, range) {
     return makeApiRequest(async () => {
         const response = await google.sheets({ version: 'v4', auth }).spreadsheets.values.get({
             spreadsheetId,
             range
         });
-
-        // Sanitize data to remove commas from numeric strings
-        const sanitizedValues = response.data.values.map(row => 
+        // Sanitize data: remove commas from numeric strings.
+        const sanitizedValues = response.data.values.map(row =>
             row.map(cell => (typeof cell === 'string' && cell.includes(',')) ? cell.replace(/,/g, '') : cell)
         );
-
         return sanitizedValues;
     });
 }
 
+// ------------------- Read Data from Google Sheets -------------------
+// Reads data from a specified range without sanitization.
+async function readSheetData(auth, spreadsheetId, range) {
+    return makeApiRequest(async () => {
+        const response = await google.sheets({ version: 'v4', auth }).spreadsheets.values.get({
+            spreadsheetId,
+            range
+        });
+        return response.data.values;
+    });
+}
 
+// ------------------- Clear Formatting in Google Sheets -------------------
+// Clears formatting in a specified range in Google Sheets.
+async function clearSheetFormatting(auth, spreadsheetId, range) {
+    return makeApiRequest(async () => {
+        await google.sheets({ version: 'v4', auth }).spreadsheets.values.clear({ spreadsheetId, range });
+    });
+}
+
+// ------------------- Fetch Data for External Use -------------------
+// Fetch data from Google Sheets for external modules.
+const fetchDataFromSheet = async (spreadsheetId, range) => {
+    const auth = await authorizeSheets();
+    return fetchSheetData(auth, spreadsheetId, range);
+};
+
+// ============================================================================
+// Writing Functions
 // ------------------- Append Data to Google Sheets -------------------
-// Appends data to a specified range in Google Sheets
 async function appendSheetData(auth, spreadsheetId, range, values) {
     if (!Array.isArray(values)) {
         throw new TypeError('Expected values to be an array');
     }
-
     const resource = {
         values: values.map(row => Array.isArray(row) ? row.map(value => (value != null ? value.toString() : '')) : [])
     };
-
     return makeApiRequest(async () => {
         await google.sheets({ version: 'v4', auth }).spreadsheets.values.append({
             spreadsheetId,
@@ -113,12 +139,10 @@ async function appendSheetData(auth, spreadsheetId, range, values) {
 }
 
 // ------------------- Write Data to Google Sheets -------------------
-// Writes data to a specific range in Google Sheets
 async function writeSheetData(auth, spreadsheetId, range, values) {
     const resource = {
         values: values.map(row => row.map(value => (typeof value === 'number') ? value : (value != null ? value.toString() : '')))
     };
-
     return makeApiRequest(async () => {
         await google.sheets({ version: 'v4', auth }).spreadsheets.values.update({
             spreadsheetId,
@@ -130,7 +154,7 @@ async function writeSheetData(auth, spreadsheetId, range, values) {
 }
 
 // ------------------- Batch Write Data to Google Sheets -------------------
-// Writes a batch of data to Google Sheets, used for multiple rows or ranges
+// Writes a batch of updates to multiple ranges in Google Sheets.
 async function writeBatchData(auth, spreadsheetId, batchRequests) {
     const requests = batchRequests.map(batch => ({
         updateCells: {
@@ -149,7 +173,6 @@ async function writeBatchData(auth, spreadsheetId, batchRequests) {
             fields: 'userEnteredValue'
         }
     }));
-
     return makeApiRequest(async () => {
         await google.sheets({ version: 'v4', auth }).spreadsheets.batchUpdate({
             spreadsheetId,
@@ -158,42 +181,26 @@ async function writeBatchData(auth, spreadsheetId, batchRequests) {
     });
 }
 
-// ------------------- Additional Google Sheets Functions -------------------
-
-// Fetch data from Google Sheets for character embed module
-const fetchDataFromSheet = async (spreadsheetId, range) => {
-    const auth = await authorizeSheets();
-    return fetchSheetData(auth, spreadsheetId, range);
-};
-
-// Update data in Google Sheets for character embed module
+// ------------------- Update and Append Data for External Use -------------------
 const updateDataInSheet = async (spreadsheetId, range, values) => {
     const auth = await authorizeSheets();
     return writeSheetData(auth, spreadsheetId, range, values);
 };
 
-// Append data to Google Sheets for character embed module
 const appendDataToSheet = async (spreadsheetId, range, values) => {
     const auth = await authorizeSheets();
     return appendSheetData(auth, spreadsheetId, range, values);
 };
 
-// Read data from Google Sheets
-async function readSheetData(auth, spreadsheetId, range) {
-    return makeApiRequest(async () => {
-        const response = await google.sheets({ version: 'v4', auth }).spreadsheets.values.get({ spreadsheetId, range });
-        return response.data.values;
-    });
+// ============================================================================
+// Utility Functions
+// ------------------- Get Google Sheets Client -------------------
+function getSheetsClient(auth) {
+    return google.sheets({ version: 'v4', auth });
 }
 
-// Clear formatting in Google Sheets with retry logic
-async function clearSheetFormatting(auth, spreadsheetId, range) {
-    return makeApiRequest(async () => {
-        await google.sheets({ version: 'v4', auth }).spreadsheets.values.clear({ spreadsheetId, range });
-    });
-}
-
-// Get the sheet ID by sheet name
+// ------------------- Get Sheet ID by Name -------------------
+// Retrieves the sheet ID using the sheet's name.
 async function getSheetIdByName(auth, spreadsheetId, sheetName) {
     return makeApiRequest(async () => {
         const response = await google.sheets({ version: 'v4', auth }).spreadsheets.get({ spreadsheetId });
@@ -206,7 +213,8 @@ async function getSheetIdByName(auth, spreadsheetId, sheetName) {
     });
 }
 
-// Get the sheet ID by title
+// ------------------- Get Sheet ID by Title -------------------
+// Retrieves the sheet ID using the sheet's title.
 async function getSheetIdByTitle(auth, spreadsheetId, sheetTitle) {
     const response = await google.sheets({ version: 'v4', auth }).spreadsheets.get({
         spreadsheetId,
@@ -216,37 +224,31 @@ async function getSheetIdByTitle(auth, spreadsheetId, sheetTitle) {
     return sheet ? sheet.properties.sheetId : null;
 }
 
-// Get Google Sheets client
-function getSheetsClient(auth) {
-    return google.sheets({ version: 'v4', auth });
-}
-
-// Convert Wix image links to a usable format for Google Sheets
+// ------------------- Convert Wix Image Link -------------------
+// Converts Wix image links to a format usable in Google Sheets.
 function convertWixImageLinkForSheets(wixLink) {
     const regex = /wix:image:\/\/v1\/([^/]+)\/[^#]+/;
     const match = wixLink.match(regex);
     return match ? `https://static.wixstatic.com/media/${match[1]}` : wixLink;
 }
 
-// Delete inventory data for a character from Google Sheets
+// ------------------- Delete Inventory Sheet Data -------------------
+// Deletes inventory data for a character from Google Sheets by clearing specific cells.
 async function deleteInventorySheetData(spreadsheetId, characterName) {
     const auth = await authorizeSheets();
-    const sheets = google.sheets({ version: 'v4', auth });
-
+    const sheetsClient = google.sheets({ version: 'v4', auth });
     try {
         const sheet = await makeApiRequest(() =>
-            sheets.spreadsheets.values.get({
+            sheetsClient.spreadsheets.values.get({
                 auth,
                 spreadsheetId,
                 range: 'loggedInventory!A2:M',
             })
         );
-
         const rows = sheet.data.values;
         if (!rows || rows.length === 0) {
             throw new Error('No data found.');
         }
-
         const updateRequests = rows.map((row, index) => {
             if (row[0] === characterName) {
                 const updateData = ['', '', '', '', '', '', '', '', '', 'Item Deleted from Inventory'];
@@ -257,13 +259,11 @@ async function deleteInventorySheetData(spreadsheetId, characterName) {
             }
             return null;
         }).filter(request => request !== null);
-
         if (updateRequests.length === 0) {
             return `❌ **Character ${characterName} not found in the sheet.**`;
         }
-
         await makeApiRequest(() =>
-            sheets.spreadsheets.values.batchUpdate({
+            sheetsClient.spreadsheets.values.batchUpdate({
                 auth,
                 spreadsheetId,
                 resource: {
@@ -272,7 +272,6 @@ async function deleteInventorySheetData(spreadsheetId, characterName) {
                 }
             })
         );
-
         return `✅ **Specific inventory data for character ${characterName} deleted from Google Sheets.**`;
     } catch (error) {
         logErrorDetails(error);
@@ -280,13 +279,15 @@ async function deleteInventorySheetData(spreadsheetId, characterName) {
     }
 }
 
-// Validate Google Sheets URL
+// ------------------- URL Validation and Parsing -------------------
+// Validates if a URL is a proper Google Sheets URL.
 function isValidGoogleSheetsUrl(url) {
     const regex = /^https:\/\/docs\.google\.com\/spreadsheets\/d\/[a-zA-Z0-9-_]+\/(edit|view)(\?[^#]+)?(#.+)?$/;
     return regex.test(url);
 }
 
-// Extract Spreadsheet ID from URL
+// ------------------- Extract Spreadsheet ID -------------------
+// Extracts the Spreadsheet ID from a Google Sheets URL.
 function extractSpreadsheetId(url) {
     if (typeof url !== 'string') {
         throw new Error('Invalid URL: URL must be a string');
@@ -296,32 +297,43 @@ function extractSpreadsheetId(url) {
     return match ? match[1] : null;
 }
 
-// ------------------- Error Logging -------------------
-// Logs error details to the console
+// ============================================================================
+// Error Logging
+// ------------------- Log Error Details -------------------
+// Logs error details to the console with a consistent format.
 function logErrorDetails(error) {
-    console.error('❌ Error details:', error);
+    console.error(`[googleSheetsUtils.js]: logs`, error);
 }
 
-
-// ------------------- Export Functions -------------------
-// Exporting all functions for external use
+// ============================================================================
+// Exported Functions
+// ------------------- Export functions grouped by functionality -------------------
 module.exports = {
+    // Authorization
     authorizeSheets,
+    
+    // Reading functions
     fetchSheetData,
+    readSheetData,
+    fetchDataFromSheet,
+    clearSheetFormatting,
+    
+    // Writing functions
     appendSheetData,
     writeSheetData,
     writeBatchData,
-    getSheetsClient,
-    readSheetData,
-    clearSheetFormatting,
-    getSheetIdByName,
-    convertWixImageLinkForSheets,
-    deleteInventorySheetData,
-    isValidGoogleSheetsUrl,
-    extractSpreadsheetId,
-    getSheetIdByTitle,
-    logErrorDetails,
-    fetchDataFromSheet,
     updateDataInSheet,
     appendDataToSheet,
+    
+    // Utility functions
+    getSheetsClient,
+    getSheetIdByName,
+    getSheetIdByTitle,
+    isValidGoogleSheetsUrl,
+    extractSpreadsheetId,
+    convertWixImageLinkForSheets,
+    deleteInventorySheetData,
+    
+    // Error logging
+    logErrorDetails
 };

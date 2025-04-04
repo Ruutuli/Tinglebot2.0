@@ -1,18 +1,38 @@
-// ------------------- Import Statements -------------------
-// Group imports by type: standard libraries, third-party modules, local modules
+// ------------------- validation.js -------------------
+// This module provides various validation functions for the application,
+// including database connection functions, character validation, URL and image validation,
+// and utility functions for converting measurements.
+
+// ============================================================================
+// Standard Libraries & Third-Party Modules
+// ------------------- Importing standard and third-party modules -------------------
 const mongoose = require('mongoose');
+
+// ============================================================================
+// Database Models
+// ------------------- Importing database models -------------------
 const Character = require('../models/CharacterModel');
+
+// ============================================================================
+// Modules
+// ------------------- Importing custom modules -------------------
 const { isVillageExclusiveJob } = require('../modules/jobsModule');
 const { isValidVillage } = require('../modules/locationsModule');
 const { isValidRace, getRaceValueByName } = require('../modules/raceModule');
 const { capitalizeFirstLetter } = require('../modules/formattingModule');
 
+
+// ============================================================================
+// Environment Variables
 // ------------------- Database URIs from Environment Variables -------------------
 const tinglebotUri = process.env.MONGODB_TINGLEBOT_URI;
 const inventoriesUri = process.env.MONGODB_INVENTORIES_URI;
 
-// ------------------- Database Connection Functions -------------------
-// Ensure the Mongoose connection is established for the Tinglebot database
+
+// ============================================================================
+// Database Connection Functions
+// ------------------- Tinglebot Database Connection -------------------
+// Ensures that the Mongoose connection is established for the Tinglebot database.
 async function ensureTinglebotConnection() {
     if (mongoose.connection.readyState === 0) {
         try {
@@ -24,7 +44,8 @@ async function ensureTinglebotConnection() {
     }
 }
 
-// Ensure the Mongoose connection is established for the Inventories database
+// ------------------- Inventories Database Connection -------------------
+// Ensures that the Mongoose connection is established for the Inventories database.
 async function ensureInventoriesConnection() {
     try {
         const inventoriesConnection = mongoose.createConnection(inventoriesUri, {}); // Add connection options here if needed
@@ -44,7 +65,8 @@ async function ensureInventoriesConnection() {
     }
 }
 
-// Ensure the collection exists in the database
+// ------------------- Ensure Collection Exists -------------------
+// Ensures that the specified collection exists in the given database connection.
 async function ensureCollectionExists(dbConnection, collectionName) {
     try {
         const db = dbConnection.db;
@@ -61,8 +83,11 @@ async function ensureCollectionExists(dbConnection, collectionName) {
     }
 }
 
-// ------------------- Character Validation Functions -------------------
-// Check if the character name is unique for a user
+
+// ============================================================================
+// Character Validation Functions
+// ------------------- Unique Character Name Check -------------------
+// Checks if the given character name is unique for the specified user.
 async function isUniqueCharacterName(userId, characterName) {
     try {
         const existingCharacter = await Character.findOne({ userId, name: characterName });
@@ -73,7 +98,8 @@ async function isUniqueCharacterName(userId, characterName) {
     }
 }
 
-// Check if a character can change their village
+// ------------------- Village Change Validation -------------------
+// Checks if a character can change their village based on their job restrictions.
 async function canChangeVillage(character, newVillage) {
     if (!isValidVillage(newVillage)) {
         return { valid: false, message: '❌ Invalid village specified.' };
@@ -89,7 +115,8 @@ async function canChangeVillage(character, newVillage) {
     } : { valid: true, message: '' };
 }
 
-// Check if a character can change their job
+// ------------------- Job Change Validation -------------------
+// Checks if a character can change their job based on home village restrictions.
 async function canChangeJob(character, newJob) {
     if (!character || !newJob) {
         console.error('[validation.js]: Character or job information is missing.');
@@ -119,20 +146,27 @@ async function canChangeJob(character, newJob) {
     return { valid: true, message: '' };
 }
 
-// ------------------- Inventory Validation Functions -------------------
-// Validate the character's inventory
+
+// ============================================================================
+// Inventory Validation Functions
+// ------------------- Validate Character Inventory -------------------
+// Validates that the character's inventory is an array and that each item has a name and quantity.
 function validateCharacterInventory(inventory) {
     return Array.isArray(inventory) && inventory.every(item => item.name && item.quantity);
 }
 
-// ------------------- URL Validation Functions -------------------
-// Validate if a given URL is a valid Google Sheets URL
+
+// ============================================================================
+// URL Validation Functions
+// ------------------- Google Sheets URL Validation -------------------
+// Checks if a given URL is a valid Google Sheets URL.
 function isValidGoogleSheetsUrl(url) {
     const regex = /^https:\/\/docs\.google\.com\/spreadsheets\/d\/[a-zA-Z0-9-_]+\/(edit|view)(\?[^#]+)?(#.+)?$/;
-    return regex.test(url); // Validate the URL passed as an argument
+    return regex.test(url);
 }
 
-// Extract the spreadsheet ID from a Google Sheets URL
+// ------------------- Extract Spreadsheet ID -------------------
+// Extracts the spreadsheet ID from a valid Google Sheets URL.
 function extractSpreadsheetId(url) {
     if (typeof url !== 'string') {
         throw new Error('Invalid URL: URL must be a string');
@@ -142,14 +176,20 @@ function extractSpreadsheetId(url) {
     return match ? match[1] : null;
 }
 
-// ------------------- Image Validation Functions -------------------
-// Function to check if a URL is a valid image URL
+
+// ============================================================================
+// Image Validation Functions
+// ------------------- Validate Image URL -------------------
+// Checks if a URL is a valid image URL (supports jpeg, jpg, gif, and png).
 const isValidImageUrl = (url) => {
     return /\.(jpeg|jpg|gif|png)$/.test(url);
 };
 
-// ------------------- Utility Functions -------------------
-// Convert height in cm to feet and inches
+
+// ============================================================================
+// Utility Functions
+// ------------------- Convert Centimeters to Feet & Inches -------------------
+// Converts a height in centimeters to a formatted string in feet and inches.
 function convertCmToFeetInches(cm) {
     const totalInches = cm / 2.54;
     let feet = Math.floor(totalInches / 12);
@@ -163,8 +203,10 @@ function convertCmToFeetInches(cm) {
     return `${feet}'${inches < 10 ? '0' : ''}${inches}"`;
 }
 
-// ------------------- Module Exports -------------------
-// Export all functions to be used in other modules
+
+// ============================================================================
+// Module Exports
+// ------------------- Exporting all validation functions -------------------
 module.exports = {
     ensureTinglebotConnection,
     ensureInventoriesConnection,
