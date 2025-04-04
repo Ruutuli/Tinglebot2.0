@@ -1,49 +1,64 @@
-const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const {
-  fetchCharacterByNameAndUserId,
-  fetchCharacterByName,
-  getCharacterInventoryCollection,
-} = require('../database/characterService');
-const {
-  authorizeSheets,
-  appendSheetData,
-  isValidGoogleSheetsUrl,
-  extractSpreadsheetId,
-} = require('../utils/googleSheetsUtils');
+// ------------------- Standard Libraries -------------------
+// Used for generating unique identifiers.
 const { v4: uuidv4 } = require('uuid');
-const ItemModel = require('../models/ItemModel');
-const { addItemInventoryDatabase, removeItemInventoryDatabase } = require('../utils/inventoryUtils');
+
+
+// ------------------- Discord.js Components -------------------
+// Components for building slash commands and button interactions.
+const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+
+
+// ------------------- Database Services -------------------
+// Service functions for fetching character data and inventory collections.
+const { fetchCharacterByNameAndUserId, fetchCharacterByName, getCharacterInventoryCollection } = require('../database/characterService');
+
+
+// ------------------- Modules -------------------
+// Custom modules for creating embed messages and handling autocomplete.
 const { createTradeEmbed } = require('../embeds/mechanicEmbeds');
 const { handleTradeAutocomplete } = require('../handlers/autocompleteHandler');
 
+
+// ------------------- Utility Functions -------------------
+// Helper functions for modifying character inventories.
+const { addItemInventoryDatabase, removeItemInventoryDatabase } = require('../utils/inventoryUtils');
+
+
+// ------------------- Database Models -------------------
+// Model representing item data.
+const ItemModel = require('../models/ItemModel');
+
+
+// ------------------- Google Sheets API -------------------
+// Utility functions for working with Google Sheets.
+const { authorizeSheets, appendSheetData, isValidGoogleSheetsUrl, extractSpreadsheetId } = require('../utils/googleSheetsUtils');
+
+
+// ------------------- Constants and Global Variables -------------------
+// Default emoji for items without a defined icon.
 const DEFAULT_EMOJI = '🔹';
+// Object to track active trade sessions.
 const tradeSessions = {};
 
-/**
- * Retrieves the emoji for a given item name.
- * @param {string} itemName - The name of the item.
- * @returns {string} The emoji for the item.
- */
+
+// ------------------- Helper Function: getItemEmoji -------------------
+// Retrieves the emoji associated with an item. Returns DEFAULT_EMOJI if none is found.
 async function getItemEmoji(itemName) {
   const item = await ItemModel.findOne({ itemName }).select('emoji').exec();
   return item && item.emoji ? item.emoji : DEFAULT_EMOJI;
 }
 
-/**
- * Removes circular references from an object.
- * @param {object} obj - The object to process.
- * @param {WeakSet} [seen=new WeakSet()] - A set of seen objects to avoid circular references.
- * @returns {object} The object with circular references removed.
- */
+
+// ------------------- Helper Function: removeCircularReferences -------------------
+// Recursively removes circular references from an object to safely serialize it.
 function removeCircularReferences(obj, seen = new WeakSet()) {
   if (obj && typeof obj === 'object') {
     if (seen.has(obj)) {
       return;
     }
     seen.add(obj);
-
     for (const key in obj) {
-      if (obj.hasOwnProperty(key)) {
+      if (Object.prototype.hasOwnProperty.call(obj, key)) {
         obj[key] = removeCircularReferences(obj[key], seen);
       }
     }
@@ -51,6 +66,9 @@ function removeCircularReferences(obj, seen = new WeakSet()) {
   return obj;
 }
 
+
+// ------------------- Slash Command Definition for Trade -------------------
+// Defines the /trade command along with its options for trading items between characters.
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('trade')
@@ -106,6 +124,9 @@ module.exports = {
         .setRequired(false)
     ),
 
+  // ------------------- Main Execution Function for Trade Command -------------------
+  // Handles the execution of the trade command by processing input, verifying inventories,
+  // performing the trade, logging data to Google Sheets, and updating trade sessions.
   async execute(interaction) {
     const characterName = interaction.options.getString('fromcharacter');
     const item1 = interaction.options.getString('item1');
@@ -121,6 +142,8 @@ module.exports = {
     try {
       await interaction.deferReply({ ephemeral: false });
 
+      // ------------------- Fetch Characters -------------------
+      // Retrieve source and target characters based on provided names and verify ownership.
       const fromCharacter = await fetchCharacterByNameAndUserId(characterName, userId);
       if (!fromCharacter) {
         await interaction.editReply({ content: `❌ Character \`${characterName}\` not found or does not belong to you.` });
@@ -133,38 +156,39 @@ module.exports = {
         return;
       }
 
-      // Check if the fromCharacter's inventory has been synced
-if (!fromCharacter.inventorySynced) {
-  return interaction.editReply({
-      content: `❌ **You cannot trade items from \`${characterName}\` because their inventory is not set up yet. Please use the </testinventorysetup:1306176790095728732> and then </syncinventory:1306176789894266898> commands to initialize the inventory.**`,
-      ephemeral: true,
-  });
-}
+      // ------------------- Inventory Sync Check -------------------
+      // Ensure both characters have synchronized inventories before proceeding.
+      if (!fromCharacter.inventorySynced) {
+        return interaction.editReply({
+          content: `❌ **You cannot trade items from \`${characterName}\` because their inventory is not set up yet. Please use the </testinventorysetup:1306176790095728732> and then </syncinventory:1306176789894266898> commands to initialize the inventory.**`,
+          ephemeral: true,
+        });
+      }
 
-// Check if the toCharacter's inventory has been synced
-if (!toCharacter.inventorySynced) {
-  return interaction.editReply({
-      content: `❌ **You cannot trade items to \`${tradingWithName}\` because their inventory is not set up yet.**`,
-      ephemeral: true,
-  });
-}
+      if (!toCharacter.inventorySynced) {
+        return interaction.editReply({
+          content: `❌ **You cannot trade items to \`${tradingWithName}\` because their inventory is not set up yet.**`,
+          ephemeral: true,
+        });
+      }
 
-
+      // ------------------- Trade Completion Flow -------------------
+      // If a trade ID is provided, complete an existing trade session.
       if (tradeId) {
-        // Complete the trade
         const tradeSession = tradeSessions[tradeId];
         if (!tradeSession) {
           await interaction.editReply({ content: `❌ Invalid Trade ID.` });
           return;
         }
 
-        // Verify the trade
+        // Verify that the trade was initiated by the same character.
         if (tradeSession.tradingWithCharacterName !== characterName) {
           await interaction.editReply({ content: `❌ Character mismatch. Trade ID was initiated with ${tradeSession.tradingWithCharacterName}.` });
           return;
         }
 
-        // Validate items
+        // ------------------- Validate Trade Items -------------------
+        // Build an array of items to trade and ensure none of them are currently equipped.
         const itemArray = [
           { name: item1, quantity: quantity1 },
           { name: item2, quantity: quantity2 },
@@ -185,6 +209,8 @@ if (!toCharacter.inventorySynced) {
           }
         }
 
+        // ------------------- Verify Inventory Quantities -------------------
+        // Check that the source character has enough of each item to trade.
         const characterInventoryCollection = await getCharacterInventoryCollection(fromCharacter.name);
         for (let item of itemArray) {
           const itemInventory = await characterInventoryCollection.findOne({ itemName: { $regex: new RegExp(`^${item.name}$`, 'i') } });
@@ -194,11 +220,14 @@ if (!toCharacter.inventorySynced) {
           }
         }
 
-// Adding/removing items to/from inventories
-for (let item of itemArray) {
-  await removeItemInventoryDatabase(fromCharacter._id, item.name, item.quantity, interaction);  // Pass interaction
-  await addItemInventoryDatabase(toCharacter._id, item.name, item.quantity, interaction);  // Pass interaction
-}
+        // ------------------- Update Inventories for Completed Trade -------------------
+        // Remove items from the source and add them to the destination character.
+        for (let item of itemArray) {
+          await removeItemInventoryDatabase(fromCharacter._id, item.name, item.quantity, interaction);
+          await addItemInventoryDatabase(toCharacter._id, item.name, item.quantity, interaction);
+        }
+
+        // Build arrays for embed display by retrieving item emojis.
         const fromItems = await Promise.all(tradeSession.items.map(async item => ({
           name: item.name,
           quantity: item.quantity,
@@ -213,6 +242,8 @@ for (let item of itemArray) {
         const fromCharacterIcon = fromCharacter.gearWeapon?.iconURL || '';
         const toCharacterIcon = tradeSession.character.gearWeapon?.iconURL || '';
 
+        // ------------------- Create Trade Embed -------------------
+        // Build an updated trade embed to reflect the completed trade.
         const updatedEmbedData = await createTradeEmbed(
           tradeSession.character,
           fromCharacter,
@@ -222,8 +253,6 @@ for (let item of itemArray) {
           fromCharacterIcon,
           toCharacterIcon
         );
-
-        // Update the embed description to the trade complete message
         updatedEmbedData.setDescription(`✅ Trade between **${fromCharacter.name}** and **${toCharacter.name}** has been complete!`);
 
         try {
@@ -233,9 +262,11 @@ for (let item of itemArray) {
             components: []
           });
         } catch (error) {
-          console.error('❌ Error editing trade message:', error);
+          console.error(`[trade.js:logs] Error editing trade message:`, error);
         }
 
+        // ------------------- Log Trade Data to Google Sheets -------------------
+        // Validate Google Sheets URLs and log trade details for both characters.
         const fromInventoryLink = fromCharacter.inventory || fromCharacter.inventoryLink;
         const toInventoryLink = tradeSession.character.inventory || tradeSession.character.inventoryLink;
 
@@ -252,48 +283,47 @@ for (let item of itemArray) {
         const formattedDateTime = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
         const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
 
+        // Helper function to append data to Google Sheets.
         const appendData = async (character, itemName, quantity, action, spreadsheetId) => {
           const itemInventory = await characterInventoryCollection.findOne({ itemName: { $regex: new RegExp(`^${itemName}$`, 'i') } });
           const category = itemInventory && itemInventory.category ? (Array.isArray(itemInventory.category) ? itemInventory.category.join(', ') : itemInventory.category) : '';
           const type = itemInventory && itemInventory.type ? (Array.isArray(itemInventory.type) ? itemInventory.type.join(', ') : itemInventory.type) : '';
           const subtype = itemInventory && itemInventory.subtype ? (Array.isArray(itemInventory.subtype) ? itemInventory.subtype.join(', ') : itemInventory.subtype) : '';
-
-          const values = [
-            [
-              character.name,
-              itemName,
-              quantity.toString(),
-              category,
-              type,
-              subtype,
-              action,
-              character.job,
-              '',
-              character.currentVillage,
-              interactionUrl,
-              formattedDateTime,
-              uniqueSyncId,
-            ],
-          ];
+          const values = [[
+            character.name,
+            itemName,
+            quantity.toString(),
+            category,
+            type,
+            subtype,
+            action,
+            character.job,
+            '',
+            character.currentVillage,
+            interactionUrl,
+            formattedDateTime,
+            uniqueSyncId,
+          ]];
           await appendSheetData(auth, spreadsheetId, range, values);
         };
 
+        // Log trade actions for items in the original trade session.
         for (let item of tradeSession.items) {
           await appendData(tradeSession.character, item.name, -item.quantity, `Trade to ${fromCharacter.name}`, toSpreadsheetId);
           await appendData(fromCharacter, item.name, item.quantity, `Trade with ${tradeSession.character.name}`, fromSpreadsheetId);
         }
-
+        // Log trade actions for newly traded items.
         for (let item of itemArray) {
           await appendData(fromCharacter, item.name, -item.quantity, `Trade to ${tradeSession.character.name}`, fromSpreadsheetId);
           await appendData(tradeSession.character, item.name, item.quantity, `Trade with ${fromCharacter.name}`, toSpreadsheetId);
         }
 
         delete tradeSessions[tradeId];
-
         await interaction.editReply({ content: `✅ Trade Complete ✅` });
 
       } else {
-        // Initiate a new trade
+        // ------------------- Initiate a New Trade -------------------
+        // Build an array of items to trade and verify they are not equipped.
         const itemArray = [
           { name: item1, quantity: quantity1 },
           { name: item2, quantity: quantity2 },
@@ -314,11 +344,13 @@ for (let item of itemArray) {
           }
         }
 
+        // Ensure both characters are in the same village.
         if (fromCharacter.currentVillage.trim().toLowerCase() !== toCharacter.currentVillage.trim().toLowerCase()) {
           await interaction.editReply({ content: `❌ Both characters must be in the same village to perform the trade. ${fromCharacter.name} is currently in ${fromCharacter.currentVillage} and ${toCharacter.name} is currently in ${toCharacter.currentVillage}.` });
           return;
         }
 
+        // Verify inventory quantities for the trade.
         const characterInventoryCollection = await getCharacterInventoryCollection(fromCharacter.name);
         for (let item of itemArray) {
           const itemInventory = await characterInventoryCollection.findOne({
@@ -332,13 +364,15 @@ for (let item of itemArray) {
           }
         }
 
-        const shortTradeId = uuidv4().split('-')[0]; // Generate short trade ID
+        // Generate a short trade ID.
+        const shortTradeId = uuidv4().split('-')[0];
         const fromItems = await Promise.all(itemArray.map(async item => ({
           name: item.name,
           quantity: item.quantity,
           emoji: await getItemEmoji(item.name)
         })));
 
+        // Create the initial trade embed.
         const tradeEmbedData = await createTradeEmbed(
           fromCharacter,
           toCharacter,
@@ -356,6 +390,7 @@ for (let item of itemArray) {
 
         const tradeMessage = await interaction.fetchReply();
 
+        // Store the new trade session.
         tradeSessions[shortTradeId] = {
           character: fromCharacter,
           tradingWithCharacterName: toCharacter.name,
@@ -363,7 +398,8 @@ for (let item of itemArray) {
           tradeMessage,
         };
 
-        // Set a timeout for the trade session
+        // ------------------- Set Trade Session Timeout -------------------
+        // Cancel the trade if not completed within 15 minutes.
         setTimeout(async () => {
           const tradeSession = tradeSessions[shortTradeId];
           if (tradeSession) {
@@ -374,29 +410,33 @@ for (let item of itemArray) {
                 components: []
               });
             } catch (error) {
-              console.error('❌ Error editing trade message:', error);
+              console.error(`[trade.js:logs] Error editing trade message during timeout:`, error);
             }
             delete tradeSessions[shortTradeId];
           }
-        }, 900000); // 15 minutes
+        }, 900000); // 15 minutes in milliseconds
       }
 
     } catch (error) {
-      console.error('❌ Error executing trade command:', error);
+      console.error(`[trade.js:logs] Error executing trade command:`, error);
       try {
         await interaction.editReply({ content: '❌ An error occurred while trying to execute the trade.' });
       } catch (replyError) {
-        console.error('❌ Error sending follow-up message:', replyError);
+        console.error(`[trade.js:logs] Error sending follow-up message:`, replyError);
       }
     }
   },
 
+  // ------------------- Autocomplete Handler for Trade Command -------------------
+  // Routes autocomplete requests to the designated handler.
   async autocomplete(interaction) {
     await handleTradeAutocomplete(interaction);
   },
 };
 
-// Handler for button interactions
+
+// ------------------- Button Interaction Handler for Trade -------------------
+// Handles button interactions to complete a trade session.
 module.exports.buttonHandler = async (interaction) => {
   if (interaction.customId.startsWith('completeTrade-')) {
     const tradeSessionId = interaction.customId.split('-')[1];
@@ -425,7 +465,8 @@ module.exports.buttonHandler = async (interaction) => {
       }
     }
 
-    // Remove items from both users' inventories and add to respective other
+    // ------------------- Process Trade via Button Interaction -------------------
+    // Remove and add items between inventories for both trade parties.
     for (let item of items) {
       await removeItemInventoryDatabase(character._id, item.name, item.quantity, interaction);
       await addItemInventoryDatabase(userCharacter._id, item.name, item.quantity, '', '', removeCircularReferences(interaction), 'trade');
@@ -460,7 +501,6 @@ module.exports.buttonHandler = async (interaction) => {
       toCharacterIcon
     );
 
-    // Update the embed description to the trade complete message
     updatedEmbedData.setDescription(`✅ Trade between **${character.name}** and **${userCharacter.name}** has been complete!`);
 
     try {
@@ -470,19 +510,10 @@ module.exports.buttonHandler = async (interaction) => {
         components: []
       });
     } catch (error) {
-      console.error('❌ Error editing trade message:', error);
+      console.error(`[trade.js:logs] Error editing trade message:`, error);
     }
 
     delete tradeSessions[tradeSessionId];
     await interaction.followUp({ content: `✅ Trade completed successfully!` });
   }
 };
-
-/* 
-Notes:
-1. Fixed error related to setting the description to an empty string.
-2. Added the message "Trade between fromcharacter and tocharacter has been complete!" upon trade completion.
-3. Updated the embed message to reflect the same.
-4. Organized imports and functions for better readability.
-5. Improved error handling and logging messages.
-*/

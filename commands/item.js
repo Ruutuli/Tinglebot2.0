@@ -1,49 +1,78 @@
-// ------------------- Import necessary modules -------------------
-const { SlashCommandBuilder  } = require('@discordjs/builders');
-const { EmbedBuilder } = require('discord.js');
-const { 
-    fetchCharacterByNameAndUserId, 
-    updateCharacterById, 
-    getCharacterInventoryCollection 
-} = require('../database/characterService');
-const { fetchItemByName } = require('../database/itemService');
-const { updateCurrentHearts, healKoCharacter, updateCurrentStamina } = require('../modules/characterStatsModule');
-const { removeItemInventoryDatabase } = require('../utils/inventoryUtils');
-const { getJobPerk } = require('../modules/jobsModule');
-const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../utils/validation');
-const { authorizeSheets, appendSheetData } = require('../utils/googleSheetsUtils');
-const { capitalizeWords } = require('../modules/formattingModule');
-const initializeInventoryModel = require('../models/InventoryModel');
-const { getVillageEmojiByName } = require('../modules/locationsModule');
+// ------------------- Standard Libraries -------------------
+// Used for generating unique identifiers.
 const { v4: uuidv4 } = require('uuid');
 
+
+// ------------------- Discord.js Components -------------------
+// Components for building slash commands and rich embed messages.
+const { SlashCommandBuilder } = require('@discordjs/builders');
+const { EmbedBuilder } = require('discord.js');
+
+
+// ------------------- Database Services -------------------
+// Service modules for character and item operations.
+const { fetchCharacterByNameAndUserId, updateCharacterById, getCharacterInventoryCollection } = require('../database/characterService');
+const { fetchItemByName } = require('../database/itemService');
+
+
+// ------------------- Modules -------------------
+// Custom modules for character statistics, jobs, formatting, and location information.
+const { updateCurrentHearts, healKoCharacter, updateCurrentStamina } = require('../modules/characterStatsModule');
+const { getJobPerk } = require('../modules/jobsModule');
+const { capitalizeWords } = require('../modules/formattingModule');
+const { getVillageEmojiByName } = require('../modules/locationsModule');
+
+
+// ------------------- Utility Functions -------------------
+// Inventory utility functions.
+const { removeItemInventoryDatabase } = require('../utils/inventoryUtils');
+
+
+// ------------------- Google Sheets API -------------------
+// Functions for integrating with Google Sheets.
+const { authorizeSheets, appendSheetData } = require('../utils/googleSheetsUtils');
+const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../utils/validation');
+
+
+// ------------------- Database Models -------------------
+// Model representing item data.
+const ItemModel = require('../models/ItemModel');
+
+
 // ------------------- Main Command Module -------------------
+// This module defines the /item command for using items (e.g., healing or job vouchers).
 module.exports = {
     data: new SlashCommandBuilder()
-    .setName('item')
-    .setDescription('Use an item for various purposes')
-    .addStringOption(option =>
-        option.setName('charactername')
-            .setDescription('The name of your character')
-            .setRequired(true)
-            .setAutocomplete(true))
-    .addStringOption(option =>
-        option.setName('itemname')
-            .setDescription('The item to use')
-            .setRequired(true)
-            .setAutocomplete(true))
-    .addIntegerOption(option =>
-        option.setName('quantity')
-            .setDescription('The number of items to use')
-            .setRequired(false)
-            .setMinValue(1))
-    .addStringOption(option =>
-        option.setName('jobname')
-            .setDescription('The job to perform using the voucher')
-            .setRequired(false)
-            .setAutocomplete(true)),      
+        .setName('item')
+        .setDescription('Use an item for various purposes')
+        .addStringOption(option =>
+            option.setName('charactername')
+                .setDescription('The name of your character')
+                .setRequired(true)
+                .setAutocomplete(true)
+        )
+        .addStringOption(option =>
+            option.setName('itemname')
+                .setDescription('The item to use')
+                .setRequired(true)
+                .setAutocomplete(true)
+        )
+        .addIntegerOption(option =>
+            option.setName('quantity')
+                .setDescription('The number of items to use')
+                .setRequired(false)
+                .setMinValue(1)
+        )
+        .addStringOption(option =>
+            option.setName('jobname')
+                .setDescription('The job to perform using the voucher')
+                .setRequired(false)
+                .setAutocomplete(true)
+        ),
 
-    // ------------------- Main execute function for item healing -------------------
+    // ------------------- Execute Function for Item Command -------------------
+    // Handles the execution of the item command, including healing logic, job voucher activation,
+    // and various validations such as debuff, KO status, and inventory sync.
     async execute(interaction) {
         await interaction.deferReply();
 
@@ -66,6 +95,7 @@ module.exports = {
                 return;
             }
 
+            // ------------------- Job Voucher Handling -------------------
             if (item.itemName.toLowerCase() === 'job voucher') {
                 if (character.jobVoucher === true) {
                     await interaction.editReply({
@@ -84,42 +114,35 @@ module.exports = {
                     return;
                 }
             
-                // Activate job voucher and set the job
+                // Activate the job voucher and set the associated job.
                 character.jobVoucher = true;
                 character.jobVoucherJob = jobName;
                 await updateCharacterById(character._id, { jobVoucher: true, jobVoucherJob: jobName });
             
-                // Do not remove the voucher from the inventory database
+                // Do not remove the voucher from the inventory.
                 const inventoryCollection = await getCharacterInventoryCollection(character.name);
             
-                // Capitalize the current village
+                // Format current village information.
                 const currentVillage = capitalizeWords(character.currentVillage || 'Unknown');
-            
-                // Get the emoji for the current village
                 const villageEmoji = getVillageEmojiByName(currentVillage) || '🌍';
             
-                // Fetch the perk for the specified job
+                // Retrieve job perk information.
                 const jobPerkInfo = getJobPerk(jobName);
-            
                 let perkDescription = '';
                 if (jobPerkInfo) {
-                    const { perks, village } = jobPerkInfo;
-            
-                    // Determine the job and perk description
+                    const { perks } = jobPerkInfo;
                     if (perks.length > 0) {
                         perkDescription = `**${character.name}** has used a Job Voucher to perform the **${perks.join(' Perk ')}** job, **${jobName}**.`;
                     } else {
                         perkDescription = `**${character.name}** has used a Job Voucher to perform the **${jobName}** job.`;
                     }
-            
-                    // Conditionally include commands based on unlocked perks
+                    // Include related commands based on unlocked perks.
                     const commands = [
                         perks.includes('GATHERING') ? '> </gather:1306176789755858974>' : null,
                         perks.includes('CRAFTING') ? '> </crafting:1306176789634355242>' : null,
                         perks.includes('LOOTING') ? '> </loot:1316682863143424121>' : null,
                         perks.includes('HEALING') ? '> </heal fufill:1306176789755858977>' : null
-                    ].filter(Boolean); // Remove null values
-            
+                    ].filter(Boolean);
                     if (commands.length) {
                         perkDescription += `\n\nUse the following commands to make the most of this Job Voucher:\n${commands.join('\n')}`;
                     }
@@ -127,25 +150,24 @@ module.exports = {
                     perkDescription = `**${character.name}** has used a Job Voucher to perform the job **${jobName}**.`;
                 }
             
-                // ------------------- Embed Configuration -------------------
-                const embed = new EmbedBuilder()
-                    .setColor('#FFD700') // Gold color for the embed
+                // ------------------- Job Voucher Embed Configuration -------------------
+                const voucherEmbed = new EmbedBuilder()
+                    .setColor('#FFD700') // Gold color for job vouchers.
                     .setTitle('🎫 Job Voucher Activated!')
                     .setDescription(perkDescription)
                     .addFields(
                         { name: `${villageEmoji} Current Village`, value: `**${currentVillage}**`, inline: true },
                         { name: '🏷️ Normal Job', value: `**${character.job || "Unemployed"}**`, inline: true }
                     )
-                    .setThumbnail(item.image || 'https://via.placeholder.com/150') // Thumbnail for the item
-                    .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png') // Large image for the embed
+                    .setThumbnail(item.image || 'https://via.placeholder.com/150')
+                    .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
                     .setFooter({ text: '✨ Good luck in your new role! Make the most of this opportunity!' });
             
-                // Send the updated embed
-                await interaction.editReply({ embeds: [embed], ephemeral: true });
+                await interaction.editReply({ embeds: [voucherEmbed], ephemeral: true });
                 return;
             }
                      
-                  
+            // ------------------- Debuff Check -------------------
             if (character.debuff?.active) {
                 const debuffEndDate = new Date(character.debuff.endDate);
                 const unixTimestamp = Math.floor(debuffEndDate.getTime() / 1000);
@@ -154,8 +176,9 @@ module.exports = {
                     ephemeral: true,
                 });
                 return;
-              }
+            }
 
+            // ------------------- Inventory Sync Check -------------------
             if (!character.inventorySynced) {
                 return interaction.editReply({
                     content: `❌ **Inventory not set up. Please initialize and sync the inventory before using items.**`,
@@ -163,31 +186,29 @@ module.exports = {
                 });
             }
 
-            // ------------------- Handle KO status -------------------
+            // ------------------- KO Status Handling -------------------
             if (character.ko && item.itemName.toLowerCase() !== 'fairy') {
                 const errorEmbed = new EmbedBuilder()
                     .setColor('#FF0000')
                     .setTitle('⚠️ Healing Failed ⚠️')
                     .setDescription(`**${item.itemName}** cannot be used to recover from KO. Please use a Fairy or request services from a Healer.`)
                     .setFooter({ text: 'Healing Error' });
-
                 await interaction.editReply({ embeds: [errorEmbed], ephemeral: true });
                 return;
             }
 
-            // ------------------- Check if character is at max hearts -------------------
+            // ------------------- Max Health Check -------------------
             if (character.currentHearts >= character.maxHearts && !item.staminaRecovered) {
                 const errorEmbed = new EmbedBuilder()
                     .setColor('#FF0000')
                     .setTitle('⚠️ Healing Failed ⚠️')
                     .setDescription(`${character.name} is already at maximum health.`)
                     .setFooter({ text: 'Healing Error' });
-
                 await interaction.editReply({ embeds: [errorEmbed], ephemeral: true });
                 return;
             }
 
-            // ------------------- Validate if the item can be used for healing -------------------
+            // ------------------- Restricted Items Check -------------------
             const restrictedItems = ['oil jar', 'goron spice'];
             if (restrictedItems.includes(item.itemName.toLowerCase())) {
                 const embed = new EmbedBuilder()
@@ -196,7 +217,6 @@ module.exports = {
                     .setColor('#FF6347')
                     .setThumbnail(item.image)
                     .setFooter({ text: 'Stick to proper healing items!' });
-
                 await interaction.editReply({ embeds: [embed], ephemeral: true });
                 return;
             }
@@ -205,26 +225,27 @@ module.exports = {
             let healAmount = 0;
             let staminaRecovered = 0;
 
-// ------------------- Healing Logic -------------------
-if (character.ko && item.itemName.toLowerCase() === 'fairy') {
-    await healKoCharacter(character._id);
-    character.currentHearts = character.maxHearts;
-    await updateCurrentHearts(character._id, character.currentHearts);
-    await interaction.editReply({ content: `💫 ${character.name} has been revived and fully healed using a ${item.itemName}!`, ephemeral: false });
-    return;
-  } else if (character.ko) {
-    await interaction.editReply({
-      content: `❌ ${item.itemName} cannot revive a KO'd character. Use a Fairy or consult a Healer.`,
-      ephemeral: true,
-    });
-    return;
-  }
+            // ------------------- KO Healing Logic -------------------
+            if (character.ko && item.itemName.toLowerCase() === 'fairy') {
+                await healKoCharacter(character._id);
+                character.currentHearts = character.maxHearts;
+                await updateCurrentHearts(character._id, character.currentHearts);
+                await interaction.editReply({ content: `💫 ${character.name} has been revived and fully healed using a ${item.itemName}!`, ephemeral: false });
+                return;
+            } else if (character.ko) {
+                await interaction.editReply({
+                    content: `❌ ${item.itemName} cannot revive a KO'd character. Use a Fairy or consult a Healer.`,
+                    ephemeral: true,
+                });
+                return;
+            }
   
-  if (item.modifierHearts) {
-    healAmount = Math.min(item.modifierHearts * quantity, character.maxHearts - character.currentHearts);
-    character.currentHearts += healAmount;
-    await updateCurrentHearts(character._id, character.currentHearts);
-  }
+            // ------------------- Apply Healing and Stamina Recovery -------------------
+            if (item.modifierHearts) {
+                healAmount = Math.min(item.modifierHearts * quantity, character.maxHearts - character.currentHearts);
+                character.currentHearts += healAmount;
+                await updateCurrentHearts(character._id, character.currentHearts);
+            }
 
             if (item.staminaRecovered) {
                 staminaRecovered = Math.min(item.staminaRecovered * quantity, character.maxStamina - character.currentStamina);
@@ -232,9 +253,11 @@ if (character.ko && item.itemName.toLowerCase() === 'fairy') {
                 await updateCurrentStamina(character._id, character.currentStamina);
             }
 
+            // ------------------- Update Inventory -------------------
             const inventoryCollection = await getCharacterInventoryCollection(character.name);
             await removeItemInventoryDatabase(character._id, item.itemName, quantity, inventoryCollection);
 
+            // ------------------- Log Healing to Google Sheets -------------------
             if (isValidGoogleSheetsUrl(character.inventory || character.inventoryLink)) {
                 const spreadsheetId = extractSpreadsheetId(character.inventory || character.inventoryLink);
                 const auth = await authorizeSheets();
@@ -264,6 +287,7 @@ if (character.ko && item.itemName.toLowerCase() === 'fairy') {
                 await appendSheetData(auth, spreadsheetId, range, values);
             }
 
+            // ------------------- Build Healing Confirmation Embed -------------------
             let description = `**${character.name}** used **${item.itemName}** ${item.emoji || ''}`;
             if (healAmount > 0) {
                 description += ` to heal **${healAmount}** hearts!`;
@@ -272,7 +296,7 @@ if (character.ko && item.itemName.toLowerCase() === 'fairy') {
                 description += ` and recovered **${staminaRecovered}** stamina!`;
             }
 
-            const embed = new EmbedBuilder()
+            const confirmationEmbed = new EmbedBuilder()
                 .setColor('#59A914')
                 .setTitle('✬ Healing ✬')
                 .setAuthor({
@@ -294,10 +318,10 @@ if (character.ko && item.itemName.toLowerCase() === 'fairy') {
                 .setFooter({ text: 'Healing and Stamina Recovery Successful' })
                 .setThumbnail(item.image);
 
-            await interaction.editReply({ embeds: [embed] });
+            await interaction.editReply({ embeds: [confirmationEmbed] });
 
         } catch (error) {
-            console.error(`[itemheal.js]: Error during healing process: ${error.message}`);
+            console.error(`[item.js:logs] Error during healing process: ${error.message}`);
             await interaction.editReply({ content: `❌ An error occurred during the healing process.`, ephemeral: true });
         }
     }

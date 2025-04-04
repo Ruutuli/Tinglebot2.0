@@ -1,21 +1,42 @@
-// ------------------- Import necessary modules and services -------------------
-const { SlashCommandBuilder } = require('discord.js');
-const {
-  fetchCharacterByNameAndUserId,
-  getCharacterInventoryCollection,
-} = require('../database/characterService');
-const {
-  addItemInventoryDatabase,
-  removeItemInventoryDatabase,
-} = require('../utils/inventoryUtils');
-const { authorizeSheets, appendSheetData, isValidGoogleSheetsUrl, extractSpreadsheetId } = require('../utils/googleSheetsUtils');
+// ------------------- Standard Libraries -------------------
+// Used for generating unique identifiers.
 const { v4: uuidv4 } = require('uuid');
+
+
+// ------------------- Discord.js Components -------------------
+// Used to build and structure slash commands.
+const { SlashCommandBuilder } = require('discord.js');
+
+
+// ------------------- Database Services -------------------
+// Service functions for character-related operations.
+const { fetchCharacterByNameAndUserId, getCharacterInventoryCollection } = require('../database/characterService');
+
+
+// ------------------- Utility Functions -------------------
+// Inventory utility functions for modifying character inventories.
+const { addItemInventoryDatabase, removeItemInventoryDatabase } = require('../utils/inventoryUtils');
+
+
+// ------------------- Database Models -------------------
+// Model representing item data.
 const ItemModel = require('../models/ItemModel');
+
+
+// ------------------- Modules -------------------
+// Custom modules for creating embed messages and handling autocomplete.
 const { createTransferEmbed } = require('../embeds/mechanicEmbeds');
 const { handleTransferAutocomplete } = require('../handlers/autocompleteHandler');
 
+
+// ------------------- Google Sheets API -------------------
+// Utility functions for working with Google Sheets.
+const { authorizeSheets, appendSheetData, isValidGoogleSheetsUrl, extractSpreadsheetId } = require('../utils/googleSheetsUtils');
+
+
+// ------------------- Slash Command Definition for Item Transfer -------------------
+// This command transfers items between characters.
 module.exports = {
-  // ------------------- Slash command definition for transferring items -------------------
   data: new SlashCommandBuilder()
     .setName('transfer')
     .setDescription('Transfer items between characters')
@@ -23,65 +44,66 @@ module.exports = {
       option.setName('fromcharacter')
         .setDescription('The character transferring the items')
         .setRequired(true)
-        .setAutocomplete(true))
+        .setAutocomplete(true)
+    )
     .addStringOption(option =>
       option.setName('tocharacter')
         .setDescription('The character receiving the items')
         .setRequired(true)
-        .setAutocomplete(true))
+        .setAutocomplete(true)
+    )
     .addStringOption(option =>
       option.setName('itema')
         .setDescription('First item to be transferred')
         .setRequired(true)
-        .setAutocomplete(true))
+        .setAutocomplete(true)
+    )
     .addIntegerOption(option =>
       option.setName('quantitya')
         .setDescription('Quantity of the first item')
-        .setRequired(true))
+        .setRequired(true)
+    )
     .addStringOption(option =>
       option.setName('itemb')
         .setDescription('Second item to be transferred')
         .setRequired(false)
-        .setAutocomplete(true))
+        .setAutocomplete(true)
+    )
     .addIntegerOption(option =>
       option.setName('quantityb')
         .setDescription('Quantity of the second item')
-        .setRequired(false))
+        .setRequired(false)
+    )
     .addStringOption(option =>
       option.setName('itemc')
         .setDescription('Third item to be transferred')
         .setRequired(false)
-        .setAutocomplete(true))
+        .setAutocomplete(true)
+    )
     .addIntegerOption(option =>
       option.setName('quantityc')
         .setDescription('Quantity of the third item')
-        .setRequired(false)),
+        .setRequired(false)
+    ),
 
-  // ------------------- Main function for handling the item transfer -------------------
+  // ------------------- Main Execution Function for Transfer Command -------------------
   async execute(interaction) {
     await interaction.deferReply();
 
+    // Retrieve transfer details from user input.
     const fromCharacterName = interaction.options.getString('fromcharacter');
     const toCharacterName = interaction.options.getString('tocharacter');
     const items = [
-      {
-        name: interaction.options.getString('itema'),
-        quantity: interaction.options.getInteger('quantitya')
-      },
-      {
-        name: interaction.options.getString('itemb'),
-        quantity: interaction.options.getInteger('quantityb')
-      },
-      {
-        name: interaction.options.getString('itemc'),
-        quantity: interaction.options.getInteger('quantityc')
-      }
-    ].filter(item => item.name && item.quantity); // Filter valid items
+      { name: interaction.options.getString('itema'), quantity: interaction.options.getInteger('quantitya') },
+      { name: interaction.options.getString('itemb'), quantity: interaction.options.getInteger('quantityb') },
+      { name: interaction.options.getString('itemc'), quantity: interaction.options.getInteger('quantityc') }
+    ].filter(item => item.name && item.quantity); // Filter out invalid items.
 
     const userId = interaction.user.id;
 
     try {
-      // ------------------- Fetch both characters by name and user ID -------------------
+      // ------------------- Fetch Characters -------------------
+      // Retrieve the source and destination characters using the provided names and user ID.
       const fromCharacter = await fetchCharacterByNameAndUserId(fromCharacterName, userId);
       const toCharacter = await fetchCharacterByNameAndUserId(toCharacterName, userId);
 
@@ -90,62 +112,57 @@ module.exports = {
         return;
       }
 
-      // Check if the fromCharacter's inventory has been synced
-if (!fromCharacter.inventorySynced) {
-  return interaction.editReply({
-      content: `❌ **You cannot transfer items from \`${fromCharacterName}\` because their inventory is not set up yet. Please use the </testinventorysetup:1306176790095728732> and then </syncinventory:1306176789894266898> commands to initialize the inventory.**`,
-      ephemeral: true,
-  });
-}
+      // ------------------- Inventory Sync Check -------------------
+      // Ensure both characters have their inventories properly synced.
+      if (!fromCharacter.inventorySynced) {
+        return interaction.editReply({
+          content: `❌ **You cannot transfer items from \`${fromCharacterName}\` because their inventory is not set up yet. Please use the </testinventorysetup:1306176790095728732> and then </syncinventory:1306176789894266898> commands to initialize the inventory.**`,
+          ephemeral: true,
+        });
+      }
 
-// Check if the toCharacter's inventory has been synced
-if (!toCharacter.inventorySynced) {
-  return interaction.editReply({
-      content: `❌ **You cannot transfer items to \`${toCharacterName}\` because their inventory is not set up yet.**`,
-      ephemeral: true,
-  });
-}
+      if (!toCharacter.inventorySynced) {
+        return interaction.editReply({
+          content: `❌ **You cannot transfer items to \`${toCharacterName}\` because their inventory is not set up yet.**`,
+          ephemeral: true,
+        });
+      }
 
-
+      // ------------------- Check Item Availability -------------------
+      // Verify that the source character has enough of each item to be transferred.
       let allItemsAvailable = true;
       const unavailableItems = [];
-
       const fromInventoryCollection = await getCharacterInventoryCollection(fromCharacter.name);
 
-// ------------------- Check if all items are available in sufficient quantity -------------------
-console.log(`[TRANSFER]: Starting item availability check for character: ${fromCharacterName}`);
+      console.log(`[transfer.js:logs] Starting item availability check for character: ${fromCharacterName}`);
 
-for (const { name, quantity } of items) {
-  console.log(`[TRANSFER]: Checking availability for item: ${name} (Required: ${quantity})`);
+      for (const { name, quantity } of items) {
+        console.log(`[transfer.js:logs] Checking availability for item: ${name} (Required: ${quantity})`);
 
-  // Retrieve all inventory entries for the item (case-insensitive match)
-  const fromInventoryEntries = await fromInventoryCollection.find({ itemName: new RegExp(`^${name}$`, 'i') }).toArray();
+        // Retrieve all matching inventory entries (case-insensitive).
+        const fromInventoryEntries = await fromInventoryCollection.find({ itemName: new RegExp(`^${name}$`, 'i') }).toArray();
 
-  // Calculate total quantity by summing up all matching entries
-  const totalQuantity = fromInventoryEntries.reduce((sum, entry) => sum + entry.quantity, 0);
+        // Calculate the total available quantity.
+        const totalQuantity = fromInventoryEntries.reduce((sum, entry) => sum + entry.quantity, 0);
+        console.log(`[transfer.js:logs] Total quantity of '${name}' in inventory: ${totalQuantity} (Required: ${quantity})`);
 
-  // Logging total quantity for debugging
-  console.log(`[TRANSFER]: Total quantity of '${name}' in inventory: ${totalQuantity} (Required: ${quantity})`);
+        if (totalQuantity < quantity) {
+          console.log(`[transfer.js:logs] Insufficient quantity for item '${name}' (Available: ${totalQuantity}, Required: ${quantity}).`);
+          unavailableItems.push(`${name} - QTY:${totalQuantity}`);
+          allItemsAvailable = false;
+        } else {
+          console.log(`[transfer.js:logs] Sufficient quantity available for '${name}' (Total: ${totalQuantity}, Required: ${quantity}).`);
+        }
+      }
 
-  if (totalQuantity < quantity) {
-    // If insufficient total quantity
-    console.log(`[TRANSFER]: Insufficient quantity for item '${name}' (Available: ${totalQuantity}, Required: ${quantity}).`);
-    unavailableItems.push(`${name} - QTY:${totalQuantity}`);
-    allItemsAvailable = false;
-  } else {
-    console.log(`[TRANSFER]: Sufficient quantity available for '${name}' (Total: ${totalQuantity}, Required: ${quantity}).`);
-  }
-}
-
-if (!allItemsAvailable) {
-  console.log(`[TRANSFER]: Items unavailable for transfer: ${unavailableItems.join(', ')}`);
-  await interaction.editReply(`❌ \`${fromCharacterName}\` does not have enough of the following items to transfer: ${unavailableItems.join(', ')}`);
-  return;
-}
-
-
+      if (!allItemsAvailable) {
+        console.log(`[transfer.js:logs] Items unavailable for transfer: ${unavailableItems.join(', ')}`);
+        await interaction.editReply(`❌ \`${fromCharacterName}\` does not have enough of the following items to transfer: ${unavailableItems.join(', ')}`);
+        return;
+      }
 
       // ------------------- Validate Google Sheets URLs -------------------
+      // Ensure that both characters have valid Google Sheets URLs for their inventories.
       const fromInventoryLink = fromCharacter.inventory || fromCharacter.inventoryLink;
       const toInventoryLink = toCharacter.inventory || toCharacter.inventoryLink;
 
@@ -154,6 +171,7 @@ if (!allItemsAvailable) {
         return;
       }
 
+      // Extract spreadsheet IDs and authorize Google Sheets API.
       const fromSpreadsheetId = extractSpreadsheetId(fromInventoryLink);
       const toSpreadsheetId = extractSpreadsheetId(toInventoryLink);
       const auth = await authorizeSheets();
@@ -164,7 +182,8 @@ if (!allItemsAvailable) {
 
       const formattedItems = [];
 
-      // ------------------- Perform the transfer and update Google Sheets -------------------
+      // ------------------- Perform Transfer and Update Google Sheets -------------------
+      // Process each item: remove from source, add to destination, and log the transfer in Google Sheets.
       for (const { name, quantity } of items) {
         await removeItemInventoryDatabase(fromCharacter._id, name, quantity);
         await addItemInventoryDatabase(toCharacter._id, name, quantity, interaction);
@@ -188,10 +207,11 @@ if (!allItemsAvailable) {
         await appendSheetData(auth, toSpreadsheetId, range, toValues);
 
         const itemIcon = itemDetails?.emoji || '📦';
-        formattedItems.push({ itemName: String(name), quantity, itemIcon }); // Ensure itemName is a string
+        formattedItems.push({ itemName: String(name), quantity, itemIcon });
       }
 
-      // ------------------- Create and send transfer embed -------------------
+      // ------------------- Create and Send Transfer Embed -------------------
+      // Generate a visual embed summarizing the transfer and send it to the user.
       const fromCharacterIcon = fromCharacter.icon || '🧙';
       const toCharacterIcon = toCharacter.icon || '🧙';
 
@@ -202,16 +222,14 @@ if (!allItemsAvailable) {
       });
 
     } catch (error) {
-      console.error('❌ Error during item transfer:', error);
+      console.error(`[transfer.js:error] Error during item transfer:`, error);
       await interaction.editReply({ content: `❌ An error occurred during the transfer. Please try again later.`, ephemeral: true });
     }
   },
 
-  // ------------------- Handle autocomplete for transfer command -------------------
+  // ------------------- Autocomplete Handler for Transfer Command -------------------
   async autocomplete(interaction) {
     const focusedOption = interaction.options.getFocused(true);
     await handleTransferAutocomplete(interaction, focusedOption);
   },
 };
-
-
