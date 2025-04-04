@@ -29,8 +29,6 @@ const ItemModel = require('../models/ItemModel');
 // Embeds and commands for character details and help messages.
 // Character Embeds
 const { createCharacterEmbed, createCharacterGearEmbed } = require('../embeds/characterEmbeds');
-// Help Commands
-const { createGettingStartedEmbed, createCommandsEmbed, createButtonsRow } = require('../commands/help');
 
 // ------------------- Modules -------------------
 // Custom modules for additional functionalities.
@@ -452,21 +450,6 @@ async function handleComponentInteraction(interaction) {
     }
 }
 
-
-// =============================================================================
-// ------------------- Help Interaction Handler -------------------
-// Handles help interactions by presenting either a getting started or commands embed.
-async function handleHelpInteraction(interaction, action) {
-    try {
-        const embed = action === 'getting_started' ? createGettingStartedEmbed() : createCommandsEmbed();
-        const buttonsRow = createButtonsRow(interaction.id);
-        await interaction.update({ embeds: [embed], components: [buttonsRow] });
-    } catch (error) {
-        console.error(`[componentHandler]: Error handling help interaction: ${error.message}`);
-    }
-}
-
-
 // =============================================================================
 // ------------------- Exports -------------------
 // Exporting the necessary functions for external use.
@@ -475,5 +458,4 @@ module.exports = {
     handleButtonInteraction,
     getCancelButtonRow,
     getConfirmButtonRow,
-    handleHelpInteraction,
 };
