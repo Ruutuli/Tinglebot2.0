@@ -1,70 +1,173 @@
 {
-  "R966852": {
-    "battleId": "R966852",
-    "characters": [
-      {
-        "debuff": {
-          "active": false,
-          "endDate": null
+  "battleId": "C567660",
+  "type": "PvP",
+  "characters": {
+    "attacker": {
+      "gearArmor": {
+        "head": {
+          "name": "Amber Earrings",
+          "stats": {
+            "modifierHearts": 2
+          }
         },
-        "lastGatherDate": null,
-        "jobVoucherJob": null,
-        "_id": "67346889474436c77b78f13e",
-        "userId": "211219306137124865",
-        "name": "Luar",
-        "age": 24,
-        "height": 188,
-        "maxHearts": 3,
-        "currentHearts": 2,
-        "maxStamina": 5,
-        "currentStamina": 5,
-        "pronouns": "He / Himbo",
-        "race": "Keaton",
-        "homeVillage": "Rudania",
-        "currentVillage": "Rudania",
-        "job": "Adventurer",
-        "inventory": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
-        "appLink": "https://docs.google.com/spreadsheets/d/163UPIMTyHLLCei598sP5Ezonpgl2W-DaSxn8JBSRRSw/edit?gid=440335447#gid=440335447",
-        "icon": "https://storage.googleapis.com/tinglebot/cd986889-88e4-4743-ba85-e75af6fae168.png",
-        "blighted": true,
-        "blightStage": 1,
-        "lastRollDate": null,
-        "ko": false,
-        "jobVoucher": false,
-        "mount": false,
-        "spiritOrbs": 0,
-        "birthday": "",
-        "inventorySynced": true,
-        "lastStaminaUsage": "2024-12-18T07:23:53.434Z",
-        "attack": 0,
-        "defense": 0,
-        "vendingPoints": 500,
-        "vendorType": "",
-        "shopPouch": "",
-        "lastCollectedMonth": 1,
-        "failedStealAttempts": 0,
-        "inJail": false,
-        "jailReleaseTime": null,
-        "canBeStolenFrom": true,
-        "pets": [],
-        "__v": 0,
-        "failedFleeAttempts": 0,
-        "jobDateChanged": "2025-01-04T02:52:59.244Z",
-        "pouchSize": 0,
-        "shopLink": "",
-        "vendingSetup": false,
-        "vendingSync": false,
-        "deathDeadline": null,
-        "lastLootDate": "2025-01-09T09:04:37.404Z",
-        "shopImage": ""
-      }
-    ],
-    "monster": "White-maned Lynel",
-    "tier": 8,
-    "monsterHearts": {
-      "max": 16,
-      "current": 16
+        "chest": {
+          "name": "Stealth Chest Guard",
+          "stats": {
+            "modifierHearts": 2
+          }
+        },
+        "legs": {
+          "name": "Frostbite Trousers",
+          "stats": {
+            "modifierHearts": 4
+          }
+        }
+      },
+      "debuff": {
+        "active": false,
+        "endDate": "2024-12-25T01:01:09.997Z"
+      },
+      "lastGatherDate": null,
+      "lastLootDate": null,
+      "_id": "6686ea8f06daf7531045b4b2",
+      "userId": "211219306137124865",
+      "name": "Alden",
+      "maxHearts": 53,
+      "currentHearts": 51,
+      "maxStamina": 13,
+      "currentStamina": 10,
+      "pronouns": "He/Him",
+      "race": "Sheikah",
+      "homeVillage": "Inariko",
+      "currentVillage": "vhintl",
+      "job": "Bandit",
+      "inventory": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+      "appLink": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+      "icon": "https://storage.googleapis.com/tinglebot/a5ff9f2c-061d-4322-8d6d-bbcf31165ed6.png",
+      "blighted": false,
+      "ko": false,
+      "jobVoucher": false,
+      "mount": false,
+      "spiritOrbs": 0,
+      "birthday": "01-19",
+      "inventorySynced": true,
+      "lastStaminaUsage": "2025-03-31T22:58:39.510Z",
+      "attack": 4,
+      "defense": 8,
+      "__v": 0,
+      "height": 182,
+      "shopPouch": "",
+      "vendingPoints": 196040,
+      "vendorType": "",
+      "lastCollectedMonth": 8,
+      "blightStage": 0,
+      "canBeStolenFrom": true,
+      "failedStealAttempts": 1,
+      "inJail": false,
+      "lastRollDate": "2025-01-18T08:01:35.701Z",
+      "gearWeapon": {
+        "name": "Ancient Spear",
+        "stats": {
+          "modifierHearts": 4
+        }
+      },
+      "age": 35,
+      "failedFleeAttempts": 0,
+      "pouchSize": 0,
+      "shopLink": "",
+      "vendingSetup": false,
+      "jobDateChanged": "2025-01-04T02:49:36.719Z",
+      "vendingSync": false,
+      "jobVoucherJob": null,
+      "deathDeadline": null,
+      "shopImage": "",
+      "jailReleaseTime": null,
+      "currentActivePet": null
     },
-    "progress": "\n🔴 Blood Moon Raid initiated!"
-  }
+    "defender": {
+      "gearArmor": {
+        "chest": {
+          "name": "Snowquill Tunic",
+          "stats": {
+            "modifierHearts": 2
+          }
+        },
+        "legs": {
+          "name": "Rubber Tights",
+          "stats": {
+            "modifierHearts": 2
+          }
+        }
+      },
+      "debuff": {
+        "endDate": null,
+        "active": false
+      },
+      "age": null,
+      "height": null,
+      "jobDateChanged": null,
+      "jailReleaseTime": null,
+      "lastGatherDate": null,
+      "lastLootDate": null,
+      "currentActivePet": null,
+      "_id": "6685bc19e92bdadb2bf12a7a",
+      "userId": "211219306137124865",
+      "name": "Ankle",
+      "maxHearts": 50,
+      "currentHearts": 50,
+      "maxStamina": 100,
+      "currentStamina": 53,
+      "pronouns": "He/Him",
+      "race": "Korok/Kokiri",
+      "homeVillage": "vhintl",
+      "currentVillage": "vhintl",
+      "job": "Beekeeper",
+      "inventory": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+      "appLink": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+      "icon": "https://storage.googleapis.com/tinglebot/f602d38e-07f8-4006-b5fa-d190066b57dd.png",
+      "blighted": false,
+      "ko": false,
+      "jobVoucher": false,
+      "mount": false,
+      "spiritOrbs": 0,
+      "birthday": "",
+      "inventorySynced": true,
+      "lastStaminaUsage": "2024-12-26T06:07:52.972Z",
+      "attack": 1,
+      "defense": 4,
+      "__v": 1,
+      "blightStage": 0,
+      "lastCollectedMonth": 1,
+      "shopPouch": "",
+      "vendingPoints": 500,
+      "vendorType": "",
+      "canBeStolenFrom": true,
+      "failedStealAttempts": 1,
+      "inJail": false,
+      "pets": [],
+      "lastRollDate": null,
+      "failedFleeAttempts": 0,
+      "pouchSize": 0,
+      "shopLink": "",
+      "vendingSetup": false,
+      "vendingSync": false,
+      "deathDeadline": null,
+      "shopImage": "",
+      "jobVoucherJob": null,
+      "gearWeapon": {
+        "name": "Knight's Broadsword",
+        "stats": {
+          "modifierHearts": 1
+        }
+      }
+    }
+  },
+  "log": [
+    "⚔️ **Alden** has challenged **Ankle** to battle!",
+    "🎲 **Alden** rolls **18** vs **Ankle's** defense (**4**) — Hit! ❤️ **14** hearts of damage dealt!",
+    "🎲 **Alden** rolls **16** vs **Ankle's** defense (**4**) — Hit! ❤️ **12** hearts of damage dealt!",
+    "🎲 **Alden** rolls **20** vs **Ankle's** defense (**4**) — Hit! ❤️ **16** hearts of damage dealt!\n⚡ Flurry Rush #1! Rolled **10**, dealt **6** more hearts!",
+    "🎲 **Alden** rolls **19** vs **Ankle's** defense (**4**) — Hit! ❤️ **15** hearts of damage dealt!"
+  ],
+  "currentTurn": "6685bc19e92bdadb2bf12a7a"
 }
