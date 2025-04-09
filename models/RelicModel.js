@@ -10,6 +10,7 @@ const RelicSchema = new Schema({
   emoji: { type: String, default: '🔸' },              // Optional emoji for visual representation.
   unique: { type: Boolean, default: false },           // Indicates if the relic is one-of-a-kind.
   duplicateOf: { type: Schema.Types.ObjectId, ref: 'Relic', default: null }, // Reference relic if duplicate.
+  rollOutcome: { type: String, default: '' },
 
   // ------------------- Discovery Information -------------------
   discoveredBy: { type: String, default: '' },         // Character who discovered the relic.

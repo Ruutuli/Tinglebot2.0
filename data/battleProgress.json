@@ -1,5 +1,5 @@
 {
-  "battleId": "C567660",
+  "battleId": "C713376",
   "type": "PvP",
   "characters": {
     "attacker": {
@@ -35,7 +35,7 @@
       "maxHearts": 53,
       "currentHearts": 51,
       "maxStamina": 13,
-      "currentStamina": 10,
+      "currentStamina": 9,
       "pronouns": "He/Him",
       "race": "Sheikah",
       "homeVillage": "Inariko",
@@ -51,7 +51,7 @@
       "spiritOrbs": 0,
       "birthday": "01-19",
       "inventorySynced": true,
-      "lastStaminaUsage": "2025-03-31T22:58:39.510Z",
+      "lastStaminaUsage": "2025-04-05T21:58:33.507Z",
       "attack": 4,
       "defense": 8,
       "__v": 0,
@@ -86,6 +86,12 @@
     },
     "defender": {
       "gearArmor": {
+        "head": {
+          "name": "Charged Headdress",
+          "stats": {
+            "modifierHearts": 4
+          }
+        },
         "chest": {
           "name": "Snowquill Tunic",
           "stats": {
@@ -114,7 +120,7 @@
       "userId": "211219306137124865",
       "name": "Ankle",
       "maxHearts": 50,
-      "currentHearts": 50,
+      "currentHearts": 13,
       "maxStamina": 100,
       "currentStamina": 53,
       "pronouns": "He/Him",
@@ -134,7 +140,7 @@
       "inventorySynced": true,
       "lastStaminaUsage": "2024-12-26T06:07:52.972Z",
       "attack": 1,
-      "defense": 4,
+      "defense": 12,
       "__v": 1,
       "blightStage": 0,
       "lastCollectedMonth": 1,
@@ -159,15 +165,19 @@
         "stats": {
           "modifierHearts": 1
         }
+      },
+      "gearShield": {
+        "name": "Ancient Shield",
+        "stats": {
+          "modifierHearts": 4
+        }
       }
     }
   },
   "log": [
     "⚔️ **Alden** has challenged **Ankle** to battle!",
-    "🎲 **Alden** rolls **18** vs **Ankle's** defense (**4**) — Hit! ❤️ **14** hearts of damage dealt!",
-    "🎲 **Alden** rolls **16** vs **Ankle's** defense (**4**) — Hit! ❤️ **12** hearts of damage dealt!",
-    "🎲 **Alden** rolls **20** vs **Ankle's** defense (**4**) — Hit! ❤️ **16** hearts of damage dealt!\n⚡ Flurry Rush #1! Rolled **10**, dealt **6** more hearts!",
-    "🎲 **Alden** rolls **19** vs **Ankle's** defense (**4**) — Hit! ❤️ **15** hearts of damage dealt!"
+    "🎲 **Alden** rolls **13** vs **Ankle's** defense (**12**) — Hit! ❤️ **1** hearts of damage dealt!",
+    "🎲 **Alden** rolls **11** (3 + 6 + 1 + 1) vs **Ankle's** defense (**12**) — ❌ Miss! No damage."
   ],
   "currentTurn": "6685bc19e92bdadb2bf12a7a"
 }

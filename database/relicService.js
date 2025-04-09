@@ -35,17 +35,23 @@ const fetchRelicsByCharacter = async (characterName) => {
 
 // ------------------- Appraise a Relic -------------------
 // Marks a relic as appraised and updates its appraisal details.
-const appraiseRelic = async (relicId, appraiserName, description) => {
+// Now accepts an optional fourth parameter: rollOutcome.
+const appraiseRelic = async (relicId, appraiserName, description, rollOutcome) => {
   try {
     await connectToTinglebot();
+    // Build the update object with the new fields.
+    const updateData = {
+      appraised: true,
+      appraisedBy: appraiserName,
+      appraisalDate: new Date(),
+      appraisalDescription: description
+    };
+    if (rollOutcome) {
+      updateData.rollOutcome = rollOutcome;
+    }
     return await RelicModel.findByIdAndUpdate(
       relicId,
-      {
-        appraised: true,
-        appraisedBy: appraiserName,
-        appraisalDate: new Date(),
-        appraisalDescription: description
-      },
+      updateData,
       { new: true }
     );
   } catch (error) {

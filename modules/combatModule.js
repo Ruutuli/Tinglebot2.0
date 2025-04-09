@@ -195,13 +195,14 @@ async function updateMonsterHeartsToZero(battleId) {
 // ============================================================================
 // Utility Functions for Combat Calculations
 // ------------------- Roll Weapon Dice -------------------
-// Rolls a number of d6 based on the mod level.
+// Rolls a number of d6 based on the mod level and returns both the total and individual results.
 function rollWeaponDice(modLevel) {
-  let total = 0;
+  const rolls = [];
   for (let i = 0; i < modLevel; i++) {
-    total += Math.floor(Math.random() * 6) + 1; // d6 per mod
+    rolls.push(Math.floor(Math.random() * 6) + 1);
   }
-  return total;
+  const total = rolls.reduce((sum, val) => sum + val, 0);
+  return { total, rolls };
 }
 
 // ------------------- Get Total Defense -------------------
@@ -330,11 +331,11 @@ async function takePvPTurn(battleId, attacker, defender) {
     return { message: skipLog };
   }
 
-  let totalRoll = rollWeaponDice(attackerMod);
-  const overage = totalRoll - defenderDefense;
+  let { total: totalRoll, rolls } = rollWeaponDice(attackerMod);
+  const overage = totalRoll - defenderDefense;  
   console.log(`[combatModule.js]: debug - Initial dice roll: ${totalRoll}, overage: ${overage}`);
 
-  let log = `🎲 **${attacker.name}** rolls **${totalRoll}** vs **${defender.name}'s** defense (**${defenderDefense}**)`;
+  let log = `🎲 **${attacker.name}** rolls **${totalRoll}** (${rolls.join(' + ')}) vs **${defender.name}'s** defense (**${defenderDefense}**)`;
   let hearts = 0;
 
   if (overage > 0) {
@@ -364,7 +365,9 @@ async function takePvPTurn(battleId, attacker, defender) {
     flurryCount++;
     console.log(`[combatModule.js]: debug - FlurryRush #${flurryCount}: Used ${staminaCost} stamina. New stamina: ${attacker.currentStamina}`);
 
-    totalRoll = rollWeaponDice(attackerMod);
+    const flurryRollResult = rollWeaponDice(attackerMod);
+    totalRoll = flurryRollResult.total;
+    const flurryRolls = flurryRollResult.rolls;    
     const flurryOverage = totalRoll - defenderDefense;
     const flurryHearts = flurryOverage > 0 ? Math.floor(flurryOverage) : 0;
     console.log(`[combatModule.js]: debug - FlurryRush #${flurryCount}: Rolled ${totalRoll}, overage: ${flurryOverage}, flurryHearts: ${flurryHearts}`);
@@ -372,7 +375,7 @@ async function takePvPTurn(battleId, attacker, defender) {
     if (flurryHearts > 0) {
       await useHearts(defender._id, flurryHearts);
       hearts += flurryHearts;
-      log += `\n⚡ Flurry Rush #${flurryCount}! Rolled **${totalRoll}**, dealt **${flurryHearts}** more hearts!`;
+      log += `\n⚡ Flurry Rush #${flurryCount}! Rolled **${totalRoll}** (${flurryRolls.join(' + ')}), dealt **${flurryHearts}** more hearts!`;
       if (defender.currentHearts - hearts <= 0) {
         await handleKO(defender._id);
         log += ` 💀 **${defender.name}** has been KO'd!`;
@@ -380,7 +383,7 @@ async function takePvPTurn(battleId, attacker, defender) {
         break;
       }
     } else {
-      log += `\n⚡ Flurry Rush #${flurryCount}! Rolled **${totalRoll}**, missed.`;
+      log += `\n⚡ Flurry Rush #${flurryCount}! Rolled **${totalRoll}** (${flurryRolls.join(' + ')}), missed.`;
       break;
     }
     staminaCost++;

@@ -201,11 +201,15 @@ module.exports = {
           return;
         }
       } else if (type === 'shield') {
-        if (!categories.includes('shield')) {
-          console.log(`[gear.js]: Item mismatch - Expected Shield, got: ${categories}`);
-          await interaction.editReply({ content: `❌ **${itemName} is not a shield and cannot be equipped to the shield slot.**` });
+        const categories = Array.isArray(itemDetail.category) ? itemDetail.category.map(c => c.toLowerCase()) : [];
+        const subtypes = Array.isArray(itemDetail.subtype) ? itemDetail.subtype.map(s => s.toLowerCase()) : [itemDetail.subtype?.toLowerCase()];
+        const isShield = categories.includes('shield') || subtypes.includes('shield');
+      
+        if (!isShield) {
+          console.log(`[gear.js]: Item mismatch - Expected Shield, got Category: ${categories}, Subtype: ${subtypes}`);
+          await interaction.editReply({ content: `❌ **${itemName} is not recognized as a shield and cannot be equipped to the shield slot.**` });
           return;
-        }
+        }      
       } else {
         console.log(`[gear.js]: Invalid slot type detected - ${type}`);
         await interaction.editReply({ content: `❌ **Invalid slot type selected for equipping ${itemName}.**` });

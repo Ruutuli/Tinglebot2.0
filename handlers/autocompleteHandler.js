@@ -199,6 +199,14 @@ async function handleAutocomplete(interaction) {
     } else if (commandName === 'shops' && focusedOption.name === 'itemname') {
       await handleShopsAutocomplete(interaction, focusedOption);
 
+    // ------------------- RELICS Commands -------------------
+  } else if (commandName === 'relic' && focusedOption.name === 'character') {
+    await handleRelicOwnerAutocomplete(interaction, focusedOption);
+    return;
+  } else if (commandName === 'relic' && focusedOption.name === 'appraiser') {
+    await handleRelicAppraiserAutocomplete(interaction, focusedOption);
+    return;
+    
     // ------------------- STEAL Commands -------------------
     // Handles autocomplete for steal command: character name, target selection, and rarity.
     } else if (commandName === 'steal') {
@@ -1492,6 +1500,77 @@ async function handlePetAutocomplete(interaction, focusedOption) {
 }
 
 // ============================================================================
+// RELIC
+// ============================================================================
+// This module provides autocomplete handlers for relic commands.
+// It supports:
+//   • Autocompletion for the 'character' option (relic owner)
+//   • Autocompletion for the 'appraiser' option (either "NPC" or characters
+//     with the Artist or Researcher job who reside in Inariko)
+
+// ------------------- Autocomplete for Relic Owner -------------------
+// Returns only characters owned by the user.
+async function handleRelicOwnerAutocomplete(interaction, focusedOption) {
+  try {
+    const userId = interaction.user.id;
+    // Fetch characters owned by the current user.
+    const characters = await fetchCharactersByUserId(userId);
+    // Map to choices with name and value.
+    const choices = characters.map(c => ({
+      name: `${c.name} - ${capitalize(c.currentVillage)}`,
+      value: c.name,
+    }));
+    // Filter based on the input, if any.
+    const filtered = focusedOption.value
+      ? choices.filter(choice =>
+          choice.name.toLowerCase().includes(focusedOption.value.toLowerCase())
+        )
+      : choices;
+    // Discord allows a maximum of 25 autocomplete choices.
+    await interaction.respond(filtered.slice(0, 25));
+  } catch (error) {
+    console.error('[relicAutocomplete.js] Error in handleRelicOwnerAutocomplete:', error);
+    await interaction.respond([]);
+  }
+}
+
+// ------------------- Autocomplete for Relic Appraiser -------------------
+// Returns "NPC" and characters whose job (or voucher job) is Artist or Researcher, provided they reside in Inariko.
+async function handleRelicAppraiserAutocomplete(interaction, focusedOption) {
+  try {
+    // Start with NPC as a default option.
+    let choices = [{ name: 'NPC', value: 'NPC' }];
+    // Fetch all characters from the system.
+    const allCharacters = await fetchAllCharacters();
+    // Filter characters: must live in Inariko and have a job of 'artist' or 'researcher' (checking both job and jobVoucherJob).
+    const validAppraisers = allCharacters.filter(c => {
+      const job = (c.job || '').toLowerCase();
+      const voucherJob = (c.jobVoucherJob || '').toLowerCase();
+      const village = (c.currentVillage || '').toLowerCase();
+      return village === 'inariko' &&
+             (job === 'artist' || job === 'researcher' ||
+              voucherJob === 'artist' || voucherJob === 'researcher');
+    });
+    // Map filtered appraisers to autocomplete choices.
+    const appraiserChoices = validAppraisers.map(c => ({
+      name: `${c.name} - Inariko`,
+      value: c.name,
+    }));
+    choices = choices.concat(appraiserChoices);
+    // Filter choices based on the focused input.
+    const filtered = focusedOption.value
+      ? choices.filter(choice =>
+          choice.name.toLowerCase().includes(focusedOption.value.toLowerCase())
+        )
+      : choices;
+    await interaction.respond(filtered.slice(0, 25));
+  } catch (error) {
+    console.error('[relicAutocomplete.js] Error in handleRelicAppraiserAutocomplete:', error);
+    await interaction.respond([]);
+  }
+}
+
+// ============================================================================
 // SHOPS
 // ============================================================================
 // Handles autocomplete suggestions for shop interactions (`buy` and `sell`).
@@ -2441,6 +2520,10 @@ module.exports = {
 
 // PET
   handlePetAutocomplete,
+
+// RELIC
+  handleRelicOwnerAutocomplete,
+  handleRelicAppraiserAutocomplete,
 
 // SHOPS
   handleShopsAutocomplete,

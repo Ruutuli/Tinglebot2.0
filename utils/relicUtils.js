@@ -87,8 +87,13 @@ async function autoArchiveUnsubmittedArt(relicId) {
 // ------------------- Duplicate and Lock Logic -------------------
 // Checks if the newly found relic is a duplicate based on its name.
 function isDuplicateRelic(existingRelics, newRelicName) {
-  return existingRelics.some(r => r.name === newRelicName);
+  return existingRelics.some(r =>
+    r.name === newRelicName &&
+    r.appraised === true &&
+    r.artSubmitted === true
+  );
 }
+
 
 // ------------------- Art Validation Helpers -------------------
 // Validates the relic art submission by ensuring proper image URL, dimensions, aspect ratio, and format.
