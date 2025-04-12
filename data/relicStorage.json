@@ -1,0 +1,27 @@
+[
+  {
+    "name": "Unappraised Relic",
+    "discoveredBy": "Alden",
+    "locationFound": "Gerudo - I11, Q4",
+    "discoveredDate": "2025-04-10T19:30:47.092Z"
+  },
+  {
+    "name": "Unappraised Relic",
+    "discoveredBy": "Alden",
+    "locationFound": "CentralHyrule - A9, Q3",
+    "discoveredDate": "2025-04-10T19:31:09.404Z"
+  },
+  {
+    "name": "Unappraised Relic",
+    "discoveredBy": "Alden",
+    "locationFound": "Eldin - A7, Q1",
+    "discoveredDate": "2025-04-11T16:11:14.608Z"
+  },
+  {
+    "relicId": "R204442",
+    "name": "Unappraised Relic",
+    "discoveredBy": "Alden",
+    "locationFound": "Gerudo - B12, Q1",
+    "discoveredDate": "2025-04-11T16:17:52.346Z"
+  }
+]

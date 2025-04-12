@@ -85,8 +85,8 @@ async function storeBattleProgress(character, monster, tier, monsterHearts, prog
   ensureBattleProgressFileExists();
   const battleProgress = JSON.parse(fs.readFileSync(BATTLE_PROGRESS_PATH, 'utf8'));
   
-  // Generate a unique battle ID with "R" prefix.
-  const battleId = generateUniqueId('R');
+  // Generate a unique battle ID with "B" prefix.
+  const battleId = generateUniqueId('B');
   
   battleProgress[battleId] = {
     battleId,
