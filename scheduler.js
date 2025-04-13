@@ -206,21 +206,24 @@ cron.schedule('0 2 1 * *', async () => {
   }
 }, { timezone: 'America/New_York' });
 
-  // ------------------- Daily Blight Roll Call -------------------
-  cron.schedule('0 20 * * *', async () => { // set back to 20 after testing 
+  // ------------------- Daily Blight Roll Call, Missed Rolls, and Death Check -------------------
+cron.schedule('0 20 * * *', async () => { 
   try {
-      console.log('v⏰ Sending daily blight roll call...');
-      await postBlightRollCall(client);
-      await checkMissedRolls(client);
-      console.log('[scheduler]✅ Blight roll call and missed roll checks completed.');
-    } catch (error) {
-      console.error('❌ [Scheduler.js] Error during blight roll call:', error);
-    }
-  }, { timezone: 'America/New_York' });
+    console.log('[scheduler]⏰ Running Blight Roll Call, Missed Rolls Check, and Death Check...');
 
-  // ------------------- Daily Blight Death Check -------------------
-  cron.schedule('0 20 * * *', async () => {
-  try {
+    // Step 1: Post Blight Roll Call once
+    try {
+      await postBlightRollCall(client);
+      console.log('[scheduler]✅ Blight roll call posted.');
+    } catch (error) {
+      console.error('[scheduler]❌ Failed to post Blight roll call:', error.message);
+    }
+
+    // Step 2: Run Missed Rolls Check
+    await checkMissedRolls(client);
+    console.log('[scheduler]✅ Missed roll check completed.');
+
+    // Step 3: Run Death Check (Retain Notify Logic)
     console.log('[scheduler]☠ Checking for characters who have died due to blight...');
 
     const now = new Date();
@@ -233,7 +236,7 @@ cron.schedule('0 2 1 * *', async () => {
       // Mark the character as dead
       character.blighted = false;
       character.blightStage = 0;
-      character.deathDeadline = null; // Clear the deadline
+      character.deathDeadline = null;
       await character.save();
 
       console.log(`[scheduler]☠ Character ${character.name} has died due to blight.`);
@@ -251,14 +254,15 @@ cron.schedule('0 2 1 * *', async () => {
     }
 
     console.log('[scheduler]✅ Blight death check completed.');
+
   } catch (error) {
-    console.error('[scheduler]❌ Error during blight death check:', error.message);
+    console.error('❌ [Scheduler.js] Error during blight roll call sequence:', error);
   }
 }, { timezone: 'America/New_York' });
 
    // ------------------- Daily Blood Moon Tracking and Announcement -------------------
    cron.schedule(
-    '0 0 * * *', // Run daily at midnight
+    '24 12 * * *', // Run daily at midnight
     async () => {
       const channels = [
         process.env.RUDANIA_TOWN_HALL,

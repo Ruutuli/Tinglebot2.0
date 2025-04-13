@@ -1,0 +1,62 @@
+{
+  "E9BF07E7": {
+    "boostRequestId": "E9BF07E7",
+    "targetCharacter": "Knuckle",
+    "boostingCharacter": "Ze'alous",
+    "category": "Crafting",
+    "status": "pending",
+    "requesterUserId": "211219306137124865",
+    "village": "Rudania",
+    "timestamp": 1744566071258
+  },
+  "93DA0861": {
+    "boostRequestId": "93DA0861",
+    "targetCharacter": "Knuckle",
+    "boostingCharacter": "Ze'alous",
+    "category": "Crafting",
+    "status": "pending",
+    "requesterUserId": "211219306137124865",
+    "village": "Rudania",
+    "timestamp": 1744566271872
+  },
+  "1C58CB37": {
+    "boostRequestId": "1C58CB37",
+    "targetCharacter": "Knuckle",
+    "boostingCharacter": "Ze'alous",
+    "category": "Crafting",
+    "status": "pending",
+    "requesterUserId": "211219306137124865",
+    "village": "Rudania",
+    "timestamp": 1744566430674
+  },
+  "704E4AB8": {
+    "boostRequestId": "704E4AB8",
+    "targetCharacter": "Luar",
+    "boostingCharacter": "Ze'alous",
+    "category": "Tokens",
+    "status": "pending",
+    "requesterUserId": "211219306137124865",
+    "village": "Rudania",
+    "timestamp": 1744566714604
+  },
+  "76C599FB": {
+    "boostRequestId": "76C599FB",
+    "targetCharacter": "Luar",
+    "boostingCharacter": "Ze'alous",
+    "category": "Tokens",
+    "status": "pending",
+    "requesterUserId": "211219306137124865",
+    "village": "Rudania",
+    "timestamp": 1744567063105
+  },
+  "B71D555A": {
+    "boostRequestId": "B71D555A",
+    "targetCharacter": "Luar",
+    "boostingCharacter": "Ze'alous",
+    "category": "Vending",
+    "status": "pending",
+    "requesterUserId": "211219306137124865",
+    "village": "Rudania",
+    "timestamp": 1744567092383
+  }
+}

@@ -48,7 +48,14 @@ async function handleAutocomplete(interaction) {
         await handleBlightCharacterAutocomplete(interaction, focusedOption);
       } else if (commandName === 'blight' && focusedOption.name === 'item') {
         await handleBlightItemAutocomplete(interaction, focusedOption);
-  
+
+      // ------------------- BOOSTING Commands -------------------
+    } else if (commandName === 'boosting' && focusedOption.name === 'character') {
+      await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, commandName);
+    
+    } else if (commandName === 'boosting' && focusedOption.name === 'booster') {
+      await handleBoostingCharacterAutocomplete(interaction, focusedOption);
+    
       // ------------------- CHANGEJOB Commands -------------------
       } else if (commandName === 'changejob' && focusedOption.name === 'newjob') {
         await handleChangeJobNewJobAutocomplete(interaction, focusedOption);
@@ -330,10 +337,10 @@ async function handleCharacterBasedCommandsAutocomplete(interaction, focusedOpti
     }
 
     const choices = characters.map(character => ({
-      name: character.name,
+      name: `${character.name} - ${capitalize(character.currentVillage)} - ${character.job}`,
       value: character.name,
     }));
-
+    
     await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
     console.error(`[handleCharacterBasedCommandsAutocomplete]: Error handling ${commandName} autocomplete:`, error);
@@ -423,7 +430,40 @@ async function handleCharacterBasedCommandsAutocomplete(interaction, focusedOpti
         await interaction.respond([]);
       }
     }
+
+// ============================================================================
+// BOOSTING COMMANDS
+// ============================================================================
     
+// ------------------- Boosting Character Autocomplete -------------------
+    async function handleBoostingCharacterAutocomplete(interaction, focusedOption) {
+      try {
+        const characters = await fetchAllCharacters();
+
+        const boostJobs = [
+          'Fortune Teller',
+          'Teacher',
+          'Priest',
+          'Entertainer',
+          'Scholar'
+        ];
+
+        const filteredCharacters = characters.filter(character =>
+          boostJobs.includes(character.job)
+        );
+
+        const choices = filteredCharacters.map(character => ({
+          name: `${character.name} - ${capitalize(character.currentVillage)} - ${character.job}`,
+          value: character.name
+        }));
+        
+        await respondWithFilteredChoices(interaction, focusedOption, choices);
+      } catch (error) {
+        console.error('[handleBoostingCharacterAutocomplete]: Error:', error);
+        await safeRespondWithError(interaction);
+      }
+    }
+
 // ============================================================================
 // CHANGEJOB COMMANDS
 // ============================================================================
@@ -2058,6 +2098,9 @@ async function handleViewInventoryAutocomplete(interaction, focusedOption) {
 // BLIGHT
 handleBlightCharacterAutocomplete,
 handleBlightItemAutocomplete,
+
+// BOOSTING 
+handleBoostingCharacterAutocomplete,
 
 // CHANGEJOB
 handleChangeJobNewJobAutocomplete,

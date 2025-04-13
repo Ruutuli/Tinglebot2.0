@@ -53,7 +53,7 @@ const NPCs = {
     }
   };
   
-
+// add a Keaton 
 // ------------------- Function to get available items from an NPC -------------------
 const getNPCItems = (npcName) => {
   const npc = NPCs[npcName]; // Get the NPC details

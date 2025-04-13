@@ -38,7 +38,7 @@ const { convertToHyruleanDate } = require('./modules/calendarModule');
 const scheduler = require('./scheduler');
 const { getGuildIds } = require('./utils/getGuildIds');
 const { initializeRandomEncounterBot } = require('./scripts/randomEncounters');
-
+const { createTrelloCard } = require('./scripts/trello');
 
 // ------------------- Blood Moon Status Checker -------------------
 // Logs the current Blood Moon status with real-world and Hyrulean dates.
@@ -172,8 +172,79 @@ async function initializeClient() {
     }
   });
 
-  // ------------------- Login the Bot -------------------
-  client.login(process.env.DISCORD_TOKEN);
+// ------------------- Forum Bug Report Listener -------------------
+// Detect new thread (forum post)
+client.on('threadCreate', async thread => {
+  if (thread.parentId !== '1315866996776374302') return; // Feedback Forum Channel ID
+  console.log(`[index.js]: New forum thread created: ${thread.name}`);
+  
+  // Fetch the starter message
+  const starterMessage = await thread.fetchStarterMessage();
+  if (!starterMessage || starterMessage.author.bot) return;
+  if (!starterMessage.content.replace(/\*/g, '').startsWith('Command:')) return;
+
+  const threadName = thread.name;
+  const username = starterMessage.author.tag;
+  const content = starterMessage.content;
+  const createdAt = starterMessage.createdAt;
+  const images = starterMessage.attachments.map(attachment => attachment.url);
+
+  const cardUrl = await createTrelloCard({ threadName, username, content, images, createdAt });
+
+  if (cardUrl) {
+    await starterMessage.reply(`✅ Bug report sent to Trello! ${cardUrl}\n\n_You can add comments to the Trello card if you want to provide more details or updates later._`);
+  } else {
+    await starterMessage.reply(`❌ Failed to send bug report to Trello.`);
+  }
+});
+
+// Detect new message in forum thread (reply)
+client.on('messageCreate', async message => {
+  if (message.channel.parentId !== '1315866996776374302') return; // Feedback Forum Channel ID
+  if (message.author.bot) return;
+
+  if (!message.content.replace(/\*/g, '').startsWith('Command:')) {
+    const reply = await message.reply(
+      `❌ Bug report must follow the required format to create a ticket!\n\n` +
+      `**Command:** [Specify the command or feature]\n` +
+      `**Issue:** [Brief description of the problem]\n` +
+      `**Steps to Reproduce:**\n` +
+      `1. [Step 1]\n` +
+      `2. [Step 2]\n` +
+      `**Error Output:**\n` +
+      `[Copy and paste the exact error message or output text here]\n` +
+      `**Screenshots:** [Attach screenshots if possible]\n` +
+      `**Expected Behavior:** [What you expected to happen]\n` +
+      `**Actual Behavior:** [What actually happened]`
+    );
+
+    setTimeout(() => {
+      reply.delete().catch(() => {});
+    }, 10000); // 10 seconds
+
+    return;
+  }
+
+  const threadName = message.channel.name;
+  const username = message.author.tag;
+  const content = message.content;
+  const createdAt = message.createdAt;
+  const images = message.attachments.map(attachment => attachment.url);
+
+  const cardUrl = await createTrelloCard({ threadName, username, content, images, createdAt });
+
+  if (cardUrl) {
+    await message.reply(`✅ Bug report sent to Trello! ${cardUrl}\n\n_You can add comments to the Trello card if you want to provide more details or updates later._`);
+  } else {
+    await message.reply(`❌ Failed to send bug report to Trello.`);
+  }  
+});
+
+
+// ------------------- Login the Bot -------------------
+// Initialize the client and start the bot.
+client.login(process.env.DISCORD_TOKEN);
+
 }
 
 

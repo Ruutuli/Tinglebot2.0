@@ -1,42 +1,35 @@
-// ------------------- storage.js -------------------
-// This module provides both in-memory and persistent storage for submissions,
-// healing requests, and vending requests. It handles reading and writing JSON
-// data to the file system, as well as cleanup of expired entries.
-
-// ============================================================================
-// Standard Libraries
-// ------------------- Importing Node.js core modules -------------------
+// ------------------- Standard Libraries -------------------
+// Import core Node.js modules.
 const fs = require('fs');
 const path = require('path');
 
 
 // ============================================================================
-// File Path Constants
-// ------------------- Define file paths for storage -------------------
+// ------------------- File Path Constants -------------------
+// Define and ensure file paths and directories for persistent storage.
+
+// Define file path for submissions data.
 const storageFile = path.join(__dirname, '../data/submissions.json');
 
-// Ensure the data directory exists
+// Ensure the data directory exists.
 if (!fs.existsSync(path.join(__dirname, '../data'))) {
   fs.mkdirSync(path.join(__dirname, '../data'));
 }
 
-// Create the submissions file if it doesn't exist
+// Create the submissions file if it doesn't exist.
 if (!fs.existsSync(storageFile)) {
   console.error('[storage.js]: logs Submissions storage file does not exist. Creating a new one.');
   fs.writeFileSync(storageFile, JSON.stringify({}));
 }
 
 
-// ============================================================================
-// In-Memory Store
-// ------------------- Define an in-memory submission store using a Map -------------------
+// ------------------- In-Memory Store -------------------
+// Define an in-memory store for submissions using a Map.
 const submissionStore = new Map();
 
 
-// ============================================================================
-// JSON File Handling Functions
-// ------------------- Safe JSON Read Function -------------------
-// Reads a JSON file and returns the parsed data, handling errors gracefully.
+// ------------------- JSON File Handling Functions -------------------
+// Safely reads a JSON file and returns the parsed data; returns an empty object on error.
 function safeReadJSON(filePath) {
   try {
     const data = fs.readFileSync(filePath, 'utf-8');
@@ -49,9 +42,10 @@ function safeReadJSON(filePath) {
 
 
 // ============================================================================
-// Submission Storage Functions
-// ------------------- Save Submission to Storage -------------------
-// Saves a submission to persistent storage (the file system).
+// ------------------- Submission Storage Functions -------------------
+// Functions for saving, retrieving, and deleting submissions from persistent storage.
+
+// Save a submission to storage.
 function saveSubmissionToStorage(submissionId, submissionData) {
   if (!submissionId || !submissionData) {
     return;
@@ -61,15 +55,13 @@ function saveSubmissionToStorage(submissionId, submissionData) {
   fs.writeFileSync(storageFile, JSON.stringify(submissions, null, 2));
 }
 
-// ------------------- Retrieve Submission from Storage -------------------
-// Retrieves a submission by its ID from persistent storage.
+// Retrieve a submission by its ID.
 function retrieveSubmissionFromStorage(submissionId) {
   const submissions = safeReadJSON(storageFile);
   return submissions[submissionId] || null;
 }
 
-// ------------------- Delete Submission from Storage -------------------
-// Deletes a submission from persistent storage by its ID.
+// Delete a submission from storage by its ID.
 function deleteSubmissionFromStorage(submissionId) {
   const submissions = safeReadJSON(storageFile);
   if (submissions[submissionId]) {
@@ -80,17 +72,18 @@ function deleteSubmissionFromStorage(submissionId) {
 
 
 // ============================================================================
-// Healing Requests Storage Functions
-// ------------------- File Path for Healing Requests -------------------
+// ------------------- Healing Requests Storage Functions -------------------
+// Functions for managing healing requests in persistent storage.
+
+// Define file path for healing requests.
 const healingRequestsFile = path.join(__dirname, '../data/healingRequests.json');
 
-// Ensure the healing requests file exists
+// Create the healing requests file if it doesn't exist.
 if (!fs.existsSync(healingRequestsFile)) {
   fs.writeFileSync(healingRequestsFile, JSON.stringify({}));
 }
 
-// ------------------- Save Healing Request to Storage -------------------
-// Saves a healing request to persistent storage.
+// Save a healing request to storage.
 function saveHealingRequestToStorage(healingRequestId, healingRequestData) {
   try {
     const healingRequests = safeReadJSON(healingRequestsFile);
@@ -101,8 +94,7 @@ function saveHealingRequestToStorage(healingRequestId, healingRequestData) {
   }
 }
 
-// ------------------- Retrieve Healing Request from Storage -------------------
-// Retrieves a healing request by its ID. Expires requests older than 24 hours.
+// Retrieve a healing request by its ID, expiring requests older than 24 hours.
 function retrieveHealingRequestFromStorage(healingRequestId) {
   const healingRequests = safeReadJSON(healingRequestsFile);
   const request = healingRequests[healingRequestId];
@@ -115,8 +107,7 @@ function retrieveHealingRequestFromStorage(healingRequestId) {
   return request || null;
 }
 
-// ------------------- Delete Healing Request from Storage -------------------
-// Deletes a healing request by its ID from persistent storage.
+// Delete a healing request from storage by its ID.
 function deleteHealingRequestFromStorage(healingRequestId) {
   const healingRequests = safeReadJSON(healingRequestsFile);
   if (healingRequests[healingRequestId]) {
@@ -127,8 +118,7 @@ function deleteHealingRequestFromStorage(healingRequestId) {
   }
 }
 
-// ------------------- Cleanup Expired Healing Requests -------------------
-// Removes healing requests that are older than 24 hours from persistent storage.
+// Cleanup healing requests older than 24 hours.
 function cleanupExpiredHealingRequests() {
   try {
     const healingRequests = safeReadJSON(healingRequestsFile);
@@ -151,18 +141,19 @@ function cleanupExpiredHealingRequests() {
 
 
 // ============================================================================
-// Vending Requests Storage Functions
-// ------------------- File Path for Vending Requests -------------------
+// ------------------- Vending Requests Storage Functions -------------------
+// Functions for managing vending requests in persistent storage.
+
+// Define file path for vending requests.
 const vendingRequestsFile = path.join(__dirname, '../data/vendingRequests.json');
 
-// Ensure the vending requests file exists
+// Create the vending requests file if it doesn't exist.
 if (!fs.existsSync(vendingRequestsFile)) {
   console.error('[storage.js]: logs Vending Requests storage file does not exist. Creating a new one.');
   fs.writeFileSync(vendingRequestsFile, JSON.stringify({}));
 }
 
-// ------------------- Save Vending Request to Storage -------------------
-// Saves a vending request to persistent storage.
+// Save a vending request to storage.
 function saveVendingRequestToStorage(requestId, requestData) {
   try {
     const vendingRequests = safeReadJSON(vendingRequestsFile);
@@ -173,15 +164,13 @@ function saveVendingRequestToStorage(requestId, requestData) {
   }
 }
 
-// ------------------- Retrieve Vending Request from Storage -------------------
-// Retrieves a vending request by its ID from persistent storage.
+// Retrieve a vending request by its ID.
 function retrieveVendingRequestFromStorage(requestId) {
   const vendingRequests = safeReadJSON(vendingRequestsFile);
   return vendingRequests[requestId] || null;
 }
 
-// ------------------- Delete Vending Request from Storage -------------------
-// Deletes a vending request by its ID from persistent storage.
+// Delete a vending request from storage by its ID.
 function deleteVendingRequestFromStorage(requestId) {
   const vendingRequests = safeReadJSON(vendingRequestsFile);
   if (vendingRequests[requestId]) {
@@ -192,8 +181,7 @@ function deleteVendingRequestFromStorage(requestId) {
   }
 }
 
-// ------------------- Retrieve All Vending Requests -------------------
-// Retrieves all vending requests from persistent storage.
+// Retrieve all vending requests.
 function retrieveAllVendingRequests() {
   try {
     const vendingRequests = safeReadJSON(vendingRequestsFile);
@@ -204,8 +192,7 @@ function retrieveAllVendingRequests() {
   }
 }
 
-// ------------------- Cleanup Expired Vending Requests -------------------
-// Removes vending requests older than 30 days from persistent storage.
+// Cleanup vending requests older than 30 days.
 function cleanupExpiredVendingRequests() {
   try {
     const vendingRequests = safeReadJSON(vendingRequestsFile);
@@ -229,20 +216,70 @@ function cleanupExpiredVendingRequests() {
 
 
 // ============================================================================
-// Module Exports
-// ------------------- Exporting Storage Functions -------------------
+// ------------------- Boosting Requests Storage Functions -------------------
+// Functions for managing boosting requests in persistent storage.
+
+// Define file path for boosting requests.
+const boostingRequestsFile = path.join(__dirname, '../data/boostingRequests.json');
+
+// Create the boosting requests file if it doesn't exist.
+if (!fs.existsSync(boostingRequestsFile)) {
+  fs.writeFileSync(boostingRequestsFile, JSON.stringify({}));
+}
+
+// Retrieve a boosting request by character name where the request is fulfilled.
+function retrieveBoostingRequestFromStorageByCharacter(characterName) {
+  const boostingRequests = safeReadJSON(boostingRequestsFile);
+  for (const requestId in boostingRequests) {
+    const request = boostingRequests[requestId];
+    if (request.targetCharacter.toLowerCase() === characterName.toLowerCase() && request.status === 'fulfilled') {
+      return request;
+    }
+  }
+  return null;
+}
+
+// ------------------- Save Boosting Request to Storage -------------------
+// Saves a boosting request to persistent storage.
+function saveBoostingRequestToStorage(requestId, requestData) {
+  try {
+    const boostingRequests = safeReadJSON(boostingRequestsFile);
+    boostingRequests[requestId] = requestData;
+    fs.writeFileSync(boostingRequestsFile, JSON.stringify(boostingRequests, null, 2));
+  } catch (error) {
+    console.error(`[storage.js]: logs Error saving boosting request ${requestId}:`, error.message);
+  }
+}
+
+// ------------------- Retrieve Boosting Request from Storage -------------------
+// Retrieves a boosting request by its ID.
+function retrieveBoostingRequestFromStorage(requestId) {
+  const boostingRequests = safeReadJSON(boostingRequestsFile);
+  return boostingRequests[requestId] || null;
+}
+
+
+// ============================================================================
+// ------------------- Module Exports -------------------
+// Export all storage-related functions for use in other modules.
 module.exports = {
-  submissionStore,                
-  saveSubmissionToStorage,        
-  retrieveSubmissionFromStorage,   
-  deleteSubmissionFromStorage,      
+  submissionStore,
+  saveSubmissionToStorage,
+  retrieveSubmissionFromStorage,
+  deleteSubmissionFromStorage,
+  
   saveHealingRequestToStorage,
   retrieveHealingRequestFromStorage,
   deleteHealingRequestFromStorage,
   cleanupExpiredHealingRequests,
+  
   saveVendingRequestToStorage,
   retrieveVendingRequestFromStorage,
   deleteVendingRequestFromStorage,
   retrieveAllVendingRequests,
-  cleanupExpiredVendingRequests
+  cleanupExpiredVendingRequests,
+  
+  saveBoostingRequestToStorage,
+  retrieveBoostingRequestFromStorage,
+  retrieveBoostingRequestFromStorageByCharacter
 };

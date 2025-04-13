@@ -1,8 +1,8 @@
 // ------------------- Imports -------------------
 const { connectToTinglebot, connectToInventories } = require('../database/connection'); // Adjust the path if necessary
-const Character = require('../models/CharacterModel');  // Adjust the path to CharacterModel if necessary
+const Character = require('../models/CharacterModel'); // Adjust the path to CharacterModel if necessary
 
-// ------------------- Update Characters -------------------
+// ------------------- Update All Characters with Blight -------------------
 async function updateAllCharacters() {
   try {
     // Connect to the Tinglebot database
@@ -11,26 +11,19 @@ async function updateAllCharacters() {
 
     // Fetch all characters
     const characters = await Character.find({});
-    console.log(`🔄 Processing ${characters.length} characters to adjust blight...\n`);
+    console.log(`🔄 Processing ${characters.length} characters to apply blight...\n`);
 
     // Iterate over each character
     for (const character of characters) {
-      // Apply blight to characters owned by user 211219306137124865
-      if (character.userId === '211219306137124865') { // Ensure this field matches the userId field in the character schema
-        character.blighted = true;
-        character.blightStage = 1;
-        character.lastRollDate = null; // Reset the lastRollDate
-        console.log(`🔵 Set blight to Stage 1 for ${character.name} (Owner: 211219306137124865)`);
-      } else {
-        character.blighted = false;
-        character.blightStage = 0;
-        character.lastRollDate = null; // Clear the lastRollDate
-        console.log(`🟢 Removed blight from ${character.name}`);
-      }
+      character.blighted = true;
+      character.blightStage = 1;
+      character.lastRollDate = null; // Reset the lastRollDate
+      console.log(`💀 Blighted ${character.name} | Stage: 1`);
+
       await character.save(); // Save the updated character
     }
 
-    console.log(`\n✅ Successfully updated characters. Blight adjusted for all based on ownership by user 211219306137124865.`);
+    console.log(`\n✅ Successfully blighted all characters in the database.`);
   } catch (error) {
     console.error('❌ Error updating characters:', error);
   } finally {

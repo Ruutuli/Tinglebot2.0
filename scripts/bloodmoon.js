@@ -18,7 +18,8 @@ const { EmbedBuilder } = require('discord.js');
 // ============================================================================
 // Local Modules
 // ------------------- Importing custom modules -------------------
-const { convertToHyruleanDate, bloodmoonDates } = require('../modules/calendarModule');
+const { convertToHyruleanDate, bloodmoonDates, isBloodmoon } = require('../modules/calendarModule');
+
 
 
 // ============================================================================
@@ -153,12 +154,20 @@ async function revertChannelNames(client) {
     [process.env.VHINTL_TOWN_HALL]: '🌱》vhintl-townhall',
   };
 
+  // Determine if Yesterday Was a Blood Moon
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  const wasBloodMoonYesterday = isBloodmoon(yesterday);  // Using your existing isBloodmoon function
+
   for (const [channelId, newName] of Object.entries(channelMappings)) {
     await changeChannelName(client, channelId, newName);
-    await sendBloodMoonEndAnnouncement(client, channelId);
+
+    if (wasBloodMoonYesterday) {
+      await sendBloodMoonEndAnnouncement(client, channelId);  // Only send if true
+    }
   }
 }
-
 
 // ============================================================================
 // Blood Moon Trigger and Status Functions
