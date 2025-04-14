@@ -5,6 +5,7 @@ const { Schema } = mongoose;
 // ------------------- Define Pet Schema -------------------
 
 const PetSchema = new Schema({
+  ownerName: { type: String, required: true },
   name: { type: String, required: true },
   species: { type: String, required: true },
   petType: { type: String, required: true },

@@ -42,5 +42,27 @@
     "flavortext": null,
     "status": "pending",
     "createdAt": "2025-03-26T19:19:56.453Z"
+  },
+  "B587395": {
+    "submissionId": "B587395",
+    "userId": "635948726686580747",
+    "characterName": "Fiddle",
+    "healerName": "Elde",
+    "taskType": "item",
+    "taskDescription": "**Elde, Oracle of Courage** wouldn't hesitate to heal those they strive to protect and certainly wouldn't ask for compensation, however it would be rude not to thank them! \nA little fairy gives you some hints as to what you could offer:\n- \"Any one part from one of those big tough Lynels—just one will do. Elde’s been studying them, they think that stuff is pretty neat.\"\n- \"Lizalfos parts, from the kinds found in and around the forest. But we need **50 of each!** Show Elde how much you’re helping!\"\n- \"Did you know Elde has a favourite Beetle? It has great big mandibles and is the colour of the sky, but it’s not easy to find. You should bring back a few of them, perhaps **5 would do?**\"",
+    "healingStage": 2,
+    "status": "pending",
+    "createdAt": "2025-04-14T01:32:03.928Z"
+  },
+  "B619780": {
+    "submissionId": "B619780",
+    "userId": "308795936530759680",
+    "characterName": "Sable",
+    "healerName": "Aemu",
+    "taskType": "item",
+    "taskDescription": "**Aemu: Oracle of Power** stumbles over her words, clearly a bit flustered. \"Oh, um! Okay, so I need these things... Ah, Hylia, what were they called again... OKAY, OKAY, SO...\"\n\n- That orangey gem! You know, the shiny one? I need **5 of those!**\n- Oh, or maybe... the ancient one? It’s more of a relic. I need **1 of those.**\n- A reddish pearl... yes, that's it! I just need **1 of those.**\n- Oh! Or a feather, but not just any feather... the one from the Goddess herself! I need **1 of those.**\n- And if you can’t find any of that, how about something that fell from the stars? I need **1 of those!**",
+    "healingStage": 2,
+    "status": "pending",
+    "createdAt": "2025-04-14T00:52:54.366Z"
   }
 }

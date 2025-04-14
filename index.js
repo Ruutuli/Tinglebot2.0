@@ -203,27 +203,40 @@ client.on('messageCreate', async message => {
   if (message.channel.parentId !== '1315866996776374302') return; // Feedback Forum Channel ID
   if (message.author.bot) return;
 
-  if (!message.content.replace(/\*/g, '').startsWith('Command:')) {
-    const reply = await message.reply(
-      `❌ Bug report must follow the required format to create a ticket!\n\n` +
-      `**Command:** [Specify the command or feature]\n` +
-      `**Issue:** [Brief description of the problem]\n` +
-      `**Steps to Reproduce:**\n` +
-      `1. [Step 1]\n` +
-      `2. [Step 2]\n` +
-      `**Error Output:**\n` +
-      `[Copy and paste the exact error message or output text here]\n` +
-      `**Screenshots:** [Attach screenshots if possible]\n` +
-      `**Expected Behavior:** [What you expected to happen]\n` +
-      `**Actual Behavior:** [What actually happened]`
-    );
+  // ------------------- Bug Report Format Validation -------------------
+if (!message.content.replace(/\*/g, '').startsWith('Command')) {
+  const reply = await message.reply(
+    `❌ **Bug Report Rejected — Missing Required Format!**\n\n` +
+    `Your message could not be processed because it is missing the required starting line:\n` +
+    `\`Command: [Command Name]\`\n\n` +
+    `> This line **must** be the very first line of your bug report.\n` +
+    `> Example:\n` +
+    `Command: /gather\n\n` +
+    `---\n` +
+    `### Why was this rejected?\n` +
+    `We automatically check for \`Command:\` at the top of your message so we know what command you are reporting a bug for.\n\n` +
+    `Without this line, we can't create a Trello ticket for your report.\n\n` +
+    `---\n` +
+    `### How to fix your report:\n` +
+    `Please edit your message to follow this format:\n\n` +
+    `**Command:** [Specify the command or feature]\n` +
+    `**Issue:** [Brief description of the problem]\n` +
+    `**Steps to Reproduce:**\n` +
+    `1. [Step 1]\n` +
+    `2. [Step 2]\n` +
+    `**Error Output:**\n` +
+    `[Copy and paste the exact error message or output text here]\n` +
+    `**Screenshots:** [Attach screenshots if possible]\n` +
+    `**Expected Behavior:** [What you expected to happen]\n` +
+    `**Actual Behavior:** [What actually happened]`
+  );
 
-    setTimeout(() => {
-      reply.delete().catch(() => {});
-    }, 10000); // 10 seconds
+  setTimeout(() => {
+    reply.delete().catch(() => {});
+  }, 600000); // 10 minutes
 
-    return;
-  }
+  return;
+}
 
   const threadName = message.channel.name;
   const username = message.author.tag;

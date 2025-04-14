@@ -193,22 +193,27 @@ async function handleAutocomplete(interaction) {
 
       // ------------------- PET Commands -------------------
       if (commandName === 'pet') {
+        if (focusedOption.name === 'charactername') {
+          await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, commandName);
+          return;
+        }
+      
         if (focusedOption.name === 'petname') {
           await handlePetNameAutocomplete(interaction, focusedOption);
           return;
         }
-
+      
         if (focusedOption.name === 'species') {
           await handlePetSpeciesAutocomplete(interaction, focusedOption);
           return;
         }
-
+      
         if (focusedOption.name === 'rolltype') {
           await handlePetRollTypeAutocomplete(interaction, focusedOption);
           return;
         }
       }
-
+      
       // ------------------- SHOPS Commands -------------------
       } else if (commandName === 'shops' && focusedOption.name === 'itemname') {
         await handleShopsAutocomplete(interaction, focusedOption);
@@ -262,7 +267,7 @@ async function handleAutocomplete(interaction) {
   
       // ------------------- Generic CHARACTER-BASED Autocomplete Commands -------------------
       } else if (
-        ['changejob', 'shops', 'explore', 'raid', 'editcharacter', 'deletecharacter', 'setbirthday', 'viewcharacter', 'testinventorysetup', 'syncinventory', 'crafting', 'gather', 'loot', 'gear', 'customweapon'].includes(commandName) &&
+        ['changejob', 'shops', 'explore', 'raid', 'editcharacter', 'deletecharacter', 'setbirthday', 'viewcharacter', 'testinventorysetup', 'syncinventory', 'crafting', 'gather', 'loot', 'gear', 'customweapon', 'pet'].includes(commandName) &&
         focusedOption.name === 'charactername'
       ) {
         await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, commandName);
@@ -1483,14 +1488,32 @@ async function handleVendorItemAutocomplete(interaction, focusedOption) {
     // ------------------- Pet Name Autocomplete -------------------
     async function handlePetNameAutocomplete(interaction, focusedOption) {
       const userId = interaction.user.id;
-      const characterName = interaction.options.getString('charactername');
-      if (!characterName) return await interaction.respond([]);
+      const fullCharacterName = interaction.options.getString('charactername');
+      const characterName = fullCharacterName.split(' - ')[0];
+    
+      console.log(`[autocompleteHandler.js]: logs - Full charactername input: "${fullCharacterName}", Extracted name: "${characterName}"`);
+    
+      if (!characterName) {
+        console.log(`[autocompleteHandler.js]: logs - No charactername provided. Returning empty response.`);
+        return await interaction.respond([]);
+      }
     
       const character = await fetchCharacterByNameAndUserId(characterName, userId);
-      if (!character) return await interaction.respond([]);
+      if (!character) {
+        console.log(`[autocompleteHandler.js]: logs - No character found for name "${characterName}" and user "${userId}".`);
+        return await interaction.respond([]);
+      }
+    
+      console.log(`[autocompleteHandler.js]: logs - Found character "${character.name}" with _id "${character._id}" for user "${userId}".`);
     
       const pets = await Pet.find({ owner: character._id, status: 'active' }).lean();
-      if (!pets.length) return await interaction.respond([]);
+    
+      if (!pets.length) {
+        console.log(`[autocompleteHandler.js]: logs - No pets found for character "${character.name}" (_id: ${character._id}).`);
+        return await interaction.respond([]);
+      }
+    
+      console.log(`[autocompleteHandler.js]: logs - Found pets for "${character.name}": ${pets.map(p => p.name).join(', ')}`);
     
       const choices = pets.map(pet => ({
         name: pet.name,
@@ -1499,6 +1522,8 @@ async function handleVendorItemAutocomplete(interaction, focusedOption) {
     
       await respondWithFilteredChoices(interaction, focusedOption, choices);
     }
+    
+
     
         // ------------------- Pet Species Autocomplete -------------------
     async function handlePetSpeciesAutocomplete(interaction, focusedOption) {

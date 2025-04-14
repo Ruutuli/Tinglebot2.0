@@ -21,7 +21,7 @@ const { fetchItemByName } = require('../database/itemService');
 const { checkAndUseStamina } = require('../modules/characterStatsModule');
 const { getJobPerk } = require('../modules/jobsModule');
 const { validateJobVoucher, activateJobVoucher, fetchJobVoucherItem, deactivateJobVoucher } = require('../modules/jobVoucherModule');
-const { capitalizeWords } = require('../modules/formattingModule');
+const { capitalizeWords,formatDateTime   } = require('../modules/formattingModule');
 
 // ------------------- Utility Functions -------------------
 const { addItemInventoryDatabase, processMaterials } = require('../utils/inventoryUtils');
