@@ -1,5 +1,6 @@
 // ------------------- Import necessary modules and services -------------------
 const { SlashCommandBuilder } = require('@discordjs/builders');
+const { handleError } = require('../utils/globalErrorHandler');
 const { fetchCharacterByNameAndUserId } = require('../database/characterService');
 const { connectToTinglebot } = require('../database/connection');
 const { authorizeSheets, appendSheetData, getSheetIdByTitle, readSheetData } = require('../utils/googleSheetsUtils');
@@ -94,6 +95,8 @@ module.exports = {
       console.log('✅ Interaction reply sent to the user.');
 
     } catch (error) {
+    handleError(error, 'testinventorysetup.js');
+
       console.error('❌ Error details:', error);
 
       // ------------------- Handle specific error cases -------------------

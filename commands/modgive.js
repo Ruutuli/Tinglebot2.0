@@ -1,5 +1,6 @@
 // ------------------- Import necessary modules -------------------
 const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const { handleError } = require('../utils/globalErrorHandler');
 const { fetchCharacterByNameAndUserId } = require('../database/characterService');
 const { fetchItemByName } = require('../database/itemService');
 const { addItemInventoryDatabase } = require('../utils/inventoryUtils');
@@ -63,6 +64,8 @@ module.exports = {
             });
     
         } catch (error) {
+    handleError(error, 'modgive.js');
+
             console.error('[modgive]: Error giving item:', error);
             return interaction.editReply({ content: '❌ **An error occurred while processing the command.**', ephemeral: true });
         }
@@ -87,6 +90,8 @@ async function handleAutocomplete(interaction) {
         await interaction.respond([]);
       }
     } catch (error) {
+    handleError(error, 'modgive.js');
+
       console.error('[handleAutocomplete]: Error handling autocomplete:', error);
       await safeRespondWithError(interaction);
     }

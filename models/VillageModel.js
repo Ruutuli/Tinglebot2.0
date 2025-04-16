@@ -1,6 +1,7 @@
 // ------------------- Import Mongoose -------------------
 const mongoose = require('mongoose');
 
+const { handleError } = require('../utils/globalErrorHandler');
 // ------------------- Define Village Schema -------------------
 const VillageSchema = new mongoose.Schema({
   name: {
@@ -117,6 +118,8 @@ const initializeVillages = async () => {
         console.log(`ℹ️ Village already exists: ${village.name}`);
       }
     } catch (error) {
+    handleError(error, 'VillageModel.js');
+
       console.error(`❌ Error initializing village: ${village.name}`, error);
     }
   }

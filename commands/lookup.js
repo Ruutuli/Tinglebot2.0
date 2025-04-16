@@ -1,5 +1,6 @@
 // ------------------- Import necessary modules and functions -------------------
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { handleError } = require('../utils/globalErrorHandler');
 const { connectToTinglebot } = require('../database/connection');
 const ItemModel = require('../models/ItemModel');
 const Character = require('../models/CharacterModel');
@@ -49,6 +50,8 @@ module.exports = {
         return interaction.editReply({ content: '❌ Please provide either an item or ingredient to look up.', ephemeral: true });
       }
     } catch (error) {
+    handleError(error, 'lookup.js');
+
       console.error("❌ Error in lookup command:", error);  // Log detailed error
       return interaction.editReply({ content: '❌ There was an error while executing this command!', ephemeral: true });
     }
@@ -229,6 +232,8 @@ async function handleIngredientLookup(interaction, ingredientName) {
    try {
      await interaction.editReply({ components: [] });
    } catch (error) {
+    handleError(error, 'lookup.js');
+
      // Error handling if needed
    }
  });

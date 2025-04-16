@@ -8,6 +8,7 @@
 // ------------------- Importing Discord.js components -------------------
 const { EmbedBuilder } = require('discord.js');
 
+const { handleError } = require('../utils/globalErrorHandler');
 // ============================================================================
 // Database Connections
 // ------------------- Importing database connection functions -------------------
@@ -53,6 +54,8 @@ async function fetchTableData(sheetName) {
         // Skip the header row and return the rest.
         return response.data.values.slice(1);
     } catch (error) {
+    handleError(error, 'sheetTableUtils.js');
+
         console.error(`[sheetTableUtils.js]: logs Error fetching data from Google Sheets (${sheetName}):`, error);
         return [];
     }
@@ -83,6 +86,8 @@ async function fetchTableFromDatabase(sheetName) {
         }
         return table.data;
     } catch (error) {
+    handleError(error, 'sheetTableUtils.js');
+
         console.error(`[sheetTableUtils.js]: logs Error fetching table from database:`, error);
         return null;
     }
@@ -104,6 +109,8 @@ async function loadTable(sheetName) {
             { upsert: true, new: true }
         );
     } catch (error) {
+    handleError(error, 'sheetTableUtils.js');
+
         console.error(`[sheetTableUtils.js]: logs Error saving table to database:`, error);
     }
     return true;

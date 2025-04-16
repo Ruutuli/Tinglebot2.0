@@ -4,6 +4,7 @@ require('dotenv').config();
 // ------------------- Local Module Imports -------------------
 // Importing the Relic model and database connection function.
 const RelicModel = require('../models/RelicModel');
+const { handleError } = require('../utils/globalErrorHandler');
 const { connectToTinglebot } = require('../database/connection');
 
 // ------------------- Relic Service Functions -------------------
@@ -16,6 +17,8 @@ const createRelic = async (relicData) => {
     const newRelic = new RelicModel(relicData);
     return await newRelic.save();
   } catch (error) {
+    handleError(error, 'relicService.js');
+
     console.error('[relicService.js]: ❌ Error creating relic:', error);
     throw error;
   }
@@ -28,6 +31,8 @@ const fetchRelicsByCharacter = async (characterName) => {
     await connectToTinglebot();
     return await RelicModel.find({ discoveredBy: characterName }).lean();
   } catch (error) {
+    handleError(error, 'relicService.js');
+
     console.error('[relicService.js]: ❌ Error fetching relics by character:', error);
     throw error;
   }
@@ -55,6 +60,8 @@ const appraiseRelic = async (relicId, appraiserName, description, rollOutcome) =
       { new: true }
     );
   } catch (error) {
+    handleError(error, 'relicService.js');
+
     console.error('[relicService.js]: ❌ Error appraising relic:', error);
     throw error;
   }
@@ -75,6 +82,8 @@ const archiveRelic = async (relicId, imageUrl) => {
       { new: true }
     );
   } catch (error) {
+    handleError(error, 'relicService.js');
+
     console.error('[relicService.js]: ❌ Error archiving relic:', error);
     throw error;
   }
@@ -91,6 +100,8 @@ const markRelicDeteriorated = async (relicId) => {
       { new: true }
     );
   } catch (error) {
+    handleError(error, 'relicService.js');
+
     console.error('[relicService.js]: ❌ Error marking relic as deteriorated:', error);
     throw error;
   }
@@ -103,6 +114,8 @@ const fetchArchivedRelics = async () => {
     await connectToTinglebot();
     return await RelicModel.find({ archived: true }).lean();
   } catch (error) {
+    handleError(error, 'relicService.js');
+
     console.error('[relicService.js]: ❌ Error fetching archived relics:', error);
     throw error;
   }
@@ -115,6 +128,8 @@ const fetchRelicById = async (relicId) => {
     await connectToTinglebot();
     return await RelicModel.findById(relicId).lean();
   } catch (error) {
+    handleError(error, 'relicService.js');
+
     console.error('[relicService.js]: ❌ Error fetching relic by ID:', error);
     throw error;
   }
@@ -128,6 +143,8 @@ const deleteAllRelics = async () => {
     // Corrected to use RelicModel instead of an undefined Relic.
     return await RelicModel.deleteMany({});
   } catch (error) {
+    handleError(error, 'relicService.js');
+
     console.error('[relicService.js]: ❌ Error deleting relics:', error);
     throw error;
   }

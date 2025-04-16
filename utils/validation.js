@@ -8,6 +8,7 @@
 // ------------------- Importing standard and third-party modules -------------------
 const mongoose = require('mongoose');
 
+const { handleError } = require('../utils/globalErrorHandler');
 // ============================================================================
 // Database Models
 // ------------------- Importing database models -------------------
@@ -39,6 +40,8 @@ async function ensureTinglebotConnection() {
             await mongoose.connect(tinglebotUri, {}); // Add connection options here if needed
             console.log('[validation.js]: Successfully connected to Tinglebot database.');
         } catch (error) {
+    handleError(error, 'validation.js');
+
             console.error('[validation.js]: Error connecting to Tinglebot database:', error);
         }
     }
@@ -60,6 +63,8 @@ async function ensureInventoriesConnection() {
 
         return inventoriesConnection;
     } catch (error) {
+    handleError(error, 'validation.js');
+
         console.error('[validation.js]: Error initializing Inventories database connection:', error);
         throw error;
     }
@@ -78,6 +83,8 @@ async function ensureCollectionExists(dbConnection, collectionName) {
             console.log(`[validation.js]: Created missing collection: ${collectionName}`);
         }
     } catch (error) {
+    handleError(error, 'validation.js');
+
         console.error(`[validation.js]: Error ensuring collection ${collectionName} exists:`, error);
         throw error;
     }
@@ -93,6 +100,8 @@ async function isUniqueCharacterName(userId, characterName) {
         const existingCharacter = await Character.findOne({ userId, name: characterName });
         return !existingCharacter;
     } catch (error) {
+    handleError(error, 'validation.js');
+
         console.error('[validation.js]: Error checking unique character name:', error);
         throw error;
     }

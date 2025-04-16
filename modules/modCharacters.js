@@ -1,3 +1,5 @@
+const { handleError } = require('../utils/globalErrorHandler');
+
 // ------------------- Module to store Mod OCs for Healing -------------------
 // This module contains the Mod OCs and their respective village, category, type, owner, and dynamic healing requirements.
 

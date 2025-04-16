@@ -1,5 +1,6 @@
 // ------------------- Import necessary modules and services -------------------
 const { SlashCommandBuilder } = require('@discordjs/builders');
+const { handleError } = require('../utils/globalErrorHandler');
 const { fetchCharacterByNameAndUserId, fetchCharactersByUserId } = require('../database/characterService');
 const { connectToTinglebot } = require('../database/connection');
 const { isValidGoogleSheetsUrl, extractSpreadsheetId } = require('../utils/validation');
@@ -83,6 +84,8 @@ module.exports = {
                 await interaction.reply({ embeds: [syncEmbed], components: [row], ephemeral: true });
                 console.log('Reached here')
             } catch (error) {
+    handleError(error, 'syncInventory.js');
+
                 // ------------------- Handle any errors -------------------
                 await interaction.reply({ content: `❌ An error occurred while syncing inventory. Please try again later.`, ephemeral: true });
                 console.log(error)
@@ -119,6 +122,8 @@ module.exports = {
                 await interaction.respond(filteredChoices);
 
             } catch (error) {
+    handleError(error, 'syncInventory.js');
+
                 // ------------------- Respond with empty array on error -------------------
                 await interaction.respond([]);
             }

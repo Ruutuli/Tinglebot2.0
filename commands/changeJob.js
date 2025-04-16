@@ -6,6 +6,7 @@
 // ------------------- Discord.js Components -------------------
 const { EmbedBuilder, SlashCommandBuilder } = require('discord.js');
 
+const { handleError } = require('../utils/globalErrorHandler');
 // ------------------- Database Connections -------------------
 const { connectToTinglebot } = require('../database/connection');
 
@@ -164,6 +165,8 @@ module.exports = {
       return interaction.followUp({ embeds: [embed], ephemeral: true });
 
     } catch (error) {
+    handleError(error, 'changeJob.js');
+
       // ------------------- Error Handling -------------------
       console.error('[changejob.js]: Error changing job:', error);
       return interaction.followUp({
@@ -186,6 +189,8 @@ module.exports = {
         await interaction.respond([]);
       }
     } catch (error) {
+    handleError(error, 'changeJob.js');
+
       console.error('[changejob.js]: Error handling autocomplete:', error);
       await interaction.respond([]);
     }

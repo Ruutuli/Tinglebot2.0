@@ -4,6 +4,7 @@
 // ------------------- Discord.js Components -------------------
 const { SlashCommandBuilder } = require('discord.js');
 
+const { handleError } = require('../utils/globalErrorHandler');
 // ------------------- Database Services -------------------
 const { fetchCharacterByName, fetchCharacterByNameAndUserId, getCharacterInventoryCollection, updateCharacterById } = require('../database/characterService');
 const { getOrCreateToken, updateTokenBalance } = require('../database/tokenService');
@@ -320,6 +321,8 @@ if (!courierCurrentVillage || !recipientCurrentVillage || courierCurrentVillage 
     });
 
   } catch (error) {
+    handleError(error, 'deliver.js');
+
     console.error('[deliver.js]: Error processing delivery request', error);
     return interaction.reply({
       content: `❌ An unexpected error occurred while creating the delivery task. Please try again later.`,
@@ -542,6 +545,8 @@ if (delivery.deliveryType === 'vendingstock') {
     });
 
   } catch (error) {
+    handleError(error, 'deliver.js');
+
     console.error('[deliver.js]: Error processing delivery accept', error);
     return interaction.reply({
       content: `❌ An error occurred while accepting the delivery task.`,
@@ -719,6 +724,8 @@ if (!isValidGoogleSheetsUrl(shopLink)) {
         try {
           await appendSheetData(auth, senderSheetId, range, senderLog);
         } catch (err) {
+    handleError(err, 'deliver.js');
+
           console.error(`[deliver.js]: Failed to log sender delivery to Sheets:`, err);
           await interaction.followUp({
             content: `⚠️ Delivery was successful, but sender's logging to Google Sheets failed.`,
@@ -728,6 +735,8 @@ if (!isValidGoogleSheetsUrl(shopLink)) {
         try {
           await appendSheetData(auth, recipientSheetId, range, recipientLog);
         } catch (err) {
+    handleError(err, 'deliver.js');
+
           console.error(`[deliver.js]: Failed to log recipient delivery to Sheets:`, err);
           await interaction.followUp({
             content: `⚠️ Delivery was successful, but recipient's logging to Google Sheets failed.`,
@@ -813,6 +822,8 @@ try {
     }
   }
 } catch (err) {
+    handleError(err, 'deliver.js');
+
   console.error(`[deliver.js]: Failed to log courier token payout:`, err);
 }
 
@@ -823,10 +834,14 @@ try {
       embeds: [deliveryCompleteEmbed],
     });
   } catch (error) {
+    handleError(error, 'deliver.js');
+
     console.error('[deliver.js]: Error processing delivery fulfillment', error);
     try {
       return interaction.editReply('❌ An error occurred while fulfilling the delivery task.');
     } catch (e) {
+    handleError(e, 'deliver.js');
+
       console.error('[deliver.js]: Failed to edit reply after error', e);
     }
   }
@@ -980,6 +995,8 @@ if ((recipientChar.vendingPoints || 0) < totalCost) {
     });
 
   } catch (err) {
+    handleError(err, 'deliver.js');
+
     console.error('[deliver.js]: Error handling vendingstock delivery:', err);
     return interaction.reply({
       content: `❌ An error occurred while creating the vending stock delivery task.`,

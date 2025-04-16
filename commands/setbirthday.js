@@ -1,5 +1,6 @@
 // ------------------- Import necessary modules and services -------------------
 const { SlashCommandBuilder } = require('discord.js');
+const { handleError } = require('../utils/globalErrorHandler');
 const { fetchCharacterByNameAndUserId, fetchCharactersByUserId } = require('../database/characterService');
 const { connectToTinglebot } = require('../database/connection');
 
@@ -50,6 +51,8 @@ module.exports = {
       await interaction.reply({ content: `🎂 **${character.name}'s** birthday has been set to **${birthday}**.`, ephemeral: true });
 
     } catch (error) {
+    handleError(error, 'setbirthday.js');
+
       // ------------------- Handle errors during execution -------------------
       await interaction.reply({ content: '❌ An error occurred while setting the birthday. Please try again later.', ephemeral: true });
     }
@@ -76,6 +79,8 @@ module.exports = {
         await interaction.respond(filteredChoices);
       }
     } catch (error) {
+    handleError(error, 'setbirthday.js');
+
       // ------------------- Handle errors during autocomplete -------------------
       await interaction.respond([]);
     }

@@ -4,6 +4,7 @@
 // ------------------- Imports -------------------
 const { ActionRowBuilder, StringSelectMenuBuilder } = require('discord.js');
 
+const { handleError } = require('../utils/globalErrorHandler');
 // ------------------- Base Selection Menu -------------------
 function getBaseSelectMenu(showNextSection = false) {
   const baseOptions = [

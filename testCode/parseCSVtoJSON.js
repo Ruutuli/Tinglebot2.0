@@ -1,5 +1,6 @@
 // =================== STANDARD LIBRARIES ===================
 const fs = require('fs');
+const { handleError } = require('../utils/globalErrorHandler');
 const path = require('path');
 
 // =================== THIRD-PARTY LIBRARIES ===================

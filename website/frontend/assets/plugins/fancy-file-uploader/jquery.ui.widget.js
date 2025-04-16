@@ -1,3 +1,5 @@
+const { handleError } = require('../utils/globalErrorHandler');
+
 /*! jQuery UI - v1.12.1+0b7246b6eeadfa9e2696e22f3230f6452f8129dc - 2020-02-20
  * http://jqueryui.com
  * Includes: widget.js

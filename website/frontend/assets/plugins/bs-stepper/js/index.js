@@ -1,3 +1,5 @@
+const { handleError } = require('../utils/globalErrorHandler');
+
 import { show, customProperty, detectAnimation, ClassName } from './util'
 import { buildClickStepLinearListener, buildClickStepNonLinearListener } from './listeners'
 

@@ -1,3 +1,5 @@
+const { handleError } = require('../utils/globalErrorHandler');
+
 /*!
  * Date picker for pickadate.js v3.6.4
  * http://amsul.github.io/pickadate.js/date.htm

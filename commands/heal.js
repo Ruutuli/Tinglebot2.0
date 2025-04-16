@@ -1,6 +1,7 @@
 // ------------------- Import necessary modules -------------------
 // Group imports into standard libraries, third-party, and local modules
 const { SlashCommandBuilder } = require('discord.js');
+const { handleError } = require('../utils/globalErrorHandler');
 const { fetchCharacterByName, fetchCharactersByUserId, fetchCharacterByNameAndUserId } = require('../database/characterService');
 const { v4: uuidv4 } = require('uuid');
 const { capitalizeWords, capitalizeFirstLetter } = require('../modules/formattingModule');
@@ -173,6 +174,8 @@ if (subcommand === 'request') {
       healingRequestData.messageId = sentMessage.id;
       saveHealingRequestToStorage(healingRequestId, healingRequestData);
   } catch (error) {
+    handleError(error, 'heal.js');
+
       console.error('[heal.js]: Error during healing request creation:', error.message);
       await interaction.editReply('❌ **Error:** An issue occurred while creating the healing request.');
   }
@@ -349,6 +352,8 @@ if (subcommand === 'fulfill') {
 
         await interaction.followUp({ content: message, embeds: [embed] });
     } catch (error) {
+    handleError(error, 'heal.js');
+
         console.error(`[heal.js]: Error during healing request fulfillment: ${error.message}`);
         await interaction.editReply('❌ **Error:** An issue occurred while fulfilling the healing request.');
     }

@@ -1,5 +1,6 @@
 // ------------------- Imports -------------------
 const { Client, GatewayIntentBits } = require('discord.js');
+const { handleError } = require('../utils/globalErrorHandler');
 require('dotenv').config(); // If you're using .env for the bot token
 
 // ------------------- Client Init -------------------
@@ -119,6 +120,8 @@ Thank you for being part of this adventure!
       await member.send(part4);
       sent++;
     } catch (error) {
+    handleError(error, 'dmBrodcast.js');
+
       console.error(`[dmBroadcast.js]: Failed to DM ${member.user.tag} - ${error.message}`);
       failed++;
     }

@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 
+const { handleError } = require('../utils/globalErrorHandler');
 // ------------------- Define the Mount Schema -------------------
 const MountSchema = new mongoose.Schema({
   discordId: { // Replacing memberId with discordId

@@ -6,6 +6,7 @@ require('dotenv').config();
 // ------------------- Standard Libraries -------------------
 // Import Node.js core modules.
 const fs = require('fs');
+const { handleError } = require('./utils/globalErrorHandler');
 const path = require('path');
 
 
@@ -50,6 +51,8 @@ function logBloodMoonStatus() {
   try {
     isBloodMoon = isBloodMoonDay();
   } catch (error) {
+    handleError(error, 'index.js');
+
     console.error(`[index.js]: Error checking Blood Moon status: ${error.message}`);
   }
 
@@ -70,6 +73,8 @@ async function initializeDatabases() {
     await connectToInventories();
     console.log('[index.js]: ✅ Databases connected');
   } catch (err) {
+    handleError(err, 'index.js');
+
     console.error('[index.js]: ❌ Database initialization error:', err);
     throw err;
   }
@@ -118,6 +123,8 @@ async function initializeClient() {
       initializeRandomEncounterBot(client);
       console.log('[index.js]: ⚔️ Random encounter functionality initialized');
     } catch (error) {
+    handleError(error, 'index.js');
+
       console.error('[index.js]: ❌ Error initializing random encounters:', error);
     }
   });
@@ -168,6 +175,8 @@ async function initializeClient() {
         console.warn(`[index.js]: Unhandled interaction type: ${interaction.type}`);
       }
     } catch (error) {
+    handleError(error, 'index.js');
+
       console.error('[index.js]: ❌ Interaction error:', error);
     }
   });

@@ -8,6 +8,7 @@ require('dotenv').config();
 // ------------------- Standard Libraries and Third-Party Modules -------------------
 const cron = require('node-cron');
 
+const { handleError } = require('./utils/globalErrorHandler');
 // ------------------- Discord.js Components -------------------
 const { EmbedBuilder } = require('discord.js');
 
@@ -82,6 +83,8 @@ cron.schedule('0 0 * * *', async () => {
             await user.send(`🏛️ **Town Hall Notice**\n\nYour character **${character.name}** has been released from jail. Remember, a fresh start awaits you!`);
           }          
         } catch (dmError) {
+    handleError(dmError, 'scheduler.js');
+
           console.error(`[scheduler]❌ Error sending DM for character ${character.name}:`, dmError.message);
         }
       }
@@ -89,6 +92,8 @@ cron.schedule('0 0 * * *', async () => {
       console.log('[scheduler] No characters to release from jail at this time.');
     }
   } catch (error) {
+    handleError(error, 'scheduler.js');
+
     console.error('[scheduler]❌ Error during jail release check:', error.message);
   }
 }, { timezone: 'America/New_York' });
@@ -101,6 +106,8 @@ cron.schedule('0 0 * * *', async () => {
       await recoverDailyStamina();
       console.log('[scheduler]✅ Daily stamina recovery completed.');
     } catch (error) {
+    handleError(error, 'scheduler.js');
+
       console.error('❌ [Scheduler.js] Error during stamina recovery:', error);
     }
   }, { timezone: 'America/New_York' });
@@ -112,6 +119,8 @@ cron.schedule('0 0 1 * *', async () => {
     await generateVendingStockList();
     console.log('[scheduler]✅ Monthly vending stock generated.');
   } catch (error) {
+    handleError(error, 'scheduler.js');
+
     console.error('[scheduler]❌ Error during monthly vending stock generation:', error.message);
   }
 }, { timezone: 'America/New_York' });
@@ -202,7 +211,7 @@ cron.schedule('0 2 1 * *', async () => {
   } catch (error) {
       // Log failure with details
       console.error('[scheduler]❌ Error updating Google Sheets:', error.message);
-      console.error(error.stack);
+      handleError(error, 'scheduler.js');
   }
 }, { timezone: 'America/New_York' });
 
@@ -216,6 +225,8 @@ cron.schedule('0 20 * * *', async () => {
       await postBlightRollCall(client);
       console.log('[scheduler]✅ Blight roll call posted.');
     } catch (error) {
+    handleError(error, 'scheduler.js');
+
       console.error('[scheduler]❌ Failed to post Blight roll call:', error.message);
     }
 
@@ -249,6 +260,8 @@ cron.schedule('0 20 * * *', async () => {
           console.log(`[scheduler]✅ User ${user.username} notified about ${character.name}'s death.`);
         }
       } catch (error) {
+    handleError(error, 'scheduler.js');
+
         console.error(`[scheduler]❌ Failed to notify user about ${character.name}'s death:`, error.message);
       }
     }
@@ -256,6 +269,8 @@ cron.schedule('0 20 * * *', async () => {
     console.log('[scheduler]✅ Blight death check completed.');
 
   } catch (error) {
+    handleError(error, 'scheduler.js');
+
     console.error('❌ [Scheduler.js] Error during blight roll call sequence:', error);
   }
 }, { timezone: 'America/New_York' });
@@ -281,6 +296,8 @@ cron.schedule('0 20 * * *', async () => {
             await revertChannelNames(client);
           }
         } catch (error) {
+    handleError(error, 'scheduler.js');
+
           console.error(`[scheduler] ❌ Error during Blood Moon tracking for channel ${channelId}:`, error.message);
         }
       }
@@ -297,6 +314,8 @@ cron.schedule('0 20 * * *', async () => {
       await executeBirthdayAnnouncements(client);
       console.log('🎉 Birthday announcements completed.');
     } catch (error) {
+    handleError(error, 'scheduler.js');
+
       console.error('❌ [Scheduler.js] Error during birthday announcements:', error);
     }
   }, { timezone: 'America/New_York' });
@@ -308,6 +327,8 @@ cron.schedule('0 20 * * *', async () => {
       await resetPetRollsForAllCharacters();
       console.log('✅ Pet rolls reset successfully.');
     } catch (error) {
+    handleError(error, 'scheduler.js');
+
       console.error('❌ [Scheduler.js] Error during pet rolls reset:', error);
     }
   }, { timezone: 'America/New_York' });
@@ -319,6 +340,8 @@ cron.schedule('0 20 * * *', async () => {
         cleanupExpiredVendingRequests();
         console.log('[scheduler]✅ Expired vending requests cleaned up successfully.');
     } catch (error) {
+    handleError(error, 'scheduler.js');
+
         console.error('[scheduler]❌ Error during daily cleanup of vending requests:', error.message);
     }
   }, { timezone: 'America/New_York' });
@@ -330,6 +353,8 @@ cron.schedule('0 20 * * *', async () => {
       cleanupExpiredHealingRequests();
       console.log('[scheduler]✅ Expired healing requests cleaned up successfully.');
     } catch (error) {
+    handleError(error, 'scheduler.js');
+
       console.error('❌ [scheduler.js] Error during daily cleanup of healing requests:', error.message);
     }
   }, { timezone: 'America/New_York' });
@@ -360,12 +385,16 @@ cron.schedule('0 20 * * *', async () => {
             console.log(`[scheduler]✅ Notified user ${user.username} about debuff removal for ${character.name}.`);
           }
         } catch (dmError) {
+    handleError(dmError, 'scheduler.js');
+
           console.error(`❌ [scheduler] Failed to DM user:`, dmError);
         }
       }
 
       console.log('[scheduler]✅ Completed debuff expiry check.');
     } catch (error) {
+    handleError(error, 'scheduler.js');
+
       console.error('❌ [scheduler] Error during debuff expiry check:', error);
     }
   }, { timezone: 'America/New_York' });
@@ -447,6 +476,8 @@ async function executeBirthdayAnnouncements(client) {
         await announcementChannel.send({ embeds: [embed] });
         console.log(`[Birthday] Announced ${character.name}'s birthday in ${guild.name}.`);
       } catch (error) {
+    handleError(error, 'scheduler.js');
+
         console.error(`[Birthday] Failed to announce for character ${character.name}:`, error.message);
       }
     }

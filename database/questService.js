@@ -1,4 +1,5 @@
 const Quest = require('../models/QuestModel');
+const { handleError } = require('../utils/globalErrorHandler');
 const { authorizeSheets, appendSheetData } = require('../utils/googleSheetsUtils');
 
 async function createQuest(questData) {

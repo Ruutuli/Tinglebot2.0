@@ -2,6 +2,7 @@
 // Standard Libraries
 const { v4: uuidv4 } = require('uuid');
 
+const { handleError } = require('../utils/globalErrorHandler');
 // Discord.js Components
 const { SlashCommandBuilder } = require('@discordjs/builders');
 const { EmbedBuilder } = require('discord.js');
@@ -493,6 +494,8 @@ await triggerRaid(
                 await interaction.editReply({ embeds: [embed] });
 
             } catch (error) {
+    handleError(error, 'explore.js');
+
                 console.error(`[ERROR] Raid processing failed for battle ID: ${battleId}`, error);
                 await interaction.editReply('❌ **An error occurred during the raid.**');
             }
@@ -625,6 +628,8 @@ else {
     }
 }
     } catch (error) {
+    handleError(error, 'explore.js');
+
         console.error(`[Roll Command Error]`, error);
         await interaction.editReply('❌ An error occurred while processing the roll command.');
     }

@@ -9,6 +9,7 @@
 // ------------------- Importing Discord.js components -------------------
 const { Client, GatewayIntentBits, ChannelType, EmbedBuilder } = require('discord.js');
 
+const { handleError } = require('../utils/globalErrorHandler');
 // ============================================================================
 // Local Modules & Database Models
 // ------------------- Importing local services and models -------------------
@@ -177,10 +178,14 @@ async function triggerRandomEncounter(channel) {
       try {
         await applyVillageDamage(selectedVillage, monster, thread);
       } catch (error) {
+    handleError(error, 'randomEncounters.js');
+
         console.error(`[Timer LOG] Error during applyVillageDamage execution:`, error);
       }
     }, timerDuration);
   } catch (error) {
+    handleError(error, 'randomEncounters.js');
+
     console.error('[Encounter LOG] Error triggering encounter:', error);
   }
 }

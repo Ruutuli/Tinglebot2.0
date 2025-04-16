@@ -3,6 +3,7 @@
 const { v4: uuidv4 } = require('uuid');
 
 
+const { handleError } = require('../utils/globalErrorHandler');
 // ------------------- Discord.js Components -------------------
 // Used for building slash commands and creating rich embed messages.
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
@@ -473,6 +474,8 @@ module.exports = {
                 }
             }
         } catch (error) {
+    handleError(error, 'village.js');
+
             console.error(`[village.js:error] An error occurred while processing "${subcommand}" for village "${villageName}":`, error);
             return interaction.reply({ content: '❌ **An error occurred while processing your request.**', ephemeral: true });
         }

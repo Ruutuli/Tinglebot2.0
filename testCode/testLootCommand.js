@@ -1,4 +1,5 @@
 const fs = require('fs');
+const { handleError } = require('../utils/globalErrorHandler');
 const path = require('path');
 const { execute } = require(path.resolve(__dirname, './commands/loot'));
 const { getAllVillages } = require('../modules/locationsModule');
@@ -69,6 +70,8 @@ const runTests = async () => {
                         const updatedCharacter = await fetchCharacterById(characterId);
                         console.log(`✅ Updated Job: ${updatedCharacter.job}, Village: ${updatedCharacter.currentVillage}`);
                     } catch (updateError) {
+    handleError(updateError, 'testLootCommand.js');
+
                         console.error(`❌ Failed to update character for ${description}:`, updateError.message);
                         logData += `Test: ${description}\nError: Failed to update character: ${updateError.message}\n\n`;
                         continue; // Skip to the next iteration if update fails
@@ -81,6 +84,8 @@ const runTests = async () => {
                         const result = interaction.replyData || 'No reply captured';
                         logData += `Test: ${description}\nResult: ${JSON.stringify(result, null, 2)}\n\n`;
                     } catch (error) {
+    handleError(error, 'testLootCommand.js');
+
                         console.error(`❌ Error in Test: ${description}:`, error.message);
                         logData += `Test: ${description}\nError: ${error.message}\n\n`;
                     }
@@ -88,6 +93,8 @@ const runTests = async () => {
             }
         }
     } catch (error) {
+    handleError(error, 'testLootCommand.js');
+
         console.error('❌ Error running tests:', error.message);
         logData += `Error running tests: ${error.message}\n`;
     } finally {

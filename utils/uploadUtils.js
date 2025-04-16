@@ -7,6 +7,7 @@ const { Storage } = require('@google-cloud/storage');  // Google Cloud Storage A
 const { v4: uuidv4 } = require('uuid');               // For generating unique identifiers
 const fetch = require('node-fetch');                  // To fetch the image from a URL
 const path = require('path');
+const { handleError } = require('../utils/globalErrorHandler');
 const bucket = require('../config/gcsService');       // Google Cloud Storage bucket configuration
 
 // ------------------- Upload Submission Image -------------------
@@ -36,6 +37,8 @@ async function uploadSubmissionImage(imageUrl, imageName) {
     return publicUrl;
 
   } catch (error) {
+    handleError(error, 'uploadUtils.js');
+
     console.error('Error uploading image to Google Cloud:', error);
     throw new Error('Failed to upload image');  // Throw error if upload fails
   }
@@ -67,6 +70,8 @@ async function uploadPetImage(imageUrl, imageName) {
 
     return publicUrl;
   } catch (error) {
+    handleError(error, 'uploadUtils.js');
+
     console.error('Error uploading image to Google Cloud:', error);
     throw new Error('Failed to upload image');  // Throw error if upload fails
   }

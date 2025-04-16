@@ -1,5 +1,6 @@
 // ------------------- Import necessary modules and services -------------------
 const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, StringSelectMenuBuilder } = require('discord.js');
+const { handleError } = require('../utils/globalErrorHandler');
 const { fetchCharacterById, getCharacterInventoryCollection } = require('../database/characterService');
 const { connectToInventories } = require('../database/connection');
 const { handleAutocomplete } = require('../handlers/autocompleteHandler');
@@ -179,11 +180,15 @@ if (!character.inventorySynced) {
         try {
           await interaction.editReply({ components: [] });
         } catch (error) {
+    handleError(error, 'viewinventory.js');
+
           console.error('Error editing reply on collector end:', error);
         }
       });
 
     } catch (error) {
+    handleError(error, 'viewinventory.js');
+
       console.error('Error executing command:', error);
       await interaction.editReply({ content: '❌ **An error occurred while processing the command.**' });
     }

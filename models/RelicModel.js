@@ -1,5 +1,6 @@
 // ------------------- Third-Party Imports -------------------
 const mongoose = require('mongoose');
+const { handleError } = require('../utils/globalErrorHandler');
 const { Schema } = mongoose;
 
 // ------------------- Relic Schema Definition -------------------

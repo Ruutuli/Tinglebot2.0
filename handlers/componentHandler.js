@@ -8,6 +8,7 @@
 // Core Node.js modules and third-party libraries.
 const { v4: uuidv4 } = require('uuid');
 
+const { handleError } = require('../utils/globalErrorHandler');
 // ------------------- Discord.js Components -------------------
 // Components from discord.js for building action rows, buttons, and embeds.
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
@@ -123,6 +124,8 @@ async function handleButtonInteraction(interaction) {
                 break;
         }
     } catch (error) {
+    handleError(error, 'componentHandler.js');
+
         console.error(`[componentHandler]: Error handling button interaction (${action}): ${error.message}`);
         if (!interaction.replied) {
             await interaction.reply({
@@ -354,10 +357,14 @@ async function handleJobSelect(interaction, characterId, updatedJob) {
                 console.error(`[componentHandler]: Notification channel is unavailable or not text-based.`);
             }
         } catch (err) {
+    handleError(err, 'componentHandler.js');
+
             console.error(`[componentHandler]: Error sending update notification: ${err.message}`);
         }
 
     } catch (error) {
+    handleError(error, 'componentHandler.js');
+
         console.error(`[componentHandler]: Error occurred while handling job selection: ${error.message}`);
         console.error(error.stack);
         await interaction.reply({
@@ -410,6 +417,8 @@ async function handleJobPage(interaction, characterId, pageIndexString) {
 
         await interaction.update({ embeds: [embed], components: [...rows, navigationRow], ephemeral: true });
     } catch (error) {
+    handleError(error, 'componentHandler.js');
+
         console.error(`[componentHandler]: Error occurred while handling job page navigation: ${error.message}`);
         console.error(error.stack);
         await interaction.reply({

@@ -1,5 +1,6 @@
 // ------------------- Village Module -------------------
 const { Village } = require('../models/VillageModel');
+const { handleError } = require('../utils/globalErrorHandler');
 const { EmbedBuilder } = require('discord.js');
 
 // Placeholder for an in-memory storage of villages
@@ -111,6 +112,8 @@ async function damageVillage(villageName, damageAmount) {
         await village.save();
         return { village, removedResources };
     } catch (error) {
+    handleError(error, 'villageModule.js');
+
         console.error(`[damageVillage] Error for village "${villageName}":`, error.message);
         throw error;
     }
@@ -173,6 +176,8 @@ async function applyVillageDamage(villageName, monster, thread) {
             thread.setArchived(true);
         }
     } catch (error) {
+    handleError(error, 'villageModule.js');
+
         console.error('[applyVillageDamage] Error applying village damage:', error);
     }
 }

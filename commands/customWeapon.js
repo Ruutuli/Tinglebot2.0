@@ -1,6 +1,7 @@
 // ------------------- /customweapon Command -------------------
 // ------------------- Standard Libraries -------------------
 const { SlashCommandBuilder, PermissionsBitField } = require('discord.js');
+const { handleError } = require('../utils/globalErrorHandler');
 const { v4: uuidv4 } = require('uuid'); // For generating unique IDs
 
 // ------------------- Database Connections -------------------
@@ -170,6 +171,8 @@ if (subcommand === 'create') {
             return;
         }
     } catch (error) {
+    handleError(error, 'customWeapon.js');
+
         console.error(`[customweapon create]: Error fetching character ${characterName}:`, error);
         await interaction.editReply({
             content: `❌ An error occurred while retrieving character data. Please try again later.`,
@@ -216,6 +219,8 @@ if (weaponSubmission.crafted === true) {
         const inventoryCollection = await getCharacterInventoryCollection(character.name);
         inventoryItems = await inventoryCollection.find({ characterId: character._id }).toArray();
     } catch (error) {
+    handleError(error, 'customWeapon.js');
+
         console.error(`[customweapon create]: Failed to fetch inventory for ${characterName}:`, error);
         await interaction.editReply({
             content: `❌ Unable to access **${characterName}**'s inventory. Please ensure it is properly synced.`,
@@ -298,6 +303,8 @@ try {
     const newStamina = updatedCharacter?.currentStamina;
 
 } catch (error) {
+    handleError(error, 'customWeapon.js');
+
     console.error(`[customweapon create]: Transaction error:`, error);
 
     if (materialsRemoved) {
@@ -408,10 +415,14 @@ await logMaterialsToGoogleSheets(
   );
   
 } catch (error) {
+    handleError(error, 'customWeapon.js');
+
     console.error(`[customweapon create]: Failed to log Google Sheets crafting entry:`, error);
 }
 
     } catch (error) {
+    handleError(error, 'customWeapon.js');
+
         console.error(`[customweapon create]: Failed to add ${weaponSubmission.weaponName} to inventory:`, error);
         await interaction.editReply({
             content: `❌ Failed to add the custom weapon **${weaponSubmission.weaponName}** to the inventory.`,
@@ -477,6 +488,8 @@ const embed = {
 await interaction.editReply({ content: null, embeds: [embed] });
 
 } catch (error) {
+    handleError(error, 'customWeapon.js');
+
     console.error(`[customweapon create]: Error sending success embed:`, error);
 }
 
@@ -530,6 +543,8 @@ try {
             throw new Error('Inventory is empty or not synced.');
         }
     } catch (error) {
+    handleError(error, 'customWeapon.js');
+
         console.error(`[customweapon submit]: Failed to fetch inventory for ${characterName}:`, error);
         await interaction.editReply({
             content: `❌ Unable to access **${characterName}**'s inventory. Please ensure it is properly synced.`,
@@ -556,6 +571,8 @@ try {
             const imageName = `${weaponName.replace(/\s+/g, '_')}_${weaponId}`; // Generate a unique name
             uploadedImageUrl = await uploadSubmissionImage(imageAttachment.url, imageName); // Upload to Google Cloud
         } catch (error) {
+    handleError(error, 'customWeapon.js');
+
             console.error(`[customweapon submit]: Failed to upload image for ${weaponName}:`, error);
             return interaction.reply({
                 content: '❌ Failed to upload the image. Please ensure the file is valid.',
@@ -674,11 +691,15 @@ try {
         }
     }
 } catch (error) {
+    handleError(error, 'customWeapon.js');
+
     console.error(`[customweapon submit]: Error sending notification to channel:`, error);
 }
 
 
 } catch (error) {
+    handleError(error, 'customWeapon.js');
+
     console.error(`[customweapon submit]: Error during submission process:`, error);
 
     // Ensure a reply is sent even on error
@@ -772,6 +793,8 @@ if (
         try {
             user = await interaction.client.users.fetch(userId);
         } catch (error) {
+    handleError(error, 'customWeapon.js');
+
             console.error(`[customweapon approve]: Failed to fetch user with ID ${userId}:`, error);
             await interaction.editReply({
                 content: '❌ User who submitted this weapon could not be found.',
@@ -819,6 +842,8 @@ if (
                 quantity: 1,
             });
         } catch (error) {
+    handleError(error, 'customWeapon.js');
+
             console.error(`[customweapon approve]: Error parsing materials: ${error.message}`);
             await interaction.editReply({
                 content: `❌ Failed to parse materials: ${error.message}`,
@@ -855,6 +880,8 @@ if (
 
             await newItem.save();
         } catch (error) {
+    handleError(error, 'customWeapon.js');
+
             console.error(`[customweapon approve]: Failed to save weapon to database:`, error);
             await interaction.editReply({
                 content: '❌ Failed to save the weapon to the database. Please try again later.',
@@ -908,6 +935,8 @@ if (
                 embeds: [dmEmbed],
             });
         } catch (error) {
+    handleError(error, 'customWeapon.js');
+
             console.error(`[customweapon approve]: Failed to DM user ${userId}:`, error);
         }
 
@@ -965,6 +994,8 @@ try {
         }
     }
 } catch (err) {
+    handleError(err, 'customWeapon.js');
+
     console.error(`[customweapon approve]: Failed to react to notification message:`, err.message);
 }
 
@@ -972,6 +1003,8 @@ try {
 
 
     } catch (error) {
+    handleError(error, 'customWeapon.js');
+
         console.error(`[customweapon approve]: An unexpected error occurred:`, error);
         if (!interaction.deferred && !interaction.replied) {
             await interaction.reply({
@@ -987,6 +1020,8 @@ try {
 }
 
         } catch (error) {
+    handleError(error, 'customWeapon.js');
+
             console.error('[customweapon command]:', error);
             return interaction.reply({ content: '❌ An error occurred while processing the command.', ephemeral: true });
         }
@@ -1010,6 +1045,8 @@ async function logMaterialsToGoogleSheets(auth, spreadsheetId, range, character,
                         const materialObjectId = new mongoose.Types.ObjectId(material._id);
                         materialItem = await ItemModel.findById(materialObjectId);
                     } catch (_) {
+    handleError(_, 'customWeapon.js');
+
                         // Silently fail invalid ObjectId — fallback handled below
                     }
                 }
@@ -1054,6 +1091,8 @@ async function logMaterialsToGoogleSheets(auth, spreadsheetId, range, character,
                     uuidv4()
                 ];
             } catch (error) {
+    handleError(error, 'customWeapon.js');
+
                 console.error('[logMaterialsToGoogleSheets]: Error processing material:', error.message);
                 return [
                     character.name,
@@ -1075,6 +1114,8 @@ async function logMaterialsToGoogleSheets(auth, spreadsheetId, range, character,
 
         await appendSheetData(auth, spreadsheetId, range, usedMaterialsValues);
     } catch (error) {
+    handleError(error, 'customWeapon.js');
+
         console.error(`[customweapon create]: Failed to log materials to sheet:`, error);
     }
 }
@@ -1114,12 +1155,16 @@ async function logMaterialsToGoogleSheets(auth, spreadsheetId, range, character,
         try {
             submissions = JSON.parse(rawData);
         } catch (parseError) {
+    handleError(parseError, 'customWeapon.js');
+
             console.error(`[customweapon helper]: Failed to parse submissions.json — it might be corrupt or empty. Returning empty list.`);
             return [];
         }
 
         return Object.values(submissions);
     } catch (error) {
+    handleError(error, 'customWeapon.js');
+
         console.error(`[customweapon helper]: Error retrieving all submissions:`, error);
         return [];
     }

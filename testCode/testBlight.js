@@ -1,3 +1,5 @@
+const { handleError } = require('../utils/globalErrorHandler');
+
 // ------------------- Imports -------------------
 const { connectToTinglebot, connectToInventories } = require('../database/connection'); // Adjust the path if necessary
 const Character = require('../models/CharacterModel'); // Adjust the path to CharacterModel if necessary
@@ -25,6 +27,8 @@ async function updateAllCharacters() {
 
     console.log(`\n✅ Successfully blighted all characters in the database.`);
   } catch (error) {
+    handleError(error, 'testBlight.js');
+
     console.error('❌ Error updating characters:', error);
   } finally {
     // Close the database connections

@@ -1,6 +1,7 @@
 // ------------------- Message Utils for User Activity Tracking -------------------
 const User = require("../models/UserModel");
 
+const { handleError } = require('../utils/globalErrorHandler');
 /**
  * Logs the user's latest message to the database.
  * @param {Message} message - Discord.js Message object
@@ -24,6 +25,8 @@ async function trackLastMessage(message) {
 
     console.log(`[messageUtils]: Updated last message for ${discordId}`);
   } catch (err) {
+    handleError(err, 'messageUtils.js');
+
     console.error(`[messageUtils]: Error tracking message for ${message.author.id}`, err);
   }
 }

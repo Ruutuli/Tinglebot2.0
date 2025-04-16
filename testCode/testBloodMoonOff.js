@@ -1,5 +1,6 @@
 require('dotenv').config();
 const { Client, GatewayIntentBits } = require('discord.js');
+const { handleError } = require('../utils/globalErrorHandler');
 const { revertChannelNames } = require('../scripts/bloodmoon');
 
 // Initialize the Discord client
@@ -21,6 +22,8 @@ client.once('ready', async () => {
 
     console.log('🌕 Blood Moon OFF successfully reverted for all channels!');
   } catch (error) {
+    handleError(error, 'testBloodMoonOff.js');
+
     console.error('❌ Error reverting Blood Moon OFF:', error);
   } finally {
     client.destroy(); // Log out the bot after execution

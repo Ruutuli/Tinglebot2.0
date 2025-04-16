@@ -7,6 +7,7 @@
 const { SlashCommandBuilder } = require('discord.js');
 
 
+const { handleError } = require('../utils/globalErrorHandler');
 // ------------------- Standard Libraries -------------------
 // Import third-party libraries.
 const { v4: uuidv4 } = require('uuid');
@@ -435,6 +436,8 @@ module.exports = {
       }
 
     } catch (error) {
+    handleError(error, 'gather.js');
+
       console.error(`[gather.js]: Error during gathering process: ${error.message}`, {
         stack: error.stack,
         interactionData: {

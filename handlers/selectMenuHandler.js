@@ -9,6 +9,7 @@
 
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 
+const { handleError } = require('../utils/globalErrorHandler');
 // ============================================================================
 // Modules
 // ============================================================================
@@ -168,6 +169,8 @@ async function handleSelectMenuInteraction(interaction) {
       await confirmSubmission(interaction, submissionData);
     }
   } catch (error) {
+    handleError(error, 'selectMenuHandler.js');
+
     console.error(`[selectMenuHandler.js]: handleSelectMenuInteraction: ${error.message}`);
     if (interaction.replied || interaction.deferred) {
       await interaction.followUp({
@@ -251,6 +254,8 @@ async function confirmSubmission(interaction) {
       ],
     });
   } catch (error) {
+    handleError(error, 'selectMenuHandler.js');
+
     console.error(`[selectMenuHandler.js]: confirmSubmission: ${error.message}`);
     if (interaction.replied || interaction.deferred) {
       await interaction.followUp({

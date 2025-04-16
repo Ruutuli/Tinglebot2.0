@@ -1,5 +1,6 @@
 // mapModel.js
 const mongoose = require('mongoose');
+const { handleError } = require('../utils/globalErrorHandler');
 const { Schema } = mongoose;
 
 // Define Discovery Schema for the discoveries array

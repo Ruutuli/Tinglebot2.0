@@ -1,3 +1,5 @@
+const { handleError } = require('../utils/globalErrorHandler');
+
 // ------------------- Pet Perk Field Mapping -------------------
 // Maps pet perk keys to specific fields in the item database.
 const perkFieldMap = {

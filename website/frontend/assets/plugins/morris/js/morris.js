@@ -1,3 +1,5 @@
+const { handleError } = require('../utils/globalErrorHandler');
+
 /* @license
 morris.js v0.5.0
 Copyright 2014 Olly Smith All rights reserved.

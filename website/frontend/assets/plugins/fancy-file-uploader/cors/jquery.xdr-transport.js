@@ -1,3 +1,5 @@
+const { handleError } = require('../utils/globalErrorHandler');
+
 /*
  * jQuery XDomainRequest Transport Plugin
  * https://github.com/blueimp/jQuery-File-Upload

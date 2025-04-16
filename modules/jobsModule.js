@@ -1,5 +1,6 @@
 // ------------------- Import necessary modules and functions -------------------
 const { fetchCharacterById, updateCharacterById } = require('../database/characterService');
+const { handleError } = require('../utils/globalErrorHandler');
 const { capitalize } = require('../modules/formattingModule');
 
 // ------------------- Define job data and configurations -------------------
@@ -147,6 +148,8 @@ const updateJob = async (characterId, newJob) => {
     character.job = capitalize(newJob);
     await updateCharacterById(characterId, { job: character.job });
   } catch (error) {
+    handleError(error, 'jobsModule.js');
+
     console.error('[jobsModule.js]: Error updating job', error.message);
     throw error;
   }

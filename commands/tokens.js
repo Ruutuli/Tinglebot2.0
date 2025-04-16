@@ -1,3 +1,5 @@
+const { handleError } = require('../utils/globalErrorHandler');
+
 // ------------------- Import necessary modules and services -------------------
 const { SlashCommandBuilder, EmbedBuilder } = require('@discordjs/builders'); // For building slash commands and embeds
 const User = require('../models/UserModel'); // User model for database operations
@@ -91,6 +93,8 @@ module.exports = {
         await interaction.reply({ embeds: [embed] });
 
       } catch (error) {
+    handleError(error, 'tokens.js');
+
         console.error('[tokens.js]: Error checking tokens:', error);
 
         let errorMessage = '❌ An error occurred while checking your tokens.';
@@ -144,6 +148,8 @@ module.exports = {
 
     await interaction.reply({ embeds: [embed] });
   } catch (error) {
+    handleError(error, 'tokens.js');
+
     console.error('[tokens.js]: Error syncing tokens:', error);
 
     let errorMessage = '❌ An error occurred while syncing your token tracker:';
@@ -173,6 +179,8 @@ module.exports = {
         const setupEmbed = createTokenTrackerSetupEmbed(interaction.user.username, link);
         await interaction.reply({ embeds: [setupEmbed], ephemeral: true });
       } catch (error) {
+    handleError(error, 'tokens.js');
+
         console.error('[tokens.js]: Error setting token tracker link:', error);
         await interaction.reply({
           content: '❌ An error occurred while setting your token tracker link. Please try again later.',
@@ -229,6 +237,8 @@ module.exports = {
         });
 
       } catch (error) {
+    handleError(error, 'tokens.js');
+
         console.error('[tokens.js]: Error in /tokens test command:', error);
 
         let errorMessage = '❌ An error occurred while testing your token tracker.';

@@ -1,5 +1,6 @@
 // ------------------- Import necessary modules -------------------
 const { SlashCommandBuilder } = require('discord.js');
+const { handleError } = require('../utils/globalErrorHandler');
 const {
   fetchCharacterByNameAndUserId,
   fetchAllCharactersExceptUser,
@@ -243,6 +244,8 @@ if (fromCharacter.currentVillage.trim().toLowerCase() !== toCharacter.currentVil
     });
 
   } catch (error) {
+    handleError(error, 'gift.js');
+
     console.error('❌ Error during gift execution:', error);
     await interaction.editReply('❌ An error occurred while trying to gift the items.');
   }

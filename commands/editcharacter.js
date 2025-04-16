@@ -34,6 +34,7 @@ const { updateHearts,   updateStamina } = require('../modules/characterStatsModu
 const { capitalizeFirstLetter } = require('../modules/formattingModule'); // Formatting utility
 const { roles } = require('../modules/rolesModule');
 
+const { handleError } = require('../utils/globalErrorHandler');
 // Utilities
 const { canChangeJob,   canChangeVillage,   isUniqueCharacterName,   convertCmToFeetInches } = require('../utils/validation'); // Validation utilities
 
@@ -191,6 +192,8 @@ if (category === 'job') {
       updateMessage = `✅ **${character.name}'s job has been updated from ${previousValue} to ${updatedInfo}.**`;
 
   } catch (error) {
+    handleError(error, 'editcharacter.js');
+
       // Log the error details
       console.error(`[ERROR] An error occurred while processing job update: ${error.message}`);
       console.error(error.stack);
@@ -314,6 +317,8 @@ if (category === 'job') {
           character.icon = publicIconUrl;
           updateMessage = `✅ **${character.name}'s icon has been updated.**`;
       } catch (error) {
+    handleError(error, 'editcharacter.js');
+
           await interaction.followUp({ content: `⚠️ **There was an error uploading the icon: ${error.message}**`, ephemeral: true });
           return;
       }
@@ -400,6 +405,8 @@ try {
         console.error(`[editcharacter.js]: Notification channel is not text-based or unavailable.`);
     }
 } catch (err) {
+    handleError(err, 'editcharacter.js');
+
     console.error(`[editcharacter.js]: Error sending update notification: ${err.message}`);
 }
 
@@ -407,6 +414,8 @@ try {
 await interaction.followUp({ content: updateMessage, embeds: [embed], ephemeral: true });
 
     } catch (error) {
+    handleError(error, 'editcharacter.js');
+
       await interaction.followUp({ content: `⚠️ **There was an error updating the character: ${error.message}**`, ephemeral: true });
     }
   },

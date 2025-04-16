@@ -5,6 +5,7 @@
 // Standard Libraries
 // ------------------- Importing Node.js core modules -------------------
 const fs = require('fs');
+const { handleError } = require('../utils/globalErrorHandler');
 const path = require('path');
 
 // ============================================================================
@@ -68,6 +69,8 @@ async function retryWithBackoff(fn) {
         try {
             return await fn();
         } catch (error) {
+    handleError(error, 'googleSheetsUtils.js');
+
             if (i === retries - 1) throw error;
             await delay(500 * Math.pow(2, i)); // Exponential backoff delay
         }
@@ -274,6 +277,8 @@ async function deleteInventorySheetData(spreadsheetId, characterName) {
         );
         return `✅ **Specific inventory data for character ${characterName} deleted from Google Sheets.**`;
     } catch (error) {
+    handleError(error, 'googleSheetsUtils.js');
+
         logErrorDetails(error);
         throw error;
     }

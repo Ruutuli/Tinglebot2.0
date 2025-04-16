@@ -7,6 +7,7 @@
 const { SlashCommandBuilder } = require('discord.js');
 
 
+const { handleError } = require('../utils/globalErrorHandler');
 // ------------------- Database Services -------------------
 // Import character-related database services for fetching and updating character data.
 const { fetchCharacterByNameAndUserId, getCharacterInventoryCollection, updateCharacterById } = require('../database/characterService');
@@ -302,6 +303,8 @@ module.exports = {
       const gearEmbed = createCharacterGearEmbed(updatedCharacter, updatedGearMap, type);
       await interaction.editReply({ content: `✅ **${itemName} has been equipped to the ${type} slot for ${characterName}.** ${unequippedMessage}`, embeds: [gearEmbed] });
     } catch (error) {
+    handleError(error, 'gear.js');
+
       console.error(`[gear.js]: Error executing gear command: ${error.message}`);
       await interaction.editReply({ content: `❌ **An error occurred while executing the gear command. Please try again later.**` });
     }

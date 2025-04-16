@@ -2,6 +2,7 @@
 
 // Import required modules and configurations
 const path = require('path');
+const { handleError } = require('../utils/globalErrorHandler');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 const mongoose = require('mongoose');
 const Square = require('../models/mapModel'); // Ensure your map model is imported correctly
@@ -13,6 +14,8 @@ async function connectToMongoDB() {
     await mongoose.connect(process.env.MONGODB_TINGLEBOT_URI, {});
     console.log('🌐 Connected to MongoDB');
   } catch (error) {
+    handleError(error, 'seedMap.js');
+
     console.error('❌ Could not connect to MongoDB...', error);
     throw error;
   }
@@ -115,6 +118,8 @@ async function seedMapData() {
 
     console.log('✅ Map data successfully seeded to MongoDB');
   } catch (error) {
+    handleError(error, 'seedMap.js');
+
     console.error('❌ Error seeding map data:', error);
     throw error;
   } finally {

@@ -1,5 +1,6 @@
 // ------------------- Import necessary modules -------------------
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
+const { handleError } = require('../utils/globalErrorHandler');
 const NodeCache = require('node-cache');
 const Item = require('../models/ItemModel');
 

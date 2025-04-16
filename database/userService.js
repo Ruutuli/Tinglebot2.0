@@ -1,5 +1,6 @@
 // ------------------- Import necessary modules and services -------------------
 const User = require('../models/UserModel');
+const { handleError } = require('../utils/globalErrorHandler');
 const { connectToTinglebot } = require('../database/connection');
 const {
     authorizeSheets,

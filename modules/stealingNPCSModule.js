@@ -1,3 +1,5 @@
+const { handleError } = require('../utils/globalErrorHandler');
+
 // ------------------- Import necessary modules -------------------
 const generalCategories = require('../models/GeneralItemCategories'); // Categories from GeneralItemCategories.js
 

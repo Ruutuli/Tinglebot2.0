@@ -1,3 +1,5 @@
+const { handleError } = require('../utils/globalErrorHandler');
+
 /*!
  * ApexCharts v3.19.0
  * (c) 2018-2020 Juned Chhipa
@@ -24434,6 +24436,8 @@
 
             box = element.node.getBBox();
           } catch (e) {
+    handleError(e, 'apexcharts.js');
+
             if (element instanceof SVG.Shape) {
               if (!SVG.parser.draw) {
                 // fixes apexcharts/vue-apexcharts #14
@@ -28016,6 +28020,8 @@
                   this.observerInst.disconnect();
                   delete this.observerInst;
               } catch (e) {
+    handleError(e, 'apexcharts.js');
+
               }
           }
       } else {

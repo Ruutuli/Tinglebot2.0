@@ -10,6 +10,7 @@
 // ------------------- Importing database models -------------------
 const Monster = require('../models/MonsterModel');
 
+const { handleError } = require('../utils/globalErrorHandler');
 // ============================================================================
 // Modules
 // ------------------- Importing custom modules -------------------
@@ -211,6 +212,8 @@ async function getMonsterEncounterFromList(monsters) {
     const selectedMonster = filteredMonsters[Math.floor(Math.random() * filteredMonsters.length)];
     return { encounter: `Tier ${tier}`, monsters: [selectedMonster] };
   } catch (error) {
+    handleError(error, 'rngModule.js');
+
     console.error('[rngModule.js]: logs ENCOUNTER ERROR', error);
     return { encounter: 'Error', monsters: [] };
   }
@@ -228,6 +231,8 @@ async function getMonstersByCriteria(village, job) {
     const monsters = await Monster.find(query);
     return monsters;
   } catch (error) {
+    handleError(error, 'rngModule.js');
+
     return [];
   }
 }
@@ -262,6 +267,8 @@ async function getMonstersByPath(path) {
     const monsters = await Monster.find(query);
     return monsters;
   } catch (error) {
+    handleError(error, 'rngModule.js');
+
     return [];
   }
 }
@@ -274,6 +281,8 @@ async function getMonstersByRegion(region) {
     const monsters = await Monster.find(query);
     return monsters;
   } catch (error) {
+    handleError(error, 'rngModule.js');
+
     return [];
   }
 }
@@ -347,6 +356,8 @@ async function attemptFlee(character, monster) {
       message: `The monster attacked and dealt ${monsterDamage} hearts of damage!`
     };
   } catch (error) {
+    handleError(error, 'rngModule.js');
+
     console.error("[rngModule.js]: logs [FLEE ATTEMPT ERROR] An error occurred during the flee attempt:", error);
     throw error;
   }

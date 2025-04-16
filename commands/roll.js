@@ -1,5 +1,6 @@
 // ------------------- Importing necessary modules -------------------
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { handleError } = require('../utils/globalErrorHandler');
 const MersenneTwister = require('mersenne-twister');
 const { evaluate } = require('../utils/mathParser');
 

@@ -1,5 +1,6 @@
 // ------------------- Import necessary modules and environment variables -------------------
 const mongoose = require('mongoose');
+const { handleError } = require('../utils/globalErrorHandler');
 require('dotenv').config();
 
 // ------------------- Define Database URIs from environment variables -------------------
@@ -19,6 +20,8 @@ async function connectToTinglebot() {
       }
       return tinglebotDbConnection;
     } catch (error) {
+    handleError(error, 'connection.js');
+
       console.error("❌ Error connecting to Tinglebot database:", error);
       throw error;
     }
@@ -32,6 +35,8 @@ async function connectToInventories() {
       }
       return inventoriesDbConnection;
     } catch (error) {
+    handleError(error, 'connection.js');
+
       console.error("❌ Error connecting to Inventories database:", error);
       throw error;
     }

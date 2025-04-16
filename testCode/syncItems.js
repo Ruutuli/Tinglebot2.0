@@ -1,5 +1,6 @@
 // ------------------- Import required modules and configurations -------------------
 const path = require('path');
+const { handleError } = require('../utils/globalErrorHandler');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 const mongoose = require('mongoose');
 const Item = require('../models/ItemModel');
@@ -58,6 +59,8 @@ async function syncItems() {
 
     console.log('✅ Items successfully synchronized to MongoDB');
   } catch (error) {
+    handleError(error, 'syncItems.js');
+
     console.error('❌ Error synchronizing items:', error);
     throw error;
   } finally {

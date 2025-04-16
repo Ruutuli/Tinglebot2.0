@@ -8,6 +8,7 @@
 
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 
+const { handleError } = require('../utils/globalErrorHandler');
 // ============================================================================
 // Database Services
 // ============================================================================
@@ -118,6 +119,8 @@ async function handleSubmissionCompletion(interaction) {
     submissionStore.delete(user.id);
     resetSubmissionState();
   } catch (error) {
+    handleError(error, 'submissionHandler.js');
+
     console.error(`[submissionHandler.js]: handleSubmissionCompletion: Error completing submission: ${error.message}`);
     await interaction.followUp({
       content: '⚠️ **Error completing submission. Please try again.**',
@@ -158,6 +161,8 @@ async function handleCancelSubmission(interaction) {
       components: [], // Remove all action components
     });
   } catch (error) {
+    handleError(error, 'submissionHandler.js');
+
     console.error(`[submissionHandler.js]: handleCancelSubmission: Error canceling submission: ${error.message}`);
     await interaction.followUp({
       content: '⚠️ **Error canceling submission. Please try again.**',
@@ -222,6 +227,8 @@ async function handleSubmitAction(interaction) {
         await appendEarnedTokens(user.id, submission.fileName, 'art', submission.finalTokenAmount, submission.fileUrl);
       }
     } catch (error) {
+    handleError(error, 'submissionHandler.js');
+
       console.error(`[submissionHandler.js]: handleSubmitAction: Error appending token data for submission ${submissionId}: ${error.message}`);
     }
 

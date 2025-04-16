@@ -1,5 +1,6 @@
 // ------------------- Import necessary modules -------------------
 const { SlashCommandBuilder } = require('@discordjs/builders');
+const { handleError } = require('../utils/globalErrorHandler');
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
 const { v4: uuidv4 } = require('uuid');
 const { handleShopsAutocomplete } = require('../handlers/autocompleteHandler');
@@ -182,10 +183,14 @@ async function handleShopView(interaction) {
         try {
           await interaction.editReply({ components: [] });
         } catch (error) {
+    handleError(error, 'shops.js');
+
           console.error('[shops]: Error clearing buttons:', error);
         }
       });
     } catch (error) {
+    handleError(error, 'shops.js');
+
       console.error('[shops]: Error viewing shop items:', error);
       interaction.editReply('❌ An error occurred while viewing the shop inventory.');
     }
@@ -319,6 +324,8 @@ await ShopStock.updateOne(
   
       interaction.editReply({ embeds: [purchaseEmbed] });
     } catch (error) {
+    handleError(error, 'shops.js');
+
       console.error('[shops]: Error buying item:', error);
       interaction.editReply('❌ An error occurred while trying to buy the item.');
     }
@@ -475,6 +482,8 @@ console.log(`[shops]: Meets crafting requirements: ${characterMeetsRequirements}
   
       interaction.editReply({ embeds: [saleEmbed] });
     } catch (error) {
+    handleError(error, 'shops.js');
+
       console.error('[shops]: Error selling item:', error);
       interaction.editReply('❌ An error occurred while trying to sell the item.');
     }

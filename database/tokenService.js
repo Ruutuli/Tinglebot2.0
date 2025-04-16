@@ -4,6 +4,7 @@
 const { google } = require('googleapis');
 
 
+const { handleError } = require('../utils/globalErrorHandler');
 // =================== DATABASE CONNECTIONS ===================
 // ------------------- Connect to Tinglebot Database -------------------
 // Import the function to establish a connection to the Tinglebot database.
@@ -31,6 +32,8 @@ async function getTokenBalance(userId) {
       const user = await User.findOne({ discordId: userId });
       return user?.tokens || 0;
   } catch (error) {
+    handleError(error, 'tokenService.js');
+
       console.error('[tokenService.js]: ❌ Error fetching token balance:', error);
       throw error;
   }
@@ -80,6 +83,8 @@ async function updateTokenBalance(userId, change) {
       await user.save();
       return newBalance;
   } catch (error) {
+    handleError(error, 'tokenService.js');
+
       console.error(`[tokenService.js]: ❌ Error updating token balance for user ID ${userId}:`, error);
       throw error;
   }
@@ -131,6 +136,8 @@ async function syncTokenTracker(userId) {
     await appendSheetData(auth, spreadsheetId, "loggedTracker!B:F", [syncRow]);
     return user;
   } catch (error) {
+    handleError(error, 'tokenService.js');
+
     console.error('[tokenService.js]: ❌ Error syncing token tracker:', error);
     throw new Error('Error syncing token tracker.');
   }
@@ -171,6 +178,8 @@ async function appendEarnedTokens(userId, fileName, category, amount, fileUrl = 
       resource: { values: [newRow] },
     });
   } catch (error) {
+    handleError(error, 'tokenService.js');
+
     console.error(`[tokenService.js]: ❌ Error appending earned token data: ${error.message}`);
     throw new Error('Error appending earned token data to the Google Sheet.');
   }
@@ -196,6 +205,8 @@ async function appendSpentTokens(userId, purchaseName, amount, link = '') {
       ];
       await appendSheetData(auth, spreadsheetId, 'loggedTracker!B7:F', [newRow]);
   } catch (error) {
+    handleError(error, 'tokenService.js');
+
       console.error('[tokenService.js]: ❌ Error appending spent token data:', error);
       throw error;
   }
@@ -216,6 +227,8 @@ async function getUserGoogleSheetId(userId) {
       return null;
     }
   } catch (error) {
+    handleError(error, 'tokenService.js');
+
     console.error(`[tokenService.js]: ❌ Error retrieving Token Tracker ID for user ${userId}:`, error.message);
     return null;
   }

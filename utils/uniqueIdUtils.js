@@ -1,3 +1,5 @@
+const { handleError } = require('../utils/globalErrorHandler');
+
 // ------------------- Unique ID Utility -------------------
 // Generates a short unique ID with a prefix and a 6-digit number
 

@@ -1,3 +1,5 @@
+const { handleError } = require('../utils/globalErrorHandler');
+
 // ------------------- Buff Calculation Module -------------------
 
 // ------------------- Calculate attack buff -------------------

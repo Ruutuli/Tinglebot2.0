@@ -1,3 +1,5 @@
+const { handleError } = require('../utils/globalErrorHandler');
+
 jQuery.fn.extend({
     createRepeater: function (options = {}) {
         var hasOption = function (optionKey) {

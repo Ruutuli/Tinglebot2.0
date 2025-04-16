@@ -1,3 +1,5 @@
+const { handleError } = require('../utils/globalErrorHandler');
+
 /*!jQuery Knob*/
 /**
  * Downward compatible, touchable dial

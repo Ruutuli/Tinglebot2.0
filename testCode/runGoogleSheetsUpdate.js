@@ -1,6 +1,7 @@
 // ------------------- Import necessary modules -------------------
 require('dotenv').config();
 const { authorizeSheets, writeSheetData, clearSheetFormatting } = require('../utils/googleSheetsUtils');
+const { handleError } = require('../utils/globalErrorHandler');
 const { getCurrentVendingStockList } = require('../database/vendingService');
 const { google } = require('googleapis');
 
@@ -86,7 +87,7 @@ async function updateGoogleSheets() {
     } catch (error) {
         // Log failure with details
         console.error('[runGoogleSheetsUpdate]❌ Error updating Google Sheets:', error.message);
-        console.error(error.stack);
+        handleError(error, 'runGoogleSheetsUpdate.js');
     }
 }
 

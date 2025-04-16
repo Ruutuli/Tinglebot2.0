@@ -1,6 +1,7 @@
 // ------------------- Import necessary modules -------------------
 // Standard Libraries
 const { google } = require('googleapis');
+const { handleError } = require('../utils/globalErrorHandler');
 const { v4: uuidv4 } = require('uuid');
 const { MongoClient } = require("mongodb")
 
@@ -70,6 +71,8 @@ async function executeVending(interaction) {
                 throw new Error(`Invalid subcommand: '${subcommand}'.`);
         }
     } catch (error) {
+    handleError(error, 'vendingHandler.js');
+
         console.error(`[vendingHandler]: Error executing subcommand '${subcommand}' for user ID ${userId}: ${error.message}`);
         await interaction.reply({
             content: `❌ An error occurred while processing your command: ${error.message}. Please try again or contact support.`,
@@ -84,6 +87,8 @@ async function connectToVendingDatabase() {
         await client.connect();
         return client;
     } catch (error) {
+    handleError(error, 'vendingHandler.js');
+
         console.error("[connectToVendingDatabase]: Error connecting to vending database:", error);
         throw error;
     }
@@ -151,6 +156,8 @@ async function handleCollectPoints(interaction, userId) {
 
         await interaction.reply({ embeds: [embed], ephemeral: false });
     } catch (error) {
+    handleError(error, 'vendingHandler.js');
+
         console.error(`[vendingHandler]: Error collecting points for user ID ${userId}: ${error.message}`);
         await interaction.reply({
             content: `❌ An error occurred while collecting points: ${error.message}. Please try again later or contact support.`,
@@ -336,6 +343,8 @@ async function handleRestock(interaction) {
 
             await appendSheetData(auth, spreadsheetId, 'vendingShop!A:K', values);
         } catch (error) {
+    handleError(error, 'vendingHandler.js');
+
             console.error(`[handleRestock]: Error updating spreadsheet for '${characterName}':`, error);
             throw new Error('Failed to update shop spreadsheet. Please check the Google Sheets configuration.');
         }
@@ -355,6 +364,8 @@ async function handleRestock(interaction) {
         // Edit the deferred reply
         await interaction.editReply({ embeds: [embed] });
     } catch (error) {
+    handleError(error, 'vendingHandler.js');
+
         console.error('[handleRestock]: Error during restock:', error);
         await interaction.editReply({ content: `❌ **Error:** ${error.message}` });
     }
@@ -627,6 +638,8 @@ async function handleBarter(interaction) {
                 const range = 'loggedInventory!A2:M';
                 await appendSheetData(auth, spreadsheetId, range, values);
             } catch (sheetError) {
+    handleError(sheetError, 'vendingHandler.js');
+
                 console.error(`[handleBarter]: Failed to log purchase to buyer's Google Sheets: ${sheetError.message}`);
             }
         }
@@ -649,6 +662,8 @@ await interaction.reply({ embeds: [embedSuccess], ephemeral: false });
 
 
     } catch (error) {
+    handleError(error, 'vendingHandler.js');
+
         console.error('[handleBarter]: Error during barter:', error);
         await interaction.reply({
             content: `❌ An error occurred during the barter: ${error.message}`,
@@ -721,6 +736,8 @@ function initializeReactionHandler(client) {
                 await reaction.message.edit({ embeds: [updatedEmbed] });
             }
         } catch (error) {
+    handleError(error, 'vendingHandler.js');
+
             console.error(`[messageReactionAdd]: Error handling reaction: ${error.message}`);
         }
     });
@@ -838,6 +855,8 @@ async function handleFulfill(interaction) {
                     }
                 }
             } catch (error) {
+    handleError(error, 'vendingHandler.js');
+
                 console.error(`[handleFulfill]: Error reacting to message ID '${messageId}':`, error);
             }
         }
@@ -869,6 +888,8 @@ async function handleFulfill(interaction) {
         // Delete the fulfillment data
         deleteVendingRequestFromStorage(fulfillmentId);
     } catch (error) {
+    handleError(error, 'vendingHandler.js');
+
         console.error('[handleFulfill]: Error during fulfillment:', error);
         await interaction.reply({
             content: `❌ An error occurred during fulfillment: ${error.message}`,
@@ -926,6 +947,8 @@ async function handlePouchUpgrade(interaction) {
 
         await interaction.reply({ embeds: [embed], ephemeral: false });
     } catch (error) {
+    handleError(error, 'vendingHandler.js');
+
         console.error('[handlePouchUpgrade]: Error:', error);
         await interaction.reply({
             content: `❌ **Error:** ${error.message}`,
@@ -983,6 +1006,8 @@ async function viewVendingStock(interaction) {
             embeds: [...villageEmbeds, limitedEmbed],
         });
     } catch (error) {
+    handleError(error, 'vendingHandler.js');
+
         console.error("Error viewing vending stock:", error);
         await interaction.editReply({
             content: `❌ An error occurred while viewing the vending stock: ${error.message}`,
@@ -1115,6 +1140,8 @@ async function handleViewShop(interaction) {
                     components: [createButtons(currentPage)],
                 });
             } catch (error) {
+    handleError(error, 'vendingHandler.js');
+
                 if (error.code === 10008) {
                     console.error('[handleViewShop]: Message not found or interaction expired.');
                     collector.stop();
@@ -1131,12 +1158,16 @@ async function handleViewShop(interaction) {
                     components: [],
                 });
             } catch (error) {
+    handleError(error, 'vendingHandler.js');
+
                 if (error.code !== 10008) {
                     console.error('[handleViewShop]: Error disabling buttons:', error);
                 }
             }
         });
     } catch (error) {
+    handleError(error, 'vendingHandler.js');
+
         console.error(`[handleViewShop]: Error viewing shop for user '${interaction.user.id}':`, error);
         try {
             await interaction.reply({
@@ -1144,6 +1175,8 @@ async function handleViewShop(interaction) {
                 ephemeral: true,
             });
         } catch (replyError) {
+    handleError(replyError, 'vendingHandler.js');
+
             if (replyError.code !== 10008) {
                 console.error('[handleViewShop]: Error sending reply:', replyError);
             }
@@ -1181,6 +1214,8 @@ async function handleShopLink(interaction) {
 
         await interaction.reply({ content: `✅ Shop link for **${characterName}** updated successfully!`, ephemeral: false });
     } catch (error) {
+    handleError(error, 'vendingHandler.js');
+
         console.error('[handleShopLink]: Error updating shop link:', error);
         await interaction.reply({ content: '❌ An error occurred while updating the shop link. Please try again later.', ephemeral: true });
     }
@@ -1284,6 +1319,8 @@ async function handleVendingSetup(interaction) {
         });
 
     } catch (error) {
+    handleError(error, 'vendingHandler.js');
+
         console.error(`[handleVendingSetup]: Error during vending setup:`, error);
         await interaction.reply({ content: '❌ An error occurred during setup. Please try again later.', ephemeral: true });
     }
@@ -1301,6 +1338,8 @@ async function checkEditorPermission(auth, spreadsheetId, email) {
         console.log(`[checkEditorPermission]: Access confirmed for spreadsheetId: ${spreadsheetId}`);
         return true; // If no error, access is confirmed
     } catch (error) {
+    handleError(error, 'vendingHandler.js');
+
         const errorDetails = error.response?.data || error.message;
         console.error(`[checkEditorPermission]: Error for spreadsheetId: ${spreadsheetId}`, errorDetails);
         
@@ -1532,6 +1571,8 @@ async function handleEditShop(interaction) {
 
         await interaction.editReply({ embeds: [embed] });
     } catch (error) {
+    handleError(error, 'vendingHandler.js');
+
         console.error('[handleEditShop]: Error editing shop item:', error);
         await interaction.editReply({
             content: `❌ An error occurred while editing the shop item: ${error.message}`,
@@ -1622,6 +1663,8 @@ async function handleVendingSync(interaction) {
             ephemeral: true,
         });
     } catch (error) {
+    handleError(error, 'vendingHandler.js');
+
         console.error('[handleVendingSync]: Error syncing vending inventory:', error);
         await interaction.reply({
             content: `❌ An error occurred while syncing: ${error.message}`,

@@ -1,3 +1,5 @@
+const { handleError } = require('../utils/globalErrorHandler');
+
 // ============================================================================
 // Boosting Module: Full Version
 // This file is generated from the CSV "[RotW] Boosting Perk [2024] - Sheet8.csv"

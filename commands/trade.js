@@ -3,6 +3,7 @@
 const { v4: uuidv4 } = require('uuid');
 
 
+const { handleError } = require('../utils/globalErrorHandler');
 // ------------------- Discord.js Components -------------------
 // Components for building slash commands and button interactions.
 const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
@@ -262,6 +263,8 @@ module.exports = {
             components: []
           });
         } catch (error) {
+    handleError(error, 'trade.js');
+
           console.error(`[trade.js:logs] Error editing trade message:`, error);
         }
 
@@ -410,6 +413,8 @@ module.exports = {
                 components: []
               });
             } catch (error) {
+    handleError(error, 'trade.js');
+
               console.error(`[trade.js:logs] Error editing trade message during timeout:`, error);
             }
             delete tradeSessions[shortTradeId];
@@ -418,10 +423,14 @@ module.exports = {
       }
 
     } catch (error) {
+    handleError(error, 'trade.js');
+
       console.error(`[trade.js:logs] Error executing trade command:`, error);
       try {
         await interaction.editReply({ content: '❌ An error occurred while trying to execute the trade.' });
       } catch (replyError) {
+    handleError(replyError, 'trade.js');
+
         console.error(`[trade.js:logs] Error sending follow-up message:`, replyError);
       }
     }
@@ -510,6 +519,8 @@ module.exports.buttonHandler = async (interaction) => {
         components: []
       });
     } catch (error) {
+    handleError(error, 'trade.js');
+
       console.error(`[trade.js:logs] Error editing trade message:`, error);
     }
 

@@ -1,5 +1,6 @@
 // ------------------- Import necessary modules -------------------
 const mongoose = require('mongoose');
+const { handleError } = require('../utils/globalErrorHandler');
 const { connectToTinglebot } = require('../database/connection'); // Use your connection.js file
 
 (async function cleanJobVoucherField() {
@@ -20,6 +21,8 @@ const { connectToTinglebot } = require('../database/connection'); // Use your co
 
         console.log(`✅ Updated ${result.modifiedCount} documents where jobVoucher was invalid.`);
     } catch (error) {
+    handleError(error, 'cleanup.js');
+
         console.error('❌ Error during cleanup:', error.message);
     } finally {
         // Close the database connection

@@ -3,6 +3,7 @@
 // Discord.js imports
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 
+const { handleError } = require('../utils/globalErrorHandler');
 // Local service and module imports
 const { fetchCharacterByNameAndUserId } = require('../database/characterService');
 const { fetchMonsterByName } = require('../database/monsterService');
@@ -181,10 +182,14 @@ async execute(interaction) {
               await processLoot(updatedBattleProgress, currentMonster, interaction, battleId);
           }
       } catch (error) {
+    handleError(error, 'raid.js');
+
           console.error('[ERROR] Error during battle processing:', error);
           await interaction.editReply('⚠️ **An error occurred during the battle.**');
       }
   } catch (error) {
+    handleError(error, 'raid.js');
+
       console.error('[ERROR] Error executing command:', error);
       await interaction.editReply('⚠️ **An error occurred.**');
   }

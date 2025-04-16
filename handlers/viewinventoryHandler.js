@@ -9,6 +9,7 @@
 // Sorted alphabetically for quick lookup.
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, SlashCommandBuilder } = require('discord.js');
 
+const { handleError } = require('../utils/globalErrorHandler');
 // ============================================================================
 // Database Services
 // ------------------- Importing database service functions -------------------
@@ -175,6 +176,8 @@ module.exports = {
       });
 
     } catch (error) {
+    handleError(error, 'viewinventoryHandler.js');
+
       console.error("[viewinventoryHandler.js]: logs Error fetching inventory:", error);
       await interaction.reply({ content: `❌ An error occurred while fetching the inventory.`, ephemeral: true });
     }

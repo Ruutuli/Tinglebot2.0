@@ -6,6 +6,7 @@ require('dotenv').config();
 const { MongoClient, ObjectId } = require('mongodb');
 
 
+const { handleError } = require('../utils/globalErrorHandler');
 // =================== DATABASE MODELS ===================
 // ------------------- Import local database models -------------------
 // Note: Sorted alphabetically by variable name.
@@ -22,6 +23,8 @@ const connectToInventories = async () => {
         await client.connect();
         return client;
     } catch (error) {
+    handleError(error, 'itemService.js');
+
         console.error('[itemService.js]: ❌ Error connecting to Inventories database:', error);
         throw error;
     }
@@ -78,6 +81,8 @@ const checkMaterial = (materialId, materialName, quantityNeeded, inventory) => {
             : inventory.find(inv => inv.itemName === materialName);
         return itemById && itemById.quantity >= quantityNeeded;
     } catch (error) {
+    handleError(error, 'itemService.js');
+
         console.error('[itemService.js]: ❌ Error checking material:', error);
         return false;
     }
@@ -93,6 +98,8 @@ const fetchAllItems = async () => {
         const items = await db.collection('items').find().toArray();
         return items;
     } catch (error) {
+    handleError(error, 'itemService.js');
+
         console.error('[itemService.js]: ❌ Error fetching all items:', error);
         throw error;
     } finally {
@@ -118,6 +125,8 @@ async function fetchItemByName(itemName) {
         }
         return item;
     } catch (error) {
+    handleError(error, 'itemService.js');
+
         console.error('[itemService.js]: ❌ Error fetching item by name:', error);
         throw error;
     } finally {
@@ -134,6 +143,8 @@ const fetchItemById = async (itemId) => {
         const item = await db.collection('items').findOne({ _id: ObjectId(itemId) });
         return item;
     } catch (error) {
+    handleError(error, 'itemService.js');
+
         console.error('[itemService.js]: ❌ Error fetching item by ID:', error);
         throw error;
     } finally {
@@ -156,6 +167,8 @@ const fetchItemsByMonster = async (monsterName) => {
         const items = await db.collection('items').find(query).toArray();
         return items.filter(item => item.itemName && item.itemRarity);
     } catch (error) {
+    handleError(error, 'itemService.js');
+
         console.error('[itemService.js]: ❌ Error fetching items by monster:', error);
         throw error;
     } finally {
@@ -184,6 +197,8 @@ const fetchCraftableItemsAndCheckMaterials = async (inventory) => {
         }
         return craftableItemsWithMaterials;
     } catch (error) {
+    handleError(error, 'itemService.js');
+
         console.error('[itemService.js]: ❌ Error fetching craftable items and checking materials:', error);
         throw error;
     } finally {
@@ -209,6 +224,8 @@ const fetchAndSortItemsByRarity = async (inventoryItems) => {
         itemsWithRarity.sort((a, b) => a.itemRarity - b.itemRarity);
         return itemsWithRarity;
     } catch (error) {
+    handleError(error, 'itemService.js');
+
         console.error('[itemService.js]: ❌ Error fetching and sorting items by rarity:', error);
         throw error;
     }
@@ -235,6 +252,8 @@ const getIngredientItems = async (ingredientName) => {
 
         return formattedResults;
     } catch (error) {
+    handleError(error, 'itemService.js');
+
         console.error('[itemService.js]: ❌ Error fetching ingredient items:', error);
         throw error;
     }
@@ -249,6 +268,8 @@ const fetchItemsByIds = async (itemIds) => {
         const items = await db.collection('items').find({ _id: { $in: itemIds } }).toArray();
         return items;
     } catch (error) {
+    handleError(error, 'itemService.js');
+
         console.error('[itemService.js]: ❌ Error fetching items by IDs:', error);
         throw error;
     } finally {
@@ -269,6 +290,8 @@ const fetchItemRarityByName = async (itemName) => {
         });
         return item ? item.itemRarity : null;
     } catch (error) {
+    handleError(error, 'itemService.js');
+
         console.error('[itemService.js]: ❌ Error fetching item rarity by name:', error);
         throw error;
     } finally {
@@ -292,6 +315,8 @@ const fetchItemsByCategory = async (category) => {
         }
         return items;
     } catch (error) {
+    handleError(error, 'itemService.js');
+
         console.error('[itemService.js]: ❌ Error fetching items by category:', error);
         throw error;
     } finally {
@@ -308,6 +333,8 @@ const fetchValidWeaponSubtypes = async () => {
         const subtypes = await db.collection('items').distinct('subtype');
         return subtypes.filter(Boolean).map(sub => sub.toLowerCase());
     } catch (error) {
+    handleError(error, 'itemService.js');
+
         console.error('[itemService.js]: ❌ Error fetching valid weapon subtypes:', error);
         return [];
     } finally {

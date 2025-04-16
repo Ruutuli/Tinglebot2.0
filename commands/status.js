@@ -2,6 +2,7 @@
 // Alphabetized imports from discord.js
 const { PermissionsBitField, SlashCommandBuilder } = require("discord.js");
 
+const { handleError } = require('../utils/globalErrorHandler');
 // ------------------- Database Models -------------------
 const User = require("../models/UserModel");
 
@@ -86,6 +87,8 @@ module.exports = {
               await interaction.guild.members.fetch(user.discordId);
               return user;
             } catch (error) {
+    handleError(error, 'status.js');
+
               return null;
             }
           })
@@ -116,6 +119,8 @@ module.exports = {
               fetchedCount += messages.size;
               before = messages.last().id;
             } catch (err) {
+    handleError(err, 'status.js');
+
               console.warn(
                 "[status.js]: Error fetching messages in channel " +
                   channel.id +
@@ -179,6 +184,8 @@ module.exports = {
               if (reachedOlder) break;
               before = messages.last().id;
             } catch (err) {
+    handleError(err, 'status.js');
+
               console.warn(
                 "[status.js]: Error fetching messages in channel " +
                   channel.id +
@@ -296,6 +303,8 @@ module.exports = {
         }
       }
     } catch (error) {
+    handleError(error, 'status.js');
+
       // ------------------- Extensive Error Logging for Command Execution -------------------
       console.error("[status.js]: Error handling status command:", error);
       await interaction.reply({

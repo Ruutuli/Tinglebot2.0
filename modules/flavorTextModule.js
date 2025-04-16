@@ -1,3 +1,5 @@
+const { handleError } = require('../utils/globalErrorHandler');
+
 // flavorTextModule.js
 
 // Utility Functions

@@ -1,4 +1,5 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
+const { handleError } = require('../utils/globalErrorHandler');
 const { fetchTableFromDatabase, loadTable, rollItem, createRollEmbed } = require('../utils/sheetTableUtils');
 const { EmbedBuilder } = require('discord.js'); // Updated import
 

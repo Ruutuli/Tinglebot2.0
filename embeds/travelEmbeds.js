@@ -1,5 +1,6 @@
 // ------------------- Import necessary modules and functions -------------------
 const { EmbedBuilder } = require('discord.js');
+const { handleError } = require('../utils/globalErrorHandler');
 const { getCommonEmbedSettings, formatItemDetails } = require('../embeds/embedUtils');
 const { capitalizeFirstLetter, capitalizeWords } = require('../modules/formattingModule');
 const { monsterMapping } = require('../models/MonsterModel');

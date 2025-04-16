@@ -1,5 +1,6 @@
 // ------------------- Import necessary modules -------------------
 const mongoose = require('mongoose');
+const { handleError } = require('../utils/globalErrorHandler');
 const ShopStock = require('../models/ShopsModel'); // Import ShopStock model
 require('dotenv').config();
 
@@ -12,6 +13,8 @@ async function connectToDatabase() {
     });
     console.log('✅ Connected to MongoDB');
   } catch (error) {
+    handleError(error, 'seedShops.js');
+
     console.error('❌ Error connecting to MongoDB:', error);
     process.exit(1);
   }
@@ -114,6 +117,8 @@ async function seedShops() {
 
     console.log('✅ Shop items seeded successfully with numeric quantities!');
   } catch (error) {
+    handleError(error, 'seedShops.js');
+
     console.error('❌ Error seeding shop items:', error);
   } finally {
     mongoose.disconnect();

@@ -22,6 +22,7 @@ const Monster = require('../models/MonsterModel');  // Model for monster-related
 // ------------------- Import buff calculation functions -------------------
 const { calculateAttackBuff, calculateDefenseBuff, applyBuffs } = require('../modules/buffModule');
 
+const { handleError } = require('../utils/globalErrorHandler');
 // ------------------- Import high-tier encounter outcome functions -------------------
 const {
   getTier5EncounterOutcome,
@@ -83,6 +84,8 @@ const getEncounterOutcome = async (character, monster, damageValue, adjustedRand
       defenseSuccess,
     };
   } catch (error) {
+    handleError(error, 'damageModule.js');
+
     console.error('[damageModule.js]: logs Encounter Outcome Calculation Failed:', error);
     throw error;
   }
@@ -161,6 +164,8 @@ async function processBattle(character, monster, battleId, originalRoll, interac
 
     return { ...outcome, originalRoll, adjustedRandomValue, attackSuccess, defenseSuccess };
   } catch (error) {
+    handleError(error, 'damageModule.js');
+
     console.error('[damageModule.js]: logs Error during battle processing:', error);
     return null;
   }

@@ -1,5 +1,6 @@
 // =================== STANDARD LIBRARIES ===================
 const fs = require('fs');
+const { handleError } = require('../utils/globalErrorHandler');
 const path = require('path');
 
 // =================== DATABASE CONNECTION ===================
@@ -53,6 +54,8 @@ const seedRelics = async () => {
     console.log(`[seedRelics]: ✅ Successfully seeded ${parsedRelics.length} relics.`);
     process.exit(0);
   } catch (error) {
+    handleError(error, 'seedRelics.js');
+
     console.error('[seedRelics]: ❌ Failed to seed relics -', error);
     process.exit(1);
   }

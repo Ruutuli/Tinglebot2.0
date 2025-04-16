@@ -1,5 +1,6 @@
 // ------------------- Import necessary modules and services -------------------
 const { SlashCommandBuilder } = require('discord.js');
+const { handleError } = require('../utils/globalErrorHandler');
 const { fetchCharacterByNameAndUserId, fetchCharactersByUserId } = require('../database/characterService');
 const { createCharacterEmbed, createVendorEmbed, createCharacterGearEmbed } = require('../embeds/characterEmbeds');
 const { getJobPerk } = require('../modules/jobsModule');
@@ -110,6 +111,8 @@ module.exports = {
       await interaction.reply({ embeds, ephemeral: true });
 
     } catch (error) {
+    handleError(error, 'viewcharacter.js');
+
       console.error('Error executing viewcharacter command:', error);
       await interaction.reply({ content: '❌ An error occurred while fetching the character.', ephemeral: true });
     }
@@ -138,6 +141,8 @@ module.exports = {
         await interaction.respond(filteredChoices);
       }
     } catch (error) {
+    handleError(error, 'viewcharacter.js');
+
       await interaction.respond([]);
     }
   }

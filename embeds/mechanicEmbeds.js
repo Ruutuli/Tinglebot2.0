@@ -2,6 +2,7 @@
 // Discord.js Imports
 const { EmbedBuilder } = require('discord.js');
 
+const { handleError } = require('../utils/globalErrorHandler');
 // Utility Imports
 const { getCommonEmbedSettings, formatItemDetails, getArticleForItem, DEFAULT_IMAGE_URL, jobActions } = require('./embedUtils');
 const { isValidImageUrl } = require('../utils/validation');

@@ -1,3 +1,5 @@
+const { handleError } = require('../utils/globalErrorHandler');
+
 /* eslint-env jasmine */
 import Stepper from './index'
 

@@ -1,5 +1,6 @@
 // ------------------- Import necessary modules -------------------
 const { getAllRaces } = require('../modules/raceModule');
+const { handleError } = require('../utils/globalErrorHandler');
 const { jobPerks, getAllJobs } = require('../modules/jobsModule');
 const { Client, GatewayIntentBits } = require('discord.js');
 
@@ -30,6 +31,8 @@ const createRole = async (guild, name, color = null) => {
     console.log(`[Roles]: Role "${name}" created successfully.`);
     return role;
   } catch (error) {
+    handleError(error, 'roles.js');
+
     console.error(`[Roles]: Error creating role "${name}":`, error.message);
   }
 };
@@ -50,6 +53,8 @@ const removeDuplicateRoles = async (guild) => {
       }
     }
   } catch (error) {
+    handleError(error, 'roles.js');
+
     console.error('[Roles]: Error removing duplicate roles:', error.message);
   }
 };
@@ -118,6 +123,8 @@ client.once('ready', async () => {
       }
     }
   } catch (error) {
+    handleError(error, 'roles.js');
+
     console.error('[Roles]: Error during role creation process:', error.message);
   }
 

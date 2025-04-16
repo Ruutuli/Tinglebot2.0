@@ -1,3 +1,5 @@
+const { handleError } = require('../utils/globalErrorHandler');
+
 document.addEventListener("DOMContentLoaded", async function () {
     // ------------------- UI Elements -------------------
     const totalMembersElement = document.getElementById("total-members");

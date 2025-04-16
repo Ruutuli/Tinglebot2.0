@@ -1,5 +1,6 @@
 // ------------------- Import MongoDB client and environment variables -------------------
 const { MongoClient } = require('mongodb');
+const { handleError } = require('../utils/globalErrorHandler');
 require('dotenv').config();
 
 // ------------------- MongoDB connection URI and connection variable -------------------

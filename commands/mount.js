@@ -1,3 +1,5 @@
+const { handleError } = require('../utils/globalErrorHandler');
+
 // ------------------- Import standard libraries and external modules -------------------
 const { SlashCommandBuilder } = require('@discordjs/builders'); // Slash command builder for Discord commands
 const { EmbedBuilder } = require('discord.js'); // Discord.js Embed builder for rich content in responses
@@ -115,6 +117,8 @@ async function handleEncounter(interaction) {
         // Proceed with rolling logic for the character in the encounter
         await proceedWithRoll(interaction, characterName, encounterId);
     } catch (error) {
+    handleError(error, 'mount.js');
+
         console.error('[mount.js]: ❌ Error fetching character or proceeding with roll:', error);
         await interaction.reply({
             content: '❌ **An error occurred while processing your request. Please try again later.**',

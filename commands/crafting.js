@@ -10,6 +10,7 @@ const { v4: uuidv4 } = require('uuid'); // For generating unique IDs
 // ------------------- Discord.js Components -------------------
 const { SlashCommandBuilder } = require('@discordjs/builders');
 
+const { handleError } = require('../utils/globalErrorHandler');
 // ------------------- Database Connections -------------------
 const { connectToTinglebot } = require('../database/connection');
 
@@ -239,6 +240,8 @@ module.exports = {
         updatedStamina = await checkAndUseStamina(character, staminaCost);
         console.log(`[crafting.js]: Stamina deducted. Remaining: ${updatedStamina}`);
       } catch (error) {
+    handleError(error, 'crafting.js');
+
         console.error(`[crafting.js]: Error deducting stamina for character "${characterName}" while crafting "${itemName}". Details:`, error);
         return interaction.followUp({
           content: `⚠️ **Crafting cannot be completed due to insufficient stamina. Please try again.**`,
@@ -332,6 +335,8 @@ module.exports = {
         }
       }
     } catch (error) {
+    handleError(error, 'crafting.js');
+
       console.error(`[crafting.js]: Error while crafting "${itemName}" for character "${characterName}". Details:`, error);
     }
   },
@@ -390,6 +395,8 @@ async function logMaterialsToGoogleSheets(auth, spreadsheetId, range, character,
           uuidv4()
         ];
       } catch (error) {
+    handleError(error, 'crafting.js');
+
         return [
           character.name,
           material.itemName,
@@ -409,6 +416,8 @@ async function logMaterialsToGoogleSheets(auth, spreadsheetId, range, character,
     }));
     await appendSheetData(auth, spreadsheetId, range, usedMaterialsValues);
   } catch (error) {
+    handleError(error, 'crafting.js');
+
     console.error(`[crafting.js]: Error logging materials to Google Sheets: ${error.message}`);
   }
 }

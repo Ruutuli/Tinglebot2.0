@@ -1,3 +1,5 @@
+const { handleError } = require('../utils/globalErrorHandler');
+
 // utils/objectUtils.js
 
 // Function to handle circular references during JSON stringification

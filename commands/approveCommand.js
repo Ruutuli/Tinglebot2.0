@@ -3,6 +3,7 @@
 // Discord.js Components (Third-Party Libraries)
 const { SlashCommandBuilder } = require('discord.js');
 
+const { handleError } = require('../utils/globalErrorHandler');
 // Database Services (Local modules for database interactions)
 const { appendEarnedTokens, getOrCreateToken, updateTokenBalance } = require('../database/tokenService');
 
@@ -45,6 +46,8 @@ async function reactToMessage(interaction, messageUrl, emoji) {
     await message.react(emoji);
     console.log(`[approveCommand.js]: Reacted to message with ${emoji}`);
   } catch (error) {
+    handleError(error, 'approveCommand.js');
+
     console.error(`[approveCommand.js]: Failed to react to the message: ${error.message}`);
     throw error;
   }
@@ -58,6 +61,8 @@ async function notifyUser(interaction, userId, messageContent) {
     await user.send(messageContent);
     console.log(`[approveCommand.js]: Notified user ${userId}`);
   } catch (error) {
+    handleError(error, 'approveCommand.js');
+
     console.error(`[approveCommand.js]: Failed to notify user ${userId}: ${error.message}`);
   }
 }
@@ -74,6 +79,8 @@ async function replyToAdmin(interaction, messageContent) {
       console.log(`[approveCommand.js]: Replied to admin with message: ${messageContent}`);
     }
   } catch (error) {
+    handleError(error, 'approveCommand.js');
+
     console.error(`[approveCommand.js]: Failed to reply to admin: ${error.message}`);
   }
 }
@@ -161,6 +168,8 @@ async function approveSubmission(interaction, submissionId) {
     await deleteSubmissionFromStorage(submissionId);
     console.log(`[approveCommand.js]: Submission ${submissionId} successfully approved.`);
   } catch (error) {
+    handleError(error, 'approveCommand.js');
+
     console.error(`[approveCommand.js]: Error during approval process: ${error.message}`);
     await replyToAdmin(interaction, `**⚠️ An error occurred while processing the submission. Please try again later.**`);
   }
@@ -202,6 +211,8 @@ async function denySubmission(interaction, submissionId, reason) {
     // Remove the submission from storage
     await deleteSubmissionFromStorage(submissionId);
   } catch (error) {
+    handleError(error, 'approveCommand.js');
+
     console.error(`[approveCommand.js]: Error during denial process: ${error.message}`);
     await replyToAdmin(interaction, `**⚠️ An error occurred while processing the denial. Please try again later.**`);
   }

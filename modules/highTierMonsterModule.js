@@ -2,6 +2,7 @@
 const { useHearts, handleKO } = require('../modules/characterStatsModule');  // Import heart handling functions
 const { calculateAttackBuff, calculateDefenseBuff, applyBuffs } = require('../modules/buffModule');
 
+const { handleError } = require('../utils/globalErrorHandler');
 // ------------------- Tier 5 Encounter Outcome -------------------
 const getTier5EncounterOutcome = async (character, monster, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess) => {
     let heartsLostForMonster = 0;

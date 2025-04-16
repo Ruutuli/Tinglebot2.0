@@ -1,3 +1,5 @@
+const { handleError } = require('../utils/globalErrorHandler');
+
 //Author      : @arboshiki
 //create lobibox object
 var Lobibox = Lobibox || {};

@@ -1,3 +1,5 @@
+const { handleError } = require('../utils/globalErrorHandler');
+
 $(function () {
 	"use strict";
 	jQuery('#world-map-markers').vectorMap({

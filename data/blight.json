@@ -1,26 +1,4 @@
 {
-  "B957960": {
-    "submissionId": "B957960",
-    "userId": "207945864918990849",
-    "characterName": "Ayame",
-    "healerName": "Ginger-Sage",
-    "taskType": "item",
-    "taskDescription": "**Ginger-Sage, Sage of Forest** is concerned and will usher you to sit or lay down so that she may tend to your blight with glowing vines. Thank her with a gift! She is always looking for new stock of herbs and flowers from all over Hyrule! Any one type of Plant in a bundle will do!",
-    "healingStage": 2,
-    "status": "pending",
-    "createdAt": "2025-04-14T01:33:48.927Z"
-  },
-  "B667161": {
-    "submissionId": "B667161",
-    "userId": "635948726686580747",
-    "characterName": "Choji",
-    "healerName": "Korelii",
-    "taskType": "item",
-    "taskDescription": "\"Oh hey there, Goro! Got any fish? My coral buddies need a bit of cleaning and it's a real bother to get back there myself, Goro! Offer up sea critters to Korelii!\"",
-    "healingStage": 2,
-    "status": "pending",
-    "createdAt": "2025-04-14T00:49:14.444Z"
-  },
   "B587395": {
     "submissionId": "B587395",
     "userId": "635948726686580747",

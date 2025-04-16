@@ -11,6 +11,7 @@ require('dotenv').config();
 
 // Database Services
 const {  fetchCharacterByNameAndUserId, fetchCharactersByUserId, updateCharacterById} = require('../database/characterService');
+const { handleError } = require('../utils/globalErrorHandler');
 const { fetchItemsByMonster, fetchItemByName } = require('../database/itemService');
 const { getMonstersAboveTier } = require('../database/monsterService');
 
@@ -265,6 +266,8 @@ if (bloodMoonActive) {
       return; // Stop if reroll is needed and executed
     }
   } catch (error) {
+    handleError(error, 'loot.js');
+
     console.error(`[LOOT] Error during Blood Moon encounter logic: ${error.message}`);
     await interaction.followUp(`🌕 **Blood Moon is active, but an error occurred while determining an encounter.**`);
     return;
@@ -310,6 +313,8 @@ if (character.jobVoucher) {
 }
 
     } catch (error) {
+    handleError(error, 'loot.js');
+
       console.error(`[LOOT] Error during command execution: ${error}`);
       await interaction.editReply({
         content: `❌ **An error occurred during the loot command execution.**`,
@@ -499,6 +504,8 @@ async function processLootingLogic(interaction, character, encounteredMonster, b
       await interaction.editReply({ embeds: [embed] });
     }
   } catch (error) {
+    handleError(error, 'loot.js');
+
     console.error(`[LOOT] Error during loot processing: ${error.message}`);
     await interaction.editReply({
       content: `❌ **An error occurred while processing the loot.**`,

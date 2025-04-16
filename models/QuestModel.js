@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { handleError } = require('../utils/globalErrorHandler');
 const { Schema } = mongoose;
 
 // ------------------- Quest Schema Definition -------------------

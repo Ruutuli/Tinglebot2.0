@@ -5,6 +5,7 @@
 // ------------------- Imports -------------------
 // Modules for token calculations and formatting
 const artModule = require('../modules/artModule');
+const { handleError } = require('../utils/globalErrorHandler');
 const { capitalizeFirstLetter } = require('../modules/formattingModule');
 
 

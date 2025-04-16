@@ -9,6 +9,7 @@
 
 const { v4: uuidv4 } = require('uuid');
 
+const { handleError } = require('../utils/globalErrorHandler');
 // ============================================================================
 // Database Connections
 // ============================================================================
@@ -215,6 +216,8 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
                     const updateRange = `loggedInventory!A${originalRowIndex}:M${originalRowIndex}`;
                     batchRequests.push({ range: updateRange, values: [updatedRowData], sheetId });
                 } catch (error) {
+    handleError(error, 'syncHandler.js');
+
                     console.error(`[syncHandler.js]: syncInventory: Error processing row ${originalRowIndex}: ${error.message}`);
                     errors.push(`Row ${originalRowIndex}: ${error.message}`);
                     skippedLinesCount++;
@@ -249,6 +252,8 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
             console.log('Initial Item removal process completed.');
             console.log('inventorySynced status updated successfully.');
         } catch (updateError) {
+    handleError(updateError, 'syncHandler.js');
+
             console.error(`[syncHandler.js]: syncInventory: Failed to update inventorySynced status: ${updateError.message}`);
         }
 
@@ -265,6 +270,8 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
             character.inventory // Character's inventory link
         );
     } catch (error) {
+    handleError(error, 'syncHandler.js');
+
         console.error(`[syncHandler.js]: syncInventory: Error in syncInventory: ${error.message}`, error);
         await editSyncErrorMessage(interaction, `❌ **Sync canceled! An error occurred: ${error.message}**`);
     }
@@ -286,6 +293,8 @@ async function retrySync(interaction, characterName, userId, retryCount, syncedI
             try {
                 await interaction.webhook.editMessage(countdownMessage.id, { content: `⏳ Sync will retry in ${remainingTime} seconds.`, ephemeral: true });
             } catch (error) {
+    handleError(error, 'syncHandler.js');
+
                 clearInterval(interval);
             }
         } else {

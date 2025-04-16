@@ -1,6 +1,7 @@
 // ------------------- Import multer for file handling -------------------
 const multer = require('multer');
 
+const { handleError } = require('../utils/globalErrorHandler');
 // ------------------- Set up in-memory storage for file uploads -------------------
 const storage = multer.memoryStorage();
 

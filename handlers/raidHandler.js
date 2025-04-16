@@ -7,6 +7,7 @@
 // ------------------- Discord.js Components -------------------
 const { EmbedBuilder } = require('discord.js');
 
+const { handleError } = require('../utils/globalErrorHandler');
 // ------------------- Modules -------------------
 const { applyVillageDamage } = require('../modules/villageModule');
 const { storeBattleProgress } = require('../modules/combatModule');
@@ -38,6 +39,8 @@ async function triggerRaid(character, monster, interaction, threadId, isBloodMoo
             isBloodMoon ? '🔴 Blood Moon Raid initiated!' : 'Raid initiated! Player turn next.'
         );
     } catch (error) {
+    handleError(error, 'raidHandler.js');
+
         console.error(`[raidHandler.js]: triggerRaid: Failed to store battle progress: ${error.message}`);
         await interaction.followUp(`❌ **Failed to trigger the raid. Please try again later.**`);
         return;
@@ -109,6 +112,8 @@ async function triggerRaid(character, monster, interaction, threadId, isBloodMoo
             await thread.send({ embeds: [embed] });
         }
     } catch (error) {
+    handleError(error, 'raidHandler.js');
+
         console.error(`[raidHandler.js]: triggerRaid: Error creating/updating thread: ${error.message}`);
         await interaction.followUp(`❌ **Unable to create or update a thread for the raid. Please try again later.**`);
         return;
@@ -123,6 +128,8 @@ async function triggerRaid(character, monster, interaction, threadId, isBloodMoo
         try {
             await applyVillageDamage(villageName, monster, thread);
         } catch (error) {
+    handleError(error, 'raidHandler.js');
+
             console.error(`[raidHandler.js]: Timer: Error during applyVillageDamage execution: ${error.message}`);
         }
     }, timerDuration);

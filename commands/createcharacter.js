@@ -9,6 +9,7 @@ const { createJobOptions, generalJobs, villageJobs, getJobPerk } = require('../m
 const { roles } = require('../modules/rolesModule'); // Roles module for assigning roles
 const { capitalizeFirstLetter, capitalizeWords } = require('../modules/formattingModule');
 
+const { handleError } = require('../utils/globalErrorHandler');
 // ------------------- Command Definition -------------------
 // Define the slash command for creating a character with subcommands for each village and general job options
 module.exports = {
@@ -143,18 +144,28 @@ async execute(interaction) {
       const User = require('../models/UserModel'); // Import User model
       const Character = require('../models/CharacterModel'); // Import Character model (adjust path as needed)
 
-      // Fetch the user from the database
-      const user = await User.findOne({ discordId: userId });
+      let user = await User.findOne({ discordId: userId });
 
-      // Check if user exists and has available slots
-      if (!user || user.characterSlot <= 0) {
+      // ------------------- Create new user with 2 character slots if they don't exist -------------------
+      if (!user) {
+          user = new User({
+              discordId: userId,
+              characterSlot: 2 // Default slot count for new users
+          });
+      
+          await user.save();
+          console.log(`[CreateCharacter]: Created new user profile for ${interaction.user.tag} with 2 character slots.`);
+      }
+      
+      // ------------------- Check if user has available slots -------------------
+      if (user.characterSlot <= 0) {
           await interaction.reply({
               content: "❌ You do not have enough character slots available to create a new character.",
               ephemeral: true
           });
-          return; // Ensure no further code is executed
+          return;
       }
-
+      
       // Check if a character with the provided name already exists
       const characterName = interaction.options.getString('name');
       const existingCharacter = await Character.findOne({ name: characterName });
@@ -219,6 +230,8 @@ async execute(interaction) {
           ephemeral: true
       });
   } catch (error) {
+    handleError(error, 'createcharacter.js');
+
       console.error('[CreateCharacter]: Error during character creation:', error.message);
 
       // Reply with an error if not already replied
@@ -237,6 +250,8 @@ async execute(interaction) {
     try {
       await createCharacterAutocomplete(interaction);
     } catch (error) {
+    handleError(error, 'createcharacter.js');
+
       await interaction.respond([]); // Sends an empty response in case of an error
     }
   }

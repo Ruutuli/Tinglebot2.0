@@ -9,6 +9,7 @@ const { MongoClient } = require('mongodb');
 
 
 
+const { handleError } = require('../utils/globalErrorHandler');
 // =================== DATABASE SERVICES ===================
 // ------------------- Import Item Service -------------------
 // Import the fetchAllItems function from the itemService module.
@@ -52,6 +53,8 @@ const connectToDatabase = async () => {
         await client.connect();
         return client;
     } catch (error) {
+    handleError(error, 'vendingService.js');
+
         console.error('[vendingService.js]: ❌ Error connecting to database:', error);
         throw error;
     }
@@ -70,6 +73,8 @@ const clearExistingStock = async () => {
     try {
         await stockCollection.deleteMany({});
     } catch (error) {
+    handleError(error, 'vendingService.js');
+
         console.error('[vendingService.js]: ❌ Error clearing vending stock:', error);
     } finally {
         await client.close();
@@ -199,6 +204,8 @@ const generateVendingStockList = async () => {
             createdAt: new Date(),
         });
     } catch (error) {
+    handleError(error, 'vendingService.js');
+
         console.error('[vendingService.js]: ❌ Error generating vending stock list:', error);
     } finally {
         await client.close();
@@ -231,6 +238,8 @@ const getCurrentVendingStockList = async () => {
             stockList: normalizedStockList,
         };
     } catch (error) {
+    handleError(error, 'vendingService.js');
+
         console.error('[vendingService.js]: ❌ Error retrieving current vending stock list:', error);
         throw error;
     } finally {
@@ -250,6 +259,8 @@ const getLimitedItems = async () => {
         const currentStock = await stockCollection.findOne({ month: currentMonth });
         return currentStock ? currentStock.limitedItems : [];
     } catch (error) {
+    handleError(error, 'vendingService.js');
+
         console.error('[vendingService.js]: ❌ Error retrieving limited items:', error);
         throw error;
     } finally {
@@ -286,6 +297,8 @@ const updateItemStockByName = async (itemName, quantity) => {
             { $set: { limitedItems: currentStock.limitedItems } }
         );
     } catch (error) {
+    handleError(error, 'vendingService.js');
+
         console.error('[vendingService.js]: ❌ Error updating item stock by name:', error);
         throw error;
     } finally {
@@ -318,6 +331,8 @@ async function updateVendingStock({ characterId, itemName, stockQty, tokenPrice,
             { upsert: true }
         );
     } catch (error) {
+    handleError(error, 'vendingService.js');
+
         console.error('[vendingService.js]: ❌ Error updating vending stock:', error);
         throw error;
     } finally {

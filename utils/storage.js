@@ -1,6 +1,7 @@
 // ------------------- Standard Libraries -------------------
 // Import core Node.js modules.
 const fs = require('fs');
+const { handleError } = require('../utils/globalErrorHandler');
 const path = require('path');
 
 
@@ -35,6 +36,8 @@ function safeReadJSON(filePath) {
     const data = fs.readFileSync(filePath, 'utf-8');
     return data ? JSON.parse(data) : {};
   } catch (error) {
+    handleError(error, 'storage.js');
+
     console.error(`[storage.js]: logs Error reading JSON file at ${filePath}:`, error.message);
     return {};
   }
@@ -90,6 +93,8 @@ function saveHealingRequestToStorage(healingRequestId, healingRequestData) {
     healingRequests[healingRequestId] = healingRequestData;
     fs.writeFileSync(healingRequestsFile, JSON.stringify(healingRequests, null, 2), 'utf-8');
   } catch (error) {
+    handleError(error, 'storage.js');
+
     console.error(`[storage.js]: logs Error saving healing request ${healingRequestId}:`, error.message);
   }
 }
@@ -135,6 +140,8 @@ function cleanupExpiredHealingRequests() {
       fs.writeFileSync(healingRequestsFile, JSON.stringify(healingRequests, null, 2), 'utf-8');
     }
   } catch (error) {
+    handleError(error, 'storage.js');
+
     console.error('[storage.js]: logs Error cleaning up expired healing requests:', error.message);
   }
 }
@@ -160,6 +167,8 @@ function saveVendingRequestToStorage(requestId, requestData) {
     vendingRequests[requestId] = requestData;
     fs.writeFileSync(vendingRequestsFile, JSON.stringify(vendingRequests, null, 2), 'utf-8');
   } catch (error) {
+    handleError(error, 'storage.js');
+
     console.error(`[storage.js]: logs Error saving vending request ${requestId}:`, error.message);
   }
 }
@@ -187,6 +196,8 @@ function retrieveAllVendingRequests() {
     const vendingRequests = safeReadJSON(vendingRequestsFile);
     return Object.values(vendingRequests);
   } catch (error) {
+    handleError(error, 'storage.js');
+
     console.error('[storage.js]: logs Error retrieving all vending requests:', error.message);
     return [];
   }
@@ -210,6 +221,8 @@ function cleanupExpiredVendingRequests() {
       fs.writeFileSync(vendingRequestsFile, JSON.stringify(vendingRequests, null, 2), 'utf-8');
     }
   } catch (error) {
+    handleError(error, 'storage.js');
+
     console.error('[storage.js]: logs Error cleaning up expired vending requests:', error.message);
   }
 }
@@ -247,6 +260,8 @@ function saveBoostingRequestToStorage(requestId, requestData) {
     boostingRequests[requestId] = requestData;
     fs.writeFileSync(boostingRequestsFile, JSON.stringify(boostingRequests, null, 2));
   } catch (error) {
+    handleError(error, 'storage.js');
+
     console.error(`[storage.js]: logs Error saving boosting request ${requestId}:`, error.message);
   }
 }

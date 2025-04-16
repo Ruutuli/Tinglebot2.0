@@ -3,6 +3,7 @@
 const { v4: uuidv4 } = require('uuid');
 
 
+const { handleError } = require('../utils/globalErrorHandler');
 // ------------------- Discord.js Components -------------------
 // Components from discord.js used for building UI elements.
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, ModalBuilder, StringSelectMenuBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
@@ -167,6 +168,8 @@ async function trackCharacterInEncounter(character, encounterId, encounter, user
     try {
       await storeEncounter(encounterId, encounter);
     } catch (error) {
+    handleError(error, 'mountComponentHandler.js');
+
       console.error('[mountComponentHandler]: Failed to store updated encounter', error);
       throw new Error('An error occurred while updating the encounter. Please try again.');
     }
@@ -375,6 +378,8 @@ async function handleMountComponentInteraction(interaction) {
           ephemeral: false,
         });
       } catch (error) {
+    handleError(error, 'mountComponentHandler.js');
+
         console.error('[mountComponentHandler]: Error while filtering distraction items:', error);
         await interaction.editReply({
           embeds: [{ title: '❌ Error', description: 'An error occurred while processing distraction items. Please try again later.', color: 0xFF0000 }],
@@ -465,6 +470,8 @@ async function handleMountComponentInteraction(interaction) {
       });
     }
   } catch (error) {
+    handleError(error, 'mountComponentHandler.js');
+
     console.error('[mountComponentHandler]: Error occurred:', error);
     if (!interaction.replied && !interaction.deferred) {
       await interaction.reply({
@@ -581,6 +588,8 @@ async function handleTameInteraction(interaction) {
       });
     }
   } catch (error) {
+    handleError(error, 'mountComponentHandler.js');
+
     console.error('[mountComponentHandler]: Error handling tame interaction:', error);
     if (!interaction.replied && !interaction.deferred) {
       await interaction.reply({
@@ -720,6 +729,8 @@ async function handleUseItemInteraction(interaction) {
     encounter.distractionResult = success;
     storeEncounter(encounterId, encounter);
   } catch (error) {
+    handleError(error, 'mountComponentHandler.js');
+
     console.error('[mountComponentHandler]: Error handling item usage interaction:', error);
     if (!interaction.replied && !interaction.deferred) {
       await interaction.reply({
@@ -773,6 +784,8 @@ async function handlePostTameInteraction(interaction, encounterId) {
       ephemeral: false,
     });
   } catch (error) {
+    handleError(error, 'mountComponentHandler.js');
+
     console.error('[mountComponentHandler]: Error handling post-tame interaction:', error);
     if (!interaction.replied && !interaction.deferred) {
       await interaction.reply({
@@ -1025,6 +1038,8 @@ async function handleTraitPaymentInteraction(interaction) {
       });
     }
   } catch (error) {
+    handleError(error, 'mountComponentHandler.js');
+
     console.error('[mountComponentHandler]: Error during trait payment interaction:', error);
     if (!interaction.replied) {
       await interaction.reply({
@@ -1215,6 +1230,8 @@ async function handleTraitSelection(interaction) {
       });
     }
   } catch (error) {
+    handleError(error, 'mountComponentHandler.js');
+
     console.error('[mountComponentHandler]: Error during trait selection:', error);
     if (!interaction.replied) {
       await interaction.reply({
@@ -1256,6 +1273,8 @@ async function handleRegisterMountModal(interaction) {
   
     await interaction.showModal(modal);
   } catch (error) {
+    handleError(error, 'mountComponentHandler.js');
+
     console.error('[mountComponentHandler]: Error handling mount registration modal:', error);
     if (!interaction.replied) {
       await interaction.reply({
@@ -1384,6 +1403,8 @@ async function handleMountNameSubmission(interaction) {
       ephemeral: false,
     });
   } catch (error) {
+    handleError(error, 'mountComponentHandler.js');
+
     console.error('[mountComponentHandler]: Error registering mount:', error);
     await interaction.reply({
       embeds: [{ title: '❌ Registration Failed', description: 'An error occurred while saving the mount. Please try again later.', color: 0xFF0000 }],
@@ -1449,6 +1470,8 @@ async function handleViewMount(interaction) {
       ephemeral: false,
     });
   } catch (error) {
+    handleError(error, 'mountComponentHandler.js');
+
     console.error('[mountComponentHandler]: Error viewing mount:', error);
     await interaction.reply({
       embeds: [{ title: '❌ Error Viewing Mount', description: 'An error occurred while fetching the mount details. Please try again later.', color: 0xFF0000 }],

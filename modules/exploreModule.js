@@ -1,6 +1,7 @@
 // exploreModule.js
 const Character = require('../models/CharacterModel');
 
+const { handleError } = require('../utils/globalErrorHandler');
 // Fetch character's items from the party data
 async function getCharacterItems(party, characterName) {
     const character = party.characters.find(char => char.name === characterName);
@@ -31,6 +32,8 @@ async function calculateTotalHeartsAndStamina(party) {
                 console.log(`Fetched ${characterData.name}: Hearts - ${characterData.currentHearts}, Stamina - ${characterData.currentStamina}`);
             }
         } catch (error) {
+    handleError(error, 'exploreModule.js');
+
             console.error(`Error fetching character data for ID ${char._id}: ${error.message}`);
         }
     }

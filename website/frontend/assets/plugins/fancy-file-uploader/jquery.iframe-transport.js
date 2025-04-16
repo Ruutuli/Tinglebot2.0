@@ -1,3 +1,5 @@
+const { handleError } = require('../utils/globalErrorHandler');
+
 /*
  * jQuery Iframe Transport Plugin
  * https://github.com/blueimp/jQuery-File-Upload
@@ -99,6 +101,8 @@
                   throw new Error();
                 }
               } catch (e) {
+    handleError(e, 'jquery.iframe-transport.js');
+
                 response = undefined;
               }
               // The complete callback returns the

@@ -1,3 +1,5 @@
+const { handleError } = require('../utils/globalErrorHandler');
+
 /*!
  * pickadate.js v3.6.4, 2019/05/25
  * By Amsul, http://amsul.ca
@@ -1207,7 +1209,9 @@ function ariaAttr(attribute, data) {
 function getActiveElement() {
     try {
         return document.activeElement
-    } catch ( err ) { }
+    } catch (err) {
+    handleError(err, 'picker.js');
+ }
 }
 
 

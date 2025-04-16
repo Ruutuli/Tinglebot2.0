@@ -1,3 +1,5 @@
+const { handleError } = require('../utils/globalErrorHandler');
+
 // ------------------- Import necessary modules -------------------
 const { capitalize } = require('../modules/formattingModule'); // Shared utility for capitalization
 

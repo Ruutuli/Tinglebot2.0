@@ -1,3 +1,5 @@
+const { handleError } = require('../utils/globalErrorHandler');
+
 /*
  * bootstrap-tagsinput v0.8.0
  * 

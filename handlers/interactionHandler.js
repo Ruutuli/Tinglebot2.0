@@ -2,6 +2,7 @@
 // Functions used to establish connections with the database.
 const { connectToInventories, connectToTinglebot } = require('../database/connection');
 
+const { handleError } = require('../utils/globalErrorHandler');
 // ------------------- Handlers -------------------
 // Custom handlers for processing various interaction types.
 const { handleAutocomplete } = require('../handlers/autocompleteHandler');
@@ -44,6 +45,8 @@ const handleInteraction = async (interaction, client) => {
       }
     }
   } catch (error) {
+    handleError(error, 'interactionHandler.js');
+
     console.error("[interactionHandler]: ❌ Error during interaction handling:", error);
 
     try {
@@ -55,6 +58,8 @@ const handleInteraction = async (interaction, client) => {
         await interaction.followUp({ content: '❌ **There was an error while executing this command!**', ephemeral: true });
       }
     } catch (err) {
+    handleError(err, 'interactionHandler.js');
+
       console.error("[interactionHandler]: ❌ Error responding to interaction:", err);
     }
   }

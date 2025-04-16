@@ -3,6 +3,7 @@ require('dotenv').config();
 
 // ------------------- Node.js Standard Modules -------------------
 const fs = require('fs');
+const { handleError } = require('../utils/globalErrorHandler');
 const { v4: uuidv4 } = require('uuid')
 
 // ------------------- Third-Party Libraries -------------------
@@ -33,6 +34,8 @@ function loadBlightSubmissions() {
     const data = fs.readFileSync('./data/blight.json', 'utf8');
     return data ? JSON.parse(data) : {};
   } catch (error) {
+    handleError(error, 'blightHandler.js');
+
     console.error('Error loading blight submissions:', error);
     return {};
   }
@@ -181,9 +184,13 @@ async function healBlight(interaction, characterName, healerName) {
       embeds: [embed],
     });
   } catch (error) {
+    handleError(error, 'blightHandler.js');
+
     console.error(`Failed to send DM to user ${interaction.user.id}:`, error);
   }
 } catch (error) {
+    handleError(error, 'blightHandler.js');
+
   console.error('Error healing blight:', error);
   await interaction.reply({ content: 'An error occurred while processing your request.', ephemeral: true });
 }
@@ -312,6 +319,8 @@ if (submission.taskType === 'item') {
               quantity: totalQuantity,
           };
       } catch (error) {
+    handleError(error, 'blightHandler.js');
+
           console.error(`[hasItem]: Error fetching inventory for character ID ${characterId}:`, error);
           throw error;
       }
@@ -390,6 +399,8 @@ if (submission.taskType === 'item') {
       try {
           await appendSheetData(auth, spreadsheetId, range, values);
       } catch (error) {
+    handleError(error, 'blightHandler.js');
+
           console.error('Error appending to Google Sheets:', error);
       }
   }
@@ -453,6 +464,8 @@ if (submission.taskType === 'item') {
       return;
     }
   } catch (error) {
+    handleError(error, 'blightHandler.js');
+
     console.error('Error submitting healing task:', error);
     await interaction.editReply({ content: 'An error occurred while submitting your healing task.' });
   }
@@ -580,6 +593,8 @@ await character.save();
     await interaction.reply({ content: `<@${user.id}> rolled for ${characterName}`, embeds: [embed] });
 
   } catch (error) {
+    handleError(error, 'blightHandler.js');
+
     console.error('Error rolling for blight progression:', error);
     await interaction.reply({ content: 'An error occurred while processing your request.', ephemeral: true });
   }
@@ -771,6 +786,8 @@ async function checkMissedRolls(client) {
       }
     }
   } catch (error) {
+    handleError(error, 'blightHandler.js');
+
     console.error('[blightHandler]❌ Error checking missed rolls:', error);
   }
 }

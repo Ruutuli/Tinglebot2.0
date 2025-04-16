@@ -1,3 +1,5 @@
+const { handleError } = require('../utils/globalErrorHandler');
+
 $.validator.setDefaults( {
 			submitHandler: function () {
 				alert( "submitted!" );

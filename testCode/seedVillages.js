@@ -1,5 +1,6 @@
 // ------------------- Import required modules -------------------
 const mongoose = require('mongoose');
+const { handleError } = require('../utils/globalErrorHandler');
 const { Village } = require('../models/VillageModel');
 require('dotenv').config();
 
@@ -9,6 +10,8 @@ async function connectToMongoDB() {
     await mongoose.connect(process.env.MONGODB_TINGLEBOT_URI, { useNewUrlParser: true, useUnifiedTopology: true });
     console.log('✅ Connected to MongoDB');
   } catch (error) {
+    handleError(error, 'seedVillages.js');
+
     console.error('❌ Could not connect to MongoDB...', error);
     throw error;
   }
@@ -91,6 +94,8 @@ async function seedVillages() {
     }
     console.log('✅ All villages seeded successfully.');
   } catch (error) {
+    handleError(error, 'seedVillages.js');
+
     console.error('❌ Error seeding villages:', error);
   } finally {
     mongoose.disconnect();

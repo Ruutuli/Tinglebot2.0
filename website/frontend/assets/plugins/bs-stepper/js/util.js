@@ -1,3 +1,5 @@
+const { handleError } = require('../utils/globalErrorHandler');
+
 import { WinEvent, createCustomEvent } from './polyfill'
 
 const MILLISECONDS_MULTIPLIER = 1000

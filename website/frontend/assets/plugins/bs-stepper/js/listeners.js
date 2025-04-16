@@ -1,3 +1,5 @@
+const { handleError } = require('../utils/globalErrorHandler');
+
 import { closest } from './polyfill'
 import { customProperty, show } from './util'
 

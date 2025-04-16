@@ -1,5 +1,6 @@
 // exploringEmbeds.js
 const { EmbedBuilder } = require('discord.js');
+const { handleError } = require('../utils/globalErrorHandler');
 const { getCharacterItems, formatCharacterItems, calculateTotalHeartsAndStamina } = require('../modules/exploreModule');
 const { monsterMapping } = require('../models/MonsterModel');
 

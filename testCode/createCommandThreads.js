@@ -1,6 +1,7 @@
 // ------------------- Import necessary modules -------------------
 require('dotenv').config(); // Load environment variables
 const { Client, GatewayIntentBits, ChannelType } = require('discord.js');
+const { handleError } = require('../utils/globalErrorHandler');
 const fs = require('fs');
 const path = require('path');
 
@@ -58,6 +59,8 @@ async function createCommandThreads(client, channelId) {
 
           console.log(`[createCommandThreads.js]: ✅ Created forum thread: ${threadName}`);
         } catch (error) {
+    handleError(error, 'createCommandThreads.js');
+
           console.error(`[createCommandThreads.js]: ❌ Error creating thread "${threadName}":`, error);
         }
       }
@@ -65,6 +68,8 @@ async function createCommandThreads(client, channelId) {
 
     console.log('[createCommandThreads.js]: ✅ All threads created successfully.');
   } catch (error) {
+    handleError(error, 'createCommandThreads.js');
+
     console.error('[createCommandThreads.js]: ❌ Error in createCommandThreads function:', error);
   }
 }

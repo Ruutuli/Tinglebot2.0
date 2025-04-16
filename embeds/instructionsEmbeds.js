@@ -1,5 +1,6 @@
 // ------------------- Import necessary modules and functions -------------------
 const { EmbedBuilder } = require('discord.js');
+const { handleError } = require('../utils/globalErrorHandler');
 const { getRandomColor } = require('../modules/formattingModule');
 const { DEFAULT_IMAGE_URL } = require('./embedUtils');
 
@@ -105,6 +106,8 @@ const editSyncMessage = async (interaction, characterName, totalSyncedItemsCount
             components: [],
         });
     } catch (error) {
+    handleError(error, 'instructionsEmbeds.js');
+
         console.error(`Error editing sync completion message: ${error.message}`);
         throw error;
     }
@@ -120,6 +123,8 @@ const editSyncErrorMessage = async (interaction, errorMessage) => {
             components: []
         });
     } catch (error) {
+    handleError(error, 'instructionsEmbeds.js');
+
         console.error(`Error editing sync error message: ${error.message}`);
         throw error;
     }

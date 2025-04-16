@@ -5,6 +5,7 @@ const Monster = require('../models/MonsterModel');
 
 
 
+const { handleError } = require('../utils/globalErrorHandler');
 // =================== UTILITY FUNCTIONS ===================
 // ------------------- Convert a string to camel case -------------------
 // This utility function converts any given string to camelCase by removing special characters
@@ -25,6 +26,8 @@ const fetchAllMonsters = async () => {
     try {
         return await Monster.find();
     } catch (error) {
+    handleError(error, 'monsterService.js');
+
         console.error('[monsterService.js]: ❌ Error fetching monsters:', error);
         throw error;
     }
@@ -36,6 +39,8 @@ const fetchMonsterByName = async (name) => {
     try {
         return await Monster.findOne({ name });
     } catch (error) {
+    handleError(error, 'monsterService.js');
+
         console.error(`[monsterService.js]: ❌ Error fetching monster with name "${name}":`, error);
         throw error;
     }
@@ -57,6 +62,8 @@ const getMonsterDetailsByMapping = async (nameMapping) => {
         }
         return monster;
     } catch (error) {
+    handleError(error, 'monsterService.js');
+
         console.error('[monsterService.js]: ❌ Error fetching monster by mapping:', error);
         throw error;
     }
@@ -76,6 +83,8 @@ async function getMonstersAboveTier(minTier = 5) {
         const randomMonster = monsters[Math.floor(Math.random() * monsters.length)];
         return randomMonster;
     } catch (error) {
+    handleError(error, 'monsterService.js');
+
         console.error(`[monsterService.js]: ❌ Error fetching monsters above tier ${minTier}:`, error);
         return null;
     }
@@ -103,6 +112,8 @@ async function getMonstersAboveTierByRegion(minTier = 5, region) {
         const randomMonster = monsters[Math.floor(Math.random() * monsters.length)];
         return randomMonster;
     } catch (error) {
+    handleError(error, 'monsterService.js');
+
         console.error(`[monsterService.js]: ❌ Error fetching monsters above tier ${minTier} for region "${region}":`, error);
         return null;
     }

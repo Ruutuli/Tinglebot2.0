@@ -8,6 +8,7 @@
 // ------------------- Importing Discord.js components -------------------
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } = require('discord.js');
 
+const { handleError } = require('../utils/globalErrorHandler');
 // ============================================================================
 // Database Connections
 // ------------------- Importing database connection functions -------------------
@@ -183,6 +184,8 @@ const addItemsToDatabase = async (character, items, interaction) => {
             await appendSheetData(spreadsheetId, 'Inventory', sheetRows);
         }
     } catch (error) {
+    handleError(error, 'itemUtils.js');
+
         throw new Error(`❌ Error in addItemsToDatabase: ${error.message}`);
     }
 };
@@ -228,6 +231,8 @@ const removeItemDatabase = async (character, item, quantity, interaction) => {
             ]]);
         }
     } catch (error) {
+    handleError(error, 'itemUtils.js');
+
         throw new Error(`❌ Error in removeItemDatabase: ${error.message}`);
     }
 };
@@ -328,6 +333,8 @@ const promptUserForSpecificItems = async (interaction, inventory, generalCategor
             totalTimeTaken += (endTime - startTime);
 
         } catch (error) {
+    handleError(error, 'itemUtils.js');
+
             if (error.message === 'canceled') {
                 throw new Error('Crafting canceled by user.');
             }
@@ -353,6 +360,8 @@ async function getSheetIdByName(sheetName) {
         }
         return sheet.properties.sheetId;
     } catch (error) {
+    handleError(error, 'itemUtils.js');
+
         console.error(`[itemUtils.js]: Error in getSheetIdByName for "${sheetName}":`, error.message);
         throw error;
     }

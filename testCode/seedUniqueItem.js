@@ -1,5 +1,6 @@
 // ------------------- Import necessary modules -------------------
 const mongoose = require("mongoose");
+const { handleError } = require('../utils/globalErrorHandler');
 const Item = require("../models/ItemModel"); // Import the Item model
 require("dotenv").config();
 
@@ -12,6 +13,8 @@ async function connectToDatabase() {
     });
     console.log("✅ Connected to MongoDB");
   } catch (error) {
+    handleError(error, 'seedUniqueItem.js');
+
     console.error("❌ Error connecting to MongoDB:", error);
     process.exit(1);
   }
@@ -197,6 +200,8 @@ async function addItem() {
 
     console.log(`✅ Item "${newItem.itemName}" added successfully (if it didn't already exist)!`);
   } catch (error) {
+    handleError(error, 'seedUniqueItem.js');
+
     console.error("❌ Error adding item:", error);
   } finally {
     mongoose.disconnect();

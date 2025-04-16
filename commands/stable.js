@@ -1,5 +1,6 @@
 // ------------------- Import necessary modules and services -------------------
 const { SlashCommandBuilder } = require('discord.js');
+const { handleError } = require('../utils/globalErrorHandler');
 const { fetchCharacterByNameAndUserId } = require('../database/characterService');
 const Mount = require('../models/MountModel');
 const { updateTokenBalance, getOrCreateToken } = require('../database/tokenService');
@@ -109,6 +110,8 @@ module.exports = {
         await handleBuyCharacter(interaction, userId, characterName, price);
       }
     } catch (error) {
+    handleError(error, 'stable.js');
+
       console.error('[stable.js]: Error executing stable command:', error);
       await interaction.reply({ content: '❌ An error occurred while managing your stable.', ephemeral: true });
     }
@@ -141,6 +144,8 @@ async function handleViewStable(interaction, userId, characterName) {
 
     await interaction.reply({ embeds: [stableEmbed], ephemeral: true });
   } catch (error) {
+    handleError(error, 'stable.js');
+
     console.error('[stable.js]: Error viewing stable:', error);
     await interaction.reply({ 
       content: '❌ Failed to retrieve stable information.', 
@@ -213,6 +218,8 @@ async function handleStoreMount(interaction, userId, characterName, mountName) {
 
     await interaction.reply({ content: `✅ Mount **${mountName}** has been stored in the stable.`, ephemeral: true });
   } catch (error) {
+    handleError(error, 'stable.js');
+
     console.error('[stable.js]: Error storing mount:', error);
     await interaction.reply({ content: '❌ Failed to store the mount.', ephemeral: true });
   }
@@ -316,6 +323,8 @@ async function handleSellMount(interaction, userId, characterName, mountName) {
         ephemeral: true,
       });
     } catch (error) {
+    handleError(error, 'stable.js');
+
       console.error('[stable.js]: Error selling mount:', error);
       await interaction.reply({ content: '❌ Failed to list the mount for sale.', ephemeral: true });
     }
@@ -373,6 +382,8 @@ async function handleRetrieveMount(interaction, userId, characterName, mountName
 
     await interaction.reply({ content: `✅ Mount **${mountName}** has been retrieved from the stable.`, ephemeral: true });
   } catch (error) {
+    handleError(error, 'stable.js');
+
     console.error('[stable.js]: Error retrieving mount:', error);
     await interaction.reply({ content: '❌ Failed to retrieve the mount.', ephemeral: true });
   }
@@ -466,6 +477,8 @@ async function handleBuyCharacter(interaction, userId, characterName, mountName)
         ephemeral: true 
       });
     } catch (error) {
+    handleError(error, 'stable.js');
+
       console.error('[stable.js]: Error buying mount:', error);
       await interaction.reply({ 
         content: '❌ Failed to purchase the mount.', 
@@ -510,6 +523,8 @@ async function handleBrowseStable(interaction) {
   
       await interaction.reply({ embeds: [stableEmbed] });
     } catch (error) {
+    handleError(error, 'stable.js');
+
       console.error('[stable.js]: Error browsing stable:', error);
       await interaction.reply({ 
         content: '❌ Failed to retrieve the list of mounts for sale.', 

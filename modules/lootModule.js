@@ -2,6 +2,7 @@
 // Discord.js EmbedBuilder for creating rich embeds
 const { EmbedBuilder } = require('discord.js');
 
+const { handleError } = require('../utils/globalErrorHandler');
 // Module imports for random number generation and inventory management
 const { createWeightedItemList, calculateFinalValue } = require('../modules/rngModule');
 const { fetchItemsByMonster } = require('../database/itemService');
@@ -83,6 +84,8 @@ async function processLoot(battleProgress, currentMonster, interaction, battleId
       }
     }
   } catch (error) {
+    handleError(error, 'lootModule.js');
+
     console.error('Error processing loot:', error);
     lootMessage += `⚠️ **Error processing loot:** ${error.message}`;  // Error handling
   }
@@ -103,6 +106,8 @@ async function processLoot(battleProgress, currentMonster, interaction, battleId
   try {
     await interaction.followUp({ embeds: [lootEmbed] });
   } catch (error) {
+    handleError(error, 'lootModule.js');
+
     console.error('Error sending loot embed:', error);  // Error handling if sending embed fails
   }
 
@@ -110,6 +115,8 @@ async function processLoot(battleProgress, currentMonster, interaction, battleId
   try {
     await deleteBattleProgressById(battleId);  // Delete battle progress after loot is processed
   } catch (error) {
+    handleError(error, 'lootModule.js');
+
     console.error('Error deleting battle progress:', error);  // Error handling for deletion
   }
 }

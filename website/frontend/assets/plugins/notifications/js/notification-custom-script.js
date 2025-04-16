@@ -1,3 +1,5 @@
+const { handleError } = require('../utils/globalErrorHandler');
+
   /* Default Notifications */
   function default_noti() {
 	Lobibox.notify('default', {

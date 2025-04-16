@@ -8,6 +8,7 @@
 // Core Discord.js objects for building commands and message embeds.
 const { EmbedBuilder, SlashCommandBuilder } = require('discord.js');
 
+const { handleError } = require('../utils/globalErrorHandler');
 // ------------------- Database Services -------------------
 // Services for retrieving character data.
 const { fetchCharacterByName, fetchCharacterByNameAndUserId } = require('../database/characterService');
@@ -142,6 +143,8 @@ module.exports = {
       }
 
     } catch (error) {
+    handleError(error, 'combat.js');
+
       console.error('[combat.js]: ❌ Error in /combat command:', error);
       return await interaction.editReply(`❌ An unexpected error occurred during combat.`);
     }

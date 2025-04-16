@@ -1,5 +1,6 @@
 // ------------------- Import required modules and configurations -------------------
 const path = require('path');
+const { handleError } = require('../utils/globalErrorHandler');
 require('dotenv').config({ path: path.join(__dirname, '../.env') }); // Load environment variables
 const mongoose = require('mongoose');
 const Item = require('../models/ItemModel'); // Item model for MongoDB
@@ -12,6 +13,8 @@ async function connectToMongoDB() {
     await mongoose.connect(process.env.MONGODB_TINGLEBOT_URI, {}); // Connect to MongoDB using environment URI
     console.log('🌐 Connected to MongoDB');
   } catch (error) {
+    handleError(error, 'seedItems.js');
+
     console.error('❌ Could not connect to MongoDB...', error);
     throw error; // Throw error if connection fails
   }
@@ -370,6 +373,8 @@ async function seedItems() {
 
     console.log('✅ Items successfully seeded/updated in MongoDB');
   } catch (error) {
+    handleError(error, 'seedItems.js');
+
     console.error('❌ Error seeding/updating items:', error);
     throw error;
   } finally {

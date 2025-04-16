@@ -8,6 +8,7 @@
 // ------------------- Importing Discord.js components -------------------
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } = require('discord.js');
 
+const { handleError } = require('../utils/globalErrorHandler');
 // ============================================================================
 // Database Connections
 // ------------------- Importing database connection functions -------------------
@@ -142,6 +143,8 @@ async function syncToInventoryDatabase(character, item, interaction) {
             await writeSheetData(auth, spreadsheetId, updateRange, [sheetData[rowIndex]]);
         }
     } catch (error) {
+    handleError(error, 'inventoryUtils.js');
+
         console.error('[inventoryUtils.js]: logs Error syncing to inventory database:', error);
         throw error;
     }
@@ -204,6 +207,8 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
         }
         return true;
     } catch (error) {
+    handleError(error, 'inventoryUtils.js');
+
         console.error('[inventoryUtils.js]: logs Error adding item to inventory database:', error);
         throw error;
     }
@@ -243,6 +248,8 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
         }
         return true;
     } catch (error) {
+    handleError(error, 'inventoryUtils.js');
+
         console.error('[inventoryUtils.js]: logs Error removing item from inventory database:', error);
         throw error;
     }
@@ -290,6 +297,8 @@ const addItemsToDatabase = async (character, items, interaction) => {
             await appendSheetData(spreadsheetId, 'Inventory', sheetRows);
         }
     } catch (error) {
+    handleError(error, 'inventoryUtils.js');
+
         console.error('[inventoryUtils.js]: logs Error adding multiple items to database:', error);
         throw error;
     }
@@ -408,6 +417,8 @@ async function removeInitialItemIfSynced(characterId) {
             }
         }
     } catch (error) {
+    handleError(error, 'inventoryUtils.js');
+
         console.error(`[inventoryUtils.js]: logs Error removing Initial Item: ${error.message}`);
         throw error;
     }
@@ -433,6 +444,8 @@ const addItemToVendingInventory = async (collectionName, item) => {
             await inventoryCollection.insertOne(item);
         }
     } catch (error) {
+    handleError(error, 'inventoryUtils.js');
+
         console.error('[inventoryUtils.js]: logs Error adding item to vending inventory:', error);
         throw error;
     }

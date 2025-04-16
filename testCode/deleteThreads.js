@@ -2,6 +2,7 @@
 require('dotenv').config(); // Load environment variables
 const { Client, GatewayIntentBits, ChannelType } = require('discord.js');
 
+const { handleError } = require('../utils/globalErrorHandler');
 // ------------------- Initialize Discord Client -------------------
 const client = new Client({
   intents: [
@@ -45,6 +46,8 @@ async function deleteThreads(client) {
             console.log(`[deleteThreads.js]: 🗑️ Deleted active thread: ${thread.name}`);
             threadCount++;
           } catch (error) {
+    handleError(error, 'deleteThreads.js');
+
             console.error(`[deleteThreads.js]: ❌ Error deleting thread "${thread.name}":`, error);
           }
         }
@@ -57,6 +60,8 @@ async function deleteThreads(client) {
             console.log(`[deleteThreads.js]: 🗑️ Deleted archived thread: ${thread.name}`);
             threadCount++;
           } catch (error) {
+    handleError(error, 'deleteThreads.js');
+
             console.error(`[deleteThreads.js]: ❌ Error deleting thread "${thread.name}":`, error);
           }
         }
@@ -69,6 +74,8 @@ async function deleteThreads(client) {
       console.log(`[deleteThreads.js]: ✅ Successfully deleted ${threadCount} threads.`);
     }
   } catch (error) {
+    handleError(error, 'deleteThreads.js');
+
     console.error('[deleteThreads.js]: ❌ Error in deleteThreads function:', error);
   }
 }

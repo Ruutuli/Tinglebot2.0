@@ -2,6 +2,7 @@
 // These are used to build and send embeds and slash commands.
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 
+const { handleError } = require('../utils/globalErrorHandler');
 // ------------------- Third-party Libraries -------------------
 // Used for generating unique identifiers.
 const { v4: uuidv4 } = require('uuid');
@@ -280,6 +281,8 @@ module.exports = {
             petImageUrl = await uploadPetImage(imageAttachment.url, petName);
             console.log(`[pet.js]: logs - Image uploaded successfully. Public URL: ${petImageUrl}`);
           } catch (error) {
+    handleError(error, 'pet.js');
+
             console.error(`[pet.js]: logs - Error uploading image for pet "${petName}": ${error.message}`);
             return interaction.reply('❌ **Failed to upload image. Please try again later.**');
           }
@@ -357,6 +360,8 @@ module.exports = {
           petImageUrl = await uploadPetImage(imageAttachment.url, petName);
           console.log(`[pet.js]: logs - Image uploaded successfully. URL: ${petImageUrl}`);
         } catch (error) {
+    handleError(error, 'pet.js');
+
           console.error(`[pet.js]: logs - Error uploading image: ${error.message}`);
           return interaction.reply('❌ **Failed to upload image. Please try again later.**');
         }
@@ -553,6 +558,8 @@ module.exports = {
       }
 
     } catch (error) {
+    handleError(error, 'pet.js');
+
       // ------------------- Global Error Handling -------------------
       // Log detailed error information and return a user-friendly error message.
       console.error(`[pet.js]: logs - Error executing pet command: ${error.message}`);

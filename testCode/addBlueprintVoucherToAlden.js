@@ -1,5 +1,6 @@
 // ------------------- Import necessary modules -------------------
 const mongoose = require("mongoose");
+const { handleError } = require('../utils/globalErrorHandler');
 const { fetchCharacterByName } = require("../database/characterService");
 const { addItemInventoryDatabase } = require("../utils/inventoryUtils");
 const Item = require("../models/ItemModel"); // Import ItemModel directly
@@ -75,6 +76,8 @@ async function addBlueprintVoucherToAlden() {
 
     console.log(`✅ Successfully added ${quantityToAdd} "${item.itemName}" to Alden's inventory.`);
   } catch (error) {
+    handleError(error, 'addBlueprintVoucherToAlden.js');
+
     console.error(`❌ Error updating inventory: ${error.message}`);
   } finally {
     // ------------------- Disconnect from MongoDB -------------------

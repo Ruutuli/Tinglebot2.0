@@ -1,5 +1,6 @@
 // ------------------- Import Necessary Libraries -------------------
 const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
+const { handleError } = require('../utils/globalErrorHandler');
 const { google } = require('googleapis');
 const fs = require('fs');
 const path = require('path');
@@ -42,12 +43,13 @@ async function fetchQuestData() {
         });
         return response.data.values || [];
     } catch (error) {
+    handleError(error, 'questAnnouncements.js');
+
         console.error('[QUESTS]: Error fetching data from Google Sheets:', error);
         return [];
     }
 }
 
-// ------------------- Function to Format Quest as Embed -------------------
 // ------------------- Function to Format Quest as Embed -------------------
 function formatQuestEmbed(quest) {
     const embed = new EmbedBuilder()
@@ -206,6 +208,8 @@ async function postQuests() {
             console.log(`[DEBUG]: Marking quest "${sanitizedQuest.title}" as posted in Google Sheets.`);
             await markQuestAsPosted(auth, rowIndex, sanitizedQuest.questID);
         } catch (error) {
+    handleError(error, 'questAnnouncements.js');
+
             console.error(`[ERROR]: Failed to process quest "${title || 'Untitled Quest'}":`, error);
         }
     }
@@ -220,6 +224,8 @@ async function markQuestAsPosted(auth, rowIndex, questID) {
         await writeSheetData(auth, SHEET_ID, `loggedQuests!Q${rowIndex + 2}:R${rowIndex + 2}`, [[questID, 'Posted']]);
         console.log(`[INFO]: Quest successfully marked as posted in Google Sheets (Row: ${rowIndex + 2}).`);
     } catch (error) {
+    handleError(error, 'questAnnouncements.js');
+
         console.error(`[ERROR]: Failed to mark quest as posted in Google Sheets (Row: ${rowIndex + 2}):`, error);
     }
 }
@@ -232,6 +238,8 @@ client.on('messageCreate', async (message) => {
             await postQuests();
             await message.reply('✅ Quests have been posted for testing!');
         } catch (error) {
+    handleError(error, 'questAnnouncements.js');
+
             console.error('[ERROR]: Failed to execute postQuests:', error);
             await message.reply('❌ An error occurred while posting quests.');
         }

@@ -1,6 +1,7 @@
 // ------------------- Third-party Library Imports -------------------
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 
+const { handleError } = require('../utils/globalErrorHandler');
 // ------------------- Local Module Imports -------------------
 const { fetchCharacterByName, getCharacterInventoryCollection } = require('../database/characterService');
 const { fetchItemsByIds, fetchItemRarityByName } = require('../database/itemService');
@@ -93,6 +94,8 @@ module.exports = {
                 .slice(0, 25);
             await interaction.respond(filteredNPCs.map(npc => ({ name: npc, value: npc })));
         } catch (error) {
+    handleError(error, 'steal.js');
+
             console.error('[steal.js]: Error in autocomplete:', error);
             await interaction.respond([]);
         }
@@ -275,6 +278,8 @@ module.exports = {
             
             
         } catch (error) {
+    handleError(error, 'steal.js');
+
             console.error('[steal.js]: Error executing /steal command:', error);
             await interaction.editReply({ content: '❌ **An error occurred while processing the steal attempt.**', ephemeral: true });
         }
@@ -492,6 +497,8 @@ async function getFilteredItemsByRarity(targetCharacter, raritySelection) {
         try {
             dbItem = dbItems.find(dbItem => dbItem._id.toString() === item.itemId.toString());
         } catch (err) {
+    handleError(err, 'steal.js');
+
             console.error(`[getFilteredItemsByRarity] Error converting itemId to string for item: ${JSON.stringify(item)} - ${err.message}`);
             return null;
         }

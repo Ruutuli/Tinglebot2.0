@@ -7,6 +7,7 @@ It downloads or crops an image using axios and sharp, constructs a detailed embe
 // ------------------- Standard Libraries -------------------
 // Third-party libraries for HTTP requests and image processing.
 const axios = require('axios');
+const { handleError } = require('../utils/globalErrorHandler');
 const sharp = require('sharp');
 
 
@@ -53,6 +54,8 @@ async function downloadSquareImage(imageUrl) {
     await sharp(buffer).toFile(outputPath);
     return outputPath;
   } catch (error) {
+    handleError(error, 'viewMap.js');
+
     console.error(`[viewMap.js:error] downloadSquareImage failed: ${error}`);
     throw error;
   }
@@ -89,6 +92,8 @@ async function cropQuadrant(imageUrl, quadrant) {
     await sharp(buffer).extract(cropRegion).toFile(outputPath);
     return outputPath;
   } catch (error) {
+    handleError(error, 'viewMap.js');
+
     console.error(`[viewMap.js:error] cropQuadrant failed: ${error}`);
     throw error;
   }
@@ -179,6 +184,8 @@ module.exports = {
       const attachment = new AttachmentBuilder(outputImagePath, { name: quadrantId ? 'quadrant.png' : 'full_square.png' });
       await interaction.reply({ embeds: [embed], files: [attachment] });
     } catch (error) {
+    handleError(error, 'viewMap.js');
+
       console.error(`[viewMap.js:error] Error processing viewmap command: ${error}`);
       await interaction.reply('❌ **There was an error retrieving the map data. Please try again later.**');
     }

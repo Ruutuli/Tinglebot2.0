@@ -2,6 +2,7 @@
 // Third-party libraries such as uuid for generating unique IDs.
 const { v4: uuidv4 } = require('uuid');
 
+const { handleError } = require('../utils/globalErrorHandler');
 // ------------------- Discord.js Components -------------------
 // Discord.js classes used to build and update embeds.
 const { EmbedBuilder } = require('discord.js');
@@ -77,19 +78,36 @@ async function handleTravelInteraction(interaction, character, day, totalTravelD
         let staminaLost = 0;
 
         // ------------------- Handle Recover Hearts Action -------------------
-        if (customId === 'recover') {
-            console.log(`[travelHandler.js]: Character: ${character.name}, Job: ${character.job}, Perk: ${character.perk}, Action: Recover Hearts`);
-            if (character.currentStamina >= 1 || character.perk === 'DELIVERING') { // Allow action even if DELIVERING perk is active.
-                if (character.currentHearts < character.maxHearts) {
-                    if (character.perk !== 'DELIVERING') { // Deduct stamina only if not preserving via DELIVERING perk.
-                        await useStamina(character._id, 1);
-                        character.currentStamina -= 1;
-                        staminaLost = 1;
-                    } else {
-                        console.log(`[travelHandler.js]: Stamina preserved for ${character.name} due to DELIVERING perk`);
-                    }
-                    await recoverHearts(character._id, 1);
-                    character.currentHearts = Math.min(character.currentHearts + 1, character.maxHearts);
+// ------------------- Handle Recover Hearts Action -------------------
+if (customId === 'recover') {
+    console.log(`[travelHandler.js]: Character: ${character.name}, Job: ${character.job}, Perk: ${character.perk}, Action: Recover Hearts`);
+
+    // ------------------- KO Check -------------------
+    if (character.ko) {
+        const errorMsg = `❌ ${character.name} is KO'd and cannot heal without a healer.`;
+        console.error(`[travelHandler.js]: ${errorMsg}`);
+        
+        await encounterMessage.edit({
+            embeds: [new EmbedBuilder(encounterMessage.embeds[0].toJSON())
+                .setDescription(`💀 ${character.name} is knocked out and cannot recover hearts without a healer.\n\n**❤️ __Hearts:__** ${character.currentHearts}/${character.maxHearts}\n**🟩 __Stamina:__** ${character.currentStamina}/${character.maxStamina}`)],
+            components: [] // Remove buttons
+        });
+
+        return; // Stop execution
+    }
+
+    if (character.currentStamina >= 1 || character.perk === 'DELIVERING') { // Allow action even if DELIVERING perk is active.
+        if (character.currentHearts < character.maxHearts) {
+            if (character.perk !== 'DELIVERING') { // Deduct stamina only if not preserving via DELIVERING perk.
+                await useStamina(character._id, 1);
+                character.currentStamina -= 1;
+                staminaLost = 1;
+            } else {
+                console.log(`[travelHandler.js]: Stamina preserved for ${character.name} due to DELIVERING perk`);
+            }
+            await recoverHearts(character._id, 1);
+            character.currentHearts = Math.min(character.currentHearts + 1, character.maxHearts);
+
 
                     decision = `💖 ${character.name} recovered a heart. ${character.perk === 'DELIVERING' ? 'Stamina preserved due to delivering perk.' : 'Lost 1 stamina.'}`;
                     outcomeMessage = `${character.name} decided to recover a heart ${character.perk === 'DELIVERING' ? 'Your Delivering perk preserves stamina!' : '(-1 stamina)'}`;
@@ -407,6 +425,8 @@ async function handleTravelInteraction(interaction, character, day, totalTravelD
         return decision;
 
     } catch (error) {
+    handleError(error, 'travelHandler.js');
+
         // ------------------- Error Logging -------------------
         console.error(`❌ [travelHandler.js]: Error during travel interaction handling: ${error.message}`, error);
         throw error;

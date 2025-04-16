@@ -3,6 +3,7 @@
 const { v4: uuidv4 } = require('uuid');
 
 
+const { handleError } = require('../utils/globalErrorHandler');
 // ------------------- Discord.js Components -------------------
 // Used to build and structure slash commands.
 const { SlashCommandBuilder } = require('discord.js');
@@ -222,6 +223,8 @@ module.exports = {
       });
 
     } catch (error) {
+    handleError(error, 'transfer.js');
+
       console.error(`[transfer.js:error] Error during item transfer:`, error);
       await interaction.editReply({ content: `❌ An error occurred during the transfer. Please try again later.`, ephemeral: true });
     }

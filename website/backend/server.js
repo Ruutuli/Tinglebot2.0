@@ -1,3 +1,5 @@
+const { handleError } = require('../utils/globalErrorHandler');
+
 require('dotenv').config({ path: 'C:/Users/Ruu/Desktop/Tinglebot 2.0/.env' });
 
 // ------------------- Import Dependencies -------------------
@@ -51,12 +53,16 @@ async function getLastMessages(guild) {
                     }
                 });
             } catch (error) {
+    handleError(error, 'server.js');
+
                 console.error(`[DISCORD]: Error fetching messages from ${channel.name}:`, error);
             }
         });
 
         await Promise.all(fetchMessagesPromises);
     } catch (error) {
+    handleError(error, 'server.js');
+
         console.error("[DISCORD]: Error fetching messages:", error);
     }
 
@@ -105,6 +111,8 @@ app.get("/api/discord-members", async (req, res) => {
 
         res.json({ members: membersData });
     } catch (error) {
+    handleError(error, 'server.js');
+
         console.error("[DISCORD]: Error fetching Discord members:", error);
         res.status(500).json({ error: "❌ Internal Server Error" });
     }
@@ -152,6 +160,8 @@ app.get('/api/json-files/:filename', (req, res) => {
             const jsonData = JSON.parse(data);
             res.json(jsonData);
         } catch (parseError) {
+    handleError(parseError, 'server.js');
+
             console.error(`[SERVER]: Invalid JSON format in ${filename}:`, parseError);
             res.status(500).json({ 
                 error: `❌ Invalid JSON format in ${filename}`, 
@@ -212,6 +222,8 @@ app.delete("/api/json-files/:fileName/:itemId", (req, res) => {
         try {
             jsonData = JSON.parse(data);
         } catch (parseError) {
+    handleError(parseError, 'server.js');
+
             console.error(`[SERVER]: Invalid JSON format in ${fileName}:`, parseError);
             return res.status(500).json({ error: "❌ Invalid JSON format." });
         }

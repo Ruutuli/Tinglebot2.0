@@ -3,6 +3,7 @@
 // ============================================================================
 // ------------------- File system and path modules -------------------
 const fs = require('fs');
+const { handleError } = require('../utils/globalErrorHandler');
 const path = require('path');
 
 // ============================================================================
@@ -174,6 +175,8 @@ module.exports = {
           await interaction.deferReply();
         }
       } catch (error) {
+    handleError(error, 'relic.js');
+
         if (error.code === 40060) {
           console.warn(`[relic.js]: Interaction already acknowledged for subcommand "${sub}".`);
         } else if (error.code === 10062) {
@@ -220,6 +223,8 @@ module.exports = {
             const fileData = fs.readFileSync(relicStoragePath, 'utf8');
             relicStorage = fileData.trim() ? JSON.parse(fileData) : [];
           } catch (err) {
+    handleError(err, 'relic.js');
+
             console.error('[relic.js]: Error reading relicStorage.json:', err);
             relicStorage = [];
           }
@@ -234,6 +239,8 @@ module.exports = {
         try {
           fs.writeFileSync(relicStoragePath, JSON.stringify(relicStorage, null, 2));
         } catch (err) {
+    handleError(err, 'relic.js');
+
           console.error('[relic.js]: Error writing to relicStorage.json:', err);
         }
 
@@ -245,6 +252,8 @@ module.exports = {
 
 *You can now use /relic appraisalrequest to request its appraisal.*`);
         } catch (finalError) {
+    handleError(finalError, 'relic.js');
+
           // If editReply fails because no reply was sent, fall back to a direct reply.
           if (finalError.code === 'InteractionNotReplied' || finalError.message.includes("has not been sent or deferred")) {
             try {
@@ -254,6 +263,8 @@ module.exports = {
 
 *You can now use /relic appraisalrequest to request its appraisal.*`);
             } catch (fallbackError) {
+    handleError(fallbackError, 'relic.js');
+
               console.error('[relic.js]: Failed to send fallback reply in test subcommand:', fallbackError);
             }
           } else {
@@ -386,6 +397,8 @@ module.exports = {
         return interaction.reply({ content: '❌ Unknown subcommand.', ephemeral: true });
       }
     } catch (error) {
+    handleError(error, 'relic.js');
+
       console.error('[relic.js]: Error executing relic command:', error);
       if (interaction.deferred || interaction.replied) {
         return interaction.editReply({ content: '❌ Something went wrong.', ephemeral: true });

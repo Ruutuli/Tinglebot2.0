@@ -1,5 +1,6 @@
 require('dotenv').config();
 const { Client, GatewayIntentBits } = require('discord.js');
+const { handleError } = require('../utils/globalErrorHandler');
 const { triggerBloodMoonNow, renameChannels } = require('../scripts/bloodmoon');
 
 const client = new Client({
@@ -28,6 +29,8 @@ client.once('ready', async () => {
 
     console.log('🌕 Blood Moon ON successfully triggered for all channels!');
   } catch (error) {
+    handleError(error, 'testBloodMoonOn.js');
+
     console.error('❌ Error triggering Blood Moon ON:', error);
   } finally {
     client.destroy(); // Log out the bot after execution

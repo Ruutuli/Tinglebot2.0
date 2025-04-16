@@ -1,3 +1,5 @@
+const { handleError } = require('../utils/globalErrorHandler');
+
 /*
  Highcharts JS v8.2.0 (2020-08-20)
 

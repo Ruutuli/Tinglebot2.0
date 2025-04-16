@@ -2,6 +2,7 @@
 // This module contains mount-related data such as species, levels, emojis, and regional mappings.
 
 const fs = require('fs');
+const { handleError } = require('../utils/globalErrorHandler');
 const path = require('path');
 
 // Importing the locations module to use village data
@@ -105,6 +106,8 @@ function storeEncounter(encounterId, encounterData) {
       // Write back to the file
       fs.writeFileSync(ENCOUNTER_PATH, JSON.stringify(encounterProgress, null, 2));
   } catch (error) {
+    handleError(error, 'mountModule.js');
+
       throw new Error('Failed to store encounter data.');
   }
 }

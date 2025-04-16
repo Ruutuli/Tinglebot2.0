@@ -8,6 +8,7 @@ require('dotenv').config();
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, SlashCommandBuilder } = require('discord.js');
 
 
+const { handleError } = require('../utils/globalErrorHandler');
 // ------------------- Database Services -------------------
 // Import database service functions for character retrieval
 const { fetchCharacterByNameAndUserId } = require('../database/characterService');
@@ -355,6 +356,8 @@ module.exports = {
         try {
           await channel.send({ embeds: [imageEmbed] });
         } catch (error) {
+    handleError(error, 'travel.js');
+
           console.error(`[travel.js]: Error sending stop-in-Inariko image embed: ${error.message}`, error);
         }
         return nextChannelId;
@@ -377,6 +380,8 @@ module.exports = {
             await finalChannel.send({ embeds: [finalEmbed] });
             await finalChannel.send({ embeds: [imageEmbed] });
           } catch (error) {
+    handleError(error, 'travel.js');
+
             console.error(`[travel.js]: Error sending arrival embeds: ${error.message}`, error);
             await finalChannel.send({ content: '⚠️ Unable to display the arrival embed.' });
           }
@@ -554,6 +559,8 @@ module.exports = {
       // ------------------- Start Travel Processing from Day 1 -------------------
       await processTravelDay(1);
     } catch (error) {
+    handleError(error, 'travel.js');
+
       console.error(`[travel.js]: Error during travel command execution: ${error.message}`, error);
       await interaction.followUp({ content: `❌ **Error during travel command execution:** ${error.message}` });
     }

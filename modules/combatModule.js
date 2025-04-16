@@ -46,6 +46,7 @@
 // ------------------- Standard Libraries -------------------
 // Node.js core modules for file system and path operations.
 const fs = require('fs');
+const { handleError } = require('../utils/globalErrorHandler');
 const path = require('path');
 
 // ------------------- Modules -------------------
@@ -72,6 +73,8 @@ function ensureBattleProgressFileExists() {
     try {
       JSON.parse(fs.readFileSync(BATTLE_PROGRESS_PATH, 'utf8'));
     } catch (error) {
+    handleError(error, 'combatModule.js');
+
       fs.writeFileSync(BATTLE_PROGRESS_PATH, JSON.stringify({}));
     }
   }
@@ -103,6 +106,8 @@ async function storeBattleProgress(character, monster, tier, monsterHearts, prog
   try {
     fs.writeFileSync(BATTLE_PROGRESS_PATH, JSON.stringify(battleProgress, null, 2));
   } catch (err) {
+    handleError(err, 'combatModule.js');
+
     console.error(`[combatModule.js]: ❌ Error storing battle progress for Battle ID "${battleId}":`, err);
     throw err;
   }
@@ -156,6 +161,8 @@ async function updateBattleProgress(battleId, updatedProgress, outcome) {
   try {
     fs.writeFileSync(BATTLE_PROGRESS_PATH, JSON.stringify(battleProgress, null, 2));
   } catch (err) {
+    handleError(err, 'combatModule.js');
+
     console.error(`[combatModule.js]: ❌ Error updating battle progress for Battle ID "${battleId}":`, err);
     throw err;
   }
@@ -172,6 +179,8 @@ async function deleteBattleProgressById(battleId) {
       fs.writeFileSync(BATTLE_PROGRESS_PATH, JSON.stringify(battleProgress, null, 2));
     }
   } catch (error) {
+    handleError(error, 'combatModule.js');
+
     console.error(`[combatModule.js]: ❌ Error deleting battle progress for Battle ID "${battleId}":`, error);
   }
 }
@@ -186,6 +195,8 @@ async function updateMonsterHeartsToZero(battleId) {
     try {
       fs.writeFileSync(BATTLE_PROGRESS_PATH, JSON.stringify(battleProgress, null, 2));
     } catch (err) {
+    handleError(err, 'combatModule.js');
+
       console.error(`[combatModule.js]: ❌ Error updating monster hearts for Battle ID "${battleId}":`, err);
       throw err;
     }
@@ -293,6 +304,8 @@ async function startPvPBattle(attacker, defender) {
   try {
     fs.writeFileSync(BATTLE_PROGRESS_PATH, JSON.stringify(battleProgress, null, 2));
   } catch (err) {
+    handleError(err, 'combatModule.js');
+
     console.error(`[combatModule.js]: ❌ Error starting PvP battle for Battle ID "${battleId}":`, err);
     throw err;
   }
@@ -325,6 +338,8 @@ async function takePvPTurn(battleId, attacker, defender) {
     try {
       fs.writeFileSync(BATTLE_PROGRESS_PATH, JSON.stringify(battleProgress, null, 2));
     } catch (err) {
+    handleError(err, 'combatModule.js');
+
       console.error(`[combatModule.js]: ❌ Error updating battle log for Battle ID "${battleId}":`, err);
       throw err;
     }
@@ -395,6 +410,8 @@ async function takePvPTurn(battleId, attacker, defender) {
   try {
     fs.writeFileSync(BATTLE_PROGRESS_PATH, JSON.stringify(battleProgress, null, 2));
   } catch (err) {
+    handleError(err, 'combatModule.js');
+
     console.error(`[combatModule.js]: ❌ Error updating battle log after turn for Battle ID "${battleId}":`, err);
     throw err;
   }

@@ -1,3 +1,5 @@
+const { handleError } = require('../utils/globalErrorHandler');
+
 // ------------------- gearModule.js -------------------
 // This module handles classification and analysis of gear data,
 // including weapon type, mod levels, and flurry thresholds.

@@ -4,6 +4,7 @@
 // ------------------- Imports -------------------
 // Third-party libraries
 const axios = require('axios');
+const { handleError } = require('../utils/globalErrorHandler');
 const { EmbedBuilder } = require('discord.js');
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
@@ -108,6 +109,8 @@ async function createCharacterInteraction(interaction) {
             await interaction.followUp({ embeds: [setupInstructionsEmbed], ephemeral: true });
         }
     } catch (error) {
+    handleError(error, 'characterInteractionHandler.js');
+
         await interaction.editReply({ content: `There was an error uploading the icon: ${error.message}`, ephemeral: true });
     }
 }

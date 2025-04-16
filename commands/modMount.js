@@ -1,3 +1,5 @@
+const { handleError } = require('../utils/globalErrorHandler');
+
 // ------------------- Import necessary modules -------------------
 const { SlashCommandBuilder } = require('@discordjs/builders'); // Import Discord.js slash command builder
 const { EmbedBuilder, PermissionsBitField } = require('discord.js'); // Import Discord.js EmbedBuilder and permissions
@@ -158,6 +160,8 @@ const embed = new EmbedBuilder()
         try {
             storeEncounter(encounterId, encounterData);
         } catch (error) {
+    handleError(error, 'modMount.js');
+
             console.error('[modMount.js]: Error storing encounter:', error);
             return interaction.reply({
                 content: '❌ Failed to store encounter. Please try again later.',

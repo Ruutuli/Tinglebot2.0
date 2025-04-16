@@ -1,3 +1,5 @@
+const { handleError } = require('../utils/globalErrorHandler');
+
 //Author      : @arboshiki
 /**
  * Generates random string of n length.

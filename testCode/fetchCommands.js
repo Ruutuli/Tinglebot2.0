@@ -1,5 +1,6 @@
 // ------------------- Import Necessary Libraries -------------------
 const { Client, GatewayIntentBits } = require('discord.js');
+const { handleError } = require('../utils/globalErrorHandler');
 const { google } = require('googleapis');
 const schedule = require('node-schedule');
 require('dotenv').config();
@@ -31,6 +32,8 @@ async function fetchQuestData() {
         });
         return response.data.values || [];
     } catch (error) {
+    handleError(error, 'fetchCommands.js');
+
         console.error('[QUESTS]: Error fetching data from Google Sheets:', error);
         return [];
     }
@@ -99,6 +102,8 @@ async function postQuests() {
         try {
             await questChannel.send(questMessage);
         } catch (error) {
+    handleError(error, 'fetchCommands.js');
+
             console.error(`[QUESTS]: Error posting quest: ${quest[0]}`, error);
         }
     }

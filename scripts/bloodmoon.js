@@ -10,6 +10,7 @@
 require('dotenv').config();
 const cron = require('node-cron');
 
+const { handleError } = require('../utils/globalErrorHandler');
 // ============================================================================
 // Discord.js Components
 // ------------------- Importing Discord.js components -------------------
@@ -44,6 +45,8 @@ async function sendBloodMoonAnnouncement(client, channelId, message) {
     const channel = await client.channels.fetch(channelId);
     await channel.send({ embeds: [embed] });
   } catch (error) {
+    handleError(error, 'bloodmoon.js');
+
     console.error(`[bloodmoon.js]: logs [sendBloodMoonAnnouncement] Error: ${error.message}`);
   }
 }
@@ -68,6 +71,8 @@ async function sendBloodMoonEndAnnouncement(client, channelId) {
     const channel = await client.channels.fetch(channelId);
     await channel.send({ embeds: [embed] });
   } catch (error) {
+    handleError(error, 'bloodmoon.js');
+
     console.error(`[bloodmoon.js]: logs [sendBloodMoonEndAnnouncement] Error: ${error.message}`);
   }
 }
@@ -127,6 +132,8 @@ async function changeChannelName(client, channelId, newName) {
     const channel = await client.channels.fetch(channelId);
     await channel.setName(newName);
   } catch (error) {
+    handleError(error, 'bloodmoon.js');
+
     console.error(`[bloodmoon.js]: logs [changeChannelName] Error: ${error.message}`);
   }
 }
@@ -179,6 +186,8 @@ async function triggerBloodMoonNow(client, channelId) {
     await sendBloodMoonAnnouncement(client, channelId, 'The Blood Moon is upon us! Beware!');
     await renameChannels(client);
   } catch (error) {
+    handleError(error, 'bloodmoon.js');
+
     console.error(`[bloodmoon.js]: logs [triggerBloodMoonNow] Error: ${error.message}`);
   }
 }
@@ -191,6 +200,8 @@ function isBloodMoonActive() {
     console.log(`[bloodmoon.js]: logs Blood Moon active status: ${active}`);
     return active;
   } catch (error) {
+    handleError(error, 'bloodmoon.js');
+
     console.error(`[bloodmoon.js]: logs [isBloodMoonActive] Error: ${error.message}`);
     return false;
   }

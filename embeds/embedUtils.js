@@ -1,6 +1,7 @@
 // ------------------- Import necessary modules and helpers -------------------
 const mongoose = require('mongoose'); 
 const { EmbedBuilder } = require('discord.js');
+const { handleError } = require('../utils/globalErrorHandler');
 const { getVillageColorByName } = require('../modules/locationsModule');
 const { capitalizeFirstLetter } = require('../modules/formattingModule');
 

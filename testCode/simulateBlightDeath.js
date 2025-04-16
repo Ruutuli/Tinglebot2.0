@@ -1,3 +1,5 @@
+const { handleError } = require('../utils/globalErrorHandler');
+
 // ------------------- Imports -------------------
 require('dotenv').config();
 const { connectToTinglebot } = require('../database/connection'); // Adjust path if necessary
@@ -85,6 +87,8 @@ async function simulateBlightDeath() {
       process.exit();
     }, 10 * 1000); // 10 seconds for testing
   } catch (error) {
+    handleError(error, 'simulateBlightDeath.js');
+
     console.error('❌ Error during simulation:', error);
   }
 }

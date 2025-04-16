@@ -10,6 +10,7 @@
 // ------------------- Importing database models -------------------
 const Character = require('../models/CharacterModel');
 
+const { handleError } = require('../utils/globalErrorHandler');
 // ============================================================================
 // Discord.js Components
 // ------------------- Importing Discord.js components -------------------
@@ -34,6 +35,8 @@ const updateHearts = async (characterId, hearts) => {
   try {
     await Character.updateOne({ _id: characterId }, { $set: { currentHearts: hearts, maxHearts: hearts } });
   } catch (error) {
+    handleError(error, 'characterStatsModule.js');
+
     throw error;
   }
 };
@@ -44,6 +47,8 @@ const updateStamina = async (characterId, stamina) => {
   try {
     await Character.updateOne({ _id: characterId }, { $set: { currentStamina: stamina, maxStamina: stamina } });
   } catch (error) {
+    handleError(error, 'characterStatsModule.js');
+
     throw error;
   }
 };
@@ -55,6 +60,8 @@ const updateCurrentHearts = async (characterId, hearts) => {
     if (isNaN(hearts)) throw new Error(`Provided hearts value is NaN for character ID: ${characterId}`);
     await Character.updateOne({ _id: characterId }, { $set: { currentHearts: hearts } });
   } catch (error) {
+    handleError(error, 'characterStatsModule.js');
+
     throw error;
   }
 };
@@ -67,6 +74,8 @@ const updateCurrentStamina = async (characterId, stamina, updateUsageDate = fals
     if (updateUsageDate) updateData.lastStaminaUsage = new Date();
     await Character.updateOne({ _id: characterId }, { $set: updateData });
   } catch (error) {
+    handleError(error, 'characterStatsModule.js');
+
     throw error;
   }
 };
@@ -105,6 +114,8 @@ const recoverHearts = async (characterId, hearts, healerId = null) => {
     await character.save();
     return createSimpleCharacterEmbed(character, `❤️ +${hearts} hearts recovered`);
   } catch (error) {
+    handleError(error, 'characterStatsModule.js');
+
     console.error(`[characterStatsModule.js]: logs Error in recoverHearts: ${error.message}`);
     throw error;
   }
@@ -123,6 +134,8 @@ const recoverStamina = async (characterId, stamina) => {
 
     return createSimpleCharacterEmbed(character, `🟩 +${stamina} stamina recovered`);
   } catch (error) {
+    handleError(error, 'characterStatsModule.js');
+
     throw error;
   }
 };
@@ -156,6 +169,8 @@ const useHearts = async (characterId, hearts) => {
 
     return createSimpleCharacterEmbed(character, `❤️ -${hearts} hearts used`);
   } catch (error) {
+    handleError(error, 'characterStatsModule.js');
+
     console.error(`[characterStatsModule.js]: logs Error in useHearts: ${error.message}`);
     throw error;
   }
@@ -179,6 +194,8 @@ const useStamina = async (characterId, stamina) => {
 
     return { message: `🟩 -${stamina} stamina used`, exhausted: false };
   } catch (error) {
+    handleError(error, 'characterStatsModule.js');
+
     throw error;
   }
 };
@@ -194,6 +211,8 @@ const handleKO = async (characterId) => {
     await Character.updateOne({ _id: characterId }, { $set: { ko: true, currentHearts: 0 } });
     console.log(`[characterStatsModule.js]: logs Character ID ${characterId} is KO'd.`);
   } catch (error) {
+    handleError(error, 'characterStatsModule.js');
+
     console.error(`[characterStatsModule.js]: logs Error in handleKO: ${error.message}`);
     throw error;
   }
@@ -241,6 +260,8 @@ const exchangeSpiritOrbs = async (characterId, type) => {
     await character.save();
     return character;
   } catch (error) {
+    handleError(error, 'characterStatsModule.js');
+
     console.error(`[characterStatsModule.js]: logs Error in exchangeSpiritOrbs: ${error.message}`);
     throw error;
   }
@@ -262,6 +283,8 @@ const recoverDailyStamina = async () => {
       }
     }
   } catch (error) {
+    handleError(error, 'characterStatsModule.js');
+
     throw error;
   }
 };
@@ -284,6 +307,8 @@ const healKoCharacter = async (characterId, healerId = null) => {
     await Character.updateOne({ _id: characterId }, { $set: { ko: false } });
     return createSimpleCharacterEmbed(character, `❤️ ${character.name} has been revived.`);
   } catch (error) {
+    handleError(error, 'characterStatsModule.js');
+
     throw error;
   }
 };
@@ -310,6 +335,8 @@ const updateCharacterDefense = async (characterId) => {
 
     await Character.updateOne({ _id: characterId }, { $set: { defense: totalDefense } });
   } catch (error) {
+    handleError(error, 'characterStatsModule.js');
+
     throw error;
   }
 };
@@ -324,6 +351,8 @@ const updateCharacterAttack = async (characterId) => {
     const totalAttack = character.gearWeapon?.stats?.get('modifierHearts') || 0;
     await Character.updateOne({ _id: characterId }, { $set: { attack: totalAttack } });
   } catch (error) {
+    handleError(error, 'characterStatsModule.js');
+
     throw error;
   }
 };
@@ -345,6 +374,8 @@ const checkAndUseStamina = async (character, staminaCost) => {
       const updatedCharacter = await Character.findById(character._id);
       return updatedCharacter.currentStamina;
   } catch (error) {
+    handleError(error, 'characterStatsModule.js');
+
       console.error(`[characterStatsModule.js]: logs Error updating stamina for character: ${error.message}`);
       throw error;
   }
@@ -363,6 +394,8 @@ const handleZeroStamina = async (characterId) => {
     }
     return `${character.name} has ${character.currentStamina} stamina remaining.`;
   } catch (error) {
+    handleError(error, 'characterStatsModule.js');
+
     console.error(`[characterStatsModule.js]: logs Error checking stamina for character: ${error.message}`);
     throw error;
   }

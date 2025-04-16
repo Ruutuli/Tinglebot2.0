@@ -1,6 +1,7 @@
 // ------------------- Import necessary modules -------------------
 // Grouped local and third-party imports for better organization
 const { authorizeSheets, fetchSheetData, appendSheetData, logErrorDetails } = require('./googleSheetsUtils');
+const { handleError } = require('../utils/globalErrorHandler');
 const VendingInventory = require('../models/VendingModel');
 const ItemModel = require('../models/ItemModel');
 const CharacterModel = require('../models/CharacterModel');
@@ -55,6 +56,8 @@ async function syncVendingInventory(spreadsheetId) {
 
         console.log('✅ Sync confirmation written to Google Sheets.');
     } catch (error) {
+    handleError(error, 'vendingUtils.js');
+
         logErrorDetails(error);
         throw new Error('❌ Error syncing vending inventory.');
     }
@@ -70,6 +73,8 @@ async function getItemId(itemName) {
         }
         return item._id;
     } catch (error) {
+    handleError(error, 'vendingUtils.js');
+
         console.error(`❌ Error fetching item ID for ${itemName}:`, error);
         return null;
     }
@@ -85,6 +90,8 @@ async function getCharacterId(vendorName) {
         }
         return character._id;
     } catch (error) {
+    handleError(error, 'vendingUtils.js');
+
         console.error(`❌ Error fetching character ID for ${vendorName}:`, error);
         return null;
     }

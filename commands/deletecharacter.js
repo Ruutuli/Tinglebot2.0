@@ -13,6 +13,7 @@ const {
 const { deleteInventorySheetData } = require('../utils/googleSheetsUtils'); // Google Sheets handling for deleting inventory data
 const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../utils/validation'); // Validation utilities for Google Sheets URL
 const { roles } = require('../modules/rolesModule');
+const { handleError } = require('../utils/globalErrorHandler');
 const { capitalizeFirstLetter, capitalizeWords  } = require('../modules/formattingModule'); // Formatting utility
 const { getJobPerk } = require('../modules/jobsModule');
 
@@ -57,6 +58,8 @@ module.exports = {
           const spreadsheetId = extractSpreadsheetId(character.inventory);
           await deleteInventorySheetData(spreadsheetId, characterName); // Delete inventory data from Google Sheets
         } catch (error) {
+    handleError(error, 'deletecharacter.js');
+
           console.error(`❌ Failed to delete inventory data for character ${characterName}:`, error);
         }
       }
@@ -128,6 +131,8 @@ console.log(`[Roles]: Completed role removal process for user "${member.user.tag
         ephemeral: true 
       });
     } catch (error) {
+    handleError(error, 'deletecharacter.js');
+
       await interaction.editReply({ 
         content: `❌ **An error occurred while deleting the character**: ${error.message}`, 
         ephemeral: true 
@@ -158,6 +163,8 @@ console.log(`[Roles]: Completed role removal process for user "${member.user.tag
         await interaction.respond(filteredChoices); // Send the filtered results
       }
     } catch (error) {
+    handleError(error, 'deletecharacter.js');
+
       await interaction.respond([]); // In case of an error, respond with an empty array
     }
   }

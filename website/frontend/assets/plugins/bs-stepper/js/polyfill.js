@@ -1,3 +1,5 @@
+const { handleError } = require('../utils/globalErrorHandler');
+
 let matches = window.Element.prototype.matches
 let closest = (element, selector) => element.closest(selector)
 let WinEvent = (inType, params) => new window.Event(inType, params)

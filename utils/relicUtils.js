@@ -5,6 +5,7 @@
 // ------------------- Local Module Imports -------------------
 // Importing local models and services required for relic operations.
 const Character = require('../models/CharacterModel');
+const { handleError } = require('../utils/globalErrorHandler');
 const Relic = require('../models/RelicModel');
 const { addTokensToCharacter } = require('../database/characterService');
 

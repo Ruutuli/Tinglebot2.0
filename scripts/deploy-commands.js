@@ -1,6 +1,7 @@
 // ------------------- Import required modules and configurations -------------------
 require('dotenv').config(); // load environment variables
 const { REST, Routes } = require('discord.js');
+const { handleError } = require('../utils/globalErrorHandler');
 const fs = require('fs');
 const path = require('path');
 const { getGuildIds } = require('../utils/getGuildIds');

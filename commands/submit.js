@@ -5,6 +5,7 @@
 // Standard Library Imports
 const path = require('path');
 
+const { handleError } = require('../utils/globalErrorHandler');
 // Discord.js Imports
 const { SlashCommandBuilder, ActionRowBuilder } = require('discord.js');
 
@@ -212,6 +213,8 @@ async onAutocomplete(interaction) {
         resetSubmissionState();
 
       } catch (error) {
+    handleError(error, 'submit.js');
+
         console.error('Error handling art submission:', error);
         await interaction.editReply({ content: '❌ **Error processing your submission. Please try again later.**' });
       }
@@ -279,6 +282,8 @@ async onAutocomplete(interaction) {
           ephemeral: true, // Ensure this is ephemeral
         });
       } catch (error) {
+    handleError(error, 'submit.js');
+
         console.error('Error handling writing submission:', error);
         await interaction.editReply({
           content: '❌ **Error processing your submission. Please try again later.**',
@@ -303,6 +308,8 @@ async onAutocomplete(interaction) {
         await handleModalSubmission(interaction);
       }
     } catch (error) {
+    handleError(error, 'submit.js');
+
       console.error('Error handling interaction:', error);
       if (!interaction.replied && !interaction.deferred) {
         await interaction.followUp({

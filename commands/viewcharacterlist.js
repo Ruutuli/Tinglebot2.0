@@ -1,6 +1,7 @@
 // viewcharacterlist.js
 
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { handleError } = require('../utils/globalErrorHandler');
 const { fetchCharactersByUserId } = require('../database/characterService');
 const { connectToTinglebot } = require('../database/connection');
 const { capitalize, getRandomColor } = require('../modules/formattingModule');
@@ -66,6 +67,8 @@ module.exports = {
 
             await interaction.reply({ embeds: [embed], components: rows });
         } catch (error) {
+    handleError(error, 'viewcharacterlist.js');
+
             await interaction.reply({ content: `❌ Error retrieving character list.`, ephemeral: true });
         }
     }

@@ -3,6 +3,7 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
 
 
+const { handleError } = require('../utils/globalErrorHandler');
 // ------------------- Modules -------------------
 // Custom handlers for vending operations sorted alphabetically.
 const { executeVending, handleEditShop, handleFulfill, handlePouchUpgrade, handleVendingSetup, handleVendingSync, handleViewShop, viewVendingStock } = require('../handlers/vendingHandler');
@@ -320,6 +321,8 @@ module.exports = {
                 await executeVending(interaction);
             }
         } catch (error) {
+    handleError(error, 'vending.js');
+
             console.error(`[vending.js:error] Error executing subcommand "${subcommand}": ${error}`);
             await interaction.reply({ content: '❌ **An error occurred while processing your vending command.**', ephemeral: true });
         }

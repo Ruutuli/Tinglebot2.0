@@ -1,4 +1,5 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
+const { handleError } = require('../utils/globalErrorHandler');
 const { PermissionsBitField, EmbedBuilder } = require('discord.js');
 const Quest = require('../models/QuestModel');
 const QUEST_CHANNEL_ID = '1305486549252706335';
@@ -94,6 +95,8 @@ module.exports = {
                 ephemeral: true
             });
         } catch (error) {
+    handleError(error, 'quest.js');
+
             console.error('[ERROR]: Failed to process quest participation:', error);
             return interaction.reply({
                 content: `❌ An error occurred while processing your request. Please try again later.`,

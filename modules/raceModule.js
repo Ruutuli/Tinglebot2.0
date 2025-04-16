@@ -1,6 +1,7 @@
 // ------------------- Import necessary modules -------------------
 const { capitalize } = require('../modules/formattingModule');
 
+const { handleError } = require('../utils/globalErrorHandler');
 // ------------------- Race data and initialization -------------------
 // Define a list of races with their display names and values
 const races = [

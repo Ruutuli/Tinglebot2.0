@@ -2,6 +2,7 @@
 
 // Import required modules and configurations
 const path = require('path');
+const { handleError } = require('../utils/globalErrorHandler');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 const mongoose = require('mongoose');
 const Monster = require('../models/MonsterModel');
@@ -14,6 +15,8 @@ async function connectToMongoDB() {
     await mongoose.connect(process.env.MONGODB_TINGLEBOT_URI, {});
     console.log('🌐 Connected to MongoDB');
   } catch (error) {
+    handleError(error, 'seedMonsters.js');
+
     console.error('❌ Could not connect to MongoDB...', error);
     throw error;
   }
@@ -102,6 +105,8 @@ async function seedMonsters() {
 
     console.log('✅ Monsters successfully seeded to MongoDB');
   } catch (error) {
+    handleError(error, 'seedMonsters.js');
+
     console.error('❌ Error seeding monsters:', error);
     throw error;
   } finally {

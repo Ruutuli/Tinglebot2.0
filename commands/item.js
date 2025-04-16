@@ -3,6 +3,7 @@
 const { v4: uuidv4 } = require('uuid');
 
 
+const { handleError } = require('../utils/globalErrorHandler');
 // ------------------- Discord.js Components -------------------
 // Components for building slash commands and rich embed messages.
 const { SlashCommandBuilder } = require('@discordjs/builders');
@@ -321,6 +322,8 @@ module.exports = {
             await interaction.editReply({ embeds: [confirmationEmbed] });
 
         } catch (error) {
+    handleError(error, 'item.js');
+
             console.error(`[item.js:logs] Error during healing process: ${error.message}`);
             await interaction.editReply({ content: `❌ An error occurred during the healing process.`, ephemeral: true });
         }

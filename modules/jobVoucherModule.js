@@ -2,6 +2,7 @@
 
 // Import necessary modules
 const { fetchItemByName } = require('../database/itemService');
+const { handleError } = require('../utils/globalErrorHandler');
 const { removeItemInventoryDatabase } = require('../utils/inventoryUtils');
 const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../utils/validation');
 const { authorizeSheets, appendSheetData } = require('../utils/googleSheetsUtils');
@@ -79,6 +80,8 @@ async function activateJobVoucher(character, jobName, item, quantity = 1, intera
             message: `🎫 **Job Voucher activated for ${character.name} to perform the job ${jobName}.**`
         };
     } catch (error) {
+    handleError(error, 'jobVoucherModule.js');
+
         console.error(`[jobVoucherModule.js]: Error activating job voucher: ${error.message}`);
         return {
             success: false,
@@ -96,6 +99,8 @@ async function fetchJobVoucherItem() {
         }
         return { success: true, item };
     } catch (error) {
+    handleError(error, 'jobVoucherModule.js');
+
         console.error(`[jobVoucherModule.js]: Error fetching job voucher item: ${error.message}`);
         return {
             success: false,
@@ -114,6 +119,8 @@ async function deactivateJobVoucher(characterId) {
             message: `🎫 **Job voucher successfully deactivated.**`
         };
     } catch (error) {
+    handleError(error, 'jobVoucherModule.js');
+
         console.error(`[Job Voucher Module]: Error deactivating job voucher: ${error.message}`);
         return {
             success: false,

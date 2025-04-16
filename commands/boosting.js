@@ -3,6 +3,7 @@
 const { v4: uuidv4 } = require('uuid');
 
 
+const { handleError } = require('../utils/globalErrorHandler');
 // ------------------- Discord.js Components -------------------
 // Import components from discord.js for handling slash commands and embeds.
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');

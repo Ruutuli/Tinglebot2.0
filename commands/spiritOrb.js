@@ -1,6 +1,7 @@
 // ------------------- Discord.js Components -------------------
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 
+const { handleError } = require('../utils/globalErrorHandler');
 // ------------------- Models -------------------
 const Character = require('../models/CharacterModel');
 
@@ -152,6 +153,8 @@ try {
     meter = `${'🟩'.repeat(Math.max(0, maxStamina - 1))}✅`;
   }
 } catch (err) {
+    handleError(err, 'spiritOrb.js');
+
   console.error(`[spiritOrb.js]: Failed to build meter display: ${err.message}`);
   meter = '*Unable to display meter.*';
 }
@@ -220,6 +223,8 @@ if (!inventoryLink || !isValidGoogleSheetsUrl(inventoryLink)) {
 
     await appendSheetData(auth, spreadsheetId, range, [sheetRow]);
   } catch (err) {
+    handleError(err, 'spiritOrb.js');
+
     console.error(`[spiritOrb.js]: Failed to log Spirit Orb exchange to sheet: ${err.message}`);
   }
 }
@@ -230,6 +235,8 @@ if (!inventoryLink || !isValidGoogleSheetsUrl(inventoryLink)) {
     }
 
   } catch (error) {
+    handleError(error, 'spiritOrb.js');
+
     console.error(`[spiritOrb.js]: Error handling /spiritorbs command: ${error.stack}`);
     return await interaction.reply({
       content: `⚠️ An unexpected error occurred while processing your request.`,

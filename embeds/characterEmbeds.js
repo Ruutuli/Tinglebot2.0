@@ -1,5 +1,6 @@
 // ------------------- Import necessary modules and functions -------------------
 const { EmbedBuilder } = require('discord.js');
+const { handleError } = require('../utils/globalErrorHandler');
 const { getCommonEmbedSettings, formatItemDetails, DEFAULT_IMAGE_URL } = require('./embedUtils');
 const { capitalize, capitalizeFirstLetter } = require('../modules/formattingModule');
 const { convertCmToFeetInches } = require('../utils/validation');
