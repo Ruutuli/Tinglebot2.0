@@ -82,11 +82,23 @@ module.exports = {
         .addStringOption(option =>
           option.setName('charactername')
             .setDescription('Enter your character’s name')
-            .setRequired(true))
+            .setRequired(true)
+            .setAutocomplete(true))
         .addStringOption(option =>
           option.setName('petname')
             .setDescription('Enter your pet’s name')
-            .setRequired(true))
+            .setRequired(true)
+            .setAutocomplete(true))
+        .addIntegerOption(option =>
+          option.setName('level')
+            .setDescription('Enter the level to upgrade to')
+            .setRequired(true)
+            .addChoices(
+              { name: 'Level 1', value: 1 },
+              { name: 'Level 2', value: 2 },
+              { name: 'Level 3', value: 3 }
+            )
+        )
     )
     // ------------------- Subcommand: Add Pet -------------------
     .addSubcommand(subcommand =>
@@ -553,16 +565,32 @@ if (subcommand === 'edit') {
 
       // ------------------- Subcommand: Upgrade -------------------
       if (subcommand === 'upgrade') {
-        if (pet.level >= 3) {
-          return interaction.reply(`❌ **${pet.name} is already at max level.**`);
+        const targetLevel = interaction.options.getInteger('level');
+      
+        // only allow levels 1–3
+        if (targetLevel < 1 || targetLevel > 3) {
+          return interaction.reply('❌ **Invalid level. Please select between level 1 and 3.**');
         }
+      
+        // enforce +1 only
+        if (targetLevel !== pet.level + 1) {
+          return interaction.reply(
+            `❌ **You can only upgrade from level ${pet.level} to level ${pet.level + 1}.**`
+          );
+        }
+      
         const tokens = character.tokens;
-        const cost = getUpgradeCost(pet.level + 1);
+        const cost = getUpgradeCost(targetLevel);
         if (tokens < cost) {
-          return interaction.reply(`❌ **You don't have enough tokens to upgrade ${pet.name}.**`);
+          return interaction.reply(
+            `❌ **You don't have enough tokens to upgrade ${pet.name} to level ${targetLevel}.**`
+          );
         }
-        await upgradePetLevel(character._id, petName, pet.level + 1);
-        return interaction.reply(`✅ **${pet.name} has been upgraded to level ${pet.level + 1}.**`);
+      
+        await upgradePetLevel(character._id, petName, targetLevel);
+        return interaction.reply(
+          `✅ **${pet.name} has been upgraded to level ${targetLevel}.**`
+        );
       }
 
       // ------------------- Subcommand: Retire -------------------
