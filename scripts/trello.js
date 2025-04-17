@@ -54,22 +54,39 @@ async function createTrelloCard({ threadName, username, content, images, created
 
   const labels = await fetchLabels();
 
-  // 🔧 Keep the extension for label matching (e.g., pet.js, mount.js)
-  let baseName = path.basename(username).toLowerCase();
+  // ------------------- Derive Label Match From Thread Name -------------------
+  let baseName = threadName.trim().toLowerCase();
 
-  // 🛠️ Optional: handle command-style names like "/mount"
-  if (baseName.startsWith('/')) baseName = `${baseName.slice(1)}.js`;
+  // Handle cases like "/loot", "loot command", etc.
+  if (baseName.startsWith('/')) {
+    baseName = baseName.split(/\s+/)[0]; // Extract just "/loot"
+    baseName = `${baseName.slice(1)}.js`; // "/loot" → "loot.js"
+  } else if (!baseName.endsWith('.js')) {
+    baseName = `${baseName.split(/\s+/)[0]}.js`; // "loot" → "loot.js"
+  }
 
-  let bestMatch = null;
+  let matchedLabels = [];
   let bestScore = 0;
+  let bestMatch = null;
 
   for (const label of labels) {
     const labelName = label.name.toLowerCase();
     const score = similarity(baseName, labelName);
+
+    // Match anything reasonably close
+    if (score >= 0.6) {
+      matchedLabels.push(label.id);
+    }
+
     if (score > bestScore) {
       bestScore = score;
       bestMatch = label;
     }
+  }
+
+  // If nothing clears the threshold, fallback to the best close match
+  if (matchedLabels.length === 0 && bestScore >= 0.3 && bestMatch) {
+    matchedLabels.push(bestMatch.id);
   }
 
   const cardData = {
@@ -78,7 +95,7 @@ async function createTrelloCard({ threadName, username, content, images, created
     idList: overrideListId || TRELLO_LIST_ID,
     start: new Date(createdAt).toISOString(),
     due: dueDate.toISOString(),
-    idLabels: bestMatch ? [bestMatch.id] : [],
+    idLabels: matchedLabels,
     key: TRELLO_API_KEY,
     token: TRELLO_TOKEN,
   };
@@ -109,6 +126,8 @@ async function createTrelloCard({ threadName, username, content, images, created
     return null;
   }
 }
+
+
 
 // ============================================================================
 // ------------------- Log Error to Trello -------------------

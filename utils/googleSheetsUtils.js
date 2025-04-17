@@ -129,30 +129,60 @@ async function appendSheetData(auth, spreadsheetId, range, values) {
         throw new TypeError('Expected values to be an array');
     }
     const resource = {
-        values: values.map(row => Array.isArray(row) ? row.map(value => (value != null ? value.toString() : '')) : [])
+        values: values.map(row =>
+            Array.isArray(row)
+                ? row.map(value => (value != null ? value.toString() : ''))
+                : []
+        )
     };
     return makeApiRequest(async () => {
-        await google.sheets({ version: 'v4', auth }).spreadsheets.values.append({
-            spreadsheetId,
-            range,
-            valueInputOption: 'USER_ENTERED',
-            resource
-        });
+        try {
+            await google.sheets({ version: 'v4', auth })
+                .spreadsheets.values.append({
+                    spreadsheetId,
+                    range,
+                    valueInputOption: 'USER_ENTERED',
+                    resource
+                });
+        } catch (err) {
+            logErrorDetails(err);
+            throw new Error(
+                `Could not append data to sheet "${range.split('!')[0]}". ` +
+                `Please verify the spreadsheet ID, the sheet tab name, ` +
+                `and that your service-account email has Editor access.`
+            );
+        }
     });
 }
 
 // ------------------- Write Data to Google Sheets -------------------
 async function writeSheetData(auth, spreadsheetId, range, values) {
     const resource = {
-        values: values.map(row => row.map(value => (typeof value === 'number') ? value : (value != null ? value.toString() : '')))
+        values: values.map(row =>
+            row.map(value =>
+                (typeof value === 'number')
+                    ? value
+                    : (value != null ? value.toString() : '')
+            )
+        )
     };
     return makeApiRequest(async () => {
-        await google.sheets({ version: 'v4', auth }).spreadsheets.values.update({
-            spreadsheetId,
-            range,
-            valueInputOption: 'USER_ENTERED',
-            resource
-        });
+        try {
+            await google.sheets({ version: 'v4', auth })
+                .spreadsheets.values.update({
+                    spreadsheetId,
+                    range,
+                    valueInputOption: 'USER_ENTERED',
+                    resource
+                });
+        } catch (err) {
+            logErrorDetails(err);
+            throw new Error(
+                `Could not write to sheet "${range.split('!')[0]}". ` +
+                `Make sure the spreadsheet ID and range are correct ` +
+                `and that the service-account has Editor access.`
+            );
+        }
     });
 }
 
