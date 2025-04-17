@@ -137,8 +137,12 @@ async function logErrorToTrello(errorMessage, source = 'Unknown Source') {
 async function logWishlistToTrello(content, author = 'WishlistBot') {
   const now = new Date().toISOString();
 
+  // Extract feature name from content using regex
+  const match = content.match(/\*\*Feature Name:\*\*\s*(.+)/i);
+  const featureName = match ? match[1].trim() : 'Wishlist Request';
+
   const wishlistCard = {
-    threadName: `Wishlist Request`,
+    threadName: featureName,
     username: author,
     content: content,
     images: [],
