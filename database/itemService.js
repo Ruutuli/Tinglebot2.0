@@ -115,8 +115,11 @@ async function fetchItemByName(itemName) {
         const db = client.db('tinglebot');
         const normalizedItemName = itemName.trim().toLowerCase();
 
+        // Escape regex metacharacters to prevent invalid RegExp errors
+        const escapedName = normalizedItemName.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+
         const item = await db.collection('items').findOne({
-            itemName: new RegExp(`^${normalizedItemName}$`, 'i')
+            itemName: new RegExp(`^${escapedName}$`, 'i')
         });
 
         if (!item) {
@@ -125,8 +128,7 @@ async function fetchItemByName(itemName) {
         }
         return item;
     } catch (error) {
-    handleError(error, 'itemService.js');
-
+        handleError(error, 'itemService.js');
         console.error('[itemService.js]: ❌ Error fetching item by name:', error);
         throw error;
     } finally {

@@ -2,7 +2,6 @@
 const axios = require('axios');
 const path = require('path');
 
-
 // ------------------- Utilities -------------------
 const { handleError } = require('../utils/globalErrorHandler');
 
@@ -52,41 +51,61 @@ async function createTrelloCard({ threadName, username, content, images, created
   const dueDate = new Date(createdAt);
   dueDate.setHours(dueDate.getHours() + 48);
 
+  let matchedLabels = [];
   const labels = await fetchLabels();
 
-  // ------------------- Derive Label Match From Thread Name -------------------
-  let baseName = threadName.trim().toLowerCase();
-
-  // Handle cases like "/loot", "loot command", etc.
-  if (baseName.startsWith('/')) {
-    baseName = baseName.split(/\s+/)[0]; // Extract just "/loot"
-    baseName = `${baseName.slice(1)}.js`; // "/loot" → "loot.js"
-  } else if (!baseName.endsWith('.js')) {
-    baseName = `${baseName.split(/\s+/)[0]}.js`; // "loot" → "loot.js"
-  }
-
-  let matchedLabels = [];
-  let bestScore = 0;
-  let bestMatch = null;
-
-  for (const label of labels) {
-    const labelName = label.name.toLowerCase();
-    const score = similarity(baseName, labelName);
-
-    // Match anything reasonably close
-    if (score >= 0.6) {
-      matchedLabels.push(label.id);
+  // ------------------- Label Matching by Card Type -------------------
+  if (overrideListId === TRELLO_LOG) {
+    // 📝 Console Logs — match exact file name (e.g., itemService.js)
+    const fileBase = threadName.split(' - ')[0].toLowerCase().trim();
+    for (const label of labels) {
+      if (label.name.toLowerCase() === fileBase) {
+        matchedLabels.push(label.id);
+        break;
+      }
     }
 
-    if (score > bestScore) {
-      bestScore = score;
-      bestMatch = label;
-    }
-  }
+  } else if (overrideListId === TRELLO_WISHLIST) {
+    // ⭐ Wishlist — match exact Feature Name
+    const match = content.match(/\*\*Feature Name:\*\*\s*(.+)/i);
+    const featureLabel = match ? match[1].toLowerCase().trim() : null;
 
-  // If nothing clears the threshold, fallback to the best close match
-  if (matchedLabels.length === 0 && bestScore >= 0.3 && bestMatch) {
-    matchedLabels.push(bestMatch.id);
+    if (featureLabel) {
+      for (const label of labels) {
+        if (label.name.toLowerCase() === featureLabel) {
+          matchedLabels.push(label.id);
+          break;
+        }
+      }
+    }
+
+  } else {
+    // 🐞 Debug/Bug Reports — fuzzy match `/command` → `command.js`
+    let baseName = threadName.trim().toLowerCase();
+
+    if (baseName.startsWith('/')) {
+      baseName = baseName.split(/\s+/)[0];
+      baseName = `${baseName.slice(1)}.js`;
+    } else if (!baseName.endsWith('.js')) {
+      baseName = `${baseName.split(/\s+/)[0]}.js`;
+    }
+
+    let bestScore = 0;
+    let bestMatch = null;
+
+    for (const label of labels) {
+      const labelName = label.name.toLowerCase();
+      const score = similarity(baseName, labelName);
+      if (score >= 0.6) matchedLabels.push(label.id);
+      if (score > bestScore) {
+        bestScore = score;
+        bestMatch = label;
+      }
+    }
+
+    if (matchedLabels.length === 0 && bestScore >= 0.3 && bestMatch) {
+      matchedLabels.push(bestMatch.id);
+    }
   }
 
   const cardData = {
@@ -127,8 +146,6 @@ async function createTrelloCard({ threadName, username, content, images, created
   }
 }
 
-
-
 // ============================================================================
 // ------------------- Log Error to Trello -------------------
 async function logErrorToTrello(errorMessage, source = 'Unknown Source') {
@@ -157,7 +174,6 @@ async function logErrorToTrello(errorMessage, source = 'Unknown Source') {
 async function logWishlistToTrello(content, author = 'WishlistBot') {
   const now = new Date().toISOString();
 
-  // Extract feature name from content using regex
   const match = content.match(/\*\*Feature Name:\*\*\s*(.+)/i);
   const featureName = match ? match[1].trim() : 'Wishlist Request';
 

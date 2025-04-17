@@ -253,8 +253,16 @@ async function handleAutocomplete(interaction) {
   
       // ------------------- TRADE Commands -------------------
     } else if (commandName === 'trade') {
-      await handleTradeAutocomplete(interaction, focusedOption);
-  
+      if (focusedOption.name === 'fromcharacter') {
+        await handleTradeFromCharacterAutocomplete(interaction, focusedOption);
+      } else if (focusedOption.name === 'tocharacter') {
+        await handleTradeToCharacterAutocomplete(interaction, focusedOption);
+      } else if (['item1','item2','item3'].includes(focusedOption.name)) {
+        await handleTradeItemAutocomplete(interaction, focusedOption);
+      } else {
+        await interaction.respond([]);
+      }
+
       // ------------------- TRANSFER Commands -------------------
     } else if (commandName === 'transfer') {
       // Autocomplete for transfer: route to the correct helper based on focusedOption
