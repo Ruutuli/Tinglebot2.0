@@ -1,29 +1,20 @@
 // ------------------- Environment Variables -------------------
-// Load environment variables from the .env file.
 require('dotenv').config();
 
-
 // ------------------- Standard Libraries -------------------
-// Import Node.js core modules.
 const fs = require('fs');
-const { handleError } = require('./utils/globalErrorHandler');
 const path = require('path');
-
+const { handleError } = require('./utils/globalErrorHandler');
 
 // ------------------- Third-Party Modules -------------------
-// Import modules from discord.js and cron for scheduling.
 const { Client, GatewayIntentBits, Collection } = require('discord.js');
 const cron = require('node-cron');
 
-
 // ------------------- Database Connections -------------------
-// Import functions to establish connections to the databases.
 const { connectToTinglebot, connectToInventories } = require('./database/connection');
 const { generateVendingStockList } = require('./database/vendingService');
 
-
 // ------------------- Handlers -------------------
-// Import all interaction and component handlers.
 const { handleAutocomplete } = require('./handlers/autocompleteHandler');
 const { handleComponentInteraction } = require('./handlers/componentHandler');
 const { handleInteraction } = require('./handlers/interactionHandler');
@@ -31,18 +22,22 @@ const { handleModalSubmission, handleButtonModalTrigger } = require('./handlers/
 const { handleSelectMenuInteraction } = require('./handlers/selectMenuHandler');
 const { executeVending, initializeReactionHandler } = require('./handlers/vendingHandler');
 
-
 // ------------------- Scripts and Utilities -------------------
-// Import scripts and utility functions used across the bot.
 const { renameChannels, trackBloodMoon, isBloodMoonDay } = require('./scripts/bloodmoon');
 const { convertToHyruleanDate } = require('./modules/calendarModule');
 const scheduler = require('./scheduler');
 const { getGuildIds } = require('./utils/getGuildIds');
 const { initializeRandomEncounterBot } = require('./scripts/randomEncounters');
 const { createTrelloCard } = require('./scripts/trello');
+const { simulateWeightedWeather } = require('./.weather/weatherHandler');
+const {
+  temperatureWeights,
+  windWeights,
+  precipitationWeights,
+  specialWeights
+} = require('./.weather/weatherData');
 
 // ------------------- Blood Moon Status Checker -------------------
-// Logs the current Blood Moon status with real-world and Hyrulean dates.
 function logBloodMoonStatus() {
   const today = new Date();
   const hyruleanDate = convertToHyruleanDate(today);
@@ -52,21 +47,16 @@ function logBloodMoonStatus() {
     isBloodMoon = isBloodMoonDay();
   } catch (error) {
     handleError(error, 'index.js');
-
     console.error(`[index.js]: Error checking Blood Moon status: ${error.message}`);
   }
 
   console.log(`[index.js]: 🌕 Blood Moon Today (Real Date: ${today.toISOString().slice(0, 10)}, Hyrulean Date: ${hyruleanDate}): ${isBloodMoon}`);
 }
 
-
-// ------------------- Global Variables -------------------
-// Define global variables used by the bot.
+// ------------------- Globals -------------------
 let client;
 
-
 // ------------------- Database Initialization -------------------
-// Establish connections to the required databases.
 async function initializeDatabases() {
   try {
     await connectToTinglebot();
@@ -74,34 +64,27 @@ async function initializeDatabases() {
     console.log('[index.js]: ✅ Databases connected');
   } catch (err) {
     handleError(err, 'index.js');
-
     console.error('[index.js]: ❌ Database initialization error:', err);
     throw err;
   }
 }
 
-
 // ------------------- Client Initialization -------------------
-// Sets up the Discord client, loads commands, and defines event handlers.
 async function initializeClient() {
   await initializeDatabases();
 
-  // Create a new Discord client with the necessary intents.
   client = new Client({
     intents: [
       GatewayIntentBits.Guilds,
       GatewayIntentBits.GuildMessages,
       GatewayIntentBits.MessageContent,
       GatewayIntentBits.GuildMessageReactions,
-      GatewayIntentBits.GuildMembers,
-    ],
+      GatewayIntentBits.GuildMembers
+    ]
   });
 
-  // Initialize the commands collection and load command files.
   client.commands = new Collection();
-  const commandFiles = fs
-    .readdirSync(path.join(__dirname, 'commands'))
-    .filter(file => file.endsWith('.js'));
+  const commandFiles = fs.readdirSync(path.join(__dirname, 'commands')).filter(file => file.endsWith('.js'));
 
   for (const file of commandFiles) {
     const command = require(`./commands/${file}`);
@@ -110,11 +93,8 @@ async function initializeClient() {
     }
   }
 
-  // ------------------- Bot Ready Event -------------------
-  // When the bot is ready, initialize reaction handlers, log Blood Moon status, and start the scheduler.
   client.once('ready', async () => {
     console.log('[index.js]: 🤖 Bot is online');
-
     initializeReactionHandler(client);
     logBloodMoonStatus();
     scheduler(client);
@@ -123,8 +103,7 @@ async function initializeClient() {
       initializeRandomEncounterBot(client);
       console.log('[index.js]: ⚔️ Random encounter functionality initialized');
     } catch (error) {
-    handleError(error, 'index.js');
-
+      handleError(error, 'index.js');
       console.error('[index.js]: ❌ Error initializing random encounters:', error);
     }
   });
@@ -133,13 +112,9 @@ async function initializeClient() {
   // Define handlers for different types of interactions.
   client.on('interactionCreate', async interaction => {
     try {
-      const allowedChannels = [
-        '1305487405985431583', // Path of Scarlet Leaves
-        '1305487571228557322'  // Leaf Dew Way
-      ];
+      const allowedChannels = ['1305487405985431583', '1305487571228557322'];
 
       if (interaction.isCommand()) {
-        // Check if the command is allowed in the current channel.
         if (allowedChannels.includes(interaction.channelId) && interaction.commandName !== 'travel') {
           console.warn(`[index.js]: Command '${interaction.commandName}' not allowed in channel ${interaction.channelId}.`);
           await interaction.reply({
@@ -149,12 +124,12 @@ async function initializeClient() {
           return;
         }
 
-        // Execute the command if it exists.
         const command = client.commands.get(interaction.commandName);
         if (command) {
           console.info(`[index.js]: Executing command '${interaction.commandName}'.`);
           await command.execute(interaction);
         }
+
       } else if (interaction.isButton()) {
         console.info(`[index.js]: Button interaction detected. CustomId=${interaction.customId}`);
         if (interaction.customId.startsWith('triggerModal-')) {
@@ -163,23 +138,98 @@ async function initializeClient() {
         } else {
           await handleComponentInteraction(interaction);
         }
+
       } else if (interaction.isStringSelectMenu()) {
         await handleSelectMenuInteraction(interaction);
+
       } else if (interaction.isAutocomplete()) {
         console.log(`[index.js]: Autocomplete interaction detected: ${interaction.commandName}`);
         await handleAutocomplete(interaction);
+
       } else if (interaction.isModalSubmit()) {
         const { handleModalSubmission } = require('./handlers/modalHandler');
         await handleModalSubmission(interaction);
+
       } else {
         console.warn(`[index.js]: Unhandled interaction type: ${interaction.type}`);
       }
     } catch (error) {
-    handleError(error, 'index.js');
-
+      handleError(error, 'index.js');
       console.error('[index.js]: ❌ Interaction error:', error);
     }
   });
+  
+    // ------------------- Global Weather Message Command -------------------
+    client.on('messageCreate', async message => {
+      if (message.author.bot) return;
+      if (message.content.trim().toLowerCase() !== '!weather') return;
+  
+      const villages = ["Rudania", "Vhintl", "Inariko"];
+      const seasons = ["Winter", "Spring", "Summer", "Autumn"];
+  
+      function getProb(label, weightMap) {
+        const weights = Object.values(weightMap);
+        const total = weights.reduce((a, b) => a + b, 0);
+        const weight = weightMap[label] ?? 0.01;
+        return weight / total;
+      }
+  
+      function getCombinedProbability(weather) {
+        const tempProb = getProb(weather.temperature.label, temperatureWeights);
+        const windProb = getProb(weather.wind.label, windWeights);
+        const precipProb = getProb(weather.precipitation.label, precipitationWeights);
+        const specialProb = weather.special ? getProb(weather.special.label, specialWeights) : 1;
+        return tempProb * windProb * precipProb * specialProb;
+      }
+  
+      try {
+        let results = [];
+  
+        for (const village of villages) {
+          for (const season of seasons) {
+            const weather = simulateWeightedWeather(village, season);
+            const prob = getCombinedProbability(weather);
+  
+            results.push([
+              `**🛖 ${weather.village} — ${weather.season}**`,
+              `\`\`\``,
+              `🌡️  Temperature   : ${weather.temperature.label}`,
+              `🌬️  Wind          : ${weather.wind.label}`,
+              `🌧️  Precipitation : ${weather.precipitation.label}`,
+              `✨  Special       : ${weather.special ? weather.special.label : 'None'}`,
+              `📊  Probability   : ${(prob * 100).toFixed(2)}%`,
+              `\`\`\``,
+              `---`
+            ].join('\n'));
+            
+          }
+        }
+  
+        const forecastChunks = [];
+        let currentChunk = `📡 **Weather Forecast Simulation**\n\n`;
+        
+        for (const line of results) {
+          if ((currentChunk + line).length > 1990) {
+            forecastChunks.push(currentChunk);
+            currentChunk = '';
+          }
+          currentChunk += line + '\n';
+        }
+        
+        if (currentChunk.trim().length > 0) {
+          forecastChunks.push(currentChunk);
+        }
+        
+        for (const chunk of forecastChunks) {
+          await message.author.send(chunk);
+        }
+        await message.react('✅');
+        
+      } catch (err) {
+        console.error('[index.js]: Failed to simulate weather forecast:', err);
+        await message.reply('❌ Something went wrong while generating the weather.');
+      }
+    });
 
 // ------------------- Forum Bug Report Listener -------------------
 // Detect new thread (forum post)
@@ -211,6 +261,8 @@ client.on('threadCreate', async thread => {
 client.on('messageCreate', async message => {
   if (message.channel.parentId !== '1315866996776374302') return; // Feedback Forum Channel ID
   if (message.author.bot) return;
+
+  
 
   // ------------------- Bug Report Format Validation -------------------
 if (!message.content.replace(/\*/g, '').startsWith('Command')) {

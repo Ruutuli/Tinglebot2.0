@@ -1,5 +1,6 @@
 // ------------------- Standard Libraries -------------------
 const axios = require('axios');
+const path = require('path');
 
 // ------------------- Utilities -------------------
 const { handleError } = require('../utils/globalErrorHandler');
@@ -7,21 +8,27 @@ const { handleError } = require('../utils/globalErrorHandler');
 // ------------------- Environment Variables -------------------
 const TRELLO_API_KEY = process.env.TRELLO_API_KEY;
 const TRELLO_TOKEN = process.env.TRELLO_TOKEN;
-const TRELLO_LIST_ID = process.env.TRELLO_LIST_ID; // Default list for normal cards
-const TRELLO_LOG = process.env.TRELLO_LOG || '67fe7cc498f7d8f31520c1af'; // Dedicated error log list
-const TRELLO_BOARD_ID = process.env.TRELLO_BOARD_ID; // Required for label fetching
+const TRELLO_LIST_ID = process.env.TRELLO_LIST_ID;
+const TRELLO_LOG = process.env.TRELLO_LOG || '67fe7cc498f7d8f31520c1af';
+const TRELLO_BOARD_ID = process.env.TRELLO_BOARD_ID;
 
-// ------------------- Utility: String Similarity -------------------
+// ------------------- Utility: Enhanced Similarity -------------------
 function similarity(a, b) {
-  const regex = /[^a-z0-9]/gi;
-  a = a.toLowerCase().replace(regex, '');
-  b = b.toLowerCase().replace(regex, '');
+  a = a.toLowerCase();
+  b = b.toLowerCase();
+
+  if (a === b) return 1;
+  if (b.includes(a) || a.includes(b)) return 0.9;
+
+  const aWords = a.split(/[^a-z0-9]/gi);
+  const bWords = b.split(/[^a-z0-9]/gi);
 
   let matches = 0;
-  for (let char of a) {
-    if (b.includes(char)) matches++;
+  for (const word of aWords) {
+    if (bWords.includes(word)) matches++;
   }
-  return matches / a.length;
+
+  return matches / Math.max(aWords.length, 1);
 }
 
 // ------------------- Fetch All Trello Labels for the Board -------------------
@@ -36,17 +43,25 @@ async function fetchLabels() {
 }
 
 // ------------------- Create a Trello Card -------------------
+// ------------------- Create a Trello Card -------------------
 async function createTrelloCard({ threadName, username, content, images, createdAt, overrideListId }) {
   const dueDate = new Date(createdAt);
   dueDate.setHours(dueDate.getHours() + 48);
 
   const labels = await fetchLabels();
+
+  // 🔧 Keep the extension for label matching (e.g., pet.js, mount.js)
+  let baseName = path.basename(username).toLowerCase();
+
+  // 🛠️ Optional: handle command-style names like "/mount"
+  if (baseName.startsWith('/')) baseName = `${baseName.slice(1)}.js`;
+
   let bestMatch = null;
   let bestScore = 0;
 
-  // Match label based only on source/filename
   for (const label of labels) {
-    const score = similarity(username, label.name);
+    const labelName = label.name.toLowerCase();
+    const score = similarity(baseName, labelName);
     if (score > bestScore) {
       bestScore = score;
       bestMatch = label;
@@ -54,7 +69,7 @@ async function createTrelloCard({ threadName, username, content, images, created
   }
 
   const cardData = {
-    name: `${threadName}`, // Do NOT append issueText (we want clean title!)
+    name: `${threadName}`,
     desc: content,
     idList: overrideListId || TRELLO_LIST_ID,
     start: new Date(createdAt).toISOString(),
@@ -94,10 +109,11 @@ async function createTrelloCard({ threadName, username, content, images, created
 // ------------------- Log Error to Trello -------------------
 async function logErrorToTrello(errorMessage, source = 'Unknown Source') {
   const now = new Date().toISOString();
+  const baseFile = path.basename(source);
 
   const errorCard = {
-    threadName: `${source} - Console Log Report`,
-    username: source,
+    threadName: `${baseFile} - Console Log Report`,
+    username: baseFile,
     content: `**Error Message:**\n\`\`\`${errorMessage}\`\`\`\n\n**Timestamp:** ${now}`,
     images: [],
     createdAt: now,

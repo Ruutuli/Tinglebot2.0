@@ -1,14 +1,1 @@
-{
-  "RWIZL0": {
-    "healingRequestId": "RWIZL0",
-    "characterRequesting": "Kimino",
-    "village": "vhintl",
-    "heartsToHeal": 3,
-    "paymentOffered": "No payment specified",
-    "healerName": null,
-    "requesterUserId": "126088204016156672",
-    "status": "fulfilled",
-    "timestamp": 1744597045020,
-    "messageId": "1361163402512437341"
-  }
-}
+{}

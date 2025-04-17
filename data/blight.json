@@ -1,15 +1,4 @@
 {
-  "B587395": {
-    "submissionId": "B587395",
-    "userId": "635948726686580747",
-    "characterName": "Fiddle",
-    "healerName": "Elde",
-    "taskType": "item",
-    "taskDescription": "**Elde, Oracle of Courage** wouldn't hesitate to heal those they strive to protect and certainly wouldn't ask for compensation, however it would be rude not to thank them! \nA little fairy gives you some hints as to what you could offer:\n- \"Any one part from one of those big tough Lynels—just one will do. Elde’s been studying them, they think that stuff is pretty neat.\"\n- \"Lizalfos parts, from the kinds found in and around the forest. But we need **50 of each!** Show Elde how much you’re helping!\"\n- \"Did you know Elde has a favourite Beetle? It has great big mandibles and is the colour of the sky, but it’s not easy to find. You should bring back a few of them, perhaps **5 would do?**\"",
-    "healingStage": 2,
-    "status": "pending",
-    "createdAt": "2025-04-14T01:32:03.928Z"
-  },
   "B619780": {
     "submissionId": "B619780",
     "userId": "308795936530759680",
@@ -20,5 +9,16 @@
     "healingStage": 2,
     "status": "pending",
     "createdAt": "2025-04-14T00:52:54.366Z"
+  },
+  "B769930": {
+    "submissionId": "B769930",
+    "userId": "322920629944975360",
+    "characterName": "Marx",
+    "healerName": "Foras",
+    "taskType": "writing",
+    "taskDescription": "**Courage comes in all forms!** Share with **Foras, Dragon of Courage** and write about a time your character exhibited emotional courage! \nPerhaps explore what they felt, or if they overcame their struggle, or even if they learned from their experience. Did they have any trouble? Perhaps they leaned on someone to help them through? Write at least 500 words!",
+    "healingStage": 4,
+    "status": "pending",
+    "createdAt": "2025-04-17T00:26:23.665Z"
   }
 }

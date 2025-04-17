@@ -1,1 +1,99 @@
-{}
+{
+  "7e4b21de": {
+    "users": [
+      {
+        "characterName": "Ze'alous",
+        "userId": "126088204016156672"
+      }
+    ],
+    "mountType": "Donkey",
+    "rarity": "Regular",
+    "mountLevel": "High",
+    "mountStamina": 6,
+    "environment": "Forest",
+    "village": "Inariko",
+    "actions": [],
+    "tameStatus": true,
+    "traits": {},
+    "totalSpent": 0
+  },
+  "b10880c7": {
+    "users": [],
+    "mountType": "Mountain Goat",
+    "rarity": "To be determined",
+    "mountLevel": "Basic",
+    "mountStamina": "To be determined",
+    "environment": "To be determined",
+    "village": "Inariko",
+    "actions": [],
+    "tameStatus": false,
+    "traits": {},
+    "totalSpent": 0
+  },
+  "5b9b9fcb": {
+    "users": [
+      {
+        "characterName": "Ayame",
+        "userId": "207945864918990849"
+      }
+    ],
+    "mountType": "Donkey",
+    "rarity": "Regular",
+    "mountLevel": "Mid",
+    "mountStamina": 3,
+    "environment": "Mountainous",
+    "village": "Vhintl",
+    "actions": [],
+    "tameStatus": true,
+    "traits": {
+      "coatColor": "Pink",
+      "coatStyle": "Fluffy",
+      "coatPattern": "Spotted"
+    },
+    "totalSpent": 100
+  },
+  "a00b1aef": {
+    "users": [
+      {
+        "characterName": "Kimino",
+        "userId": "126088204016156672"
+      }
+    ],
+    "mountType": "Donkey",
+    "rarity": "Regular",
+    "mountLevel": "High",
+    "mountStamina": 5,
+    "environment": "Tall grass",
+    "village": "Rudania",
+    "actions": [],
+    "tameStatus": false,
+    "traits": {},
+    "totalSpent": 0
+  },
+  "f8e4a62c": {
+    "users": [],
+    "mountType": "Horse",
+    "rarity": "To be determined",
+    "mountLevel": "High",
+    "mountStamina": "To be determined",
+    "environment": "To be determined",
+    "village": "Rudania",
+    "actions": [],
+    "tameStatus": false,
+    "traits": {},
+    "totalSpent": 0
+  },
+  "13e2f5dc": {
+    "users": [],
+    "mountType": "Donkey",
+    "rarity": "To be determined",
+    "mountLevel": "Basic",
+    "mountStamina": "To be determined",
+    "environment": "To be determined",
+    "village": "Rudania",
+    "actions": [],
+    "tameStatus": false,
+    "traits": {},
+    "totalSpent": 0
+  }
+}
