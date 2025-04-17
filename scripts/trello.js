@@ -11,7 +11,9 @@ const TRELLO_TOKEN = process.env.TRELLO_TOKEN;
 const TRELLO_LIST_ID = process.env.TRELLO_LIST_ID;
 const TRELLO_LOG = process.env.TRELLO_LOG || '67fe7cc498f7d8f31520c1af';
 const TRELLO_BOARD_ID = process.env.TRELLO_BOARD_ID;
+const TRELLO_WISHLIST = process.env.TRELLO_WISHLIST;
 
+// ============================================================================
 // ------------------- Utility: Enhanced Similarity -------------------
 function similarity(a, b) {
   a = a.toLowerCase();
@@ -31,6 +33,7 @@ function similarity(a, b) {
   return matches / Math.max(aWords.length, 1);
 }
 
+// ============================================================================
 // ------------------- Fetch All Trello Labels for the Board -------------------
 async function fetchLabels() {
   const response = await axios.get(`https://api.trello.com/1/boards/${TRELLO_BOARD_ID}/labels`, {
@@ -42,7 +45,7 @@ async function fetchLabels() {
   return response.data;
 }
 
-// ------------------- Create a Trello Card -------------------
+// ============================================================================
 // ------------------- Create a Trello Card -------------------
 async function createTrelloCard({ threadName, username, content, images, createdAt, overrideListId }) {
   const dueDate = new Date(createdAt);
@@ -106,6 +109,7 @@ async function createTrelloCard({ threadName, username, content, images, created
   }
 }
 
+// ============================================================================
 // ------------------- Log Error to Trello -------------------
 async function logErrorToTrello(errorMessage, source = 'Unknown Source') {
   const now = new Date().toISOString();
@@ -128,8 +132,32 @@ async function logErrorToTrello(errorMessage, source = 'Unknown Source') {
   }
 }
 
+// ============================================================================
+// ------------------- Log Wishlist Entry to Trello -------------------
+async function logWishlistToTrello(content, author = 'WishlistBot') {
+  const now = new Date().toISOString();
+
+  const wishlistCard = {
+    threadName: `Wishlist Request`,
+    username: author,
+    content: content,
+    images: [],
+    createdAt: now,
+    overrideListId: TRELLO_WISHLIST
+  };
+
+  try {
+    await createTrelloCard(wishlistCard);
+  } catch (e) {
+    handleError(e, 'trello.js');
+    console.error(`[trello.js]: Failed to log wishlist to Trello: ${e.message}`);
+  }
+}
+
+// ============================================================================
 // ------------------- Exports -------------------
 module.exports = {
   createTrelloCard,
-  logErrorToTrello
+  logErrorToTrello,
+  logWishlistToTrello
 };

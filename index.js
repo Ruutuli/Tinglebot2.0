@@ -28,7 +28,7 @@ const { convertToHyruleanDate } = require('./modules/calendarModule');
 const scheduler = require('./scheduler');
 const { getGuildIds } = require('./utils/getGuildIds');
 const { initializeRandomEncounterBot } = require('./scripts/randomEncounters');
-const { createTrelloCard } = require('./scripts/trello');
+const { createTrelloCard, logWishlistToTrello  } = require('./scripts/trello');
 const { simulateWeightedWeather } = require('./.weather/weatherHandler');
 const {
   temperatureWeights,
@@ -231,89 +231,106 @@ async function initializeClient() {
       }
     });
 
-// ------------------- Forum Bug Report Listener -------------------
-// Detect new thread (forum post)
+// ============================================================================
+// ------------------- Forum + Wishlist Trello Logging -------------------
+// ============================================================================
+
+// ------------------- Forum Bug Report Thread Creation Listener -------------------
+// Triggered when a new thread is created in the bug report forum
 client.on('threadCreate', async thread => {
-  if (thread.parentId !== '1315866996776374302') return; // Feedback Forum Channel ID
+  const FEEDBACK_FORUM_CHANNEL_ID = '1315866996776374302';
+  if (thread.parentId !== FEEDBACK_FORUM_CHANNEL_ID) return;
+
   console.log(`[index.js]: New forum thread created: ${thread.name}`);
-  
-  // Fetch the starter message
-  const starterMessage = await thread.fetchStarterMessage();
-  if (!starterMessage || starterMessage.author.bot) return;
-  if (!starterMessage.content.replace(/\*/g, '').startsWith('Command:')) return;
 
-  const threadName = thread.name;
-  const username = starterMessage.author.tag;
-  const content = starterMessage.content;
-  const createdAt = starterMessage.createdAt;
-  const images = starterMessage.attachments.map(attachment => attachment.url);
+  try {
+    const starterMessage = await thread.fetchStarterMessage();
+    if (!starterMessage || starterMessage.author.bot) return;
+    if (!starterMessage.content.replace(/\*/g, '').startsWith('Command:')) return;
 
-  const cardUrl = await createTrelloCard({ threadName, username, content, images, createdAt });
+    const threadName = thread.name;
+    const username = starterMessage.author.tag;
+    const content = starterMessage.content;
+    const createdAt = starterMessage.createdAt;
+    const images = starterMessage.attachments.map(attachment => attachment.url);
 
-  if (cardUrl) {
-    await starterMessage.reply(`✅ Bug report sent to Trello! ${cardUrl}\n\n_You can add comments to the Trello card if you want to provide more details or updates later._`);
-  } else {
-    await starterMessage.reply(`❌ Failed to send bug report to Trello.`);
+    const cardUrl = await createTrelloCard({ threadName, username, content, images, createdAt });
+
+    if (cardUrl) {
+      await starterMessage.reply(`✅ Bug report sent to Trello! ${cardUrl}\n\n_You can add comments to the Trello card if you want to provide more details or updates later._`);
+    } else {
+      await starterMessage.reply(`❌ Failed to send bug report to Trello.`);
+    }
+
+  } catch (err) {
+    console.error('[index.js]: ❌ Error handling forum thread creation:', err);
   }
 });
 
-// Detect new message in forum thread (reply)
+// ------------------- Forum Bug Report Reply Listener -------------------
+// Triggered when a new message is posted in an existing bug report thread
 client.on('messageCreate', async message => {
-  if (message.channel.parentId !== '1315866996776374302') return; // Feedback Forum Channel ID
+  const FEEDBACK_FORUM_CHANNEL_ID = '1315866996776374302';
+  if (message.channel.parentId !== FEEDBACK_FORUM_CHANNEL_ID) return;
   if (message.author.bot) return;
 
-  
-
   // ------------------- Bug Report Format Validation -------------------
-if (!message.content.replace(/\*/g, '').startsWith('Command')) {
-  const reply = await message.reply(
-    `❌ **Bug Report Rejected — Missing Required Format!**\n\n` +
-    `Your message could not be processed because it is missing the required starting line:\n` +
-    `\`Command: [Command Name]\`\n\n` +
-    `> This line **must** be the very first line of your bug report.\n` +
-    `> Example:\n` +
-    `Command: /gather\n\n` +
-    `---\n` +
-    `### Why was this rejected?\n` +
-    `We automatically check for \`Command:\` at the top of your message so we know what command you are reporting a bug for.\n\n` +
-    `Without this line, we can't create a Trello ticket for your report.\n\n` +
-    `---\n` +
-    `### How to fix your report:\n` +
-    `Please edit your message to follow this format:\n\n` +
-    `**Command:** [Specify the command or feature]\n` +
-    `**Issue:** [Brief description of the problem]\n` +
-    `**Steps to Reproduce:**\n` +
-    `1. [Step 1]\n` +
-    `2. [Step 2]\n` +
-    `**Error Output:**\n` +
-    `[Copy and paste the exact error message or output text here]\n` +
-    `**Screenshots:** [Attach screenshots if possible]\n` +
-    `**Expected Behavior:** [What you expected to happen]\n` +
-    `**Actual Behavior:** [What actually happened]`
-  );
+  if (!message.content.replace(/\*/g, '').startsWith('Command')) {
+    const reply = await message.reply(
+      `❌ **Bug Report Rejected — Missing Required Format!**\n\n` +
+      `Your message must start with this line:\n\`Command: [Command Name]\`\n\n` +
+      `> Example:\n> \`Command: /gather\`\n\n` +
+      `Please update your post to match this format:\n\n` +
+      `**Command:** [Specify the command or feature]\n` +
+      `**Issue:** [Brief description of the problem]\n` +
+      `**Steps to Reproduce:**\n1. [Step 1]\n2. [Step 2]\n` +
+      `**Error Output:** [Error message]\n**Screenshots:** [Attach images]\n` +
+      `**Expected Behavior:** [What you expected to happen]\n` +
+      `**Actual Behavior:** [What actually happened]`
+    );
 
-  setTimeout(() => {
-    reply.delete().catch(() => {});
-  }, 600000); // 10 minutes
+    setTimeout(() => reply.delete().catch(() => {}), 600000); // Auto-delete after 10 mins
+    return;
+  }
 
-  return;
-}
+  try {
+    const threadName = message.channel.name;
+    const username = message.author.tag;
+    const content = message.content;
+    const createdAt = message.createdAt;
+    const images = message.attachments.map(attachment => attachment.url);
 
-  const threadName = message.channel.name;
-  const username = message.author.tag;
-  const content = message.content;
-  const createdAt = message.createdAt;
-  const images = message.attachments.map(attachment => attachment.url);
+    const cardUrl = await createTrelloCard({ threadName, username, content, images, createdAt });
 
-  const cardUrl = await createTrelloCard({ threadName, username, content, images, createdAt });
+    if (cardUrl) {
+      await message.reply(`✅ Bug report sent to Trello! ${cardUrl}\n\n_You can add comments to the Trello card if you want to provide more details or updates later._`);
+    } else {
+      await message.reply(`❌ Failed to send bug report to Trello.`);
+    }
 
-  if (cardUrl) {
-    await message.reply(`✅ Bug report sent to Trello! ${cardUrl}\n\n_You can add comments to the Trello card if you want to provide more details or updates later._`);
-  } else {
-    await message.reply(`❌ Failed to send bug report to Trello.`);
-  }  
+  } catch (err) {
+    console.error('[index.js]: ❌ Error handling forum reply for Trello:', err);
+  }
 });
 
+// ------------------- Wishlist Channel Listener -------------------
+// Automatically logs any message in the wishlist channel directly to Trello
+client.on('messageCreate', async message => {
+  const WISHLIST_CHANNEL_ID = '1319826690935099463';
+  if (message.channelId !== WISHLIST_CHANNEL_ID) return;
+  if (message.author.bot) return;
+
+  const content = message.content;
+  const author = message.author.tag;
+
+  try {
+    await logWishlistToTrello(content, author);
+    await message.react('⭐'); // Visual confirmation
+  } catch (err) {
+    console.error('[index.js]: Failed to log wishlist to Trello:', err);
+    await message.reply('❌ Could not send this wishlist item to Trello.');
+  }
+});
 
 // ------------------- Login the Bot -------------------
 // Initialize the client and start the bot.
