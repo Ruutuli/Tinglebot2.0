@@ -17,6 +17,7 @@ const {
   updatePetToCharacter 
 } = require('../database/characterService');
 const { fetchAllItems } = require('../database/itemService');
+const { getTokenBalance, updateTokenBalance } = require('../database/tokenService');
 
 // ------------------- Modules -------------------
 // Modules used for random item rolls, pet formatting, and retrieving pet-related data.
@@ -579,17 +580,28 @@ if (subcommand === 'edit') {
           );
         }
       
-        const tokens = character.tokens;
+        const userId = interaction.user.id;
+        const balance = await getTokenBalance(userId);
         const cost = getUpgradeCost(targetLevel);
-        if (tokens < cost) {
+      
+        // check balance
+        if (balance < cost) {
           return interaction.reply(
-            `❌ **You don't have enough tokens to upgrade ${pet.name} to level ${targetLevel}.**`
+            `❌ **You only have ${balance} tokens, but upgrading to level ${targetLevel} costs ${cost}.**`
           );
         }
       
+        // deduct tokens
+        await updateTokenBalance(userId, -cost);
+      
+        // perform the upgrade
         await upgradePetLevel(character._id, petName, targetLevel);
+        await updatePetRolls(character._id, petName, targetLevel);
+      
         return interaction.reply(
-          `✅ **${pet.name} has been upgraded to level ${targetLevel}.**`
+          `✅ **${pet.name} is now level ${targetLevel}!**\n` +
+          `💰 Spent ${cost} tokens — you have ${balance - cost} left.\n` +
+          `🎲 Rolls remaining set to ${targetLevel}.`
         );
       }
 
