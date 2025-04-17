@@ -363,7 +363,7 @@ const createMonsterEncounterEmbed = (
 };
 
 
-// ------------------- Functifon to create no encounter embed -------------------
+// ------------------- Function to create no encounter embed -------------------
 const createNoEncounterEmbed = (character, isBloodMoon = false) => {
     const settings = getCommonEmbedSettings(character);
 
@@ -378,10 +378,10 @@ const createNoEncounterEmbed = (character, isBloodMoon = false) => {
 
     // Determine embed color based on visiting status and Blood Moon
     const embedColor = isBloodMoon
-        ? '#FF4500' // Fiery red for Blood Moon
+        ? '#FF4500'
         : isVisiting
-            ? getVillageColorByName(character.currentVillage) || '#000000' // Use current village's color if visiting
-            : settings.color || '#000000'; // Default color if not visiting or no settings color
+            ? getVillageColorByName(character.currentVillage) || '#000000'
+            : settings.color || '#000000';
 
     // Define village-specific footer images
     const villageImages = {
@@ -393,16 +393,26 @@ const createNoEncounterEmbed = (character, isBloodMoon = false) => {
     // Select the appropriate footer image for the current village
     const villageImage = villageImages[character.currentVillage.toLowerCase()] || 'https://via.placeholder.com/100x100';
 
+    // Build author options only with valid strings
+    const authorOptions = { name: `${character.name} 🔗` };
+    if (settings.author && typeof settings.author.iconURL === 'string') {
+        authorOptions.iconURL = settings.author.iconURL;
+    }
+    if (settings.author && typeof settings.author.url === 'string') {
+        authorOptions.url = settings.author.url;
+    }
+
     return new EmbedBuilder()
         .setColor(embedColor)
         .setTitle(
             `${locationPrefix}: ${character.name} encountered no monsters.`
         )
-        .setAuthor({ name: `${character.name} 🔗`, iconURL: settings.author.iconURL, url: settings.author.url })
+        .setAuthor(authorOptions)
         .addFields({ name: '🔹 __Outcome__', value: `> ${noEncounterMessage}`, inline: false })
         .setImage(villageImage)
         .setFooter({ text: isBloodMoon ? '🔴 The Blood Moon rises... but nothing stirs in the shadows.' : 'Better luck next time!' });
 };
+
 
 
 // ------------------- Function to create KO embed -------------------

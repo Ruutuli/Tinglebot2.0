@@ -260,12 +260,12 @@ async function handleAutocomplete(interaction) {
       // Autocomplete for transfer: route to the correct helper based on focusedOption
       if (['fromcharacter', 'tocharacter'].includes(focusedOption.name)) {
         await handleTransferCharacterAutocomplete(interaction, focusedOption);
-      } else if (focusedOption.name === 'item') {
+      } else if (['itema', 'itemb', 'itemc'].includes(focusedOption.name)) {
         await handleTransferItemAutocomplete(interaction, focusedOption);
       } else {
         await interaction.respond([]);
       }
-  
+    
       // ------------------- TRAVEL Commands -------------------
       } else if (commandName === 'travel' && focusedOption.name === 'charactername') {
         await handleTravelAutocomplete(interaction, focusedOption);
@@ -1913,31 +1913,37 @@ async function handleModCharacterAutocomplete(interaction, focusedOption) {
     }
     
         // ------------------- Transfer Item Autocomplete -------------------
-    async function handleTransferItemAutocomplete(interaction, focusedOption) {
-      try {
-        const userId = interaction.user.id;
-        const fromCharacterName = interaction.options.getString('fromcharacter');
-        if (!fromCharacterName) return await interaction.respond([]);
-    
-        const fromCharacter = await fetchCharacterByNameAndUserId(fromCharacterName, userId);
-        if (!fromCharacter) return await interaction.respond([]);
-    
-        const inventoryCollection = await getCharacterInventoryCollection(fromCharacter.name);
-        const fromInventory = await inventoryCollection.find().toArray();
-    
-        const choices = fromInventory.map(item => ({
-          name: `${item.itemName} - QTY:${item.quantity}`,
-          value: item.itemName,
-        }));
-    
-        await respondWithFilteredChoices(interaction, focusedOption, choices);
-      } catch (error) {
-    handleError(error, 'autocompleteHandler.js');
+async function handleTransferItemAutocomplete(interaction, focusedOption) {
+  try {
+    const userId = interaction.user.id;
+    const fromCharacterName = interaction.options.getString('fromcharacter');
+    if (!fromCharacterName) return await interaction.respond([]);
 
-        console.error('[handleTransferItemAutocomplete]: Error:', error);
-        await safeRespondWithError(interaction);
-      }
-    }
+    const fromCharacter = await fetchCharacterByNameAndUserId(fromCharacterName, userId);
+    if (!fromCharacter) return await interaction.respond([]);
+
+    const inventoryCollection = await getCharacterInventoryCollection(fromCharacter.name);
+    const fromInventory = await inventoryCollection.find().toArray();
+
+    // Merge duplicates: accumulate quantities per itemName
+    const itemMap = new Map();
+    fromInventory.forEach(({ itemName, quantity }) => {
+      itemMap.set(itemName, (itemMap.get(itemName) || 0) + quantity);
+    });
+
+    const choices = Array.from(itemMap.entries()).map(([name, qty]) => ({
+      name: `${name} - QTY:${qty}`,
+      value: name,
+    }));
+
+    await respondWithFilteredChoices(interaction, focusedOption, choices);
+  } catch (error) {
+    handleError(error, 'autocompleteHandler.js');
+    console.error('[handleTransferItemAutocomplete]: Error:', error);
+    await safeRespondWithError(interaction);
+  }
+}
+
     
 // ============================================================================
 // TRAVEL COMMANDS
