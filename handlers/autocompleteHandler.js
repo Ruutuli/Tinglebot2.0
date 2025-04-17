@@ -1638,20 +1638,33 @@ async function handleModCharacterAutocomplete(interaction, focusedOption) {
         
     
         // ------------------- Pet Roll Type Autocomplete -------------------
-    async function handlePetRollTypeAutocomplete(interaction, focusedOption) {
-      const petId = interaction.options.getString('petname');
-      if (!petId) return await interaction.respond([]);
-    
-      const pet = await Pet.findById(petId).lean();
-      if (!pet || !Array.isArray(pet.rollCombination)) return await interaction.respond([]);
-    
-      const choices = pet.rollCombination.map(roll => ({
-        name: roll,
-        value: roll,
-      }));
-    
-      await respondWithFilteredChoices(interaction, focusedOption, choices);
-    }
+        async function handlePetRollTypeAutocomplete(interaction, focusedOption) {
+          // 1. Get the character name (supports both /pet and /mod contexts)
+          const rawCharacter = interaction.options.getString('charactername')
+                               || interaction.options.getString('character');
+          if (!rawCharacter) return await interaction.respond([]);
+          const characterName = rawCharacter.split(' - ')[0];
+          const userId = interaction.user.id;
+        
+          // 2. Fetch the character (only your own for /pet)
+          const character = await fetchCharacterByNameAndUserId(characterName, userId);
+          if (!character) return await interaction.respond([]);
+        
+          // 3. Get the pet’s name (not ID)
+          const petName = interaction.options.getString('petname');
+          if (!petName) return await interaction.respond([]);
+        
+          // 4. Look up the pet by owner & name
+          const petDoc = await Pet.findOne({ owner: character._id, name: petName }).lean();
+          if (!petDoc || !Array.isArray(petDoc.rollCombination)) {
+            return await interaction.respond([]);
+          }
+        
+          // 5. Build and return the roll-type choices
+          const choices = petDoc.rollCombination.map(roll => ({ name: roll, value: roll }));
+          await respondWithFilteredChoices(interaction, focusedOption, choices);
+        }
+        
     
 // ============================================================================
 // RELIC
