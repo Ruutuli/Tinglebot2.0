@@ -344,7 +344,7 @@ module.exports = {
         }
       }
 
-      // ------------------- Subcommand: Edit Pet Image -------------------
+    // ------------------- Subcommand: Edit Pet Image -------------------
 // This branch handles updating the image of an existing pet.
 if (subcommand === 'edit') {
   // Retrieve the image attachment.
@@ -373,9 +373,24 @@ if (subcommand === 'edit') {
   // Update the pet's image and save changes
   petDoc.imageUrl = petImageUrl;
   await updatePetToCharacter(character._id, petName, petDoc);
-  return interaction.reply(`✅ **Updated the image for pet \`${petName}\`.**`);
-}
 
+  // Build and send embed showing updated pet
+  const editEmbed = new EmbedBuilder()
+    .setAuthor({ name: character.name, iconURL: character.icon })
+    .setTitle(`Pet Image Updated — ${petDoc.name}`)
+    .setThumbnail(petDoc.imageUrl)
+    .addFields(
+      { name: 'Name', value: `\`${petDoc.name}\``, inline: true },
+      { name: 'Species', value: petDoc.species, inline: true },
+      { name: 'Type', value: petDoc.petType, inline: true },
+      { name: 'Level', value: `${petDoc.level}`, inline: true },
+      { name: 'Rolls Remaining', value: `${petDoc.rollsRemaining}`, inline: true }
+    )
+    .setImage(petDoc.imageUrl)
+    .setColor('#00FF00');
+
+  return interaction.reply({ embeds: [editEmbed] });
+}
 
       // ------------------- Verify Pet Existence for Roll, Upgrade, and Retire -------------------
       // Determine if the pet exists in the Pet collection by checking its ID or name.
