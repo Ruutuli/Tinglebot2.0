@@ -252,12 +252,19 @@ async function handleAutocomplete(interaction) {
         await interaction.respond(filtered.map(choice => ({ name: choice, value: choice })));
   
       // ------------------- TRADE Commands -------------------
-      } else if (commandName === 'trade') {
-        await handleTradeAutocomplete(interaction, focusedOption);
+    } else if (commandName === 'trade') {
+      await handleTradeAutocomplete(interaction, focusedOption);
   
       // ------------------- TRANSFER Commands -------------------
-      } else if (commandName === 'transfer') {
-        await handleTransferAutocomplete(interaction, focusedOption);
+    } else if (commandName === 'transfer') {
+      // Autocomplete for transfer: route to the correct helper based on focusedOption
+      if (['fromcharacter', 'tocharacter'].includes(focusedOption.name)) {
+        await handleTransferCharacterAutocomplete(interaction, focusedOption);
+      } else if (focusedOption.name === 'item') {
+        await handleTransferItemAutocomplete(interaction, focusedOption);
+      } else {
+        await interaction.respond([]);
+      }
   
       // ------------------- TRAVEL Commands -------------------
       } else if (commandName === 'travel' && focusedOption.name === 'charactername') {
@@ -2359,6 +2366,7 @@ handleTradeItemAutocomplete,
 // TRANSFER
 handleTransferCharacterAutocomplete,
 handleTransferItemAutocomplete,
+
 
 // TRAVEL
 handleTravelAutocomplete,
