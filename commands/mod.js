@@ -186,7 +186,9 @@ module.exports = {
           );
         }
 
+        // Set level and sync rollsRemaining to match
         petDoc.level = newLevel;
+        petDoc.rollsRemaining = newLevel;
         await petDoc.save();
 
         // ------------------- Sync Embedded Pet Data -------------------
@@ -199,9 +201,10 @@ module.exports = {
         );
 
         return interaction.editReply(
-          `✅ Pet **${petName}** level set to **${newLevel}** for **${character.name}**.`
+          `✅ Pet **${petName}** level and rolls set to **${newLevel}** for **${character.name}**.`
         );
       }
+
 
       // ------------------- Unknown Subcommand Fallback -------------------
       return interaction.editReply('❌ Unknown subcommand specified.');
