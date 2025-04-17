@@ -481,18 +481,31 @@ async function processLootingLogic(interaction, character, encounteredMonster, b
         interaction
       );
 
-      await appendSheetData(auth, spreadsheetId, range, values);
+ // —— Wrap the Sheets append in its own try/catch ——
+ try {
+  await appendSheetData(auth, spreadsheetId, range, values);
+} catch (sheetError) {
+  console.error(`[LOOT] Google Sheets append error: ${sheetError.message}`);
+  await interaction.editReply({
+    content: `❌ **Failed to write to your Google Sheet.**\n` +
+             `> Make sure your **Inventory** link is a valid Google Sheets URL ` +
+             `and that you’ve shared the sheet with the service account ` +
+             `(the “client_email” in service_account.json).`,
+    ephemeral: true
+  });
+  return;
+}
 
-      const embed = createMonsterEncounterEmbed(
-        character,
-        encounteredMonster,
-        outcomeMessage,
-        updatedCharacter.currentHearts,
-        lootedItem,
-        bloodMoonActive
-      );
-      await interaction.editReply({ embeds: [embed] });
-    } else {
+const embed = createMonsterEncounterEmbed(
+  character,
+  encounteredMonster,
+  outcomeMessage,
+  updatedCharacter.currentHearts,
+  lootedItem,
+  bloodMoonActive
+);
+await interaction.editReply({ embeds: [embed] });
+} else {
       const embed = createMonsterEncounterEmbed(
         character,
         encounteredMonster,
