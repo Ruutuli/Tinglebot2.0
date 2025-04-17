@@ -175,10 +175,22 @@ module.exports = {
           option.setName('petname')
             .setDescription('Enter the pet’s name to retire')
             .setRequired(true)
+            .setAutocomplete(true)))
+    // ------------------- Subcommand: View -------------------
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('view')
+        .setDescription('View details for one of your pets')
+        .addStringOption(option =>
+          option.setName('charactername')
+            .setDescription('Enter your character’s name')
+            .setRequired(true)
             .setAutocomplete(true))
-
-            // ------------------- Subcommand: View -------------------
-    ),
+        .addStringOption(option =>
+          option.setName('petname')
+            .setDescription('Enter your pet’s name')
+            .setRequired(true)
+            .setAutocomplete(true))),
 
   // ------------------- Command Execution Function -------------------
   // This function handles executing the pet command based on the chosen subcommand.
@@ -577,6 +589,42 @@ if (subcommand === 'edit') {
           .setFooter({ text: 'Pet retired successfully.' });
         return interaction.editReply({ embeds: [retireEmbed] });
       }
+
+      // ------------------- Subcommand: View Pet -------------------
+if (subcommand === 'view') {
+  // Fetch the pet document
+  const petDoc = await Pet.findOne({ name: petName, owner: character._id });
+  if (!petDoc) {
+    return interaction.reply(`❌ **Pet \`${petName}\` not found. Please add it first with \`/pet add\`.**`);
+  }
+
+  // Prepare rolls display
+  const rollsDisplay = '🔔'.repeat(petDoc.rollsRemaining) 
+                     + '🔕'.repeat(petDoc.level - petDoc.rollsRemaining);
+
+  // Get pet type data for combination & description
+  const petTypeData = getPetTypeData(petDoc.petType);
+
+  // Build the embed
+  const viewEmbed = new EmbedBuilder()
+    .setAuthor({ name: character.name, iconURL: character.icon })
+    .setTitle(`🐾 ${petDoc.name} — Details`)
+    .setThumbnail(petDoc.imageUrl || 'https://via.placeholder.com/150')
+    .addFields(
+      { name: '__Pet Name__',           value: `> ${petDoc.name}`, inline: true },
+      { name: '__Owner__',              value: `> ${character.name}`, inline: true },
+      { name: '__Pet Level & Rolls__',  value: `> Level ${petDoc.level} | ${rollsDisplay}`, inline: true },
+      { name: '__Pet Species__',        value: `> ${getPetEmoji(petDoc.species)} ${petDoc.species}`, inline: true },
+      { name: '__Pet Type__',           value: `> ${petDoc.petType}`, inline: true },
+      { name: 'Roll Combination',       value: petTypeData.rollCombination.join(', '), inline: false },
+      { name: 'Description',            value: petTypeData.description, inline: false }
+    )
+    .setImage(petDoc.imageUrl || 'https://via.placeholder.com/150')
+    .setColor('#00FF00');
+
+  return interaction.reply({ embeds: [viewEmbed] });
+}
+
 
     } catch (error) {
     handleError(error, 'pet.js');
