@@ -116,6 +116,16 @@ module.exports = {
         return;
       }
 
+            // ------------------- New: Ensure inventory is initialized -------------------
+            if (!character.inventorySynced) {
+              await interaction.editReply({
+                content: `❌ **${character.name}’s inventory is not set up yet.**\n` +
+                         `Please run \`/testinventorysetup\` and then \`/syncinventory\` to initialize your inventory.`,
+                ephemeral: true
+              });
+              return;
+            }
+
 // ------------------- Step 3: Check Hearts and Job Validity -------------------
 if (character.currentHearts === 0) {
   const embed = createKOEmbed(character); // Create embed for KO status
