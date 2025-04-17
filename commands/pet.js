@@ -289,7 +289,6 @@ module.exports = {
           if (category === 'normal') {
             existingPet.size = inferredSize;
           }
-          existingPet.level = level;
           existingPet.perks = [petType];
           // Update image only if a new URL is provided.
           existingPet.imageUrl = petImageUrl || existingPet.imageUrl;
@@ -300,7 +299,7 @@ module.exports = {
           return interaction.reply(`✅ **Updated pet \`${petName}\` with new details.**`);
         } else {
         // ------------------- Add New Pet to the Character -------------------
-        await addPetToCharacter(character._id, petName, species, inferredSize, level, petType, petImageUrl);
+        await addPetToCharacter(character._id, petName, species, inferredSize, 0,      petType, petImageUrl);
         const petTypeData = getPetTypeData(petType);
         const newPet = await Pet.create({
           ownerName: character.name,
