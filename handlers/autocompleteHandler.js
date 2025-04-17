@@ -1572,54 +1572,50 @@ async function handleModCharacterAutocomplete(interaction, focusedOption) {
     async function handlePetNameAutocomplete(interaction, focusedOption) {
       const userId = interaction.user.id;
     
-      // Fetch the raw string; if null, bail out immediately
-      const rawInput = interaction.options.getString('charactername');
+      // 1. Accept either the 'charactername' (pet cmd) or 'character' (mod cmd) option
+      const rawInput =
+        interaction.options.getString('charactername') ||
+        interaction.options.getString('character');
       if (!rawInput) {
-        console.log('[autocompleteHandler.js]: logs - No charactername provided; responding with empty list.');
+        console.log('[autocompleteHandler.js]: logs - No character provided; responding with empty list.');
         return await interaction.respond([]);
       }
     
-      // Safely split on ' - ' even if the label includes extra info
+      // 2. Strip off any " – village – job" suffix
       const characterName = rawInput.split(' - ')[0];
-    
       console.log(
-        `[autocompleteHandler.js]: logs - Raw input: "${rawInput}", Extracted characterName: "${characterName}"`
+        `[autocompleteHandler.js]: logs - Lookup pets for character "${characterName}".`
       );
     
-      // If extraction yields an empty string, also bail
-      if (!characterName) {
-        console.log(
-          '[autocompleteHandler.js]: logs - Extracted characterName is empty; responding with empty list.'
-        );
-        return await interaction.respond([]);
+      // 3. Fetch the character appropriately
+      let character;
+      if (interaction.commandName === 'mod') {
+        // Admin context: can target any character
+        character = await fetchCharacterByName(characterName);
+      } else {
+        // Regular pet command: only your own characters
+        character = await fetchCharacterByNameAndUserId(characterName, userId);
       }
-    
-      // …rest of logic remains unchanged…
-      const character = await fetchCharacterByNameAndUserId(characterName, userId);
       if (!character) {
-        console.log(
-          `[autocompleteHandler.js]: logs - No character found for "${characterName}" and user "${userId}".`
-        );
+        console.log(`[autocompleteHandler.js]: logs - Character "${characterName}" not found.`);
         return await interaction.respond([]);
       }
     
+      // 4. Query active pets
       const pets = await Pet.find({ owner: character._id, status: 'active' }).lean();
       if (!pets.length) {
-        console.log(
-          `[autocompleteHandler.js]: logs - No active pets for "${characterName}".`
-        );
+        console.log(`[autocompleteHandler.js]: logs - No active pets for "${characterName}".`);
         return await interaction.respond([]);
       }
     
+      // 5. Return pet names (so mod petlevel can match by name)
       const choices = pets.map(pet => ({
         name: pet.name,
-        value: pet._id.toString(),
+        value: pet.name,
       }));
       await respondWithFilteredChoices(interaction, focusedOption, choices);
     }
-    
 
-    
         // ------------------- Pet Species Autocomplete -------------------
         async function handlePetSpeciesAutocomplete(interaction, focusedOption) {
           // grab the category they've already selected (defaults to 'normal')
