@@ -142,52 +142,57 @@ async function healBlight(interaction, characterName, healerName) {
     saveBlightSubmissions(blightSubmissions);
     saveSubmissionToStorage(submissionId, blightSubmissions[submissionId]);
 
-    // ------------------- Send the Healing Request Embed -------------------
-    const embed = new EmbedBuilder()
-    .setColor('#AA926A')
-    .setTitle(`${healer.name} from the village of ${healer.village} has heard your request to heal ${characterName}.`)
-    .setDescription(`${roleplayResponse}`)
-    .setAuthor({ name: `${characterName}`, iconURL: character.icon })
-    .setThumbnail(healer.iconUrl)
-    .addFields(
-      {
-        name: '<:bb0:854499720797618207> __Healing Requirement__',
-        value: `> **Type**: ${
-          healingRequirement.type === 'art'
-            ? '🎨 Art'
-            : healingRequirement.type === 'writing'
-            ? '✍️ Writing'
-            : '🍎 Item'
-        }\n> ${healingRequirement.description}`,
-      },
-      { name: '<:bb0:854499720797618207> __Submission ID__', value: `\`\`\`${submissionId}\`\`\`` },
-      {
-        name: '<:bb0:854499720797618207> __Alternative Option__',
-        value: `> If you cannot fulfill this request, you can forfeit all of your total tokens to be healed. Use </blight submit:1306176789634355241> to forfeit your tokens.`,
-      }
-    )
-    .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
-    .setFooter({ text: 'Use the Submission ID when you submit your task with /blight submit' })
-    .setTimestamp();
+ // ------------------- Send the Healing Request Embed -------------------
+const fields = [
+  {
+    name: '<:bb0:854499720797618207> __Healing Requirement__',
+    value: `> **Type**: ${
+      healingRequirement.type === 'art'
+        ? '🎨 Art'
+        : healingRequirement.type === 'writing'
+        ? '✍️ Writing'
+        : '🍎 Item'
+    }\n> ${healingRequirement.description}`,
+  },
+  {
+    name: '<:bb0:854499720797618207> __Submission ID__',
+    value: `\`\`\`${submissionId}\`\`\``,
+  },
+  {
+    name: '<:bb0:854499720797618207> __Alternative Option__',
+    value: `> If you cannot fulfill this request, you can forfeit all of your total tokens to be healed. Use </blight submit:1306176789634355241> to forfeit your tokens.`,
+  },
+];
 
-  // Mention the user in the channel
-  await interaction.reply({
-    content: `<@${interaction.user.id}>`,
+const embed = new EmbedBuilder()
+  .setColor('#AA926A')
+  .setTitle(`${healer.name} from the village of ${healer.village} has heard your request to heal ${characterName}.`)
+  .setDescription(roleplayResponse)
+  .setAuthor({ name: characterName, iconURL: character.icon })
+  .setThumbnail(healer.iconUrl)
+  .addFields(fields)  // ← now passes an array, not separate args
+  .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+  .setFooter({ text: 'Use the Submission ID when you submit your task with /blight submit' })
+  .setTimestamp();
+
+// Mention the user in the channel
+await interaction.reply({
+  content: `<@${interaction.user.id}>`,
+  embeds: [embed],
+  ephemeral: false,
+});
+
+// Attempt to send the embed as a DM
+try {
+  await interaction.user.send({
+    content: `Hi <@${interaction.user.id}>, here are the details of your healing request:`,
     embeds: [embed],
-    ephemeral: false,
   });
+} catch (error) {
+  handleError(error, 'blightHandler.js');
+  console.error(`Failed to send DM to user ${interaction.user.id}:`, error);
+}
 
-  // Attempt to send the embed as a DM
-  try {
-    await interaction.user.send({
-      content: `Hi <@${interaction.user.id}>, here are the details of your healing request:`,
-      embeds: [embed],
-    });
-  } catch (error) {
-    handleError(error, 'blightHandler.js');
-
-    console.error(`Failed to send DM to user ${interaction.user.id}:`, error);
-  }
 } catch (error) {
     handleError(error, 'blightHandler.js');
 
@@ -421,9 +426,14 @@ if (submission.taskType === 'item') {
 
   await interaction.editReply({ embeds: [embed], ephemeral: false });
 
-  deleteSubmissionFromStorage(submissionId);
-  saveBlightSubmissions(blightSubmissions);
-  return;
+// **CLEAR THE BLIGHT STATUS**
+character.blighted   = false;
+character.blightStage = 0;
+await character.save();
+
+deleteSubmissionFromStorage(submissionId);
+saveBlightSubmissions(blightSubmissions);
+return;
 }
 
 
