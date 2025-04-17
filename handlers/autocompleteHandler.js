@@ -18,7 +18,7 @@ const { capitalize, capitalizeFirstLetter } = require('../modules/formattingModu
 const { getGeneralJobsPage, getJobPerk, getVillageExclusiveJobs } = require('../modules/jobsModule');
 const { getAllVillages } = require('../modules/locationsModule');
 const { modCharacters } = require('../modules/modCharacters');
-const { petEmojiMap } = require('../modules/petModule');
+const { petEmojiMap, normalPets, specialPets } = require('../modules/petModule');
 const { getAllRaces } = require('../modules/raceModule');
 
 // ------------------- Database Models -------------------
@@ -171,14 +171,35 @@ async function handleAutocomplete(interaction) {
       ) {
         await handleLookupAutocomplete(interaction, focusedOption);
   
-      // ------------------- MODGIVE Commands -------------------
-      } else if (
-        commandName === 'modgive' &&
-        (focusedOption.name === 'character' || focusedOption.name === 'charactername')
-      ) {
-        await handleModGiveCharacterAutocomplete(interaction, focusedOption);
-      } else if (commandName === 'modgive' && focusedOption.name === 'item') {
-        await handleModGiveItemAutocomplete(interaction, focusedOption);
+      // ------------------- MOD Commands -------------------
+    } else if (
+      commandName === 'mod' &&
+      interaction.options.getSubcommand() === 'give' &&
+      focusedOption.name === 'character'
+    ) {
+      // /mod give — character autocomplete
+      await handleModGiveCharacterAutocomplete(interaction, focusedOption);
+    } else if (
+      commandName === 'mod' &&
+      interaction.options.getSubcommand() === 'give' &&
+      focusedOption.name === 'item'
+    ) {
+      // /mod give — item autocomplete
+      await handleModGiveItemAutocomplete(interaction, focusedOption);
+    } else if (
+      commandName === 'mod' &&
+      interaction.options.getSubcommand() === 'petlevel' &&
+      focusedOption.name === 'character'
+    ) {
+      // /mod petlevel — character autocomplete (needs a new helper)
+      await handleModCharacterAutocomplete(interaction, focusedOption);
+    } else if (
+      commandName === 'mod' &&
+      interaction.options.getSubcommand() === 'petlevel' &&
+      focusedOption.name === 'petname'
+    ) {
+      // /mod petlevel — pet-name autocomplete
+      await handlePetNameAutocomplete(interaction, focusedOption);
   
       // ------------------- MOUNT/STABLE Commands -------------------
       } else if (
@@ -193,27 +214,19 @@ async function handleAutocomplete(interaction) {
         await handleMountNameAutocomplete(interaction, focusedOption);
 
       // ------------------- PET Commands -------------------
-      if (commandName === 'pet') {
-        if (focusedOption.name === 'charactername') {
-          await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, commandName);
-          return;
-        }
-      
-        if (focusedOption.name === 'petname') {
-          await handlePetNameAutocomplete(interaction, focusedOption);
-          return;
-        }
-      
-        if (focusedOption.name === 'species') {
-          await handlePetSpeciesAutocomplete(interaction, focusedOption);
-          return;
-        }
-      
-        if (focusedOption.name === 'rolltype') {
-          await handlePetRollTypeAutocomplete(interaction, focusedOption);
-          return;
-        }
+    } else if (commandName === 'pet') {
+      if (focusedOption.name === 'charactername') {
+        await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, commandName);
+      } else if (focusedOption.name === 'petname') {
+        await handlePetNameAutocomplete(interaction, focusedOption);
+      } else if (focusedOption.name === 'species') {
+        await handlePetSpeciesAutocomplete(interaction, focusedOption);
+      } else if (focusedOption.name === 'rolltype') {
+        await handlePetRollTypeAutocomplete(interaction, focusedOption);
+      } else {
+        await interaction.respond([]);
       }
+      return;
       
       // ------------------- SHOPS Commands -------------------
       } else if (commandName === 'shops' && focusedOption.name === 'itemname') {
@@ -1587,15 +1600,25 @@ async function handleVendorItemAutocomplete(interaction, focusedOption) {
 
     
         // ------------------- Pet Species Autocomplete -------------------
-    async function handlePetSpeciesAutocomplete(interaction, focusedOption) {
-      const speciesList = Object.keys(petEmojiMap);
-      const choices = speciesList.map(species => ({
-        name: species,
-        value: species,
-      }));
-    
-      await respondWithFilteredChoices(interaction, focusedOption, choices);
-    }
+        async function handlePetSpeciesAutocomplete(interaction, focusedOption) {
+          // grab the category they've already selected (defaults to 'normal')
+          const category = interaction.options.getString('category') || 'normal';
+        
+          // choose only the normal or special species
+          const speciesList = category === 'special'
+            ? Object.keys(specialPets)
+            : Object.keys(normalPets);
+        
+          // build your choices array
+          const choices = speciesList.map(species => ({
+            name: species,
+            value: species,
+          }));
+        
+          // let your helper filter & respond
+          await respondWithFilteredChoices(interaction, focusedOption, choices);
+        }
+        
     
         // ------------------- Pet Roll Type Autocomplete -------------------
     async function handlePetRollTypeAutocomplete(interaction, focusedOption) {

@@ -136,15 +136,6 @@ module.exports = {
               { name: 'Sentinel', value: 'Sentinel' },
               { name: 'Tracker', value: 'Tracker' }
             ))
-        .addIntegerOption(option =>
-          option.setName('level')
-            .setDescription('Select the starting level of the pet')
-            .setRequired(true)
-            .addChoices(
-              { name: '1', value: 1 },
-              { name: '2', value: 2 },
-              { name: '3', value: 3 }
-            ))
         .addAttachmentOption(option =>
           option.setName('image')
             .setDescription('Upload an image of the pet (optional)')
@@ -194,8 +185,12 @@ module.exports = {
       // ------------------- Retrieve Command Options -------------------
       // Extract the user's ID, character name, pet name, and the subcommand.
       const userId = interaction.user.id;
-      const characterName = interaction.options.getString('charactername');
-      const petName = interaction.options.getString('petname');
+
+      // strip off any " – village – job" suffix if someone pastes the full label
+      const rawCharacter = interaction.options.getString('charactername');
+      const characterName = rawCharacter.split(' - ')[0];
+      
+      const petName    = interaction.options.getString('petname');
       const subcommand = interaction.options.getSubcommand();
 
       // ------------------- Fetch Character Data -------------------
@@ -224,7 +219,6 @@ module.exports = {
         // Get species, category, starting level, pet type, and optional image attachment.
         const species = interaction.options.getString('species');
         const category = interaction.options.getString('category');
-        const level = interaction.options.getInteger('level');
         const petType = interaction.options.getString('pettype');
         const imageAttachment = interaction.options.getAttachment('image');
 
@@ -305,23 +299,21 @@ module.exports = {
           }
           return interaction.reply(`✅ **Updated pet \`${petName}\` with new details.**`);
         } else {
-          // ------------------- Add New Pet to the Character -------------------
-          await addPetToCharacter(character._id, petName, species, inferredSize, level, petType, petImageUrl);
-          const petTypeData = getPetTypeData(petType);
-          const newPet = await Pet.create({
-            owner: character._id,
-            name: petName,
-            species: species,
-            petType: petType,
-            level: level,
-            rollsRemaining: 1,    // Default rolls remaining.
-            owner: character._id,
-            imageUrl: petImageUrl || '',
-            rollCombination: petTypeData.rollCombination,
-            tableDescription: petTypeData.description
-          });
-          // Update the character's current active pet.
-          await Character.findByIdAndUpdate(character._id, { currentActivePet: newPet._id });
+        // ------------------- Add New Pet to the Character -------------------
+        await addPetToCharacter(character._id, petName, species, inferredSize, level, petType, petImageUrl);
+        const petTypeData = getPetTypeData(petType);
+        const newPet = await Pet.create({
+          ownerName: character.name,
+          owner: character._id,
+          name: petName,
+          species,
+          petType,
+          level: 0,           
+          rollsRemaining: 0,
+          imageUrl: petImageUrl || '',
+          rollCombination: petTypeData.rollCombination,
+          tableDescription: petTypeData.description
+        });
 
           // ------------------- Build and Send Success Embed for Adding Pet -------------------
           const rollsDisplay = '🔔'.repeat(newPet.rollsRemaining) + '🔕'.repeat(newPet.level - newPet.rollsRemaining);
