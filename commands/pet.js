@@ -176,6 +176,8 @@ module.exports = {
             .setDescription('Enter the pet’s name to retire')
             .setRequired(true)
             .setAutocomplete(true))
+
+            // ------------------- Subcommand: View -------------------
     ),
 
   // ------------------- Command Execution Function -------------------
@@ -343,31 +345,37 @@ module.exports = {
       }
 
       // ------------------- Subcommand: Edit Pet Image -------------------
-      // This branch handles updating the image of an existing pet.
-      if (subcommand === 'edit') {
-        // Retrieve the image attachment.
-        const imageAttachment = interaction.options.getAttachment('image');
-        if (!existingPet) {
-          return interaction.reply('❌ **Pet `' + petName + '` not found. Please add it first with `/pet add`.**');
-        }
-        if (!imageAttachment) {
-          return interaction.reply('❌ **Please upload an image to update your pet.**');
-        }
-        let petImageUrl = '';
-        try {
-          petImageUrl = await uploadPetImage(imageAttachment.url, petName);
-          console.log(`[pet.js]: logs - Image uploaded successfully. URL: ${petImageUrl}`);
-        } catch (error) {
-    handleError(error, 'pet.js');
+// This branch handles updating the image of an existing pet.
+if (subcommand === 'edit') {
+  // Retrieve the image attachment.
+  const imageAttachment = interaction.options.getAttachment('image');
+  if (!imageAttachment) {
+    return interaction.reply('❌ **Please upload an image to update your pet.**');
+  }
 
-          console.error(`[pet.js]: logs - Error uploading image: ${error.message}`);
-          return interaction.reply('❌ **Failed to upload image. Please try again later.**');
-        }
-        // Update the pet's image and save changes.
-        existingPet.imageUrl = petImageUrl;
-        await updatePetToCharacter(character._id, petName, existingPet);
-        return interaction.reply(`✅ **Updated the image for pet \`${petName}\`.**`);
-      }
+  // Verify pet exists in the database
+  const petDoc = await Pet.findOne({ name: petName, owner: character._id });
+  if (!petDoc) {
+    return interaction.reply(`❌ **Pet \`${petName}\` not found. Please add it first with \`/pet add\`.**`);
+  }
+
+  // Attempt to upload the new image
+  let petImageUrl = '';
+  try {
+    petImageUrl = await uploadPetImage(imageAttachment.url, petName);
+    console.log(`[pet.js]: logs - Image uploaded successfully. URL: ${petImageUrl}`);
+  } catch (error) {
+    handleError(error, 'pet.js');
+    console.error(`[pet.js]: logs - Error uploading image: ${error.message}`);
+    return interaction.reply('❌ **Failed to upload image. Please try again later.**');
+  }
+
+  // Update the pet's image and save changes
+  petDoc.imageUrl = petImageUrl;
+  await updatePetToCharacter(character._id, petName, petDoc);
+  return interaction.reply(`✅ **Updated the image for pet \`${petName}\`.**`);
+}
+
 
       // ------------------- Verify Pet Existence for Roll, Upgrade, and Retire -------------------
       // Determine if the pet exists in the Pet collection by checking its ID or name.
