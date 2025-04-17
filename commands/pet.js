@@ -315,6 +315,13 @@ module.exports = {
           tableDescription: petTypeData.description
         });
 
+        // ———————————————— NEW: set this pet as the character's active pet ————————————————
+        await Character.findByIdAndUpdate(
+          character._id,
+          { currentActivePet: newPet._id }
+        );
+
+
           // ------------------- Build and Send Success Embed for Adding Pet -------------------
           const rollsDisplay = '🔔'.repeat(newPet.rollsRemaining) + '🔕'.repeat(newPet.level - newPet.rollsRemaining);
           const successEmbed = new EmbedBuilder()

@@ -1425,54 +1425,63 @@ async function handleVendorItemAutocomplete(interaction, focusedOption) {
 // ============================================================================
 // MOD COMMANDS
 // ============================================================================
-// This section handles autocomplete interactions for mod-related commands.
-// It provides suggestions for mod characters and mod items for modgive.
+// This section handles autocomplete interactions for the “/mod” command.
+// It provides suggestions for the “give” and “petlevel” subcommands.
 
-    // ------------------- Mod Give Character Autocomplete -------------------
-    // Provides autocomplete suggestions for all mod characters.
-    async function handleModGiveCharacterAutocomplete(interaction, focusedOption) {
-      try {
-        // Map modCharacters to autocomplete choices
-        const choices = modCharacters.map(character => ({
-          name: character.name, // Character name for display
-          value: character.name, // Character name for value
-        }));
-    
-        // Respond with filtered character choices
-        await respondWithFilteredChoices(interaction, focusedOption, choices);
-      } catch (error) {
+// ------------------- /mod give: Character Autocomplete -------------------
+async function handleModGiveCharacterAutocomplete(interaction, focusedOption) {
+  try {
+    // Map modCharacters to autocomplete choices
+    const choices = modCharacters.map(character => ({
+      name: character.name, // Character name for display
+      value: character.name, // Character name for value
+    }));
+    // Respond with filtered character choices
+    await respondWithFilteredChoices(interaction, focusedOption, choices);
+  } catch (error) {
     handleError(error, 'autocompleteHandler.js');
+    console.error('[handleModGiveCharacterAutocomplete]: Error:', error);
+    await safeRespondWithError(interaction);
+  }
+}
 
-        console.error('[handleModGiveCharacterAutocomplete]: Error:', error);
-        await safeRespondWithError(interaction);
-      }
-    }
-    
-        // ------------------- Mod Give Item Autocomplete -------------------
-        // Provides autocomplete suggestions for items in a mod character's inventory.
-    async function handleModGiveItemAutocomplete(interaction, focusedOption) {
-      try {
-        const characterName = interaction.options.getString('character');
-        if (!characterName) return await interaction.respond([]);
-    
-        // Fetch mod character details
-        const character = getModCharacterByName(characterName);
-        if (!character) return await interaction.respond([]);
-    
-        // Map mod character's inventory to autocomplete choices
-        const choices = character.inventory.map(item => ({
-          name: `${item.name} - Qty: ${item.quantity}`, // Item name with quantity
-          value: item.name, // Item name for value
-        }));
-    
-        await respondWithFilteredChoices(interaction, focusedOption, choices);
-      } catch (error) {
+// ------------------- /mod give: Item Autocomplete -------------------
+async function handleModGiveItemAutocomplete(interaction, focusedOption) {
+  try {
+    const characterName = interaction.options.getString('character');
+    if (!characterName) return await interaction.respond([]);
+    // Fetch mod character details
+    const character = getModCharacterByName(characterName);
+    if (!character) return await interaction.respond([]);
+    // Map mod character's inventory to autocomplete choices
+    const choices = character.inventory.map(item => ({
+      name: `${item.name} - Qty: ${item.quantity}`, // Item name with quantity
+      value: item.name, // Item name for value
+    }));
+    await respondWithFilteredChoices(interaction, focusedOption, choices);
+  } catch (error) {
     handleError(error, 'autocompleteHandler.js');
+    console.error('[handleModGiveItemAutocomplete]: Error:', error);
+    await safeRespondWithError(interaction);
+  }
+}
 
-        console.error('[handleModGiveItemAutocomplete]: Error:', error);
-        await safeRespondWithError(interaction);
-      }
-    }   
+// ------------------- /mod petlevel: Character Autocomplete -------------------
+async function handleModCharacterAutocomplete(interaction, focusedOption) {
+  try {
+    // Provides autocomplete suggestions for all characters (admin can target any)
+    const characters = await fetchAllCharacters(); // make sure to import this from characterService
+    const choices = characters.map(c => ({
+      name: c.name,
+      value: c.name,
+    }));
+    await respondWithFilteredChoices(interaction, focusedOption, choices);
+  } catch (error) {
+    handleError(error, 'autocompleteHandler.js');
+    console.error('[handleModCharacterAutocomplete]: Error:', error);
+    await safeRespondWithError(interaction);
+  }
+}
 
 // ============================================================================
 // MOUNT & STABLE COMMANDS
@@ -1562,38 +1571,50 @@ async function handleVendorItemAutocomplete(interaction, focusedOption) {
     // ------------------- Pet Name Autocomplete -------------------
     async function handlePetNameAutocomplete(interaction, focusedOption) {
       const userId = interaction.user.id;
-      const fullCharacterName = interaction.options.getString('charactername');
-      const characterName = fullCharacterName.split(' - ')[0];
     
-      console.log(`[autocompleteHandler.js]: logs - Full charactername input: "${fullCharacterName}", Extracted name: "${characterName}"`);
-    
-      if (!characterName) {
-        console.log(`[autocompleteHandler.js]: logs - No charactername provided. Returning empty response.`);
+      // Fetch the raw string; if null, bail out immediately
+      const rawInput = interaction.options.getString('charactername');
+      if (!rawInput) {
+        console.log('[autocompleteHandler.js]: logs - No charactername provided; responding with empty list.');
         return await interaction.respond([]);
       }
     
+      // Safely split on ' - ' even if the label includes extra info
+      const characterName = rawInput.split(' - ')[0];
+    
+      console.log(
+        `[autocompleteHandler.js]: logs - Raw input: "${rawInput}", Extracted characterName: "${characterName}"`
+      );
+    
+      // If extraction yields an empty string, also bail
+      if (!characterName) {
+        console.log(
+          '[autocompleteHandler.js]: logs - Extracted characterName is empty; responding with empty list.'
+        );
+        return await interaction.respond([]);
+      }
+    
+      // …rest of logic remains unchanged…
       const character = await fetchCharacterByNameAndUserId(characterName, userId);
       if (!character) {
-        console.log(`[autocompleteHandler.js]: logs - No character found for name "${characterName}" and user "${userId}".`);
+        console.log(
+          `[autocompleteHandler.js]: logs - No character found for "${characterName}" and user "${userId}".`
+        );
         return await interaction.respond([]);
       }
-    
-      console.log(`[autocompleteHandler.js]: logs - Found character "${character.name}" with _id "${character._id}" for user "${userId}".`);
     
       const pets = await Pet.find({ owner: character._id, status: 'active' }).lean();
-    
       if (!pets.length) {
-        console.log(`[autocompleteHandler.js]: logs - No pets found for character "${character.name}" (_id: ${character._id}).`);
+        console.log(
+          `[autocompleteHandler.js]: logs - No active pets for "${characterName}".`
+        );
         return await interaction.respond([]);
       }
-    
-      console.log(`[autocompleteHandler.js]: logs - Found pets for "${character.name}": ${pets.map(p => p.name).join(', ')}`);
     
       const choices = pets.map(pet => ({
         name: pet.name,
         value: pet._id.toString(),
       }));
-    
       await respondWithFilteredChoices(interaction, focusedOption, choices);
     }
     
