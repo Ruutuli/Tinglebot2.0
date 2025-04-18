@@ -1,109 +1,120 @@
 const { handleError } = require('../utils/globalErrorHandler');
 
 class BaseService {
-  constructor(model, svc_name) {
+    constructor(model, serviceName) {
     this.model = model;
-    this.svc_name = svc_name;
+    this.serviceName = serviceName;
   }
 
-  async one(qry, opt = {}) {
+    async findOne(query, options = {}) {
     try {
-      const res = await this.model.findOne(qry, opt.projection || {})
-        .lean(opt.lean !== false)
+      const result = await this.model.findOne(query, options.projection || {})
+        .lean(options.lean !== false)
         .exec();
       
-      if (!res && opt.throwIfNotFound) {
-        throw new Error(`${opt.entityName || 'Document'} not found`);
+      if (!result && options.throwIfNotFound) {
+        throw new Error(`${options.entityName || 'Document'} not found`);
       }
       
-      return res;
-    } catch (err) {
-      handleError(err, this.svc_name);
-      console.error(`[${this.svc_name}]: Error in one:`, err.message);
-      throw err;
+      return result;
+    } catch (error) {
+      handleError(error, this.serviceName);
+      console.error(`[${this.serviceName}]: Error in findOne:`, error.message);
+      throw error;
     }
   }
 
-  async all(qry = {}, opt = {}) {
+    async find(query = {}, options = {}) {
     try {
-      let qb = this.model.find(qry, opt.projection || {});
+      let queryBuilder = this.model.find(query, options.projection || {});
       
-      if (opt.sort) qb = qb.sort(opt.sort);
-      if (opt.limit) qb = qb.limit(opt.limit);
-      if (opt.skip) qb = qb.skip(opt.skip);
-      if (opt.populate) qb = qb.populate(opt.populate);
+      if (options.sort) {
+        queryBuilder = queryBuilder.sort(options.sort);
+      }
       
-      return await qb.lean(opt.lean !== false).exec();
-    } catch (err) {
-      handleError(err, this.svc_name);
-      console.error(`[${this.svc_name}]: Error in all:`, err.message);
-      throw err;
+      if (options.limit) {
+        queryBuilder = queryBuilder.limit(options.limit);
+      }
+      
+      if (options.skip) {
+        queryBuilder = queryBuilder.skip(options.skip);
+      }
+      
+      if (options.populate) {
+        queryBuilder = queryBuilder.populate(options.populate);
+      }
+      
+      return await queryBuilder.lean(options.lean !== false).exec();
+    } catch (error) {
+      handleError(error, this.serviceName);
+      console.error(`[${this.serviceName}]: Error in find:`, error.message);
+      throw error;
     }
   }
 
-  async add(dat) {
+    async create(data) {
     try {
-      const doc = new this.model(dat);
-      await doc.save();
-      return doc;
-    } catch (err) {
-      handleError(err, this.svc_name);
-      console.error(`[${this.svc_name}]: Error in add:`, err.message);
-      throw err;
+      const newDocument = new this.model(data);
+      await newDocument.save();
+      return newDocument;
+    } catch (error) {
+      handleError(error, this.serviceName);
+      console.error(`[${this.serviceName}]: Error in create:`, error.message);
+      throw error;
     }
   }
 
-  async mod(id, dat, opt = {}) {
+    async updateById(id, updateData, options = {}) {
     try {
       return await this.model.findByIdAndUpdate(
         id, 
-        dat, 
-        { new: true, ...opt }
-      ).lean(opt.lean !== false).exec();
-    } catch (err) {
-      handleError(err, this.svc_name);
-      console.error(`[${this.svc_name}]: Error in mod:`, err.message);
-      throw err;
+        updateData, 
+        { new: true, ...options }
+      ).lean(options.lean !== false).exec();
+    } catch (error) {
+      handleError(error, this.serviceName);
+      console.error(`[${this.serviceName}]: Error in updateById:`, error.message);
+      throw error;
     }
   }
 
-  async mny(qry, dat, opt = {}) {
+    async updateMany(query, updateData, options = {}) {
     try {
-      return await this.model.updateMany(qry, dat, opt).exec();
-    } catch (err) {
-      handleError(err, this.svc_name);
-      console.error(`[${this.svc_name}]: Error in mny:`, err.message);
-      throw err;
+      return await this.model.updateMany(query, updateData, options).exec();
+    } catch (error) {
+      handleError(error, this.serviceName);
+      console.error(`[${this.serviceName}]: Error in updateMany:`, error.message);
+      throw error;
     }
   }
 
-  async del(id) {
+   async deleteById(id) {
     try {
       return await this.model.findByIdAndDelete(id).lean().exec();
-    } catch (err) {
-      handleError(err, this.svc_name);
-      console.error(`[${this.svc_name}]: Error in del:`, err.message);
-      throw err;
+    } catch (error) {
+      handleError(error, this.serviceName);
+      console.error(`[${this.serviceName}]: Error in deleteById:`, error.message);
+      throw error;
     }
   }
 
-  async rem(qry) {
+    async deleteMany(query) {
     try {
-      return await this.model.deleteMany(qry).exec();
-    } catch (err) {
-      handleError(err, this.svc_name);
-      console.error(`[${this.svc_name}]: Error in rem:`, err.message);
-      throw err;
+      return await this.model.deleteMany(query).exec();
+    } catch (error) {
+      handleError(error, this.serviceName);
+      console.error(`[${this.serviceName}]: Error in deleteMany:`, error.message);
+      throw error;
     }
   }
 
-  async cnt(qry = {}) {
+    async count(query = {}) {
     try {
-      return await this.model.countDocuments(qry).exec();
-    } catch (err) {
-      handleError(err, this.svc_name);
-      console.error(`[${this.svc_name}]: Error in cnt:`, err.message);
-      throw err;
+      return await this.model.countDocuments(query).exec();
+    } catch (error) {
+      handleError(error, this.serviceName);
+      console.error(`[${this.serviceName}]: Error in count:`, error.message);
+      throw error;
     }
   }
 }
