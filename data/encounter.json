@@ -95,5 +95,18 @@
     "tameStatus": false,
     "traits": {},
     "totalSpent": 0
+  },
+  "c85aeee2": {
+    "users": [],
+    "mountType": "Mountain Goat",
+    "rarity": "To be determined",
+    "mountLevel": "Basic",
+    "mountStamina": "To be determined",
+    "environment": "To be determined",
+    "village": "Inariko",
+    "actions": [],
+    "tameStatus": false,
+    "traits": {},
+    "totalSpent": 0
   }
 }

@@ -43,32 +43,6 @@
     "status": "pending",
     "createdAt": "2025-03-26T19:19:56.453Z"
   },
-  "B619780": {
-    "submissionId": "B619780",
-    "userId": "308795936530759680",
-    "characterName": "Sable",
-    "healerName": "Aemu",
-    "taskType": "item",
-    "taskDescription": "**Aemu: Oracle of Power** stumbles over her words, clearly a bit flustered. \"Oh, um! Okay, so I need these things... Ah, Hylia, what were they called again... OKAY, OKAY, SO...\"\n\n- That orangey gem! You know, the shiny one? I need **5 of those!**\n- Oh, or maybe... the ancient one? It’s more of a relic. I need **1 of those.**\n- A reddish pearl... yes, that's it! I just need **1 of those.**\n- Oh! Or a feather, but not just any feather... the one from the Goddess herself! I need **1 of those.**\n- And if you can’t find any of that, how about something that fell from the stars? I need **1 of those!**",
-    "healingStage": 2,
-    "status": "pending",
-    "createdAt": "2025-04-14T00:52:54.366Z"
-  },
-  "W195618": {
-    "submissionId": "W195618",
-    "userId": "271107732289880064",
-    "username": "matagy",
-    "userAvatar": "https://cdn.discordapp.com/avatars/271107732289880064/6a2f1dfb8892e802ad9d9f3c11ad8dd7.webp",
-    "category": "writing",
-    "title": "this is a test",
-    "wordCount": 582,
-    "finalTokenAmount": 58,
-    "link": "https://docs.google.com/document/d/1ns8mspLiNjkWPj-ABuyAFMH9ea-mYiKwLpQcOmKVB1s/edit?tab=t.0",
-    "description": "testing",
-    "questEvent": "N/A",
-    "tokenTracker": "https://docs.google.com/spreadsheets/d/1rKKt0RVy13mcnOFiYh7BSRRNoECA2K2Fjf4A784Maiw/edit?usp=sharing",
-    "messageUrl": "https://discord.com/channels/1305484048063529002/1317243912158707742/1362222397805301760"
-  },
   "B769930": {
     "submissionId": "B769930",
     "userId": "322920629944975360",

@@ -249,7 +249,7 @@ client.on('threadCreate', async thread => {
     if (!starterMessage.content.replace(/\*/g, '').startsWith('Command:')) return;
 
     const threadName = thread.name;
-    const username = starterMessage.author.tag;
+    const username = starterMessage.author?.tag || starterMessage.author?.username || `User-${starterMessage.author?.id}`;
     const content = starterMessage.content;
     const createdAt = starterMessage.createdAt;
     const images = starterMessage.attachments.map(attachment => attachment.url);
@@ -295,7 +295,7 @@ client.on('messageCreate', async message => {
 
   try {
     const threadName = message.channel.name;
-    const username = message.author.tag;
+    const username = message.author?.tag || message.author?.username || `User-${message.author?.id}`;
     const content = message.content;
     const createdAt = message.createdAt;
     const images = message.attachments.map(attachment => attachment.url);

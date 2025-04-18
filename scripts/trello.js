@@ -1,10 +1,13 @@
+// ============================================================================
 // ------------------- Standard Libraries -------------------
 const axios = require('axios');
 const path = require('path');
 
+// ============================================================================
 // ------------------- Utilities -------------------
 const { handleError } = require('../utils/globalErrorHandler');
 
+// ============================================================================
 // ------------------- Environment Variables -------------------
 const TRELLO_API_KEY = process.env.TRELLO_API_KEY;
 const TRELLO_TOKEN = process.env.TRELLO_TOKEN;
@@ -56,7 +59,7 @@ async function createTrelloCard({ threadName, username, content, images, created
 
   // ------------------- Label Matching by Card Type -------------------
   if (overrideListId === TRELLO_LOG) {
-    // 📝 Console Logs — match exact file name (e.g., itemService.js)
+    // Match exact file name from "file.js - Console Log Report"
     const fileBase = threadName.split(' - ')[0].toLowerCase().trim();
     for (const label of labels) {
       if (label.name.toLowerCase() === fileBase) {
@@ -64,12 +67,10 @@ async function createTrelloCard({ threadName, username, content, images, created
         break;
       }
     }
-
   } else if (overrideListId === TRELLO_WISHLIST) {
-    // ⭐ Wishlist — match exact Feature Name
+    // Match label from **Feature Name:**
     const match = content.match(/\*\*Feature Name:\*\*\s*(.+)/i);
     const featureLabel = match ? match[1].toLowerCase().trim() : null;
-
     if (featureLabel) {
       for (const label of labels) {
         if (label.name.toLowerCase() === featureLabel) {
@@ -78,11 +79,9 @@ async function createTrelloCard({ threadName, username, content, images, created
         }
       }
     }
-
   } else {
-    // 🐞 Debug/Bug Reports — fuzzy match `/command` → `command.js`
+    // Match command-style names like /loot => loot.js
     let baseName = threadName.trim().toLowerCase();
-
     if (baseName.startsWith('/')) {
       baseName = baseName.split(/\s+/)[0];
       baseName = `${baseName.slice(1)}.js`;
@@ -108,17 +107,31 @@ async function createTrelloCard({ threadName, username, content, images, created
     }
   }
 
+  // ------------------- Format Name and Description -------------------
+  let formattedName = threadName;
+  let formattedDesc = content;
+
+  if (overrideListId === TRELLO_LIST_ID) {
+    formattedName = `${threadName} - ${username}`;
+    formattedDesc = `**Submitted By:** ${username}\n\n${content}`;
+  }
+
+  // ------------------- Build Card Payload -------------------
   const cardData = {
-    name: `${threadName}`,
-    desc: content,
+    name: formattedName,
+    desc: formattedDesc,
     idList: overrideListId || TRELLO_LIST_ID,
     start: new Date(createdAt).toISOString(),
-    due: dueDate.toISOString(),
     idLabels: matchedLabels,
     key: TRELLO_API_KEY,
     token: TRELLO_TOKEN,
   };
 
+  if (overrideListId !== TRELLO_WISHLIST) {
+    cardData.due = dueDate.toISOString();
+  }
+
+  // ------------------- Post Card and Attachments -------------------
   try {
     const response = await axios.post('https://api.trello.com/1/cards', cardData);
     const cardId = response.data.id;
@@ -150,11 +163,10 @@ async function createTrelloCard({ threadName, username, content, images, created
 // ------------------- Log Error to Trello -------------------
 async function logErrorToTrello(errorMessage, source = 'Unknown Source') {
   const now = new Date().toISOString();
-  const baseFile = path.basename(source);
 
   const errorCard = {
-    threadName: `${baseFile} - Console Log Report`,
-    username: baseFile,
+    threadName: `${source} - Console Log Report`,
+    username: source,
     content: `**Error Message:**\n\`\`\`${errorMessage}\`\`\`\n\n**Timestamp:** ${now}`,
     images: [],
     createdAt: now,
