@@ -19,7 +19,7 @@ const { resetSubmissionState, calculateTokens, calculateWritingTokens } = requir
 const { getBaseSelectMenu } = require('../utils/menuUtils');
 const { submissionStore, saveSubmissionToStorage } = require('../utils/storage');
 const { uploadSubmissionImage } = require('../utils/uploadUtils');
-const { createArtSubmissionEmbed, createWritingSubmissionEmbed } = require('../embeds/mechanicEmbeds');
+const { createArtSubmissionEmbed, createWritingSubmissionEmbed } = require('../embeds/embeds.js');
 const User = require('../models/UserModel'); 
 const { generateUniqueId } = require('../utils/uniqueIdUtils');
 
