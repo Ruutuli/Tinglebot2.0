@@ -20,7 +20,7 @@ const ItemModel = require('../models/ItemModel');
 
 // ------------------- Embeds -------------------
 // Import the embed utility for displaying character gear.
-const { createCharacterGearEmbed } = require('../embeds/characterEmbeds');
+const { createCharacterGearEmbed } = require('../embeds/embeds.js');
 
 
 // ------------------- Modules -------------------
