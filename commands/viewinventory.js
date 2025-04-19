@@ -6,7 +6,7 @@ const { connectToInventories } = require('../database/connection');
 const { handleAutocomplete } = require('../handlers/autocompleteHandler');
 const { typeColors } = require('../modules/formattingModule');
 const ItemModel = require('../models/ItemModel');
-const { formatItemDetails } = require('../embeds/embedUtils');
+const { formatItemDetails } = require('../embeds/embeds.js');
 
 // ------------------- Constants -------------------
 const ITEMS_PER_PAGE = 25;
