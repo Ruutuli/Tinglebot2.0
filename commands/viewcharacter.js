@@ -2,7 +2,6 @@
 const { SlashCommandBuilder } = require('discord.js');
 const { handleError } = require('../utils/globalErrorHandler');
 const { fetchCharacterByNameAndUserId, fetchCharactersByUserId } = require('../database/characterService');
-const { createCharacterEmbed, createVendorEmbed, createCharacterGearEmbed } = require('../embeds/characterEmbeds');
 const { getJobPerk } = require('../modules/jobsModule');
 const ItemModel = require('../models/ItemModel');
 const Mount = require('../models/MountModel');
