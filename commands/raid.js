@@ -15,7 +15,7 @@ const {
   createMonsterEncounterEmbed,
   createNoEncounterEmbed,
   createKOEmbed,
-} = require('../embeds/mechanicEmbeds');
+} = require('../embeds/embeds.js');
 
 // ------------------- Command Setup -------------------
 
