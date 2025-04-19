@@ -42,7 +42,7 @@ const {
 
 // Embeds
 const {
-  createMonsterEncounterEmbed,  createNoEncounterEmbed,  createKOEmbed,} = require('../embeds/mechanicEmbeds');
+  createMonsterEncounterEmbed,  createNoEncounterEmbed,  createKOEmbed,} = require('../embeds/embeds.js');
 
 // Models
 const { monsterMapping } = require('../models/MonsterModel');
