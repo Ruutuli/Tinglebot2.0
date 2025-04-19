@@ -16,7 +16,7 @@ const { fetchCharacterByNameAndUserId, fetchCharacterByName, getCharacterInvento
 
 // ------------------- Modules -------------------
 // Custom modules for creating embed messages and handling autocomplete.
-const { createTradeEmbed } = require('../embeds/mechanicEmbeds');
+const { createTradeEmbed } = require('../embeds/embeds.js');
 const { handleTradeAutocomplete } = require('../handlers/autocompleteHandler');
 
 
