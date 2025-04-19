@@ -24,7 +24,7 @@ const {
   createStopInInarikoEmbed, 
   createTravelingEmbed, 
   pathEmojis 
-} = require('../embeds/travelEmbeds');
+} = require('../embeds/embeds.js');
 
 
 // ------------------- Handlers -------------------
