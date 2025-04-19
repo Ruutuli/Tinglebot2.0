@@ -8,7 +8,7 @@ const { handleAutocomplete } = require('../handlers/autocompleteHandler');
 const { getCategoryColor } = require('../modules/formattingModule');
 const { getIngredientItems, fetchItemByName, fetchAllItemsAndLogStructure  } = require('../database/itemService');
 const { getCharacterInventoryCollection } = require('../database/characterService');
-const { formatItemDetails } = require('../embeds/embedUtils');
+const { formatItemDetails } = require('../embeds/embeds.js');
 
 // ------------------- Constants -------------------
 const ITEMS_PER_PAGE = 25;
