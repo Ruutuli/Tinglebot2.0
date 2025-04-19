@@ -7,7 +7,7 @@ const { getJobPerk } = require('../modules/jobsModule');
 const ItemModel = require('../models/ItemModel');
 const Mount = require('../models/MountModel');
 const { getMountEmoji, getMountThumbnail } = require('../modules/mountModule');
-const { getCommonEmbedSettings, formatItemDetails, getArticleForItem, DEFAULT_IMAGE_URL, jobActions } = require('../embeds/embedUtils');
+const { getCommonEmbedSettings, formatItemDetails, getArticleForItem, DEFAULT_IMAGE_URL, jobActions } = require('../embeds/embeds.js');
 
 module.exports = {
   // ------------------- Slash command definition -------------------
