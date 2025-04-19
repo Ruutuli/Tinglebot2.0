@@ -12,7 +12,7 @@ const {
   retrieveHealingRequestFromStorage, 
   deleteHealingRequestFromStorage 
 } = require('../utils/storage');
-const { createHealEmbed, createHealingEmbed } = require('../embeds/mechanicEmbeds');
+const { createHealEmbed, createHealingEmbed } = require('../embeds/embeds.js');
 const { validateJobVoucher, activateJobVoucher, fetchJobVoucherItem, deactivateJobVoucher } = require('../modules/jobVoucherModule');
 
 
