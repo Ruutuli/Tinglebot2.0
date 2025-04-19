@@ -26,7 +26,7 @@ const ItemModel = require('../models/ItemModel');
 
 // ------------------- Modules -------------------
 // Custom modules for creating embed messages and handling autocomplete.
-const { createTransferEmbed } = require('../embeds/mechanicEmbeds');
+const { createTransferEmbed } = require('../embeds/embeds.js');
 
 // ------------------- Google Sheets API -------------------
 // Utility functions for working with Google Sheets.
