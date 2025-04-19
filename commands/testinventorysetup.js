@@ -6,7 +6,7 @@ const { connectToTinglebot } = require('../database/connection');
 const { authorizeSheets, appendSheetData, getSheetIdByTitle, readSheetData } = require('../utils/googleSheetsUtils');
 const { extractSpreadsheetId } = require('../utils/validation');
 const Character = require('../models/CharacterModel');
-const { createSetupInstructionsEmbed } = require('../embeds/instructionsEmbeds');
+const { createSetupInstructionsEmbed } = require('../embeds/embeds.js');
 
 module.exports = {
   // ------------------- Command data definition -------------------
