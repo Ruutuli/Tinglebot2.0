@@ -30,7 +30,7 @@ const ItemModel = require('../models/ItemModel');
 const MonsterModel = require('../models/MonsterModel');
 
 // Embeds
-const { createExplorationItemEmbed, createExplorationMonsterEmbed } = require('../embeds/exploringEmbeds');
+const { createExplorationItemEmbed, createExplorationMonsterEmbed } = require('../embeds/embeds.js');
 
 // ------------------- Utility Functions -------------------
 function generateShortId(length = 6) {
