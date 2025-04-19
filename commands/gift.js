@@ -18,7 +18,7 @@ const {
 } = require('../utils/googleSheetsUtils');
 const { v4: uuidv4 } = require('uuid');
 const ItemModel = require('../models/ItemModel');
-const { createGiftEmbed } = require('../embeds/mechanicEmbeds');
+const { createGiftEmbed } = require('../embeds/embeds.js');
 const { handleGiftAutocomplete } = require('../handlers/autocompleteHandler');
 
 // ------------------- Main Gift Command Module -------------------
