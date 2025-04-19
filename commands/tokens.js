@@ -10,7 +10,7 @@ const {
   readSheetData,
 } = require('../utils/googleSheetsUtils'); // Google Sheets utilities
 const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../utils/validation'); // Validation utilities
-const { createTokenTrackerSetupEmbed } = require('../embeds/instructionsEmbeds'); // Embed creation utilities
+const { createTokenTrackerSetupEmbed } = require('../embeds/embeds.js'); // Embed creation utilities
 
 // ------------------- Command data definition for managing tokens -------------------
 module.exports = {
