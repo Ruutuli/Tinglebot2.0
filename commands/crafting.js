@@ -32,7 +32,7 @@ const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../utils/valid
 const { appendSheetData, authorizeSheets } = require('../utils/googleSheetsUtils');
 
 // ------------------- Embed Imports -------------------
-const { createCraftingEmbed } = require('../embeds/mechanicEmbeds');
+const { createCraftingEmbed } = require('../embeds/embeds.js');
 
 // ------------------- Handler Imports -------------------
 const { handleCraftingAutocomplete } = require('../handlers/autocompleteHandler');
