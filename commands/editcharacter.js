@@ -17,7 +17,7 @@ const bucket = require('../config/gcsService'); // Google Cloud Storage service
 const Character = require('../models/CharacterModel'); // Character model
 
 // Embeds
-const { createCharacterEmbed } = require('../embeds/characterEmbeds'); // Embeds for character display
+const { createCharacterEmbed } = require('../embeds/embeds.js'); // Embeds for character display
 
 // Database
 const { connectToTinglebot } = require('../database/connection'); // Database connection
