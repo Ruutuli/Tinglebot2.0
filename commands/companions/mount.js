@@ -7,7 +7,7 @@ const { EmbedBuilder } = require('discord.js'); // Discord.js Embed builder for 
 // ------------------- Import custom modules and handlers -------------------
 const { getEncounterById } = require('../../modules/mountModule'); // Module to retrieve encounter details by ID
 const { proceedWithRoll,handleViewMount  } = require('../../handlers/mountComponentHandler'); // Handler to proceed with rolling logic
-const { fetchCharacterByNameAndUserId } = require('../../database/characterService'); // Import fetchCharacterByNameAndUserId
+const { fetchCharacterByNameAndUserId } = require('../../database/db'); // Import fetchCharacterByNameAndUserId
 
 
 
