@@ -10,7 +10,7 @@ const { SlashCommandBuilder } = require('discord.js');
 const { handleError } = require('../../utils/globalErrorHandler.js');
 // ------------------- Database Services -------------------
 // Import character-related database services for fetching and updating character data.
-const { fetchCharacterByNameAndUserId, getCharacterInventoryCollection, updateCharacterById } = require('../../database/characterService.js');
+const { fetchCharacterByNameAndUserId, getCharacterInventoryCollection, updateCharacterById } = require('../../database/db.js');
 
 
 // ------------------- Database Models -------------------
