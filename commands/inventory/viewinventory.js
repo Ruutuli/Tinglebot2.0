@@ -1,7 +1,7 @@
 // ------------------- Import necessary modules and services -------------------
 const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, StringSelectMenuBuilder } = require('discord.js');
 const { handleError } = require('../../utils/globalErrorHandler.js');
-const { connectToInventories, fetchCharacterById, getCharacterInventoryCollection } = require('../../database/db.js');
+const { fetchCharacterById, getCharacterInventoryCollection } = require('../../database/db.js');
 const { handleAutocomplete } = require('../../handlers/autocompleteHandler.js');
 const { typeColors } = require('../../modules/formattingModule.js');
 const ItemModel = require('../../models/ItemModel.js');
