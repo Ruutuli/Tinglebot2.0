@@ -1,5 +1,3 @@
-const { handleError } = require('../utils/globalErrorHandler');
-
 require('dotenv').config();
 
 /**
