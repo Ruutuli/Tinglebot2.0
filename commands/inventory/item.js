@@ -12,8 +12,7 @@ const { EmbedBuilder } = require('discord.js');
 
 // ------------------- Database Services -------------------
 // Service modules for character and item operations.
-const { fetchCharacterByNameAndUserId, updateCharacterById, getCharacterInventoryCollection } = require('../../database/characterService');
-const { fetchItemByName } = require('../../database/itemService');
+const { fetchCharacterByNameAndUserId, updateCharacterById, getCharacterInventoryCollection,fetchItemByName } = require('../../database/db');
 
 
 // ------------------- Modules -------------------
