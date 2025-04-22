@@ -42,13 +42,6 @@ const failureChances = {
     rare: 80
 };
 
-// ------------------- Success/Failure Chances Based on Tier -------------------
-// Defines the percentage chance of a successful steal based on item tier.
-const successChances = {
-    common: 90,
-    uncommon: 50,
-    rare: 20
-};
 
 // ------------------- Slash Command Builder Setup -------------------
 // Defines the /steal command options.
@@ -198,7 +191,6 @@ module.exports = {
                         const formattedDateTime = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
                         const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
                         // Get flavor text from the NPC module.
-                        const npcFlavor = (NPCs[mappedNPCName] && NPCs[mappedNPCName].flavorText) || '';
                         const logValues = [[
                             thiefCharacter.name,
                             selectedItem.itemName,
@@ -292,11 +284,6 @@ async function getItemEmoji(itemName) {
     return item && item.emoji ? item.emoji : '';
 }
 
-// ------------------- Helper Function: Filter Items by Rarity -------------------
-// Filters items based on their tier.
-function filterItemsByRarity(items, raritySelection) {
-    return items.filter(item => item.tier === raritySelection);
-}
 
 // ------------------- Helper Function: Determine Steal Quantity -------------------
 // Determines quantity based on item's tier.
@@ -465,62 +452,6 @@ function getRandomItemByWeight(items) {
         if (randomValue <= 0) return item;
     }
     return null;
-}
-
-// ------------------- Helper Function: Get Filtered Items by Rarity -------------------
-// Retrieves a character's inventory from the database and filters by rarity.
-async function getFilteredItemsByRarity(targetCharacter, raritySelection) {
-    const targetInventory = await getCharacterInventoryCollection(targetCharacter.name);
-    const items = await targetInventory.find({ characterId: targetCharacter._id }).toArray();
-    
-    if (!items || items.length === 0) {
-        console.error(`[getFilteredItemsByRarity] No inventory items found for character "${targetCharacter.name}".`);
-        return [];
-    }
-    
-    // Filter out items missing an itemId and log a warning.
-    const validItems = items.filter(item => {
-        if (!item.itemId) {
-            console.error(`[getFilteredItemsByRarity] Inventory item is missing itemId: ${JSON.stringify(item)}`);
-            return false;
-        }
-        return true;
-    });
-    
-    const itemIds = validItems.map(item => item.itemId);
-    const dbItems = await fetchItemsByIds(itemIds);
-    
-    const filtered = validItems.map(item => {
-        // Ensure both item.itemId and dbItem._id can be converted to strings
-        let dbItem;
-        try {
-            dbItem = dbItems.find(dbItem => dbItem._id.toString() === item.itemId.toString());
-        } catch (err) {
-    handleError(err, 'steal.js');
-
-            console.error(`[getFilteredItemsByRarity] Error converting itemId to string for item: ${JSON.stringify(item)} - ${err.message}`);
-            return null;
-        }
-        
-        if (!dbItem) {
-            console.error(`[getFilteredItemsByRarity] No matching database item found for inventory item with itemId: ${item.itemId}`);
-            return null;
-        }
-        
-        const rarity = dbItem.itemRarity || 1;
-        const weight = rarityWeights[rarity] || 1;
-        let tier = 'common';
-        if (rarity >= 8) tier = 'rare';
-        else if (rarity >= 5) tier = 'uncommon';
-        
-        return { ...item, weight, tier, itemRarity: rarity };
-    }).filter(item => item && item.tier === raritySelection);
-    
-    if (filtered.length === 0) {
-        console.error(`[getFilteredItemsByRarity] No items of rarity "${raritySelection}" found for character "${targetCharacter.name}". Check that inventory items have valid itemId values.`);
-    }
-    
-    return filtered;
 }
 
 
