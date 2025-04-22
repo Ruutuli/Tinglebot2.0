@@ -31,66 +31,6 @@ const { appendSheetData, authorizeSheets, extractSpreadsheetId } = require('../.
 
 
 
-// ------------------- Helper Functions: Resource Checks and Updates -------------------
-
-// Validates if required items are sufficient for upgrading a village.
-// Checks if the provided item exists within the village materials and if the quantity meets the required amount.
-async function canUpgradeByItems(village, itemName, qty, nextLevel) {
-    const materials = village.materials instanceof Map ? Object.fromEntries(village.materials) : village.materials;
-    const normalizedItemName = Object.keys(materials).find(
-        key => key.toLowerCase() === itemName.trim().toLowerCase()
-    );
-
-    if (!normalizedItemName) {
-        console.warn(`[village.js:logs] canUpgradeByItems: Item "${itemName}" not found in village materials.`);
-        return { success: false, message: `❌ **Item "${itemName}" not found.**` };
-    }
-
-    const material = materials[normalizedItemName];
-    const required = material.required[nextLevel];
-    if (required === undefined) {
-        console.warn(`[village.js:logs] canUpgradeByItems: Item "${normalizedItemName}" is not required for level ${nextLevel}.`);
-        return { success: false, message: `❌ **Item "${itemName}" is not required for level ${nextLevel}.**` };
-    }
-
-    const current = material.current || 0;
-    console.log(`[village.js:logs] canUpgradeByItems: "${normalizedItemName}" current = ${current}, required = ${required}, adding = ${qty}`);
-
-    if (current + qty >= required) {
-        return { success: true };
-    } else {
-        return {
-            success: false,
-            message: `❌ **Insufficient items for upgrade.** ${required - (current + qty)} more "${normalizedItemName}" needed.`,
-        };
-    }
-}
-
-// Checks if the village has enough tokens (including incoming tokens) to upgrade.
-async function canUpgradeByTokens(village, tokens, nextLevel) {
-    const requiredTokens = village.tokenRequirements[nextLevel.toString()] || 0;
-    return (village.currentTokens + tokens) >= requiredTokens;
-}
-
-// Updates the resources (items or tokens) for a village and persists the change to the database.
-async function updateVillageResources(village, type, itemName, qty, nextLevel) {
-    const materials = village.materials instanceof Map ? Object.fromEntries(village.materials) : village.materials;
-    const normalizedItemName = Object.keys(materials).find(
-        key => key.toLowerCase() === itemName.trim().toLowerCase()
-    );
-
-    if (type === 'Items' && normalizedItemName) {
-        const material = village.materials[normalizedItemName];
-        material.current = (material.current || 0) + qty;
-        console.log(`[village.js:logs] updateVillageResources: Updated "${normalizedItemName}" to ${material.current}`);
-    } else if (type === 'Tokens') {
-        village.currentTokens = (village.currentTokens || 0) + qty;
-        console.log(`[village.js:logs] updateVillageResources: Updated tokens to ${village.currentTokens}`);
-    }
-
-    await village.save();
-    return village;
-}
 
 
 
@@ -429,7 +369,6 @@ module.exports = {
                     if (tokenRecord.tokenTracker) {
                         const spreadsheetId = extractSpreadsheetId(tokenRecord.tokenTracker);
                         const auth = await authorizeSheets();
-                        const formattedDateTime = new Date().toISOString();
                         const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
 
                         const tokenRow = [
