@@ -11,10 +11,10 @@ const path = require("path");
 
 const { handleError } = require("../../utils/globalErrorHandler");
 const {
+ getOrCreateToken,
+ updateTokenBalance,
  connectToTinglebot,
  connectToInventories,
-} = require("../../database/connection");
-const {
  fetchCharacterByNameAndUserId,
  fetchCharactersByUserId,
  fetchCharacterById,
@@ -22,11 +22,7 @@ const {
  updateCharacterById,
  deleteCharacterInventoryCollection,
  createCharacterInventory,
-} = require("../../database/characterService");
-const {
- getOrCreateToken,
- updateTokenBalance,
-} = require("../../database/tokenService");
+} = require("../../database/db");
 const {
  getVillageColorByName,
  getVillageEmojiByName,
