@@ -1,9 +1,6 @@
-// ------------------- Import necessary modules -------------------
 const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
 const { handleError } = require('../../utils/globalErrorHandler.js');
 const { v4: uuidv4 } = require('uuid');
-
-// Database Services
 const {
   fetchCharacterByNameAndUserId,
   fetchCharacterByName,
@@ -12,8 +9,6 @@ const {
 } = require('../../database/characterService.js');
 const { getOrCreateToken, updateTokenBalance } = require('../../database/tokenService');
 const { fetchItemByName } = require('../../database/itemService');
-
-// Utils
 const {
   addItemInventoryDatabase,
   removeItemInventoryDatabase,
@@ -24,13 +19,9 @@ const {
   isValidGoogleSheetsUrl,
   extractSpreadsheetId,
 } = require('../../utils/googleSheetsUtils.js');
-
-// Models
 const ItemModel = require('../../models/ItemModel.js');
 const ShopStock = require('../../models/ShopsModel');
 const User = require('../../models/UserModel');
-
-// Modules and Embeds
 const { createGiftEmbed, createTradeEmbed, createTransferEmbed } = require('../../embeds/embeds.js');
 const { hasPerk } = require('../../modules/jobsModule');
 const { 
@@ -40,11 +31,9 @@ const {
   handleTransferAutocomplete 
 } = require('../../handlers/autocompleteHandler.js');
 
-// Trade sessions storage
 const tradeSessions = {};
 const DEFAULT_EMOJI = '🔹';
 
-// ------------------- Helper Functions -------------------
 async function getItemEmoji(itemName) {
   const item = await ItemModel.findOne({ itemName }).select('emoji').exec();
   return item && item.emoji ? item.emoji : DEFAULT_EMOJI;
@@ -67,13 +56,10 @@ function capitalizeWords(str) {
   return str.replace(/\b\w/g, char => char.toUpperCase());
 }
 
-// ------------------- Main Economy Command Module -------------------
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('economy')
     .setDescription('Economy commands for gifts, shops, trades, and transfers')
-    
-    // Gift Subcommand
     .addSubcommand(subcommand =>
       subcommand
         .setName('gift')
@@ -124,15 +110,11 @@ module.exports = {
             .setRequired(false)
         )
     )
-    
-    // Shop View Subcommand
     .addSubcommand(subcommand =>
       subcommand
         .setName('shop-view')
         .setDescription('View items available in the shop')
     )
-    
-    // Shop Buy Subcommand
     .addSubcommand(subcommand =>
       subcommand
         .setName('shop-buy')
@@ -155,8 +137,6 @@ module.exports = {
             .setRequired(true)
         )
     )
-    
-    // Shop Sell Subcommand
     .addSubcommand(subcommand =>
       subcommand
         .setName('shop-sell')
@@ -179,8 +159,6 @@ module.exports = {
             .setRequired(true)
         )
     )
-    
-    // Trade Subcommand
     .addSubcommand(subcommand =>
       subcommand
         .setName('trade')
@@ -236,8 +214,6 @@ module.exports = {
             .setRequired(false)
         )
     )
-    
-    // Transfer Subcommand
     .addSubcommand(subcommand =>
       subcommand
         .setName('transfer')
@@ -289,10 +265,8 @@ module.exports = {
         )
     ),
 
-  // ------------------- Main execute function -------------------
   async execute(interaction) {
     const subcommand = interaction.options.getSubcommand();
-
     switch (subcommand) {
       case 'gift':
         await handleGift(interaction);
@@ -317,11 +291,9 @@ module.exports = {
     }
   },
 
-  // ------------------- Autocomplete handler -------------------
   async autocomplete(interaction) {
     const focusedOption = interaction.options.getFocused(true);
     const subcommand = interaction.options.getSubcommand();
-
     switch (subcommand) {
       case 'gift':
         await handleGiftAutocomplete(interaction, focusedOption);
@@ -343,7 +315,6 @@ module.exports = {
     }
   },
 
-  // ------------------- Button handler for trade -------------------
   buttonHandler: async (interaction) => {
     if (interaction.customId.startsWith('completeTrade-')) {
       const tradeSessionId = interaction.customId.split('-')[1];
@@ -354,15 +325,79 @@ module.exports = {
         return;
       }
 
-      // ... Rest of the trade button handler code ...
+      const { character, tradingWithCharacterName, items } = tradeSession;
+      const userId = interaction.user.id;
+      const userCharacter = await fetchCharacterByNameAndUserId(tradingWithCharacterName, userId);
+
+      if (!userCharacter) {
+        await interaction.reply({ content: `❌ Character not found or does not belong to you.`, ephemeral: true });
+        return;
+      }
+
+      const characterInventoryCollection = await getCharacterInventoryCollection(userCharacter.name);
+      for (let item of items) {
+        const itemInventory = await characterInventoryCollection.findOne({ itemName: { $regex: new RegExp(`^${item.name}$`, 'i') } });
+        if (!itemInventory || itemInventory.quantity < item.quantity) {
+          await interaction.reply({ content: `❌ \`${userCharacter.name}\` does not have enough \`${item.name} - QTY:${itemInventory ? itemInventory.quantity : 0}\` to trade.`, ephemeral: true });
+          return;
+        }
+      }
+
+      for (let item of items) {
+        await removeItemInventoryDatabase(character._id, item.name, item.quantity, interaction);
+        await addItemInventoryDatabase(userCharacter._id, item.name, item.quantity, '', '', removeCircularReferences(interaction), 'trade');
+      }
+
+      for (let item of items) {
+        await removeItemInventoryDatabase(userCharacter._id, item.name, item.quantity, interaction);
+        await addItemInventoryDatabase(character._id, item.name, item.quantity, '', '', removeCircularReferences(interaction), 'trade');
+      }
+
+      const fromItems = await Promise.all(items.map(async item => ({
+        name: item.name,
+        quantity: item.quantity,
+        emoji: await getItemEmoji(item.name)
+      })));
+      const toItems = await Promise.all(items.map(async item => ({
+        name: item.name,
+        quantity: item.quantity,
+        emoji: await getItemEmoji(item.name)
+      })));
+
+      const fromCharacterIcon = character.gearWeapon?.iconURL || '';
+      const toCharacterIcon = userCharacter.gearWeapon?.iconURL || '';
+
+      const updatedEmbedData = await createTradeEmbed(
+        character,
+        userCharacter,
+        fromItems,
+        toItems,
+        interaction.url,
+        fromCharacterIcon,
+        toCharacterIcon
+      );
+
+      updatedEmbedData.setDescription(`✅ Trade between **${character.name}** and **${userCharacter.name}** has been complete!`);
+
+      try {
+        await tradeSession.tradeMessage.edit({
+          content: `.`,
+          embeds: [updatedEmbedData],
+          components: []
+        });
+      } catch (error) {
+        handleError(error, 'trade button handler');
+        console.error(`[trade.js:logs] Error editing trade message:`, error);
+      }
+
+      delete tradeSessions[tradeSessionId];
+      await interaction.followUp({ content: `✅ Trade completed successfully!` });
     }
   },
 };
 
-// ------------------- Gift Handler -------------------
 async function handleGift(interaction) {
   await interaction.deferReply();
-
   const fromCharacterName = interaction.options.getString('fromcharacter');
   const toCharacterName = interaction.options.getString('tocharacter');
   const items = [
@@ -383,7 +418,6 @@ async function handleGift(interaction) {
   const userId = interaction.user.id;
 
   try {
-    // Fetch characters
     const fromCharacter = await fetchCharacterByNameAndUserId(fromCharacterName, userId);
     if (!fromCharacter) {
       await interaction.editReply(`❌ Character \`${fromCharacterName}\` not found or does not belong to you.`);
@@ -397,7 +431,6 @@ async function handleGift(interaction) {
       return;
     }
 
-    // Check inventory sync status
     if (!fromCharacter.inventorySynced) {
       return interaction.editReply({
         content: `❌ **You cannot gift items from \`${fromCharacterName}\` because their inventory is not set up yet. Please use the </testinventorysetup:1306176790095728732> and then </syncinventory:1306176789894266898> commands to initialize the inventory.**`,
@@ -414,7 +447,6 @@ async function handleGift(interaction) {
 
     const toCharacterOwnerId = toCharacter.userId;
 
-    // Check if both characters are in the same village
     if (fromCharacter.currentVillage.trim().toLowerCase() !== toCharacter.currentVillage.trim().toLowerCase()) {
       const fromVillageCapitalized = capitalizeWords(fromCharacter.currentVillage.trim());
       const toVillageCapitalized = capitalizeWords(toCharacter.currentVillage.trim());
@@ -426,7 +458,6 @@ async function handleGift(interaction) {
       return;
     }
 
-    // Check item availability
     const fromInventoryCollection = await getCharacterInventoryCollection(fromCharacter.name);
     let allItemsAvailable = true;
     const unavailableItems = [];
@@ -449,7 +480,6 @@ async function handleGift(interaction) {
       return;
     }
 
-    // Validate Google Sheets URLs
     const fromInventoryLink = fromCharacter.inventory || fromCharacter.inventoryLink;
     const toInventoryLink = toCharacter.inventory || toCharacter.inventoryLink;
 
@@ -463,7 +493,6 @@ async function handleGift(interaction) {
       return;
     }
 
-    // Prepare and sync data with Google Sheets
     const fromSpreadsheetId = extractSpreadsheetId(fromInventoryLink);
     const toSpreadsheetId = extractSpreadsheetId(toInventoryLink);
     const auth = await authorizeSheets();
@@ -502,7 +531,6 @@ async function handleGift(interaction) {
       formattedItems.push({ itemName: name, quantity, itemIcon });
     }
 
-    // Create and send gift embed
     const fromCharacterIcon = fromCharacter.icon || '🧙';
     const toCharacterIcon = toCharacter.icon || '🧙';
     const giftEmbed = createGiftEmbed(fromCharacter, toCharacter, formattedItems, fromInventoryLink, toInventoryLink, fromCharacterIcon, toCharacterIcon);
@@ -513,13 +541,12 @@ async function handleGift(interaction) {
     });
 
   } catch (error) {
-    handleError(error, 'economy.js - gift handler');
+    handleError(error, 'gift.js');
     console.error('❌ Error during gift execution:', error);
     await interaction.editReply('❌ An error occurred while trying to gift the items.');
   }
 }
 
-// ------------------- Shop View Handler -------------------
 async function handleShopView(interaction) {
   try {
     await interaction.deferReply({ ephemeral: true });
@@ -593,18 +620,17 @@ async function handleShopView(interaction) {
       try {
         await interaction.editReply({ components: [] });
       } catch (error) {
-        handleError(error, 'economy.js - shop view');
+        handleError(error, 'shops.js');
         console.error('[shops]: Error clearing buttons:', error);
       }
     });
   } catch (error) {
-    handleError(error, 'economy.js - shop view');
+    handleError(error, 'shops.js');
     console.error('[shops]: Error viewing shop items:', error);
     interaction.editReply('❌ An error occurred while viewing the shop inventory.');
   }
 }
 
-// ------------------- Shop Buy Handler -------------------
 async function handleShopBuy(interaction) {
   try {
     await interaction.deferReply();
@@ -617,6 +643,8 @@ async function handleShopBuy(interaction) {
     const characterName = interaction.options.getString('charactername');
     const itemName = interaction.options.getString('itemname');
     const quantity = interaction.options.getInteger('quantity');
+
+    console.log(`[shops]: Initiating purchase for character: ${characterName}, item: ${itemName}, quantity: ${quantity}`);
 
     const character = await fetchCharacterByName(characterName);
     if (!character) {
@@ -658,7 +686,9 @@ async function handleShopBuy(interaction) {
 
     await ShopStock.updateOne(
       { itemName },
-      { $set: { quantity: parseInt(shopQuantity, 10) - quantity } }
+      {
+        $set: { quantity: parseInt(shopQuantity, 10) - quantity }
+      }
     );
 
     const inventoryLink = character.inventory || 'https://example.com/inventory/default';
@@ -666,7 +696,6 @@ async function handleShopBuy(interaction) {
     const formattedDateTime = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
     const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
 
-    // Log to Token Tracker
     if (user.tokenTracker) {
       const spreadsheetId = extractSpreadsheetId(user.tokenTracker);
       const auth = await authorizeSheets();
@@ -680,7 +709,6 @@ async function handleShopBuy(interaction) {
       await appendSheetData(auth, spreadsheetId, 'loggedTracker!B7:F', [tokenRow]);
     }
 
-    // Log to Inventory Tracker
     if (character.inventory) {
       const spreadsheetId = extractSpreadsheetId(character.inventory);
       const auth = await authorizeSheets();
@@ -719,13 +747,12 @@ async function handleShopBuy(interaction) {
 
     interaction.editReply({ embeds: [purchaseEmbed] });
   } catch (error) {
-    handleError(error, 'economy.js - shop buy');
+    handleError(error, 'shops.js');
     console.error('[shops]: Error buying item:', error);
     interaction.editReply('❌ An error occurred while trying to buy the item.');
   }
 }
 
-// ------------------- Shop Sell Handler -------------------
 async function handleShopSell(interaction) {
   try {
     await interaction.deferReply();
@@ -734,8 +761,11 @@ async function handleShopSell(interaction) {
     const itemName = interaction.options.getString('itemname');
     const quantity = interaction.options.getInteger('quantity');
 
+    console.log(`[shops]: Initiating sale process for character: ${characterName}, item: ${itemName}, quantity: ${quantity}`);
+
     const character = await fetchCharacterByName(characterName);
     if (!character) {
+      console.error(`[shops]: Character not found: ${characterName}`);
       return interaction.editReply('❌ Character not found.');
     }
 
@@ -743,33 +773,54 @@ async function handleShopSell(interaction) {
     const inventoryItem = await inventoryCollection.findOne({ itemName });
 
     if (!inventoryItem || parseInt(inventoryItem.quantity, 10) < quantity) {
+      console.error(`[shops]: Insufficient inventory for item: ${itemName}. Available: ${inventoryItem?.quantity || 0}`);
       return interaction.editReply('❌ Not enough of the item in your inventory to sell.');
     }
 
+    console.log(`[shops]: Inventory item found. Quantity available: ${inventoryItem.quantity}`);
+
     const isCrafted = inventoryItem.obtain.includes('Crafting');
+    console.log(`[shops]: Item crafted: ${isCrafted}`);
+
+    if (!isCrafted) {
+      console.warn(`[shops]: Item not crafted: ${itemName}. Obtain method: ${inventoryItem.obtain}`);
+      console.log(`[shops]: Proceeding to sell item at the standard sell price.`);
+    }
 
     const itemDetails = await ItemModel.findOne({ itemName }).select('buyPrice sellPrice category type image craftingJobs').lean();
     if (!itemDetails) {
+      console.error(`[shops]: Item details not found in database: ${itemName}`);
       return interaction.editReply('❌ Item details not found.');
     }
 
+    console.log(`[shops]: Item details found. Buy price: ${itemDetails.buyPrice}, Sell price: ${itemDetails.sellPrice}, Category: ${itemDetails.category}, Crafting jobs: ${itemDetails.craftingJobs}`);
+
     const normalizedCharacterJob = character.job.toLowerCase();
     const normalizedCraftingJobs = itemDetails.craftingJobs.map(job => job.toLowerCase());
+
     const characterMeetsRequirements = hasPerk(character, 'CRAFTING') && 
-      normalizedCraftingJobs.includes(normalizedCharacterJob);
+        normalizedCraftingJobs.includes(normalizedCharacterJob);
+
+    console.log(`[shops]: Character job: ${character.job}, Crafting jobs (normalized): ${normalizedCraftingJobs}`);
+    console.log(`[shops]: Meets crafting requirements: ${characterMeetsRequirements}`);
 
     const sellPrice = isCrafted && characterMeetsRequirements
       ? itemDetails.buyPrice
       : itemDetails.sellPrice || 0;
 
     if (sellPrice <= 0) {
+      console.warn(`[shops]: Invalid sell price for item: ${itemName}. Character job: ${character.job}, Item category: ${itemDetails.category}`);
       return interaction.editReply('❌ This item cannot be sold to the shop.');
     }
+
+    console.log(`[shops]: Valid sell price determined: ${sellPrice}`);
 
     await inventoryCollection.updateOne(
       { itemName },
       { $inc: { quantity: -quantity } }
     );
+
+    console.log(`[shops]: Deducted ${quantity}x ${itemName} from inventory.`);
 
     await ShopStock.updateOne(
       { itemName },
@@ -777,10 +828,14 @@ async function handleShopSell(interaction) {
       { upsert: true }
     );
 
+    console.log(`[shops]: Added ${quantity}x ${itemName} to shop stock.`);
+
     const totalPrice = sellPrice * quantity;
+
     await updateTokenBalance(interaction.user.id, totalPrice);
 
-    // Log to token tracker
+    console.log(`[shops]: Updated user's token balance by ${totalPrice}.`);
+
     const user = await User.findOne({ discordId: interaction.user.id });
     if (user?.tokenTracker) {
       const spreadsheetId = extractSpreadsheetId(user.tokenTracker);
@@ -794,9 +849,9 @@ async function handleShopSell(interaction) {
         `+${totalPrice}`
       ];
       await appendSheetData(auth, spreadsheetId, 'loggedTracker!B7:F', [tokenRow]);
+      console.log(`[shops]: Logged sale in token tracker.`);
     }
 
-    // Log to inventory tracker
     if (character.inventory) {
       const spreadsheetId = extractSpreadsheetId(character.inventory);
       const auth = await authorizeSheets();
@@ -818,6 +873,7 @@ async function handleShopSell(interaction) {
         uuidv4()
       ];
       await appendSheetData(auth, spreadsheetId, 'loggedInventory!A2:M', [inventoryRow]);
+      console.log(`[shops]: Logged sale in inventory tracker.`);
     }
 
     const saleEmbed = new EmbedBuilder()
@@ -834,13 +890,12 @@ async function handleShopSell(interaction) {
 
     interaction.editReply({ embeds: [saleEmbed] });
   } catch (error) {
-    handleError(error, 'economy.js - shop sell');
+    handleError(error, 'shops.js');
     console.error('[shops]: Error selling item:', error);
     interaction.editReply('❌ An error occurred while trying to sell the item.');
   }
 }
 
-// ------------------- Trade Handler -------------------
 async function handleTrade(interaction) {
   const characterName = interaction.options.getString('fromcharacter');
   const item1 = interaction.options.getString('item1');
@@ -868,7 +923,6 @@ async function handleTrade(interaction) {
       return;
     }
 
-    // Check inventory sync
     if (!fromCharacter.inventorySynced) {
       return interaction.editReply({
         content: `❌ **You cannot trade items from \`${characterName}\` because their inventory is not set up yet. Please use the </testinventorysetup:1306176790095728732> and then </syncinventory:1306176789894266898> commands to initialize the inventory.**`,
@@ -883,7 +937,6 @@ async function handleTrade(interaction) {
       });
     }
 
-    // Complete existing trade
     if (tradeId) {
       const tradeSession = tradeSessions[tradeId];
       if (!tradeSession) {
@@ -896,14 +949,12 @@ async function handleTrade(interaction) {
         return;
       }
 
-      // Process trade completion
       const itemArray = [
         { name: item1, quantity: quantity1 },
         { name: item2, quantity: quantity2 },
         { name: item3, quantity: quantity3 },
       ].filter(item => item.name);
 
-      // Check equipped items
       for (let item of itemArray) {
         const equippedItems = [
           fromCharacter.gearWeapon?.name,
@@ -918,7 +969,6 @@ async function handleTrade(interaction) {
         }
       }
 
-      // Verify inventory quantities
       const characterInventoryCollection = await getCharacterInventoryCollection(fromCharacter.name);
       for (let item of itemArray) {
         const itemInventory = await characterInventoryCollection.findOne({ itemName: { $regex: new RegExp(`^${item.name}$`, 'i') } });
@@ -928,7 +978,6 @@ async function handleTrade(interaction) {
         }
       }
 
-      // Update inventories
       for (let item of itemArray) {
         await removeItemInventoryDatabase(fromCharacter._id, item.name, item.quantity, interaction);
         await addItemInventoryDatabase(toCharacter._id, item.name, item.quantity, interaction);
@@ -966,25 +1015,69 @@ async function handleTrade(interaction) {
           components: []
         });
       } catch (error) {
-        handleError(error, 'economy.js - trade edit message');
+        handleError(error, 'trade.js');
         console.error(`[trade.js:logs] Error editing trade message:`, error);
       }
 
-      // Log trade data to Google Sheets (similar to original code)
-      // ... (Google Sheets logging code here)
+      const fromInventoryLink = fromCharacter.inventory || fromCharacter.inventoryLink;
+      const toInventoryLink = tradeSession.character.inventory || tradeSession.character.inventoryLink;
+
+      if (!isValidGoogleSheetsUrl(fromInventoryLink) || !isValidGoogleSheetsUrl(toInventoryLink)) {
+        await interaction.editReply({ content: `❌ Invalid or missing Google Sheets URL for character inventory.` });
+        return;
+      }
+
+      const fromSpreadsheetId = extractSpreadsheetId(fromInventoryLink);
+      const toSpreadsheetId = extractSpreadsheetId(toInventoryLink);
+      const auth = await authorizeSheets();
+      const range = 'loggedInventory!A2:M';
+      const uniqueSyncId = uuidv4();
+      const formattedDateTime = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
+      const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
+
+      const appendData = async (character, itemName, quantity, action, spreadsheetId) => {
+        const itemInventory = await characterInventoryCollection.findOne({ itemName: { $regex: new RegExp(`^${itemName}$`, 'i') } });
+        const category = itemInventory && itemInventory.category ? (Array.isArray(itemInventory.category) ? itemInventory.category.join(', ') : itemInventory.category) : '';
+        const type = itemInventory && itemInventory.type ? (Array.isArray(itemInventory.type) ? itemInventory.type.join(', ') : itemInventory.type) : '';
+        const subtype = itemInventory && itemInventory.subtype ? (Array.isArray(itemInventory.subtype) ? itemInventory.subtype.join(', ') : itemInventory.subtype) : '';
+        const values = [[
+          character.name,
+          itemName,
+          quantity.toString(),
+          category,
+          type,
+          subtype,
+          action,
+          character.job,
+          '',
+          character.currentVillage,
+          interactionUrl,
+          formattedDateTime,
+          uniqueSyncId,
+        ]];
+        await appendSheetData(auth, spreadsheetId, range, values);
+      };
+
+      for (let item of tradeSession.items) {
+        await appendData(tradeSession.character, item.name, -item.quantity, `Trade to ${fromCharacter.name}`, toSpreadsheetId);
+        await appendData(fromCharacter, item.name, item.quantity, `Trade with ${tradeSession.character.name}`, fromSpreadsheetId);
+      }
+
+      for (let item of itemArray) {
+        await appendData(fromCharacter, item.name, -item.quantity, `Trade to ${tradeSession.character.name}`, fromSpreadsheetId);
+        await appendData(tradeSession.character, item.name, item.quantity, `Trade with ${fromCharacter.name}`, toSpreadsheetId);
+      }
 
       delete tradeSessions[tradeId];
       await interaction.editReply({ content: `✅ Trade Complete ✅` });
 
     } else {
-      // Initiate new trade
       const itemArray = [
         { name: item1, quantity: quantity1 },
         { name: item2, quantity: quantity2 },
         { name: item3, quantity: quantity3 },
       ].filter(item => item.name);
 
-      // Check equipped items
       for (let item of itemArray) {
         const equippedItems = [
           fromCharacter.gearWeapon?.name,
@@ -999,13 +1092,11 @@ async function handleTrade(interaction) {
         }
       }
 
-      // Check village match
       if (fromCharacter.currentVillage.trim().toLowerCase() !== toCharacter.currentVillage.trim().toLowerCase()) {
         await interaction.editReply({ content: `❌ Both characters must be in the same village to perform the trade. ${fromCharacter.name} is currently in ${fromCharacter.currentVillage} and ${toCharacter.name} is currently in ${toCharacter.currentVillage}.` });
         return;
       }
 
-      // Verify inventory quantities
       const characterInventoryCollection = await getCharacterInventoryCollection(fromCharacter.name);
       for (let item of itemArray) {
         const itemInventory = await characterInventoryCollection.findOne({
@@ -1019,7 +1110,6 @@ async function handleTrade(interaction) {
         }
       }
 
-      // Create trade session
       const shortTradeId = uuidv4().split('-')[0];
       const fromItems = await Promise.all(itemArray.map(async item => ({
         name: item.name,
@@ -1051,7 +1141,6 @@ async function handleTrade(interaction) {
         tradeMessage,
       };
 
-      // Set trade timeout
       setTimeout(async () => {
         const tradeSession = tradeSessions[shortTradeId];
         if (tradeSession) {
@@ -1062,27 +1151,26 @@ async function handleTrade(interaction) {
               components: []
             });
           } catch (error) {
-            handleError(error, 'economy.js - trade timeout');
+            handleError(error, 'trade.js');
             console.error(`[trade.js:logs] Error editing trade message during timeout:`, error);
           }
           delete tradeSessions[shortTradeId];
         }
-      }, 900000); // 15 minutes
+      }, 900000);
     }
 
   } catch (error) {
-    handleError(error, 'economy.js - trade');
+    handleError(error, 'trade.js');
     console.error(`[trade.js:logs] Error executing trade command:`, error);
     try {
       await interaction.editReply({ content: '❌ An error occurred while trying to execute the trade.' });
     } catch (replyError) {
-      handleError(replyError, 'economy.js - trade reply');
+      handleError(replyError, 'trade.js');
       console.error(`[trade.js:logs] Error sending follow-up message:`, replyError);
     }
   }
 }
 
-// ------------------- Transfer Handler -------------------
 async function handleTransfer(interaction) {
   await interaction.deferReply();
 
@@ -1097,7 +1185,6 @@ async function handleTransfer(interaction) {
   const userId = interaction.user.id;
 
   try {
-    // Fetch characters
     const fromCharacter = await fetchCharacterByNameAndUserId(fromCharacterName, userId);
     const toCharacter = await fetchCharacterByNameAndUserId(toCharacterName, userId);
 
@@ -1106,7 +1193,6 @@ async function handleTransfer(interaction) {
       return;
     }
 
-    // Check inventory sync
     if (!fromCharacter.inventorySynced) {
       return interaction.editReply({
         content: `❌ **You cannot transfer items from \`${fromCharacterName}\` because their inventory is not set up yet. Please use the </testinventorysetup:1306176790095728732> and then </syncinventory:1306176789894266898> commands to initialize the inventory.**`,
@@ -1121,22 +1207,30 @@ async function handleTransfer(interaction) {
       });
     }
 
-    // Check item availabilityxdd
     let allItemsAvailable = true;
     const unavailableItems = [];
     const fromInventoryCollection = await getCharacterInventoryCollection(fromCharacter.name);
 
+    console.log(`[transfer.js:logs] Starting item availability check for character: ${fromCharacterName}`);
+
     for (const { name, quantity } of items) {
+      console.log(`[transfer.js:logs] Checking availability for item: ${name} (Required: ${quantity})`);
+
       const fromInventoryEntries = await fromInventoryCollection.find({ itemName: new RegExp(`^${name}$`, 'i') }).toArray();
       const totalQuantity = fromInventoryEntries.reduce((sum, entry) => sum + entry.quantity, 0);
+      console.log(`[transfer.js:logs] Total quantity of '${name}' in inventory: ${totalQuantity} (Required: ${quantity})`);
 
       if (totalQuantity < quantity) {
+        console.log(`[transfer.js:logs] Insufficient quantity for item '${name}' (Available: ${totalQuantity}, Required: ${quantity}).`);
         unavailableItems.push(`${name} - QTY:${totalQuantity}`);
         allItemsAvailable = false;
+      } else {
+        console.log(`[transfer.js:logs] Sufficient quantity available for '${name}' (Total: ${totalQuantity}, Required: ${quantity}).`);
       }
     }
 
     if (!allItemsAvailable) {
+      console.log(`[transfer.js:logs] Items unavailable for transfer: ${unavailableItems.join(', ')}`);
       await interaction.editReply(`❌ \`${fromCharacterName}\` does not have enough of the following items to transfer: ${unavailableItems.join(', ')}`);
       return;
     }
@@ -1195,7 +1289,7 @@ async function handleTransfer(interaction) {
     });
 
   } catch (error) {
-    handleError(error, 'economy.js - transfer');
+    handleError(error, 'transfer.js');
     console.error(`[transfer.js:error] Error during item transfer:`, error);
     await interaction.editReply({ content: `❌ An error occurred during the transfer. Please try again later.`, ephemeral: true });
   }
