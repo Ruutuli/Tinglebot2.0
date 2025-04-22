@@ -19,9 +19,7 @@ const { SlashCommandBuilder } = require('discord.js');
 const { 
   fetchRelicById, 
   archiveRelic, 
-  appraiseRelic,
-  createRelic,
-  fetchCharacterByNameAndUserId
+  appraiseRelic
 } = require('../../database/db.js');
 
 
@@ -39,8 +37,6 @@ const MapModule = require('../../modules/mapModule.js');
 const { generateUniqueId } = require('../../utils/uniqueIdUtils.js');
 // ------------------- Import submission storage operations -------------------
 const { saveSubmissionToStorage, retrieveSubmissionFromStorage, deleteSubmissionFromStorage } = require('../../utils/storage.js');
-// ------------------- Import inventory utility functions -------------------
-const { addItemInventoryDatabase } = require('../../utils/inventoryUtils.js');
 
 // ============================================================================
 // Configuration and Paths
