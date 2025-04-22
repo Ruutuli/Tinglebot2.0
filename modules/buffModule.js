@@ -1,6 +1,3 @@
-const { handleError } = require('../utils/globalErrorHandler');
-
-// ------------------- Buff Calculation Module -------------------
 
 // ------------------- Calculate attack buff -------------------
 // This function calculates whether an attack buff should be applied based on the character's attack stat.
