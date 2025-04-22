@@ -2,7 +2,7 @@
 // Group imports into standard libraries, third-party, and local modules
 const { SlashCommandBuilder } = require('discord.js');
 const { handleError } = require('../../utils/globalErrorHandler.js');
-const { fetchCharacterByName, fetchCharactersByUserId, fetchCharacterByNameAndUserId } = require('../../database/characterService.js');
+const { fetchCharacterByName, fetchCharactersByUserId, fetchCharacterByNameAndUserId } = require('../../database/db.js');
 const { v4: uuidv4 } = require('uuid');
 const { capitalizeWords, capitalizeFirstLetter } = require('../../modules/formattingModule.js');
 const { useStamina, recoverHearts } = require('../../modules/characterStatsModule.js');
