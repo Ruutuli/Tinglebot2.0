@@ -7,7 +7,7 @@ const path = require('path');
 
 const { handleError } = require('../../utils/globalErrorHandler.js');
 // Discord.js Imports
-const { SlashCommandBuilder, ActionRowBuilder } = require('discord.js');
+const { SlashCommandBuilder } = require('discord.js');
 
 // Handler Imports
 const { handleSelectMenuInteraction, finalizeSubmission } = require('../../handlers/selectMenuHandler.js');
@@ -19,7 +19,7 @@ const { resetSubmissionState, calculateTokens, calculateWritingTokens } = requir
 const { getBaseSelectMenu } = require('../../utils/menuUtils.js');
 const { submissionStore, saveSubmissionToStorage } = require('../../utils/storage.js');
 const { uploadSubmissionImage } = require('../../utils/uploadUtils.js');
-const { createArtSubmissionEmbed, createWritingSubmissionEmbed } = require('../../embeds/embeds.js');
+const { createWritingSubmissionEmbed } = require('../../embeds/embeds.js');
 const User = require('../../models/UserModel.js'); 
 const { generateUniqueId } = require('../../utils/uniqueIdUtils.js');
 
@@ -155,16 +155,6 @@ async onAutocomplete(interaction) {
         // Upload the image to Google Drive or cloud storage
         const googleImageUrl = await uploadSubmissionImage(discordImageUrl, fileName);
 
-        // Calculate tokens for the art submission
-        const tokenBreakdown = calculateTokens({
-          baseSelections: [],
-          typeMultiplierSelections: [],
-          productMultiplierValue: 1,
-          addOnsApplied: [],
-          specialWorksApplied: [],
-          characterCount: 1,
-          collab: collab || null, // Pass the collab parameter
-        });
         
         const submissionId = generateUniqueId('A');
         console.log('Generated Submission ID:', submissionId);
@@ -238,7 +228,6 @@ async onAutocomplete(interaction) {
         }
         const description = interaction.options.getString('description') || 'No description provided.';
         const questId = interaction.options.getString('questid') || 'N/A';
-        const collab = interaction.options.getString('collab');
     
         // Fetch user data from the database
         const userData = await User.findOne({ discordId: user.id });
