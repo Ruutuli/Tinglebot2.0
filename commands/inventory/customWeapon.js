@@ -5,7 +5,7 @@ const { handleError } = require('../../utils/globalErrorHandler');
 const { v4: uuidv4 } = require('uuid'); // For generating unique IDs
 
 // ------------------- Database Connections -------------------
-const { connectToInventories,fetchCharacterByNameAndUserId, updateCharacterById, getCharacterInventoryCollection, fetchItemByName, fetchValidWeaponSubtypes } = require('../../database/db');
+const { fetchCharacterByNameAndUserId, updateCharacterById, getCharacterInventoryCollection, fetchItemByName, fetchValidWeaponSubtypes } = require('../../database/db');
 
 // ------------------- Utility Functions -------------------
 const { addItemInventoryDatabase, processMaterials, removeItemInventoryDatabase } = require('../../utils/inventoryUtils');
@@ -289,13 +289,8 @@ try {
     materialsRemoved = true;
 
     // Log stamina before and after deduction
-    const oldStamina = character.currentStamina;
     await checkAndUseStamina(character, weaponSubmission.staminaToCraft);
     staminaDeducted = true;
-
-    // Fetch character again to get updated stamina
-    const updatedCharacter = await fetchCharacterByNameAndUserId(character.name, character.userId);
-    const newStamina = updatedCharacter?.currentStamina;
 
 } catch (error) {
     handleError(error, 'customWeapon.js');
@@ -381,21 +376,6 @@ const values = [
 
     await appendSheetData(auth, spreadsheetId, range, values);
 
-// 🛠️ Append Star Fragment and Blueprint Voucher to materials for proper logging
-const fullMaterialsUsed = await Promise.all([
-    ...weaponSubmission.craftingMaterials.map(async (mat) => {
-        const dbItem = await ItemModel.findOne({ itemName: mat.itemName });
-        const emoji = dbItem?.emoji || ':small_blue_diamond:';
-        return `> ${emoji} **${mat.itemName}** x${mat.quantity}`;
-    }),
-    (async () => {
-        const blueprintItem = await ItemModel.findOne({ itemName: 'Blueprint Voucher' });
-        const blueprintEmoji = (blueprintItem?.itemName === 'Blueprint Voucher' || !blueprintItem?.emoji || blueprintItem.emoji.trim() === '') 
-    ? ':small_blue_diamond:' 
-    : blueprintItem.emoji;
-        return `> ${blueprintEmoji} **Blueprint Voucher** x1`;
-    })()
-]);
 
 
 await logMaterialsToGoogleSheets(
@@ -1118,7 +1098,6 @@ async function logMaterialsToGoogleSheets(auth, spreadsheetId, range, character,
   
   // Combines materials used for crafting to avoid duplicates
   function combineMaterials(materialsUsed) {
-    const combinedMaterials = [];
     const materialMap = new Map();
   
     for (const material of materialsUsed) {
