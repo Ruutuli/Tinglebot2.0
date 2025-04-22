@@ -25,9 +25,8 @@ const {
   fetchCharacterByName,
   fetchCharacterByNameAndUserId,
   updatePetToCharacter,
-} = require('../../database/characterService');
-// ------------------- Item Service -------------------
-const { fetchItemByName } = require('../../database/itemService');
+  fetchItemByName
+} = require('../../database/db');
 
 // ============================================================================
 // Database Models
