@@ -34,11 +34,6 @@ const { authorizeSheets, appendSheetData } = require('../../utils/googleSheetsUt
 const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../../utils/validation');
 
 
-// ------------------- Database Models -------------------
-// Model representing item data.
-const ItemModel = require('../../models/ItemModel');
-
-
 // ------------------- Main Command Module -------------------
 // This module defines the /item command for using items (e.g., healing or job vouchers).
 module.exports = {
@@ -118,9 +113,6 @@ module.exports = {
                 character.jobVoucher = true;
                 character.jobVoucherJob = jobName;
                 await updateCharacterById(character._id, { jobVoucher: true, jobVoucherJob: jobName });
-            
-                // Do not remove the voucher from the inventory.
-                const inventoryCollection = await getCharacterInventoryCollection(character.name);
             
                 // Format current village information.
                 const currentVillage = capitalizeWords(character.currentVillage || 'Unknown');
