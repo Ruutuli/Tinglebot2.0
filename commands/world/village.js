@@ -11,8 +11,7 @@ const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 
 // ------------------- Database Services -------------------
 // Services for database operations related to characters and tokens.
-const { fetchCharacterByName } = require('../../database/characterService');
-const { getOrCreateToken, updateTokenBalance } = require('../../database/tokenService');
+const { fetchCharacterByName, getOrCreateToken, updateTokenBalance } = require('../../database/db');
 
 
 // ------------------- Utility Functions -------------------
