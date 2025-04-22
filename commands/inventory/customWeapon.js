@@ -5,12 +5,7 @@ const { handleError } = require('../../utils/globalErrorHandler');
 const { v4: uuidv4 } = require('uuid'); // For generating unique IDs
 
 // ------------------- Database Connections -------------------
-const { connectToInventories } = require('../../database/connection');
-
-// ------------------- Database Services -------------------
-const { fetchCharacterByNameAndUserId, updateCharacterById, getCharacterInventoryCollection } = require('../../database/characterService');
-const { fetchItemByName, fetchValidWeaponSubtypes } = require('../../database/itemService');
-
+const { connectToInventories,fetchCharacterByNameAndUserId, updateCharacterById, getCharacterInventoryCollection, fetchItemByName, fetchValidWeaponSubtypes } = require('../../database/db');
 
 // ------------------- Utility Functions -------------------
 const { addItemInventoryDatabase, processMaterials, removeItemInventoryDatabase } = require('../../utils/inventoryUtils');
