@@ -3,7 +3,7 @@ const { handleError } = require('../../utils/globalErrorHandler');
 // ------------------- Import necessary modules -------------------
 const { SlashCommandBuilder } = require('@discordjs/builders'); // Import Discord.js slash command builder
 const { EmbedBuilder, PermissionsBitField } = require('discord.js'); // Import Discord.js EmbedBuilder and permissions
-const { storeEncounter, getRandomMount, getMountThumbnail, getRandomVillage, getRandomLevel, getMountEmoji } = require('../../modules/mountModule'); // Import mount-related helper functions
+const { storeEncounter, getRandomMount, getMountThumbnail, getRandomVillage, getMountEmoji } = require('../../modules/mountModule'); // Import mount-related helper functions
 const { v4: uuidv4 } = require('uuid'); // Import UUID for generating unique encounter IDs
 
 // ------------------- Define village emojis -------------------
