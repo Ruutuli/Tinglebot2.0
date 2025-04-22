@@ -1,6 +1,5 @@
 // ------------------- Import necessary modules -------------------
 const mongoose = require('mongoose');
-const { handleError } = require('../utils/globalErrorHandler');
 const { Schema } = mongoose;
 
 // ------------------- Define reusable schemas -------------------
