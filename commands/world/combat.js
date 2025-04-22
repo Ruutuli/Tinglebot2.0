@@ -11,7 +11,7 @@ const { EmbedBuilder, SlashCommandBuilder } = require('discord.js');
 const { handleError } = require('../../utils/globalErrorHandler');
 // ------------------- Database Services -------------------
 // Services for retrieving character data.
-const { fetchCharacterByName, fetchCharacterByNameAndUserId } = require('../../database/characterService');
+const { fetchCharacterByName, fetchCharacterByNameAndUserId } = require('../../database/db');
 
 // ------------------- Modules -------------------
 // Combat module functions (alphabetized within this group).
