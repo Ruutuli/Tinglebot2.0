@@ -1,7 +1,6 @@
 // PartyModel.js
 
 const mongoose = require('mongoose');
-const { handleError } = require('../utils/globalErrorHandler');
 const { Schema } = mongoose;
 
 const PartySchema = new Schema({
