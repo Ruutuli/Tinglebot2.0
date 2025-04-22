@@ -45,9 +45,6 @@ const { hasPerk } = require('../../modules/jobsModule.js');
 const { isValidVillage } = require('../../modules/locationsModule.js');
 
 
-// ------------------- Constants -------------------
-// Default image URL used in travel embeds (if needed)
-const DEFAULT_IMAGE_URL = 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png';
 
 // Predefined path channel IDs for different travel routes
 const PATH_CHANNELS = {
@@ -310,7 +307,6 @@ module.exports = {
       // ------------------- Initialize Travel Log and State Variables -------------------
       let travelLog = [];
       let travelingMessages = [];
-      let lastSafeDayMessage = null;
 
       // ------------------- Helper Function: Check and Handle KO -------------------
       async function checkAndHandleKO(channel) {
