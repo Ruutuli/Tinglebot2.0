@@ -12,13 +12,9 @@ const { handleError } = require('../utils/globalErrorHandler');
 // ============================================================================
 // Database Connections
 // ------------------- Importing database connection functions -------------------
-const { connectToInventories } = require('../database/connection');
-
-// ============================================================================
 // Database Services
 // ------------------- Importing database service functions -------------------
-const { fetchCharacterById, fetchCharacterByNameAndUserId } = require('../database/characterService');
-const { fetchAndSortItemsByRarity, fetchItemById, fetchItemByName } = require('../database/itemService');
+const { connectToInventories, fetchAndSortItemsByRarity, fetchItemById, fetchItemByName, fetchCharacterById, fetchCharacterByNameAndUserId } = require('../database/db');
 
 // ============================================================================
 // Modules
