@@ -5,7 +5,7 @@ const { handleError } = require('../utils/globalErrorHandler');
 const { removeItemInventoryDatabase } = require('../utils/inventoryUtils');
 const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../utils/validation');
 const { authorizeSheets, appendSheetData } = require('../utils/googleSheetsUtils');
-const { fetchCharacterByNameAndUserId, getCharacterInventoryCollection, updateCharacterById, fetchItemByName } = require('../database/db'); 
+const { getCharacterInventoryCollection, updateCharacterById, fetchItemByName } = require('../database/db'); 
 const { v4: uuidv4 } = require('uuid');
 
 // ------------------- Validate Job Voucher -------------------
