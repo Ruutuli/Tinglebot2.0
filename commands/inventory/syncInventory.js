@@ -2,10 +2,8 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
 const { handleError } = require('../../utils/globalErrorHandler.js');
 const { connectToTinglebot, fetchCharacterByNameAndUserId, fetchCharactersByUserId } = require('../../database/db.js');
-const { isValidGoogleSheetsUrl, extractSpreadsheetId } = require('../../utils/validation.js');
+const { isValidGoogleSheetsUrl } = require('../../utils/validation.js');
 const { createSyncEmbed, createSetupInstructionsEmbed } = require('../../embeds/embeds.js');
-const { syncInventory } = require('../../handlers/syncHandler.js');
-const { removeInitialItemIfSynced } = require('../../utils/inventoryUtils.js');
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 
 // ------------------- Define the /syncinventory command -------------------
@@ -50,8 +48,6 @@ module.exports = {
                     await interaction.reply({ embeds: [setupEmbed], ephemeral: true });
                     return;
                 }
-
-                const spreadsheetId = extractSpreadsheetId(inventoryUrl);
 
                 // ------------------- Check if inventory is already synced -------------------
                 if (character.inventorySynced) {
