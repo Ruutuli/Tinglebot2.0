@@ -12,11 +12,7 @@ const { SlashCommandBuilder } = require('@discordjs/builders');
 
 const { handleError } = require('../../utils/globalErrorHandler.js');
 // ------------------- Database Connections -------------------
-const { connectToTinglebot } = require('../../database/connection.js');
-
-// ------------------- Database Services -------------------
-const { fetchCharacterByNameAndUserId, getCharacterInventoryCollection, updateCharacterById } = require('../../database/characterService.js');
-const { fetchItemByName } = require('../../database/itemService.js');
+const { connectToTinglebot, fetchCharacterByNameAndUserId, getCharacterInventoryCollection, updateCharacterById, fetchItemByName } = require('../../database/db.js');
 
 // ------------------- Modules -------------------
 const { checkAndUseStamina } = require('../../modules/characterStatsModule.js');
