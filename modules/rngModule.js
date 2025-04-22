@@ -16,7 +16,7 @@ const { handleError } = require('../utils/globalErrorHandler');
 // ------------------- Importing custom modules -------------------
 const { getVillageRegionByName } = require('../modules/locationsModule');
 const { applyBuffs, calculateAttackBuff, calculateDefenseBuff } = require('../modules/buffModule');
-const { useHearts, useStamina, handleKO } = require('../modules/characterStatsModule');
+const { useHearts, handleKO } = require('../modules/characterStatsModule');
 
 // ============================================================================
 // Encounter Probabilities
