@@ -16,16 +16,6 @@ const { handleError } = require('../utils/globalErrorHandler');
 // ------------------- Importing Discord.js components -------------------
 const { createSimpleCharacterEmbed } = require('../embeds/characterEmbeds');
 
-// ============================================================================
-// Database Services
-// ------------------- Importing character service functions -------------------
-const { getCharacterInventoryCollection } = require('../database/characterService');
-
-// ============================================================================
-// Modules
-// ------------------- Importing additional modules -------------------
-const initializeInventoryModel = require('../models/InventoryModel');
-
 
 // ============================================================================
 // Character Statistics Update Functions
