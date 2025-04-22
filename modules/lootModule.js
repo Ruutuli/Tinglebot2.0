@@ -13,7 +13,7 @@ const { authorizeSheets, appendSheetData } = require('../utils/googleSheetsUtils
 // Additional utilities and services
 const { v4: uuidv4 } = require('uuid');
 const { fetchCharacterByName } = require('../database/characterService');
-const { storeBattleProgress, deleteBattleProgressById } = require('../modules/combatModule');
+const { deleteBattleProgressById } = require('../modules/combatModule');
 
 // Monster data for reference
 const { monsterMapping } = require('../models/MonsterModel');
