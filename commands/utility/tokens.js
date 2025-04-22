@@ -3,7 +3,7 @@ const { handleError } = require('../../utils/globalErrorHandler.js');
 // ------------------- Import necessary modules and services -------------------
 const { SlashCommandBuilder, EmbedBuilder } = require('@discordjs/builders'); // For building slash commands and embeds
 const User = require('../../models/UserModel.js'); // User model for database operations
-const { getOrCreateToken, syncTokenTracker } = require('../../database/tokenService.js'); // Token services
+const { getOrCreateToken, syncTokenTracker } = require('../../database/db.js'); // Token services
 const {
   authorizeSheets,
   getSheetIdByTitle,
