@@ -7,12 +7,10 @@ const { handleError } = require('../../utils/globalErrorHandler.js');
 // Local service and module imports
 const { fetchCharacterByNameAndUserId, fetchMonsterByName } = require('../../database/db.js');
 const { processBattle } = require('../../modules/damageModule.js');
-const { storeBattleProgress, getBattleProgressById } = require('../../modules/combatModule.js');
+const { getBattleProgressById } = require('../../modules/combatModule.js');
 const { monsterMapping } = require('../../models/MonsterModel.js');
 const { processLoot } = require('../../modules/lootModule.js');
 const {
-  createMonsterEncounterEmbed,
-  createNoEncounterEmbed,
   createKOEmbed,
 } = require('../../embeds/embeds.js');
 
@@ -122,7 +120,6 @@ async execute(interaction) {
               defenseSuccess = false
           } = battleOutcome;
 
-          const buffEffect = adjustedRandomValue - originalRoll || 0;
           let buffMessage = '';
 
           if (attackSuccess || defenseSuccess) {
