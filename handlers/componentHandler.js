@@ -4,10 +4,6 @@
 // functions for button rows, and contains interaction handlers for job selection, 
 // character viewing, syncing, and more.
 
-// ------------------- Standard Libraries -------------------
-// Core Node.js modules and third-party libraries.
-const { v4: uuidv4 } = require('uuid');
-
 const { handleError } = require('../utils/globalErrorHandler');
 // ------------------- Discord.js Components -------------------
 // Components from discord.js for building action rows, buttons, and embeds.
