@@ -6,7 +6,7 @@ const { handleError } = require('../../utils/globalErrorHandler');
 const Character = require('../../models/CharacterModel');
 
 // ------------------- Services -------------------
-const { getCharacterInventoryCollection } = require('../../database/characterService');
+const { getCharacterInventoryCollection } = require('../../database/db');
 
 // ------------------- Modules -------------------
 const { exchangeSpiritOrbs } = require('../../modules/characterStatsModule');
