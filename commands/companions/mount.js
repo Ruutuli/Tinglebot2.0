@@ -2,11 +2,11 @@ const { handleError } = require('../../utils/globalErrorHandler');
 
 // ------------------- Import standard libraries and external modules -------------------
 const { SlashCommandBuilder } = require('@discordjs/builders'); // Slash command builder for Discord commands
-const { EmbedBuilder } = require('discord.js'); // Discord.js Embed builder for rich content in responses
 
 // ------------------- Import custom modules and handlers -------------------
 const { getEncounterById } = require('../../modules/mountModule'); // Module to retrieve encounter details by ID
 const { proceedWithRoll,handleViewMount  } = require('../../handlers/mountComponentHandler'); // Handler to proceed with rolling logic
+const { handleMountAutocomplete } = require('../../handlers/autocompleteHandler'); // Handler for character name autocomplete
 const { fetchCharacterByNameAndUserId } = require('../../database/db'); // Import fetchCharacterByNameAndUserId
 
 
