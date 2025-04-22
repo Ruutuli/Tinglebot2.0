@@ -1,6 +1,5 @@
 // ------------------- Import necessary modules -------------------
 const mongoose = require('mongoose');
-const { handleError } = require('../utils/globalErrorHandler');
 const { Schema } = mongoose;
 const { connectToInventories } = require('../database/connection');
 
