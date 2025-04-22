@@ -11,7 +11,7 @@ const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, SlashCommand
 const { handleError } = require('../../utils/globalErrorHandler.js');
 // ------------------- Database Services -------------------
 // Import database service functions for character retrieval
-const { fetchCharacterByNameAndUserId } = require('../../database/characterService.js');
+const { fetchCharacterByNameAndUserId } = require('../../database/db.js');
 
 
 // ------------------- Embeds -------------------
