@@ -11,7 +11,7 @@ const { EmbedBuilder } = require('discord.js');
 // (Add imports for database connection modules here if applicable)
 
 // Database Services
-const { fetchAllItems, fetchItemsByMonster } = require('../../database/itemService.js');
+const { fetchAllItems, fetchItemsByMonster } = require('../../database/db.js');
 
 // Modules
 const { calculateFinalValue, createWeightedItemList, getMonsterEncounterFromList, getMonstersByRegion } = require('../../modules/rngModule.js');
