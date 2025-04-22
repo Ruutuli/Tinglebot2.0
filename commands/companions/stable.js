@@ -1,9 +1,8 @@
 // ------------------- Import necessary modules and services -------------------
 const { SlashCommandBuilder } = require('discord.js');
 const { handleError } = require('../../utils/globalErrorHandler');
-const { fetchCharacterByNameAndUserId } = require('../../database/characterService');
+const { fetchCharacterByNameAndUserId, updateTokenBalance, getOrCreateToken } = require('../../database/db');
 const Mount = require('../../models/MountModel');
-const { updateTokenBalance, getOrCreateToken } = require('../../database/tokenService');
 const { appendSheetData, authorizeSheets, extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../../utils/googleSheetsUtils');
 const User = require('../../models/UserModel');
 const { calculateMountPrice } = require('../../modules/mountModule');
