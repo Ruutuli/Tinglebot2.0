@@ -10,10 +10,8 @@ require('dotenv').config();
 
 
 // Database Services
-const {  fetchCharacterByNameAndUserId, fetchCharactersByUserId, updateCharacterById} = require('../../database/characterService.js');
+const {  fetchCharacterByNameAndUserId, fetchCharactersByUserId, updateCharacterById, fetchItemsByMonster, fetchItemByName, getMonstersAboveTier} = require('../../database/db.js');
 const { handleError } = require('../../utils/globalErrorHandler.js');
-const { fetchItemsByMonster, fetchItemByName } = require('../../database/itemService.js');
-const { getMonstersAboveTier } = require('../../database/monsterService.js');
 
 // Utilities
 const {  authorizeSheets,  appendSheetData,} = require('../../utils/googleSheetsUtils.js');
