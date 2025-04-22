@@ -5,12 +5,12 @@ const { EmbedBuilder } = require('discord.js');
 const { recoverDailyStamina } = require('./modules/characterStatsModule');
 const { generateVendingStockList, getCurrentVendingStockList, resetPetRollsForAllCharacters } = require('./database/db');
 const { checkMissedRolls, postBlightRollCall } = require('./handlers/blightHandler');
-const {sendBloodMoonAnnouncement, sendBloodMoonEndAnnouncement, isBloodMoonDay, renameChannels, revertChannelNames} = require('./scripts/bloodmoon');
-const { fetchQuestsFromSheet } = require('./scripts/questAnnouncements');
+const {sendBloodMoonAnnouncement, isBloodMoonDay, renameChannels, revertChannelNames} = require('./scripts/bloodmoon');
 const { cleanupExpiredVendingRequests, cleanupExpiredHealingRequests } = require('./utils/storage');
-const { authorizeSheets, appendSheetData, getSheetIdByTitle } = require('./utils/googleSheetsUtils');
+const { authorizeSheets, clearSheetFormatting, writeSheetData } = require('./utils/googleSheetsUtils');
 const { convertToHyruleanDate } = require('./modules/calendarModule');
 const Character = require('./models/CharacterModel');
+
 
 module.exports = (client) => {
   console.log('[scheduler]📅 Scheduler initialized');
