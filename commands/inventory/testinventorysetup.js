@@ -4,7 +4,6 @@ const { handleError } = require('../../utils/globalErrorHandler.js');
 const { connectToTinglebot, fetchCharacterByNameAndUserId } = require('../../database/db.js');
 const { authorizeSheets, appendSheetData, getSheetIdByTitle, readSheetData } = require('../../utils/googleSheetsUtils.js');
 const { extractSpreadsheetId } = require('../../utils/validation.js');
-const Character = require('../../models/CharacterModel.js');
 const { createSetupInstructionsEmbed } = require('../../embeds/embeds.js');
 
 module.exports = {
