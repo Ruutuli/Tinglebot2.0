@@ -10,12 +10,12 @@ const { handleError } = require('../../utils/globalErrorHandler.js');
 const { SlashCommandBuilder } = require('discord.js');
 
 // Handler Imports
-const { handleSelectMenuInteraction, finalizeSubmission } = require('../../handlers/selectMenuHandler.js');
+const { handleSelectMenuInteraction } = require('../../handlers/selectMenuHandler.js');
 const { handleModalSubmission } = require('../../handlers/modalHandler.js');
 const { getCancelButtonRow } = require('../../handlers/componentHandler.js');
 
 // Utility Imports
-const { resetSubmissionState, calculateTokens, calculateWritingTokens } = require('../../utils/tokenUtils.js');
+const { resetSubmissionState, calculateWritingTokens } = require('../../utils/tokenUtils.js');
 const { getBaseSelectMenu } = require('../../utils/menuUtils.js');
 const { submissionStore, saveSubmissionToStorage } = require('../../utils/storage.js');
 const { uploadSubmissionImage } = require('../../utils/uploadUtils.js');
