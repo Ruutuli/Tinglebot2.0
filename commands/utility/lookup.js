@@ -1,13 +1,11 @@
 // ------------------- Import necessary modules and functions -------------------
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { handleError } = require('../../utils/globalErrorHandler.js');
-const { connectToTinglebot } = require('../../database/connection.js');
+const { connectToTinglebot, getIngredientItems, fetchItemByName, fetchAllItemsAndLogStructure, getCharacterInventoryCollection} = require('../../database/db.js');
 const ItemModel = require('../../models/ItemModel.js');
 const Character = require('../../models/CharacterModel.js');
 const { handleAutocomplete } = require('../../handlers/autocompleteHandler.js');
 const { getCategoryColor } = require('../../modules/formattingModule.js');
-const { getIngredientItems, fetchItemByName, fetchAllItemsAndLogStructure  } = require('../../database/itemService.js');
-const { getCharacterInventoryCollection } = require('../../database/characterService.js');
 const { formatItemDetails } = require('../../embeds/embeds.js');
 
 // ------------------- Constants -------------------
