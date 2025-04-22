@@ -11,7 +11,7 @@ const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 
 // ------------------- Database Services -------------------
 // Import database service functions for character lookups.
-const { fetchCharacterByNameAndUserId, fetchCharacterByName } = require('../../database/characterService');
+const { fetchCharacterByNameAndUserId, fetchCharacterByName } = require('../../database/db');
 
 
 // ------------------- Modules -------------------
