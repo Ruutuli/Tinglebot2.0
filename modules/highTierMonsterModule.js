@@ -1,8 +1,6 @@
 // ------------------- Import necessary utilities or modules -------------------
 const { useHearts, handleKO } = require('../modules/characterStatsModule');  // Import heart handling functions
-const { calculateAttackBuff, calculateDefenseBuff, applyBuffs } = require('../modules/buffModule');
 
-const { handleError } = require('../utils/globalErrorHandler');
 // ------------------- Tier 5 Encounter Outcome -------------------
 const getTier5EncounterOutcome = async (character, monster, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess) => {
     let heartsLostForMonster = 0;
@@ -386,6 +384,7 @@ const getTier10EncounterOutcome = async (character, monster, damageValue, adjust
 
 // ------------------- Helper Function: Log Battle Details -------------------
 const logBattleDetails = (tier, characterName, monsterName, adjustedRandomValue, characterDamage, heartsLostForMonster) => {
+    //this does nothing
 };
 
 // Exporting all functions
