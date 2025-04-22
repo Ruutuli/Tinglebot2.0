@@ -1,12 +1,6 @@
 const { handleError } = require('../../utils/globalErrorHandler.js');
-// Discord.js Components
 const { SlashCommandBuilder } = require('@discordjs/builders');
 const { EmbedBuilder } = require('discord.js');
-
-// Database Connections
-// (Add imports for database connection modules here if applicable)
-
-// Database Services
 const { fetchAllItems, fetchItemsByMonster } = require('../../database/db.js');
 
 // Modules
