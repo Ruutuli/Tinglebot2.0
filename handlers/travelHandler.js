@@ -13,13 +13,13 @@ const { fetchAllItems, fetchItemsByMonster } = require('../database/itemService'
 
 // ------------------- Embeds -------------------
 // Functions to create mechanic-related embed messages.
-const { createKOEmbed, createMonsterEncounterEmbed } = require('../embeds/mechanicEmbeds');
+const { createKOEmbed } = require('../embeds/embeds');
 
 // ------------------- Modules -------------------
 // Functions from various modules to handle character stats, RNG, damage, flavor text, and job perks.
 
 // Character stats module: functions to recover hearts, update hearts, use hearts/stamina, and handle KO.
-const { handleKO, recoverHearts, updateCurrentHearts, useHearts, useStamina } = require('../modules/characterStatsModule');
+const { recoverHearts, updateCurrentHearts, useHearts, useStamina } = require('../modules/characterStatsModule');
 
 // RNG module: functions to calculate fight values, attempt to flee, and create a weighted list of items.
 const { calculateFinalValue, attemptFlee, createWeightedItemList } = require('../modules/rngModule');
@@ -72,7 +72,6 @@ async function handleTravelInteraction(interaction, character, day, totalTravelD
         const customId = interaction.customId;
         let decision = '';
         let outcomeMessage = '';
-        const tier = monster ? monster.tier : null;
         let heartsLost = 0;
         let heartsGained = 0;
         let staminaLost = 0;
@@ -341,7 +340,6 @@ if (customId === 'recover') {
             const fleeResult = await attemptFlee(character, monster);
             console.log(`[travelHandler.js]: [FLEE ATTEMPT] Result: ${fleeResult.success ? 'Success' : 'Failure'}`);
             let description = '';
-            let logEntry = '';
 
             if (fleeResult.success) {
                 if (!hasPerk(character, 'DELIVERING')) {
