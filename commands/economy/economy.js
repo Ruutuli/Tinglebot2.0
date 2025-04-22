@@ -38,8 +38,9 @@ const { hasPerk } = require("../../modules/jobsModule");
 const {
  handleGiftAutocomplete,
  handleShopsAutocomplete,
- handleTradeAutocomplete,
- handleTransferAutocomplete,
+ handleTradeItemAutocomplete,
+ handleCharacterBasedCommandsAutocomplete,
+ handleTransferItemAutocomplete,
 } = require("../../handlers/autocompleteHandler.js");
 
 const tradeSessions = {};
@@ -353,10 +354,10 @@ module.exports = {
     }
     break;
    case "trade":
-    await handleTradeAutocomplete(interaction);
+    await handleTradeItemAutocomplete(interaction);
     break;
    case "transfer":
-    await handleTransferAutocomplete(interaction, focusedOption);
+    await handleTransferItemAutocomplete(interaction, focusedOption);
     break;
   }
  },
