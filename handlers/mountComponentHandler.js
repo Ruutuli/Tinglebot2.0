@@ -6,15 +6,15 @@ const { v4: uuidv4 } = require('uuid');
 const { handleError } = require('../utils/globalErrorHandler');
 // ------------------- Discord.js Components -------------------
 // Components from discord.js used for building UI elements.
-const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, ModalBuilder, StringSelectMenuBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 
 
 // ------------------- Database Services -------------------
 // Service modules for database interactions.
 // Character Services
-const { fetchCharacterByName, fetchCharacterByNameAndUserId, getCharacterInventoryCollection } = require('../database/characterService');
+const { fetchCharacterByName, fetchCharacterByNameAndUserId, getCharacterInventoryCollection } = require('../database/db');
 // Token Services
-const { getOrCreateToken, updateTokenBalance } = require('../database/tokenService');
+const { getOrCreateToken } = require('../database/tokenService');
 
 
 // ------------------- Modules -------------------
@@ -56,12 +56,12 @@ const {
   wolfosTraits 
 } = require('../modules/mountModule');
 
-const { checkAndUseStamina, useStamina } = require('../modules/characterStatsModule');
+const { useStamina } = require('../modules/characterStatsModule');
 
 
 // ------------------- Utility Functions -------------------
 // Generic helper utilities not directly tied to Google Sheets.
-const { addItemInventoryDatabase, removeItemInventoryDatabase } = require('../utils/inventoryUtils');
+const { removeItemInventoryDatabase } = require('../utils/inventoryUtils');
 
 
 // ------------------- Google Sheets API -------------------
@@ -870,8 +870,6 @@ async function handleTraitPaymentInteraction(interaction) {
         const spreadsheetId = extractSpreadsheetId(character.inventory || character.inventoryLink);
         const auth = await authorizeSheets();
         const range = 'customizationLog!A2:M';
-        const uniqueSyncId = uuidv4();
-        const formattedDateTime = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
   
         const values = [[
           `${mountType} Customization - ${customizationType}`,
@@ -1353,7 +1351,6 @@ async function handleMountNameSubmission(interaction) {
       const spreadsheetId = extractSpreadsheetId(user.tokenTracker);
       const auth = await authorizeSheets();
       const range = 'loggedTracker!B7:F';
-      const formattedDateTime = new Date().toLocaleString('en-US', { timeZone: user.timezone || 'UTC' });
       const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
       const values = [[
         `${mountName} - Mount Registration`,
