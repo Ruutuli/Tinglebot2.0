@@ -2,7 +2,6 @@
 // Standard libraries (Discord.js builders)
 const { SlashCommandBuilder } = require('@discordjs/builders');
 
-const { handleError } = require('../../utils/globalErrorHandler');
 // Local modules (blight handlers)
 const { rollForBlightProgression, healBlight, submitHealingTask } = require('../../handlers/blightHandler');
 
