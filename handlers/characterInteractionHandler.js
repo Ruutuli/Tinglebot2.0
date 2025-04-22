@@ -5,7 +5,6 @@
 // Third-party libraries
 const axios = require('axios');
 const { handleError } = require('../utils/globalErrorHandler');
-const { EmbedBuilder } = require('discord.js');
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 
