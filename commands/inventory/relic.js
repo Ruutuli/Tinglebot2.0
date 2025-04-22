@@ -20,10 +20,10 @@ const {
   fetchRelicById, 
   archiveRelic, 
   appraiseRelic,
-  createRelic
-} = require('../../database/relicService.js');
-// ------------------- Import Character Service functions -------------------
-const { fetchCharacterByNameAndUserId } = require('../../database/characterService.js');
+  createRelic,
+  fetchCharacterByNameAndUserId
+} = require('../../database/db.js');
+
 
 // ============================================================================
 // Modules
