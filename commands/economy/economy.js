@@ -12,12 +12,10 @@ const {
  fetchCharacterByName,
  fetchAllCharactersExceptUser,
  getCharacterInventoryCollection,
-} = require("../../database/characterService.js");
-const {
  getOrCreateToken,
  updateTokenBalance,
-} = require("../../database/tokenService");
-const { fetchItemByName } = require("../../database/itemService");
+ fetchItemByName
+} = require("../../database/db.js");
 const {
  addItemInventoryDatabase,
  removeItemInventoryDatabase,
