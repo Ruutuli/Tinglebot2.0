@@ -1,6 +1,6 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
 const { handleError } = require('../../utils/globalErrorHandler');
-const { PermissionsBitField, EmbedBuilder } = require('discord.js');
+const { EmbedBuilder } = require('discord.js');
 const Quest = require('../../models/QuestModel');
 const QUEST_CHANNEL_ID = '1305486549252706335';
 
