@@ -19,7 +19,6 @@ const {
  fetchCharactersByUserId,
  fetchCharacterById,
  deleteCharacterById,
- updateCharacterById,
  deleteCharacterInventoryCollection,
  createCharacterInventory,
 } = require("../../database/db");
@@ -1579,11 +1578,6 @@ async function handleSetBirthday(interaction) {
    ephemeral: true,
   });
  }
-}
-
-async function fetchIconData(iconUrl) {
- const response = await axios.get(iconUrl, { responseType: "arraybuffer" });
- return Buffer.from(response.data, "binary");
 }
 
 function capturePreviousAndUpdatedValues(character, category, updatedInfo) {
