@@ -1,7 +1,3 @@
-// ------------------- Imports -------------------
-// Standard Libraries
-const { v4: uuidv4 } = require('uuid');
-
 const { handleError } = require('../../utils/globalErrorHandler.js');
 // Discord.js Components
 const { SlashCommandBuilder } = require('@discordjs/builders');
@@ -14,20 +10,18 @@ const { EmbedBuilder } = require('discord.js');
 const { fetchAllItems, fetchItemsByMonster } = require('../../database/db.js');
 
 // Modules
-const { calculateFinalValue, createWeightedItemList, getMonsterEncounterFromList, getMonstersByRegion } = require('../../modules/rngModule.js');
-const { processBattle, getEncounterOutcome } = require('../../modules/damageModule.js');
+const { calculateFinalValue, getMonstersByRegion } = require('../../modules/rngModule.js');
+const { getEncounterOutcome } = require('../../modules/damageModule.js');
 const { storeBattleProgress } = require('../../modules/combatModule.js');
+const { handleKO } = require('../../modules/characterStatsModule.js');
 const { triggerRaid } = require('../../handlers/raidHandler.js');
 
 // Utility Functions
 const { addItemInventoryDatabase } = require('../../utils/inventoryUtils.js');
-const { authorizeSheets, appendSheetData, extractSpreadsheetId } = require('../../utils/googleSheetsUtils.js');
-
 // Database Models
 const Party = require('../../models/PartyModel.js');
 const Character = require('../../models/CharacterModel.js');
 const ItemModel = require('../../models/ItemModel.js');
-const MonsterModel = require('../../models/MonsterModel.js');
 
 // Embeds
 const { createExplorationItemEmbed, createExplorationMonsterEmbed } = require('../../embeds/embeds.js');
