@@ -5,7 +5,7 @@ const { SlashCommandBuilder } = require('discord.js');
 
 const { handleError } = require('../../utils/globalErrorHandler');
 // Database Services (Local modules for database interactions)
-const { appendEarnedTokens, getOrCreateToken, updateTokenBalance } = require('../../database/tokenService');
+const { appendEarnedTokens, getOrCreateToken, updateTokenBalance } = require('../../database/db');
 
 // Utility Functions (Local modules for additional helper functionality)
 const { deleteSubmissionFromStorage, retrieveSubmissionFromStorage } = require('../../utils/storage');
