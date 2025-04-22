@@ -5,8 +5,7 @@ const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 
 const { handleError } = require('../../utils/globalErrorHandler.js');
 // Local service and module imports
-const { fetchCharacterByNameAndUserId } = require('../../database/characterService.js');
-const { fetchMonsterByName } = require('../../database/monsterService.js');
+const { fetchCharacterByNameAndUserId, fetchMonsterByName } = require('../../database/db.js');
 const { processBattle } = require('../../modules/damageModule.js');
 const { storeBattleProgress, getBattleProgressById } = require('../../modules/combatModule.js');
 const { monsterMapping } = require('../../models/MonsterModel.js');
