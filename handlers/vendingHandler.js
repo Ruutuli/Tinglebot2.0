@@ -6,7 +6,7 @@ const { v4: uuidv4 } = require('uuid');
 const { MongoClient } = require("mongodb")
 
 // Discord.js Components
-const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, InteractionType, ModalBuilder, StringSelectMenuBuilder, TextInputBuilder, TextInputStyle } = require("discord.js");
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require("discord.js");
 
 // Database Connections
 const { connectToTinglebot } = require("../database/connection");
@@ -14,27 +14,23 @@ const { connectToTinglebot } = require("../database/connection");
 // Database Services
 const { fetchCharacterByNameAndUserId, updateCharacterById } = require("../database/characterService");
 const { fetchItemByName} = require("../database/itemService");
-const { getCurrentVendingStockList, updateItemStockByName, updateVendingStock, VILLAGE_ICONS, VILLAGE_IMAGES } = require("../database/vendingService");
-const { getTokenBalance, updateTokenBalance, appendSpentTokens, getOrCreateToken  } = require('../database/tokenService');
+const { getCurrentVendingStockList, updateItemStockByName, VILLAGE_ICONS, VILLAGE_IMAGES } = require("../database/vendingService");
+const { getTokenBalance, updateTokenBalance,  getOrCreateToken  } = require('../database/tokenService');
 
 // Modules
 
 
 // Utility Functions
-const { appendSheetData, authorizeSheets, extractSpreadsheetId, fetchSheetData, getSheetIdByTitle, isValidGoogleSheetsUrl, readSheetData, writeSheetData } = require("../utils/googleSheetsUtils");
-const {addItemToVendingInventory, connectToInventories, updateInventory, addItemInventoryDatabase } = require("../utils/inventoryUtils.js")
-const { saveSubmissionToStorage, retrieveVendingRequestFromStorage, deleteVendingRequestFromStorage, saveVendingRequestToStorage, retrieveAllVendingRequests } = require('../utils/storage'); 
+const { appendSheetData, authorizeSheets, extractSpreadsheetId, getSheetIdByTitle, isValidGoogleSheetsUrl, readSheetData, writeSheetData } = require("../utils/googleSheetsUtils");
+const {addItemToVendingInventory, addItemInventoryDatabase } = require("../utils/inventoryUtils.js")
+const { retrieveVendingRequestFromStorage, deleteVendingRequestFromStorage, saveVendingRequestToStorage, retrieveAllVendingRequests } = require('../utils/storage'); 
 const { uploadSubmissionImage } = require('../utils/uploadUtils'); // Replace with the correct path to uploadUtils.js
 
 
 // Database Models
 const Character = require('../models/CharacterModel');
-const VendingInventory = require('../models/VendingModel');
 const ItemModel = require('../models/ItemModel'); 
-const initializeInventoryModel = require('../models/InventoryModel');
 
-// Google Sheets API
-const sheets = google.sheets({ version: 'v4' });
 
 
 const DEFAULT_IMAGE_URL = "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png";
@@ -231,7 +227,6 @@ async function handleRestock(interaction) {
 
         // Determine stacking rules based on item properties
         const isCraftable = itemDetails.crafting || false;
-        const isStackable = !isCraftable; // If not craftable, it is stackable
         
         const slotsRequired = isCraftable
             ? stockQty // Craftable items: 1 slot per item
@@ -672,11 +667,8 @@ await interaction.reply({ embeds: [embedSuccess], ephemeral: false });
     }
 }
 
-// ------------------- Reaction Listener for Trade Acceptance -------------------
-let botClient;
 
 function initializeReactionHandler(client) {
-    botClient = client;
 
     client.on('messageReactionAdd', async (reaction, user) => {
         try {
@@ -692,7 +684,6 @@ function initializeReactionHandler(client) {
     
             const {
                 buyerId,
-                userCharacterName,
                 vendorCharacterName,
                 itemName,
                 quantity,
@@ -1219,11 +1210,6 @@ async function handleShopLink(interaction) {
         console.error('[handleShopLink]: Error updating shop link:', error);
         await interaction.reply({ content: '❌ An error occurred while updating the shop link. Please try again later.', ephemeral: true });
     }
-}
-
-// ------------------- Helper function to capitalize the first letter of a string -------------------
-function capitalizeFirstLetter(string) {
-    return string.charAt(0).toUpperCase() + string.slice(1);
 }
 
 // ------------------- Helper: Vending Setup -------------------
