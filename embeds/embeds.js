@@ -1,4 +1,3 @@
-const mongoose = require("mongoose");
 const { EmbedBuilder } = require("discord.js");
 const { handleError } = require("../utils/globalErrorHandler");
 const {
@@ -15,11 +14,6 @@ const {
  getVillageColorByName,
  getVillageEmojiByName,
 } = require("../modules/locationsModule");
-const {
- getCharacterItems,
- formatCharacterItems,
- calculateTotalHeartsAndStamina,
-} = require("../modules/exploreModule");
 const {
  getNoEncounterMessage,
  typeActionMap,
@@ -969,12 +963,9 @@ const createTransferEmbed = (
  fromCharacter,
  toCharacter,
  items,
- interactionUrl,
- fromCharacterIcon,
  toCharacterIcon
 ) => {
  const fromSettings = getCommonEmbedSettings(fromCharacter);
- const toSettings = getCommonEmbedSettings(toCharacter);
 
  const formattedItems = items
   .map(
@@ -1034,10 +1025,7 @@ const createTradeEmbed = async (
  fromCharacter,
  toCharacter,
  fromItems,
- toItems,
- interactionUrl,
- fromCharacterIcon,
- toCharacterIcon
+ toItems
 ) => {
  const settingsFrom = getCommonEmbedSettings(fromCharacter);
  const fromItemsDescription = fromItems
@@ -1377,7 +1365,6 @@ const createHealingEmbed = (
  characterToHeal,
  heartsHealed,
  staminaRecovered,
- healingRequestId
 ) => {
  if (!characterToHeal || !healerCharacter) {
   throw new Error("Both healer and character to heal are required.");
