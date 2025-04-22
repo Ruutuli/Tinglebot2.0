@@ -175,7 +175,6 @@ module.exports = {
       }
 
       try {
-        const tokenRecord = await getOrCreateToken(userId, link);
         const setupEmbed = createTokenTrackerSetupEmbed(interaction.user.username, link);
         await interaction.reply({ embeds: [setupEmbed], ephemeral: true });
       } catch (error) {
