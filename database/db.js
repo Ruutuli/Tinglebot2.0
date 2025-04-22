@@ -11,8 +11,8 @@ const {
 } = require("../utils/googleSheetsUtils");
 require("dotenv").config();
 
+const {removeInitialItemIfSynced} = require("../utils/inventoryUtils");
 const Character = require("../models/CharacterModel");
-const Item = require("../models/ItemModel");
 const Monster = require("../models/MonsterModel");
 const Quest = require("../models/QuestModel");
 const RelicModel = require("../models/RelicModel");
@@ -27,7 +27,6 @@ let inventoriesDbConnection;
 let inventoriesDbNativeConnection = null;
 
 const VILLAGE_NAMES = ["Rudania", "Inariko", "Vhintl"];
-const ITEMS_PER_VILLAGE = 10;
 const LIMITED_ITEMS_COUNT = 5;
 
 const VILLAGE_IMAGES = {
@@ -1301,10 +1300,6 @@ const generateVendingStockList = async () => {
     "[vendingService.js]: ❌ Insufficient items available for generating stock."
    );
   }
-
-  const priorityItemsForShopkeepers = shopkeeperItems.filter((item) =>
-   priorityItems.includes(item.itemName)
-  );
 
   const generateRoundedPrice = (min, max) => {
    const randomPrice = min + Math.floor(Math.random() * (max - min + 1));
