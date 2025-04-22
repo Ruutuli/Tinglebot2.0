@@ -15,13 +15,13 @@ const { v4: uuidv4 } = require('uuid');
 
 // ------------------- Database Services -------------------
 // Import character, item, and monster related database service functions.
-const { fetchCharacterByNameAndUserId, fetchCharactersByUserId, updateCharacterById, fetchAllItems, fetchItemsByMonster, fetchItemByName, fetchAllMonsters } = require('../../database/db.js');
+const { fetchCharacterByNameAndUserId, fetchAllItems, fetchItemsByMonster, fetchAllMonsters } = require('../../database/db.js');
 
 
 // ------------------- Modules -------------------
 // Import custom modules for RNG, flavor text, damage calculations, job handling, locations, character stats, formatting, and job vouchers.
 const { createWeightedItemList, calculateFinalValue } = require('../../modules/rngModule.js');
-const { generateVictoryMessage, generateDamageMessage, generateFinalOutcomeMessage } = require('../../modules/flavorTextModule.js');
+const { generateVictoryMessage, generateDamageMessage, generateFinalOutcomeMessage, generateDefenseBuffMessage, generateAttackBuffMessage } = require('../../modules/flavorTextModule.js');
 const { getEncounterOutcome } = require('../../modules/damageModule.js');
 const { getJobPerk, normalizeJobName, isValidJob } = require('../../modules/jobsModule.js');
 const { getVillageRegionByName } = require('../../modules/locationsModule.js');
