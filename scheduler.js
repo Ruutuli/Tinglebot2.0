@@ -1,41 +1,17 @@
-// ------------------- Scheduler -------------------
-// Manages all scheduled tasks such as daily stamina recovery, blight roll checks, Blood Moon announcements, and birthday announcements
-
-// ------------------- Imports -------------------
-// ------------------- Load Environment Variables -------------------
 require('dotenv').config();
-
-// ------------------- Standard Libraries and Third-Party Modules -------------------
 const cron = require('node-cron');
-
 const { handleError } = require('./utils/globalErrorHandler');
-// ------------------- Discord.js Components -------------------
 const { EmbedBuilder } = require('discord.js');
-
-// ------------------- Database Connections -------------------
 const { recoverDailyStamina } = require('./modules/characterStatsModule');
-
-// ------------------- Database Services -------------------
-const { generateVendingStockList, getCurrentVendingStockList } = require('./database/vendingService');
+const { generateVendingStockList, getCurrentVendingStockList, resetPetRollsForAllCharacters } = require('./database/db');
 const { checkMissedRolls, postBlightRollCall } = require('./handlers/blightHandler');
-const { resetPetRollsForAllCharacters } = require('./database/characterService');
-const { createScheduledQuest } = require('./database/questService');
-
-// ------------------- Modules -------------------
 const {sendBloodMoonAnnouncement, sendBloodMoonEndAnnouncement, isBloodMoonDay, renameChannels, revertChannelNames} = require('./scripts/bloodmoon');
 const { fetchQuestsFromSheet } = require('./scripts/questAnnouncements');
-
-// ------------------- Utility Functions -------------------
 const { cleanupExpiredVendingRequests, cleanupExpiredHealingRequests } = require('./utils/storage');
 const { authorizeSheets, appendSheetData, getSheetIdByTitle } = require('./utils/googleSheetsUtils');
 const { convertToHyruleanDate } = require('./modules/calendarModule');
-
-// ------------------- Database Models -------------------
 const Character = require('./models/CharacterModel');
 
-
-// ------------------- Scheduler Initialization -------------------
-// Function to set up all scheduled tasks
 module.exports = (client) => {
   console.log('[scheduler]📅 Scheduler initialized');
 
