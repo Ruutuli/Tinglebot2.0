@@ -1,32 +1,16 @@
-// ------------------- inventoryUtils.js -------------------
-// This module provides utility functions for inventory management, including
-// syncing data with Google Sheets and the database, adding/removing items,
-// processing crafting materials, and managing vending inventory.
-
-// ============================================================================
-// Discord.js Components
-// ------------------- Importing Discord.js components -------------------
-const { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } = require('discord.js');
-
 const { handleError } = require('../utils/globalErrorHandler');
 // ============================================================================
 // Database Connections
 // ------------------- Importing database connection functions -------------------
 // Database Services
 // ------------------- Importing database service functions -------------------
-const { connectToInventories, fetchAndSortItemsByRarity, fetchItemById, fetchItemByName, fetchCharacterById, fetchCharacterByNameAndUserId } = require('../database/db');
-
-// ============================================================================
-// Modules
-// ------------------- Importing additional custom modules -------------------
-const { toLowerCase } = require('../modules/formattingModule');
+const { connectToInventories, fetchItemByName, fetchCharacterById } = require('../database/db');
 
 // ============================================================================
 // Utility Functions
 // ------------------- Importing utility functions -------------------
 const { appendSheetData, authorizeSheets, getSheetIdByTitle, readSheetData, writeSheetData } = require('../utils/googleSheetsUtils');
 const { extractSpreadsheetId } = require('../utils/validation');
-const { safeStringify } = require('../utils/objectUtils');
 const { promptUserForSpecificItems } = require('../utils/itemUtils');
 
 // ============================================================================
@@ -58,32 +42,6 @@ function formatDateTime(date) {
 // Escapes special characters in a string for use in a regular expression.
 function escapeRegExp(string) {
     return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-// ------------------- JSON BigInt Replacer -------------------
-// Converts BigInt values to strings during JSON stringification.
-function replacer(key, value) {
-    if (typeof value === 'bigint') {
-        return value.toString();
-    }
-    return value;
-}
-
-// ------------------- Extract Interaction Fields -------------------
-// Extracts selected fields from an interaction object.
-function extractInteractionFields(interaction) {
-    if (!interaction) {
-        return {};
-    }
-    return {
-        id: interaction.id || null,
-        applicationId: interaction.applicationId || null,
-        channelId: interaction.channelId || null,
-        guildId: interaction.guildId || null,
-        user: interaction.user || null,
-        commandName: interaction.commandName || null,
-        options: interaction.options || null,
-    };
 }
 
 
