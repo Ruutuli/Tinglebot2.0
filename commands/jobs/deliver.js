@@ -760,7 +760,6 @@ if (!isValidGoogleSheetsUrl(shopLink)) {
     // Build the delivery complete embed
     let deliveryCompleteEmbed;
     if (delivery.deliveryType === 'vendingstock') {
-      const recipientVillage = capitalizeWords(recipientCharacter.currentVillage || 'Unknown');
       const pointsDeducted = delivery.quantity * delivery.vendingPointsCost;
       deliveryCompleteEmbed = {
         title: `✅ Delivery Completed!`,
