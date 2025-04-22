@@ -24,12 +24,11 @@ const { capitalizeFirstLetter } = require('../modules/formattingModule');
 const { calculateTokens, generateTokenBreakdown } = require('../utils/tokenUtils');
 
 // Storage utilities for saving and retrieving submission data
-const { saveSubmissionToStorage, submissionStore } = require('../utils/storage');
+const { submissionStore } = require('../utils/storage');
 
 // Menu utilities to generate select menus for the submission process
 const {
   getAddOnsMenu,
-  getBaseSelectMenu,
   getProductMultiplierMenu,
   getSpecialWorksMenu,
   getTypeMultiplierMenu,
