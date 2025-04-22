@@ -3,8 +3,7 @@ const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 
 const { handleError } = require('../../utils/globalErrorHandler');
 // ------------------- Local Module Imports -------------------
-const { fetchCharacterByName, getCharacterInventoryCollection } = require('../../database/characterService');
-const { fetchItemsByIds, fetchItemRarityByName } = require('../../database/itemService');
+const { fetchCharacterByName, getCharacterInventoryCollection, fetchItemsByIds, fetchItemRarityByName } = require('../../database/db');
 const { removeItemInventoryDatabase, addItemInventoryDatabase } = require('../../utils/inventoryUtils');
 const { getNPCItems, NPCs } = require('../../modules/stealingNPCSModule');
 const { authorizeSheets, appendSheetData, isValidGoogleSheetsUrl, extractSpreadsheetId } = require('../../utils/googleSheetsUtils');
