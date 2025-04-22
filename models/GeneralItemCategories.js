@@ -1,7 +1,3 @@
-const { handleError } = require('../utils/globalErrorHandler');
-
-// ------------------- Import necessary modules -------------------
-const Item = require('./ItemModel'); // Ensure correct path for the item model
 
 // ------------------- Define general item categories -------------------
 // Organized categories with corresponding items under each category
