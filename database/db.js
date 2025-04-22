@@ -1,5 +1,5 @@
 const mongoose = require("mongoose");
-const { MongoClient } = require("mongodb");
+const { MongoClient, ObjectId } = require("mongodb");
 const { google } = require("googleapis");
 const { handleError } = require("../utils/globalErrorHandler");
 const {
@@ -17,22 +17,14 @@ const Monster = require("../models/MonsterModel");
 const Quest = require("../models/QuestModel");
 const RelicModel = require("../models/RelicModel");
 const User = require("../models/UserModel");
+const Pet = require("../models/PetModel");
 const generalCategories = require("../models/GeneralItemCategories");
 
 const tinglebotUri = process.env.MONGODB_TINGLEBOT_URI;
 const inventoriesUri = process.env.MONGODB_INVENTORIES_URI;
-let tinglebotConnection = null;
-let inventoriesConnection = null;
-let inventoriesDbConnection = null;
-
-const connectionOptions = {
- useNewUrlParser: true,
- useUnifiedTopology: true,
- serverSelectionTimeoutMS: 5000,
- connectTimeoutMS: 10000,
- socketTimeoutMS: 45000,
- family: 4,
-};
+let tinglebotDbConnection;
+let inventoriesDbConnection;
+let inventoriesDbNativeConnection = null;
 
 const VILLAGE_NAMES = ["Rudania", "Inariko", "Vhintl"];
 const ITEMS_PER_VILLAGE = 10;
@@ -56,600 +48,756 @@ const VILLAGE_ICONS = {
   "https://static.wixstatic.com/media/7573f4_15ac377e0dd643309853fc77250a86a1~mv2.png",
 };
 
-async function getTinglebotConnection() {
+async function connectToTinglebot() {
  try {
-  if (!tinglebotConnection || mongoose.connection.readyState === 0) {
+  if (!tinglebotDbConnection || mongoose.connection.readyState === 0) {
    mongoose.set("strictQuery", false);
-   await mongoose.connect(tinglebotUri, connectionOptions);
-   tinglebotConnection = mongoose.connection;
-
-   tinglebotConnection.on("error", (err) => {
-    handleError(err, "connection.js");
-    console.error("MongoDB connection error:", err);
-   });
-
-   tinglebotConnection.on("disconnected", () => {
-    console.warn("MongoDB disconnected. Attempting to reconnect...");
-    tinglebotConnection = null;
-   });
+   tinglebotDbConnection = await mongoose.connect(tinglebotUri, {});
   }
-  return tinglebotConnection;
+  return tinglebotDbConnection;
  } catch (error) {
   handleError(error, "connection.js");
-  console.error("Error connecting to Tinglebot database:", error);
+  console.error("❌ Error connecting to Tinglebot database:", error);
   throw error;
  }
 }
 
-async function getInventoriesConnection() {
+async function connectToInventories() {
  try {
-  if (!inventoriesConnection || inventoriesConnection.readyState === 0) {
-   inventoriesConnection = mongoose.createConnection(
-    inventoriesUri,
-    connectionOptions
-   );
-
-   inventoriesConnection.on("error", (err) => {
-    handleError(err, "connection.js");
-    console.error("Inventories MongoDB connection error:", err);
-   });
-
-   inventoriesConnection.on("disconnected", () => {
-    console.warn(
-     "Inventories MongoDB disconnected. Will reconnect on next use."
-    );
-    inventoriesConnection = null;
-   });
+  if (!inventoriesDbConnection) {
+   inventoriesDbConnection = mongoose.createConnection(inventoriesUri, {});
   }
-  return inventoriesConnection;
+  return inventoriesDbConnection;
  } catch (error) {
   handleError(error, "connection.js");
-  console.error("Error connecting to Inventories database:", error);
+  console.error("❌ Error connecting to Inventories database:", error);
   throw error;
  }
 }
 
-const connectToInventories = async () => {
- if (!inventoriesDbConnection) {
+const connectToInventoriesNative = async () => {
+ if (!inventoriesDbNativeConnection) {
   const client = new MongoClient(inventoriesUri, {});
   await client.connect();
-  inventoriesDbConnection = client.db();
+  inventoriesDbNativeConnection = client.db();
  }
- return inventoriesDbConnection;
+ return inventoriesDbNativeConnection;
 };
 
 const getInventoryCollection = async (characterName) => {
  if (typeof characterName !== "string") {
   throw new Error("Character name must be a string.");
  }
- const inventoriesDb = await connectToInventories();
+ const inventoriesDb = await connectToInventoriesNative();
  const collectionName = characterName.trim().toLowerCase();
  return inventoriesDb.collection(collectionName);
 };
 
-class BaseService {
- constructor(model, serviceName) {
-  this.model = model;
-  this.serviceName = serviceName;
- }
-
- async findOne(query, options = {}) {
-  try {
-   const result = await this.model
-    .findOne(query, options.projection || {})
-    .lean(options.lean !== false)
-    .exec();
-
-   if (!result && options.throwIfNotFound) {
-    throw new Error(`${options.entityName || "Document"} not found`);
-   }
-
-   return result;
-  } catch (error) {
-   handleError(error, this.serviceName);
-   console.error(`[${this.serviceName}]: Error in findOne:`, error.message);
-   throw error;
-  }
- }
-
- async find(query = {}, options = {}) {
-  try {
-   let queryBuilder = this.model.find(query, options.projection || {});
-
-   if (options.sort) {
-    queryBuilder = queryBuilder.sort(options.sort);
-   }
-
-   if (options.limit) {
-    queryBuilder = queryBuilder.limit(options.limit);
-   }
-
-   if (options.skip) {
-    queryBuilder = queryBuilder.skip(options.skip);
-   }
-
-   if (options.populate) {
-    queryBuilder = queryBuilder.populate(options.populate);
-   }
-
-   return await queryBuilder.lean(options.lean !== false).exec();
-  } catch (error) {
-   handleError(error, this.serviceName);
-   console.error(`[${this.serviceName}]: Error in find:`, error.message);
-   throw error;
-  }
- }
-
- async create(data) {
-  try {
-   const newDocument = new this.model(data);
-   await newDocument.save();
-   return newDocument;
-  } catch (error) {
-   handleError(error, this.serviceName);
-   console.error(`[${this.serviceName}]: Error in create:`, error.message);
-   throw error;
-  }
- }
-
- async updateById(id, updateData, options = {}) {
-  try {
-   return await this.model
-    .findByIdAndUpdate(id, updateData, { new: true, ...options })
-    .lean(options.lean !== false)
-    .exec();
-  } catch (error) {
-   handleError(error, this.serviceName);
-   console.error(`[${this.serviceName}]: Error in updateById:`, error.message);
-   throw error;
-  }
- }
-
- async updateMany(query, updateData, options = {}) {
-  try {
-   return await this.model.updateMany(query, updateData, options).exec();
-  } catch (error) {
-   handleError(error, this.serviceName);
-   console.error(`[${this.serviceName}]: Error in updateMany:`, error.message);
-   throw error;
-  }
- }
-
- async deleteById(id) {
-  try {
-   return await this.model.findByIdAndDelete(id).lean().exec();
-  } catch (error) {
-   handleError(error, this.serviceName);
-   console.error(`[${this.serviceName}]: Error in deleteById:`, error.message);
-   throw error;
-  }
- }
-
- async deleteMany(query) {
-  try {
-   return await this.model.deleteMany(query).exec();
-  } catch (error) {
-   handleError(error, this.serviceName);
-   console.error(`[${this.serviceName}]: Error in deleteMany:`, error.message);
-   throw error;
-  }
- }
-
- async count(query = {}) {
-  try {
-   return await this.model.countDocuments(query).exec();
-  } catch (error) {
-   handleError(error, this.serviceName);
-   console.error(`[${this.serviceName}]: Error in count:`, error.message);
-   throw error;
-  }
+async function getCharactersInVillage(userId, village) {
+ try {
+  const characters = await fetchCharactersByUserId(userId);
+  return characters.filter(
+   (character) =>
+    character.currentVillage.toLowerCase() === village.toLowerCase()
+  );
+ } catch (error) {
+  handleError(error, "characterService.js");
+  console.error(
+   `[characterService]: logs - Error in getCharactersInVillage: ${error.message}`
+  );
+  throw error;
  }
 }
 
-class CharacterService extends BaseService {
- constructor() {
-  super(Character, "CharacterService");
- }
-
- async getCharactersInVillage(userId, village) {
-  try {
-   await getTinglebotConnection();
-   const characters = await this.find({ userId });
-   return characters.filter(
-    (character) =>
-     character.currentVillage.toLowerCase() === village.toLowerCase()
-   );
-  } catch (error) {
-   handleError(error, "CharacterService");
-   console.error(
-    `Error getting characters in village ${village}:`,
-    error.message
-   );
-   throw error;
-  }
- }
-
- async getCharacterByName(characterName) {
-  try {
-   await getTinglebotConnection();
-   const character = await this.findOne(
-    {
-     name: new RegExp(`^${characterName.trim()}$`, "i"),
-    },
-    {
-     throwIfNotFound: true,
-     entityName: `Character "${characterName}"`,
-    }
-   );
-   return character;
-  } catch (error) {
-   handleError(error, "CharacterService");
-   console.error(`Error fetching character "${characterName}":`, error.message);
-   throw error;
-  }
- }
-
- async getBlightedCharacters(userId) {
-  try {
-   await getTinglebotConnection();
-   return await this.find({ userId, blighted: true });
-  } catch (error) {
-   handleError(error, "CharacterService");
-   console.error(
-    `Error fetching blighted characters for user ${userId}:`,
-    error.message
-   );
-   throw error;
-  }
- }
-
- async getInventoryCollection(characterName) {
-  try {
-   if (typeof characterName !== "string") {
-    throw new TypeError(
-     `Expected a string for characterName, but received ${typeof characterName}`
-    );
-   }
-
-   await getInventoriesConnection();
-   const collectionName = characterName.trim().toLowerCase();
-   return await getInventoryCollection(collectionName);
-  } catch (error) {
-   handleError(error, "CharacterService");
-   console.error(
-    `Error getting inventory collection for "${characterName}":`,
-    error.message
-   );
-   throw error;
-  }
- }
-
- async createInventory(characterName, characterId, job) {
-  try {
-   const collection = await this.getInventoryCollection(characterName);
-   const initialInventory = {
-    characterId,
-    itemName: "Initial Item",
-    quantity: 1,
-    category: "Misc",
-    type: "Misc",
-    subtype: "Misc",
-    job,
-    perk: "",
-    location: "",
-    link: "",
-    date: new Date(),
-    obtain: [],
-   };
-   await collection.insertOne(initialInventory);
-  } catch (error) {
-   handleError(error, "CharacterService");
-   console.error(
-    `Error creating inventory for "${characterName}":`,
-    error.message
-   );
-   throw error;
-  }
- }
-
- async addPet(characterId, petName, species, size, level, perk) {
-  try {
-   await getTinglebotConnection();
-   await this.updateById(characterId, {
-    $push: {
-     pets: {
-      name: petName,
-      species,
-      size,
-      level,
-      rollsRemaining: 1,
-      perks: [perk],
-     },
-    },
-   });
-  } catch (error) {
-   handleError(error, "CharacterService");
-   console.error(`Error adding pet "${petName}" to character:`, error.message);
-   throw error;
-  }
- }
-
- async updatePet(characterId, petName, updatedPetData) {
-  try {
-   await getTinglebotConnection();
-   await Character.updateOne(
-    { _id: characterId, "pets.name": petName },
-    { $set: { "pets.$": updatedPetData } }
-   );
-  } catch (error) {
-   handleError(error, "CharacterService");
-   console.error(`Failed to update pet "${petName}":`, error.message);
-   throw error;
-  }
- }
-
- async resetAllPetRolls() {
-  try {
-   await getTinglebotConnection();
-   const characters = await this.find({});
-
-   for (const character of characters) {
-    if (character.pets && Array.isArray(character.pets)) {
-     character.pets = character.pets.map((pet) => {
-      pet.rollsRemaining = Math.min(pet.level, 3);
-      return pet;
-     });
-
-     await this.updateById(character._id, { pets: character.pets });
-    }
-   }
-  } catch (error) {
-   handleError(error, "CharacterService");
-   console.error(
-    "Error resetting pet rolls for all characters:",
-    error.message
-   );
-   throw error;
-  }
- }
-}
-
-class ItemService extends BaseService {
- constructor() {
-  super(Item, "ItemService");
- }
-
- async getAllItems() {
-  try {
-   await getTinglebotConnection();
-   return await this.find();
-  } catch (error) {
-   handleError(error, "ItemService");
-   console.error("Error fetching all items:", error.message);
-   throw error;
-  }
- }
-
- async getItemByName(itemName) {
-  try {
-   await getTinglebotConnection();
-   const normalizedItemName = itemName.trim().toLowerCase();
-   const escapedName = normalizedItemName.replace(
-    /[-\/\\^$*+?.()|[\]{}]/g,
-    "\\$&"
-   );
-
-   return await this.findOne({
-    itemName: new RegExp(`^${escapedName}$`, "i"),
-   });
-  } catch (error) {
-   handleError(error, "ItemService");
-   console.error(`Error fetching item "${itemName}":`, error.message);
-   throw error;
-  }
- }
-
- async getItemsByMonster(monsterName) {
-  try {
-   await getTinglebotConnection();
-   const query = {
-    $or: [{ monsterList: monsterName }, { [monsterName]: true }],
-   };
-
-   const items = await this.find(query);
-   return items.filter((item) => item.itemName && item.itemRarity);
-  } catch (error) {
-   handleError(error, "ItemService");
-   console.error(
-    `Error fetching items for monster "${monsterName}":`,
-    error.message
-   );
-   throw error;
-  }
- }
-
- async getCraftableItems(inventory) {
-  try {
-   await getTinglebotConnection();
-   const craftableItems = await this.find({ crafting: true });
-   const craftableWithMaterials = [];
-
-   for (const item of craftableItems) {
-    const { craftingMaterial } = item;
-    if (!craftingMaterial || craftingMaterial.length === 0) {
-     continue;
-    }
-
-    if (this.checkMaterialAvailability(craftingMaterial, inventory)) {
-     craftableWithMaterials.push(item);
-    }
-   }
-
-   return craftableWithMaterials;
-  } catch (error) {
-   handleError(error, "ItemService");
-   console.error("Error fetching craftable items:", error.message);
-   throw error;
-  }
- }
-
- checkMaterialAvailability(craftingMaterials, inventory) {
-  for (const material of craftingMaterials) {
-   const { _id, itemName, quantity } = material;
-
-   if (!_id) {
-    const specificItems = this.getSpecificItems(itemName);
-    if (specificItems.length === 0) {
-     return false;
-    }
-
-    let specificMaterialAvailable = false;
-    for (const specificItem of specificItems) {
-     if (this.checkMaterial(null, specificItem, quantity, inventory)) {
-      specificMaterialAvailable = true;
-      break;
-     }
-    }
-
-    if (!specificMaterialAvailable) {
-     return false;
-    }
-   } else if (!this.checkMaterial(_id, itemName, quantity, inventory)) {
-    return false;
-   }
-  }
-
-  return true;
- }
-
- checkMaterial(materialId, materialName, quantityNeeded, inventory) {
-  try {
-   if (!materialId && !materialName) {
-    return false;
-   }
-
-   const itemById = materialId
-    ? inventory.find(
-       (inv) => inv.itemId && inv.itemId.toString() === materialId.toString()
-      )
-    : inventory.find((inv) => inv.itemName === materialName);
-
-   return itemById && itemById.quantity >= quantityNeeded;
-  } catch (error) {
-   handleError(error, "ItemService");
-   console.error("Error checking material:", error.message);
-   return false;
-  }
- }
-
- getSpecificItems(generalItemName) {
-  return generalCategories[generalItemName] || [];
- }
-
- async getItemsByCategory(category) {
-  try {
-   await getTinglebotConnection();
-   return await this.find({
-    category: { $regex: `^${category}$`, $options: "i" },
-   });
-  } catch (error) {
-   handleError(error, "ItemService");
-   console.error(
-    `Error fetching items by category "${category}":`,
-    error.message
-   );
-   throw error;
-  }
- }
-}
-
-class MonsterService extends BaseService {
- constructor() {
-  super(Monster, "MonsterService");
- }
-
- toCamelCase(str) {
-  return str.replace(/(?:^\w|[A-Z]|\b\w|\s+|[-()/])/g, (match, index) => {
-   if (match === "-" || match === "(" || match === ")" || match === "/")
-    return "";
-   return index === 0 ? match.toLowerCase() : match.toUpperCase();
+const fetchCharacterByName = async (characterName) => {
+ try {
+  await connectToTinglebot();
+  const character = await Character.findOne({
+   name: new RegExp(`^${characterName.trim()}$`, "i"),
   });
- }
 
- async getByNameMapping(nameMapping) {
-  if (!nameMapping) {
-   throw new Error("No nameMapping provided");
-  }
-
-  try {
-   await getTinglebotConnection();
-   const normalizedMapping = this.toCamelCase(nameMapping);
-   return await this.findOne({ nameMapping: normalizedMapping });
-  } catch (error) {
-   handleError(error, "MonsterService");
+  if (!character) {
    console.error(
-    `Error fetching monster by mapping "${nameMapping}":`,
-    error.message
+    `[characterService]: logs - Character "${characterName}" not found in database.`
    );
-   throw error;
+   throw new Error("Character not found");
   }
+  return character;
+ } catch (error) {
+  handleError(error, "characterService.js");
+  console.error(
+   `❌ Error fetching character "${characterName}": ${error.message}`
+  );
+  throw error;
  }
+};
 
- async getMonsterAboveTier(minTier = 5) {
-  try {
-   await getTinglebotConnection();
-   const monsters = await this.find({ tier: { $gte: minTier } });
-
-   if (!monsters || monsters.length === 0) {
-    throw new Error(`No monsters found above tier ${minTier}`);
-   }
-
-   return monsters[Math.floor(Math.random() * monsters.length)];
-  } catch (error) {
-   handleError(error, "MonsterService");
-   console.error(
-    `Error fetching monsters above tier ${minTier}:`,
-    error.message
-   );
-   throw error;
-  }
+const fetchBlightedCharactersByUserId = async (userId) => {
+ try {
+  await connectToTinglebot();
+  return await Character.find({ userId, blighted: true }).lean().exec();
+ } catch (error) {
+  handleError(error, "characterService.js");
+  console.error(
+   `[characterService]: logs - Error in fetchBlightedCharactersByUserId: ${error.message}`
+  );
+  throw error;
  }
+};
 
- async getMonsterAboveTierByRegion(minTier = 5, region) {
-  if (!region) {
-   throw new Error("Region must be specified");
-  }
+const fetchAllCharacters = async () => {
+ try {
+  await connectToTinglebot();
+  return await Character.find().lean().exec();
+ } catch (error) {
+  handleError(error, "characterService.js");
+  console.error(
+   `[characterService]: logs - Error in fetchAllCharacters: ${error.message}`
+  );
+  throw error;
+ }
+};
 
-  try {
-   await getTinglebotConnection();
-   const filter = {
-    tier: { $gte: minTier },
-    [region.toLowerCase()]: true,
-   };
-
-   const monsters = await this.find(filter);
-
-   if (!monsters || monsters.length === 0) {
-    throw new Error(
-     `No monsters found above tier ${minTier} in region ${region}`
-    );
-   }
-
-   return monsters[Math.floor(Math.random() * monsters.length)];
-  } catch (error) {
-   handleError(error, "MonsterService");
+const fetchCharacterById = async (characterId) => {
+ try {
+  await connectToTinglebot();
+  const character = await Character.findById(characterId);
+  if (!character) {
    console.error(
-    `Error fetching monsters above tier ${minTier} in region ${region}:`,
-    error.message
+    `[characterService]: logs - Character with ID "${characterId}" not found.`
    );
-   throw error;
+   throw new Error("Character not found");
   }
+  return character;
+ } catch (error) {
+  handleError(error, "characterService.js");
+  console.error(
+   `[characterService]: logs - Error in fetchCharacterById: ${error.message}`
+  );
+  throw error;
+ }
+};
+
+const fetchCharactersByUserId = async (userId) => {
+ try {
+  await connectToTinglebot();
+  const characters = await Character.find({ userId }).lean().exec();
+  return characters;
+ } catch (error) {
+  handleError(error, "characterService.js");
+  console.error(
+   `[characterService]: logs - Error in fetchCharactersByUserId: ${error.message}`
+  );
+  throw error;
+ }
+};
+
+const fetchCharacterByNameAndUserId = async (characterName, userId) => {
+ try {
+  await connectToTinglebot();
+  const character = await Character.findOne({ name: characterName, userId });
+  return character;
+ } catch (error) {
+  handleError(error, "characterService.js");
+  console.error(
+   `[characterService]: logs - Error in fetchCharacterByNameAndUserId: ${error.message}`
+  );
+  throw error;
+ }
+};
+
+const fetchAllCharactersExceptUser = async (userId) => {
+ try {
+  await connectToTinglebot();
+  return await Character.find({ userId: { $ne: userId } }).exec();
+ } catch (error) {
+  handleError(error, "characterService.js");
+  console.error(
+   `[characterService]: logs - Error in fetchAllCharactersExceptUser: ${error.message}`
+  );
+  throw error;
+ }
+};
+
+const createCharacter = async (characterData) => {
+ try {
+  await connectToTinglebot();
+  const character = new Character(characterData);
+  await character.save();
+  return character;
+ } catch (error) {
+  handleError(error, "characterService.js");
+  console.error(
+   `[characterService]: logs - Error in createCharacter: ${error.message}`
+  );
+  throw error;
+ }
+};
+
+const updateCharacterById = async (characterId, updateData) => {
+ try {
+  await connectToTinglebot();
+  return await Character.findByIdAndUpdate(
+   new ObjectId(characterId),
+   updateData,
+   { new: true }
+  )
+   .lean()
+   .exec();
+ } catch (error) {
+  handleError(error, "characterService.js");
+  console.error(
+   `[characterService]: logs - Error in updateCharacterById: ${error.message}`
+  );
+  throw error;
+ }
+};
+
+const deleteCharacterById = async (characterId) => {
+ try {
+  await connectToTinglebot();
+  return await Character.findByIdAndDelete(new ObjectId(characterId))
+   .lean()
+   .exec();
+ } catch (error) {
+  handleError(error, "characterService.js");
+  console.error(
+   `[characterService]: logs - Error in deleteCharacterById: ${error.message}`
+  );
+  throw error;
+ }
+};
+
+const updateCharacterInventorySynced = async (characterId) => {
+ try {
+  await updateCharacterById(characterId, { inventorySynced: true });
+  await removeInitialItemIfSynced(characterId);
+ } catch (error) {
+  handleError(error, "characterService.js");
+  console.error(
+   `[characterService]: logs - Error in updateCharacterInventorySynced: ${error.message}`
+  );
+  throw error;
+ }
+};
+
+const getCharacterInventoryCollection = async (characterName) => {
+ try {
+  if (typeof characterName !== "string") {
+   throw new TypeError(
+    `Expected a string for characterName, but received ${typeof characterName}`
+   );
+  }
+  await connectToInventories();
+  const collectionName = characterName.trim().toLowerCase();
+  return await getInventoryCollection(collectionName);
+ } catch (error) {
+  handleError(error, "characterService.js");
+  console.error(
+   `[characterService]: logs - Error in getCharacterInventoryCollection for "${characterName}": ${error.message}`
+  );
+  throw error;
+ }
+};
+
+const createCharacterInventory = async (characterName, characterId, job) => {
+ try {
+  const collection = await getInventoryCollection(characterName);
+  const initialInventory = {
+   characterId,
+   itemName: "Initial Item",
+   quantity: 1,
+   category: "Misc",
+   type: "Misc",
+   subtype: "Misc",
+   job,
+   perk: "",
+   location: "",
+   link: "",
+   date: new Date(),
+   obtain: [],
+  };
+  await collection.insertOne(initialInventory);
+ } catch (error) {
+  handleError(error, "characterService.js");
+  console.error(
+   `[characterService]: logs - Error in createCharacterInventory for "${characterName}": ${error.message}`
+  );
+  throw error;
+ }
+};
+
+const deleteCharacterInventoryCollection = async (characterName) => {
+ try {
+  const collection = await getCharacterInventoryCollection(characterName);
+  await collection.drop();
+ } catch (error) {
+  handleError(error, "characterService.js");
+  console.error(
+   `[characterService]: logs - Error in deleteCharacterInventoryCollection for "${characterName}": ${error.message}`
+  );
+  throw error;
+ }
+};
+
+async function addPetToCharacter(
+ characterId,
+ petName,
+ species,
+ size,
+ level,
+ perk
+) {
+ try {
+  await Character.findByIdAndUpdate(characterId, {
+   $push: {
+    pets: {
+     name: petName,
+     species: species,
+     size: size,
+     level: level,
+     rollsRemaining: 1,
+     perks: [perk],
+    },
+   },
+  });
+ } catch (error) {
+  handleError(error, "characterService.js");
+  console.error(
+   `[characterService]: logs - Error in addPetToCharacter: ${error.message}`
+  );
+  throw error;
  }
 }
 
-const characterService = new CharacterService();
-const itemService = new ItemService();
-const monsterService = new MonsterService();
+async function updatePetRolls(characterId, petIdentifier, newRolls) {
+ try {
+  let filter;
+  if (petIdentifier.match(/^[0-9a-fA-F]{24}$/)) {
+   filter = { _id: petIdentifier, owner: characterId };
+  } else {
+   filter = { name: petIdentifier, owner: characterId };
+  }
+  await Pet.updateOne(filter, { $set: { rollsRemaining: newRolls } });
+ } catch (error) {
+  handleError(error, "characterService.js");
+  console.error(
+   `[characterService]: logs - updatePetRolls error: ${error.message}`
+  );
+  throw error;
+ }
+}
+
+async function upgradePetLevel(characterId, petName, newLevel) {
+ try {
+  await Character.updateOne(
+   { _id: characterId, "pets.name": petName },
+   { $set: { "pets.$.level": newLevel } }
+  );
+ } catch (error) {
+  handleError(error, "characterService.js");
+  console.error(
+   `[characterService]: logs - Error in upgradePetLevel: ${error.message}`
+  );
+  throw error;
+ }
+}
+
+async function updatePetToCharacter(characterId, petName, updatedPetData) {
+ try {
+  await Character.updateOne(
+   { _id: characterId, "pets.name": petName },
+   { $set: { "pets.$": updatedPetData } }
+  );
+ } catch (error) {
+  handleError(error, "characterService.js");
+  console.error(
+   `[characterService]: logs - Failed to update pet "${petName}": ${error.message}`
+  );
+  throw new Error("Failed to update pet");
+ }
+}
+
+async function resetPetRollsForAllCharacters() {
+ try {
+  const characters = await fetchAllCharacters();
+  for (let character of characters) {
+   if (character.pets && Array.isArray(character.pets)) {
+    character.pets = character.pets.map((pet) => {
+     pet.rollsRemaining = Math.min(pet.level, 3);
+     return pet;
+    });
+    await Character.findByIdAndUpdate(character._id, { pets: character.pets });
+   }
+  }
+ } catch (error) {
+  handleError(error, "characterService.js");
+  console.error(
+   `[characterService]: logs - Error in resetPetRollsForAllCharacters: ${error.message}`
+  );
+  throw error;
+ }
+}
+
+const fetchAllItems = async () => {
+ const client = await connectToInventoriesForItems();
+ try {
+  const db = client.db("tinglebot");
+  const items = await db.collection("items").find().toArray();
+  return items;
+ } catch (error) {
+  handleError(error, "itemService.js");
+  console.error("[itemService.js]: ❌ Error fetching all items:", error);
+  throw error;
+ } finally {
+  await client.close();
+ }
+};
+
+async function fetchItemByName(itemName) {
+ const client = await connectToInventoriesForItems();
+ try {
+  const db = client.db("tinglebot");
+  const normalizedItemName = itemName.trim().toLowerCase();
+  const escapedName = normalizedItemName.replace(
+   /[-\/\\^$*+?.()|[\]{}]/g,
+   "\\$&"
+  );
+  const item = await db.collection("items").findOne({
+   itemName: new RegExp(`^${escapedName}$`, "i"),
+  });
+  if (!item) {
+   console.warn(
+    `[itemService.js]: ⚠️ No item found for "${normalizedItemName}"`
+   );
+   return null;
+  }
+  return item;
+ } catch (error) {
+  handleError(error, "itemService.js");
+  console.error("[itemService.js]: ❌ Error fetching item by name:", error);
+  throw error;
+ } finally {
+  await client.close();
+ }
+}
+
+const fetchItemById = async (itemId) => {
+ const client = await connectToInventoriesForItems();
+ try {
+  const db = client.db("tinglebot");
+  const item = await db.collection("items").findOne({ _id: ObjectId(itemId) });
+  return item;
+ } catch (error) {
+  handleError(error, "itemService.js");
+  console.error("[itemService.js]: ❌ Error fetching item by ID:", error);
+  throw error;
+ } finally {
+  await client.close();
+ }
+};
+
+const fetchItemsByMonster = async (monsterName) => {
+ const client = await connectToInventoriesForItems();
+ try {
+  const db = client.db("tinglebot");
+  const query = {
+   $or: [{ monsterList: monsterName }, { [monsterName]: true }],
+  };
+  const items = await db.collection("items").find(query).toArray();
+  return items.filter((item) => item.itemName && item.itemRarity);
+ } catch (error) {
+  handleError(error, "itemService.js");
+  console.error("[itemService.js]: ❌ Error fetching items by monster:", error);
+  throw error;
+ } finally {
+  await client.close();
+ }
+};
+
+const fetchCraftableItemsAndCheckMaterials = async (inventory) => {
+ const client = await connectToInventoriesForItems();
+ try {
+  const db = client.db("tinglebot");
+  const craftableItems = await db
+   .collection("items")
+   .find({ crafting: true })
+   .toArray();
+  const craftableItemsWithMaterials = [];
+
+  for (const item of craftableItems) {
+   const { craftingMaterial } = item;
+   if (!craftingMaterial || craftingMaterial.length === 0) {
+    continue;
+   }
+   const allMaterialsAvailable = checkMaterialAvailability(
+    craftingMaterial,
+    inventory
+   );
+   if (allMaterialsAvailable) {
+    craftableItemsWithMaterials.push(item);
+   }
+  }
+  return craftableItemsWithMaterials;
+ } catch (error) {
+  handleError(error, "itemService.js");
+  console.error(
+   "[itemService.js]: ❌ Error fetching craftable items and checking materials:",
+   error
+  );
+  throw error;
+ } finally {
+  await client.close();
+ }
+};
+
+const fetchAndSortItemsByRarity = async (inventoryItems) => {
+ try {
+  const itemIds = inventoryItems.map((item) => item.itemId);
+  const itemsFromDB = await ItemModel.find({ _id: { $in: itemIds } }).lean();
+
+  const itemsWithRarity = inventoryItems.map((inventoryItem) => {
+   const dbItem = itemsFromDB.find(
+    (dbItem) => dbItem._id.toString() === inventoryItem.itemId.toString()
+   );
+   return {
+    ...inventoryItem,
+    itemRarity: dbItem ? dbItem.itemRarity : 1,
+   };
+  });
+
+  itemsWithRarity.sort((a, b) => a.itemRarity - b.itemRarity);
+  return itemsWithRarity;
+ } catch (error) {
+  handleError(error, "itemService.js");
+  console.error(
+   "[itemService.js]: ❌ Error fetching and sorting items by rarity:",
+   error
+  );
+  throw error;
+ }
+};
+
+const getIngredientItems = async (ingredientName) => {
+ try {
+  const items = await fetchAllItems();
+  const craftingItems = items.filter((item) => item.crafting);
+  const directMatches = craftingItems.filter((item) =>
+   item.craftingMaterial.some(
+    (material) => material.itemName === ingredientName
+   )
+  );
+  const formattedResults = directMatches.map((item) => ({
+   name: `**${item.emoji || "🔹"} ${item.itemName}** | ${
+    item.staminaToCraft
+   } 🟩 | ${item.craftingJobs.join(", ")}`,
+   value: item.itemName,
+   craftingMaterial: item.craftingMaterial,
+  }));
+  return formattedResults;
+ } catch (error) {
+  handleError(error, "itemService.js");
+  console.error("[itemService.js]: ❌ Error fetching ingredient items:", error);
+  throw error;
+ }
+};
+
+const fetchItemsByIds = async (itemIds) => {
+ const client = await connectToInventoriesForItems();
+ try {
+  const db = client.db("tinglebot");
+  const items = await db
+   .collection("items")
+   .find({ _id: { $in: itemIds } })
+   .toArray();
+  return items;
+ } catch (error) {
+  handleError(error, "itemService.js");
+  console.error("[itemService.js]: ❌ Error fetching items by IDs:", error);
+  throw error;
+ } finally {
+  await client.close();
+ }
+};
+
+const fetchItemRarityByName = async (itemName) => {
+ const client = await connectToInventoriesForItems();
+ try {
+  const db = client.db("tinglebot");
+  const normalizedItemName = itemName.trim().toLowerCase();
+  const escapedName = normalizedItemName.replace(
+   /[-\/\\^$*+?.()|[\]{}]/g,
+   "\\$&"
+  );
+  const item = await db.collection("items").findOne({
+   itemName: new RegExp(`^${escapedName}$`, "i"),
+  });
+  return item ? item.itemRarity : null;
+ } catch (error) {
+  handleError(error, "itemService.js");
+  console.error(
+   "[itemService.js]: ❌ Error fetching item rarity by name:",
+   error
+  );
+  throw error;
+ } finally {
+  await client.close();
+ }
+};
+
+const fetchItemsByCategory = async (category) => {
+ const client = await connectToInventoriesForItems();
+ try {
+  const db = client.db("tinglebot");
+  const items = await db
+   .collection("items")
+   .find({
+    category: { $regex: `^${category}$`, $options: "i" },
+   })
+   .toArray();
+
+  if (!items || items.length === 0) {
+   console.warn(`[itemService.js]: ⚠️ No items found in category: ${category}`);
+   return [];
+  }
+  return items;
+ } catch (error) {
+  handleError(error, "itemService.js");
+  console.error(
+   "[itemService.js]: ❌ Error fetching items by category:",
+   error
+  );
+  throw error;
+ } finally {
+  await client.close();
+ }
+};
+
+const fetchValidWeaponSubtypes = async () => {
+ const client = await connectToInventoriesForItems();
+ try {
+  const db = client.db("tinglebot");
+  const subtypes = await db.collection("items").distinct("subtype");
+  return subtypes.filter(Boolean).map((sub) => sub.toLowerCase());
+ } catch (error) {
+  handleError(error, "itemService.js");
+  console.error(
+   "[itemService.js]: ❌ Error fetching valid weapon subtypes:",
+   error
+  );
+  return [];
+ } finally {
+  await client.close();
+ }
+};
+
+function toCamelCase(str) {
+ return str.replace(/(?:^\w|[A-Z]|\b\w|\s+|[-()/])/g, (match, index) => {
+  if (match === "-" || match === "(" || match === ")" || match === "/")
+   return "";
+  return index === 0 ? match.toLowerCase() : match.toUpperCase();
+ });
+}
+
+const fetchAllMonsters = async () => {
+ try {
+  return await Monster.find();
+ } catch (error) {
+  handleError(error, "monsterService.js");
+  console.error("[monsterService.js]: ❌ Error fetching monsters:", error);
+  throw error;
+ }
+};
+
+const fetchMonsterByName = async (name) => {
+ try {
+  return await Monster.findOne({ name });
+ } catch (error) {
+  handleError(error, "monsterService.js");
+  console.error(
+   `[monsterService.js]: ❌ Error fetching monster with name "${name}":`,
+   error
+  );
+  throw error;
+ }
+};
+
+const getMonsterDetailsByMapping = async (nameMapping) => {
+ if (!nameMapping) {
+  console.error("[monsterService.js]: ❌ No nameMapping provided.");
+  return null;
+ }
+ const normalizedMapping = toCamelCase(nameMapping);
+ try {
+  const monster = await Monster.findOne({ nameMapping: normalizedMapping });
+  if (!monster) {
+   console.error(
+    `[monsterService.js]: ❌ No monster found with nameMapping: ${normalizedMapping}`
+   );
+   return null;
+  }
+  return monster;
+ } catch (error) {
+  handleError(error, "monsterService.js");
+  console.error(
+   "[monsterService.js]: ❌ Error fetching monster by mapping:",
+   error
+  );
+  throw error;
+ }
+};
+
+async function getMonstersAboveTier(minTier = 5) {
+ try {
+  const monsters = await Monster.find({ tier: { $gte: minTier } }).exec();
+  if (!monsters || monsters.length === 0) {
+   console.error(
+    `[monsterService.js]: ❌ No monsters found above tier ${minTier}.`
+   );
+   return null;
+  }
+  const randomMonster = monsters[Math.floor(Math.random() * monsters.length)];
+  return randomMonster;
+ } catch (error) {
+  handleError(error, "monsterService.js");
+  console.error(
+   `[monsterService.js]: ❌ Error fetching monsters above tier ${minTier}:`,
+   error
+  );
+  return null;
+ }
+}
+
+async function getMonstersAboveTierByRegion(minTier = 5, region) {
+ try {
+  if (!region) {
+   console.error(
+    "[monsterService.js]: ❌ No region provided for filtering monsters."
+   );
+   return null;
+  }
+  const filter = {
+   tier: { $gte: minTier },
+   [region.toLowerCase()]: true,
+  };
+  const monsters = await Monster.find(filter).exec();
+  if (!monsters || monsters.length === 0) {
+   console.error(
+    `[monsterService.js]: ❌ No monsters found above tier ${minTier} for region: ${region}.`
+   );
+   return null;
+  }
+  const randomMonster = monsters[Math.floor(Math.random() * monsters.length)];
+  return randomMonster;
+ } catch (error) {
+  handleError(error, "monsterService.js");
+  console.error(
+   `[monsterService.js]: ❌ Error fetching monsters above tier ${minTier} for region "${region}":`,
+   error
+  );
+  return null;
+ }
+}
 
 async function createQuest(questData) {
  const quest = new Quest(questData);
@@ -678,7 +826,7 @@ async function completeQuest(userId, questId) {
 
 const createRelic = async (relicData) => {
  try {
-  await getTinglebotConnection();
+  await connectToTinglebot();
   const newRelic = new RelicModel(relicData);
   return await newRelic.save();
  } catch (error) {
@@ -690,7 +838,7 @@ const createRelic = async (relicData) => {
 
 const fetchRelicsByCharacter = async (characterName) => {
  try {
-  await getTinglebotConnection();
+  await connectToTinglebot();
   return await RelicModel.find({ discoveredBy: characterName }).lean();
  } catch (error) {
   handleError(error, "relicService.js");
@@ -709,7 +857,7 @@ const appraiseRelic = async (
  rollOutcome
 ) => {
  try {
-  await getTinglebotConnection();
+  await connectToTinglebot();
   const updateData = {
    appraised: true,
    appraisedBy: appraiserName,
@@ -729,7 +877,7 @@ const appraiseRelic = async (
 
 const archiveRelic = async (relicId, imageUrl) => {
  try {
-  await getTinglebotConnection();
+  await connectToTinglebot();
   return await RelicModel.findByIdAndUpdate(
    relicId,
    {
@@ -748,7 +896,7 @@ const archiveRelic = async (relicId, imageUrl) => {
 
 const markRelicDeteriorated = async (relicId) => {
  try {
-  await getTinglebotConnection();
+  await connectToTinglebot();
   return await RelicModel.findByIdAndUpdate(
    relicId,
    { deteriorated: true },
@@ -766,7 +914,7 @@ const markRelicDeteriorated = async (relicId) => {
 
 const fetchArchivedRelics = async () => {
  try {
-  await getTinglebotConnection();
+  await connectToTinglebot();
   return await RelicModel.find({ archived: true }).lean();
  } catch (error) {
   handleError(error, "relicService.js");
@@ -777,7 +925,7 @@ const fetchArchivedRelics = async () => {
 
 const fetchRelicById = async (relicId) => {
  try {
-  await getTinglebotConnection();
+  await connectToTinglebot();
   return await RelicModel.findById(relicId).lean();
  } catch (error) {
   handleError(error, "relicService.js");
@@ -788,7 +936,7 @@ const fetchRelicById = async (relicId) => {
 
 const deleteAllRelics = async () => {
  try {
-  await getTinglebotConnection();
+  await connectToTinglebot();
   return await RelicModel.deleteMany({});
  } catch (error) {
   handleError(error, "relicService.js");
@@ -809,7 +957,7 @@ async function getTokenBalance(userId) {
 }
 
 async function getOrCreateToken(userId, tokenTrackerLink = "") {
- await getTinglebotConnection();
+ await connectToTinglebot();
  let user = await User.findOne({ discordId: userId });
 
  if (!user) {
@@ -860,7 +1008,7 @@ async function updateTokenBalance(userId, change) {
 }
 
 async function syncTokenTracker(userId) {
- await getTinglebotConnection();
+ await connectToTinglebot();
  const user = await getOrCreateToken(userId);
  if (!user.tokenTracker || !isValidGoogleSheetsUrl(user.tokenTracker)) {
   const errorMessage = "Invalid Google Sheets URL";
@@ -1012,7 +1160,7 @@ function extractSpreadsheetIdFromUrl(url) {
 }
 
 async function getOrCreateUser(discordId, googleSheetsUrl, timezone) {
- await getTinglebotConnection();
+ await connectToTinglebot();
  let user = await User.findOne({ discordId });
 
  if (!user) {
@@ -1036,14 +1184,14 @@ async function getOrCreateUser(discordId, googleSheetsUrl, timezone) {
 
 const getUserById = async (discordId) => {
  console.log(`Fetching user by Discord ID: ${discordId}`);
- await getTinglebotConnection();
+ await connectToTinglebot();
  const user = await User.findOne({ discordId });
  console.log(`User found: ${user ? user.discordId : "Not found"}`);
  return user;
 };
 
 async function updateUserTokens(discordId, amount, activity, link = "") {
- await getTinglebotConnection();
+ await connectToTinglebot();
  const user = await User.findOne({ discordId });
 
  if (!user) {
@@ -1066,7 +1214,7 @@ async function updateUserTokens(discordId, amount, activity, link = "") {
 }
 
 async function updateUserTokenTracker(discordId, tokenTracker) {
- await getTinglebotConnection();
+ await connectToTinglebot();
  const user = await User.findOneAndUpdate(
   { discordId },
   { tokenTracker },
@@ -1111,6 +1259,7 @@ const generateVendingStockList = async () => {
  const client = await connectToDatabase();
  const db = client.db("tinglebot");
  const stockCollection = db.collection("vending_stock");
+
  const priorityItems = [
   "Leather",
   "Eldin Ore",
@@ -1139,7 +1288,7 @@ const generateVendingStockList = async () => {
  try {
   const currentMonth = new Date().getMonth() + 1;
   await clearExistingStock();
-  const allItems = await itemService.getAllItems();
+  const allItems = await fetchAllItems();
   const merchantItems = allItems.filter(
    (item) => item.vending && item.itemRarity >= 1 && item.itemRarity <= 10
   );
@@ -1394,14 +1543,114 @@ async function updateVendingStock({
  }
 }
 
+const getSpecificItems = (generalItemName) => {
+ return generalCategories[generalItemName] || [];
+};
+
+const checkMaterialAvailability = (craftingMaterials, inventory) => {
+ let allMaterialsAvailable = true;
+ for (const material of craftingMaterials) {
+  const { _id, itemName, quantity } = material;
+  if (!_id) {
+   const specificItems = getSpecificItems(itemName);
+   if (specificItems.length === 0) {
+    allMaterialsAvailable = false;
+    continue;
+   }
+   let specificMaterialAvailable = false;
+   for (const specificItem of specificItems) {
+    if (checkMaterial(null, specificItem, quantity, inventory)) {
+     specificMaterialAvailable = true;
+     break;
+    }
+   }
+   if (!specificMaterialAvailable) {
+    allMaterialsAvailable = false;
+   }
+  } else {
+   if (!checkMaterial(_id, itemName, quantity, inventory)) {
+    allMaterialsAvailable = false;
+   }
+  }
+ }
+ return allMaterialsAvailable;
+};
+
+const checkMaterial = (materialId, materialName, quantityNeeded, inventory) => {
+ try {
+  if (!materialId && !materialName) {
+   return false;
+  }
+  const itemById = materialId
+   ? inventory.find(
+      (inv) => inv.itemId && inv.itemId.toString() === materialId.toString()
+     )
+   : inventory.find((inv) => inv.itemName === materialName);
+  return itemById && itemById.quantity >= quantityNeeded;
+ } catch (error) {
+  handleError(error, "itemService.js");
+  console.error("[itemService.js]: ❌ Error checking material:", error);
+  return false;
+ }
+};
+
+const connectToInventoriesForItems = async () => {
+ const client = new MongoClient(inventoriesUri, {});
+ try {
+  await client.connect();
+  return client;
+ } catch (error) {
+  handleError(error, "itemService.js");
+  console.error(
+   "[itemService.js]: ❌ Error connecting to Inventories database:",
+   error
+  );
+  throw error;
+ }
+};
+
 module.exports = {
- getTinglebotConnection,
- getInventoriesConnection,
+ connectToTinglebot,
  connectToInventories,
+ connectToInventoriesNative,
  getInventoryCollection,
- characterService,
- itemService,
- monsterService,
+ getCharactersInVillage,
+ fetchCharacterByName,
+ fetchAllCharacters,
+ fetchCharacterById,
+ fetchCharactersByUserId,
+ fetchCharacterByNameAndUserId,
+ fetchAllCharactersExceptUser,
+ createCharacter,
+ updateCharacterById,
+ deleteCharacterById,
+ fetchBlightedCharactersByUserId,
+ updateCharacterInventorySynced,
+ getCharacterInventoryCollection,
+ createCharacterInventory,
+ deleteCharacterInventoryCollection,
+ addPetToCharacter,
+ updatePetRolls,
+ upgradePetLevel,
+ updatePetToCharacter,
+ resetPetRollsForAllCharacters,
+ fetchAllItems,
+ fetchItemByName,
+ fetchItemById,
+ fetchItemsByMonster,
+ fetchCraftableItemsAndCheckMaterials,
+ fetchAndSortItemsByRarity,
+ getIngredientItems,
+ fetchItemsByIds,
+ fetchItemRarityByName,
+ fetchItemsByCategory,
+ fetchValidWeaponSubtypes,
+ getSpecificItems,
+ fetchAllMonsters,
+ fetchMonsterByName,
+ getMonsterDetailsByMapping,
+ getMonstersAboveTier,
+ getMonstersAboveTierByRegion,
  createQuest,
  joinQuest,
  completeQuest,
