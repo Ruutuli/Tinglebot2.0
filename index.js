@@ -1,28 +1,16 @@
-// ------------------- Environment Variables -------------------
 require('dotenv').config();
-
-// ------------------- Standard Libraries -------------------
 const fs = require('fs');
 const path = require('path');
 const { handleError } = require('./utils/globalErrorHandler');
-
-// ------------------- Third-Party Modules -------------------
 const { Client, GatewayIntentBits, Collection } = require('discord.js');
 const cron = require('node-cron');
-
-// ------------------- Database Connections -------------------
-const { connectToTinglebot, connectToInventories } = require('./database/connection');
-const { generateVendingStockList } = require('./database/vendingService');
-
-// ------------------- Handlers -------------------
+const { connectToTinglebot, connectToInventories, generateVendingStockList } = require('./database/db');
 const { handleAutocomplete } = require('./handlers/autocompleteHandler');
 const { handleComponentInteraction } = require('./handlers/componentHandler');
 const { handleInteraction } = require('./handlers/interactionHandler');
 const { handleModalSubmission, handleButtonModalTrigger } = require('./handlers/modalHandler');
 const { handleSelectMenuInteraction } = require('./handlers/selectMenuHandler');
 const { executeVending, initializeReactionHandler } = require('./handlers/vendingHandler');
-
-// ------------------- Scripts and Utilities -------------------
 const { renameChannels, trackBloodMoon, isBloodMoonDay } = require('./scripts/bloodmoon');
 const { convertToHyruleanDate } = require('./modules/calendarModule');
 const scheduler = require('./scheduler');
