@@ -20,9 +20,7 @@ const { saveSubmissionToStorage, deleteSubmissionFromStorage  } = require('../ut
 const { generateUniqueId } = require('../utils/uniqueIdUtils');
 
 // ------------------- Services -------------------
-const { appendSpentTokens, updateTokenBalance, getTokenBalance, getOrCreateToken } = require('../database/tokenService');
-const { getCharacterInventoryCollection, fetchCharacterById  } = require('../database/characterService');
-const { fetchItemByName } = require('../database/itemService');
+const { appendSpentTokens, updateTokenBalance, getTokenBalance, getOrCreateToken, fetchItemByName, getCharacterInventoryCollection, fetchCharacterById} = require('../database/db');
 
 // Channel ID for Blight Notifications
 const channelId = process.env.BLIGHT_NOTIFICATIONS_CHANNEL_ID;
