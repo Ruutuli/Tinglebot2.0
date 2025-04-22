@@ -5,17 +5,9 @@ const fs = require('fs');
 const { handleError } = require('../utils/globalErrorHandler');
 const path = require('path');
 
-// Importing the locations module to use village data
-const { getAllVillages } = require('./locationsModule');
-
 // Define the path to encounter.json
 const ENCOUNTER_PATH = path.join(__dirname, '..', 'data', 'encounter.json');
 
-const villageEmojis = {
-  rudania: '<:rudania:899492917452890142>',
-  inariko: '<:inariko:899493009073274920>',
-  vhintl: '<:vhintl:899492879205007450>',
-};
 
 // ------------------- Customization Costs -------------------
 const customizationCosts = {
@@ -302,12 +294,6 @@ function getMountVillage(mount) {
     return getRandomVillage(); // Randomly select a village for horses and donkeys
   }
   return regionalMounts[mount] || 'Unknown';
-}
-
-// Helper function to randomly select a village
-function getRandomVillage() {
-  const villages = ['Rudania', 'Inariko', 'Vhintl'];
-  return villages[Math.floor(Math.random() * villages.length)];
 }
 
 // Helper function to get a random level
@@ -1120,7 +1106,5 @@ module.exports = {
   bearTraits,
   mooseTraits,
   generateMooseTraits,
-  generateMountainGoatTraits,
-  mountainGoatTraits,
   calculateMountPrice
 };
