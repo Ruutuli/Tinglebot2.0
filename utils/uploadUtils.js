@@ -3,10 +3,8 @@
 
 // ------------------- Imports -------------------
 // Group imports logically
-const { Storage } = require('@google-cloud/storage');  // Google Cloud Storage API
 const { v4: uuidv4 } = require('uuid');               // For generating unique identifiers
 const fetch = require('node-fetch');                  // To fetch the image from a URL
-const path = require('path');
 const { handleError } = require('../utils/globalErrorHandler');
 const bucket = require('../config/gcsService');       // Google Cloud Storage bucket configuration
 
