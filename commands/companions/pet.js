@@ -25,7 +25,6 @@ const { createWeightedItemList } = require("../../modules/rngModule");
 const {
  getPerkField,
  getPetEmoji,
- getPetTableRollDescription,
  getFlavorText,
  getPetTypeData,
 } = require("../../modules/petModule");
@@ -661,10 +660,6 @@ module.exports = {
     }
 
     // ------------------- Build Roll Result Embed -------------------
-    const totalRolls = Math.min(pet.level, 3);
-    const usedRolls = totalRolls - newRollsRemaining;
-    const petEmoji = getPetEmoji(pet.species);
-    const tableDescription = getPetTableRollDescription(chosenRoll);
     const flavorTextMessage = getFlavorText(
      chosenRoll,
      pet.name,
@@ -692,13 +687,6 @@ module.exports = {
     const usedRollsDisplay = maxRolls - pet.rollsRemaining;
     const rollsIcon =
      "🔔".repeat(pet.rollsRemaining) + "🔕".repeat(usedRollsDisplay);
-
-    // ------------------- Determine Upgrade Cost for Display -------------------
-    let upgradeCost = "Max level reached";
-    if (pet.level < 3) {
-     const nextLevel = pet.level + 1;
-     upgradeCost = getUpgradeCost(nextLevel) + " tokens";
-    }
 
     // ------------------- Create and Send Roll Result Embed -------------------
     const rollEmbed = new EmbedBuilder()
