@@ -1,7 +1,7 @@
 // ------------------- Import necessary modules and functions -------------------
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { handleError } = require('../../utils/globalErrorHandler.js');
-const { connectToTinglebot, getIngredientItems, fetchItemByName, fetchAllItemsAndLogStructure, getCharacterInventoryCollection} = require('../../database/db.js');
+const { connectToTinglebot, getIngredientItems, getCharacterInventoryCollection} = require('../../database/db.js');
 const ItemModel = require('../../models/ItemModel.js');
 const Character = require('../../models/CharacterModel.js');
 const { handleAutocomplete } = require('../../handlers/autocompleteHandler.js');
@@ -11,7 +11,6 @@ const { formatItemDetails } = require('../../embeds/embeds.js');
 // ------------------- Constants -------------------
 const ITEMS_PER_PAGE = 25;
 const DEFAULT_EMOJI = '🔹';
-const MAX_DESCRIPTION_LENGTH = 4096;
 
 module.exports = {
   // ------------------- Slash Command Definition -------------------
