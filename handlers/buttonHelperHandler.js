@@ -2,8 +2,6 @@
 // Provides utility functions for common button components
 
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-
-const { handleError } = require('../utils/globalErrorHandler');
 // ------------------- Cancel Button Row -------------------
 function getCancelButtonRow() {
   return new ActionRowBuilder().addComponents(
