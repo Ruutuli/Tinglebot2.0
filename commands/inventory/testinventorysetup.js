@@ -1,8 +1,7 @@
 // ------------------- Import necessary modules and services -------------------
 const { SlashCommandBuilder } = require('@discordjs/builders');
 const { handleError } = require('../../utils/globalErrorHandler.js');
-const { fetchCharacterByNameAndUserId } = require('../../database/characterService.js');
-const { connectToTinglebot } = require('../../database/connection.js');
+const { connectToTinglebot, fetchCharacterByNameAndUserId } = require('../../database/db.js');
 const { authorizeSheets, appendSheetData, getSheetIdByTitle, readSheetData } = require('../../utils/googleSheetsUtils.js');
 const { extractSpreadsheetId } = require('../../utils/validation.js');
 const Character = require('../../models/CharacterModel.js');
