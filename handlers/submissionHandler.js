@@ -6,7 +6,7 @@
 // Discord.js Components
 // ============================================================================
 
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { EmbedBuilder } = require('discord.js');
 
 const { handleError } = require('../utils/globalErrorHandler');
 // ============================================================================
@@ -22,15 +22,6 @@ const { appendEarnedTokens } = require('../database/tokenService');
 const { resetSubmissionState, calculateTokens } = require('../utils/tokenUtils');
 const { saveSubmissionToStorage, submissionStore, retrieveSubmissionFromStorage, deleteSubmissionFromStorage } = require('../utils/storage');
 
-// ============================================================================
-// Helper Functions
-// ============================================================================
-
-// ------------------- Capitalize First Letter -------------------
-// Capitalizes the first letter of a string.
-function capitalizeFirstLetter(string) {
-  return string.charAt(0).toUpperCase() + string.slice(1);
-}
 
 // ============================================================================
 // Submission Completion Handler
