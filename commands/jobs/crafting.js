@@ -12,7 +12,7 @@ const { SlashCommandBuilder } = require('@discordjs/builders');
 
 const { handleError } = require('../../utils/globalErrorHandler.js');
 // ------------------- Database Connections -------------------
-const { connectToTinglebot, fetchCharacterByNameAndUserId, getCharacterInventoryCollection, updateCharacterById, fetchItemByName } = require('../../database/db.js');
+const { connectToTinglebot, fetchCharacterByNameAndUserId, getCharacterInventoryCollection, fetchItemByName } = require('../../database/db.js');
 
 // ------------------- Modules -------------------
 const { checkAndUseStamina } = require('../../modules/characterStatsModule.js');
@@ -33,8 +33,6 @@ const { createCraftingEmbed } = require('../../embeds/embeds.js');
 // ------------------- Handler Imports -------------------
 const { handleCraftingAutocomplete } = require('../../handlers/autocompleteHandler.js');
 
-// ------------------- Database Models -------------------
-const generalCategories = require('../../models/GeneralItemCategories.js');
 const ItemModel = require('../../models/ItemModel.js');
 
 module.exports = {
@@ -421,7 +419,6 @@ async function logMaterialsToGoogleSheets(auth, spreadsheetId, range, character,
 // ------------------- Combine Materials -------------------
 // Combines duplicate materials from the crafting process to avoid redundancy in logging.
 function combineMaterials(materialsUsed) {
-  const combinedMaterials = [];
   const materialMap = new Map();
 
   for (const material of materialsUsed) {
