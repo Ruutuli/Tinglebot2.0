@@ -2,9 +2,6 @@
 // Components from discord.js used for building modals and input rows.
 const { ActionRowBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 
-
-const { handleError } = require('../utils/globalErrorHandler');
-// ------------------- Modules -------------------
 // Custom modules for formatting and extended functionality.
 const { capitalizeFirstLetter } = require('../modules/formattingModule');
 
