@@ -78,7 +78,7 @@ const {
  getMountEmoji,
  getMountThumbnail,
 } = require("../../modules/mountModule");
-const bucket = require("../config/gcsService");
+const bucket = require("../../config/gcsService");
 
 const Character = require("../../models/CharacterModel");
 const User = require("../../models/UserModel");
