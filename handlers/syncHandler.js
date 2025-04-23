@@ -18,7 +18,9 @@ const {connectToTinglebot, fetchCharacterByNameAndUserId } = require('../databas
 // ============================================================================
 
 const { editCharacterNotFoundMessage, editSyncErrorMessage, editSyncMessage } = require('../embeds/embeds');
+
 const { removeInitialItemIfSynced, syncToInventoryDatabase } = require('../utils/inventoryUtils');
+
 
 // ============================================================================
 // Utility Functions
