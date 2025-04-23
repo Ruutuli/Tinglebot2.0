@@ -1,11 +1,9 @@
-// ------------------- Import required modules and configurations -------------------
-require('dotenv').config(); // load environment variables
+require('dotenv').config();
 const { REST, Routes } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
 const { getGuildIds } = require('../utils/getGuildIds');
 
-// ------------------- Recursive function to get all command files -------------------
 function getCommandFiles(dir) {
     let results = [];
     const list = fs.readdirSync(dir);
@@ -21,13 +19,11 @@ function getCommandFiles(dir) {
     return results;
 }
 
-// ------------------- Prepare command data for deployment -------------------
 const commands = [];
 const commandDir = path.join(__dirname, '../commands');
 const commandFiles = getCommandFiles(commandDir);
 const commandNames = new Set();
 
-// ------------------- Load and validate commands -------------------
 for (const file of commandFiles) {
     try {
         const command = require(file);
@@ -35,7 +31,14 @@ for (const file of commandFiles) {
             if (commandNames.has(command.data.name)) {
                 console.warn(`⚠️ Duplicate command name found: ${command.data.name}. Skipping file: ${file}`);
             } else {
-                commands.push(command.data.toJSON());
+                const commandJson = command.data.toJSON();
+                
+                const hasAutocompleteOption = checkForAutocompleteOptions(commandJson);
+                if (hasAutocompleteOption && typeof command.autocomplete !== 'function') {
+                    console.warn(`⚠️ Command ${commandJson.name} has autocomplete options but no autocomplete handler!`);
+                }
+                
+                commands.push(commandJson);
                 commandNames.add(command.data.name);
                 console.log(`✅ Loaded command: ${command.data.name} from ${file}`);
             }
@@ -47,10 +50,30 @@ for (const file of commandFiles) {
     }
 }
 
-// ------------------- Initialize REST client for Discord -------------------
+function checkForAutocompleteOptions(commandJson) {
+    if (!commandJson.options) return false;
+    
+    let hasAutocomplete = false;
+    
+    function checkOptions(options) {
+        for (const option of options) {
+            if (option.autocomplete === true) {
+                console.log(`  - Option "${option.name}" has autocomplete enabled`);
+                hasAutocomplete = true;
+            }
+            
+            if (option.options) {
+                checkOptions(option.options);
+            }
+        }
+    }
+    
+    checkOptions(commandJson.options);
+    return hasAutocomplete;
+}
+
 const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 
-// ------------------- Deploy global commands -------------------
 async function deployGlobalCommands() {
     console.log(`🔄 Started refreshing ${commands.length} global (/) commands.`);
     await rest.put(
@@ -60,7 +83,6 @@ async function deployGlobalCommands() {
     console.log('✅ Successfully reloaded global (/) commands.');
 }
 
-// ------------------- Deploy guild commands -------------------
 async function deployGuildCommands() {
     const guildIds = getGuildIds();
     for (const guildId of guildIds) {
@@ -74,7 +96,6 @@ async function deployGuildCommands() {
     console.log('✅ Successfully reloaded all guild (/) commands.');
 }
 
-// ------------------- Execute deployment based on provided arguments -------------------
 (async () => {
     try {
         const args = process.argv.slice(2);
