@@ -9,7 +9,7 @@ const { EmbedBuilder } = require('discord.js');
 
 // ------------------- Database Services -------------------
 // Service functions that interact with the database for item-related operations.
-const { fetchAllItems, fetchItemsByMonster } = require('../database/itemService');
+const { fetchAllItems, fetchItemsByMonster } = require('../database/db');
 
 // ------------------- Embeds -------------------
 // Functions to create mechanic-related embed messages.
