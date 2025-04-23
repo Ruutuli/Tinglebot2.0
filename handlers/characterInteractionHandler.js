@@ -10,12 +10,10 @@ const path = require('path');
 
 // Local modules
 const Character = require('../models/CharacterModel');
-const { createCharacterInventory } = require('../database/characterService');
-const { getOrCreateUser } = require('../database/userService');
+const { createCharacterInventory, getOrCreateUser } = require('../database/db');
 const { isUniqueCharacterName, isValidGoogleSheetsUrl } = require('../utils/validation');
 const { getVillageColorByName } = require('../modules/locationsModule');
-const { createCharacterEmbed } = require('../embeds/characterEmbeds');
-const { createSetupInstructionsEmbed } = require('../embeds/instructionsEmbeds');
+const { createCharacterEmbed, createSetupInstructionsEmbed } = require('../embeds/embeds');
 const bucket = require('../config/gcsService');
 
 // ------------------- Create Character Interaction -------------------
