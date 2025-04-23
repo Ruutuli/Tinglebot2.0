@@ -15,7 +15,7 @@ const { v4: uuidv4 } = require('uuid');
 
 // ------------------- Database Services -------------------
 // Import character, item, and monster related database service functions.
-const { fetchCharacterByNameAndUserId, fetchAllItems, fetchItemsByMonster, fetchAllMonsters } = require('../../database/db.js');
+const { fetchCharacterByNameAndUserId, fetchAllItems, fetchItemsByMonster, fetchAllMonsters, fetchCharacterById  } = require('../../database/db.js');
 
 
 // ------------------- Modules -------------------
