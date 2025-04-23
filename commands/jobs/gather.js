@@ -72,8 +72,7 @@ module.exports = {
 
       // ------------------- Step 1: Validate Character -------------------
       const characterName = interaction.options.getString('charactername');
-      const userId = interaction.user.id;
-      const character = await fetchCharacterByNameAndUserId(characterName, userId);
+      const character = await fetchCharacterById(characterName);
       if (!character) {
         await interaction.editReply({
           content: `❌ **Character ${characterName} not found or does not belong to you.**`,
