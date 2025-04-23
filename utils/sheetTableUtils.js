@@ -12,7 +12,7 @@ const { handleError } = require('../utils/globalErrorHandler');
 // ============================================================================
 // Database Connections
 // ------------------- Importing database connection functions -------------------
-const { connectToTinglebot } = require('../database/connection');
+const { connectToTinglebot } = require('../database/db');
 
 // ============================================================================
 // Database Models
