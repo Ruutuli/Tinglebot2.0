@@ -11,7 +11,7 @@ const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('
 
 // ------------------- Database Connections -------------------
 // Functions to establish connections with the database.
-const { connectToTinglebot } = require('../database/connection');
+const { connectToTinglebot } = require('../database/db');
 
 // ------------------- Database Services -------------------
 // Service modules for database interactions.
