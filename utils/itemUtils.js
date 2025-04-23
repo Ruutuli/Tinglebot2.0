@@ -12,7 +12,7 @@ const { handleError } = require('../utils/globalErrorHandler');
 // ============================================================================
 // Database Connections
 // ------------------- Importing database connection functions -------------------
-const { connectToInventories } = require('../database/connection');
+const { connectToInventories } = require('../database/db');
 
 // ============================================================================
 // Database Services
