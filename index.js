@@ -68,14 +68,32 @@ async function initializeClient() {
   });
 
   client.commands = new Collection();
-  const commandFiles = fs.readdirSync(path.join(__dirname, 'commands')).filter(file => file.endsWith('.js'));
 
-  for (const file of commandFiles) {
-    const command = require(`./commands/${file}`);
+function getCommandFiles(dir) {
+    let results = [];
+    const list = fs.readdirSync(dir);
+    list.forEach((file) => {
+        file = path.join(dir, file);
+        const stat = fs.statSync(file);
+        if (stat.isDirectory()) {
+            results = results.concat(getCommandFiles(file));
+        } else if (file.endsWith('.js')) {
+            results.push(file);
+        }
+    });
+    return results;
+}
+
+const commandDir = path.join(__dirname, 'commands');
+const commandFiles = getCommandFiles(commandDir);
+
+for (const file of commandFiles) {
+    const command = require(file);
     if ('data' in command && 'execute' in command) {
-      client.commands.set(command.data.name, command);
+        client.commands.set(command.data.name, command);
     }
-  }
+}
+
 
   client.once('ready', async () => {
     console.log('[index.js]: 🤖 Bot is online');
