@@ -13,7 +13,7 @@ const { handleError } = require('../utils/globalErrorHandler');
 // ============================================================================
 // Local Modules & Database Models
 // ------------------- Importing local services and models -------------------
-const { getMonstersAboveTierByRegion } = require('../database/monsterService');
+const { getMonstersAboveTierByRegion } = require('../database/db');
 const { monsterMapping } = require('../models/MonsterModel');
 const { getVillageRegionByName } = require('../modules/locationsModule');
 const { applyVillageDamage } = require('../modules/villageModule');
