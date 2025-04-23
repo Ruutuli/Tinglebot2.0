@@ -1,19 +1,33 @@
-// ------------------- Import necessary modules -------------------
 const fs = require('fs');
 const path = require('path');
 const { Collection } = require('discord.js');
 
-// ------------------- Load commands into the client's collection -------------------
+function getCommandFiles(dir) {
+    let results = [];
+    const list = fs.readdirSync(dir);
+    list.forEach((file) => {
+        file = path.join(dir, file);
+        const stat = fs.statSync(file);
+        if (stat.isDirectory()) {
+            results = results.concat(getCommandFiles(file));
+        } else if (file.endsWith('.js')) {
+            results.push(file);
+        }
+    });
+    return results;
+}
+
 module.exports = (client) => {
   client.commands = new Collection();
   
-  // Load all command files from the 'commands' directory
-  const commandFiles = fs.readdirSync(path.join(__dirname, '../commands')).filter(file => file.endsWith('.js'));
+  // Recursively load all command files from the 'commands' directory and its subdirectories
+  const commandDir = path.join(__dirname, '../commands');
+  const commandFiles = getCommandFiles(commandDir);
 
   for (const file of commandFiles) {
-    const command = require(`../commands/${file}`);
+    const command = require(file);
 
-    // If there are multiple commands, register them
+    // Register each command, handling both single and multiple commands per file
     if (Array.isArray(command.data)) {
       command.data.forEach(cmd => client.commands.set(cmd.name, command));
     } else {
@@ -21,4 +35,3 @@ module.exports = (client) => {
     }
   }
 };
-
