@@ -9,13 +9,7 @@ const { MongoClient } = require("mongodb")
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require("discord.js");
 
 // Database Connections
-const { connectToTinglebot } = require("../database/connection");
-
-// Database Services
-const { fetchCharacterByNameAndUserId, updateCharacterById } = require("../database/characterService");
-const { fetchItemByName} = require("../database/itemService");
-const { getCurrentVendingStockList, updateItemStockByName, VILLAGE_ICONS, VILLAGE_IMAGES } = require("../database/vendingService");
-const { getTokenBalance, updateTokenBalance,  getOrCreateToken  } = require('../database/tokenService');
+const { connectToTinglebot, fetchCharacterByNameAndUserId, updateCharacterById,  fetchItemByName, getCurrentVendingStockList, updateItemStockByName, VILLAGE_ICONS, VILLAGE_IMAGES, getTokenBalance, updateTokenBalance,  getOrCreateToken } = require("../database/db");
 
 // Modules
 
