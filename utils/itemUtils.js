@@ -10,14 +10,9 @@ const { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } 
 
 const { handleError } = require('../utils/globalErrorHandler');
 // ============================================================================
-// Database Connections
-// ------------------- Importing database connection functions -------------------
-const { connectToInventories } = require('../database/db');
 
-// ============================================================================
-// Database Services
 // ------------------- Importing database service functions -------------------
-const { fetchAndSortItemsByRarity } = require('../database/db');
+const { fetchAndSortItemsByRarity, connectToInventories } = require('../database/db');
 
 
 // ============================================================================
