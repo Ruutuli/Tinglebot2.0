@@ -45,7 +45,6 @@ const { syncInventory } = require('../handlers/syncHandler'); //---- Import for 
 // Utility functions for storage, token calculations, art submission embeds, and validation.
 const { deleteSubmissionFromStorage, saveSubmissionToStorage, submissionStore } = require('../utils/storage');
 const { calculateTokens, generateTokenBreakdown } = require('../utils/tokenUtils');
-const { createArtSubmissionEmbed } = require('../embeds/mechanicEmbeds');
 const { canChangeJob } = require('../utils/validation');
 
 
