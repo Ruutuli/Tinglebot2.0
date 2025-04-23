@@ -1,5 +1,5 @@
 // ------------------- Import necessary modules and functions -------------------
-const { fetchCharacterById, updateCharacterById } = require('../database/characterService');
+const { fetchCharacterById, updateCharacterById } = require('../database/db');
 const { handleError } = require('../utils/globalErrorHandler');
 const { capitalize } = require('../modules/formattingModule');
 
