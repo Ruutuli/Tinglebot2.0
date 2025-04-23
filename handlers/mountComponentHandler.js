@@ -12,9 +12,7 @@ const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, ModalBuilder
 // ------------------- Database Services -------------------
 // Service modules for database interactions.
 // Character Services
-const { fetchCharacterByName, fetchCharacterByNameAndUserId, getCharacterInventoryCollection } = require('../database/db');
-// Token Services
-const { getOrCreateToken } = require('../database/tokenService');
+const { fetchCharacterByName, fetchCharacterByNameAndUserId, getCharacterInventoryCollection, getOrCreateToken } = require('../database/db');
 
 
 // ------------------- Modules -------------------
