@@ -7,15 +7,14 @@
 // ============================================================================
 // Discord.js Components
 // ------------------- Importing Discord.js components -------------------
-const { Client, GatewayIntentBits, ChannelType, EmbedBuilder } = require('discord.js');
+const { ChannelType, EmbedBuilder } = require('discord.js');
 
 const { handleError } = require('../utils/globalErrorHandler');
 // ============================================================================
 // Local Modules & Database Models
 // ------------------- Importing local services and models -------------------
-const { getMonstersAboveTierByRegion } = require('../database/monsterService');
+const { getMonstersAboveTierByRegion } = require('../database/db');
 const { monsterMapping } = require('../models/MonsterModel');
-const { storeBattleProgress } = require('../modules/combatModule');
 const { getVillageRegionByName } = require('../modules/locationsModule');
 const { applyVillageDamage } = require('../modules/villageModule');
 
@@ -108,7 +107,7 @@ async function checkForRandomEncounters(client) {
 // Encounter Embed Creation
 // ------------------- Create Encounter Embed -------------------
 // Generates a Discord embed for a monster encounter with details such as monster hearts, tier, and battle ID.
-function createEncounterEmbed(monster, battleId, villageName) {
+function createEncounterEmbed(monster, battleId) {
   const fallbackImage = 'https://via.placeholder.com/150';
   const monsterData = monsterMapping[monster.nameMapping] || {};
   const monsterImage = monsterData.image || monster.image || fallbackImage;

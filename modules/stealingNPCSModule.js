@@ -1,6 +1,3 @@
-const { handleError } = require('../utils/globalErrorHandler');
-
-// ------------------- Import necessary modules -------------------
 const generalCategories = require('../models/GeneralItemCategories'); // Categories from GeneralItemCategories.js
 
 // ------------------- Define NPCs and their available categories and custom flavor texts -------------------

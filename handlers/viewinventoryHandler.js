@@ -13,7 +13,7 @@ const { handleError } = require('../utils/globalErrorHandler');
 // ============================================================================
 // Database Services
 // ------------------- Importing database service functions -------------------
-const { fetchCharacterByNameAndUserId } = require('../database/characterService');
+const { fetchCharacterByNameAndUserId } = require('../database/db');
 
 // ============================================================================
 // Modules

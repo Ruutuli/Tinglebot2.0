@@ -10,85 +10,22 @@ const { ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } 
 
 const { handleError } = require('../utils/globalErrorHandler');
 // ============================================================================
-// Database Connections
-// ------------------- Importing database connection functions -------------------
-const { connectToInventories } = require('../database/connection');
 
-// ============================================================================
-// Database Services
 // ------------------- Importing database service functions -------------------
-const { fetchCharacterById, fetchCharacterByNameAndUserId } = require('../database/characterService');
-const { fetchAndSortItemsByRarity, fetchItemById, fetchItemByName } = require('../database/itemService');
+const { fetchAndSortItemsByRarity, connectToInventories } = require('../database/db');
 
-// ============================================================================
-// Modules
-// ------------------- Importing custom modules -------------------
-const { toLowerCase } = require('../modules/formattingModule');
 
 // ============================================================================
 // Utility Functions
 // ------------------- Importing utility functions -------------------
-const { appendSheetData, authorizeSheets, getSheetIdByTitle, getSheetsClient, readSheetData, writeSheetData } = require('../utils/googleSheetsUtils');
+const { appendSheetData } = require('../utils/googleSheetsUtils');
 const { extractSpreadsheetId } = require('../utils/validation');
-const { safeStringify } = require('../utils/objectUtils');
 
 // ============================================================================
 // Database Models
 // ------------------- Importing database models -------------------
 const generalCategories = require('../models/GeneralItemCategories');
-const ItemModel = require('../models/ItemModel');
 
-
-// ============================================================================
-// General Utility Functions
-// ------------------- Format Date and Time -------------------
-// Formats a given date in EST with a specific format.
-function formatDateTime(date) {
-    const options = {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true,
-        timeZone: 'America/New_York',
-    };
-    return new Intl.DateTimeFormat('en-US', options)
-        .format(new Date(date))
-        .replace(',', ' |') + ' EST';
-}
-
-// ------------------- Escape RegExp -------------------
-// Escapes special characters in a string for use in a regular expression.
-function escapeRegExp(string) {
-    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-// ------------------- JSON Replacer for BigInt -------------------
-// Converts BigInt values to strings during JSON stringification.
-function replacer(key, value) {
-    if (typeof value === 'bigint') {
-        return value.toString();
-    }
-    return value;
-}
-
-// ------------------- Extract Interaction Fields -------------------
-// Extracts selected fields from an interaction object.
-function extractInteractionFields(interaction) {
-    if (!interaction) {
-        return {};
-    }
-    return {
-        id: interaction.id || null,
-        applicationId: interaction.applicationId || null,
-        channelId: interaction.channelId || null,
-        guildId: interaction.guildId || null,
-        user: interaction.user || null,
-        commandName: interaction.commandName || null,
-        options: interaction.options || null,
-    };
-}
 
 
 // ============================================================================
@@ -345,31 +282,7 @@ const promptUserForSpecificItems = async (interaction, inventory, generalCategor
     return selectedItems;
 };
 
-// ------------------- Get Sheet ID by Name -------------------
-// Retrieves the sheet ID for a given sheet name using the Google Sheets API.
-async function getSheetIdByName(sheetName) {
-    try {
-        const auth = await authorizeSheets();
-        const sheets = getSheetsClient(auth);
-        const spreadsheetId = 'your-spreadsheet-id'; // Replace with your spreadsheet ID
-        const response = await sheets.spreadsheets.get({ spreadsheetId });
-        const sheet = response.data.sheets.find(sheet => sheet.properties.title === sheetName);
-        if (!sheet) {
-            console.error(`[itemUtils.js]: Sheet "${sheetName}" not found in spreadsheet "${spreadsheetId}".`);
-            throw new Error(`Sheet "${sheetName}" not found.`);
-        }
-        return sheet.properties.sheetId;
-    } catch (error) {
-    handleError(error, 'itemUtils.js');
 
-        console.error(`[itemUtils.js]: Error in getSheetIdByName for "${sheetName}":`, error.message);
-        throw error;
-    }
-}
-
-// ============================================================================
-// Exported Functions
-// ------------------- Exporting item utility functions -------------------
 module.exports = {
     createNewItemDatabase,       // Creates a new inventory item entry.
     createRemovedItemDatabase,   // Creates a record for a removed inventory item.

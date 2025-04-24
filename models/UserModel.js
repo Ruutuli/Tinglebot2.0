@@ -1,7 +1,5 @@
 // ------------------- Import necessary modules -------------------
 const mongoose = require('mongoose');
-
-const { handleError } = require('../utils/globalErrorHandler');
 // ------------------- Define the user schema -------------------
 const userSchema = new mongoose.Schema({
   discordId: { type: String, required: true, unique: true }, // Unique Discord ID of the user

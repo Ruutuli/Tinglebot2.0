@@ -4,10 +4,6 @@
 // functions for button rows, and contains interaction handlers for job selection, 
 // character viewing, syncing, and more.
 
-// ------------------- Standard Libraries -------------------
-// Core Node.js modules and third-party libraries.
-const { v4: uuidv4 } = require('uuid');
-
 const { handleError } = require('../utils/globalErrorHandler');
 // ------------------- Discord.js Components -------------------
 // Components from discord.js for building action rows, buttons, and embeds.
@@ -15,12 +11,7 @@ const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('
 
 // ------------------- Database Connections -------------------
 // Functions to establish connections with the database.
-const { connectToTinglebot } = require('../database/connection');
-
-// ------------------- Database Services -------------------
-// Service modules for database interactions.
-const { fetchCharacterById, /* getCharactersInVillage */ } = require('../database/characterService');
-const { getUserById } = require('../database/userService');
+const { connectToTinglebot, fetchCharacterById, getUserById } = require('../database/db');
 
 // ------------------- Database Models -------------------
 // Schemas/models for database collections.
@@ -29,7 +20,7 @@ const ItemModel = require('../models/ItemModel');
 // ------------------- Embed and Command Imports -------------------
 // Embeds and commands for character details and help messages.
 // Character Embeds
-const { createCharacterEmbed, createCharacterGearEmbed } = require('../embeds/characterEmbeds');
+const { createCharacterEmbed, createCharacterGearEmbed, createArtSubmissionEmbed } = require('../embeds/embeds');
 
 // ------------------- Modules -------------------
 // Custom modules for additional functionalities.
@@ -54,7 +45,6 @@ const { syncInventory } = require('../handlers/syncHandler'); //---- Import for 
 // Utility functions for storage, token calculations, art submission embeds, and validation.
 const { deleteSubmissionFromStorage, saveSubmissionToStorage, submissionStore } = require('../utils/storage');
 const { calculateTokens, generateTokenBreakdown } = require('../utils/tokenUtils');
-const { createArtSubmissionEmbed } = require('../embeds/mechanicEmbeds');
 const { canChangeJob } = require('../utils/validation');
 
 

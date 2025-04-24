@@ -4,7 +4,7 @@ const { handleError } = require('../utils/globalErrorHandler');
 const { google } = require('googleapis');
 const fs = require('fs');
 const path = require('path');
-const { authorizeSheets, fetchSheetData, writeSheetData, logErrorDetails }= require('../utils/googleSheetsUtils'); 
+const { authorizeSheets, writeSheetData }= require('../utils/googleSheetsUtils'); 
 const Quest = require('../models/QuestModel');
 
 // ------------------- Discord Bot Setup -------------------
@@ -137,11 +137,9 @@ async function postQuests() {
             participantCap,
             postRequirement,
             specialNote,
-            participants,
             status,
             date,
             questID,
-            posted
         ] = quest;
     
         try {

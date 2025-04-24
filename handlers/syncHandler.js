@@ -10,24 +10,17 @@
 const { v4: uuidv4 } = require('uuid');
 
 const { handleError } = require('../utils/globalErrorHandler');
-// ============================================================================
-// Database Connections
-// ============================================================================
 
-const { connectToTinglebot } = require('../database/connection');
-
-// ============================================================================
-// Database Services
-// ============================================================================
-
-const { fetchCharacterByNameAndUserId, getCharacterInventoryCollection } = require('../database/characterService');
+const {connectToTinglebot, fetchCharacterByNameAndUserId } = require('../database/db');
 
 // ============================================================================
 // Modules
 // ============================================================================
 
-const { editCharacterNotFoundMessage, editSyncErrorMessage, editSyncMessage } = require('../embeds/instructionsEmbeds');
+const { editCharacterNotFoundMessage, editSyncErrorMessage, editSyncMessage } = require('../embeds/embeds');
+
 const { removeInitialItemIfSynced, syncToInventoryDatabase } = require('../utils/inventoryUtils');
+
 
 // ============================================================================
 // Utility Functions
@@ -40,7 +33,6 @@ const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../utils/valid
 // Database Models
 // ============================================================================
 
-const Character = require('../models/CharacterModel');
 const ItemModel = require('../models/ItemModel');
 
 // ============================================================================
@@ -49,8 +41,6 @@ const ItemModel = require('../models/ItemModel');
 
 const BATCH_SIZE = 25;
 const BATCH_DELAY = 15000; // 15 seconds
-const RETRY_DELAY = 180000; // 3 minutes in milliseconds
-const MAX_RETRIES = 3;
 
 // ============================================================================
 // Helper Functions
@@ -149,7 +139,6 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
 
         // ------------------- Process Rows in Batches -------------------
         console.log(`Fetching inventory collection for character: ${character.name}`);
-        const inventoryCollection = await getCharacterInventoryCollection(character.name);
         let batchRequests = [];
 
         console.log('Processing rows in batches...');
@@ -276,41 +265,6 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
         await editSyncErrorMessage(interaction, `❌ **Sync canceled! An error occurred: ${error.message}**`);
     }
 }
-
-// ============================================================================
-// Helper Function: retrySync
-// ============================================================================
-
-// ------------------- retrySync -------------------
-// Handles retry logic by displaying a countdown and retrying the sync process after a delay.
-async function retrySync(interaction, characterName, userId, retryCount, syncedItemsCount, totalSyncedItemsCount, errors) {
-    let remainingTime = RETRY_DELAY / 1000;
-    const countdownMessage = await interaction.followUp({ content: `⏳ Sync will retry in ${Math.ceil(remainingTime)} seconds.`, ephemeral: true });
-
-    const interval = setInterval(async () => {
-        remainingTime--;
-        if (remainingTime > 0) {
-            try {
-                await interaction.webhook.editMessage(countdownMessage.id, { content: `⏳ Sync will retry in ${remainingTime} seconds.`, ephemeral: true });
-            } catch (error) {
-    handleError(error, 'syncHandler.js');
-
-                clearInterval(interval);
-            }
-        } else {
-            clearInterval(interval);
-        }
-    }, 1000);
-
-    setTimeout(async () => {
-        clearInterval(interval);
-        await syncInventory(characterName, userId, interaction, retryCount + 1, totalSyncedItemsCount + syncedItemsCount);
-    }, RETRY_DELAY);
-}
-
-// ============================================================================
-// Exported Functions
-// ============================================================================
 
 module.exports = {
     syncInventory,

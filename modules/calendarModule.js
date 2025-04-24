@@ -1,7 +1,6 @@
 // ------------------- Import necessary modules -------------------
 const moment = require('moment');
 
-const { handleError } = require('../utils/globalErrorHandler');
 // ------------------- Calendar months and date ranges -------------------
 const hyruleanCalendar = [
     { monthId: 1, name: 'Yowaka Ita', start: '01-01', end: '01-26' },

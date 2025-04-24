@@ -1,5 +1,3 @@
-const { handleError } = require('../utils/globalErrorHandler');
-
 // ------------------- Import necessary modules -------------------
 const { capitalize } = require('../modules/formattingModule'); // Shared utility for capitalization
 
@@ -55,10 +53,6 @@ const getVillageRegionByName = (name) => {
   return locations.Villages[villageName]?.region || null;
 };
 
-// ------------------- Logging Utility -------------------
-const logError = (errorMessage) => {
-  console.error(`[locationsModule.js]: ${errorMessage}`);
-};
 
 // ------------------- Exports -------------------
 module.exports = {

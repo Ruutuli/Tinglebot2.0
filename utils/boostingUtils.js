@@ -3,7 +3,6 @@
 const { v4: uuidv4 } = require('uuid');
 
 
-const { handleError } = require('../utils/globalErrorHandler');
 // ------------------- Utility Functions -------------------
 // Import helper functions for persistent storage.
 const { retrieveBoostingRequestFromStorageByCharacter } = require('../utils/storage');

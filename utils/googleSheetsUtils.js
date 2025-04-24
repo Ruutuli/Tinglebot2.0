@@ -13,7 +13,6 @@ const path = require('path');
 // ------------------- Importing third-party modules -------------------
 const Bottleneck = require('bottleneck');
 const { google } = require('googleapis');
-const { GoogleAuth } = require('google-auth-library');
 
 // ============================================================================
 // Constants
