@@ -12,7 +12,7 @@ const { SlashCommandBuilder } = require('discord.js');
 // Handler Imports
 const { handleSelectMenuInteraction } = require('../../handlers/selectMenuHandler.js');
 const { handleModalSubmission } = require('../../handlers/modalHandler.js');
-const { getCancelButtonRow } = require('../../handlers/componentHandler.js');
+const { getCancelButtonRow, handleButtonInteraction } = require('../../handlers/componentHandler.js');
 
 // Utility Imports
 const { resetSubmissionState, calculateWritingTokens } = require('../../utils/tokenUtils.js');
