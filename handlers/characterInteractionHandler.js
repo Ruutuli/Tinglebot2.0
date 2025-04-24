@@ -16,6 +16,43 @@ const { getVillageColorByName } = require('../modules/locationsModule');
 const { createCharacterEmbed, createSetupInstructionsEmbed } = require('../embeds/embeds');
 const bucket = require('../config/gcsService');
 
+// ------------------- Character Autocomplete Handler -------------------
+// Handles autocomplete for character creation fields
+async function createCharacterAutocomplete(interaction) {
+    const focusedOption = interaction.options.getFocused(true);
+    
+    // Handle "race" field autocomplete
+    if (focusedOption.name === "race") {
+        try {
+            // List of races that will be suggested for autocomplete
+            const races = [
+                { name: 'Gerudo', value: 'gerudo' },
+                { name: 'Goron', value: 'goron' },
+                { name: 'Hylian', value: 'hylian' },
+                { name: 'Keaton', value: 'keaton' },
+                { name: 'Korok/Kokiri', value: 'korok/kokiri' },
+                { name: 'Mixed', value: 'mixed' },
+                { name: 'Mogma', value: 'mogma' },
+                { name: 'Rito', value: 'rito' },
+                { name: 'Sheikah', value: 'sheikah' },
+                { name: 'Twili', value: 'twili' },
+                { name: 'Zora', value: 'zora' }
+            ];
+            
+            // Filter the races based on user input
+            const filtered = races.filter(race => 
+                race.name.toLowerCase().includes(focusedOption.value.toLowerCase())
+            );
+            
+            // Respond with the filtered list of choices
+            await interaction.respond(filtered.slice(0, 25));
+        } catch (error) {
+            handleError(error, 'characterInteractionHandler.js');
+            await interaction.respond([]);
+        }
+    }
+}
+
 // ------------------- Create Character Interaction -------------------
 // Handles creating a new character with the specified attributes
 async function createCharacterInteraction(interaction) {
@@ -116,4 +153,5 @@ async function createCharacterInteraction(interaction) {
 // Export the functions for external use
 module.exports = {
     createCharacterInteraction,
+    createCharacterAutocomplete
 };
