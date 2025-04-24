@@ -22,26 +22,35 @@ module.exports = (client) => {
   
   const commandDir = path.join(__dirname, '../commands');
   const commandFiles = getCommandFiles(commandDir);
+  
+  let successCount = 0;
+  let errorCount = 0;
+  let errorMessages = [];
 
   for (const file of commandFiles) {
     try {
       const command = require(file);
 
       if (!('data' in command) || !('execute' in command)) {
-        console.warn(`[commandHandler.js]: Command at ${file} is missing required "data" or "execute" property. Skipping.`);
+        errorCount++;
+        errorMessages.push(`Command at ${file} is missing required "data" or "execute" property.`);
         continue;
       }
 
-      console.log(`[commandHandler.js]: Registering command: ${command.data.name} from ${file}`);
       client.commands.set(command.data.name, command);
-      
-      if (typeof command.autocomplete === 'function') {
-        console.log(`[commandHandler.js]: Command ${command.data.name} has autocomplete handler.`);
-      }
+      successCount++;
     } catch (error) {
-      console.error(`[commandHandler.js]: Error loading command from ${file}:`, error);
+      errorCount++;
+      errorMessages.push(`Error loading command from ${file}: ${error.message}`);
     }
   }
 
-  console.log(`[commandHandler.js]: Registered ${client.commands.size} commands.`);
+  if (errorCount === 0) {
+    console.log(`[commandHandler.js]: ✅ Successfully loaded all ${successCount} commands.`);
+    return true;
+  } else {
+    console.log(`[commandHandler.js]: ⚠️ Loaded ${successCount} commands with ${errorCount} errors:`);
+    errorMessages.forEach(msg => console.log(`[commandHandler.js]: - ${msg}`));
+    return false;
+  }
 };
