@@ -1,8 +1,9 @@
-// utils/globalErrorHandler.js
+let trelloLogger = null;
 
-const { logErrorToTrello } = require('../scripts/trello');
+function initializeErrorHandler(trelloLoggerFunction) {
+  trelloLogger = trelloLoggerFunction;
+}
 
-// Pretty error log formatter for console + Trello
 function handleError(error, source = 'Unknown Source', context = {}) {
   const message = error?.stack || error?.message || String(error);
 
@@ -23,16 +24,17 @@ ${message}
 
   console.error(logBlock);
 
-  // Build Trello content
-  let trelloContent = `**Error Message:**\n\`\`\`${message}\`\`\`\n`;
-  trelloContent += `**File:** ${source}\n`;
-  trelloContent += `**Time:** ${timestamp}\n`;
+  if (trelloLogger) {
+    let trelloContent = `**Error Message:**\n\`\`\`${message}\`\`\`\n`;
+    trelloContent += `**File:** ${source}\n`;
+    trelloContent += `**Time:** ${timestamp}\n`;
 
-  if (context.commandName) trelloContent += `**Command:** ${context.commandName}\n`;
-  if (context.userTag) trelloContent += `**User:** ${context.userTag} (${context.userId})\n`;
-  if (context.options) trelloContent += `**Options:**\n\`\`\`${JSON.stringify(context.options)}\`\`\`\n`;
+    if (context.commandName) trelloContent += `**Command:** ${context.commandName}\n`;
+    if (context.userTag) trelloContent += `**User:** ${context.userTag} (${context.userId})\n`;
+    if (context.options) trelloContent += `**Options:**\n\`\`\`${JSON.stringify(context.options)}\`\`\`\n`;
 
-  logErrorToTrello(trelloContent, source);
+    trelloLogger(trelloContent, source);
+  }
 }
 
-module.exports = { handleError };
+module.exports = { handleError, initializeErrorHandler };
