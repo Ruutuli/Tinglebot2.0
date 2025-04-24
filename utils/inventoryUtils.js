@@ -7,6 +7,7 @@ let dbFunctions = {
  connectToInventories: null,
  fetchItemByName: null,
  fetchCharacterById: null,
+ getInventoryCollection: null,
 };
 // Initialize function to set the required db functions
 function initializeInventoryUtils(dbModuleFunctions) {
@@ -26,8 +27,14 @@ const {
  readSheetData,
  writeSheetData,
 } = require("../utils/googleSheetsUtils");
-const { extractSpreadsheetId } = require("../utils/validation");
-const { promptUserForSpecificItems } = require("../utils/itemUtils");
+
+// Import extractSpreadsheetId directly to avoid circular dependency
+// Instead of: const { extractSpreadsheetId } = require("../utils/validation");
+function extractSpreadsheetId(url) {
+ if (!url) return null;
+ const match = url.match(/\/d\/([a-zA-Z0-9-_]+)/);
+ return match ? match[1] : null;
+}
 
 // ============================================================================
 // Database Models
@@ -144,7 +151,17 @@ async function addItemInventoryDatabase(
   if (!interaction) {
    throw new Error("Interaction object is undefined.");
   }
-  const character = await fetchCharacterById(characterId);
+
+  // Use the injected function instead of direct import
+  if (
+   !dbFunctions.fetchCharacterById ||
+   !dbFunctions.connectToInventories ||
+   !dbFunctions.fetchItemByName
+  ) {
+   throw new Error("Required database functions not initialized");
+  }
+
+  const character = await dbFunctions.fetchCharacterById(characterId);
   if (!character) {
    throw new Error(`Character with ID ${characterId} not found`);
   }
@@ -152,7 +169,7 @@ async function addItemInventoryDatabase(
    `[inventoryUtils.js]: logs Found character: ${character.name}, ID: ${character._id}`
   );
 
-  const inventoriesConnection = await connectToInventories();
+  const inventoriesConnection = await dbFunctions.connectToInventories();
   const db = inventoriesConnection.useDb("inventories");
   const collectionName = character.name.toLowerCase().replace(/\s+/g, "_");
   const inventoryCollection = db.collection(collectionName);
@@ -161,7 +178,7 @@ async function addItemInventoryDatabase(
    `[inventoryUtils.js]: logs Checking inventory for character "${character.name}" in collection "${collectionName}"`
   );
 
-  const item = await fetchItemByName(itemName);
+  const item = await dbFunctions.fetchItemByName(itemName);
   if (!item) {
    throw new Error(`Item with name "${itemName}" not found`);
   }
@@ -226,12 +243,16 @@ async function removeItemInventoryDatabase(
  interaction
 ) {
  try {
-  const character = await fetchCharacterById(characterId);
+  if (!dbFunctions.fetchCharacterById || !dbFunctions.connectToInventories) {
+   throw new Error("Required database functions not initialized");
+  }
+
+  const character = await dbFunctions.fetchCharacterById(characterId);
   if (!character) {
    throw new Error(`Character with ID ${characterId} not found`);
   }
   const collectionName = character.name.toLowerCase();
-  const inventoriesConnection = await connectToInventories();
+  const inventoriesConnection = await dbFunctions.connectToInventories();
   const db = inventoriesConnection.useDb("inventories");
   const inventoryCollection = db.collection(collectionName);
 
@@ -276,7 +297,11 @@ async function removeItemInventoryDatabase(
 // Adds multiple items to a character's inventory database.
 const addItemsToDatabase = async (character, items, interaction) => {
  try {
-  const inventoriesConnection = await connectToInventories();
+  if (!dbFunctions.connectToInventories) {
+   throw new Error("Required database functions not initialized");
+  }
+
+  const inventoriesConnection = await dbFunctions.connectToInventories();
   const db = inventoriesConnection.useDb("inventories");
   const collectionName = character.name.toLowerCase();
   const inventoryCollection = db.collection(collectionName);
@@ -392,6 +417,14 @@ const createRemovedItemDatabase = (
 
 // ------------------- Process Materials for Crafting -------------------
 // Processes required materials for crafting an item, ensuring sufficient quantities and updating inventory.
+// This function needs itemUtils, create a placeholder for now
+let promptUserForSpecificItems = null;
+
+// Initialize function for itemUtils dependency
+function initializeItemUtils(itemUtilsFunctions) {
+ promptUserForSpecificItems = itemUtilsFunctions.promptUserForSpecificItems;
+}
+
 const processMaterials = async (
  interaction,
  character,
@@ -399,6 +432,10 @@ const processMaterials = async (
  craftableItem,
  quantity
 ) => {
+ if (!promptUserForSpecificItems) {
+  throw new Error("itemUtils functions not initialized");
+ }
+
  const materialsUsed = [];
  for (const material of craftableItem.craftingMaterial) {
   const materialName = material.itemName;
@@ -454,10 +491,8 @@ const processMaterials = async (
 // Removes the "Initial Item" from the inventory if the inventory has been marked as synced.
 async function removeInitialItemIfSynced(characterId) {
  try {
-  if (!dbFunctions.fetchCharacterById) {
-   throw new Error(
-    "fetchCharacterById function not initialized in inventoryUtils"
-   );
+  if (!dbFunctions.fetchCharacterById || !dbFunctions.connectToInventories) {
+   throw new Error("Required database functions not initialized");
   }
 
   const character = await dbFunctions.fetchCharacterById(characterId);
@@ -494,7 +529,11 @@ async function removeInitialItemIfSynced(characterId) {
 // Adds an item to a vending inventory collection or updates its stock quantity.
 const addItemToVendingInventory = async (collectionName, item) => {
  try {
-  const inventoriesConnection = await connectToInventories();
+  if (!dbFunctions.connectToInventories) {
+   throw new Error("Required database functions not initialized");
+  }
+
+  const inventoriesConnection = await dbFunctions.connectToInventories();
   const db = inventoriesConnection.useDb("vending");
   const inventoryCollection = db.collection(collectionName);
   const existingItem = await inventoryCollection.findOne({
@@ -524,6 +563,8 @@ const addItemToVendingInventory = async (collectionName, item) => {
 // Exported Functions
 // ------------------- Exporting all inventory management functions -------------------
 module.exports = {
+ initializeInventoryUtils,
+ initializeItemUtils,
  syncToInventoryDatabase,
  addItemInventoryDatabase,
  removeItemInventoryDatabase,
@@ -533,4 +574,5 @@ module.exports = {
  addItemsToDatabase,
  removeInitialItemIfSynced,
  addItemToVendingInventory,
+ extractSpreadsheetId,
 };
