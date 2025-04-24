@@ -20,7 +20,7 @@ const ItemModel = require('../models/ItemModel');
 // ------------------- Embed and Command Imports -------------------
 // Embeds and commands for character details and help messages.
 // Character Embeds
-const { createCharacterEmbed, createCharacterGearEmbed } = require('../embeds/embeds');
+const { createCharacterEmbed, createCharacterGearEmbed, createArtSubmissionEmbed } = require('../embeds/embeds');
 
 // ------------------- Modules -------------------
 // Custom modules for additional functionalities.
