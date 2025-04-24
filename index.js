@@ -12,6 +12,7 @@ const scheduler = require("./scheduler");
 const { initializeRandomEncounterBot } = require("./scripts/randomEncounters");
 const { createTrelloCard, logWishlistToTrello } = require("./scripts/trello");
 const { simulateWeightedWeather } = require("./.weather/weatherHandler");
+const figlet = require("figlet");
 const {
  temperatureWeights,
  windWeights,
@@ -71,18 +72,49 @@ async function initializeClient() {
  commandHandler(client);
 
  client.once("ready", async () => {
-  console.log("[index.js]: 🤖 Bot is online");
-  initializeReactionHandler(client);
-  logBloodMoonStatus();
-  scheduler(client);
+  console.clear();
 
-  try {
-   initializeRandomEncounterBot(client);
-   console.log("[index.js]: ⚔️ Random encounter functionality initialized");
-  } catch (error) {
-   handleError(error, "index.js");
-   console.error("[index.js]: ❌ Error initializing random encounters:", error);
-  }
+  figlet.text(
+   "Tinglebot 2.0",
+   {
+    font: "Slant",
+    horizontalLayout: "default",
+    verticalLayout: "default",
+   },
+   async function (err, data) {
+    if (err) {
+     console.log("Something went wrong with figlet");
+     console.log(err);
+     return;
+    }
+
+    console.log(data);
+    console.log("==========================================================");
+
+    console.log("[index.js]: 🤖 Bot is online");
+
+    try {
+     initializeReactionHandler(client);
+     console.log("[index.js]: ✅ Reaction handler initialized");
+
+     logBloodMoonStatus();
+     console.log("[index.js]: 🌕 Blood Moon status checked");
+
+     scheduler(client);
+     console.log("[scheduler]: 📅 Scheduler initialized");
+
+     initializeRandomEncounterBot(client);
+     console.log("[index.js]: ⚔️ Random encounter functionality initialized");
+
+     console.log("==========================================================");
+     console.log("Tinglebot 2.0 is fully operational!");
+     console.log("==========================================================");
+    } catch (error) {
+     handleError(error, "index.js");
+     console.error("[index.js]: ❌ Error during initialization:", error);
+    }
+   }
+  );
  });
 
  client.on("interactionCreate", async (interaction) => {
