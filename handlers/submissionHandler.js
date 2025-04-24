@@ -13,7 +13,7 @@ const { handleError } = require('../utils/globalErrorHandler');
 // Database Services
 // ============================================================================
 
-const { appendEarnedTokens } = require('../database/tokenService');
+const { appendEarnedTokens } = require('../database/db');
 
 // ============================================================================
 // Utility Functions
