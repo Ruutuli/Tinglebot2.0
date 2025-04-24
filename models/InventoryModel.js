@@ -1,7 +1,7 @@
 // ------------------- Import necessary modules -------------------
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
-const { connectToInventories } = require('../database/connection');
+const { connectToInventories } = require('../database/db');
 
 // ------------------- Define the inventory schema -------------------
 const inventorySchema = new Schema({
