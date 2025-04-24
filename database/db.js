@@ -11,7 +11,9 @@ const {
 } = require("../utils/googleSheetsUtils");
 require("dotenv").config();
 
-const {removeInitialItemIfSynced} = require("../utils/inventoryUtils");
+// Import inventoryUtils but don't use removeInitialItemIfSynced directly
+const inventoryUtils = require("../utils/inventoryUtils");
+
 const Character = require("../models/CharacterModel");
 const Monster = require("../models/MonsterModel");
 const Quest = require("../models/QuestModel");
@@ -270,7 +272,10 @@ const deleteCharacterById = async (characterId) => {
 const updateCharacterInventorySynced = async (characterId) => {
  try {
   await updateCharacterById(characterId, { inventorySynced: true });
-  await removeInitialItemIfSynced(characterId);
+
+  // Instead of directly requiring removeInitialItemIfSynced, use the reference
+  // from the initialized module
+  await inventoryUtils.removeInitialItemIfSynced(characterId);
  } catch (error) {
   handleError(error, "characterService.js");
   console.error(
@@ -1604,6 +1609,14 @@ const connectToInventoriesForItems = async () => {
  }
 };
 
+// Initialize the inventoryUtils module with the necessary functions
+inventoryUtils.initializeInventoryUtils({
+ connectToInventories,
+ fetchItemByName,
+ fetchCharacterById,
+ getInventoryCollection,
+});
+
 module.exports = {
  connectToTinglebot,
  connectToInventories,
@@ -1677,4 +1690,7 @@ module.exports = {
  updateVendingStock,
  VILLAGE_IMAGES,
  VILLAGE_ICONS,
+ connectToInventoriesForItems,
+ checkMaterialAvailability,
+ checkMaterial,
 };
