@@ -1,6 +1,6 @@
 // ------------------- Database Connections -------------------
 // Functions used to establish connections with the database.
-const { connectToInventories, connectToTinglebot } = require('../database/connection');
+const { connectToInventories, connectToTinglebot } = require('../database/db');
 
 const { handleError } = require('../utils/globalErrorHandler');
 // ------------------- Handlers -------------------
