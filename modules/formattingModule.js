@@ -1,5 +1,3 @@
-const { handleError } = require('../utils/globalErrorHandler');
-
 // formattingModule.js
 
 // Color definitions for different item types

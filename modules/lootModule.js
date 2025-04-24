@@ -5,15 +5,14 @@ const { EmbedBuilder } = require('discord.js');
 const { handleError } = require('../utils/globalErrorHandler');
 // Module imports for random number generation and inventory management
 const { createWeightedItemList, calculateFinalValue } = require('../modules/rngModule');
-const { fetchItemsByMonster } = require('../database/itemService');
+const { fetchItemsByMonster, fetchCharacterByName } = require('../database/db');
 const { addItemInventoryDatabase } = require('../utils/inventoryUtils');
 const { extractSpreadsheetId } = require('../utils/validation');
 const { authorizeSheets, appendSheetData } = require('../utils/googleSheetsUtils');
 
 // Additional utilities and services
 const { v4: uuidv4 } = require('uuid');
-const { fetchCharacterByName } = require('../database/characterService');
-const { storeBattleProgress, deleteBattleProgressById } = require('../modules/combatModule');
+const { deleteBattleProgressById } = require('../modules/combatModule');
 
 // Monster data for reference
 const { monsterMapping } = require('../models/MonsterModel');

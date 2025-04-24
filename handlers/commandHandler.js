@@ -1,25 +1,47 @@
-// ------------------- Import necessary modules -------------------
 const fs = require('fs');
-const { handleError } = require('../utils/globalErrorHandler');
 const path = require('path');
 const { Collection } = require('discord.js');
 
-// ------------------- Load commands into the client's collection -------------------
+function getCommandFiles(dir) {
+    let results = [];
+    const list = fs.readdirSync(dir);
+    list.forEach((file) => {
+        file = path.join(dir, file);
+        const stat = fs.statSync(file);
+        if (stat.isDirectory()) {
+            results = results.concat(getCommandFiles(file));
+        } else if (file.endsWith('.js')) {
+            results.push(file);
+        }
+    });
+    return results;
+}
+
 module.exports = (client) => {
   client.commands = new Collection();
   
-  // Load all command files from the 'commands' directory
-  const commandFiles = fs.readdirSync(path.join(__dirname, '../commands')).filter(file => file.endsWith('.js'));
+  const commandDir = path.join(__dirname, '../commands');
+  const commandFiles = getCommandFiles(commandDir);
 
   for (const file of commandFiles) {
-    const command = require(`../commands/${file}`);
+    try {
+      const command = require(file);
 
-    // If there are multiple commands, register them
-    if (Array.isArray(command.data)) {
-      command.data.forEach(cmd => client.commands.set(cmd.name, command));
-    } else {
+      if (!('data' in command) || !('execute' in command)) {
+        console.warn(`[commandHandler.js]: Command at ${file} is missing required "data" or "execute" property. Skipping.`);
+        continue;
+      }
+
+      console.log(`[commandHandler.js]: Registering command: ${command.data.name} from ${file}`);
       client.commands.set(command.data.name, command);
+      
+      if (typeof command.autocomplete === 'function') {
+        console.log(`[commandHandler.js]: Command ${command.data.name} has autocomplete handler.`);
+      }
+    } catch (error) {
+      console.error(`[commandHandler.js]: Error loading command from ${file}:`, error);
     }
   }
-};
 
+  console.log(`[commandHandler.js]: Registered ${client.commands.size} commands.`);
+};

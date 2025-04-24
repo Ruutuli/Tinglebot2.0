@@ -3,10 +3,7 @@
 
 // ------------------- Imports -------------------
 // Group imports logically
-const { Storage } = require('@google-cloud/storage');  // Google Cloud Storage API
 const { v4: uuidv4 } = require('uuid');               // For generating unique identifiers
-const fetch = require('node-fetch');                  // To fetch the image from a URL
-const path = require('path');
 const { handleError } = require('../utils/globalErrorHandler');
 const bucket = require('../config/gcsService');       // Google Cloud Storage bucket configuration
 
@@ -14,6 +11,7 @@ const bucket = require('../config/gcsService');       // Google Cloud Storage bu
 // Uploads an image to Google Cloud Storage and returns the public URL
 async function uploadSubmissionImage(imageUrl, imageName) {
   try {
+    const { default: fetch } = await import('node-fetch');
     // Define the destination path within the Google Cloud Storage bucket
     const destination = `Submissions/${uuidv4()}-${imageName}`;
     const file = bucket.file(destination);
@@ -48,6 +46,7 @@ async function uploadSubmissionImage(imageUrl, imageName) {
 // Uploads an image to Google Cloud Storage under the "pets" folder and returns the public URL
 async function uploadPetImage(imageUrl, imageName) {
   try {
+    const { default: fetch } = await import('node-fetch');
     // Define the destination path within the Google Cloud Storage bucket under "pets"
     const destination = `pets/${uuidv4()}-${imageName}`;
     const file = bucket.file(destination);

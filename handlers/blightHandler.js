@@ -15,17 +15,13 @@ const Character = require('../models/CharacterModel');
 // ------------------- Utilities -------------------
 const { getModCharacterByName } = require('../modules/modCharacters');
 const { removeItemInventoryDatabase } = require('../utils/inventoryUtils');
-const { authorizeSheets, updateDataInSheet, appendSheetData, extractSpreadsheetId } = require('../utils/googleSheetsUtils');
+const { authorizeSheets, appendSheetData, extractSpreadsheetId } = require('../utils/googleSheetsUtils');
 const { saveSubmissionToStorage, deleteSubmissionFromStorage  } = require('../utils/storage');
 const { generateUniqueId } = require('../utils/uniqueIdUtils');
 
 // ------------------- Services -------------------
-const { appendSpentTokens, updateTokenBalance, getTokenBalance, getOrCreateToken } = require('../database/tokenService');
-const { getCharacterInventoryCollection, fetchCharacterById  } = require('../database/characterService');
-const { fetchItemByName } = require('../database/itemService');
+const { updateTokenBalance, getTokenBalance, fetchItemByName, getCharacterInventoryCollection, fetchCharacterById} = require('../database/db');
 
-// Channel ID for Blight Notifications
-const channelId = process.env.BLIGHT_NOTIFICATIONS_CHANNEL_ID;
 
 // ------------------- Load and Save Blight Submissions -------------------
 // Load blight submissions from file
@@ -250,7 +246,6 @@ if (tokens) {
   saveBlightSubmissions(blightSubmissions);
   deleteSubmissionFromStorage(submissionId);
 
-  const token = await getOrCreateToken(interaction.user.id);
   const embed = new EmbedBuilder()
       .setColor('#AA926A')
       .setTitle(`Blight Healing Completed for ${submission.characterName}`)
@@ -293,11 +288,6 @@ if (submission.taskType === 'item') {
           ephemeral: true,
       });
       return;
-  }
-
-  // Utility to escape special characters in a string for use in regular expressions
-  function escapeRegExp(string) {
-      return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // Escapes special characters
   }
 
   const hasItem = async (characterId, itemName, requiredQuantity) => {

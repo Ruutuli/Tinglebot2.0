@@ -1,7 +1,3 @@
-const { handleError } = require('../utils/globalErrorHandler');
-
-// ------------------- Roles Module -------------------
-
 // Define all roles with categories and attributes
 const roles = {
     Villages: [

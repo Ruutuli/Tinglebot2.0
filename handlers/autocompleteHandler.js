@@ -5,20 +5,16 @@ const { MongoClient } = require("mongodb");
 
 const { handleError } = require('../utils/globalErrorHandler');
 // ------------------- Database Connections -------------------
-const { connectToInventories, connectToTinglebot } = require('../database/connection');
+
 
 // ------------------- Database Services -------------------
-const { fetchAllCharacters, fetchAllCharactersExceptUser, fetchBlightedCharactersByUserId, fetchCharacterByName, fetchCharacterByNameAndUserId, fetchCharactersByUserId, getCharacterInventoryCollection} = require('../database/characterService');
-const { fetchAllItems, fetchCraftableItemsAndCheckMaterials,fetchItemsByCategory } = require('../database/itemService');
-const { getCurrentVendingStockList } = require("../database/vendingService");
-const { connectToVendingDatabase } = require('./vendingHandler');
-
+const { connectToInventories, connectToTinglebot, fetchAllCharacters, fetchAllCharactersExceptUser, fetchBlightedCharactersByUserId, fetchCharacterByName, fetchCharacterByNameAndUserId, fetchCharactersByUserId, getCharacterInventoryCollection, fetchCraftableItemsAndCheckMaterials,  getCurrentVendingStockList} = require('../database/db');
 // ------------------- Modules -------------------
 const { capitalize, capitalizeFirstLetter } = require('../modules/formattingModule');
 const { getGeneralJobsPage, getJobPerk, getVillageExclusiveJobs } = require('../modules/jobsModule');
 const { getAllVillages } = require('../modules/locationsModule');
-const { modCharacters } = require('../modules/modCharacters');
-const { petEmojiMap, normalPets, specialPets } = require('../modules/petModule');
+const { modCharacters , getModCharacterByName} = require('../modules/modCharacters');
+const { normalPets, specialPets } = require('../modules/petModule');
 const { getAllRaces } = require('../modules/raceModule');
 
 // ------------------- Database Models -------------------
@@ -1288,7 +1284,6 @@ async function handleVendorItemAutocomplete(interaction, focusedOption) {
     // Provides autocomplete suggestions for items in a character's inventory.
     async function handleItemAutocomplete(interaction) {
       try {
-        const userId = interaction.user.id;
         const focusedOption = interaction.options.getFocused(true);
         const subcommand = interaction.options.getSubcommand();
         const characterName = interaction.options.getString('charactername');
@@ -1384,7 +1379,6 @@ async function handleVendorItemAutocomplete(interaction, focusedOption) {
         // Provides autocomplete suggestions for Job Voucher items from a character's inventory.
     async function handleItemJobVoucherAutocomplete(interaction, focusedOption) {
       try {
-        const userId = interaction.user.id;
         const characterName = interaction.options.getString('charactername');
         if (!characterName) return await interaction.respond([]);
     
@@ -2397,6 +2391,8 @@ handleVillageUpgradeCharacterAutocomplete,
 handleVillageMaterialsAutocomplete,
 
 // VIEWINVENTORY
-handleViewInventoryAutocomplete
+handleViewInventoryAutocomplete,
+
+handleCharacterBasedCommandsAutocomplete
 
   };

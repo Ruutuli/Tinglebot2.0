@@ -1,6 +1,4 @@
 const mongoose = require('mongoose');
-
-const { handleError } = require('../utils/globalErrorHandler');
 // ------------------- Define Stable Schema -------------------
 const StableSchema = new mongoose.Schema({
   mountId: {

@@ -1,21 +1,3 @@
-const { handleError } = require('../utils/globalErrorHandler');
-
-// utils/objectUtils.js
-
-// Function to handle circular references during JSON stringification
-function getCircularReplacer() {
-  const seen = new WeakSet();
-  return (key, value) => {
-      if (typeof value === 'object' && value !== null) {
-          if (seen.has(value)) {
-              return '[Circular]';
-          }
-          seen.add(value);
-      }
-      return value;
-  };
-}
-
 // Function to handle BigInt values during JSON stringification
 function replacer(key, value) {
   if (typeof value === 'bigint') {

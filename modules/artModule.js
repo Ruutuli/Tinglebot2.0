@@ -1,5 +1,3 @@
-const { handleError } = require('../utils/globalErrorHandler');
-
 // ------------------- Base Token Values -------------------
 // These are the base token costs for different art categories
 const baseTokens = {

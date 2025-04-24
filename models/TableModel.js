@@ -1,5 +1,4 @@
 const mongoose = require('mongoose');
-const { handleError } = require('../utils/globalErrorHandler');
 const { Schema } = mongoose;
 
 // ------------------- Schema for storing tables -------------------

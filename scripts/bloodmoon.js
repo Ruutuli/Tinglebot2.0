@@ -8,7 +8,6 @@
 // Standard Libraries & Third-Party Modules
 // ------------------- Importing third-party modules -------------------
 require('dotenv').config();
-const cron = require('node-cron');
 
 const { handleError } = require('../utils/globalErrorHandler');
 // ============================================================================

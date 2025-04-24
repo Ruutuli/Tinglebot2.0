@@ -14,17 +14,7 @@ const { handleError } = require('../utils/globalErrorHandler');
 // ============================================================================
 // Discord.js Components
 // ------------------- Importing Discord.js components -------------------
-const { createSimpleCharacterEmbed } = require('../embeds/characterEmbeds');
-
-// ============================================================================
-// Database Services
-// ------------------- Importing character service functions -------------------
-const { getCharacterInventoryCollection } = require('../database/characterService');
-
-// ============================================================================
-// Modules
-// ------------------- Importing additional modules -------------------
-const initializeInventoryModel = require('../models/InventoryModel');
+const { createSimpleCharacterEmbed } = require('../embeds/embeds');
 
 
 // ============================================================================
@@ -226,7 +216,7 @@ const exchangeSpiritOrbs = async (characterId, type) => {
     if (!character) throw new Error('Character not found');
 
     // Dynamically require the character service function.
-    const { getCharacterInventoryCollection } = require('../database/characterService');
+    const { getCharacterInventoryCollection } = require('../database/db');
     const inventoryCollection = await getCharacterInventoryCollection(character.name);
 
     const orbEntry = await inventoryCollection.findOne({
