@@ -216,7 +216,7 @@ const exchangeSpiritOrbs = async (characterId, type) => {
     if (!character) throw new Error('Character not found');
 
     // Dynamically require the character service function.
-    const { getCharacterInventoryCollection } = require('../database/characterService');
+    const { getCharacterInventoryCollection } = require('../database/db');
     const inventoryCollection = await getCharacterInventoryCollection(character.name);
 
     const orbEntry = await inventoryCollection.findOne({
