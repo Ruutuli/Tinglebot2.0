@@ -130,10 +130,12 @@ module.exports = {
         .setDescription("Age of the character")
         .setRequired(true)
       )
-      .addIntegerOption((option) =>
+      .addStringOption((option) =>
        option
         .setName("height")
-        .setDescription("Height of the character in cm")
+        .setDescription(
+         "Height of the character in cm (can use decimal values)"
+        )
         .setRequired(true)
       )
       .addIntegerOption((option) =>
@@ -203,10 +205,12 @@ module.exports = {
         .setDescription("Age of the character")
         .setRequired(true)
       )
-      .addIntegerOption((option) =>
+      .addStringOption((option) =>
        option
         .setName("height")
-        .setDescription("Height of the character in cm")
+        .setDescription(
+         "Height of the character in cm (can use decimal values)"
+        )
         .setRequired(true)
       )
       .addIntegerOption((option) =>
@@ -276,10 +280,12 @@ module.exports = {
         .setDescription("Age of the character")
         .setRequired(true)
       )
-      .addIntegerOption((option) =>
+      .addStringOption((option) =>
        option
         .setName("height")
-        .setDescription("Height of the character in cm")
+        .setDescription(
+         "Height of the character in cm (can use decimal values)"
+        )
         .setRequired(true)
       )
       .addIntegerOption((option) =>
@@ -349,10 +355,12 @@ module.exports = {
         .setDescription("Age of the character")
         .setRequired(true)
       )
-      .addIntegerOption((option) =>
+      .addStringOption((option) =>
        option
         .setName("height")
-        .setDescription("Height of the character in cm")
+        .setDescription(
+         "Height of the character in cm (can use decimal values)"
+        )
         .setRequired(true)
       )
       .addIntegerOption((option) =>
@@ -681,7 +689,37 @@ async function handleCreateCharacter(interaction, subcommand) {
    return;
   }
 
+  // Add validation here
+  const hearts = interaction.options.getInteger("hearts");
+  const stamina = interaction.options.getInteger("stamina");
+
+  if (hearts < 0 || stamina < 0) {
+   await interaction.reply({
+    content: "❌ Hearts and stamina values must be positive numbers.",
+    ephemeral: true,
+   });
+   return;
+  }
+
+  const heightStr = interaction.options.getString("height");
+  const height = parseFloat(heightStr);
+
+  if (isNaN(height) || height <= 0) {
+   await interaction.reply({
+    content: "❌ Height must be a positive number.",
+    ephemeral: true,
+   });
+   return;
+  }
+
   const race = interaction.options.getString("race");
+  if (!isValidRace(race)) {
+   await interaction.reply({
+    content: `❌ "${race}" is not a valid race. Please select a valid race from the autocomplete options.`,
+    ephemeral: true,
+   });
+   return;
+  }
   const village = interaction.options.getString("village");
   const job = interaction.options.getString("job");
 
