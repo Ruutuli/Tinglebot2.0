@@ -1,29 +1,41 @@
 const { handleError } = require("../utils/globalErrorHandler");
-const itemUtils = require('../utils/itemUtils');
-// ============================================================================
-// Database Connections
-// ------------------- Required functions will be initialized later -------------------
-// We'll use dependency injection to avoid circular dependencies
+let promptUserForSpecificItems = null;
+
 let dbFunctions = {
  connectToInventories: null,
  fetchItemByName: null,
  fetchCharacterById: null,
  getInventoryCollection: null,
 };
-// Initialize function to set the required db functions
+
 function initializeInventoryUtils(dbModuleFunctions) {
  dbFunctions = {
   ...dbFunctions,
   ...dbModuleFunctions,
  };
 }
-inventoryUtils.initializeItemUtils({
-  promptUserForSpecificItems: itemUtils.promptUserForSpecificItems
-});
 
-// ============================================================================
-// Utility Functions
-// ------------------- Importing utility functions -------------------
+function initializeItemUtils(itemUtilsFunctions) {
+ if (itemUtilsFunctions && itemUtilsFunctions.promptUserForSpecificItems) {
+  promptUserForSpecificItems = itemUtilsFunctions.promptUserForSpecificItems;
+ } else {
+  promptUserForSpecificItems = async (
+   interaction,
+   inventory,
+   materialName,
+   requiredQuantity
+  ) => {
+   const generalCategories = require("../models/GeneralItemCategories");
+   return inventory.filter((item) => {
+    if (generalCategories[materialName]) {
+     return generalCategories[materialName].includes(item.itemName);
+    }
+    return item.itemName === materialName;
+   });
+  };
+ }
+}
+
 const {
  appendSheetData,
  authorizeSheets,
@@ -32,23 +44,14 @@ const {
  writeSheetData,
 } = require("../utils/googleSheetsUtils");
 
-// Import extractSpreadsheetId directly to avoid circular dependency
-// Instead of: const { extractSpreadsheetId } = require("../utils/validation");
+const generalCategories = require("../models/GeneralItemCategories");
+
 function extractSpreadsheetId(url) {
  if (!url) return null;
  const match = url.match(/\/d\/([a-zA-Z0-9-_]+)/);
  return match ? match[1] : null;
 }
 
-// ============================================================================
-// Database Models
-// ------------------- Importing database models -------------------
-const generalCategories = require("../models/GeneralItemCategories");
-
-// ============================================================================
-// General Utility Functions
-// ------------------- Format Date and Time -------------------
-// Formats a given date in EST with a specific format.
 function formatDateTime(date) {
  const options = {
   year: "numeric",
@@ -66,16 +69,10 @@ function formatDateTime(date) {
  );
 }
 
-// ------------------- Escape Regular Expression -------------------
-// Escapes special characters in a string for use in a regular expression.
 function escapeRegExp(string) {
  return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-// ============================================================================
-// Inventory Management Functions
-// ------------------- Sync Inventory to Database and Google Sheets -------------------
-// Synchronizes inventory data by updating the database and reflecting changes in Google Sheets.
 async function syncToInventoryDatabase(character, item, interaction) {
  try {
   if (!dbFunctions.connectToInventories) {
@@ -142,8 +139,6 @@ async function syncToInventoryDatabase(character, item, interaction) {
  }
 }
 
-// ------------------- Add Single Item to Inventory Database -------------------
-// Adds a single item to a character's inventory; updates quantity if the item already exists.
 async function addItemInventoryDatabase(
  characterId,
  itemName,
@@ -156,7 +151,6 @@ async function addItemInventoryDatabase(
    throw new Error("Interaction object is undefined.");
   }
 
-  // Use the injected function instead of direct import
   if (
    !dbFunctions.fetchCharacterById ||
    !dbFunctions.connectToInventories ||
@@ -238,8 +232,6 @@ async function addItemInventoryDatabase(
  }
 }
 
-// ------------------- Remove Item from Inventory Database -------------------
-// Removes a specified quantity of an item from a character's inventory.
 async function removeItemInventoryDatabase(
  characterId,
  itemName,
@@ -297,8 +289,6 @@ async function removeItemInventoryDatabase(
  }
 }
 
-// ------------------- Add Multiple Items to Database -------------------
-// Adds multiple items to a character's inventory database.
 const addItemsToDatabase = async (character, items, interaction) => {
  try {
   if (!dbFunctions.connectToInventories) {
@@ -353,8 +343,6 @@ const addItemsToDatabase = async (character, items, interaction) => {
  }
 };
 
-// ------------------- Create New Item Database Entry -------------------
-// Creates a new item entry object for a character's inventory.
 const createNewItemDatabase = (
  character,
  itemName,
@@ -385,8 +373,6 @@ const createNewItemDatabase = (
  };
 };
 
-// ------------------- Create Removed Item Database Entry -------------------
-// Creates a record for an item removed from a character's inventory.
 const createRemovedItemDatabase = (
  character,
  item,
@@ -419,12 +405,6 @@ const createRemovedItemDatabase = (
  };
 };
 
-// ------------------- Process Materials for Crafting -------------------
-// Processes required materials for crafting an item, ensuring sufficient quantities and updating inventory.
-// This function needs itemUtils, create a placeholder for now
-let promptUserForSpecificItems = null;
-
-
 const processMaterials = async (
  interaction,
  character,
@@ -433,7 +413,7 @@ const processMaterials = async (
  quantity
 ) => {
  if (!promptUserForSpecificItems) {
-  throw new Error("itemUtils functions not initialized");
+  initializeItemUtils({});
  }
 
  const materialsUsed = [];
@@ -487,8 +467,6 @@ const processMaterials = async (
  return materialsUsed;
 };
 
-// ------------------- Remove Initial Item if Synced -------------------
-// Removes the "Initial Item" from the inventory if the inventory has been marked as synced.
 async function removeInitialItemIfSynced(characterId) {
  try {
   if (!dbFunctions.fetchCharacterById || !dbFunctions.connectToInventories) {
@@ -525,8 +503,6 @@ async function removeInitialItemIfSynced(characterId) {
  }
 }
 
-// ------------------- Add Item to Vending Inventory -------------------
-// Adds an item to a vending inventory collection or updates its stock quantity.
 const addItemToVendingInventory = async (collectionName, item) => {
  try {
   if (!dbFunctions.connectToInventories) {
@@ -559,9 +535,6 @@ const addItemToVendingInventory = async (collectionName, item) => {
  }
 };
 
-// ============================================================================
-// Exported Functions
-// ------------------- Exporting all inventory management functions -------------------
 module.exports = {
  initializeInventoryUtils,
  initializeItemUtils,
