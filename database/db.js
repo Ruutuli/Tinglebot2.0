@@ -102,7 +102,7 @@ async function getCharactersInVillage(userId, village) {
     character.currentVillage.toLowerCase() === village.toLowerCase()
   );
  } catch (error) {
-  handleError(error, "characterService.js");
+  handleError(error, "db.js");
   console.error(
    `[characterService]: logs - Error in getCharactersInVillage: ${error.message}`
   );
@@ -125,7 +125,7 @@ const fetchCharacterByName = async (characterName) => {
   }
   return character;
  } catch (error) {
-  handleError(error, "characterService.js");
+  handleError(error, "db.js");
   console.error(
    `❌ Error fetching character "${characterName}": ${error.message}`
   );
@@ -138,7 +138,7 @@ const fetchBlightedCharactersByUserId = async (userId) => {
   await connectToTinglebot();
   return await Character.find({ userId, blighted: true }).lean().exec();
  } catch (error) {
-  handleError(error, "characterService.js");
+  handleError(error, "db.js");
   console.error(
    `[characterService]: logs - Error in fetchBlightedCharactersByUserId: ${error.message}`
   );
@@ -151,7 +151,7 @@ const fetchAllCharacters = async () => {
   await connectToTinglebot();
   return await Character.find().lean().exec();
  } catch (error) {
-  handleError(error, "characterService.js");
+  handleError(error, "db.js");
   console.error(
    `[characterService]: logs - Error in fetchAllCharacters: ${error.message}`
   );
@@ -171,7 +171,7 @@ const fetchCharacterById = async (characterId) => {
   }
   return character;
  } catch (error) {
-  handleError(error, "characterService.js");
+  handleError(error, "db.js");
   console.error(
    `[characterService]: logs - Error in fetchCharacterById: ${error.message}`
   );
@@ -185,7 +185,7 @@ const fetchCharactersByUserId = async (userId) => {
   const characters = await Character.find({ userId }).lean().exec();
   return characters;
  } catch (error) {
-  handleError(error, "characterService.js");
+  handleError(error, "db.js");
   console.error(
    `[characterService]: logs - Error in fetchCharactersByUserId: ${error.message}`
   );
@@ -199,7 +199,7 @@ const fetchCharacterByNameAndUserId = async (characterName, userId) => {
   const character = await Character.findOne({ name: characterName, userId });
   return character;
  } catch (error) {
-  handleError(error, "characterService.js");
+  handleError(error, "db.js");
   console.error(
    `[characterService]: logs - Error in fetchCharacterByNameAndUserId: ${error.message}`
   );
@@ -212,7 +212,7 @@ const fetchAllCharactersExceptUser = async (userId) => {
   await connectToTinglebot();
   return await Character.find({ userId: { $ne: userId } }).exec();
  } catch (error) {
-  handleError(error, "characterService.js");
+  handleError(error, "db.js");
   console.error(
    `[characterService]: logs - Error in fetchAllCharactersExceptUser: ${error.message}`
   );
@@ -227,7 +227,7 @@ const createCharacter = async (characterData) => {
   await character.save();
   return character;
  } catch (error) {
-  handleError(error, "characterService.js");
+  handleError(error, "db.js");
   console.error(
    `[characterService]: logs - Error in createCharacter: ${error.message}`
   );
@@ -246,7 +246,7 @@ const updateCharacterById = async (characterId, updateData) => {
    .lean()
    .exec();
  } catch (error) {
-  handleError(error, "characterService.js");
+  handleError(error, "db.js");
   console.error(
    `[characterService]: logs - Error in updateCharacterById: ${error.message}`
   );
@@ -261,7 +261,7 @@ const deleteCharacterById = async (characterId) => {
    .lean()
    .exec();
  } catch (error) {
-  handleError(error, "characterService.js");
+  handleError(error, "db.js");
   console.error(
    `[characterService]: logs - Error in deleteCharacterById: ${error.message}`
   );
@@ -277,7 +277,7 @@ const updateCharacterInventorySynced = async (characterId) => {
   // from the initialized module
   await inventoryUtils.removeInitialItemIfSynced(characterId);
  } catch (error) {
-  handleError(error, "characterService.js");
+  handleError(error, "db.js");
   console.error(
    `[characterService]: logs - Error in updateCharacterInventorySynced: ${error.message}`
   );
@@ -296,7 +296,7 @@ const getCharacterInventoryCollection = async (characterName) => {
   const collectionName = characterName.trim().toLowerCase();
   return await getInventoryCollection(collectionName);
  } catch (error) {
-  handleError(error, "characterService.js");
+  handleError(error, "db.js");
   console.error(
    `[characterService]: logs - Error in getCharacterInventoryCollection for "${characterName}": ${error.message}`
   );
@@ -323,7 +323,7 @@ const createCharacterInventory = async (characterName, characterId, job) => {
   };
   await collection.insertOne(initialInventory);
  } catch (error) {
-  handleError(error, "characterService.js");
+  handleError(error, "db.js");
   console.error(
    `[characterService]: logs - Error in createCharacterInventory for "${characterName}": ${error.message}`
   );
@@ -336,7 +336,7 @@ const deleteCharacterInventoryCollection = async (characterName) => {
   const collection = await getCharacterInventoryCollection(characterName);
   await collection.drop();
  } catch (error) {
-  handleError(error, "characterService.js");
+  handleError(error, "db.js");
   console.error(
    `[characterService]: logs - Error in deleteCharacterInventoryCollection for "${characterName}": ${error.message}`
   );
@@ -366,7 +366,7 @@ async function addPetToCharacter(
    },
   });
  } catch (error) {
-  handleError(error, "characterService.js");
+  handleError(error, "db.js");
   console.error(
    `[characterService]: logs - Error in addPetToCharacter: ${error.message}`
   );
@@ -384,7 +384,7 @@ async function updatePetRolls(characterId, petIdentifier, newRolls) {
   }
   await Pet.updateOne(filter, { $set: { rollsRemaining: newRolls } });
  } catch (error) {
-  handleError(error, "characterService.js");
+  handleError(error, "db.js");
   console.error(
    `[characterService]: logs - updatePetRolls error: ${error.message}`
   );
@@ -399,7 +399,7 @@ async function upgradePetLevel(characterId, petName, newLevel) {
    { $set: { "pets.$.level": newLevel } }
   );
  } catch (error) {
-  handleError(error, "characterService.js");
+  handleError(error, "db.js");
   console.error(
    `[characterService]: logs - Error in upgradePetLevel: ${error.message}`
   );
@@ -414,7 +414,7 @@ async function updatePetToCharacter(characterId, petName, updatedPetData) {
    { $set: { "pets.$": updatedPetData } }
   );
  } catch (error) {
-  handleError(error, "characterService.js");
+  handleError(error, "db.js");
   console.error(
    `[characterService]: logs - Failed to update pet "${petName}": ${error.message}`
   );
@@ -435,7 +435,7 @@ async function resetPetRollsForAllCharacters() {
    }
   }
  } catch (error) {
-  handleError(error, "characterService.js");
+  handleError(error, "db.js");
   console.error(
    `[characterService]: logs - Error in resetPetRollsForAllCharacters: ${error.message}`
   );
