@@ -1,4 +1,5 @@
 const { handleError } = require("../utils/globalErrorHandler");
+const itemUtils = require('../utils/itemUtils');
 // ============================================================================
 // Database Connections
 // ------------------- Required functions will be initialized later -------------------
@@ -16,6 +17,9 @@ function initializeInventoryUtils(dbModuleFunctions) {
   ...dbModuleFunctions,
  };
 }
+inventoryUtils.initializeItemUtils({
+  promptUserForSpecificItems: itemUtils.promptUserForSpecificItems
+});
 
 // ============================================================================
 // Utility Functions
@@ -420,10 +424,6 @@ const createRemovedItemDatabase = (
 // This function needs itemUtils, create a placeholder for now
 let promptUserForSpecificItems = null;
 
-// Initialize function for itemUtils dependency
-function initializeItemUtils(itemUtilsFunctions) {
- promptUserForSpecificItems = itemUtilsFunctions.promptUserForSpecificItems;
-}
 
 const processMaterials = async (
  interaction,
