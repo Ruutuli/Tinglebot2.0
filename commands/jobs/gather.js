@@ -15,7 +15,7 @@ const { v4: uuidv4 } = require('uuid');
 
 // ------------------- Database Services -------------------
 // Import character, item, and monster related database service functions.
-const { fetchCharacterByNameAndUserId, fetchAllItems, fetchItemsByMonster, fetchAllMonsters, fetchCharacterById  } = require('../../database/db.js');
+const { fetchCharacterByNameAndUserId, fetchAllItems, fetchItemsByMonster, fetchAllMonsters } = require('../../database/db.js');
 
 
 // ------------------- Modules -------------------
@@ -72,7 +72,7 @@ module.exports = {
 
       // ------------------- Step 1: Validate Character -------------------
       const characterName = interaction.options.getString('charactername');
-      const character = await fetchCharacterById(characterName);
+      const character = await fetchCharacterByNameAndUserId(characterName, interaction.user.id);
       if (!character) {
         await interaction.editReply({
           content: `❌ **Character ${characterName} not found or does not belong to you.**`,
