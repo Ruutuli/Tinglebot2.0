@@ -315,12 +315,22 @@ async function handleAutocomplete(interaction) {
   
 // ------------------- Helper Function to Filter and Respond with Choices -------------------
 async function respondWithFilteredChoices(interaction, focusedOption, choices) {
-  const filteredChoices = focusedOption.value === ''
-    ? choices.slice(0, 25) // Return up to 25 options if no input is provided
-    : choices.filter(choice => choice.name.toLowerCase().includes(focusedOption.value.toLowerCase())).slice(0, 25); // Filter based on input
+  // Add this check at the beginning of the function
+  if (!focusedOption || typeof focusedOption.value === 'undefined') {
+    // If focusedOption is missing or doesn't have a value property,
+    // just return sorted choices without filtering
+    const sortedChoices = [...choices].sort((a, b) => a.name.localeCompare(b.name)).slice(0, 25);
+    await interaction.respond(sortedChoices);
+    return;
+  }
 
-  filteredChoices.sort((a, b) => a.name.localeCompare(b.name)); // Sort alphabetically
-  await interaction.respond(filteredChoices); // Send the filtered choices
+  // The rest of the function remains the same
+  const filteredChoices = focusedOption.value === ''
+    ? choices.slice(0, 25)
+    : choices.filter(choice => choice.name.toLowerCase().includes(focusedOption.value.toLowerCase())).slice(0, 25);
+
+  filteredChoices.sort((a, b) => a.name.localeCompare(b.name));
+  await interaction.respond(filteredChoices);
 }
 
 // ------------------- Helper Function to Safely Respond with Error -------------------
