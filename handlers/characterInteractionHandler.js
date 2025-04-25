@@ -64,8 +64,43 @@ async function createCharacterInteraction(interaction) {
     const timezone = interaction.options.getString('timezone');
     const subcommand = interaction.options.getSubcommand();
     const homeVillage = subcommand === 'general' ? interaction.options.getString('village') : subcommand;
-    const age = interaction.options.getInteger('age');
-    const height = interaction.options.getInteger('height');
+    
+    // Get values for validation
+    const hearts = interaction.options.getInteger('hearts');
+    const stamina = interaction.options.getInteger('stamina');
+    const race = interaction.options.getString('race');
+    
+    // NEW: Validate hearts and stamina are positive
+    if (hearts < 0 || stamina < 0) {
+        await interaction.editReply({ 
+            content: "❌ Hearts and stamina values must be positive numbers.",
+            ephemeral: true 
+        });
+        return;
+    }
+    
+    // NEW: Parse height as string and convert to float
+    const heightStr = interaction.options.getString('height');
+    const height = parseFloat(heightStr);
+    
+    // NEW: Validate height is a valid number and positive
+    if (isNaN(height) || height <= 0) {
+        await interaction.editReply({
+            content: "❌ Height must be a positive number.",
+            ephemeral: true
+        });
+        return;
+    }
+    
+    // NEW: Validate race
+    const validRaces = ['gerudo', 'goron', 'hylian', 'keaton', 'korok/kokiri', 'mixed', 'mogma', 'rito', 'sheikah', 'twili', 'zora'];
+    if (!validRaces.includes(race.toLowerCase())) {
+        await interaction.editReply({
+            content: `❌ "${race}" is not a valid race. Please select a valid race from the autocomplete options.`,
+            ephemeral: true
+        });
+        return;
+    }
 
     // Ensure character name is unique
     const isUnique = await isUniqueCharacterName(userId, characterName);
@@ -74,7 +109,7 @@ async function createCharacterInteraction(interaction) {
         return;
     }
 
-    // Get or create the user
+    // Continue with the rest of the function...
     const user = await getOrCreateUser(userId, googleSheetsUrl, timezone);
 
     // Handle character icon attachment
@@ -104,14 +139,14 @@ async function createCharacterInteraction(interaction) {
         const character = new Character({
             userId: user.discordId,
             name: characterName,
-            age: age,
+            age: interaction.options.getInteger('age'),
             height: height,
-            maxHearts: interaction.options.getInteger('hearts'),
-            currentHearts: interaction.options.getInteger('hearts'),
-            maxStamina: interaction.options.getInteger('stamina'),
-            currentStamina: interaction.options.getInteger('stamina'),
+            maxHearts: hearts,
+            currentHearts: hearts,
+            maxStamina: stamina,
+            currentStamina: stamina,
             pronouns: interaction.options.getString('pronouns'),
-            race: interaction.options.getString('race'),
+            race: race,
             homeVillage: homeVillage,
             currentVillage: homeVillage,
             job: interaction.options.getString('job'),
