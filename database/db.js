@@ -13,7 +13,6 @@ require("dotenv").config();
 
 // Import inventoryUtils but don't use removeInitialItemIfSynced directly
 const inventoryUtils = require("../utils/inventoryUtils");
-const itemUtils = require('../utils/itemUtils');
 
 const Character = require("../models/CharacterModel");
 const Monster = require("../models/MonsterModel");
