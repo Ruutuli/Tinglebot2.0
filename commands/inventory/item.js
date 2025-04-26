@@ -89,6 +89,23 @@ module.exports = {
                 await interaction.editReply({ content: `❌ Item not found.`, ephemeral: true });
                 return;
             }
+
+            // ------------------- Validate Item Ownership -------------------
+            // Ensure the character actually has the item in their inventory.
+            const inventoryItems = await inventoryCollection.find().toArray();
+
+            const ownedItem = inventoryItems.find(invItem =>
+            invItem.itemName && invItem.itemName.toLowerCase() === itemName.toLowerCase()
+            );
+
+            if (!ownedItem || ownedItem.quantity < quantity) {
+            await interaction.editReply({
+                content: `❌ **${character.name}** does not have enough "${capitalizeWords(itemName)}" in their inventory to use.`,
+                ephemeral: true,
+            });
+            return;
+            }
+
                 // ------------------- Job Voucher Handling -------------------
                 if (item.itemName.toLowerCase() === 'job voucher') {
                     // ------------------- Active Voucher Check -------------------
