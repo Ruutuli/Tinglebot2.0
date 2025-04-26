@@ -1,24 +1,36 @@
 // ------------------- Standard Libraries -------------------
 require("dotenv").config();
 const figlet = require("figlet");
+
 // ------------------- Discord.js Components -------------------
 const { Client, GatewayIntentBits } = require("discord.js");
+
 // ------------------- Database Connections -------------------
 const { connectToTinglebot, connectToInventories } = require("./database/db");
-// ------------------- Custom Modules -------------------
-const { initializeErrorHandler } = require("./utils/globalErrorHandler");
-const { sendErrorToTrello } = require("./scripts/trello");
-const scheduler = require("./scheduler");
+
+// ------------------- Handlers -------------------
+
 const { handleAutocomplete } = require("./handlers/autocompleteHandler");
 const { handleComponentInteraction } = require("./handlers/componentHandler");
 const { handleSelectMenuInteraction } = require("./handlers/selectMenuHandler");
 const { initializeReactionHandler } = require("./handlers/vendingHandler");
-// ------------------- Utility Functions -------------------
-const { handleError } = require("./utils/globalErrorHandler");
+
+// ------------------- Scripts -------------------
+const {
+  handleError,
+  initializeErrorHandler,
+} = require("./utils/globalErrorHandler");
+const {
+  createTrelloCard,
+  logWishlistToTrello,
+  logErrorToTrello,
+} = require("./scripts/trello");
 const { isBloodMoonDay } = require("./scripts/bloodmoon");
-const { convertToHyruleanDate } = require("./modules/calendarModule");
 const { initializeRandomEncounterBot } = require("./scripts/randomEncounters");
-const { createTrelloCard, logWishlistToTrello } = require("./scripts/trello");
+const scheduler = require("./scheduler");
+const { convertToHyruleanDate } = require("./modules/calendarModule");
+
+// ------------------- Weather -------------------
 const { simulateWeightedWeather } = require("./.weather/weatherHandler");
 const {
   precipitationWeights,
@@ -26,6 +38,7 @@ const {
   temperatureWeights,
   windWeights,
 } = require("./.weather/weatherData");
+
 
 // ============================================================================
 // ------------------- Main Initialization -------------------
@@ -72,7 +85,7 @@ async function initializeClient() {
   // --------------------------------------------------------------------------
   client.once("ready", async () => {
     console.log(`Logged in as ${client.user.tag}!`);
-    initializeErrorHandler(sendErrorToTrello, client);
+    initializeErrorHandler(logErrorToTrello, client);
   });
 
   // --------------------------------------------------------------------------

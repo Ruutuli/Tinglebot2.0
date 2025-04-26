@@ -389,10 +389,19 @@ module.exports = {
             await interaction.editReply({ embeds: [confirmationEmbed] });
 
         } catch (error) {
-    handleError(error, 'item.js');
-
+            handleError(error, 'item.js', {
+              commandName: 'item',
+              userTag: interaction.user.tag,
+              userId: interaction.user.id,
+              options: {
+                characterName,
+                itemName,
+                quantity
+              }
+            });
+          
             console.error(`[item.js:logs] Error during healing process: ${error.message}`);
             await interaction.editReply({ content: `❌ An error occurred during the healing process.`, ephemeral: true });
-        }
-    }
+          }
+        }          
 };
