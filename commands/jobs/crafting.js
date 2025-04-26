@@ -166,6 +166,19 @@ module.exports = {
           }
         }
 
+        // ------------------- Additional Village Lock Check for Voucher -------------------
+        // If the job is village-locked, enforce matching village
+        const lockedVillage = isVillageExclusiveJob(job);
+        if (lockedVillage) {
+          const normalizedCurrentVillage = character.currentVillage?.toLowerCase();
+          if (normalizedCurrentVillage !== lockedVillage.toLowerCase()) {
+            return interaction.editReply({
+              content: `❌ **"${character.name}" cannot use the "${job}" job while in ${capitalizeWords(character.currentVillage)}.**\nThis job is restricted to **${capitalizeWords(lockedVillage)}** only.`,
+              ephemeral: true,
+            });
+          }
+        }
+
         // Restrict crafting of items that require more than 5 stamina when using a job voucher.
         if (item.staminaToCraft > 5) {
           console.log(`[crafting.js]: Item "${itemName}" requires ${item.staminaToCraft} stamina to craft, exceeding the allowed limit for job vouchers.`);
