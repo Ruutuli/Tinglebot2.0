@@ -2,6 +2,7 @@
 // ------------------- Error Handling -------------------
 // Global error capturing and logging to Discord and Trello.
 // ============================================================================
+const { EmbedBuilder } = require('discord.js');
 
 // ------------------- Standard Libraries -------------------
 const ERROR_LOG_CHANNEL_ID = process.env.ERROR_LOG_CHANNEL_ID || "1365790477747486730";
@@ -57,28 +58,28 @@ ${message}
     }
   }
 
-  // ------------------- Discord Error Channel Logging -------------------
-  if (client && client.channels?.cache.has(ERROR_LOG_CHANNEL_ID)) {
-    const errorChannel = client.channels.cache.get(ERROR_LOG_CHANNEL_ID);
+// ------------------- Discord Error Channel Logging -------------------
+if (client && client.channels?.cache.has(ERROR_LOG_CHANNEL_ID)) {
+  const errorChannel = client.channels.cache.get(ERROR_LOG_CHANNEL_ID);
 
-    if (errorChannel) {
-      const errorMessage = `
-❌ **Error Detected in ${source}**
+  if (errorChannel) {
+    const { EmbedBuilder } = require("discord.js");
 
-🧠 **Details:**
-${context.commandName ? `• Command: ${context.commandName}\n` : ""}
-${context.userTag ? `• User: ${context.userTag} (${context.userId})\n` : ""}
-${context.options ? `• Options: \`\`\`${JSON.stringify(context.options)}\`\`\`\n` : ""}
+    const errorEmbed = new EmbedBuilder()
+      .setColor(0xFF0000)
+      .setTitle(`❌ Error Detected in ${source}`)
+      .addFields(
+        { name: "🧠 Command", value: context.commandName || "Unknown", inline: false },
+        { name: "🙋 User", value: context.userTag ? `${context.userTag} (${context.userId})` : "Unknown", inline: false },
+        { name: "📦 Options", value: context.options ? `\`\`\`json\n${JSON.stringify(context.options, null, 2)}\n\`\`\`` : "None" },
+        { name: "📝 Error Message", value: `\`\`\`\n${message.slice(0, 1000)}\n\`\`\`` },
+        { name: "🔗 Trello Link", value: trelloLink ? trelloLink : "No Trello card available." }
+      )
+      .setTimestamp();
 
-📝 **Message:**
-\`\`\`${message}\`\`\`
-
-🔗 **Trello Link:** ${trelloLink ? trelloLink : "Check board manually."}
-      `.trim();
-
-      errorChannel.send(errorMessage).catch(console.error);
-    }
+    errorChannel.send({ embeds: [errorEmbed] }).catch(console.error);
   }
+}
 }
 
 // ------------------- Exports -------------------

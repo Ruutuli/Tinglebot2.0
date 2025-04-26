@@ -173,12 +173,15 @@ async function logErrorToTrello(errorMessage, source = 'Unknown Source') {
   };
 
   try {
-    await createTrelloCard(errorCard);
+    const cardLink = await createTrelloCard(errorCard);
+    return cardLink; // ✅ RETURN the Trello card link
   } catch (e) {
     handleError(e, 'trello.js');
     console.error(`[trello.js]: Failed to log error to Trello: ${e.message}`);
+    return null;
   }
 }
+
 
 // ============================================================================
 // ------------------- Log Wishlist Entry to Trello -------------------
