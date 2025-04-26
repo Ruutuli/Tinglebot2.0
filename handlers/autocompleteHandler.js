@@ -1450,10 +1450,12 @@ async function handleGiftAutocomplete(interaction, focusedOption) {
    );
    const fromInventory = await inventoryCollection.find().toArray();
 
-   const choices = fromInventory.map((item) => ({
-    name: `${item.itemName} - QTY:${item.quantity}`,
-    value: item.itemName,
-   }));
+   const choices = fromInventory
+   .filter((item) => item.itemName && item.itemName !== "Initial Item")
+   .map((item) => ({
+     name: `${capitalizeWords(item.itemName)} - QTY:${item.quantity}`,
+     value: item.itemName,
+   })); 
 
    await respondWithFilteredChoices(interaction, focusedOption, choices);
   }
