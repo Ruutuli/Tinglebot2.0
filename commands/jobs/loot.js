@@ -504,25 +504,30 @@ async function handleBloodMoonRerolls(
 }
 
 // ------------------- Normal Encounter Logic -------------------
-async function handleNormalEncounter(currentVillage, job) {
- const monstersByCriteria = await getMonstersByCriteria(currentVillage, job);
- if (monstersByCriteria.length === 0) {
-  return null; // No monsters available
- }
+async function handleNormalEncounter(interaction, currentVillage, job, character, bloodMoonActive) {
+  const monstersByCriteria = await getMonstersByCriteria(currentVillage, job);
+  if (monstersByCriteria.length === 0) {
+    const embed = createNoEncounterEmbed(character, bloodMoonActive); // Send "No Encounter" embed
+    await interaction.editReply({ embeds: [embed] });
+    return null;
+  }
 
- const encounterResult = await getMonsterEncounterFromList(monstersByCriteria);
- if (encounterResult.encounter === "No Encounter") {
-  return null; // No encounter happened
- }
+  const encounterResult = await getMonsterEncounterFromList(monstersByCriteria);
+  if (encounterResult.encounter === "No Encounter") {
+    const embed = createNoEncounterEmbed(character, bloodMoonActive); // Send "No Encounter" embed
+    await interaction.editReply({ embeds: [embed] });
+    return null;
+  }
 
- const encounteredMonster =
-  encounterResult.monsters[
-   Math.floor(Math.random() * encounterResult.monsters.length)
-  ];
+  const encounteredMonster =
+    encounterResult.monsters[
+      Math.floor(Math.random() * encounterResult.monsters.length)
+    ];
 
- // Return the final encountered monster
- return encounteredMonster;
+  // Return the final encountered monster
+  return encounteredMonster;
 }
+
 
 // ------------------- Looting Logic -------------------
 async function processLootingLogic(
