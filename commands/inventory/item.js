@@ -117,20 +117,23 @@ module.exports = {
                     return;
                     }
                 
-                    // ------------------- Validate Inventory Existence -------------------
-                    const inventoryCollection = await getCharacterInventoryCollection(character.name);
-                    if (!inventoryCollection) {
-                    await interaction.editReply({
-                        content: `❌ **${character.name}** does not have an inventory set up. Please initialize an inventory before using a Job Voucher.`,
-                        ephemeral: true,
-                    });
-                    return;
-                    }
-                
-                    const inventoryItems = await inventoryCollection.find().toArray();
-                    const hasJobVoucher = inventoryItems.some(invItem =>
-                    invItem.itemName && invItem.itemName.toLowerCase() === 'job voucher'
-                    );
+                // ------------------- Validate Item Ownership -------------------
+                // Ensure the character actually has the item in their inventory.
+                const inventoryCollection = await getCharacterInventoryCollection(character.name);
+                if (!inventoryCollection) {
+                await interaction.editReply({
+                    content: `❌ **${character.name}** does not have an inventory set up. Please initialize an inventory before using items.`,
+                    ephemeral: true,
+                });
+                return;
+                }
+
+                const inventoryItems = await inventoryCollection.find().toArray();
+
+                const ownedItem = inventoryItems.find(invItem =>
+                invItem.itemName && invItem.itemName.toLowerCase() === itemName.toLowerCase()
+                );
+
                 
                     if (!hasJobVoucher) {
                     await interaction.editReply({
