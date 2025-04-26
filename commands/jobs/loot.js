@@ -395,7 +395,6 @@ module.exports = {
      return;
     }
    }
-   // ------------------- Step 5: Looting Logic -------------------
    await processLootingLogic(
     interaction,
     character,
@@ -405,17 +404,14 @@ module.exports = {
 
    // ------------------- Deactivate Job Voucher -------------------
    if (character.jobVoucher) {
-    const deactivationResult = await deactivateJobVoucher(character._id);
-    if (!deactivationResult.success) {
-     console.error(
-      `[Loot Command]: Failed to deactivate job voucher for ${character.name}`
-     );
-    } else {
-     console.log(
-      `[Loot Command]: Job voucher deactivated for ${character.name}`
-     );
-    }
+     const deactivationResult = await deactivateJobVoucher(character._id);
+     if (!deactivationResult.success) {
+       console.error(`[Loot Command]: Failed to deactivate job voucher for ${character.name}`);
+     } else {
+       console.log(`[Loot Command]: Job voucher deactivated for ${character.name}`);
+     }
    }
+
   } catch (error) {
    handleError(error, "loot.js");
 

@@ -360,6 +360,8 @@ module.exports = {
           return;
         }
       } else {
+
+        
         // ------------------- Normal Gathering Logic -------------------
         const items = await fetchAllItems();
         const availableItems = items.filter(item => {

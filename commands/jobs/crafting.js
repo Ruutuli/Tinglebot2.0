@@ -346,6 +346,8 @@ module.exports = {
           console.log(`[crafting.js]: Job voucher deactivated for ${character.name}`);
         }
       }
+
+      
     } catch (error) {
     handleError(error, 'crafting.js');
 
