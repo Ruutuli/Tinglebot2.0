@@ -1,3 +1,8 @@
+// ============================================================================
+// ------------------- Imports and Dependencies -------------------
+// Importing necessary libraries, modules, utilities, models, and constants.
+// ============================================================================
+
 const {
  SlashCommandBuilder,
  EmbedBuilder,
@@ -85,6 +90,11 @@ const User = require("../../models/UserModel");
 const ItemModel = require("../../models/ItemModel");
 const Mount = require("../../models/MountModel");
 
+// ============================================================================
+// ------------------- Constants and Configuration -------------------
+// Defining constant values such as default images, channel IDs, and emoji lists.
+// ============================================================================
+
 const DEFAULT_IMAGE_URL =
  "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png";
 const EDIT_NOTIFICATION_CHANNEL_ID = "1319524801408274434";
@@ -105,11 +115,17 @@ const characterEmojis = [
  "🌿",
 ];
 
+// ============================================================================
+// ------------------- Slash Command Setup -------------------
+// Defining the structure of the /character command, subcommands, and options.
+// ============================================================================
+
 module.exports = {
  data: new SlashCommandBuilder()
   .setName("character")
   .setDescription("Manage your characters")
 
+  // ------------------- Create Character Subcommands -------------------
   .addSubcommandGroup((group) =>
    group
     .setName("create")
@@ -427,6 +443,7 @@ module.exports = {
     )
   )
 
+  // ------------------- Edit Character Subcommand -------------------
   .addSubcommand((subcommand) =>
    subcommand
     .setName("edit")
@@ -472,7 +489,7 @@ module.exports = {
       .setRequired(false)
     )
   )
-
+  // ------------------- View Character Subcommand -------------------
   .addSubcommand((subcommand) =>
    subcommand
     .setName("view")
@@ -485,7 +502,7 @@ module.exports = {
       .setAutocomplete(true)
     )
   )
-
+  // ------------------- View List of Characters Subcommand -------------------
   .addSubcommand((subcommand) =>
    subcommand
     .setName("viewlist")
@@ -497,7 +514,7 @@ module.exports = {
       .setRequired(false)
     )
   )
-
+  // ------------------- Delete Character Subcommand -------------------
   .addSubcommand((subcommand) =>
    subcommand
     .setName("delete")
@@ -510,7 +527,7 @@ module.exports = {
       .setAutocomplete(true)
     )
   )
-
+ // ------------------- Change Character Job Subcommand -------------------
   .addSubcommand((subcommand) =>
    subcommand
     .setName("changejob")
@@ -532,7 +549,7 @@ module.exports = {
       .setAutocomplete(true)
     )
   )
-
+ // ------------------- Set Character Birthday Subcommand -------------------
   .addSubcommand((subcommand) =>
    subcommand
     .setName("setbirthday")
@@ -552,10 +569,16 @@ module.exports = {
     )
   ),
 
+// ============================================================================
+// ------------------- Slash Command Main Handlers -------------------
+// Handling command execution and autocomplete functionality.
+// ============================================================================
+
  async execute(interaction) {
   const subcommandGroup = interaction.options.getSubcommandGroup(false);
   const subcommand = interaction.options.getSubcommand();
 
+  
   try {
    if (subcommandGroup === "create") {
     await handleCreateCharacter(interaction, subcommand);
@@ -652,6 +675,11 @@ module.exports = {
   }
  },
 };
+
+// ============================================================================
+// ------------------- Character Creation Handler -------------------
+// Processes character creation, validation, and database updates.
+// ============================================================================
 
 async function handleCreateCharacter(interaction, subcommand) {
  try {
@@ -788,6 +816,12 @@ async function handleCreateCharacter(interaction, subcommand) {
   }
  }
 }
+
+// ============================================================================
+// ------------------- Character Editing Handler -------------------
+// Processes updates to existing characters including name, job, race, village, etc.
+// ============================================================================
+
 
 async function handleEditCharacter(interaction) {
  await interaction.deferReply({ ephemeral: true });
@@ -1139,6 +1173,12 @@ async function handleEditCharacter(interaction) {
  }
 }
 
+// ============================================================================
+// ------------------- Character Viewing Handlers -------------------
+// Handles viewing individual character profiles and listing characters.
+// ============================================================================
+
+
 async function handleViewCharacter(interaction) {
  try {
   const characterName = interaction.options.getString("charactername");
@@ -1335,6 +1375,12 @@ async function handleViewCharacterList(interaction) {
  }
 }
 
+// ============================================================================
+// ------------------- Character Deletion Handler -------------------
+// Handles the deletion of a character and cleanup of associated data and roles.
+// ============================================================================
+
+
 async function handleDeleteCharacter(interaction) {
  await interaction.deferReply({ ephemeral: true });
 
@@ -1446,6 +1492,12 @@ async function handleDeleteCharacter(interaction) {
   });
  }
 }
+
+// ============================================================================
+// ------------------- Character Job Change Handler -------------------
+// Processes the change of a character's job with validation and token deduction.
+// ============================================================================
+
 
 async function handleChangeJob(interaction) {
  await interaction.deferReply({ ephemeral: true });
@@ -1578,6 +1630,11 @@ async function handleChangeJob(interaction) {
  }
 }
 
+// ============================================================================
+// ------------------- Character Birthday Setting Handler -------------------
+// Handles setting or updating the birthday field for a character.
+// ============================================================================
+
 async function handleSetBirthday(interaction) {
  try {
   const characterName = interaction.options.getString("charactername");
@@ -1620,6 +1677,12 @@ async function handleSetBirthday(interaction) {
   });
  }
 }
+
+// ============================================================================
+// ------------------- Utility Helper Functions -------------------
+// Small helper functions for repetitive operations like value tracking and job selection UI.
+// ============================================================================
+
 
 function capturePreviousAndUpdatedValues(character, category, updatedInfo) {
  const previousValue =
