@@ -1525,8 +1525,7 @@ async function handleChangeJob(interaction) {
 
   await character.save();
 
-  const villageColor =
-   getVillageColorByName(character.homeVillage) || "#4CAF50";
+  const villageColor = getVillageColorByName(character.homeVillage) || "#4CAF50";
   const villageEmoji = getVillageEmojiByName(character.homeVillage) || "🏡";
   const nextJobChangeDate = new Date(currentTime + oneMonth).toLocaleDateString(
    "en-US",
@@ -1536,13 +1535,17 @@ async function handleChangeJob(interaction) {
     day: "numeric",
    }
   );
-
+  
+  // capitalize homeVillage properly before inserting
+  const formattedHomeVillage = capitalizeFirstLetter(character.homeVillage);
+  
   const embed = new EmbedBuilder()
    .setTitle(`${villageEmoji} Job Change Notification`)
    .setDescription(
     `Resident **${character.name}** has formally submitted their notice of job change from **${previousJob}** to **${newJob}**.\n\n` +
-     `The **${character.homeVillage} Town Hall** wishes you the best in your new endeavors!`
+     `The **${formattedHomeVillage} Town Hall** wishes you the best in your new endeavors!`
    )
+  
    .addFields(
     { name: "👤 __Name__", value: character.name, inline: true },
     { name: "🏡 __Home Village__", value: character.homeVillage, inline: true },
