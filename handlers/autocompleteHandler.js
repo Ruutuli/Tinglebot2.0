@@ -526,11 +526,10 @@ async function handleCharacterBasedCommandsAutocomplete(
   }
 
   const choices = characters.map((character) => ({
-   name: `${character.name} - ${capitalize(character.currentVillage)} - ${
-    character.job
-   }`,
-   value: character.name,
-  }));
+    name: `${character.name} | ${capitalizeFirstLetter(character.currentVillage)} | ${capitalizeFirstLetter(character.job)}`,
+    value: character.name,
+   }));
+   
 
   await respondWithFilteredChoices(interaction, focusedOption, choices);
  } catch (error) {
