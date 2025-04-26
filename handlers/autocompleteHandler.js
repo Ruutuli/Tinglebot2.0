@@ -678,72 +678,80 @@ async function handleBoostingCharacterAutocomplete(interaction, focusedOption) {
 // as well as for selecting the character whose job is to be changed.
 
 // ------------------- New Job Autocomplete -------------------
-// Provides autocomplete suggestions for new job options using the character’s
-// general and village-specific job lists.
+
 async function handleChangeJobNewJobAutocomplete(interaction, focusedOption) {
- try {
-  const userId = interaction.user.id;
-  const characterName = interaction.options.getString("charactername");
-
-  // Fetch the character
-  const character = await fetchCharacterByNameAndUserId(characterName, userId);
-  if (!character) {
-   console.warn(
-    `[handleChangeJobNewJobAutocomplete] Character not found for userId: ${userId}, characterName: ${characterName}`
+  try {
+   const userId = interaction.user.id;
+   
+   // Fix: fallback if characterName is empty
+   const characterName = interaction.options.getString("charactername") || "";
+ 
+   if (!characterName) {
+    console.warn(`[handleChangeJobNewJobAutocomplete]: No character selected.`);
+    await interaction.respond([]);
+    return;
+   }
+ 
+   // Fetch the character by user and character name
+   const character = await fetchCharacterByNameAndUserId(characterName, userId);
+   if (!character) {
+    console.warn(
+     `[handleChangeJobNewJobAutocomplete]: Character not found for userId: ${userId}, characterName: ${characterName}`
+    );
+    await interaction.respond([]);
+    return;
+   }
+ 
+   // Fetch general and village-specific jobs
+   const generalJobs = getGeneralJobsPage(1).concat(getGeneralJobsPage(2));
+   const villageJobs = getVillageExclusiveJobs(character.homeVillage);
+ 
+   // Combine jobs
+   const allJobs = [...generalJobs, ...villageJobs];
+ 
+   // Filter jobs based on user typing
+   const filteredJobs = allJobs.filter((job) =>
+     job.toLowerCase().includes(focusedOption.value.toLowerCase())
    );
+ 
+   // Format the filtered choices (capitalize words)
+   const formattedChoices = filteredJobs.map((job) => ({
+    name: capitalizeWords(job),
+    value: job,
+   }));
+ 
+   // Respond with filtered choices (limit to 25)
+   await interaction.respond(formattedChoices.slice(0, 25));
+  } catch (error) {
+   handleError(error, "autocompleteHandler.js");
+ 
+   console.error(`[handleChangeJobNewJobAutocomplete] Error:`, error);
    await interaction.respond([]);
-   return;
   }
-  // Fetch general and village-specific jobs
-  const generalJobs = getGeneralJobsPage(1).concat(getGeneralJobsPage(2));
-  const villageJobs = getVillageExclusiveJobs(character.homeVillage);
-
-  // Combine and filter jobs
-  const allJobs = [...generalJobs, ...villageJobs];
-  const filteredJobs = focusedOption.value
-   ? allJobs.filter((job) =>
-      job.toLowerCase().includes(focusedOption.value.toLowerCase())
-     )
-   : allJobs;
-  // Respond with filtered jobs (limit to 25)
-  const formattedChoices = filteredJobs.map((job) => ({
-   name: job,
-   value: job,
-  }));
-
-  await interaction.respond(formattedChoices.slice(0, 25));
- } catch (error) {
-  handleError(error, "autocompleteHandler.js");
-
-  console.error(`[handleChangeJobNewJobAutocomplete] Error:`, error);
-  await interaction.respond([]);
  }
-}
-
-// ------------------- Character Name Autocomplete for ChangeJob -------------------
-// Reuses the generic character-based autocomplete handler to suggest character names
-// for the "changejob" command.
-async function handleChangeJobCharacterAutocomplete(
- interaction,
- focusedOption
-) {
- try {
-  const commandName = "changejob";
-  await handleCharacterBasedCommandsAutocomplete(
-   interaction,
-   focusedOption,
-   commandName
-  );
- } catch (error) {
-  handleError(error, "autocompleteHandler.js");
-
-  console.error(
-   "[handleChangeJobCharacterAutocomplete]: Error occurred:",
-   error
-  );
-  await safeRespondWithError(interaction);
+ 
+ // ------------------- Character Name Autocomplete for ChangeJob -------------------
+ // Reuses the generic character-based autocomplete handler to suggest character names
+ // for the "changejob" command.
+ async function handleChangeJobCharacterAutocomplete(interaction, focusedOption) {
+  try {
+   const commandName = "changejob";
+   await handleCharacterBasedCommandsAutocomplete(
+    interaction,
+    focusedOption,
+    commandName
+   );
+  } catch (error) {
+   handleError(error, "autocompleteHandler.js");
+ 
+   console.error(
+    "[handleChangeJobCharacterAutocomplete]: Error occurred:",
+    error
+   );
+   await safeRespondWithError(interaction);
+  }
  }
-}
+ 
 
 // ============================================================================
 // COMBAT COMMANDS
