@@ -75,7 +75,13 @@ if (!character.inventorySynced) {
       }, []).sort((a, b) => a.itemName.localeCompare(b.itemName));
 
       const itemsByType = combinedItems.reduce((acc, item) => {
-        const types = item.type.split(', ').map(type => type.trim());
+        let types = item.type.split(', ').map(type => type.trim());
+      
+        // ----------------- Special Case: Force Job Voucher items into "Job Voucher" category -----------------
+        if (item.itemName.toLowerCase() === "job voucher") {
+          types = ["Job Voucher"];
+        }
+      
         types.forEach(type => {
           if (!acc[type]) {
             acc[type] = [];
@@ -84,6 +90,7 @@ if (!character.inventorySynced) {
         });
         return acc;
       }, {});
+      
 
       itemsByType['All'] = combinedItems; // Include "All" category
 
