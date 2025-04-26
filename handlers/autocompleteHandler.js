@@ -1554,9 +1554,9 @@ async function handleHealAutocomplete(interaction, focusedOption) {
 async function handleItemAutocomplete(interaction, focusedOption) {
   try {
    const userId = interaction.user.id;
-   const subcommand = interaction.options.getSubcommand();
+   const focusedName = focusedOption.name;
    const characterName = interaction.options.getString("charactername");
-   const searchQuery = focusedOption?.value?.toLowerCase() || "";
+   const searchQuery = focusedOption.value?.toLowerCase() || "";
  
    if (!characterName) return await interaction.respond([]);
  
@@ -1568,32 +1568,44 @@ async function handleItemAutocomplete(interaction, focusedOption) {
  
    let choices = [];
  
-   if (subcommand !== "sell") {
+   // Only fetch subcommand if autocompleting itemname
+   if (focusedName === "itemname") {
+     const subcommand = interaction.options.getSubcommand(false); // Pass false to prevent crash
+ 
+     if (subcommand !== "sell") {
+       choices = inventoryItems
+         .filter(item => 
+           item.itemName &&
+           item.itemName.toLowerCase().includes(searchQuery) &&
+           item.itemName.toLowerCase() !== "initial item"
+         )
+         .map(item => ({
+           name: `${capitalizeWords(item.itemName)} - Qty: ${item.quantity}`,
+           value: item.itemName,
+         }));
+     } else {
+       const itemNames = inventoryItems.map(item => item.itemName);
+       const itemsFromDB = await Item.find({ itemName: { $in: itemNames } }).select("itemName sellPrice").lean();
+       const itemsMap = new Map(itemsFromDB.map(item => [item.itemName, item.sellPrice]));
+ 
+       choices = inventoryItems
+         .filter(item => 
+           item.itemName &&
+           item.itemName.toLowerCase().includes(searchQuery) &&
+           item.itemName.toLowerCase() !== "initial item"
+         )
+         .sort((a, b) => a.itemName.localeCompare(b.itemName))
+         .map(item => ({
+           name: `${capitalizeWords(item.itemName)} - Qty: ${item.quantity} - Sell: ${itemsMap.get(item.itemName) || "N/A"}`,
+           value: item.itemName,
+         }));
+     }
+   } else {
+     // If we're not focusing itemname, don't do anything fancy
      choices = inventoryItems
-       .filter(item => 
-         item.itemName &&
-         item.itemName.toLowerCase().includes(searchQuery) &&
-         item.itemName.toLowerCase() !== "initial item"
-       )
+       .filter(item => item.itemName && item.itemName.toLowerCase().includes(searchQuery))
        .map(item => ({
          name: `${capitalizeWords(item.itemName)} - Qty: ${item.quantity}`,
-         value: item.itemName,
-       }));
-   } else {
-     const itemNames = inventoryItems.map(item => item.itemName);
-     const itemsFromDB = await Item.find({ itemName: { $in: itemNames } }).select("itemName sellPrice").lean();
- 
-     const itemsMap = new Map(itemsFromDB.map(item => [item.itemName, item.sellPrice]));
- 
-     choices = inventoryItems
-       .filter(item => 
-         item.itemName &&
-         item.itemName.toLowerCase().includes(searchQuery) &&
-         item.itemName.toLowerCase() !== "initial item"
-       )
-       .sort((a, b) => a.itemName.localeCompare(b.itemName))
-       .map(item => ({
-         name: `${capitalizeWords(item.itemName)} - Qty: ${item.quantity} - Sell: ${itemsMap.get(item.itemName) || "N/A"}`,
          value: item.itemName,
        }));
    }
@@ -1601,10 +1613,12 @@ async function handleItemAutocomplete(interaction, focusedOption) {
    await interaction.respond(choices.slice(0, 25));
   } catch (error) {
    handleError(error, "autocompleteHandler.js");
+ 
    console.error("[handleItemAutocomplete]: Error:", error);
    if (!interaction.responded) await interaction.respond([]);
   }
  }
+ 
 
 // ------------------- Item Job Voucher Autocomplete -------------------
 // Provides autocomplete suggestions for Job Voucher items from a character's inventory.
