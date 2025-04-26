@@ -524,12 +524,14 @@ async function handleCharacterBasedCommandsAutocomplete(
   }
   else if (commandName === "crafting") {
     characters = characters.filter((character) => {
-      const job = character.jobVoucher ? character.jobVoucherJob : character.job;
+      let job = character.job;
+      if (character.jobVoucher && character.jobVoucherJob) {
+        job = character.jobVoucherJob;
+      }
       const jobPerk = getJobPerk(job);
       return jobPerk && jobPerk.perks.includes("CRAFTING");
     });
   }
-
   // No filtering for mount command
   if (commandName === "mount") {
    console.log("[Autocomplete]: Mount command does not require filtering.");
