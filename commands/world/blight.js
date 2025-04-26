@@ -97,7 +97,21 @@ module.exports = {
     } else if (subcommand === 'heal') {
       const characterName = interaction.options.getString('character_name');
       const healerName = interaction.options.getString('healer_name');
-      await healBlight(interaction, characterName, healerName);  
+    
+      // Validate character belongs to the user
+      const userId = interaction.user.id;
+      const character = await fetchCharacterByNameAndUserId(characterName, userId);
+    
+      if (!character) {
+        await interaction.reply({
+          content: `❌ You can only request blight healing for your **own** characters!`,
+          ephemeral: true,
+        });
+        return;
+      }
+    
+      await healBlight(interaction, characterName, healerName);
+        
 
     } else if (subcommand === 'submit') {
       const submissionId = interaction.options.getString('submission_id');
