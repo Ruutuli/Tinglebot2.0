@@ -215,10 +215,12 @@ async function handleAutocomplete(interaction) {
    await handleHealAutocomplete(interaction, focusedOption);
 
    // ------------------- ITEM Commands -------------------
-  } else if (commandName === "item" && focusedOption.name === "jobname") {
-   await handleItemJobVoucherAutocomplete(interaction, focusedOption);
-  } else if (commandName === "item") {
-   await handleItemHealAutocomplete(interaction, focusedOption);
+  } else if (commandName === "item" && focusedOption.name === "itemname") {
+    await handleItemAutocomplete(interaction);
+   } else if (commandName === "item" && focusedOption.name === "charactername") {
+    await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, commandName);
+   } else if (commandName === "item" && focusedOption.name === "jobname") {
+    await handleItemJobVoucherAutocomplete(interaction, focusedOption);
 
    // ------------------- LOOKUP Commands -------------------
   } else if (
@@ -1604,7 +1606,7 @@ async function handleItemAutocomplete(interaction) {
 
 // ------------------- Item Heal Autocomplete -------------------
 // Provides autocomplete suggestions for healing items from a character's inventory.
-async function handleItemHealAutocomplete(interaction, focusedOption) {
+async function handleItemAutocomplete(interaction, focusedOption) {
  try {
   const userId = interaction.user.id;
 
@@ -1645,7 +1647,7 @@ async function handleItemHealAutocomplete(interaction, focusedOption) {
  } catch (error) {
   handleError(error, "autocompleteHandler.js");
 
-  console.error("[handleItemHealAutocomplete]: Error:", error);
+  console.error("[handleItemAutocomplete]: Error:", error);
   await safeRespondWithError(interaction);
  }
 }
@@ -2684,7 +2686,6 @@ module.exports = {
 
  // ITEM
  handleItemAutocomplete,
- handleItemHealAutocomplete,
  handleItemJobVoucherAutocomplete,
 
  // LOOKUP
