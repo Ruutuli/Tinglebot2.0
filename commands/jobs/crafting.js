@@ -354,15 +354,7 @@ module.exports = {
       console.error(`[crafting.js]: Error while crafting "${itemName}" for character "${characterName}". Details:`, error);
     }
   },
-
-  // ------------------- Autocomplete Handler -------------------
-  async autocomplete(interaction) {
-    const focusedOption = interaction.options.getFocused(true);
-    await handleCraftingAutocomplete(interaction, focusedOption);
-  }
-};
-
-// ------------------- Helper Functions -------------------
+}
 
 // ------------------- Log Materials to Google Sheets -------------------
 // Logs the materials used in crafting to a Google Sheets document.

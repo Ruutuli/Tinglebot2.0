@@ -522,6 +522,13 @@ async function handleCharacterBasedCommandsAutocomplete(
   } else if (commandName === "syncinventory") {
    characters = characters.filter((character) => !character.inventorySynced);
   }
+  else if (commandName === "crafting") {
+    characters = characters.filter((character) => {
+      const job = character.jobVoucher ? character.jobVoucherJob : character.job;
+      const jobPerk = getJobPerk(job);
+      return jobPerk && jobPerk.perks.includes("CRAFTING");
+    });
+  }
 
   // No filtering for mount command
   if (commandName === "mount") {
