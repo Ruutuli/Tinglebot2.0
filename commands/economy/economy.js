@@ -512,6 +512,19 @@ async function handleGift(interaction) {
   },
  ].filter((item) => item.name && item.quantity);
 
+
+ // ------------------- Validate Gift Quantities -------------------
+// Ensure all gifted item quantities are positive integers
+for (const { quantity } of items) {
+  if (quantity <= 0) {
+    await interaction.editReply({
+      content: `❌ You must gift a **positive quantity** of items. Negative numbers are not allowed.`,
+      ephemeral: true,
+    });
+    return;
+  }
+}
+
  const userId = interaction.user.id;
 
  try {
