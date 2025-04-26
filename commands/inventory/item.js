@@ -147,6 +147,39 @@ module.exports = {
                     character.jobVoucherJob = jobName;
                     await updateCharacterById(character._id, { jobVoucher: true, jobVoucherJob: jobName });
                 
+                    // ------------------- Remove Job Voucher from Inventory -------------------
+                        await removeItemInventoryDatabase(character._id, "Job Voucher", 1, interaction);
+
+                        // ------------------- Log Removal to Google Sheets -------------------
+                        if (isValidGoogleSheetsUrl(character.inventory || character.inventoryLink)) {
+                        const spreadsheetId = extractSpreadsheetId(character.inventory || character.inventoryLink);
+                        const auth = await authorizeSheets();
+                        const range = 'loggedInventory!A2:M';
+                        const uniqueSyncId = uuidv4();
+                        const formattedDateTime = new Date().toISOString();
+                        const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
+
+                        const values = [
+                            [
+                            character.name,
+                            "Job Voucher",
+                            "-1",
+                            "Voucher",
+                            "Special",
+                            "",
+                            `Used for ${jobName}`,
+                            character.job,
+                            "",
+                            character.currentVillage,
+                            interactionUrl,
+                            formattedDateTime,
+                            uniqueSyncId
+                            ]
+                        ];
+
+                        await appendSheetData(auth, spreadsheetId, range, values);
+                        }
+
                     // ------------------- Build Voucher Embed -------------------
                     const currentVillage = capitalizeWords(character.currentVillage || 'Unknown');
                     const villageEmoji = getVillageEmojiByName(currentVillage) || '🌍';
