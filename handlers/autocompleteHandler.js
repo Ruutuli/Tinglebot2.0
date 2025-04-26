@@ -1551,106 +1551,60 @@ async function handleHealAutocomplete(interaction, focusedOption) {
 
 // ------------------- Item Autocomplete -------------------
 // Provides autocomplete suggestions for items in a character's inventory.
-async function handleItemAutocomplete(interaction) {
- try {
-  const focusedOption = interaction.options.getFocused(true);
-  const subcommand = interaction.options.getSubcommand();
-  const characterName = interaction.options.getString("charactername");
-  const searchQuery = focusedOption.value.toLowerCase();
-
-  if (!characterName) return await interaction.respond([]);
-
-  const inventoryCollection = await getCharacterInventoryCollection(
-   characterName
-  );
-  const inventoryItems = await inventoryCollection.find().toArray();
-
-  let choices = [];
-
-  if (subcommand !== "sell") {
-   choices = inventoryItems
-    .filter((item) => item.itemName.toLowerCase().includes(searchQuery))
-    .map((item) => ({
-     name: `${item.itemName} - Qty: ${item.quantity}`,
-     value: item.itemName,
-    }));
-  } else {
-   const itemNames = inventoryItems.map((item) => item.itemName);
-   const itemsFromDB = await Item.find({ itemName: { $in: itemNames } })
-    .select("itemName sellPrice")
-    .lean();
-
-   const itemsMap = new Map(
-    itemsFromDB.map((item) => [item.itemName, item.sellPrice])
-   );
-
-   choices = inventoryItems
-    .filter((item) => item.itemName.toLowerCase().includes(searchQuery))
-    .sort((a, b) => a.itemName.localeCompare(b.itemName))
-    .map((item) => ({
-     name: `${item.itemName} - Qty: ${item.quantity} - Sell: ${
-      itemsMap.get(item.itemName) || "N/A"
-     }`,
-     value: item.itemName,
-    }));
-  }
-
-  await interaction.respond(choices.slice(0, 25));
- } catch (error) {
-  handleError(error, "autocompleteHandler.js");
-
-  console.error("[handleItemAutocomplete]: Error:", error);
-  if (!interaction.responded) await interaction.respond([]);
- }
-}
-
-// ------------------- Item Heal Autocomplete -------------------
-// Provides autocomplete suggestions for healing items from a character's inventory.
 async function handleItemAutocomplete(interaction, focusedOption) {
- try {
-  const userId = interaction.user.id;
-
-  if (focusedOption.name === "charactername") {
-   const characters = await fetchCharactersByUserId(userId);
-   const choices = characters.map((character) => ({
-    name: character.name,
-    value: character.name,
-   }));
-
-   await respondWithFilteredChoices(interaction, focusedOption, choices);
-  } else if (focusedOption.name === "itemname") {
+  try {
+   const userId = interaction.user.id;
+   const subcommand = interaction.options.getSubcommand();
    const characterName = interaction.options.getString("charactername");
+   const searchQuery = focusedOption?.value?.toLowerCase() || "";
+ 
    if (!characterName) return await interaction.respond([]);
-
+ 
    const character = await fetchCharacterByNameAndUserId(characterName, userId);
    if (!character) return await interaction.respond([]);
-
-   const inventoryCollection = await getCharacterInventoryCollection(
-    character.name
-   );
+ 
+   const inventoryCollection = await getCharacterInventoryCollection(character.name);
    const inventoryItems = await inventoryCollection.find().toArray();
-
-   const choices = inventoryItems
-    .filter(
-     (item) =>
-      (item.category && item.category.includes("Recipe")) ||
-      item.itemName.toLowerCase() === "fairy" ||
-      item.itemName.toLowerCase() === "job voucher"
-    )
-    .map((item) => ({
-     name: `${item.itemName} - QTY:${item.quantity}`,
-     value: item.itemName,
-    }));
-
-   await respondWithFilteredChoices(interaction, focusedOption, choices);
+ 
+   let choices = [];
+ 
+   if (subcommand !== "sell") {
+     choices = inventoryItems
+       .filter(item => 
+         item.itemName &&
+         item.itemName.toLowerCase().includes(searchQuery) &&
+         item.itemName.toLowerCase() !== "initial item"
+       )
+       .map(item => ({
+         name: `${capitalizeWords(item.itemName)} - Qty: ${item.quantity}`,
+         value: item.itemName,
+       }));
+   } else {
+     const itemNames = inventoryItems.map(item => item.itemName);
+     const itemsFromDB = await Item.find({ itemName: { $in: itemNames } }).select("itemName sellPrice").lean();
+ 
+     const itemsMap = new Map(itemsFromDB.map(item => [item.itemName, item.sellPrice]));
+ 
+     choices = inventoryItems
+       .filter(item => 
+         item.itemName &&
+         item.itemName.toLowerCase().includes(searchQuery) &&
+         item.itemName.toLowerCase() !== "initial item"
+       )
+       .sort((a, b) => a.itemName.localeCompare(b.itemName))
+       .map(item => ({
+         name: `${capitalizeWords(item.itemName)} - Qty: ${item.quantity} - Sell: ${itemsMap.get(item.itemName) || "N/A"}`,
+         value: item.itemName,
+       }));
+   }
+ 
+   await interaction.respond(choices.slice(0, 25));
+  } catch (error) {
+   handleError(error, "autocompleteHandler.js");
+   console.error("[handleItemAutocomplete]: Error:", error);
+   if (!interaction.responded) await interaction.respond([]);
   }
- } catch (error) {
-  handleError(error, "autocompleteHandler.js");
-
-  console.error("[handleItemAutocomplete]: Error:", error);
-  await safeRespondWithError(interaction);
  }
-}
 
 // ------------------- Item Job Voucher Autocomplete -------------------
 // Provides autocomplete suggestions for Job Voucher items from a character's inventory.
