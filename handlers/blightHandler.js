@@ -237,6 +237,33 @@ if (tokens) {
   }
 
   await updateTokenBalance(interaction.user.id, -currentTokenBalance);
+  // ------------------- New Code: Log token forfeiture in loggedTracker -------------------
+const user = interaction.user;
+const userId = user.id;
+
+// You need user's tokenTracker spreadsheet link. Assume you already have it stored somewhere on User model or database.
+const userData = await getTokenBalance(userId); // Modify if you store token tracker link elsewhere
+const tokenTrackerLink = userData?.tokenTracker;
+
+if (tokenTrackerLink) {
+  const spreadsheetId = extractSpreadsheetId(tokenTrackerLink);
+  const auth = await authorizeSheets();
+  const formattedDateTime = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
+  const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
+
+  const tokenRow = [
+    [
+      'Blight Healing',   // Submission
+      interactionUrl,     // Link
+      'blight healing',   // Categories
+      'spent',            // Type
+      `-${currentTokenBalance}` // Amount spent
+    ]
+  ];
+
+  await appendSheetData(auth, spreadsheetId, 'loggedTracker!B7:F', tokenRow);
+}
+
   submission.status = 'completed';
   submission.submittedAt = new Date().toISOString();
   submission.forfeitTokens = true;
