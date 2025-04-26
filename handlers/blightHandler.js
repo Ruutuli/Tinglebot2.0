@@ -228,15 +228,29 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
     }
 
     // ------------------- Token Forfeit Option -------------------
-if (tokens) {
-  const currentTokenBalance = await getTokenBalance(interaction.user.id);
+    if (tokens) {
+      const userId = interaction.user.id;
+      const userData = await getTokenBalance(userId); // Your system stores token and tracker here
+      const currentTokenBalance = userData.tokens;
+      const tokenTrackerLink = userData.tokenTracker;
+    
+      if (currentTokenBalance <= 0) {
+        await interaction.editReply({
+          content: '❌ You do not have enough tokens to forfeit. You must have more than 0 tokens to use this option.',
+          ephemeral: true,
+        });
+        return;
+      }
+    
+      if (!tokenTrackerLink) {
+        await interaction.editReply({
+          content: '❌ You cannot forfeit tokens because you do not have a token tracker set up. Please set up your token tracker first!',
+          ephemeral: true,
+        });
+        return;
+      }
 
-  if (currentTokenBalance <= 0) {
-      await interaction.editReply({ content: 'You do not have enough tokens to forfeit. You must have more than 0 tokens to use this option.' });
-      return;
-  }
-
-  await updateTokenBalance(interaction.user.id, -currentTokenBalance);
+      await updateTokenBalance(userId, -currentTokenBalance);
   // ------------------- New Code: Log token forfeiture in loggedTracker -------------------
 const user = interaction.user;
 const userId = user.id;
