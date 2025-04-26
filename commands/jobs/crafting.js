@@ -265,6 +265,31 @@ module.exports = {
       // Fetch the character's inventory and process the materials required for crafting.
       const inventoryCollection = await getCharacterInventoryCollection(character.name);
       const inventory = await inventoryCollection.find().toArray();
+
+      // ------------------- Pre-Check Materials Before Crafting -------------------
+const missingMaterials = [];
+for (const material of item.craftingMaterial) {
+  const requiredQty = material.quantity * quantity;
+  const ownedQty = inventory
+    .filter(invItem => invItem.itemName === material.itemName)
+    .reduce((sum, invItem) => sum + invItem.quantity, 0);
+
+  if (ownedQty < requiredQty) {
+    missingMaterials.push(`• ${material.itemName} (Required: ${requiredQty}, Found: ${ownedQty})`);
+  }
+}
+
+if (missingMaterials.length > 0) {
+  const missingEmbed = {
+    title: `❌ Missing Required Materials`,
+    description: `You are missing the following materials to craft **${quantity}x ${itemName}**:\n\n${missingMaterials.join('\n')}`,
+    color: 0xff0000, // Red
+    footer: { text: 'Sync your inventory or gather more materials.' }
+  };
+
+  return interaction.editReply({ embeds: [missingEmbed], ephemeral: true });
+}
+
       const materialsUsed = await processMaterials(interaction, character, inventory, item, quantity);
       if (materialsUsed === 'canceled') {
         return interaction.editReply({ content: '❌ **Crafting canceled.**', ephemeral: true });
