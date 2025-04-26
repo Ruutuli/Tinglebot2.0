@@ -91,8 +91,21 @@ module.exports = {
     const subcommand = interaction.options.getSubcommand();
     
     if (subcommand === 'roll') {
-      const characterName = interaction.options.getString('character_name'); // Fetch the character name
-      await rollForBlightProgression(interaction, characterName); // Validate and execute the roll
+      const characterName = interaction.options.getString('character_name');
+    
+      // Validate character belongs to the user
+      const userId = interaction.user.id;
+      const character = await fetchCharacterByNameAndUserId(characterName, userId);
+    
+      if (!character) {
+        await interaction.reply({
+          content: `❌ You can only roll for blight progression for your **own** characters!`,
+          ephemeral: true,
+        });
+        return;
+      }
+    
+      await rollForBlightProgression(interaction, characterName);
     
     } else if (subcommand === 'heal') {
       const characterName = interaction.options.getString('character_name');
