@@ -625,13 +625,21 @@ module.exports = {
    const subcommandGroup = interaction.options.getSubcommandGroup(false);
    const subcommand = interaction.options.getSubcommand();
    const focusedOption = interaction.options.getFocused(true);
-
+ 
    if (subcommandGroup === "create") {
     await createCharacterAutocomplete(interaction);
    } else {
     switch (subcommand) {
      case "edit":
-      await handleAutocomplete(interaction);
+     case "delete":
+     case "setbirthday":
+      if (focusedOption.name === "charactername") {
+       await handleCharacterBasedCommandsAutocomplete(
+        interaction,
+        focusedOption,
+        "character"
+       );
+      }
       break;
      case "changejob":
       if (focusedOption.name === "charactername") {
@@ -646,32 +654,19 @@ module.exports = {
       break;
      default:
       if (focusedOption.name === "charactername") {
-       const userId = interaction.user.id;
-       await connectToTinglebot();
-       const characters = await fetchCharactersByUserId(userId);
-       const choices = characters.map((character) => ({
-        name: character.name,
-        value: character.name,
-       }));
-
-       const filteredChoices =
-        focusedOption.value === ""
-         ? choices.slice(0, 25)
-         : choices
-            .filter((choice) =>
-             choice.name
-              .toLowerCase()
-              .includes(focusedOption.value.toLowerCase())
-            )
-            .slice(0, 25);
-
-       await interaction.respond(filteredChoices);
+       await handleCharacterBasedCommandsAutocomplete(
+        interaction,
+        focusedOption,
+        "character"
+       );
       }
+      break;
     }
    }
   } catch (error) {
    handleError(error, "character.js");
    await interaction.respond([]);
+   
   }
  },
 };
