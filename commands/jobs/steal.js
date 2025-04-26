@@ -266,6 +266,17 @@ module.exports = {
             } else {
                 return handleSuccessfulSteal(interaction, thiefCharacter, targetCharacter, selectedItemPlayer, rollPlayer, failureThresholdPlayer);
             }
+
+            // ------------------- Deactivate Job Voucher -------------------
+                if (thiefCharacter.jobVoucher) {
+                    const deactivationResult = await deactivateJobVoucher(thiefCharacter._id);
+                    if (!deactivationResult.success) {
+                    console.error(`[steal.js]: Failed to deactivate job voucher for ${thiefCharacter.name}`);
+                    } else {
+                    console.log(`[steal.js]: Job voucher deactivated for ${thiefCharacter.name}`);
+                    }
+                }
+  
             
             
         } catch (error) {

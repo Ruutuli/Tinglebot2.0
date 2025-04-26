@@ -315,6 +315,17 @@ if (subcommand === 'fulfill') {
         await useStamina(healerCharacter._id, staminaCost);
         await recoverHearts(characterToHeal._id, healingRequest.heartsToHeal, healerCharacter._id);
 
+        // ------------------- Deactivate Job Voucher -------------------
+            if (healerCharacter.jobVoucher) {
+                const deactivationResult = await deactivateJobVoucher(healerCharacter._id);
+                if (!deactivationResult.success) {
+                console.error(`[heal.js]: Failed to deactivate job voucher for ${healerCharacter.name}`);
+                } else {
+                console.log(`[heal.js]: Job voucher deactivated for ${healerCharacter.name}`);
+                }
+            }
+  
+
         // Mark the request as fulfilled and save its updated status
         healingRequest.status = 'fulfilled';
         saveHealingRequestToStorage(requestId, healingRequest);
