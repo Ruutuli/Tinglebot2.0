@@ -220,7 +220,7 @@ async function handleAutocomplete(interaction) {
    } else if (commandName === "item" && focusedOption.name === "charactername") {
     await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, commandName);
    } else if (commandName === "item" && focusedOption.name === "jobname") {
-    await handleItemJobVoucherAutocomplete(interaction, focusedOption);
+    await handleItemJobNameAutocomplete(interaction, focusedOption);
 
    // ------------------- LOOKUP Commands -------------------
   } else if (
@@ -1648,6 +1648,47 @@ async function handleItemJobVoucherAutocomplete(interaction, focusedOption) {
  }
 }
 
+// ------------------- Job Voucher Job Name Autocomplete -------------------
+
+async function handleItemJobNameAutocomplete(interaction, focusedOption) {
+  try {
+   // Fetch general jobs
+   const generalJobs = getGeneralJobsPage(1).concat(getGeneralJobsPage(2));
+ 
+   // Fetch village-specific jobs based on character's home village
+   const characterName = interaction.options.getString("charactername");
+   const userId = interaction.user.id;
+   if (!characterName) return await interaction.respond([]);
+ 
+   const character = await fetchCharacterByNameAndUserId(characterName, userId);
+   if (!character) return await interaction.respond([]);
+ 
+   const villageJobs = getVillageExclusiveJobs(character.homeVillage);
+ 
+   // Combine all jobs
+   const allJobs = [...generalJobs, ...villageJobs];
+ 
+   // Filter jobs based on user's typing
+   const searchQuery = focusedOption.value?.toLowerCase() || "";
+   const filteredJobs = allJobs.filter((job) =>
+     job.toLowerCase().includes(searchQuery)
+   );
+ 
+   // Format autocomplete choices
+   const formattedChoices = filteredJobs.map((job) => ({
+     name: capitalizeWords(job),
+     value: job,
+   }));
+ 
+   await interaction.respond(formattedChoices.slice(0, 25));
+  } catch (error) {
+   handleError(error, "autocompleteHandler.js");
+   console.error("[handleItemJobNameAutocomplete]: Error:", error);
+   await safeRespondWithError(interaction);
+  }
+ }
+ 
+
 // ============================================================================
 // LOOKUP COMMANDS
 // ============================================================================
@@ -2655,6 +2696,7 @@ module.exports = {
  // ITEM
  handleItemAutocomplete,
  handleItemJobVoucherAutocomplete,
+ handleItemJobNameAutocomplete,
 
  // LOOKUP
  handleLookupAutocomplete,
