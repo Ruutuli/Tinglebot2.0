@@ -1613,7 +1613,7 @@ async function handleChangeJob(interaction) {
    .setImage(DEFAULT_IMAGE_URL)
    .setTimestamp();
 
-  return interaction.followUp({ embeds: [embed], ephemeral: true });
+  return interaction.followUp({ embeds: [embed], ephemeral: false });
  } catch (error) {
   handleError(error, "character.js");
   console.error("[changejob.js]: Error changing job:", error);
