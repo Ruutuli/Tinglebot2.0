@@ -221,14 +221,27 @@ module.exports = {
       }
       if (character.currentHearts >= character.maxHearts && !item.staminaRecovered) {
         const errorEmbed = new EmbedBuilder()
-          .setColor('#FF0000')
-          .setTitle('⚠️ Healing Failed ⚠️')
-          .setDescription(`${character.name} is already at maximum health.`)
-          .setFooter({ text: 'Healing Error' });
+          .setColor('#59A914') // friendly green tone for RP
+          .setAuthor({
+            name: `${character.name} 🔗`,
+            iconURL: character.icon,
+            url: character.inventory,
+          })
+          .setTitle('💚 Already at Full Health!')
+          .setDescription(
+            `**${character.name}** is already feeling their best!\n` +
+            `No need to waste a perfectly good **${item.emoji || ''} ${item.itemName}** right now.`
+          )
+          .addFields(
+            { name: '❤️ Hearts', value: `> **${character.currentHearts}/${character.maxHearts}**`, inline: true },
+            { name: '🟩 Stamina', value: `> **${character.currentStamina}/${character.maxStamina}**`, inline: true }
+          )
+          .setThumbnail(item.image || character.icon)
+          .setFooter({ text: `Rest easy, ${character.name} is thriving! 🌿` });
+      
         return void await interaction.editReply({ embeds: [errorEmbed] });
       }
-
-
+      
       // ------------------- Restricted Items Check -------------------
       // Block usage of explicitly disallowed healing items.
       const restricted = ['oil jar', 'goron spice'];
