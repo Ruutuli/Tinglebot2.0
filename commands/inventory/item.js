@@ -89,98 +89,101 @@ module.exports = {
                 await interaction.editReply({ content: `❌ Item not found.`, ephemeral: true });
                 return;
             }
-
-            // ------------------- Job Voucher Handling -------------------
-            if (item.itemName.toLowerCase() === 'job voucher') {
-                if (character.jobVoucher === true) {
+                // ------------------- Job Voucher Handling -------------------
+                if (item.itemName.toLowerCase() === 'job voucher') {
+                    // ------------------- Active Voucher Check -------------------
+                    if (character.jobVoucher === true) {
                     await interaction.editReply({
-                        content: `❌ A job voucher is already active for **${character.name}** with the job **${character.jobVoucherJob}**. Complete a job before using another voucher.`,
-                        ephemeral: true
+                        content: `❌ **${character.name}** already has an active Job Voucher for **${character.jobVoucherJob}**.\nPlease complete the current job before using another voucher.`,
+                        ephemeral: true,
                     });
                     return;
-                }
-
-                // ------------------- Validate Inventory and Voucher Existence -------------------
+                    }
+                
+                    // ------------------- Validate Inventory Existence -------------------
                     const inventoryCollection = await getCharacterInventoryCollection(character.name);
-
                     if (!inventoryCollection) {
                     await interaction.editReply({
-                        content: `❌ **${character.name} does not have an inventory set up yet.** Please set up an inventory before using a Job Voucher.`,
+                        content: `❌ **${character.name}** does not have an inventory set up. Please initialize an inventory before using a Job Voucher.`,
                         ephemeral: true,
                     });
                     return;
                     }
-
+                
                     const inventoryItems = await inventoryCollection.find().toArray();
-                    const hasJobVoucher = inventoryItems.some(invItem => invItem.itemName && invItem.itemName.toLowerCase() === "job voucher");
-
+                    const hasJobVoucher = inventoryItems.some(invItem =>
+                    invItem.itemName && invItem.itemName.toLowerCase() === 'job voucher'
+                    );
+                
                     if (!hasJobVoucher) {
                     await interaction.editReply({
-                        content: `❌ **${character.name} does not have a Job Voucher in their inventory.** Please acquire a Job Voucher first before using one.`,
+                        content: `❌ **${character.name}** does not have a Job Voucher in their inventory.`,
                         ephemeral: true,
                     });
                     return;
                     }
-
-            
-                const jobName = interaction.options.getString('jobname');
-                if (!jobName) {
+                
+                    // ------------------- Validate Job Selection -------------------
+                    const jobName = interaction.options.getString('jobname');
+                    if (!jobName) {
                     await interaction.editReply({
-                        content: `❌ You must specify a job to use with the job voucher.`,
-                        ephemeral: true
+                        content: `❌ You must specify a job to use with the Job Voucher.`,
+                        ephemeral: true,
                     });
                     return;
-                }
-            
-                // Activate the job voucher and set the associated job.
-                character.jobVoucher = true;
-                character.jobVoucherJob = jobName;
-                await updateCharacterById(character._id, { jobVoucher: true, jobVoucherJob: jobName });
-            
-                // Format current village information.
-                const currentVillage = capitalizeWords(character.currentVillage || 'Unknown');
-                const villageEmoji = getVillageEmojiByName(currentVillage) || '🌍';
-            
-                // Retrieve job perk information.
-                const jobPerkInfo = getJobPerk(jobName);
-                let perkDescription = '';
-                if (jobPerkInfo) {
-                    const { perks } = jobPerkInfo;
-                    if (perks.length > 0) {
-                        perkDescription = `**${character.name}** has used a Job Voucher to perform the **${perks.join(' Perk ')}** job, **${jobName}**.`;
-                    } else {
-                        perkDescription = `**${character.name}** has used a Job Voucher to perform the **${jobName}** job.`;
                     }
-                    // Include related commands based on unlocked perks.
+                
+                    const jobPerkInfo = getJobPerk(jobName);
+                    if (!jobPerkInfo) {
+                    await interaction.editReply({
+                        content: `❌ "**${capitalizeWords(jobName)}**" is not a valid job.\nPlease select a valid job from the suggestions.`,
+                        ephemeral: true,
+                    });
+                    return;
+                    }
+                
+                    // ------------------- Activate Voucher -------------------
+                    character.jobVoucher = true;
+                    character.jobVoucherJob = jobName;
+                    await updateCharacterById(character._id, { jobVoucher: true, jobVoucherJob: jobName });
+                
+                    // ------------------- Build Voucher Embed -------------------
+                    const currentVillage = capitalizeWords(character.currentVillage || 'Unknown');
+                    const villageEmoji = getVillageEmojiByName(currentVillage) || '🌍';
+                
+                    let perkDescription = `**${character.name}** has used a Job Voucher to perform the **${jobName}** job.`;
+                
+                    if (jobPerkInfo?.perks?.length > 0) {
+                    perkDescription = `**${character.name}** has used a Job Voucher to perform the **${jobName}** job with the following perk(s): **${jobPerkInfo.perks.join(', ')}**.`;
+                
                     const commands = [
-                        perks.includes('GATHERING') ? '> </gather:1306176789755858974>' : null,
-                        perks.includes('CRAFTING') ? '> </crafting:1306176789634355242>' : null,
-                        perks.includes('LOOTING') ? '> </loot:1316682863143424121>' : null,
-                        perks.includes('HEALING') ? '> </heal fufill:1306176789755858977>' : null
+                        jobPerkInfo.perks.includes('GATHERING') ? '> </gather:1306176789755858974>' : null,
+                        jobPerkInfo.perks.includes('CRAFTING') ? '> </crafting:1306176789634355242>' : null,
+                        jobPerkInfo.perks.includes('LOOTING') ? '> </loot:1316682863143424121>' : null,
+                        jobPerkInfo.perks.includes('HEALING') ? '> </heal fufill:1306176789755858977>' : null,
                     ].filter(Boolean);
+                
                     if (commands.length) {
-                        perkDescription += `\n\nUse the following commands to make the most of this Job Voucher:\n${commands.join('\n')}`;
+                        perkDescription += `\n\nUse the following commands to make the most of this role:\n${commands.join('\n')}`;
                     }
-                } else {
-                    perkDescription = `**${character.name}** has used a Job Voucher to perform the job **${jobName}**.`;
-                }
-            
-                // ------------------- Job Voucher Embed Configuration -------------------
-                const voucherEmbed = new EmbedBuilder()
-                    .setColor('#FFD700') // Gold color for job vouchers.
+                    }
+                
+                    const voucherEmbed = new EmbedBuilder()
+                    .setColor('#FFD700')
                     .setTitle('🎫 Job Voucher Activated!')
                     .setDescription(perkDescription)
                     .addFields(
                         { name: `${villageEmoji} Current Village`, value: `**${currentVillage}**`, inline: true },
-                        { name: '🏷️ Normal Job', value: `**${character.job || "Unemployed"}**`, inline: true }
+                        { name: '🏷️ Normal Job', value: `**${character.job || 'Unemployed'}**`, inline: true }
                     )
                     .setThumbnail(item.image || 'https://via.placeholder.com/150')
                     .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
                     .setFooter({ text: '✨ Good luck in your new role! Make the most of this opportunity!' });
-            
-                await interaction.editReply({ embeds: [voucherEmbed], ephemeral: true });
-                return;
-            }
+                
+                    await interaction.editReply({ embeds: [voucherEmbed], ephemeral: true });
+                    return;
+                }
+  
                      
             // ------------------- Debuff Check -------------------
             if (character.debuff?.active) {
