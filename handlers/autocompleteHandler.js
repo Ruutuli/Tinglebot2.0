@@ -216,7 +216,7 @@ async function handleAutocomplete(interaction) {
 
    // ------------------- ITEM Commands -------------------
   } else if (commandName === "item" && focusedOption.name === "itemname") {
-    await handleItemAutocomplete(interaction);
+    await handleItemAutocomplete(interaction, focusedOption);
    } else if (commandName === "item" && focusedOption.name === "charactername") {
     await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, commandName);
    } else if (commandName === "item" && focusedOption.name === "jobname") {
