@@ -199,6 +199,12 @@ const createCharacterEmbed = (character) => {
     inline: true,
    },
 
+   {
+    name: "💥 __KO Status__",
+    value: `> ${character.ko ? "True" : "False"}`,
+    inline: true,
+   },
+
    // Full-width fields below
    {
     name: "📦 __Inventory__",
