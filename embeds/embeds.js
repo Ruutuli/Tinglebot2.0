@@ -179,15 +179,13 @@ const createCharacterEmbed = (character) => {
     value: `> ${capitalizeFirstLetter(character.job)}`,
     inline: true,
    },
-      // If a job voucher is active, show it
-    ...(character.jobVoucher && character.jobVoucherJob
-      ? [{
-          name: "🎫 __Active Job Voucher__",
-          value: `> ${capitalizeWords(character.jobVoucherJob)}`,
-          inline: true,
-        }]
-      : []
-    ),
+   {
+    name: "🎫 __Active Job Voucher__",
+    value: character.jobVoucher && character.jobVoucherJob
+     ? `> ${capitalizeWords(character.jobVoucherJob)}`
+     : `> N/A`,
+    inline: true,
+   },   
    {
     name: "🔹 __Blighted__",
     value: `> ${
