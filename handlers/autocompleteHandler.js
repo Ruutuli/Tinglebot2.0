@@ -24,6 +24,7 @@ const {
 const {
  capitalize,
  capitalizeFirstLetter,
+ capitalizeWords,
 } = require("../modules/formattingModule");
 const {
  getGeneralJobsPage,
