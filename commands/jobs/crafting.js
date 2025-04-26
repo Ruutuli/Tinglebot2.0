@@ -16,7 +16,7 @@ const { connectToTinglebot, fetchCharacterByNameAndUserId, getCharacterInventory
 
 // ------------------- Modules -------------------
 const { checkAndUseStamina } = require('../../modules/characterStatsModule.js');
-const { getJobPerk } = require('../../modules/jobsModule.js');
+const { getJobPerk, isVillageExclusiveJob } = require('../../modules/jobsModule.js');
 const { validateJobVoucher, activateJobVoucher, fetchJobVoucherItem, deactivateJobVoucher } = require('../../modules/jobVoucherModule.js');
 const { capitalizeWords,formatDateTime   } = require('../../modules/formattingModule.js');
 
