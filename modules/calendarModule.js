@@ -25,7 +25,7 @@ const bloodmoonDates = [
     { realDate: '02-08', month: 'Noe Rajee', day: 13 },
     { realDate: '03-06', month: 'Ha Dahamar', day: 13 },
     { realDate: '04-01', month: 'Shae Katha', day: 13 },
-    { realDate: '04-27', month: 'Keo Ruug', day: 13 },
+    { realDate: '04-13', month: 'Keo Ruug', day: 13 }, // re-add the 27th later
     { realDate: '05-23', month: 'Gee Ha\'rah', day: 13 },
     { realDate: '06-18', month: 'Jitan Sa\'mi', day: 13 },
     { realDate: '07-14', month: 'Sha Warvo', day: 13 },

@@ -1573,14 +1573,15 @@ async function handleItemAutocomplete(interaction, focusedOption) {
       const subcommand = interaction.options.getSubcommand(false); // Pass false to prevent crash
 
       if (subcommand !== "sell") {
-        // --- Updated Healing Item Filter ---
+        // --- Updated Healing Item + Voucher Filter ---
         const itemNames = inventoryItems.map(item => item.itemName);
 
         const allowedItems = await Item.find({
           itemName: { $in: itemNames },
           $or: [
             { "recipeTag.0": { $exists: true } }, // has at least one tag (healing)
-            { itemName: "Fairy" }
+            { itemName: "Fairy" },
+            { itemName: "Job Voucher" }
           ]
         }).select("itemName").lean();
 

@@ -6,3 +6,4 @@ node_modules
 config/
 eslint.config.mjs
 .dependency-cruiser.js
+testingCode/
