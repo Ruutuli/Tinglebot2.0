@@ -194,17 +194,22 @@ module.exports = {
       // Ensure the character's job permits crafting the desired item.
       const jobPerk = getJobPerk(job);
       const requiredJobs = item.craftingTags.join(', ');
+      
+      // Lowercase job and craftingTags safely
+      const jobLower = job.toLowerCase();
+      const craftingTagsLower = item.craftingTags.map(tag => tag.toLowerCase());
+      
       if (
         !jobPerk ||
         !jobPerk.perks.includes('CRAFTING') ||
-        !item.craftingTags.map(tag => tag.toLowerCase()).includes(job.toLowerCase())
+        !craftingTagsLower.includes(jobLower)
       ) {
         return interaction.editReply({
           content: `❌ **"${character.name}" cannot craft "${itemName}" because they lack the required job(s): ${requiredJobs}.**`,
           ephemeral: true,
         });
       }
-
+      
       // ------------------- Handle Job Voucher Activation -------------------
       // If a job voucher is active, activate it for crafting.
       if (character.jobVoucher) {
