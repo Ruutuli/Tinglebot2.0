@@ -202,7 +202,7 @@ const isValidImageUrl = (url) => {
 function convertCmToFeetInches(heightInCm) {
     const totalInches = heightInCm / 2.54;
     const feet = Math.floor(totalInches / 12);
-    const inches = Math.round((totalInches % 12) * 10) / 10; // Round to 1 decimal place
+    const inches = Math.round(totalInches % 12);
     return `${feet}' ${inches}"`;
   }
 

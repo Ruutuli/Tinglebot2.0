@@ -1108,7 +1108,7 @@ async function handleEditCharacter(interaction) {
    character.age = updatedValue;
    updateMessage = `✅ **${character.name}'s age has been updated from ${previousValue} to ${updatedValue}.**`;
   } else if (category === "height") {
-   const heightInCm = parseInt(updatedInfo, 10);
+    const heightInCm = parseFloat(updatedInfo);
    if (isNaN(heightInCm) || heightInCm < 0) {
     await interaction.followUp({
      content: `⚠️ **${updatedInfo}** is not valid for height. Please provide a non-negative number in centimeters.`,
