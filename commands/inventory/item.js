@@ -99,6 +99,29 @@ module.exports = {
                     });
                     return;
                 }
+
+                // ------------------- Validate Inventory and Voucher Existence -------------------
+                    const inventoryCollection = await getCharacterInventoryCollection(character.name);
+
+                    if (!inventoryCollection) {
+                    await interaction.editReply({
+                        content: `❌ **${character.name} does not have an inventory set up yet.** Please set up an inventory before using a Job Voucher.`,
+                        ephemeral: true,
+                    });
+                    return;
+                    }
+
+                    const inventoryItems = await inventoryCollection.find().toArray();
+                    const hasJobVoucher = inventoryItems.some(invItem => invItem.itemName && invItem.itemName.toLowerCase() === "job voucher");
+
+                    if (!hasJobVoucher) {
+                    await interaction.editReply({
+                        content: `❌ **${character.name} does not have a Job Voucher in their inventory.** Please acquire a Job Voucher first before using one.`,
+                        ephemeral: true,
+                    });
+                    return;
+                    }
+
             
                 const jobName = interaction.options.getString('jobname');
                 if (!jobName) {
