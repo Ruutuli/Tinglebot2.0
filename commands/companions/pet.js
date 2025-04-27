@@ -27,6 +27,7 @@ const {
  getPetEmoji,
  getFlavorText,
  getPetTypeData,
+ petTypeData,
  canSpeciesPerformPetType,
 } = require("../../modules/petModule");
 
@@ -257,8 +258,11 @@ module.exports = {
     )
   ),
 
- // ------------------- Command Execution Function -------------------
- // This function handles executing the pet command based on the chosen subcommand.
+// ============================================================================
+// ------------------- Command Execution Function -------------------
+// Handles executing the pet command based on the chosen subcommand.
+// ============================================================================
+
  async execute(interaction) {
   try {
    // ------------------- Retrieve Command Options -------------------
@@ -290,164 +294,78 @@ module.exports = {
    const existingPet = character.pets.find((pet) => pet.name === petName);
 
    // ------------------- Subcommand: Add Pet or Update Pet Details -------------------
-   if (subcommand === "add") {
-    // If adding a new pet, prevent adding if an active pet already exists.
-    if (!existingPet && character.currentActivePet) {
-     return interaction.reply(
+if (subcommand === "add") {
+  // If adding a new pet, prevent adding if an active pet already exists.
+  if (!existingPet && character.currentActivePet) {
+    return interaction.reply(
       "❌ **You already have an active pet. Please update your current pet instead of adding a new one.**"
-     );
-    }
-
-    // ------------------- Retrieve Additional Options -------------------
-    // Get species, category, starting level, pet type, and optional image attachment.
-    const species = interaction.options.getString("species");
-    const category = interaction.options.getString("category");
-    const petType = interaction.options.getString("pettype");
-    const imageAttachment = interaction.options.getAttachment("image");
-
-// Normalize species for lookup
-const normalizedSpeciesKey = species.toLowerCase().replace(/\s+/g, '').replace(/'/g, '');
-
-// Validate species can perform pet type rolls
-if (!canSpeciesPerformPetType(normalizedSpeciesKey, petType)) {
-  // If invalid, suggest valid pet types
-  const possibleTypes = [];
-
-  for (const [type, data] of Object.entries(petTypeData)) {
-    const requiredRolls = data.rollCombination;
-    const allowedRolls = speciesRollPermissions[normalizedSpeciesKey];
-
-    if (!allowedRolls) continue; // No data? skip
-    const canPerformAll = requiredRolls.every(roll => allowedRolls.includes(roll));
-    if (canPerformAll) possibleTypes.push(type);
+    );
   }
 
-  const suggestionText = possibleTypes.length
-    ? `**Valid pet types for ${species}:**\n> ${possibleTypes.join(", ")}`
-    : `❗ **No valid pet types found for this species.** Please choose a different species.`;
+  // ------------------- Retrieve Additional Options -------------------
+  const species = interaction.options.getString("species");
+  const category = interaction.options.getString("category");
+  const petType = interaction.options.getString("pettype");
+  const imageAttachment = interaction.options.getAttachment("image");
 
-  return interaction.reply(
-    `❌ **The species \`${species}\` cannot perform all roll types required by the pet type \`${petType}\`.**\n\n` +
-    `${suggestionText}`
-  );
-}
+  // Normalize species for lookup
+  const normalizedSpeciesKey = species.toLowerCase().replace(/\s+/g, '').replace(/'/g, '');
+  const allowedRolls = speciesRollPermissions[normalizedSpeciesKey];
 
+  // ------------------- Validate Species -------------------
+  if (!allowedRolls) {
+    return interaction.reply(`❌ **Unknown or unsupported species \`${species}\`. Please select a valid species.**`);
+  }
 
+  if (!canSpeciesPerformPetType(normalizedSpeciesKey, petType)) {
+    const possibleTypes = [];
 
-
-    // ------------------- Validate and Infer Pet Size -------------------
-    // For normal pets, infer size based on the species name.
-    let inferredSize;
-    if (category === "normal") {
-     const lowerSpecies = species.toLowerCase();
-     if (lowerSpecies.includes("small")) {
-      inferredSize = "small";
-     } else if (lowerSpecies.includes("large")) {
-      inferredSize = "large";
-     } else {
-      inferredSize = "small";
-     }
-
-     // ------------------- Validate Pet Type Against Inferred Size -------------------
-     const petTypeData = getPetTypeData(petType);
-     if (!petTypeData) {
-      return interaction.reply(`❌ **Unknown pet type \`${petType}\`.**`);
-     }
-
-     const largePetTypes = [
-      "Conqueror",
-      "Guardian",
-      "Hunter",
-      "Roamer",
-      "Sentinel",
-     ];
-     const smallPetTypes = ["Protector"];
-
-     if (inferredSize === "small" && largePetTypes.includes(petType)) {
-      return interaction.reply(
-       `❌ **Oops! A \`${species}\` pet cannot be of type \`${petType}\`.**\n` +
-        `It requires a large pet with the following characteristics:\n` +
-        `• **Roll Combination:** \`${petTypeData.rollCombination.join(
-         ", "
-        )}\`\n` +
-        `• **Description:** ${petTypeData.description}`
-      );
-     }
-     if (inferredSize === "large" && smallPetTypes.includes(petType)) {
-      return interaction.reply(
-       `❌ **Only small pets can be of type \`${petType}\`.**`
-      );
-     }
-     if (
-      inferredSize === "small" &&
-      petTypeData.rollCombination.includes("lgpetprey")
-     ) {
-      return interaction.reply(
-       `❌ **Oops! The \`${species}\` pet cannot be of type \`${petType}\` because its roll combination includes \`lgpetprey\`.**\n` +
-        `Required Characteristics:\n` +
-        `• **Roll Combination:** \`${petTypeData.rollCombination.join(
-         ", "
-        )}\`\n` +
-        `• **Description:** ${petTypeData.description}`
-      );
-     }
-    } else {
-     // ------------------- Special Pet Validations -------------------
-     // Add any additional validations for special pets here.
+    for (const [type, data] of Object.entries(petTypeData)) {
+      const requiredRolls = data.rollCombination;
+      if (requiredRolls.every((roll) => allowedRolls.includes(roll))) {
+        possibleTypes.push(type);
+      }
     }
 
-    // ------------------- Upload Pet Image (If Provided) -------------------
-    let petImageUrl = "";
-    if (imageAttachment) {
-     try {
+    const suggestionText = possibleTypes.length
+      ? `**Valid pet types for ${species}:**\n> ${possibleTypes.join(", ")}`
+      : `❗ **No valid pet types found for this species.** Please choose a different species.`;
+
+    return interaction.reply(
+      `❌ **The species \`${species}\` cannot perform all roll types required by the pet type \`${petType}\`.**\n\n${suggestionText}`
+    );
+  }
+
+  // ------------------- Upload Pet Image (If Provided) -------------------
+  let petImageUrl = "";
+  if (imageAttachment) {
+    try {
       petImageUrl = await uploadPetImage(imageAttachment.url, petName);
-      console.log(
-       `[pet.js]: logs - Image uploaded successfully. Public URL: ${petImageUrl}`
-      );
-     } catch (error) {
+      console.log(`[pet.js]: logs - Image uploaded successfully. Public URL: ${petImageUrl}`);
+    } catch (error) {
       handleError(error, "pet.js");
+      console.error(`[pet.js]: logs - Error uploading image for pet "${petName}": ${error.message}`);
+      return interaction.reply("❌ **Failed to upload image. Please try again later.**");
+    }
+  }
 
-      console.error(
-       `[pet.js]: logs - Error uploading image for pet "${petName}": ${error.message}`
-      );
-      return interaction.reply(
-       "❌ **Failed to upload image. Please try again later.**"
-      );
-     }
+  // ------------------- Update Existing Pet or Add New Pet -------------------
+  if (existingPet) {
+    existingPet.species = species;
+    existingPet.perks = [petType];
+    existingPet.imageUrl = petImageUrl || existingPet.imageUrl;
+    await updatePetToCharacter(character._id, petName, existingPet);
+
+    if (!character.currentActivePet) {
+      await Character.findByIdAndUpdate(character._id, { currentActivePet: existingPet._id });
     }
 
-    // ------------------- Update Existing Pet or Add New Pet -------------------
-    if (existingPet) {
-     // ------------------- Update Existing Pet Details -------------------
-     existingPet.species = species;
-     if (category === "normal") {
-      existingPet.size = inferredSize;
-     }
-     existingPet.perks = [petType];
-     // Update image only if a new URL is provided.
-     existingPet.imageUrl = petImageUrl || existingPet.imageUrl;
-     await updatePetToCharacter(character._id, petName, existingPet);
-     if (!character.currentActivePet) {
-      await Character.findByIdAndUpdate(character._id, {
-       currentActivePet: existingPet._id,
-      });
-     }
-     return interaction.reply(
-      `✅ **Updated pet \`${petName}\` with new details.**`
-     );
-    } else {
-     // ------------------- Add New Pet to the Character -------------------
-     await addPetToCharacter(
-      character._id,
-      petName,
-      species,
-      inferredSize,
-      0,
-      petType,
-      petImageUrl
-     );
-     const petTypeData = getPetTypeData(petType);
-     const newPet = await Pet.create({
+    return interaction.reply(`✅ **Updated pet \`${petName}\` with new details.**`);
+  } else {
+    await addPetToCharacter(character._id, petName, species, "small", 0, petType, petImageUrl);
+
+    const selectedPetTypeData = getPetTypeData(petType);
+    const newPet = await Pet.create({
       ownerName: character.name,
       owner: character._id,
       name: petName,
@@ -456,51 +374,33 @@ if (!canSpeciesPerformPetType(normalizedSpeciesKey, petType)) {
       level: 0,
       rollsRemaining: 0,
       imageUrl: petImageUrl || "",
-      rollCombination: petTypeData.rollCombination,
-      tableDescription: petTypeData.description,
-     });
+      rollCombination: selectedPetTypeData.rollCombination,
+      tableDescription: selectedPetTypeData.description,
+    });
 
-     // ———————————————— NEW: set this pet as the character's active pet ————————————————
-     await Character.findByIdAndUpdate(character._id, {
-      currentActivePet: newPet._id,
-     });
+    await Character.findByIdAndUpdate(character._id, { currentActivePet: newPet._id });
 
-     // ------------------- Build and Send Success Embed for Adding Pet -------------------
-     const rollsDisplay =
-      "🔔".repeat(newPet.rollsRemaining) +
-      "🔕".repeat(newPet.level - newPet.rollsRemaining);
-     const successEmbed = new EmbedBuilder()
+    const rollsDisplay = "🔔".repeat(newPet.rollsRemaining) + "🔕".repeat(newPet.level - newPet.rollsRemaining);
+    const successEmbed = new EmbedBuilder()
       .setAuthor({ name: character.name, iconURL: character.icon })
       .setTitle("🎉 Pet Added Successfully")
-      .setDescription(
-       `Pet \`${petName}\` the **${species}** has been added as type \`${petType}\`.`
-      )
+      .setDescription(`Pet \`${petName}\` the **${species}** has been added as type \`${petType}\`.`)
       .addFields(
-       { name: "__Pet Name__", value: `> ${petName}`, inline: true },
-       { name: "__Owner__", value: `> ${character.name}`, inline: true },
-       {
-        name: "__Pet Level & Rolls__",
-        value: `> Level ${newPet.level} | ${rollsDisplay}`,
-        inline: true,
-       },
-       {
-        name: "__Pet Species__",
-        value: `> ${getPetEmoji(species)} ${species}`,
-        inline: true,
-       },
-       { name: "__Pet Type__", value: `> ${petType}`, inline: true },
-       {
-        name: "Roll Combination",
-        value: petTypeData.rollCombination.join(", "),
-        inline: false,
-       },
-       { name: "Description", value: petTypeData.description, inline: false }
+        { name: "__Pet Name__", value: `> ${petName}`, inline: true },
+        { name: "__Owner__", value: `> ${character.name}`, inline: true },
+        { name: "__Pet Level & Rolls__", value: `> Level ${newPet.level} | ${rollsDisplay}`, inline: true },
+        { name: "__Pet Species__", value: `> ${getPetEmoji(species)} ${species}`, inline: true },
+        { name: "__Pet Type__", value: `> ${petType}`, inline: true },
+        { name: "Roll Combination", value: selectedPetTypeData.rollCombination.join(", "), inline: false },
+        { name: "Description", value: selectedPetTypeData.description, inline: false }
       )
       .setImage(petImageUrl || "https://via.placeholder.com/150")
       .setColor("#00FF00");
-     return interaction.reply({ embeds: [successEmbed] });
-    }
-   }
+
+    return interaction.reply({ embeds: [successEmbed] });
+  }
+}
+
 
    // ------------------- Subcommand: Edit Pet Image -------------------
    // This branch handles updating the image of an existing pet.
