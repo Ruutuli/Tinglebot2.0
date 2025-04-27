@@ -510,7 +510,7 @@ const createSetupInstructionsEmbed = async (characterName, googleSheetsUrl) => {
 
   return new EmbedBuilder()
     .setTitle(`📋 Setup Instructions for ${characterName}`)
-    .setDescription(`Please follow these steps carefully to set up your Google Sheets inventory:`)
+    .setDescription(`📋 Please follow these steps carefully to set up your Google Sheets inventory.`)
     .addFields(fields)
     .setColor(getRandomColor())
     .setTimestamp()

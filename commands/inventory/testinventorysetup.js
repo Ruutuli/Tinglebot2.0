@@ -71,20 +71,6 @@ module.exports = {
       }
       console.log('✅ Headers in "loggedInventory" sheet are correct.');
 
-      // ------------------- Append test message to Google Sheets -------------------
-      const dateTimeNow = new Date().toLocaleString('en-US', {
-        month: 'numeric',
-        day: 'numeric',
-        year: 'numeric',
-        hour: 'numeric',
-        minute: 'numeric',
-        hour12: true
-      });
-      const testMessage = `✅ ${character.name} setup has been successfully tested on ${dateTimeNow}.`;
-
-      await appendSheetData(auth, spreadsheetId, 'loggedInventory', [[testMessage]]);
-      console.log('✅ Test message appended to "loggedInventory" sheet.');
-
       // ------------------- Reply to the interaction with a confirmation message -------------------
       await interaction.reply({
         content: `✅ **Success!**\n\n🛠️ **Inventory setup for** **${character.name}** **has been successfully tested.**\n\n📄 **See your inventory [here](<${inventoryUrl}>)**.\n\n🔄 **Once ready, use the** \`/syncinventory\` **command to sync your character's inventory.**`,
