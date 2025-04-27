@@ -701,10 +701,16 @@ for (const { quantity } of items) {
    toCharacterIcon
   );
 
-  await interaction.editReply({
-   content: `<@${toCharacterOwnerId}>`,
-   embeds: [giftEmbed],
+  await interaction.channel.send({
+    content: `🎁 <@${toCharacterOwnerId}>, you received a gift!`,
+    allowedMentions: { users: [toCharacterOwnerId] },
+    embeds: [giftEmbed],
   });
+  await interaction.editReply({
+    content: `✅ Gift sent successfully!`,
+  }); 
+  
+  
  } catch (error) {
   handleError(error, "gift.js");
   console.error("❌ Error during gift execution:", error);
