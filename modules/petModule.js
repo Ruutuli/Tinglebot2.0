@@ -25,8 +25,8 @@ const normalPets = {
   largeFeline: '🦁',       // Lions, tigers, big cats
 
   // Rodents & Small Mammals
-  rabbit: '🐰',            // Rabbits, hares
-  smallRodent: '🐹',       // Hamsters, gerbils, voles
+  lagamorph : '🐰',          // Rabbits, hares
+  rodent: '🐹',             // Hamsters, gerbils, voles
   mustelid: '🦦',          // Ferrets, weasels, mink
 
   // Ungulates (Livestock)

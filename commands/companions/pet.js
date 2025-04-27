@@ -18,6 +18,7 @@ const {
  fetchAllItems,
  getTokenBalance,
  updateTokenBalance,
+ petTypeData,
 } = require("../../database/db");
 // ------------------- Modules -------------------
 // Modules used for random item rolls, pet formatting, and retrieving pet-related data.
@@ -310,11 +311,28 @@ const normalizedSpeciesKey = species.toLowerCase().replace(/\s+/g, '').replace(/
 
 // Validate species can perform pet type rolls
 if (!canSpeciesPerformPetType(normalizedSpeciesKey, petType)) {
+  // If invalid, suggest valid pet types
+  const possibleTypes = [];
+
+  for (const [type, data] of Object.entries(petTypeData)) {
+    const requiredRolls = data.rollCombination;
+    const allowedRolls = speciesRollPermissions[normalizedSpeciesKey];
+
+    if (!allowedRolls) continue; // No data? skip
+    const canPerformAll = requiredRolls.every(roll => allowedRolls.includes(roll));
+    if (canPerformAll) possibleTypes.push(type);
+  }
+
+  const suggestionText = possibleTypes.length
+    ? `**Valid pet types for ${species}:**\n> ${possibleTypes.join(", ")}`
+    : `❗ **No valid pet types found for this species.** Please choose a different species.`;
+
   return interaction.reply(
     `❌ **The species \`${species}\` cannot perform all roll types required by the pet type \`${petType}\`.**\n\n` +
-    `Please select a more appropriate pet type for this species.`
+    `${suggestionText}`
   );
 }
+
 
 
 
