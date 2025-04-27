@@ -1479,12 +1479,21 @@ if (focusedOption.name === "tocharacter") {
    );
    const fromInventory = await inventoryCollection.find().toArray();
 
-   const choices = fromInventory
-   .filter((item) => item.itemName && item.itemName !== "Initial Item")
-   .map((item) => ({
-     name: `${capitalizeWords(item.itemName)} - QTY:${item.quantity}`,
-     value: item.itemName,
-   })); 
+   const itemMap = new Map();
+   for (const item of fromInventory) {
+     if (item.itemName && item.itemName !== "Initial Item") {
+       itemMap.set(
+         item.itemName,
+         (itemMap.get(item.itemName) || 0) + item.quantity
+       );
+     }
+   }
+   
+   const choices = Array.from(itemMap.entries()).map(([itemName, quantity]) => ({
+     name: `${capitalizeWords(itemName)} - QTY:${quantity}`,
+     value: itemName,
+   }));
+   
 
    await respondWithFilteredChoices(interaction, focusedOption, choices);
   }
