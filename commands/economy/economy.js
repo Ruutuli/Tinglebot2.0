@@ -1454,6 +1454,18 @@ for (const { name } of items) {
     { name: item3, quantity: quantity3 },
    ].filter((item) => item.name);
 
+   // ------------------- Validate Trade Quantities -------------------
+// Ensure all traded item quantities are positive integers
+for (const { quantity } of itemArray) {
+  if (quantity <= 0) {
+    await interaction.editReply({
+      content: `❌ You must trade a **positive quantity** of items. Negative numbers are not allowed.`,
+      ephemeral: true,
+    });
+    return;
+  }
+}
+
    for (let item of itemArray) {
     const equippedItems = [
      fromCharacter.gearWeapon?.name,
