@@ -63,6 +63,7 @@ module.exports = {
         'Character Name', 'Item Name', 'Qty of Item', 'Category', 'Type',
         'Subtype', 'Obtain', 'Job', 'Perk', 'Location', 'Link', 'Date/Time', 'Confirmed Sync'
       ];
+      // ✅ Check that the sheet headers exist
       const sheetData = await readSheetData(auth, spreadsheetId, 'loggedInventory!A1:M1');
       if (!sheetData || !expectedHeaders.every(header => sheetData[0]?.includes(header))) {
         console.error('❌ Missing or incorrect headers in "loggedInventory" sheet.');
@@ -70,6 +71,16 @@ module.exports = {
         return;
       }
       console.log('✅ Headers in "loggedInventory" sheet are correct.');
+
+      // ✅ ADD THIS NEXT:
+      const validationResult = await validateInventorySheet(inventoryUrl);
+      if (!validationResult.success) {
+        console.error('❌ Validation failed after header check.');
+        await sendSetupInstructions(interaction, 'invalid_inventory', character._id, characterName, inventoryUrl, validationResult.message);
+        return;
+      }
+      console.log('✅ Inventory sheet contains at least one valid item.');
+
 
       // ------------------- Reply to the interaction with a confirmation message -------------------
       await interaction.reply({
@@ -117,16 +128,16 @@ module.exports = {
 };
 
 // ------------------- Helper function to send setup instructions -------------------
-async function sendSetupInstructions(interaction, errorType, characterId, characterName, googleSheetsUrl) {
+async function sendSetupInstructions(interaction, errorType, characterId, characterName, googleSheetsUrl, customMessage = null) {
   const errorMessages = {
     invalid_url: 'The provided URL is not valid.',
     missing_sheet: 'The Google Sheets document is missing the required "loggedInventory" tab.',
     missing_headers: 'The "loggedInventory" sheet is missing the required headers.',
+    invalid_inventory: 'Your inventory is missing required starter items or is improperly formatted.',
   };
 
-  const errorMessage = errorMessages[errorType] || 'An unexpected error occurred. Please check your setup.';
+  const errorMessage = customMessage || errorMessages[errorType] || 'An unexpected error occurred. Please check your setup.';
 
-  // ✅ Await the embed creation
   const embed = await createSetupInstructionsEmbed(characterName, googleSheetsUrl, errorMessage);
 
   await interaction.reply({ embeds: [embed], ephemeral: true });
