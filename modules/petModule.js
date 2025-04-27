@@ -26,9 +26,7 @@ const normalPets = {
 
   // Rodents & Small Mammals
   rabbit: '🐰',            // Rabbits, hares
-  mouse: '🐭',             // Mice, rats
   smallRodent: '🐹',       // Hamsters, gerbils, voles
-  insectivore: '🦔',       // Hedgehogs, shrews
   mustelid: '🦦',          // Ferrets, weasels, mink
 
   // Ungulates (Livestock)
@@ -36,7 +34,6 @@ const normalPets = {
   bovine: '🐄',            // Cows
   caprine: '🐐',           // Goats
   porcine: '🐷',           // Pigs
-  equine: '🐎',            // Horses, ponies
 
   // Marsupials & Misc
   marsupial: '🦘',         // Sugar gliders, opossums
@@ -46,7 +43,6 @@ const normalPets = {
   foragingBird: '🐦',       // Songbirds, waterfowl
   scavengingBird: '🦅',     // Ravens, vultures
   predatoryBird: '🦉',      // Owls, hawks
-  companionBird: '🦜',      // Parrots, cockatiels
   flightlessBird: '🐥',     // Chicks, ducklings
 
   // Reptiles & Amphibians
@@ -236,24 +232,56 @@ const getPetTypeDescription = (petType) => {
 // Retrieve the complete pet type data (roll combination and description) for a given pet type.
 const getPetTypeData = (petType) => petTypeData[petType] || null;
 
-const dangerousPetTypes = [
-  "Conqueror",
-  "Guardian",
-  "Hunter",
-  "Nomad",
-  "Roamer",
-  "Sentinel"
-];
+// ------------------- Species Roll Permissions -------------------
+// Defines which roll types each species is allowed to perform based on updated chart.
 
-const forbiddenSpeciesForDangerousTypes = [
-  // small normal pets
-  'smallcanine', 'smallfeline', 'rabbit', 'mouse', 'smallrodent', 'insectivore', 'mustelid',
-  'foragingbird', 'scavengingbird', 'predatorybird', 'companionbird', 'flightlessbird',
-  'smallreptile', 'climbingreptile', 'shellreptile', 'amphibian',
-  // special pets
-  'chain chomp', 'chuchu', 'choir frog', 'cucco', 'keese', 'moink', "pol's voice", 'pygmy octorok', 'remlit', 'walltula'
-];
+const speciesRollPermissions = {
+  smallCanine: ['petprey', 'petforage', 'petmon'],
+  largeCanine: ['lgpetprey', 'petmon'],
+  smallFeline: ['petprey', 'petforage', 'petmon'],
+  largeFeline: ['lgpetprey', 'petmon'],
+  lagamorph: ['petforage'],
+  rodent: ['petforage'],
+  mustelid: ['petprey', 'petforage', 'petmon'],
+  ovine: ['petforage'],
+  bovine: ['petforage'],
+  caprine: ['petforage', 'petmon'],
+  porcine: ['petforage', 'petmon'],
+  marsupial: ['petprey', 'petforage'],
+  mesopredator: ['petprey', 'petmon'],
+  foragingBird: ['petforage'],
+  scavengingBird: ['petprey', 'petforage'],
+  predatoryBird: ['petprey', 'petmon'],
+  flightlessBird: ['petforage', 'petmon'],
+  smallReptile: ['petprey', 'petforage'],
+  largeReptile: ['lgpetprey', 'petforage'],
+  shellReptile: ['petforage'],
+  amphibian: ['petprey', 'petforage'],
+  chainChomp: ['petprey', 'lgpetprey', 'petmon'],
+  chuchu: ['petprey', 'petforage', 'petchu', 'petfirechu', 'peticechu', 'petelectricchu'],
+  choirFrog: ['petprey', 'petforage'],
+  cucco: ['petprey', 'petforage', 'petmon'],
+  keese: ['petprey', 'petforage'],
+  moink: ['petforage', 'petmon'],
+  polsVoice: ['petprey', 'petforage'],
+  pygmyOctorok: ['petprey', 'petmon'],
+  remlit: ['petprey', 'petforage', 'petmon'],
+  sandSeal: ['petforage', 'petmon'],
+  walltula: ['petprey', 'petmon'],
+  smallSpecial: ['petprey', 'petforage', 'petmon'],
+  largeSpecial: ['lgpetprey', 'petforage', 'petmon'],
+};
 
+// ------------------- Helper: Validate Species Can Perform PetType Rolls -------------------
+const canSpeciesPerformPetType = (speciesKey, petType) => {
+  const allowedRolls = speciesRollPermissions[speciesKey];
+  const requiredRolls = getPetTypeRollCombination(petType) || [];
+
+  if (!allowedRolls) return false; // No permission record = block
+
+  // Ensure species has all required rolls
+  return requiredRolls.every(roll => allowedRolls.includes(roll));
+};
 
 
 // ------------------- Module Exports -------------------
@@ -267,5 +295,6 @@ module.exports = {
   getPetTypeData,
   petEmojiMap,
   normalPets,
-  specialPets
+  specialPets,
+  canSpeciesPerformPetType,
 };
