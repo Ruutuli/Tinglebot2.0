@@ -211,17 +211,14 @@ const fetchCharacterById = async (characterId) => {
 
 // ------------------- fetchCharactersByUserId -------------------
 const fetchCharactersByUserId = async (userId) => {
- try {
-  await connectToTinglebot();
-  const characters = await Character.find({ userId }).lean().exec();
-  return characters;
- } catch (error) {
-  handleError(error, "db.js");
-  console.error(
-   `[characterService]: logs - Error in fetchCharactersByUserId: ${error.message}`
-  );
-  throw error;
- }
+  try {
+    await connectToTinglebot();
+    const characters = await Character.find({ userId }).lean().exec();
+    return characters;
+  } catch (error) {
+    handleError(error, "db.js");
+    throw error;
+  }
 };
 
 // ------------------- fetchCharacterByNameAndUserId -------------------
