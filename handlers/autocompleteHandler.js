@@ -2021,63 +2021,48 @@ async function handlePetRollTypeAutocomplete(interaction, focusedOption) {
 // - Item names from a character's inventory when selling
 
 // ------------------- Shops Autocomplete -------------------
-// Provides autocomplete suggestions for shop item names for buy/sell.
 async function handleShopsAutocomplete(interaction, focusedOption) {
- try {
-  const characterName = interaction.options.getString("charactername");
-  const subcommand = interaction.options.getSubcommand();
-  const searchQuery = focusedOption.value.toLowerCase();
-  let choices = [];
-
-  if (subcommand === "buy") {
-   const items = await ShopStock.find()
-    .sort({ itemName: 1 })
-    .select("itemName quantity")
-    .lean();
-
-   choices = items
-    .filter((item) => item.itemName.toLowerCase().includes(searchQuery))
-    .map((item) => ({
-     name: `${item.itemName} - Qty: ${item.quantity}`,
-     value: item.itemName,
-    }));
-  } else if (subcommand === "sell") {
-   const inventoryCollection = await getCharacterInventoryCollection(
-    characterName
-   );
-   const inventoryItems = await inventoryCollection.find().toArray();
-
-   const itemNames = inventoryItems.map((item) => item.itemName);
-   const itemsFromDB = await Item.find({ itemName: { $in: itemNames } })
-    .select("itemName sellPrice")
-    .lean();
-
-   const itemsMap = new Map(
-    itemsFromDB.map((item) => [item.itemName, item.sellPrice])
-   );
-
-   choices = inventoryItems
-    .filter((item) => item.itemName.toLowerCase().includes(searchQuery))
-    .sort((a, b) => a.itemName.localeCompare(b.itemName))
-    .map((item) => ({
-     name: `${item.itemName} - Qty: ${item.quantity} - Sell: ${
-      itemsMap.get(item.itemName) || "N/A"
-     }`,
-     value: item.itemName,
-    }));
+  try {
+   const subcommand = interaction.options.getSubcommand();
+   const searchQuery = focusedOption.value.toLowerCase();
+   let choices = [];
+ 
+   if (subcommand === "shop-buy") {
+    const items = await ShopStock.find()
+     .sort({ itemName: 1 })
+     .select("itemName stock")
+     .lean();
+ 
+    choices = items
+     .filter((item) => item.itemName.toLowerCase().includes(searchQuery))
+     .map((item) => ({
+      name: `${item.itemName} - Stock: ${item.stock}`,
+      value: item.itemName,
+     }));
+   } else if (subcommand === "shop-sell") {
+    const characterName = interaction.options.getString("charactername");
+    if (!characterName) return await interaction.respond([]);
+ 
+    const inventoryCollection = await getCharacterInventoryCollection(characterName);
+    const inventoryItems = await inventoryCollection.find().toArray();
+ 
+    choices = inventoryItems
+     .filter((item) => item.itemName.toLowerCase().includes(searchQuery))
+     .map((item) => ({
+      name: `${item.itemName} - Qty: ${item.quantity}`,
+      value: item.itemName,
+     }));
+   }
+ 
+   await interaction.respond(choices.slice(0, 25));
+  } catch (error) {
+   handleError(error, "autocompleteHandler.js");
+ 
+   console.error("[handleShopsAutocomplete]: Error:", error);
+   await safeRespondWithError(interaction);
   }
-
-  await interaction.respond(choices.slice(0, 25));
- } catch (error) {
-  handleError(error, "autocompleteHandler.js");
-
-  console.error(
-   "[handleShopsAutocomplete]: Error handling shops autocomplete:",
-   error
-  );
-  await safeRespondWithError(interaction);
  }
-}
+ 
 
 // ============================================================================
 // STEAL COMMANDS
