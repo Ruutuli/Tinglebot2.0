@@ -60,6 +60,7 @@ const {
  getJobPerk,
  getGeneralJobsPage,
  getJobsByCategory,
+ getAllJobs,
 } = require("../../modules/jobsModule");
 const { roles } = require("../../modules/rolesModule");
 const {
@@ -630,17 +631,41 @@ module.exports = {
     await createCharacterAutocomplete(interaction);
    } else {
     switch (subcommand) {
-     case "edit":
-     case "delete":
-     case "setbirthday":
-      if (focusedOption.name === "charactername") {
-       await handleCharacterBasedCommandsAutocomplete(
-        interaction,
-        focusedOption,
-        "character"
-       );
-      }
-      break;
+      case "edit":
+        if (focusedOption.name === "charactername") {
+          await handleCharacterBasedCommandsAutocomplete(
+            interaction,
+            focusedOption,
+            "character"
+          );
+        } else if (focusedOption.name === "updatedinfo") {
+          const selectedCategory = interaction.options.getString('category');
+      
+          if (selectedCategory === "job") {
+            const allJobs = getAllJobs();
+            const filteredJobs = allJobs
+              .filter(job => job.toLowerCase().includes(focusedOption.value.toLowerCase()))
+              .slice(0, 25)
+              .map(job => ({ name: job, value: job }));
+      
+            await interaction.respond(filteredJobs);
+          } else {
+            await interaction.respond([]);
+          }
+        }
+        break;
+      
+      case "delete":
+      case "setbirthday":
+        if (focusedOption.name === "charactername") {
+          await handleCharacterBasedCommandsAutocomplete(
+            interaction,
+            focusedOption,
+            "character"
+          );
+        }
+        break;
+      
      case "changejob":
       if (focusedOption.name === "charactername") {
        await handleCharacterBasedCommandsAutocomplete(
