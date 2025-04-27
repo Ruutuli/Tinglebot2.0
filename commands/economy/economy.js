@@ -835,6 +835,14 @@ async function handleShopBuy(interaction) {
    return interaction.editReply("❌ Character not found.");
   }
 
+  if (!character.inventorySynced) {
+    return interaction.editReply({
+      content: `❌ **${character.name}'s inventory is not set up yet. Please initialize and sync their inventory before purchasing from the shop.**`,
+      ephemeral: true,
+    });
+  }
+  
+
   const shopItem = await ShopStock.findOne({ itemName }).lean();
   if (!shopItem) {
    return interaction.editReply("❌ Item not found in the shop.");
