@@ -441,3 +441,4 @@ function logBloodMoonStatus() {
 }
 
 initializeClient();
+module.exports = { client };
