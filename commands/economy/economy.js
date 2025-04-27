@@ -334,33 +334,7 @@ module.exports = {
   }
  },
 
- async autocomplete(interaction) {
-  const focusedOption = interaction.options.getFocused(true);
-  const subcommand = interaction.options.getSubcommand();
-  switch (subcommand) {
-   case "gift":
-    await handleGiftAutocomplete(interaction, focusedOption);
-    break;
-   case "shop-buy":
-   case "shop-sell":
-    if (focusedOption.name === "itemname") {
-     await handleShopsAutocomplete(interaction, focusedOption);
-    } else if (focusedOption.name === "charactername") {
-     await handleCharacterBasedCommandsAutocomplete(
-      interaction,
-      focusedOption,
-      "shops"
-     );
-    }
-    break;
-   case "trade":
-    await handleTradeItemAutocomplete(interaction);
-    break;
-   case "transfer":
-    await handleTransferItemAutocomplete(interaction, focusedOption);
-    break;
-  }
- },
+ 
 
  buttonHandler: async (interaction) => {
   if (interaction.customId.startsWith("completeTrade-")) {
