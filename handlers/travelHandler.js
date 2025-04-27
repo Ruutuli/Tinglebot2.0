@@ -308,7 +308,8 @@ if (customId === 'recover') {
                     }
 
                     const itemEmoji = lootedItem.emoji || '';
-                    outcomeMessage = generateVictoryMessage(adjustedRandomValue, defenseSuccess, attackSuccess) + ` ${character.name} looted a ${itemEmoji} ${lootedItem.itemName}.`;
+                    const quantityText = lootedItem.quantity > 1 ? `x${lootedItem.quantity}` : '';
+                    outcomeMessage = generateVictoryMessage(adjustedRandomValue, defenseSuccess, attackSuccess) + ` ${character.name} looted ${itemEmoji} ${lootedItem.itemName}${quantityText ? ` ${quantityText}` : ''}.`;
                     decision = `Fought the monster and won! Looted ${itemEmoji} ${lootedItem.itemName}.`;
                 } else {
                     // ------------------- Handle Damage Outcome -------------------
