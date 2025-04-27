@@ -1215,13 +1215,12 @@ const createMonsterEncounterEmbed = (
   });
  }
 
- if (initialRandomValue !== null && adjustedRandomValue !== null) {
-  embed.addFields({
-    name: "__🎲 Dice Roll__",
-    value: `> \`${damageValue}/100\``,
-    inline: false,
-  });  
- }
+ embed.addFields({
+  name: "__🎲 Dice Roll__",
+  value: `> \`${damageValue}/100\``,
+  inline: false,
+});
+
 
  if (isValidImageUrl(monsterDetails.image)) {
   embed.setThumbnail(monsterDetails.image);
