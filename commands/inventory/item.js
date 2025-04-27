@@ -131,35 +131,7 @@ module.exports = {
 
         // Activate voucher and remove one from inventory.
         await updateCharacterById(character._id, { jobVoucher: true, jobVoucherJob: jobName });
-        await removeItemInventoryDatabase(character._id, 'Job Voucher', 1, inventoryCollection);
-
-        // ------------------- Log Voucher Use to Sheets -------------------
-        if (isValidGoogleSheetsUrl(character.inventory || character.inventoryLink)) {
-          const spreadsheetId = extractSpreadsheetId(character.inventory || character.inventoryLink);
-          const auth = await authorizeSheets();
-          const range = 'loggedInventory!A2:M';
-          const uniqueSyncId = uuidv4();
-          const timestamp = new Date().toISOString();
-          const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
-
-          const values = [[
-            character.name,
-            'Job Voucher',
-            '-1',
-            'Voucher',
-            'Special',
-            '',
-            `Used for ${jobName}`,
-            character.job,
-            '',
-            character.currentVillage,
-            interactionUrl,
-            timestamp,
-            uniqueSyncId
-          ]];
-
-          await appendSheetData(auth, spreadsheetId, range, values);
-        }
+        await removeItemInventoryDatabase(character._id, 'Job Voucher', 1, interaction);
 
         // ------------------- Build and Send Voucher Embed -------------------
         const currentVillage = capitalizeWords(character.currentVillage || 'Unknown');
