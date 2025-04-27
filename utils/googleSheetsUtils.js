@@ -340,6 +340,14 @@ function extractSpreadsheetId(url) {
 // ------------------- validateInventorySheet------------------- 
 async function validateInventorySheet(spreadsheetUrl) {
     const spreadsheetId = extractSpreadsheetId(spreadsheetUrl);
+  
+    if (!spreadsheetId) {
+      return {
+        success: false,
+        message: "**Error:** Invalid Google Sheets URL.\n\n**Fix:** Please double-check you pasted a full valid URL like:\n> https://docs.google.com/spreadsheets/d/your-spreadsheet-id/edit"
+      };
+    }
+  
     const auth = await authorizeSheets();
     try {
       const headerRow = await readSheetData(auth, spreadsheetId, 'loggedInventory!A1:M1');
@@ -351,7 +359,7 @@ async function validateInventorySheet(spreadsheetUrl) {
       if (!headerRow || headerRow.length === 0) {
         return {
           success: false,
-          message: "**Error:** The `loggedInventory` tab exists but there is no header data.\n\n**Fix:** Please copy the correct header row into A1:M1."
+          message: "**Error:** The `loggedInventory` tab exists but has no header data.\n\n**Fix:** Please copy the correct header row into A1:M1."
         };
       }
   
@@ -368,6 +376,14 @@ async function validateInventorySheet(spreadsheetUrl) {
       return { success: true, message: "✅ Inventory sheet is set up correctly!" };
   
     } catch (error) {
+      const errorMsg = error?.errors?.[0]?.message || error.message || '';
+  
+      if (errorMsg.includes('Requested entity was not found')) {
+        return {
+          success: false,
+          message: "**Error:** The Google Sheet was not found.\n\n**Fix:** Please double-check your URL and that the sheet is shared publicly (or with the bot)."
+        };
+      }
       if (error.message.includes('Requested entity was not found')) {
         return {
           success: false,
@@ -377,7 +393,7 @@ async function validateInventorySheet(spreadsheetUrl) {
       if (error.message.includes('Unable to parse range')) {
         return {
           success: false,
-          message: "**Error:** Cannot find the correct cells A1:M1.\n\n**Fix:** Double-check your tab name is exactly `loggedInventory` and that there is data starting at row 2."
+          message: "**Error:** Cannot find the correct cells A1:M1.\n\n**Fix:** Double-check your tab name is exactly `loggedInventory` and that there is data starting at row 1."
         };
       }
       if (error.code === 403) {
@@ -386,13 +402,13 @@ async function validateInventorySheet(spreadsheetUrl) {
           message: "**Error:** Permission denied.\n\n**Fix:** Make sure the Google Sheet is shared with editor access to:\n📧 `tinglebot@rotw-tinglebot.iam.gserviceaccount.com`"
         };
       }
+  
       return {
         success: false,
         message: `Unknown error accessing sheet: ${error.message}`
       };
     }
   }
-  
   
 // ============================================================================
 // Error Logging
