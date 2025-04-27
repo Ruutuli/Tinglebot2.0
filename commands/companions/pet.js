@@ -18,7 +18,6 @@ const {
  fetchAllItems,
  getTokenBalance,
  updateTokenBalance,
- petTypeData,
 } = require("../../database/db");
 // ------------------- Modules -------------------
 // Modules used for random item rolls, pet formatting, and retrieving pet-related data.
