@@ -584,5 +584,491 @@
       "current": 18
     },
     "progress": "\n🔴 Blood Moon Raid initiated!"
+  },
+  "B982580": {
+    "battleId": "B982580",
+    "characters": [
+      {
+        "debuff": {
+          "endDate": null,
+          "active": false
+        },
+        "jobDateChanged": null,
+        "lastGatherDate": null,
+        "lastLootDate": null,
+        "_id": "680eac4e15a01753dea9cf04",
+        "userId": "211219306137124865",
+        "name": "Marx Clone",
+        "age": 28,
+        "height": 179,
+        "maxHearts": 2200,
+        "currentHearts": 2199,
+        "maxStamina": 5,
+        "currentStamina": 5,
+        "pronouns": "he/him",
+        "race": "Sheikah",
+        "homeVillage": "vhintl",
+        "currentVillage": "vhintl",
+        "job": "Adventurer",
+        "inventory": "https://docs.google.com/spreadsheets/d/12RPk_1pFi9N2ortfNFu60DCD9O5TgufcLRonOUte0UE/edit?gid=2030861071#gid=2030861071",
+        "appLink": "https://docs.google.com/document/d/1iuDzhB6ZY7_E3GoOwRfEYBQKOHV2Ph7ZgxLuldRiGc8/edit?tab=t.0",
+        "icon": "https://storage.googleapis.com/tinglebot/67c81caa-f498-4190-9c64-350e6d39c9e3.png",
+        "blighted": true,
+        "blightStage": 5,
+        "lastRollDate": "2025-04-17T00:28:00.716Z",
+        "ko": false,
+        "jobVoucher": false,
+        "mount": false,
+        "spiritOrbs": 0,
+        "birthday": "",
+        "inventorySynced": true,
+        "lastStaminaUsage": "2025-04-18T00:46:31.420Z",
+        "attack": 3,
+        "defense": 2,
+        "vendingPoints": 0,
+        "vendorType": "",
+        "shopPouch": "",
+        "lastCollectedMonth": 0,
+        "failedStealAttempts": 0,
+        "inJail": false,
+        "jailReleaseTime": null,
+        "canBeStolenFrom": true,
+        "pets": [],
+        "__v": 0,
+        "failedFleeAttempts": 0,
+        "gearWeapon": {
+          "name": "Mighty Lynel Sword",
+          "stats": {
+            "modifierHearts": 3
+          }
+        },
+        "gearShield": {
+          "name": "Dragonbone Boko Shield",
+          "stats": {
+            "modifierHearts": 2
+          }
+        },
+        "pouchSize": 0,
+        "shopLink": "",
+        "vendingSetup": false,
+        "vendingSync": false,
+        "deathDeadline": "2025-05-01T00:00:34.552Z",
+        "shopImage": "",
+        "currentActivePet": null,
+        "jobVoucherJob": null
+      }
+    ],
+    "monster": "Blue Hinox",
+    "tier": 5,
+    "monsterHearts": {
+      "max": 10,
+      "current": 10
+    },
+    "progress": "\n🔴 Blood Moon Raid initiated!"
+  },
+  "B762257": {
+    "battleId": "B762257",
+    "characters": [
+      {
+        "debuff": {
+          "endDate": null,
+          "active": false
+        },
+        "jobDateChanged": null,
+        "lastGatherDate": null,
+        "lastLootDate": null,
+        "_id": "680eac4e15a01753dea9cf04",
+        "userId": "211219306137124865",
+        "name": "Marx Clone",
+        "age": 28,
+        "height": 179,
+        "maxHearts": 2200,
+        "currentHearts": 2199,
+        "maxStamina": 5,
+        "currentStamina": 5,
+        "pronouns": "he/him",
+        "race": "Sheikah",
+        "homeVillage": "vhintl",
+        "currentVillage": "vhintl",
+        "job": "Adventurer",
+        "inventory": "https://docs.google.com/spreadsheets/d/12RPk_1pFi9N2ortfNFu60DCD9O5TgufcLRonOUte0UE/edit?gid=2030861071#gid=2030861071",
+        "appLink": "https://docs.google.com/document/d/1iuDzhB6ZY7_E3GoOwRfEYBQKOHV2Ph7ZgxLuldRiGc8/edit?tab=t.0",
+        "icon": "https://storage.googleapis.com/tinglebot/67c81caa-f498-4190-9c64-350e6d39c9e3.png",
+        "blighted": true,
+        "blightStage": 5,
+        "lastRollDate": "2025-04-17T00:28:00.716Z",
+        "ko": false,
+        "jobVoucher": false,
+        "mount": false,
+        "spiritOrbs": 0,
+        "birthday": "",
+        "inventorySynced": true,
+        "lastStaminaUsage": "2025-04-18T00:46:31.420Z",
+        "attack": 3,
+        "defense": 2,
+        "vendingPoints": 0,
+        "vendorType": "",
+        "shopPouch": "",
+        "lastCollectedMonth": 0,
+        "failedStealAttempts": 0,
+        "inJail": false,
+        "jailReleaseTime": null,
+        "canBeStolenFrom": true,
+        "pets": [],
+        "__v": 0,
+        "failedFleeAttempts": 0,
+        "gearWeapon": {
+          "name": "Mighty Lynel Sword",
+          "stats": {
+            "modifierHearts": 3
+          }
+        },
+        "gearShield": {
+          "name": "Dragonbone Boko Shield",
+          "stats": {
+            "modifierHearts": 2
+          }
+        },
+        "pouchSize": 0,
+        "shopLink": "",
+        "vendingSetup": false,
+        "vendingSync": false,
+        "deathDeadline": "2025-05-01T00:00:34.552Z",
+        "shopImage": "",
+        "currentActivePet": null,
+        "jobVoucherJob": null
+      }
+    ],
+    "monster": "White-maned Lynel",
+    "tier": 8,
+    "monsterHearts": {
+      "max": 16,
+      "current": 16
+    },
+    "progress": "\n🔴 Blood Moon Raid initiated!"
+  },
+  "B867472": {
+    "battleId": "B867472",
+    "characters": [
+      {
+        "debuff": {
+          "endDate": null,
+          "active": false
+        },
+        "jobDateChanged": null,
+        "lastGatherDate": null,
+        "lastLootDate": null,
+        "_id": "680eac4e15a01753dea9cf04",
+        "userId": "211219306137124865",
+        "name": "Marx Clone",
+        "age": 28,
+        "height": 179,
+        "maxHearts": 2200,
+        "currentHearts": 2199,
+        "maxStamina": 5,
+        "currentStamina": 5,
+        "pronouns": "he/him",
+        "race": "Sheikah",
+        "homeVillage": "vhintl",
+        "currentVillage": "vhintl",
+        "job": "Adventurer",
+        "inventory": "https://docs.google.com/spreadsheets/d/12RPk_1pFi9N2ortfNFu60DCD9O5TgufcLRonOUte0UE/edit?gid=2030861071#gid=2030861071",
+        "appLink": "https://docs.google.com/document/d/1iuDzhB6ZY7_E3GoOwRfEYBQKOHV2Ph7ZgxLuldRiGc8/edit?tab=t.0",
+        "icon": "https://storage.googleapis.com/tinglebot/67c81caa-f498-4190-9c64-350e6d39c9e3.png",
+        "blighted": true,
+        "blightStage": 5,
+        "lastRollDate": "2025-04-17T00:28:00.716Z",
+        "ko": false,
+        "jobVoucher": false,
+        "mount": false,
+        "spiritOrbs": 0,
+        "birthday": "",
+        "inventorySynced": true,
+        "lastStaminaUsage": "2025-04-18T00:46:31.420Z",
+        "attack": 3,
+        "defense": 2,
+        "vendingPoints": 0,
+        "vendorType": "",
+        "shopPouch": "",
+        "lastCollectedMonth": 0,
+        "failedStealAttempts": 0,
+        "inJail": false,
+        "jailReleaseTime": null,
+        "canBeStolenFrom": true,
+        "pets": [],
+        "__v": 0,
+        "failedFleeAttempts": 0,
+        "gearWeapon": {
+          "name": "Mighty Lynel Sword",
+          "stats": {
+            "modifierHearts": 3
+          }
+        },
+        "gearShield": {
+          "name": "Dragonbone Boko Shield",
+          "stats": {
+            "modifierHearts": 2
+          }
+        },
+        "pouchSize": 0,
+        "shopLink": "",
+        "vendingSetup": false,
+        "vendingSync": false,
+        "deathDeadline": "2025-05-01T00:00:34.552Z",
+        "shopImage": "",
+        "currentActivePet": null,
+        "jobVoucherJob": null
+      }
+    ],
+    "monster": "Lynel",
+    "tier": 6,
+    "monsterHearts": {
+      "max": 12,
+      "current": 12
+    },
+    "progress": "\n🔴 Blood Moon Raid initiated!"
+  },
+  "B354485": {
+    "battleId": "B354485",
+    "characters": [
+      {
+        "debuff": {
+          "endDate": null,
+          "active": false
+        },
+        "jobDateChanged": null,
+        "lastGatherDate": null,
+        "lastLootDate": null,
+        "_id": "680eac4e15a01753dea9cf04",
+        "userId": "211219306137124865",
+        "name": "Marx Clone",
+        "age": 28,
+        "height": 179,
+        "maxHearts": 2200,
+        "currentHearts": 2199,
+        "maxStamina": 5,
+        "currentStamina": 5,
+        "pronouns": "he/him",
+        "race": "Sheikah",
+        "homeVillage": "vhintl",
+        "currentVillage": "vhintl",
+        "job": "Adventurer",
+        "inventory": "https://docs.google.com/spreadsheets/d/12RPk_1pFi9N2ortfNFu60DCD9O5TgufcLRonOUte0UE/edit?gid=2030861071#gid=2030861071",
+        "appLink": "https://docs.google.com/document/d/1iuDzhB6ZY7_E3GoOwRfEYBQKOHV2Ph7ZgxLuldRiGc8/edit?tab=t.0",
+        "icon": "https://storage.googleapis.com/tinglebot/67c81caa-f498-4190-9c64-350e6d39c9e3.png",
+        "blighted": true,
+        "blightStage": 5,
+        "lastRollDate": "2025-04-17T00:28:00.716Z",
+        "ko": false,
+        "jobVoucher": false,
+        "mount": false,
+        "spiritOrbs": 0,
+        "birthday": "",
+        "inventorySynced": true,
+        "lastStaminaUsage": "2025-04-18T00:46:31.420Z",
+        "attack": 3,
+        "defense": 2,
+        "vendingPoints": 0,
+        "vendorType": "",
+        "shopPouch": "",
+        "lastCollectedMonth": 0,
+        "failedStealAttempts": 0,
+        "inJail": false,
+        "jailReleaseTime": null,
+        "canBeStolenFrom": true,
+        "pets": [],
+        "__v": 0,
+        "failedFleeAttempts": 0,
+        "gearWeapon": {
+          "name": "Mighty Lynel Sword",
+          "stats": {
+            "modifierHearts": 3
+          }
+        },
+        "gearShield": {
+          "name": "Dragonbone Boko Shield",
+          "stats": {
+            "modifierHearts": 2
+          }
+        },
+        "pouchSize": 0,
+        "shopLink": "",
+        "vendingSetup": false,
+        "vendingSync": false,
+        "deathDeadline": "2025-05-01T00:00:34.552Z",
+        "shopImage": "",
+        "currentActivePet": null,
+        "jobVoucherJob": null
+      }
+    ],
+    "monster": "Blue-Maned Lynel",
+    "tier": 7,
+    "monsterHearts": {
+      "max": 14,
+      "current": 14
+    },
+    "progress": "\n🔴 Blood Moon Raid initiated!"
+  },
+  "B597011": {
+    "battleId": "B597011",
+    "characters": [
+      {
+        "debuff": {
+          "endDate": null,
+          "active": false
+        },
+        "jobDateChanged": null,
+        "lastGatherDate": null,
+        "lastLootDate": null,
+        "_id": "680eac4e15a01753dea9cf04",
+        "userId": "211219306137124865",
+        "name": "Marx Clone",
+        "age": 28,
+        "height": 179,
+        "maxHearts": 2200,
+        "currentHearts": 2198,
+        "maxStamina": 5,
+        "currentStamina": 5,
+        "pronouns": "he/him",
+        "race": "Sheikah",
+        "homeVillage": "vhintl",
+        "currentVillage": "vhintl",
+        "job": "Adventurer",
+        "inventory": "https://docs.google.com/spreadsheets/d/12RPk_1pFi9N2ortfNFu60DCD9O5TgufcLRonOUte0UE/edit?gid=2030861071#gid=2030861071",
+        "appLink": "https://docs.google.com/document/d/1iuDzhB6ZY7_E3GoOwRfEYBQKOHV2Ph7ZgxLuldRiGc8/edit?tab=t.0",
+        "icon": "https://storage.googleapis.com/tinglebot/67c81caa-f498-4190-9c64-350e6d39c9e3.png",
+        "blighted": true,
+        "blightStage": 5,
+        "lastRollDate": "2025-04-17T00:28:00.716Z",
+        "ko": false,
+        "jobVoucher": false,
+        "mount": false,
+        "spiritOrbs": 0,
+        "birthday": "",
+        "inventorySynced": true,
+        "lastStaminaUsage": "2025-04-18T00:46:31.420Z",
+        "attack": 3,
+        "defense": 2,
+        "vendingPoints": 0,
+        "vendorType": "",
+        "shopPouch": "",
+        "lastCollectedMonth": 0,
+        "failedStealAttempts": 0,
+        "inJail": false,
+        "jailReleaseTime": null,
+        "canBeStolenFrom": true,
+        "pets": [],
+        "__v": 0,
+        "failedFleeAttempts": 0,
+        "gearWeapon": {
+          "name": "Mighty Lynel Sword",
+          "stats": {
+            "modifierHearts": 3
+          }
+        },
+        "gearShield": {
+          "name": "Dragonbone Boko Shield",
+          "stats": {
+            "modifierHearts": 2
+          }
+        },
+        "pouchSize": 0,
+        "shopLink": "",
+        "vendingSetup": false,
+        "vendingSync": false,
+        "deathDeadline": "2025-05-01T00:00:34.552Z",
+        "shopImage": "",
+        "currentActivePet": null,
+        "jobVoucherJob": null
+      }
+    ],
+    "monster": "Silver Lynel",
+    "tier": 9,
+    "monsterHearts": {
+      "max": 18,
+      "current": 18
+    },
+    "progress": "\n🔴 Blood Moon Raid initiated!"
+  },
+  "B571296": {
+    "battleId": "B571296",
+    "characters": [
+      {
+        "debuff": {
+          "endDate": null,
+          "active": false
+        },
+        "jobDateChanged": null,
+        "lastGatherDate": null,
+        "lastLootDate": null,
+        "_id": "680eac4e15a01753dea9cf04",
+        "userId": "211219306137124865",
+        "name": "Marx Clone",
+        "age": 28,
+        "height": 179,
+        "maxHearts": 2200,
+        "currentHearts": 2198,
+        "maxStamina": 5,
+        "currentStamina": 5,
+        "pronouns": "he/him",
+        "race": "Sheikah",
+        "homeVillage": "vhintl",
+        "currentVillage": "vhintl",
+        "job": "Adventurer",
+        "inventory": "https://docs.google.com/spreadsheets/d/12RPk_1pFi9N2ortfNFu60DCD9O5TgufcLRonOUte0UE/edit?gid=2030861071#gid=2030861071",
+        "appLink": "https://docs.google.com/document/d/1iuDzhB6ZY7_E3GoOwRfEYBQKOHV2Ph7ZgxLuldRiGc8/edit?tab=t.0",
+        "icon": "https://storage.googleapis.com/tinglebot/67c81caa-f498-4190-9c64-350e6d39c9e3.png",
+        "blighted": true,
+        "blightStage": 5,
+        "lastRollDate": "2025-04-17T00:28:00.716Z",
+        "ko": false,
+        "jobVoucher": false,
+        "mount": false,
+        "spiritOrbs": 0,
+        "birthday": "",
+        "inventorySynced": true,
+        "lastStaminaUsage": "2025-04-18T00:46:31.420Z",
+        "attack": 3,
+        "defense": 2,
+        "vendingPoints": 0,
+        "vendorType": "",
+        "shopPouch": "",
+        "lastCollectedMonth": 0,
+        "failedStealAttempts": 0,
+        "inJail": false,
+        "jailReleaseTime": null,
+        "canBeStolenFrom": true,
+        "pets": [],
+        "__v": 0,
+        "failedFleeAttempts": 0,
+        "gearWeapon": {
+          "name": "Mighty Lynel Sword",
+          "stats": {
+            "modifierHearts": 3
+          }
+        },
+        "gearShield": {
+          "name": "Dragonbone Boko Shield",
+          "stats": {
+            "modifierHearts": 2
+          }
+        },
+        "pouchSize": 0,
+        "shopLink": "",
+        "vendingSetup": false,
+        "vendingSync": false,
+        "deathDeadline": "2025-05-01T00:00:34.552Z",
+        "shopImage": "",
+        "currentActivePet": null,
+        "jobVoucherJob": null
+      }
+    ],
+    "monster": "Black Hinox",
+    "tier": 6,
+    "monsterHearts": {
+      "max": 12,
+      "current": 12
+    },
+    "progress": "\n🔴 Blood Moon Raid initiated!"
   }
 }

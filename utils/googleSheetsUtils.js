@@ -460,21 +460,23 @@ async function safeAppendDataToSheet(spreadsheetUrl, characterInfo, range, value
       if (!validationResult.success) {
         console.error(`[googleSheetsUtils.js]: Validation failed for ${character.name}: ${validationResult.message}`);
   
-        // ✉️ DM the user about the broken link
-        if (character.userId) {
-          try {
-            const user = await client.users.fetch(character.userId);
-            if (user) {
-              await user.send(
-                `⚠️ Heads up! Your inventory sync for **${character.name}** failed.\n\n` +
-                `Your linked Google Sheet may be missing, renamed, or set up incorrectly. Please update your inventory link or re-setup your sheet when you have a chance!`
-              );
-              console.log(`[googleSheetsUtils.js]: Sent DM to user ${character.userId} about broken inventory.`);
-            }
-          } catch (dmError) {
-            console.error(`[googleSheetsUtils.js]: Failed to send DM to ${character.userId}: ${dmError.message}`);
-          }
-        } else {
+       // ✉️ DM the user about the broken link
+if (character.userId) {
+    try {
+      const { client } = require('../index.js'); // <-- RELOAD IT FRESH
+  
+      const user = await client.users.fetch(character.userId);
+      if (user) {
+        await user.send(
+          `⚠️ Heads up! Your inventory sync for **${character.name}** failed.\n\n` +
+          `Your linked Google Sheet may be missing, renamed, or set up incorrectly. Please update your inventory link or re-setup your sheet when you have a chance!`
+        );
+        console.log(`[googleSheetsUtils.js]: Sent DM to user ${character.userId} about broken inventory.`);
+      }
+    } catch (dmError) {
+      console.error(`[googleSheetsUtils.js]: Failed to send DM to ${character.userId}: ${dmError.message}`);
+    }
+  }   else {
           console.warn(`[googleSheetsUtils.js]: No userId found for character ${character.name}. Could not send DM.`);
         }
   
