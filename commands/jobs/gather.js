@@ -80,6 +80,15 @@ module.exports = {
         return;
       }
 
+      // Check if the character is KOed.
+      if (character.isKO) {
+        await interaction.editReply({
+          content: `❌ **${character.name} is currently KOed and cannot gather.**\n💤 **Let them rest and recover before gathering again.**`,
+          ephemeral: true,
+        });
+        return;
+      }
+
       // Check if the character is debuffed.
       if (character.debuff?.active) {
         const debuffEndDate = new Date(character.debuff.endDate);
@@ -90,6 +99,7 @@ module.exports = {
         });
         return;
       }
+
 
       // ------------------- Step 2: Validate Interaction Channel -------------------
       const currentVillage = capitalizeWords(character.currentVillage);
