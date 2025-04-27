@@ -755,20 +755,18 @@ if (!canSpeciesPerformPetType(normalizedSpeciesKey, petType)) {
     const targetLevel = interaction.options.getInteger("level");
 
     // only allow levels 1–3
-    if (targetLevel < 1 || targetLevel > 3) {
-     return interaction.reply(
-      "❌ **Invalid level. Please select between level 1 and 3.**"
-     );
-    }
+// enforce +1 only
+if (targetLevel !== pet.level + 1) {
+  if (pet.level === 3) {
+    return interaction.reply(
+      `❌ **Your pet is already at the maximum level (Level 3). No further upgrades are possible.**`
+    );
+  }
+  return interaction.reply(
+    `❌ **You can only upgrade from level ${pet.level} to level ${pet.level + 1}.**`
+  );
+}
 
-    // enforce +1 only
-    if (targetLevel !== pet.level + 1) {
-     return interaction.reply(
-      `❌ **You can only upgrade from level ${pet.level} to level ${
-       pet.level + 1
-      }.**`
-     );
-    }
 
     const userId = interaction.user.id;
     const balance = await getTokenBalance(userId);
