@@ -159,3 +159,31 @@
   - Option "item" has autocomplete enabled
   - Option "ingredient" has autocomplete enabled
 ✅ Loaded command: lookup from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\utility\lookup.js
+✅ Loaded command: roll from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\utility\roll.js
+✅ Loaded command: tokens from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\utility\tokens.js
+  - Option "character_name" has autocomplete enabled
+  - Option "character_name" has autocomplete enabled
+  - Option "item" has autocomplete enabled
+⚠️ Command blight has autocomplete options but no autocomplete handler!
+✅ Loaded command: blight from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\world\blight.js
+  - Option "attacker" has autocomplete enabled
+  - Option "defender" has autocomplete enabled
+  - Option "attacker" has autocomplete enabled
+⚠️ Command combat has autocomplete options but no autocomplete handler!
+✅ Loaded command: combat from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\world\combat.js
+✅ Loaded command: quest from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\world\quest.js
+  - Option "charactername" has autocomplete enabled
+⚠️ Command raid has autocomplete options but no autocomplete handler!
+✅ Loaded command: raid from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\world\raid.js
+  - Option "charactername" has autocomplete enabled
+  - Option "destination" has autocomplete enabled
+✅ Loaded command: travel from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\world\travel.js
+  - Option "charactername" has autocomplete enabled
+  - Option "itemname" has autocomplete enabled
+⚠️ Command village has autocomplete options but no autocomplete handler!
+✅ Loaded command: village from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\world\village.js
+🔄 Started refreshing 38 guild (/) commands for guild ID: 1305484048063529002
+✅ Successfully reloaded application (/) commands for guild ID: 1305484048063529002.
+🔄 Started refreshing 38 guild (/) commands for guild ID: 603960955839447050
+✅ Successfully reloaded application (/) commands for guild ID: 603960955839447050.
+✅ Successfully reloaded all guild (/) commands.
