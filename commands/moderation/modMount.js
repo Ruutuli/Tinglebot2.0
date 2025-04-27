@@ -79,7 +79,18 @@ module.exports = {
 
         // ------------------- Extract Options and Generate Encounter -------------------
         const village = interaction.options.getString('village') || getRandomVillage();
-        let species = interaction.options.getString('species') || getRandomMount(village).mount;
+        let species = interaction.options.getString('species');
+        if (!species) {
+            const mountData = getRandomMount(village);
+            if (!mountData || mountData.village.toLowerCase() !== village.toLowerCase()) {
+                return interaction.reply({
+                    content: `❌ **Failed to find a valid mount species for ${village}.** Please try again.`,
+                    ephemeral: true,
+                });
+            }
+            species = mountData.mount;
+        }
+        
         let level = interaction.options.getString('level');
 
         // ------------------- Assign Level Based on Species -------------------
