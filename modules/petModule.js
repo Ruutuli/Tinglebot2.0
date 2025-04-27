@@ -263,5 +263,6 @@ module.exports = {
   normalPets,
   specialPets,
   canSpeciesPerformPetType,
-  speciesRollPermissions
+  speciesRollPermissions,
+  petTypeData
 };
