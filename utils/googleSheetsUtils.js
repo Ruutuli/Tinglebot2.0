@@ -373,21 +373,30 @@ async function validateInventorySheet(spreadsheetUrl) {
         };
       }
   
+      // ✅ At this point headers are good
+      // ➔ Now check if at least one item exists below
+      const inventoryData = await readSheetData(auth, spreadsheetId, 'loggedInventory!A2:M100'); // Pull rows 2-100
+  
+      const hasAtLeastOneItem = inventoryData && inventoryData.some(row => {
+        const itemName = row[1]; // Column B = Item Name
+        const quantity = row[2]; // Column C = Qty
+        return itemName && quantity && Number(quantity) > 0;
+      });
+  
+      if (!hasAtLeastOneItem) {
+        return {
+          success: false,
+          message: "**Error:** Your inventory does not contain any valid items.\n\n**Fix:** Add at least one starter item with a name and quantity greater than 0."
+        };
+      }
+  
       return { success: true, message: "✅ Inventory sheet is set up correctly!" };
   
     } catch (error) {
-      const errorMsg = error?.errors?.[0]?.message || error.message || '';
-  
-      if (errorMsg.includes('Requested entity was not found')) {
-        return {
-          success: false,
-          message: "**Error:** The Google Sheet was not found.\n\n**Fix:** Please double-check your URL and that the sheet is shared publicly (or with the bot)."
-        };
-      }
       if (error.message.includes('Requested entity was not found')) {
         return {
           success: false,
-          message: "**Error:** The `loggedInventory` tab was not found.\n\n**Fix:** Make sure your tab is named exactly `loggedInventory` (case-sensitive, no extra spaces)."
+          message: "**Error:** The Google Sheet was not found.\n\n**Fix:** Please double-check your URL and that the sheet is shared publicly (or with the bot)."
         };
       }
       if (error.message.includes('Unable to parse range')) {
@@ -402,13 +411,13 @@ async function validateInventorySheet(spreadsheetUrl) {
           message: "**Error:** Permission denied.\n\n**Fix:** Make sure the Google Sheet is shared with editor access to:\n📧 `tinglebot@rotw-tinglebot.iam.gserviceaccount.com`"
         };
       }
-  
       return {
         success: false,
         message: `Unknown error accessing sheet: ${error.message}`
       };
     }
   }
+  
   
 // ============================================================================
 // Error Logging
