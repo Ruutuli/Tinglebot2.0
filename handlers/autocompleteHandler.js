@@ -2312,24 +2312,31 @@ async function handleTransferItemAutocomplete(interaction, focusedOption) {
 // - Destination Villages
 
 // ------------------- Travel Character Name Autocomplete -------------------
-async function handleTravelAutocomplete(interaction, focusedOption) {
- try {
+async function handleTravelAutocomplete(interaction) {
+  const focusedOption = interaction.options.getFocused(true);
   const userId = interaction.user.id;
 
-  const characters = await fetchCharactersByUserId(userId);
+  if (focusedOption.name === 'charactername') {
+    const characters = await fetchCharactersByUserId(userId);
+    const filtered = characters
+      .filter(char => char.name.toLowerCase().includes(focusedOption.value.toLowerCase()))
+      .map(char => ({
+        name: char.name,
+        value: char.name
+      }));
+    await interaction.respond(filtered.slice(0, 25));
+  }
 
-  const choices = characters.map((character) => ({
-   name: `${character.name} - ${capitalize(character.currentVillage)}`,
-   value: character.name,
-  }));
-
-  await respondWithFilteredChoices(interaction, focusedOption, choices);
- } catch (error) {
-  handleError(error, "autocompleteHandler.js");
-
-  console.error("[handleTravelAutocomplete]: Error:", error);
-  await safeRespondWithError(interaction);
- }
+  if (focusedOption.name === 'destination') {
+    const villages = getAllVillages(); // CORRECTED to your function
+    const filtered = villages
+      .filter(village => village.toLowerCase().includes(focusedOption.value.toLowerCase()))
+      .map(village => ({
+        name: village.charAt(0).toUpperCase() + village.slice(1),
+        value: village.toLowerCase()
+      }));
+    await interaction.respond(filtered.slice(0, 25));
+  }
 }
 
 // ------------------- Travel Destination Village Autocomplete -------------------
