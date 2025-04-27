@@ -78,7 +78,27 @@ module.exports = {
         }
 
         // ------------------- Extract Options and Generate Encounter -------------------
-        const village = interaction.options.getString('village') || getRandomVillage();
+// ------------------- Determine Village Based on Channel -------------------
+let village = interaction.options.getString('village');
+
+if (!village) {
+    const channelId = interaction.channelId;
+
+    if (channelId === process.env.RUDANIA_TOWN_HALL) {
+        village = 'rudania';
+    } else if (channelId === process.env.INARIKO_TOWN_HALL) {
+        village = 'inariko';
+    } else if (channelId === process.env.VHINTL_TOWN_HALL) {
+        village = 'vhintl';
+    } else {
+        // Fallback if not in a known Town Hall channel
+        return interaction.reply({
+            content: '❌ **You must use this command inside a Town Hall channel (Rudania, Inariko, or Vhintl).**',
+            ephemeral: true,
+        });
+    }
+}
+
         let species = interaction.options.getString('species');
         if (!species) {
             const mountData = getRandomMount(village);
