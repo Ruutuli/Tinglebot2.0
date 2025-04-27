@@ -76,6 +76,8 @@ async function initializeClient() {
     ],
   });
 
+  module.exports = { client };
+
   // Import command handlers
   const commandHandler = require("./handlers/commandHandler");
   commandHandler(client);
@@ -441,4 +443,3 @@ function logBloodMoonStatus() {
 }
 
 initializeClient();
-module.exports = { client };
