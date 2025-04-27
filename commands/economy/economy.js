@@ -495,15 +495,34 @@ for (const { quantity } of items) {
 
  try {
   const fromCharacter = await fetchCharacterByNameAndUserId(
-   fromCharacterName,
-   userId
+    fromCharacterName,
+    userId
   );
   if (!fromCharacter) {
-   await interaction.editReply(
-    `❌ Character \`${fromCharacterName}\` not found or does not belong to you.`
-   );
-   return;
+    await interaction.editReply(
+      `❌ Character \`${fromCharacterName}\` not found or does not belong to you.`
+    );
+    return;
   }
+  
+  // ------------------- NEW: Prevent gifting equipped items -------------------
+  const equippedItems = [
+    fromCharacter.gearArmor?.head?.name,
+    fromCharacter.gearArmor?.chest?.name,
+    fromCharacter.gearArmor?.legs?.name,
+    fromCharacter.gearWeapon?.name,
+    fromCharacter.gearShield?.name,
+  ].filter(Boolean); // remove undefineds
+  
+  for (const { name } of items) {
+    if (equippedItems.includes(name)) {
+      await interaction.editReply(
+        `❌ You cannot gift \`${name}\` because it is currently equipped. Please unequip it first.`
+      );
+      return;
+    }
+  }
+  
 
   const allCharacters = await fetchAllCharactersExceptUser(userId);
   const toCharacter = allCharacters.find((c) => c.name === toCharacterName);
