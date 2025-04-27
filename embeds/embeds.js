@@ -520,59 +520,76 @@ const createSetupInstructionsEmbed = async (characterName, googleSheetsUrl) => {
 };
 
 
-// ------------------- Subsection Title ------------------- 
+// ------------------- Subsection Title -------------------
 const createSyncEmbed = (characterName, googleSheetsUrl) => {
- const syncEmbed = new EmbedBuilder()
-  .setTitle(`🔄 Sync Inventory for **${characterName}**`)
-  .setDescription(
-   "Follow these steps to sync your character's inventory. Note: The sync can only be performed **once**."
-  )
-  .setColor(getRandomColor())
-  .setTimestamp()
-  .setFooter({
-   text:
-    "This process may take time, especially if your character has many items!",
-  })
-  .setImage(DEFAULT_IMAGE_URL);
+  const syncEmbed = new EmbedBuilder()
+    .setTitle(`🔄 Sync Inventory for ${characterName}`)
+    .setDescription(
+      "You're almost done! Follow these final steps to sync your inventory to the database.\n\n" +
+      "⚡ **Remember:** You can only sync once without Moderator help!"
+    )
+    .setColor(getRandomColor())
+    .setTimestamp()
+    .setFooter({
+      text: "This process may take a few minutes if you have a lot of items!",
+    })
+    .setImage(DEFAULT_IMAGE_URL);
 
- const fields = [
-  {
-   name: "📄 Step 1: Open the Google Sheet",
-   value: `Use [this link](${googleSheetsUrl}) to open your character's inventory sheet.`,
-  },
-  {
-   name: "✂️ Step 2: Copy and Paste Your Inventory Items",
-   value:
-    "Ensure each item in your inventory is listed as follows in the loggedInventory tab:\n```\nCharacter Name | Item Name | Quantity\n```",
-  },
-  {
-   name: "📝 Step 3: Example Format",
-   value:
-    "Each row should contain:\n- **Character Name**\n- **Item Name**\n- **Quantity**\nExample:\n```\nTingle | Palm Fruit | 47\n```",
-  },
-  {
-   name: "⚠️ Step 4: Important Notes",
-   value:
-    '- This sync can only be performed once. Ensure all items are listed before confirming.\n- Do not edit the "loggedInventory" sheet after syncing.',
-  },
-  {
-   name: "🔍 Step 5: Exact Formatting",
-   value:
-    "Items must be EXACTLY as they are on the website. Check [this sheet](https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?usp=sharing) for the correct format.",
-  },
-  {
-   name: "✅ Confirm Sync",
-   value: "When ready, confirm the sync by clicking **Yes**.",
-  },
- ];
+  const fields = [
+    {
+      name: "📄 Step 1: Open Your Inventory Sheet",
+      value: `Open your personal Google Sheet:\n[📄 Inventory Link](${googleSheetsUrl})\n\nMake sure your tab is named exactly \`loggedInventory\`.`,
+    },
+    {
+      name: "🧹 Step 2: Final Inventory Check",
+      value:
+        "Double-check that each item is listed properly:\n" +
+        "- Character Name\n" +
+        "- Item Name\n" +
+        "- Quantity\n\n" +
+        "✅ Only include real items your character owns.\n✅ No fake items, placeholders, or notes.",
+    },
+    {
+      name: "📝 Step 3: Example Format",
+      value:
+        "Your items should look like this in your sheet:\n" +
+        "```text\n" +
+        "Tingle | Palm Fruit | 47\n" +
+        "Tingle | Bokoblin Fang | 3\n" +
+        "```\n" +
+        "Each row = one item your character actually has.",
+    },
+    {
+      name: "⚠️ Step 4: Important Rules",
+      value:
+        "- 🛠️ Syncing can **only be performed ONCE** without Moderator help.\n" +
+        "- 🚫 After syncing, you **cannot edit your sheet** freely.\n" +
+        "- 📋 Double-check everything **before confirming**!",
+    },
+    {
+      name: "🔍 Step 5: Exact Formatting Matters",
+      value:
+        "Items must match exactly how they appear in official lists.\n" +
+        "Use [this sheet](https://docs.google.com/spreadsheets/d/1MZ1DUoqim7LAFs0qm0TTjcln7lroe3ZN0Co2pINc4TY/edit?gid=2070188402#gid=2070188402) for correct item names if you're unsure.",
+    },
+    {
+      name: "✅ Confirm the Sync",
+      value:
+        "Once ready:\n" +
+        "- Click **Yes** to sync.\n" +
+        "- Click **No** to cancel and fix your sheet first." 
+    },
+  ];
 
- fields.forEach((field) => {
-  syncEmbed.addFields({ name: field.name, value: field.value });
- });
+  fields.forEach((field) => {
+    syncEmbed.addFields({ name: field.name, value: field.value });
 
- return syncEmbed;
+  });
+
+  return syncEmbed;
 };
 
+// ------------------- Subsection Title ------------------- 
 const editSyncMessage = async (
  interaction,
  characterName,
@@ -595,6 +612,7 @@ const editSyncMessage = async (
     "\n\n⚠️ Please double-check the spelling or formatting of these items in your sheet. Please let a mod know if any lines were skipped!";
   }
 
+  // ------------------- Subsection Title ------------------- 
   const finalMessage =
    `✅ **Sync completed for ${characterName}!**\n\n` +
    `**${totalSyncedItemsCount} lines synced**\n` +
