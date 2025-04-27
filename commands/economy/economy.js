@@ -683,8 +683,8 @@ for (const { quantity } of items) {
     ],
    ];
 
-   await safeAppendDataToSheet(fromSpreadsheetId, auth.name, range, fromValues);
-   await safeAppendDataToSheet(toSpreadsheetId, auth.name, range, toValues);
+   await safeAppendDataToSheet(character.inventory, character, range, fromValues);
+   await safeAppendDataToSheet(character.inventory, character, range, toValues);
 
    const itemIcon = itemDetails?.emoji || "🎁";
    formattedItems.push({ itemName: name, quantity, itemIcon });
@@ -918,7 +918,7 @@ if (quantity <= 0) {
     "spent",
     `-${totalPrice}`,
    ];
-   await safeAppendDataToSheet(spreadsheetId, auth.name, "loggedTracker!B7:F", [tokenRow]);
+   await safeAppendDataToSheet(character.inventory, character, "loggedTracker!B7:F", [tokenRow]);
   }
 
   if (character.inventory) {
@@ -1137,7 +1137,7 @@ if (quantity <= 0) {
     "earned",
     `+${totalPrice}`,
    ];
-   await safeAppendDataToSheet(spreadsheetId, auth.name, "loggedTracker!B7:F", [tokenRow]);
+   await safeAppendDataToSheet(character.inventory, character, "loggedTracker!B7:F", [tokenRow]);
    console.log(`[shops]: Logged sale in token tracker.`);
   }
 
@@ -1437,7 +1437,7 @@ for (const { name } of items) {
       uniqueSyncId,
      ],
     ];
-    await safeAppendDataToSheet(spreadsheetId, auth.name, range, values);
+    await safeAppendDataToSheet(character.inventory, character, range, values);
    };
 
    for (let item of tradeSession.items) {
@@ -1823,8 +1823,8 @@ for (const { name } of items) {
     ],
    ];
 
-   await safeAppendDataToSheet(fromSpreadsheetId, auth.name, range, fromValues);
-   await safeAppendDataToSheet(toSpreadsheetId, auth.name, range, toValues);
+   await safeAppendDataToSheet(character.inventory, character, range, fromValues);
+   await safeAppendDataToSheet(character.inventory, character, range, toValues);
 
    const itemIcon = itemDetails?.emoji || "📦";
    formattedItems.push({ itemName: String(name), quantity, itemIcon });

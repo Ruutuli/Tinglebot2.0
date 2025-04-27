@@ -338,7 +338,7 @@ if (missingMaterials.length > 0) {
             uniqueSyncId
           ]
         ];
-        await safeAppendDataToSheet(spreadsheetId, auth.name, range, values);
+        await safeAppendDataToSheet(character.inventory, character, range, values);
         await logMaterialsToGoogleSheets(
           auth,
           spreadsheetId,
@@ -445,7 +445,7 @@ async function logMaterialsToGoogleSheets(auth, spreadsheetId, range, character,
         ];
       }
     }));
-    await safeAppendDataToSheet(spreadsheetId, auth.name, range, usedMaterialsValues);
+    await safeAppendDataToSheet(character.inventory, character, range, usedMaterialsValues);
   } catch (error) {
     handleError(error, 'crafting.js');
 

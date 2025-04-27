@@ -1583,7 +1583,7 @@ async function handleChangeJob(interaction) {
     "spent",
     `-500`,
    ];
-   await safeAppendDataToSheet(spreadsheetId, auth.name, "loggedTracker!B7:F", [tokenRow]);
+   await safeAppendDataToSheet(character.inventory, character, "loggedTracker!B7:F", [tokenRow]);
   }
 
   character.job = newJob;

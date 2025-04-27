@@ -592,7 +592,7 @@ if (!canSpeciesPerformPetType(normalizedSpeciesKey, petType)) {
        uuidv4(),
       ],
      ];
-     await safeAppendDataToSheet(spreadsheetId, auth.name, "loggedInventory!A2:M", values);
+     await safeAppendDataToSheet(character.inventory, character, "loggedInventory!A2:M", values);
     }
 
     // ------------------- Build Roll Result Embed -------------------

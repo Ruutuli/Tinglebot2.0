@@ -340,7 +340,7 @@ module.exports = {
                 lootedItem.type.join(', '),
                 interaction
               );
-              await safeAppendDataToSheet(spreadsheetId, auth.name, range, values);
+              await safeAppendDataToSheet(character.inventory, character, range, values);
               const embed = createMonsterEncounterEmbed(
                 character,
                 encounteredMonster,
@@ -429,7 +429,7 @@ module.exports = {
           formattedDateTime,
           uniqueSyncId,
         ]];
-        await safeAppendDataToSheet(spreadsheetId, auth.name, range, values);
+        await safeAppendDataToSheet(character.inventory, character, range, values);
         const embed = createGatherEmbed(character, randomItem);
         await interaction.editReply({ embeds: [embed] });
       }

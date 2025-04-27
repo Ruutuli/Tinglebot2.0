@@ -286,7 +286,7 @@ module.exports = {
           uniqueSyncId
         ]];
 
-        await safeAppendDataToSheet(spreadsheetId, auth.name, range, values);
+        await safeAppendDataToSheet(character.inventory, character, range, values);
       }
 
 

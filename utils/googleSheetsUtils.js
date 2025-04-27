@@ -9,8 +9,7 @@ const { handleError } = require('../utils/globalErrorHandler');
 const path = require('path');
 const Character = require('../models/CharacterModel');
 const { client } = require('../index.js');
-
-
+const { fetchCharacterByName } = require('../database/db')
 
 // ============================================================================
 // Third-Party Libraries
@@ -436,35 +435,47 @@ function logErrorDetails(error) {
 }
 
 // ------------------- Safely Append Data to Sheet -------------------
-async function safeAppendDataToSheet(spreadsheetUrl, characterName, range, values) {
+async function safeAppendDataToSheet(spreadsheetUrl, characterInfo, range, values) {
     try {
       if (!spreadsheetUrl || typeof spreadsheetUrl !== 'string') {
-        console.warn(`[googleSheetsUtils.js]: No spreadsheet URL provided for ${characterName}. Skipping sync.`);
+        console.warn(`[googleSheetsUtils.js]: No spreadsheet URL provided for ${characterInfo}. Skipping sync.`);
         return;
+      }
+  
+      // Determine if characterInfo is a string (name) or object (full character)
+      let character = characterInfo;
+      if (typeof characterInfo === 'string') {
+        character = await fetchCharacterByName(characterInfo);
+        if (!character) {
+          console.error(`[googleSheetsUtils.js]: Character lookup failed for name: ${characterInfo}`);
+          return;
+        }
       }
   
       const spreadsheetId = extractSpreadsheetId(spreadsheetUrl);
       const auth = await authorizeSheets();
   
       // 🛡️ Validate the inventory sheet first
-      const validationResult = await validateInventorySheet(spreadsheetUrl, characterName);
+      const validationResult = await validateInventorySheet(spreadsheetUrl, character.name);
       if (!validationResult.success) {
-        console.error(`[googleSheetsUtils.js]: Validation failed for ${characterName}: ${validationResult.message}`);
+        console.error(`[googleSheetsUtils.js]: Validation failed for ${character.name}: ${validationResult.message}`);
   
         // ✉️ DM the user about the broken link
-        const characterRecord = await Character.findOne({ name: characterName });
-        if (characterRecord && characterRecord.userId) {
+        if (character.userId) {
           try {
-            const user = await client.users.fetch(characterRecord.userId);
+            const user = await client.users.fetch(character.userId);
             if (user) {
-              await user.send(`⚠️ Heads up! Your inventory sync for **${characterName}** failed.\n\nYour linked Google Sheet may be missing, renamed, or set up incorrectly. Please update your inventory link or re-setup your sheet when you have a chance!`);
-              console.log(`[googleSheetsUtils.js]: Sent DM to user ${characterRecord.userId} about broken inventory.`);
+              await user.send(
+                `⚠️ Heads up! Your inventory sync for **${character.name}** failed.\n\n` +
+                `Your linked Google Sheet may be missing, renamed, or set up incorrectly. Please update your inventory link or re-setup your sheet when you have a chance!`
+              );
+              console.log(`[googleSheetsUtils.js]: Sent DM to user ${character.userId} about broken inventory.`);
             }
           } catch (dmError) {
-            console.error(`[googleSheetsUtils.js]: Failed to send DM to ${characterRecord.userId}: ${dmError.message}`);
+            console.error(`[googleSheetsUtils.js]: Failed to send DM to ${character.userId}: ${dmError.message}`);
           }
         } else {
-          console.warn(`[googleSheetsUtils.js]: No userId found for character ${characterName}. Could not send DM.`);
+          console.warn(`[googleSheetsUtils.js]: No userId found for character ${character.name}. Could not send DM.`);
         }
   
         return; // Stop trying to sync
@@ -474,11 +485,10 @@ async function safeAppendDataToSheet(spreadsheetUrl, characterName, range, value
       await appendSheetData(auth, spreadsheetId, range, values);
   
     } catch (error) {
-      console.error(`[googleSheetsUtils.js]: Failed to safely append data for ${characterName}: ${error.message}`);
+      console.error(`[googleSheetsUtils.js]: Failed to safely append data for ${characterInfo}: ${error.message}`);
     }
   }
-
-
+  
 // ============================================================================
 // Exported Functions
 // ------------------- Export functions grouped by functionality -------------------

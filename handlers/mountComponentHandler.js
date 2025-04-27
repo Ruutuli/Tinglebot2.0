@@ -727,7 +727,7 @@ async function handleUseItemInteraction(interaction) {
         uniqueSyncId
       ]];
   
-      await safeAppendDataToSheet(spreadsheetId, auth.name, range, values);
+      await safeAppendDataToSheet(character.inventory, character, range, values);
     }
   
     encounter.distractionResult = success;
@@ -896,7 +896,7 @@ if (character.currentVillage?.toLowerCase() !== encounter.village?.toLowerCase()
           'spent',
           `-${cost}`
         ]];
-        await safeAppendDataToSheet(spreadsheetId, auth.name, range, values);
+        await safeAppendDataToSheet(character.inventory, character, range, values);
         console.log(`[mountComponentHandler]: Logged token usage to Google Sheets for user ${interaction.user.id}.`);
       }
   
@@ -1153,7 +1153,7 @@ async function handleTraitSelection(interaction) {
         const auth = await authorizeSheets();
         const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
         const values = [[`${mountType} Customization - ${traitKey}`, interactionUrl, 'Other', 'spent', `-${cost}`]];
-        await safeAppendDataToSheet(spreadsheetId, auth.name, 'loggedTracker!B7:F', values);
+        await safeAppendDataToSheet(character.inventory, character, 'loggedTracker!B7:F', values);
         console.log(`[mountComponentHandler]: Logged token usage to Google Sheets for user ${interaction.user.id}.`);
       }
     }
@@ -1378,7 +1378,7 @@ async function handleMountNameSubmission(interaction) {
         `- ${tokenCost}`
       ]];
   
-      await safeAppendDataToSheet(spreadsheetId, auth.name, range, values);
+      await safeAppendDataToSheet(character.inventory, character, range, values);
       sheetLogged = true;
       console.info(`[mountComponentHandler]: Token deduction logged to Google Sheets successfully.`);
     }

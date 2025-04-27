@@ -1164,7 +1164,7 @@ async function syncTokenTracker(userId) {
   await user.save();
 
   const syncRow = ["Initial Sync", "You can delete this!", "", "sync", "0"];
-  await safeAppendDataToSheet(spreadsheetId, auth.name, "loggedTracker!B:F", [syncRow]);
+  await safeAppendDataToSheet(character.inventory, character, "loggedTracker!B:F", [syncRow]);
   return user;
  } catch (error) {
   handleError(error, "tokenService.js");
@@ -1231,7 +1231,7 @@ async function appendSpentTokens(userId, purchaseName, amount, link = "") {
   const spreadsheetId = extractSpreadsheetId(tokenTrackerLink);
   const auth = await authorizeSheets();
   const newRow = [purchaseName, link, "", "spent", `-${amount}`];
-  await safeAppendDataToSheet(spreadsheetId, auth.name, "loggedTracker!B7:F", [newRow]);
+  await safeAppendDataToSheet(character.inventory, character, "loggedTracker!B7:F", [newRow]);
  } catch (error) {
   handleError(error, "tokenService.js");
   console.error(
@@ -1326,7 +1326,7 @@ async function updateUserTokens(discordId, amount, activity, link = "") {
   const range = "loggedTracker!B:F";
   const dateTime = new Date().toISOString();
   const values = [["Update", activity, link, amount.toString(), dateTime]];
-  await safeAppendDataToSheet(spreadsheetId, auth.name, range, values);
+  await safeAppendDataToSheet(character.inventory, character, range, values);
  }
 
  return user;
