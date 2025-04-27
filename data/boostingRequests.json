@@ -58,5 +58,25 @@
     "requesterUserId": "211219306137124865",
     "village": "Rudania",
     "timestamp": 1744567092383
+  },
+  "65D3F3E2": {
+    "boostRequestId": "65D3F3E2",
+    "targetCharacter": "Sable",
+    "boostingCharacter": "Minoru",
+    "category": "Gathering",
+    "status": "fulfilled",
+    "requesterUserId": "308795936530759680",
+    "village": "inariko",
+    "timestamp": 1745782145502
+  },
+  "51AA2699": {
+    "boostRequestId": "51AA2699",
+    "targetCharacter": "Sable",
+    "boostingCharacter": "Minoru",
+    "category": "Exploring",
+    "status": "pending",
+    "requesterUserId": "308795936530759680",
+    "village": "inariko",
+    "timestamp": 1745782296689
   }
 }

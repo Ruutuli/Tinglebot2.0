@@ -6,7 +6,7 @@ const { handleError } = require('../../utils/globalErrorHandler');
 const { fetchCharacterByName, getCharacterInventoryCollection, fetchItemRarityByName } = require('../../database/db');
 const { removeItemInventoryDatabase, addItemInventoryDatabase } = require('../../utils/inventoryUtils');
 const { getNPCItems, NPCs } = require('../../modules/stealingNPCSModule');
-const { authorizeSheets, appendSheetData, isValidGoogleSheetsUrl, extractSpreadsheetId } = require('../../utils/googleSheetsUtils');
+const { authorizeSheets, appendSheetData, isValidGoogleSheetsUrl, extractSpreadsheetId, safeAppendDataToSheet, } = require('../../utils/googleSheetsUtils');
 const { v4: uuidv4 } = require('uuid');
 const ItemModel = require('../../models/ItemModel');
 
@@ -204,7 +204,7 @@ module.exports = {
                             formattedDateTime,
                             uniqueSyncId
                         ]];                        
-                        await appendSheetData(auth, thiefSpreadsheetId, range, logValues);
+                        await safeAppendDataToSheet(thiefSpreadsheetId, auth, range, logValues);
                     }
 
                     // ------------------- Send NPC Success Embed -------------------
@@ -412,8 +412,8 @@ async function handleSuccessfulSteal(interaction, thiefCharacter, targetCharacte
             formattedDateTime,
             uniqueSyncId
         ]];
-        await appendSheetData(auth, thiefSpreadsheetId, range, thiefValues);
-        await appendSheetData(auth, targetSpreadsheetId, range, targetValues);
+        await safeAppendDataToSheet(thiefSpreadsheetId, auth, range, thiefValues);
+        await safeAppendDataToSheet(targetSpreadsheetId, auth, range, targetValues);
     }
 
     // ------------------- Create Enhanced Success Embed for Player -------------------

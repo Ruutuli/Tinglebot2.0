@@ -3,7 +3,7 @@ const { SlashCommandBuilder } = require('discord.js');
 const { handleError } = require('../../utils/globalErrorHandler');
 const { fetchCharacterByNameAndUserId } = require('../../database/db');
 const Mount = require('../../models/MountModel');
-const { appendSheetData, authorizeSheets, extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../../utils/googleSheetsUtils');
+const { appendSheetData, authorizeSheets, extractSpreadsheetId, isValidGoogleSheetsUrl, safeAppendDataToSheet, } = require('../../utils/googleSheetsUtils');
 const User = require('../../models/UserModel');
 const { calculateMountPrice } = require('../../modules/mountModule');
 
@@ -184,7 +184,7 @@ async function handleStoreMount(interaction, userId, characterName, mountName) {
         'spent',                           // TYPE
         '-100'                             // TOKEN AMOUNT
       ]];
-      await appendSheetData(auth, spreadsheetId, 'loggedTracker!A:F', values);
+      await safeAppendDataToSheet(spreadsheetId, auth, 'loggedTracker!A:F', values);
     }
 
     const mountsInStable = await Mount.find({ owner: character.name, isStored: true });
@@ -314,7 +314,7 @@ async function handleSellMount(interaction, userId, characterName, mountName) {
           'sale',                          // TYPE
           `${sellPrice}`                   // PRICE
         ]];
-        await appendSheetData(auth, spreadsheetId, 'loggedTracker!A:F', values);
+        await safeAppendDataToSheet(spreadsheetId, auth, 'loggedTracker!A:F', values);
       }
   
       await interaction.reply({
@@ -360,7 +360,7 @@ async function handleRetrieveMount(interaction, userId, characterName, mountName
         'spent',                           // TYPE
         '-100'                             // TOKEN AMOUNT
       ]];
-      await appendSheetData(auth, spreadsheetId, 'loggedTracker!A:F', values);
+      await safeAppendDataToSheet(spreadsheetId, auth, 'loggedTracker!A:F', values);
     }
 
     const mount = await Mount.findOne({ owner: character.name, name: mountName, isStored: true });
@@ -436,7 +436,7 @@ async function handleBuyCharacter(interaction, userId, characterName, mountName)
           'spent',                         // TYPE
           `-${stableEntry.price}`          // TOKEN AMOUNT
         ]];
-        await appendSheetData(auth, spreadsheetId, 'loggedTracker!A:F', values);
+        await safeAppendDataToSheet(spreadsheetId, auth, 'loggedTracker!A:F', values);
       }
   
       // Remove mount from the database

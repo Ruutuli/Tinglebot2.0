@@ -4,7 +4,7 @@
 const { handleError } = require('../utils/globalErrorHandler');
 const { removeItemInventoryDatabase } = require('../utils/inventoryUtils');
 const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../utils/validation');
-const { authorizeSheets, appendSheetData } = require('../utils/googleSheetsUtils');
+const { authorizeSheets, appendSheetData, safeAppendDataToSheet } = require('../utils/googleSheetsUtils');
 const { getCharacterInventoryCollection, updateCharacterById, fetchItemByName } = require('../database/db'); 
 const { v4: uuidv4 } = require('uuid');
 
@@ -71,7 +71,7 @@ async function activateJobVoucher(character, jobName, item, quantity = 1, intera
                 ]
             ];
 
-            await appendSheetData(auth, spreadsheetId, range, values);
+            await safeAppendDataToSheet(spreadsheetId, auth, range, values);
         }
 
         return {

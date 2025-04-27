@@ -9,7 +9,7 @@ const { fetchCharacterByNameAndUserId, updateCharacterById, getCharacterInventor
 
 // ------------------- Utility Functions -------------------
 const { addItemInventoryDatabase, processMaterials, removeItemInventoryDatabase } = require('../../utils/inventoryUtils');
-const { appendSheetData, authorizeSheets, extractSpreadsheetId } = require('../../utils/googleSheetsUtils');
+const { appendSheetData, authorizeSheets, extractSpreadsheetId, safeAppendDataToSheet, } = require('../../utils/googleSheetsUtils');
 const { retrieveSubmissionFromStorage, saveSubmissionToStorage, deleteSubmissionFromStorage } = require('../../utils/storage');
 const { uploadSubmissionImage } = require('../../utils/uploadUtils');
 const { generateUniqueId } = require('../../utils/uniqueIdUtils');
@@ -374,7 +374,7 @@ const values = [
   ]
 ];
 
-    await appendSheetData(auth, spreadsheetId, range, values);
+    await safeAppendDataToSheet(spreadsheetId, auth, range, values);
 
 
 
@@ -1087,7 +1087,7 @@ async function logMaterialsToGoogleSheets(auth, spreadsheetId, range, character,
             }
         }));
 
-        await appendSheetData(auth, spreadsheetId, range, usedMaterialsValues);
+        await safeAppendDataToSheet(spreadsheetId, auth, range, usedMaterialsValues);
     } catch (error) {
     handleError(error, 'customWeapon.js');
 

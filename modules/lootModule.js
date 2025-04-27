@@ -8,7 +8,7 @@ const { createWeightedItemList, calculateFinalValue } = require('../modules/rngM
 const { fetchItemsByMonster, fetchCharacterByName } = require('../database/db');
 const { addItemInventoryDatabase } = require('../utils/inventoryUtils');
 const { extractSpreadsheetId } = require('../utils/validation');
-const { authorizeSheets, appendSheetData } = require('../utils/googleSheetsUtils');
+const { authorizeSheets, appendSheetData,  safeAppendDataToSheet, } = require('../utils/googleSheetsUtils');
 
 // Additional utilities and services
 const { v4: uuidv4 } = require('uuid');
@@ -72,7 +72,7 @@ async function processLoot(battleProgress, currentMonster, interaction, battleId
           character.currentVillage, interactionUrl, formattedDateTime, uuidv4()
         ]];
 
-        await appendSheetData(auth, spreadsheetId, range, values);  // Append data to the Google Sheet
+        await safeAppendDataToSheet(spreadsheetId, auth, range, values);  // Append data to the Google Sheet
 
         // Create a link to the character's inventory for the loot message
         const inventoryLinkFormatted = `[${character.name}](<${inventoryLink}>)`;

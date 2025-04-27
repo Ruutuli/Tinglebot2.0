@@ -25,6 +25,7 @@ const {
  appendSheetData,
  isValidGoogleSheetsUrl,
  extractSpreadsheetId,
+ safeAppendDataToSheet,
 } = require("../../utils/googleSheetsUtils.js");
 const ItemModel = require("../../models/ItemModel.js");
 const ShopStock = require("../../models/VillageShopsModel");
@@ -682,8 +683,8 @@ for (const { quantity } of items) {
     ],
    ];
 
-   await appendSheetData(auth, fromSpreadsheetId, range, fromValues);
-   await appendSheetData(auth, toSpreadsheetId, range, toValues);
+   await safeAppendDataToSheet(fromSpreadsheetId, auth, range, fromValues);
+   await safeAppendDataToSheet(toSpreadsheetId, auth, range, toValues);
 
    const itemIcon = itemDetails?.emoji || "🎁";
    formattedItems.push({ itemName: name, quantity, itemIcon });
@@ -917,7 +918,7 @@ if (quantity <= 0) {
     "spent",
     `-${totalPrice}`,
    ];
-   await appendSheetData(auth, spreadsheetId, "loggedTracker!B7:F", [tokenRow]);
+   await safeAppendDataToSheet(spreadsheetId, auth, "loggedTracker!B7:F", [tokenRow]);
   }
 
   if (character.inventory) {
@@ -1136,7 +1137,7 @@ if (quantity <= 0) {
     "earned",
     `+${totalPrice}`,
    ];
-   await appendSheetData(auth, spreadsheetId, "loggedTracker!B7:F", [tokenRow]);
+   await safeAppendDataToSheet(spreadsheetId, auth, "loggedTracker!B7:F", [tokenRow]);
    console.log(`[shops]: Logged sale in token tracker.`);
   }
 
@@ -1436,7 +1437,7 @@ for (const { name } of items) {
       uniqueSyncId,
      ],
     ];
-    await appendSheetData(auth, spreadsheetId, range, values);
+    await safeAppendDataToSheet(spreadsheetId, auth, range, values);
    };
 
    for (let item of tradeSession.items) {
@@ -1822,8 +1823,8 @@ for (const { name } of items) {
     ],
    ];
 
-   await appendSheetData(auth, fromSpreadsheetId, range, fromValues);
-   await appendSheetData(auth, toSpreadsheetId, range, toValues);
+   await safeAppendDataToSheet(fromSpreadsheetId, auth, range, fromValues);
+   await safeAppendDataToSheet(toSpreadsheetId, auth, range, toValues);
 
    const itemIcon = itemDetails?.emoji || "📦";
    formattedItems.push({ itemName: String(name), quantity, itemIcon });

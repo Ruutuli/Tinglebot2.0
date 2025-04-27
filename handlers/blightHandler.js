@@ -43,7 +43,8 @@ const { removeItemInventoryDatabase } = require('../utils/inventoryUtils');
 const {
   appendSheetData,
   authorizeSheets,
-  extractSpreadsheetId
+  extractSpreadsheetId,
+  safeAppendDataToSheet,
 } = require('../utils/googleSheetsUtils');
 const {
   deleteSubmissionFromStorage,
@@ -312,7 +313,7 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
             `-${currentTokenBalance}`
           ]
         ];
-        await appendSheetData(auth, spreadsheetId, 'loggedTracker!B7:F', tokenRow);
+        await safeAppendDataToSheet(spreadsheetId, auth, 'loggedTracker!B7:F', tokenRow);
       } catch (sheetError) {
         handleError(sheetError, 'blightHandler.js');
         console.error('[blightHandler]: Error logging token forfeiture', sheetError);
@@ -424,7 +425,7 @@ You have forfeited **${currentTokenBalance} tokens** in exchange for healing **$
             formattedDateTime,
             uniqueSyncId
           ]];
-          await appendSheetData(auth, spreadsheetId, 'loggedInventory!A2:M', values);
+          await safeAppendDataToSheet(spreadsheetId, auth, 'loggedInventory!A2:M', values);
         }
       } catch (invSheetError) {
         handleError(invSheetError, 'blightHandler.js');

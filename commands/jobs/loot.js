@@ -19,6 +19,7 @@ const { handleError } = require("../../utils/globalErrorHandler.js");
 const {
  authorizeSheets,
  appendSheetData,
+ safeAppendDataToSheet,
 } = require("../../utils/googleSheetsUtils.js");
 const {
  extractSpreadsheetId,
@@ -649,7 +650,7 @@ async function processLootingLogic(
 
    // —— Wrap the Sheets append in its own try/catch ——
    try {
-    await appendSheetData(auth, spreadsheetId, range, values);
+    await safeAppendDataToSheet(spreadsheetId, auth, range, values);
    } catch (sheetError) {
     console.error(`[LOOT] Google Sheets append error: ${sheetError.message}`);
     await interaction.editReply({

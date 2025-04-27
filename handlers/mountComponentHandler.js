@@ -64,7 +64,7 @@ const { removeItemInventoryDatabase } = require('../utils/inventoryUtils');
 
 // ------------------- Google Sheets API -------------------
 // Specific setup for Google Sheets API integration.
-const { appendSheetData, authorizeSheets, extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../utils/googleSheetsUtils');
+const { appendSheetData, authorizeSheets, extractSpreadsheetId, isValidGoogleSheetsUrl, safeAppendDataToSheet, } = require('../utils/googleSheetsUtils');
 
 
 // ------------------- Database Models -------------------
@@ -727,7 +727,7 @@ async function handleUseItemInteraction(interaction) {
         uniqueSyncId
       ]];
   
-      await appendSheetData(auth, spreadsheetId, range, values);
+      await safeAppendDataToSheet(spreadsheetId, auth, range, values);
     }
   
     encounter.distractionResult = success;
@@ -896,7 +896,7 @@ if (character.currentVillage?.toLowerCase() !== encounter.village?.toLowerCase()
           'spent',
           `-${cost}`
         ]];
-        await appendSheetData(auth, spreadsheetId, range, values);
+        await safeAppendDataToSheet(spreadsheetId, auth, range, values);
         console.log(`[mountComponentHandler]: Logged token usage to Google Sheets for user ${interaction.user.id}.`);
       }
   
@@ -1153,7 +1153,7 @@ async function handleTraitSelection(interaction) {
         const auth = await authorizeSheets();
         const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
         const values = [[`${mountType} Customization - ${traitKey}`, interactionUrl, 'Other', 'spent', `-${cost}`]];
-        await appendSheetData(auth, spreadsheetId, 'loggedTracker!B7:F', values);
+        await safeAppendDataToSheet(spreadsheetId, auth, 'loggedTracker!B7:F', values);
         console.log(`[mountComponentHandler]: Logged token usage to Google Sheets for user ${interaction.user.id}.`);
       }
     }
@@ -1378,7 +1378,7 @@ async function handleMountNameSubmission(interaction) {
         `- ${tokenCost}`
       ]];
   
-      await appendSheetData(auth, spreadsheetId, range, values);
+      await safeAppendDataToSheet(spreadsheetId, auth, range, values);
       sheetLogged = true;
       console.info(`[mountComponentHandler]: Token deduction logged to Google Sheets successfully.`);
     }

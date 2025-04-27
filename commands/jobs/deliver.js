@@ -18,7 +18,7 @@ const { deleteSubmissionFromStorage, retrieveSubmissionFromStorage, saveSubmissi
 const ItemModel = require('../../models/ItemModel');
 
 // ------------------- Google Sheets API -------------------
-const { appendSheetData, authorizeSheets, extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../../utils/googleSheetsUtils');
+const { appendSheetData, authorizeSheets, extractSpreadsheetId, isValidGoogleSheetsUrl,safeAppendDataToSheet } = require('../../utils/googleSheetsUtils');
 
 // ------------------- Temporary In-Memory Storage -------------------
 const deliveryTasks = {};
@@ -656,7 +656,7 @@ if (!isValidGoogleSheetsUrl(shopLink)) {
     'No',                                         // tradesOpen (default for delivery)
     currentMonthYear,                             // Month/Year
   ]];
-  await appendSheetData(auth, sheetId, range, values);
+  await safeAppendDataToSheet(sheetId, auth, range, values);
 }
 
     } else {
@@ -720,7 +720,7 @@ if (!isValidGoogleSheetsUrl(shopLink)) {
           uniqueSyncId,
         ]];
         try {
-          await appendSheetData(auth, senderSheetId, range, senderLog);
+          await safeAppendDataToSheet(senderSheetId, auth, range, senderLog);
         } catch (err) {
     handleError(err, 'deliver.js');
 
@@ -731,7 +731,7 @@ if (!isValidGoogleSheetsUrl(shopLink)) {
           });
         }
         try {
-          await appendSheetData(auth, recipientSheetId, range, recipientLog);
+          await safeAppendDataToSheet(recipientSheetId, auth, range, recipientLog);
         } catch (err) {
     handleError(err, 'deliver.js');
 
@@ -815,7 +815,7 @@ try {
         'earned',
         '+100',
       ];
-      await appendSheetData(auth, tokenSpreadsheetId, tokenRange, [tokenRow]);
+      await safeAppendDataToSheet(tokenSpreadsheetId, auth, tokenRange, [tokenRow]);
     }
   }
 } catch (err) {

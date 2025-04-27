@@ -22,7 +22,7 @@ const { capitalizeWords,formatDateTime   } = require('../../modules/formattingMo
 
 // ------------------- Utility Functions -------------------
 const { addItemInventoryDatabase, processMaterials } = require('../../utils/inventoryUtils.js');
-const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../../utils/validation.js');
+const { extractSpreadsheetId, isValidGoogleSheetsUrl,safeAppendDataToSheet  } = require('../../utils/validation.js');
 
 // ------------------- Google Sheets API -------------------
 const { appendSheetData, authorizeSheets } = require('../../utils/googleSheetsUtils.js');
@@ -338,7 +338,7 @@ if (missingMaterials.length > 0) {
             uniqueSyncId
           ]
         ];
-        await appendSheetData(auth, spreadsheetId, range, values);
+        await safeAppendDataToSheet(spreadsheetId, auth, range, values);
         await logMaterialsToGoogleSheets(
           auth,
           spreadsheetId,
@@ -445,7 +445,7 @@ async function logMaterialsToGoogleSheets(auth, spreadsheetId, range, character,
         ];
       }
     }));
-    await appendSheetData(auth, spreadsheetId, range, usedMaterialsValues);
+    await safeAppendDataToSheet(spreadsheetId, auth, range, usedMaterialsValues);
   } catch (error) {
     handleError(error, 'crafting.js');
 

@@ -40,6 +40,7 @@ const {
  appendSheetData,
  extractSpreadsheetId,
  isValidGoogleSheetsUrl,
+ safeAppendDataToSheet,
 } = require("../../utils/googleSheetsUtils");
 const { uploadPetImage } = require("../../utils/uploadUtils");
 
@@ -591,7 +592,7 @@ if (!canSpeciesPerformPetType(normalizedSpeciesKey, petType)) {
        uuidv4(),
       ],
      ];
-     await appendSheetData(auth, spreadsheetId, "loggedInventory!A2:M", values);
+     await safeAppendDataToSheet(spreadsheetId, auth, "loggedInventory!A2:M", values);
     }
 
     // ------------------- Build Roll Result Embed -------------------
