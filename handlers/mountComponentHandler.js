@@ -854,6 +854,20 @@ async function handleTraitPaymentInteraction(interaction) {
         });
         return;
       }
+
+      // ------------------- NEW: Validate Character Village Match -------------------
+if (character.currentVillage?.toLowerCase() !== encounter.village?.toLowerCase()) {
+  await interaction.editReply({
+    embeds: [{
+      title: '❌ Wrong Village',
+      description: `**${character.name}** is in **${character.currentVillage || 'an unknown location'}**, but this mount encounter is happening in **${encounter.village}**.\n\nYou must be in the correct village to continue.`,
+      color: 0xFF0000,
+    }],
+    ephemeral: true,
+  });
+  return;
+}
+
   
       if (character.tokens < cost) {
         await interaction.editReply({
