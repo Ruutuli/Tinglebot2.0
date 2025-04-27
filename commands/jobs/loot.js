@@ -650,7 +650,7 @@ async function processLootingLogic(
 
    // —— Wrap the Sheets append in its own try/catch ——
    try {
-    await safeAppendDataToSheet(spreadsheetId, auth.name, range, values);
+    await safeAppendDataToSheet(character.inventory, character, range, values);
    } catch (sheetError) {
     console.error(`[LOOT] Google Sheets append error: ${sheetError.message}`);
     await interaction.editReply({

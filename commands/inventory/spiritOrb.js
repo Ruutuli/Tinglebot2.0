@@ -221,7 +221,7 @@ if (!inventoryLink || !isValidGoogleSheetsUrl(inventoryLink)) {
       uniqueSyncId                             // Unique ID
     ];
 
-    await safeAppendDataToSheet(spreadsheetId, auth.name, range, [sheetRow]);
+    await safeAppendDataToSheet(character.inventory, character, range, [sheetRow]);
   } catch (err) {
     handleError(err, 'spiritOrb.js');
 

@@ -165,7 +165,7 @@ if (customId === 'recover') {
                         uniqueSyncId
                     ]];
 
-                    await safeAppendDataToSheet(spreadsheetId, auth.name, range, values);
+                    await safeAppendDataToSheet(character.inventory, character, range, values);
                 }
 
                 // Deduct stamina if the character does not have the DELIVERING perk.
@@ -304,7 +304,7 @@ if (customId === 'recover') {
                             uniqueSyncId
                         ]];
 
-                        await safeAppendDataToSheet(spreadsheetId, auth.name, range, values);
+                        await safeAppendDataToSheet(character.inventory, character, range, values);
                     }
 
                     const itemEmoji = lootedItem.emoji || '';

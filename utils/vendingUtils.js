@@ -52,7 +52,7 @@ async function syncVendingInventory(spreadsheetId) {
 
         // Write confirmation to the vendingShop sheet
         const confirmationMessage = [['VENDING INVENTORY SYNCED']];
-        await safeAppendDataToSheet(spreadsheetId, auth.name, 'vendingShop!I1:I1', confirmationMessage);
+        await safeAppendDataToSheet(character.inventory, character, 'vendingShop!I1:I1', confirmationMessage);
 
         console.log('✅ Sync confirmation written to Google Sheets.');
     } catch (error) {

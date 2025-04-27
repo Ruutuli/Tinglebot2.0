@@ -71,7 +71,7 @@ async function activateJobVoucher(character, jobName, item, quantity = 1, intera
                 ]
             ];
 
-            await safeAppendDataToSheet(spreadsheetId, auth.name, range, values);
+            await safeAppendDataToSheet(character.inventory, character, range, values);
         }
 
         return {
