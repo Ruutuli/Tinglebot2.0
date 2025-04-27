@@ -65,17 +65,19 @@ async function retryWithBackoff(fn) {
     const retries = 3;
     const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
     for (let i = 0; i < retries; i++) {
-        try {
-            return await fn();
-        } catch (error) {
-    handleError(error, 'googleSheetsUtils.js');
-
-            if (i === retries - 1) throw error;
-            await delay(500 * Math.pow(2, i)); // Exponential backoff delay
+      try {
+        return await fn();
+      } catch (error) {
+        if (i === retries - 1) {
+          // Only log AFTER all retries fail
+          handleError(error, 'googleSheetsUtils.js');
+          throw error;
         }
+        await delay(500 * Math.pow(2, i)); // Exponential backoff delay
+      }
     }
-}
-
+  }
+  
 // ============================================================================
 // Reading Functions
 // ------------------- Fetch Data from Google Sheets with Sanitization -------------------
@@ -344,27 +346,50 @@ async function validateInventorySheet(spreadsheetUrl) {
       ];
   
       if (!headerRow || headerRow.length === 0) {
-        return { success: false, message: 'No data found. Is the tab named correctly?' };
+        return {
+          success: false,
+          message: "**Error:** The `loggedInventory` tab exists but there is no header data.\n\n**Fix:** Please copy the correct header row into A1:M1."
+        };
       }
   
       const headers = headerRow[0];
       const allHeadersMatch = expectedHeaders.every((header, index) => headers[index] === header);
   
       if (!allHeadersMatch) {
-        return { success: false, message: 'Headers do not match expected format.' };
+        return {
+          success: false,
+          message: "**Error:** The headers do not match the required format.\n\n**Fix:** Ensure A1:M1 exactly reads:\n```Character Name, Item Name, Qty of Item, Category, Type, Subtype, Obtain, Job, Perk, Location, Link, Date/Time, Confirmed Sync```"
+        };
       }
   
-      return { success: true, message: 'Inventory sheet is set up correctly!' };
+      return { success: true, message: "✅ Inventory sheet is set up correctly!" };
+  
     } catch (error) {
       if (error.message.includes('Requested entity was not found')) {
-        return { success: false, message: 'Tab "loggedInventory" was not found. Please rename it correctly.' };
+        return {
+          success: false,
+          message: "**Error:** The `loggedInventory` tab was not found.\n\n**Fix:** Make sure your tab is named exactly `loggedInventory` (case-sensitive, no extra spaces)."
+        };
+      }
+      if (error.message.includes('Unable to parse range')) {
+        return {
+          success: false,
+          message: "**Error:** Cannot find the correct cells A1:M1.\n\n**Fix:** Double-check your tab name is exactly `loggedInventory` and that there is data starting at row 1."
+        };
       }
       if (error.code === 403) {
-        return { success: false, message: 'Permission denied. Make sure the sheet is shared with the bot email as an Editor.' };
+        return {
+          success: false,
+          message: "**Error:** Permission denied.\n\n**Fix:** Make sure the Google Sheet is shared with editor access to:\n📧 `tinglebot@rotw-tinglebot.iam.gserviceaccount.com`"
+        };
       }
-      return { success: false, message: 'Unknown error accessing sheet: ' + error.message };
+      return {
+        success: false,
+        message: `Unknown error accessing sheet: ${error.message}`
+      };
     }
   }
+  
   
 // ============================================================================
 // Error Logging
