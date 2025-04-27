@@ -378,9 +378,10 @@ if (!canSpeciesPerformPetType(normalizedSpeciesKey, petType)) {
       level: 0,
       rollsRemaining: 0,
       imageUrl: petImageUrl || "",
-      rollCombination: selectedPetTypeInfo.rollCombination,
-      tableDescription: selectedPetTypeInfo.description,
+      rollCombination: selectedPetTypeData.rollCombination,
+      tableDescription: selectedPetTypeData.description,
     });
+    
 
     await Character.findByIdAndUpdate(character._id, { currentActivePet: newPet._id });
 
