@@ -27,7 +27,7 @@ const {
  extractSpreadsheetId,
 } = require("../../utils/googleSheetsUtils.js");
 const ItemModel = require("../../models/ItemModel.js");
-const ShopStock = require("../../models/ShopsModel");
+const ShopStock = require("../../models/VillageShopsModel");
 const User = require("../../models/UserModel");
 const {
  createGiftEmbed,

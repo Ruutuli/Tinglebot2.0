@@ -45,7 +45,7 @@ const Item = require("../models/ItemModel");
 const Mount = require("../models/MountModel");
 const Party = require("../models/PartyModel");
 const Pet = require("../models/PetModel");
-const ShopStock = require("../models/ShopsModel");
+const ShopStock = require("../models/VillageShopsModel");
 const { Village } = require("../models/VillageModel");
 
 // ============================================================================
