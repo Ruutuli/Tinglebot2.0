@@ -183,6 +183,46 @@ async function handleAutocomplete(interaction) {
     }
    }
 
+  // ------------------- ECONOMY Commands -------------------
+else if (commandName === "economy") {
+  const subcommand = interaction.options.getSubcommand();
+  const focusedOption = interaction.options.getFocused(true);
+
+  if (subcommand === "gift") {
+    if (focusedOption.name === "fromcharacter") {
+      await handleGiftFromCharacterAutocomplete(interaction, focusedOption);
+    } else if (focusedOption.name === "tocharacter") {
+      await handleGiftToCharacterAutocomplete(interaction, focusedOption);
+    } else if (["itema", "itemb", "itemc"].includes(focusedOption.name)) {
+      await handleGiftItemAutocomplete(interaction, focusedOption);
+    } else {
+      await interaction.respond([]);
+    }
+  } else if (subcommand === "shop-buy" || subcommand === "shop-sell") {
+    await handleShopsAutocomplete(interaction, focusedOption);
+  } else if (subcommand === "trade") {
+    if (focusedOption.name === "fromcharacter") {
+      await handleTradeFromCharacterAutocomplete(interaction, focusedOption);
+    } else if (focusedOption.name === "tocharacter") {
+      await handleTradeToCharacterAutocomplete(interaction, focusedOption);
+    } else if (["item1", "item2", "item3"].includes(focusedOption.name)) {
+      await handleTradeItemAutocomplete(interaction, focusedOption);
+    } else {
+      await interaction.respond([]);
+    }
+  } else if (subcommand === "transfer") {
+    if (["fromcharacter", "tocharacter"].includes(focusedOption.name)) {
+      await handleTransferCharacterAutocomplete(interaction, focusedOption);
+    } else if (["itema", "itemb", "itemc"].includes(focusedOption.name)) {
+      await handleTransferItemAutocomplete(interaction, focusedOption);
+    } else {
+      await interaction.respond([]);
+    }
+  } else {
+    await interaction.respond([]);
+  }
+}
+
    // ------------------- EDITCHARACTER Commands -------------------
   } else if (
    commandName === "editcharacter" &&
@@ -206,9 +246,7 @@ async function handleAutocomplete(interaction) {
   } else if (commandName === "gear" && focusedOption.name === "itemname") {
    await handleGearAutocomplete(interaction, focusedOption);
 
-   // ------------------- GIFT Commands -------------------
-  } else if (commandName === "gift") {
-   await handleGiftAutocomplete(interaction, focusedOption);
+
 
    // ------------------- HEAL Commands -------------------
   } else if (commandName === "heal") {
@@ -330,28 +368,7 @@ async function handleAutocomplete(interaction) {
     filtered.map((choice) => ({ name: choice, value: choice }))
    );
 
-   // ------------------- TRADE Commands -------------------
-  } else if (commandName === "trade") {
-   if (focusedOption.name === "fromcharacter") {
-    await handleTradeFromCharacterAutocomplete(interaction, focusedOption);
-   } else if (focusedOption.name === "tocharacter") {
-    await handleTradeToCharacterAutocomplete(interaction, focusedOption);
-   } else if (["item1", "item2", "item3"].includes(focusedOption.name)) {
-    await handleTradeItemAutocomplete(interaction, focusedOption);
-   } else {
-    await interaction.respond([]);
-   }
 
-   // ------------------- TRANSFER Commands -------------------
-  } else if (commandName === "transfer") {
-   // Autocomplete for transfer: route to the correct helper based on focusedOption
-   if (["fromcharacter", "tocharacter"].includes(focusedOption.name)) {
-    await handleTransferCharacterAutocomplete(interaction, focusedOption);
-   } else if (["itema", "itemb", "itemc"].includes(focusedOption.name)) {
-    await handleTransferItemAutocomplete(interaction, focusedOption);
-   } else {
-    await interaction.respond([]);
-   }
 
    // ------------------- TRAVEL Commands -------------------
   } else if (
