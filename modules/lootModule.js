@@ -72,7 +72,7 @@ async function processLoot(battleProgress, currentMonster, interaction, battleId
           character.currentVillage, interactionUrl, formattedDateTime, uuidv4()
         ]];
 
-        await safeAppendDataToSheet(spreadsheetId, auth, range, values);  // Append data to the Google Sheet
+        await safeAppendDataToSheet(spreadsheetId, auth.name, range, values);  // Append data to the Google Sheet
 
         // Create a link to the character's inventory for the loot message
         const inventoryLinkFormatted = `[${character.name}](<${inventoryLink}>)`;

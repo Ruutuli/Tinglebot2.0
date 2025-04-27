@@ -204,7 +204,7 @@ module.exports = {
                             formattedDateTime,
                             uniqueSyncId
                         ]];                        
-                        await safeAppendDataToSheet(thiefSpreadsheetId, auth, range, logValues);
+                        await safeAppendDataToSheet(thiefSpreadsheetId, auth.name, range, logValues);
                     }
 
                     // ------------------- Send NPC Success Embed -------------------
@@ -412,8 +412,8 @@ async function handleSuccessfulSteal(interaction, thiefCharacter, targetCharacte
             formattedDateTime,
             uniqueSyncId
         ]];
-        await safeAppendDataToSheet(thiefSpreadsheetId, auth, range, thiefValues);
-        await safeAppendDataToSheet(targetSpreadsheetId, auth, range, targetValues);
+        await safeAppendDataToSheet(thiefSpreadsheetId, auth.name, range, thiefValues);
+        await safeAppendDataToSheet(targetSpreadsheetId, auth.name, range, targetValues);
     }
 
     // ------------------- Create Enhanced Success Embed for Player -------------------

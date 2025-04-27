@@ -656,7 +656,7 @@ if (!isValidGoogleSheetsUrl(shopLink)) {
     'No',                                         // tradesOpen (default for delivery)
     currentMonthYear,                             // Month/Year
   ]];
-  await safeAppendDataToSheet(sheetId, auth, range, values);
+  await safeAppendDataToSheet(sheetId, auth.name, range, values);
 }
 
     } else {
@@ -720,7 +720,7 @@ if (!isValidGoogleSheetsUrl(shopLink)) {
           uniqueSyncId,
         ]];
         try {
-          await safeAppendDataToSheet(senderSheetId, auth, range, senderLog);
+          await safeAppendDataToSheet(senderSheetId, auth.name, range, senderLog);
         } catch (err) {
     handleError(err, 'deliver.js');
 
@@ -731,7 +731,7 @@ if (!isValidGoogleSheetsUrl(shopLink)) {
           });
         }
         try {
-          await safeAppendDataToSheet(recipientSheetId, auth, range, recipientLog);
+          await safeAppendDataToSheet(recipientSheetId, auth.name, range, recipientLog);
         } catch (err) {
     handleError(err, 'deliver.js');
 
@@ -815,7 +815,7 @@ try {
         'earned',
         '+100',
       ];
-      await safeAppendDataToSheet(tokenSpreadsheetId, auth, tokenRange, [tokenRow]);
+      await safeAppendDataToSheet(tokenSpreadsheetId, auth.name, tokenRange, [tokenRow]);
     }
   }
 } catch (err) {

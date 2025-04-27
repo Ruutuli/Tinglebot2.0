@@ -330,7 +330,7 @@ async function handleRestock(interaction) {
                 ]
             ];
 
-            await safeAppendDataToSheet(spreadsheetId, auth, 'vendingShop!A:K', values);
+            await safeAppendDataToSheet(spreadsheetId, auth.name, 'vendingShop!A:K', values);
         } catch (error) {
     handleError(error, 'vendingHandler.js');
 
@@ -625,7 +625,7 @@ async function handleBarter(interaction) {
                 ]];
 
                 const range = 'loggedInventory!A2:M';
-                await safeAppendDataToSheet(spreadsheetId, auth, range, values);
+                await safeAppendDataToSheet(spreadsheetId, auth.name, range, values);
             } catch (sheetError) {
     handleError(sheetError, 'vendingHandler.js');
 
@@ -821,7 +821,7 @@ async function handleFulfill(interaction) {
             ]];
 
             const range = 'loggedInventory!A2:M'; // Range for appending data
-            await safeAppendDataToSheet(spreadsheetId, auth, range, values);
+            await safeAppendDataToSheet(spreadsheetId, auth.name, range, values);
         }
 
         // React to the "Fulfillment Required!" message

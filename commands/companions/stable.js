@@ -184,7 +184,7 @@ async function handleStoreMount(interaction, userId, characterName, mountName) {
         'spent',                           // TYPE
         '-100'                             // TOKEN AMOUNT
       ]];
-      await safeAppendDataToSheet(spreadsheetId, auth, 'loggedTracker!A:F', values);
+      await safeAppendDataToSheet(spreadsheetId, auth.name, 'loggedTracker!A:F', values);
     }
 
     const mountsInStable = await Mount.find({ owner: character.name, isStored: true });
@@ -314,7 +314,7 @@ async function handleSellMount(interaction, userId, characterName, mountName) {
           'sale',                          // TYPE
           `${sellPrice}`                   // PRICE
         ]];
-        await safeAppendDataToSheet(spreadsheetId, auth, 'loggedTracker!A:F', values);
+        await safeAppendDataToSheet(spreadsheetId, auth.name, 'loggedTracker!A:F', values);
       }
   
       await interaction.reply({
@@ -360,7 +360,7 @@ async function handleRetrieveMount(interaction, userId, characterName, mountName
         'spent',                           // TYPE
         '-100'                             // TOKEN AMOUNT
       ]];
-      await safeAppendDataToSheet(spreadsheetId, auth, 'loggedTracker!A:F', values);
+      await safeAppendDataToSheet(spreadsheetId, auth.name, 'loggedTracker!A:F', values);
     }
 
     const mount = await Mount.findOne({ owner: character.name, name: mountName, isStored: true });
@@ -436,7 +436,7 @@ async function handleBuyCharacter(interaction, userId, characterName, mountName)
           'spent',                         // TYPE
           `-${stableEntry.price}`          // TOKEN AMOUNT
         ]];
-        await safeAppendDataToSheet(spreadsheetId, auth, 'loggedTracker!A:F', values);
+        await safeAppendDataToSheet(spreadsheetId, auth.name, 'loggedTracker!A:F', values);
       }
   
       // Remove mount from the database

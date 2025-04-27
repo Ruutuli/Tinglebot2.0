@@ -374,7 +374,7 @@ const values = [
   ]
 ];
 
-    await safeAppendDataToSheet(spreadsheetId, auth, range, values);
+    await safeAppendDataToSheet(spreadsheetId, auth.name, range, values);
 
 
 
@@ -1087,7 +1087,7 @@ async function logMaterialsToGoogleSheets(auth, spreadsheetId, range, character,
             }
         }));
 
-        await safeAppendDataToSheet(spreadsheetId, auth, range, usedMaterialsValues);
+        await safeAppendDataToSheet(spreadsheetId, auth.name, range, usedMaterialsValues);
     } catch (error) {
     handleError(error, 'customWeapon.js');
 
