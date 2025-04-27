@@ -55,13 +55,15 @@ module.exports = {
         .setDescription('The name of the item to equip')
         .setRequired(false)
         .setAutocomplete(true))
-    .addStringOption(option =>
-      option.setName('status')
-        .setDescription('Set to unequip to remove the item')
-        .setRequired(false)
-        .addChoices(
-          { name: 'Unequip', value: 'unequip' }
-        )),
+        .addStringOption(option =>
+          option.setName('status')
+            .setDescription('Choose to equip or unequip the item')
+            .setRequired(false)
+            .addChoices(
+              { name: 'Equip', value: 'equip' },
+              { name: 'Unequip', value: 'unequip' }
+            )),
+        
 
   // ------------------- Command Execution Logic -------------------
   // This function handles equipping and unequipping gear for a character.
@@ -73,6 +75,16 @@ module.exports = {
       const type = interaction.options.getString('type');
       const itemName = interaction.options.getString('itemname');
       const status = interaction.options.getString('status');
+
+      // Validate status
+      if (status && status !== 'equip' && status !== 'unequip') {
+        await interaction.editReply({
+          content: `❌ **Invalid status selected. Please choose either "Equip" or "Unequip".**`,
+          ephemeral: true,
+        });
+        return;
+      }
+
       const userId = interaction.user.id;
 
       // ------------------- Acknowledge Interaction -------------------
