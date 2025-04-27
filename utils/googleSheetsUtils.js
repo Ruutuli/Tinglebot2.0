@@ -7,6 +7,10 @@
 const fs = require('fs');
 const { handleError } = require('../utils/globalErrorHandler');
 const path = require('path');
+const Character = require('../models/CharacterModel');
+const { client } = require('../index.js');
+
+
 
 // ============================================================================
 // Third-Party Libraries
@@ -433,30 +437,46 @@ function logErrorDetails(error) {
 
 // ------------------- Safely Append Data to Sheet -------------------
 async function safeAppendDataToSheet(spreadsheetUrl, characterName, range, values) {
-  try {
+    try {
       if (!spreadsheetUrl || typeof spreadsheetUrl !== 'string') {
-          console.warn(`[googleSheetsUtils.js]: No spreadsheet URL provided for ${characterName}. Skipping sync.`);
-          return;
+        console.warn(`[googleSheetsUtils.js]: No spreadsheet URL provided for ${characterName}. Skipping sync.`);
+        return;
       }
-
+  
       const spreadsheetId = extractSpreadsheetId(spreadsheetUrl);
       const auth = await authorizeSheets();
-
+  
       // 🛡️ Validate the inventory sheet first
       const validationResult = await validateInventorySheet(spreadsheetUrl, characterName);
       if (!validationResult.success) {
-          console.error(`[googleSheetsUtils.js]: Validation failed for ${characterName}: ${validationResult.message}`);
-          return;
+        console.error(`[googleSheetsUtils.js]: Validation failed for ${characterName}: ${validationResult.message}`);
+  
+        // ✉️ DM the user about the broken link
+        const characterRecord = await Character.findOne({ name: characterName });
+        if (characterRecord && characterRecord.userId) {
+          try {
+            const user = await client.users.fetch(characterRecord.userId);
+            if (user) {
+              await user.send(`⚠️ Heads up! Your inventory sync for **${characterName}** failed.\n\nYour linked Google Sheet may be missing, renamed, or set up incorrectly. Please update your inventory link or re-setup your sheet when you have a chance!`);
+              console.log(`[googleSheetsUtils.js]: Sent DM to user ${characterRecord.userId} about broken inventory.`);
+            }
+          } catch (dmError) {
+            console.error(`[googleSheetsUtils.js]: Failed to send DM to ${characterRecord.userId}: ${dmError.message}`);
+          }
+        } else {
+          console.warn(`[googleSheetsUtils.js]: No userId found for character ${characterName}. Could not send DM.`);
+        }
+  
+        return; // Stop trying to sync
       }
-
+  
       // ✅ If validation passed, proceed to append
-      await safeAppendDataToSheet(spreadsheetId, auth, range, values);
-
-  } catch (error) {
+      await appendSheetData(auth, spreadsheetId, range, values);
+  
+    } catch (error) {
       console.error(`[googleSheetsUtils.js]: Failed to safely append data for ${characterName}: ${error.message}`);
-      // You can also use handleError(error, 'googleSheetsUtils.js'); if you want
+    }
   }
-}
 
 
 // ============================================================================
