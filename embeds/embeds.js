@@ -24,6 +24,7 @@ const { getLastDebugValues } = require("../modules/buffModule");
 const ItemModel = require("../models/ItemModel");
 const Character = require("../models/CharacterModel");
 const { monsterMapping } = require("../models/MonsterModel");
+const { validateInventorySheet } = require('../utils/googleSheetsUtils')
 
 const DEFAULT_EMOJI = "🔹";
 const DEFAULT_IMAGE_URL =
@@ -117,6 +118,7 @@ const formatMaterialsList = (materials) => {
   .join(", ");
 };
 
+// ------------------- Subsection Title ------------------- 
 const createCharacterEmbed = (character) => {
  const settings = getCommonEmbedSettings(character);
 
@@ -225,6 +227,7 @@ const createCharacterEmbed = (character) => {
  return embed;
 };
 
+// ------------------- Subsection Title ------------------- 
 const createSimpleCharacterEmbed = (character, description) => {
  const settings = getCommonEmbedSettings(character);
 
@@ -253,6 +256,7 @@ const createSimpleCharacterEmbed = (character, description) => {
  return embed;
 };
 
+// ------------------- Subsection Title ------------------- 
 const createCharacterGearEmbed = (
  character,
  gearMap,
@@ -322,6 +326,7 @@ const createCharacterGearEmbed = (
  return embed;
 };
 
+// ------------------- Subsection Title ------------------- 
 const createVendorEmbed = (character) => {
  if (!character.vendorType) return null;
 
@@ -363,6 +368,7 @@ const createVendorEmbed = (character) => {
  return embed;
 };
 
+// ------------------- Subsection Title ------------------- 
 const createExplorationItemEmbed = (
  party,
  character,
@@ -405,6 +411,7 @@ const createExplorationItemEmbed = (
  return embed;
 };
 
+// ------------------- Subsection Title ------------------- 
 const createExplorationMonsterEmbed = (
  party,
  character,
@@ -456,57 +463,52 @@ const createExplorationMonsterEmbed = (
  return embed;
 };
 
-const createSetupInstructionsEmbed = (
- characterName,
- googleSheetsUrl,
- errorMessage = ""
-) => {
- const fields = [
-  {
-   name: "1. Open your Inventory Link",
-   value: `[📄 Inventory](${googleSheetsUrl})`,
-  },
-  { name: '2. Create a new tab named "loggedInventory".', value: "🔖" },
-  {
-   name: "3. Make sure there are headers for these ranges A1:M1 that read:",
-   value:
-    "```Character Name, Item Name, Qty of Item, Category, Type, Subtype, Obtain, Job, Perk, Location, Link, Date/Time, Confirmed Sync```",
-  },
-  {
-   name: "4. Share the Google Sheet with this email with edit permissions:",
-   value: "📧 tinglebot@rotw-tinglebot.iam.gserviceaccount.com",
-  },
-  {
-   name: `5. Use \`/testinventorysetup charactername:${characterName}\` to test if it's set up right.`,
-   value: "✅",
-  },
- ];
+// ------------------- Subsection Title ------------------- 
+const createSetupInstructionsEmbed = async (characterName, googleSheetsUrl) => {
+  const validationResult = await validateInventorySheet(googleSheetsUrl);
 
- if (errorMessage) {
-  fields.push({ name: "Error", value: `❌ **${errorMessage}**` });
- } else {
-  fields.push({
-   name: "Success",
-   value: "🎉 Inventory is set up correctly! 🎉",
-  });
- }
+  const fields = [
+    {
+      name: "1. Open your Inventory Link",
+      value: `[📄 Inventory](${googleSheetsUrl})`,
+    },
+    { name: '2. Create a new tab named "loggedInventory"', value: "🔖" },
+    {
+      name: "3. Ensure your headers in A1:M1 are exactly:",
+      value: "```Character Name, Item Name, Qty of Item, Category, Type, Subtype, Obtain, Job, Perk, Location, Link, Date/Time, Confirmed Sync```",
+    },
+    {
+      name: "4. Share the Google Sheet with this email (Editor Access):",
+      value: "📧 tinglebot@rotw-tinglebot.iam.gserviceaccount.com",
+    },
+    {
+      name: `5. Test it by using: \`/testinventorysetup charactername:${characterName}\``,
+      value: "✅",
+    },
+  ];
 
- return new EmbedBuilder()
-  .setTitle(`📋 Setup Instructions for ${characterName}`)
-  .setDescription(
-   `Check that your inventory links are in one of these formats:
-        \`\`\`
-        https://docs.google.com/spreadsheets/d/1AbcDefGhijkLmnoPqrStuVwxYz0123456789/edit
-        https://docs.google.com/spreadsheets/d/1AbcDefGhijkLmnoPqrStuVwxYz0123456789/view
-        \`\`\`
-        Please follow these steps to set up your Google Sheets inventory:`
-  )
-  .addFields(fields)
-  .setColor(getRandomColor())
-  .setTimestamp()
-  .setImage(DEFAULT_IMAGE_URL);
+  if (validationResult.success) {
+    fields.push({
+      name: "✅ Validation Success",
+      value: "🎉 Your inventory sheet is set up correctly and ready for syncing!",
+    });
+  } else {
+    fields.push({
+      name: "❌ Validation Error",
+      value: `⚠️ ${validationResult.message}`,
+    });
+  }
+
+  return new EmbedBuilder()
+    .setTitle(`📋 Setup Instructions for ${characterName}`)
+    .setDescription(`Please follow these steps carefully to set up your Google Sheets inventory:`)
+    .addFields(fields)
+    .setColor(getRandomColor())
+    .setTimestamp()
+    .setImage(DEFAULT_IMAGE_URL);
 };
 
+// ------------------- Subsection Title ------------------- 
 const createSyncEmbed = (characterName, googleSheetsUrl) => {
  const syncEmbed = new EmbedBuilder()
   .setTitle(`🔄 Sync Inventory for **${characterName}**`)
@@ -619,6 +621,7 @@ const editSyncErrorMessage = async (interaction, errorMessage) => {
  }
 };
 
+// ------------------- Subsection Title ------------------- 
 const createTokenTrackerSetupEmbed = (
  username,
  googleSheetsUrl,
@@ -685,6 +688,7 @@ const createTokenTrackerSetupEmbed = (
   .setFooter({ text: "Need help? Contact a mod for assistance!" });
 };
 
+// ------------------- Subsection Title ------------------- 
 const createCraftingEmbed = async (
  item,
  character,
@@ -803,6 +807,7 @@ const createCraftingEmbed = async (
  return embed;
 };
 
+// ------------------- Subsection Title ------------------- 
 const createWritingSubmissionEmbed = (submissionData) => {
  return new EmbedBuilder()
   .setColor("#AA926A")
@@ -843,6 +848,7 @@ const createWritingSubmissionEmbed = (submissionData) => {
   .setFooter({ text: "Writing Submission System" });
 };
 
+// ------------------- Subsection Title ------------------- 
 const createArtSubmissionEmbed = (submissionData, user, tokenCalculation) => {
  return new EmbedBuilder()
   .setColor("#AA926A")
@@ -919,6 +925,7 @@ const createArtSubmissionEmbed = (submissionData, user, tokenCalculation) => {
   .setFooter({ text: "Art Submission System" });
 };
 
+// ------------------- Subsection Title ------------------- 
 const createGatherEmbed = (character, randomItem) => {
  const settings = getCommonEmbedSettings(character);
  const action = typeActionMap[randomItem.type[0]]?.action || "found";
@@ -972,6 +979,7 @@ const createGatherEmbed = (character, randomItem) => {
   .setImage(villageImage); // Use the village-specific image
 };
 
+// ------------------- Subsection Title ------------------- 
 const createTransferEmbed = (
  fromCharacter,
  toCharacter,
@@ -1001,6 +1009,7 @@ const createTransferEmbed = (
   .setImage(fromSettings.image.url);
 };
 
+// ------------------- Subsection Title ------------------- 
 const createGiftEmbed = (
  fromCharacter,
  toCharacter,
@@ -1034,6 +1043,7 @@ const createGiftEmbed = (
   .setImage(fromSettings.image.url);
 };
 
+// ------------------- Subsection Title ------------------- 
 const createTradeEmbed = async (
  fromCharacter,
  toCharacter,
@@ -1078,6 +1088,7 @@ const createTradeEmbed = async (
   .setImage(settingsFrom.image.url);
 };
 
+// ------------------- Subsection Title ------------------- 
 const createMonsterEncounterEmbed = (
  character,
  monster,
@@ -1191,6 +1202,7 @@ const createMonsterEncounterEmbed = (
  return embed;
 };
 
+// ------------------- Subsection Title ------------------- 
 const createNoEncounterEmbed = (character, isBloodMoon = false) => {
  const settings = getCommonEmbedSettings(character);
 
@@ -1250,6 +1262,7 @@ const createNoEncounterEmbed = (character, isBloodMoon = false) => {
   });
 };
 
+// ------------------- Subsection Title ------------------- 
 const createKOEmbed = (character) => {
  const settings = getCommonEmbedSettings(character);
 
@@ -1279,6 +1292,7 @@ const createKOEmbed = (character) => {
   );
 };
 
+// ------------------- Subsection Title ------------------- 
 const createHealEmbed = (
  healerCharacter,
  characterToHeal,
@@ -1373,6 +1387,7 @@ const createHealEmbed = (
  return embed;
 };
 
+// ------------------- Subsection Title ------------------- 
 const createHealingEmbed = (
  healerCharacter,
  characterToHeal,
@@ -1430,6 +1445,7 @@ const createHealingEmbed = (
   );
 };
 
+// ------------------- Subsection Title ------------------- 
 const createTravelMonsterEncounterEmbed = (
  character,
  monster,
@@ -1498,6 +1514,7 @@ const createTravelMonsterEncounterEmbed = (
  return embed;
 };
 
+// ------------------- Subsection Title ------------------- 
 const createInitialTravelEmbed = (
  character,
  startingVillage,
@@ -1538,6 +1555,7 @@ const createInitialTravelEmbed = (
   .setTimestamp();
 };
 
+// ------------------- Subsection Title ------------------- 
 const createTravelingEmbed = (character) => {
  return new EmbedBuilder()
   .setDescription(
@@ -1548,6 +1566,7 @@ const createTravelingEmbed = (character) => {
   .setTimestamp();
 };
 
+// ------------------- Subsection Title ------------------- 
 const createSafeTravelDayEmbed = (
  character,
  day,
@@ -1573,6 +1592,7 @@ const createSafeTravelDayEmbed = (
   .setTimestamp();
 };
 
+// ------------------- Subsection Title ------------------- 
 const createStopInInarikoEmbed = (character, nextChannelId) => {
  return new EmbedBuilder()
   .setTitle(`🛑 **${character.name}** stopped in Inariko`)
@@ -1584,6 +1604,7 @@ const createStopInInarikoEmbed = (character, nextChannelId) => {
   .setTimestamp();
 };
 
+// ------------------- Subsection Title ------------------- 
 const createFinalTravelEmbed = (
  character,
  destination,
