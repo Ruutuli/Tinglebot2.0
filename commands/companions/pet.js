@@ -379,7 +379,7 @@ if (!canSpeciesPerformPetType(normalizedSpeciesKey, petType)) {
       rollsRemaining: 0,
       imageUrl: petImageUrl || "",
       rollCombination: selectedPetTypeInfo.rollCombination,
-      tableDescription: selectedPetTypeInfo.description,      
+      tableDescription: selectedPetTypeInfo.description,
     });
 
     await Character.findByIdAndUpdate(character._id, { currentActivePet: newPet._id });
@@ -618,6 +618,7 @@ if (!canSpeciesPerformPetType(normalizedSpeciesKey, petType)) {
 
     // ------------------- Calculate Roll Display -------------------
     const maxRolls = pet.level;
+    const petEmoji = getPetEmoji(pet.species);
     const usedRollsDisplay = maxRolls - pet.rollsRemaining;
     const rollsIcon =
      "🔔".repeat(pet.rollsRemaining) + "🔕".repeat(usedRollsDisplay);
