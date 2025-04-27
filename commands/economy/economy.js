@@ -978,6 +978,22 @@ async function handleShopSell(interaction) {
   );
   const inventoryItem = await inventoryCollection.findOne({ itemName });
 
+  const equippedItems = [
+    character.gearArmor?.head?.name,
+    character.gearArmor?.chest?.name,
+    character.gearArmor?.legs?.name,
+    character.gearWeapon?.name,
+    character.gearShield?.name,
+  ].filter(Boolean);
+  
+  if (equippedItems.includes(itemName)) {
+    await interaction.editReply({
+      content: `❌ You cannot sell \`${itemName}\` because it is currently equipped. Please unequip it first.`,
+      ephemeral: true,
+    });
+    return;
+  }
+
   if (!inventoryItem || parseInt(inventoryItem.quantity, 10) < quantity) {
    console.error(
     `[shops]: Insufficient inventory for item: ${itemName}. Available: ${
@@ -1199,6 +1215,9 @@ async function handleTrade(interaction) {
     return;
    }
 
+
+
+
    if (tradeSession.tradingWithCharacterName !== characterName) {
     await interaction.editReply({
      content: `❌ Character mismatch. Trade ID was initiated with ${tradeSession.tradingWithCharacterName}.`,
@@ -1212,21 +1231,24 @@ async function handleTrade(interaction) {
     { name: item3, quantity: quantity3 },
    ].filter((item) => item.name);
 
-   for (let item of itemArray) {
-    const equippedItems = [
-     fromCharacter.gearWeapon?.name,
-     fromCharacter.gearShield?.name,
-     fromCharacter.gearArmor?.head?.name,
-     fromCharacter.gearArmor?.chest?.name,
-     fromCharacter.gearArmor?.legs?.name,
-    ];
-    if (equippedItems.includes(item.name)) {
-     await interaction.editReply({
-      content: `❌ You cannot trade an item that is currently equipped. Unequip \`${item.name}\` first.`,
-     });
-     return;
-    }
-   }
+    // ------------------- NEW: Prevent using equipped items -------------------
+const equippedItems = [
+  fromCharacter.gearArmor?.head?.name,
+  fromCharacter.gearArmor?.chest?.name,
+  fromCharacter.gearArmor?.legs?.name,
+  fromCharacter.gearWeapon?.name,
+  fromCharacter.gearShield?.name,
+].filter(Boolean);
+
+for (const { name } of items) {
+  if (equippedItems.includes(name)) {
+    await interaction.editReply({
+      content: `❌ You cannot sell/trade/transfer \`${name}\` because it is currently equipped. Please unequip it first.`,
+      ephemeral: true,
+    });
+    return;
+  }
+}
 
    const characterInventoryCollection = await getCharacterInventoryCollection(
     fromCharacter.name
@@ -1570,6 +1592,26 @@ async function handleTransfer(interaction) {
    });
    return;
   }
+
+  // ------------------- NEW: Prevent using equipped items -------------------
+const equippedItems = [
+  fromCharacter.gearArmor?.head?.name,
+  fromCharacter.gearArmor?.chest?.name,
+  fromCharacter.gearArmor?.legs?.name,
+  fromCharacter.gearWeapon?.name,
+  fromCharacter.gearShield?.name,
+].filter(Boolean);
+
+for (const { name } of items) {
+  if (equippedItems.includes(name)) {
+    await interaction.editReply({
+      content: `❌ You cannot sell/trade/transfer \`${name}\` because it is currently equipped. Please unequip it first.`,
+      ephemeral: true,
+    });
+    return;
+  }
+}
+
 
   if (!fromCharacter.inventorySynced) {
    return interaction.editReply({
