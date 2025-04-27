@@ -312,7 +312,7 @@ module.exports = {
                             uuidv4(),                          // Unique Identifier
                         ];
 
-                        await safeAppendDataToSheet(spreadsheetId, auth, 'loggedInventory!A2:N', [inventoryRow]);
+                        await safeAppendDataToSheet(spreadsheetId, auth.name, 'loggedInventory!A2:N', [inventoryRow]);
                         console.log(`[village.js:logs] execute (upgrade): Logged donation to Google Sheets for character "${characterName}" to village "${villageName}"`);
                     }
 
@@ -379,7 +379,7 @@ module.exports = {
                             `-${qty}`,                           // Amount (negative for tokens spent)
                         ];
 
-                        await safeAppendDataToSheet(spreadsheetId, auth, 'loggedTracker!B7:F', [tokenRow]);
+                        await safeAppendDataToSheet(spreadsheetId, auth.name, 'loggedTracker!B7:F', [tokenRow]);
                         console.log(`[village.js:logs] execute (upgrade): Logged token contribution to Google Sheets for user ${userId}`);
                     }
 
