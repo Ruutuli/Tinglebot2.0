@@ -1,6 +1,11 @@
+// ------------------- Standard Libraries -------------------
 const mongoose = require("mongoose");
 const { MongoClient, ObjectId } = require("mongodb");
+
+// ------------------- Third-Party Modules -------------------
 const { google } = require("googleapis");
+
+// ------------------- Project Utilities -------------------
 const { handleError } = require("../utils/globalErrorHandler");
 const {
  authorizeSheets,
@@ -14,6 +19,7 @@ require("dotenv").config();
 // Import inventoryUtils but don't use removeInitialItemIfSynced directly
 const inventoryUtils = require("../utils/inventoryUtils");
 
+// ------------------- Models -------------------
 const Character = require("../models/CharacterModel");
 const Monster = require("../models/MonsterModel");
 const Quest = require("../models/QuestModel");
@@ -22,11 +28,20 @@ const User = require("../models/UserModel");
 const Pet = require("../models/PetModel");
 const generalCategories = require("../models/GeneralItemCategories");
 
+// ============================================================================
+// ------------------- Database Connection Functions -------------------
+// Functions to establish and retrieve MongoDB connections.
+// ============================================================================
 const tinglebotUri = process.env.MONGODB_TINGLEBOT_URI;
 const inventoriesUri = process.env.MONGODB_INVENTORIES_URI;
 let tinglebotDbConnection;
 let inventoriesDbConnection;
 let inventoriesDbNativeConnection = null;
+
+// ============================================================================
+// ------------------- Configuration Constants -------------------
+// Definitions of static constants like village names and icons.
+// ============================================================================
 
 const VILLAGE_NAMES = ["Rudania", "Inariko", "Vhintl"];
 const LIMITED_ITEMS_COUNT = 5;
@@ -49,6 +64,8 @@ const VILLAGE_ICONS = {
   "https://static.wixstatic.com/media/7573f4_15ac377e0dd643309853fc77250a86a1~mv2.png",
 };
 
+
+// ------------------- connectToTinglebot -------------------
 async function connectToTinglebot() {
  try {
   if (!tinglebotDbConnection || mongoose.connection.readyState === 0) {
@@ -63,6 +80,7 @@ async function connectToTinglebot() {
  }
 }
 
+// ------------------- connectToInventories -------------------
 async function connectToInventories() {
  try {
   if (!inventoriesDbConnection) {
@@ -76,6 +94,7 @@ async function connectToInventories() {
  }
 }
 
+// ------------------- connectToInventoriesNative -------------------
 const connectToInventoriesNative = async () => {
  if (!inventoriesDbNativeConnection) {
   const client = new MongoClient(inventoriesUri, {});
@@ -85,6 +104,7 @@ const connectToInventoriesNative = async () => {
  return inventoriesDbNativeConnection;
 };
 
+// ------------------- getInventoryCollection -------------------
 const getInventoryCollection = async (characterName) => {
  if (typeof characterName !== "string") {
   throw new Error("Character name must be a string.");
@@ -94,6 +114,12 @@ const getInventoryCollection = async (characterName) => {
  return inventoriesDb.collection(collectionName);
 };
 
+// ============================================================================
+// ------------------- Character Service Functions -------------------
+// CRUD and helper functions for Character entities.
+// ============================================================================
+
+// ------------------- getCharactersInVillage -------------------
 async function getCharactersInVillage(userId, village) {
  try {
   const characters = await fetchCharactersByUserId(userId);
@@ -110,6 +136,7 @@ async function getCharactersInVillage(userId, village) {
  }
 }
 
+// ------------------- fetchCharacterByName -------------------
 const fetchCharacterByName = async (characterName) => {
  try {
   await connectToTinglebot();
@@ -133,6 +160,7 @@ const fetchCharacterByName = async (characterName) => {
  }
 };
 
+// ------------------- fetchBlightedCharactersByUserId -------------------
 const fetchBlightedCharactersByUserId = async (userId) => {
  try {
   await connectToTinglebot();
@@ -146,6 +174,7 @@ const fetchBlightedCharactersByUserId = async (userId) => {
  }
 };
 
+// ------------------- fetchAllCharacters -------------------
 const fetchAllCharacters = async () => {
  try {
   await connectToTinglebot();
@@ -159,6 +188,7 @@ const fetchAllCharacters = async () => {
  }
 };
 
+// ------------------- fetchCharacterById -------------------
 const fetchCharacterById = async (characterId) => {
  try {
   await connectToTinglebot();
@@ -179,6 +209,7 @@ const fetchCharacterById = async (characterId) => {
  }
 };
 
+// ------------------- fetchCharactersByUserId -------------------
 const fetchCharactersByUserId = async (userId) => {
  try {
   await connectToTinglebot();
@@ -193,6 +224,7 @@ const fetchCharactersByUserId = async (userId) => {
  }
 };
 
+// ------------------- fetchCharacterByNameAndUserId -------------------
 const fetchCharacterByNameAndUserId = async (characterName, userId) => {
  try {
   await connectToTinglebot();
@@ -207,6 +239,7 @@ const fetchCharacterByNameAndUserId = async (characterName, userId) => {
  }
 };
 
+// ------------------- fetchAllCharactersExceptUser -------------------
 const fetchAllCharactersExceptUser = async (userId) => {
  try {
   await connectToTinglebot();
@@ -220,6 +253,7 @@ const fetchAllCharactersExceptUser = async (userId) => {
  }
 };
 
+// ------------------- createCharacter -------------------
 const createCharacter = async (characterData) => {
  try {
   await connectToTinglebot();
@@ -235,6 +269,7 @@ const createCharacter = async (characterData) => {
  }
 };
 
+// ------------------- updateCharacterById -------------------
 const updateCharacterById = async (characterId, updateData) => {
  try {
   await connectToTinglebot();
@@ -254,6 +289,7 @@ const updateCharacterById = async (characterId, updateData) => {
  }
 };
 
+// ------------------- deleteCharacterById -------------------
 const deleteCharacterById = async (characterId) => {
  try {
   await connectToTinglebot();
@@ -269,6 +305,7 @@ const deleteCharacterById = async (characterId) => {
  }
 };
 
+// ------------------- updateCharacterInventorySynced -------------------
 const updateCharacterInventorySynced = async (characterId) => {
  try {
   await updateCharacterById(characterId, { inventorySynced: true });
@@ -285,6 +322,7 @@ const updateCharacterInventorySynced = async (characterId) => {
  }
 };
 
+// ------------------- getCharacterInventoryCollection -------------------
 const getCharacterInventoryCollection = async (characterName) => {
  try {
   if (typeof characterName !== "string") {
@@ -304,6 +342,7 @@ const getCharacterInventoryCollection = async (characterName) => {
  }
 };
 
+// ------------------- createCharacterInventory -------------------
 const createCharacterInventory = async (characterName, characterId, job) => {
  try {
   const collection = await getInventoryCollection(characterName);
@@ -331,6 +370,7 @@ const createCharacterInventory = async (characterName, characterId, job) => {
  }
 };
 
+// ------------------- deleteCharacterInventoryCollection -------------------
 const deleteCharacterInventoryCollection = async (characterName) => {
  try {
   const collection = await getCharacterInventoryCollection(characterName);
@@ -344,6 +384,11 @@ const deleteCharacterInventoryCollection = async (characterName) => {
  }
 };
 
+// ============================================================================
+// ------------------- Pet Service Functions -------------------
+// CRUD and helper functions for managing character pets.
+// ============================================================================
+// ------------------- addPetToCharacter -------------------
 async function addPetToCharacter(
  characterId,
  petName,
@@ -374,6 +419,7 @@ async function addPetToCharacter(
  }
 }
 
+// ------------------- updatePetRolls -------------------
 async function updatePetRolls(characterId, petIdentifier, newRolls) {
  try {
   let filter;
@@ -392,6 +438,7 @@ async function updatePetRolls(characterId, petIdentifier, newRolls) {
  }
 }
 
+// ------------------- upgradePetLevel -------------------
 async function upgradePetLevel(characterId, petName, newLevel) {
  try {
   await Character.updateOne(
@@ -407,6 +454,7 @@ async function upgradePetLevel(characterId, petName, newLevel) {
  }
 }
 
+// ------------------- updatePetToCharacter -------------------
 async function updatePetToCharacter(characterId, petName, updatedPetData) {
  try {
   await Character.updateOne(
@@ -422,6 +470,7 @@ async function updatePetToCharacter(characterId, petName, updatedPetData) {
  }
 }
 
+// ------------------- resetPetRollsForAllCharacters -------------------
 async function resetPetRollsForAllCharacters() {
  try {
   const characters = await fetchAllCharacters();
@@ -443,6 +492,12 @@ async function resetPetRollsForAllCharacters() {
  }
 }
 
+// ============================================================================
+// ------------------- Item Service Functions  -------------------
+// Brief description of what this section handles.
+// ============================================================================
+
+// ------------------- fetchAllItems -------------------
 const fetchAllItems = async () => {
  const client = await connectToInventoriesForItems();
  try {
@@ -458,6 +513,7 @@ const fetchAllItems = async () => {
  }
 };
 
+// ------------------- fetchItemByName -------------------
 async function fetchItemByName(itemName) {
  const client = await connectToInventoriesForItems();
  try {
@@ -486,6 +542,7 @@ async function fetchItemByName(itemName) {
  }
 }
 
+// ------------------- fetchItemById -------------------
 const fetchItemById = async (itemId) => {
  const client = await connectToInventoriesForItems();
  try {
@@ -501,6 +558,7 @@ const fetchItemById = async (itemId) => {
  }
 };
 
+// ------------------- fetchItemsByMonster -------------------
 const fetchItemsByMonster = async (monsterName) => {
  const client = await connectToInventoriesForItems();
  try {
@@ -519,6 +577,7 @@ const fetchItemsByMonster = async (monsterName) => {
  }
 };
 
+// ------------------- fetchCraftableItemsAndCheckMaterials -------------------
 const fetchCraftableItemsAndCheckMaterials = async (inventory) => {
  const client = await connectToInventoriesForItems();
  try {
@@ -555,6 +614,7 @@ const fetchCraftableItemsAndCheckMaterials = async (inventory) => {
  }
 };
 
+// ------------------- fetchAndSortItemsByRarity -------------------
 const fetchAndSortItemsByRarity = async (inventoryItems) => {
  try {
   const itemIds = inventoryItems.map((item) => item.itemId);
@@ -582,6 +642,7 @@ const fetchAndSortItemsByRarity = async (inventoryItems) => {
  }
 };
 
+// ------------------- getIngredientItems -------------------
 const getIngredientItems = async (ingredientName) => {
  try {
   const items = await fetchAllItems();
@@ -606,6 +667,7 @@ const getIngredientItems = async (ingredientName) => {
  }
 };
 
+// ------------------- fetchItemsByIds -------------------
 const fetchItemsByIds = async (itemIds) => {
  const client = await connectToInventoriesForItems();
  try {
@@ -624,6 +686,7 @@ const fetchItemsByIds = async (itemIds) => {
  }
 };
 
+// ------------------- fetchItemRarityByName -------------------
 const fetchItemRarityByName = async (itemName) => {
  const client = await connectToInventoriesForItems();
  try {
@@ -649,6 +712,7 @@ const fetchItemRarityByName = async (itemName) => {
  }
 };
 
+// ------------------- fetchItemsByCategory -------------------
 const fetchItemsByCategory = async (category) => {
  const client = await connectToInventoriesForItems();
  try {
@@ -677,6 +741,7 @@ const fetchItemsByCategory = async (category) => {
  }
 };
 
+// ------------------- fetchValidWeaponSubtypes -------------------
 const fetchValidWeaponSubtypes = async () => {
  const client = await connectToInventoriesForItems();
  try {
@@ -695,6 +760,12 @@ const fetchValidWeaponSubtypes = async () => {
  }
 };
 
+// ============================================================================
+// ------------------- Helper / Utility Functions   -------------------
+// Brief description of what this section handles.
+// ============================================================================
+
+// ------------------- toCamelCase -------------------
 function toCamelCase(str) {
  return str.replace(/(?:^\w|[A-Z]|\b\w|\s+|[-()/])/g, (match, index) => {
   if (match === "-" || match === "(" || match === ")" || match === "/")
@@ -703,6 +774,12 @@ function toCamelCase(str) {
  });
 }
 
+// ============================================================================
+// ------------------- Monster Service Functions -------------------
+// Brief description of what this section handles.
+// ============================================================================
+
+// ------------------- fetchAllMonsters -------------------
 const fetchAllMonsters = async () => {
  try {
   return await Monster.find();
@@ -713,6 +790,7 @@ const fetchAllMonsters = async () => {
  }
 };
 
+// ------------------- fetchMonsterByName -------------------
 const fetchMonsterByName = async (name) => {
  try {
   return await Monster.findOne({ name });
@@ -726,6 +804,7 @@ const fetchMonsterByName = async (name) => {
  }
 };
 
+// ------------------- getMonsterDetailsByMapping -------------------
 const getMonsterDetailsByMapping = async (nameMapping) => {
  if (!nameMapping) {
   console.error("[monsterService.js]: ❌ No nameMapping provided.");
@@ -751,6 +830,7 @@ const getMonsterDetailsByMapping = async (nameMapping) => {
  }
 };
 
+// ------------------- getMonstersAboveTier -------------------
 async function getMonstersAboveTier(minTier = 5) {
  try {
   const monsters = await Monster.find({ tier: { $gte: minTier } }).exec();
@@ -772,6 +852,7 @@ async function getMonstersAboveTier(minTier = 5) {
  }
 }
 
+// ------------------- getMonstersAboveTierByRegion -------------------
 async function getMonstersAboveTierByRegion(minTier = 5, region) {
  try {
   if (!region) {
@@ -803,12 +884,19 @@ async function getMonstersAboveTierByRegion(minTier = 5, region) {
  }
 }
 
+// ============================================================================
+// ------------------- Quest Service Functions   -------------------
+// Brief description of what this section handles.
+// ============================================================================
+
+// ------------------- createQuest -------------------
 async function createQuest(questData) {
  const quest = new Quest(questData);
  await quest.save();
  return quest;
 }
 
+// ------------------- joinQuest -------------------
 async function joinQuest(userId, questId) {
  const quest = await Quest.findById(questId);
  if (!quest || quest.status !== "open")
@@ -817,6 +905,7 @@ async function joinQuest(userId, questId) {
  await quest.save();
 }
 
+// ------------------- completeQuest -------------------
 async function completeQuest(userId, questId) {
  const quest = await Quest.findById(questId);
  if (!quest) throw new Error("Quest not found.");
@@ -828,6 +917,12 @@ async function completeQuest(userId, questId) {
  return quest.rewards;
 }
 
+// ============================================================================
+// ------------------- Relic Service Functions  -------------------
+// Brief description of what this section handles.
+// ============================================================================
+
+// ------------------- createRelic -------------------
 const createRelic = async (relicData) => {
  try {
   await connectToTinglebot();
@@ -840,6 +935,7 @@ const createRelic = async (relicData) => {
  }
 };
 
+// ------------------- fetchRelicsByCharacter -------------------
 const fetchRelicsByCharacter = async (characterName) => {
  try {
   await connectToTinglebot();
@@ -854,6 +950,7 @@ const fetchRelicsByCharacter = async (characterName) => {
  }
 };
 
+// ------------------- appraiseRelic -------------------
 const appraiseRelic = async (
  relicId,
  appraiserName,
@@ -879,6 +976,7 @@ const appraiseRelic = async (
  }
 };
 
+// ------------------- archiveRelic -------------------
 const archiveRelic = async (relicId, imageUrl) => {
  try {
   await connectToTinglebot();
@@ -898,6 +996,7 @@ const archiveRelic = async (relicId, imageUrl) => {
  }
 };
 
+// ------------------- markRelicDeteriorated -------------------
 const markRelicDeteriorated = async (relicId) => {
  try {
   await connectToTinglebot();
@@ -916,6 +1015,7 @@ const markRelicDeteriorated = async (relicId) => {
  }
 };
 
+// ------------------- fetchArchivedRelics -------------------=
 const fetchArchivedRelics = async () => {
  try {
   await connectToTinglebot();
@@ -927,6 +1027,7 @@ const fetchArchivedRelics = async () => {
  }
 };
 
+// ------------------- fetchRelicById -------------------
 const fetchRelicById = async (relicId) => {
  try {
   await connectToTinglebot();
@@ -938,6 +1039,7 @@ const fetchRelicById = async (relicId) => {
  }
 };
 
+// ------------------- deleteAllRelics -------------------
 const deleteAllRelics = async () => {
  try {
   await connectToTinglebot();
@@ -949,6 +1051,12 @@ const deleteAllRelics = async () => {
  }
 };
 
+// ============================================================================
+// ------------------- Token Service Functions -------------------
+// Brief description of what this section handles.
+// ============================================================================
+
+// ------------------- getTokenBalance -------------------
 async function getTokenBalance(userId) {
  try {
   const user = await User.findOne({ discordId: userId });
@@ -960,6 +1068,7 @@ async function getTokenBalance(userId) {
  }
 }
 
+// ------------------- getOrCreateToken -------------------
 async function getOrCreateToken(userId, tokenTrackerLink = "") {
  await connectToTinglebot();
  let user = await User.findOne({ discordId: userId });
@@ -979,6 +1088,7 @@ async function getOrCreateToken(userId, tokenTrackerLink = "") {
  return user;
 }
 
+// ------------------- updateTokenBalance -------------------
 async function updateTokenBalance(userId, change) {
  try {
   if (isNaN(change)) {
@@ -1011,6 +1121,7 @@ async function updateTokenBalance(userId, change) {
  }
 }
 
+// ------------------- syncTokenTracker -------------------
 async function syncTokenTracker(userId) {
  await connectToTinglebot();
  const user = await getOrCreateToken(userId);
@@ -1064,6 +1175,7 @@ async function syncTokenTracker(userId) {
  }
 }
 
+// ------------------- appendEarnedTokens -------------------
 async function appendEarnedTokens(
  userId,
  fileName,
@@ -1108,6 +1220,7 @@ async function appendEarnedTokens(
  }
 }
 
+// ------------------- appendSpentTokens -------------------
 async function appendSpentTokens(userId, purchaseName, amount, link = "") {
  try {
   const user = await getOrCreateToken(userId);
@@ -1131,6 +1244,7 @@ async function appendSpentTokens(userId, purchaseName, amount, link = "") {
  }
 }
 
+// ------------------- getUserGoogleSheetId -------------------
 async function getUserGoogleSheetId(userId) {
  try {
   const user = await User.findOne({ discordId: userId });
@@ -1163,6 +1277,7 @@ function extractSpreadsheetIdFromUrl(url) {
  return match ? match[1] : null;
 }
 
+// ------------------- getOrCreateUser -------------------
 async function getOrCreateUser(discordId, googleSheetsUrl, timezone) {
  await connectToTinglebot();
  let user = await User.findOne({ discordId });
@@ -1186,6 +1301,7 @@ async function getOrCreateUser(discordId, googleSheetsUrl, timezone) {
  return user;
 }
 
+// ------------------- getUserById -------------------
 const getUserById = async (discordId) => {
  console.log(`Fetching user by Discord ID: ${discordId}`);
  await connectToTinglebot();
@@ -1194,6 +1310,7 @@ const getUserById = async (discordId) => {
  return user;
 };
 
+// ------------------- updateUserTokens -------------------
 async function updateUserTokens(discordId, amount, activity, link = "") {
  await connectToTinglebot();
  const user = await User.findOne({ discordId });
@@ -1217,6 +1334,7 @@ async function updateUserTokens(discordId, amount, activity, link = "") {
  return user;
 }
 
+// ------------------- updateUserTokenTracker -------------------
 async function updateUserTokenTracker(discordId, tokenTracker) {
  await connectToTinglebot();
  const user = await User.findOneAndUpdate(
@@ -1232,6 +1350,12 @@ async function updateUserTokenTracker(discordId, tokenTracker) {
  return user;
 }
 
+// ============================================================================
+// ------------------- Vending Service Functions  -------------------
+// Brief description of what this section handles.
+// ============================================================================
+
+// ------------------- connectToDatabase -------------------
 const connectToDatabase = async () => {
  const client = new MongoClient(inventoriesUri, {});
  try {
@@ -1244,6 +1368,7 @@ const connectToDatabase = async () => {
  }
 };
 
+// ------------------- clearExistingStock -------------------
 const clearExistingStock = async () => {
  const client = await connectToDatabase();
  const db = client.db("tinglebot");
@@ -1259,6 +1384,7 @@ const clearExistingStock = async () => {
  }
 };
 
+// ------------------- generateVendingStockList -------------------
 const generateVendingStockList = async () => {
  const client = await connectToDatabase();
  const db = client.db("tinglebot");
@@ -1411,6 +1537,7 @@ const generateVendingStockList = async () => {
  }
 };
 
+// ------------------- getCurrentVendingStockList -------------------
 const getCurrentVendingStockList = async () => {
  const client = await connectToDatabase();
  const db = client.db("tinglebot");
@@ -1445,6 +1572,7 @@ const getCurrentVendingStockList = async () => {
  }
 };
 
+// ------------------- getLimitedItems -------------------
 const getLimitedItems = async () => {
  const client = await connectToDatabase();
  const db = client.db("tinglebot");
@@ -1466,6 +1594,7 @@ const getLimitedItems = async () => {
  }
 };
 
+// ------------------- updateItemStockByName -------------------
 const updateItemStockByName = async (itemName, quantity) => {
  const client = await connectToDatabase();
  const db = client.db("tinglebot");
@@ -1503,7 +1632,7 @@ const updateItemStockByName = async (itemName, quantity) => {
   await client.close();
  }
 };
-
+// ------------------- updateVendingStock -------------------
 async function updateVendingStock({
  characterId,
  itemName,
@@ -1616,6 +1745,11 @@ inventoryUtils.initializeInventoryUtils({
  fetchCharacterById,
  getInventoryCollection,
 });
+
+// ============================================================================
+// ------------------- Module Exports -------------------
+// Export all service functions and constants.
+// ============================================================================
 
 module.exports = {
  connectToTinglebot,
