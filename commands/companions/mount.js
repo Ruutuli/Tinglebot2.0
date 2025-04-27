@@ -106,16 +106,25 @@ async function handleEncounter(interaction) {
             });
         }
 
-        // Check if the character's inventory has been synced
-        if (!character.inventorySynced) {
-            return interaction.reply({
-                content: `❌ **You cannot use the mount command because "${character.name}"'s inventory is not set up yet. Please use the </testinventorysetup:1306176790095728732> and then </syncinventory:1306176789894266898> commands to initialize the inventory.**`,
-                ephemeral: true,
-            });
-        }
+            // Check if the character's inventory has been synced
+            if (!character.inventorySynced) {
+                return interaction.reply({
+                    content: `❌ **You cannot use the mount command because "${character.name}"'s inventory is not set up yet. Please use the </testinventorysetup:1306176790095728732> and then </syncinventory:1306176789894266898> commands to initialize the inventory.**`,
+                    ephemeral: true,
+                });
+            }
 
-        // Proceed with rolling logic for the character in the encounter
-        await proceedWithRoll(interaction, characterName, encounterId);
+            // ------------------- NEW: Validate village match -------------------
+            if (character.currentVillage?.toLowerCase() !== encounter.village?.toLowerCase()) {
+                return interaction.reply({
+                    content: `❌ **${character.name} is currently located in ${character.currentVillage || 'an unknown location'}, but this encounter is in ${encounter.village}. Characters must be in the correct village to roll!**`,
+                    ephemeral: true,
+                });
+            }
+
+            // Proceed with rolling logic for the character in the encounter
+            await proceedWithRoll(interaction, characterName, encounterId);
+
     } catch (error) {
     handleError(error, 'mount.js');
 
