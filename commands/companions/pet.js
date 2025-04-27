@@ -319,11 +319,11 @@ if (subcommand === "add") {
     return interaction.reply(`❌ **Unknown or unsupported species \`${species}\`. Please select a valid species.**`);
   }
 
-  // Validate petTypeData existence
-  const selectedPetTypeInfo = getPetTypeData(petType);
-  if (!selectedPetTypeInfo) {
-    return interaction.reply(`❌ **Unknown or unsupported pet type \`${petType}\`.**`);
-  }
+// Validate petTypeData existence
+const selectedPetTypeData = getPetTypeData(petType);
+if (!selectedPetTypeData) {
+  return interaction.reply(`❌ **Unknown or unsupported pet type \`${petType}\`.**`);
+}
 
 // Validate Species Compatibility with Pet Type
 if (!canSpeciesPerformPetType(normalizedSpeciesKey, petType)) {
@@ -396,7 +396,7 @@ if (!canSpeciesPerformPetType(normalizedSpeciesKey, petType)) {
         { name: "__Pet Species__", value: `> ${getPetEmoji(species)} ${species}`, inline: true },
         { name: "__Pet Type__", value: `> ${petType}`, inline: true },
         { name: "Roll Combination", value: selectedPetTypeData.rollCombination.join(", "), inline: false },
-        { name: "Description", value: selectedPetTypeData.description, inline: false }
+        { name: "Description",      value: selectedPetTypeData.description,               inline: false }
       )
       .setImage(petImageUrl || "https://via.placeholder.com/150")
       .setColor("#00FF00");
