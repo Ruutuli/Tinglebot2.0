@@ -2,7 +2,7 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
 const { handleError } = require('../../utils/globalErrorHandler.js');
 const { connectToTinglebot, fetchCharacterByNameAndUserId } = require('../../database/db.js');
-const { authorizeSheets, appendSheetData, getSheetIdByTitle, readSheetData } = require('../../utils/googleSheetsUtils.js');
+const { authorizeSheets, appendSheetData, getSheetIdByTitle, readSheetData, validateInventorySheet } = require('../../utils/googleSheetsUtils.js');
 const { extractSpreadsheetId } = require('../../utils/validation.js');
 const { createSetupInstructionsEmbed } = require('../../embeds/embeds.js');
 
@@ -73,7 +73,7 @@ module.exports = {
       console.log('✅ Headers in "loggedInventory" sheet are correct.');
 
       // ✅ ADD THIS NEXT:
-      const validationResult = await validateInventorySheet(inventoryUrl);
+      const validationResult = await validateInventorySheet(inventoryUrl, characterName);
       if (!validationResult.success) {
         console.error('❌ Validation failed after header check.');
         await sendSetupInstructions(interaction, 'invalid_inventory', character._id, characterName, inventoryUrl, validationResult.message);

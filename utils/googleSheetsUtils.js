@@ -338,7 +338,7 @@ function extractSpreadsheetId(url) {
 
 
 // ------------------- validateInventorySheet------------------- 
-async function validateInventorySheet(spreadsheetUrl) {
+async function validateInventorySheet(spreadsheetUrl, characterName) {
     const spreadsheetId = extractSpreadsheetId(spreadsheetUrl);
   
     if (!spreadsheetId) {
@@ -373,20 +373,25 @@ async function validateInventorySheet(spreadsheetUrl) {
         };
       }
   
-      // ✅ At this point headers are good
-      // ➔ Now check if at least one item exists below
-      const inventoryData = await readSheetData(auth, spreadsheetId, 'loggedInventory!A2:M100'); // Pull rows 2-100
+      // ✅ Headers confirmed, now validate inventory content
+      const inventoryData = await readSheetData(auth, spreadsheetId, 'loggedInventory!A2:M100');
   
       const hasAtLeastOneItem = inventoryData && inventoryData.some(row => {
-        const itemName = row[1]; // Column B = Item Name
-        const quantity = row[2]; // Column C = Qty
-        return itemName && quantity && Number(quantity) > 0;
+        const sheetCharacterName = (row[0] || '').trim().toLowerCase();
+        const itemName = (row[1] || '').trim();
+        const quantity = Number(row[2] || 0);
+  
+        return (
+          sheetCharacterName === characterName.trim().toLowerCase() &&
+          itemName.length > 0 &&
+          quantity > 0
+        );
       });
   
       if (!hasAtLeastOneItem) {
         return {
           success: false,
-          message: "**Error:** Your inventory does not contain any valid items.\n\n**Fix:** Add at least one starter item with a name and quantity greater than 0."
+          message: `**Error:** No inventory items found for character **${characterName}**.\n\n**Fix:** Please make sure your inventory sheet contains at least one item entry for your character.`
         };
       }
   
@@ -417,7 +422,6 @@ async function validateInventorySheet(spreadsheetUrl) {
       };
     }
   }
-  
   
 // ============================================================================
 // Error Logging
