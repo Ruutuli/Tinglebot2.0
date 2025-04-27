@@ -12,7 +12,7 @@ const { getCharacterInventoryCollection } = require('../../database/db');
 const { exchangeSpiritOrbs } = require('../../modules/characterStatsModule');
 
 // ------------------- Add Google Sheets Logging -------------------
-const { authorizeSheets, appendSheetData, extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../../utils/googleSheetsUtils');
+const { authorizeSheets, appendSheetData, extractSpreadsheetId, isValidGoogleSheetsUrl,safeAppendDataToSheet  } = require('../../utils/googleSheetsUtils');
 const { v4: uuidv4 } = require('uuid');
 
 // ------------------- Slash Command Definition -------------------
@@ -221,7 +221,7 @@ if (!inventoryLink || !isValidGoogleSheetsUrl(inventoryLink)) {
       uniqueSyncId                             // Unique ID
     ];
 
-    await appendSheetData(auth, spreadsheetId, range, [sheetRow]);
+    await safeAppendDataToSheet(spreadsheetId, auth, range, [sheetRow]);
   } catch (err) {
     handleError(err, 'spiritOrb.js');
 

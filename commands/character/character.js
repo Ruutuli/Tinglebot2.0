@@ -48,6 +48,7 @@ const {
  appendSheetData,
  authorizeSheets,
  deleteInventorySheetData,
+ safeAppendDataToSheet,
 } = require("../../utils/googleSheetsUtils");
 const {
  createCharacterAutocomplete,
@@ -1582,7 +1583,7 @@ async function handleChangeJob(interaction) {
     "spent",
     `-500`,
    ];
-   await appendSheetData(auth, spreadsheetId, "loggedTracker!B7:F", [tokenRow]);
+   await safeAppendDataToSheet(spreadsheetId, auth, "loggedTracker!B7:F", [tokenRow]);
   }
 
   character.job = newJob;

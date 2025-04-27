@@ -41,7 +41,7 @@ const { getJobPerk, hasPerk } = require('../modules/jobsModule');
 const { addItemInventoryDatabase } = require('../utils/inventoryUtils');
 
 // Google Sheets utilities: functions for appending data and authorizing access.
-const { appendSheetData, authorizeSheets } = require('../utils/googleSheetsUtils');
+const { appendSheetData, authorizeSheets, safeAppendDataToSheet, } = require('../utils/googleSheetsUtils');
 
 // Validation utilities: functions to extract spreadsheet IDs and validate Google Sheets URLs.
 const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../utils/validation');
@@ -165,7 +165,7 @@ if (customId === 'recover') {
                         uniqueSyncId
                     ]];
 
-                    await appendSheetData(auth, spreadsheetId, range, values);
+                    await safeAppendDataToSheet(spreadsheetId, auth, range, values);
                 }
 
                 // Deduct stamina if the character does not have the DELIVERING perk.
@@ -304,7 +304,7 @@ if (customId === 'recover') {
                             uniqueSyncId
                         ]];
 
-                        await appendSheetData(auth, spreadsheetId, range, values);
+                        await safeAppendDataToSheet(spreadsheetId, auth, range, values);
                     }
 
                     const itemEmoji = lootedItem.emoji || '';

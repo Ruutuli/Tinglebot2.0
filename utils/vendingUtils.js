@@ -1,6 +1,6 @@
 // ------------------- Import necessary modules -------------------
 // Grouped local and third-party imports for better organization
-const { authorizeSheets, fetchSheetData, appendSheetData, logErrorDetails } = require('./googleSheetsUtils');
+const { authorizeSheets, fetchSheetData, appendSheetData, logErrorDetails,  safeAppendDataToSheet, } = require('./googleSheetsUtils');
 const { handleError } = require('../utils/globalErrorHandler');
 const VendingInventory = require('../models/VendingModel');
 const ItemModel = require('../models/ItemModel');
@@ -52,7 +52,7 @@ async function syncVendingInventory(spreadsheetId) {
 
         // Write confirmation to the vendingShop sheet
         const confirmationMessage = [['VENDING INVENTORY SYNCED']];
-        await appendSheetData(auth, spreadsheetId, 'vendingShop!I1:I1', confirmationMessage);
+        await safeAppendDataToSheet(spreadsheetId, auth, 'vendingShop!I1:I1', confirmationMessage);
 
         console.log('✅ Sync confirmation written to Google Sheets.');
     } catch (error) {

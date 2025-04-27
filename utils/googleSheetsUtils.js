@@ -431,6 +431,34 @@ function logErrorDetails(error) {
     console.error(`[googleSheetsUtils.js]: logs`, error);
 }
 
+// ------------------- Safely Append Data to Sheet -------------------
+async function safeAppendDataToSheet(spreadsheetUrl, characterName, range, values) {
+  try {
+      if (!spreadsheetUrl || typeof spreadsheetUrl !== 'string') {
+          console.warn(`[googleSheetsUtils.js]: No spreadsheet URL provided for ${characterName}. Skipping sync.`);
+          return;
+      }
+
+      const spreadsheetId = extractSpreadsheetId(spreadsheetUrl);
+      const auth = await authorizeSheets();
+
+      // 🛡️ Validate the inventory sheet first
+      const validationResult = await validateInventorySheet(spreadsheetUrl, characterName);
+      if (!validationResult.success) {
+          console.error(`[googleSheetsUtils.js]: Validation failed for ${characterName}: ${validationResult.message}`);
+          return;
+      }
+
+      // ✅ If validation passed, proceed to append
+      await safeAppendDataToSheet(spreadsheetId, auth, range, values);
+
+  } catch (error) {
+      console.error(`[googleSheetsUtils.js]: Failed to safely append data for ${characterName}: ${error.message}`);
+      // You can also use handleError(error, 'googleSheetsUtils.js'); if you want
+  }
+}
+
+
 // ============================================================================
 // Exported Functions
 // ------------------- Export functions grouped by functionality -------------------
@@ -460,6 +488,7 @@ module.exports = {
     convertWixImageLinkForSheets,
     deleteInventorySheetData,
     validateInventorySheet,
+    safeAppendDataToSheet,
     
     // Error logging
     logErrorDetails

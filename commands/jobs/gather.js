@@ -33,7 +33,7 @@ const { validateJobVoucher, activateJobVoucher, fetchJobVoucherItem, deactivateJ
 // ------------------- Utilities -------------------
 // Import helper utilities for inventory management, Google Sheets integration, URL validation, and Blood Moon detection.
 const { addItemInventoryDatabase } = require('../../utils/inventoryUtils.js');
-const { authorizeSheets, appendSheetData } = require('../../utils/googleSheetsUtils.js');
+const { authorizeSheets, appendSheetData,safeAppendDataToSheet  } = require('../../utils/googleSheetsUtils.js');
 const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../../utils/validation.js');
 const { isBloodMoonActive } = require('../../scripts/bloodmoon.js');
 
@@ -340,7 +340,7 @@ module.exports = {
                 lootedItem.type.join(', '),
                 interaction
               );
-              await appendSheetData(auth, spreadsheetId, range, values);
+              await safeAppendDataToSheet(spreadsheetId, auth, range, values);
               const embed = createMonsterEncounterEmbed(
                 character,
                 encounteredMonster,
@@ -429,7 +429,7 @@ module.exports = {
           formattedDateTime,
           uniqueSyncId,
         ]];
-        await appendSheetData(auth, spreadsheetId, range, values);
+        await safeAppendDataToSheet(spreadsheetId, auth, range, values);
         const embed = createGatherEmbed(character, randomItem);
         await interaction.editReply({ embeds: [embed] });
       }

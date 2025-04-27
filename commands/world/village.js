@@ -27,7 +27,7 @@ const { Village } = require('../../models/VillageModel');
 
 // ------------------- Google Sheets API -------------------
 // Utility functions for logging and tracking via Google Sheets.
-const { appendSheetData, authorizeSheets, extractSpreadsheetId } = require('../../utils/googleSheetsUtils');
+const { appendSheetData, authorizeSheets, extractSpreadsheetId, safeAppendDataToSheet, } = require('../../utils/googleSheetsUtils');
 
 
 
@@ -312,7 +312,7 @@ module.exports = {
                             uuidv4(),                          // Unique Identifier
                         ];
 
-                        await appendSheetData(auth, spreadsheetId, 'loggedInventory!A2:N', [inventoryRow]);
+                        await safeAppendDataToSheet(spreadsheetId, auth, 'loggedInventory!A2:N', [inventoryRow]);
                         console.log(`[village.js:logs] execute (upgrade): Logged donation to Google Sheets for character "${characterName}" to village "${villageName}"`);
                     }
 
@@ -379,7 +379,7 @@ module.exports = {
                             `-${qty}`,                           // Amount (negative for tokens spent)
                         ];
 
-                        await appendSheetData(auth, spreadsheetId, 'loggedTracker!B7:F', [tokenRow]);
+                        await safeAppendDataToSheet(spreadsheetId, auth, 'loggedTracker!B7:F', [tokenRow]);
                         console.log(`[village.js:logs] execute (upgrade): Logged token contribution to Google Sheets for user ${userId}`);
                     }
 

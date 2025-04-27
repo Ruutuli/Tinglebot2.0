@@ -25,7 +25,7 @@ const { getVillageEmojiByName } = require('../../modules/locationsModule');
 
 // ------------------- Utility Functions -------------------
 // General-purpose utilities: Google Sheets integration, URL validation, error handling, inventory utils.
-const { authorizeSheets, appendSheetData } = require('../../utils/googleSheetsUtils');
+const { authorizeSheets, appendSheetData,  safeAppendDataToSheet, } = require('../../utils/googleSheetsUtils');
 const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../../utils/validation');
 const { handleError } = require('../../utils/globalErrorHandler');
 const { removeItemInventoryDatabase } = require('../../utils/inventoryUtils');
@@ -286,7 +286,7 @@ module.exports = {
           uniqueSyncId
         ]];
 
-        await appendSheetData(auth, spreadsheetId, range, values);
+        await safeAppendDataToSheet(spreadsheetId, auth, range, values);
       }
 
 

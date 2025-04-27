@@ -15,7 +15,7 @@ const { connectToTinglebot, fetchCharacterByNameAndUserId, updateCharacterById, 
 
 
 // Utility Functions
-const { appendSheetData, authorizeSheets, extractSpreadsheetId, getSheetIdByTitle, isValidGoogleSheetsUrl, readSheetData, writeSheetData } = require("../utils/googleSheetsUtils");
+const { appendSheetData, authorizeSheets, extractSpreadsheetId, getSheetIdByTitle, isValidGoogleSheetsUrl, readSheetData, writeSheetData,  safeAppendDataToSheet, } = require("../utils/googleSheetsUtils");
 const {addItemToVendingInventory, addItemInventoryDatabase } = require("../utils/inventoryUtils.js")
 const { retrieveVendingRequestFromStorage, deleteVendingRequestFromStorage, saveVendingRequestToStorage, retrieveAllVendingRequests } = require('../utils/storage'); 
 const { uploadSubmissionImage } = require('../utils/uploadUtils'); // Replace with the correct path to uploadUtils.js
@@ -330,7 +330,7 @@ async function handleRestock(interaction) {
                 ]
             ];
 
-            await appendSheetData(auth, spreadsheetId, 'vendingShop!A:K', values);
+            await safeAppendDataToSheet(spreadsheetId, auth, 'vendingShop!A:K', values);
         } catch (error) {
     handleError(error, 'vendingHandler.js');
 
@@ -625,7 +625,7 @@ async function handleBarter(interaction) {
                 ]];
 
                 const range = 'loggedInventory!A2:M';
-                await appendSheetData(auth, spreadsheetId, range, values);
+                await safeAppendDataToSheet(spreadsheetId, auth, range, values);
             } catch (sheetError) {
     handleError(sheetError, 'vendingHandler.js');
 
@@ -821,7 +821,7 @@ async function handleFulfill(interaction) {
             ]];
 
             const range = 'loggedInventory!A2:M'; // Range for appending data
-            await appendSheetData(auth, spreadsheetId, range, values);
+            await safeAppendDataToSheet(spreadsheetId, auth, range, values);
         }
 
         // React to the "Fulfillment Required!" message
