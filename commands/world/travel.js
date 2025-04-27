@@ -137,12 +137,11 @@ function calculateTravelDuration(currentVillage, destination, mode, character) {
   }
   
   // ------------------- Handle stop at Inariko during multi-day travel -------------------
-  async function handleStopInariko(channel, character, nextPathKey, travelLog) {
+  async function handleStopInariko(channel, character, nextPathKey) {
     const nextChannelId = PATH_CHANNELS[nextPathKey];
     const stopEmbed = createStopInInarikoEmbed(character, nextChannelId);
   
     await channel.send({ embeds: [stopEmbed] });
-    travelLog.push(`> 🛑 Stopped in Inariko. Please move to <#${nextChannelId}> to continue your journey.\n`);
   
     const imageEmbed = new EmbedBuilder()
       .setImage('https://storage.googleapis.com/tinglebot/Graphics/stopatlanayru.png')
@@ -152,12 +151,12 @@ function calculateTravelDuration(currentVillage, destination, mode, character) {
       await channel.send({ embeds: [imageEmbed] });
     } catch (error) {
       handleError(error, 'travel.js');
-      console.error(`[travel.js]: Error sending stop-in-Inariko image embed: ${error.message}`, error);
+      console.error(`[travel.js]: Error sending stop image: ${error.message}`);
     }
   
     return nextChannelId;
   }
-
+  
   // ------------------- Create travel button collectors and handle timeout fallback -------------------
 async function createTravelCollector(message, interaction, character, day, totalTravelDuration, pathEmoji, currentPath, travelLog, paths, stopInInariko, monster = null) {
     const filter = (i) => i.user.id === interaction.user.id;
