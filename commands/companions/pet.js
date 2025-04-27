@@ -367,7 +367,7 @@ if (!canSpeciesPerformPetType(normalizedSpeciesKey, petType)) {
 
     return interaction.reply(`✅ **Updated pet \`${petName}\` with new details.**`);
   } else {
-    await addPetToCharacter(character._id, petName, species, "small", 0, petType, petImageUrl);
+    await addPetToCharacter(character._id, petName, species, 0, petType, petImageUrl);
 
     const newPet = await Pet.create({
       ownerName: character.name,
