@@ -74,11 +74,16 @@ async function retryWithBackoff(fn, options = {}) {
         return await fn();
       } catch (error) {
         if (i === retries - 1) {
-          if (!suppressLog) {
-            handleError(error, 'googleSheetsUtils.js'); // ❌ Only log if NOT suppressed
+            if (!suppressLog) {
+              if (error.message.includes('Requested entity was not found')) {
+                console.warn(`[googleSheetsUtils.js]: Warning: Requested Google Sheet entity was not found. Suppressing error log.`);
+              } else {
+                handleError(error, 'googleSheetsUtils.js'); // ❌ Only log real errors
+              }
+            }
+            throw error;
           }
-          throw error;
-        }
+          
         await delay(500 * Math.pow(2, i)); // Exponential backoff delay
       }
     }
