@@ -741,7 +741,7 @@ async function handleShopView(interaction) {
      const buyPrice = itemDetails?.buyPrice || "N/A";
      const sellPrice = itemDetails?.sellPrice || "N/A";
      const emoji = itemDetails?.emoji || "🛒";
-     return `__ ${emoji} **${item.itemName}**__ - Qty: ${item.quantity}\n> 🪙 Buy Price: ${buyPrice} \n> 🪙 Sell Price: ${sellPrice}`;
+     return `__ ${emoji} **${item.itemName}**__ - Stock: ${item.stock}\n> 🪙 Buy Price: ${buyPrice} \n> 🪙 Sell Price: ${sellPrice}`;
     })
    );
 
