@@ -61,16 +61,19 @@ async function makeApiRequest(fn) {
 
 // ------------------- Retry with Exponential Backoff -------------------
 // Retries API requests with exponential backoff on failure.
-async function retryWithBackoff(fn) {
+async function retryWithBackoff(fn, options = {}) {
+    const { suppressLog = false } = options;
     const retries = 3;
     const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+  
     for (let i = 0; i < retries; i++) {
       try {
         return await fn();
       } catch (error) {
         if (i === retries - 1) {
-          // Only log AFTER all retries fail
-          handleError(error, 'googleSheetsUtils.js');
+          if (!suppressLog) {
+            handleError(error, 'googleSheetsUtils.js'); // ❌ Only log if NOT suppressed
+          }
           throw error;
         }
         await delay(500 * Math.pow(2, i)); // Exponential backoff delay
@@ -78,34 +81,34 @@ async function retryWithBackoff(fn) {
     }
   }
   
+  
 // ============================================================================
 // Reading Functions
 // ------------------- Fetch Data from Google Sheets with Sanitization -------------------
 async function fetchSheetData(auth, spreadsheetId, range) {
     return makeApiRequest(async () => {
-        const response = await google.sheets({ version: 'v4', auth }).spreadsheets.values.get({
-            spreadsheetId,
-            range
-        });
-        // Sanitize data: remove commas from numeric strings.
-        const sanitizedValues = response.data.values.map(row =>
-            row.map(cell => (typeof cell === 'string' && cell.includes(',')) ? cell.replace(/,/g, '') : cell)
-        );
-        return sanitizedValues;
-    });
-}
+      const response = await google.sheets({ version: 'v4', auth }).spreadsheets.values.get({
+        spreadsheetId,
+        range
+      });
+      const sanitizedValues = response.data.values.map(row =>
+        row.map(cell => (typeof cell === 'string' && cell.includes(',')) ? cell.replace(/,/g, '') : cell)
+      );
+      return sanitizedValues;
+    }, { suppressLog: true }); // 👈 Add this
+  }
 
 // ------------------- Read Data from Google Sheets -------------------
 // Reads data from a specified range without sanitization.
 async function readSheetData(auth, spreadsheetId, range) {
     return makeApiRequest(async () => {
-        const response = await google.sheets({ version: 'v4', auth }).spreadsheets.values.get({
-            spreadsheetId,
-            range
-        });
-        return response.data.values;
-    });
-}
+      const response = await google.sheets({ version: 'v4', auth }).spreadsheets.values.get({
+        spreadsheetId,
+        range
+      });
+      return response.data.values;
+    }, { suppressLog: true }); // 👈 Add this
+  }
 
 // ------------------- Clear Formatting in Google Sheets -------------------
 // Clears formatting in a specified range in Google Sheets.
