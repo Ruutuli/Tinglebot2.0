@@ -236,6 +236,26 @@ const getPetTypeDescription = (petType) => {
 // Retrieve the complete pet type data (roll combination and description) for a given pet type.
 const getPetTypeData = (petType) => petTypeData[petType] || null;
 
+const dangerousPetTypes = [
+  "Conqueror",
+  "Guardian",
+  "Hunter",
+  "Nomad",
+  "Roamer",
+  "Sentinel"
+];
+
+const forbiddenSpeciesForDangerousTypes = [
+  // small normal pets
+  'smallcanine', 'smallfeline', 'rabbit', 'mouse', 'smallrodent', 'insectivore', 'mustelid',
+  'foragingbird', 'scavengingbird', 'predatorybird', 'companionbird', 'flightlessbird',
+  'smallreptile', 'climbingreptile', 'shellreptile', 'amphibian',
+  // special pets
+  'chain chomp', 'chuchu', 'choir frog', 'cucco', 'keese', 'moink', "pol's voice", 'pygmy octorok', 'remlit', 'walltula'
+];
+
+
+
 // ------------------- Module Exports -------------------
 module.exports = {
   getPerkField,

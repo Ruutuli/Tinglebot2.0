@@ -304,6 +304,18 @@ module.exports = {
     const petType = interaction.options.getString("pettype");
     const imageAttachment = interaction.options.getAttachment("image");
 
+    // ------------------- Validate Species Against Dangerous Pet Types -------------------
+    const lowerSpecies = species.toLowerCase().replace(/\s+/g, ''); // remove spaces for matching
+    if (dangerousPetTypes.includes(petType)) {
+      if (forbiddenSpeciesForDangerousTypes.includes(lowerSpecies)) {
+        return interaction.reply(
+          `❌ **The species \`${species}\` is too small or unsuitable to be assigned the pet type \`${petType}\`.**\n\n` +
+          `Please select a more appropriate pet type for this pet.`
+        );
+      }
+    }
+
+
     // ------------------- Validate and Infer Pet Size -------------------
     // For normal pets, infer size based on the species name.
     let inferredSize;
