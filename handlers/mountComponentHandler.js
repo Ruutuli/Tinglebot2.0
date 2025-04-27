@@ -574,10 +574,15 @@ async function handleTameInteraction(interaction) {
         ephemeral: false
       });
     } else {
-      message += `🚫 **Failed!** The mount escaped. Try again if you have enough stamina.`;
+      deleteEncounterById(encounterId); // ❗ Mount escaped, delete encounter
+    
+      message += `🚫 **Failed!** The mount escaped and fled! You can no longer attempt to tame this mount.`;
+      
+      await interaction.message.edit({ components: [] }); // ❗ Clear buttons
+    
       await interaction.editReply({
         embeds: [{
-          title: `${getMountEmoji(encounter.mountType)} Tame Attempt Failed`,
+          title: `${getMountEmoji(encounter.mountType)} Mount Escaped`,
           description: message,
           color: 0xFF0000,
           author: { name: character.name, icon_url: character.icon },
@@ -585,6 +590,7 @@ async function handleTameInteraction(interaction) {
         ephemeral: false
       });
     }
+    
   } catch (error) {
     handleError(error, 'mountComponentHandler.js');
 
