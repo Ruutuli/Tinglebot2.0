@@ -321,7 +321,7 @@ if (subcommand === "add") {
 
   // Validate petTypeData existence
   const selectedPetTypeInfo = getPetTypeData(petType);
-  if (!selectedPetTypeData) {
+  if (!selectedPetTypeInfo) {
     return interaction.reply(`❌ **Unknown or unsupported pet type \`${petType}\`.**`);
   }
 
@@ -378,8 +378,8 @@ if (!canSpeciesPerformPetType(normalizedSpeciesKey, petType)) {
       level: 0,
       rollsRemaining: 0,
       imageUrl: petImageUrl || "",
-      rollCombination: selectedPetTypeData.rollCombination,
-      tableDescription: selectedPetTypeData.description,
+      rollCombination: selectedPetTypeInfo.rollCombination,
+      tableDescription: selectedPetTypeInfo.description,      
     });
 
     await Character.findByIdAndUpdate(character._id, { currentActivePet: newPet._id });
