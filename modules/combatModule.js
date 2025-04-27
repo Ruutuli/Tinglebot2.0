@@ -418,6 +418,26 @@ async function takePvPTurn(battleId, attacker, defender) {
   return { message: log };
 }
 
+// ------------------- Update Monster Hearts Only -------------------
+// Updates only the monster's current hearts for a battle.
+async function updateBattleProgressHearts(battleId, newMonsterHeartsCurrent) {
+  ensureBattleProgressFileExists();
+  const battleProgress = JSON.parse(fs.readFileSync(BATTLE_PROGRESS_PATH, 'utf8'));
+
+  if (battleProgress[battleId]) {
+    battleProgress[battleId].monsterHearts.current = Math.max(newMonsterHeartsCurrent, 0);
+
+    try {
+      fs.writeFileSync(BATTLE_PROGRESS_PATH, JSON.stringify(battleProgress, null, 2));
+    } catch (err) {
+      handleError(err, 'combatModule.js');
+      console.error(`[combatModule.js]: ❌ Error updating monster hearts for Battle ID "${battleId}":`, err);
+      throw err;
+    }
+  }
+}
+
+
 // ============================================================================
 // Module Exports
 // ------------------- Exported Functions -------------------
@@ -430,5 +450,6 @@ module.exports = {
   updateMonsterHeartsToZero,
   startPvPBattle,
   takePvPTurn,
-  getTotalDefense
+  getTotalDefense,
+  updateBattleProgressHearts   
 };

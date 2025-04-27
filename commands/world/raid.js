@@ -7,7 +7,7 @@ const { handleError } = require('../../utils/globalErrorHandler.js');
 // Local service and module imports
 const { fetchCharacterByNameAndUserId, fetchMonsterByName } = require('../../database/db.js');
 const { processBattle } = require('../../modules/damageModule.js');
-const { getBattleProgressById } = require('../../modules/combatModule.js');
+const { getBattleProgressById, updateBattleProgressHearts  } = require('../../modules/combatModule.js');
 const { monsterMapping } = require('../../models/MonsterModel.js');
 const { processLoot } = require('../../modules/lootModule.js');
 const {
@@ -104,28 +104,36 @@ async execute(interaction) {
 
       try {
           // ------------------- Process the Battle -------------------
-          const battleOutcome = await processBattle(character, currentMonster, battleId, originalRoll, interaction);
+            const battleOutcome = await processBattle(character, currentMonster, battleId, originalRoll, interaction);
 
-          if (!battleOutcome || typeof battleOutcome !== 'object') {
-              console.error('[ERROR] Invalid battle outcome.');
-              await interaction.editReply('⚠️ **An error occurred during the battle.**');
-              return;
-          }
+            if (!battleOutcome || typeof battleOutcome !== 'object') {
+                console.error('[ERROR] Invalid battle outcome.');
+                await interaction.editReply('⚠️ **An error occurred during the battle.**');
+                return;
+            }
 
-          // Ensure battleResult is defined, with a fallback value
-          const {
-              result: battleResult = 'No result available.', // Fallback message for undefined results
-              adjustedRandomValue = originalRoll,
-              attackSuccess = false,
-              defenseSuccess = false
-          } = battleOutcome;
+            // Ensure battleResult is defined, with a fallback value
+            const {
+                result: battleResult = 'No result available.', // Fallback message for undefined results
+                adjustedRandomValue = originalRoll,
+                attackSuccess = false,
+                defenseSuccess = false,
+                newMonsterHeartsCurrent // <-- we expect this from processBattle now
+            } = battleOutcome;
 
-          let buffMessage = '';
+            let buffMessage = '';
 
-          if (attackSuccess || defenseSuccess) {
-              const buffSource = attackSuccess ? 'weapon' : 'armor';
-              buffMessage = `🛡️ **Your ${buffSource} helped!**\n\n`;
-          }
+            if (attackSuccess || defenseSuccess) {
+                const buffSource = attackSuccess ? 'weapon' : 'armor';
+                buffMessage = `🛡️ **Your ${buffSource} helped!**\n\n`;
+            }
+
+            // ------------------- Update Monster Hearts After Battle -------------------
+            if (newMonsterHeartsCurrent !== undefined) {
+                const { updateBattleProgressHearts } = require('../../modules/combatModule');
+                await updateBattleProgressHearts(battleId, newMonsterHeartsCurrent);
+            }
+
 
         // ------------------- Create Embed -------------------
           const updatedBattleProgress = await getBattleProgressById(battleId);
