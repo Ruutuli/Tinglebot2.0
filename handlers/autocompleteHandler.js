@@ -202,7 +202,7 @@ else if (commandName === "economy") {
     await handleShopsAutocomplete(interaction, focusedOption);
   } else if (subcommand === "trade") {
     if (focusedOption.name === "fromcharacter") {
-      await handleTradeFromCharacterAutocomplete(interaction, focusedOption);
+      await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "trade");
     } else if (focusedOption.name === "tocharacter") {
       await handleTradeToCharacterAutocomplete(interaction, focusedOption);
     } else if (["item1", "item2", "item3"].includes(focusedOption.name)) {
@@ -2174,33 +2174,8 @@ async function handleStealRarityAutocomplete(interaction, focusedOption) {
 // ============================================================================
 // This section handles autocomplete interactions for the "trade" command.
 // It provides suggestions for:
-// - From Character (user-owned characters)
 // - To Character (any character not owned by user)
 // - Items from From Character's Inventory
-
-// ------------------- Trade From Character Autocomplete -------------------
-async function handleTradeFromCharacterAutocomplete(
- interaction,
- focusedOption
-) {
- try {
-  const userId = interaction.user.id;
-
-  const characters = await fetchCharactersByUserId(userId);
-
-  const choices = characters.map((character) => ({
-   name: `${character.name} - ${capitalize(character.currentVillage)}`,
-   value: character.name,
-  }));
-
-  await respondWithFilteredChoices(interaction, focusedOption, choices);
- } catch (error) {
-  handleError(error, "autocompleteHandler.js");
-
-  console.error("[handleTradeFromCharacterAutocomplete]: Error:", error);
-  await safeRespondWithError(interaction);
- }
-}
 
 // ------------------- Trade To Character Autocomplete -------------------
 async function handleTradeToCharacterAutocomplete(interaction, focusedOption) {
@@ -2752,7 +2727,6 @@ module.exports = {
  handleStealRarityAutocomplete,
 
  // TRADE
- handleTradeFromCharacterAutocomplete,
  handleTradeToCharacterAutocomplete,
  handleTradeItemAutocomplete,
 
