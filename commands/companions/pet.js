@@ -27,6 +27,7 @@ const {
  getPetEmoji,
  getFlavorText,
  getPetTypeData,
+ canSpeciesPerformPetType,
 } = require("../../modules/petModule");
 
 // ------------------- Utility Functions -------------------
@@ -304,16 +305,17 @@ module.exports = {
     const petType = interaction.options.getString("pettype");
     const imageAttachment = interaction.options.getAttachment("image");
 
-    // ------------------- Validate Species Against Dangerous Pet Types -------------------
-    const lowerSpecies = species.toLowerCase().replace(/\s+/g, ''); // remove spaces for matching
-    if (dangerousPetTypes.includes(petType)) {
-      if (forbiddenSpeciesForDangerousTypes.includes(lowerSpecies)) {
-        return interaction.reply(
-          `❌ **The species \`${species}\` is too small or unsuitable to be assigned the pet type \`${petType}\`.**\n\n` +
-          `Please select a more appropriate pet type for this pet.`
-        );
-      }
-    }
+// Normalize species for lookup
+const normalizedSpeciesKey = species.toLowerCase().replace(/\s+/g, '').replace(/'/g, '');
+
+// Validate species can perform pet type rolls
+if (!canSpeciesPerformPetType(normalizedSpeciesKey, petType)) {
+  return interaction.reply(
+    `❌ **The species \`${species}\` cannot perform all roll types required by the pet type \`${petType}\`.**\n\n` +
+    `Please select a more appropriate pet type for this species.`
+  );
+}
+
 
 
     // ------------------- Validate and Infer Pet Size -------------------
