@@ -320,7 +320,7 @@ if (subcommand === "add") {
   }
 
   // Validate petTypeData existence
-  const selectedPetTypeData = getPetTypeData(petType);
+  const selectedPetTypeInfo = getPetTypeData(petType);
   if (!selectedPetTypeData) {
     return interaction.reply(`❌ **Unknown or unsupported pet type \`${petType}\`.**`);
   }
