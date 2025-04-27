@@ -139,5 +139,31 @@
     "tameStatus": false,
     "traits": {},
     "totalSpent": 0
+  },
+  "2c4734e3": {
+    "users": [],
+    "mountType": "Horse",
+    "rarity": "To be determined",
+    "mountLevel": "Basic",
+    "mountStamina": "To be determined",
+    "environment": "To be determined",
+    "village": "Rudania",
+    "actions": [],
+    "tameStatus": false,
+    "traits": {},
+    "totalSpent": 0
+  },
+  "776e4096": {
+    "users": [],
+    "mountType": "Donkey",
+    "rarity": "To be determined",
+    "mountLevel": "Mid",
+    "mountStamina": "To be determined",
+    "environment": "To be determined",
+    "village": "Rudania",
+    "actions": [],
+    "tameStatus": false,
+    "traits": {},
+    "totalSpent": 0
   }
 }
