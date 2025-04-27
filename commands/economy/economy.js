@@ -35,14 +35,6 @@ const {
  createTransferEmbed,
 } = require("../../embeds/embeds.js");
 const { hasPerk } = require("../../modules/jobsModule");
-const {
- handleGiftAutocomplete,
- handleShopsAutocomplete,
- handleTradeItemAutocomplete,
- handleCharacterBasedCommandsAutocomplete,
- handleTransferItemAutocomplete,
-} = require("../../handlers/autocompleteHandler.js");
-
 const tradeSessions = {};
 const DEFAULT_EMOJI = "🔹";
 

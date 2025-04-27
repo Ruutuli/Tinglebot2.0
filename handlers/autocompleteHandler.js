@@ -183,46 +183,55 @@ async function handleAutocomplete(interaction) {
     }
    }
 
-  // ------------------- ECONOMY Commands -------------------
-else if (commandName === "economy") {
-  const subcommand = interaction.options.getSubcommand();
-  const focusedOption = interaction.options.getFocused(true);
-
-  if (subcommand === "gift") {
-    if (focusedOption.name === "fromcharacter") {
-      await handleGiftFromCharacterAutocomplete(interaction, focusedOption);
-    } else if (focusedOption.name === "tocharacter") {
-      await handleGiftToCharacterAutocomplete(interaction, focusedOption);
-    } else if (["itema", "itemb", "itemc"].includes(focusedOption.name)) {
-      await handleGiftItemAutocomplete(interaction, focusedOption);
-    } else {
-      await interaction.respond([]);
-    }
-  } else if (subcommand === "shop-buy" || subcommand === "shop-sell") {
+  } else if (
+    commandName === "economy" &&
+    (
+      (["gift", "trade", "transfer"].includes(interaction.options.getSubcommand()) && focusedOption.name === "fromcharacter") ||
+      (["shop-buy", "shop-sell"].includes(interaction.options.getSubcommand()) && focusedOption.name === "charactername") ||
+      (["transfer"].includes(interaction.options.getSubcommand()) && focusedOption.name === "tocharacter")
+    )
+  ) {
+    await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, commandName);
+  
+  } else if (
+    commandName === "economy" &&
+    (["gift", "trade"].includes(interaction.options.getSubcommand())) &&
+    focusedOption.name === "tocharacter"
+  ) {
+    await handleTradeToCharacterAutocomplete(interaction, focusedOption);
+  
+  // GIFT Items
+  } else if (
+    commandName === "economy" &&
+    interaction.options.getSubcommand() === "gift" &&
+    ["itema", "itemb", "itemc"].includes(focusedOption.name)
+  ) {
+    await handleGiftAutocomplete(interaction, focusedOption);
+  
+  // TRADE Items
+  } else if (
+    commandName === "economy" &&
+    interaction.options.getSubcommand() === "trade" &&
+    ["item1", "item2", "item3"].includes(focusedOption.name)
+  ) {
+    await handleTradeItemAutocomplete(interaction, focusedOption);
+  
+  // TRANSFER Items
+  } else if (
+    commandName === "economy" &&
+    interaction.options.getSubcommand() === "transfer" &&
+    ["itema", "itemb", "itemc"].includes(focusedOption.name)
+  ) {
+    await handleTransferItemAutocomplete(interaction, focusedOption);
+  
+  // SHOP BUY/SELL Items
+  } else if (
+    commandName === "economy" &&
+    ["shop-buy", "shop-sell"].includes(interaction.options.getSubcommand()) &&
+    focusedOption.name === "itemname"
+  ) {
     await handleShopsAutocomplete(interaction, focusedOption);
-  } else if (subcommand === "trade") {
-    if (focusedOption.name === "fromcharacter") {
-      await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "trade");
-    } else if (focusedOption.name === "tocharacter") {
-      await handleTradeToCharacterAutocomplete(interaction, focusedOption);
-    } else if (["item1", "item2", "item3"].includes(focusedOption.name)) {
-      await handleTradeItemAutocomplete(interaction, focusedOption);
-    } else {
-      await interaction.respond([]);
-    }
-  } else if (subcommand === "transfer") {
-    if (["fromcharacter", "tocharacter"].includes(focusedOption.name)) {
-      await handleTransferCharacterAutocomplete(interaction, focusedOption);
-    } else if (["itema", "itemb", "itemc"].includes(focusedOption.name)) {
-      await handleTransferItemAutocomplete(interaction, focusedOption);
-    } else {
-      await interaction.respond([]);
-    }
-  } else {
-    await interaction.respond([]);
-  }
-}
-
+    
    // ------------------- EDITCHARACTER Commands -------------------
   } else if (
    commandName === "editcharacter" &&
@@ -1446,19 +1455,11 @@ async function handleGiftAutocomplete(interaction, focusedOption) {
  try {
   const userId = interaction.user.id;
 
-  if (focusedOption.name === "fromcharacter") {
-   // Autocomplete for characters owned by the user (sender)
-   const characters = await fetchCharactersByUserId(userId);
-   const choices = characters.map((character) => ({
-    name: `${character.name} - ${capitalize(character.currentVillage)}`,
-    value: character.name,
-   }));
-   await respondWithFilteredChoices(interaction, focusedOption, choices);
-  } else if (focusedOption.name === "tocharacter") {
+if (focusedOption.name === "tocharacter") {
    // Autocomplete for all characters excluding the user's own (recipient)
    const allCharacters = await fetchAllCharactersExceptUser(userId);
    const choices = allCharacters.map((character) => ({
-    name: `${character.name} - ${capitalize(character.currentVillage)}`,
+    name: `${character.name} | ${capitalize(character.currentVillage)}`,
     value: character.name,
    }));
    await respondWithFilteredChoices(interaction, focusedOption, choices);
@@ -2185,7 +2186,7 @@ async function handleTradeToCharacterAutocomplete(interaction, focusedOption) {
   const characters = await fetchAllCharactersExceptUser(userId);
 
   const choices = characters.map((character) => ({
-   name: `${character.name} - ${capitalize(character.currentVillage)}`,
+   name: `${character.name} | ${capitalize(character.currentVillage)}`,
    value: character.name,
   }));
 
