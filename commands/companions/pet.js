@@ -29,6 +29,7 @@ const {
  getPetTypeData,
  petTypeData,
  canSpeciesPerformPetType,
+ speciesRollPermissions,
 } = require("../../modules/petModule");
 
 // ------------------- Utility Functions -------------------
@@ -312,29 +313,36 @@ if (subcommand === "add") {
   const normalizedSpeciesKey = species.toLowerCase().replace(/\s+/g, '').replace(/'/g, '');
   const allowedRolls = speciesRollPermissions[normalizedSpeciesKey];
 
-  // ------------------- Validate Species -------------------
-  if (!allowedRolls) {
-    return interaction.reply(`❌ **Unknown or unsupported species \`${species}\`. Please select a valid species.**`);
-  }
+// ------------------- Validate Species -------------------
+if (!allowedRolls) {
+  return interaction.reply(`❌ **Unknown or unsupported species \`${species}\`. Please select a valid species.**`);
+}
 
-  if (!canSpeciesPerformPetType(normalizedSpeciesKey, petType)) {
-    const possibleTypes = [];
+// Validate petTypeData existence
+const selectedPetTypeData = getPetTypeData(petType);
+if (!selectedPetTypeData) {
+  return interaction.reply(`❌ **Unknown or unsupported pet type \`${petType}\`.**`);
+}
 
-    for (const [type, data] of Object.entries(petTypeData)) {
-      const requiredRolls = data.rollCombination;
-      if (requiredRolls.every((roll) => allowedRolls.includes(roll))) {
-        possibleTypes.push(type);
+      // Validate if species can perform pet type rolls
+      if (!canSpeciesPerformPetType(normalizedSpeciesKey, petType)) {
+        const possibleTypes = [];
+
+        for (const [type, data] of Object.entries(petTypeData)) {
+          const requiredRolls = data.rollCombination;
+          if (allowedRolls && requiredRolls.every((roll) => allowedRolls.includes(roll))) {
+            possibleTypes.push(type);
+          }
+        }
+
+        const suggestionText = possibleTypes.length
+          ? `**Valid pet types for ${species}:**\n> ${possibleTypes.join(", ")}`
+          : `❗ **No valid pet types found for this species.** Please choose a different species.`;
+
+        return interaction.reply(
+          `❌ **The species \`${species}\` cannot perform all roll types required by the pet type \`${petType}\`.**\n\n${suggestionText}`
+        );
       }
-    }
-
-    const suggestionText = possibleTypes.length
-      ? `**Valid pet types for ${species}:**\n> ${possibleTypes.join(", ")}`
-      : `❗ **No valid pet types found for this species.** Please choose a different species.`;
-
-    return interaction.reply(
-      `❌ **The species \`${species}\` cannot perform all roll types required by the pet type \`${petType}\`.**\n\n${suggestionText}`
-    );
-  }
 
   // ------------------- Upload Pet Image (If Provided) -------------------
   let petImageUrl = "";
