@@ -81,10 +81,10 @@ async function triggerRaid(character, monster, interaction, threadId, isBloodMoo
         if (!threadId) {
             const emoji = isBloodMoon ? '🔴' : '🛡️';
             const threadName = `${emoji} ${character.currentVillage || 'Unknown Village'} - ${monster.name} (Tier ${monster.tier})`;
-
+        
             // Edit the initial interaction reply with the embed message.
             await interaction.editReply({ embeds: [embed] });
-
+        
             // Start a new thread from the reply message.
             thread = await interaction.fetchReply().then((message) =>
                 message.startThread({
@@ -93,12 +93,18 @@ async function triggerRaid(character, monster, interaction, threadId, isBloodMoo
                     reason: `Raid initiated for ${character.name} against ${monster.name}`,
                 })
             );
-
+        
             threadId = thread.id; // Update threadId with the new thread's ID
-
-            // Send an initial message in the new thread.
-            await thread.send(`👋 <@${interaction.user.id}> has initiated a raid! Prepare to face **${monster.name} (Tier ${monster.tier})**.`);
-        } else {
+        
+            // Build the role mentions based on village name
+            const safeVillageName = (character.currentVillage || "UnknownVillage").replace(/\s+/g, '');
+            const residentRole = `@${safeVillageName} resident`;
+            const visitorRole = `@visiting:${safeVillageName}`;
+        
+            // Send an initial ping message mentioning visitors and residents
+            await thread.send(`👋 <@${interaction.user.id}> has initiated a raid against **${monster.name} (Tier ${monster.tier})**!\n\n${residentRole} ${visitorRole} — come help defend your home!`);
+        }
+         else {
             // If a thread ID is provided, fetch the existing thread.
             thread = interaction.guild.channels.cache.get(threadId);
 
