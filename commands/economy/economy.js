@@ -825,6 +825,15 @@ async function handleShopBuy(interaction) {
   const characterName = interaction.options.getString("charactername");
   const itemName = interaction.options.getString("itemname");
   const quantity = interaction.options.getInteger("quantity");
+  // ------------------- Validate Buy Quantity -------------------
+if (quantity <= 0) {
+  await interaction.editReply({
+    content: `❌ You must buy a **positive quantity** of items. Negative numbers are not allowed.`,
+    ephemeral: true,
+  });
+  return;
+}
+
 
   console.log(
    `[shops]: Initiating purchase for character: ${characterName}, item: ${itemName}, quantity: ${quantity}`
@@ -976,6 +985,15 @@ async function handleShopSell(interaction) {
   const characterName = interaction.options.getString("charactername");
   const itemName = interaction.options.getString("itemname");
   const quantity = interaction.options.getInteger("quantity");
+  // ------------------- Validate Sell Quantity -------------------
+if (quantity <= 0) {
+  await interaction.editReply({
+    content: `❌ You must sell a **positive quantity** of items. Negative numbers are not allowed.`,
+    ephemeral: true,
+  });
+  return;
+}
+
 
   console.log(
    `[shops]: Initiating sale process for character: ${characterName}, item: ${itemName}, quantity: ${quantity}`
@@ -1598,6 +1616,18 @@ async function handleTransfer(interaction) {
    quantity: interaction.options.getInteger("quantityc"),
   },
  ].filter((item) => item.name && item.quantity);
+
+ // ------------------- Validate Transfer Quantities -------------------
+for (const { quantity } of items) {
+  if (quantity <= 0) {
+    await interaction.editReply({
+      content: `❌ You must transfer a **positive quantity** of items. Negative numbers are not allowed.`,
+      ephemeral: true,
+    });
+    return;
+  }
+}
+
 
  const userId = interaction.user.id;
 
