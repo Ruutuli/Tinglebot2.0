@@ -469,21 +469,24 @@ const createSetupInstructionsEmbed = async (characterName, googleSheetsUrl) => {
 
   const fields = [
     {
-      name: "1. Open your Inventory Link",
-      value: `[📄 Inventory](${googleSheetsUrl})`,
-    },
-    { name: '2. Create a new tab named "loggedInventory"', value: "🔖" },
-    {
-      name: "3. Ensure your headers in A1:M1 are exactly:",
-      value: "```Character Name, Item Name, Qty of Item, Category, Type, Subtype, Obtain, Job, Perk, Location, Link, Date/Time, Confirmed Sync```",
+      name: "1️⃣ Open your Inventory Link",
+      value: `[📄 Inventory Link](${googleSheetsUrl})`,
     },
     {
-      name: "4. Share the Google Sheet with this email (Editor Access):",
-      value: "📧 tinglebot@rotw-tinglebot.iam.gserviceaccount.com",
+      name: "2️⃣ Create a New Tab",
+      value: "🔖 Create a new tab named exactly:\n```\nloggedInventory\n``` *(case-sensitive, no extra spaces)*",
     },
     {
-      name: `5. Test it by using: \`/testinventorysetup charactername:${characterName}\``,
-      value: "✅",
+      name: "3️⃣ Set Up Headers",
+      value: "✏️ Ensure the headers from **A1 to M1** are exactly:\n```\nCharacter Name, Item Name, Qty of Item, Category, Type, Subtype, Obtain, Job, Perk, Location, Link, Date/Time, Confirmed Sync\n```",
+    },
+    {
+      name: "4️⃣ Share the Sheet",
+      value: "📧 Share your sheet with **Editor Access** to:\n```\ntinglebot@rotw-tinglebot.iam.gserviceaccount.com\n```",
+    },
+    {
+      name: "5️⃣ Test Your Inventory",
+      value: `✅ Use the following command:\n\`\`\`\n/testinventorysetup charactername:${characterName}\n\`\`\``,
     },
   ];
 
@@ -493,10 +496,16 @@ const createSetupInstructionsEmbed = async (characterName, googleSheetsUrl) => {
       value: "🎉 Your inventory sheet is set up correctly and ready for syncing!",
     });
   } else {
-    fields.push({
-      name: "❌ Validation Error",
-      value: `⚠️ ${validationResult.message}`,
-    });
+    fields.push(
+      {
+        name: "❌ Validation Error",
+        value: `⚠️ **Problem Detected:**\n\`\`\`\n${validationResult.message.split('||')[0]}\n\`\`\``,
+      },
+      {
+        name: "🛠️ How to Fix:",
+        value: `${validationResult.message.split('||')[1] || 'Please review the setup steps above carefully and correct any issues.'}`,
+      }
+    );
   }
 
   return new EmbedBuilder()

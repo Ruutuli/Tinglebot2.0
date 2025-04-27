@@ -377,7 +377,7 @@ async function validateInventorySheet(spreadsheetUrl) {
       if (error.message.includes('Unable to parse range')) {
         return {
           success: false,
-          message: "**Error:** Cannot find the correct cells A1:M1.\n\n**Fix:** Double-check your tab name is exactly `loggedInventory` and that there is data starting at row 1."
+          message: "**Error:** Cannot find the correct cells A1:M1.\n\n**Fix:** Double-check your tab name is exactly `loggedInventory` and that there is data starting at row 2."
         };
       }
       if (error.code === 403) {
