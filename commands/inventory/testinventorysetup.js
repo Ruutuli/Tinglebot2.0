@@ -139,7 +139,9 @@ async function sendSetupInstructions(interaction, errorType, characterId, charac
   };
 
   const errorMessage = errorMessages[errorType] || 'An unexpected error occurred. Please check your setup.';
-  const embed = createSetupInstructionsEmbed(characterName, googleSheetsUrl, errorMessage);
+
+  // ✅ Await the embed creation
+  const embed = await createSetupInstructionsEmbed(characterName, googleSheetsUrl, errorMessage);
 
   await interaction.reply({ embeds: [embed], ephemeral: true });
   console.log(`🔄 Setup instructions sent to the user: ${errorMessage}`);
