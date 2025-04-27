@@ -985,6 +985,16 @@ async function handleShopSell(interaction) {
   const characterName = interaction.options.getString("charactername");
   const itemName = interaction.options.getString("itemname");
   const quantity = interaction.options.getInteger("quantity");
+
+  if (!user || !user.tokensSynced) {
+    return interaction.editReply({
+      content: `❌ **You must set up and sync your token tracker before you can sell items.**\nPlease use </synctokens:123456789> to set up your token tracker.`,
+      ephemeral: true,
+    });
+  }
+
+
+  
   // ------------------- Validate Sell Quantity -------------------
 if (quantity <= 0) {
   await interaction.editReply({
