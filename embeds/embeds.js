@@ -1127,7 +1127,7 @@ const createMonsterEncounterEmbed = (
  lootItem,
  isBloodMoon = false
 ) => {
- const { initialRandomValue, adjustedRandomValue } = getLastDebugValues();
+ const damageValue = Math.floor(Math.random() * 100) + 1;
  const settings = getCommonEmbedSettings(character) || {};
  const nameMapping = monster.nameMapping || monster.name;
  const monsterDetails = monsterMapping[nameMapping.replace(/\s+/g, "")] || {
@@ -1217,10 +1217,10 @@ const createMonsterEncounterEmbed = (
 
  if (initialRandomValue !== null && adjustedRandomValue !== null) {
   embed.addFields({
-   name: "__🎲 Dice Roll__",
-   value: `> \`${initialRandomValue} -> ${adjustedRandomValue}\``,
-   inline: false,
-  });
+    name: "__🎲 Dice Roll__",
+    value: `> \`${damageValue}/100\``,
+    inline: false,
+  });  
  }
 
  if (isValidImageUrl(monsterDetails.image)) {
