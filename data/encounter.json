@@ -108,5 +108,36 @@
     "tameStatus": false,
     "traits": {},
     "totalSpent": 0
+  },
+  "0b269c73": {
+    "users": [
+      {
+        "characterName": "Alden",
+        "userId": "211219306137124865"
+      }
+    ],
+    "mountType": "Horse",
+    "rarity": "Regular",
+    "mountLevel": "High",
+    "mountStamina": 6,
+    "environment": "Tall grass",
+    "village": "Rudania",
+    "actions": [],
+    "tameStatus": true,
+    "traits": {},
+    "totalSpent": 0
+  },
+  "7ac7a8c1": {
+    "users": [],
+    "mountType": "Horse",
+    "rarity": "To be determined",
+    "mountLevel": "Basic",
+    "mountStamina": "To be determined",
+    "environment": "To be determined",
+    "village": "Inariko",
+    "actions": [],
+    "tameStatus": false,
+    "traits": {},
+    "totalSpent": 0
   }
 }
