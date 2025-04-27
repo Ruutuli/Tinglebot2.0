@@ -165,5 +165,44 @@
     "tameStatus": false,
     "traits": {},
     "totalSpent": 0
+  },
+  "a5c091dc": {
+    "users": [],
+    "mountType": "Horse",
+    "rarity": "To be determined",
+    "mountLevel": "High",
+    "mountStamina": "To be determined",
+    "environment": "To be determined",
+    "village": "vhintl",
+    "actions": [],
+    "tameStatus": false,
+    "traits": {},
+    "totalSpent": 0
+  },
+  "fb9a837f": {
+    "users": [],
+    "mountType": "Donkey",
+    "rarity": "To be determined",
+    "mountLevel": "High",
+    "mountStamina": "To be determined",
+    "environment": "To be determined",
+    "village": "rudania",
+    "actions": [],
+    "tameStatus": false,
+    "traits": {},
+    "totalSpent": 0
+  },
+  "95faa7f2": {
+    "users": [],
+    "mountType": "Horse",
+    "rarity": "To be determined",
+    "mountLevel": "High",
+    "mountStamina": "To be determined",
+    "environment": "To be determined",
+    "village": "inariko",
+    "actions": [],
+    "tameStatus": false,
+    "traits": {},
+    "totalSpent": 0
   }
 }
