@@ -375,25 +375,25 @@ async function validateInventorySheet(spreadsheetUrl, characterName) {
   
       // ✅ Headers confirmed, now validate inventory content
       const inventoryData = await readSheetData(auth, spreadsheetId, 'loggedInventory!A2:M100');
-  
       const hasAtLeastOneItem = inventoryData && inventoryData.some(row => {
         const sheetCharacterName = (row[0] || '').trim().toLowerCase();
         const itemName = (row[1] || '').trim();
         const quantity = Number(row[2] || 0);
-  
+      
         return (
           sheetCharacterName === characterName.trim().toLowerCase() &&
           itemName.length > 0 &&
           quantity > 0
         );
       });
-  
+      
       if (!hasAtLeastOneItem) {
         return {
           success: false,
-          message: `**Error:** No inventory items found for character **${characterName}**.\n\n**Fix:** Please make sure your inventory sheet contains at least one item entry for your character.`
+          message: `No inventory items found for character **${characterName}**.||Please make sure your inventory sheet contains at least one item entry for your character.`
         };
       }
+      
   
       return { success: true, message: "✅ Inventory sheet is set up correctly!" };
   

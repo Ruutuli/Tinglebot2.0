@@ -463,30 +463,30 @@ const createExplorationMonsterEmbed = (
  return embed;
 };
 
-// ------------------- Subsection Title ------------------- 
+// ------------------- Subsection Title -------------------
 const createSetupInstructionsEmbed = async (characterName, googleSheetsUrl) => {
-  const validationResult = await validateInventorySheet(googleSheetsUrl);
+  const validationResult = await validateInventorySheet(googleSheetsUrl, characterName); // <-- Pass characterName here too
 
   const fields = [
     {
-      name: "1️⃣ Open your Inventory Link",
-      value: `[📄 Inventory Link](${googleSheetsUrl})`,
+      name: "1️⃣ Open Your Inventory Link",
+      value: `[📄 Inventory Link](${googleSheetsUrl})\n\n> ---`,
     },
     {
       name: "2️⃣ Create a New Tab",
-      value: "🔖 Create a new tab named exactly:\n```\nloggedInventory\n``` *(case-sensitive, no extra spaces)*",
+      value: `> 🔖 Create a new tab named exactly:\n> \`\`\`text\n> loggedInventory\n> \`\`\`\n> *(case-sensitive, no extra spaces)*\n\n> ---`,
     },
     {
       name: "3️⃣ Set Up Headers",
-      value: "✏️ Ensure the headers from **A1 to M1** are exactly:\n```\nCharacter Name, Item Name, Qty of Item, Category, Type, Subtype, Obtain, Job, Perk, Location, Link, Date/Time, Confirmed Sync\n```",
+      value: `> ✏️ Ensure headers from **A1 to M1** match exactly:\n> \`\`\`text\n> Character Name, Item Name, Qty of Item, Category, Type, Subtype, Obtain, Job, Perk, Location, Link, Date/Time, Confirmed Sync\n> \`\`\`\n\n> ---`,
     },
     {
       name: "4️⃣ Share the Sheet",
-      value: "📧 Share your sheet with **Editor Access** to:\n```\ntinglebot@rotw-tinglebot.iam.gserviceaccount.com\n```",
+      value: `> 📧 Share with **Editor Access** to:\n> \`\`\`text\n> tinglebot@rotw-tinglebot.iam.gserviceaccount.com\n> \`\`\`\n\n> ---`,
     },
     {
       name: "5️⃣ Test Your Inventory",
-      value: `✅ Use the following command:\n\`\`\`\n/testinventorysetup charactername:${characterName}\n\`\`\``,
+      value: `> ✅ Use the command:\n> \`\`\`text\n> /testinventorysetup charactername:${characterName}\n> \`\`\`\n\n> ---`,
     },
   ];
 
@@ -496,14 +496,16 @@ const createSetupInstructionsEmbed = async (characterName, googleSheetsUrl) => {
       value: "🎉 Your inventory sheet is set up correctly and ready for syncing!",
     });
   } else {
+    const [problem, fix] = validationResult.message.split('||');
+
     fields.push(
       {
         name: "❌ Validation Error",
-        value: `⚠️ **Problem Detected:**\n\`\`\`\n${validationResult.message.split('||')[0]}\n\`\`\``,
+        value: `> ⚠️ **Problem Detected:**\n> \`\`\`text\n> ${problem?.trim() || 'Unknown Problem'}\n> \`\`\`\n\n> ---`,
       },
       {
         name: "🛠️ How to Fix:",
-        value: `${validationResult.message.split('||')[1] || 'Please review the setup steps above carefully and correct any issues.'}`,
+        value: fix ? `> ${fix.trim()}` : '> Please review the setup instructions carefully and correct any issues.',
       }
     );
   }
@@ -512,10 +514,11 @@ const createSetupInstructionsEmbed = async (characterName, googleSheetsUrl) => {
     .setTitle(`📋 Setup Instructions for ${characterName}`)
     .setDescription(`📋 Please follow these steps carefully to set up your Google Sheets inventory.`)
     .addFields(fields)
-    .setColor(getRandomColor())
+    .setColor(validationResult.success ? getRandomColor() : 'Red')
     .setTimestamp()
     .setImage(DEFAULT_IMAGE_URL);
 };
+
 
 // ------------------- Subsection Title ------------------- 
 const createSyncEmbed = (characterName, googleSheetsUrl) => {
