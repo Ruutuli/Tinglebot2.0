@@ -331,6 +331,41 @@ function extractSpreadsheetId(url) {
     return match ? match[1] : null;
 }
 
+
+// ------------------- validateInventorySheet------------------- 
+async function validateInventorySheet(spreadsheetUrl) {
+    const spreadsheetId = extractSpreadsheetId(spreadsheetUrl);
+    const auth = await authorizeSheets();
+    try {
+      const headerRow = await readSheetData(auth, spreadsheetId, 'loggedInventory!A1:M1');
+      const expectedHeaders = [
+        'Character Name', 'Item Name', 'Qty of Item', 'Category', 'Type', 'Subtype',
+        'Obtain', 'Job', 'Perk', 'Location', 'Link', 'Date/Time', 'Confirmed Sync'
+      ];
+  
+      if (!headerRow || headerRow.length === 0) {
+        return { success: false, message: 'No data found. Is the tab named correctly?' };
+      }
+  
+      const headers = headerRow[0];
+      const allHeadersMatch = expectedHeaders.every((header, index) => headers[index] === header);
+  
+      if (!allHeadersMatch) {
+        return { success: false, message: 'Headers do not match expected format.' };
+      }
+  
+      return { success: true, message: 'Inventory sheet is set up correctly!' };
+    } catch (error) {
+      if (error.message.includes('Requested entity was not found')) {
+        return { success: false, message: 'Tab "loggedInventory" was not found. Please rename it correctly.' };
+      }
+      if (error.code === 403) {
+        return { success: false, message: 'Permission denied. Make sure the sheet is shared with the bot email as an Editor.' };
+      }
+      return { success: false, message: 'Unknown error accessing sheet: ' + error.message };
+    }
+  }
+  
 // ============================================================================
 // Error Logging
 // ------------------- Log Error Details -------------------
@@ -367,6 +402,7 @@ module.exports = {
     extractSpreadsheetId,
     convertWixImageLinkForSheets,
     deleteInventorySheetData,
+    validateInventorySheet,
     
     // Error logging
     logErrorDetails
