@@ -262,10 +262,12 @@ module.exports = {
         await healKoCharacter(character._id);
         character.currentHearts = character.maxHearts;
         await updateCurrentHearts(character._id, character.currentHearts);
+        await removeItemInventoryDatabase(character._id, item.itemName, quantity, inventoryCollection); // ✅ Remove Fairy from inventory
         return void await interaction.editReply({
           content: `💫 **${character.name}** has been revived and fully healed using a **${item.itemName}**!`
         });
       }
+      
 
 
       // ------------------- Healing and Stamina Processing -------------------
