@@ -345,25 +345,54 @@ async function handleFight(interaction, character, encounterMessage, monster) {
         result.decision = `KO'd during the fight.`;
         result.outcomeMessage = `${EMOJI.knockOut} ${character.name} was KO'd and wakes up in their recovery village with 0 hearts and 0 stamina.`;
 
-        // Update character KO state
+        // Save character KO status and set recovery details
         result.heartsLost = character.currentHearts;
         result.staminaLost = character.currentStamina;
         character.currentHearts = 0;
         character.currentStamina = 0;
         character.debuff = {
             active: true,
-            endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+            endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // Debuff for 7 days
         };
         character.currentVillage = (character.currentVillage === 'rudania' || character.currentVillage === 'vhintl')
-            ? 'inariko'
+            ? 'inariko' // Move to recovery village if KO'd in certain villages
             : character.homeVillage;
         character.ko = true;
 
-        await updateCurrentHearts(character._id, character.currentHearts);
-        await useStamina(character._id, character.currentStamina);
-        await character.save();
+        await updateCurrentHearts(character._id, character.currentHearts);  // Save the updated hearts
+        await useStamina(character._id, character.currentStamina);  // Save updated stamina
+        await character.save();  // Save all character changes
 
-        return result;
+        return result;  // Return the fight result
+    } else {
+        // ------------------- Normal Fight Outcome -------------------
+        const heartsLost = encounterOutcome.damage;
+
+        // Apply hearts loss (no need to manually adjust currentHearts after useHearts)
+        await useHearts(character._id, heartsLost);  // Deduct hearts from character's total
+
+        // If character KO's, apply KO logic
+        if (character.currentHearts <= 0) {
+            character.ko = true;
+            const koEmbed = createKOEmbed(character);
+            await interaction.followUp({ embeds: [koEmbed] });
+
+            result.decision = `KO'd during the fight.`;
+            result.outcomeMessage = `${EMOJI.knockOut} ${character.name} was KO'd and wakes up in their recovery village.`;
+
+            character.debuff = {
+                active: true,
+                endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // Apply debuff for 7 days
+            };
+            character.currentStamina = 0;
+            character.currentHearts = 0;
+            character.currentVillage = (character.currentVillage === 'rudania' || character.currentVillage === 'vhintl')
+                ? 'inariko'
+                : character.homeVillage;
+
+            await character.save();  // Save character changes after KO
+            return result;  // Return KO result
+        }
     }
 
     // ------------------- Handle Non-KO Fight Outcome -------------------
