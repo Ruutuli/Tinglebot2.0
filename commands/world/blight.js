@@ -4,6 +4,7 @@ const { SlashCommandBuilder } = require('@discordjs/builders');
 
 // Local modules (blight handlers)
 const { rollForBlightProgression, healBlight, submitHealingTask } = require('../../handlers/blightHandler');
+const { fetchCharacterByNameAndUserId } = require('../../database/db.js');
 
 // ------------------- Define the Blight Command -------------------
 // This command manages blight progression, healing, and submission of healing tasks.
