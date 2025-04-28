@@ -365,8 +365,6 @@ async function handleFight(interaction, character, encounterMessage, monster) {
     }
 
     // ------------------- Handle Non-KO Outcome -------------------
-    await useHearts(character._id, heartsLost);
-    character.currentHearts = Math.max(0, character.currentHearts - heartsLost);
     result.heartsLost = heartsLost;
 
     // ------------------- Handle Victory (Loot Drop) -------------------
