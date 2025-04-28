@@ -1823,9 +1823,9 @@ for (const { name } of items) {
     ],
    ];
 
-   await safeAppendDataToSheet(character.inventory, character, range, fromValues);
-   await safeAppendDataToSheet(character.inventory, character, range, toValues);
-
+   await safeAppendDataToSheet(fromCharacter.inventory, fromCharacter, range, fromValues);
+   await safeAppendDataToSheet(toCharacter.inventory, toCharacter, range, toValues);
+   
    const itemIcon = itemDetails?.emoji || "📦";
    formattedItems.push({ itemName: String(name), quantity, itemIcon });
   }
