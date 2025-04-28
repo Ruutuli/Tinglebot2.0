@@ -320,7 +320,6 @@ async function handleDoNothing(interaction, character, encounterMessage) {
     return result;
 }
 
-// ------------------- Action Handler (Handle Fight Encounter) -------------------
 async function handleFight(interaction, character, encounterMessage, monster) {
     console.log(`[travelHandler.js][Fight]: Handling fight for ${character.name} vs ${monster.name}`);
 
@@ -335,80 +334,49 @@ async function handleFight(interaction, character, encounterMessage, monster) {
     const { damageValue, adjustedRandomValue, attackSuccess, defenseSuccess } = calculateFinalValue(character);
     const encounterOutcome = await getEncounterOutcome(character, monster, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess);
 
-    if (encounterOutcome.result === 'KO') {
-        // ------------------- Handle KO Outcome -------------------
+    const heartsLost = encounterOutcome.hearts ?? encounterOutcome.damage ?? 0;
+
+    // If KO'd
+    if (encounterOutcome.result === 'KO' || (character.currentHearts - heartsLost) <= 0) {
         console.warn(`[travelHandler.js][Fight]: ${character.name} was KO'd during the fight.`);
 
-        const embed = createKOEmbed(character);
-        await interaction.followUp({ embeds: [embed] });
-
-        result.decision = `KO'd during the fight.`;
-        result.outcomeMessage = `${EMOJI.knockOut} ${character.name} was KO'd and wakes up in their recovery village with 0 hearts and 0 stamina.`;
-
-        // Save character KO status and set recovery details
-        result.heartsLost = character.currentHearts;
-        result.staminaLost = character.currentStamina;
         character.currentHearts = 0;
         character.currentStamina = 0;
+        character.ko = true;
         character.debuff = {
             active: true,
-            endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // Debuff for 7 days
+            endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
         };
         character.currentVillage = (character.currentVillage === 'rudania' || character.currentVillage === 'vhintl')
-            ? 'inariko' // Move to recovery village if KO'd in certain villages
+            ? 'inariko'
             : character.homeVillage;
-        character.ko = true;
 
-        await updateCurrentHearts(character._id, character.currentHearts);  // Save the updated hearts
-        await useStamina(character._id, character.currentStamina);  // Save updated stamina
-        await character.save();  // Save all character changes
+        await character.save();
 
-        return result;  // Return the fight result
-    } else {
-        // ------------------- Normal Fight Outcome -------------------
-        const heartsLost = encounterOutcome.damage;
+        const koEmbed = createKOEmbed(character);
+        await interaction.followUp({ embeds: [koEmbed] });
 
-        // Apply hearts loss (no need to manually adjust currentHearts after useHearts)
-        await useHearts(character._id, heartsLost);  // Deduct hearts from character's total
+        result.decision = `KO'd during the fight.`;
+        result.outcomeMessage = `${EMOJI.knockOut} ${character.name} was KO'd and wakes up in their recovery village with 0 hearts and stamina.`;
+        result.heartsLost = character.maxHearts;
+        result.staminaLost = character.maxStamina;
 
-        // If character KO's, apply KO logic
-        if (character.currentHearts <= 0) {
-            character.ko = true;
-            const koEmbed = createKOEmbed(character);
-            await interaction.followUp({ embeds: [koEmbed] });
-
-            result.decision = `KO'd during the fight.`;
-            result.outcomeMessage = `${EMOJI.knockOut} ${character.name} was KO'd and wakes up in their recovery village.`;
-
-            character.debuff = {
-                active: true,
-                endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // Apply debuff for 7 days
-            };
-            character.currentStamina = 0;
-            character.currentHearts = 0;
-            character.currentVillage = (character.currentVillage === 'rudania' || character.currentVillage === 'vhintl')
-                ? 'inariko'
-                : character.homeVillage;
-
-            await character.save();  // Save character changes after KO
-            return result;  // Return KO result
-        }
+        return result;
     }
 
-    // ------------------- Handle Non-KO Fight Outcome -------------------
-    await useHearts(character._id, encounterOutcome.hearts);
-    character.currentHearts = Math.max(0, character.currentHearts - encounterOutcome.hearts);
-    result.heartsLost = encounterOutcome.hearts;
+    // Non-KO damage handling
+    await useHearts(character._id, heartsLost);
+    character.currentHearts = Math.max(0, character.currentHearts - heartsLost);
+    result.heartsLost = heartsLost;
 
     if (encounterOutcome.result === 'Win!/Loot') {
-        // ------------------- Handle Loot Drop -------------------
         console.log(`[travelHandler.js][Fight]: ${character.name} won and is looting.`);
 
         const items = await fetchItemsByMonster(monster.name);
         const weightedItems = createWeightedItemList(items, adjustedRandomValue);
         let lootedItem = weightedItems[Math.floor(Math.random() * weightedItems.length)];
 
-        // Special case: Chuchu monsters drop specific jellies
+        // Special case for Chuchus
         if (monster.name.includes('Chuchu')) {
             const jellyType = monster.name.includes('Ice') ? 'White Chuchu Jelly'
                 : monster.name.includes('Fire') ? 'Red Chuchu Jelly'
@@ -434,7 +402,7 @@ async function handleFight(interaction, character, encounterMessage, monster) {
             interaction
         );
 
-        // ------------------- Sync Loot with Google Sheets -------------------
+        // Google Sheets Sync (if needed)
         const inventoryLink = character.inventory || character.inventoryLink;
         if (typeof inventoryLink === 'string' && isValidGoogleSheetsUrl(inventoryLink)) {
             const spreadsheetId = extractSpreadsheetId(inventoryLink);
@@ -469,15 +437,15 @@ async function handleFight(interaction, character, encounterMessage, monster) {
         result.decision = `Fought the monster and won! Looted ${itemEmoji} ${lootedItem.itemName}${quantityText ? ` ${quantityText}` : ''}.`;
         result.outcomeMessage = generateVictoryMessage(adjustedRandomValue, defenseSuccess, attackSuccess) +
             ` ${character.name} looted ${itemEmoji} ${lootedItem.itemName}${quantityText ? ` ${quantityText}` : ''}.`;
-    } else {
-        // ------------------- Handle Damage Only Outcome -------------------
-        console.log(`[travelHandler.js][Fight]: ${character.name} lost ${encounterOutcome.hearts} hearts.`);
 
-        result.decision = `Fought the monster and lost ${encounterOutcome.hearts} hearts.`;
-        result.outcomeMessage = generateDamageMessage(encounterOutcome.hearts);
+    } else {
+        console.log(`[travelHandler.js][Fight]: ${character.name} lost ${heartsLost} hearts.`);
+
+        result.decision = `Fought the monster and lost ${heartsLost} hearts.`;
+        result.outcomeMessage = generateDamageMessage(heartsLost);
     }
 
-    // ------------------- Update Encounter Embed -------------------
+    // Update the Encounter Embed
     const embedData = encounterMessage.embeds[0].toJSON();
     const updatedEmbed = new EmbedBuilder(embedData)
         .setDescription(`${EMOJI.fight} ${result.decision}\n\n**${EMOJI.heart} Hearts:** ${character.currentHearts}/${character.maxHearts}\n**${EMOJI.stamina} Stamina:** ${character.currentStamina}/${character.maxStamina}`);
@@ -497,6 +465,7 @@ async function handleFight(interaction, character, encounterMessage, monster) {
 
     return result;
 }
+
 
 // ------------------- Action Handler (Handle Flee Attempt) -------------------
 async function handleFlee(interaction, character, encounterMessage, monster) {
