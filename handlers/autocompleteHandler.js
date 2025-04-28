@@ -1401,35 +1401,35 @@ async function handleGearAutocomplete(interaction, focusedOption) {
   const characterInventory = await inventoryCollection.find().toArray();
 
   const filteredItems = characterInventory.filter((item) => {
-   const categories = item.category
-    .split(",")
-    .map((cat) => cat.trim().toLowerCase());
-   const subtypes = Array.isArray(item.subtype)
-    ? item.subtype.map((st) => st.trim().toLowerCase())
-    : item.subtype
-    ? [item.subtype.trim().toLowerCase()]
-    : [];
-
-   if (type === "weapon") {
-    return categories.includes("weapon") && !subtypes.includes("shield");
-   } else if (type === "shield") {
-    return subtypes.includes("shield");
-   } else if (type === "head") {
-    return (
-     categories.includes("armor") && item.type.toLowerCase().includes("head")
-    );
-   } else if (type === "chest") {
-    return (
-     categories.includes("armor") && item.type.toLowerCase().includes("chest")
-    );
-   } else if (type === "legs") {
-    return (
-     categories.includes("armor") && item.type.toLowerCase().includes("legs")
-    );
-   }
-   return false;
+    const categories = item.category
+      ? item.category.split(",").map((cat) => cat.trim().toLowerCase())
+      : [];
+    const subtypes = Array.isArray(item.subtype)
+      ? item.subtype.map((st) => st.trim().toLowerCase())
+      : item.subtype
+        ? [item.subtype.trim().toLowerCase()]
+        : [];
+  
+    if (type === "weapon") {
+      return categories.includes("weapon") && !subtypes.includes("shield");
+    } else if (type === "shield") {
+      return subtypes.includes("shield");
+    } else if (type === "head") {
+      return (
+        categories.includes("armor") && item.type?.toLowerCase()?.includes("head")
+      );
+    } else if (type === "chest") {
+      return (
+        categories.includes("armor") && item.type?.toLowerCase()?.includes("chest")
+      );
+    } else if (type === "legs") {
+      return (
+        categories.includes("armor") && item.type?.toLowerCase()?.includes("legs")
+      );
+    }
+    return false;
   });
-
+  
   const items = filteredItems.map((item) => ({
    name: `${item.itemName} - QTY:${item.quantity}`,
    value: item.itemName,
