@@ -319,7 +319,7 @@ async function handleDoNothing(interaction, character, encounterMessage) {
 
     return result;
 }
-
+// ------------------- Action Handler (Handle Fight Encounter) -------------------
 async function handleFight(interaction, character, encounterMessage, monster) {
     console.log(`[travelHandler.js][Fight]: Handling fight for ${character.name} vs ${monster.name}`);
 
@@ -334,9 +334,9 @@ async function handleFight(interaction, character, encounterMessage, monster) {
     const { damageValue, adjustedRandomValue, attackSuccess, defenseSuccess } = calculateFinalValue(character);
     const encounterOutcome = await getEncounterOutcome(character, monster, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess);
 
-    const heartsLost = encounterOutcome.hearts ?? encounterOutcome.damage ?? 0;
+    const heartsLost = encounterOutcome.heartsLost ?? encounterOutcome.hearts ?? encounterOutcome.damage ?? 0;
 
-    // If KO'd
+    // ------------------- Handle KO Outcome -------------------
     if (encounterOutcome.result === 'KO' || (character.currentHearts - heartsLost) <= 0) {
         console.warn(`[travelHandler.js][Fight]: ${character.name} was KO'd during the fight.`);
 
@@ -364,11 +364,12 @@ async function handleFight(interaction, character, encounterMessage, monster) {
         return result;
     }
 
-    // Non-KO damage handling
+    // ------------------- Handle Non-KO Outcome -------------------
     await useHearts(character._id, heartsLost);
     character.currentHearts = Math.max(0, character.currentHearts - heartsLost);
     result.heartsLost = heartsLost;
 
+    // ------------------- Handle Victory (Loot Drop) -------------------
     if (encounterOutcome.result === 'Win!/Loot') {
         console.log(`[travelHandler.js][Fight]: ${character.name} won and is looting.`);
 
@@ -376,7 +377,7 @@ async function handleFight(interaction, character, encounterMessage, monster) {
         const weightedItems = createWeightedItemList(items, adjustedRandomValue);
         let lootedItem = weightedItems[Math.floor(Math.random() * weightedItems.length)];
 
-        // Special case for Chuchus
+        // Handle special Chuchu loot case
         if (monster.name.includes('Chuchu')) {
             const jellyType = monster.name.includes('Ice') ? 'White Chuchu Jelly'
                 : monster.name.includes('Fire') ? 'Red Chuchu Jelly'
@@ -402,7 +403,7 @@ async function handleFight(interaction, character, encounterMessage, monster) {
             interaction
         );
 
-        // Google Sheets Sync (if needed)
+        // Sync to Google Sheets if necessary
         const inventoryLink = character.inventory || character.inventoryLink;
         if (typeof inventoryLink === 'string' && isValidGoogleSheetsUrl(inventoryLink)) {
             const spreadsheetId = extractSpreadsheetId(inventoryLink);
@@ -428,7 +429,7 @@ async function handleFight(interaction, character, encounterMessage, monster) {
                 uniqueSyncId
             ]];
 
-            await safeAppendDataToSheet(character.inventory, character, range, values);
+            await safeAppendDataToSheet(inventoryLink, character, range, values);
         }
 
         const itemEmoji = lootedItem.emoji || '';
@@ -445,7 +446,7 @@ async function handleFight(interaction, character, encounterMessage, monster) {
         result.outcomeMessage = generateDamageMessage(heartsLost);
     }
 
-    // Update the Encounter Embed
+    // ------------------- Update Encounter Message Embed -------------------
     const embedData = encounterMessage.embeds[0].toJSON();
     const updatedEmbed = new EmbedBuilder(embedData)
         .setDescription(`${EMOJI.fight} ${result.decision}\n\n**${EMOJI.heart} Hearts:** ${character.currentHearts}/${character.maxHearts}\n**${EMOJI.stamina} Stamina:** ${character.currentStamina}/${character.maxStamina}`);
@@ -465,7 +466,6 @@ async function handleFight(interaction, character, encounterMessage, monster) {
 
     return result;
 }
-
 
 // ------------------- Action Handler (Handle Flee Attempt) -------------------
 async function handleFlee(interaction, character, encounterMessage, monster) {
@@ -512,7 +512,6 @@ async function handleFlee(interaction, character, encounterMessage, monster) {
         }
 
         await useHearts(character._id, fleeResult.damage);
-        character.currentHearts = Math.max(0, character.currentHearts - fleeResult.damage);
         result.heartsLost = fleeResult.damage;
 
         result.decision = `⚠️ Flee failed! ${character.name} took ${fleeResult.damage} hearts of damage.${result.staminaLost === 0 ? ' Stamina preserved!' : ' Used 1 stamina.'}`;
