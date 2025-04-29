@@ -167,68 +167,68 @@ function calculateTravelDuration(currentVillage, destination, mode, character) {
     return nextChannelId;
   }
   
-  async function createTravelCollector(message, interaction, character, day, totalTravelDuration, pathEmoji, currentPath, travelLog, paths, stopInInariko, monster = null) {
-    const filter = (i) => i.user.id === interaction.user.id;
-    const collector = message.createMessageComponentCollector({ filter, time: 60000 }); // 1 min timeout
-  
-    const savedPaths = paths;
-    const savedStopInInariko = stopInInariko;
-  
-    console.log(`[createTravelCollector]: Collector started for ${character.name}, Day ${day}/${totalTravelDuration}`);
-  
-    collector.on('collect', async (i) => {
-      console.log(`[createTravelCollector]: User interaction collected: ${i.customId} on Day ${day}`);
+ async function createTravelCollector(message, interaction, character, day, totalTravelDuration, pathEmoji, currentPath, travelLog, paths, stopInInariko, monster = null) {
+  const filter = (i) => i.user.id === interaction.user.id;
+  const collector = message.createMessageComponentCollector({ filter, time: 60000 }); // 1 min timeout
+
+  const savedPaths = paths;
+  const savedStopInInariko = stopInInariko;
+
+  console.log(`[createTravelCollector]: Collector started for ${character.name}, Day ${day}/${totalTravelDuration}`);
+
+  collector.on('collect', async (i) => {
+    console.log(`[createTravelCollector]: User interaction collected: ${i.customId} on Day ${day}`);
+    try {
+      const result = await handleTravelInteraction(i, character, day, totalTravelDuration, pathEmoji, currentPath, message, monster, travelLog);
+      updateTravelLog(travelLog, result);
+
+      console.log(`[createTravelCollector]: Advancing to Day ${day + 1} after interaction.`);
+      await processTravelDay(day + 1, interaction, character, savedPaths, totalTravelDuration, travelLog, savedStopInInariko);
+    } catch (error) {
+      console.error(`[travel.js]: Error during button interaction: ${error.message}`, error);
+      handleError(error, 'travel.js');
+    }
+  });
+
+  collector.on('end', async (collected, reason) => {
+    console.warn(`[createTravelCollector]: Collector ended with reason: ${reason}. Collected size: ${collected.size}`);
+
+    if (reason === 'time' && !collected.size) {
+      const channel = interaction.channel;
       try {
-        const result = await handleTravelInteraction(i, character, day, totalTravelDuration, pathEmoji, currentPath, message, monster, travelLog);
+        await channel.send(`⏳ **No action was selected for ${character.name}. Default action is being taken automatically.**`);
+      } catch (error) {
+        console.error(`[travel.js]: Failed to send timeout message: ${error.message}`);
+      }
+
+      const fakeInteraction = {
+        deferUpdate: async () => {},
+        isButton: () => true,
+        isCommand: () => false,
+        user: interaction.user
+      };
+
+      if (!monster) {
+        fakeInteraction.customId = 'do_nothing';
+        console.log(`[createTravelCollector]: Simulating 'do_nothing' on Day ${day}`);
+      } else {
+        fakeInteraction.customId = 'fight';
+        console.log(`[createTravelCollector]: Simulating 'fight' on Day ${day}`);
+      }
+
+      try {
+        const result = await handleTravelInteraction(fakeInteraction, character, day, totalTravelDuration, pathEmoji, currentPath, message, monster, travelLog);
         updateTravelLog(travelLog, result);
-  
-        console.log(`[createTravelCollector]: Advancing to Day ${day + 1} after interaction.`);
+
+        console.log(`[createTravelCollector]: Advancing to Day ${day + 1} after timeout fallback.`);
         await processTravelDay(day + 1, interaction, character, savedPaths, totalTravelDuration, travelLog, savedStopInInariko);
       } catch (error) {
-        console.error(`[travel.js]: Error during button interaction: ${error.message}`, error);
-        handleError(error, 'travel.js');
+        console.error(`[travel.js]: Error during timeout fallback handling: ${error.message}`, error);
       }
-    });
-  
-    collector.on('end', async (collected, reason) => {
-      console.warn(`[createTravelCollector]: Collector ended with reason: ${reason}. Collected size: ${collected.size}`);
-  
-      if (reason === 'time' && !collected.size) {
-        const channel = interaction.channel;
-        try {
-          await channel.send(`⏳ **No action was selected for ${character.name}. Default action is being taken automatically.**`);
-        } catch (error) {
-          console.error(`[travel.js]: Failed to send timeout message: ${error.message}`);
-        }
-  
-        const fakeInteraction = {
-          deferUpdate: async () => {},
-          isButton: () => true,
-          isCommand: () => false,
-          user: interaction.user
-        };
-  
-        if (!monster) {
-          fakeInteraction.customId = 'do_nothing';
-          console.log(`[createTravelCollector]: Simulating 'do_nothing' on Day ${day}`);
-        } else {
-          fakeInteraction.customId = 'fight';
-          console.log(`[createTravelCollector]: Simulating 'fight' on Day ${day}`);
-        }
-  
-        try {
-          const result = await handleTravelInteraction(fakeInteraction, character, day, totalTravelDuration, pathEmoji, currentPath, message, monster, travelLog);
-          updateTravelLog(travelLog, result);
-  
-          console.log(`[createTravelCollector]: Advancing to Day ${day + 1} after timeout fallback.`);
-          await processTravelDay(day + 1, interaction, character, savedPaths, totalTravelDuration, travelLog, savedStopInInariko);
-        } catch (error) {
-          console.error(`[travel.js]: Error during timeout fallback handling: ${error.message}`, error);
-        }
-      }
-    });
-  }
-  
+    }
+  });
+}
+
 
   
 // ============================================================================
@@ -274,13 +274,22 @@ const doNothingButton = new ButtonBuilder()
     }
   
     const encounterResult = await getRandomTravelEncounter(monsters);
-if (!encounterResult || !encounterResult.monster) {
-  console.error(`[travel.js]: getRandomTravelEncounter returned an invalid result:`, encounterResult);
-  return await handleSafeTravelDay(channel, interaction, character, day, totalTravelDuration, pathEmoji, currentPath, travelLog);
-}
 
-const { monster, encounterType } = encounterResult;
+    // Support both the { monster, encounterType } shape and direct Monster object fallback
+    let monsterObj, encounterType;
+    if (encounterResult && encounterResult.monster) {
+      monsterObj = encounterResult.monster;
+      encounterType = encounterResult.encounterType;
+    } else if (encounterResult && encounterResult.name) {
+      monsterObj = encounterResult;
+      encounterType = 'encounter';
+    } else {
+      console.error(`[travel.js]: getRandomTravelEncounter returned an invalid result:`, encounterResult);
+      return await handleSafeTravelDay(channel, interaction, character, day, totalTravelDuration, pathEmoji, currentPath, travelLog);
+    }
+    const monster = monsterObj;
 
+    
 if (encounterType === 'safe') {
   return await handleSafeTravelDay(channel, interaction, character, day, totalTravelDuration, pathEmoji, currentPath, travelLog);
 }
