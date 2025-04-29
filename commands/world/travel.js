@@ -265,7 +265,18 @@ const doNothingButton = new ButtonBuilder()
 }
 
   // ------------------- Handle monster encounter during travel -------------------
-  async function handleMonsterEncounter(channel, interaction, character, day, totalTravelDuration, pathEmoji, currentPath, travelLog) {
+  async function handleMonsterEncounter(
+    channel,
+    interaction,
+    character,
+    day,
+    totalTravelDuration,
+    pathEmoji,
+    currentPath,
+    travelLog,
+    paths,
+    stopInInariko
+  ) {
     const monsters = await getMonstersByPath(currentPath);
   
     if (!monsters.length) {
@@ -321,8 +332,19 @@ const encounterEmbed = createTravelMonsterEncounterEmbed(
     const row = new ActionRowBuilder().addComponents(fightButton, fleeButton);
   
     const message = await channel.send({ embeds: [encounterEmbed], components: [row] });
-  
-    await createTravelCollector(message, interaction, character, day, totalTravelDuration, pathEmoji, currentPath, travelLog, paths, stopInInariko, monster);
+    await createTravelCollector(
+      message,
+      interaction,
+      character,
+      day,
+      totalTravelDuration,
+      pathEmoji,
+      currentPath,
+      travelLog,
+      paths,
+      stopInInariko,
+      monster
+    );
   }
   
 // ============================================================================
