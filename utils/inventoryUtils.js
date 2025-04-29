@@ -1,5 +1,5 @@
 const { handleError } = require("../utils/globalErrorHandler");
-let promptUserForSpecificItems = null;
+const { promptUserForSpecificItems } = require('../utils/itemUtils')
 
 let dbFunctions = {
  connectToInventories: null,
