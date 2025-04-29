@@ -98,7 +98,12 @@ async function syncInventoryToSheets(character, item, interaction, acquisitionTy
             uniqueSyncId
         ]];
 
-        await safeAppendDataToSheet(character.inventory, character, range, values);
+        if (character?.name && character?.inventory && character?.userId) {
+    await safeAppendDataToSheet(character.inventory, character, range, values);
+} else {
+    console.error('[safeAppendDataToSheet]: Invalid character object detected before syncing.');
+}
+
     }
 }
 
@@ -248,7 +253,12 @@ async function handleGather(interaction, character, encounterMessage, currentPat
                 uniqueSyncId
             ]];
 
-            await safeAppendDataToSheet(character.inventory, character, range, values);
+            if (character?.name && character?.inventory && character?.userId) {
+    await safeAppendDataToSheet(character.inventory, character, range, values);
+} else {
+    console.error('[safeAppendDataToSheet]: Invalid character object detected before syncing.');
+}
+
         }
 
         // ------------------- Handle Stamina Usage -------------------

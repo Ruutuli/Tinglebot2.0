@@ -650,7 +650,12 @@ async function processLootingLogic(
 
    // —— Wrap the Sheets append in its own try/catch ——
    try {
+    if (character?.name && character?.inventory && character?.userId) {
     await safeAppendDataToSheet(character.inventory, character, range, values);
+} else {
+    console.error('[safeAppendDataToSheet]: Invalid character object detected before syncing.');
+}
+
    } catch (sheetError) {
     console.error(`[LOOT] Google Sheets append error: ${sheetError.message}`);
     await interaction.editReply({

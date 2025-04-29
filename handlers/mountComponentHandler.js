@@ -727,7 +727,12 @@ async function handleUseItemInteraction(interaction) {
         uniqueSyncId
       ]];
   
-      await safeAppendDataToSheet(character.inventory, character, range, values);
+      if (character?.name && character?.inventory && character?.userId) {
+    await safeAppendDataToSheet(character.inventory, character, range, values);
+} else {
+    console.error('[safeAppendDataToSheet]: Invalid character object detected before syncing.');
+}
+
     }
   
     encounter.distractionResult = success;
@@ -896,7 +901,12 @@ if (character.currentVillage?.toLowerCase() !== encounter.village?.toLowerCase()
           'spent',
           `-${cost}`
         ]];
-        await safeAppendDataToSheet(character.inventory, character, range, values);
+        if (character?.name && character?.inventory && character?.userId) {
+    await safeAppendDataToSheet(character.inventory, character, range, values);
+} else {
+    console.error('[safeAppendDataToSheet]: Invalid character object detected before syncing.');
+}
+
         console.log(`[mountComponentHandler]: Logged token usage to Google Sheets for user ${interaction.user.id}.`);
       }
   
@@ -1378,7 +1388,12 @@ async function handleMountNameSubmission(interaction) {
         `- ${tokenCost}`
       ]];
   
-      await safeAppendDataToSheet(character.inventory, character, range, values);
+      if (character?.name && character?.inventory && character?.userId) {
+    await safeAppendDataToSheet(character.inventory, character, range, values);
+} else {
+    console.error('[safeAppendDataToSheet]: Invalid character object detected before syncing.');
+}
+
       sheetLogged = true;
       console.info(`[mountComponentHandler]: Token deduction logged to Google Sheets successfully.`);
     }

@@ -625,7 +625,12 @@ async function handleBarter(interaction) {
                 ]];
 
                 const range = 'loggedInventory!A2:M';
-                await safeAppendDataToSheet(character.inventory, character, range, values);
+                if (character?.name && character?.inventory && character?.userId) {
+    await safeAppendDataToSheet(character.inventory, character, range, values);
+} else {
+    console.error('[safeAppendDataToSheet]: Invalid character object detected before syncing.');
+}
+
             } catch (sheetError) {
     handleError(sheetError, 'vendingHandler.js');
 
@@ -821,7 +826,12 @@ async function handleFulfill(interaction) {
             ]];
 
             const range = 'loggedInventory!A2:M'; // Range for appending data
-            await safeAppendDataToSheet(character.inventory, character, range, values);
+            if (character?.name && character?.inventory && character?.userId) {
+    await safeAppendDataToSheet(character.inventory, character, range, values);
+} else {
+    console.error('[safeAppendDataToSheet]: Invalid character object detected before syncing.');
+}
+
         }
 
         // React to the "Fulfillment Required!" message

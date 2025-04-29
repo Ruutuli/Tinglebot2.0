@@ -72,7 +72,12 @@ async function processLoot(battleProgress, currentMonster, interaction, battleId
           character.currentVillage, interactionUrl, formattedDateTime, uuidv4()
         ]];
 
-        await safeAppendDataToSheet(character.inventory, character, range, values);  // Append data to the Google Sheet
+        if (character?.name && character?.inventory && character?.userId) {
+    await safeAppendDataToSheet(character.inventory, character, range, values);
+} else {
+    console.error('[safeAppendDataToSheet]: Invalid character object detected before syncing.');
+}
+  // Append data to the Google Sheet
 
         // Create a link to the character's inventory for the loot message
         const inventoryLinkFormatted = `[${character.name}](<${inventoryLink}>)`;

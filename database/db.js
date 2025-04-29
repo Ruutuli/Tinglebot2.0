@@ -1136,7 +1136,12 @@ async function syncTokenTracker(userId) {
   await user.save();
 
   const syncRow = ["Initial Sync", "You can delete this!", "", "sync", "0"];
-  await safeAppendDataToSheet(character.inventory, character, range, values);
+  if (character?.name && character?.inventory && character?.userId) {
+    await safeAppendDataToSheet(character.inventory, character, range, values);
+} else {
+    console.error('[safeAppendDataToSheet]: Invalid character object detected before syncing.');
+}
+
   return user;
  } catch (error) {
   handleError(error, "tokenService.js");
@@ -1298,7 +1303,12 @@ async function updateUserTokens(discordId, amount, activity, link = "") {
   const range = "loggedTracker!B:F";
   const dateTime = new Date().toISOString();
   const values = [["Update", activity, link, amount.toString(), dateTime]];
-  await safeAppendDataToSheet(character.inventory, character, range, values);
+  if (character?.name && character?.inventory && character?.userId) {
+    await safeAppendDataToSheet(character.inventory, character, range, values);
+} else {
+    console.error('[safeAppendDataToSheet]: Invalid character object detected before syncing.');
+}
+
  }
 
  return user;

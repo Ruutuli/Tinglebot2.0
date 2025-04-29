@@ -656,7 +656,12 @@ if (!isValidGoogleSheetsUrl(shopLink)) {
     'No',                                         // tradesOpen (default for delivery)
     currentMonthYear,                             // Month/Year
   ]];
-  await safeAppendDataToSheet(character.inventory, character, range, values);
+  if (character?.name && character?.inventory && character?.userId) {
+    await safeAppendDataToSheet(character.inventory, character, range, values);
+} else {
+    console.error('[safeAppendDataToSheet]: Invalid character object detected before syncing.');
+}
+
 }
 
     } else {
