@@ -8,3 +8,5 @@ eslint.config.mjs
 .dependency-cruiser.js
 testingCode/
 database/
+nodemon.log
+

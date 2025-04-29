@@ -26,8 +26,7 @@ const {
   pathEmojis 
 } = require('../../embeds/embeds.js');
 
-// ------------------- Autocomplete and interaction handlers -------------------
-const { handleTravelAutocomplete } = require('../../handlers/autocompleteHandler.js');
+// ------------------- interaction handlers -------------------
 const { handleTravelInteraction } = require('../../handlers/travelHandler.js');
 
 // ------------------- Custom modules (formatting, RNG, jobs, locations) -------------------
@@ -384,7 +383,8 @@ module.exports = {
       .addStringOption(option =>
         option.setName('charactername')
           .setDescription('Your character\'s name.')
-          .setRequired(true))
+          .setRequired(true)
+          .setAutocomplete(true))
       .addStringOption(option =>
         option.setName('destination')
           .setDescription('Destination village.')
@@ -402,15 +402,7 @@ module.exports = {
             { name: 'On Foot', value: 'on foot' },
             { name: 'On Mount', value: 'on mount' }
           )),
-  
-    // ------------------- Autocomplete Handler -------------------
-    async autocomplete(interaction) {
-      try {
-        await handleTravelAutocomplete(interaction);
-      } catch (error) {
-        handleError(error, 'travel.js');
-      }
-    },
+
   
     // ------------------- Execute Travel Command -------------------
     async execute(interaction) {
