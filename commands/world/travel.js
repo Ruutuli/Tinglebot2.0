@@ -271,9 +271,12 @@ const doNothingButton = new ButtonBuilder()
 
 // ------------------- Process travel day recursively -------------------
 async function processTravelDay(day, interaction, character, paths, totalTravelDuration, travelLog, stopInInariko) {
-    const channel = interaction.channel;
+  const channel = interaction.channel;
 
-    
+  if (day <= totalTravelDuration) {
+    const travelingEmbed = createTravelingEmbed(character);
+    await channel.send({ embeds: [travelingEmbed] });
+  }
   
     if (await checkAndHandleKO(channel, character)) {
       return;
@@ -416,6 +419,14 @@ module.exports = {
         const { paths, totalTravelDuration, stopInInariko } = await setupTravel(interaction, character);
   
         const travelLog = [];
+
+      // Send initial Travel Announcement
+      const startingVillage = character.currentVillage.toLowerCase();
+      const destination = interaction.options.getString('destination').toLowerCase();
+      const travelAnnouncementEmbed = createInitialTravelEmbed(character, startingVillage, destination, paths, totalTravelDuration);
+      await interaction.followUp({ embeds: [travelAnnouncementEmbed] });
+
+
         await processTravelDay(1, interaction, character, paths, totalTravelDuration, travelLog, stopInInariko);
   
       } catch (error) {
