@@ -269,16 +269,23 @@ const doNothingButton = new ButtonBuilder()
       return await handleSafeTravelDay(channel, interaction, character, day, totalTravelDuration, pathEmoji, currentPath, travelLog);
     }
   
-    const { monster, encounterType } = await getRandomTravelEncounter(monsters);
-  
-    if (encounterType === 'safe') {
-      return await handleSafeTravelDay(channel, interaction, character, day, totalTravelDuration, pathEmoji, currentPath, travelLog);
-    }
-  
-    const encounterEmbed = createTravelMonsterEncounterEmbed(
-      character,
-      monster,
-      `You encountered a ${monster.name}! What do you want to do?`,
+    const encounterResult = await getRandomTravelEncounter(monsters);
+if (!encounterResult || !encounterResult.monster) {
+  console.error(`[travel.js]: getRandomTravelEncounter returned an invalid result:`, encounterResult);
+  return await handleSafeTravelDay(channel, interaction, character, day, totalTravelDuration, pathEmoji, currentPath, travelLog);
+}
+
+const { monster, encounterType } = encounterResult;
+
+if (encounterType === 'safe') {
+  return await handleSafeTravelDay(channel, interaction, character, day, totalTravelDuration, pathEmoji, currentPath, travelLog);
+}
+
+const encounterEmbed = createTravelMonsterEncounterEmbed(
+  character,
+  monster,
+  `You encountered a ${monster.name}! What do you want to do?`,
+
       character.currentHearts,
       null,
       day,
@@ -351,7 +358,7 @@ async function processTravelDay(day, interaction, character, paths, totalTravelD
     if (isSafeDay) {
       await handleSafeTravelDay(channel, interaction, character, day, totalTravelDuration, pathEmoji, currentPath, travelLog);
     } else {
-      await handleMonsterEncounter(channel, interaction, character, day, totalTravelDuration, pathEmoji, currentPath, travelLog);
+      await handleMonsterEncounter(channel, interaction, character, day, totalTravelDuration, pathEmoji, currentPath, travelLog, paths, stopInInariko);
     }
   }
   
