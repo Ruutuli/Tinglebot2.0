@@ -374,7 +374,12 @@ const values = [
   ]
 ];
 
+    if (character?.name && character?.inventory && character?.userId) {
     await safeAppendDataToSheet(character.inventory, character, range, values);
+} else {
+    console.error('[safeAppendDataToSheet]: Invalid character object detected before syncing.');
+}
+
 
 
 

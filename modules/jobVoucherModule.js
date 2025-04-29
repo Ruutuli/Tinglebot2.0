@@ -71,7 +71,12 @@ async function activateJobVoucher(character, jobName, item, quantity = 1, intera
                 ]
             ];
 
-            await safeAppendDataToSheet(character.inventory, character, range, values);
+            if (character?.name && character?.inventory && character?.userId) {
+    await safeAppendDataToSheet(character.inventory, character, range, values);
+} else {
+    console.error('[safeAppendDataToSheet]: Invalid character object detected before syncing.');
+}
+
         }
 
         return {

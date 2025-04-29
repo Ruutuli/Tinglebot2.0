@@ -683,8 +683,18 @@ for (const { quantity } of items) {
     ],
    ];
 
-   await safeAppendDataToSheet(fromCharacter.inventory, fromCharacter, range, fromValues);
-   await safeAppendDataToSheet(toCharacter.inventory, toCharacter, range, toValues);
+   if (fromCharacter?.name && fromCharacter?.inventory && fromCharacter?.userId) {
+    await safeAppendDataToSheet(fromCharacter.inventory, fromCharacter, range, fromValues);
+} else {
+    console.error('[safeAppendDataToSheet]: Invalid fromCharacter object detected.');
+}
+
+if (toCharacter?.name && toCharacter?.inventory && toCharacter?.userId) {
+    await safeAppendDataToSheet(toCharacter.inventory, toCharacter, range, toValues);
+} else {
+    console.error('[safeAppendDataToSheet]: Invalid toCharacter object detected.');
+}
+
    
    const itemIcon = itemDetails?.emoji || "🎁";
    formattedItems.push({ itemName: name, quantity, itemIcon });
@@ -1437,7 +1447,12 @@ for (const { name } of items) {
       uniqueSyncId,
      ],
     ];
+    if (character?.name && character?.inventory && character?.userId) {
     await safeAppendDataToSheet(character.inventory, character, range, values);
+} else {
+    console.error('[safeAppendDataToSheet]: Invalid character object detected before syncing.');
+}
+
    };
 
    for (let item of tradeSession.items) {
