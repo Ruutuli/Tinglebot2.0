@@ -627,4 +627,4 @@ async function handleTravelInteraction(interaction, character, day, totalTravelD
 
 
 // ---------------- Export ----------------
-module.exports = { handleTravelInteraction };
+module.exports = { handleTravelInteraction,updateTravelLog };
