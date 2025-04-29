@@ -347,40 +347,51 @@ async function processTravelDay(day, interaction, character, paths, totalTravelD
   
   // ------------------- Setup initial travel state -------------------
 async function setupTravel(interaction, character) {
-    const destination = interaction.options.getString('destination');
-    const mode = interaction.options.getString('mode');
-  
-    if (!isValidVillage(destination)) {
-      throw new Error(`Invalid destination selected: ${destination}`);
-    }
-  
-    // New: Validate channel correctness based on village
-    const currentChannelId = interaction.channelId;
-    const validChannelIds = [
-      PATH_CHANNELS.pathOfScarletLeaves,
-      PATH_CHANNELS.leafDewWay
-    ];
-  
-    if (!validChannelIds.includes(currentChannelId)) {
-      throw new Error(`Travel must be started in the correct path channel.`);
-    }
-  
-    const travelKey = `${character.currentVillage}-${destination}`;
-    const reverseKey = `${destination}-${character.currentVillage}`;
-    const stopInInariko = (travelKey === 'rudania-vhintl' || reverseKey === 'vhintl-rudania');
-  
-    const paths = stopInInariko
-      ? ['pathOfScarletLeaves', 'leafDewWay']
-      : ['pathOfScarletLeaves'];
-  
-    const totalTravelDuration = calculateTravelDuration(character.currentVillage, destination, mode, character);
-  
-    if (totalTravelDuration === -1) {
-      throw new Error('Invalid travel route. No path found.');
-    }
-  
-    return { paths, totalTravelDuration, stopInInariko };
+  const destination = interaction.options.getString('destination');
+  const mode = interaction.options.getString('mode');
+
+  if (!isValidVillage(destination)) {
+    throw new Error(`Invalid destination selected: ${destination}`);
   }
+
+  // ------------------- Validate channel correctness based on village -------------------
+  const currentChannelId = interaction.channelId;
+  const validChannelIds = [
+    PATH_CHANNELS.pathOfScarletLeaves,
+    PATH_CHANNELS.leafDewWay
+  ];
+
+  if (!validChannelIds.includes(currentChannelId)) {
+    throw new Error(`Travel must be started in the correct path channel.`);
+  }
+
+  const startingVillage = character.currentVillage.toLowerCase();
+  const travelKey = `${startingVillage}-${destination}`;
+  const reverseKey = `${destination}-${startingVillage}`;
+
+  let paths = [];
+  let stopInInariko = false;
+
+  if (travelKey === 'rudania-vhintl' || reverseKey === 'vhintl-rudania') {
+    paths = ['pathOfScarletLeaves', 'leafDewWay'];
+    stopInInariko = true;
+  } else if (travelKey === 'rudania-inariko' || reverseKey === 'inariko-rudania') {
+    paths = ['pathOfScarletLeaves'];
+  } else if (travelKey === 'vhintl-inariko' || reverseKey === 'inariko-vhintl') {
+    paths = ['leafDewWay'];
+  } else {
+    throw new Error('Invalid travel route. No path found.');
+  }
+
+  const totalTravelDuration = calculateTravelDuration(startingVillage, destination, mode, character);
+
+  if (totalTravelDuration === -1) {
+    throw new Error('Invalid travel route. No path found.');
+  }
+
+  return { paths, totalTravelDuration, stopInInariko };
+}
+
   
   // ------------------- Validate character and travel parameters -------------------
 async function validateCharacter(interaction) {
