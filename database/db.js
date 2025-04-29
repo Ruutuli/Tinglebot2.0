@@ -612,34 +612,6 @@ const fetchCraftableItemsAndCheckMaterials = async (inventory) => {
  }
 };
 
-// ------------------- fetchAndSortItemsByRarity -------------------
-const fetchAndSortItemsByRarity = async (inventoryItems) => {
- try {
-  const itemIds = inventoryItems.map((item) => item.itemId);
-  const itemsFromDB = await ItemModel.find({ _id: { $in: itemIds } }).lean();
-
-  const itemsWithRarity = inventoryItems.map((inventoryItem) => {
-   const dbItem = itemsFromDB.find(
-    (dbItem) => dbItem._id.toString() === inventoryItem.itemId.toString()
-   );
-   return {
-    ...inventoryItem,
-    itemRarity: dbItem ? dbItem.itemRarity : 1,
-   };
-  });
-
-  itemsWithRarity.sort((a, b) => a.itemRarity - b.itemRarity);
-  return itemsWithRarity;
- } catch (error) {
-  handleError(error, "itemService.js");
-  console.error(
-   "[itemService.js]: ❌ Error fetching and sorting items by rarity:",
-   error
-  );
-  throw error;
- }
-};
-
 // ------------------- getIngredientItems -------------------
 const getIngredientItems = async (ingredientName) => {
  try {
@@ -1779,7 +1751,6 @@ module.exports = {
  fetchItemById,
  fetchItemsByMonster,
  fetchCraftableItemsAndCheckMaterials,
- fetchAndSortItemsByRarity,
  getIngredientItems,
  fetchItemsByIds,
  fetchItemRarityByName,

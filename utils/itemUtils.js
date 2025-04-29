@@ -12,7 +12,7 @@ const { handleError } = require('../utils/globalErrorHandler');
 // ============================================================================
 
 // ------------------- Importing database service functions -------------------
-const { fetchAndSortItemsByRarity, connectToInventories } = require('../database/db');
+const { connectToInventories } = require('../database/db');
 
 
 // ============================================================================
@@ -174,6 +174,18 @@ const removeItemDatabase = async (character, item, quantity, interaction) => {
     }
 };
 
+
+// ------------------- Sort Inventory Items By Rarity -------------------
+function sortItemsByRarity(inventoryItems) {
+    return inventoryItems
+      .sort((a, b) => {
+        const rarityA = a.itemRarity || 1;
+        const rarityB = b.itemRarity || 1;
+        return rarityA - rarityB;
+      });
+  }
+  
+
 // ------------------- Prompt User for Specific Items -------------------
 // Prompts the user to select specific items from a general category when needed for crafting.
 const promptUserForSpecificItems = async (interaction, inventory, generalCategoryItemName, requiredQuantity) => {
@@ -182,7 +194,7 @@ const promptUserForSpecificItems = async (interaction, inventory, generalCategor
     }
 
     let specificItems = inventory.filter(item => generalCategories[generalCategoryItemName].includes(item.itemName));
-    specificItems = await fetchAndSortItemsByRarity(specificItems);
+    specificItems = sortItemsByRarity(specificItems);
 
     let availableItems = specificItems.map((item, index) => ({
         label: `${item.itemName} - Qty: ${item.quantity}`,
