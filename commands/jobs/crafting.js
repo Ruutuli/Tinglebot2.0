@@ -31,8 +31,7 @@ const { appendSheetData, authorizeSheets } = require('../../utils/googleSheetsUt
 const { createCraftingEmbed } = require('../../embeds/embeds.js');
 
 // ------------------- Handler Imports -------------------
-const { handleCraftingAutocomplete } = require('../../handlers/autocompleteHandler.js');
-
+const generalCategories = require('../../models/GeneralItemCategories');
 const ItemModel = require('../../models/ItemModel.js');
 
 module.exports = {
@@ -267,17 +266,27 @@ module.exports = {
       const inventory = await inventoryCollection.find().toArray();
 
       // ------------------- Pre-Check Materials Before Crafting -------------------
-const missingMaterials = [];
-for (const material of item.craftingMaterial) {
-  const requiredQty = material.quantity * quantity;
-  const ownedQty = inventory
-    .filter(invItem => invItem.itemName === material.itemName)
-    .reduce((sum, invItem) => sum + invItem.quantity, 0);
-
-  if (ownedQty < requiredQty) {
-    missingMaterials.push(`• ${material.itemName} (Required: ${requiredQty}, Found: ${ownedQty})`);
-  }
-}
+      const missingMaterials = [];
+      for (const material of item.craftingMaterial) {
+        const requiredQty = material.quantity * quantity;
+        let ownedQty = 0;
+      
+        if (generalCategories[material.itemName]) {
+          // If it's a general category like "Any Fish", sum all matching inventory items
+          ownedQty = inventory
+            .filter(invItem => generalCategories[material.itemName].includes(invItem.itemName))
+            .reduce((sum, invItem) => sum + invItem.quantity, 0);
+        } else {
+          // Otherwise match by exact name
+          ownedQty = inventory
+            .filter(invItem => invItem.itemName === material.itemName)
+            .reduce((sum, invItem) => sum + invItem.quantity, 0);
+        }
+      
+        if (ownedQty < requiredQty) {
+          missingMaterials.push(`• ${material.itemName} (Required: ${requiredQty}, Found: ${ownedQty})`);
+        }
+      }
 
 if (missingMaterials.length > 0) {
   const missingEmbed = {
