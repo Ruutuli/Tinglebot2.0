@@ -116,6 +116,16 @@ module.exports = {
         if (!voucherValidation.success && character.jobVoucherJob !== null) {
           return interaction.editReply({ content: voucherValidation.message, ephemeral: true });
         }
+      
+        // Restrict crafting of items that require more than 5 stamina when using a job voucher
+        if (item.staminaToCraft > 5) {
+          console.log(`[crafting.js]: Item "${itemName}" requires ${item.staminaToCraft} stamina to craft, exceeding the allowed limit for job vouchers.`);
+          await interaction.editReply({
+            content: `❌ **Items requiring more than 5 stamina to craft cannot be crafted with an active job voucher.**\n"${itemName}" requires **${item.staminaToCraft} stamina**.`,
+            ephemeral: true,
+          });
+          return;
+        }
 
         const lockedVillage = isVillageExclusiveJob(job);
         if (lockedVillage && character.currentVillage.toLowerCase() !== lockedVillage.toLowerCase()) {
