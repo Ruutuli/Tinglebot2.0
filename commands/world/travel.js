@@ -185,14 +185,33 @@ function calculateTravelDuration(currentVillage, destination, mode, character) {
         }
 
         if (!monster) {
-          const result = await handleDoNothing(interaction, character, message);
+          // Simulate a "do_nothing" button press
+          const fakeInteraction = {
+            customId: 'do_nothing',
+            deferUpdate: async () => {},
+            isButton: () => true,
+            isCommand: () => false,
+            user: interaction.user,
+          };
+        
+          const result = await handleTravelInteraction(fakeInteraction, character, day, totalTravelDuration, pathEmoji, currentPath, message, null, travelLog);
           updateTravelLog(travelLog, result);
           await processTravelDay(day + 1, interaction, character, paths, totalTravelDuration, travelLog, stopInInariko);
         } else {
-          const result = await handleFight(interaction, character, message, monster);
+          // Simulate a "fight" button press
+          const fakeInteraction = {
+            customId: 'fight',
+            deferUpdate: async () => {},
+            isButton: () => true,
+            isCommand: () => false,
+            user: interaction.user,
+          };
+        
+          const result = await handleTravelInteraction(fakeInteraction, character, day, totalTravelDuration, pathEmoji, currentPath, message, monster, travelLog);
           updateTravelLog(travelLog, result);
           await processTravelDay(day + 1, interaction, character, paths, totalTravelDuration, travelLog, stopInInariko);
         }
+        
       }
     });
 }
