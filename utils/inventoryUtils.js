@@ -442,10 +442,15 @@ const processMaterials = async (
    0
   );
   if (totalQuantity < requiredQuantity) {
-   throw new Error(
-    `❌ **Unable to find or insufficient quantity for ${materialName} in ${character.name}'s inventory. Required: ${requiredQuantity}, Found: ${totalQuantity}**`
-   );
+    if (interaction && interaction.followUp) {
+      await interaction.followUp({
+        content: `❌ **You don't have enough ${materialName} to craft this item!**\nRequired: ${requiredQuantity}, Found: ${totalQuantity}`,
+        ephemeral: true,
+      });
+    }
+    return "canceled"; // Cancel crafting gracefully
   }
+  
 
   for (const specificItem of specificItems) {
    if (requiredQuantity <= 0) break;
