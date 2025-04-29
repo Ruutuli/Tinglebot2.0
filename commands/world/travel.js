@@ -20,6 +20,7 @@ const {
   createFinalTravelEmbed, 
   createInitialTravelEmbed, 
   createMonsterEncounterEmbed, 
+  createTravelMonsterEncounterEmbed,
   createSafeTravelDayEmbed, 
   createStopInInarikoEmbed, 
   createTravelingEmbed, 
