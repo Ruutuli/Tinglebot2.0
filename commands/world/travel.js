@@ -26,8 +26,8 @@ const {
   pathEmojis 
 } = require('../../embeds/embeds.js');
 
-// ------------------- interaction handlers -------------------
-const { handleTravelInteraction } = require('../../handlers/travelHandler.js');
+// ------------------- Interaction handlers -------------------
+const { handleTravelInteraction, updateTravelLog } = require('../../handlers/travelHandler.js');
 
 // ------------------- Custom modules (formatting, RNG, jobs, locations) -------------------
 const { capitalizeFirstLetter } = require('../../modules/formattingModule.js');
