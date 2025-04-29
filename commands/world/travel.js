@@ -268,6 +268,8 @@ async function processTravelDay(day, interaction, character, paths, totalTravelD
     if (await checkAndHandleKO(channel, character)) {
       return;
     }
+    
+    character = await fetchCharacterByNameAndUserId(character.name, character.userId);
   
     const pathEmoji = pathEmojis[character.currentVillage] || '🏞️';
     const currentPath = getCurrentPath(day, paths, stopInInariko);
