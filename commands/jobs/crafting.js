@@ -25,8 +25,10 @@ const { capitalizeWords, formatDateTime } = require('../../modules/formattingMod
 
 // ------------------- Utility Functions -------------------
 const { addItemInventoryDatabase, processMaterials } = require('../../utils/inventoryUtils');
-const { extractSpreadsheetId, isValidGoogleSheetsUrl, safeAppendDataToSheet } = require('../../utils/validation');
+const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../../utils/validation');
+const { safeAppendDataToSheet } = require('../../utils/googleSheetsUtils');
 const { handleError } = require('../../utils/globalErrorHandler');
+
 
 // ------------------- Embed Imports -------------------
 const { createCraftingEmbed } = require('../../embeds/embeds');
