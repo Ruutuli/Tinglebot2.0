@@ -377,16 +377,15 @@ async function handleAutocomplete(interaction) {
     filtered.map((choice) => ({ name: choice, value: choice }))
    );
 
-
-
-   // ------------------- TRAVEL Commands -------------------
+// ------------------- TRAVEL Commands -------------------
   } else if (
-   commandName === "travel" &&
-   focusedOption.name === "charactername"
+    commandName === "travel" &&
+    focusedOption.name === "charactername"
   ) {
-   await handleTravelAutocomplete(interaction, focusedOption);
+    await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, commandName);
   } else if (commandName === "travel" && focusedOption.name === "destination") {
-   await handleVillageBasedCommandsAutocomplete(interaction, focusedOption);
+    await handleVillageBasedCommandsAutocomplete(interaction, focusedOption);
+
 
    // ------------------- VENDING Commands -------------------
   } else if (commandName === "vending") {
