@@ -207,19 +207,20 @@ async function handleSafeTravelDay(channel, interaction, character, day, totalTr
   const travelEmbed = createSafeTravelDayEmbed(character, day, totalTravelDuration, pathEmoji, currentPath);
 
   const recoverButton = new ButtonBuilder()
-    .setCustomId('recover')
-    .setLabel('Recover')
-    .setStyle(ButtonStyle.Success);
+  .setCustomId('recover')
+  .setLabel('💖 Recover a Heart')
+  .setStyle(ButtonStyle.Success);
 
-  const gatherButton = new ButtonBuilder()
-    .setCustomId('gather')
-    .setLabel('Gather')
-    .setStyle(ButtonStyle.Secondary);
+const gatherButton = new ButtonBuilder()
+  .setCustomId('gather')
+  .setLabel('🌿 Gather Resources')
+  .setStyle(ButtonStyle.Primary);
 
-  const doNothingButton = new ButtonBuilder()
-    .setCustomId('do_nothing')
-    .setLabel('Do Nothing')
-    .setStyle(ButtonStyle.Secondary);
+const doNothingButton = new ButtonBuilder()
+  .setCustomId('do_nothing')
+  .setLabel('✨ Do Nothing')
+  .setStyle(ButtonStyle.Secondary);
+
 
   const row = new ActionRowBuilder().addComponents(recoverButton, gatherButton, doNothingButton);
 
@@ -271,6 +272,8 @@ async function handleSafeTravelDay(channel, interaction, character, day, totalTr
 // ------------------- Process travel day recursively -------------------
 async function processTravelDay(day, interaction, character, paths, totalTravelDuration, travelLog, stopInInariko) {
     const channel = interaction.channel;
+
+    
   
     if (await checkAndHandleKO(channel, character)) {
       return;
