@@ -27,7 +27,7 @@ const {
 } = require('../../embeds/embeds.js');
 
 // ------------------- Interaction handlers -------------------
-const { handleTravelInteraction, updateTravelLog } = require('../../handlers/travelHandler.js');
+const { handleTravelInteraction, handleDoNothing, handleFight, updateTravelLog } = require('../../handlers/travelHandler.js');
 
 // ------------------- Custom modules (formatting, RNG, jobs, locations) -------------------
 const { capitalizeFirstLetter } = require('../../modules/formattingModule.js');
