@@ -169,66 +169,66 @@ function calculateTravelDuration(currentVillage, destination, mode, character) {
   
   async function createTravelCollector(message, interaction, character, day, totalTravelDuration, pathEmoji, currentPath, travelLog, paths, stopInInariko, monster = null) {
     const filter = (i) => i.user.id === interaction.user.id;
-    const collector = message.createMessageComponentCollector({ filter, time: 60000 }); // 5 minutes timeout (300,000 ms)
-
+    const collector = message.createMessageComponentCollector({ filter, time: 60000 }); // 1 min timeout
+  
     const savedPaths = paths;
-const savedStopInInariko = stopInInariko;
-
-collector.on('collect', async (i) => {
-
+    const savedStopInInariko = stopInInariko;
+  
+    console.log(`[createTravelCollector]: Collector started for ${character.name}, Day ${day}/${totalTravelDuration}`);
+  
+    collector.on('collect', async (i) => {
+      console.log(`[createTravelCollector]: User interaction collected: ${i.customId} on Day ${day}`);
       try {
         const result = await handleTravelInteraction(i, character, day, totalTravelDuration, pathEmoji, currentPath, message, monster, travelLog);
-
         updateTravelLog(travelLog, result);
+  
+        console.log(`[createTravelCollector]: Advancing to Day ${day + 1} after interaction.`);
         await processTravelDay(day + 1, interaction, character, savedPaths, totalTravelDuration, travelLog, savedStopInInariko);
       } catch (error) {
         console.error(`[travel.js]: Error during button interaction: ${error.message}`, error);
         handleError(error, 'travel.js');
       }
     });
-
+  
     collector.on('end', async (collected, reason) => {
+      console.warn(`[createTravelCollector]: Collector ended with reason: ${reason}. Collected size: ${collected.size}`);
+  
       if (reason === 'time' && !collected.size) {
-        console.warn(`[travel.js]: Collector timed out with no user action.`);
-
         const channel = interaction.channel;
         try {
           await channel.send(`⏳ **No action was selected for ${character.name}. Default action is being taken automatically.**`);
         } catch (error) {
-          console.error(`[travel.js]: Failed to send timeout notification: ${error.message}`);
+          console.error(`[travel.js]: Failed to send timeout message: ${error.message}`);
         }
-
+  
+        const fakeInteraction = {
+          deferUpdate: async () => {},
+          isButton: () => true,
+          isCommand: () => false,
+          user: interaction.user
+        };
+  
         if (!monster) {
-          // Simulate a "do_nothing" button press
-          const fakeInteraction = {
-            customId: 'do_nothing',
-            deferUpdate: async () => {},
-            isButton: () => true,
-            isCommand: () => false,
-            user: interaction.user,
-          };
-        
-          const result = await handleTravelInteraction(fakeInteraction, character, day, totalTravelDuration, pathEmoji, currentPath, message, null, travelLog);
-          updateTravelLog(travelLog, result);
-          await processTravelDay(day + 1, interaction, character, savedPaths, totalTravelDuration, travelLog, savedStopInInariko);
+          fakeInteraction.customId = 'do_nothing';
+          console.log(`[createTravelCollector]: Simulating 'do_nothing' on Day ${day}`);
         } else {
-          // Simulate a "fight" button press
-          const fakeInteraction = {
-            customId: 'fight',
-            deferUpdate: async () => {},
-            isButton: () => true,
-            isCommand: () => false,
-            user: interaction.user,
-          };
-        
+          fakeInteraction.customId = 'fight';
+          console.log(`[createTravelCollector]: Simulating 'fight' on Day ${day}`);
+        }
+  
+        try {
           const result = await handleTravelInteraction(fakeInteraction, character, day, totalTravelDuration, pathEmoji, currentPath, message, monster, travelLog);
           updateTravelLog(travelLog, result);
+  
+          console.log(`[createTravelCollector]: Advancing to Day ${day + 1} after timeout fallback.`);
           await processTravelDay(day + 1, interaction, character, savedPaths, totalTravelDuration, travelLog, savedStopInInariko);
+        } catch (error) {
+          console.error(`[travel.js]: Error during timeout fallback handling: ${error.message}`, error);
         }
-        
       }
     });
-}
+  }
+  
 
   
 // ============================================================================
@@ -492,7 +492,8 @@ module.exports = {
       await interaction.followUp({ embeds: [travelAnnouncementEmbed] });
 
 
-      await processTravelDay(day + 1, interaction, character, savedPaths, totalTravelDuration, travelLog, savedStopInInariko);
+      await processTravelDay(1, interaction, character, paths, totalTravelDuration, travelLog, stopInInariko);
+
   
       } catch (error) {
         handleError(error, 'travel.js');
