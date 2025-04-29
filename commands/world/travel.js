@@ -157,15 +157,14 @@ function calculateTravelDuration(currentVillage, destination, mode, character) {
     return nextChannelId;
   }
   
-  // ------------------- Create travel button collectors and handle timeout fallback -------------------
-async function createTravelCollector(message, interaction, character, day, totalTravelDuration, pathEmoji, currentPath, travelLog, paths, stopInInariko, monster = null) {
+  async function createTravelCollector(message, interaction, character, day, totalTravelDuration, pathEmoji, currentPath, travelLog, paths, stopInInariko, monster = null) {
     const filter = (i) => i.user.id === interaction.user.id;
-    const collector = message.createMessageComponentCollector({ filter, time: 60000 });
-  
+    const collector = message.createMessageComponentCollector({ filter, time: 60000 }); // 5 minutes timeout (300,000 ms)
+
     collector.on('collect', async (i) => {
       try {
         const result = await handleTravelInteraction(i, character, day, totalTravelDuration, pathEmoji, currentPath, message, monster, travelLog);
-  
+
         updateTravelLog(travelLog, result);
         await processTravelDay(day + 1, interaction, character, paths, totalTravelDuration, travelLog, stopInInariko);
       } catch (error) {
@@ -173,11 +172,18 @@ async function createTravelCollector(message, interaction, character, day, total
         handleError(error, 'travel.js');
       }
     });
-  
+
     collector.on('end', async (collected, reason) => {
       if (reason === 'time' && !collected.size) {
         console.warn(`[travel.js]: Collector timed out with no user action.`);
-  
+
+        const channel = interaction.channel;
+        try {
+          await channel.send(`⏳ **No action was selected for ${character.name}. Default action is being taken automatically.**`);
+        } catch (error) {
+          console.error(`[travel.js]: Failed to send timeout notification: ${error.message}`);
+        }
+
         if (!monster) {
           const result = await handleDoNothing(interaction, character, message);
           updateTravelLog(travelLog, result);
@@ -189,7 +195,8 @@ async function createTravelCollector(message, interaction, character, day, total
         }
       }
     });
-  }
+}
+
   
 // ============================================================================
 // ------------------- TRAVEL ENCOUNTER HANDLERS -------------------
@@ -197,31 +204,32 @@ async function createTravelCollector(message, interaction, character, day, total
 // ============================================================================
 
 // ------------------- Handle safe travel day (no monster encounter) -------------------
-async function handleSafeTravelDay(channel, interaction, character, day, totalTravelDuration, pathEmoji, currentPath, travelLog) {
-    const travelEmbed = createSafeTravelDayEmbed(character, day, totalTravelDuration, pathEmoji, currentPath);
-  
-    const recoverButton = new ButtonBuilder()
-      .setCustomId('recover')
-      .setLabel('Recover')
-      .setStyle(ButtonStyle.Success);
-  
-    const gatherButton = new ButtonBuilder()
-      .setCustomId('gather')
-      .setLabel('Gather')
-      .setStyle(ButtonStyle.Secondary);
-  
-    const doNothingButton = new ButtonBuilder()
-      .setCustomId('do_nothing')
-      .setLabel('Do Nothing')
-      .setStyle(ButtonStyle.Secondary);
-  
-    const row = new ActionRowBuilder().addComponents(recoverButton, gatherButton, doNothingButton);
-  
-    const message = await channel.send({ embeds: [travelEmbed], components: [row] });
-    
-    await createTravelCollector(message, interaction, character, day, totalTravelDuration, pathEmoji, currentPath, travelLog, paths, stopInInariko, monster);
-  }
-  
+async function handleSafeTravelDay(channel, interaction, character, day, totalTravelDuration, pathEmoji, currentPath, travelLog, paths, stopInInariko) {
+  const travelEmbed = createSafeTravelDayEmbed(character, day, totalTravelDuration, pathEmoji, currentPath);
+
+  const recoverButton = new ButtonBuilder()
+    .setCustomId('recover')
+    .setLabel('Recover')
+    .setStyle(ButtonStyle.Success);
+
+  const gatherButton = new ButtonBuilder()
+    .setCustomId('gather')
+    .setLabel('Gather')
+    .setStyle(ButtonStyle.Secondary);
+
+  const doNothingButton = new ButtonBuilder()
+    .setCustomId('do_nothing')
+    .setLabel('Do Nothing')
+    .setStyle(ButtonStyle.Secondary);
+
+  const row = new ActionRowBuilder().addComponents(recoverButton, gatherButton, doNothingButton);
+
+  const message = await channel.send({ embeds: [travelEmbed], components: [row] });
+
+  // Fix: remove `monster` from call; no monster during safe day
+  await createTravelCollector(message, interaction, character, day, totalTravelDuration, pathEmoji, currentPath, travelLog, paths, stopInInariko, null);
+}
+
   // ------------------- Handle monster encounter during travel -------------------
   async function handleMonsterEncounter(channel, interaction, character, day, totalTravelDuration, pathEmoji, currentPath, travelLog) {
     const monsters = await getMonstersByPath(currentPath);
@@ -268,7 +276,7 @@ async function processTravelDay(day, interaction, character, paths, totalTravelD
     if (await checkAndHandleKO(channel, character)) {
       return;
     }
-    
+
     character = await fetchCharacterByNameAndUserId(character.name, character.userId);
   
     const pathEmoji = pathEmojis[character.currentVillage] || '🏞️';

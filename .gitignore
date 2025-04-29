@@ -7,3 +7,4 @@ config/
 eslint.config.mjs
 .dependency-cruiser.js
 testingCode/
+database/
