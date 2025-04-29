@@ -318,6 +318,7 @@ const encounterEmbed = createTravelMonsterEncounterEmbed(
 // ============================================================================
 
 // ------------------- Process travel day recursively -------------------
+// ------------------- Process travel day recursively -------------------
 async function processTravelDay(day, interaction, character, paths, totalTravelDuration, travelLog, stopInInariko) {
   const channel = interaction.channel;
 
@@ -325,42 +326,43 @@ async function processTravelDay(day, interaction, character, paths, totalTravelD
     const travelingEmbed = createTravelingEmbed(character);
     await channel.send({ embeds: [travelingEmbed] });
   }
-  
-    if (await checkAndHandleKO(channel, character)) {
-      return;
-    }
 
-    character = await fetchCharacterByNameAndUserId(character.name, character.userId);
-  
-    const pathEmoji = pathEmojis[character.currentVillage] || '🏞️';
-    const currentPath = getCurrentPath(day, paths, stopInInariko);
-  
-    if (!currentPath) {
-      console.error(`[travel.js]: Error determining current path for day ${day}.`);
-      return;
-    }
-  
-    if (day > totalTravelDuration) {
-      const finalTravelEmbed = createFinalTravelEmbed(character);
-      await channel.send({ embeds: [finalTravelEmbed] });
-      return;
-    }
-  
-    if (stopInInariko && day === Math.ceil(totalTravelDuration / 2)) {
-        await handleStopInariko(channel, character, currentPath, travelLog);
-      return;
-    }
-  
-    // Determine whether it's a safe travel day or monster encounter
-    const encounterChance = Math.random();
-    const isSafeDay = encounterChance < 0.6; // 60% chance safe travel
-  
-    if (isSafeDay) {
-      await handleSafeTravelDay(channel, interaction, character, day, totalTravelDuration, pathEmoji, currentPath, travelLog);
-    } else {
-      await handleMonsterEncounter(channel, interaction, character, day, totalTravelDuration, pathEmoji, currentPath, travelLog, paths, stopInInariko);
-    }
+  if (await checkAndHandleKO(channel, character)) {
+    return;
   }
+
+  character = await fetchCharacterByNameAndUserId(character.name, character.userId);
+
+  const pathEmoji = pathEmojis[character.currentVillage] || '🏞️';
+  const currentPath = getCurrentPath(day, paths, stopInInariko);
+
+  if (!currentPath) {
+    console.error(`[travel.js]: Error determining current path for day ${day}.`);
+    return;
+  }
+
+  if (day > totalTravelDuration) {
+    const finalTravelEmbed = createFinalTravelEmbed(character);
+    await channel.send({ embeds: [finalTravelEmbed] });
+    return;
+  }
+
+  if (stopInInariko && day === Math.ceil(totalTravelDuration / 2)) {
+    await handleStopInariko(channel, character, currentPath, travelLog);
+    return;
+  }
+
+  // Determine whether it's a safe travel day or monster encounter
+  const encounterChance = Math.random();
+  const isSafeDay = encounterChance < 0.6; // 60% chance safe travel
+
+  if (isSafeDay) {
+    await handleSafeTravelDay(channel, interaction, character, day, totalTravelDuration, pathEmoji, currentPath, travelLog, paths, stopInInariko);
+  } else {
+    await handleMonsterEncounter(channel, interaction, character, day, totalTravelDuration, pathEmoji, currentPath, travelLog, paths, stopInInariko);
+  }
+}
+
   
   // ------------------- Setup initial travel state -------------------
 async function setupTravel(interaction, character) {
