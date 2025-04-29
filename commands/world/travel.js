@@ -93,15 +93,25 @@ function calculateTravelDuration(currentVillage, destination, mode, character) {
   
   // ------------------- Determine the current path for the day -------------------
   function getCurrentPath(day, paths, halfTime) {
+    if (!Array.isArray(paths)) {
+      console.error(`[travel.js]: Error: paths is not an array. Received:`, paths);
+      return null;
+    }
     if (paths.length === 0) {
-      console.error(`[travel.js]: Error: Invalid path length ${paths.length}`);
+      console.error(`[travel.js]: Error: Invalid path length 0. Day: ${day}, halfTime: ${halfTime}`);
       return null;
     }
     if (paths.length === 1) {
       return paths[0];
     }
-    return paths[Math.floor((day - 1) / (halfTime ? 1 : 2))];
+    const index = Math.floor((day - 1) / (halfTime ? 1 : 2));
+    if (index >= paths.length) {
+      console.warn(`[travel.js]: Warning: Calculated index (${index}) out of bounds for paths array:`, paths);
+      return paths[paths.length - 1]; // fallback to last path
+    }
+    return paths[index];
   }
+  
   
   // ------------------- Check if character is KO'd and handle recovery if needed -------------------
   async function checkAndHandleKO(channel, character) {
