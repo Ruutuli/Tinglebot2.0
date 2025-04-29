@@ -245,7 +245,18 @@ const doNothingButton = new ButtonBuilder()
       return await handleSafeTravelDay(channel, interaction, character, day, totalTravelDuration, pathEmoji, currentPath, travelLog);
     }
   
-    const encounterEmbed = createMonsterEncounterEmbed(character, monster);
+    const encounterEmbed = createTravelMonsterEncounterEmbed(
+      character,
+      monster,
+      `You encountered a ${monster.name}! What do you want to do?`,
+      character.currentHearts,
+      null,
+      day,
+      totalTravelDuration,
+      pathEmoji,
+      currentPath
+    );
+    
   
     const fightButton = new ButtonBuilder()
       .setCustomId('fight')
