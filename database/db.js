@@ -1136,7 +1136,7 @@ async function syncTokenTracker(userId) {
   await user.save();
 
   const syncRow = ["Initial Sync", "You can delete this!", "", "sync", "0"];
-  await safeAppendDataToSheet(character.inventory, character, "loggedTracker!B:F", [syncRow]);
+  await safeAppendDataToSheet(character.inventory, character, range, values);
   return user;
  } catch (error) {
   handleError(error, "tokenService.js");

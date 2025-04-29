@@ -8,8 +8,6 @@ const fs = require('fs');
 const { handleError } = require('../utils/globalErrorHandler');
 const path = require('path');
 const Character = require('../models/CharacterModel');
-const { client } = require('../index.js');
-const { fetchCharacterByName } = require('../database/db')
 
 // ============================================================================
 // Third-Party Libraries
@@ -436,64 +434,63 @@ async function validateInventorySheet(spreadsheetUrl, characterName) {
 // ------------------- Log Error Details -------------------
 // Logs error details to the console with a consistent format.
 function logErrorDetails(error) {
-    console.error(`[googleSheetsUtils.js]: logs`, error);
+  console.error(`[googleSheetsUtils.js]: logs`, error);
 }
 
-async function safeAppendDataToSheet(spreadsheetUrl, characterInfo, range, values) {
-    try {
-      if (!spreadsheetUrl || typeof spreadsheetUrl !== 'string') {
-        console.warn(`[googleSheetsUtils.js]: No spreadsheet URL provided for ${characterInfo}. Skipping sync.`);
-        return;
-      }
-  
-      // Determine if characterInfo is a string (name) or object (full character)
-      let character = characterInfo;
-      if (typeof characterInfo === 'string') {
-        character = await fetchCharacterByName(characterInfo);
-        if (!character) {
-          console.error(`[googleSheetsUtils.js]: Character lookup failed for name: ${characterInfo}`);
-          return;
-        }
-      }
-  
-      const spreadsheetId = extractSpreadsheetId(spreadsheetUrl);
-      const auth = await authorizeSheets();
-  
-      // 🛡️ Validate the inventory sheet first
-      const validationResult = await validateInventorySheet(spreadsheetUrl, character.name);
-      if (!validationResult.success) {
-        // 🛠️ Only log the error part, no "Fix" text
-        const errorOnly = validationResult.message.split('**Fix:**')[0].trim();
-        console.error(`[googleSheetsUtils.js]: Validation failed for ${character.name}: ${errorOnly}`);
-  
-        // ✉️ DM the user about the broken link
-        if (character.userId) {
-          try {
-            const user = await client.users.fetch(character.userId);
-            if (user) {
-              await user.send(
-                `⚠️ Heads up! Your inventory sync for **${character.name}** failed.\n\n` +
-                `Your linked Google Sheet may be missing, renamed, or set up incorrectly. Please update your inventory link or re-setup your sheet when you have a chance!`
-              );
-              console.log(`[googleSheetsUtils.js]: Sent DM to user ${character.userId} about broken inventory.`);
-            }
-          } catch (dmError) {
-            console.error(`[googleSheetsUtils.js]: Failed to send DM to ${character.userId}: ${dmError.message}`);
-          }
-        } else {
-          console.warn(`[googleSheetsUtils.js]: No userId found for character ${character.name}. Could not send DM.`);
-        }
-  
-        return; // Stop trying to sync
-      }
-  
-      // ✅ If validation passed, proceed to append
-      await appendSheetData(auth, spreadsheetId, range, values);
-  
-    } catch (error) {
-      console.error(`[googleSheetsUtils.js]: Failed to safely append data for ${characterInfo}: ${error.message}`);
+// ============================================================================
+// Safe Append Data To Sheet
+// ------------------- Validate and Safely Append Inventory Data -------------------
+async function safeAppendDataToSheet(spreadsheetUrl, character, range, values) {
+  try {
+    if (!spreadsheetUrl || typeof spreadsheetUrl !== 'string') {
+      console.warn(`[googleSheetsUtils.js]: No spreadsheet URL provided for character. Skipping sync.`);
+      return;
     }
+
+    if (!character || typeof character !== 'object' || !character.name) {
+      console.error(`[googleSheetsUtils.js]: Invalid character object provided. Skipping sync.`);
+      return;
+    }
+
+    const spreadsheetId = extractSpreadsheetId(spreadsheetUrl);
+    const auth = await authorizeSheets();
+
+    // 🛡️ Validate the inventory sheet first
+    const validationResult = await validateInventorySheet(spreadsheetUrl, character.name);
+    if (!validationResult.success) {
+      // 🛠️ Only log the error part, no "Fix" text
+      const errorOnly = validationResult.message.split('**Fix:**')[0].trim();
+      console.error(`[googleSheetsUtils.js]: Validation failed for ${character.name}: ${errorOnly}`);
+
+      // ✉️ DM the user about the broken link
+      if (character.userId) {
+        try {
+          const user = await client.users.fetch(character.userId);
+          if (user) {
+            await user.send(
+              `⚠️ Heads up! Your inventory sync for **${character.name}** failed.\n\n` +
+              `Your linked Google Sheet may be missing, renamed, or set up incorrectly. Please update your inventory link or re-setup your sheet when you have a chance!`
+            );
+            console.log(`[googleSheetsUtils.js]: Sent DM to user ${character.userId} about broken inventory.`);
+          }
+        } catch (dmError) {
+          console.error(`[googleSheetsUtils.js]: Failed to send DM to ${character.userId}: ${dmError.message}`);
+        }
+      } else {
+        console.warn(`[googleSheetsUtils.js]: No userId found for character ${character.name}. Could not send DM.`);
+      }
+
+      return; // Stop trying to sync
+    }
+
+    // ✅ If validation passed, proceed to append
+    await appendSheetData(auth, spreadsheetId, range, values);
+
+  } catch (error) {
+    console.error(`[googleSheetsUtils.js]: Failed to safely append data for ${character?.name || 'Unknown Character'}: ${error.message}`);
+    handleError(error, 'googleSheetsUtils.js');
   }
+}
   
 // ============================================================================
 // Exported Functions
