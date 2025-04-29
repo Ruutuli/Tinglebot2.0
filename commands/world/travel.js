@@ -171,12 +171,16 @@ function calculateTravelDuration(currentVillage, destination, mode, character) {
     const filter = (i) => i.user.id === interaction.user.id;
     const collector = message.createMessageComponentCollector({ filter, time: 60000 }); // 5 minutes timeout (300,000 ms)
 
-    collector.on('collect', async (i) => {
+    const savedPaths = paths;
+const savedStopInInariko = stopInInariko;
+
+collector.on('collect', async (i) => {
+
       try {
         const result = await handleTravelInteraction(i, character, day, totalTravelDuration, pathEmoji, currentPath, message, monster, travelLog);
 
         updateTravelLog(travelLog, result);
-        await processTravelDay(day + 1, interaction, character, paths, totalTravelDuration, travelLog, stopInInariko);
+        await processTravelDay(day + 1, interaction, character, savedPaths, totalTravelDuration, travelLog, savedStopInInariko);
       } catch (error) {
         console.error(`[travel.js]: Error during button interaction: ${error.message}`, error);
         handleError(error, 'travel.js');
@@ -206,7 +210,7 @@ function calculateTravelDuration(currentVillage, destination, mode, character) {
         
           const result = await handleTravelInteraction(fakeInteraction, character, day, totalTravelDuration, pathEmoji, currentPath, message, null, travelLog);
           updateTravelLog(travelLog, result);
-          await processTravelDay(day + 1, interaction, character, paths, totalTravelDuration, travelLog, stopInInariko);
+          await processTravelDay(day + 1, interaction, character, savedPaths, totalTravelDuration, travelLog, savedStopInInariko);
         } else {
           // Simulate a "fight" button press
           const fakeInteraction = {
@@ -219,7 +223,7 @@ function calculateTravelDuration(currentVillage, destination, mode, character) {
         
           const result = await handleTravelInteraction(fakeInteraction, character, day, totalTravelDuration, pathEmoji, currentPath, message, monster, travelLog);
           updateTravelLog(travelLog, result);
-          await processTravelDay(day + 1, interaction, character, paths, totalTravelDuration, travelLog, stopInInariko);
+          await processTravelDay(day + 1, interaction, character, savedPaths, totalTravelDuration, travelLog, savedStopInInariko);
         }
         
       }
@@ -342,7 +346,7 @@ async function processTravelDay(day, interaction, character, paths, totalTravelD
   }
 
   if (day > totalTravelDuration) {
-    const finalTravelEmbed = createFinalTravelEmbed(character);
+    const finalTravelEmbed = createFinalTravelEmbed(character, character.currentVillage, paths, totalTravelDuration, travelLog);
     await channel.send({ embeds: [finalTravelEmbed] });
     return;
   }
@@ -488,7 +492,7 @@ module.exports = {
       await interaction.followUp({ embeds: [travelAnnouncementEmbed] });
 
 
-        await processTravelDay(1, interaction, character, paths, totalTravelDuration, travelLog, stopInInariko);
+      await processTravelDay(day + 1, interaction, character, savedPaths, totalTravelDuration, travelLog, savedStopInInariko);
   
       } catch (error) {
         handleError(error, 'travel.js');
