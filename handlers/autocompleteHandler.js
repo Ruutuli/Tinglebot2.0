@@ -182,56 +182,61 @@ async function handleAutocomplete(interaction) {
      }
     }
    }
+  } else if (
+   commandName === "economy" &&
+   ((["gift", "trade", "transfer"].includes(
+    interaction.options.getSubcommand()
+   ) &&
+    focusedOption.name === "fromcharacter") ||
+    (["shop-buy", "shop-sell"].includes(interaction.options.getSubcommand()) &&
+     focusedOption.name === "charactername") ||
+    (["transfer"].includes(interaction.options.getSubcommand()) &&
+     focusedOption.name === "tocharacter"))
+  ) {
+   await handleCharacterBasedCommandsAutocomplete(
+    interaction,
+    focusedOption,
+    commandName
+   );
+  } else if (
+   commandName === "economy" &&
+   ["gift", "trade"].includes(interaction.options.getSubcommand()) &&
+   focusedOption.name === "tocharacter"
+  ) {
+   await handleTradeToCharacterAutocomplete(interaction, focusedOption);
 
+   // GIFT Items
   } else if (
-    commandName === "economy" &&
-    (
-      (["gift", "trade", "transfer"].includes(interaction.options.getSubcommand()) && focusedOption.name === "fromcharacter") ||
-      (["shop-buy", "shop-sell"].includes(interaction.options.getSubcommand()) && focusedOption.name === "charactername") ||
-      (["transfer"].includes(interaction.options.getSubcommand()) && focusedOption.name === "tocharacter")
-    )
+   commandName === "economy" &&
+   interaction.options.getSubcommand() === "gift" &&
+   ["itema", "itemb", "itemc"].includes(focusedOption.name)
   ) {
-    await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, commandName);
-  
+   await handleGiftAutocomplete(interaction, focusedOption);
+
+   // TRADE Items
   } else if (
-    commandName === "economy" &&
-    (["gift", "trade"].includes(interaction.options.getSubcommand())) &&
-    focusedOption.name === "tocharacter"
+   commandName === "economy" &&
+   interaction.options.getSubcommand() === "trade" &&
+   ["item1", "item2", "item3"].includes(focusedOption.name)
   ) {
-    await handleTradeToCharacterAutocomplete(interaction, focusedOption);
-  
-  // GIFT Items
+   await handleTradeItemAutocomplete(interaction, focusedOption);
+
+   // TRANSFER Items
   } else if (
-    commandName === "economy" &&
-    interaction.options.getSubcommand() === "gift" &&
-    ["itema", "itemb", "itemc"].includes(focusedOption.name)
+   commandName === "economy" &&
+   interaction.options.getSubcommand() === "transfer" &&
+   ["itema", "itemb", "itemc"].includes(focusedOption.name)
   ) {
-    await handleGiftAutocomplete(interaction, focusedOption);
-  
-  // TRADE Items
+   await handleTransferItemAutocomplete(interaction, focusedOption);
+
+   // SHOP BUY/SELL Items
   } else if (
-    commandName === "economy" &&
-    interaction.options.getSubcommand() === "trade" &&
-    ["item1", "item2", "item3"].includes(focusedOption.name)
+   commandName === "economy" &&
+   ["shop-buy", "shop-sell"].includes(interaction.options.getSubcommand()) &&
+   focusedOption.name === "itemname"
   ) {
-    await handleTradeItemAutocomplete(interaction, focusedOption);
-  
-  // TRANSFER Items
-  } else if (
-    commandName === "economy" &&
-    interaction.options.getSubcommand() === "transfer" &&
-    ["itema", "itemb", "itemc"].includes(focusedOption.name)
-  ) {
-    await handleTransferItemAutocomplete(interaction, focusedOption);
-  
-  // SHOP BUY/SELL Items
-  } else if (
-    commandName === "economy" &&
-    ["shop-buy", "shop-sell"].includes(interaction.options.getSubcommand()) &&
-    focusedOption.name === "itemname"
-  ) {
-    await handleShopsAutocomplete(interaction, focusedOption);
-    
+   await handleShopsAutocomplete(interaction, focusedOption);
+
    // ------------------- EDITCHARACTER Commands -------------------
   } else if (
    commandName === "editcharacter" &&
@@ -255,19 +260,21 @@ async function handleAutocomplete(interaction) {
   } else if (commandName === "gear" && focusedOption.name === "itemname") {
    await handleGearAutocomplete(interaction, focusedOption);
 
-
-
    // ------------------- HEAL Commands -------------------
   } else if (commandName === "heal") {
    await handleHealAutocomplete(interaction, focusedOption);
 
    // ------------------- ITEM Commands -------------------
   } else if (commandName === "item" && focusedOption.name === "itemname") {
-    await handleItemAutocomplete(interaction, focusedOption);
-   } else if (commandName === "item" && focusedOption.name === "charactername") {
-    await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, commandName);
-   } else if (commandName === "item" && focusedOption.name === "jobname") {
-    await handleItemJobNameAutocomplete(interaction, focusedOption);
+   await handleItemAutocomplete(interaction, focusedOption);
+  } else if (commandName === "item" && focusedOption.name === "charactername") {
+   await handleCharacterBasedCommandsAutocomplete(
+    interaction,
+    focusedOption,
+    commandName
+   );
+  } else if (commandName === "item" && focusedOption.name === "jobname") {
+   await handleItemJobNameAutocomplete(interaction, focusedOption);
 
    // ------------------- LOOKUP Commands -------------------
   } else if (
@@ -377,15 +384,18 @@ async function handleAutocomplete(interaction) {
     filtered.map((choice) => ({ name: choice, value: choice }))
    );
 
-// ------------------- TRAVEL Commands -------------------
+   // ------------------- TRAVEL Commands -------------------
   } else if (
-    commandName === "travel" &&
-    focusedOption.name === "charactername"
+   commandName === "travel" &&
+   focusedOption.name === "charactername"
   ) {
-    await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, commandName);
+   await handleCharacterBasedCommandsAutocomplete(
+    interaction,
+    focusedOption,
+    commandName
+   );
   } else if (commandName === "travel" && focusedOption.name === "destination") {
-    await handleVillageBasedCommandsAutocomplete(interaction, focusedOption);
-
+   await handleVillageBasedCommandsAutocomplete(interaction, focusedOption);
 
    // ------------------- VENDING Commands -------------------
   } else if (commandName === "vending") {
@@ -546,16 +556,15 @@ async function handleCharacterBasedCommandsAutocomplete(
    });
   } else if (commandName === "syncinventory") {
    characters = characters.filter((character) => !character.inventorySynced);
-  }
-  else if (commandName === "crafting") {
-    characters = characters.filter((character) => {
-      let job = character.job;
-      if (character.jobVoucher && character.jobVoucherJob) {
-        job = character.jobVoucherJob;
-      }
-      const jobPerk = getJobPerk(job);
-      return jobPerk && jobPerk.perks.includes("CRAFTING");
-    });
+  } else if (commandName === "crafting") {
+   characters = characters.filter((character) => {
+    let job = character.job;
+    if (character.jobVoucher && character.jobVoucherJob) {
+     job = character.jobVoucherJob;
+    }
+    const jobPerk = getJobPerk(job);
+    return jobPerk && jobPerk.perks.includes("CRAFTING");
+   });
   }
   // No filtering for mount command
   if (commandName === "mount") {
@@ -563,10 +572,11 @@ async function handleCharacterBasedCommandsAutocomplete(
   }
 
   const choices = characters.map((character) => ({
-    name: `${character.name} | ${capitalizeFirstLetter(character.currentVillage)} | ${capitalizeFirstLetter(character.job)}`,
-    value: character.name,
-   }));
-   
+   name: `${character.name} | ${capitalizeFirstLetter(
+    character.currentVillage
+   )} | ${capitalizeFirstLetter(character.job)}`,
+   value: character.name,
+  }));
 
   await respondWithFilteredChoices(interaction, focusedOption, choices);
  } catch (error) {
@@ -717,78 +727,80 @@ async function handleBoostingCharacterAutocomplete(interaction, focusedOption) {
 // ------------------- New Job Autocomplete -------------------
 
 async function handleChangeJobNewJobAutocomplete(interaction, focusedOption) {
-  try {
-   const userId = interaction.user.id;
-   
-   // Fix: fallback if characterName is empty
-   const characterName = interaction.options.getString("charactername") || "";
- 
-   if (!characterName) {
-    console.warn(`[handleChangeJobNewJobAutocomplete]: No character selected.`);
-    await interaction.respond([]);
-    return;
-   }
- 
-   // Fetch the character by user and character name
-   const character = await fetchCharacterByNameAndUserId(characterName, userId);
-   if (!character) {
-    console.warn(
-     `[handleChangeJobNewJobAutocomplete]: Character not found for userId: ${userId}, characterName: ${characterName}`
-    );
-    await interaction.respond([]);
-    return;
-   }
- 
-   // Fetch general and village-specific jobs
-   const generalJobs = getGeneralJobsPage(1).concat(getGeneralJobsPage(2));
-   const villageJobs = getVillageExclusiveJobs(character.homeVillage);
- 
-   // Combine jobs
-   const allJobs = [...generalJobs, ...villageJobs];
- 
-   // Filter jobs based on user typing
-   const filteredJobs = allJobs.filter((job) =>
-     job.toLowerCase().includes(focusedOption.value.toLowerCase())
-   );
- 
-   // Format the filtered choices (capitalize words)
-   const formattedChoices = filteredJobs.map((job) => ({
-    name: capitalizeWords(job),
-    value: job,
-   }));
- 
-   // Respond with filtered choices (limit to 25)
-   await interaction.respond(formattedChoices.slice(0, 25));
-  } catch (error) {
-   handleError(error, "autocompleteHandler.js");
- 
-   console.error(`[handleChangeJobNewJobAutocomplete] Error:`, error);
+ try {
+  const userId = interaction.user.id;
+
+  // Fix: fallback if characterName is empty
+  const characterName = interaction.options.getString("charactername") || "";
+
+  if (!characterName) {
+   console.warn(`[handleChangeJobNewJobAutocomplete]: No character selected.`);
    await interaction.respond([]);
+   return;
   }
- }
- 
- // ------------------- Character Name Autocomplete for ChangeJob -------------------
- // Reuses the generic character-based autocomplete handler to suggest character names
- // for the "changejob" command.
- async function handleChangeJobCharacterAutocomplete(interaction, focusedOption) {
-  try {
-   const commandName = "changejob";
-   await handleCharacterBasedCommandsAutocomplete(
-    interaction,
-    focusedOption,
-    commandName
+
+  // Fetch the character by user and character name
+  const character = await fetchCharacterByNameAndUserId(characterName, userId);
+  if (!character) {
+   console.warn(
+    `[handleChangeJobNewJobAutocomplete]: Character not found for userId: ${userId}, characterName: ${characterName}`
    );
-  } catch (error) {
-   handleError(error, "autocompleteHandler.js");
- 
-   console.error(
-    "[handleChangeJobCharacterAutocomplete]: Error occurred:",
-    error
-   );
-   await safeRespondWithError(interaction);
+   await interaction.respond([]);
+   return;
   }
+
+  // Fetch general and village-specific jobs
+  const generalJobs = getGeneralJobsPage(1).concat(getGeneralJobsPage(2));
+  const villageJobs = getVillageExclusiveJobs(character.homeVillage);
+
+  // Combine jobs
+  const allJobs = [...generalJobs, ...villageJobs];
+
+  // Filter jobs based on user typing
+  const filteredJobs = allJobs.filter((job) =>
+   job.toLowerCase().includes(focusedOption.value.toLowerCase())
+  );
+
+  // Format the filtered choices (capitalize words)
+  const formattedChoices = filteredJobs.map((job) => ({
+   name: capitalizeWords(job),
+   value: job,
+  }));
+
+  // Respond with filtered choices (limit to 25)
+  await interaction.respond(formattedChoices.slice(0, 25));
+ } catch (error) {
+  handleError(error, "autocompleteHandler.js");
+
+  console.error(`[handleChangeJobNewJobAutocomplete] Error:`, error);
+  await interaction.respond([]);
  }
- 
+}
+
+// ------------------- Character Name Autocomplete for ChangeJob -------------------
+// Reuses the generic character-based autocomplete handler to suggest character names
+// for the "changejob" command.
+async function handleChangeJobCharacterAutocomplete(
+ interaction,
+ focusedOption
+) {
+ try {
+  const commandName = "changejob";
+  await handleCharacterBasedCommandsAutocomplete(
+   interaction,
+   focusedOption,
+   commandName
+  );
+ } catch (error) {
+  handleError(error, "autocompleteHandler.js");
+
+  console.error(
+   "[handleChangeJobCharacterAutocomplete]: Error occurred:",
+   error
+  );
+  await safeRespondWithError(interaction);
+ }
+}
 
 // ============================================================================
 // COMBAT COMMANDS
@@ -1260,6 +1272,54 @@ async function handleEditCharacterAutocomplete(interaction, focusedOption) {
 // It provides suggestions for healing items from a character's inventory and for
 // selecting characters involved in an exploration roll.
 
+async function handleExploreRollCharacterAutocomplete(interaction, focusedOption) {
+  try {
+    const userId = interaction.user.id;
+    const expeditionId = interaction.options.getString("id");
+    
+    if (!expeditionId) {
+      return await interaction.respond([]);
+    }
+    
+    const party = await Party.findOne({ partyId: expeditionId });
+    if (!party) {
+      return await interaction.respond([
+        { name: "Expedition not found", value: "none" }
+      ]);
+    }
+    
+    const userCharacters = party.characters.filter(char => char.userId === userId);
+    
+    if (userCharacters.length === 0) {
+      return await interaction.respond([
+        { name: "You don't have any characters in this expedition", value: "none" }
+      ]);
+    }
+    
+    // Determine whose turn it is
+    const currentTurnCharacter = party.characters[party.currentTurn];
+    const isUsersTurn = currentTurnCharacter && currentTurnCharacter.userId === userId;
+    
+    const choices = userCharacters.map(char => {
+      const isTurn = char.name === currentTurnCharacter?.name;
+      return {
+        name: `${char.name} | ❤️ ${char.currentHearts} | 🟩 ${char.currentStamina}${isTurn ? ' (Current Turn)' : ''}`,
+        value: char.name
+      };
+    });
+    
+    const filtered = choices.filter(choice => 
+      choice.name.toLowerCase().includes(focusedOption.value.toLowerCase())
+    );
+    
+    return await interaction.respond(filtered.slice(0, 25));
+  } catch (error) {
+    handleError(error, "autocompleteHandler.js");
+    console.error("Error during explore roll character autocomplete:", error);
+    await interaction.respond([]);
+  }
+}
+
 // ------------------- Explore: Item Autocomplete -------------------
 // Provides autocomplete suggestions for healing items from a character's inventory.
 async function handleExploreItemAutocomplete(interaction, focusedOption) {
@@ -1319,60 +1379,64 @@ async function handleExploreItemAutocomplete(interaction, focusedOption) {
 }
 
 async function handleExploreCharacterAutocomplete(interaction, focusedOption) {
-  try {
-    const userId = interaction.user.id;
-    const subcommand = interaction.options.getSubcommand();
-    
-    if (subcommand === 'join') {
-      const userCharacters = await fetchCharactersByUserId(userId);
-      
-      const choices = userCharacters.map(char => ({
-        name: `${char.name} | ${char.currentVillage} | ${char.job}`,
-        value: char.name
-      }));
-      
-      const filtered = choices.filter(choice => 
-        choice.name.toLowerCase().includes(focusedOption.value.toLowerCase())
-      );
-      
-      return await interaction.respond(filtered.slice(0, 25));
-    }
-    else if (subcommand === 'roll') {
-      const expeditionId = interaction.options.getString("id");
-      
-      if (!expeditionId) {
-        return await interaction.respond([]);
-      }
-      
-      const party = await Party.findOne({ partyId: expeditionId });
-      if (!party) {
-        return await interaction.respond([]);
-      }
-      
-      const userCharacters = party.characters.filter(char => char.userId === userId);
-      
-      if (userCharacters.length === 0) {
-        return await interaction.respond([
-          { name: "You don't have any characters in this expedition.", value: "none" }
-        ]);
-      }
-      
-      const choices = userCharacters.map(char => ({
-        name: `${char.name} | ❤️ ${char.currentHearts} | 🟩 ${char.currentStamina}`,
-        value: char.name
-      }));
-      
-      const filtered = choices.filter(choice => 
-        choice.name.toLowerCase().includes(focusedOption.value.toLowerCase())
-      );
-      
-      return await interaction.respond(filtered.slice(0, 25));
-    }
-  } catch (error) {
-    handleError(error, "autocompleteHandler.js");
-    console.error("Error during explore character autocomplete:", error);
-    await interaction.respond([]);
+ try {
+  const userId = interaction.user.id;
+  const subcommand = interaction.options.getSubcommand();
+
+  if (subcommand === "join") {
+   const userCharacters = await fetchCharactersByUserId(userId);
+
+   const choices = userCharacters.map((char) => ({
+    name: `${char.name} | ${char.currentVillage} | ${char.job}`,
+    value: char.name,
+   }));
+
+   const filtered = choices.filter((choice) =>
+    choice.name.toLowerCase().includes(focusedOption.value.toLowerCase())
+   );
+
+   return await interaction.respond(filtered.slice(0, 25));
+  } else if (subcommand === "roll") {
+   const expeditionId = interaction.options.getString("id");
+
+   if (!expeditionId) {
+    return await interaction.respond([]);
+   }
+
+   const party = await Party.findOne({ partyId: expeditionId });
+   if (!party) {
+    return await interaction.respond([]);
+   }
+
+   const userCharacters = party.characters.filter(
+    (char) => char.userId === userId
+   );
+
+   if (userCharacters.length === 0) {
+    return await interaction.respond([
+     {
+      name: "You don't have any characters in this expedition.",
+      value: "none",
+     },
+    ]);
+   }
+
+   const choices = userCharacters.map((char) => ({
+    name: `${char.name} | ❤️ ${char.currentHearts} | 🟩 ${char.currentStamina}`,
+    value: char.name,
+   }));
+
+   const filtered = choices.filter((choice) =>
+    choice.name.toLowerCase().includes(focusedOption.value.toLowerCase())
+   );
+
+   return await interaction.respond(filtered.slice(0, 25));
   }
+ } catch (error) {
+  handleError(error, "autocompleteHandler.js");
+  console.error("Error during explore character autocomplete:", error);
+  await interaction.respond([]);
+ }
 }
 
 // ------------------- Gear Autocomplete -------------------
@@ -1393,35 +1457,35 @@ async function handleGearAutocomplete(interaction, focusedOption) {
   const characterInventory = await inventoryCollection.find().toArray();
 
   const filteredItems = characterInventory.filter((item) => {
-    const categories = item.category
-      ? item.category.split(",").map((cat) => cat.trim().toLowerCase())
-      : [];
-    const subtypes = Array.isArray(item.subtype)
-      ? item.subtype.map((st) => st.trim().toLowerCase())
-      : item.subtype
-        ? [item.subtype.trim().toLowerCase()]
-        : [];
-  
-    if (type === "weapon") {
-      return categories.includes("weapon") && !subtypes.includes("shield");
-    } else if (type === "shield") {
-      return subtypes.includes("shield");
-    } else if (type === "head") {
-      return (
-        categories.includes("armor") && item.type?.toLowerCase()?.includes("head")
-      );
-    } else if (type === "chest") {
-      return (
-        categories.includes("armor") && item.type?.toLowerCase()?.includes("chest")
-      );
-    } else if (type === "legs") {
-      return (
-        categories.includes("armor") && item.type?.toLowerCase()?.includes("legs")
-      );
-    }
-    return false;
+   const categories = item.category
+    ? item.category.split(",").map((cat) => cat.trim().toLowerCase())
+    : [];
+   const subtypes = Array.isArray(item.subtype)
+    ? item.subtype.map((st) => st.trim().toLowerCase())
+    : item.subtype
+    ? [item.subtype.trim().toLowerCase()]
+    : [];
+
+   if (type === "weapon") {
+    return categories.includes("weapon") && !subtypes.includes("shield");
+   } else if (type === "shield") {
+    return subtypes.includes("shield");
+   } else if (type === "head") {
+    return (
+     categories.includes("armor") && item.type?.toLowerCase()?.includes("head")
+    );
+   } else if (type === "chest") {
+    return (
+     categories.includes("armor") && item.type?.toLowerCase()?.includes("chest")
+    );
+   } else if (type === "legs") {
+    return (
+     categories.includes("armor") && item.type?.toLowerCase()?.includes("legs")
+    );
+   }
+   return false;
   });
-  
+
   const items = filteredItems.map((item) => ({
    name: `${item.itemName} - QTY:${item.quantity}`,
    value: item.itemName,
@@ -1447,7 +1511,7 @@ async function handleGiftAutocomplete(interaction, focusedOption) {
  try {
   const userId = interaction.user.id;
 
-if (focusedOption.name === "tocharacter") {
+  if (focusedOption.name === "tocharacter") {
    // Autocomplete for all characters excluding the user's own (recipient)
    const allCharacters = await fetchAllCharactersExceptUser(userId);
    const choices = allCharacters.map((character) => ({
@@ -1473,19 +1537,20 @@ if (focusedOption.name === "tocharacter") {
 
    const itemMap = new Map();
    for (const item of fromInventory) {
-     if (item.itemName && item.itemName !== "Initial Item") {
-       itemMap.set(
-         item.itemName,
-         (itemMap.get(item.itemName) || 0) + item.quantity
-       );
-     }
+    if (item.itemName && item.itemName !== "Initial Item") {
+     itemMap.set(
+      item.itemName,
+      (itemMap.get(item.itemName) || 0) + item.quantity
+     );
+    }
    }
-   
-   const choices = Array.from(itemMap.entries()).map(([itemName, quantity]) => ({
+
+   const choices = Array.from(itemMap.entries()).map(
+    ([itemName, quantity]) => ({
      name: `${capitalizeWords(itemName)} - QTY:${quantity}`,
      value: itemName,
-   }));
-   
+    })
+   );
 
    await respondWithFilteredChoices(interaction, focusedOption, choices);
   }
@@ -1580,88 +1645,102 @@ async function handleHealAutocomplete(interaction, focusedOption) {
 // ------------------- Item Autocomplete -------------------
 // Provides autocomplete suggestions for items in a character's inventory.
 async function handleItemAutocomplete(interaction, focusedOption) {
-  try {
-    const userId = interaction.user.id;
-    const focusedName = focusedOption.name;
-    const characterName = interaction.options.getString("charactername");
-    const searchQuery = focusedOption.value?.toLowerCase() || "";
+ try {
+  const userId = interaction.user.id;
+  const focusedName = focusedOption.name;
+  const characterName = interaction.options.getString("charactername");
+  const searchQuery = focusedOption.value?.toLowerCase() || "";
 
-    if (!characterName) return await interaction.respond([]);
+  if (!characterName) return await interaction.respond([]);
 
-    const character = await fetchCharacterByNameAndUserId(characterName, userId);
-    if (!character) return await interaction.respond([]);
+  const character = await fetchCharacterByNameAndUserId(characterName, userId);
+  if (!character) return await interaction.respond([]);
 
-    const inventoryCollection = await getCharacterInventoryCollection(character.name);
-    const inventoryItems = await inventoryCollection.find().toArray();
+  const inventoryCollection = await getCharacterInventoryCollection(
+   character.name
+  );
+  const inventoryItems = await inventoryCollection.find().toArray();
 
-    let choices = [];
+  let choices = [];
 
-    // Only fetch subcommand if autocompleting itemname
-    if (focusedName === "itemname") {
-      const subcommand = interaction.options.getSubcommand(false); // Pass false to prevent crash
+  // Only fetch subcommand if autocompleting itemname
+  if (focusedName === "itemname") {
+   const subcommand = interaction.options.getSubcommand(false); // Pass false to prevent crash
 
-      if (subcommand !== "sell") {
-        // --- Updated Healing Item + Voucher Filter ---
-        const itemNames = inventoryItems.map(item => item.itemName);
+   if (subcommand !== "sell") {
+    // --- Updated Healing Item + Voucher Filter ---
+    const itemNames = inventoryItems.map((item) => item.itemName);
 
-        const allowedItems = await Item.find({
-          itemName: { $in: itemNames },
-          $or: [
-            { "recipeTag.0": { $exists: true } }, // has at least one tag (healing)
-            { itemName: "Fairy" },
-            { itemName: "Job Voucher" }
-          ]
-        }).select("itemName").lean();
+    const allowedItems = await Item.find({
+     itemName: { $in: itemNames },
+     $or: [
+      { "recipeTag.0": { $exists: true } }, // has at least one tag (healing)
+      { itemName: "Fairy" },
+      { itemName: "Job Voucher" },
+     ],
+    })
+     .select("itemName")
+     .lean();
 
-        const allowedNames = new Set(
-          allowedItems.map(item => item.itemName.toLowerCase())
-        );
+    const allowedNames = new Set(
+     allowedItems.map((item) => item.itemName.toLowerCase())
+    );
 
-        choices = inventoryItems
-          .filter(item =>
-            item.itemName &&
-            allowedNames.has(item.itemName.toLowerCase()) &&
-            item.itemName.toLowerCase().includes(searchQuery)
-          )
-          .map(item => ({
-            name: `${capitalizeWords(item.itemName)} - Qty: ${item.quantity}`,
-            value: item.itemName,
-          }));
+    choices = inventoryItems
+     .filter(
+      (item) =>
+       item.itemName &&
+       allowedNames.has(item.itemName.toLowerCase()) &&
+       item.itemName.toLowerCase().includes(searchQuery)
+     )
+     .map((item) => ({
+      name: `${capitalizeWords(item.itemName)} - Qty: ${item.quantity}`,
+      value: item.itemName,
+     }));
+   } else {
+    const itemNames = inventoryItems.map((item) => item.itemName);
+    const itemsFromDB = await Item.find({ itemName: { $in: itemNames } })
+     .select("itemName sellPrice")
+     .lean();
+    const itemsMap = new Map(
+     itemsFromDB.map((item) => [item.itemName, item.sellPrice])
+    );
 
-      } else {
-        const itemNames = inventoryItems.map(item => item.itemName);
-        const itemsFromDB = await Item.find({ itemName: { $in: itemNames } }).select("itemName sellPrice").lean();
-        const itemsMap = new Map(itemsFromDB.map(item => [item.itemName, item.sellPrice]));
-
-        choices = inventoryItems
-          .filter(item => 
-            item.itemName &&
-            item.itemName.toLowerCase().includes(searchQuery) &&
-            item.itemName.toLowerCase() !== "initial item"
-          )
-          .sort((a, b) => a.itemName.localeCompare(b.itemName))
-          .map(item => ({
-            name: `${capitalizeWords(item.itemName)} - Qty: ${item.quantity} - Sell: ${itemsMap.get(item.itemName) || "N/A"}`,
-            value: item.itemName,
-          }));
-      }
-    } else {
-      // If we're not focusing itemname, don't do anything fancy
-      choices = inventoryItems
-        .filter(item => item.itemName && item.itemName.toLowerCase().includes(searchQuery))
-        .map(item => ({
-          name: `${capitalizeWords(item.itemName)} - Qty: ${item.quantity}`,
-          value: item.itemName,
-        }));
-    }
-
-    await interaction.respond(choices.slice(0, 25));
-  } catch (error) {
-    handleError(error, "autocompleteHandler.js");
-
-    console.error("[handleItemAutocomplete]: Error:", error);
-    if (!interaction.responded) await interaction.respond([]);
+    choices = inventoryItems
+     .filter(
+      (item) =>
+       item.itemName &&
+       item.itemName.toLowerCase().includes(searchQuery) &&
+       item.itemName.toLowerCase() !== "initial item"
+     )
+     .sort((a, b) => a.itemName.localeCompare(b.itemName))
+     .map((item) => ({
+      name: `${capitalizeWords(item.itemName)} - Qty: ${
+       item.quantity
+      } - Sell: ${itemsMap.get(item.itemName) || "N/A"}`,
+      value: item.itemName,
+     }));
+   }
+  } else {
+   // If we're not focusing itemname, don't do anything fancy
+   choices = inventoryItems
+    .filter(
+     (item) =>
+      item.itemName && item.itemName.toLowerCase().includes(searchQuery)
+    )
+    .map((item) => ({
+     name: `${capitalizeWords(item.itemName)} - Qty: ${item.quantity}`,
+     value: item.itemName,
+    }));
   }
+
+  await interaction.respond(choices.slice(0, 25));
+ } catch (error) {
+  handleError(error, "autocompleteHandler.js");
+
+  console.error("[handleItemAutocomplete]: Error:", error);
+  if (!interaction.responded) await interaction.respond([]);
+ }
 }
 
 // ------------------- Item Job Voucher Autocomplete -------------------
@@ -1695,43 +1774,42 @@ async function handleItemJobVoucherAutocomplete(interaction, focusedOption) {
 // ------------------- Job Voucher Job Name Autocomplete -------------------
 
 async function handleItemJobNameAutocomplete(interaction, focusedOption) {
-  try {
-   // Fetch general jobs
-   const generalJobs = getGeneralJobsPage(1).concat(getGeneralJobsPage(2));
- 
-   // Fetch village-specific jobs based on character's home village
-   const characterName = interaction.options.getString("charactername");
-   const userId = interaction.user.id;
-   if (!characterName) return await interaction.respond([]);
- 
-   const character = await fetchCharacterByNameAndUserId(characterName, userId);
-   if (!character) return await interaction.respond([]);
- 
-   const villageJobs = getVillageExclusiveJobs(character.homeVillage);
- 
-   // Combine all jobs
-   const allJobs = [...generalJobs, ...villageJobs];
- 
-   // Filter jobs based on user's typing
-   const searchQuery = focusedOption.value?.toLowerCase() || "";
-   const filteredJobs = allJobs.filter((job) =>
-     job.toLowerCase().includes(searchQuery)
-   );
- 
-   // Format autocomplete choices
-   const formattedChoices = filteredJobs.map((job) => ({
-     name: capitalizeWords(job),
-     value: job,
-   }));
- 
-   await interaction.respond(formattedChoices.slice(0, 25));
-  } catch (error) {
-   handleError(error, "autocompleteHandler.js");
-   console.error("[handleItemJobNameAutocomplete]: Error:", error);
-   await safeRespondWithError(interaction);
-  }
+ try {
+  // Fetch general jobs
+  const generalJobs = getGeneralJobsPage(1).concat(getGeneralJobsPage(2));
+
+  // Fetch village-specific jobs based on character's home village
+  const characterName = interaction.options.getString("charactername");
+  const userId = interaction.user.id;
+  if (!characterName) return await interaction.respond([]);
+
+  const character = await fetchCharacterByNameAndUserId(characterName, userId);
+  if (!character) return await interaction.respond([]);
+
+  const villageJobs = getVillageExclusiveJobs(character.homeVillage);
+
+  // Combine all jobs
+  const allJobs = [...generalJobs, ...villageJobs];
+
+  // Filter jobs based on user's typing
+  const searchQuery = focusedOption.value?.toLowerCase() || "";
+  const filteredJobs = allJobs.filter((job) =>
+   job.toLowerCase().includes(searchQuery)
+  );
+
+  // Format autocomplete choices
+  const formattedChoices = filteredJobs.map((job) => ({
+   name: capitalizeWords(job),
+   value: job,
+  }));
+
+  await interaction.respond(formattedChoices.slice(0, 25));
+ } catch (error) {
+  handleError(error, "autocompleteHandler.js");
+  console.error("[handleItemJobNameAutocomplete]: Error:", error);
+  await safeRespondWithError(interaction);
  }
- 
+}
 
 // ============================================================================
 // LOOKUP COMMANDS
@@ -2041,47 +2119,48 @@ async function handlePetRollTypeAutocomplete(interaction, focusedOption) {
 
 // ------------------- Shops Autocomplete -------------------
 async function handleShopsAutocomplete(interaction, focusedOption) {
-  try {
-   const subcommand = interaction.options.getSubcommand();
-   const searchQuery = focusedOption.value.toLowerCase();
-   let choices = [];
- 
-   if (subcommand === "shop-buy") {
-    const items = await ShopStock.find()
-     .sort({ itemName: 1 })
-     .select("itemName stock")
-     .lean();
- 
-    choices = items
-     .filter((item) => item.itemName.toLowerCase().includes(searchQuery))
-     .map((item) => ({
-      name: `${item.itemName} - Stock: ${item.stock}`,
-      value: item.itemName,
-     }));
-   } else if (subcommand === "shop-sell") {
-    const characterName = interaction.options.getString("charactername");
-    if (!characterName) return await interaction.respond([]);
- 
-    const inventoryCollection = await getCharacterInventoryCollection(characterName);
-    const inventoryItems = await inventoryCollection.find().toArray();
- 
-    choices = inventoryItems
-     .filter((item) => item.itemName.toLowerCase().includes(searchQuery))
-     .map((item) => ({
-      name: `${item.itemName} - Qty: ${item.quantity}`,
-      value: item.itemName,
-     }));
-   }
- 
-   await interaction.respond(choices.slice(0, 25));
-  } catch (error) {
-   handleError(error, "autocompleteHandler.js");
- 
-   console.error("[handleShopsAutocomplete]: Error:", error);
-   await safeRespondWithError(interaction);
+ try {
+  const subcommand = interaction.options.getSubcommand();
+  const searchQuery = focusedOption.value.toLowerCase();
+  let choices = [];
+
+  if (subcommand === "shop-buy") {
+   const items = await ShopStock.find()
+    .sort({ itemName: 1 })
+    .select("itemName stock")
+    .lean();
+
+   choices = items
+    .filter((item) => item.itemName.toLowerCase().includes(searchQuery))
+    .map((item) => ({
+     name: `${item.itemName} - Stock: ${item.stock}`,
+     value: item.itemName,
+    }));
+  } else if (subcommand === "shop-sell") {
+   const characterName = interaction.options.getString("charactername");
+   if (!characterName) return await interaction.respond([]);
+
+   const inventoryCollection = await getCharacterInventoryCollection(
+    characterName
+   );
+   const inventoryItems = await inventoryCollection.find().toArray();
+
+   choices = inventoryItems
+    .filter((item) => item.itemName.toLowerCase().includes(searchQuery))
+    .map((item) => ({
+     name: `${item.itemName} - Qty: ${item.quantity}`,
+     value: item.itemName,
+    }));
   }
+
+  await interaction.respond(choices.slice(0, 25));
+ } catch (error) {
+  handleError(error, "autocompleteHandler.js");
+
+  console.error("[handleShopsAutocomplete]: Error:", error);
+  await safeRespondWithError(interaction);
  }
- 
+}
 
 // ============================================================================
 // STEAL COMMANDS
@@ -2305,30 +2384,34 @@ async function handleTransferItemAutocomplete(interaction, focusedOption) {
 
 // ------------------- Travel Character Name Autocomplete -------------------
 async function handleTravelAutocomplete(interaction) {
-  const focusedOption = interaction.options.getFocused(true);
-  const userId = interaction.user.id;
+ const focusedOption = interaction.options.getFocused(true);
+ const userId = interaction.user.id;
 
-  if (focusedOption.name === 'charactername') {
-    const characters = await fetchCharactersByUserId(userId);
-    const filtered = characters
-      .filter(char => char.name.toLowerCase().includes(focusedOption.value.toLowerCase()))
-      .map(char => ({
-        name: char.name,
-        value: char.name
-      }));
-    await interaction.respond(filtered.slice(0, 25));
-  }
+ if (focusedOption.name === "charactername") {
+  const characters = await fetchCharactersByUserId(userId);
+  const filtered = characters
+   .filter((char) =>
+    char.name.toLowerCase().includes(focusedOption.value.toLowerCase())
+   )
+   .map((char) => ({
+    name: char.name,
+    value: char.name,
+   }));
+  await interaction.respond(filtered.slice(0, 25));
+ }
 
-  if (focusedOption.name === 'destination') {
-    const villages = getAllVillages(); // CORRECTED to your function
-    const filtered = villages
-      .filter(village => village.toLowerCase().includes(focusedOption.value.toLowerCase()))
-      .map(village => ({
-        name: village.charAt(0).toUpperCase() + village.slice(1),
-        value: village.toLowerCase()
-      }));
-    await interaction.respond(filtered.slice(0, 25));
-  }
+ if (focusedOption.name === "destination") {
+  const villages = getAllVillages(); // CORRECTED to your function
+  const filtered = villages
+   .filter((village) =>
+    village.toLowerCase().includes(focusedOption.value.toLowerCase())
+   )
+   .map((village) => ({
+    name: village.charAt(0).toUpperCase() + village.slice(1),
+    value: village.toLowerCase(),
+   }));
+  await interaction.respond(filtered.slice(0, 25));
+ }
 }
 
 // ------------------- Travel Destination Village Autocomplete -------------------
@@ -2761,5 +2844,5 @@ module.exports = {
  handleViewInventoryAutocomplete,
 
  handleCharacterBasedCommandsAutocomplete,
- handleExploreCharacterAutocomplete
+ handleExploreCharacterAutocomplete,
 };
