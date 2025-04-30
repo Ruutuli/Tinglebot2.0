@@ -2,7 +2,7 @@
 .env
 
 node_modules
-
+data/
 config/
 eslint.config.mjs
 .dependency-cruiser.js
