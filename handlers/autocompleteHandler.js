@@ -1318,69 +1318,62 @@ async function handleExploreItemAutocomplete(interaction, focusedOption) {
  }
 }
 
-// ------------------- Explore: Roll Character Autocomplete -------------------
-// Provides autocomplete suggestions for characters involved in an exploration party.
-async function handleExploreRollCharacterAutocomplete(
- interaction,
- focusedOption
-) {
- try {
-  const expeditionId = interaction.options.getString("id");
-  console.log(`🔍 Expedition ID provided for Autocomplete: ${expeditionId}`);
-
-  const parties = await Party.find().lean();
-  console.log(
-   `🗂️ All Parties in Database: ${JSON.stringify(parties, null, 2)}`
-  );
-
-  if (!expeditionId) {
-   console.log("❌ Expedition ID is missing.");
-   return await interaction.respond([]);
+async function handleExploreCharacterAutocomplete(interaction, focusedOption) {
+  try {
+    const userId = interaction.user.id;
+    const subcommand = interaction.options.getSubcommand();
+    
+    if (subcommand === 'join') {
+      const userCharacters = await fetchCharactersByUserId(userId);
+      
+      const choices = userCharacters.map(char => ({
+        name: `${char.name} | ${char.currentVillage} | ${char.job}`,
+        value: char.name
+      }));
+      
+      const filtered = choices.filter(choice => 
+        choice.name.toLowerCase().includes(focusedOption.value.toLowerCase())
+      );
+      
+      return await interaction.respond(filtered.slice(0, 25));
+    }
+    else if (subcommand === 'roll') {
+      const expeditionId = interaction.options.getString("id");
+      
+      if (!expeditionId) {
+        return await interaction.respond([]);
+      }
+      
+      const party = await Party.findOne({ partyId: expeditionId });
+      if (!party) {
+        return await interaction.respond([]);
+      }
+      
+      const userCharacters = party.characters.filter(char => char.userId === userId);
+      
+      if (userCharacters.length === 0) {
+        return await interaction.respond([
+          { name: "You don't have any characters in this expedition.", value: "none" }
+        ]);
+      }
+      
+      const choices = userCharacters.map(char => ({
+        name: `${char.name} | ❤️ ${char.currentHearts} | 🟩 ${char.currentStamina}`,
+        value: char.name
+      }));
+      
+      const filtered = choices.filter(choice => 
+        choice.name.toLowerCase().includes(focusedOption.value.toLowerCase())
+      );
+      
+      return await interaction.respond(filtered.slice(0, 25));
+    }
+  } catch (error) {
+    handleError(error, "autocompleteHandler.js");
+    console.error("Error during explore character autocomplete:", error);
+    await interaction.respond([]);
   }
-
-  const party = await Party.findOne({ partyId: expeditionId }).lean();
-  if (!party) {
-   console.log("❌ No party found for the specified Expedition ID.");
-   return await interaction.respond([]);
-  }
-
-  console.log(`✅ Party Data Retrieved: ${JSON.stringify(party, null, 2)}`);
-
-  if (party.characters && party.characters.length > 0) {
-   console.log(`🔍 Accessing characters in the expedition party:`);
-   party.characters.forEach((character, index) => {
-    console.log(
-     `- Character ${index + 1}: ${JSON.stringify(character, null, 2)}`
-    );
-   });
-  } else {
-   console.log("❌ No characters found in the party for this expedition.");
-  }
-
-  const choices = party.characters.map((character) => ({
-   name: character.name,
-   value: character.name,
-  }));
-
-  console.log(
-   `🚀 Returning Autocomplete Choices: ${JSON.stringify(choices, null, 2)}`
-  );
-
-  return await interaction.respond(choices);
- } catch (error) {
-  handleError(error, "autocompleteHandler.js");
-
-  console.error("❌ Error during Autocomplete Process:", error);
-  await interaction.respond([]);
- }
 }
-
-// ============================================================================
-// GEAR COMMANDS
-// ============================================================================
-// This section handles autocomplete interactions for the "gear" command.
-// It provides suggestions for gear items from a character's inventory,
-// filtered based on gear type.
 
 // ------------------- Gear Autocomplete -------------------
 // Provides autocomplete suggestions for gear items based on specified type.
@@ -2768,4 +2761,5 @@ module.exports = {
  handleViewInventoryAutocomplete,
 
  handleCharacterBasedCommandsAutocomplete,
+ handleExploreCharacterAutocomplete
 };
