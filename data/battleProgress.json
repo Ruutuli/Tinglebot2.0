@@ -1070,5 +1070,70 @@
       "current": 12
     },
     "progress": "\n🔴 Blood Moon Raid initiated!"
+  },
+  "B302457": {
+    "battleId": "B302457",
+    "characters": [
+      1745974180962
+    ],
+    "monster": "SethV",
+    "tier": {
+      "_id": "66795cec08edb92cfbb58ddf",
+      "name": "Golden Lizalfos",
+      "__v": 0,
+      "adventurer": false,
+      "animalBreederLive": false,
+      "animalBreederMeat": false,
+      "beekeeper": false,
+      "bloodmoon": false,
+      "centralHyrule": true,
+      "dmg": 2,
+      "eldin": true,
+      "exploreEldin": true,
+      "exploreFaron": true,
+      "exploreLanayru": true,
+      "exploreLocations": [
+        "Explore Eldin",
+        "Explore Lanayru",
+        "Explore Faron"
+      ],
+      "farmer": false,
+      "faron": true,
+      "fisherman": false,
+      "forager": false,
+      "gerudo": true,
+      "graveskeeper": false,
+      "guard": true,
+      "hearts": 10,
+      "hebra": true,
+      "herbalist": false,
+      "hunter": true,
+      "image": "",
+      "job": [
+        "Guard",
+        "Hunter"
+      ],
+      "lanayru": true,
+      "leafDewWay": false,
+      "locations": [
+        "Eldin",
+        "Lanayru",
+        "Faron",
+        "Central",
+        "Hyrule",
+        "Gerudo",
+        "Hebra"
+      ],
+      "mercenary": false,
+      "miner": false,
+      "nameMapping": "goldenLizalfos",
+      "pathOfScarletLeaves": false,
+      "scout": false,
+      "species": "Lizalfos",
+      "tier": 5,
+      "type": "Golden"
+    },
+    "monsterHearts": {},
+    "progress": "\n[object Object]"
   }
 }
