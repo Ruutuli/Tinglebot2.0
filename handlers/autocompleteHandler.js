@@ -1272,52 +1272,60 @@ async function handleEditCharacterAutocomplete(interaction, focusedOption) {
 // It provides suggestions for healing items from a character's inventory and for
 // selecting characters involved in an exploration roll.
 
-async function handleExploreRollCharacterAutocomplete(interaction, focusedOption) {
-  try {
-    const userId = interaction.user.id;
-    const expeditionId = interaction.options.getString("id");
-    
-    if (!expeditionId) {
-      return await interaction.respond([]);
-    }
-    
-    const party = await Party.findOne({ partyId: expeditionId });
-    if (!party) {
-      return await interaction.respond([
-        { name: "Expedition not found", value: "none" }
-      ]);
-    }
-    
-    const userCharacters = party.characters.filter(char => char.userId === userId);
-    
-    if (userCharacters.length === 0) {
-      return await interaction.respond([
-        { name: "You don't have any characters in this expedition", value: "none" }
-      ]);
-    }
-    
-    // Determine whose turn it is
-    const currentTurnCharacter = party.characters[party.currentTurn];
-    const isUsersTurn = currentTurnCharacter && currentTurnCharacter.userId === userId;
-    
-    const choices = userCharacters.map(char => {
-      const isTurn = char.name === currentTurnCharacter?.name;
-      return {
-        name: `${char.name} | ❤️ ${char.currentHearts} | 🟩 ${char.currentStamina}${isTurn ? ' (Current Turn)' : ''}`,
-        value: char.name
-      };
-    });
-    
-    const filtered = choices.filter(choice => 
-      choice.name.toLowerCase().includes(focusedOption.value.toLowerCase())
-    );
-    
-    return await interaction.respond(filtered.slice(0, 25));
-  } catch (error) {
-    handleError(error, "autocompleteHandler.js");
-    console.error("Error during explore roll character autocomplete:", error);
-    await interaction.respond([]);
+async function handleExploreRollCharacterAutocomplete(
+ interaction,
+ focusedOption
+) {
+ try {
+  const userId = interaction.user.id;
+  const expeditionId = interaction.options.getString("id");
+
+  if (!expeditionId) {
+   return await interaction.respond([]);
   }
+
+  const party = await Party.findOne({ partyId: expeditionId });
+  if (!party) {
+   return await interaction.respond([
+    { name: "Expedition not found", value: "none" },
+   ]);
+  }
+
+  const userCharacters = party.characters.filter(
+   (char) => char.userId === userId
+  );
+
+  if (userCharacters.length === 0) {
+   return await interaction.respond([
+    { name: "You don't have any characters in this expedition", value: "none" },
+   ]);
+  }
+
+  // Determine whose turn it is
+  const currentTurnCharacter = party.characters[party.currentTurn];
+  const isUsersTurn =
+   currentTurnCharacter && currentTurnCharacter.userId === userId;
+
+  const choices = userCharacters.map((char) => {
+   const isTurn = char.name === currentTurnCharacter?.name;
+   return {
+    name: `${char.name} | ❤️ ${char.currentHearts} | 🟩 ${char.currentStamina}${
+     isTurn ? " (Current Turn)" : ""
+    }`,
+    value: char.name,
+   };
+  });
+
+  const filtered = choices.filter((choice) =>
+   choice.name.toLowerCase().includes(focusedOption.value.toLowerCase())
+  );
+
+  return await interaction.respond(filtered.slice(0, 25));
+ } catch (error) {
+  handleError(error, "autocompleteHandler.js");
+  console.error("Error during explore roll character autocomplete:", error);
+  await interaction.respond([]);
+ }
 }
 
 // ------------------- Explore: Item Autocomplete -------------------
