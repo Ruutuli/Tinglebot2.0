@@ -450,7 +450,7 @@ async function handleMountComponentInteraction(interaction) {
         ephemeral: false
       });
     } else {
-      message += `\n\n🚫 The mount evaded! Would **${character.name}** like to try again for 1 stamina?\n\n**${character.name}** now has **${character.currentStamina}** 🟩 stamina remaining.`;
+      message += `\n\n🚫 The mount evaded! Would **${character.name}** like to try again for 1 🟩 stamina?\n\n**${character.name}** now has **${character.currentStamina}** 🟩 stamina remaining.`;
       const retryButtons = createActionButtons(encounterId, village, encounter.glideUsed);
   
       await interaction.message.edit({ components: [] });
