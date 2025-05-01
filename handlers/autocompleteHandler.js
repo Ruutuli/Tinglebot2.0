@@ -254,9 +254,12 @@ async function handleAutocomplete(interaction) {
    commandName === "explore" &&
    focusedOption.name === "charactername"
   ) {
-   await handleExploreRollCharacterAutocomplete(interaction, focusedOption);
-
-   // ------------------- GEAR Commands -------------------
+   const subcommand = interaction.options.getSubcommand();
+   if (subcommand === "roll") {
+    await handleExploreRollCharacterAutocomplete(interaction, focusedOption);
+   } else if (subcommand === "join") {
+    await handleExploreCharacterAutocomplete(interaction, focusedOption);
+   }
   } else if (commandName === "gear" && focusedOption.name === "itemname") {
    await handleGearAutocomplete(interaction, focusedOption);
 
@@ -1387,126 +1390,71 @@ async function handleExploreItemAutocomplete(interaction, focusedOption) {
 }
 
 async function handleExploreCharacterAutocomplete(interaction, focusedOption) {
- try {
-  const userId = interaction.user.id;
-  const subcommand = interaction.options.getSubcommand();
-
-  if (subcommand === "join") {
-   const expeditionId = interaction.options.getString("id");
-
-   if (!expeditionId) {
+  try {
+    const userId = interaction.user.id;
+    const expeditionId = interaction.options.getString("id");
+    
     const userCharacters = await fetchCharactersByUserId(userId);
-    const choices = userCharacters.map((char) => ({
-     name: `${char.name} | ${char.currentVillage} | ${char.job}`,
-     value: char.name,
-    }));
-
-    const filtered = choices.filter((choice) =>
-     choice.name.toLowerCase().includes(focusedOption.value.toLowerCase())
-    );
-
-    return await interaction.respond(filtered.slice(0, 25));
-   }
-
-   const party = await Party.findOne({ partyId: expeditionId });
-   if (!party) {
-    return await interaction.respond([
-     { name: "Expedition not found", value: "none" },
-    ]);
-   }
-
-   const regionToVillage = {
-    eldin: "rudania",
-    lanayru: "inariko",
-    faron: "vhintl",
-   };
-
-   const requiredVillage = regionToVillage[party.region];
-   if (!requiredVillage) {
-    return await interaction.respond([
-     { name: "Invalid expedition region", value: "none" },
-    ]);
-   }
-
-   const userCharacters = await fetchCharactersByUserId(userId);
-
-   const eligibleCharacters = userCharacters.filter(
-    (char) =>
-     char.currentVillage.toLowerCase() === requiredVillage.toLowerCase() &&
-     char.inventorySynced === true
-   );
-
-   if (eligibleCharacters.length === 0) {
-    return await interaction.respond([
-     {
-      name: `You need a character in ${
-       requiredVillage.charAt(0).toUpperCase() + requiredVillage.slice(1)
-      } to join this expedition`,
-      value: "none",
-     },
-    ]);
-   }
-
-   const choices = eligibleCharacters.map((char) => ({
-    name: `${char.name} | ${char.currentVillage} | ${char.job} | ❤️ ${char.currentHearts} | 🟩 ${char.currentStamina}`,
-    value: char.name,
-   }));
-
-   const filtered = choices.filter((choice) =>
-    choice.name.toLowerCase().includes(focusedOption.value.toLowerCase())
-   );
-
-   return await interaction.respond(filtered.slice(0, 25));
-  } else if (subcommand === "roll") {
-   const expeditionId = interaction.options.getString("id");
-
-   if (!expeditionId) {
-    return await interaction.respond([]);
-   }
-
-   const party = await Party.findOne({ partyId: expeditionId });
-   if (!party) {
-    return await interaction.respond([
-     { name: "Expedition not found", value: "none" },
-    ]);
-   }
-
-   const userCharacters = party.characters.filter(
-    (char) => char.userId === userId
-   );
-
-   if (userCharacters.length === 0) {
-    return await interaction.respond([
-     {
-      name: "You don't have any characters in this expedition",
-      value: "none",
-     },
-    ]);
-   }
-
-   const currentTurnCharacter = party.characters[party.currentTurn];
-
-   const choices = userCharacters.map((char) => {
-    const isTurn = char.name === currentTurnCharacter?.name;
-    return {
-     name: `${char.name} | ❤️ ${char.currentHearts} | 🟩 ${
-      char.currentStamina
-     }${isTurn ? " (Current Turn)" : ""}`,
-     value: char.name,
+    
+    if (!expeditionId) {
+      const choices = userCharacters.map(char => ({
+        name: `${char.name} | ${char.currentVillage} | ${char.job}`,
+        value: char.name
+      }));
+      
+      const filtered = choices.filter(choice => 
+        choice.name.toLowerCase().includes(focusedOption.value.toLowerCase())
+      );
+      
+      return await interaction.respond(filtered.slice(0, 25));
+    }
+    
+    const party = await Party.findOne({ partyId: expeditionId });
+    if (!party) {
+      return await interaction.respond([
+        { name: "Expedition not found", value: "none" }
+      ]);
+    }
+    
+    const regionToVillage = {
+      'eldin': 'rudania',
+      'lanayru': 'inariko',
+      'faron': 'vhintl'
     };
-   });
-
-   const filtered = choices.filter((choice) =>
-    choice.name.toLowerCase().includes(focusedOption.value.toLowerCase())
-   );
-
-   return await interaction.respond(filtered.slice(0, 25));
+    
+    const requiredVillage = regionToVillage[party.region];
+    if (!requiredVillage) {
+      return await interaction.respond([
+        { name: "Invalid expedition region", value: "none" }
+      ]);
+    }
+    
+    const eligibleCharacters = userCharacters.filter(char => 
+      char.currentVillage.toLowerCase() === requiredVillage.toLowerCase() &&
+      char.inventorySynced === true
+    );
+    
+    if (eligibleCharacters.length === 0) {
+      return await interaction.respond([
+        { name: `You need a character in ${requiredVillage.charAt(0).toUpperCase() + requiredVillage.slice(1)} to join this expedition`, value: "none" }
+      ]);
+    }
+    
+    const choices = eligibleCharacters.map(char => ({
+      name: `${char.name} | ${char.currentVillage} | ${char.job} | ❤️ ${char.currentHearts} | 🟩 ${char.currentStamina}`,
+      value: char.name
+    }));
+    
+    const filtered = choices.filter(choice => 
+      choice.name.toLowerCase().includes(focusedOption.value.toLowerCase())
+    );
+    
+    return await interaction.respond(filtered.slice(0, 25));
+  } catch (error) {
+    handleError(error, "autocompleteHandler.js");
+    console.error("Error during explore character autocomplete:", error);
+    await interaction.respond([]);
   }
- } catch (error) {
-  handleError(error, "autocompleteHandler.js");
-  console.error("Error during explore character autocomplete:", error);
-  await interaction.respond([]);
- }
 }
 
 // ------------------- Gear Autocomplete -------------------
