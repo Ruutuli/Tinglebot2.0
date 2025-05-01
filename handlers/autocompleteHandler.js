@@ -1347,7 +1347,7 @@ async function handleExploreItemAutocomplete(interaction, focusedOption) {
 
   const itemIds = inventoryItems.map((item) => item.itemId);
 
-  const healingItems = await ItemModel.find({
+  const healingItems = await Item.find({
    _id: { $in: itemIds },
    itemName: { $ne: "Oil Jar" },
    $or: [
