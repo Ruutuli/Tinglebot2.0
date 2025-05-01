@@ -336,27 +336,35 @@ module.exports = {
         } else if (subcommand === 'start') {
             const expeditionId = interaction.options.getString('id');
             const party = await Party.findOne({ partyId: expeditionId });
-
+        
             if (!party) {
                 return interaction.reply('❌ Expedition ID not found.');
             }
-
+        
             if (party.status !== 'open') {
                 return interaction.reply('❌ This expedition has already started.');
             }
-
+        
             if (party.characters.length === 0) {
                 return interaction.reply('❌ Cannot start an expedition with no participants.');
             }
-
+        
             if (interaction.user.id !== party.leaderId) {
                 return interaction.reply('❌ Only the expedition leader can start the expedition.');
             }
-
+        
+            let leaderIndex = party.characters.findIndex(char => char.name === interaction.options.getString('charactername'));
+            
+            if (leaderIndex === -1) {
+                const userCharacters = await Character.find({ userId: interaction.user.id }).lean();
+                const userCharacterNames = userCharacters.map(char => char.name);
+                
+                leaderIndex = party.characters.findIndex(char => userCharacterNames.includes(char.name));
+            }
+            
+            party.currentTurn = leaderIndex !== -1 ? leaderIndex : 0;
             party.status = 'started';
-            party.currentTurn = 0; 
             await party.save();
-
             try {
                 const originalMessage = await interaction.channel.messages.fetch(party.messageId);
 
