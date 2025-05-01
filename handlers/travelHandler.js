@@ -1,630 +1,587 @@
-// ------------------- Standard & Core Libraries -------------------
+// ============================================================================
+// ------------------- Standard Libraries -------------------
+// ============================================================================
 const { v4: uuidv4 } = require('uuid');
-const { EmbedBuilder } = require('discord.js');
 
-// ------------------- Utilities -------------------
-const { handleError } = require('../utils/globalErrorHandler');
-const { addItemInventoryDatabase } = require('../utils/inventoryUtils');
-const { authorizeSheets, safeAppendDataToSheet } = require('../utils/googleSheetsUtils');
-const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../utils/validation');
+// ------------------- Discord.js Components -------------------
+const { EmbedBuilder } = require('discord.js');
 
 // ------------------- Database Services -------------------
 const { fetchAllItems, fetchItemsByMonster } = require('../database/db');
 
-// ------------------- Modules -------------------
-const { recoverHearts, updateCurrentHearts, useHearts, useStamina } = require('../modules/characterStatsModule');
-const { calculateFinalValue, attemptFlee, createWeightedItemList } = require('../modules/rngModule');
-const { getEncounterOutcome } = require('../modules/damageModule');
-const { generateDamageMessage, generateVictoryMessage } = require('../modules/flavorTextModule');
-const { getJobPerk, hasPerk } = require('../modules/jobsModule');
-
 // ------------------- Embeds -------------------
-const { createKOEmbed } = require('../embeds/embeds');
+const { createKOEmbed,createUpdatedTravelEmbed } = require('../embeds/embeds');
 
-const EMOJI = {
-    heart: '❤️',
-    stamina: '🟩',
-    recovery: '💖',
-    fail: '❌',
-    flower: '🌸',
-    flee: '💨',
-    fight: '⚔️',
-    loot: '🌿',
-    knockOut: '💀',
-};
-
-// ============================================================================
-// ---------------- Utility & Helpers ----------------
-// ============================================================================
+// ------------------- Modules -------------------
+const {
+  recoverHearts,
+  updateCurrentHearts,
+  useHearts,
+  useStamina
+} = require('../modules/characterStatsModule');
+const { getEncounterOutcome } = require('../modules/damageModule');
+const {
+  generateDamageMessage,
+  generateVictoryMessage
+} = require('../modules/flavorTextModule');
+const { getJobPerk, hasPerk } = require('../modules/jobsModule');
+const {
+  attemptFlee,
+  calculateFinalValue,
+  createWeightedItemList
+} = require('../modules/rngModule');
 
 // ------------------- Utility Functions -------------------
-// Update and edit the encounter message embed
-async function updateEncounterEmbed(encounterMessage, character, description, monster = null, outcomeMessage = null) {
-    const embedData = encounterMessage.embeds[0].toJSON();
-    const updatedEmbed = new EmbedBuilder(embedData).setDescription(description);
+const { addItemInventoryDatabase } = require('../utils/inventoryUtils');
+const {
+  appendSheetData,
+  authorizeSheets,
+  safeAppendDataToSheet
+} = require('../utils/googleSheetsUtils');
+const {
+  extractSpreadsheetId,
+  isValidGoogleSheetsUrl
+} = require('../utils/validation');
+const { handleError } = require('../utils/globalErrorHandler');
 
-    if (outcomeMessage) {
-        const outcomeField = updatedEmbed.data.fields?.find(field => field.name === '🔹 __Outcome__');
-        if (outcomeField) {
-            outcomeField.value = outcomeMessage;
-        } else {
-            updatedEmbed.addFields({ name: '🔹 __Outcome__', value: outcomeMessage, inline: false });
-        }
-    }
-
-    if (monster && monster.tier !== undefined) {
-        updatedEmbed.setFooter({ text: `Tier: ${monster.tier}` });
-    }
-
-    await encounterMessage.edit({ embeds: [updatedEmbed], components: [] });
-}
-
-// Deduct 1 stamina if the character does not have the Delivering perk
-async function deductStaminaIfNeeded(character) {
-    if (!hasDeliveringPerk(character)) {
-        await useStamina(character._id, 1);
-        character.currentStamina -= 1;
-        return 1; // Stamina lost
-    } else {
-        console.log(`[travelHandler.js][Stamina]: Stamina preserved for ${character.name} due to DELIVERING perk.`);
-        return 0; // No stamina lost
-    }
-}
-
-// Sync an item addition (gathered/looted) to the character's Google Sheet
-async function syncInventoryToSheets(character, item, interaction, acquisitionType) {
-    const inventoryLink = character.inventory || character.inventoryLink;
-    if (typeof inventoryLink === 'string' && isValidGoogleSheetsUrl(inventoryLink)) {
-        const spreadsheetId = extractSpreadsheetId(inventoryLink);
-        const auth = await authorizeSheets();
-        const range = 'loggedInventory!A2:M';
-        const uniqueSyncId = uuidv4();
-        const formattedDateTime = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
-        const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
-
-        const values = [[
-            character.name,
-            item.itemName,
-            (item.quantity || 1).toString(),
-            item.category.join(', '),
-            item.type.join(', '),
-            item.subtype || '',
-            acquisitionType,
-            character.job,
-            '',
-            character.currentVillage,
-            interactionUrl,
-            formattedDateTime,
-            uniqueSyncId
-        ]];
-
-        if (character?.name && character?.inventory && character?.userId) {
-    await safeAppendDataToSheet(character.inventory, character, range, values);
-} else {
-    console.error('[safeAppendDataToSheet]: Invalid character object detected before syncing.');
-}
-
-    }
-}
-
-
-// ------------------- Helpers -------------------
-// Check if the character has the Delivering perk
-function hasDeliveringPerk(character) {
-    return character.perk === 'DELIVERING';
-}
-
-// Randomly pick a flavor text from an array
-function getRandomFlavorText(textArray) {
-    return textArray[Math.floor(Math.random() * textArray.length)];
-}
-
-// Update the travel log based on results from an action
-function updateTravelLog(travelLog, result) {
-    if (!travelLog || !result) return;
-
-    let logSummary = '';
-
-    if (result.heartsLost > 0) logSummary += `Lost ${result.heartsLost} Heart(s). `;
-    if (result.heartsGained > 0) logSummary += `Gained ${result.heartsGained} Heart(s). `;
-    if (result.staminaLost > 0) logSummary += `Lost ${result.staminaLost} Stamina. `;
-
-    if (logSummary.trim()) {
-        travelLog.push(logSummary.trim());
-    }
-}
+const Character = require('../models/CharacterModel');
 
 // ============================================================================
-// ---------------- Action Handlers ----------------
+// ------------------- Private Helpers -------------------
 // ============================================================================
-// ------------------- Action Handler (Handle Recover Hearts) -------------------
-async function handleRecover(interaction, character, encounterMessage) {
-    console.log(`[travelHandler.js][Recover]: Handling recover for ${character.name}`);
 
-    const result = {
-        decision: '',
-        outcomeMessage: '',
-        heartsLost: 0,
-        heartsGained: 0,
-        staminaLost: 0,
-    };
-
-    if (character.ko) {
-        console.error(`[travelHandler.js][Recover]: ${character.name} is KO'd and cannot recover.`);
-        await encounterMessage.edit({
-            embeds: [
-                new EmbedBuilder(encounterMessage.embeds[0].toJSON())
-                    .setDescription(`${EMOJI.knockOut} ${character.name} is knocked out and cannot recover hearts without a healer.\n\n**${EMOJI.heart} Hearts:** ${character.currentHearts}/${character.maxHearts}\n**${EMOJI.stamina} Stamina:** ${character.currentStamina}/${character.maxStamina}`)
-            ],
-            components: [],
-        });
-        result.decision = `${EMOJI.fail} ${character.name} is KO'd and cannot heal.`;
-        return result;
-    }
-
-    const enoughStamina = character.currentStamina >= 1 || hasDeliveringPerk(character);
-
-    if (enoughStamina) {
-        if (character.currentHearts < character.maxHearts) {
-            if (!hasDeliveringPerk(character)) {
-                await useStamina(character._id, 1);
-                character.currentStamina -= 1;
-                result.staminaLost = 1;
-            } else {
-                console.log(`[travelHandler.js][Recover]: Stamina preserved for ${character.name} due to DELIVERING perk.`);
-            }
-
-            await recoverHearts(character._id, 1);
-            character.currentHearts = Math.min(character.currentHearts + 1, character.maxHearts);
-            result.heartsGained = 1;
-
-            result.decision = `${EMOJI.recovery} ${character.name} recovered a heart.${hasDeliveringPerk(character) ? ' Stamina preserved!' : ' Lost 1 stamina.'}`;
-            result.outcomeMessage = `${character.name} recovered 1 heart ${hasDeliveringPerk(character) ? '(Delivering perk active!)' : '(-1 stamina)'}`;
-        } else {
-            result.decision = `${EMOJI.fail} ${character.name} is already at full hearts.`;
-            result.outcomeMessage = `${character.name} tried to recover but is already full.`;
+// ------------------- Recover Helper -------------------
+// Attempts to recover a heart if character not KO’d, has stamina or Delivering perk,
+// handles full-hearts case, updates stats, travel log, and edits encounter embed.
+async function handleRecover(interaction, character, encounterMessage, travelLog) {
+  try {
+    travelLog = Array.isArray(travelLog) ? travelLog : [];
+      const jobPerk = getJobPerk(character.job);
+      character.perk = jobPerk?.perks[0];
+      console.log(`[travelHandler.js]: Recover Hearts → ${character.name} (Perk: ${character.perk})`);
+  
+      // KO check
+      if (character.ko) {
+        const decision = `❌ ${character.name} is KO'd and cannot recover.`;
+        const description = 
+          `🌸 It's a nice and safe day of traveling. What do you want to do next?\n> ${decision}\n\n` +
+          `**❤️ Hearts:** ${character.currentHearts}/${character.maxHearts}\n` +
+          `**🟩 Stamina:** ${character.currentStamina}/${character.maxStamina}`;
+        const embed = new EmbedBuilder(encounterMessage.embeds[0].toJSON())
+          .setDescription(description);
+        if (typeof encounterMessage?.edit === 'function') {
+  await encounterMessage.edit({ embeds: [embed], components: [] });
+}
+        travelLog.push(`recover: failed KO`);
+        return decision;
+      }
+  
+      // Already full hearts
+      if (character.currentHearts >= character.maxHearts) {
+        const decision = `❌ ${character.name} is already at full hearts.`;
+        const description = 
+          `🌸 It's a nice and safe day of traveling. What do you want to do next?\n> ${decision}\n\n` +
+          `**❤️ Hearts:** ${character.currentHearts}/${character.maxHearts}\n` +
+          `**🟩 Stamina:** ${character.currentStamina}/${character.maxStamina}`;
+        const embed = new EmbedBuilder(encounterMessage.embeds[0].toJSON())
+          .setDescription(description);
+        if (typeof encounterMessage?.edit === 'function') {
+  await encounterMessage.edit({ embeds: [embed], components: [] });
+}
+        travelLog.push(`recover: full hearts`);
+        return decision;
+      }
+  
+      // Stamina check & perform recovery
+      let decision, outcomeMessage;
+      if (character.currentStamina >= 1 || hasPerk(character, 'DELIVERING')) {
+        if (!hasPerk(character, 'DELIVERING')) {
+          await useStamina(character._id, 1);
+          character.currentStamina -= 1;
         }
-    } else {
-        result.decision = `${EMOJI.fail} ${character.name} doesn't have enough stamina to recover.`;
-        result.outcomeMessage = `${character.name} tried to recover but lacked stamina.`;
-    }
+        await recoverHearts(character._id, 1);
+        character.currentHearts = Math.min(character.maxHearts, character.currentHearts + 1);
+        await updateCurrentHearts(character._id, character.currentHearts);
+  
+        decision = `💖 Recovered 1 heart${hasPerk(character,'DELIVERING') ? '' : ' (-1 🟩 stamina)'}.`;
+        outcomeMessage = `${character.name} recovered a heart${hasPerk(character,'DELIVERING') ? '' : ' and lost 1 🟩 stamina'}.`;
+      } else {
+        decision = `❌ Not enough stamina to recover.`;
+        outcomeMessage = `${character.name} tried to recover but lacked stamina.`;
+      }
+  
+// Update embed
+const description = 
+  `🌸 It's a nice and safe day of traveling. What do you want to do next?\n> ${decision}\n\n` +
+  `**❤️ Hearts:** ${character.currentHearts}/${character.maxHearts}\n` +
+  `**🟩 Stamina:** ${character.currentStamina}/${character.maxStamina}`;
 
-    const description = `${EMOJI.flower} It's a nice and safe day of traveling. What do you want to do next?\n> ${result.decision}\n\n**${EMOJI.heart} Hearts:** ${character.currentHearts}/${character.maxHearts}\n**${EMOJI.stamina} Stamina:** ${character.currentStamina}/${character.maxStamina}`;
+  const embed = createUpdatedTravelEmbed({
+    encounterMessage,
+    character,
+    description,
+    fields: [], // or just omit `fields` entirely if you're not adding anything else
+  });
 
-    await encounterMessage.edit({
-        embeds: [new EmbedBuilder(encounterMessage.embeds[0].toJSON()).setDescription(description)],
-        components: [],
-    });
-
-    return result;
+if (typeof encounterMessage?.edit === 'function') {
+  await encounterMessage.edit({ embeds: [embed], components: [] });
 }
 
-// ------------------- Action Handler (Handle Gather Resources) -------------------
-async function handleGather(interaction, character, encounterMessage, currentPath) {
-    console.log(`[travelHandler.js][Gather]: Handling gather for ${character.name} on path ${currentPath}`);
+return decision;
+  
+    } catch (error) {
+      handleError(error, 'travelHandler.js (handleRecover)');
+      throw error;
+    }
+  }
+  
+  // ------------------- Gather Helper -------------------
+  // Picks a random resource along path, updates inventory, stamina, logs outcome,
+  // syncs sheet, and edits encounter embed.
+  async function handleGather(interaction, character, currentPath, encounterMessage, travelLog) {
+    if (typeof currentPath !== 'string') {
+      console.error(`[handleGather]: Invalid currentPath type: ${typeof currentPath} (${currentPath})`);
+      throw new Error(`Invalid currentPath value: "${currentPath}" — expected a string like "leafDewWay".`);
+    }
+    
+    try {
+      travelLog = Array.isArray(travelLog) ? travelLog : [];
+      const jobPerk = getJobPerk(character.job);
+      character.perk = jobPerk?.perks[0];
+      console.log(`[travelHandler.js]: Gather → ${character.name} (Path Key: "${currentPath}", Type: ${typeof currentPath})`);
 
-    const result = {
-        decision: '',
-        outcomeMessage: '',
-        heartsLost: 0,
-        heartsGained: 0,
-        staminaLost: 0,
-    };
+      const items = await fetchAllItems();
+      const available = items.filter(i => i[currentPath] === true);
+      
+      if (!available.length) {
+        console.warn(`[handleGather]: No items available for path "${currentPath}". Check database item path keys.`);
+        console.warn(`Fetched ${items.length} total items. First few:`, items.slice(0, 5).map(i => i.itemName));
 
-    const items = await fetchAllItems();
-    const availableItems = items.filter(item => item[currentPath]);
-
-    if (availableItems.length > 0) {
-        const weightedItems = createWeightedItemList(availableItems);
-        const randomItem = weightedItems[Math.floor(Math.random() * weightedItems.length)];
-
+      }
+      
+      let decision, outcomeMessage;
+  
+      if (!available.length) {
+        decision = `❌ No resources to gather.`;
+      } else {
+        const weighted = createWeightedItemList(available);
+        const chosen = weighted[Math.floor(Math.random() * weighted.length)];
         await addItemInventoryDatabase(
-            character._id,
-            randomItem.itemName,
-            1,
-            randomItem.category.join(', '),
-            randomItem.type.join(', '),
-            interaction
+          character._id,
+          chosen.itemName || chosen.type.join(', '),
+          chosen.quantity || 1,
+          chosen.category.join(', '),
+          chosen.type.join(', '),
+          interaction
         );
+        outcomeMessage = `Gathered ${chosen.quantity||1}× ${chosen.itemName||chosen.type.join(', ')}.`;
+  
+        // Sheet sync
+        if (character.inventoryLink && isValidGoogleSheetsUrl(character.inventoryLink)) {
+          const sheetId = extractSpreadsheetId(character.inventoryLink);
+          const auth = await authorizeSheets();
+          const range = 'loggedInventory!A2:M';
+          const values = [[
+            character.name,
+            chosen.category.join(', '),
+            chosen.type.join(', '),
+            `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`,
+            new Date().toLocaleString('en-US',{timeZone:'America/New_York'}),
+            uuidv4()
+          ]];
+          await safeAppendDataToSheet(sheetId, auth, range, values);
+        }
+  
+        // Deduct stamina
+        if (!hasPerk(character, 'DELIVERING')) {
+          await useStamina(character._id, 1);
+          character.currentStamina -= 1;
+          outcomeMessage += ' (-1 🟩 stamina)';
+        }
+        decision = `🌱 ${outcomeMessage}`;
+      }
+  
+// Update embed
+const description = 
+  `🌸 It's a nice and safe day of traveling. What do you want to do next?\n> ${decision}\n\n` +
+  `**❤️ Hearts:** ${character.currentHearts}/${character.maxHearts}\n` +
+  `**🟩 Stamina:** ${character.currentStamina}/${character.maxStamina}`;
 
-        // ------------------- Sync Gathered Item with Google Sheets -------------------
-        const inventoryLink = character.inventory || character.inventoryLink;
-        if (typeof inventoryLink === 'string' && isValidGoogleSheetsUrl(inventoryLink)) {
-            const spreadsheetId = extractSpreadsheetId(inventoryLink);
-            const auth = await authorizeSheets();
-            const range = 'loggedInventory!A2:M';
-            const uniqueSyncId = uuidv4();
-            const formattedDateTime = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
-            const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
+  const embed = createUpdatedTravelEmbed({
+    encounterMessage,
+    character,
+    description,
+    fields: [{ name: '🔹 __Outcome__', value: outcomeMessage || 'No resources found', inline: false }],
+  });
+  
 
-            const values = [[
-                character.name,
-                randomItem.itemName,
-                (randomItem.quantity || 1).toString(),
-                randomItem.category.join(', '),
-                randomItem.type.join(', '),
-                randomItem.subtype || '',
-                'Gathered',
-                character.job,
-                '',
-                character.currentVillage,
-                interactionUrl,
-                formattedDateTime,
-                uniqueSyncId
-            ]];
-
-            if (character?.name && character?.inventory && character?.userId) {
-    await safeAppendDataToSheet(character.inventory, character, range, values);
-} else {
-    console.error('[safeAppendDataToSheet]: Invalid character object detected before syncing.');
+if (typeof encounterMessage?.edit === 'function') {
+  await encounterMessage.edit({ embeds: [embed], components: [] });
 }
 
-        }
+return decision;
 
-        // ------------------- Handle Stamina Usage -------------------
-        if (!hasDeliveringPerk(character)) {
-            await useStamina(character._id, 1);
-            character.currentStamina -= 1;
-            result.staminaLost = 1;
-        } else {
-            console.log(`[travelHandler.js][Gather]: Stamina preserved for ${character.name} due to DELIVERING perk.`);
-        }
-
-        const itemEmoji = randomItem.emoji || '';
-        result.decision = `${EMOJI.loot} ${character.name} gathered and found ${itemEmoji} ${randomItem.itemName}.${result.staminaLost === 0 ? ' Stamina preserved!' : ' Lost 1 stamina.'}`;
-        result.outcomeMessage = `${character.name} gathered ${itemEmoji} ${randomItem.itemName} ${result.staminaLost === 0 ? '(Delivering perk active!)' : '(-1 stamina)'}`;
-    } else {
-        console.warn(`[travelHandler.js][Gather]: No resources found for ${character.name} on path ${currentPath}.`);
-        result.decision = `${EMOJI.fail} No resources found to gather on this path.`;
-        result.outcomeMessage = `${character.name} tried to gather but found nothing.`;
+  
+    } catch (error) {
+      handleError(error, 'travelHandler.js (handleGather)');
+      throw error;
     }
+  }
+  
+  // ------------------- Fight Helper -------------------
+// Resolves combat, handles KO relocation, loot (incl. Chuchu logic),
+// sheet sync, stamina, updates embed fields & footer, logs outcomes.
+async function handleFight(interaction, character, encounterMessage, monster, travelLog) {
+  try {
+    travelLog = Array.isArray(travelLog) ? travelLog : [];
+    const jobPerk = getJobPerk(character.job);
+    character.perk = jobPerk?.perks[0];
 
-    const description = `${EMOJI.flower} It's a nice and safe day of traveling. What do you want to do next?\n> ${result.decision}\n\n**${EMOJI.heart} Hearts:** ${character.currentHearts}/${character.maxHearts}\n**${EMOJI.stamina} Stamina:** ${character.currentStamina}/${character.maxStamina}`;
+    console.log(`[travelHandler.js]: Fight → ${character.name} vs ${monster.name}`);
 
-    await encounterMessage.edit({
-        embeds: [new EmbedBuilder(encounterMessage.embeds[0].toJSON()).setDescription(description)],
-        components: [],
-    });
-
-    return result;
-}
-
-// ------------------- Action Handler (Handle Do Nothing Flavor Event) -------------------
-async function handleDoNothing(interaction, character, encounterMessage) {
-    console.log(`[travelHandler.js][DoNothing]: Handling do nothing for ${character.name}`);
-
-    const result = {
-        decision: '',
-        outcomeMessage: '',
-        heartsLost: 0,
-        heartsGained: 0,
-        staminaLost: 0,
-    };
-
-    // ------------------- Random Flavor Text Options -------------------
-    const flavorTexts = [
-        `${character.name} lay under a blanket of stars, listening to the distant howl of wolves. 🌌🐺`,
-        `${character.name} built a small campfire and enjoyed the crackling warmth. 🔥🌙`,
-        `${character.name} stumbled upon ancient ruins and marveled at mysterious carvings. 🏛️✨`,
-        `${character.name} heard the gentle sound of a nearby stream and drifted to sleep with a calm heart. 💧🌿`,
-        `${character.name} found a quiet grove to rest, where fireflies danced in the moonlight. 🌳✨`,
-        `${character.name} roasted some foraged mushrooms over the fire and thought of home. 🍄🔥`,
-        `${character.name} wrapped themselves in their cloak, feeling the chill of the mountain air. 🧥❄️`,
-        `${character.name} caught a glimpse of a shooting star and made a silent wish. 🌠🙏`,
-        `${character.name} discovered a meadow where wildflowers bloomed under the moonlight. 🌺🌕`,
-        `${character.name} gazed at the constellations and felt at peace. 🌌✨`
-    ];
-
-    const randomFlavorText = getRandomFlavorText(flavorTexts);
-
-    result.decision = `✨ ${randomFlavorText}`;
-    result.outcomeMessage = randomFlavorText;
-
-    const description = `${EMOJI.flower} It's a nice and safe day of traveling. What do you want to do next?\n> ${result.decision}\n\n**${EMOJI.heart} Hearts:** ${character.currentHearts}/${character.maxHearts}\n**${EMOJI.stamina} Stamina:** ${character.currentStamina}/${character.maxStamina}`;
-
-    await encounterMessage.edit({
-        embeds: [new EmbedBuilder(encounterMessage.embeds[0].toJSON()).setDescription(description)],
-        components: [],
-    });
-
-    return result;
-}
-// ------------------- Action Handler (Handle Fight Encounter) -------------------
-async function handleFight(interaction, character, encounterMessage, monster) {
-    console.log(`[travelHandler.js][Fight]: Handling fight for ${character.name} vs ${monster.name}`);
-
-    const result = {
-        decision: '',
-        outcomeMessage: '',
-        heartsLost: 0,
-        heartsGained: 0,
-        staminaLost: 0,
-    };
+    if (!monster || typeof monster.tier === 'undefined') {
+      throw new Error(`Invalid monster passed to handleFight: ${JSON.stringify(monster)}`);
+    }
 
     const { damageValue, adjustedRandomValue, attackSuccess, defenseSuccess } = calculateFinalValue(character);
-    const encounterOutcome = await getEncounterOutcome(character, monster, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess);
+    const outcome = await getEncounterOutcome(character, monster, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess);
+    console.log(`[handleFight]: Encounter outcome →`, outcome);
 
-    const heartsLost = encounterOutcome.heartsLost ?? encounterOutcome.hearts ?? encounterOutcome.damage ?? 0;
+    // ------------------- KO Branch -------------------
+    if (outcome.result === 'KO') {
+      const koEmbed = createKOEmbed(character);
+      await interaction.followUp({ embeds: [koEmbed] });
 
-    // ------------------- Handle KO Outcome -------------------
-    if (encounterOutcome.result === 'KO' || (character.currentHearts - heartsLost) <= 0) {
-        console.warn(`[travelHandler.js][Fight]: ${character.name} was KO'd during the fight.`);
+      const prevHearts = character.currentHearts;
+      const prevStamina = character.currentStamina;
 
-        character.currentHearts = 0;
-        character.currentStamina = 0;
-        character.ko = true;
-        character.debuff = {
-            active: true,
-            endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-        };
-        character.currentVillage = (character.currentVillage === 'rudania' || character.currentVillage === 'vhintl')
-            ? 'inariko'
-            : character.homeVillage;
+      character.currentHearts = 0;
+      character.currentStamina = 0;
+      character.debuff = { active: true, endDate: new Date(Date.now() + 7 * 86400000) };
+      character.currentVillage = ['rudania', 'vhintl'].includes(character.currentVillage) ? 'inariko' : character.homeVillage;
+      character.ko = true;
 
-        await character.save();
+      await updateCurrentHearts(character._id, 0);
+      await useStamina(character._id, 0);
+      await character.save();
 
-        const koEmbed = createKOEmbed(character);
-        await interaction.followUp({ embeds: [koEmbed] });
-
-        result.decision = `KO'd during the fight.`;
-        result.outcomeMessage = `${EMOJI.knockOut} ${character.name} was KO'd and wakes up in their recovery village with 0 hearts and stamina.`;
-        result.heartsLost = character.maxHearts;
-        result.staminaLost = character.maxStamina;
-
-        return result;
+      travelLog.push(`fight: KO (${prevHearts}→0 hearts, ${prevStamina}→0 stam)`);
+      return `💀 ${character.name} was KO'd and moved to recovery village.`;
     }
 
-    // ------------------- Handle Non-KO Outcome -------------------
-    result.heartsLost = heartsLost;
+    // ------------------- Fallback Heart Damage -------------------
+    if (outcome.result !== 'Win!/Loot' && outcome.result !== 'KO') {
+      if (typeof outcome.hearts !== 'number' || isNaN(outcome.hearts)) {
+        console.warn(`[handleFight]: Invalid or missing outcome.hearts for monster: ${monster.name}, forcing fallback.`);
+        outcome.hearts = 1;
+        outcome.result = `💥⚔️ The monster attacks! You lose ❤️ 1 heart!`;
+      }
+    }
 
-    // ------------------- Handle Victory (Loot Drop) -------------------
-    if (encounterOutcome.result === 'Win!/Loot') {
-        console.log(`[travelHandler.js][Fight]: ${character.name} won and is looting.`);
+    // ------------------- Sync Hearts & Stamina -------------------
+    const latestCharacter = await Character.findById(character._id);
+    character.currentStamina = latestCharacter.currentStamina;
+    character.currentHearts = latestCharacter.currentHearts;
 
-        const items = await fetchItemsByMonster(monster.name);
-        const weightedItems = createWeightedItemList(items, adjustedRandomValue);
-        let lootedItem = weightedItems[Math.floor(Math.random() * weightedItems.length)];
+    console.log(`[travelHandler.js]: Tracked ${outcome.hearts} heart(s) damage.`);
 
-        // Handle special Chuchu loot case
-        if (monster.name.includes('Chuchu')) {
-            const jellyType = monster.name.includes('Ice') ? 'White Chuchu Jelly'
-                : monster.name.includes('Fire') ? 'Red Chuchu Jelly'
-                : monster.name.includes('Electric') ? 'Yellow Chuchu Jelly'
-                : 'Chuchu Jelly';
+    // ------------------- Loot & Combat Result -------------------
+    let decision, outcomeMessage, lootLine = '';
+    let item = null;
 
-            const quantity = monster.name.includes('Large') ? 3
-                : monster.name.includes('Medium') ? 2
-                : 1;
+    if (outcome.result === 'Win!/Loot') {
+      const drops = await fetchItemsByMonster(monster.name);
+      const weighted = createWeightedItemList(drops, adjustedRandomValue);
+      item = weighted[Math.floor(Math.random() * weighted.length)];
 
-            lootedItem.itemName = jellyType;
-            lootedItem.quantity = quantity;
-        } else {
-            lootedItem.quantity = 1;
-        }
+      // Chuchu Special Case
+      if (/Chuchu/.test(monster.name)) {
+        const qty = /Large/.test(monster.name) ? 3 : /Medium/.test(monster.name) ? 2 : 1;
+        item.itemName = `${monster.name.includes('Ice') ? 'White' : monster.name.includes('Fire') ? 'Red' : 'Yellow'} Chuchu Jelly`;
+        item.quantity = qty;
+      } else {
+        item.quantity = 1;
+      }
 
-        await addItemInventoryDatabase(
-            character._id,
-            lootedItem.itemName,
-            lootedItem.quantity,
-            lootedItem.category.join(', '),
-            lootedItem.type.join(', '),
-            interaction
-        );
+      await addItemInventoryDatabase(
+        character._id,
+        item.itemName,
+        item.quantity,
+        item.category.join(', '),
+        item.type.join(', '),
+        interaction
+      );
 
-        // Sync to Google Sheets if necessary
-        const inventoryLink = character.inventory || character.inventoryLink;
-        if (typeof inventoryLink === 'string' && isValidGoogleSheetsUrl(inventoryLink)) {
-            const spreadsheetId = extractSpreadsheetId(inventoryLink);
-            const auth = await authorizeSheets();
-            const range = 'loggedInventory!A2:M';
-            const uniqueSyncId = uuidv4();
-            const formattedDateTime = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
-            const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
+      // Optional: Sheet Sync
+      if (character.inventoryLink && isValidGoogleSheetsUrl(character.inventoryLink)) {
+        const sheetId = extractSpreadsheetId(character.inventoryLink);
+        const auth = await authorizeSheets();
+        await safeAppendDataToSheet(sheetId, auth, 'loggedInventory!A2:M', [[
+          character.name,
+          item.category.join(', '),
+          item.type.join(', '),
+          `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`,
+          new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }),
+          uuidv4()
+        ]]);
+      }
 
-            const values = [[
-                character.name,
-                lootedItem.itemName,
-                (lootedItem.quantity || 1).toString(),
-                lootedItem.category.join(', '),
-                lootedItem.type.join(', '),
-                lootedItem.subtype || '',
-                'Looted',
-                character.job,
-                '',
-                character.currentVillage,
-                interactionUrl,
-                formattedDateTime,
-                uniqueSyncId
-            ]];
-
-            await safeAppendDataToSheet(inventoryLink, character, range, values);
-        }
-
-        const itemEmoji = lootedItem.emoji || '';
-        const quantityText = lootedItem.quantity > 1 ? `x${lootedItem.quantity}` : '';
-
-        result.decision = `Fought the monster and won! Looted ${itemEmoji} ${lootedItem.itemName}${quantityText ? ` ${quantityText}` : ''}.`;
-        result.outcomeMessage = generateVictoryMessage(adjustedRandomValue, defenseSuccess, attackSuccess) +
-            ` ${character.name} looted ${itemEmoji} ${lootedItem.itemName}${quantityText ? ` ${quantityText}` : ''}.`;
-
+      lootLine = `\n> Looted ${item.quantity}× ${item.itemName}`;
+      outcomeMessage = `${generateVictoryMessage(item)}${lootLine}`;
+      travelLog.push(`fight: win & loot (${item.quantity}× ${item.itemName})`);
     } else {
-        console.log(`[travelHandler.js][Fight]: ${character.name} lost ${heartsLost} hearts.`);
-
-        result.decision = `Fought the monster and lost ${heartsLost} hearts.`;
-        result.outcomeMessage = generateDamageMessage(heartsLost);
+      outcomeMessage = generateDamageMessage(outcome.hearts);
     }
 
-    // ------------------- Update Encounter Message Embed -------------------
-    const embedData = encounterMessage.embeds[0].toJSON();
-    const updatedEmbed = new EmbedBuilder(embedData)
-        .setDescription(`${EMOJI.fight} ${result.decision}\n\n**${EMOJI.heart} Hearts:** ${character.currentHearts}/${character.maxHearts}\n**${EMOJI.stamina} Stamina:** ${character.currentStamina}/${character.maxStamina}`);
-
-    const outcomeField = updatedEmbed.data.fields?.find(field => field.name === '🔹 __Outcome__');
-    if (outcomeField) {
-        outcomeField.value = result.outcomeMessage;
-    } else {
-        updatedEmbed.addFields({ name: '🔹 __Outcome__', value: result.outcomeMessage, inline: false });
+    // ------------------- Deduct Stamina -------------------
+    if (!hasPerk(character, 'DELIVERING')) {
+      await useStamina(character._id, 1);
+      character.currentStamina -= 1;
     }
 
-    if (monster && monster.tier !== undefined) {
-        updatedEmbed.setFooter({ text: `Tier: ${monster.tier}` });
+    // ------------------- Embed Update -------------------
+    const description =
+      `> ${outcomeMessage}` +
+      `\n**❤️ Hearts:** ${character.currentHearts}/${character.maxHearts}` +
+      `\n**🟩 Stamina:** ${character.currentStamina}/${character.maxStamina}`;
+
+    const embed = createUpdatedTravelEmbed({
+      encounterMessage,
+      character,
+      description,
+      fields: [],
+      footer: { text: `Tier: ${monster.tier}` },
+      titleFallback: `${character.name} vs ${monster?.name || 'Unknown Monster'}`
+    });
+
+    if (typeof encounterMessage?.edit === 'function') {
+      await encounterMessage.edit({ embeds: [embed], components: [] });
     }
 
-    await encounterMessage.edit({ embeds: [updatedEmbed], components: [] });
+    return outcomeMessage;
 
-    return result;
+  } catch (error) {
+    handleError(error, 'travelHandler.js (handleFight)');
+    throw error;
+  }
 }
 
-// ------------------- Action Handler (Handle Flee Attempt) -------------------
-async function handleFlee(interaction, character, encounterMessage, monster) {
-    console.log(`[travelHandler.js][Flee]: Handling flee for ${character.name} vs ${monster.name}`);
-
-    const result = {
-        decision: '',
-        outcomeMessage: '',
-        heartsLost: 0,
-        heartsGained: 0,
-        staminaLost: 0,
-    };
-
-    const fleeResult = await attemptFlee(character, monster);
-    console.log(`[travelHandler.js][Flee]: Flee attempt result: ${fleeResult.success ? 'Success' : 'Failure'}`);
-
-    let description = '';
-
-    if (fleeResult.success) {
-        // ------------------- Flee Success -------------------
-        if (!hasDeliveringPerk(character)) {
-            await useStamina(character._id, 1);
-            character.currentStamina -= 1;
-            result.staminaLost = 1;
-        } else {
-            console.log(`[travelHandler.js][Flee]: Stamina preserved for ${character.name} due to DELIVERING perk.`);
-        }
-
-        result.decision = `${EMOJI.flee} ${character.name} fled and safely got away!${result.staminaLost === 0 ? ' Stamina preserved!' : ' Lost 1 stamina.'}`;
-        result.outcomeMessage = `${character.name} successfully fled from the ${monster.name}! ${result.staminaLost === 0 ? '(Delivering perk active!)' : '(-1 stamina)'}`;
-
-        description = `${EMOJI.flee} You safely got away from the encounter!\n\n**${EMOJI.heart} Hearts:** ${character.currentHearts}/${character.maxHearts}\n**${EMOJI.stamina} Stamina:** ${character.currentStamina}/${character.maxStamina}`;
-
-    } else if (fleeResult.attacked) {
-        // ------------------- Flee Failed + Attacked -------------------
-        console.warn(`[travelHandler.js][Flee]: ${character.name} failed to flee and took ${fleeResult.damage} damage.`);
-
-        if (!hasDeliveringPerk(character)) {
-            await useStamina(character._id, 1);
-            character.currentStamina -= 1;
-            result.staminaLost = 1;
-        } else {
-            console.log(`[travelHandler.js][Flee]: Stamina preserved for ${character.name} due to DELIVERING perk.`);
-        }
-
-        await useHearts(character._id, fleeResult.damage);
-        result.heartsLost = fleeResult.damage;
-
-        result.decision = `⚠️ Flee failed! ${character.name} took ${fleeResult.damage} hearts of damage.${result.staminaLost === 0 ? ' Stamina preserved!' : ' Used 1 stamina.'}`;
-        result.outcomeMessage = `${character.name} failed to flee and took ${fleeResult.damage} hearts of damage from ${monster.name}. ${result.staminaLost === 0 ? '(Delivering perk active!)' : '(-1 stamina)'}`;
-
-        if (character.currentHearts <= 0) {
-            console.warn(`[travelHandler.js][Flee]: ${character.name} was knocked out after failed flee.`);
-            description = `💔 The monster attacked, and you were knocked out!\n\n**${EMOJI.heart} Hearts:** ${character.currentHearts}/${character.maxHearts}\n**${EMOJI.stamina} Stamina:** ${character.currentStamina}/${character.maxStamina}`;
-        } else {
-            description = `⚠️ You failed to flee and were attacked!\n\n**${EMOJI.heart} Hearts:** ${character.currentHearts}/${character.maxHearts}\n**${EMOJI.stamina} Stamina:** ${character.currentStamina}/${character.maxStamina}`;
-        }
-
-    } else {
-        // ------------------- Flee Failed but No Attack -------------------
-        console.warn(`[travelHandler.js][Flee]: ${character.name} failed to flee but was not attacked.`);
-
-        if (!hasDeliveringPerk(character)) {
-            await useStamina(character._id, 1);
-            character.currentStamina -= 1;
-            result.staminaLost = 1;
-        } else {
-            console.log(`[travelHandler.js][Flee]: Stamina preserved for ${character.name} due to DELIVERING perk.`);
-        }
-
-        result.decision = `${EMOJI.flee} Flee failed, but the monster did not attack.${result.staminaLost === 0 ? ' Stamina preserved!' : ' Used 1 stamina.'}`;
-        result.outcomeMessage = `${character.name} failed to flee, but the ${monster.name} did not attack. ${result.staminaLost === 0 ? '(Delivering perk active!)' : '(-1 stamina)'}`;
-
-        description = `${EMOJI.flee} You failed to flee, but the monster did not attack.\n\n**${EMOJI.heart} Hearts:** ${character.currentHearts}/${character.maxHearts}\n**${EMOJI.stamina} Stamina:** ${character.currentStamina}/${character.maxStamina}`;
-    }
-
-    // ------------------- Update Encounter Embed -------------------
-    const embedData = encounterMessage.embeds[0].toJSON();
-    const updatedEmbed = new EmbedBuilder(embedData)
-        .setDescription(description);
-
-    const outcomeField = updatedEmbed.data.fields?.find(field => field.name === '🔹 __Outcome__');
-    if (outcomeField) {
-        outcomeField.value = result.outcomeMessage;
-    } else {
-        updatedEmbed.addFields({ name: '🔹 __Outcome__', value: result.outcomeMessage, inline: false });
-    }
-
-    if (monster && monster.tier !== undefined) {
-        updatedEmbed.setFooter({ text: `Tier: ${monster.tier}` });
-    }
-
-    await encounterMessage.edit({ embeds: [updatedEmbed], components: [] });
-
-    return result;
-}
-
-// ------------------- Main Handler (Handle Travel Interaction) -------------------
-async function handleTravelInteraction(interaction, character, day, totalTravelDuration, pathEmoji, currentPath, encounterMessage, monster, travelLog) {
+  // ------------------- Flee Helper -------------------
+  // Handles three flee outcomes (success, failed+attack, failed+no-attack),
+  // handles KO on flee, stamina, updates embed & logs outcomes.
+  async function handleFlee(interaction, character, encounterMessage, monster, travelLog) {
     try {
-        // ------------------- Defer Interaction -------------------
-        if (interaction.isButton()) {
-            await interaction.deferUpdate();
-        } else if (interaction.isCommand()) {
-            await interaction.deferReply();
-        } else {
-            throw new Error(`Unsupported interaction type: ${interaction.type}`);
+      travelLog = Array.isArray(travelLog) ? travelLog : [];
+  
+      const jobPerk = getJobPerk(character.job);
+      character.perk = jobPerk?.perks[0];
+      console.log(`[travelHandler.js]: Flee → ${character.name} from ${monster.name}`);
+  
+  
+      const result = await attemptFlee(character, monster);
+      let decision, outcomeMessage;
+  
+      if (result.success) {
+        // success
+        if (!hasPerk(character,'DELIVERING')) {
+          await useStamina(character._id,1);
+          character.currentStamina -=1;
         }
+        decision = `💨 Successfully fled${!hasPerk(character,'DELIVERING')?' (-1 🟩 stamina)':''}.`;
+        outcomeMessage = `${character.name} escaped the ${monster.name}!`;
+      } else if (result.attacked) {
+        
+        if (typeof result.damage !== 'number' || isNaN(result.damage)) {
+          throw new Error(`Flee damage is invalid or missing: ${result.damage}`);
+        }        
+        
 
-        // ------------------- Set Character Perk -------------------
-        const jobPerk = getJobPerk(character.job);
-        character.perk = jobPerk ? jobPerk.perks[0] : undefined;
-        console.log(`[travelHandler.js][Main]: Set job perk for ${character.name}: ${character.perk || 'None'}`);
+// attacked while fleeing
+await useHearts(character._id, result.damage);
+const latestCharacter = await Character.findById(character._id);
+character.currentStamina = latestCharacter.currentStamina;
+character.currentHearts = latestCharacter.currentHearts;
+console.log(`[travelHandler.js]: Tracked ${result.damage} heart(s) damage (deducted by characterStatsModule).`);
 
-        const customId = interaction.customId;
-        let result = null;
-
-        // ------------------- Handle Based on Action -------------------
-        switch (customId) {
-            case 'recover':
-                result = await handleRecover(interaction, character, encounterMessage);
-                break;
-            case 'gather':
-                result = await handleGather(interaction, character, encounterMessage, currentPath);
-                break;
-            case 'do_nothing':
-                result = await handleDoNothing(interaction, character, encounterMessage);
-                break;
-            case 'fight':
-                result = await handleFight(interaction, character, encounterMessage, monster);
-                break;
-            case 'flee':
-                result = await handleFlee(interaction, character, encounterMessage, monster);
-                break;
-            default:
-                throw new Error(`Unsupported customId: ${customId}`);
-        }
-
-        // ------------------- Update Travel Log -------------------
-        if (result) {
-            updateTravelLog(travelLog, result);
-            return result.decision;
-        }
-
-    } catch (error) {
-        handleError(error, 'travelHandler.js');
-        console.error(`[travelHandler.js][Main]: Error during travel interaction: ${error.message}`, error);
-        throw error;
-    }
+if (!hasPerk(character, 'DELIVERING')) {
+  await useStamina(character._id, 1);
+  character.currentStamina -= 1; // Optional: only used for display
 }
 
+outcomeMessage = `${character.name} failed to flee and took ${result.damage} hearts${!hasPerk(character, 'DELIVERING') ? ' (-1 🟩 stamina)' : ''}.`;
+decision = result.damage >= character.maxHearts
+  ? `💔 KO'd while fleeing!`
+  : `⚠️ Flee failed and took ${result.damage} ❤️ hearts.`;
 
-// ---------------- Export ----------------
-module.exports = { handleTravelInteraction,updateTravelLog };
+  
+        // KO on flee
+        if (character.currentHearts <= 0) {
+          character.currentStamina = 0;
+          character.debuff = { active: true, endDate: new Date(Date.now()+7*86400000) };
+          character.currentVillage = ['rudania','vhintl'].includes(character.currentVillage)?'inariko':character.homeVillage;
+          character.ko = true;
+          await updateCurrentHearts(character._id,0);
+          await useStamina(character._id,0);
+          await character.save();
+        } else {
+        }
+      } else {
+        // no attack
+        if (!hasPerk(character,'DELIVERING')) {
+          await useStamina(character._id,1);
+          character.currentStamina -=1;
+        }
+        decision = `💨 Flee failed but no attack${!hasPerk(character,'DELIVERING')?' (-1 🟩 stamina)':''}.`;
+        outcomeMessage = `${character.name} tried to flee but wasn’t attacked.`;
+      }
+  
+// Update embed
+const description = 
+  `🌸 It's a nice and safe day of traveling. What do you want to do next?\n> ${decision}\n\n` +
+  `**❤️ Hearts:** ${character.currentHearts}/${character.maxHearts}\n` +
+  `**🟩 Stamina:** ${character.currentStamina}/${character.maxStamina}`;
+
+  const embed = createUpdatedTravelEmbed({
+    encounterMessage,
+    character,
+    description,
+    fields: [], // or just omit `fields` entirely if you're not adding anything else
+  });
+  
+
+if (typeof encounterMessage?.edit === 'function') {
+  await encounterMessage.edit({ embeds: [embed], components: [] });
+}
+
+return decision;
+
+  
+    } catch (error) {
+      handleError(error, 'travelHandler.js (handleFlee)');
+      throw error;
+    }
+  }
+  
+  // ------------------- Do Nothing Helper -------------------
+  // Presents extended flavor pool (10+ lines), deducts stamina, logs, and edits embed.
+  async function handleDoNothing(interaction, character, encounterMessage, travelLog) {
+    try {
+      travelLog = Array.isArray(travelLog) ? travelLog : [];
+      const jobPerk = getJobPerk(character.job);
+      character.perk = jobPerk?.perks[0];
+      console.log(`[travelHandler.js]: Do Nothing → ${character.name}`);
+  
+      const flavorTexts = [
+        `${character.name} lay under a blanket of stars. 🌌`,
+        `${character.name} built a small campfire and enjoyed the crackling warmth. 🔥`,
+        `${character.name} stumbled upon ancient ruins and marveled at their carvings. 🏛️`,
+        `${character.name} heard a nearby stream and drifted to sleep. 💧`,
+        `${character.name} found a quiet grove where fireflies danced. ✨`,
+        `${character.name} roasted foraged mushrooms and thought of home. 🍄`,
+        `${character.name} wrapped themselves in their cloak against the chill. 🧥`,
+        `${character.name} caught a glimpse of a shooting star and made a wish. 🌠`,
+        `${character.name} discovered a meadow of moonlit wildflowers. 🌺`,
+        `${character.name} gazed at constellations and felt at peace. 🌟`
+      ];
+      const randomFlavor = flavorTexts[Math.floor(Math.random() * flavorTexts.length)];
+  
+      if (!hasPerk(character,'DELIVERING')) {
+        await useStamina(character._id,1);
+        character.currentStamina -=1;
+      }
+  
+// Update embed
+const description = 
+  `🌸 It's a nice and safe day of traveling. What do you want to do next?\n> ✨ ${randomFlavor}\n\n` +
+  `**❤️ Hearts:** ${character.currentHearts}/${character.maxHearts}\n` +
+  `**🟩 Stamina:** ${character.currentStamina}/${character.maxStamina}`;
+
+  const embed = createUpdatedTravelEmbed({
+    encounterMessage,
+    character,
+    description,
+    fields: [{ name: '🔹 __Outcome__', value: randomFlavor, inline: false }],
+  });
+  
+
+if (typeof encounterMessage?.edit === 'function') {
+  await encounterMessage.edit({ embeds: [embed], components: [] });
+}
+
+return randomFlavor;
+
+  
+    } catch (error) {
+      handleError(error, 'travelHandler.js (handleDoNothing)');
+      throw error;
+    }
+  }
+  
+  // ============================================================================
+// ------------------- Primary Handler -------------------
+// ============================================================================
+
+// ------------------- Interaction Routing -------------------
+// Routes button interactions to specific helpers based on customId.
+async function handleTravelInteraction(
+    interaction,
+    character,
+    pathEmoji,
+    currentPath,
+    encounterMessage,
+    monster,
+    travelLog
+  ) {
+    try {
+      if (interaction.isButton()) {
+        try {
+          await interaction.deferUpdate();
+        } catch (err) {
+          if (err.code === 10062) {
+            console.warn(`[handleTravelInteraction]: Interaction expired or already responded to.`);
+            return '❌ This interaction has expired. Please try again or reissue the command.';
+          } else {
+            throw err;
+          }
+        }
+      }
+      
+      const customId = interaction.customId;
+      let result;
+  
+      switch (customId) {
+        case 'recover':
+          result = await handleRecover(interaction, character, encounterMessage, travelLog);
+          break;
+        case 'gather':
+          result = await handleGather(interaction, character, currentPath, encounterMessage, travelLog);
+          break;
+        case 'fight':
+            if (!monster) {
+              result = '❌ Could not resolve monster for this encounter.';
+              break;
+            }
+            result = await handleFight(interaction, character, encounterMessage, monster, travelLog);
+            break;
+        case 'flee':
+          result = await handleFlee(interaction, character, encounterMessage, monster, travelLog);
+          break;
+        default:
+          result = await handleDoNothing(interaction, character, encounterMessage, travelLog);
+      }
+  
+      return result;
+    } catch (error) {
+      handleError(error, 'travelHandler.js (main)');
+      console.error(`[travelHandler.js]: Error routing interaction: ${error.message}`, error);
+      throw error;
+    }
+  }
+  
+  // ============================================================================
+  // ------------------- Export the Function -------------------
+  // ============================================================================
+  
+  // Exports the primary handler for use in the command module.
+  module.exports = { handleTravelInteraction };
+  

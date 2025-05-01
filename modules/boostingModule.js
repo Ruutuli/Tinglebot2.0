@@ -239,7 +239,7 @@ const boostingEffects = {
       // ------------------- Healers -------------------
       Healers: {
         name: 'Efficient Recovery',
-        description: 'Boosted by a Scholar, both the healer and recipient recover 1 stamina after the healing is complete.'
+        description: 'Boosted by a Scholar, both the healer and recipient recover 1 🟩 stamina after the healing is complete.'
       },
       // ------------------- Looting -------------------
       Looting: {

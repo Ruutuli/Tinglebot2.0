@@ -1603,7 +1603,7 @@ const createSafeTravelDayEmbed = (
  pathEmoji,
  currentPath
 ) => {
- const description = `🌸 **It's a nice and safe day of traveling.** What do you want to do next?\n- ❤️ Recover a heart (costs 1 stamina)\n- 🌿 Gather (costs 1 stamina)\n- 💤 Do nothing (move onto the next day)`;
+ const description = `🌸 **It's a nice and safe day of traveling.** What do you want to do next?\n- ❤️ Recover a heart (costs 1 🟩 stamina)\n- 🌿 Gather (costs 1 🟩 stamina)\n- 💤 Do nothing (move onto the next day)`;
 
  return new EmbedBuilder()
   .setAuthor({
@@ -1621,17 +1621,7 @@ const createSafeTravelDayEmbed = (
   .setTimestamp();
 };
 
-// ------------------- Subsection Title ------------------- 
-const createStopInInarikoEmbed = (character, nextChannelId) => {
- return new EmbedBuilder()
-  .setTitle(`🛑 **${character.name}** stopped in Inariko`)
-  .setDescription(
-   `**${character.name}** stopped in Inariko to rest and gather supplies.\n\n**❤️ __Hearts:__** ${character.currentHearts}/${character.maxHearts}\n**🟩 __Stamina:__** ${character.currentStamina}/${character.maxStamina}\n\n🔔 Please move over to <#${nextChannelId}> to continue the journey!`
-  )
-  .setColor("#AA926A")
-  .setImage(DEFAULT_IMAGE_URL)
-  .setTimestamp();
-};
+
 
 // ------------------- Subsection Title ------------------- 
 const createFinalTravelEmbed = (
@@ -1677,6 +1667,22 @@ const createFinalTravelEmbed = (
   .setTimestamp();
 };
 
+// ------------------- Subsection Title ------------------- 
+function createUpdatedTravelEmbed({ encounterMessage, character, description, fields = [], footer = null, titleFallback = null }) {
+  const baseEmbed = (encounterMessage?.embeds?.[0])
+    ? new EmbedBuilder(encounterMessage.embeds[0].toJSON())
+    : new EmbedBuilder().setTitle(titleFallback || `${character.name}'s Travel Log`);
+
+  // Remove old conflicting fields
+  baseEmbed.spliceFields(0, baseEmbed.data.fields?.length || 0);
+  baseEmbed.addFields(...fields);
+  
+  return baseEmbed
+    .setDescription(description)
+    .setFooter(footer || null);
+}
+
+
 module.exports = {
  DEFAULT_EMOJI,
  DEFAULT_IMAGE_URL,
@@ -1718,6 +1724,6 @@ module.exports = {
  createInitialTravelEmbed,
  createTravelingEmbed,
  createSafeTravelDayEmbed,
- createStopInInarikoEmbed,
  createFinalTravelEmbed,
+ createUpdatedTravelEmbed,
 };

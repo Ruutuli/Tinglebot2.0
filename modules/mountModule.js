@@ -86,7 +86,7 @@ function storeEncounter(encounterId, encounterData) {
           mountType: encounterData.mountType || 'Unknown',
           rarity: encounterData.rarity || 'Regular', // Default to 'Regular'
           mountLevel: encounterData.mountLevel || '1', // Default to level 1
-          mountStamina: encounterData.mountStamina || '1', // Default to 1 stamina
+          mountStamina: encounterData.mountStamina || '1', // Default to 1 🟩 stamina
           environment: encounterData.environment || 'Plains', // Default to 'Plains'
           village: encounterData.village || 'Unknown',
           actions: encounterData.actions || [],
