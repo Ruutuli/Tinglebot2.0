@@ -436,7 +436,7 @@ module.exports = {
                 // ------------------- Check Turn Order -------------------
                 // Find character's index in the party
                 const characterIndex = party.characters.findIndex(char => 
-                    char.name === characterName && char.userId === userId
+                    char.name === characterName
                 );
                 
                 if (characterIndex === -1) {
