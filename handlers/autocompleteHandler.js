@@ -1300,13 +1300,20 @@ async function handleExploreRollCharacterAutocomplete(
   console.log(`[DEBUG] User ID: ${userId}`);
   console.log(`[DEBUG] Party characters:`, JSON.stringify(party.characters));
 
-  const userCharacters = party.characters.filter(
-   (char) => char.userId && char.userId.toString() === userId.toString()
+  const userCharacters = await fetchCharactersByUserId(userId);
+  const userCharacterNames = userCharacters.map((char) => char.name);
+
+  console.log(`[DEBUG] User's character names:`, userCharacterNames);
+
+  const userPartyCharacters = party.characters.filter((partyChar) =>
+   userCharacterNames.includes(partyChar.name)
   );
 
-  console.log(`[DEBUG] Found ${userCharacters.length} characters for user`);
+  console.log(
+   `[DEBUG] Found ${userPartyCharacters.length} characters for user in party`
+  );
 
-  if (userCharacters.length === 0) {
+  if (userPartyCharacters.length === 0) {
    return await interaction.respond([
     { name: "You don't have any characters in this expedition", value: "none" },
    ]);
@@ -1314,11 +1321,9 @@ async function handleExploreRollCharacterAutocomplete(
 
   const currentTurnCharacter = party.characters[party.currentTurn];
 
-  const choices = userCharacters.map((char) => {
+  const choices = userPartyCharacters.map((char) => {
    const isTurn =
-    currentTurnCharacter &&
-    char.name === currentTurnCharacter.name &&
-    char.userId.toString() === currentTurnCharacter.userId.toString();
+    currentTurnCharacter && char.name === currentTurnCharacter.name;
 
    return {
     name: `${char.name} | ❤️ ${char.currentHearts || 0} | 🟩 ${
@@ -1327,13 +1332,6 @@ async function handleExploreRollCharacterAutocomplete(
     value: char.name,
    };
   });
-
-  if (choices.length === 0 && userCharacters.length > 0) {
-   choices.push({
-    name: userCharacters[0].name,
-    value: userCharacters[0].name,
-   });
-  }
 
   const filtered = choices.filter((choice) =>
    choice.name.toLowerCase().includes(focusedOption.value.toLowerCase())
