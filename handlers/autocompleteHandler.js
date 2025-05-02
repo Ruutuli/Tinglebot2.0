@@ -53,14 +53,24 @@ const { Village } = require("../models/VillageModel");
 // ============================================================================
 
 async function handleAutocomplete(interaction) {
- try {
-  await connectToTinglebot(); // Ensure MongoDB connection
+  try {
+    await connectToTinglebot();
 
-  const focusedOption = interaction.options.getFocused(true); // Get the focused option
-  const commandName = interaction.commandName; // Get the command name
+    const focusedOption = interaction.options.getFocused(true);
+    const commandName = interaction.commandName;
 
-  // ------------------- BLIGHT Commands -------------------
-  if (
+    if (commandName === "quest") {
+      if (focusedOption.name === "charactername") {
+        await handleCharacterBasedCommandsAutocomplete(
+          interaction,
+          focusedOption,
+          commandName
+        );
+      } else if (focusedOption.name === "questid") {
+        await handleQuestIdAutocomplete(interaction, focusedOption);
+      }
+    } 
+    else if (
    commandName === "blight" &&
    (focusedOption.name === "character_name" ||
     focusedOption.name === "healer_name")
@@ -1601,6 +1611,27 @@ async function handleGiftAutocomplete(interaction, focusedOption) {
  }
 }
 
+// ------------------- Quest ID Autocomplete -------------------
+async function handleQuestIdAutocomplete(interaction, focusedOption) {
+  try {
+      // Fetch active quests from the database
+      const quests = await Quest.find({ status: 'active' }).lean();
+      
+      // Format quest choices for autocomplete
+      const choices = quests.map(quest => ({
+          name: `${quest.questID} - ${quest.title} (${quest.location})`,
+          value: quest.questID
+      }));
+      
+      // Respond with filtered quest choices
+      await respondWithFilteredChoices(interaction, focusedOption, choices);
+  } catch (error) {
+      handleError(error, "autocompleteHandler.js");
+      console.error("[handleQuestIdAutocomplete]: Error:", error);
+      await safeRespondWithError(interaction);
+  }
+}
+
 // ============================================================================
 // HEAL COMMANDS
 // ============================================================================
@@ -2774,6 +2805,8 @@ async function handleViewInventoryAutocomplete(interaction, focusedOption) {
 // ============================================================================
 module.exports = {
  handleAutocomplete,
+
+ handleQuestIdAutocomplete,
 
  // CHARACTER-BASED
 
