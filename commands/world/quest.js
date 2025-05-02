@@ -13,12 +13,14 @@ module.exports = {
                 .setName('charactername')
                 .setDescription('The name of your character.')
                 .setRequired(true)
+                .setAutocomplete(true)
         )
         .addStringOption(option =>
             option
                 .setName('questid')
                 .setDescription('The ID of the quest you want to join.')
                 .setRequired(true)
+                .setAutocomplete(true)
         ),
     async execute(interaction) {
         const characterName = interaction.options.getString('charactername');
