@@ -117,13 +117,22 @@ if (character.lastCollectedMonth === currentMonth + 1) {
   });
 }
   
-    const job = character.job?.toLowerCase();
-    if (job !== 'shopkeeper' && job !== 'merchant') {
-      return interaction.reply({
-        content: `❌ Only characters with the job **Shopkeeper** or **Merchant** can claim vending points.`,
-        ephemeral: true
-      });
-    }
+const job = character.job?.toLowerCase();
+if (job !== 'shopkeeper' && job !== 'merchant') {
+  return interaction.reply({
+    content: `❌ Only characters with the job **Shopkeeper** or **Merchant** can claim vending points.`,
+    ephemeral: true
+  });
+}
+
+// ------------------- Setup Validation -------------------
+if (!character.vendingSetup || !character.vendingSync || !character.vendingSheetUrl) {
+  return interaction.reply({
+    content: `❌ You must complete vending setup before collecting points. Please run \`/vending setup\` first.`,
+    ephemeral: true
+  });
+}
+
   
     const pointsAwarded = MONTHLY_VENDING_POINTS;
 
