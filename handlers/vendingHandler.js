@@ -1043,10 +1043,9 @@ async function handleVendingViewVillage(interaction, villageKey) {
       .setColor('#f4c542')
       .setDescription(
         items.map(i =>
-          `• ${i.itemIcon || '📦'} **${i.itemName}** — x${i.stockQty ?? '?'} (${i.points} pts)`
+          `• ${i.emoji || '📦'} **${i.itemName}** — x${i.stock ?? i.stockQty ?? '?'} (${i.points} pts)`
         ).join('\n') || '*No items found*'
       );
-
     return interaction.update({
       embeds: [embed],
       components: interaction.message.components // ✅ preserves village buttons
