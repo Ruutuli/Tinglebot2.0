@@ -132,13 +132,20 @@ async function handleCollectPoints(interaction) {
       });
     }
 
-    // ------------------- Setup Validation -------------------
-    if (!character.vendingSetup || !character.shopLink) {
-      return interaction.reply({
-        content: `❌ You must complete vending setup before collecting points. Please run \`/vending setup\` first.`,
-        ephemeral: true
-      });
-    }
+      // ------------------- Setup Validation -------------------
+      if (!character.vendingSetup || !character.shopLink) {
+        return interaction.reply({
+          content: `❌ You must complete vending setup before collecting points. Please run \`/vending setup\` first.`,
+          ephemeral: true
+        });
+      }
+
+      if (!character.vendingSync) {
+        return interaction.reply({
+          content: `❌ You must sync your vending sheet before collecting points. Please run \`/vending sync\` first.`,
+          ephemeral: true
+        });
+      }
 
     // ------------------- Award Points -------------------
     const pointsAwarded = MONTHLY_VENDING_POINTS;
