@@ -462,7 +462,7 @@ async function handleVendingViewVillage(interaction, villageKey) {
 // ------------------- Component Interaction Handler -------------------
 // Delegates interactions to the appropriate handlers based on the customId.
 async function handleComponentInteraction(interaction) {
-    const [action, param] = interaction.customId.split('_');
+    const [action] = interaction.customId.split('|');
 
     if (
         ['sync-yes', 'sync-no', 'confirm', 'cancel', 'view', 'job-select', 'job-page'].includes(action)

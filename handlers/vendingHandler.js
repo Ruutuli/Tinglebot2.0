@@ -988,7 +988,7 @@ async function viewVendingStock(interaction) {
 // Create buttons for each village
 const villageButtons = Object.keys(stockList).map(village =>
   new ButtonBuilder()
-    .setCustomId(`vending_view_${village.toLowerCase()}`)
+    .setCustomId(`vending_view|${village.toLowerCase()}`)
     .setLabel(`🏘️ ${village}`)
     .setStyle(ButtonStyle.Primary)
 );
