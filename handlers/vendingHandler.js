@@ -952,32 +952,34 @@ async function handleShopLink(interaction) {
   }
   
 // ------------------- generateVillageButtonRow -------------------
-
 const villageEmojis = {
-  rudania: '<:rudania:899492917452890142>',
-  inariko: '<:inariko:899493009073274920>',
-  vhintl: '<:vhintl:899492879205007450>',
+  rudania: { id: '899492917452890142', name: 'rudania' },
+  inariko: { id: '899493009073274920', name: 'inariko' },
+  vhintl: { id: '899492879205007450', name: 'vhintl' },
 };
 
 function generateVillageButtonRow(currentVillageKey = '') {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
-      .setCustomId('village_rudania')
+      .setCustomId('vending_view|rudania')
       .setLabel('Rudania')
-      .setEmoji({ id: '899492917452890142', name: 'rudania' })
-      .setStyle(currentVillageKey === 'rudania' ? ButtonStyle.Danger : ButtonStyle.Secondary), // 🔴 red
+      .setEmoji(villageEmojis.rudania)
+      .setStyle(ButtonStyle.Danger)
+      .setDisabled(currentVillageKey === 'rudania'),
 
     new ButtonBuilder()
-      .setCustomId('village_inariko')
+      .setCustomId('vending_view|inariko')
       .setLabel('Inariko')
-      .setEmoji({ id: '899493009073274920', name: 'inariko' })
-      .setStyle(currentVillageKey === 'inariko' ? ButtonStyle.Primary : ButtonStyle.Secondary), // 🔵 blue
+      .setEmoji(villageEmojis.inariko)
+      .setStyle(ButtonStyle.Primary)
+      .setDisabled(currentVillageKey === 'inariko'),
 
     new ButtonBuilder()
-      .setCustomId('village_vhintl')
+      .setCustomId('vending_view|vhintl')
       .setLabel('Vhintl')
-      .setEmoji({ id: '899492879205007450', name: 'vhintl' })
-      .setStyle(currentVillageKey === 'vhintl' ? ButtonStyle.Success : ButtonStyle.Secondary)  // 🟢 green
+      .setEmoji(villageEmojis.vhintl)
+      .setStyle(ButtonStyle.Success)
+      .setDisabled(currentVillageKey === 'vhintl')
   );
 }
 
@@ -1078,11 +1080,11 @@ async function handleVendingViewVillage(interaction, villageKey) {
         ).join('\n\n') || '*No items found*'
       );
 
-      return interaction.update({
-        embeds: [embed],
-        components: [generateVillageButtonRow(villageKey)]
-      });
-      
+    return interaction.update({
+      embeds: [embed],
+      components: [generateVillageButtonRow(villageKey)]
+    });
+
   } catch (err) {
     console.error(`[handleVendingViewVillage]: ${err.message}`);
     return interaction.update({
@@ -1092,6 +1094,7 @@ async function handleVendingViewVillage(interaction, villageKey) {
     });
   }
 }
+
 
 // ============================================================================
 // ------------------- Helper Functions (Private) -------------------
