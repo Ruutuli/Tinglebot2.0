@@ -951,48 +951,60 @@ async function handleShopLink(interaction) {
   
 // ------------------- viewVendingStock -------------------
 async function viewVendingStock(interaction) {
-    const db = await connectToInventories();
-    const now = new Date();
-    const month = now.toLocaleString('default', { month: 'long' });
-  
-    const all = await db.find({}).toArray();
-    const matches = all.filter(entry => {
-      const entryDate = new Date(entry.date);
-      return entryDate.getMonth() === now.getMonth() &&
-             entryDate.getFullYear() === now.getFullYear();
-    });
-  
-    if (!matches.length) {
-      return interaction.reply({
-        content: `📭 No vending stock found for **${month}**.`,
-        ephemeral: true
-      });
+  const client = await connectToInventories();
+  const db = client.db("vending");
+  const collections = await db.collections();
+
+  const all = [];
+
+  for (const collection of collections) {
+    const entries = await collection.find({}).toArray();
+    for (const entry of entries) {
+      if (entry?.date) {
+        all.push(entry);
+      }
     }
-  
-    const grouped = {};
-    for (const entry of matches) {
-      const village = entry.village || 'Unknown';
-      if (!grouped[village]) grouped[village] = [];
-      grouped[village].push(entry);
-    }
-  
-    const embed = new EmbedBuilder()
-      .setTitle(`📊 Vending Stock — ${month}`)
-      .setDescription(`Grouped by village, showing recent stock activity.`);
-  
-    for (const [village, items] of Object.entries(grouped)) {
-      const summary = items
-        .slice(0, 10)
-        .map(i => `- ${i.characterName}: ${i.itemName} x${i.stockQty}`)
-        .join('\n');
-  
-      embed.addFields({ name: `🏘️ ${village}`, value: summary, inline: false });
-    }
-  
-    return interaction.reply({ embeds: [embed], ephemeral: true });
   }
-  
-  
+
+  const now = new Date();
+  const month = now.toLocaleString('default', { month: 'long' });
+
+  const matches = all.filter(entry => {
+    const entryDate = new Date(entry.date);
+    return entryDate.getMonth() === now.getMonth() &&
+           entryDate.getFullYear() === now.getFullYear();
+  });
+
+  if (!matches.length) {
+    return interaction.reply({
+      content: `📭 No vending stock found for **${month}**.`,
+      ephemeral: true
+    });
+  }
+
+  const grouped = {};
+  for (const entry of matches) {
+    const village = entry.village || 'Unknown';
+    if (!grouped[village]) grouped[village] = [];
+    grouped[village].push(entry);
+  }
+
+  const embed = new EmbedBuilder()
+    .setTitle(`📊 Vending Stock — ${month}`)
+    .setDescription(`Grouped by village, showing recent stock activity.`);
+
+  for (const [village, items] of Object.entries(grouped)) {
+    const summary = items
+      .slice(0, 10)
+      .map(i => `- ${i.characterName}: ${i.itemName} x${i.stockQty}`)
+      .join('\n');
+
+    embed.addFields({ name: `🏘️ ${village}`, value: summary, inline: false });
+  }
+
+  return interaction.reply({ embeds: [embed], ephemeral: true });
+}
+
 
 // ============================================================================
 // ------------------- Helper Functions (Private) -------------------
