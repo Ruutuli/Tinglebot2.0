@@ -153,141 +153,131 @@ async function handleCollectPoints(interaction) {
   
 // ------------------- handleRestock -------------------
 async function handleRestock(interaction) {
-    try {
-      await interaction.deferReply({ ephemeral: true });
-  
-      const characterName = interaction.options.getString('charactername');
-      const itemName = interaction.options.getString('itemname');
-      const stockQty = interaction.options.getInteger('stockqty');
-      const tokenPrice = interaction.options.getInteger('tokenprice') || 'N/A';
-      const artPrice = interaction.options.getInteger('artprice') || 'N/A';
-      const otherPrice = interaction.options.getInteger('otherprice') || 'N/A';
-      const tradesOpen = interaction.options.getBoolean('tradesopen') || false;
-      const userId = interaction.user.id;
-  
-      const baseSlotLimits = { shopkeeper: 5, merchant: 3 };
-      const pouchCapacities = { none: 0, bronze: 15, silver: 30, gold: 50 };
-  
-      const character = await fetchCharacterByName(characterName);
-      if (!character || character.userId !== userId) {
-        return interaction.editReply("❌ Character not found or doesn't belong to you.");
-      }
-  
-      const baseSlots = baseSlotLimits[character.job?.toLowerCase()] || 0;
-      const extraSlots = pouchCapacities[character.shopPouch?.toLowerCase()] || 0;
-      const totalSlots = baseSlots + extraSlots;
-  
-      const client = await connectToInventories();
-      const db = client; 
-      const inventory = db.collection(characterName.toLowerCase());
-      const existingItems = await inventory.find({}).toArray();
-      
+  try {
+    await interaction.deferReply({ ephemeral: true });
 
-      const stockDb = client.db("tinglebot");
-      const stockCollection = stockDb.collection("vending_stock");
-      
-      const stockDoc = await stockCollection.findOne({ month: currentMonth });
-      if (!stockDoc) {
-        return interaction.editReply(`❌ No vending stock found for month ${currentMonth}.`);
-      }
-      
-      const villageStock = stockDoc.stockList?.[currentVillage] || [];
-      const itemDoc = villageStock.find(i => i.itemName === itemName);
-      
-      if (!itemDoc || typeof itemDoc.points !== "number" || itemDoc.points <= 0) {
-        return interaction.editReply(`❌ Item '${itemName}' is missing a valid vending point value in the vending stock.`);
-      }
-      
-      const pointCost = itemDoc.points;
-      
-      if (!itemDoc) {
-        return interaction.editReply(`❌ Item '${itemName}' not found in database.`);
-      }
-      
-      const stackable = !itemDoc.crafting;
-      const slotsUsed = existingItems.reduce((acc, item) => {
-        return acc + (item.stackable ? Math.ceil(item.stockQty / 10) : item.stockQty);
-      }, 0);
-      const slotsRequired = stackable ? Math.ceil(stockQty / 10) : stockQty;
-      
-  
-      if (slotsUsed + slotsRequired > totalSlots) {
-        const reason = stackable
-          ? `Stackable item (1 slot per 10 units)`
-          : `Crafting item (1 slot per unit)`;
-        return interaction.editReply(
-          `⚠️ Not enough space.\n` +
-          `**${characterName}** has **${totalSlots} slots** (${slotsUsed} used).\n` +
-          `Adding \`${itemName}\` would need \`${slotsRequired}\`.\n\n${reason}`
-        );
-      }
-  
-      const vendingPoints = character.vendingPoints || 0;
-      const pointCost = itemDoc.points;
+    const characterName = interaction.options.getString('charactername');
+    const itemName = interaction.options.getString('itemname');
+    const stockQty = interaction.options.getInteger('stockqty');
+    const tokenPrice = interaction.options.getInteger('tokenprice') || 'N/A';
+    const artPrice = interaction.options.getInteger('artprice') || 'N/A';
+    const otherPrice = interaction.options.getInteger('otherprice') || 'N/A';
+    const tradesOpen = interaction.options.getBoolean('tradesopen') || false;
+    const userId = interaction.user.id;
 
-      if (typeof pointCost !== 'number' || isNaN(pointCost) || pointCost <= 0) {
-        return interaction.editReply(`❌ Item '${itemName}' is missing a valid vending point value (points field).`);
-      }
-      
-      const totalCost = stockQty * pointCost;
-  
-      if (vendingPoints < totalCost) {
-        return interaction.editReply(`⚠️ Not enough vending points. You need ${totalCost}, but only have ${vendingPoints}.`);
-      }
-  
-      await inventory.insertOne({
-        itemName,
-        stockQty,
-        costEach: pointCost,
-        pointsSpent: totalCost,
-        tokenPrice,
-        artPrice,
-        otherPrice,
-        tradesOpen,
-        stackable,
-        boughtFrom: character.currentVillage,
-        date: new Date()
-      });
-  
-      await Character.updateOne(
-        { name: characterName },
-        { $set: { vendingPoints: vendingPoints - totalCost } }
-      );
-      
-      try {
-        const spreadsheetId = extractSpreadsheetId(character.shopLink);
-        const auth = await authorizeSheets();
-        const currentMonth = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
-  
-        const row = [[
-          characterName, itemName, stockQty, pointCost, totalCost,
-          character.currentVillage, tokenPrice, artPrice, otherPrice,
-          tradesOpen ? 'Yes' : 'No', currentMonth
-        ]];
-  
-        await safeAppendDataToSheet(character.shopLink, character, 'vendingShop!A:K', row);
-      } catch (err) {
-        console.error('[handleRestock]: Sheet logging failed', err);
-      }
-  
-      const embed = new EmbedBuilder()
-        .setTitle(`✅ Restock Successful`)
-        .setDescription(`${characterName} has restocked \`${itemName} x${stockQty}\`.`)
-        .addFields(
-          { name: 'Points Used', value: `${totalCost}`, inline: true },
-          { name: 'Slots Used', value: `${slotsRequired}`, inline: true },
-          { name: 'Remaining Points', value: `${vendingPoints - totalCost}`, inline: true }
-        )
-        .setColor('#25C059')
-        .setTimestamp();
-  
-      await interaction.editReply({ embeds: [embed] });
-  
-    } catch (error) {
-      console.error('[handleRestock]: Error', error);
-      await interaction.editReply({ content: `❌ ${error.message}`, ephemeral: true });
+    const baseSlotLimits = { shopkeeper: 5, merchant: 3 };
+    const pouchCapacities = { none: 0, bronze: 15, silver: 30, gold: 50 };
+
+    const character = await fetchCharacterByName(characterName);
+    if (!character || character.userId !== userId) {
+      return interaction.editReply("❌ Character not found or doesn't belong to you.");
     }
+
+    const baseSlots = baseSlotLimits[character.job?.toLowerCase()] || 0;
+    const extraSlots = pouchCapacities[character.shopPouch?.toLowerCase()] || 0;
+    const totalSlots = baseSlots + extraSlots;
+
+    const db = await connectToInventoriesNative(); // ✅ Use correct native DB instance
+    const inventory = db.collection(characterName.toLowerCase());
+    const existingItems = await inventory.find({}).toArray();
+
+    const currentMonth = new Date().getMonth() + 1;
+    const currentVillage = character.currentVillage;
+
+    const stockCollection = db.collection("vending_stock");
+    const stockDoc = await stockCollection.findOne({ month: currentMonth });
+
+    if (!stockDoc) {
+      return interaction.editReply(`❌ No vending stock found for month ${currentMonth}.`);
+    }
+
+    const villageStock = stockDoc.stockList?.[currentVillage] || [];
+    const itemDoc = villageStock.find(i => i.itemName === itemName);
+
+    if (!itemDoc || typeof itemDoc.points !== "number" || itemDoc.points <= 0) {
+      return interaction.editReply(`❌ Item '${itemName}' is missing a valid vending point value in the vending stock.`);
+    }
+
+    const stackable = !itemDoc.crafting;
+    const slotsUsed = existingItems.reduce((acc, item) => {
+      return acc + (item.stackable ? Math.ceil(item.stockQty / 10) : item.stockQty);
+    }, 0);
+    const slotsRequired = stackable ? Math.ceil(stockQty / 10) : stockQty;
+
+    if (slotsUsed + slotsRequired > totalSlots) {
+      const reason = stackable
+        ? `Stackable item (1 slot per 10 units)`
+        : `Crafting item (1 slot per unit)`;
+      return interaction.editReply(
+        `⚠️ Not enough space.\n` +
+        `**${characterName}** has **${totalSlots} slots** (${slotsUsed} used).\n` +
+        `Adding \`${itemName}\` would need \`${slotsRequired}\`.\n\n${reason}`
+      );
+    }
+
+    const vendingPoints = character.vendingPoints || 0;
+    const pointCost = itemDoc.points;
+
+    const totalCost = stockQty * pointCost;
+
+    if (vendingPoints < totalCost) {
+      return interaction.editReply(`⚠️ Not enough vending points. You need ${totalCost}, but only have ${vendingPoints}.`);
+    }
+
+    await inventory.insertOne({
+      itemName,
+      stockQty,
+      costEach: pointCost,
+      pointsSpent: totalCost,
+      tokenPrice,
+      artPrice,
+      otherPrice,
+      tradesOpen,
+      stackable,
+      boughtFrom: character.currentVillage,
+      date: new Date()
+    });
+
+    await Character.updateOne(
+      { name: characterName },
+      { $set: { vendingPoints: vendingPoints - totalCost } }
+    );
+
+    try {
+      const spreadsheetId = extractSpreadsheetId(character.shopLink);
+      const auth = await authorizeSheets();
+      const monthLabel = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
+
+      const row = [[
+        characterName, itemName, stockQty, pointCost, totalCost,
+        character.currentVillage, tokenPrice, artPrice, otherPrice,
+        tradesOpen ? 'Yes' : 'No', monthLabel
+      ]];
+
+      await safeAppendDataToSheet(character.shopLink, character, 'vendingShop!A:K', row);
+    } catch (err) {
+      console.error('[handleRestock]: Sheet logging failed', err);
+    }
+
+    const embed = new EmbedBuilder()
+      .setTitle(`✅ Restock Successful`)
+      .setDescription(`${characterName} has restocked \`${itemName} x${stockQty}\`.`)
+      .addFields(
+        { name: 'Points Used', value: `${totalCost}`, inline: true },
+        { name: 'Slots Used', value: `${slotsRequired}`, inline: true },
+        { name: 'Remaining Points', value: `${vendingPoints - totalCost}`, inline: true }
+      )
+      .setColor('#25C059')
+      .setTimestamp();
+
+    await interaction.editReply({ embeds: [embed] });
+
+  } catch (error) {
+    console.error('[handleRestock]: Error', error);
+    await interaction.editReply({ content: `❌ ${error.message}`, ephemeral: true });
   }
+}
+
   
 // ------------------- handleBarter -------------------
 async function handleBarter(interaction) {
