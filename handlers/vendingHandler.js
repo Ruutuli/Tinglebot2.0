@@ -1057,7 +1057,6 @@ async function viewVendingStock(interaction) {
   }
 }
 
-
 // ------------------- handleVendingViewVillage -------------------
 async function handleVendingViewVillage(interaction, villageKey) {
   try {
@@ -1073,14 +1072,28 @@ async function handleVendingViewVillage(interaction, villageKey) {
     }
 
     const items = stockList[villageKey];
+
     const embed = new EmbedBuilder()
-      .setTitle(`🏘️ Vending Stock — ${villageKey[0].toUpperCase() + villageKey.slice(1)}`)
-      .setColor('#f4c542')
+      .setTitle(
+        villageKey === 'rudania'
+          ? `<:rudania:899492917452890142> Vending Stock — Rudania`
+          : `🏘️ Vending Stock — ${villageKey[0].toUpperCase() + villageKey.slice(1)}`
+      )
+      .setColor(
+        villageKey === 'rudania'
+          ? '#d93e3e' // Rudania red
+          : '#f4c542' // default yellow-gold
+      )
       .setDescription(
         items.map(i =>
           `${i.emoji || '📦'} **${i.itemName}**\n  > **Cost:** ${i.points} pts\n  > **Type:** ${i.vendingType}`
         ).join('\n\n') || '*No items found*'
       );
+
+    // Rudania only: add themed image
+    if (villageKey === 'rudania') {
+      embed.setImage('https://static.wixstatic.com/media/7573f4_a0d0d9c6b91644f3b67de8612a312e42~mv2.png/v1/fill/w_830,h_175,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/bottom%20border%20red.png');
+    }
 
     return interaction.update({
       embeds: [embed],
@@ -1094,7 +1107,6 @@ async function handleVendingViewVillage(interaction, villageKey) {
             .setStyle(ButtonStyle.Secondary)
         )
       ]
-      
     });
 
   } catch (err) {
@@ -1106,6 +1118,7 @@ async function handleVendingViewVillage(interaction, villageKey) {
     });
   }
 }
+
 
 
 // ============================================================================
