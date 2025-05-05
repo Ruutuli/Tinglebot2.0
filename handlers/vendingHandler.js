@@ -16,6 +16,7 @@ const {
 
 // ------------------- Database Models -------------------
 const { VendingRequest } = require('../models/VendingModel');
+const Character = require("../models/CharacterModel");
 
 // ------------------- Database Connections -------------------
 const {
