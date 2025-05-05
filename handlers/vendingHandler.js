@@ -178,20 +178,21 @@ async function handleRestock(interaction) {
       const totalSlots = baseSlots + extraSlots;
   
       const client = await connectToInventories();
-      const db = client.db('vending');
+      const db = client; 
       const inventory = db.collection(characterName.toLowerCase());
       const existingItems = await inventory.find({}).toArray();
-  
-      const itemDoc = await connectToItems().then(items => items.findOne({ itemName }));
+
+      const itemDoc = await ItemModel.findOne({ itemName });
       if (!itemDoc) {
-        return interaction.editReply(`❌ Item \`${itemName}\` not found in database.`);
+        return interaction.editReply(`❌ Item '${itemName}' not found in database.`);
       }
-  
+      
       const stackable = !itemDoc.crafting;
       const slotsUsed = existingItems.reduce((acc, item) => {
         return acc + (item.stackable ? Math.ceil(item.stockQty / 10) : item.stockQty);
       }, 0);
       const slotsRequired = stackable ? Math.ceil(stockQty / 10) : stockQty;
+      
   
       if (slotsUsed + slotsRequired > totalSlots) {
         const reason = stackable
@@ -513,7 +514,7 @@ function isValidUrl(str) {
   
       // Connect to the vending inventory database
       const client = await connectToVendingDatabase();
-      const db = client.db("vending");
+      const db = client; 
       const inventoryCollection = db.collection(characterName.toLowerCase());
   
       // Fetch all items in the character's vending inventory
@@ -877,7 +878,7 @@ async function handleEditShop(interaction) {
   
       // ------------------- Connect to Inventory DB -------------------
       const client = await connectToVendingDatabase();
-      const db = client.db('vending');
+      const db = client; 
       const inventory = db.collection(characterName.toLowerCase());
   
       const item = await inventory.findOne({ itemName });
