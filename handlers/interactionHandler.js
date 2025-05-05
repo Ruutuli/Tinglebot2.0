@@ -65,6 +65,29 @@ const handleInteraction = async (interaction, client) => {
   }
 };
 
+// ------------------- initializeReactionHandler -------------------
+// Set up global reaction collectors (non-interaction based, like emoji reacts)
+function initializeReactionHandler(client) {
+  client.on('messageReactionAdd', async (reaction, user) => {
+    try {
+      if (user.bot) return;
+
+      // Example: react-based role system (expand as needed)
+      if (reaction.message.partial) await reaction.message.fetch();
+      if (reaction.partial) await reaction.fetch();
+
+      console.log(`[reactionHandler]: ${user.username} reacted with ${reaction.emoji.name} on message ${reaction.message.id}`);
+
+      // You can route to specific logic here (e.g., match emoji/message/channel)
+    } catch (error) {
+      handleError(error, 'interactionHandler.js');
+      console.error('[reactionHandler]: ❌ Error in reaction listener', error);
+    }
+  });
+}
+
+
 module.exports = {
   handleInteraction,
+  initializeReactionHandler,
 };
