@@ -208,15 +208,10 @@ async function handleRestock(interaction) {
       const vendingPoints = character.vendingPoints || 0;
       const pointCost = itemDoc.points;
 
-      if (typeof pointCost !== 'number' || isNaN(pointCost)) {
-        return interaction.editReply(`❌ Item '${itemName}' is missing a vending point value (points field).`);
+      if (typeof pointCost !== 'number' || isNaN(pointCost) || pointCost <= 0) {
+        return interaction.editReply(`❌ Item '${itemName}' is missing a valid vending point value (points field).`);
       }
-
-    
-    if (pointCost === 0) {
-      return interaction.editReply(`❌ Item '${itemName}' is missing a vendingPointCost.`);
-    }
-    
+      
       const totalCost = stockQty * pointCost;
   
       if (vendingPoints < totalCost) {
