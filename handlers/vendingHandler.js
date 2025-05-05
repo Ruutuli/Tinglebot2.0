@@ -25,8 +25,7 @@ const {
   connectToItems,
   fetchCharacterByName,
   getInventoryByCharacter,
-  addItemInventoryDatabase,
-  getCurrentVendingStockList,
+  getCurrentVendingStockList, generateVendingStockList 
 } = require('../database/db');
 // ------------------- Utility Functions -------------------
 const {
@@ -106,19 +105,35 @@ async function handleCollectPoints(interaction) {
       lastPointClaim: now
     });
   
-    const embed = new EmbedBuilder()
-      .setTitle(`🪙 Vending Points Awarded`)
-      .setDescription(`${characterName} received **${pointsAwarded}** vending points.`)
-      .setFooter({ text: `Claimed: ${now.toLocaleDateString()}` });
-  
-    if (character.vendingSheetUrl) {
-      embed.addFields({
-        name: '📎 Shop Sheet',
-        value: `[View Sheet](${character.vendingSheetUrl})`
-      });
-    }
-  
-    return interaction.reply({ embeds: [embed], ephemeral: true });
+    // Build action rows with a button per village
+const villageButtons = Object.keys(stockList).map(village =>
+  new ButtonBuilder()
+    .setCustomId(`vending_view_${village.toLowerCase()}`)
+    .setLabel(`🏘️ ${village}`)
+    .setStyle(ButtonStyle.Primary)
+);
+
+const limitedButton = new ButtonBuilder()
+  .setCustomId(`vending_view_limited`)
+  .setLabel('🎁 Limited Items')
+  .setStyle(ButtonStyle.Secondary);
+
+const buttonRows = [];
+for (let i = 0; i < villageButtons.length; i += 5) {
+  buttonRows.push(new ActionRowBuilder().addComponents(villageButtons.slice(i, i + 5)));
+}
+buttonRows.push(new ActionRowBuilder().addComponents(limitedButton));
+
+// Build new embed
+const embed = new EmbedBuilder()
+  .setTitle(`📊 Vending Stock — ${monthName}`)
+  .setDescription(`Click a button below to view stock for a specific village.\nLimited items are also available.`)
+  .setColor('#88cc88');
+
+return interaction.editReply({
+  embeds: [embed],
+  components: buttonRows
+});
   }
   
 // ------------------- handleRestock -------------------
@@ -960,17 +975,26 @@ async function viewVendingStock(interaction) {
     const now = new Date();
     const monthName = now.toLocaleString('default', { month: 'long' });
 
-    const { stockList } = await getCurrentVendingStockList();
+    // First attempt
+    let result = await getCurrentVendingStockList();
 
-    console.log(`📦 Pulled vending stock from tinglebot.vending_stock`);
-    console.dir(stockList, { depth: null });
+    // Auto-generate if missing
+    if (!result || !result.stockList || Object.keys(result.stockList).length === 0) {
+      console.warn(`[viewVendingStock]⚠️ No vending stock for ${monthName} — generating now...`);
+      await generateVendingStockList(); // 🔁 Trigger generation
 
-    if (!stockList || Object.keys(stockList).length === 0) {
+      // Retry fetch
+      result = await getCurrentVendingStockList();
+    }
+
+    if (!result || !result.stockList || Object.keys(result.stockList).length === 0) {
       return interaction.editReply({
-        content: `📭 No vending stock found for **${monthName}**.`,
+        content: `📭 No vending stock available for **${monthName}**, even after regeneration.`,
         ephemeral: true
       });
     }
+
+    const { stockList } = result;
 
     const embed = new EmbedBuilder()
       .setTitle(`📊 Vending Stock — ${monthName}`)
@@ -996,6 +1020,7 @@ async function viewVendingStock(interaction) {
     });
   }
 }
+
 
 // ============================================================================
 // ------------------- Helper Functions (Private) -------------------
