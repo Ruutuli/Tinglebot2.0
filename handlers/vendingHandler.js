@@ -110,7 +110,7 @@ async function handleCollectPoints(interaction) {
     const currentYear = now.getFullYear();
   
 // ------------------- Claim Check -------------------
-if (character.lastCollectedMonth === currentMonth) {
+if (character.lastCollectedMonth === currentMonth + 1) {
   return interaction.reply({
     content: `⚠️ ${characterName} has already claimed vending points this month.`,
     ephemeral: true
