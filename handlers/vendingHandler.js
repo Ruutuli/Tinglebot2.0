@@ -1043,13 +1043,13 @@ async function handleVendingViewVillage(interaction, villageKey) {
       .setColor('#f4c542')
       .setDescription(
         items.map(i =>
-          `• ${i.emoji || '📦'} **${i.itemName}** — (${i.points} pts, ${i.vendingType})`
-        ).join('\n') || '*No items found*'
+          `${i.emoji || '📦'} **${i.itemName}**\n  > **Cost:** ${i.points} pts\n  > **Type:** ${i.vendingType}`
+        ).join('\n\n') || '*No items found*'
       );
 
     return interaction.update({
       embeds: [embed],
-      components: interaction.message.components // ✅ preserves village buttons
+      components: interaction.message.components
     });
 
   } catch (err) {
@@ -1061,7 +1061,6 @@ async function handleVendingViewVillage(interaction, villageKey) {
     });
   }
 }
-
 
 // ============================================================================
 // ------------------- Helper Functions (Private) -------------------
