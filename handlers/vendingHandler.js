@@ -177,12 +177,12 @@ async function handleRestock(interaction) {
     const extraSlots = pouchCapacities[character.shopPouch?.toLowerCase()] || 0;
     const totalSlots = baseSlots + extraSlots;
 
-    const db = await connectToInventoriesNative(); // ✅ Use correct native DB instance
+    const db = await connectToInventoriesNative();
     const inventory = db.collection(characterName.toLowerCase());
     const existingItems = await inventory.find({}).toArray();
-
-    const currentMonth = new Date().getMonth() + 1;
+    const currentMonth = new Date().getMonth() + 1; // ✅ Move this up immediately
     const currentVillage = character.currentVillage;
+
 
     const stockCollection = db.collection("vending_stock");
     const stockDoc = await stockCollection.findOne({ month: currentMonth });
