@@ -1062,8 +1062,9 @@ async function handleVendingViewVillage(interaction, villageKey) {
   try {
     const result = await getCurrentVendingStockList();
     const stockList = result?.stockList || {};
+    const limitedItems = result?.limitedItems || [];
 
-    if (!stockList[villageKey]) {
+    if (!stockList[villageKey] && villageKey !== 'limited') {
       return interaction.update({
         content: `❌ No vending stock found for **${villageKey}**.`,
         embeds: [],
@@ -1071,28 +1072,57 @@ async function handleVendingViewVillage(interaction, villageKey) {
       });
     }
 
-    const items = stockList[villageKey];
+    // ----- Determine per-village settings -----
+    const villageSettings = {
+      rudania: {
+        emoji: '<:rudania:899492917452890142>',
+        color: '#d93e3e',
+        image: 'https://static.wixstatic.com/media/7573f4_a0d0d9c6b91644f3b67de8612a312e42~mv2.png/v1/fill/w_830,h_175,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/bottom%20border%20red.png'
+      },
+      inariko: {
+        emoji: '<:inariko:899493009073274920>',
+        color: '#3e7ed9',
+        image: 'https://static.wixstatic.com/media/7573f4_c88757c19bf244aa9418254c43046978~mv2.png/v1/fill/w_830,h_175,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/bottom%20border%20blue.png'
+      },
+      vhintl: {
+        emoji: '<:vhintl:899492879205007450>',
+        color: '#3ed96a',
+        image: 'https://static.wixstatic.com/media/7573f4_968160b5206e4d9aa1b254464d97f9a9~mv2.png/v1/fill/w_830,h_175,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/bottom%20border%20GREEN.png'
+      },
+      limited: {
+        emoji: '🎁',
+        color: '#00d6d6',
+        image: 'https://storage.googleapis.com/tinglebot/Graphics/%5BRotW%5D%20border_cyan_bottom.png'
+      }
+    };
+
+    const settings = villageSettings[villageKey] || {
+      emoji: '🏘️',
+      color: '#f4c542',
+      image: null
+    };
 
     const embed = new EmbedBuilder()
-      .setTitle(
-        villageKey === 'rudania'
-          ? `<:rudania:899492917452890142> Vending Stock — Rudania`
-          : `🏘️ Vending Stock — ${villageKey[0].toUpperCase() + villageKey.slice(1)}`
-      )
-      .setColor(
-        villageKey === 'rudania'
-          ? '#d93e3e' // Rudania red
-          : '#f4c542' // default yellow-gold
-      )
-      .setDescription(
+      .setTitle(`${settings.emoji} Vending Stock — ${villageKey[0].toUpperCase() + villageKey.slice(1)}`)
+      .setColor(settings.color);
+
+    if (villageKey === 'limited') {
+      embed.setDescription(
+        limitedItems.map(i =>
+          `${i.emoji || '📦'} **${i.itemName}**\n  > **Cost:** ${i.points} pts\n  > **Stock:** x${i.stock ?? '?'}`
+        ).join('\n\n') || '*No limited items available*'
+      );
+    } else {
+      const items = stockList[villageKey];
+      embed.setDescription(
         items.map(i =>
           `${i.emoji || '📦'} **${i.itemName}**\n  > **Cost:** ${i.points} pts\n  > **Type:** ${i.vendingType}`
         ).join('\n\n') || '*No items found*'
       );
+    }
 
-    // Rudania only: add themed image
-    if (villageKey === 'rudania') {
-      embed.setImage('https://static.wixstatic.com/media/7573f4_a0d0d9c6b91644f3b67de8612a312e42~mv2.png/v1/fill/w_830,h_175,al_c,q_85,usm_0.66_1.00_0.01,enc_avif,quality_auto/bottom%20border%20red.png');
+    if (settings.image) {
+      embed.setImage(settings.image);
     }
 
     return interaction.update({
@@ -1105,6 +1135,7 @@ async function handleVendingViewVillage(interaction, villageKey) {
             .setLabel('Limited Items')
             .setEmoji('🎁')
             .setStyle(ButtonStyle.Secondary)
+            .setDisabled(villageKey === 'limited')
         )
       ]
     });
@@ -1118,8 +1149,6 @@ async function handleVendingViewVillage(interaction, villageKey) {
     });
   }
 }
-
-
 
 // ============================================================================
 // ------------------- Helper Functions (Private) -------------------
