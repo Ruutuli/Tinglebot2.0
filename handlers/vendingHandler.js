@@ -25,7 +25,8 @@ const {
   connectToItems,
   fetchCharacterByName,
   getInventoryByCharacter,
-  addItemInventoryDatabase
+  addItemInventoryDatabase,
+  getCurrentVendingStockList,
 } = require('../database/db');
 // ------------------- Utility Functions -------------------
 const {
@@ -955,69 +956,45 @@ async function handleShopLink(interaction) {
 async function viewVendingStock(interaction) {
   await interaction.deferReply({ ephemeral: true });
 
-  const db = await connectToInventoriesNative();
-  const collections = await db.collections();
+  try {
+    const now = new Date();
+    const monthName = now.toLocaleString('default', { month: 'long' });
 
-  const all = [];
+    const { stockList } = await getCurrentVendingStockList();
 
-  for (const collection of collections) {
-    console.log(`📂 Scanning collection: ${collection.collectionName}`);
-    const entries = await collection.find({}).toArray();
-    console.log(`📄 Found ${entries.length} entries in ${collection.collectionName}`);
+    console.log(`📦 Pulled vending stock from tinglebot.vending_stock`);
+    console.dir(stockList, { depth: null });
 
-    for (const entry of entries) {
-      if (entry?.date) {
-        all.push(entry);
-      }
+    if (!stockList || Object.keys(stockList).length === 0) {
+      return interaction.editReply({
+        content: `📭 No vending stock found for **${monthName}**.`,
+        ephemeral: true
+      });
     }
-  }
 
-  console.log(`📦 Total dated entries: ${all.length}`);
+    const embed = new EmbedBuilder()
+      .setTitle(`📊 Vending Stock — ${monthName}`)
+      .setDescription(`Grouped by village, showing available vending stock.`)
+      .setColor('#AA926A');
 
-  const now = new Date();
-  const month = now.toLocaleString('default', { month: 'long' });
+    for (const [village, items] of Object.entries(stockList)) {
+      const summary = items
+        .map(i => `- ${i.characterName || '???'}: ${i.itemName || '???'} x${i.stockQty || '?'}`)
+        .slice(0, 10)
+        .join('\n');
 
-  const matches = all.filter(entry => {
-    const entryDate = new Date(entry.date);
-    return entryDate.getMonth() === now.getMonth() &&
-           entryDate.getFullYear() === now.getFullYear();
-  });
+      embed.addFields({ name: `🏘️ ${village}`, value: summary || '—', inline: false });
+    }
 
-  console.log(`✅ Matches for ${month}: ${matches.length}`);
-  if (matches.length > 0) {
-    console.dir(matches.slice(0, 5), { depth: null });
-  }
+    return interaction.editReply({ embeds: [embed] });
 
-  if (!matches.length) {
-    return interaction.reply({
-      content: `📭 No vending stock found for **${month}**.`,
+  } catch (err) {
+    console.error('[viewVendingStock]: Error loading vending_stock:', err);
+    return interaction.editReply({
+      content: `❌ An error occurred while retrieving vending stock.`,
       ephemeral: true
     });
   }
-
-  const grouped = {};
-  for (const entry of matches) {
-    const village = entry.village || 'Unknown';
-    if (!grouped[village]) grouped[village] = [];
-    grouped[village].push(entry);
-  }
-
-  console.log(`🏘️ Grouped villages: ${Object.keys(grouped).join(', ')}`);
-
-  const embed = new EmbedBuilder()
-    .setTitle(`📊 Vending Stock — ${month}`)
-    .setDescription(`Grouped by village, showing recent stock activity.`);
-
-  for (const [village, items] of Object.entries(grouped)) {
-    const summary = items
-      .slice(0, 10)
-      .map(i => `- ${i.characterName || '???'}: ${i.itemName || '???'} x${i.stockQty || '?'}`)
-      .join('\n');
-
-    embed.addFields({ name: `🏘️ ${village}`, value: summary, inline: false });
-  }
-
-  return interaction.editReply({ embeds: [embed] });
 }
 
 // ============================================================================
