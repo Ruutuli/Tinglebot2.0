@@ -418,12 +418,50 @@ async function handleJobPage(interaction, characterId, pageIndexString) {
     }
 }
 
+// ------------------- Vending View Button Handler -------------------
+const { getCurrentVendingStockList } = require('../database/db');
+
+async function handleVendingViewVillage(interaction, villageKey) {
+  await interaction.deferReply({ ephemeral: true });
+
+  try {
+    const result = await getCurrentVendingStockList();
+    const stockList = result?.stockList || {};
+
+    if (!stockList[villageKey]) {
+      return interaction.editReply({
+        content: `❌ No vending stock found for **${villageKey}**.`,
+        ephemeral: true
+      });
+    }
+
+    const items = stockList[villageKey];
+    const embed = new EmbedBuilder()
+      .setTitle(`🏘️ Vending Stock — ${villageKey[0].toUpperCase() + villageKey.slice(1)}`)
+      .setColor('#f4c542')
+      .setDescription(
+        items.map(i =>
+          `• ${i.itemIcon || '📦'} **${i.itemName}** — x${i.stockQty ?? '?'} (${i.points} pts)`
+        ).join('\n') || '*No items found*'
+      );
+
+    return interaction.editReply({ embeds: [embed] });
+  } catch (err) {
+    console.error(`[handleVendingViewVillage]: ${err.message}`);
+    return interaction.editReply({
+      content: `❌ Failed to load vending data.`,
+      ephemeral: true
+    });
+  }
+}
+
+
 
 // =============================================================================
 // ------------------- Component Interaction Handler -------------------
 // Delegates interactions to the appropriate handlers based on the customId.
 async function handleComponentInteraction(interaction) {
-    const [action] = interaction.customId.split('|');
+    const [action, param] = interaction.customId.split('|');
 
     if (
         ['sync-yes', 'sync-no', 'confirm', 'cancel', 'view', 'job-select', 'job-page'].includes(action)
@@ -439,6 +477,8 @@ async function handleComponentInteraction(interaction) {
         await handleTraitPaymentInteraction(interaction);
     } else if (action === 'trait-select') {
         await handleTraitSelection(interaction);
+    } else if (action === 'vending_view') {
+        await handleVendingViewVillage(interaction, param);
     } else if (action === 'register-mount') {
         await handleRegisterMountModal(interaction);
     } else if (interaction.isModalSubmit()) {
@@ -457,4 +497,6 @@ module.exports = {
     handleButtonInteraction,
     getCancelButtonRow,
     getConfirmButtonRow,
+    handleVendingViewVillage,
+
 };

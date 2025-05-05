@@ -105,35 +105,19 @@ async function handleCollectPoints(interaction) {
       lastPointClaim: now
     });
   
-    // Build action rows with a button per village
-const villageButtons = Object.keys(stockList).map(village =>
-  new ButtonBuilder()
-    .setCustomId(`vending_view_${village.toLowerCase()}`)
-    .setLabel(`🏘️ ${village}`)
-    .setStyle(ButtonStyle.Primary)
-);
-
-const limitedButton = new ButtonBuilder()
-  .setCustomId(`vending_view_limited`)
-  .setLabel('🎁 Limited Items')
-  .setStyle(ButtonStyle.Secondary);
-
-const buttonRows = [];
-for (let i = 0; i < villageButtons.length; i += 5) {
-  buttonRows.push(new ActionRowBuilder().addComponents(villageButtons.slice(i, i + 5)));
-}
-buttonRows.push(new ActionRowBuilder().addComponents(limitedButton));
-
-// Build new embed
-const embed = new EmbedBuilder()
-  .setTitle(`📊 Vending Stock — ${monthName}`)
-  .setDescription(`Click a button below to view stock for a specific village.\nLimited items are also available.`)
-  .setColor('#88cc88');
-
-return interaction.editReply({
-  embeds: [embed],
-  components: buttonRows
-});
+    const embed = new EmbedBuilder()
+      .setTitle(`🪙 Vending Points Awarded`)
+      .setDescription(`${characterName} received **${pointsAwarded}** vending points.`)
+      .setFooter({ text: `Claimed: ${now.toLocaleDateString()}` });
+  
+    if (character.vendingSheetUrl) {
+      embed.addFields({
+        name: '📎 Shop Sheet',
+        value: `[View Sheet](${character.vendingSheetUrl})`
+      });
+    }
+  
+    return interaction.reply({ embeds: [embed], ephemeral: true });
   }
   
 // ------------------- handleRestock -------------------
@@ -997,20 +981,38 @@ async function viewVendingStock(interaction) {
     const { stockList } = result;
 
     const embed = new EmbedBuilder()
-      .setTitle(`📊 Vending Stock — ${monthName}`)
-      .setDescription(`Grouped by village, showing available vending stock.`)
-      .setColor('#AA926A');
+  .setTitle(`📊 Vending Stock — ${monthName}`)
+  .setDescription(`Click a button below to view vending stock by village or see limited items.`)
+  .setColor('#88cc88');
 
-    for (const [village, items] of Object.entries(stockList)) {
-      const summary = items
-        .map(i => `- ${i.characterName || '???'}: ${i.itemName || '???'} x${i.stockQty || '?'}`)
-        .slice(0, 10)
-        .join('\n');
+// Create buttons for each village
+const villageButtons = Object.keys(stockList).map(village =>
+  new ButtonBuilder()
+    .setCustomId(`vending_view_${village.toLowerCase()}`)
+    .setLabel(`🏘️ ${village}`)
+    .setStyle(ButtonStyle.Primary)
+);
 
-      embed.addFields({ name: `🏘️ ${village}`, value: summary || '—', inline: false });
-    }
+// Add limited items button
+const limitedButton = new ButtonBuilder()
+  .setCustomId(`vending_view_limited`)
+  .setLabel('🎁 Limited Items')
+  .setStyle(ButtonStyle.Secondary);
 
-    return interaction.editReply({ embeds: [embed] });
+// Group buttons into rows (max 5 per row)
+const buttonRows = [];
+for (let i = 0; i < villageButtons.length; i += 5) {
+  buttonRows.push(new ActionRowBuilder().addComponents(villageButtons.slice(i, i + 5)));
+}
+
+// Put the limited button in its own row
+buttonRows.push(new ActionRowBuilder().addComponents(limitedButton));
+
+// ✅ Send embed + buttons
+await interaction.editReply({
+  embeds: [embed],
+  components: buttonRows
+});
 
   } catch (err) {
     console.error('[viewVendingStock]: Error loading vending_stock:', err);
