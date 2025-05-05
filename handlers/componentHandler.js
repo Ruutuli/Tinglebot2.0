@@ -28,6 +28,7 @@ const { getGeneralJobsPage, getJobPerk } = require('../modules/jobsModule');
 const { getVillageColorByName } = require('../modules/locationsModule');
 const { roles } = require('../modules/rolesModule');
 const { getCurrentVendingStockList } = require('../database/db');
+const { handleVendingViewVillage } = require('./vendingHandler');
 
 // ------------------- Handler Imports -------------------
 // Handlers for specific component interactions and modals.
@@ -418,45 +419,6 @@ async function handleJobPage(interaction, characterId, pageIndexString) {
         });
     }
 }
-
-// ------------------- Vending View Button Handler -------------------
-
-
-async function handleVendingViewVillage(interaction, villageKey) {
-  await interaction.deferReply({ ephemeral: true });
-
-  try {
-    const result = await getCurrentVendingStockList();
-    const stockList = result?.stockList || {};
-
-    if (!stockList[villageKey]) {
-      return interaction.editReply({
-        content: `❌ No vending stock found for **${villageKey}**.`,
-        ephemeral: true
-      });
-    }
-
-    const items = stockList[villageKey];
-    const embed = new EmbedBuilder()
-      .setTitle(`🏘️ Vending Stock — ${villageKey[0].toUpperCase() + villageKey.slice(1)}`)
-      .setColor('#f4c542')
-      .setDescription(
-        items.map(i =>
-          `• ${i.itemIcon || '📦'} **${i.itemName}** — x${i.stockQty ?? '?'} (${i.points} pts)`
-        ).join('\n') || '*No items found*'
-      );
-
-    return interaction.editReply({ embeds: [embed] });
-  } catch (err) {
-    console.error(`[handleVendingViewVillage]: ${err.message}`);
-    return interaction.editReply({
-      content: `❌ Failed to load vending data.`,
-      ephemeral: true
-    });
-  }
-}
-
-
 
 // =============================================================================
 // ------------------- Component Interaction Handler -------------------
