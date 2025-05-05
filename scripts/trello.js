@@ -39,7 +39,16 @@ function similarity(a, b) {
 // ------------------- Fetch All Trello Labels for the Board -------------------
 // Safely retrieves label data for the current Trello board.
 // ============================================================================
+let lastLabelFetchError = 0;
+
 async function fetchLabels() {
+  const now = Date.now();
+
+  if (now - lastLabelFetchError < 5 * 60 * 1000) {
+    console.warn("[trello.js]: ⚠️ Skipping label fetch due to recent Trello 503");
+    return [];
+  }
+
   try {
     if (!TRELLO_BOARD_ID) {
       throw new Error("❌ Missing TRELLO_BOARD_ID in environment variables.");
@@ -55,13 +64,17 @@ async function fetchLabels() {
     return response.data;
 
   } catch (error) {
+    lastLabelFetchError = Date.now(); // 🕒 Record the failure time
+
     const context = {
       options: { TRELLO_BOARD_ID },
       commandName: "fetchLabels"
     };
+
     handleError(error, "trello.js", context);
     console.error("[trello.js]: ❌ Failed to fetch labels from Trello API", error.message);
-    return []; // Return safe fallback
+
+    return [];
   }
 }
 
