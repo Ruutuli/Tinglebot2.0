@@ -393,12 +393,13 @@ async function validateInventorySheet(spreadsheetUrl, characterName) {
         );
       });
       
-      if (!hasAtLeastOneItem) {
+      if (!hasAtLeastOneItem && spreadsheetUrl.includes("loggedInventory")) {
         return {
           success: false,
           message: `No inventory items found for character **${characterName}**.||Please make sure your inventory sheet contains at least one item entry for your character.`
         };
       }
+
       
   
       return { success: true, message: "✅ Inventory sheet is set up correctly!" };
