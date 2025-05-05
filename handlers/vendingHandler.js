@@ -879,6 +879,10 @@ async function handleVendingSync(interaction) {
     }
 
     if (!parsedRows.length) {
+      await updateCharacterById(character._id, {
+        vendingSync: true
+      });
+    
       return await interaction.editReply({
         content: `⚠️ No valid "Old Stock" entries found. Proceeding to sync with an empty inventory. This cannot be undone.`,
         ephemeral: true
