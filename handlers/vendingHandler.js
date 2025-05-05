@@ -45,6 +45,7 @@ const {
   readSheetData,
   writeSheetData,
   safeAppendDataToSheet,
+  
 } = require("../utils/googleSheetsUtils.js");
 
 const {
@@ -733,21 +734,6 @@ async function handleVendingSetup(interaction) {
           content: '❌ Unable to extract Spreadsheet ID from the provided link.',
           ephemeral: true
         });
-        return;
-      }
-  
-      const auth = await authorizeSheets();
-      const hasPermission = await checkEditorPermission(
-        auth,
-        spreadsheetId,
-        'tinglebot@rotw-tinglebot.iam.gserviceaccount.com'
-      );
-      if (!hasPermission) {
-        await sendPermissionErrorEmbed(
-          interaction,
-          'tinglebot@rotw-tinglebot.iam.gserviceaccount.com',
-          shopLink
-        );
         return;
       }
   
