@@ -49,6 +49,7 @@ const {
   saveVendingRequestToStorage,
   retrieveAllVendingRequests
 } = require('../utils/storage.js');
+const { handleError } = require('../utils/globalErrorHandler.js');
 
 // ============================================================================
 // ------------------- Handler Functions (Exported) -------------------
