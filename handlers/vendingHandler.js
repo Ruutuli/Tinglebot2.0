@@ -271,7 +271,7 @@ if (!stockDoc) {
         tradesOpen ? 'Yes' : 'No', monthLabel
       ]];
 
-      await safeAppendDataToSheet(character.shopLink, character, 'vendingShop!A:K', row);
+      await safeAppendDataToSheet(character.shopLink, character, 'vendingShop!A:K', row, interaction.client);
     } catch (err) {
       console.error('[handleRestock]: Sheet logging failed', err);
     }
