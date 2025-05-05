@@ -45,6 +45,7 @@ const {
   readSheetData,
   writeSheetData,
   safeAppendDataToSheet,
+  fetchSheetData,
 } = require("../utils/googleSheetsUtils.js");
 
 const {
