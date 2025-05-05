@@ -15,7 +15,7 @@ const {
 } = require('discord.js');
 
 // ------------------- Database Models -------------------
-const { VendingRequest } = require('../../models/VendingModel');
+const { VendingRequest } = require('../models/VendingModel');
 
 // ------------------- Database Connections -------------------
 const {
@@ -24,7 +24,7 @@ const {
   fetchCharacterByName,
   getInventoryByCharacter,
   addItemInventoryDatabase
-} = require('../../db');
+} = require('../database/db');
 // ------------------- Utility Functions -------------------
 const {
   appendSheetData,
@@ -35,18 +35,18 @@ const {
   readSheetData,
   writeSheetData,
   safeAppendDataToSheet,
-} = require("../../utils/googleSheetsUtils.js");
+} = require("../utils/googleSheetsUtils.js");
 
 const {
   addItemToVendingInventory,
-} = require("../../utils/inventoryUtils.js");
+} = require("../utils/inventoryUtils.js");
 
 const {
   retrieveVendingRequestFromStorage,
   deleteVendingRequestFromStorage,
   saveVendingRequestToStorage,
   retrieveAllVendingRequests
-} = require('../../utils/storage.js');
+} = require('../utils/storage.js');
 
 // ============================================================================
 // ------------------- Handler Functions (Exported) -------------------
