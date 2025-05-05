@@ -189,11 +189,14 @@ const currentVillage = character.currentVillage;
 
 console.log(`[Debug] Looking for vending stock with month: ${currentMonth} (type: ${typeof currentMonth})`);
 
-const stockCollection = db.collection("vendingStock");
+// Ensure connection to the correct database
+const client = new MongoClient(process.env.MONGODB_INVENTORIES_URI, {});
+await client.connect();
+const correctDb = client.db("tinglebot"); // ✅ Explicit DB
 
-// Add logging to inspect what’s in the DB
+const stockCollection = correctDb.collection("vending_stock"); // ✅ Correct collection name
 const debugAllDocs = await stockCollection.find({}).toArray();
-console.log(`[Debug] All vendingStock docs:`, debugAllDocs.map(doc => doc.month));
+console.log(`[Debug] All vending_stock docs (by month):`, debugAllDocs.map(doc => doc.month));
 
 const stockDoc = await stockCollection.findOne({ month: currentMonth });
 
@@ -201,6 +204,7 @@ if (!stockDoc) {
   console.warn(`[Restock Debug] No stockDoc found for month ${currentMonth}. Check DB entries.`);
   return interaction.editReply(`❌ No vending stock found for month ${currentMonth}.`);
 }
+
 
 
 
