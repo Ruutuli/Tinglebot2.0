@@ -63,7 +63,7 @@ const {
   capitalizeFirstLetter
  } = require("../modules/formattingModule");
 
- const { createVendingSetupEmbed } = require("../embeds");
+ const { createVendingSetupEmbed } = require("../embeds/embeds");
 
 
 // ------------------- Constants -------------------
@@ -133,7 +133,7 @@ async function handleCollectPoints(interaction) {
     }
 
     // ------------------- Setup Validation -------------------
-    if (!character.vendingSetup || !character.vendingSync || !character.vendingSheetUrl) {
+    if (!character.vendingSetup || !character.vendingSync || !character.shopLink) {
       return interaction.reply({
         content: `❌ You must complete vending setup before collecting points. Please run \`/vending setup\` first.`,
         ephemeral: true
