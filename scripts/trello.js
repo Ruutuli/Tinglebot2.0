@@ -37,47 +37,52 @@ function similarity(a, b) {
 
 // ============================================================================
 // ------------------- Fetch All Trello Labels for the Board -------------------
-// Safely retrieves label data for the current Trello board.
+// Implements exponential backoff with jitter for resilient label fetching.
 // ============================================================================
-let lastLabelFetchError = 0;
+const MAX_RETRIES = 5;
+const BASE_DELAY_MS = 500;
 
 async function fetchLabels() {
-  const now = Date.now();
-
-  if (now - lastLabelFetchError < 5 * 60 * 1000) {
-    console.warn("[trello.js]: ⚠️ Skipping label fetch due to recent Trello 503");
+  if (!TRELLO_BOARD_ID) {
+    console.error("[trello.js]: ❌ Missing TRELLO_BOARD_ID in environment variables.");
     return [];
   }
 
-  try {
-    if (!TRELLO_BOARD_ID) {
-      throw new Error("❌ Missing TRELLO_BOARD_ID in environment variables.");
-    }
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const response = await axios.get(`https://api.trello.com/1/boards/${TRELLO_BOARD_ID}/labels`, {
+        params: {
+          key: TRELLO_API_KEY,
+          token: TRELLO_TOKEN
+        }
+      });
 
-    const response = await axios.get(`https://api.trello.com/1/boards/${TRELLO_BOARD_ID}/labels`, {
-      params: {
-        key: TRELLO_API_KEY,
-        token: TRELLO_TOKEN
+      return response.data;
+
+    } catch (error) {
+      const status = error.response?.status;
+
+      if (status === 503 || status === 429) {
+        const delay = BASE_DELAY_MS * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 100);
+        console.warn(`[trello.js]: ⚠️ Attempt ${attempt} failed with status ${status}. Retrying in ${delay}ms...`);
+        await new Promise(res => setTimeout(res, delay));
+        continue;
       }
-    });
 
-    return response.data;
+      const context = {
+        options: { TRELLO_BOARD_ID },
+        commandName: "fetchLabels"
+      };
 
-  } catch (error) {
-    lastLabelFetchError = Date.now(); // 🕒 Record the failure time
-
-    const context = {
-      options: { TRELLO_BOARD_ID },
-      commandName: "fetchLabels"
-    };
-
-    handleError(error, "trello.js", context);
-    console.error("[trello.js]: ❌ Failed to fetch labels from Trello API", error.message);
-
-    return [];
+      handleError(error, "trello.js", context);
+      console.error("[trello.js]: ❌ Failed to fetch labels from Trello API", error.message);
+      return [];
+    }
   }
-}
 
+  console.error("[trello.js]: ❌ All retry attempts failed. Returning empty label list.");
+  return [];
+}
 
 // ============================================================================
 // ------------------- Create a Trello Card -------------------
