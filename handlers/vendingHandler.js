@@ -953,6 +953,8 @@ async function handleShopLink(interaction) {
   
 // ------------------- viewVendingStock -------------------
 async function viewVendingStock(interaction) {
+  await interaction.deferReply({ ephemeral: true }); // ✅ PREVENT interaction timeout
+
   const db = await connectToInventoriesNative(); // ✅ Returns db directly
   const collections = await db.collections();
 
@@ -1003,7 +1005,8 @@ async function viewVendingStock(interaction) {
     embed.addFields({ name: `🏘️ ${village}`, value: summary, inline: false });
   }
 
-  return interaction.reply({ embeds: [embed], ephemeral: true });
+  return interaction.editReply({ embeds: [embed] });
+
 }
 
 
