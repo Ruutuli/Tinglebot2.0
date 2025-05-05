@@ -951,6 +951,37 @@ async function handleShopLink(interaction) {
     }
   }
   
+// ------------------- generateVillageButtonRow -------------------
+
+const villageEmojis = {
+  rudania: '<:rudania:899492917452890142>',
+  inariko: '<:inariko:899493009073274920>',
+  vhintl: '<:vhintl:899492879205007450>',
+};
+
+function generateVillageButtonRow(currentVillageKey = '') {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId('village_rudania')
+      .setLabel('Rudania')
+      .setEmoji({ id: '899492917452890142', name: 'rudania' })
+      .setStyle(currentVillageKey === 'rudania' ? ButtonStyle.Danger : ButtonStyle.Secondary), // 🔴 red
+
+    new ButtonBuilder()
+      .setCustomId('village_inariko')
+      .setLabel('Inariko')
+      .setEmoji({ id: '899493009073274920', name: 'inariko' })
+      .setStyle(currentVillageKey === 'inariko' ? ButtonStyle.Primary : ButtonStyle.Secondary), // 🔵 blue
+
+    new ButtonBuilder()
+      .setCustomId('village_vhintl')
+      .setLabel('Vhintl')
+      .setEmoji({ id: '899492879205007450', name: 'vhintl' })
+      .setStyle(currentVillageKey === 'vhintl' ? ButtonStyle.Success : ButtonStyle.Secondary)  // 🟢 green
+  );
+}
+
+
 // ------------------- viewVendingStock -------------------
 async function viewVendingStock(interaction) {
   await interaction.deferReply({ ephemeral: true });
@@ -1047,11 +1078,11 @@ async function handleVendingViewVillage(interaction, villageKey) {
         ).join('\n\n') || '*No items found*'
       );
 
-    return interaction.update({
-      embeds: [embed],
-      components: interaction.message.components
-    });
-
+      return interaction.update({
+        embeds: [embed],
+        components: [generateVillageButtonRow(villageKey)]
+      });
+      
   } catch (err) {
     console.error(`[handleVendingViewVillage]: ${err.message}`);
     return interaction.update({
