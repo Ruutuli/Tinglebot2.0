@@ -206,7 +206,14 @@ async function handleRestock(interaction) {
       }
   
       const vendingPoints = character.vendingPoints || 0;
-      const pointCost = itemDoc.vendingPointCost;
+      const pointCost = typeof itemDoc.vendingPointCost === "number" 
+      ? itemDoc.vendingPointCost 
+      : 0;
+    
+    if (pointCost === 0) {
+      return interaction.editReply(`❌ Item '${itemName}' is missing a vendingPointCost.`);
+    }
+    
       const totalCost = stockQty * pointCost;
   
       if (vendingPoints < totalCost) {
