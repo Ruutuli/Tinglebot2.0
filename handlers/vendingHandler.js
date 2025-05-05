@@ -478,32 +478,17 @@ async function handleViewShop(interaction) {
   
       // Fetch all items in the character's vending inventory
       const items = await inventoryCollection.find({}).toArray();
-      console.log(`[handleViewShop]: Raw inventory for ${characterName}:`, items);
-      
       if (!items || items.length === 0) {
         throw new Error(`No items found in ${characterName}'s shop.`);
       }
-      
   
       const itemDescriptionsArray = await Promise.all(
         items.map(async (item) => {
           const itemDetails = await ItemModel.findOne({ itemName: item.itemName });
           const emoji = itemDetails?.emoji || "🔹";
-      
-          console.log(`[handleViewShop]: Mapped item ->`, {
-            itemName: item.itemName,
-            stockQty: item.stockQty,
-            tokenPrice: item.tokenPrice,
-            artPrice: item.artPrice,
-            otherPrice: item.otherPrice,
-            tradesOpen: item.tradesOpen,
-            emoji
-          });
-      
           return `**${emoji} ${item.itemName}** - \`qty: ${item.stockQty}\`\n> **Token Price:** ${item.tokenPrice || "N/A"}\n> **Art Price:** ${item.artPrice || "N/A"}\n> **Other Price:** ${item.otherPrice || "N/A"}\n> **Trades Open:** ${item.tradesOpen ? "Yes" : "No"}`;
         })
       );
-      
   
       // Pagination setup
       const itemsPerPage = 4;
@@ -968,21 +953,26 @@ async function handleShopLink(interaction) {
   
 // ------------------- viewVendingStock -------------------
 async function viewVendingStock(interaction) {
-  await interaction.deferReply({ ephemeral: true }); // ✅ PREVENT interaction timeout
+  await interaction.deferReply({ ephemeral: true });
 
-  const db = await connectToInventoriesNative(); // ✅ Returns db directly
+  const db = await connectToInventoriesNative();
   const collections = await db.collections();
 
   const all = [];
 
   for (const collection of collections) {
+    console.log(`📂 Scanning collection: ${collection.collectionName}`);
     const entries = await collection.find({}).toArray();
+    console.log(`📄 Found ${entries.length} entries in ${collection.collectionName}`);
+
     for (const entry of entries) {
       if (entry?.date) {
         all.push(entry);
       }
     }
   }
+
+  console.log(`📦 Total dated entries: ${all.length}`);
 
   const now = new Date();
   const month = now.toLocaleString('default', { month: 'long' });
@@ -992,6 +982,11 @@ async function viewVendingStock(interaction) {
     return entryDate.getMonth() === now.getMonth() &&
            entryDate.getFullYear() === now.getFullYear();
   });
+
+  console.log(`✅ Matches for ${month}: ${matches.length}`);
+  if (matches.length > 0) {
+    console.dir(matches.slice(0, 5), { depth: null });
+  }
 
   if (!matches.length) {
     return interaction.reply({
@@ -1007,6 +1002,8 @@ async function viewVendingStock(interaction) {
     grouped[village].push(entry);
   }
 
+  console.log(`🏘️ Grouped villages: ${Object.keys(grouped).join(', ')}`);
+
   const embed = new EmbedBuilder()
     .setTitle(`📊 Vending Stock — ${month}`)
     .setDescription(`Grouped by village, showing recent stock activity.`);
@@ -1014,16 +1011,14 @@ async function viewVendingStock(interaction) {
   for (const [village, items] of Object.entries(grouped)) {
     const summary = items
       .slice(0, 10)
-      .map(i => `- ${i.characterName}: ${i.itemName} x${i.stockQty}`)
+      .map(i => `- ${i.characterName || '???'}: ${i.itemName || '???'} x${i.stockQty || '?'}`)
       .join('\n');
 
     embed.addFields({ name: `🏘️ ${village}`, value: summary, inline: false });
   }
 
   return interaction.editReply({ embeds: [embed] });
-
 }
-
 
 // ============================================================================
 // ------------------- Helper Functions (Private) -------------------
