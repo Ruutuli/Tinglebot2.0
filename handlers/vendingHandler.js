@@ -27,7 +27,9 @@ const {
   connectToItems,
   fetchCharacterByName,
   getInventoryByCharacter,
-  getCurrentVendingStockList, generateVendingStockList 
+  getCurrentVendingStockList, 
+  generateVendingStockList,
+  updateCharacterById,
 } = require('../database/db');
 // ------------------- Utility Functions -------------------
 const {
