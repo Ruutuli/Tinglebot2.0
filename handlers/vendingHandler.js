@@ -478,17 +478,32 @@ async function handleViewShop(interaction) {
   
       // Fetch all items in the character's vending inventory
       const items = await inventoryCollection.find({}).toArray();
+      console.log(`[handleViewShop]: Raw inventory for ${characterName}:`, items);
+      
       if (!items || items.length === 0) {
         throw new Error(`No items found in ${characterName}'s shop.`);
       }
+      
   
       const itemDescriptionsArray = await Promise.all(
         items.map(async (item) => {
           const itemDetails = await ItemModel.findOne({ itemName: item.itemName });
           const emoji = itemDetails?.emoji || "🔹";
+      
+          console.log(`[handleViewShop]: Mapped item ->`, {
+            itemName: item.itemName,
+            stockQty: item.stockQty,
+            tokenPrice: item.tokenPrice,
+            artPrice: item.artPrice,
+            otherPrice: item.otherPrice,
+            tradesOpen: item.tradesOpen,
+            emoji
+          });
+      
           return `**${emoji} ${item.itemName}** - \`qty: ${item.stockQty}\`\n> **Token Price:** ${item.tokenPrice || "N/A"}\n> **Art Price:** ${item.artPrice || "N/A"}\n> **Other Price:** ${item.otherPrice || "N/A"}\n> **Trades Open:** ${item.tradesOpen ? "Yes" : "No"}`;
         })
       );
+      
   
       // Pagination setup
       const itemsPerPage = 4;
