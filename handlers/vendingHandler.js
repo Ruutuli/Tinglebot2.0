@@ -133,7 +133,7 @@ async function handleCollectPoints(interaction) {
     }
 
     // ------------------- Setup Validation -------------------
-    if (!character.vendingSetup || !character.vendingSync || !character.shopLink) {
+    if (!character.vendingSetup || !character.shopLink) {
       return interaction.reply({
         content: `❌ You must complete vending setup before collecting points. Please run \`/vending setup\` first.`,
         ephemeral: true
