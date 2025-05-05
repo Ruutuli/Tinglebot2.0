@@ -483,12 +483,16 @@ async function handleComponentInteraction(interaction) {
     } else if (interaction.isModalSubmit()) {
         // Redirect modal submissions to the modal handler.
         await handleModalSubmission(interaction); 
-    } else if (interaction.customId.startsWith('vending_view_')) {
+    } else if (action === 'vending_view') {
+        const [, villageKey] = interaction.customId.split('|');
+        await handleVendingViewVillage(interaction, villageKey);
+      } else if (interaction.customId.startsWith('vending_view_')) {
         const villageKey = interaction.customId.replace('vending_view_', '');
         await handleVendingViewVillage(interaction, villageKey);
       } else {
         console.warn(`[componentHandler]: Unhandled component interaction: ${interaction.customId}`);
       }
+    
 }
 
 // =============================================================================
