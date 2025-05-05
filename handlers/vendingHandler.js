@@ -210,13 +210,11 @@ async function handleRestock(interaction) {
     const extraSlots = pouchCapacities[character.shopPouch?.toLowerCase()] || 0;
     const totalSlots = baseSlots + extraSlots;
 
-    // ------------------- Existing Inventory Check -------------------
-    const vendingClient = new MongoClient(process.env.MONGODB_INVENTORIES_URI);
+    // ------------------- Fetch Vending Inventory -------------------
     await vendingClient.connect();
-    const vendingDb = vendingClient.db("vending");
     const inventoryCollection = vendingDb.collection(characterName.toLowerCase());
     const items = await inventoryCollection.find({}).toArray();
-    
+
     // ------------------- Fetch Vending Stock for Current Month -------------------
     const currentMonth = new Date().getMonth() + 1;
     const currentVillage = character.currentVillage;
