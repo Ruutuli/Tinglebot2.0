@@ -131,7 +131,8 @@ async function handleCollectPoints(interaction) {
       });
     }
   
-    const pointsAwarded = calculateShopPoints(character);
+    const pointsAwarded = MONTHLY_VENDING_POINTS;
+
   
     await updateCharacterById(character._id, {
       vendingPoints: (character.vendingPoints || 0) + pointsAwarded,
@@ -1299,13 +1300,6 @@ function generateFulfillEmbed(request) {
       .setFooter({ text: `Requested by ${request.buyerUsername}` })
       .setTimestamp();
   }
-  
-// ------------------- calculateShopPoints -------------------
-function calculateShopPoints(character) {
-    const basePoints = character.job?.toLowerCase() === 'shopkeeper' ? 300 : 150;
-    const multiplier = character.reputationTier === 'gold' ? 1.25 : character.reputationTier === 'silver' ? 1.1 : 1;
-    return Math.floor(basePoints * multiplier);
-  }  
 
   // ============================================================================
 // ------------------- Module Exports -------------------
