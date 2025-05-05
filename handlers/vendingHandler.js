@@ -190,7 +190,7 @@ const currentVillage = character.currentVillage;
 console.log(`[Debug] Looking for vending stock with month: ${currentMonth} (type: ${typeof currentMonth})`);
 
 const stockCollection = db.collection("vendingStock"); // ✅ corrected collection name
-const stockDoc = await stockCollection.findOne({ month: Number(currentMonth) });
+const stockDoc = await stockCollection.findOne({ month: currentMonth.toString() });
 
 if (!stockDoc) {
   console.warn(`[Restock Debug] No stockDoc found for month ${currentMonth}. Check DB entries.`);
