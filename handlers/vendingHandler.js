@@ -254,6 +254,28 @@ if (!stockDoc) {
       boughtFrom: character.currentVillage,
       date: new Date()
     });
+    
+    // ------------------- Insert into VENDING database -------------------
+    const vendingClient = new MongoClient(process.env.MONGODB_INVENTORIES_URI);
+    await vendingClient.connect();
+    const vendingDb = vendingClient.db("vending");
+    const vendingCollection = vendingDb.collection(characterName.toLowerCase());
+    
+    await vendingCollection.insertOne({
+      itemName,
+      stockQty,
+      costEach: pointCost,
+      pointsSpent: totalCost,
+      tokenPrice,
+      artPrice,
+      otherPrice,
+      tradesOpen,
+      stackable,
+      boughtFrom: character.currentVillage,
+      date: new Date()
+    });
+    await vendingClient.close();
+    
 
     await Character.updateOne(
       { name: characterName },
