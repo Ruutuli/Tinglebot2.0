@@ -998,9 +998,7 @@ async function viewVendingStock(interaction) {
     // Auto-generate if missing
     if (!result || !result.stockList || Object.keys(result.stockList).length === 0) {
       console.warn(`[viewVendingStock]⚠️ No vending stock for ${monthName} — generating now...`);
-      await generateVendingStockList(); // 🔁 Trigger generation
-
-      // Retry fetch
+      await generateVendingStockList();
       result = await getCurrentVendingStockList();
     }
 
@@ -1011,41 +1009,44 @@ async function viewVendingStock(interaction) {
       });
     }
 
-    const { stockList } = result;
-
     const embed = new EmbedBuilder()
-  .setTitle(`📊 Vending Stock — ${monthName}`)
-  .setDescription(`Click a button below to view vending stock by village or see limited items.`)
-  .setColor('#88cc88');
+      .setTitle(`📊 Vending Stock — ${monthName}`)
+      .setDescription(`Click a button below to view vending stock by village or see limited items.`)
+      .setColor('#88cc88');
 
-// Create buttons for each village
-const villageButtons = Object.keys(stockList).map(village =>
-  new ButtonBuilder()
-    .setCustomId(`vending_view|${village.toLowerCase()}`)
-    .setLabel(`🏘️ ${village}`)
-    .setStyle(ButtonStyle.Primary)
-);
+    // Styled buttons with emojis
+    const villageRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId('vending_view|rudania')
+        .setLabel('Rudania')
+        .setEmoji({ id: '899492917452890142', name: 'rudania' })
+        .setStyle(ButtonStyle.Danger),
 
-// Add limited items button
-const limitedButton = new ButtonBuilder()
-  .setCustomId(`vending_view_limited`)
-  .setLabel('🎁 Limited Items')
-  .setStyle(ButtonStyle.Secondary);
+      new ButtonBuilder()
+        .setCustomId('vending_view|inariko')
+        .setLabel('Inariko')
+        .setEmoji({ id: '899493009073274920', name: 'inariko' })
+        .setStyle(ButtonStyle.Primary),
 
-// Group buttons into rows (max 5 per row)
-const buttonRows = [];
-for (let i = 0; i < villageButtons.length; i += 5) {
-  buttonRows.push(new ActionRowBuilder().addComponents(villageButtons.slice(i, i + 5)));
-}
+      new ButtonBuilder()
+        .setCustomId('vending_view|vhintl')
+        .setLabel('Vhintl')
+        .setEmoji({ id: '899492879205007450', name: 'vhintl' })
+        .setStyle(ButtonStyle.Success)
+    );
 
-// Put the limited button in its own row
-buttonRows.push(new ActionRowBuilder().addComponents(limitedButton));
+    const limitedRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId('vending_view_limited')
+        .setLabel('Limited Items')
+        .setEmoji('🎁')
+        .setStyle(ButtonStyle.Secondary)
+    );
 
-// ✅ Send embed + buttons
-await interaction.editReply({
-  embeds: [embed],
-  components: buttonRows
-});
+    await interaction.editReply({
+      embeds: [embed],
+      components: [villageRow, limitedRow]
+    });
 
   } catch (err) {
     console.error('[viewVendingStock]: Error loading vending_stock:', err);
@@ -1055,6 +1056,7 @@ await interaction.editReply({
     });
   }
 }
+
 
 // ------------------- handleVendingViewVillage -------------------
 async function handleVendingViewVillage(interaction, villageKey) {
