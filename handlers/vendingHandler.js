@@ -33,6 +33,7 @@ const {
   updateCharacterById,
   fetchCharacterByNameAndUserId,
   getTokenBalance,
+  updateTokenBalance, 
 } = require('../database/db');
 // ------------------- Utility Functions -------------------
 const {
