@@ -1084,7 +1084,17 @@ async function handleVendingViewVillage(interaction, villageKey) {
 
     return interaction.update({
       embeds: [embed],
-      components: [generateVillageButtonRow(villageKey)]
+      components: [
+        generateVillageButtonRow(villageKey),
+        new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId('vending_view_limited')
+            .setLabel('Limited Items')
+            .setEmoji('🎁')
+            .setStyle(ButtonStyle.Secondary)
+        )
+      ]
+      
     });
 
   } catch (err) {
