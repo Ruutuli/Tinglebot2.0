@@ -211,10 +211,12 @@ async function handleRestock(interaction) {
     const totalSlots = baseSlots + extraSlots;
 
     // ------------------- Existing Inventory Check -------------------
-    const db = await connectToInventoriesNative();
-    const inventory = db.collection(characterName.toLowerCase());
-    const existingItems = await inventory.find({}).toArray();
-
+    const vendingClient = new MongoClient(process.env.MONGODB_INVENTORIES_URI);
+    await vendingClient.connect();
+    const vendingDb = vendingClient.db("vending");
+    const inventoryCollection = vendingDb.collection(characterName.toLowerCase());
+    const items = await inventoryCollection.find({}).toArray();
+    
     // ------------------- Fetch Vending Stock for Current Month -------------------
     const currentMonth = new Date().getMonth() + 1;
     const currentVillage = character.currentVillage;
