@@ -32,6 +32,7 @@ const {
   generateVendingStockList,
   updateCharacterById,
   fetchCharacterByNameAndUserId,
+  getTokenBalance,
 } = require('../database/db');
 // ------------------- Utility Functions -------------------
 const {
