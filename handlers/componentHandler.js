@@ -27,6 +27,7 @@ const { createCharacterEmbed, createCharacterGearEmbed, createArtSubmissionEmbed
 const { getGeneralJobsPage, getJobPerk } = require('../modules/jobsModule');
 const { getVillageColorByName } = require('../modules/locationsModule');
 const { roles } = require('../modules/rolesModule');
+const { getCurrentVendingStockList } = require('../database/db');
 
 // ------------------- Handler Imports -------------------
 // Handlers for specific component interactions and modals.
@@ -419,7 +420,7 @@ async function handleJobPage(interaction, characterId, pageIndexString) {
 }
 
 // ------------------- Vending View Button Handler -------------------
-const { getCurrentVendingStockList } = require('../database/db');
+
 
 async function handleVendingViewVillage(interaction, villageKey) {
   await interaction.deferReply({ ephemeral: true });
@@ -461,7 +462,7 @@ async function handleVendingViewVillage(interaction, villageKey) {
 // ------------------- Component Interaction Handler -------------------
 // Delegates interactions to the appropriate handlers based on the customId.
 async function handleComponentInteraction(interaction) {
-    const [action, param] = interaction.customId.split('|');
+    const [action, param] = interaction.customId.split('_');
 
     if (
         ['sync-yes', 'sync-no', 'confirm', 'cancel', 'view', 'job-select', 'job-page'].includes(action)
@@ -477,16 +478,17 @@ async function handleComponentInteraction(interaction) {
         await handleTraitPaymentInteraction(interaction);
     } else if (action === 'trait-select') {
         await handleTraitSelection(interaction);
-    } else if (action === 'vending_view') {
-        await handleVendingViewVillage(interaction, param);
     } else if (action === 'register-mount') {
         await handleRegisterMountModal(interaction);
     } else if (interaction.isModalSubmit()) {
         // Redirect modal submissions to the modal handler.
         await handleModalSubmission(interaction); 
-    } else {
+    } else if (interaction.customId.startsWith('vending_view_')) {
+        const villageKey = interaction.customId.replace('vending_view_', '');
+        await handleVendingViewVillage(interaction, villageKey);
+      } else {
         console.warn(`[componentHandler]: Unhandled component interaction: ${interaction.customId}`);
-    }
+      }
 }
 
 // =============================================================================
@@ -497,6 +499,6 @@ module.exports = {
     handleButtonInteraction,
     getCancelButtonRow,
     getConfirmButtonRow,
-    handleVendingViewVillage,
+      handleVendingViewVillage,
 
 };
