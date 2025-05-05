@@ -491,7 +491,8 @@ async function safeAppendDataToSheet(spreadsheetUrl, character, range, values) {
     handleError(error, 'googleSheetsUtils.js');
   }
 }
-  
+
+
 // ============================================================================
 // Exported Functions
 // ------------------- Export functions grouped by functionality -------------------
