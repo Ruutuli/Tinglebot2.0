@@ -1023,6 +1023,44 @@ await interaction.editReply({
   }
 }
 
+// ------------------- handleVendingViewVillage -------------------
+async function handleVendingViewVillage(interaction, villageKey) {
+  try {
+    const result = await getCurrentVendingStockList();
+    const stockList = result?.stockList || {};
+
+    if (!stockList[villageKey]) {
+      return interaction.update({
+        content: `❌ No vending stock found for **${villageKey}**.`,
+        embeds: [],
+        components: interaction.message.components
+      });
+    }
+
+    const items = stockList[villageKey];
+    const embed = new EmbedBuilder()
+      .setTitle(`🏘️ Vending Stock — ${villageKey[0].toUpperCase() + villageKey.slice(1)}`)
+      .setColor('#f4c542')
+      .setDescription(
+        items.map(i =>
+          `• ${i.itemIcon || '📦'} **${i.itemName}** — x${i.stockQty ?? '?'} (${i.points} pts)`
+        ).join('\n') || '*No items found*'
+      );
+
+    return interaction.update({
+      embeds: [embed],
+      components: interaction.message.components // ✅ preserves village buttons
+    });
+
+  } catch (err) {
+    console.error(`[handleVendingViewVillage]: ${err.message}`);
+    return interaction.update({
+      content: `❌ Failed to load vending data.`,
+      embeds: [],
+      components: interaction.message.components
+    });
+  }
+}
 
 // ============================================================================
 // ------------------- Helper Functions (Private) -------------------
@@ -1106,6 +1144,7 @@ module.exports = {
     handleVendingSync,
     handleEditShop,
     handleShopLink,
-    viewVendingStock
+    viewVendingStock,
+    handleVendingViewVillage
   };
   
