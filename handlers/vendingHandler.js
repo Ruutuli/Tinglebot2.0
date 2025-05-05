@@ -736,7 +736,9 @@ async function handleVendingSetup(interaction) {
         });
         return;
       }
-  
+      
+      const auth = await authorizeSheets(); // ✅ Define auth before use
+      
       const sheetId = await getSheetIdByTitle(auth, spreadsheetId, 'vendingShop');
       if (!sheetId) {
         await sendSetupInstructions(interaction, 'missing_sheet', character._id, characterName, shopLink);
