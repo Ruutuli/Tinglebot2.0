@@ -13,7 +13,6 @@ const { connectToTinglebot, connectToInventories } = require("./database/db");
 const { handleAutocomplete } = require("./handlers/autocompleteHandler");
 const { handleComponentInteraction } = require("./handlers/componentHandler");
 const { handleSelectMenuInteraction } = require("./handlers/selectMenuHandler");
-const { initializeReactionHandler } = require("./handlers/vendingHandler");
 
 // ------------------- Scripts -------------------
 const {
