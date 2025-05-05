@@ -597,11 +597,14 @@ function isValidUrl(str) {
       const inventoryCollection = db.collection(characterName.toLowerCase());
   
       // Fetch all items in the character's vending inventory
-      const items = await inventoryCollection.find({}).toArray();
-      if (!items || items.length === 0) {
-        throw new Error(`No items found in ${characterName}'s shop.`);
-      }
-  
+    const items = await inventoryCollection.find({}).toArray();
+    if (!items || items.length === 0) {
+      return interaction.reply({
+        content: `📭 ${characterName}'s shop is currently empty. Try restocking using \`/vending restock\`.`,
+        ephemeral: true
+      });
+    }
+
       const itemDescriptionsArray = await Promise.all(
         items.map(async (item) => {
           const itemDetails = await ItemModel.findOne({ itemName: item.itemName });
