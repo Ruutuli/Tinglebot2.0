@@ -227,13 +227,11 @@ async function handleRestock(interaction) {
         date: new Date()
       });
   
-      await connectToInventories().then(chars =>
-        chars.updateOne(
-          { name: characterName },
-          { $set: { vendingPoints: vendingPoints - totalCost } }
-        )
+      await Character.updateOne(
+        { name: characterName },
+        { $set: { vendingPoints: vendingPoints - totalCost } }
       );
-  
+      
       try {
         const spreadsheetId = extractSpreadsheetId(character.shopLink);
         const auth = await authorizeSheets();
