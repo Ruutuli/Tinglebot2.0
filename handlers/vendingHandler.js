@@ -189,13 +189,19 @@ const currentVillage = character.currentVillage;
 
 console.log(`[Debug] Looking for vending stock with month: ${currentMonth} (type: ${typeof currentMonth})`);
 
-const stockCollection = db.collection("vendingStock"); // ✅ corrected collection name
-const stockDoc = await stockCollection.findOne({ month: currentMonth.toString() });
+const stockCollection = db.collection("vendingStock");
+
+// Add logging to inspect what’s in the DB
+const debugAllDocs = await stockCollection.find({}).toArray();
+console.log(`[Debug] All vendingStock docs:`, debugAllDocs.map(doc => doc.month));
+
+const stockDoc = await stockCollection.findOne({ month: currentMonth });
 
 if (!stockDoc) {
   console.warn(`[Restock Debug] No stockDoc found for month ${currentMonth}. Check DB entries.`);
   return interaction.editReply(`❌ No vending stock found for month ${currentMonth}.`);
 }
+
 
 
     const villageStock = stockDoc.stockList?.[currentVillage] || [];
