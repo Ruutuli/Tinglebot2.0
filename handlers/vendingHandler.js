@@ -953,8 +953,7 @@ async function handleShopLink(interaction) {
   
 // ------------------- viewVendingStock -------------------
 async function viewVendingStock(interaction) {
-  const mongoClient = await connectToInventoriesNative(); // ✅ Switch to native
-  const db = mongoClient.db("vending"); // ✅ Now this is valid
+  const db = await connectToInventoriesNative(); // ✅ Returns db directly
   const collections = await db.collections();
 
   const all = [];
