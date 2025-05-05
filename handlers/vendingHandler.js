@@ -20,6 +20,8 @@ const { VendingRequest } = require('../models/VendingModel');
 // ------------------- Database Connections -------------------
 const {
   connectToInventories,
+  connectToInventoriesNative,
+  getInventoryCollection,
   connectToItems,
   fetchCharacterByName,
   getInventoryByCharacter,
@@ -951,8 +953,8 @@ async function handleShopLink(interaction) {
   
 // ------------------- viewVendingStock -------------------
 async function viewVendingStock(interaction) {
-  const client = await connectToInventories();
-  const db = client.db("vending");
+  const mongoClient = await connectToInventoriesNative(); // ✅ Switch to native
+  const db = mongoClient.db("vending"); // ✅ Now this is valid
   const collections = await db.collections();
 
   const all = [];
