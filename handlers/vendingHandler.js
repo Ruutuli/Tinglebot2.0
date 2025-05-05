@@ -182,12 +182,14 @@ async function handleRestock(interaction) {
     const db = await connectToInventoriesNative();
     const inventory = db.collection(characterName.toLowerCase());
     const existingItems = await inventory.find({}).toArray();
-    const currentMonth = new Date().getMonth() + 1; // ✅ Move this up immediately
+    const currentMonth = new Date().getMonth() + 1;
     const currentVillage = character.currentVillage;
-
-
+    
+    console.log(`[Debug] Looking for vending stock with month: ${currentMonth}`); // 🐛 Debug Log
+    
     const stockCollection = db.collection("vending_stock");
     const stockDoc = await stockCollection.findOne({ month: currentMonth });
+    
 
     if (!stockDoc) {
       return interaction.editReply(`❌ No vending stock found for month ${currentMonth}.`);
