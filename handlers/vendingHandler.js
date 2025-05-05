@@ -94,80 +94,90 @@ async function executeVending(interaction) {
 }
 
 // ------------------- handleCollectPoints -------------------
+// Handles monthly vending point collection for eligible characters.
 async function handleCollectPoints(interaction) {
+  try {
     const characterName = interaction.options.getString('charactername');
-  
     const character = await fetchCharacterByName(characterName);
+
     if (!character) {
       return interaction.reply({
         content: `❌ Character "${characterName}" not found.`,
         ephemeral: true
       });
     }
-  
+
     const now = new Date();
-    const currentMonth = now.getMonth();
+    const currentMonth = now.getMonth() + 1;
     const currentYear = now.getFullYear();
-  
-// ------------------- Claim Check -------------------
-const currentMonth = now.getMonth() + 1;
-const alreadyClaimed = character.lastCollectedMonth === currentMonth;
 
-if (alreadyClaimed) {
-  return interaction.reply({
-    content: `⚠️ ${characterName} has already claimed vending points this month.`,
-    ephemeral: true
-  });
-}
+    // ------------------- Claim Check -------------------
+    const alreadyClaimed = character.lastCollectedMonth === currentMonth;
 
-  
-const job = character.job?.toLowerCase();
-if (job !== 'shopkeeper' && job !== 'merchant') {
-  return interaction.reply({
-    content: `❌ Only characters with the job **Shopkeeper** or **Merchant** can claim vending points.`,
-    ephemeral: true
-  });
-}
+    if (alreadyClaimed) {
+      return interaction.reply({
+        content: `⚠️ ${characterName} has already claimed vending points this month.`,
+        ephemeral: true
+      });
+    }
 
-// ------------------- Setup Validation -------------------
-if (!character.vendingSetup || !character.vendingSync || !character.vendingSheetUrl) {
-  return interaction.reply({
-    content: `❌ You must complete vending setup before collecting points. Please run \`/vending setup\` first.`,
-    ephemeral: true
-  });
-}
+    // ------------------- Job Validation -------------------
+    const job = character.job?.toLowerCase();
+    if (job !== 'shopkeeper' && job !== 'merchant') {
+      return interaction.reply({
+        content: `❌ Only characters with the job **Shopkeeper** or **Merchant** can claim vending points.`,
+        ephemeral: true
+      });
+    }
 
-  
+    // ------------------- Setup Validation -------------------
+    if (!character.vendingSetup || !character.vendingSync || !character.vendingSheetUrl) {
+      return interaction.reply({
+        content: `❌ You must complete vending setup before collecting points. Please run \`/vending setup\` first.`,
+        ephemeral: true
+      });
+    }
+
+    // ------------------- Award Points -------------------
     const pointsAwarded = MONTHLY_VENDING_POINTS;
 
-  
     await updateCharacterById(character._id, {
       vendingPoints: (character.vendingPoints || 0) + pointsAwarded,
       lastPointClaim: now,
-      lastCollectedMonth: now.getMonth() + 1
-
+      lastCollectedMonth: currentMonth
     });
-  
+
+    // ------------------- Embed Response -------------------
     const embed = new EmbedBuilder()
       .setTitle(`🪙 Vending Points Awarded`)
       .setDescription(`${characterName} received **${pointsAwarded}** vending points.`)
       .setFooter({ text: `Claimed: ${now.toLocaleDateString()}` });
-  
+
     if (character.vendingSheetUrl) {
       embed.addFields({
         name: '📎 Shop Sheet',
         value: `[View Sheet](${character.vendingSheetUrl})`
       });
     }
-  
+
     return interaction.reply({ embeds: [embed], ephemeral: true });
+  } catch (error) {
+    console.error('[handleCollectPoints]: Error', error);
+    return interaction.reply({
+      content: `❌ An unexpected error occurred. Please try again later.`,
+      ephemeral: true
+    });
   }
-  
+}
+
 // ------------------- handleRestock -------------------
+// Allows Shopkeepers/Merchants to restock items from monthly vending stock.
+
 async function handleRestock(interaction) {
   try {
     await interaction.deferReply({ ephemeral: true });
 
+    // ------------------- Input Parsing -------------------
     const characterName = interaction.options.getString('charactername');
     const itemName = interaction.options.getString('itemname');
     const stockQty = interaction.options.getInteger('stockqty');
@@ -177,6 +187,7 @@ async function handleRestock(interaction) {
     const tradesOpen = interaction.options.getBoolean('tradesopen') || false;
     const userId = interaction.user.id;
 
+    // ------------------- Slot Limits -------------------
     const baseSlotLimits = { shopkeeper: 5, merchant: 3 };
     const pouchCapacities = { none: 0, bronze: 15, silver: 30, gold: 50 };
 
@@ -189,34 +200,29 @@ async function handleRestock(interaction) {
     const extraSlots = pouchCapacities[character.shopPouch?.toLowerCase()] || 0;
     const totalSlots = baseSlots + extraSlots;
 
+    // ------------------- Existing Inventory Check -------------------
     const db = await connectToInventoriesNative();
     const inventory = db.collection(characterName.toLowerCase());
     const existingItems = await inventory.find({}).toArray();
-    
-// ------------------- Fetch Vending Stock for Current Month -------------------
-const currentMonth = new Date().getMonth() + 1;
-const currentVillage = character.currentVillage;
 
-console.log(`[Debug] Looking for vending stock with month: ${currentMonth} (type: ${typeof currentMonth})`);
+    // ------------------- Fetch Vending Stock for Current Month -------------------
+    const currentMonth = new Date().getMonth() + 1;
+    const currentVillage = character.currentVillage;
 
-// Ensure connection to the correct database
-const client = new MongoClient(process.env.MONGODB_INVENTORIES_URI, {});
-await client.connect();
-const correctDb = client.db("tinglebot"); // ✅ Explicit DB
+    console.log(`[handleRestock]: Fetching vending stock for month ${currentMonth}`);
 
-const stockCollection = correctDb.collection("vending_stock"); // ✅ Correct collection name
-const debugAllDocs = await stockCollection.find({}).toArray();
-console.log(`[Debug] All vending_stock docs (by month):`, debugAllDocs.map(doc => doc.month));
+    const client = new MongoClient(process.env.MONGODB_INVENTORIES_URI, {});
+    await client.connect();
+    const correctDb = client.db("tinglebot");
+    const stockCollection = correctDb.collection("vending_stock");
 
-const stockDoc = await stockCollection.findOne({ month: currentMonth });
+    const stockDoc = await stockCollection.findOne({ month: currentMonth });
+    await client.close();
 
-if (!stockDoc) {
-  console.warn(`[Restock Debug] No stockDoc found for month ${currentMonth}. Check DB entries.`);
-  return interaction.editReply(`❌ No vending stock found for month ${currentMonth}.`);
-}
-
-
-
+    if (!stockDoc) {
+      console.warn(`[handleRestock]: No stock document found for month ${currentMonth}`);
+      return interaction.editReply(`❌ No vending stock found for month ${currentMonth}.`);
+    }
 
     const villageStock = stockDoc.stockList?.[currentVillage] || [];
     const itemDoc = villageStock.find(i => i.itemName === itemName);
@@ -225,6 +231,7 @@ if (!stockDoc) {
       return interaction.editReply(`❌ Item '${itemName}' is missing a valid vending point value in the vending stock.`);
     }
 
+    // ------------------- Slot Usage Calculation -------------------
     const stackable = !itemDoc.crafting;
     const slotsUsed = existingItems.reduce((acc, item) => {
       return acc + (item.stackable ? Math.ceil(item.stockQty / 10) : item.stockQty);
@@ -242,15 +249,16 @@ if (!stockDoc) {
       );
     }
 
+    // ------------------- Vending Point Validation -------------------
     const vendingPoints = character.vendingPoints || 0;
     const pointCost = itemDoc.points;
-
     const totalCost = stockQty * pointCost;
 
     if (vendingPoints < totalCost) {
       return interaction.editReply(`⚠️ Not enough vending points. You need ${totalCost}, but only have ${vendingPoints}.`);
     }
 
+    // ------------------- Insert Item into Local Inventory -------------------
     await inventory.insertOne({
       itemName,
       stockQty,
@@ -264,13 +272,13 @@ if (!stockDoc) {
       boughtFrom: character.currentVillage,
       date: new Date()
     });
-    
-    // ------------------- Insert into VENDING database -------------------
+
+    // ------------------- Insert Item into Vending Inventory -------------------
     const vendingClient = new MongoClient(process.env.MONGODB_INVENTORIES_URI);
     await vendingClient.connect();
     const vendingDb = vendingClient.db("vending");
     const vendingCollection = vendingDb.collection(characterName.toLowerCase());
-    
+
     await vendingCollection.insertOne({
       itemName,
       stockQty,
@@ -284,14 +292,16 @@ if (!stockDoc) {
       boughtFrom: character.currentVillage,
       date: new Date()
     });
-    await vendingClient.close();
-    
 
+    await vendingClient.close();
+
+    // ------------------- Update Character Points -------------------
     await Character.updateOne(
       { name: characterName },
       { $set: { vendingPoints: vendingPoints - totalCost } }
     );
 
+    // ------------------- Append Row to Sheet -------------------
     try {
       const spreadsheetId = extractSpreadsheetId(character.shopLink);
       const auth = await authorizeSheets();
@@ -308,6 +318,7 @@ if (!stockDoc) {
       console.error('[handleRestock]: Sheet logging failed', err);
     }
 
+    // ------------------- Final Confirmation Embed -------------------
     const embed = new EmbedBuilder()
       .setTitle(`✅ Restock Successful`)
       .setDescription(`${characterName} has restocked \`${itemName} x${stockQty}\`.`)
@@ -327,7 +338,6 @@ if (!stockDoc) {
   }
 }
 
-  
 // ------------------- handleBarter -------------------
 async function handleBarter(interaction) {
     try {
