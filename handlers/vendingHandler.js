@@ -45,7 +45,6 @@ const {
   readSheetData,
   writeSheetData,
   safeAppendDataToSheet,
-  
 } = require("../utils/googleSheetsUtils.js");
 
 const {
@@ -63,6 +62,8 @@ const { handleError } = require('../utils/globalErrorHandler.js');
 const {
   capitalizeFirstLetter
  } = require("../modules/formattingModule");
+
+ const { createVendingSetupEmbed } = require("../embeds");
 
 
 // ------------------- Constants -------------------
