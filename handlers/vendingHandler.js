@@ -56,12 +56,28 @@ const { handleError } = require('../utils/globalErrorHandler.js');
 // ------------------- Constants -------------------
 const DEFAULT_IMAGE_URL = "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png";
 const MONTHLY_VENDING_POINTS = 500;
+const VIEW_SHOP_IMAGE_URL = DEFAULT_IMAGE_URL;
 
 // ============================================================================
 // ------------------- Handler Functions (Exported) -------------------
 // Each function handles one vending subcommand. They are modular, async,
 // and include error handling + DB updates where relevant.
 // ============================================================================
+
+// ------------------- Connect to vending database -------------------
+const { MongoClient } = require("mongodb");
+
+async function connectToVendingDatabase() {
+  const client = new MongoClient(process.env.MONGODB_INVENTORIES_URI, {});
+  try {
+    await client.connect();
+    return client;
+  } catch (error) {
+    handleError(error, 'vendingHandler.js');
+    console.error("[connectToVendingDatabase]: Error connecting to vending database:", error);
+    throw error;
+  }
+}
 
 // ------------------- executeVending -------------------
 async function executeVending(interaction) {}
