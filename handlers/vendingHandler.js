@@ -109,19 +109,13 @@ async function handleCollectPoints(interaction) {
     const currentMonth = now.getMonth();
     const currentYear = now.getFullYear();
   
-    const lastClaim = character.lastPointClaim;
-    if (lastClaim) {
-      const lastDate = new Date(lastClaim);
-      if (
-        lastDate.getMonth() === currentMonth &&
-        lastDate.getFullYear() === currentYear
-      ) {
-        return interaction.reply({
-          content: `⚠️ ${characterName} has already claimed vending points this month.`,
-          ephemeral: true
-        });
-      }
-    }
+// ------------------- Claim Check -------------------
+if (character.lastCollectedMonth === currentMonth) {
+  return interaction.reply({
+    content: `⚠️ ${characterName} has already claimed vending points this month.`,
+    ephemeral: true
+  });
+}
   
     const job = character.job?.toLowerCase();
     if (job !== 'shopkeeper' && job !== 'merchant') {
