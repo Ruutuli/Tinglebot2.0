@@ -156,7 +156,6 @@ async function handleCollectPoints(interaction, userId) {
     }
 }
 
-
 // ------------------- Handle the Restock Subcommand -------------------
 // Handles the restock process for a character.
 async function handleRestock(interaction) {
@@ -176,76 +175,70 @@ async function handleRestock(interaction) {
 
         // Define slot and pouch limits
         const baseSlotLimits = {
-            shopkeeper: 5, // Shopkeeper's starting slots
-            merchant: 3,   // Merchant's starting slots
+            shopkeeper: 5,
+            merchant: 3,
         };
 
         const pouchCapacities = {
-            none: 0,       // No pouch: 0 additional slots
-            bronze: 15,    // Bronze pouch: +15 slots
-            silver: 30,    // Silver pouch: +30 slots
-            gold: 50,      // Gold pouch: +50 slots
+            none: 0,
+            bronze: 15,
+            silver: 30,
+            gold: 50,
         };
 
-        // Fetch character and validate
         const character = await fetchCharacterByNameAndUserId(characterName, userId);
         if (!character) {
             throw new Error(`Character '${characterName}' not found.`);
         }
 
-        // Calculate total slots available
         const baseSlots = baseSlotLimits[character.job.toLowerCase()] || 0;
         const additionalSlots = pouchCapacities[character.shopPouch?.toLowerCase() || 'none'];
         const totalSlots = baseSlots + additionalSlots;
 
-        // Connect to the vending inventory
         const client = await connectToVendingDatabase();
         const db = client.db('vending');
         const inventoryCollection = db.collection(characterName.toLowerCase());
 
-        // Fetch current shop inventory
         const shopItems = await inventoryCollection.find({}).toArray();
         const currentSlotsUsed = shopItems.reduce((slots, item) => {
-            if (item.stackable) {
-                return slots + Math.ceil(item.stockQty / 10); // Stackable items: 10 per slot
-            } else {
-                return slots + item.stockQty; // Craftable items: 1 slot per item
-            }
+            return item.stackable
+                ? slots + Math.ceil(item.stockQty / 10)
+                : slots + item.stockQty;
         }, 0);
 
-        // Fetch item details from database
         const itemDetails = await fetchItemByName(itemName);
         if (!itemDetails) {
             throw new Error(`Item '${itemName}' not found in the database.`);
         }
 
-        // Determine stacking rules based on item properties
         const isCraftable = itemDetails.crafting || false;
-        
         const slotsRequired = isCraftable
-            ? stockQty // Craftable items: 1 slot per item
-            : Math.ceil(stockQty / 10); // Stackable items: 10 per slot
-        
-        if (currentSlotsUsed + slotsRequired > totalSlots) {
-            // Construct detailed reason message
-            const reason = isCraftable
-                ? `This is a crafting item! You tried to stock **${stockQty} of this item**. Each crafting item takes up **1 slot per unit**.`
-                : `This is a stackable item! You tried to stock **${stockQty} of this item**. Stackable items take up **1 slot for every 10 units**.`;
-        
-            throw new Error(
-                `Not enough space in the shop. **${characterName}'s** shop has **${totalSlots} slots**. ` +
-                `${currentSlotsUsed} are already used. Adding '**${itemDetails.itemName}**' would require ${slotsRequired} slots, exceeding the limit.\n\n` +
-                reason
-            );
-        }      
+            ? stockQty
+            : Math.ceil(stockQty / 10);
 
-        // Fetch the current vending stock
-        const stockList = await getCurrentVendingStockList();
+        if (currentSlotsUsed + slotsRequired > totalSlots) {
+            const reason = isCraftable
+                ? `This is a crafting item! You tried to stock **${stockQty}**. Each one takes **1 slot**.`
+                : `This is a stackable item! You tried to stock **${stockQty}**. Stackables take **1 slot per 10 units**.`;
+
+            throw new Error(
+                `Not enough space. **${characterName}** has **${totalSlots} slots**.\n` +
+                `${currentSlotsUsed} are used. Adding '${itemName}' would need ${slotsRequired} more.\n\n${reason}`
+            );
+        }
+
+        // ✅ ADDED: Ensure vending stock exists this month
+        let stockList = await getCurrentVendingStockList();
+        if (!stockList || !stockList.stockList) {
+            console.warn("[handleRestock]: No stock list found — generating new stock...");
+            await generateVendingStockList(); // <-- Ensure this is imported
+            stockList = await getCurrentVendingStockList();
+        }
+
         if (!stockList || !stockList.stockList) {
             throw new Error('No vending stock available for this month.');
         }
 
-        // Validate item in current village stock or limited items
         const currentVillage = character.currentVillage.toLowerCase().trim();
         const villageStock = stockList.stockList[currentVillage] || [];
         const limitedItems = stockList.limitedItems || [];
@@ -275,21 +268,18 @@ async function handleRestock(interaction) {
         }
 
         const pointsSpent = stockQty * itemPointsCost;
-
-        // Deduct points from the character
         const remainingPoints = (character.vendingPoints || 0) - pointsSpent;
+
         if (remainingPoints < 0) {
             throw new Error(`Insufficient points. ${characterName} only has ${character.vendingPoints} points.`);
         }
 
         await updateCharacterById(character._id, { vendingPoints: remainingPoints });
 
-        // Deduct limited item stock if applicable
         if (limitedItem) {
             await updateItemStockByName(itemName, stockQty);
         }
 
-        // Add item to the character's vending sub-collection
         await addItemToVendingInventory(character.name.toLowerCase(), {
             characterName,
             itemName,
@@ -305,7 +295,6 @@ async function handleRestock(interaction) {
             date: new Date()
         });
 
-        // Update the shop spreadsheet
         const spreadsheetId = extractSpreadsheetId(character.shopLink);
         if (!spreadsheetId) {
             throw new Error(`Invalid or missing shop link for '${characterName}'.`);
@@ -332,13 +321,11 @@ async function handleRestock(interaction) {
 
             await safeAppendDataToSheet(character.inventory, character, 'vendingShop!A:K', values);
         } catch (error) {
-    handleError(error, 'vendingHandler.js');
-
+            handleError(error, 'vendingHandler.js');
             console.error(`[handleRestock]: Error updating spreadsheet for '${characterName}':`, error);
             throw new Error('Failed to update shop spreadsheet. Please check the Google Sheets configuration.');
         }
 
-        // Create embed for the response
         const embed = new EmbedBuilder()
             .setTitle('✅ **Restock Successful!**')
             .setDescription(`✨ **${characterName}'s Shop Restocked!**`)
@@ -350,15 +337,14 @@ async function handleRestock(interaction) {
             )
             .setColor('#AA926A');
 
-        // Edit the deferred reply
         await interaction.editReply({ embeds: [embed] });
     } catch (error) {
-    handleError(error, 'vendingHandler.js');
-
+        handleError(error, 'vendingHandler.js');
         console.error('[handleRestock]: Error during restock:', error);
         await interaction.editReply({ content: `❌ **Error:** ${error.message}` });
     }
 }
+
 
 // removed updateBuyerInventory to repalce with addItemInventoryDatabase 
 
@@ -1676,5 +1662,6 @@ module.exports = {
     initializeReactionHandler,
     handlePouchUpgrade,
     handleVendingSync,
+    handleRestock,
     connectToVendingDatabase
 };
