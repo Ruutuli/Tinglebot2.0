@@ -1,330 +1,331 @@
+// ============================================================================
+// ------------------- Vending Slash Command Router -------------------
+// Registers all /vending subcommands and dispatches to handlers.
+// ============================================================================
+
 // ------------------- Discord.js Components -------------------
-// Used to build and structure slash commands.
-const { SlashCommandBuilder } = require('@discordjs/builders');
+const { SlashCommandBuilder } = require('discord.js');
 
+// ------------------- Command Handlers -------------------
+const {
+    executeVending,
+    handleCollectPoints,
+    handleRestock,
+    handleBarter,
+    handleFulfill,
+    handleEditShop,
+    handleVendingSync,
+    handlePouchUpgrade,
+    handleVendingSetup,
+    handleViewShop,
+    handleShopLink,
+    viewVendingStock
+  } = require('../../handlers/vendingHandler');
+  
+// ============================================================================
+// ------------------- Slash Command Definition -------------------
+// Main command: /vending
+// ============================================================================
+const command = new SlashCommandBuilder()
+  .setName('vending')
+  .setDescription('Manage vending and barter system')
 
-const { handleError } = require('../../utils/globalErrorHandler');
-// ------------------- Modules -------------------
-// Custom handlers for vending operations sorted alphabetically.
-const { executeVending, handleEditShop, handleFulfill, handlePouchUpgrade, handleVendingSetup, handleVendingSync, handleViewShop, viewVendingStock } = require('../../handlers/vendingHandler');
+  // ------------------- /vending collect_points -------------------
+  .addSubcommand(sub =>
+    sub.setName('collect_points')
+      .setDescription('🎯 Award vending points to a character')
+      .addStringOption(opt =>
+        opt.setName('charactername')
+          .setDescription('Name of the character')
+          .setRequired(true)
+          .setAutocomplete(true)
+      )
+  )
 
+  // ------------------- /vending restock -------------------
+  .addSubcommand(sub =>
+    sub.setName('restock')
+      .setDescription('📦 Add a new item to your vending shop')
+      .addStringOption(opt =>
+        opt.setName('charactername')
+          .setDescription('Your character\'s name')
+          .setRequired(true)
+          .setAutocomplete(true)
+      )
+      .addStringOption(opt =>
+        opt.setName('itemname')
+          .setDescription('Name of the item to restock')
+          .setRequired(true)
+          .setAutocomplete(true)
+      )
+      .addIntegerOption(opt =>
+        opt.setName('stockqty')
+          .setDescription('Quantity to add to stock')
+          .setRequired(true)
+      )
+      .addIntegerOption(opt =>
+        opt.setName('tokenprice')
+          .setDescription('Token price (optional)')
+      )
+      .addStringOption(opt =>
+        opt.setName('artprice')
+          .setDescription('Art price (optional)')
+      )
+      .addStringOption(opt =>
+        opt.setName('otherprice')
+          .setDescription('Other price (optional)')
+      )
+      .addBooleanOption(opt =>
+        opt.setName('tradesopen')
+          .setDescription('Is this item open for trades?')
+      )
+  )
 
-// ------------------- Slash Command Definition and Execution -------------------
-// This module defines the "vending" command with various subcommands to manage vending operations.
-// Each subcommand routes to its corresponding handler function.
+  // ------------------- /vending barter -------------------
+  .addSubcommand(sub =>
+    sub.setName('barter')
+      .setDescription('🔄 Submit a barter request')
+      .addStringOption(opt =>
+        opt.setName('charactername')
+          .setDescription('Your character\'s name')
+          .setRequired(true)
+          .setAutocomplete(true)
+      )
+      .addStringOption(opt =>
+        opt.setName('vendorcharacter')
+          .setDescription('Name of the character/shop you\'re bartering with')
+          .setRequired(true)
+          .setAutocomplete(true)
+      )
+      .addStringOption(opt =>
+        opt.setName('itemname')
+          .setDescription('Item you want to barter for')
+          .setRequired(true)
+          .setAutocomplete(true)
+      )
+      .addIntegerOption(opt =>
+        opt.setName('quantity')
+          .setDescription('Quantity to request')
+          .setRequired(true)
+      )
+      .addStringOption(opt =>
+        opt.setName('paymentmethod')
+          .setDescription('What you are offering in return')
+          .setRequired(true)
+      )
+      .addStringOption(opt =>
+        opt.setName('notes')
+          .setDescription('Optional notes for the vendor')
+      )
+  )
+
+  // ------------------- /vending fulfill -------------------
+  .addSubcommand(sub =>
+    sub.setName('fulfill')
+      .setDescription('✅ Fulfill a pending barter request')
+      .addStringOption(opt =>
+        opt.setName('fulfillmentid')
+          .setDescription('The unique Fulfillment ID')
+          .setRequired(true)
+      )
+  )
+
+  // ------------------- /vending editshop -------------------
+  .addSubcommand(sub =>
+    sub.setName('editshop')
+      .setDescription('🛠️ Edit an existing item or upload a shop image')
+      .addStringOption(opt =>
+        opt.setName('charactername')
+          .setDescription('Your character\'s name')
+          .setRequired(true)
+          .setAutocomplete(true)
+      )
+      .addStringOption(opt =>
+        opt.setName('itemname')
+          .setDescription('Item name or type "shop image" to upload banner')
+          .setRequired(true)
+          .setAutocomplete(true)
+      )
+      .addAttachmentOption(opt =>
+        opt.setName('shopimagefile')
+          .setDescription('Upload shop banner image (used if itemname is "shop image")')
+      )
+      .addIntegerOption(opt =>
+        opt.setName('tokenprice')
+          .setDescription('New token price')
+      )
+      .addStringOption(opt =>
+        opt.setName('artprice')
+          .setDescription('New art price')
+      )
+      .addStringOption(opt =>
+        opt.setName('otherprice')
+          .setDescription('New other price')
+      )
+      .addBooleanOption(opt =>
+        opt.setName('tradesopen')
+          .setDescription('Update if trades are open')
+      )
+  )
+
+  // ------------------- /vending sync -------------------
+  .addSubcommand(sub =>
+    sub.setName('sync')
+      .setDescription('🔁 Sync inventory from Google Sheets (Old Stock only)')
+      .addStringOption(opt =>
+        opt.setName('charactername')
+          .setDescription('Character to sync')
+          .setRequired(true)
+          .setAutocomplete(true)
+      )
+  )
+
+  // ------------------- /vending pouch -------------------
+  .addSubcommand(sub =>
+    sub.setName('pouch')
+      .setDescription('🎒 Upgrade your pouch size')
+      .addStringOption(opt =>
+        opt.setName('charactername')
+          .setDescription('Character upgrading pouch')
+          .setRequired(true)
+          .setAutocomplete(true)
+      )
+      .addStringOption(opt =>
+        opt.setName('pouchtype')
+          .setDescription('Choose a new pouch tier')
+          .setRequired(true)
+          .addChoices(
+            { name: 'None', value: 'none' },
+            { name: 'Bronze', value: 'bronze' },
+            { name: 'Silver', value: 'silver' },
+            { name: 'Gold', value: 'gold' }
+          )
+      )
+  )
+
+  // ------------------- /vending setup -------------------
+  .addSubcommand(sub =>
+    sub.setName('setup')
+      .setDescription('🧾 Set up a character to become a vendor')
+      .addStringOption(opt =>
+        opt.setName('charactername')
+          .setDescription('Name of the vendor character')
+          .setRequired(true)
+          .setAutocomplete(true)
+      )
+      .addStringOption(opt =>
+        opt.setName('shoplink')
+          .setDescription('Google Sheets URL to your shop')
+          .setRequired(true)
+      )
+      .addStringOption(opt =>
+        opt.setName('pouch')
+          .setDescription('Starting pouch tier')
+          .setRequired(true)
+          .addChoices(
+            { name: 'None', value: 'none' },
+            { name: 'Bronze', value: 'bronze' },
+            { name: 'Silver', value: 'silver' },
+            { name: 'Gold', value: 'gold' }
+          )
+      )
+      .addIntegerOption(opt =>
+        opt.setName('points')
+          .setDescription('Initial vending point total')
+          .setRequired(true)
+      )
+  )
+
+  // ------------------- /vending viewshop -------------------
+  .addSubcommand(sub =>
+    sub.setName('viewshop')
+      .setDescription('🛒 View a character’s active vending shop')
+      .addStringOption(opt =>
+        opt.setName('charactername')
+          .setDescription('Shop owner to view')
+          .setRequired(true)
+          .setAutocomplete(true)
+      )
+  )
+
+  // ------------------- /vending shoplink -------------------
+  .addSubcommand(sub =>
+    sub.setName('shoplink')
+      .setDescription('🔗 Link or update your character’s vending sheet')
+      .addStringOption(opt =>
+        opt.setName('charactername')
+          .setDescription('Character to assign the sheet to')
+          .setRequired(true)
+          .setAutocomplete(true)
+      )
+      .addStringOption(opt =>
+        opt.setName('link')
+          .setDescription('Google Sheets URL')
+          .setRequired(true)
+      )
+  )
+
+  // ------------------- /vending viewstock -------------------
+  .addSubcommand(sub =>
+    sub.setName('viewstock')
+      .setDescription('📊 View current month’s vending stock by village')
+  );
+
+ // ============================================================================
+// ------------------- Dispatcher Function -------------------
+// Routes interaction to the correct handler based on subcommand.
+// ============================================================================
+async function execute(interaction) {
+    const subcommand = interaction.options.getSubcommand();
+  
+    switch (subcommand) {
+      case 'restock':
+        return await handleRestock(interaction);
+  
+      case 'barter':
+        return await handleBarter(interaction);
+  
+      case 'fulfill':
+        return await handleFulfill(interaction);
+  
+      case 'editshop':
+        return await handleEditShop(interaction);
+  
+      case 'sync':
+        return await handleVendingSync(interaction);
+  
+      case 'pouch':
+        return await handlePouchUpgrade(interaction);
+  
+      case 'setup':
+        return await handleVendingSetup(interaction);
+  
+      case 'viewshop':
+        return await handleViewShop(interaction);
+
+    case 'viewstock':
+        return await viewVendingStock(interaction);
+
+      case 'shoplink':
+        return await handleShopLink(interaction);
+  
+      case 'collect_points':
+        return await executeVending(interaction);
+  
+      default:
+        return interaction.reply({
+          content: '❌ Unknown vending subcommand.',
+          ephemeral: true
+        });
+    }
+  }
+  
+  // ============================================================================
+// ------------------- Module Exports -------------------
+// ============================================================================
+
 module.exports = {
-    data: new SlashCommandBuilder()
-        .setName('vending')
-        .setDescription('Manage vending operations. 💼')
-
-        // ------------------- Subcommand: Collect Points -------------------
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('collect_points')
-                .setDescription('💰 Collect your monthly vending points.')
-                .addStringOption(option =>
-                    option
-                        .setName('charactername')
-                        .setDescription('Enter the name of your character.')
-                        .setRequired(true)
-                        .setAutocomplete(true)
-                )
-        )
-
-        // ------------------- Subcommand: Restock -------------------
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('restock')
-                .setDescription('📦 Restock your shop with available items.')
-                .addStringOption(option =>
-                    option
-                        .setName('charactername')
-                        .setDescription('Enter the name of your character.')
-                        .setRequired(true)
-                        .setAutocomplete(true)
-                )
-                .addStringOption(option =>
-                    option
-                        .setName('itemname')
-                        .setDescription('Enter the name of the item.')
-                        .setRequired(true)
-                        .setAutocomplete(true)
-                )
-                .addIntegerOption(option =>
-                    option
-                        .setName('stockqty')
-                        .setDescription('Enter the quantity of stock to add.')
-                        .setRequired(true)
-                )
-                .addIntegerOption(option =>
-                    option
-                        .setName('tokenprice')
-                        .setDescription('Enter the price in tokens (optional).')
-                        .setRequired(false)
-                )
-                .addIntegerOption(option =>
-                    option
-                        .setName('artprice')
-                        .setDescription('Enter the price in art currency (optional).')
-                        .setRequired(false)
-                )
-                .addIntegerOption(option =>
-                    option
-                        .setName('otherprice')
-                        .setDescription('Enter the price in other currency (optional).')
-                        .setRequired(false)
-                )
-                .addBooleanOption(option =>
-                    option
-                        .setName('tradesopen')
-                        .setDescription('Is this item open for trades?')
-                        .setRequired(false)
-                )
-        )
-
-        // ------------------- Subcommand: Sync -------------------
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('sync')
-                .setDescription('🔄 Sync old stock from the shop spreadsheet to the vending inventory.')
-                .addStringOption(option =>
-                    option
-                        .setName('charactername')
-                        .setDescription('Enter the name of your character.')
-                        .setRequired(true)
-                        .setAutocomplete(true)
-                )
-        )
-
-        // ------------------- Subcommand: Barter -------------------
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('barter')
-                .setDescription('🤝 Handle a barter transaction between your character and a vendor.')
-                .addStringOption(option =>
-                    option
-                        .setName('charactername')
-                        .setDescription('Enter the name of your character initiating the barter.')
-                        .setRequired(true)
-                        .setAutocomplete(true)
-                )
-                .addStringOption(option =>
-                    option
-                        .setName('vendorcharacter')
-                        .setDescription('Enter the vendor character involved in the barter.')
-                        .setRequired(true)
-                        .setAutocomplete(true)
-                )
-                .addStringOption(option =>
-                    option
-                        .setName('itemname')
-                        .setDescription('Enter the name of the item to barter for.')
-                        .setRequired(true)
-                        .setAutocomplete(true)
-                )
-                .addIntegerOption(option =>
-                    option
-                        .setName('quantity')
-                        .setDescription('Enter the quantity to barter.')
-                        .setRequired(true)
-                )
-                .addStringOption(option =>
-                    option
-                        .setName('paymentmethod')
-                        .setDescription('Select the payment method: art, token, other, or trade.')
-                        .setRequired(true)
-                        .addChoices(
-                            { name: 'Art', value: 'art' },
-                            { name: 'Token', value: 'token' },
-                            { name: 'Other', value: 'other' },
-                            { name: 'Trade', value: 'trade' }
-                        )
-                )
-                .addStringOption(option =>
-                    option
-                        .setName('notes')
-                        .setDescription('Optional notes about the barter transaction.')
-                        .setRequired(false)
-                )
-        )
-
-        // ------------------- Subcommand: Edit Shop -------------------
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('editshop')
-                .setDescription('✏️ Edit the details of items in your vending shop.')
-                .addStringOption(option =>
-                    option
-                        .setName('charactername')
-                        .setDescription('Enter the name of your character.')
-                        .setRequired(true)
-                        .setAutocomplete(true)
-                )
-                .addStringOption(option =>
-                    option
-                        .setName('itemname')
-                        .setDescription('Enter the name of the item to edit (use "Shop Image" to set shop image).')
-                        .setRequired(true)
-                        .setAutocomplete(true)
-                )
-                .addAttachmentOption(option =>
-                    option
-                        .setName('shopimagefile')
-                        .setDescription('Upload the shop image file (if item is "Shop Image").')
-                        .setRequired(false)
-                )
-                .addIntegerOption(option =>
-                    option
-                        .setName('tokenprice')
-                        .setDescription('Enter the new price in tokens (optional).')
-                        .setRequired(false)
-                )
-                .addStringOption(option =>
-                    option
-                        .setName('artprice')
-                        .setDescription('Enter the new price in art currency (optional).')
-                        .setRequired(false)
-                )
-                .addStringOption(option =>
-                    option
-                        .setName('otherprice')
-                        .setDescription('Enter the new price in other currency (optional).')
-                        .setRequired(false)
-                )
-                .addBooleanOption(option =>
-                    option
-                        .setName('tradesopen')
-                        .setDescription('Are trades open for this item?')
-                        .setRequired(false)
-                )
-        )
-
-        // ------------------- Subcommand: Fulfill -------------------
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('fulfill')
-                .setDescription('✅ Fulfill a barter request.')
-                .addStringOption(option =>
-                    option
-                        .setName('id')
-                        .setDescription('Enter the fulfillment ID of the barter request.')
-                        .setRequired(true)
-                )
-        )
-
-        // ------------------- Subcommand: Pouch -------------------
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('pouch')
-                .setDescription('📈 Upgrade your vending character\'s pouch size.')
-                .addStringOption(option =>
-                    option
-                        .setName('charactername')
-                        .setDescription('Enter the name of the vending character.')
-                        .setRequired(true)
-                        .setAutocomplete(true)
-                )
-                .addStringOption(option =>
-                    option
-                        .setName('pouchtype')
-                        .setDescription('Select the pouch type to upgrade to.')
-                        .setRequired(true)
-                        .addChoices(
-                            { name: 'Bronze (15 slots)', value: 'bronze' },
-                            { name: 'Silver (30 slots)', value: 'silver' },
-                            { name: 'Gold (50 slots)', value: 'gold' }
-                        )
-                )
-        )
-
-        // ------------------- Subcommand: Setup -------------------
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('setup')
-                .setDescription('🛠️ Set up a character for vending.')
-                .addStringOption(option =>
-                    option
-                        .setName('charactername')
-                        .setDescription('Enter the name of the character.')
-                        .setRequired(true)
-                        .setAutocomplete(true)
-                )
-                .addStringOption(option =>
-                    option
-                        .setName('shoplink')
-                        .setDescription('Enter the Google Sheets link to the vending shop.')
-                        .setRequired(true)
-                )
-                .addStringOption(option =>
-                    option
-                        .setName('pouch')
-                        .setDescription('Does the character have a pouch?')
-                        .setRequired(true)
-                        .addChoices(
-                            { name: 'None', value: 'none' },
-                            { name: 'Bronze', value: 'bronze' },
-                            { name: 'Silver', value: 'silver' },
-                            { name: 'Gold', value: 'gold' }
-                        )
-                )
-                .addIntegerOption(option =>
-                    option
-                        .setName('points')
-                        .setDescription('Enter the number of points the character has.')
-                        .setRequired(true)
-                )
-        )
-
-        // ------------------- Subcommand: View Shop -------------------
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('viewshop')
-                .setDescription('👀 View a character’s shop details.')
-                .addStringOption(option =>
-                    option
-                        .setName('charactername')
-                        .setDescription('Enter the name of the character to view.')
-                        .setRequired(true)
-                        .setAutocomplete(true)
-                )
-        )
-
-        // ------------------- Subcommand: View Stock -------------------
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('viewstock')
-                .setDescription('📋 View the current vending stock list.')
-        ),
-
-    // ------------------- Command Execution -------------------
-    // Routes the user's subcommand to its corresponding handler function.
-    async execute(interaction) {
-        const subcommand = interaction.options.getSubcommand();
-        console.log(`[vending.js:logs] Executing subcommand: ${subcommand}`);
-
-        try {
-            if (subcommand === 'viewstock') {
-                await viewVendingStock(interaction);
-            } else if (subcommand === 'viewshop') {
-                await handleViewShop(interaction, interaction.user.id);
-            } else if (subcommand === 'setup') {
-                await handleVendingSetup(interaction);
-            } else if (subcommand === 'editshop') {
-                await handleEditShop(interaction);
-            } else if (subcommand === 'fulfill') {
-                await handleFulfill(interaction);
-            } else if (subcommand === 'pouch') {
-                await handlePouchUpgrade(interaction);
-            } else if (subcommand === 'sync') {
-                await handleVendingSync(interaction);
-            } else {
-                await executeVending(interaction);
-            }
-        } catch (error) {
-    handleError(error, 'vending.js');
-
-            console.error(`[vending.js:error] Error executing subcommand "${subcommand}": ${error}`);
-            await interaction.reply({ content: '❌ **An error occurred while processing your vending command.**', ephemeral: true });
-        }
-    },
-};
+    data: command,
+    execute
+  };
+  
