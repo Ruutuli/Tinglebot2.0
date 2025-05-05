@@ -37,15 +37,34 @@ function similarity(a, b) {
 
 // ============================================================================
 // ------------------- Fetch All Trello Labels for the Board -------------------
+// Safely retrieves label data for the current Trello board.
+// ============================================================================
 async function fetchLabels() {
-  const response = await axios.get(`https://api.trello.com/1/boards/${TRELLO_BOARD_ID}/labels`, {
-    params: {
-      key: TRELLO_API_KEY,
-      token: TRELLO_TOKEN
+  try {
+    if (!TRELLO_BOARD_ID) {
+      throw new Error("❌ Missing TRELLO_BOARD_ID in environment variables.");
     }
-  });
-  return response.data;
+
+    const response = await axios.get(`https://api.trello.com/1/boards/${TRELLO_BOARD_ID}/labels`, {
+      params: {
+        key: TRELLO_API_KEY,
+        token: TRELLO_TOKEN
+      }
+    });
+
+    return response.data;
+
+  } catch (error) {
+    const context = {
+      options: { TRELLO_BOARD_ID },
+      commandName: "fetchLabels"
+    };
+    handleError(error, "trello.js", context);
+    console.error("[trello.js]: ❌ Failed to fetch labels from Trello API", error.message);
+    return []; // Return safe fallback
+  }
 }
+
 
 // ============================================================================
 // ------------------- Create a Trello Card -------------------
