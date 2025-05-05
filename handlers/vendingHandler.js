@@ -185,13 +185,13 @@ async function handleRestock(interaction) {
     const currentMonth = new Date().getMonth() + 1;
     const currentVillage = character.currentVillage;
     
-    console.log(`[Debug] Looking for vending stock with month: ${currentMonth}`); // 🐛 Debug Log
+    console.log(`[Debug] Looking for vending stock with month: ${currentMonth} (type: ${typeof currentMonth})`);
     
     const stockCollection = db.collection("vending_stock");
-    const stockDoc = await stockCollection.findOne({ month: currentMonth });
+    const stockDoc = await stockCollection.findOne({ month: Number(currentMonth) });
     
-
     if (!stockDoc) {
+      console.warn(`[Restock Debug] No stockDoc found for month ${currentMonth}. Check DB entries.`);
       return interaction.editReply(`❌ No vending stock found for month ${currentMonth}.`);
     }
 
