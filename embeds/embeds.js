@@ -369,6 +369,21 @@ const createVendorEmbed = (character) => {
 };
 
 // ------------------- Subsection Title ------------------- 
+function createVendingSetupEmbed(characterName, shopLink) {
+  return {
+    title: `🛒 Vending Setup Complete`,
+    description: `Your vending shop is now linked and active!`,
+    fields: [
+      { name: "Character", value: characterName, inline: true },
+      { name: "Shop Sheet", value: `[Open Sheet](${shopLink})`, inline: true },
+    ],
+    color: 0x34D399, // Tailwind-style emerald-400
+    footer: { text: "You can now collect vending points and restock items." },
+    timestamp: new Date(),
+  };
+}
+
+// ------------------- Subsection Title ------------------- 
 const createExplorationItemEmbed = (
  party,
  character,
@@ -1701,6 +1716,7 @@ module.exports = {
  createSimpleCharacterEmbed,
  createCharacterGearEmbed,
  createVendorEmbed,
+ createVendingSetupEmbed,
  createExplorationItemEmbed,
  createExplorationMonsterEmbed,
  createSetupInstructionsEmbed,
