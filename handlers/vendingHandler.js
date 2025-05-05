@@ -137,7 +137,8 @@ async function handleCollectPoints(interaction) {
     await updateCharacterById(character._id, {
       vendingPoints: (character.vendingPoints || 0) + pointsAwarded,
       lastPointClaim: now,
-      lastCollectedMonth: now.getMonth()
+      lastCollectedMonth: now.getMonth() + 1
+
     });
   
     const embed = new EmbedBuilder()
