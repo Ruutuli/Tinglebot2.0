@@ -879,8 +879,12 @@ async function handleVendingSync(interaction) {
     }
 
     if (!parsedRows.length) {
-      throw new Error('No valid "Old Stock" entries were found in the sheet.');
+      return await interaction.editReply({
+        content: `⚠️ No valid "Old Stock" entries found. Proceeding to sync with an empty inventory. This cannot be undone.`,
+        ephemeral: true
+      });
     }
+    
 
     // ------------------- Step 4: Insert Into Database -------------------
     const db = await connectToInventories();
