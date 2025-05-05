@@ -181,8 +181,25 @@ async function handleRestock(interaction) {
       const db = client; 
       const inventory = db.collection(characterName.toLowerCase());
       const existingItems = await inventory.find({}).toArray();
+      
 
-      const itemDoc = await ItemModel.findOne({ itemName });
+      const stockDb = client.db("tinglebot");
+      const stockCollection = stockDb.collection("vending_stock");
+      
+      const stockDoc = await stockCollection.findOne({ month: currentMonth });
+      if (!stockDoc) {
+        return interaction.editReply(`❌ No vending stock found for month ${currentMonth}.`);
+      }
+      
+      const villageStock = stockDoc.stockList?.[currentVillage] || [];
+      const itemDoc = villageStock.find(i => i.itemName === itemName);
+      
+      if (!itemDoc || typeof itemDoc.points !== "number" || itemDoc.points <= 0) {
+        return interaction.editReply(`❌ Item '${itemName}' is missing a valid vending point value in the vending stock.`);
+      }
+      
+      const pointCost = itemDoc.points;
+      
       if (!itemDoc) {
         return interaction.editReply(`❌ Item '${itemName}' not found in database.`);
       }
