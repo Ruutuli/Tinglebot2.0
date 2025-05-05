@@ -55,7 +55,7 @@ const { handleError } = require('../utils/globalErrorHandler.js');
 
 const {
   capitalizeFirstLetter
- } = require("../../modules/formattingModule");
+ } = require("../modules/formattingModule");
 
 
 // ------------------- Constants -------------------
@@ -85,8 +85,9 @@ async function connectToVendingDatabase() {
 }
 
 // ------------------- executeVending -------------------
-async function executeVending(interaction) {}
-
+async function executeVending(interaction) {
+  return await handleCollectPoints(interaction);
+}
 
 // ------------------- handleCollectPoints -------------------
 async function handleCollectPoints(interaction) {
