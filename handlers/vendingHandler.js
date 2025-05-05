@@ -80,13 +80,13 @@ async function connectToVendingDatabase() {
   const client = new MongoClient(process.env.MONGODB_INVENTORIES_URI, {});
   try {
     await client.connect();
-    return client.db(); // ✅ RETURN THE DB, NOT THE CLIENT
+    return client.db("tinglebot"); // ✅ explicitly select the tinglebot DB
   } catch (error) {
     handleError(error, 'vendingHandler.js');
-    console.error("[connectToVendingDatabase]: Error connecting to vending database:", error);
     throw error;
   }
 }
+
 
 // ------------------- executeVending -------------------
 async function executeVending(interaction) {
@@ -182,18 +182,21 @@ async function handleRestock(interaction) {
     const db = await connectToInventoriesNative();
     const inventory = db.collection(characterName.toLowerCase());
     const existingItems = await inventory.find({}).toArray();
-    const currentMonth = new Date().getMonth() + 1;
-    const currentVillage = character.currentVillage;
     
-    console.log(`[Debug] Looking for vending stock with month: ${currentMonth} (type: ${typeof currentMonth})`);
-    
-    const stockCollection = db.collection("vending_stock");
-    const stockDoc = await stockCollection.findOne({ month: Number(currentMonth) });
-    
-    if (!stockDoc) {
-      console.warn(`[Restock Debug] No stockDoc found for month ${currentMonth}. Check DB entries.`);
-      return interaction.editReply(`❌ No vending stock found for month ${currentMonth}.`);
-    }
+// ------------------- Fetch Vending Stock for Current Month -------------------
+const currentMonth = new Date().getMonth() + 1;
+const currentVillage = character.currentVillage;
+
+console.log(`[Debug] Looking for vending stock with month: ${currentMonth} (type: ${typeof currentMonth})`);
+
+const stockCollection = db.collection("vendingStock"); // ✅ corrected collection name
+const stockDoc = await stockCollection.findOne({ month: Number(currentMonth) });
+
+if (!stockDoc) {
+  console.warn(`[Restock Debug] No stockDoc found for month ${currentMonth}. Check DB entries.`);
+  return interaction.editReply(`❌ No vending stock found for month ${currentMonth}.`);
+}
+
 
     const villageStock = stockDoc.stockList?.[currentVillage] || [];
     const itemDoc = villageStock.find(i => i.itemName === itemName);
