@@ -467,7 +467,16 @@ async function handleViewShop(interaction) {
       if (!character) {
         throw new Error(`Character '${characterName}' not found.`);
       }
-  
+  // ------------------- Simple URL Validator -------------------
+function isValidUrl(str) {
+  try {
+    new URL(str);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
       // Validate the shop image URL
       const shopImage = isValidUrl(character.shopImage)
         ? character.shopImage
