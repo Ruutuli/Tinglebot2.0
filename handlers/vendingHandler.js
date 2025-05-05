@@ -5,6 +5,7 @@
 
 // ------------------- Standard Libraries -------------------
 const { v4: uuidv4 } = require('uuid');
+const { MongoClient } = require("mongodb");
 
 // ------------------- Discord.js Components -------------------
 const {
@@ -72,13 +73,11 @@ const VIEW_SHOP_IMAGE_URL = DEFAULT_IMAGE_URL;
 // ============================================================================
 
 // ------------------- Connect to vending database -------------------
-const { MongoClient } = require("mongodb");
-
 async function connectToVendingDatabase() {
   const client = new MongoClient(process.env.MONGODB_INVENTORIES_URI, {});
   try {
     await client.connect();
-    return client;
+    return client.db(); // ✅ RETURN THE DB, NOT THE CLIENT
   } catch (error) {
     handleError(error, 'vendingHandler.js');
     console.error("[connectToVendingDatabase]: Error connecting to vending database:", error);
