@@ -53,6 +53,10 @@ const {
 } = require('../utils/storage.js');
 const { handleError } = require('../utils/globalErrorHandler.js');
 
+const {
+  capitalizeFirstLetter
+ } = require("../../modules/formattingModule");
+
 
 // ------------------- Constants -------------------
 const DEFAULT_IMAGE_URL = "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png";
