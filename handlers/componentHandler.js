@@ -1,470 +1,511 @@
+// ============================================================================
 // ------------------- Combined Component and Button Handler -------------------
-// This file handles both button interactions and other component interactions,
-// including template commands and modals. It organizes imports, defines helper 
-// functions for button rows, and contains interaction handlers for job selection, 
-// character viewing, syncing, and more.
+// Handles button interactions and component logic like job selection, modals,
+// syncing, art submissions, vending view, and mount traits.
+// ============================================================================
 
+
+// =============================================================================
+// ------------------- Imports -------------------
+// =============================================================================
+
+// ------------------- Standard Libraries -------------------
 const { handleError } = require('../utils/globalErrorHandler');
+
 // ------------------- Discord.js Components -------------------
-// Components from discord.js for building action rows, buttons, and embeds.
-const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
+const {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  EmbedBuilder
+} = require('discord.js');
 
 // ------------------- Database Connections -------------------
-// Functions to establish connections with the database.
-const { connectToTinglebot, fetchCharacterById, getUserById } = require('../database/db');
+const {
+  connectToTinglebot,
+  fetchCharacterById,
+  getUserById
+} = require('../database/db');
 
 // ------------------- Database Models -------------------
-// Schemas/models for database collections.
 const ItemModel = require('../models/ItemModel');
 
 // ------------------- Embed and Command Imports -------------------
-// Embeds and commands for character details and help messages.
-// Character Embeds
-const { createCharacterEmbed, createCharacterGearEmbed, createArtSubmissionEmbed } = require('../embeds/embeds');
+const {
+  createCharacterEmbed,
+  createCharacterGearEmbed,
+  createArtSubmissionEmbed
+} = require('../embeds/embeds');
 
 // ------------------- Modules -------------------
-// Custom modules for additional functionalities.
 const { getGeneralJobsPage, getJobPerk } = require('../modules/jobsModule');
 const { getVillageColorByName } = require('../modules/locationsModule');
 const { roles } = require('../modules/rolesModule');
-const { getCurrentVendingStockList } = require('../database/db');
-const { handleVendingViewVillage } = require('./vendingHandler');
 
 // ------------------- Handler Imports -------------------
-// Handlers for specific component interactions and modals.
-const { 
-    handleMountComponentInteraction, 
-    handleRegisterMountModal,
-    handleTameInteraction, 
-    handleTraitPaymentInteraction,
-    handleTraitSelection,
-    handleUseItemInteraction 
+const {
+  handleMountComponentInteraction,
+  handleRegisterMountModal,
+  handleTameInteraction,
+  handleTraitPaymentInteraction,
+  handleTraitSelection,
+  handleUseItemInteraction
 } = require('./mountComponentHandler');
-const { handleModalSubmission } = require('./modalHandler');
-const { syncInventory } = require('../handlers/syncHandler'); //---- Import for syncInventory handler
 
-// ------------------- Utility Imports -------------------
-// Utility functions for storage, token calculations, art submission embeds, and validation.
-const { deleteSubmissionFromStorage, saveSubmissionToStorage, submissionStore } = require('../utils/storage');
-const { calculateTokens, generateTokenBreakdown } = require('../utils/tokenUtils');
+const { handleModalSubmission } = require('./modalHandler');
+const { syncInventory } = require('../handlers/syncHandler');
+const { handleVendingViewVillage } = require('./vendingHandler');
+
+// ------------------- Utility Functions -------------------
+const {
+  deleteSubmissionFromStorage,
+  saveSubmissionToStorage,
+  submissionStore
+} = require('../utils/storage');
+
+const {
+  calculateTokens,
+  generateTokenBreakdown
+} = require('../utils/tokenUtils');
+
 const { canChangeJob } = require('../utils/validation');
 
 
 // =============================================================================
 // ------------------- Utility Button Row Functions -------------------
 // These functions create pre-defined button rows for interactions.
+// =============================================================================
 
-//---- Returns an action row containing a Cancel button.
+// ------------------- Function: getCancelButtonRow -------------------
+// Returns an action row with a ❌ Cancel button.
 function getCancelButtonRow() {
-    return new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-            .setCustomId('cancel')
-            .setLabel('❌ Cancel')
-            .setStyle(ButtonStyle.Danger)
-    );
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId('cancel')
+      .setLabel('❌ Cancel')
+      .setStyle(ButtonStyle.Danger)
+  );
 }
 
-//---- Returns an action row containing a Confirm button.
+// ------------------- Function: getConfirmButtonRow -------------------
+// Returns an action row with a ✅ Confirm button.
 function getConfirmButtonRow() {
-    return new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-            .setCustomId('confirm')
-            .setLabel('✅ Confirm')
-            .setStyle(ButtonStyle.Success)
-    );
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId('confirm')
+      .setLabel('✅ Confirm')
+      .setStyle(ButtonStyle.Success)
+  );
 }
 
 
 // =============================================================================
 // ------------------- Button Interaction Handlers -------------------
-// These functions handle various button interactions such as syncing, confirmation,
-// cancellation, viewing a character, and job selection actions.
+// These functions handle buttons for sync, cancel, job update, etc.
+// =============================================================================
 
-//---- Primary handler for button interactions. Determines the action from customId and delegates accordingly.
+// ------------------- Function: handleButtonInteraction -------------------
+// Routes button actions like sync, job-change, view, confirm, etc.
 async function handleButtonInteraction(interaction) {
-    if (interaction.replied || interaction.deferred) return;
+  if (interaction.replied || interaction.deferred) return;
 
-    const userId = interaction.user.id;
-    const [action, characterId, extra] = interaction.customId.split('|');
-    const submissionData = submissionStore.get(userId);
+  const [action, characterId, extra] = interaction.customId.split('|');
+  const userId = interaction.user.id;
+  const submissionData = submissionStore.get(userId);
 
-    try {
-        switch (action) {
-            case 'sync-yes':
-                await handleSyncYes(interaction, characterId);
-                break;
-            case 'sync-no':
-                await handleSyncNo(interaction);
-                break;
-            case 'confirm':
-                await handleConfirmation(interaction, userId, submissionData);
-                break;
-            case 'cancel':
-                await handleCancel(interaction, userId, submissionData);
-                break;
-            case 'view':
-                await handleViewCharacter(interaction, characterId);
-                break;
-            case 'job-select':
-                await handleJobSelect(interaction, characterId, extra);
-                break;
-            case 'job-page':
-                await handleJobPage(interaction, characterId, extra);
-                break;
-            default:
-                console.warn(`[componentHandler]: Unhandled button action: ${action}`);
-                break;
-        }
-    } catch (error) {
+  try {
+    switch (action) {
+      case 'sync-yes':
+        return await handleSyncYes(interaction, characterId);
+      case 'sync-no':
+        return await handleSyncNo(interaction);
+      case 'confirm':
+        return await handleConfirmation(interaction, userId, submissionData);
+      case 'cancel':
+        return await handleCancel(interaction, userId, submissionData);
+      case 'view':
+        return await handleViewCharacter(interaction, characterId);
+      case 'job-select':
+        return await handleJobSelect(interaction, characterId, extra);
+      case 'job-page':
+        return await handleJobPage(interaction, characterId, extra);
+      default:
+        console.warn(`[componentHandler.js]: Unhandled button action: ${action}`);
+    }
+  } catch (error) {
     handleError(error, 'componentHandler.js');
+    console.error(`[componentHandler.js]: Error handling button (${action})`, error);
 
-        console.error(`[componentHandler]: Error handling button interaction (${action}): ${error.message}`);
-        if (!interaction.replied) {
-            await interaction.reply({
-                content: '❌ **An error occurred while processing your action.**',
-                ephemeral: true,
-            });
-        }
+    if (!interaction.replied) {
+      await interaction.reply({
+        content: '❌ **An error occurred while processing your action.**',
+        ephemeral: true,
+      });
     }
+  }
 }
 
-//---- Handles the 'sync-yes' button interaction to initiate an inventory sync.
+// ------------------- Function: handleSyncYes -------------------
+// Begins character inventory sync.
 async function handleSyncYes(interaction, characterId) {
-    await interaction.deferReply({ ephemeral: true });
-    await interaction.editReply({
-        content: '🔄 **Sync has initiated. This may take some time. Please wait...**',
-    });
+  await interaction.deferReply({ ephemeral: true });
+  await interaction.editReply({ content: '🔄 **Sync has initiated. Please wait...**' });
 
-    const character = await fetchCharacterById(characterId);
-    if (!character) {
-        await interaction.editReply({ content: '❌ **Character not found.**' });
-        return;
-    }
+  const character = await fetchCharacterById(characterId);
+  if (!character) {
+    return interaction.editReply({ content: '❌ **Character not found.**' });
+  }
 
-    await syncInventory(character.name, interaction.user.id, interaction);
+  await syncInventory(character.name, interaction.user.id, interaction);
 }
 
-//---- Handles the 'sync-no' button interaction to cancel a sync operation.
+// ------------------- Function: handleSyncNo -------------------
+// Cancels sync.
 async function handleSyncNo(interaction) {
-    await interaction.reply({ content: '❌ **Sync canceled.**', ephemeral: true });
+  await interaction.reply({ content: '❌ **Sync canceled.**', ephemeral: true });
 }
 
-//---- Handles the confirmation of a submission.
+// ------------------- Function: handleConfirmation -------------------
+// Confirms an art submission and posts embed.
 async function handleConfirmation(interaction, userId, submissionData) {
-    if (!submissionData) {
-        await interaction.reply({
-            content: '❌ **Submission data not found. Please try again.**',
-            ephemeral: true,
-        });
-        return;
-    }
-
-    const user = await getUserById(userId);
-    const { totalTokens } = calculateTokens(submissionData);
-    const breakdown = generateTokenBreakdown({
-        ...submissionData,
-        finalTokenAmount: totalTokens,
+  if (!submissionData) {
+    return interaction.reply({
+      content: '❌ **Submission data not found. Please try again.**',
+      ephemeral: true,
     });
+  }
 
-    await interaction.update({
-        content: '✅ **You have confirmed your submission!** Mods will review it shortly.',
-        components: [],
-    });
+  const user = await getUserById(userId);
+  const { totalTokens } = calculateTokens(submissionData);
+  const breakdown = generateTokenBreakdown({ ...submissionData, finalTokenAmount: totalTokens });
 
+  await interaction.update({
+    content: '✅ **You have confirmed your submission! Mods will review it shortly.**',
+    components: [],
+  });
+
+  if (!submissionData.embedSent) {
     const embed = createArtSubmissionEmbed(submissionData, user, breakdown);
-    if (!submissionData.embedSent) {
-        const sentMessage = await interaction.channel.send({ embeds: [embed] });
-        submissionData.messageUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${sentMessage.id}`;
-        submissionStore.set(userId, submissionData);
-        saveSubmissionToStorage(submissionData.submissionId, submissionData);
-    }
+    const sentMessage = await interaction.channel.send({ embeds: [embed] });
+    submissionData.messageUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${sentMessage.id}`;
+    submissionStore.set(userId, submissionData);
+    saveSubmissionToStorage(submissionData.submissionId, submissionData);
+  }
 
-    submissionStore.delete(userId);
+  submissionStore.delete(userId);
 }
 
-//---- Handles the cancellation of a submission.
+// ------------------- Function: handleCancel -------------------
+// Cancels submission and removes stored data.
 async function handleCancel(interaction, userId, submissionData) {
-    if (submissionData?.submissionId) {
-        deleteSubmissionFromStorage(submissionData.submissionId);
-    }
+  if (submissionData?.submissionId) {
+    deleteSubmissionFromStorage(submissionData.submissionId);
+  }
 
-    submissionStore.delete(userId);
+  submissionStore.delete(userId);
 
-    await interaction.update({
-        content: '❌ **Your submission has been canceled.**',
-        components: [],
-    });
+  await interaction.update({
+    content: '❌ **Your submission has been canceled.**',
+    components: [],
+  });
 }
 
-//---- Handles the viewing of a character's details and gear.
+// ------------------- Function: handleViewCharacter -------------------
+// Shows a character's profile + gear embed.
 async function handleViewCharacter(interaction, characterId) {
-    await connectToTinglebot();
-    const character = await fetchCharacterById(characterId);
+  await connectToTinglebot();
+  const character = await fetchCharacterById(characterId);
 
-    if (!character) {
-        await interaction.reply({ content: '❌ **Character not found.**', ephemeral: true });
-        return;
-    }
+  if (!character) {
+    return interaction.reply({ content: '❌ **Character not found.**', ephemeral: true });
+  }
 
-    const embed = createCharacterEmbed(character);
-    const itemNames = [
-        character.gearWeapon?.name,
-        character.gearShield?.name,
-        character.gearArmor?.head?.name,
-        character.gearArmor?.chest?.name,
-        character.gearArmor?.legs?.name,
-    ].filter(Boolean);
+  const embed = createCharacterEmbed(character);
 
-    const itemDetails = await ItemModel.find({ itemName: { $in: itemNames } });
-    const getItemDetail = (itemName) => {
-        const item = itemDetails.find((detail) => detail.itemName === itemName);
-        return item ? `${item.emoji} ${item.itemName} [+${item.modifierHearts}]` : 'N/A';
-    };
+  const itemNames = [
+    character.gearWeapon?.name,
+    character.gearShield?.name,
+    character.gearArmor?.head?.name,
+    character.gearArmor?.chest?.name,
+    character.gearArmor?.legs?.name
+  ].filter(Boolean);
 
-    const gearMap = {
-        head: character.gearArmor?.head ? `> ${getItemDetail(character.gearArmor.head.name)}` : '> N/A',
-        chest: character.gearArmor?.chest ? `> ${getItemDetail(character.gearArmor.chest.name)}` : '> N/A',
-        legs: character.gearArmor?.legs ? `> ${getItemDetail(character.gearArmor.legs.name)}` : '> N/A',
-        weapon: character.gearWeapon ? `> ${getItemDetail(character.gearWeapon.name)}` : '> N/A',
-        shield: character.gearShield ? `> ${getItemDetail(character.gearShield.name)}` : '> N/A',
-    };
+  const itemDetails = await ItemModel.find({ itemName: { $in: itemNames } });
+  const getItemDetail = (itemName) => {
+    const item = itemDetails.find(i => i.itemName === itemName);
+    return item ? `${item.emoji} ${item.itemName} [+${item.modifierHearts}]` : 'N/A';
+  };
 
-    const gearEmbed = createCharacterGearEmbed(character, gearMap, 'all');
-    await interaction.reply({ embeds: [embed, gearEmbed], ephemeral: true });
+  const gearMap = {
+    head: character.gearArmor?.head ? `> ${getItemDetail(character.gearArmor.head.name)}` : '> N/A',
+    chest: character.gearArmor?.chest ? `> ${getItemDetail(character.gearArmor.chest.name)}` : '> N/A',
+    legs: character.gearArmor?.legs ? `> ${getItemDetail(character.gearArmor.legs.name)}` : '> N/A',
+    weapon: character.gearWeapon ? `> ${getItemDetail(character.gearWeapon.name)}` : '> N/A',
+    shield: character.gearShield ? `> ${getItemDetail(character.gearShield.name)}` : '> N/A',
+  };
+
+  const gearEmbed = createCharacterGearEmbed(character, gearMap, 'all');
+  await interaction.reply({ embeds: [embed, gearEmbed], ephemeral: true });
 }
-
 
 // =============================================================================
 // ------------------- Job Interaction Handlers -------------------
 // These functions handle job selection and pagination for updating a character's job.
+// =============================================================================
 
-//---- Handles job selection for a character, including validation, role updates, and notifications.
+// ------------------- Function: handleJobSelect -------------------
+// Validates and applies job change, updates Discord roles, embeds, and posts a notification.
 async function handleJobSelect(interaction, characterId, updatedJob) {
     try {
-        await connectToTinglebot();
-        const character = await fetchCharacterById(characterId);
-
-        if (!character) {
-            console.error(`[componentHandler]: Character not found for ID: ${characterId}`);
-            await interaction.reply({ content: '❌ **Character not found.**', ephemeral: true });
-            return;
+      await connectToTinglebot();
+      const character = await fetchCharacterById(characterId);
+  
+      if (!character) {
+        console.error(`[componentHandler.js]: Character not found for ID: ${characterId}`);
+        return interaction.reply({ content: '❌ **Character not found.**', ephemeral: true });
+      }
+  
+      // Validate job change
+      const validationResult = await canChangeJob(character, updatedJob);
+      if (!validationResult.valid) {
+        console.warn(`[componentHandler.js]: Job validation failed: ${validationResult.message}`);
+        return interaction.reply({ content: validationResult.message, ephemeral: true });
+      }
+  
+      const previousJob = character.job;
+      const member = interaction.member;
+  
+      // ------------------- Remove old job role -------------------
+      const oldJobRole = roles.Jobs.find(r => r.name === `Job: ${previousJob}`);
+      if (oldJobRole) {
+        const guildRole = interaction.guild.roles.cache.find(r => r.name === oldJobRole.name);
+        if (guildRole) {
+          await member.roles.remove(guildRole);
+        } else {
+          console.error(`[componentHandler.js]: Old job role "${oldJobRole.name}" not found in guild.`);
         }
-
-        // Run job validation
-        const validationResult = await canChangeJob(character, updatedJob);
-        if (!validationResult.valid) {
-            console.warn(`[componentHandler]: Job validation failed: ${validationResult.message}`);
-            await interaction.reply({ content: validationResult.message, ephemeral: true });
-            return;
+      }
+  
+      // ------------------- Add new job role -------------------
+      const newJobRole = roles.Jobs.find(r => r.name === `Job: ${updatedJob}`);
+      if (newJobRole) {
+        const guildRole = interaction.guild.roles.cache.find(r => r.name === newJobRole.name);
+        if (guildRole) {
+          await member.roles.add(guildRole);
+        } else {
+          console.error(`[componentHandler.js]: New job role "${newJobRole.name}" not found in guild.`);
         }
-
-        const previousJob = character.job;
-        const member = interaction.member;
-
-        // Update job roles: Remove the old job role if it exists.
-        const roleToRemove = roles.Jobs.find(r => r.name === `Job: ${previousJob}`);
-        if (roleToRemove) {
-            const role = interaction.guild.roles.cache.find(r => r.name === roleToRemove.name);
-            if (role) {
-                await member.roles.remove(role);
-            } else {
-                console.error(`[componentHandler]: Role "${roleToRemove.name}" not found in the guild.`);
-            }
+      }
+  
+      // ------------------- Update perk roles -------------------
+      const previousPerks = getJobPerk(previousJob)?.perks || [];
+      const newPerks = getJobPerk(updatedJob)?.perks || [];
+  
+      // Remove previous perk roles
+      for (const perk of previousPerks) {
+        const perkRole = roles.JobPerks.find(r => r.name === `Job Perk: ${perk}`);
+        if (perkRole) {
+          const role = interaction.guild.roles.cache.find(r => r.name === perkRole.name);
+          if (role) {
+            await member.roles.remove(role);
+          } else {
+            console.error(`[componentHandler.js]: Old perk role "${perkRole.name}" not found.`);
+          }
+        } else {
+          console.error(`[componentHandler.js]: No role mapping for old perk "${perk}".`);
         }
-
-        // Add the new job role if available.
-        const roleToAdd = roles.Jobs.find(r => r.name === `Job: ${updatedJob}`);
-        if (roleToAdd) {
-            const role = interaction.guild.roles.cache.find(r => r.name === roleToAdd.name);
-            if (role) {
-                await member.roles.add(role);
-            } else {
-                console.error(`[componentHandler]: Role "${roleToAdd.name}" not found in the guild.`);
-            }
+      }
+  
+      // Add new perk roles
+      for (const perk of newPerks) {
+        const perkRole = roles.JobPerks.find(r => r.name === `Job Perk: ${perk}`);
+        if (perkRole) {
+          const role = interaction.guild.roles.cache.find(r => r.name === perkRole.name);
+          if (role) {
+            await member.roles.add(role);
+          } else {
+            console.error(`[componentHandler.js]: New perk role "${perkRole.name}" not found.`);
+          }
+        } else {
+          console.error(`[componentHandler.js]: No role mapping for new perk "${perk}".`);
         }
-
-        // Handle job perk updates.
-        const jobPerkData = getJobPerk(updatedJob) || { perks: [] };
-        const newPerks = jobPerkData.perks;
-        const previousPerkData = getJobPerk(previousJob) || { perks: [] };
-        const previousPerks = previousPerkData.perks;
-
-        // Remove the old perk roles.
-        for (const perk of previousPerks) {
-            const perkRole = roles.JobPerks.find(r => r.name === `Job Perk: ${perk}`);
-            if (perkRole) {
-                const guildRole = interaction.guild.roles.cache.find(r => r.name === perkRole.name);
-                if (guildRole) {
-                    await member.roles.remove(guildRole);
-                } else {
-                    console.error(`[componentHandler]: Perk role "${perkRole.name}" not found in the guild.`);
-                }
-            } else {
-                console.error(`[componentHandler]: No perk role found for "${perk}".`);
-            }
+      }
+  
+      // ------------------- Update character job and save -------------------
+      character.job = updatedJob;
+      character.jobPerk = newPerks.join(' / ');
+      await character.save();
+  
+      const embed = createCharacterEmbed(character);
+  
+      await interaction.update({
+        content: `✅ **${character.name}'s job has been updated from ${previousJob} to ${updatedJob}.**`,
+        embeds: [embed],
+        components: [],
+        ephemeral: true,
+      });
+  
+      // ------------------- Notify edit log channel -------------------
+      const EDIT_NOTIFICATION_CHANNEL_ID = '1319524801408274434';
+  
+      try {
+        const notificationChannel = await interaction.client.channels.fetch(EDIT_NOTIFICATION_CHANNEL_ID);
+        if (notificationChannel?.isTextBased()) {
+          const log = [
+            `📢 **USER EDITED THEIR CHARACTER**`,
+            `🌱 **User:** \`${interaction.user.tag}\``,
+            `👤 **Character Name:** \`${character.name}\``,
+            `🛠️ **Edited Category:** \`Job\``,
+            `🔄 **Previous Value:** \`Job: ${previousJob || 'N/A'}\``,
+            `✅ **Updated Value:** \`Job: ${updatedJob}\``
+          ].join('\n');
+  
+          await notificationChannel.send(log);
+        } else {
+          console.error(`[componentHandler.js]: Notification channel not text-based or unavailable.`);
         }
-
-        // Add the new perk roles.
-        for (const perk of newPerks) {
-            const perkRole = roles.JobPerks.find(r => r.name === `Job Perk: ${perk}`);
-            if (perkRole) {
-                const guildRole = interaction.guild.roles.cache.find(r => r.name === perkRole.name);
-                if (guildRole) {
-                    await member.roles.add(guildRole);
-                } else {
-                    console.error(`[componentHandler]: Perk role "${perkRole.name}" not found in the guild.`);
-                }
-            } else {
-                console.error(`[componentHandler]: No perk role found for "${perk}".`);
-            }
-        }
-
-        // Update character's job and associated perk.
-        character.job = updatedJob;
-        character.jobPerk = newPerks.join(' / ');
-        await character.save();
-
-        // Create an embed for the updated character.
-        const embed = createCharacterEmbed(character);
-        await interaction.update({
-            content: `✅ **${character.name}'s job has been updated from ${previousJob} to ${updatedJob}.**`,
-            embeds: [embed],
-            components: [],
-            ephemeral: true,
-        });
-
-        // Post a notification message to the designated channel.
-        const EDIT_NOTIFICATION_CHANNEL_ID = '1319524801408274434'; // Replace with your actual channel ID.
-        try {
-            const notificationChannel = await interaction.client.channels.fetch(EDIT_NOTIFICATION_CHANNEL_ID);
-            if (notificationChannel && notificationChannel.isTextBased()) {
-                const notificationMessage = `📢 **USER EDITED THEIR CHARACTER**\n\n` +
-                    `🌱 **User:** \`${interaction.user.tag}\`\n` +
-                    `👤 **Character Name:** \`${character.name}\`\n` +
-                    `🛠️ **Edited Category:** \`Job\`\n` +
-                    `🔄 **Previous Value:** \`Job: ${previousJob || 'N/A'}\`\n` +
-                    `✅ **Updated Value:** \`Job: ${updatedJob}\``;
-                await notificationChannel.send(notificationMessage);
-            } else {
-                console.error(`[componentHandler]: Notification channel is unavailable or not text-based.`);
-            }
-        } catch (err) {
-    handleError(err, 'componentHandler.js');
-
-            console.error(`[componentHandler]: Error sending update notification: ${err.message}`);
-        }
-
+      } catch (err) {
+        handleError(err, 'componentHandler.js');
+        console.error(`[componentHandler.js]: Error sending update notification`, err);
+      }
+  
     } catch (error) {
-    handleError(error, 'componentHandler.js');
-
-        console.error(`[componentHandler]: Error occurred while handling job selection: ${error.message}`);
-        console.error(error.stack);
-        await interaction.reply({
-            content: '⚠️ **An error occurred while updating the job. Please try again.**',
-            ephemeral: true,
-        });
+      handleError(error, 'componentHandler.js');
+      console.error(`[componentHandler.js]: Error in handleJobSelect`, error);
+      await interaction.reply({
+        content: '⚠️ **An error occurred while updating the job. Please try again.**',
+        ephemeral: true,
+      });
     }
-}
-
-//---- Handles pagination of job selection, creating buttons for job pages.
-async function handleJobPage(interaction, characterId, pageIndexString) {
+  }
+  
+  // ------------------- Function: handleJobPage -------------------
+  // Displays paginated list of jobs using buttons.
+  async function handleJobPage(interaction, characterId, pageIndexString) {
     try {
-        const pageIndex = parseInt(pageIndexString, 10);
-        const jobs = getGeneralJobsPage(pageIndex);
-
-        // Create job selection buttons.
-        const jobButtons = jobs.map((job) =>
-            new ButtonBuilder()
-                .setCustomId(`job-select|${characterId}|${job}`)
-                .setLabel(job)
-                .setStyle(ButtonStyle.Primary)
-        );
-
-        const rows = [];
-        while (jobButtons.length) {
-            rows.push(new ActionRowBuilder().addComponents(jobButtons.splice(0, 5)));
-        }
-
-        // Create navigation buttons.
-        const previousPageIndex = pageIndex - 1;
-        const nextPageIndex = pageIndex + 1;
-        const navigationButtons = [
-            new ButtonBuilder()
-                .setCustomId(`job-page|${characterId}|${previousPageIndex}`)
-                .setLabel('Previous')
-                .setStyle(ButtonStyle.Secondary)
-                .setDisabled(previousPageIndex < 1),
-            new ButtonBuilder()
-                .setCustomId(`job-page|${characterId}|${nextPageIndex}`)
-                .setLabel('Next')
-                .setStyle(ButtonStyle.Secondary)
-                .setDisabled(nextPageIndex > 2),
-        ];
-        const navigationRow = new ActionRowBuilder().addComponents(navigationButtons);
-
-        const embed = new EmbedBuilder()
-            .setTitle('General Jobs')
-            .setDescription('Select a job from the buttons below:')
-            .setColor(getVillageColorByName('General') || '#00CED1');
-
-        await interaction.update({ embeds: [embed], components: [...rows, navigationRow], ephemeral: true });
-    } catch (error) {
-    handleError(error, 'componentHandler.js');
-
-        console.error(`[componentHandler]: Error occurred while handling job page navigation: ${error.message}`);
-        console.error(error.stack);
-        await interaction.reply({
-            content: '⚠️ **An error occurred while navigating the job pages. Please try again.**',
-            ephemeral: true,
+      const pageIndex = parseInt(pageIndexString, 10);
+  
+      if (isNaN(pageIndex) || pageIndex < 1 || pageIndex > 2) {
+        return interaction.reply({
+          content: '⚠️ **Invalid job page. Please try again.**',
+          ephemeral: true,
         });
+      }
+  
+      const jobs = getGeneralJobsPage(pageIndex);
+      if (!jobs || !Array.isArray(jobs) || jobs.length === 0) {
+        return interaction.reply({
+          content: '⚠️ **No jobs available on this page.**',
+          ephemeral: true,
+        });
+      }
+  
+      const jobButtons = jobs.map(job =>
+        new ButtonBuilder()
+          .setCustomId(`job-select|${characterId}|${job}`)
+          .setLabel(job)
+          .setStyle(ButtonStyle.Primary)
+      );
+  
+      const rows = [];
+      while (jobButtons.length) {
+        rows.push(new ActionRowBuilder().addComponents(jobButtons.splice(0, 5)));
+      }
+  
+      const navigationRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`job-page|${characterId}|${pageIndex - 1}`)
+          .setLabel('Previous')
+          .setStyle(ButtonStyle.Secondary)
+          .setDisabled(pageIndex <= 1),
+  
+        new ButtonBuilder()
+          .setCustomId(`job-page|${characterId}|${pageIndex + 1}`)
+          .setLabel('Next')
+          .setStyle(ButtonStyle.Secondary)
+          .setDisabled(pageIndex >= 2) // 🔁 Change if dynamic paging added
+      );
+  
+      const embed = new EmbedBuilder()
+        .setTitle('General Jobs')
+        .setDescription('Select a job from the buttons below:')
+        .setColor(getVillageColorByName('General') || '#00CED1');
+  
+      await interaction.update({
+        embeds: [embed],
+        components: [...rows, navigationRow],
+        ephemeral: true,
+      });
+  
+    } catch (error) {
+      handleError(error, 'componentHandler.js');
+      console.error(`[componentHandler.js]: Error in handleJobPage`, error);
+      await interaction.reply({
+        content: '⚠️ **An error occurred while navigating job pages. Please try again.**',
+        ephemeral: true,
+      });
     }
-}
-
+  }
+  
 // =============================================================================
 // ------------------- Component Interaction Handler -------------------
-// Delegates interactions to the appropriate handlers based on the customId.
-async function handleComponentInteraction(interaction) {
-    const [action] = interaction.customId.split('|');
+// Routes all customId interactions.
+// =============================================================================
 
-    if (
-        ['sync-yes', 'sync-no', 'confirm', 'cancel', 'view', 'job-select', 'job-page'].includes(action)
-    ) {
-        await handleButtonInteraction(interaction);
-    } else if (['sneak', 'distract', 'corner', 'rush', 'glide'].includes(action)) {
-        await handleMountComponentInteraction(interaction);
-    } else if (action === 'tame') {
-        await handleTameInteraction(interaction);
-    } else if (action === 'use-item') {
-        await handleUseItemInteraction(interaction);
-    } else if (action === 'pay-traits') {
-        await handleTraitPaymentInteraction(interaction);
-    } else if (action === 'trait-select') {
-        await handleTraitSelection(interaction);
-    } else if (action === 'register-mount') {
-        await handleRegisterMountModal(interaction);
-    } else if (interaction.isModalSubmit()) {
-        // Redirect modal submissions to the modal handler.
-        await handleModalSubmission(interaction); 
-    } else if (action === 'vending_view') {
-        const [, villageKey] = interaction.customId.split('|');
-        await handleVendingViewVillage(interaction, villageKey);
-      } else if (interaction.customId.startsWith('vending_view_')) {
-        const villageKey = interaction.customId.replace('vending_view_', '');
-        await handleVendingViewVillage(interaction, villageKey);
-      } else {
-        console.warn(`[componentHandler]: Unhandled component interaction: ${interaction.customId}`);
-      }
-    
+// ------------------- Function: handleComponentInteraction -------------------
+// Delegates interaction based on customId prefix.
+async function handleComponentInteraction(interaction) {
+  const [action] = interaction.customId.split('|');
+
+  try {
+    if ([
+      'sync-yes',
+      'sync-no',
+      'confirm',
+      'cancel',
+      'view',
+      'job-select',
+      'job-page'
+    ].includes(action)) {
+      return await handleButtonInteraction(interaction);
+    }
+
+    if (['sneak', 'distract', 'corner', 'rush', 'glide'].includes(action)) {
+      return await handleMountComponentInteraction(interaction);
+    }
+
+    if (action === 'tame') return await handleTameInteraction(interaction);
+    if (action === 'use-item') return await handleUseItemInteraction(interaction);
+    if (action === 'pay-traits') return await handleTraitPaymentInteraction(interaction);
+    if (action === 'trait-select') return await handleTraitSelection(interaction);
+    if (action === 'register-mount') return await handleRegisterMountModal(interaction);
+    if (interaction.isModalSubmit()) return await handleModalSubmission(interaction);
+
+    if (action === 'vending_view') {
+      const [, villageKey] = interaction.customId.split('|');
+      return await handleVendingViewVillage(interaction, villageKey);
+    }
+
+    if (interaction.customId.startsWith('vending_view_')) {
+      const villageKey = interaction.customId.replace('vending_view_', '');
+      return await handleVendingViewVillage(interaction, villageKey);
+    }
+
+    console.warn(`[componentHandler.js]: Unhandled component interaction: ${interaction.customId}`);
+  } catch (error) {
+    handleError(error, 'componentHandler.js');
+    console.error(`[componentHandler.js]: Failed to handle component`, error);
+  }
 }
+
 
 // =============================================================================
 // ------------------- Exports -------------------
-// Exporting the necessary functions for external use.
-module.exports = {
-    handleComponentInteraction,
-    handleButtonInteraction,
-    getCancelButtonRow,
-    getConfirmButtonRow,
-      handleVendingViewVillage,
+// =============================================================================
 
+module.exports = {
+  handleComponentInteraction,
+  handleButtonInteraction,
+  getCancelButtonRow,
+  getConfirmButtonRow
 };
