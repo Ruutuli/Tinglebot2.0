@@ -592,10 +592,11 @@ function isValidUrl(str) {
         : VIEW_SHOP_IMAGE_URL;
   
       // Connect to the vending inventory database
-      const client = await connectToVendingDatabase();
-      const db = client; 
-      const inventoryCollection = db.collection(characterName.toLowerCase());
-  
+      const vendingClient = new MongoClient(process.env.MONGODB_INVENTORIES_URI);
+      await vendingClient.connect();
+      const vendingDb = vendingClient.db("vending");
+      const inventoryCollection = vendingDb.collection(characterName.toLowerCase());
+
       // Fetch all items in the character's vending inventory
       const items = await inventoryCollection.find({}).toArray();
       console.log(`[handleViewShop]: Fetched ${items.length} items for ${characterName}.`);
