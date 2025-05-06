@@ -271,41 +271,27 @@ async function handleRestock(interaction) {
       return interaction.editReply(`⚠️ Not enough vending points. You need ${totalCost}, but only have ${vendingPoints}.`);
     }
 
-      // ------------------- Insert Item into Vending Inventory (ONLY use vending > characterName)
-      // NEVER use inventories > characterName for vending restocks
-      await vendCollection.insertOne({
-        itemName,
-        stockQty,
-        costEach: pointCost,
-        pointsSpent: totalCost,
-        tokenPrice,
-        artPrice,
-        otherPrice,
-        tradesOpen,
-        stackable,
-        boughtFrom: character.currentVillage,
-        date: new Date()
-      });
-
     // ------------------- Insert Item into Vending Inventory -------------------
-      const vendClient = new MongoClient(process.env.MONGODB_INVENTORIES_URI);
-      await vendClient.connect();
-      const vendDb = vendClient.db("vending");
-      const vendCollection = vendDb.collection(characterName.toLowerCase());
+    const vendClient = new MongoClient(process.env.MONGODB_INVENTORIES_URI);
+    await vendClient.connect();
+    const vendDb = vendClient.db("vending");
+    const vendCollection = vendDb.collection(characterName.toLowerCase());
 
-      await vendCollection.insertOne({
-        itemName,
-        stockQty,
-        costEach: pointCost,
-        pointsSpent: totalCost,
-        tokenPrice,
-        artPrice,
-        otherPrice,
-        tradesOpen,
-        stackable,
-        boughtFrom: character.currentVillage,
-        date: new Date()
-      });
+    // ------------------- Insert Item into Vending Inventory (ONLY use vending > characterName)
+    // NEVER use inventories > characterName for vending restocks
+    await vendCollection.insertOne({
+      itemName,
+      stockQty,
+      costEach: pointCost,
+      pointsSpent: totalCost,
+      tokenPrice,
+      artPrice,
+      otherPrice,
+      tradesOpen,
+      stackable,
+      boughtFrom: character.currentVillage,
+      date: new Date()
+    });
 
       await vendClient.close();
 
