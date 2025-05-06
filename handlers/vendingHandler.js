@@ -83,7 +83,7 @@ async function connectToVendingDatabase() {
   const client = new MongoClient(process.env.MONGODB_INVENTORIES_URI, {});
   try {
     await client.connect();
-    return client.db("tinglebot"); // ✅ explicitly select the tinglebot DB
+    return client.db("vending");
   } catch (error) {
     handleError(error, 'vendingHandler.js');
     throw error;
