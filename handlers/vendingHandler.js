@@ -6,6 +6,7 @@
 // ------------------- Standard Libraries -------------------
 const { v4: uuidv4 } = require('uuid');
 const { MongoClient } = require("mongodb");
+const VENDING_DB_URI = process.env.MONGODB_INVENTORIES_URI;
 
 // ------------------- Discord.js Components -------------------
 const {
