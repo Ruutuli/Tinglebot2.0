@@ -766,14 +766,16 @@ const createCraftingEmbed = async (
   ? character.jobVoucherJob
   : character.job;
 
- const craftingFlavorText = generateCraftingFlavorText(jobForFlavorText);
+const craftingFlavorText = generateCraftingFlavorText(
+  typeof jobForFlavorText === 'string' ? jobForFlavorText.trim() : ''
+);
 
- const jobVoucherMessage = character.jobVoucher
+const jobVoucherMessage = character.jobVoucher
   ? `🎫 **Job Voucher activated for ${character.name} to perform the job ${jobForFlavorText}.**\n\n`
   : "";
 
- const combinedFlavorText = flavorText
-  ? `${jobVoucherMessage}${craftingFlavorText}\n\n🌟 **Custom Flavor Text:** ${flavorText}`
+const combinedFlavorText = flavorText?.trim()
+  ? `${jobVoucherMessage}${craftingFlavorText}\n\n🌟 **Custom Flavor Text:** ${flavorText.trim()}`
   : `${jobVoucherMessage}${craftingFlavorText}`;
 
  const DEFAULT_EMOJI = ":small_blue_diamond:";
