@@ -975,16 +975,29 @@ async function handleEditShop(interaction) {
         return;
       }
   
-      // ------------------- Connect to Inventory DB -------------------
+      // ------------------- Connect to MongoDB -------------------
       const client = await connectToVendingDatabase();
-      const db = client; 
+      const db = client;
       const inventory = db.collection(characterName.toLowerCase());
 
-      // ------------------- Case-insensitive item lookup -------------------
+      console.log(`[handleEditShop] Connected to vending DB. Character: ${characterName.toLowerCase()}`);
+
+      // Pull full inventory for inspection
+      const allItems = await inventory.find({}).toArray();
+      console.log(`[handleEditShop] Inventory for ${characterName}:`, allItems.map(i => i.itemName));
+
+      // Attempt to find item
+      console.log(`[handleEditShop] Attempting to locate item (user input): '${itemName.trim()}'`);
       const item = await inventory.findOne({
         itemName: { $regex: new RegExp(`^${itemName.trim()}$`, 'i') }
       });
-      if (!item) throw new Error(`Item '${itemName}' not found in ${characterName}'s shop.`);
+
+      if (!item) {
+        console.error(`[handleEditShop] FAILED to find item '${itemName}' in inventory. Full inventory:`, allItems);
+        throw new Error(`Item '${itemName}' not found in ${characterName}'s shop.`);
+      } else {
+        console.log(`[handleEditShop] Match found for '${itemName}':`, item);
+      }
 
       // ------------------- Apply Updates -------------------
       const updateFields = {};
