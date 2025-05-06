@@ -80,8 +80,6 @@ const initializeReactionHandler = (client) => {
 
       if (reaction.message.partial) await reaction.message.fetch();
       if (reaction.partial) await reaction.fetch();
-
-      console.log(`[interactionHandler.js]: ${user.username} reacted with ${reaction.emoji.name} on message ${reaction.message.id}`);
       
       // TODO: Add routing logic here for specific emoji/message/channel reactions
 

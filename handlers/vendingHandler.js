@@ -211,7 +211,9 @@ async function handleRestock(interaction) {
     const totalSlots = baseSlots + extraSlots;
 
     // ------------------- Fetch Vending Inventory -------------------
+    const vendingClient = new MongoClient(process.env.MONGODB_INVENTORIES_URI);
     await vendingClient.connect();
+    const vendingDb = vendingClient.db("vending");
     const inventoryCollection = vendingDb.collection(characterName.toLowerCase());
     const items = await inventoryCollection.find({}).toArray();
 
@@ -341,6 +343,7 @@ async function handleRestock(interaction) {
       .setTimestamp();
 
     await interaction.editReply({ embeds: [embed] });
+    await vendingClient.close();
 
   } catch (error) {
     console.error('[handleRestock]: Error', error);
