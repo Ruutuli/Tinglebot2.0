@@ -297,34 +297,41 @@ async function handleAutocomplete(interaction) {
    await handleLookupAutocomplete(interaction, focusedOption);
 
    // ------------------- MOD Commands -------------------
-  } else if (
-   commandName === "mod" &&
-   interaction.options.getSubcommand() === "give" &&
-   focusedOption.name === "character"
-  ) {
-   // /mod give — character autocomplete
-   await handleModGiveCharacterAutocomplete(interaction, focusedOption);
-  } else if (
-   commandName === "mod" &&
-   interaction.options.getSubcommand() === "give" &&
-   focusedOption.name === "item"
-  ) {
-   // /mod give — item autocomplete
-   await handleModGiveItemAutocomplete(interaction, focusedOption);
-  } else if (
-   commandName === "mod" &&
-   interaction.options.getSubcommand() === "petlevel" &&
-   focusedOption.name === "character"
-  ) {
-   // /mod petlevel — character autocomplete (needs a new helper)
-   await handleModCharacterAutocomplete(interaction, focusedOption);
-  } else if (
-   commandName === "mod" &&
-   interaction.options.getSubcommand() === "petlevel" &&
-   focusedOption.name === "petname"
-  ) {
-   // /mod petlevel — pet-name autocomplete
-   await handlePetNameAutocomplete(interaction, focusedOption);
+} else if (
+  commandName === "mod" &&
+  interaction.options.getSubcommand() === "give" &&
+  focusedOption.name === "character"
+) {
+  // /mod give — character autocomplete (use all characters)
+  const allCharacters = await fetchAllCharacters();
+  const choices = allCharacters.map((char) => ({
+    name: `${char.name} - ${capitalize(char.currentVillage || '')} - ${capitalize(char.job || '')}`,
+    value: char.name,
+  }));
+
+  await respondWithFilteredChoices(interaction, focusedOption, choices);
+} else if (
+  commandName === "mod" &&
+  interaction.options.getSubcommand() === "give" &&
+  focusedOption.name === "item"
+) {
+  // /mod give — item autocomplete
+  await handleModGiveItemAutocomplete(interaction, focusedOption);
+} else if (
+  commandName === "mod" &&
+  interaction.options.getSubcommand() === "petlevel" &&
+  focusedOption.name === "character"
+) {
+  // /mod petlevel — character autocomplete
+  await handleModCharacterAutocomplete(interaction, focusedOption);
+} else if (
+  commandName === "mod" &&
+  interaction.options.getSubcommand() === "petlevel" &&
+  focusedOption.name === "petname"
+) {
+  // /mod petlevel — pet-name autocomplete
+  await handlePetNameAutocomplete(interaction, focusedOption);
+
 
    // ------------------- MOUNT/STABLE Commands -------------------
   } else if (
