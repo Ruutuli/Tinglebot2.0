@@ -294,13 +294,13 @@ if (totalTravelDuration === -1) {
 // ------------------- KO Handling -------------------
 // Checks if character is KO’d; if so, applies debuff, moves them to recovery village,
 // updates database, sends recovery embed, and returns true to abort further travel.
-async function checkAndHandleKO(character, channel) {
+async function checkAndHandleKO(character, channel, startingVillage) {
   if (character.currentHearts <= 0 || character.ko) {
     character.ko = true;
 
-    const recoveryVillage = ['rudania', 'vhintl'].includes(character.currentVillage)
-      ? 'inariko'
-      : character.currentVillage;
+    const recoveryVillage = ['rudania', 'vhintl'].includes(startingVillage)
+    ? 'inariko'
+    : startingVillage;  
 
     character.currentVillage = recoveryVillage;
     character.currentStamina = 0;
@@ -475,7 +475,7 @@ const finalEmbed = createFinalTravelEmbed(character, destination, paths, totalTr
       
           dailyLogEntry += decision.split('\n').map(line => `> ${line}`).join('\n') + '\n';
         }
-        if (await checkAndHandleKO(character, channel)) return;
+        if (await checkAndHandleKO(character, channel, startingVillage)) return;
         travelLog.push(dailyLogEntry);
         await processTravelDay(day + 1, { ...context, channel });
 
