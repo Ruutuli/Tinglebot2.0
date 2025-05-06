@@ -463,59 +463,54 @@ return decision;
   }
   
   // ------------------- Do Nothing Helper -------------------
-  // Presents extended flavor pool (10+ lines), deducts stamina, logs, and edits embed.
-  async function handleDoNothing(interaction, character, encounterMessage, travelLog) {
-    try {
-      travelLog = Array.isArray(travelLog) ? travelLog : [];
-      const jobPerk = getJobPerk(character.job);
-      character.perk = jobPerk?.perks[0];
-      console.log(`[travelHandler.js]: Do Nothing → ${character.name}`);
-  
-      const flavorTexts = [
-        `${character.name} lay under a blanket of stars. 🌌`,
-        `${character.name} built a small campfire and enjoyed the crackling warmth. 🔥`,
-        `${character.name} stumbled upon ancient ruins and marveled at their carvings. 🏛️`,
-        `${character.name} heard a nearby stream and drifted to sleep. 💧`,
-        `${character.name} found a quiet grove where fireflies danced. ✨`,
-        `${character.name} roasted foraged mushrooms and thought of home. 🍄`,
-        `${character.name} wrapped themselves in their cloak against the chill. 🧥`,
-        `${character.name} caught a glimpse of a shooting star and made a wish. 🌠`,
-        `${character.name} discovered a meadow of moonlit wildflowers. 🌺`,
-        `${character.name} gazed at constellations and felt at peace. 🌟`
-      ];
-      const randomFlavor = flavorTexts[Math.floor(Math.random() * flavorTexts.length)];
-  
-      if (!hasPerk(character,'DELIVERING')) {
-        await useStamina(character._id,1);
-        character.currentStamina -=1;
-      }
-  
-// Update embed
-const description = 
-  `🌸 It's a nice and safe day of traveling. What do you want to do next?\n> ✨ ${randomFlavor}\n\n` +
-  `**❤️ Hearts:** ${character.currentHearts}/${character.maxHearts}\n` +
-  `**🟩 Stamina:** ${character.currentStamina}/${character.maxStamina}`;
+// Presents extended flavor pool (10+ lines), logs event, and edits embed (NO stamina cost).
+async function handleDoNothing(interaction, character, encounterMessage, travelLog) {
+  try {
+    travelLog = Array.isArray(travelLog) ? travelLog : [];
+    const jobPerk = getJobPerk(character.job);
+    character.perk = jobPerk?.perks[0];
+    console.log(`[travelHandler.js]: Do Nothing → ${character.name}`);
 
-  const embed = createUpdatedTravelEmbed({
-    encounterMessage,
-    character,
-    description,
-    fields: [{ name: '🔹 __Outcome__', value: randomFlavor, inline: false }],
-  });
-  
+    const flavorTexts = [
+      `${character.name} lay under a blanket of stars. 🌌`,
+      `${character.name} built a small campfire and enjoyed the crackling warmth. 🔥`,
+      `${character.name} stumbled upon ancient ruins and marveled at their carvings. 🏛️`,
+      `${character.name} heard a nearby stream and drifted to sleep. 💧`,
+      `${character.name} found a quiet grove where fireflies danced. ✨`,
+      `${character.name} roasted foraged mushrooms and thought of home. 🍄`,
+      `${character.name} wrapped themselves in their cloak against the chill. 🧥`,
+      `${character.name} caught a glimpse of a shooting star and made a wish. 🌠`,
+      `${character.name} discovered a meadow of moonlit wildflowers. 🌺`,
+      `${character.name} gazed at constellations and felt at peace. 🌟`
+    ];
+    const randomFlavor = flavorTexts[Math.floor(Math.random() * flavorTexts.length)];
 
-if (typeof encounterMessage?.edit === 'function') {
-  await encounterMessage.edit({ embeds: [embed], components: [] });
-}
+    // No stamina should be used when truly doing nothing
 
-return randomFlavor;
+    // Update embed
+    const description = 
+      `🌸 It's a nice and safe day of traveling. What do you want to do next?\n> ✨ ${randomFlavor}\n\n` +
+      `**❤️ Hearts:** ${character.currentHearts}/${character.maxHearts}\n` +
+      `**🟩 Stamina:** ${character.currentStamina}/${character.maxStamina}`;
 
-  
-    } catch (error) {
-      handleError(error, 'travelHandler.js (handleDoNothing)');
-      throw error;
+    const embed = createUpdatedTravelEmbed({
+      encounterMessage,
+      character,
+      description,
+      fields: [{ name: '🔹 __Outcome__', value: randomFlavor, inline: false }],
+    });
+
+    if (typeof encounterMessage?.edit === 'function') {
+      await encounterMessage.edit({ embeds: [embed], components: [] });
     }
+
+    return randomFlavor;
+
+  } catch (error) {
+    handleError(error, 'travelHandler.js (handleDoNothing)');
+    throw error;
   }
+}
   
   // ============================================================================
 // ------------------- Primary Handler -------------------
