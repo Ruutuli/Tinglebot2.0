@@ -1596,6 +1596,34 @@ async function handleChangeJob(interaction) {
    changedAt: new Date(currentTime),
   });
 
+  // ------------------- Reset Vending on Invalid Job -------------------
+  const nonVendor = !["merchant", "shopkeeper"].includes(newJob.toLowerCase());
+  if (nonVendor) {
+    try {
+      const vendingClient = new MongoClient(process.env.MONGODB_VENDING_URI);
+      await vendingClient.connect();
+
+      const vendingDb = vendingClient.db("vending");
+      const vendingCollection = vendingDb.collection(character.name.toLowerCase());
+
+      await vendingCollection.deleteMany({});
+
+      character.vendingPoints = 0;
+      character.vendingSetup = false;
+      character.vendingSync = false;
+      character.shopLink = null;
+      character.shopPouch = null;
+      character.pouchSize = 0;
+      character.vendingType = null;
+
+      await vendingClient.close();
+
+      console.log(`[handleChangeJob] Cleared vending stock and reset points for ${character.name}`);
+    } catch (err) {
+      console.error(`[handleChangeJob] Failed to reset vending data for ${character.name}:`, err);
+    }
+  }
+
   await character.save();
 
   const villageColor = getVillageColorByName(character.homeVillage) || "#4CAF50";
