@@ -980,9 +980,10 @@ async function handleEditShop(interaction) {
       const db = client; 
       const inventory = db.collection(characterName.toLowerCase());
   
-      const item = await inventory.findOne({ itemName });
+      // ------------------- Case-insensitive item lookup -------------------
+      const item = await inventory.findOne({ itemName: new RegExp(`^${itemName}$`, 'i') });
       if (!item) throw new Error(`Item '${itemName}' not found in ${characterName}'s shop.`);
-  
+
       // ------------------- Apply Updates -------------------
       const updateFields = {};
       if (tokenPrice !== null) updateFields.tokenPrice = tokenPrice;
