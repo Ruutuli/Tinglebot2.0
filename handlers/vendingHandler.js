@@ -976,9 +976,10 @@ async function handleEditShop(interaction) {
       }
   
       // ------------------- Connect to Inventory DB -------------------
-      const client = await connectToVendingDatabase();
-      const db = client; 
-      const inventory = db.collection(characterName.toLowerCase());
+      const item = await inventory.findOne({
+        itemName: { $regex: new RegExp(`^${itemName.trim()}$`, 'i') }
+      });
+      if (!item) throw new Error(`Item '${itemName}' not found in ${characterName}'s shop.`);
   
       // ------------------- Case-insensitive item lookup -------------------
       const item = await inventory.findOne({
