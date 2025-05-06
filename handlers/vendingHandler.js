@@ -985,18 +985,19 @@ async function handleEditShop(interaction) {
         itemName: { $regex: new RegExp(`^${itemName.trim()}$`, 'i') }
       });
       if (!item) throw new Error(`Item '${itemName}' not found in ${characterName}'s shop.`);
-
+      
       // ------------------- Apply Updates -------------------
       const updateFields = {};
       if (tokenPrice !== null) updateFields.tokenPrice = tokenPrice;
       if (artPrice) updateFields.artPrice = artPrice;
       if (otherPrice) updateFields.otherPrice = otherPrice;
       if (tradesOpen !== null) updateFields.tradesOpen = tradesOpen;
-  
+      
       if (Object.keys(updateFields).length === 0) throw new Error('No valid fields provided for update.');
-  
-      await inventory.updateOne({ itemName }, { $set: updateFields });
-  
+      
+      // ✅ FIX: Update by _id, not itemName
+      await inventory.updateOne({ _id: item._id }, { $set: updateFields });
+      
       // ------------------- Update Google Sheet -------------------
       const spreadsheetId = extractSpreadsheetId(character.shopLink);
       if (!spreadsheetId) throw new Error(`Invalid or missing shop link for '${characterName}'.`);
