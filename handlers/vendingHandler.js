@@ -317,6 +317,7 @@ async function handleRestock(interaction) {
         tradesOpen,
         stackable,
         boughtFrom: character.currentVillage,
+        slot: `${Date.now()}`,
         date: new Date()
       });
     }
@@ -336,12 +337,22 @@ async function handleRestock(interaction) {
       const monthLabel = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
 
       const row = [[
-        characterName, itemName, stockQty, pointCost, totalCost,
-        character.currentVillage, tokenPrice, artPrice, otherPrice,
-        tradesOpen ? 'Yes' : 'No', monthLabel
+        characterName,
+        `${Date.now()}`, // Generate a slot using timestamp or UUID (feel free to change)
+        itemName,
+        stockQty,
+        pointCost,
+        totalCost,
+        character.currentVillage,
+        tokenPrice,
+        artPrice,
+        otherPrice,
+        tradesOpen ? 'Yes' : 'No',
+        monthLabel
       ]];
+      
 
-      await safeAppendDataToSheet(character.shopLink, character, 'vendingShop!A:K', row, interaction.client);
+      await safeAppendDataToSheet(character.shopLink, character, 'vendingShop!A:L', row, interaction.client);
     } catch (err) {
       console.error('[handleRestock]: Sheet logging failed', err);
     }
@@ -851,7 +862,7 @@ async function handleVendingSync(interaction) {
     // ------------------- Step 2: Fetch Sheet Data -------------------
     const spreadsheetId = extractSpreadsheetId(character.shopLink);
     const auth = await authorizeSheets();
-    const sheetData = await fetchSheetData(auth, spreadsheetId, 'vendingShop!A2:K');
+    const sheetData = await fetchSheetData(auth, spreadsheetId, 'vendingShop!A2:L');
 
     if (!sheetData?.length) {
       throw new Error('No data found in the vendingShop sheet.');
@@ -863,6 +874,7 @@ async function handleVendingSync(interaction) {
     for (const row of sheetData) {
       const [
         sheetCharacterName,
+        slot,
         itemName,
         stockQtyRaw,
         costEachRaw,
@@ -873,7 +885,7 @@ async function handleVendingSync(interaction) {
         otherPrice,
         tradesOpen,
         date
-      ] = row;
+      ] = row;      
 
       if (
         sheetCharacterName !== character.name ||
@@ -899,8 +911,9 @@ async function handleVendingSync(interaction) {
         artPrice: artPrice || '',
         otherPrice: otherPrice || '',
         tradesOpen: tradesOpen?.toLowerCase() === 'yes',
+        slot: slot || `${Date.now()}`,
         date: new Date()
-      });
+      });      
     }
 
     if (!parsedRows.length) {
