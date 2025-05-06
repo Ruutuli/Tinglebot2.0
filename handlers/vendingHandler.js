@@ -361,10 +361,10 @@ async function handleRestock(interaction) {
       // ------------------- Append Row to Sheet -------------------
       try {
         const spreadsheetId = extractSpreadsheetId(character.shopLink);
-        const auth = await authorizeSheets(); // ✅ Define auth here
         const monthLabel = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
 
         // ✅ FIX: Read sheet data BEFORE using it
+        const auth = await authorizeSheets(); // ✅ Call this BEFORE using it
         const sheetData = await readSheetData(auth, spreadsheetId, 'vendingShop!A2:L');
 
         // ✅ Extract slot column
