@@ -329,13 +329,32 @@ async function handleRestock(interaction) {
         }
       }
       
-      // Auto-generate next available slot
+    // Check if there's an existing stackable match in an existing slot under 10 total units
+    let newSlot;
+    if (stackable) {
+      const matchingStacks = await vendCollection.find({ itemName, stackable: true }).toArray();
+
+      for (const entry of matchingStacks) {
+        const currentSlot = entry.slot;
+        const existingQty = entry.stockQty;
+
+        if (/^Slot \d+$/.test(currentSlot) && existingQty < 10 && (existingQty + stockQty) <= 10) {
+          newSlot = currentSlot;
+          break;
+        }
+      }
+    }
+
+    // If no existing slot found, assign next available unique slot
+    if (!newSlot) {
       let nextSlot = 1;
       while (usedSlotNums.has(nextSlot)) {
         nextSlot++;
       }
-      const newSlot = `Slot ${nextSlot}`;
-      
+      newSlot = `Slot ${nextSlot}`;
+      usedSlotNums.add(nextSlot);
+    }
+
       // Insert new item entry
       await vendCollection.insertOne({
         itemName,
