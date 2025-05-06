@@ -641,7 +641,7 @@ if (!isValidGoogleSheetsUrl(shopLink)) {
   });
 } else {
   const sheetId = extractSpreadsheetId(shopLink);
-  const range = 'vendingShop!A:K';
+  const range = 'vendingShop!A:L';
   const currentMonthYear = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
   const values = [[
     recipientCharacter.name,                      // Vendor name
