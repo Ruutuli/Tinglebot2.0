@@ -2671,6 +2671,8 @@ async function handleViewVendingShopAutocomplete(interaction) {
 async function handleSlotAutocomplete(interaction) {
   try {
     const characterName = interaction.options.getString('charactername');
+    if (!characterName) return await interaction.respond([]);
+
     const character = await fetchCharacterByName(characterName);
     if (!character) return await interaction.respond([]);
 
@@ -2680,12 +2682,48 @@ async function handleSlotAutocomplete(interaction) {
     const extraSlots = pouchCapacities[character.shopPouch?.toLowerCase()] || 0;
     const totalSlots = baseSlots + extraSlots;
 
-    const allSlots = Array.from({ length: totalSlots }, (_, i) => {
-      const slotNum = i + 1;
-      return { name: `Slot ${slotNum}`, value: `Slot ${slotNum}` };
-    });
+    // Connect to the vending DB
+    const client = new MongoClient(process.env.MONGODB_INVENTORIES_URI);
+    await client.connect();
+    const vendDb = client.db("vending");
+    const vendCollection = vendDb.collection(characterName.toLowerCase());
+    const items = await vendCollection.find({}).toArray();
+    await client.close();
 
-    await respondWithFilteredChoices(interaction, interaction.options.getFocused(true), allSlots);
+    const slotMap = new Map(); // Slot => { itemName, qty }
+
+    for (const item of items) {
+      const slot = item.slot;
+      if (!slot || !/^Slot \d+$/.test(slot)) continue;
+
+      const existing = slotMap.get(slot);
+      if (existing) {
+        existing.qty += item.stockQty;
+      } else {
+        slotMap.set(slot, { itemName: item.itemName, qty: item.stockQty });
+      }
+    }
+
+    const slotChoices = [];
+
+    for (let i = 1; i <= totalSlots; i++) {
+      const slotName = `Slot ${i}`;
+      if (slotMap.has(slotName)) {
+        const { itemName, qty } = slotMap.get(slotName);
+        const fullness = Math.min(qty, 10);
+        slotChoices.push({
+          name: `${slotName} – ${itemName} – ${fullness}/10`,
+          value: slotName,
+        });
+      } else {
+        slotChoices.push({
+          name: `${slotName} – (Empty)`,
+          value: slotName,
+        });
+      }
+    }
+
+    await respondWithFilteredChoices(interaction, interaction.options.getFocused(true), slotChoices);
   } catch (error) {
     handleError(error, "autocompleteHandler.js");
     await interaction.respond([]);
