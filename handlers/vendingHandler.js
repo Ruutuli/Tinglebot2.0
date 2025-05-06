@@ -976,17 +976,16 @@ async function handleEditShop(interaction) {
       }
   
       // ------------------- Connect to Inventory DB -------------------
-      const item = await inventory.findOne({
-        itemName: { $regex: new RegExp(`^${itemName.trim()}$`, 'i') }
-      });
-      if (!item) throw new Error(`Item '${itemName}' not found in ${characterName}'s shop.`);
-  
+      const client = await connectToVendingDatabase();
+      const db = client; 
+      const inventory = db.collection(characterName.toLowerCase());
+
       // ------------------- Case-insensitive item lookup -------------------
       const item = await inventory.findOne({
         itemName: { $regex: new RegExp(`^${itemName.trim()}$`, 'i') }
       });
       if (!item) throw new Error(`Item '${itemName}' not found in ${characterName}'s shop.`);
-      
+
       // ------------------- Apply Updates -------------------
       const updateFields = {};
       if (tokenPrice !== null) updateFields.tokenPrice = tokenPrice;
@@ -1005,7 +1004,9 @@ async function handleEditShop(interaction) {
   
       const auth = await authorizeSheets();
       const sheetData = await readSheetData(auth, spreadsheetId, 'vendingShop!A:K');
-      const rowIndex = sheetData.findIndex(row => row[1] === itemName);
+      // ------------------- Match sheet row using case-insensitive item name -------------------
+      const rowIndex = sheetData.findIndex(row => row[1]?.trim().toLowerCase() === itemName.trim().toLowerCase());
+
       if (rowIndex === -1) throw new Error(`Item '${itemName}' not found in the shop spreadsheet.`);
   
       const updatedRow = [
