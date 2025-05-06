@@ -358,45 +358,58 @@ async function handleRestock(interaction) {
     );
 
     // ------------------- Append Row to Sheet -------------------
-    try {
-      const spreadsheetId = extractSpreadsheetId(character.shopLink);
-      const auth = await authorizeSheets();
-      const monthLabel = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
+      try {
+        const spreadsheetId = extractSpreadsheetId(character.shopLink);
+        const auth = await authorizeSheets();
+        const monthLabel = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
 
-      // ✅ FIX: Read the full sheet data before using it
-      const sheetData = await readSheetData(auth, spreadsheetId, 'vendingShop!A2:L');
+        // ✅ FIX: Read sheet data BEFORE using it
+        const sheetData = await readSheetData(auth, spreadsheetId, 'vendingShop!A2:L');
 
-      const usedSlotNumbers = existingSlots.map(s => parseInt(s.split(' ')[1])).sort((a, b) => a - b);
-      let nextSlot = 1;
-      for (const num of usedSlotNumbers) {
-        if (num === nextSlot) {
-          nextSlot++;
-        } else {
-          break;
+        // ✅ Extract slot column
+        const existingSlots = sheetData.map(row => row[1]?.trim()).filter(s => /^Slot \d+$/.test(s));
+
+        // ✅ Track slot numbers and enforce uniqueness
+        const usedSlotNums = new Set();
+        for (const slot of existingSlots) {
+          const match = /^Slot (\d+)$/.exec(slot);
+          if (match) {
+            const num = parseInt(match[1]);
+            if (usedSlotNums.has(num)) {
+              throw new Error(`Duplicate slot number detected: Slot ${num}`);
+            }
+            usedSlotNums.add(num);
+          }
         }
+
+        // ✅ Generate next unique slot
+        let nextSlot = 1;
+        while (usedSlotNums.has(nextSlot)) {
+          nextSlot++;
+        }
+        const newSlot = `Slot ${nextSlot}`;
+
+        // ✅ Append new row with slot to sheet
+        const row = [[
+          characterName,
+          newSlot,
+          itemName,
+          stockQty,
+          pointCost,
+          totalCost,
+          character.currentVillage,
+          tokenPrice,
+          artPrice,
+          otherPrice,
+          tradesOpen ? 'Yes' : 'No',
+          monthLabel
+        ]];
+
+        await safeAppendDataToSheet(character.shopLink, character, 'vendingShop!A:L', row, interaction.client);
+        console.log(`[handleRestock]: Logged restock for ${characterName} to sheet.`);
+      } catch (error) {
+        console.error('[handleRestock]: Sheet logging failed', error);
       }
-      const newSlot = `Slot ${nextSlot}`;
-
-      const row = [[
-        characterName,
-        newSlot,
-        itemName,
-        stockQty,
-        pointCost,
-        totalCost,
-        character.currentVillage,
-        tokenPrice,
-        artPrice,
-        otherPrice,
-        tradesOpen ? 'Yes' : 'No',
-        monthLabel
-      ]];
-      
-
-      await safeAppendDataToSheet(character.shopLink, character, 'vendingShop!A:L', row, interaction.client);
-    } catch (err) {
-      console.error('[handleRestock]: Sheet logging failed', err);
-    }
 
     // ------------------- Final Confirmation Embed -------------------
     const embed = new EmbedBuilder()
