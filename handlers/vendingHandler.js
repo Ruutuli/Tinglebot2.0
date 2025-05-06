@@ -307,19 +307,31 @@ async function handleRestock(interaction) {
     } else {
 
       // Generate next available Slot
-      const existingSlots = items.map(i => i.slot).filter(s => /^Slot \d+$/.test(s));
-      const usedSlotNums = existingSlots.map(s => parseInt(s.split(' ')[1])).sort((a, b) => a - b);
-      let nextSlot = 1;
-      for (const num of usedSlotNums) {
-        if (num === nextSlot) {
-          nextSlot++;
-        } else {
-          break;
+      const sheetData = await readSheetData(auth, spreadsheetId, 'vendingShop!A2:L');
+
+      // Check existing slots
+      const existingSlots = sheetData.map(row => row[1]?.trim()).filter(s => /^Slot \d+$/.test(s));
+      
+      // Create Set to track and enforce uniqueness
+      const usedSlotNums = new Set();
+      for (const slot of existingSlots) {
+        const match = /^Slot (\d+)$/.exec(slot);
+        if (match) {
+          const num = parseInt(match[1]);
+          if (usedSlotNums.has(num)) {
+            throw new Error(`Duplicate slot number detected: Slot ${num}`);
+          }
+          usedSlotNums.add(num);
         }
       }
+      
+      // Auto-generate next available slot
+      let nextSlot = 1;
+      while (usedSlotNums.has(nextSlot)) {
+        nextSlot++;
+      }
       const newSlot = `Slot ${nextSlot}`;
-
-
+      
       // Insert new item entry
       await vendCollection.insertOne({
         itemName,
@@ -351,7 +363,9 @@ async function handleRestock(interaction) {
       const auth = await authorizeSheets();
       const monthLabel = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
 
-      const existingSlots = sheetData.map(row => row[1]).filter(s => /^Slot \d+$/.test(s));
+      // ✅ FIX: Read the full sheet data before using it
+      const sheetData = await readSheetData(auth, spreadsheetId, 'vendingShop!A2:L');
+
       const usedSlotNumbers = existingSlots.map(s => parseInt(s.split(' ')[1])).sort((a, b) => a - b);
       let nextSlot = 1;
       for (const num of usedSlotNumbers) {
