@@ -344,7 +344,11 @@ async function handleRestock(interaction) {
           char === characterName &&
           name === itemName &&
           slot === newSlot &&
-          Number(qty) + stockQty <= 10
+          cost == pointCost &&
+          tokenPrice == Number(row[7]) &&
+          artPrice == row[8] &&
+          otherPrice == row[9] &&
+          (tradesOpen ? 'Yes' : 'No') == row[10]
         ) {
           const updatedRow = [
             characterName,
@@ -364,7 +368,7 @@ async function handleRestock(interaction) {
           await writeSheetData(auth, spreadsheetId, range, [updatedRow]);
           rowMatched = true;
           break;
-        }
+        }        
       }
     }
 
