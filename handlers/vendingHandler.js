@@ -188,8 +188,8 @@ async function handleRestock(interaction) {
 
     // ------------------- Input Parsing -------------------
     const characterName = interaction.options.getString('charactername');
-    const manualSlot = interaction.options.getString('slot'); // <-- added
     const itemName = interaction.options.getString('itemname');
+    const manualSlot = interaction.options.getString('slot'); // <-- added
     const stockQty = interaction.options.getInteger('stockqty');
     const tokenPrice = interaction.options.getInteger('tokenprice') || 'N/A';
     const artPrice = interaction.options.getInteger('artprice') || 'N/A';
@@ -1020,7 +1020,6 @@ async function handleEditShop(interaction) {
 
     // ------------------- Extract Inputs -------------------
     const characterName = interaction.options.getString('charactername');
-    const newSlot = interaction.options.getString('slot'); // <-- added
     const itemName = interaction.options.getString('itemname');
     const shopImageFile = interaction.options.getAttachment('shopimagefile');
     const tokenPrice = interaction.options.getInteger('tokenprice');
