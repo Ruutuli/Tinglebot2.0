@@ -496,14 +496,12 @@ if (!canSpeciesPerformPetType(normalizedSpeciesKey, petType)) {
     // ------------------- Defer Reply for Longer Operations -------------------
     await interaction.deferReply();
 
-    // ------------------- Check Available Pet Rolls -------------------
 // ------------------- Check Available Pet Rolls -------------------
 if (pet.rollsRemaining <= 0) {
   return interaction.editReply(
     "❌ Your pet has no rolls left this week. Rolls reset every Sunday. You can increase your roll limit by training your pet! [Learn more](#)"
   );
 }
-
     // ------------------- Verify Inventory Setup -------------------
     if (!character.inventorySynced) {
      return interaction.reply({
@@ -743,13 +741,14 @@ if (targetLevel !== pet.level + 1) {
     const updatedPetData = { ...pet.toObject(), status: "retired" };
     await updatePetToCharacter(character._id, pet.name, updatedPetData);
     const retireEmbed = new EmbedBuilder()
-     .setAuthor({ name: character.name, iconURL: character.icon })
-     .setTitle(`Pet Retired - ${pet.name}`)
-     .setColor("#FF0000")
-     .setDescription(
-      `Your pet **${pet.name}** has been retired.\nYou can now add a new pet to your character.`
-     )
-     .setFooter({ text: "Pet retired successfully." });
+    .setAuthor({ name: character.name, iconURL: character.icon })
+    .setTitle(`Pet Retired - ${pet.name}`)
+    .setColor("#FF0000")
+    .setDescription(
+     `Your pet **${pet.name}** has been retired.\nYou can now add a new pet to your character.`
+    )
+    .setImage(pet.imageUrl || "https://via.placeholder.com/150")
+    .setFooter({ text: "Pet retired successfully." });   
     return interaction.editReply({ embeds: [retireEmbed] });
    }
 
