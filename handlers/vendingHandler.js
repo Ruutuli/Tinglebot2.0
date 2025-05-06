@@ -301,16 +301,27 @@ async function handleRestock(interaction) {
       newSlot = `Slot ${nextSlot}`;
     }    
 
-    // ------------------- Insert or Merge Inventory -------------------
-    const existingMatch = await vendCollection.findOne({
-      itemName,
-      costEach: pointCost,
-      tokenPrice,
-      artPrice,
-      otherPrice,
-      tradesOpen,
-      stackable
-    });
+      // ------------------- Insert or Merge Inventory -------------------
+      // Prevent overfilling stackable items in a slot
+      if (stackable) {
+        const existingStack = await vendCollection.findOne({ itemName, slot: newSlot, stackable: true });
+        if (existingStack) {
+          const totalAfterAdd = existingStack.stockQty + stockQty;
+          if (totalAfterAdd > 10) {
+            return interaction.editReply(`⚠️ Cannot restock \`${itemName}\` into ${newSlot}. That slot already holds ${existingStack.stockQty}, and adding ${stockQty} would exceed the max of 10.`);
+          }
+        }
+      }
+
+      const existingMatch = await vendCollection.findOne({
+        itemName,
+        costEach: pointCost,
+        tokenPrice,
+        artPrice,
+        otherPrice,
+        tradesOpen,
+        stackable
+      });
 
     if (existingMatch) {
       await vendCollection.updateOne(
