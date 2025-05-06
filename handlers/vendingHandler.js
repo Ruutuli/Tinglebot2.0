@@ -279,19 +279,47 @@ async function handleRestock(interaction) {
 
     // ------------------- Insert Item into Vending Inventory (ONLY use vending > characterName)
     // NEVER use inventories > characterName for vending restocks
-    await vendCollection.insertOne({
+    const existingMatch = await vendCollection.findOne({
       itemName,
-      stockQty,
       costEach: pointCost,
-      pointsSpent: totalCost,
       tokenPrice,
       artPrice,
       otherPrice,
       tradesOpen,
-      stackable,
-      boughtFrom: character.currentVillage,
-      date: new Date()
+      stackable
     });
+    
+    if (existingMatch) {
+      // Merge stock quantity and points spent
+      await vendCollection.updateOne(
+        { _id: existingMatch._id },
+        {
+          $inc: {
+            stockQty: stockQty,
+            pointsSpent: totalCost
+          },
+          $set: {
+            date: new Date(),
+            boughtFrom: character.currentVillage
+          }
+        }
+      );
+    } else {
+      // Insert new item entry
+      await vendCollection.insertOne({
+        itemName,
+        stockQty,
+        costEach: pointCost,
+        pointsSpent: totalCost,
+        tokenPrice,
+        artPrice,
+        otherPrice,
+        tradesOpen,
+        stackable,
+        boughtFrom: character.currentVillage,
+        date: new Date()
+      });
+    }
 
       await vendClient.close();
 
