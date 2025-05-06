@@ -156,7 +156,12 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
                 try {
                     console.log(`Processing item: ${itemName}, Quantity: ${qty}`);
                     const item = await ItemModel.findOne({ itemName });
-                    if (!item) throw new Error(`Item with name ${itemName} not found.`);
+                    if (!item) {
+                        console.warn(`[syncInventory]: Skipping unknown item: ${itemName} (row ${originalRowIndex})`);
+                        errors.push(`Row ${originalRowIndex}: Item not found - ${itemName}`);
+                        skippedLinesCount++;
+                        continue; // skip this row without throwing
+                    }                    
 
                     const cleanedQty = String(qty).replace(/,/g, ''); // Remove commas
                     const quantity = parseInt(cleanedQty, 10);
