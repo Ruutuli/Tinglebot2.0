@@ -977,9 +977,9 @@ async function handleEditShop(interaction) {
   
       // ------------------- Connect to MongoDB -------------------
       const client = await connectToVendingDatabase();
-      const db = client;
+      const db = client.db("vending"); // ⬅️ Make sure we're inside the right DB
       const inventory = db.collection(characterName.toLowerCase());
-
+      
       console.log(`[handleEditShop] Connected to vending DB. Character: ${characterName.toLowerCase()}`);
 
       // Pull full inventory for inspection
