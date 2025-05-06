@@ -305,6 +305,21 @@ async function handleRestock(interaction) {
         }
       );
     } else {
+
+      // Generate next available Slot
+      const existingSlots = items.map(i => i.slot).filter(s => /^Slot \d+$/.test(s));
+      const usedSlotNums = existingSlots.map(s => parseInt(s.split(' ')[1])).sort((a, b) => a - b);
+      let nextSlot = 1;
+      for (const num of usedSlotNums) {
+        if (num === nextSlot) {
+          nextSlot++;
+        } else {
+          break;
+        }
+      }
+      const newSlot = `Slot ${nextSlot}`;
+
+
       // Insert new item entry
       await vendCollection.insertOne({
         itemName,
@@ -317,7 +332,7 @@ async function handleRestock(interaction) {
         tradesOpen,
         stackable,
         boughtFrom: character.currentVillage,
-        slot: `${Date.now()}`,
+        slot: newSlot,
         date: new Date()
       });
     }
@@ -336,9 +351,21 @@ async function handleRestock(interaction) {
       const auth = await authorizeSheets();
       const monthLabel = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
 
+      const existingSlots = sheetData.map(row => row[1]).filter(s => /^Slot \d+$/.test(s));
+      const usedSlotNumbers = existingSlots.map(s => parseInt(s.split(' ')[1])).sort((a, b) => a - b);
+      let nextSlot = 1;
+      for (const num of usedSlotNumbers) {
+        if (num === nextSlot) {
+          nextSlot++;
+        } else {
+          break;
+        }
+      }
+      const newSlot = `Slot ${nextSlot}`;
+
       const row = [[
         characterName,
-        `${Date.now()}`, // Generate a slot using timestamp or UUID (feel free to change)
+        newSlot,
         itemName,
         stockQty,
         pointCost,
@@ -875,7 +902,7 @@ async function handleVendingSync(interaction) {
     for (const row of sheetData) {
       const [
         sheetCharacterName,
-        slot,
+        rawSlot,
         itemName,
         stockQtyRaw,
         costEachRaw,
@@ -886,7 +913,26 @@ async function handleVendingSync(interaction) {
         otherPrice,
         tradesOpen,
         date
-      ] = row;      
+      ] = row;
+    
+      const slot = rawSlot?.trim() || getNextSlot();
+      
+
+      // Track used slot numbers for assigning unique slots
+      const usedSlotNumbers = new Set();
+      sheetData.forEach(row => {
+        const slot = row[1];
+        const match = /^Slot (\d+)$/.exec(slot);
+        if (match) usedSlotNumbers.add(Number(match[1]));
+      });
+      let slotCounter = 1;
+      const getNextSlot = () => {
+        while (usedSlotNumbers.has(slotCounter)) {
+          slotCounter++;
+        }
+        usedSlotNumbers.add(slotCounter);
+        return `Slot ${slotCounter}`;
+      };
 
       if (
         sheetCharacterName !== character.name ||
@@ -912,7 +958,7 @@ async function handleVendingSync(interaction) {
         artPrice: artPrice || '',
         otherPrice: otherPrice || '',
         tradesOpen: tradesOpen?.toLowerCase() === 'yes',
-        slot: slot || `${Date.now()}`,
+        slot: newSlot,
         date: new Date()
       });      
     }
@@ -1032,16 +1078,17 @@ async function handleEditShop(interaction) {
 
     const updatedRow = [
       characterName,
+      sheetData[rowIndex][1], // SLOT
       itemName,
-      sheetData[rowIndex][2], // Stock Qty
-      sheetData[rowIndex][3], // Cost Each
-      sheetData[rowIndex][4], // Points Spent
-      sheetData[rowIndex][5], // Bought From
-      tokenPrice !== null ? tokenPrice : sheetData[rowIndex][6],
-      artPrice || sheetData[rowIndex][7],
-      otherPrice || sheetData[rowIndex][8],
-      tradesOpen !== null ? (tradesOpen ? 'Yes' : 'No') : sheetData[rowIndex][9],
-      sheetData[rowIndex][10] // Date
+      sheetData[rowIndex][3], // Stock Qty
+      sheetData[rowIndex][4], // Cost Each
+      sheetData[rowIndex][5], // Points Spent
+      sheetData[rowIndex][6], // Bought From
+      tokenPrice !== null ? tokenPrice : sheetData[rowIndex][7],
+      artPrice || sheetData[rowIndex][8],
+      otherPrice || sheetData[rowIndex][9],
+      tradesOpen !== null ? (tradesOpen ? 'Yes' : 'No') : sheetData[rowIndex][10],
+      sheetData[rowIndex][11] // Date
     ];
 
     const range = `vendingShop!A${rowIndex + 1}:L${rowIndex + 1}`;
