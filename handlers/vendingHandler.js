@@ -245,9 +245,10 @@ async function handleRestock(interaction) {
 
     // ------------------- Slot Usage Calculation -------------------
     const stackable = !itemDoc.crafting;
-    const slotsUsed = existingItems.reduce((acc, item) => {
+    const slotsUsed = items.reduce((acc, item) => {
       return acc + (item.stackable ? Math.ceil(item.stockQty / 10) : item.stockQty);
     }, 0);
+
     const slotsRequired = stackable ? Math.ceil(stockQty / 10) : stockQty;
 
     if (slotsUsed + slotsRequired > totalSlots) {
