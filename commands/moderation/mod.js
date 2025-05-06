@@ -310,16 +310,20 @@ async function execute(interaction) {
         const User = require('../../models/UserModel.js'); // ✅ adjust if needed
       
         try {
-          const target = await User.findOne({ discordId: user.id });
+          let target = await User.findOne({ discordId: user.id });
+
           if (!target) {
-            return interaction.editReply({
-              content: `❌ No user record found for <@${user.id}>.`,
-              ephemeral: true
+            target = new User({
+              discordId: user.id,
+              tokens: 0,
+              joinedAt: new Date(),
+              status: 'active'
             });
           }
-      
+          
           target.tokens = (target.tokens || 0) + amount;
           await target.save();
+          
       
           await interaction.editReply({
             content: `💠 <@${user.id}> has been given **${amount} tokens**. They now have **${target.tokens} total**.`,
