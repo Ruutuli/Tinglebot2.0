@@ -234,6 +234,26 @@ const modCommand = new SlashCommandBuilder()
               .setRequired(true)
           )
       )
+
+      // ------------------- Subcommand: blightpause -------------------
+.addSubcommand(sub =>
+  sub
+    .setName('blightpause')
+    .setDescription('⏸️ Pause or unpause blight progression for a character')
+    .addStringOption(opt =>
+      opt
+        .setName('character')
+        .setDescription('Name of the character to pause/unpause')
+        .setRequired(true)
+        .setAutocomplete(true)
+    )
+    .addBooleanOption(opt =>
+      opt
+        .setName('paused')
+        .setDescription('True to pause, false to unpause')
+        .setRequired(true)
+    )
+  )
   )
   
 // ============================================================================
@@ -257,9 +277,11 @@ async function execute(interaction) {
         return await handleApprove(interaction);      
     } else if (subcommand === 'inactivityreport') {
         return await handleInactivityReport(interaction);      
-    } else if (subcommand === 'table') {
+      } else if (subcommand === 'table') {
         return await handleTable(interaction);      
-    } else {
+      } else if (subcommand === 'blightpause') {
+        return await handleBlightPause(interaction);
+      } else {
       return interaction.editReply('❌ Unknown subcommand.');
     }
 
@@ -732,6 +754,32 @@ async function handleTable(interaction) {
     }
   }
   
+  // ------------------- Function: handleBlightPause -------------------
+// Pauses or unpauses blight progression for a given character.
+async function handleBlightPause(interaction) {
+  const charName = interaction.options.getString('character');
+  const pauseState = interaction.options.getBoolean('paused');
+
+  try {
+    const character = await fetchCharacterByName(charName);
+    if (!character) {
+      return interaction.editReply(`❌ Character **${charName}** not found.`);
+    }
+
+    character.blightPaused = pauseState;
+    await character.save();
+
+    const emoji = pauseState ? '⏸️' : '▶️';
+    const verb = pauseState ? 'paused' : 'unpaused';
+
+    return interaction.editReply(`${emoji} Blight progression for **${character.name}** has been **${verb}**.`);
+  } catch (error) {
+    handleError(error, 'mod.js');
+    console.error('[mod.js]: Error in handleBlightPause', error);
+    return interaction.editReply('❌ An error occurred while processing your request.');
+  }
+}
+
   
 // ============================================================================
 // ------------------- Export Command -------------------
