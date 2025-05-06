@@ -284,26 +284,26 @@ async function handleRestock(interaction) {
     });
 
     // ------------------- Insert Item into Vending Inventory -------------------
-    const vendingClient = new MongoClient(process.env.MONGODB_INVENTORIES_URI);
-    await vendingClient.connect();
-    const vendingDb = vendingClient.db("vending");
-    const vendingCollection = vendingDb.collection(characterName.toLowerCase());
+      const vendClient = new MongoClient(process.env.MONGODB_INVENTORIES_URI);
+      await vendClient.connect();
+      const vendDb = vendClient.db("vending");
+      const vendCollection = vendDb.collection(characterName.toLowerCase());
 
-    await vendingCollection.insertOne({
-      itemName,
-      stockQty,
-      costEach: pointCost,
-      pointsSpent: totalCost,
-      tokenPrice,
-      artPrice,
-      otherPrice,
-      tradesOpen,
-      stackable,
-      boughtFrom: character.currentVillage,
-      date: new Date()
-    });
+      await vendCollection.insertOne({
+        itemName,
+        stockQty,
+        costEach: pointCost,
+        pointsSpent: totalCost,
+        tokenPrice,
+        artPrice,
+        otherPrice,
+        tradesOpen,
+        stackable,
+        boughtFrom: character.currentVillage,
+        date: new Date()
+      });
 
-    await vendingClient.close();
+      await vendClient.close();
 
     // ------------------- Update Character Points -------------------
     await Character.updateOne(
@@ -599,8 +599,6 @@ function isValidUrl(str) {
 
       // Fetch all items in the character's vending inventory
       const items = await inventoryCollection.find({}).toArray();
-      console.log(`[handleViewShop]: Fetched ${items.length} items for ${characterName}.`);
-      console.log(`[handleViewShop]: Items retrieved:`, items);
 
       if (!items || items.length === 0) {
         console.warn(`[handleViewShop]: No items found in vending DB for ${characterName}.`);
