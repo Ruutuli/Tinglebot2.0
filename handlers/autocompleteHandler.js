@@ -422,6 +422,8 @@ async function handleAutocomplete(interaction) {
      await handleVendingBarterAutocomplete(interaction, focusedOption);
     } else if (subcommand === "editshop" && focusedOption.name === "itemname") {
      await handleVendingEditShopAutocomplete(interaction, focusedOption);
+    } else if (subcommand === "restock" && focusedOption.name === "slot") {
+      await handleSlotAutocomplete(interaction);
     } else if (
      subcommand === "viewshop" &&
      focusedOption.name === "charactername"
@@ -2619,16 +2621,16 @@ async function handleVendingEditShopAutocomplete(interaction, focusedOption) {
   if (!shopItems.length) return await interaction.respond([]);
 
   const searchQuery = focusedOption.value.toLowerCase();
-  const slotFilter = interaction.options.getString("slot");
-  const filteredItems = shopItems
-    .filter((item) => {
-      const matchesSlot = slotFilter ? item.slot === slotFilter : true;
-      return item.itemName.toLowerCase().includes(searchQuery) && matchesSlot;
-    })
-    .map((item) => ({
-      name: `${item.itemName} (${item.slot}) - Qty: ${item.stockQty}`,
-      value: item.itemName,
-    }))
+const slotFilter = interaction.options.getString("slot");
+const filteredItems = shopItems
+  .filter((item) => {
+    const matchesSlot = slotFilter ? item.slot === slotFilter : true;
+    return item.itemName.toLowerCase().includes(searchQuery) && matchesSlot;
+  })
+  .map((item) => ({
+    name: `${item.itemName} (${item.slot}) - Qty: ${item.stockQty}`,
+    value: item.itemName,
+  }))
    .slice(0, 25);
 
   await interaction.respond(filteredItems);
@@ -2663,6 +2665,31 @@ async function handleViewVendingShopAutocomplete(interaction) {
   console.error("[handleViewVendingShopAutocomplete]: Error:", error);
   await interaction.respond([]);
  }
+}
+
+// ------------------- handleSlotAutocomplete Autocomplete -------------------
+async function handleSlotAutocomplete(interaction) {
+  try {
+    const characterName = interaction.options.getString('charactername');
+    const character = await fetchCharacterByName(characterName);
+    if (!character) return await interaction.respond([]);
+
+    const baseSlotLimits = { shopkeeper: 5, merchant: 3 };
+    const pouchCapacities = { none: 0, bronze: 15, silver: 30, gold: 50 };
+    const baseSlots = baseSlotLimits[character.job?.toLowerCase()] || 0;
+    const extraSlots = pouchCapacities[character.shopPouch?.toLowerCase()] || 0;
+    const totalSlots = baseSlots + extraSlots;
+
+    const allSlots = Array.from({ length: totalSlots }, (_, i) => {
+      const slotNum = i + 1;
+      return { name: `Slot ${slotNum}`, value: `Slot ${slotNum}` };
+    });
+
+    await respondWithFilteredChoices(interaction, interaction.options.getFocused(true), allSlots);
+  } catch (error) {
+    handleError(error, "autocompleteHandler.js");
+    await interaction.respond([]);
+  }
 }
 
 // ============================================================================
@@ -2912,6 +2939,7 @@ module.exports = {
  handleVendingBarterAutocomplete,
  handleVendingEditShopAutocomplete,
  handleViewVendingShopAutocomplete,
+ handleSlotAutocomplete,
 
  // VILLAGE
  handleVillageUpgradeCharacterAutocomplete,
