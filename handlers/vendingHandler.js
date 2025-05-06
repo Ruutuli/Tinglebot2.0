@@ -915,9 +915,8 @@ async function handleVendingSync(interaction) {
         date
       ] = row;
     
-      const slot = rawSlot?.trim() || getNextSlot();
-      
-
+      const slot = rawSlot?.trim() || getNextSlot(); // <-- Move slot logic here
+    
       // Track used slot numbers for assigning unique slots
       const usedSlotNumbers = new Set();
       sheetData.forEach(row => {

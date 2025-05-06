@@ -5,6 +5,7 @@ const { Schema } = mongoose;
 // ------------------- Define the vending inventory schema -------------------
 const vendingInventorySchema = new Schema({
   itemName: { type: String, required: true }, // Item name
+  slot: { type: String, required: true, unique: false }, // Slot identifier (e.g., Slot 1)
   stockQty: { type: Number, required: true }, // Stock quantity
   costEach: { type: Number, required: true }, // Cost per item in points
   pointsSpent: { type: Number, required: true }, // Total points spent
