@@ -2696,19 +2696,27 @@ async function handleSlotAutocomplete(interaction) {
     const items = await vendCollection.find({}).toArray();
     await client.close();
 
+    // ------------------- Accurate Slot Aggregation -------------------
     const slotMap = new Map(); // Slot => { itemName, qty }
 
     for (const item of items) {
       const slot = item.slot;
       if (!slot || !/^Slot \d+$/.test(slot)) continue;
 
-      const existing = slotMap.get(slot);
-      if (existing) {
-        existing.qty += item.stockQty;
+      // If this slot already has data, add to total if same item
+      if (slotMap.has(slot)) {
+        const entry = slotMap.get(slot);
+        if (entry.itemName === item.itemName) {
+          entry.qty += item.stockQty;
+        } else {
+          // Mixed item types in same slot — mark as invalid
+          slotMap.set(slot, { itemName: "❌ Multiple Items", qty: null });
+        }
       } else {
         slotMap.set(slot, { itemName: item.itemName, qty: item.stockQty });
       }
     }
+
 
     const slotChoices = [];
 
@@ -2719,11 +2727,13 @@ for (let i = 1; i <= totalSlots; i++) {
 
   if (slotMap.has(slotNameValue)) {
     const { itemName, qty } = slotMap.get(slotNameValue);
-    const fullness = Math.min(qty, 10);
+    const fullness = qty !== null ? `${Math.min(qty, 10)}/10` : `🚫 Conflict`;
+    
     slotChoices.push({
-      name: `${slotNameDisplay} – ${itemName} – ${fullness}/10`,
+      name: `${slotNameDisplay} – ${itemName} – ${fullness}`,
       value: slotNameValue,
     });
+    
   } else {
     slotChoices.push({
       name: `${slotNameDisplay} – (Empty)`,
