@@ -167,7 +167,11 @@ async function createCharacterInteraction(interaction) {
         await createCharacterInventory(characterName, character._id, character.job);
 
         // Send success message with the character embed
-        await interaction.editReply({ content: `Character **${characterName}** created successfully! 🎉`, embeds: [embed], ephemeral: true });
+        await interaction.editReply({
+            content: `Character **${characterName}** created successfully! 🎉`,
+            embeds: embed?.data?.description ? [embed] : [],
+            ephemeral: true
+        });
 
         // Validate Google Sheets URL and send setup instructions if invalid
         if (!isValidGoogleSheetsUrl(googleSheetsUrl)) {

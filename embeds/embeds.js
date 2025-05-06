@@ -219,10 +219,12 @@ const createCharacterEmbed = (character) => {
     inline: false,
    }
   )
+  .setDescription("📋 Character profile created successfully.")
   .setColor(settings.color)
   .setThumbnail(character.icon)
   .setFooter({ text: "Character details" })
   .setImage(DEFAULT_IMAGE_URL);
+
 
  return embed;
 };
