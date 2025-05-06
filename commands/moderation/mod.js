@@ -278,6 +278,13 @@ const modCommand = new SlashCommandBuilder()
     )
 )
 
+// ------------------- Subcommand: kick -------------------
+.addSubcommand(sub =>
+  sub
+    .setName('kick_travelers')
+    .setDescription('👢 Kick users who have been Travelers for 14+ days without a character')
+)
+
   
 // ============================================================================
 // ------------------- Execute Command Handler -------------------
@@ -304,6 +311,8 @@ async function execute(interaction) {
         return await handleTable(interaction);      
       } else if (subcommand === 'blightpause') {
         return await handleBlightPause(interaction);
+      } else if (subcommand === 'kick_travelers') {
+        return await handleKickTravelers(interaction);      
       } else if (subcommand === 'tokens') {
         const user = interaction.options.getUser('user');
         const amount = interaction.options.getInteger('amount');
@@ -834,6 +843,46 @@ async function handleBlightPause(interaction) {
     console.error('[mod.js]: Error in handleBlightPause', error);
     return interaction.editReply('❌ An error occurred while processing your request.');
   }
+}
+
+// ------------------- Function: handleKickTravelers -------------------
+// Kicks members who joined 14+ days ago and only have Traveler role
+async function handleKickTravelers(interaction) {
+  const guild = interaction.guild;
+  const travelerRoleId = process.env.TRAVELER_ROLE_ID;
+
+  if (!travelerRoleId) {
+    return interaction.editReply('❌ Environment variable `TRAVELER_ROLE_ID` not set.');
+  }
+
+  await interaction.editReply('🔍 Checking members...');
+
+  const fourteenDaysAgo = Date.now() - 14 * 24 * 60 * 60 * 1000;
+  const kicked = [];
+
+  const members = await guild.members.fetch();
+
+  for (const [id, member] of members) {
+    const hasTraveler = member.roles.cache.has(travelerRoleId);
+    const joinedLongAgo = member.joinedAt && member.joinedAt.getTime() < fourteenDaysAgo;
+
+    const userDoc = await User.findOne({ discordId: id });
+    const hasCharacter = userDoc?.characters?.length > 0;
+
+    if (hasTraveler && joinedLongAgo && !hasCharacter) {
+      try {
+        await member.kick("No character submitted within 2 weeks of joining.");
+        kicked.push(`<@${id}>`);
+      } catch (err) {
+        console.warn(`❌ Could not kick ${id}: ${err.message}`);
+      }
+    }
+  }
+
+  return interaction.followUp({
+    content: `✅ Kicked ${kicked.length} members:\n${kicked.join('\n') || 'None'}`,
+    ephemeral: true
+  });
 }
 
   
