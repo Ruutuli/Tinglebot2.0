@@ -195,9 +195,9 @@ return decision;
         // Deduct stamina
         if (!hasPerk(character, 'DELIVERING')) {
           await useStamina(character._id, 1);
-          character.currentStamina -= 1;
+          character.currentStamina = Math.max(0, character.currentStamina - 1);
           outcomeMessage += ' (-1 🟩 stamina)';
-        }
+        }        
         decision = `🌱 ${outcomeMessage}`;
       }
   
@@ -336,8 +336,8 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
     // ------------------- Deduct Stamina -------------------
     if (!hasPerk(character, 'DELIVERING')) {
       await useStamina(character._id, 1);
-      character.currentStamina -= 1;
-    }
+      character.currentStamina = Math.max(0, character.currentStamina - 1);
+    }  
 
     // ------------------- Embed Update -------------------
     const description =
@@ -383,10 +383,11 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
   
       if (result.success) {
         // success
-        if (!hasPerk(character,'DELIVERING')) {
-          await useStamina(character._id,1);
-          character.currentStamina -=1;
+        if (!hasPerk(character, 'DELIVERING')) {
+          await useStamina(character._id, 1);
+          character.currentStamina = Math.max(0, character.currentStamina - 1);
         }
+        
         decision = `💨 Successfully fled${!hasPerk(character,'DELIVERING')?' (-1 🟩 stamina)':''}.`;
         outcomeMessage = `${character.name} escaped the ${monster.name}!`;
       } else if (result.attacked) {
@@ -405,7 +406,7 @@ console.log(`[travelHandler.js]: Tracked ${result.damage} heart(s) damage (deduc
 
 if (!hasPerk(character, 'DELIVERING')) {
   await useStamina(character._id, 1);
-  character.currentStamina -= 1; // Optional: only used for display
+  character.currentStamina = Math.max(0, character.currentStamina - 1);
 }
 
 outcomeMessage = `${character.name} failed to flee and took ${result.damage} hearts${!hasPerk(character, 'DELIVERING') ? ' (-1 🟩 stamina)' : ''}.`;
@@ -427,10 +428,11 @@ decision = result.damage >= character.maxHearts
         }
       } else {
         // no attack
-        if (!hasPerk(character,'DELIVERING')) {
-          await useStamina(character._id,1);
-          character.currentStamina -=1;
+        if (!hasPerk(character, 'DELIVERING')) {
+          await useStamina(character._id, 1);
+          character.currentStamina = Math.max(0, character.currentStamina - 1);
         }
+        
         decision = `💨 Flee failed but no attack${!hasPerk(character,'DELIVERING')?' (-1 🟩 stamina)':''}.`;
         outcomeMessage = `${character.name} tried to flee but wasn’t attacked.`;
       }
