@@ -352,41 +352,26 @@ async function handleRestock(interaction) {
     const monthLabel = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
     let rowMatched = false;
 
-    if (stackable) {
-      for (let i = 0; i < sheetData.length; i++) {
-        const row = sheetData[i];
-        const [char, slot, name, qty, cost, spent] = row;
-        if (
-          char === characterName &&
-          name === itemName &&
-          slot === newSlot &&
-          cost == pointCost &&
-          tokenPrice == Number(row[7]) &&
-          artPrice == row[8] &&
-          otherPrice == row[9] &&
-          (tradesOpen ? 'Yes' : 'No') == row[10]
-        ) {
-          const updatedRow = [
-            characterName,
-            slot,
-            itemName,
-            Number(qty) + stockQty,
-            cost,
-            Number(spent) + totalCost,
-            character.currentVillage,
-            tokenPrice,
-            artPrice,
-            otherPrice,
-            tradesOpen ? 'Yes' : 'No',
-            monthLabel
-          ];
-          const range = `vendingShop!A${i + 2}:L${i + 2}`;
-          await writeSheetData(auth, spreadsheetId, range, [updatedRow]);
-          rowMatched = true;
-          break;
-        }        
-      }
+// ------------------- Insert or Merge Inventory -------------------
+// Enforce stackable slot integrity: only one item per slot, max 10 qty
+if (stackable && /^Slot \d+$/.test(newSlot)) {
+  const slotContents = await vendCollection.find({ slot: newSlot, stackable: true }).toArray();
+  
+  if (slotContents.length > 0) {
+    const existingItemName = slotContents[0].itemName;
+    const currentQty = slotContents.reduce((sum, entry) => sum + entry.stockQty, 0);
+
+    // Check: same item?
+    if (existingItemName !== itemName) {
+      return interaction.editReply(`⚠️ Cannot add \`${itemName}\` to ${newSlot}. That slot already contains \`${existingItemName}\`.`);
     }
+
+    // Check: max 10 units?
+    if (currentQty + stockQty > 10) {
+      return interaction.editReply(`⚠️ Cannot add \`${stockQty}\` more to ${newSlot}. That slot already holds ${currentQty} \`${existingItemName}\`, and would exceed the 10 unit limit.`);
+    }
+  }
+}
 
     if (!rowMatched) {
       const newRow = [[
