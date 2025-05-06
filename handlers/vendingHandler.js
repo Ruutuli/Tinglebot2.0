@@ -792,10 +792,11 @@ async function handleVendingSetup(interaction) {
   
       // ------------------- Step 4: Header Check -------------------
       const expectedHeaders = [
-        'CHARACTER NAME', 'ITEM NAME', 'STOCK QTY', 'COST EACH', 'POINTS SPENT',
+        'CHARACTER NAME', 'SLOT', 'ITEM NAME', 'STOCK QTY', 'COST EACH', 'POINTS SPENT',
         'BOUGHT FROM', 'TOKEN PRICE', 'ART PRICE', 'OTHER PRICE', 'TRADES OPEN?', 'DATE'
       ];
       const sheetData = await readSheetData(auth, spreadsheetId, 'vendingShop!A1:L1');
+      
       if (!sheetData || !expectedHeaders.every(header => sheetData[0]?.includes(header))) {
         await sendSetupInstructions(interaction, 'missing_headers', character._id, characterName, shopLink);
         return;
@@ -1019,7 +1020,7 @@ async function handleEditShop(interaction) {
     if (!spreadsheetId) throw new Error(`Invalid or missing shop link for '${characterName}'.`);
 
     const auth = await authorizeSheets();
-    const sheetData = await readSheetData(auth, spreadsheetId, 'vendingShop!A:K');
+    const sheetData = await readSheetData(auth, spreadsheetId, 'vendingShop!A:L');
 
     const rowIndex = sheetData.findIndex(row =>
       row[1]?.trim().toLowerCase() === itemName.trim().toLowerCase()
@@ -1043,7 +1044,7 @@ async function handleEditShop(interaction) {
       sheetData[rowIndex][10] // Date
     ];
 
-    const range = `vendingShop!A${rowIndex + 1}:K${rowIndex + 1}`;
+    const range = `vendingShop!A${rowIndex + 1}:L${rowIndex + 1}`;
     await writeSheetData(auth, spreadsheetId, range, [updatedRow]);
 
     // ------------------- Success Embed -------------------
