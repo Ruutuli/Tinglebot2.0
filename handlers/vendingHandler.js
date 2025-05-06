@@ -896,6 +896,22 @@ async function handleVendingSync(interaction) {
       throw new Error('No data found in the vendingShop sheet.');
     }
 
+    // ------------------- Build Slot Tracker -------------------
+    const usedSlotNumbers = new Set();
+    sheetData.forEach(row => {
+      const match = /^Slot (\d+)$/.exec(row[1]);
+      if (match) usedSlotNumbers.add(Number(match[1]));
+    });
+
+    let slotCounter = 1;
+    const getNextSlot = () => {
+      while (usedSlotNumbers.has(slotCounter)) {
+        slotCounter++;
+      }
+      usedSlotNumbers.add(slotCounter);
+      return `Slot ${slotCounter}`;
+    };
+
     // ------------------- Step 3: Parse and Validate Rows -------------------
     const parsedRows = [];
 
@@ -914,24 +930,8 @@ async function handleVendingSync(interaction) {
         tradesOpen,
         date
       ] = row;
-    
-      const slot = rawSlot?.trim() || getNextSlot(); // <-- Move slot logic here
-    
-      // Track used slot numbers for assigning unique slots
-      const usedSlotNumbers = new Set();
-      sheetData.forEach(row => {
-        const slot = row[1];
-        const match = /^Slot (\d+)$/.exec(slot);
-        if (match) usedSlotNumbers.add(Number(match[1]));
-      });
-      let slotCounter = 1;
-      const getNextSlot = () => {
-        while (usedSlotNumbers.has(slotCounter)) {
-          slotCounter++;
-        }
-        usedSlotNumbers.add(slotCounter);
-        return `Slot ${slotCounter}`;
-      };
+
+      const slot = rawSlot?.trim() || getNextSlot();
 
       if (
         sheetCharacterName !== character.name ||
@@ -957,23 +957,22 @@ async function handleVendingSync(interaction) {
         artPrice: artPrice || '',
         otherPrice: otherPrice || '',
         tradesOpen: tradesOpen?.toLowerCase() === 'yes',
-        slot: newSlot,
+        slot,
         date: new Date()
-      });      
+      });
     }
 
     if (!parsedRows.length) {
       await updateCharacterById(character._id, {
         vendingSync: true
       });
-    
+
       return await interaction.editReply({
         content: `⚠️ No valid "Old Stock" entries found. Proceeding to sync with an empty inventory. This cannot be undone.`,
         ephemeral: true
       });
     }
     
-
     // ------------------- Step 4: Insert Into Database -------------------
     const db = await connectToInventories();
     const collection = db.collection(character.name.toLowerCase());
