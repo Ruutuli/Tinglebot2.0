@@ -258,7 +258,7 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
       character.currentHearts = 0;
       character.currentStamina = 0;
       character.debuff = { active: true, endDate: new Date(Date.now() + 7 * 86400000) };
-      character.currentVillage = ['rudania', 'vhintl'].includes(character.currentVillage) ? 'inariko' : character.homeVillage;
+      character.currentVillage = character.homeVillage;
       character.ko = true;
 
       await updateCurrentHearts(character._id, 0);
