@@ -2673,7 +2673,13 @@ async function handleSlotAutocomplete(interaction) {
     const characterName = interaction.options.getString('charactername');
     if (!characterName) return await interaction.respond([]);
 
-    const character = await fetchCharacterByName(characterName);
+    let character;
+    try {
+      character = await fetchCharacterByName(characterName);
+    } catch (err) {
+      console.error(`[handleSlotAutocomplete]: Character "${characterName}" not found or fetch failed.`);
+      return await interaction.respond([]);
+    }
     if (!character) return await interaction.respond([]);
 
     const baseSlotLimits = { shopkeeper: 5, merchant: 3 };
