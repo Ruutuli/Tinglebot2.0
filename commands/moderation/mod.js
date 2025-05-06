@@ -74,64 +74,65 @@ const modCommand = new SlashCommandBuilder()
 
 // ------------------- Subcommand: give -------------------
 .addSubcommand(sub =>
-    sub
-      .setName('give')
-      .setDescription('🎁 Give an item to a character')
-      .addStringOption(opt =>
-        opt
-          .setName('character')
-          .setDescription('Name of the target character')
-          .setRequired(true)
-          .setAutocomplete(true)
-      )
-      .addStringOption(opt =>
-        opt
-          .setName('item')
-          .setDescription('Name of the item to give')
-          .setRequired(true)
-          .setAutocomplete(true)
-      )
-      .addIntegerOption(opt =>
-        opt
-          .setName('quantity')
-          .setDescription('Amount of the item to give')
-          .setRequired(true)
-      )
-  )
-  
-  // ------------------- Subcommand: petlevel -------------------
-  .addSubcommand(sub =>
-    sub
-      .setName('petlevel')
-      .setDescription("🐾 Override a pet's level for a character")
-      .addStringOption(opt =>
-        opt
-          .setName('character')
-          .setDescription('Name of the character owner')
-          .setRequired(true)
-          .setAutocomplete(true)
-      )
-      .addStringOption(opt =>
-        opt
-          .setName('petname')
-          .setDescription("Name of the pet to override")
-          .setRequired(true)
-          .setAutocomplete(true)
-      )
-      .addIntegerOption(opt =>
-        opt
-          .setName('level')
-          .setDescription('New level value for the pet')
-          .setRequired(true)
-      )
-  )
-  
-  // ------------------- Subcommand: mount -------------------
-  .addSubcommand(sub =>
-    sub
-      .setName('mount')
-      .setDescription("🐴 Create a mount encounter")
-      .addStringOption(option => option
+  sub
+    .setName('give')
+    .setDescription('🎁 Give an item to a character')
+    .addStringOption(opt =>
+      opt
+        .setName('character')
+        .setDescription('Name of the target character')
+        .setRequired(true)
+        .setAutocomplete(true)
+    )
+    .addStringOption(opt =>
+      opt
+        .setName('item')
+        .setDescription('Name of the item to give')
+        .setRequired(true)
+        .setAutocomplete(true)
+    )
+    .addIntegerOption(opt =>
+      opt
+        .setName('quantity')
+        .setDescription('Amount of the item to give')
+        .setRequired(true)
+    )
+)
+
+// ------------------- Subcommand: petlevel -------------------
+.addSubcommand(sub =>
+  sub
+    .setName('petlevel')
+    .setDescription("🐾 Override a pet's level for a character")
+    .addStringOption(opt =>
+      opt
+        .setName('character')
+        .setDescription('Name of the character owner')
+        .setRequired(true)
+        .setAutocomplete(true)
+    )
+    .addStringOption(opt =>
+      opt
+        .setName('petname')
+        .setDescription("Name of the pet to override")
+        .setRequired(true)
+        .setAutocomplete(true)
+    )
+    .addIntegerOption(opt =>
+      opt
+        .setName('level')
+        .setDescription('New level value for the pet')
+        .setRequired(true)
+    )
+)
+
+// ------------------- Subcommand: mount -------------------
+.addSubcommand(sub =>
+  sub
+    .setName('mount')
+    .setDescription("🐴 Create a mount encounter")
+    .addStringOption(option =>
+      option
         .setName('village')
         .setDescription('Enter the village where the encounter happens')
         .setRequired(false)
@@ -140,8 +141,9 @@ const modCommand = new SlashCommandBuilder()
           { name: 'Inariko', value: 'inariko' },
           { name: 'Vhintl', value: 'vhintl' }
         )
-      )
-      .addStringOption(option => option
+    )
+    .addStringOption(option =>
+      option
         .setName('level')
         .setDescription('Choose the mount level (Basic, Mid, High)')
         .setRequired(false)
@@ -150,8 +152,9 @@ const modCommand = new SlashCommandBuilder()
           { name: 'Mid', value: 'Mid' },
           { name: 'High', value: 'High' }
         )
-      )
-      .addStringOption(option => option
+    )
+    .addStringOption(option =>
+      option
         .setName('species')
         .setDescription('Choose the mount species')
         .setRequired(false)
@@ -168,74 +171,75 @@ const modCommand = new SlashCommandBuilder()
           { name: 'Moose 🍁', value: 'Moose' },
           { name: 'Bear 🐻', value: 'Bear' }
         )
-      )
-  )
-  
-  // ------------------- Subcommand: approve -------------------
-  .addSubcommand(sub =>
-    sub
-      .setName('approve')
-      .setDescription('✅ Approve or deny a submission')
-      .addStringOption(opt =>
-        opt
-          .setName('submission_id')
-          .setDescription('The ID of the submission to approve/deny.')
-          .setRequired(true)
-      )
-      .addStringOption(opt =>
-        opt
-          .setName('action')
-          .setDescription('Approve or deny the submission.')
-          .setRequired(true)
-          .addChoices(
-            { name: 'Approve', value: 'approve' },
-            { name: 'Deny', value: 'deny' }
-          )
-      )
-      .addStringOption(opt =>
-        opt
-          .setName('reason')
-          .setDescription('Provide a reason for denying the submission (optional).')
-          .setRequired(false)
-      )
-  )  
-  
-  // ------------------- Subcommand: inactivityreport -------------------
-  .addSubcommand(sub =>
-    sub
-      .setName('inactivityreport')
-      .setDescription("📋 View members inactive for 3+ months")
-  )
-  
-  // ------------------- Subcommand: table -------------------
-  .addSubcommandGroup(group =>
-    group
-      .setName('table')
-      .setDescription("📊 Load or roll from item tables")
-      .addSubcommand(sub =>
-        sub
-          .setName('load')
-          .setDescription('Loads a table from Google Sheets into the database')
-          .addStringOption(option =>
-            option
-              .setName('tablename')
-              .setDescription('The name of the sheet tab')
-              .setRequired(true)
-          )
-      )
-      .addSubcommand(sub =>
-        sub
-          .setName('roll')
-          .setDescription('Rolls an item from a loaded table stored in the database')
-          .addStringOption(option =>
-            option
-              .setName('tablename')
-              .setDescription('The name of the table to roll from')
-              .setRequired(true)
-          )
-      )
+    )
+)
 
-      // ------------------- Subcommand: blightpause -------------------
+// ------------------- Subcommand: approve -------------------
+.addSubcommand(sub =>
+  sub
+    .setName('approve')
+    .setDescription('✅ Approve or deny a submission')
+    .addStringOption(opt =>
+      opt
+        .setName('submission_id')
+        .setDescription('The ID of the submission to approve/deny.')
+        .setRequired(true)
+    )
+    .addStringOption(opt =>
+      opt
+        .setName('action')
+        .setDescription('Approve or deny the submission.')
+        .setRequired(true)
+        .addChoices(
+          { name: 'Approve', value: 'approve' },
+          { name: 'Deny', value: 'deny' }
+        )
+    )
+    .addStringOption(opt =>
+      opt
+        .setName('reason')
+        .setDescription('Provide a reason for denying the submission (optional).')
+        .setRequired(false)
+    )
+)
+
+// ------------------- Subcommand: inactivityreport -------------------
+.addSubcommand(sub =>
+  sub
+    .setName('inactivityreport')
+    .setDescription("📋 View members inactive for 3+ months")
+)
+
+// ------------------- Subcommand Group: table -------------------
+.addSubcommandGroup(group =>
+  group
+    .setName('table')
+    .setDescription("📊 Load or roll from item tables")
+    .addSubcommand(sub =>
+      sub
+        .setName('load')
+        .setDescription('Loads a table from Google Sheets into the database')
+        .addStringOption(option =>
+          option
+            .setName('tablename')
+            .setDescription('The name of the sheet tab')
+            .setRequired(true)
+        )
+    )
+    .addSubcommand(sub =>
+      sub
+        .setName('roll')
+        .setDescription('Rolls an item from a loaded table stored in the database')
+        .addStringOption(option =>
+          option
+            .setName('tablename')
+            .setDescription('The name of the table to roll from')
+            .setRequired(true)
+        )
+    )
+)
+
+// ------------------- Subcommand: blightpause -------------------
 .addSubcommand(sub =>
   sub
     .setName('blightpause')
@@ -253,8 +257,27 @@ const modCommand = new SlashCommandBuilder()
         .setDescription('True to pause, false to unpause')
         .setRequired(true)
     )
-  )
-  )
+)
+
+// ------------------- Subcommand: tokens -------------------
+.addSubcommand(sub =>
+  sub
+    .setName('tokens')
+    .setDescription('💠 Give tokens to a user')
+    .addUserOption(opt =>
+      opt
+        .setName('user')
+        .setDescription('The user to give tokens to')
+        .setRequired(true)
+    )
+    .addIntegerOption(opt =>
+      opt
+        .setName('amount')
+        .setDescription('Number of tokens to give')
+        .setRequired(true)
+    )
+)
+
   
 // ============================================================================
 // ------------------- Execute Command Handler -------------------
@@ -281,6 +304,35 @@ async function execute(interaction) {
         return await handleTable(interaction);      
       } else if (subcommand === 'blightpause') {
         return await handleBlightPause(interaction);
+      } else if (subcommand === 'tokens') {
+        const user = interaction.options.getUser('user');
+        const amount = interaction.options.getInteger('amount');
+        const User = require('../../models/UserModel.js'); // ✅ adjust if needed
+      
+        try {
+          const target = await User.findOne({ discordId: user.id });
+          if (!target) {
+            return interaction.editReply({
+              content: `❌ No user record found for <@${user.id}>.`,
+              ephemeral: true
+            });
+          }
+      
+          target.tokens = (target.tokens || 0) + amount;
+          await target.save();
+      
+          await interaction.editReply({
+            content: `💠 <@${user.id}> has been given **${amount} tokens**. They now have **${target.tokens} total**.`,
+            ephemeral: true
+          });
+        } catch (err) {
+          console.error(`[mod.js] Error giving tokens:`, err);
+          return interaction.editReply({
+            content: `❌ Failed to give tokens to <@${user.id}>.`,
+            ephemeral: true
+          });
+          
+        }      
       } else {
       return interaction.editReply('❌ Unknown subcommand.');
     }
