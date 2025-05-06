@@ -356,6 +356,28 @@ async function processTravelDay(day, context) {
     await character.save();
     const finalChannelId = PATH_CHANNELS[paths[paths.length - 1]] || currentChannel;
     const finalChannel = await interaction.client.channels.fetch(finalChannelId);
+  
+    // ------------------- Assign Village Role -------------------
+    const member = await interaction.guild.members.fetch(interaction.user.id);
+    const allRoles = await interaction.guild.roles.fetch();
+    const roleName = `${capitalizeFirstLetter(destination)} Visiting`;
+    const villageRole = allRoles.find(role => role.name === roleName);
+  
+    if (villageRole) {
+      // Remove other "* Visiting" roles first
+      const visitingRoles = member.roles.cache.filter(r => /Visiting$/.test(r.name) && r.id !== villageRole.id);
+      for (const [roleId] of visitingRoles) {
+        await member.roles.remove(roleId).catch(console.warn);
+      }
+  
+      // Add destination visiting role
+      if (!member.roles.cache.has(villageRole.id)) {
+        await member.roles.add(villageRole).catch(console.warn);
+      }
+    } else {
+      console.warn(`[travel.js]: Could not find role "${roleName}" to assign.`);
+    }
+  
 // Filter out "fight: win & loot" logs from final summary
 const filteredLog = travelLog.filter(entry => !entry.startsWith('fight: win & loot'));
 const finalEmbed = createFinalTravelEmbed(character, destination, paths, totalTravelDuration, filteredLog);
