@@ -80,7 +80,21 @@ module.exports = {
         return;
       }
 
-      // Check if the character is KOed.
+      // ------------------- Daily Gather Limit -------------------
+      const now = new Date();
+      const rollover = new Date();
+      rollover.setUTCHours(13, 0, 0, 0); // 8AM EST = 1PM UTC
+
+      const lastGathered = character.lastGatheredAt ? new Date(character.lastGatheredAt) : null;
+      if (lastGathered && lastGathered > rollover && now > rollover) {
+        await interaction.editReply({
+          content: `⏳ **${character.name} has already gathered today!**\n🌅 **Daily gather limit resets at midnight EST (4AM UTC).**`,
+          ephemeral: true,
+        });
+        return;
+        }
+
+       // Check if the character is KOed.
       if (character.isKO) {
         await interaction.editReply({
           content: `❌ **${character.name} is currently KOed and cannot gather.**\n💤 **Let them rest and recover before gathering again.**`,
@@ -465,6 +479,10 @@ module.exports = {
 
         const embed = createGatherEmbed(character, randomItem);
         await interaction.editReply({ embeds: [embed] });
+        // ------------------- Update Last Gather Timestamp -------------------
+character.lastGatheredAt = new Date().toISOString();
+await character.save();
+
       }
 
       // ------------------- Deactivate Job Voucher -------------------

@@ -112,6 +112,21 @@ module.exports = {
     return;
    }
 
+   // ------------------- Daily Loot Limit -------------------
+    const now = new Date();
+    const rollover = new Date();
+    rollover.setUTCHours(13, 0, 0, 0); // 8AM EST = 1PM UTC
+
+    const lastLooted = character.lastLootedAt ? new Date(character.lastLootedAt) : null;
+    if (lastLooted && lastLooted > rollover && now > rollover) {
+      await interaction.editReply({
+        content: `⏳ **${character.name} has already looted today!**\n🌅 **Daily loot limit resets at midnight EST (4AM UTC).**`,
+        ephemeral: true,
+      });
+      return;
+}
+
+
    if (character.debuff?.active) {
     const debuffEndDate = new Date(character.debuff.endDate);
     const unixTimestamp = Math.floor(debuffEndDate.getTime() / 1000);
@@ -678,6 +693,10 @@ async function processLootingLogic(
     bloodMoonActive
    );
    await interaction.editReply({ embeds: [embed] });
+   // ------------------- Update Last Loot Timestamp -------------------
+character.lastLootedAt = new Date().toISOString();
+await character.save();
+
   } else {
    const embed = createMonsterEncounterEmbed(
     character,
@@ -688,6 +707,10 @@ async function processLootingLogic(
     bloodMoonActive
    );
    await interaction.editReply({ embeds: [embed] });
+   // ------------------- Update Last Loot Timestamp -------------------
+character.lastLootedAt = new Date().toISOString();
+await character.save();
+
   }
  } catch (error) {
   handleError(error, "loot.js");
