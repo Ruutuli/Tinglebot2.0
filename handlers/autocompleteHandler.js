@@ -2706,39 +2706,34 @@ async function handleSlotAutocomplete(interaction) {
 
     const slotChoices = [];
 
-    for (let i = 1; i <= totalSlots; i++) {
-      const slotName = `Slot ${i}`;
-      if (slotMap.has(slotName)) {
-        const { itemName, qty } = slotMap.get(slotName);
-        const fullness = Math.min(qty, 10);
-        slotChoices.push({
-          slotNum: i,
-          name: `${slotName} – ${itemName} – ${fullness}/10`,
-          value: slotName,
-        });
-      } else {
-        slotChoices.push({
-          slotNum: i,
-          name: `${slotName} – (Empty)`,
-          value: slotName,
-        });
-      }
-    }
+for (let i = 1; i <= totalSlots; i++) {
+  const displayNum = String(i).padStart(2, '0'); // For visible sorting
+  const slotNameDisplay = `Slot ${displayNum}`;  // 👁️ Shown to user
+  const slotNameValue = `Slot ${i}`;             // 💾 Used internally
 
-    // Sort numerically by extracted slotNum
-    slotChoices.sort((a, b) => a.slotNum - b.slotNum);
+  if (slotMap.has(slotNameValue)) {
+    const { itemName, qty } = slotMap.get(slotNameValue);
+    const fullness = Math.min(qty, 10);
+    slotChoices.push({
+      name: `${slotNameDisplay} – ${itemName} – ${fullness}/10`,
+      value: slotNameValue,
+    });
+  } else {
+    slotChoices.push({
+      name: `${slotNameDisplay} – (Empty)`,
+      value: slotNameValue,
+    });
+  }
+}
 
-    // Respond with cleaned-up format (removing slotNum field)
-    await respondWithFilteredChoices(
-      interaction,
-      interaction.options.getFocused(true),
-      slotChoices.map(({ name, value }) => ({ name, value }))
-    );
+// No custom sorting needed now
+await respondWithFilteredChoices(interaction, interaction.options.getFocused(true), slotChoices);
+
+
   } catch (error) {
     handleError(error, "autocompleteHandler.js");
     await interaction.respond([]);
   }
-
 }
 
 // ============================================================================
