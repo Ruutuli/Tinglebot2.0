@@ -306,6 +306,10 @@ async function handleRestock(interaction) {
       );
     } else {
 
+      // ------------------- Authorize Sheets & Extract ID -------------------
+      const spreadsheetId = extractSpreadsheetId(character.shopLink);
+      const auth = await authorizeSheets();
+
       // Generate next available Slot
       const sheetData = await readSheetData(auth, spreadsheetId, 'vendingShop!A2:L');
 
