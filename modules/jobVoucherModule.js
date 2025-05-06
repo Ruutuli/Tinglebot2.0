@@ -10,6 +10,16 @@ const { v4: uuidv4 } = require('uuid');
 
 // ------------------- Validate Job Voucher -------------------
 async function validateJobVoucher(character, jobName) {
+    // ------------------- NEW: If character already has the job, voucher is not needed -------------------
+    if (character.job?.trim().toLowerCase() === jobName?.trim().toLowerCase()) {
+        console.log(`[Job Voucher Validation]: Character already has job "${jobName}". Voucher not required.`);
+        return {
+            success: false,
+            message: `✅ Character already has the job "${jobName}". No job voucher needed.`,
+            skipVoucher: true
+        };
+    }
+
     if (!character.jobVoucher) {
         return {
             success: false,
@@ -32,7 +42,6 @@ async function validateJobVoucher(character, jobName) {
 
     return { success: true };
 }
-
 
 // ------------------- Activate Job Voucher -------------------
 async function activateJobVoucher(character, jobName, item, quantity = 1, interaction) {
