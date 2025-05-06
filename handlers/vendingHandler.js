@@ -263,8 +263,13 @@ async function handleRestock(interaction) {
     // ------------------- Authorize Sheets & Get Slot -------------------
     const spreadsheetId = extractSpreadsheetId(character.shopLink);
     const auth = await authorizeSheets();
-    const sheetData = await readSheetData(auth, spreadsheetId, 'vendingShop!A2:L');
-    const existingSlots = sheetData.map(row => row[1]?.trim()).filter(s => /^Slot \d+$/.test(s));
+    const sheetData = await readSheetData(auth, spreadsheetId, 'vendingShop!A2:L') || [];
+    
+    if (!Array.isArray(sheetData)) {
+      return interaction.editReply("❌ Unable to read data from the vendingShop sheet. Make sure the sheet exists and has proper permissions.");
+    }
+    
+    const existingSlots = sheetData.map(row => row[1]?.trim()).filter(s => /^Slot \d+$/.test(s));    
 
     const usedSlotNums = new Set();
     for (const slot of existingSlots) {
