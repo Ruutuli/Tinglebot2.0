@@ -279,17 +279,23 @@ async function handleRestock(interaction) {
 
     let newSlot = null;
     if (stackable) {
+      // Find all entries for the same item that are stackable and grouped by slot
       const matchingStacks = await vendCollection.find({ itemName, stackable: true }).toArray();
+      const slotTotals = {};
+    
       for (const entry of matchingStacks) {
-        const currentSlot = entry.slot;
-        const existingQty = entry.stockQty;
-        if (/^Slot \d+$/.test(currentSlot) && existingQty + stockQty <= 10) {
-          newSlot = currentSlot;
+        if (!/^Slot \d+$/.test(entry.slot)) continue;
+        slotTotals[entry.slot] = (slotTotals[entry.slot] || 0) + entry.stockQty;
+      }
+    
+      for (const [slot, totalQty] of Object.entries(slotTotals)) {
+        if (totalQty + stockQty <= 10) {
+          newSlot = slot;
           break;
         }
       }
     }
-
+    
     if (!newSlot) {
       let nextSlot = 1;
       while (usedSlotNums.has(nextSlot)) nextSlot++;
