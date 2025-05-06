@@ -358,10 +358,10 @@ async function handleRestock(interaction) {
       { $set: { vendingPoints: vendingPoints - totalCost } }
     );
 
-    // ------------------- Append Row to Sheet -------------------
+      // ------------------- Append Row to Sheet -------------------
       try {
         const spreadsheetId = extractSpreadsheetId(character.shopLink);
-        const auth = await authorizeSheets();
+        const auth = await authorizeSheets(); // ✅ Define auth here
         const monthLabel = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
 
         // ✅ FIX: Read sheet data BEFORE using it
