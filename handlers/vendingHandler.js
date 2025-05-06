@@ -194,6 +194,7 @@ async function handleRestock(interaction) {
     const artPrice = interaction.options.getInteger('artprice') || 'N/A';
     const otherPrice = interaction.options.getInteger('otherprice') || 'N/A';
     const tradesOpen = interaction.options.getBoolean('tradesopen') || false;
+    const manualSlot = interaction.options.getString('slot'); // <-- added
     const userId = interaction.user.id;
 
     // ------------------- Character Validation -------------------
@@ -277,17 +278,15 @@ async function handleRestock(interaction) {
       if (match) usedSlotNums.add(Number(match[1]));
     }
 
-    let newSlot = null;
-    if (stackable) {
-      // Find all entries for the same item that are stackable and grouped by slot
+    let newSlot = manualSlot || null;
+
+    if (!newSlot && stackable) {
       const matchingStacks = await vendCollection.find({ itemName, stackable: true }).toArray();
       const slotTotals = {};
-    
       for (const entry of matchingStacks) {
         if (!/^Slot \d+$/.test(entry.slot)) continue;
         slotTotals[entry.slot] = (slotTotals[entry.slot] || 0) + entry.stockQty;
       }
-    
       for (const [slot, totalQty] of Object.entries(slotTotals)) {
         if (totalQty + stockQty <= 10) {
           newSlot = slot;
@@ -300,7 +299,7 @@ async function handleRestock(interaction) {
       let nextSlot = 1;
       while (usedSlotNums.has(nextSlot)) nextSlot++;
       newSlot = `Slot ${nextSlot}`;
-    }
+    }    
 
     // ------------------- Insert or Merge Inventory -------------------
     const existingMatch = await vendCollection.findOne({
@@ -1027,7 +1026,8 @@ async function handleEditShop(interaction) {
     const artPrice = interaction.options.getString('artprice');
     const otherPrice = interaction.options.getString('otherprice');
     const tradesOpen = interaction.options.getBoolean('tradesopen');
-    const userId = interaction.user.id;
+    const newSlot = interaction.options.getString('slot'); // <-- added
+    const userId = interaction.user.id;    
 
     // ------------------- Fetch Character -------------------
     const character = await fetchCharacterByNameAndUserId(characterName, userId);
@@ -1069,9 +1069,11 @@ async function handleEditShop(interaction) {
     if (otherPrice) updateFields.otherPrice = otherPrice;
     if (tradesOpen !== null) updateFields.tradesOpen = tradesOpen;
 
+    if (newSlot) updateFields.slot = newSlot;
+
     if (Object.keys(updateFields).length === 0) {
       throw new Error('No valid fields provided for update.');
-    }
+    }    
 
     await inventory.updateOne({ _id: item._id }, { $set: updateFields });
 
@@ -1092,7 +1094,7 @@ async function handleEditShop(interaction) {
 
     const updatedRow = [
       characterName,
-      sheetData[rowIndex][1], // SLOT
+      newSlot || sheetData[rowIndex][1], // SLOT    
       itemName,
       sheetData[rowIndex][3], // Stock Qty
       sheetData[rowIndex][4], // Cost Each

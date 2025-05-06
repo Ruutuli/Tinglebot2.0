@@ -79,6 +79,10 @@ const command = new SlashCommandBuilder()
         opt.setName('tradesopen')
           .setDescription('Is this item open for trades?')
       )
+      .addStringOption(opt =>
+        opt.setName('slot')
+          .setDescription('Manually assign a slot (e.g., Slot 3)')
+      )
   )
 
   // ------------------- /vending barter -------------------
@@ -165,6 +169,10 @@ const command = new SlashCommandBuilder()
       .addBooleanOption(opt =>
         opt.setName('tradesopen')
           .setDescription('Update if trades are open')
+      )
+      .addStringOption(opt =>
+        opt.setName('slot')
+          .setDescription('Update item slot (e.g., Slot 2)')
       )
   )
 
