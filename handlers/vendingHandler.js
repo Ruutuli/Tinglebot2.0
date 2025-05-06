@@ -942,126 +942,122 @@ async function handleVendingSync(interaction) {
   
 // ------------------- handleEditShop -------------------
 async function handleEditShop(interaction) {
-    try {
-      await interaction.deferReply({ ephemeral: true });
-  
-      // ------------------- Extract Inputs -------------------
-      const characterName = interaction.options.getString('charactername');
-      const itemName = interaction.options.getString('itemname');
-      const shopImageFile = interaction.options.getAttachment('shopimagefile');
-      const tokenPrice = interaction.options.getInteger('tokenprice');
-      const artPrice = interaction.options.getString('artprice');
-      const otherPrice = interaction.options.getString('otherprice');
-      const tradesOpen = interaction.options.getBoolean('tradesopen');
-      const userId = interaction.user.id;
-  
-      // ------------------- Fetch Character -------------------
-      const character = await fetchCharacterByNameAndUserId(characterName, userId);
-      if (!character) throw new Error(`Character '${characterName}' not found or does not belong to you.`);
-  
-      // ------------------- Handle Shop Image Upload -------------------
-      if (itemName.toLowerCase() === 'shop image') {
-        if (!shopImageFile) throw new Error('No shop image file uploaded.');
-  
-        const sanitizedName = characterName.replace(/\s+/g, '');
-        const imageName = `${sanitizedName}_shop_image_${Date.now()}`;
-        const imageUrl = await uploadSubmissionImage(shopImageFile.url, imageName);
-  
-        await Character.updateOne({ name: characterName }, { $set: { shopImage: imageUrl } });
-  
-        await interaction.editReply({
-          content: `✅ Shop image updated for **${characterName}**!`
-        });
-        return;
-      }
-  
-      // ------------------- Connect to MongoDB -------------------
-      console.log(`[handleEditShop] Connected to vending DB. Character: ${characterName.toLowerCase()}`);
-      const db = await connectToVendingDatabase(); // ✔ already a .db("tinglebot")
-      const inventory = db.collection(characterName.toLowerCase());
-      
-      console.log(`[handleEditShop] Connected to vending DB. Character: ${characterName.toLowerCase()}`);
+  try {
+    await interaction.deferReply({ ephemeral: true });
 
-      // Pull full inventory for inspection
-      const allItems = await inventory.find({}).toArray();
-      console.log(`[handleEditShop] Inventory for ${characterName}:`, allItems.map(i => i.itemName));
+    // ------------------- Extract Inputs -------------------
+    const characterName = interaction.options.getString('charactername');
+    const itemName = interaction.options.getString('itemname');
+    const shopImageFile = interaction.options.getAttachment('shopimagefile');
+    const tokenPrice = interaction.options.getInteger('tokenprice');
+    const artPrice = interaction.options.getString('artprice');
+    const otherPrice = interaction.options.getString('otherprice');
+    const tradesOpen = interaction.options.getBoolean('tradesopen');
+    const userId = interaction.user.id;
 
-      // Attempt to find item
-      console.log(`[handleEditShop] Attempting to locate item (user input): '${itemName.trim()}'`);
-      const item = await inventory.findOne({
-        itemName: { $regex: new RegExp(`^${itemName.trim()}$`, 'i') }
-      });
+    // ------------------- Fetch Character -------------------
+    const character = await fetchCharacterByNameAndUserId(characterName, userId);
+    if (!character) throw new Error(`Character '${characterName}' not found or does not belong to you.`);
 
-      if (!item) {
-        console.error(`[handleEditShop] FAILED to find item '${itemName}' in inventory. Full inventory:`, allItems);
-        throw new Error(`Item '${itemName}' not found in ${characterName}'s shop.`);
-      } else {
-        console.log(`[handleEditShop] Match found for '${itemName}':`, item);
-      }
+    // ------------------- Handle Shop Image Upload -------------------
+    if (itemName.toLowerCase() === 'shop image') {
+      if (!shopImageFile) throw new Error('No shop image file uploaded.');
 
-      // ------------------- Apply Updates -------------------
-      const updateFields = {};
-      if (tokenPrice !== null) updateFields.tokenPrice = tokenPrice;
-      if (artPrice) updateFields.artPrice = artPrice;
-      if (otherPrice) updateFields.otherPrice = otherPrice;
-      if (tradesOpen !== null) updateFields.tradesOpen = tradesOpen;
-      
-      if (Object.keys(updateFields).length === 0) throw new Error('No valid fields provided for update.');
-      
-      // ✅ FIX: Update by _id, not itemName
-      await inventory.updateOne({ _id: item._id }, { $set: updateFields });
-      
-      // ------------------- Update Google Sheet -------------------
-      const spreadsheetId = extractSpreadsheetId(character.shopLink);
-      if (!spreadsheetId) throw new Error(`Invalid or missing shop link for '${characterName}'.`);
-  
-      const auth = await authorizeSheets();
-      const sheetData = await readSheetData(auth, spreadsheetId, 'vendingShop!A:K');
-      // ------------------- Match sheet row using case-insensitive item name -------------------
-      const rowIndex = sheetData.findIndex(row => row[1]?.trim().toLowerCase() === itemName.trim().toLowerCase());
+      const sanitizedName = characterName.replace(/\s+/g, '');
+      const imageName = `${sanitizedName}_shop_image_${Date.now()}`;
+      const imageUrl = await uploadSubmissionImage(shopImageFile.url, imageName);
 
-      if (rowIndex === -1) throw new Error(`Item '${itemName}' not found in the shop spreadsheet.`);
-  
-      const updatedRow = [
-        characterName,
-        itemName,
-        sheetData[rowIndex][2], // Stock Qty
-        sheetData[rowIndex][3], // Cost Each
-        sheetData[rowIndex][4], // Points Spent
-        sheetData[rowIndex][5], // Bought From
-        tokenPrice !== null ? tokenPrice : sheetData[rowIndex][6],
-        artPrice || sheetData[rowIndex][7],
-        otherPrice || sheetData[rowIndex][8],
-        tradesOpen !== null ? (tradesOpen ? 'Yes' : 'No') : sheetData[rowIndex][9],
-        sheetData[rowIndex][10] // Date
-      ];
-  
-      const range = `vendingShop!A${rowIndex + 1}:K${rowIndex + 1}`;
-      await writeSheetData(auth, spreadsheetId, range, [updatedRow]);
-  
-      // ------------------- Success Embed -------------------
-      const embed = new EmbedBuilder()
-        .setTitle('✅ **Item Updated Successfully!**')
-        .setDescription(`**${itemName}** in **${characterName}'s** shop has been updated.`)
-        .addFields(
-          { name: '💰 Token Price', value: `${tokenPrice ?? item.tokenPrice ?? 'N/A'}`, inline: true },
-          { name: '🎨 Art Price', value: `${artPrice ?? item.artPrice ?? 'N/A'}`, inline: true },
-          { name: '📜 Other Price', value: `${otherPrice ?? item.otherPrice ?? 'N/A'}`, inline: true },
-          { name: '🔄 Trades Open', value: `${tradesOpen !== null ? (tradesOpen ? 'Yes' : 'No') : item.tradesOpen ? 'Yes' : 'No'}`, inline: true }
-        )
-        .setColor('#AA926A')
-        .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png');
-  
-      await interaction.editReply({ embeds: [embed] });
-    } catch (error) {
-      handleError(error, 'vendingHandler.js');
-      console.error('[handleEditShop]:', error);
+      await Character.updateOne({ name: characterName }, { $set: { shopImage: imageUrl } });
+
       await interaction.editReply({
-        content: `❌ Error editing shop item: ${error.message}`,
-        ephemeral: true
+        content: `✅ Shop image updated for **${characterName}**!`
       });
+      return;
     }
+
+    // ------------------- Connect to MongoDB -------------------
+    const db = await connectToVendingDatabase(); // returns vending DB
+    const inventory = db.collection(characterName.toLowerCase());
+
+    // ------------------- Attempt to Find Item -------------------
+    const item = await inventory.findOne({
+      itemName: { $regex: new RegExp(`^${itemName.trim()}$`, 'i') }
+    });
+
+    if (!item) {
+      throw new Error(`Item '${itemName}' not found in ${characterName}'s shop.`);
+    }
+
+    // ------------------- Apply Updates -------------------
+    const updateFields = {};
+    if (tokenPrice !== null) updateFields.tokenPrice = tokenPrice;
+    if (artPrice) updateFields.artPrice = artPrice;
+    if (otherPrice) updateFields.otherPrice = otherPrice;
+    if (tradesOpen !== null) updateFields.tradesOpen = tradesOpen;
+
+    if (Object.keys(updateFields).length === 0) {
+      throw new Error('No valid fields provided for update.');
+    }
+
+    await inventory.updateOne({ _id: item._id }, { $set: updateFields });
+
+    // ------------------- Update Google Sheet -------------------
+    const spreadsheetId = extractSpreadsheetId(character.shopLink);
+    if (!spreadsheetId) throw new Error(`Invalid or missing shop link for '${characterName}'.`);
+
+    const auth = await authorizeSheets();
+    const sheetData = await readSheetData(auth, spreadsheetId, 'vendingShop!A:K');
+
+    const rowIndex = sheetData.findIndex(row =>
+      row[1]?.trim().toLowerCase() === itemName.trim().toLowerCase()
+    );
+
+    if (rowIndex === -1) {
+      throw new Error(`Item '${itemName}' not found in the shop spreadsheet.`);
+    }
+
+    const updatedRow = [
+      characterName,
+      itemName,
+      sheetData[rowIndex][2], // Stock Qty
+      sheetData[rowIndex][3], // Cost Each
+      sheetData[rowIndex][4], // Points Spent
+      sheetData[rowIndex][5], // Bought From
+      tokenPrice !== null ? tokenPrice : sheetData[rowIndex][6],
+      artPrice || sheetData[rowIndex][7],
+      otherPrice || sheetData[rowIndex][8],
+      tradesOpen !== null ? (tradesOpen ? 'Yes' : 'No') : sheetData[rowIndex][9],
+      sheetData[rowIndex][10] // Date
+    ];
+
+    const range = `vendingShop!A${rowIndex + 1}:K${rowIndex + 1}`;
+    await writeSheetData(auth, spreadsheetId, range, [updatedRow]);
+
+    // ------------------- Success Embed -------------------
+    const embed = new EmbedBuilder()
+      .setTitle('✅ **Item Updated Successfully!**')
+      .setDescription(`**${itemName}** in **${characterName}'s** shop has been updated.`)
+      .addFields(
+        { name: '💰 Token Price', value: `${tokenPrice ?? item.tokenPrice ?? 'N/A'}`, inline: true },
+        { name: '🎨 Art Price', value: `${artPrice ?? item.artPrice ?? 'N/A'}`, inline: true },
+        { name: '📜 Other Price', value: `${otherPrice ?? item.otherPrice ?? 'N/A'}`, inline: true },
+        { name: '🔄 Trades Open', value: `${tradesOpen !== null ? (tradesOpen ? 'Yes' : 'No') : item.tradesOpen ? 'Yes' : 'No'}`, inline: true }
+      )
+      .setColor('#AA926A')
+      .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png');
+
+    await interaction.editReply({ embeds: [embed] });
+
+  } catch (error) {
+    handleError(error, 'vendingHandler.js');
+    console.error('[handleEditShop]:', error);
+    await interaction.editReply({
+      content: `❌ Error editing shop item: ${error.message}`,
+      ephemeral: true
+    });
   }
+}
+
   
 // ------------------- handleShopLink -------------------
 async function handleShopLink(interaction) {
