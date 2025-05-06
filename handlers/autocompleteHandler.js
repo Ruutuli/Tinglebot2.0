@@ -2619,12 +2619,16 @@ async function handleVendingEditShopAutocomplete(interaction, focusedOption) {
   if (!shopItems.length) return await interaction.respond([]);
 
   const searchQuery = focusedOption.value.toLowerCase();
+  const slotFilter = interaction.options.getString("slot");
   const filteredItems = shopItems
-   .filter((item) => item.itemName.toLowerCase().includes(searchQuery))
-   .map((item) => ({
-    name: `${item.itemName} - Qty: ${item.stockQty}`,
-    value: item.itemName,
-   }))
+    .filter((item) => {
+      const matchesSlot = slotFilter ? item.slot === slotFilter : true;
+      return item.itemName.toLowerCase().includes(searchQuery) && matchesSlot;
+    })
+    .map((item) => ({
+      name: `${item.itemName} (${item.slot}) - Qty: ${item.stockQty}`,
+      value: item.itemName,
+    }))
    .slice(0, 25);
 
   await interaction.respond(filteredItems);

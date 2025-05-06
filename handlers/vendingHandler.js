@@ -188,13 +188,13 @@ async function handleRestock(interaction) {
 
     // ------------------- Input Parsing -------------------
     const characterName = interaction.options.getString('charactername');
+    const manualSlot = interaction.options.getString('slot'); // <-- added
     const itemName = interaction.options.getString('itemname');
     const stockQty = interaction.options.getInteger('stockqty');
     const tokenPrice = interaction.options.getInteger('tokenprice') || 'N/A';
     const artPrice = interaction.options.getInteger('artprice') || 'N/A';
     const otherPrice = interaction.options.getInteger('otherprice') || 'N/A';
     const tradesOpen = interaction.options.getBoolean('tradesopen') || false;
-    const manualSlot = interaction.options.getString('slot'); // <-- added
     const userId = interaction.user.id;
 
     // ------------------- Character Validation -------------------
@@ -1020,13 +1020,13 @@ async function handleEditShop(interaction) {
 
     // ------------------- Extract Inputs -------------------
     const characterName = interaction.options.getString('charactername');
+    const newSlot = interaction.options.getString('slot'); // <-- added
     const itemName = interaction.options.getString('itemname');
     const shopImageFile = interaction.options.getAttachment('shopimagefile');
     const tokenPrice = interaction.options.getInteger('tokenprice');
     const artPrice = interaction.options.getString('artprice');
     const otherPrice = interaction.options.getString('otherprice');
     const tradesOpen = interaction.options.getBoolean('tradesopen');
-    const newSlot = interaction.options.getString('slot'); // <-- added
     const userId = interaction.user.id;    
 
     // ------------------- Fetch Character -------------------

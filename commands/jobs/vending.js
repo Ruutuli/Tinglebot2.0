@@ -53,6 +53,10 @@ const command = new SlashCommandBuilder()
           .setAutocomplete(true)
       )
       .addStringOption(opt =>
+        opt.setName('slot')
+          .setDescription('Manually assign a slot (e.g., Slot 3)')
+      )
+      .addStringOption(opt =>
         opt.setName('itemname')
           .setDescription('Name of the item to restock')
           .setRequired(true)
@@ -78,10 +82,6 @@ const command = new SlashCommandBuilder()
       .addBooleanOption(opt =>
         opt.setName('tradesopen')
           .setDescription('Is this item open for trades?')
-      )
-      .addStringOption(opt =>
-        opt.setName('slot')
-          .setDescription('Manually assign a slot (e.g., Slot 3)')
       )
   )
 
@@ -145,6 +145,10 @@ const command = new SlashCommandBuilder()
           .setAutocomplete(true)
       )
       .addStringOption(opt =>
+        opt.setName('slot')
+          .setDescription('Update item slot (e.g., Slot 2)')
+      )
+      .addStringOption(opt =>
         opt.setName('itemname')
           .setDescription('Item name or type "shop image" to upload banner')
           .setRequired(true)
@@ -169,10 +173,6 @@ const command = new SlashCommandBuilder()
       .addBooleanOption(opt =>
         opt.setName('tradesopen')
           .setDescription('Update if trades are open')
-      )
-      .addStringOption(opt =>
-        opt.setName('slot')
-          .setDescription('Update item slot (e.g., Slot 2)')
       )
   )
 
