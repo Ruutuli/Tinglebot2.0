@@ -119,6 +119,13 @@ async function healBlight(interaction, characterName, healerName) {
       return;
     }
 
+    if (character.blightPaused) {
+      return interaction.reply({
+        content: `⏸️ Blight progression is currently **paused** for **${character.name}**.`,
+        ephemeral: true
+      });
+    }
+
     const healer = getModCharacterByName(healerName);
     if (!healer) {
       await interaction.reply({ content: `❌ Healer "${healerName}" not found.`, ephemeral: true });
