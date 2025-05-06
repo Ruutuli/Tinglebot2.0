@@ -233,12 +233,18 @@ module.exports = {
           discoveredDate: relic.discoveredDate.toISOString()
         });
         try {
+          // Ensure the directory exists before writing the file
+          const relicStorageDir = path.dirname(relicStoragePath);
+          if (!fs.existsSync(relicStorageDir)) {
+            fs.mkdirSync(relicStorageDir, { recursive: true });
+          }
+
           fs.writeFileSync(relicStoragePath, JSON.stringify(relicStorage, null, 2));
         } catch (err) {
-    handleError(err, 'relic.js');
-
+          handleError(err, 'relic.js');
           console.error('[relic.js]: Error writing to relicStorage.json:', err);
         }
+
 
         // ------------------- Final Response for test subcommand with failsafe -------------------
         try {
