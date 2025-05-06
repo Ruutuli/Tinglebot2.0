@@ -315,8 +315,14 @@ async function handleAutocomplete(interaction) {
   interaction.options.getSubcommand() === "give" &&
   focusedOption.name === "item"
 ) {
-  // /mod give — item autocomplete
-  await handleModGiveItemAutocomplete(interaction, focusedOption);
+  // /mod give — item autocomplete (all items in item database)
+  const items = await Item.find({}).lean();
+  const choices = items.map(item => ({
+    name: item.itemName,
+    value: item.itemName,
+  }));
+
+  await respondWithFilteredChoices(interaction, focusedOption, choices);
 } else if (
   commandName === "mod" &&
   interaction.options.getSubcommand() === "petlevel" &&
