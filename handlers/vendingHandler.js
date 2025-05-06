@@ -182,7 +182,6 @@ async function handleCollectPoints(interaction) {
 
 // ------------------- handleRestock -------------------
 // Allows Shopkeepers/Merchants to restock items from monthly vending stock.
-
 async function handleRestock(interaction) {
   try {
     await interaction.deferReply({ ephemeral: true });
@@ -197,42 +196,36 @@ async function handleRestock(interaction) {
     const tradesOpen = interaction.options.getBoolean('tradesopen') || false;
     const userId = interaction.user.id;
 
-    // ------------------- Slot Limits -------------------
-    const baseSlotLimits = { shopkeeper: 5, merchant: 3 };
-    const pouchCapacities = { none: 0, bronze: 15, silver: 30, gold: 50 };
-
+    // ------------------- Character Validation -------------------
     const character = await fetchCharacterByName(characterName);
     if (!character || character.userId !== userId) {
       return interaction.editReply("❌ Character not found or doesn't belong to you.");
     }
 
+    // ------------------- Slot Limits -------------------
+    const baseSlotLimits = { shopkeeper: 5, merchant: 3 };
+    const pouchCapacities = { none: 0, bronze: 15, silver: 30, gold: 50 };
     const baseSlots = baseSlotLimits[character.job?.toLowerCase()] || 0;
     const extraSlots = pouchCapacities[character.shopPouch?.toLowerCase()] || 0;
     const totalSlots = baseSlots + extraSlots;
 
-    // ------------------- Fetch Vending Inventory -------------------
+    // ------------------- DB Connections -------------------
     const vendingClient = new MongoClient(process.env.MONGODB_INVENTORIES_URI);
     await vendingClient.connect();
-    const vendingDb = vendingClient.db("vending");
-    const inventoryCollection = vendingDb.collection(characterName.toLowerCase());
-    const items = await inventoryCollection.find({}).toArray();
+    const vendDb = vendingClient.db("vending");
+    const vendCollection = vendDb.collection(characterName.toLowerCase());
+    const items = await vendCollection.find({}).toArray();
 
-    // ------------------- Fetch Vending Stock for Current Month -------------------
+    // ------------------- Fetch Stock Data -------------------
     const currentMonth = new Date().getMonth() + 1;
     const currentVillage = character.currentVillage;
-
-    console.log(`[handleRestock]: Fetching vending stock for month ${currentMonth}`);
-
-    const client = new MongoClient(process.env.MONGODB_INVENTORIES_URI, {});
-    await client.connect();
-    const correctDb = client.db("tinglebot");
-    const stockCollection = correctDb.collection("vending_stock");
-
-    const stockDoc = await stockCollection.findOne({ month: currentMonth });
-    await client.close();
+    const stockDbClient = new MongoClient(process.env.MONGODB_INVENTORIES_URI);
+    await stockDbClient.connect();
+    const stockDb = stockDbClient.db("tinglebot");
+    const stockDoc = await stockDb.collection("vending_stock").findOne({ month: currentMonth });
+    await stockDbClient.close();
 
     if (!stockDoc) {
-      console.warn(`[handleRestock]: No stock document found for month ${currentMonth}`);
       return interaction.editReply(`❌ No vending stock found for month ${currentMonth}.`);
     }
 
@@ -248,17 +241,14 @@ async function handleRestock(interaction) {
     const slotsUsed = items.reduce((acc, item) => {
       return acc + (item.stackable ? Math.ceil(item.stockQty / 10) : item.stockQty);
     }, 0);
-
     const slotsRequired = stackable ? Math.ceil(stockQty / 10) : stockQty;
 
     if (slotsUsed + slotsRequired > totalSlots) {
-      const reason = stackable
-        ? `Stackable item (1 slot per 10 units)`
-        : `Crafting item (1 slot per unit)`;
       return interaction.editReply(
         `⚠️ Not enough space.\n` +
         `**${characterName}** has **${totalSlots} slots** (${slotsUsed} used).\n` +
-        `Adding \`${itemName}\` would need \`${slotsRequired}\`.\n\n${reason}`
+        `Adding \`${itemName}\` would need \`${slotsRequired}\`.\n\n` +
+        `${stackable ? 'Stackable item (1 slot per 10 units)' : 'Crafting item (1 slot per unit)'}`
       );
     }
 
@@ -266,19 +256,42 @@ async function handleRestock(interaction) {
     const vendingPoints = character.vendingPoints || 0;
     const pointCost = itemDoc.points;
     const totalCost = stockQty * pointCost;
-
     if (vendingPoints < totalCost) {
       return interaction.editReply(`⚠️ Not enough vending points. You need ${totalCost}, but only have ${vendingPoints}.`);
     }
 
-    // ------------------- Insert Item into Vending Inventory -------------------
-    const vendClient = new MongoClient(process.env.MONGODB_INVENTORIES_URI);
-    await vendClient.connect();
-    const vendDb = vendClient.db("vending");
-    const vendCollection = vendDb.collection(characterName.toLowerCase());
+    // ------------------- Authorize Sheets & Get Slot -------------------
+    const spreadsheetId = extractSpreadsheetId(character.shopLink);
+    const auth = await authorizeSheets();
+    const sheetData = await readSheetData(auth, spreadsheetId, 'vendingShop!A2:L');
+    const existingSlots = sheetData.map(row => row[1]?.trim()).filter(s => /^Slot \d+$/.test(s));
 
-    // ------------------- Insert Item into Vending Inventory (ONLY use vending > characterName)
-    // NEVER use inventories > characterName for vending restocks
+    const usedSlotNums = new Set();
+    for (const slot of existingSlots) {
+      const match = /^Slot (\d+)$/.exec(slot);
+      if (match) usedSlotNums.add(Number(match[1]));
+    }
+
+    let newSlot = null;
+    if (stackable) {
+      const matchingStacks = await vendCollection.find({ itemName, stackable: true }).toArray();
+      for (const entry of matchingStacks) {
+        const currentSlot = entry.slot;
+        const existingQty = entry.stockQty;
+        if (/^Slot \d+$/.test(currentSlot) && existingQty + stockQty <= 10) {
+          newSlot = currentSlot;
+          break;
+        }
+      }
+    }
+
+    if (!newSlot) {
+      let nextSlot = 1;
+      while (usedSlotNums.has(nextSlot)) nextSlot++;
+      newSlot = `Slot ${nextSlot}`;
+    }
+
+    // ------------------- Insert or Merge Inventory -------------------
     const existingMatch = await vendCollection.findOne({
       itemName,
       costEach: pointCost,
@@ -288,74 +301,16 @@ async function handleRestock(interaction) {
       tradesOpen,
       stackable
     });
-    
+
     if (existingMatch) {
-      // Merge stock quantity and points spent
       await vendCollection.updateOne(
         { _id: existingMatch._id },
         {
-          $inc: {
-            stockQty: stockQty,
-            pointsSpent: totalCost
-          },
-          $set: {
-            date: new Date(),
-            boughtFrom: character.currentVillage
-          }
+          $inc: { stockQty: stockQty, pointsSpent: totalCost },
+          $set: { date: new Date(), boughtFrom: character.currentVillage }
         }
       );
     } else {
-
-      // ------------------- Authorize Sheets & Extract ID -------------------
-      const spreadsheetId = extractSpreadsheetId(character.shopLink);
-      const auth = await authorizeSheets();
-
-      // Generate next available Slot
-      const sheetData = await readSheetData(auth, spreadsheetId, 'vendingShop!A2:L');
-
-      // Check existing slots
-      const existingSlots = sheetData.map(row => row[1]?.trim()).filter(s => /^Slot \d+$/.test(s));
-      
-      // Create Set to track and enforce uniqueness
-      const usedSlotNums = new Set();
-      for (const slot of existingSlots) {
-        const match = /^Slot (\d+)$/.exec(slot);
-        if (match) {
-          const num = parseInt(match[1]);
-          if (usedSlotNums.has(num)) {
-            throw new Error(`Duplicate slot number detected: Slot ${num}`);
-          }
-          usedSlotNums.add(num);
-        }
-      }
-      
-    // Check if there's an existing stackable match in an existing slot under 10 total units
-    let newSlot;
-    if (stackable) {
-      const matchingStacks = await vendCollection.find({ itemName, stackable: true }).toArray();
-
-      for (const entry of matchingStacks) {
-        const currentSlot = entry.slot;
-        const existingQty = entry.stockQty;
-
-        if (/^Slot \d+$/.test(currentSlot) && existingQty < 10 && (existingQty + stockQty) <= 10) {
-          newSlot = currentSlot;
-          break;
-        }
-      }
-    }
-
-    // If no existing slot found, assign next available unique slot
-    if (!newSlot) {
-      let nextSlot = 1;
-      while (usedSlotNums.has(nextSlot)) {
-        nextSlot++;
-      }
-      newSlot = `Slot ${nextSlot}`;
-      usedSlotNums.add(nextSlot);
-    }
-
-      // Insert new item entry
       await vendCollection.insertOne({
         itemName,
         stockQty,
@@ -367,75 +322,70 @@ async function handleRestock(interaction) {
         tradesOpen,
         stackable,
         boughtFrom: character.currentVillage,
-        slot: newSlot, // ✅ Add slot to DB
+        slot: newSlot,
         date: new Date()
       });
-      
     }
 
-      await vendClient.close();
+    // ------------------- Update Google Sheet -------------------
+    const monthLabel = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
+    let rowMatched = false;
 
-    // ------------------- Update Character Points -------------------
-    await Character.updateOne(
-      { name: characterName },
-      { $set: { vendingPoints: vendingPoints - totalCost } }
-    );
-
-      // ------------------- Append Row to Sheet -------------------
-      try {
-        const spreadsheetId = extractSpreadsheetId(character.shopLink);
-        const monthLabel = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
-
-        // ✅ FIX: Read sheet data BEFORE using it
-        const auth = await authorizeSheets(); // ✅ Call this BEFORE using it
-        const sheetData = await readSheetData(auth, spreadsheetId, 'vendingShop!A2:L');
-
-        // ✅ Extract slot column
-        const existingSlots = sheetData.map(row => row[1]?.trim()).filter(s => /^Slot \d+$/.test(s));
-
-        // ✅ Track slot numbers and enforce uniqueness
-        const usedSlotNums = new Set();
-        for (const slot of existingSlots) {
-          const match = /^Slot (\d+)$/.exec(slot);
-          if (match) {
-            const num = parseInt(match[1]);
-            if (usedSlotNums.has(num)) {
-              throw new Error(`Duplicate slot number detected: Slot ${num}`);
-            }
-            usedSlotNums.add(num);
-          }
+    if (stackable) {
+      for (let i = 0; i < sheetData.length; i++) {
+        const row = sheetData[i];
+        const [char, slot, name, qty, cost, spent] = row;
+        if (
+          char === characterName &&
+          name === itemName &&
+          slot === newSlot &&
+          Number(qty) + stockQty <= 10
+        ) {
+          const updatedRow = [
+            characterName,
+            slot,
+            itemName,
+            Number(qty) + stockQty,
+            cost,
+            Number(spent) + totalCost,
+            character.currentVillage,
+            tokenPrice,
+            artPrice,
+            otherPrice,
+            tradesOpen ? 'Yes' : 'No',
+            monthLabel
+          ];
+          const range = `vendingShop!A${i + 2}:L${i + 2}`;
+          await writeSheetData(auth, spreadsheetId, range, [updatedRow]);
+          rowMatched = true;
+          break;
         }
-
-        // ✅ Generate next unique slot
-        let nextSlot = 1;
-        while (usedSlotNums.has(nextSlot)) {
-          nextSlot++;
-        }
-        const newSlot = `Slot ${nextSlot}`;
-
-        // ✅ Append new row with slot to sheet
-        const row = [[
-          characterName,
-          newSlot,
-          itemName,
-          stockQty,
-          pointCost,
-          totalCost,
-          character.currentVillage,
-          tokenPrice,
-          artPrice,
-          otherPrice,
-          tradesOpen ? 'Yes' : 'No',
-          monthLabel
-        ]];
-
-        await safeAppendDataToSheet(character.shopLink, character, 'vendingShop!A:L', row, interaction.client);
-        console.log(`[handleRestock]: Logged restock for ${characterName} to sheet.`);
-      } catch (error) {
-        console.error('[handleRestock]: Sheet logging failed', error);
       }
+    }
 
-    // ------------------- Final Confirmation Embed -------------------
+    if (!rowMatched) {
+      const newRow = [[
+        characterName,
+        newSlot,
+        itemName,
+        stockQty,
+        pointCost,
+        totalCost,
+        character.currentVillage,
+        tokenPrice,
+        artPrice,
+        otherPrice,
+        tradesOpen ? 'Yes' : 'No',
+        monthLabel
+      ]];
+      await safeAppendDataToSheet(character.shopLink, character, 'vendingShop!A:L', newRow, interaction.client);
+    }
+
+    // ------------------- Update Points & Send Embed -------------------
+    await Character.updateOne({ name: characterName }, {
+      $set: { vendingPoints: vendingPoints - totalCost }
+    });
+
     const embed = new EmbedBuilder()
       .setTitle(`✅ Restock Successful`)
       .setDescription(`${characterName} has restocked \`${itemName} x${stockQty}\`.`)
@@ -449,12 +399,12 @@ async function handleRestock(interaction) {
 
     await interaction.editReply({ embeds: [embed] });
     await vendingClient.close();
-
   } catch (error) {
     console.error('[handleRestock]: Error', error);
     await interaction.editReply({ content: `❌ ${error.message}`, ephemeral: true });
   }
 }
+
 
 // ------------------- handleBarter -------------------
 async function handleBarter(interaction) {
