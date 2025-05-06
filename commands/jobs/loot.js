@@ -228,44 +228,7 @@ module.exports = {
     return;
    }
 
-   // Handle job voucher activation after validation
-   if (character.jobVoucher) {
-    console.log(
-     `[Loot Command]: Activating job voucher for ${character.name}.`
-    );
-    const {
-     success: itemSuccess,
-     item: jobVoucherItem,
-     message: itemError,
-    } = await fetchJobVoucherItem();
-    if (!itemSuccess) {
-     await interaction.editReply({
-      content: itemError,
-      ephemeral: true,
-     });
-     return;
-    }
-
-    const activationResult = await activateJobVoucher(
-     character,
-     job,
-     jobVoucherItem,
-     1,
-     interaction
-    );
-    if (!activationResult.success) {
-     await interaction.editReply({
-      content: activationResult.message,
-      ephemeral: true,
-     });
-     return;
-    }
-
-    await interaction.followUp({
-     content: activationResult.message,
-     ephemeral: true,
-    });
-   }
+  
 
    // ------------------- Step 4: Determine Region and Encounter -------------------
    const region = getVillageRegionByName(currentVillage); // Get the region based on village
@@ -395,6 +358,45 @@ module.exports = {
      await interaction.editReply({ embeds: [embed] });
      return; // Stop execution after "No Encounter"
     }
+
+      // Handle job voucher activation after validation
+      if (character.jobVoucher) {
+        console.log(
+        `[Loot Command]: Activating job voucher for ${character.name}.`
+        );
+        const {
+        success: itemSuccess,
+        item: jobVoucherItem,
+        message: itemError,
+        } = await fetchJobVoucherItem();
+        if (!itemSuccess) {
+        await interaction.editReply({
+          content: itemError,
+          ephemeral: true,
+        });
+        return;
+        }
+
+        const activationResult = await activateJobVoucher(
+        character,
+        job,
+        jobVoucherItem,
+        1,
+        interaction
+        );
+        if (!activationResult.success) {
+        await interaction.editReply({
+          content: activationResult.message,
+          ephemeral: true,
+        });
+        return;
+        }
+
+        await interaction.followUp({
+        content: activationResult.message,
+        ephemeral: true,
+        });
+      }
 
     // ------------------- Handle Looting for All Tiers -------------------
     if (encounteredMonster.tier > 4) {
