@@ -524,7 +524,7 @@ async function handleTravelInteraction(
     travelLog
   ) {
     try {
-      if (interaction.isButton()) {
+      if (interaction?.isButton?.()) {
         try {
           await interaction.deferUpdate();
         } catch (err) {
@@ -536,6 +536,7 @@ async function handleTravelInteraction(
           }
         }
       }
+      
       
       const customId = interaction.customId;
       let result;
