@@ -419,7 +419,9 @@ async function handleAutocomplete(interaction) {
     if (subcommand === "restock" && focusedOption.name === "itemname") {
      await handleVendingRestockAutocomplete(interaction, focusedOption);
     } else if (subcommand === "barter" && focusedOption.name === "itemname") {
-     await handleVendingBarterAutocomplete(interaction, focusedOption);
+      await handleVendingBarterAutocomplete(interaction, focusedOption);
+     } else if (subcommand === "barter" && focusedOption.name === "vendorcharacter") {
+      await handleVendorCharacterAutocomplete(interaction); 
     } else if (subcommand === "editshop" && focusedOption.name === "itemname") {
      await handleVendingEditShopAutocomplete(interaction, focusedOption);
     } else if (subcommand === "restock" && focusedOption.name === "slot") {
@@ -2752,6 +2754,29 @@ await respondWithFilteredChoices(interaction, interaction.options.getFocused(tru
   }
 }
 
+// ------------------- handleVendorCharacterAutocomplete -------------------
+async function handleVendorCharacterAutocomplete(interaction) {
+  try {
+    const focusedValue = interaction.options.getFocused();
+
+    const matchingCharacters = await Character.find({
+      name: { $regex: new RegExp(focusedValue, 'i') },
+      job: { $in: ['shopkeeper', 'merchant'] }
+    }).limit(25);
+
+    const results = matchingCharacters.map((char) => ({
+      name: `${char.name} | ${char.currentVillage} | ${char.job}`,
+      value: char.name
+    }));
+
+    return await interaction.respond(results);
+  } catch (error) {
+    console.error('[handleVendorCharacterAutocomplete]:', error);
+    return await interaction.respond([]);
+  }
+}
+
+
 // ============================================================================
 // VILLAGE COMMANDS
 // ============================================================================
@@ -2934,6 +2959,7 @@ module.exports = {
  handleAllRecipientAutocomplete,
  handleDeliverItemAutocomplete,
  handleVendorItemAutocomplete,
+ handleVendorCharacterAutocomplete,
 
  // EDITCHARACTER
  handleEditCharacterAutocomplete,
