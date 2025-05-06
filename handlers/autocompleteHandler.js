@@ -2712,22 +2712,33 @@ async function handleSlotAutocomplete(interaction) {
         const { itemName, qty } = slotMap.get(slotName);
         const fullness = Math.min(qty, 10);
         slotChoices.push({
+          slotNum: i,
           name: `${slotName} – ${itemName} – ${fullness}/10`,
           value: slotName,
         });
       } else {
         slotChoices.push({
+          slotNum: i,
           name: `${slotName} – (Empty)`,
           value: slotName,
         });
       }
     }
 
-    await respondWithFilteredChoices(interaction, interaction.options.getFocused(true), slotChoices);
+    // Sort numerically by extracted slotNum
+    slotChoices.sort((a, b) => a.slotNum - b.slotNum);
+
+    // Respond with cleaned-up format (removing slotNum field)
+    await respondWithFilteredChoices(
+      interaction,
+      interaction.options.getFocused(true),
+      slotChoices.map(({ name, value }) => ({ name, value }))
+    );
   } catch (error) {
     handleError(error, "autocompleteHandler.js");
     await interaction.respond([]);
   }
+
 }
 
 // ============================================================================
