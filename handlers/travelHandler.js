@@ -333,12 +333,6 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
       outcomeMessage = generateDamageMessage(outcome.hearts);
     }
 
-    // ------------------- Deduct Stamina -------------------
-    if (!hasPerk(character, 'DELIVERING')) {
-      await useStamina(character._id, 1);
-      character.currentStamina = Math.max(0, character.currentStamina - 1);
-    }  
-
     // ------------------- Embed Update -------------------
     const description =
       `> ${outcomeMessage}` +
