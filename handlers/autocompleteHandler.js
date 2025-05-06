@@ -2761,7 +2761,7 @@ async function handleVendorCharacterAutocomplete(interaction) {
 
     const matchingCharacters = await Character.find({
       name: { $regex: new RegExp(focusedValue, 'i') },
-      job: { $in: ['shopkeeper', 'merchant'] }
+      job: { $regex: /^(shopkeeper|merchant)$/i }
     }).limit(25);
 
     const results = matchingCharacters.map((char) => ({
