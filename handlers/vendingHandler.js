@@ -344,9 +344,10 @@ async function handleRestock(interaction) {
         tradesOpen,
         stackable,
         boughtFrom: character.currentVillage,
-        slot: newSlot,
+        slot: newSlot, // ✅ Add slot to DB
         date: new Date()
       });
+      
     }
 
       await vendClient.close();
