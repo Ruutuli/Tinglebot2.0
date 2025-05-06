@@ -497,11 +497,12 @@ if (!canSpeciesPerformPetType(normalizedSpeciesKey, petType)) {
     await interaction.deferReply();
 
     // ------------------- Check Available Pet Rolls -------------------
-    if (pet.rollsRemaining <= 0) {
-     return interaction.editReply(
-      "❌ **Your pet has no rolls left this week.**"
-     );
-    }
+// ------------------- Check Available Pet Rolls -------------------
+if (pet.rollsRemaining <= 0) {
+  return interaction.editReply(
+    "❌ Your pet has no rolls left this week. Rolls reset every Sunday. You can increase your roll limit by training your pet! [Learn more](#)"
+  );
+}
 
     // ------------------- Verify Inventory Setup -------------------
     if (!character.inventorySynced) {
