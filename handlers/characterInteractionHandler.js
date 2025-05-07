@@ -166,10 +166,15 @@ async function createCharacterInteraction(interaction) {
         const embed = createCharacterEmbed(character, villageColor);
         await createCharacterInventory(characterName, character._id, character.job);
 
+        // ------------------- Embed Validation Fix -------------------
+        if (!embed?.data?.description) {
+            embed.setDescription("📋 Character profile created successfully.");
+        }
+
         // Send success message with the character embed
         await interaction.editReply({
             content: `Character **${characterName}** created successfully! 🎉`,
-            embeds: embed?.data?.description ? [embed] : [],
+            embeds: [embed],
             ephemeral: true
         });
 
