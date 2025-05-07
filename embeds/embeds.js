@@ -370,19 +370,31 @@ const createVendorEmbed = (character) => {
  return embed;
 };
 
-// ------------------- Subsection Title ------------------- 
-function createVendingSetupEmbed(characterName, shopLink) {
-  return {
-    title: `🛒 Vending Setup Complete`,
-    description: `Your vending shop is now linked and active!`,
-    fields: [
-      { name: "Character", value: characterName, inline: true },
-      { name: "Shop Sheet", value: `[Open Sheet](${shopLink})`, inline: true },
-    ],
-    color: 0x34D399, // Tailwind-style emerald-400
-    footer: { text: "You can now collect vending points and restock items." },
-    timestamp: new Date(),
+// ------------------- Vending Setup Instructions -------------------
+function createVendingSetupInstructionsEmbed(characterName, issueType, sheetLink) {
+  const commonNotice = `Please fix the issue in your Google Sheet and try \`/vending setup\` again.\nIf you're stuck, ask a moderator for help.`;
+
+  const issueMessages = {
+    missing_sheet: {
+      title: "❌ Missing 'vendingShop' Tab",
+      description: `The sheet is missing a tab named \`vendingShop\`.\n\n1️⃣ Open your Google Sheet\n2️⃣ Create a new tab named exactly:\n\`\`\`text\nvendingShop\n\`\`\`\n\n📎 Sheet: [Open Sheet](${sheetLink})`,
+    },
+    missing_headers: {
+      title: "❌ Missing or Incorrect Headers",
+      description: `The \`vendingShop\` tab must have headers in **A1 to L1** exactly like this:\n\`\`\`text\nCHARACTER NAME, SLOT, ITEM NAME, STOCK QTY, COST EACH, POINTS SPENT, BOUGHT FROM, TOKEN PRICE, ART PRICE, OTHER PRICE, TRADES OPEN?, DATE\n\`\`\`\n\n📎 Sheet: [Open Sheet](${sheetLink})`,
+    },
   };
+
+  const issue = issueMessages[issueType] || {
+    title: "❌ Unknown Error",
+    description: `Something went wrong. Please double-check your vending sheet.`,
+  };
+
+  return new EmbedBuilder()
+    .setTitle(issue.title)
+    .setDescription(`${issue.description}\n\n---\n${commonNotice}`)
+    .setColor("Red")
+    .setTimestamp();
 }
 
 // ------------------- Subsection Title ------------------- 
