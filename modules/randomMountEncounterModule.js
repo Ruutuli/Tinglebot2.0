@@ -64,6 +64,24 @@ function createRandomMountEncounter(channelId, isMonthly = false) {
     try {
         initializeMonthlyTracking();
         
+        // For monthly encounters, check if this village already had one this month
+        if (isMonthly) {
+            const village = getVillageFromChannelId(channelId);
+            if (!village) {
+                console.error('[randomMountEncounterModule]: Invalid channel ID for monthly encounter');
+                return null;
+            }
+            
+            // Check if this village already had a monthly encounter
+            const villageKey = `village_${village.toLowerCase()}`;
+            if (monthlyEncounterMap.has(villageKey)) {
+                return null; // Village already had its monthly encounter
+            }
+            
+            // Mark this village as having had its monthly encounter
+            monthlyEncounterMap.set(villageKey, new Date());
+        }
+        
         // Generate random mount data
         const randomMount = getRandomMount();
         const rarity = getMountRarity();
@@ -87,11 +105,6 @@ function createRandomMountEncounter(channelId, isMonthly = false) {
         // Store the encounter
         storeEncounter(encounterId, encounter);
         
-        // Update monthly encounter tracking if this was a monthly encounter
-        if (isMonthly) {
-            monthlyEncounterMap.set(channelId, new Date());
-        }
-        
         return encounter;
     } catch (error) {
         handleError(error, 'randomMountEncounterModule.js');
@@ -100,15 +113,26 @@ function createRandomMountEncounter(channelId, isMonthly = false) {
     }
 }
 
+// Helper function to get village from channel ID
+function getVillageFromChannelId(channelId) {
+    if (channelId === process.env.RUDANIA_TOWN_HALL) return 'Rudania';
+    if (channelId === process.env.INARIKO_TOWN_HALL) return 'Inariko';
+    if (channelId === process.env.VHINTL_TOWN_HALL) return 'Vhintl';
+    return null;
+}
+
 // Check and create encounters if needed
 function checkAndCreateEncounter(channelId) {
     try {
         // First check if we need a monthly encounter
         if (needsMonthlyEncounter(channelId)) {
-            return createRandomMountEncounter(channelId, true);
+            const monthlyEncounter = createRandomMountEncounter(channelId, true);
+            if (monthlyEncounter) {
+                return monthlyEncounter;
+            }
         }
         
-        // Then check message activity
+        // Then check message activity for random encounters
         if (trackMessageActivity(channelId)) {
             return createRandomMountEncounter(channelId, false);
         }
