@@ -292,7 +292,7 @@ if (totalTravelDuration === -1) {
 // ============================================================================
 
 // ------------------- KO Handling -------------------
-// Checks if character is KO’d; if so, applies debuff, moves them to recovery village,
+// Checks if character is KO'd; if so, applies debuff, moves them to recovery village,
 // updates database, sends recovery embed, and returns true to abort further travel.
 async function checkAndHandleKO(character, channel, startingVillage) {
   if (character.currentHearts <= 0 || character.ko) {
@@ -466,7 +466,16 @@ const finalEmbed = createFinalTravelEmbed(character, destination, paths, totalTr
         new ButtonBuilder().setCustomId('flee').setLabel('💨 Flee').setStyle(ButtonStyle.Secondary).setDisabled(character.currentStamina === 0)
       );
       const encounterMessage = await channel.send({ embeds: [encounterEmbed], components: [buttons] });
-      const collector = encounterMessage.createMessageComponentCollector({ filter: i => i.user.id === interaction.user.id, time: 300000 });
+      const collector = encounterMessage.createMessageComponentCollector({ 
+        filter: i => {
+          if (i.user.id !== interaction.user.id) {
+            i.reply({ content: '❌ Only the traveler can interact with these buttons.', ephemeral: true });
+            return false;
+          }
+          return true;
+        }, 
+        time: 300000 
+      });
 
       collector.on('collect', async i => {
         const decision = await handleTravelInteraction(
@@ -514,7 +523,16 @@ const finalEmbed = createFinalTravelEmbed(character, destination, paths, totalTr
     );
     await safeMessage.edit({ embeds: [safeEmbed], components: [buttons] });
 
-    const collector = safeMessage.createMessageComponentCollector({ filter: i => i.user.id === interaction.user.id, time: 300000 });
+    const collector = safeMessage.createMessageComponentCollector({ 
+      filter: i => {
+        if (i.user.id !== interaction.user.id) {
+          i.reply({ content: '❌ Only the traveler can interact with these buttons.', ephemeral: true });
+          return false;
+        }
+        return true;
+      }, 
+      time: 300000 
+    });
     collector.on('collect', async i => {
       const decision = await handleTravelInteraction(
         i,
