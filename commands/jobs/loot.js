@@ -50,7 +50,7 @@ const {
 } = require("../../modules/rngModule.js");
 
 // Event Handlers
-const { triggerRaid } = require("../../handlers/raidHandler.js");
+const { triggerRaid } = require('../../modules/raidModule.js');
 
 // Flavor Text and Messages
 const {

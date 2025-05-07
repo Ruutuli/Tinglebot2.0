@@ -4,9 +4,9 @@ const { EmbedBuilder } = require('discord.js');
 const { fetchAllItems, fetchItemsByMonster } = require('../../database/db.js');
 const { calculateFinalValue, getMonstersByRegion } = require('../../modules/rngModule.js');
 const { getEncounterOutcome } = require('../../modules/damageModule.js');
-const { storeBattleProgress, getBattleProgressById } = require('../../modules/combatModule.js');
+const { storeRaidProgress, getRaidProgressById } = require('../../modules/raidModule.js');
 const { handleKO } = require('../../modules/characterStatsModule.js');
-const { triggerRaid } = require('../../handlers/raidHandler.js');
+const { triggerRaid } = require('../../modules/raidModule.js');
 const { addItemInventoryDatabase } = require('../../utils/inventoryUtils.js');
 const Party = require('../../models/PartyModel.js');
 const Character = require('../../models/CharacterModel.js');
@@ -577,7 +577,7 @@ module.exports = {
                         const monsterHearts = { max: selectedMonster.hearts, current: selectedMonster.hearts };
                         
                         // Store battle progress for this raid
-                        await storeBattleProgress(
+                        await storeRaidProgress(
                             character, 
                             selectedMonster, 
                             selectedMonster.tier,
@@ -604,9 +604,9 @@ module.exports = {
                           await new Promise(resolve => setTimeout(resolve, 2000));
 
                             // Get battle progress to check monster hearts
-                            const battleProgress = await getBattleProgressById(battleId);
+                            const battleProgress = await getRaidProgressById(battleId);
                             if (!battleProgress) {
-                                console.error(`[ERROR] No battle progress found for Battle ID: ${raidBattleId}`);
+                                console.error(`[ERROR] No battle progress found for Battle ID: ${battleId}`);
                                 await interaction.editReply('❌ **An error occurred retrieving raid progress.**');
                                 return;
                             }
@@ -631,7 +631,7 @@ module.exports = {
                             // Add raid-specific fields
                             embed.addFields(
                                 { name: `💙 __Monster Hearts__`, value: `${battleProgress.monsterHearts.current}/${battleProgress.monsterHearts.max}`, inline: true },
-                                { name: '🆔 **__Raid ID__**', value: raidBattleId, inline: true },
+                                { name: '🆔 **__Raid ID__**', value: battleId, inline: true },
                                 { name: '🆔 **__Expedition ID__**', value: expeditionId || 'Unknown', inline: true },
                                 { name: `⚔️ __Raid Outcome__`, value: monsterDefeated ? 'Monster defeated!' : 'Raid in progress...', inline: false }
                             );

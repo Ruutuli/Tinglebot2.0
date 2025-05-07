@@ -7,7 +7,7 @@ const { handleError } = require('../../utils/globalErrorHandler.js');
 // Local service and module imports
 const { fetchCharacterByNameAndUserId, fetchMonsterByName } = require('../../database/db.js');
 const { processBattle } = require('../../modules/damageModule.js');
-const { getBattleProgressById, updateBattleProgressHearts  } = require('../../modules/combatModule.js');
+const { getRaidProgressById, updateRaidProgress } = require('../../modules/raidModule.js');
 const { monsterMapping } = require('../../models/MonsterModel.js');
 const { processLoot } = require('../../modules/lootModule.js');
 const {
@@ -71,7 +71,7 @@ async execute(interaction) {
       }
 
       // ------------------- Retrieve Existing Raid Progress -------------------
-      const battleProgress = await getBattleProgressById(battleId);
+      const battleProgress = await getRaidProgressById(battleId);
       if (!battleProgress) {
           console.error(`[ERROR] No battle progress found for Battle ID: ${battleId}`);
           await interaction.editReply('❌ **An error occurred during the battle: Battle progress not found.**');
@@ -130,13 +130,13 @@ async execute(interaction) {
 
             // ------------------- Update Monster Hearts After Battle -------------------
             if (newMonsterHeartsCurrent !== undefined) {
-                const { updateBattleProgressHearts } = require('../../modules/combatModule');
-                await updateBattleProgressHearts(battleId, newMonsterHeartsCurrent);
+                const { updateRaidProgress } = require('../../modules/raidModule');
+                await updateRaidProgress(battleId, newMonsterHeartsCurrent);
             }
 
 
         // ------------------- Create Embed -------------------
-          const updatedBattleProgress = await getBattleProgressById(battleId);
+          const updatedBattleProgress = await getRaidProgressById(battleId);
           const monsterHeartsCurrent = updatedBattleProgress.monsterHearts.current || 0;
           const monsterHeartsMax = updatedBattleProgress.monsterHearts.max;
 
