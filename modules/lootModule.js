@@ -12,7 +12,7 @@ const { authorizeSheets, appendSheetData,  safeAppendDataToSheet, } = require('.
 
 // Additional utilities and services
 const { v4: uuidv4 } = require('uuid');
-const { deleteBattleProgressById } = require('../modules/combatModule');
+const { deleteBattleProgressById } = require('../modules/raidCombatModule');
 
 // Monster data for reference
 const { monsterMapping } = require('../models/MonsterModel');

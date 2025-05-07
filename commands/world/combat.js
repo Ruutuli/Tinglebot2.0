@@ -15,7 +15,7 @@ const { fetchCharacterByName, fetchCharacterByNameAndUserId } = require('../../d
 
 // ------------------- Modules -------------------
 // Combat module functions (alphabetized within this group).
-const { getBattleProgressById, startPvPBattle, takePvPTurn, getTotalDefense  } = require('../../modules/combatModule');
+const { getBattleProgressById, startPvPBattle, takePvPTurn, getTotalDefense  } = require('../../modules/pvpCombatModule');
 const { getGearModLevel } = require('../../modules/gearModule');
 
 // ============================================================================
@@ -74,7 +74,7 @@ module.exports = {
       }
 
       if (attacker.ko || attacker.currentHearts <= 0) {
-        return await interaction.editReply(`💤 **${attacker.name}** is KO’d and cannot fight.`);
+        return await interaction.editReply(`💤 **${attacker.name}** is KO'd and cannot fight.`);
       }
 
       // ------------------- PvP Challenge Subcommand -------------------
@@ -91,7 +91,7 @@ module.exports = {
         }
 
         if (defender.ko || defender.currentHearts <= 0) {
-          return await interaction.editReply(`💤 **${defender.name}** is KO’d and cannot be attacked.`);
+          return await interaction.editReply(`💤 **${defender.name}** is KO'd and cannot be attacked.`);
         }
 
         const battleId = await startPvPBattle(attacker, defender);

@@ -14,7 +14,7 @@
 // Local Modules & Database Models
 // ------------------- Import local modules and models -------------------
 const { handleKO, useHearts } = require('../modules/characterStatsModule');  // Functions to handle KO and heart usage
-const { getBattleProgressById, storeBattleProgress } = require('../modules/combatModule');  // Manage battle progress
+const { getBattleProgressById, storeBattleProgress } = require('../modules/raidCombatModule');  // Manage battle progress
 //this import needs to be fixed to the correct path
 const Monster = require('../models/MonsterModel');  // Model for monster-related data
 

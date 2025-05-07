@@ -1,5 +1,5 @@
 // ============================================================================
-// PVP Combat Module - Design Rules & Goals
+// Raid Combat Module - Design Rules & Goals
 // ============================================================================
 // RULES:
 // • Attacks are simultaneous? If not, an initiative system will have to be made.
@@ -38,29 +38,34 @@
 // ============================================================================
 
 // ============================================================================
-// PvP Combat Module
-// This module manages player vs player combat operations such as storing battle progress,
-// updating battle states, and handling PvP combat turns.
+// Raid Combat Module
+// This module manages raid combat operations such as storing battle progress,
+// updating battle states, and handling raid combat turns.
 // ============================================================================
 
 // ------------------- Standard Libraries -------------------
+// Node.js core modules for file system and path operations.
 const fs = require('fs');
-const path = require('path');
 const { handleError } = require('../utils/globalErrorHandler');
+const path = require('path');
 
 // ------------------- Modules -------------------
+// Character statistics and status management.
 const { handleKO, useHearts } = require('../modules/characterStatsModule');
 const { getGearModLevel } = require('../modules/gearModule');
 
 // ------------------- Utility Functions -------------------
+// Unique ID generation for battle IDs.
 const { generateUniqueId } = require('../utils/uniqueIdUtils');
 
 // ------------------- Configuration Constants -------------------
-const BATTLE_PROGRESS_PATH = path.join(__dirname, '..', 'data', 'pvpBattleProgress.json');
+// Define file path for storing battle progress.
+const BATTLE_PROGRESS_PATH = path.join(__dirname, '..', 'data', 'raidBattleProgress.json');
 
 // ============================================================================
 // File Initialization Functions
 // ------------------- Ensure Battle Progress File Exists -------------------
+// Checks and initializes the battle progress file.
 function ensureBattleProgressFileExists() {
   if (!fs.existsSync(BATTLE_PROGRESS_PATH)) {
     fs.writeFileSync(BATTLE_PROGRESS_PATH, JSON.stringify({}));
@@ -68,7 +73,7 @@ function ensureBattleProgressFileExists() {
     try {
       JSON.parse(fs.readFileSync(BATTLE_PROGRESS_PATH, 'utf8'));
     } catch (error) {
-      handleError(error, 'pvpCombatModule.js');
+      handleError(error, 'raidCombatModule.js');
       fs.writeFileSync(BATTLE_PROGRESS_PATH, JSON.stringify({}));
     }
   }
@@ -77,73 +82,91 @@ function ensureBattleProgressFileExists() {
 // ============================================================================
 // Battle Progress Storage Functions
 // ------------------- Store Battle Progress -------------------
-async function storeBattleProgress(attacker, defender) {
+// Saves battle progress data and returns a unique battle ID.
+async function storeBattleProgress(character, monster, tier, monsterHearts, progress) {
   ensureBattleProgressFileExists();
   const battleProgress = JSON.parse(fs.readFileSync(BATTLE_PROGRESS_PATH, 'utf8'));
   
-  const battleId = generateUniqueId('P'); // 'P' for PvP battles
+  // Generate a unique battle ID with "R" prefix.
+  const battleId = generateUniqueId('R');
   
   battleProgress[battleId] = {
     battleId,
-    characters: {
-      attacker,
-      defender
+    characters: [character], // Full character object stored
+    monster: monster.name,
+    tier: tier,
+    monsterHearts: {
+      max: monster.hearts,
+      current: monsterHearts.current,
     },
-    progress: 'PvP Battle initiated',
-    turnCount: 0
+    progress: progress ? `\n${progress}` : '',
   };
 
   try {
     fs.writeFileSync(BATTLE_PROGRESS_PATH, JSON.stringify(battleProgress, null, 2));
   } catch (err) {
-    handleError(err, 'pvpCombatModule.js');
-    console.error(`[pvpCombatModule.js]: ❌ Error storing battle progress for Battle ID "${battleId}":`, err);
+    handleError(err, 'raidCombatModule.js');
+    console.error(`[raidCombatModule.js]: ❌ Error storing battle progress for Battle ID "${battleId}":`, err);
     throw err;
   }
   return battleId;
 }
 
 // ------------------- Get Battle Progress by ID -------------------
+// Retrieves battle progress using the given battle ID.
+// Handles both PvP and legacy/raid formats.
 async function getBattleProgressById(battleId) {
   ensureBattleProgressFileExists();
-  const battleProgress = JSON.parse(fs.readFileSync(BATTLE_PROGRESS_PATH, 'utf8'));
+  const raw = fs.readFileSync(BATTLE_PROGRESS_PATH, 'utf8');
+  const battleProgress = JSON.parse(raw);
 
   if (battleProgress[battleId]) {
     return battleProgress[battleId];
   }
 
-  console.error(`[pvpCombatModule.js]: ❌ Error - No battle progress found for Battle ID: ${battleId}`);
+  // Handle legacy/raid-style format (if applicable)
+  if (battleProgress.battleId === battleId) {
+    console.warn(`[raidCombatModule.js]: ⚠️ Legacy battle format detected for ID ${battleId}`);
+    return battleProgress;
+  }
+
+  console.error(`[raidCombatModule.js]: ❌ Error - No battle progress found for Battle ID: ${battleId}`);
   return null;
 }
 
 // ------------------- Update Battle Progress -------------------
+// Updates battle progress: deducts monster hearts, updates character hearts,
+// and appends new progress information.
 async function updateBattleProgress(battleId, updatedProgress, outcome) {
   ensureBattleProgressFileExists();
   const battleProgress = JSON.parse(fs.readFileSync(BATTLE_PROGRESS_PATH, 'utf8'));
-  
-  if (!battleProgress[battleId]) return;
+  if (!battleProgress) return;
 
-  battleProgress[battleId].progress += `\n${updatedProgress}`;
-  battleProgress[battleId].turnCount++;
+  // Deduct monster hearts without dropping below zero.
+  battleProgress.monsterHearts.current = Math.max(battleProgress.monsterHearts.current - (outcome.hearts || 0), 0);
 
-  if (outcome.hearts > 0) {
+  // If damage was dealt, update character hearts and check for KO.
+  if (outcome.hearts) {
     await useHearts(outcome.character._id, outcome.hearts);
     if (outcome.character.currentHearts === 0) {
       await handleKO(outcome.character._id);
-      battleProgress[battleId].progress += `\n${outcome.character.name} has been KO'd!`;
+      battleProgress.progress += `\n${outcome.character.name} has been KO'd!`;
     }
   }
-
+  
+  battleProgress.progress += `\n${updatedProgress}`;
+  
   try {
     fs.writeFileSync(BATTLE_PROGRESS_PATH, JSON.stringify(battleProgress, null, 2));
   } catch (err) {
-    handleError(err, 'pvpCombatModule.js');
-    console.error(`[pvpCombatModule.js]: ❌ Error updating battle progress for Battle ID "${battleId}":`, err);
+    handleError(err, 'raidCombatModule.js');
+    console.error(`[raidCombatModule.js]: ❌ Error updating battle progress for Battle ID "${battleId}":`, err);
     throw err;
   }
 }
 
 // ------------------- Delete Battle Progress -------------------
+// Removes battle progress data for the specified battle ID.
 async function deleteBattleProgressById(battleId) {
   ensureBattleProgressFileExists();
   try {
@@ -153,13 +176,30 @@ async function deleteBattleProgressById(battleId) {
       fs.writeFileSync(BATTLE_PROGRESS_PATH, JSON.stringify(battleProgress, null, 2));
     }
   } catch (error) {
-    handleError(error, 'pvpCombatModule.js');
-    console.error(`[pvpCombatModule.js]: ❌ Error deleting battle progress for Battle ID "${battleId}":`, error);
+    handleError(error, 'raidCombatModule.js');
+    console.error(`[raidCombatModule.js]: ❌ Error deleting battle progress for Battle ID "${battleId}":`, error);
+  }
+}
+
+// ------------------- Update Monster Hearts to Zero -------------------
+// Sets the monster's current hearts to zero for the specified battle.
+async function updateMonsterHeartsToZero(battleId) {
+  ensureBattleProgressFileExists();
+  const battleProgress = JSON.parse(fs.readFileSync(BATTLE_PROGRESS_PATH, 'utf8'));
+  if (battleProgress[battleId]) {
+    battleProgress[battleId].monsterHearts.current = 0;
+    try {
+      fs.writeFileSync(BATTLE_PROGRESS_PATH, JSON.stringify(battleProgress, null, 2));
+    } catch (err) {
+      handleError(err, 'raidCombatModule.js');
+      console.error(`[raidCombatModule.js]: ❌ Error updating monster hearts for Battle ID "${battleId}":`, err);
+      throw err;
+    }
   }
 }
 
 // ============================================================================
-// Combat Calculation Functions
+// Utility Functions for Combat Calculations
 // ------------------- Roll Weapon Dice -------------------
 function rollWeaponDice(modLevel) {
   const rolls = [];
@@ -175,28 +215,28 @@ function getTotalDefense(character) {
   let total = 0;
   
   if (!character.gearArmor) {
-    console.log(`[pvpCombatModule.js]: debug - ${character.name} has no gearArmor defined, defaulting armor defense to 0.`);
+    console.log(`[raidCombatModule.js]: debug - ${character.name} has no gearArmor defined, defaulting armor defense to 0.`);
   } else {
     ['head', 'chest', 'legs'].forEach(slot => {
       const gearPiece = character.gearArmor[slot];
       if (gearPiece) {
         const modValue = getGearModLevel(gearPiece);
         if (modValue === 0) {
-          console.log(`[pvpCombatModule.js]: debug - ${character.name} gear in slot ${slot} returned mod value 0.`);
+          console.log(`[raidCombatModule.js]: debug - ${character.name} gear in slot ${slot} returned mod value 0.`);
         }
         total += modValue;
       } else {
-        console.log(`[pvpCombatModule.js]: debug - ${character.name} has no gear for slot ${slot}, defaulting to 0.`);
+        console.log(`[raidCombatModule.js]: debug - ${character.name} has no gear for slot ${slot}, defaulting to 0.`);
       }
     });
   }
   
   if (!character.gearShield) {
-    console.log(`[pvpCombatModule.js]: debug - ${character.name} has no gearShield defined, defaulting shield defense to 0.`);
+    console.log(`[raidCombatModule.js]: debug - ${character.name} has no gearShield defined, defaulting shield defense to 0.`);
   } else {
     const shieldMod = getGearModLevel(character.gearShield);
     if (shieldMod === 0) {
-      console.log(`[pvpCombatModule.js]: debug - ${character.name}'s shield returned mod value 0.`);
+      console.log(`[raidCombatModule.js]: debug - ${character.name}'s shield returned mod value 0.`);
     }
     total += shieldMod;
   }
@@ -207,7 +247,7 @@ function getTotalDefense(character) {
 // ------------------- Get Weapon Mod -------------------
 function getWeaponMod(character) {
   if (!character.gearWeapon) {
-    console.log(`[pvpCombatModule.js]: debug - ${character.name} has no gearWeapon defined, defaulting weapon mod to 0.`);
+    console.log(`[raidCombatModule.js]: debug - ${character.name} has no gearWeapon defined, defaulting weapon mod to 0.`);
     return 0;
   }
   return getGearModLevel(character.gearWeapon);
@@ -221,35 +261,41 @@ function isFlurryTrigger(rollTotal, modLevel, flurryCount = 0) {
 }
 
 // ============================================================================
-// PvP Battle Functions
-// ------------------- Start PvP Battle -------------------
-async function startPvPBattle(attacker, defender) {
-  const battleId = await storeBattleProgress(attacker, defender);
+// Raid Battle Functions
+// ------------------- Start Raid Battle -------------------
+async function startRaidBattle(character, monster) {
+  const battleId = await storeBattleProgress(
+    character, 
+    monster, 
+    monster.tier, 
+    { current: monster.hearts }, 
+    'Raid Battle initiated'
+  );
   return battleId;
 }
 
-// ------------------- Take PvP Turn -------------------
-async function takePvPTurn(battleId, attacker, defender) {
+// ------------------- Take Raid Turn -------------------
+async function takeRaidTurn(battleId, character, monster) {
   const battleProgress = await getBattleProgressById(battleId);
   if (!battleProgress) return null;
 
-  const weaponMod = getWeaponMod(attacker);
+  const weaponMod = getWeaponMod(character);
   const { total: rollTotal, rolls } = rollWeaponDice(weaponMod);
-  const defense = getTotalDefense(defender || battleProgress.characters.defender);
+  const defense = monster.defense || 0;
 
   const outcome = {
-    attacker: attacker.name,
-    defender: (defender || battleProgress.characters.defender).name,
+    attacker: character.name,
+    defender: monster.name,
     rollTotal,
     rolls,
     defense,
     success: rollTotal > defense,
     hearts: rollTotal > defense ? 1 : 0,
-    character: defender || battleProgress.characters.defender
+    character: character
   };
 
   await updateBattleProgress(battleId, 
-    `${attacker.name} rolled ${rollTotal} (${rolls.join(', ')}) against ${outcome.defender}'s defense of ${defense}. ` +
+    `${character.name} rolled ${rollTotal} (${rolls.join(', ')}) against ${monster.name}'s defense of ${defense}. ` +
     `${outcome.success ? 'Hit!' : 'Miss!'}`, 
     outcome
   );
@@ -258,11 +304,15 @@ async function takePvPTurn(battleId, attacker, defender) {
 }
 
 module.exports = {
+  storeBattleProgress,
   getBattleProgressById,
-  startPvPBattle,
-  takePvPTurn,
+  updateBattleProgress,
+  deleteBattleProgressById,
+  updateMonsterHeartsToZero,
+  rollWeaponDice,
   getTotalDefense,
   getWeaponMod,
   isFlurryTrigger,
-  deleteBattleProgressById
+  startRaidBattle,
+  takeRaidTurn
 }; 
