@@ -19,7 +19,7 @@ const {
   useHearts,
   useStamina
 } = require('../modules/characterStatsModule');
-const { getEncounterOutcome } = require('../modules/damageModule');
+const { getEncounterOutcome } = require('../modules/encounterModule');
 const {
   generateDamageMessage,
   generateVictoryMessage
@@ -51,7 +51,7 @@ const Character = require('../models/CharacterModel');
 // ============================================================================
 
 // ------------------- Recover Helper -------------------
-// Attempts to recover a heart if character not KO’d, has stamina or Delivering perk,
+// Attempts to recover a heart if character not KO'd, has stamina or Delivering perk,
 // handles full-hearts case, updates stats, travel log, and edits encounter embed.
 async function handleRecover(interaction, character, encounterMessage, travelLog) {
   try {
@@ -428,7 +428,7 @@ decision = result.damage >= character.maxHearts
         }
         
         decision = `💨 Flee failed but no attack${!hasPerk(character,'DELIVERING')?' (-1 🟩 stamina)':''}.`;
-        outcomeMessage = `${character.name} tried to flee but wasn’t attacked.`;
+        outcomeMessage = `${character.name} tried to flee but wasn't attacked.`;
       }
   
 // Update embed
