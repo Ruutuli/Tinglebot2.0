@@ -65,7 +65,7 @@ const {
   capitalizeFirstLetter
  } = require("../modules/formattingModule");
 
- const { createVendingSetupEmbed } = require("../embeds/embeds");
+ const { createVendingSetupInstructionsEmbed } = require("../embeds/embeds");
 
 
 // ------------------- Constants -------------------
@@ -830,7 +830,6 @@ async function handleVendingSetup(interaction) {
         return;
       }
       
-  
       // ------------------- Step 4: Header Check -------------------
       const expectedHeaders = [
         'CHARACTER NAME', 'SLOT', 'ITEM NAME', 'STOCK QTY', 'COST EACH', 'POINTS SPENT',
@@ -864,7 +863,7 @@ async function handleVendingSetup(interaction) {
       });
   
       // ------------------- Step 7: Respond with Confirmation -------------------
-      const setupEmbed = createVendingSetupEmbed(characterName, shopLink, pouch, points, pouchSize);
+      const setupEmbed = createVendingSetupInstructionsEmbed(characterName, shopLink, pouch, points, pouchSize);
       await interaction.reply({
         embeds: [setupEmbed],
         ephemeral: true
