@@ -825,9 +825,11 @@ async function handleVendingSetup(interaction) {
       
       const sheetId = await getSheetIdByTitle(auth, spreadsheetId, 'vendingShop');
       if (!sheetId) {
-        await sendSetupInstructions(interaction, 'missing_sheet', character._id, characterName, shopLink);
+        const errorEmbed = createVendingSetupInstructionsEmbed(characterName, 'missing_sheet', shopLink);
+        await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
         return;
       }
+      
   
       // ------------------- Step 4: Header Check -------------------
       const expectedHeaders = [
@@ -837,10 +839,11 @@ async function handleVendingSetup(interaction) {
       const sheetData = await readSheetData(auth, spreadsheetId, 'vendingShop!A1:L1');
       
       if (!sheetData || !expectedHeaders.every(header => sheetData[0]?.includes(header))) {
-        await sendSetupInstructions(interaction, 'missing_headers', character._id, characterName, shopLink);
+        const errorEmbed = createVendingSetupInstructionsEmbed(characterName, 'missing_headers', shopLink);
+        await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
         return;
       }
-  
+      
       // ------------------- Step 5: Apply Pouch Size Logic -------------------
       const pouchSizes = {
         bronze: 15,
