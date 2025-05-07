@@ -80,6 +80,26 @@ const villageChannels = {
  Vhintl: process.env.VHINTL_TOWN_HALL,
 };
 
+// ------------------- Helper Functions -------------------
+// Check if a daily roll is available for a specific activity
+function canUseDailyRoll(character, activity) {
+  const now = new Date();
+  const rollover = new Date();
+  rollover.setUTCHours(13, 0, 0, 0); // 8AM EST = 1PM UTC
+
+  const lastRoll = character.dailyRoll.get(activity);
+  if (!lastRoll) return true;
+
+  const lastRollDate = new Date(lastRoll);
+  return lastRollDate < rollover || now < rollover;
+}
+
+// Update the daily roll timestamp for an activity
+async function updateDailyRoll(character, activity) {
+  character.dailyRoll.set(activity, new Date().toISOString());
+  await character.save();
+}
+
 // ------------------- Command Definition -------------------
 
 // Define the `loot` slash command, allowing users to loot items based on their character's job and location
@@ -113,19 +133,13 @@ module.exports = {
    }
 
    // ------------------- Daily Loot Limit -------------------
-    const now = new Date();
-    const rollover = new Date();
-    rollover.setUTCHours(13, 0, 0, 0); // 8AM EST = 1PM UTC
-
-    const lastLooted = character.lastLootedAt ? new Date(character.lastLootedAt) : null;
-    if (lastLooted && lastLooted > rollover && now > rollover) {
+    if (!canUseDailyRoll(character, 'loot')) {
       await interaction.editReply({
-        content: `⏳ **${character.name} has already looted today!**\n🌅 **Daily loot limit resets at midnight EST (4AM UTC).**`,
+        content: `⏳ **${character.name} has already looted today!**\n🌅 **Daily loot limit resets at 8AM EST (1PM UTC).**`,
         ephemeral: true,
       });
       return;
-}
-
+    }
 
    if (character.debuff?.active) {
     const debuffEndDate = new Date(character.debuff.endDate);
@@ -406,6 +420,9 @@ module.exports = {
        console.log(`[Loot Command]: Job voucher deactivated for ${character.name}`);
      }
    }
+
+   // After successful looting, update the daily roll
+   await updateDailyRoll(character, 'loot');
 
   } catch (error) {
    handleError(error, "loot.js");

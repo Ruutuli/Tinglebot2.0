@@ -5,7 +5,7 @@
  "main": "index.js",
  "scripts": {
   "start": "node index.js",
-  "scheduler": "node birthdayScheduler.js",
+  "scheduler": "node scripts/scheduler.js",
   "dev": "concurrently \"nodemon -L --config nodemon.json index.js\" \"nodemon -L --config nodemon.json birthdayScheduler.js\"",
   "deploy-commands": "node scripts/deploy-commands.js"
  },
