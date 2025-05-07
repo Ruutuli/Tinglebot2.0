@@ -213,39 +213,55 @@ async function handleCancel(interaction, userId, submissionData) {
 // ------------------- Function: handleViewCharacter -------------------
 // Shows a character's profile + gear embed.
 async function handleViewCharacter(interaction, characterId) {
-  await connectToTinglebot();
-  const character = await fetchCharacterById(characterId);
+  try {
+    await connectToTinglebot();
+    const character = await fetchCharacterById(characterId);
 
-  if (!character) {
-    return interaction.reply({ content: '❌ **Character not found.**', ephemeral: true });
+    if (!character) {
+      console.error(`[componentHandler.js]: Character with ID "${characterId}" not found.`);
+      return interaction.reply({ 
+        content: '❌ **This character no longer exists or has been deleted.**\nPlease try viewing a different character.', 
+        ephemeral: true 
+      });
+    }
+
+    const embed = createCharacterEmbed(character);
+
+    const itemNames = [
+      character.gearWeapon?.name,
+      character.gearShield?.name,
+      character.gearArmor?.head?.name,
+      character.gearArmor?.chest?.name,
+      character.gearArmor?.legs?.name
+    ].filter(Boolean);
+
+    const itemDetails = await ItemModel.find({ itemName: { $in: itemNames } });
+    const getItemDetail = (itemName) => {
+      const item = itemDetails.find(i => i.itemName === itemName);
+      return item ? `${item.emoji} ${item.itemName} [+${item.modifierHearts}]` : 'N/A';
+    };
+
+    const gearMap = {
+      head: character.gearArmor?.head ? `> ${getItemDetail(character.gearArmor.head.name)}` : '> N/A',
+      chest: character.gearArmor?.chest ? `> ${getItemDetail(character.gearArmor.chest.name)}` : '> N/A',
+      legs: character.gearArmor?.legs ? `> ${getItemDetail(character.gearArmor.legs.name)}` : '> N/A',
+      weapon: character.gearWeapon ? `> ${getItemDetail(character.gearWeapon.name)}` : '> N/A',
+      shield: character.gearShield ? `> ${getItemDetail(character.gearShield.name)}` : '> N/A',
+    };
+
+    const gearEmbed = createCharacterGearEmbed(character, gearMap, 'all');
+    await interaction.reply({ embeds: [embed, gearEmbed], ephemeral: true });
+  } catch (error) {
+    handleError(error, 'componentHandler.js');
+    console.error(`[componentHandler.js]: Error in handleViewCharacter:`, error);
+    
+    if (!interaction.replied) {
+      await interaction.reply({
+        content: '❌ **An error occurred while viewing the character.**\nPlease try again later.',
+        ephemeral: true
+      });
+    }
   }
-
-  const embed = createCharacterEmbed(character);
-
-  const itemNames = [
-    character.gearWeapon?.name,
-    character.gearShield?.name,
-    character.gearArmor?.head?.name,
-    character.gearArmor?.chest?.name,
-    character.gearArmor?.legs?.name
-  ].filter(Boolean);
-
-  const itemDetails = await ItemModel.find({ itemName: { $in: itemNames } });
-  const getItemDetail = (itemName) => {
-    const item = itemDetails.find(i => i.itemName === itemName);
-    return item ? `${item.emoji} ${item.itemName} [+${item.modifierHearts}]` : 'N/A';
-  };
-
-  const gearMap = {
-    head: character.gearArmor?.head ? `> ${getItemDetail(character.gearArmor.head.name)}` : '> N/A',
-    chest: character.gearArmor?.chest ? `> ${getItemDetail(character.gearArmor.chest.name)}` : '> N/A',
-    legs: character.gearArmor?.legs ? `> ${getItemDetail(character.gearArmor.legs.name)}` : '> N/A',
-    weapon: character.gearWeapon ? `> ${getItemDetail(character.gearWeapon.name)}` : '> N/A',
-    shield: character.gearShield ? `> ${getItemDetail(character.gearShield.name)}` : '> N/A',
-  };
-
-  const gearEmbed = createCharacterGearEmbed(character, gearMap, 'all');
-  await interaction.reply({ embeds: [embed, gearEmbed], ephemeral: true });
 }
 
 // =============================================================================
