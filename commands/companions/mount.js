@@ -1,4 +1,5 @@
 const { handleError } = require('../../utils/globalErrorHandler');
+const { capitalizeVillageName } = require('../../utils/stringUtils');
 
 // ------------------- Import standard libraries and external modules -------------------
 const { SlashCommandBuilder } = require('@discordjs/builders'); // Slash command builder for Discord commands
@@ -117,7 +118,7 @@ async function handleEncounter(interaction) {
             // ------------------- NEW: Validate village match -------------------
             if (character.currentVillage?.toLowerCase() !== encounter.village?.toLowerCase()) {
                 return interaction.reply({
-                    content: `❌ **${character.name} is currently located in ${character.currentVillage || 'an unknown location'}, but this encounter is in ${encounter.village}. Characters must be in the correct village to roll!**`,
+                    content: `❌ **${character.name} is currently located in ${capitalizeVillageName(character.currentVillage) || 'an unknown location'}, but this encounter is in ${capitalizeVillageName(encounter.village)}. Characters must be in the correct village to roll!**`,
                     ephemeral: true,
                 });
             }

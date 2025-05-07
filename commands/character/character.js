@@ -91,6 +91,7 @@ const Character = require("../../models/CharacterModel");
 const User = require("../../models/UserModel");
 const ItemModel = require("../../models/ItemModel");
 const Mount = require("../../models/MountModel");
+const { capitalizeVillageName } = require('../../utils/stringUtils');
 
 // ============================================================================
 // ------------------- Constants and Configuration -------------------
@@ -988,7 +989,7 @@ async function handleEditCharacter(interaction) {
    }
    character.homeVillage = updatedInfo;
    character.currentVillage = updatedInfo;
-   updateMessage = `✅ **${character.name}'s village has been updated from ${previousValue} to ${updatedInfo}.**`;
+   updateMessage = `✅ **${character.name}'s village has been updated from ${capitalizeVillageName(previousValue)} to ${capitalizeVillageName(updatedInfo)}.**`;
   } else if (category === "name") {
    const uniqueNameCheck = await isUniqueCharacterName(
     character.userId,
