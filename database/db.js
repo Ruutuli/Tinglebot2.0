@@ -1706,6 +1706,72 @@ inventoryUtils.initializeInventoryUtils({
 
 
 // ============================================================================
+// ------------------- Blight Roll History Functions -------------------
+// Functions for tracking and managing blight roll history.
+// ============================================================================
+
+// ------------------- recordBlightRoll -------------------
+const recordBlightRoll = async (characterId, characterName, userId, rollValue, previousStage, newStage, notes = '') => {
+  try {
+    await connectToTinglebot();
+    const BlightRollHistory = require('../models/BlightRollHistoryModel');
+    
+    const rollRecord = new BlightRollHistory({
+      characterId,
+      characterName,
+      userId,
+      rollValue,
+      previousStage,
+      newStage,
+      notes
+    });
+
+    await rollRecord.save();
+    return rollRecord;
+  } catch (error) {
+    handleError(error, 'db.js');
+    console.error(`[blightService]: Error recording blight roll: ${error.message}`);
+    throw error;
+  }
+};
+
+// ------------------- getCharacterBlightHistory -------------------
+const getCharacterBlightHistory = async (characterId, limit = 10) => {
+  try {
+    await connectToTinglebot();
+    const BlightRollHistory = require('../models/BlightRollHistoryModel');
+    
+    return await BlightRollHistory.find({ characterId })
+      .sort({ timestamp: -1 })
+      .limit(limit)
+      .lean()
+      .exec();
+  } catch (error) {
+    handleError(error, 'db.js');
+    console.error(`[blightService]: Error fetching blight history: ${error.message}`);
+    throw error;
+  }
+};
+
+// ------------------- getUserBlightHistory -------------------
+const getUserBlightHistory = async (userId, limit = 20) => {
+  try {
+    await connectToTinglebot();
+    const BlightRollHistory = require('../models/BlightRollHistoryModel');
+    
+    return await BlightRollHistory.find({ userId })
+      .sort({ timestamp: -1 })
+      .limit(limit)
+      .lean()
+      .exec();
+  } catch (error) {
+    handleError(error, 'db.js');
+    console.error(`[blightService]: Error fetching user blight history: ${error.message}`);
+    throw error;
+  }
+};
+
+// ============================================================================
 // ------------------- Module Exports -------------------
 // Export all service functions and constants.
 // ============================================================================
@@ -1785,4 +1851,7 @@ module.exports = {
  connectToInventoriesForItems,
  checkMaterialAvailability,
  checkMaterial,
+ recordBlightRoll,
+ getCharacterBlightHistory,
+ getUserBlightHistory,
 };
