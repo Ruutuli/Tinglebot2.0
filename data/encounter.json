@@ -217,5 +217,31 @@
     "tameStatus": false,
     "traits": {},
     "totalSpent": 0
+  },
+  "dad00763-7f8c-48af-8727-08a6c547beb5": {
+    "users": [],
+    "mountType": "Donkey",
+    "rarity": "Regular",
+    "mountLevel": "Basic",
+    "mountStamina": 2,
+    "environment": "Forest",
+    "village": "Unknown",
+    "actions": [],
+    "tameStatus": false,
+    "traits": {},
+    "totalSpent": 0
+  },
+  "62c53b65": {
+    "users": [],
+    "mountType": "Horse",
+    "rarity": "To be determined",
+    "mountLevel": "Basic",
+    "mountStamina": "To be determined",
+    "environment": "To be determined",
+    "village": "rudania",
+    "actions": [],
+    "tameStatus": false,
+    "traits": {},
+    "totalSpent": 0
   }
 }
