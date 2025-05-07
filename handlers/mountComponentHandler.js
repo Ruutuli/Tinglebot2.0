@@ -191,11 +191,19 @@ async function proceedWithRoll(interaction, characterName, encounterId) {
 
   // Check if the character's inventory has been synced
   if (!character.inventorySynced) {
-    await interaction.editReply({
+    return interaction.reply({
       content: `❌ **You cannot use the mount command because "${character.name}"'s inventory is not set up yet. Please use the </testinventorysetup:1306176790095728732> and then </syncinventory:1306176789894266898> commands to initialize the inventory.**`,
       ephemeral: true,
     });
-    return;
+  }
+
+  // Check if the user's token tracker is set up
+  const user = await User.findOne({ discordId: interaction.user.id });
+  if (!user || !user.tokensSynced) {
+    return interaction.reply({
+      content: `❌ **You cannot use the mount command because your token tracker is not set up yet. Please use the </tokens tokentrackerlink:1306176790095728732> and then </tokens sync:1306176789894266898> commands to set up your token tracker.**`,
+      ephemeral: true,
+    });
   }
 
   const roll = Math.floor(Math.random() * 20) + 1;
@@ -1474,6 +1482,15 @@ async function handleViewMount(interaction) {
     if (!character.inventorySynced) {
       return interaction.reply({
         content: `❌ **You cannot use the mount command because "${character.name}"'s inventory is not set up yet. Please use the </testinventorysetup:1306176790095728732> and then </syncinventory:1306176789894266898> commands to initialize the inventory.**`,
+        ephemeral: true,
+      });
+    }
+
+    // Check if the user's token tracker is set up
+    const user = await User.findOne({ discordId: interaction.user.id });
+    if (!user || !user.tokensSynced) {
+      return interaction.reply({
+        content: `❌ **You cannot use the mount command because your token tracker is not set up yet. Please use the </tokens tokentrackerlink:1306176790095728732> and then </tokens sync:1306176789894266898> commands to set up your token tracker.**`,
         ephemeral: true,
       });
     }
