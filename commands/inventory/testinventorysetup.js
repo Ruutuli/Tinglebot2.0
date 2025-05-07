@@ -56,6 +56,11 @@ module.exports = {
         await sendSetupInstructions(interaction, 'missing_sheet', character._id, characterName, inventoryUrl);
         return;
       }
+      if (!sheetId) {
+        console.error('❌ "loggedInventory" sheet not found in the spreadsheet.');
+        await sendSetupInstructions(interaction, 'missing_sheet', character._id, characterName, inventoryUrl);
+        return;
+      }
       console.log('✅ "loggedInventory" sheet ID retrieved successfully.');
 
       // ------------------- Check for missing headers -------------------
