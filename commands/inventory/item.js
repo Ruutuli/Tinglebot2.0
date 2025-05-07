@@ -22,6 +22,7 @@ const { healKoCharacter, updateCurrentHearts, updateCurrentStamina } = require('
 const { getJobPerk } = require('../../modules/jobsModule');
 const { capitalizeWords } = require('../../modules/formattingModule');
 const { getVillageEmojiByName } = require('../../modules/locationsModule');
+const { syncInventory } = require('../../handlers/syncHandler');
 
 // ------------------- Utility Functions -------------------
 // General-purpose utilities: Google Sheets integration, URL validation, error handling, inventory utils.
@@ -191,6 +192,20 @@ module.exports = {
           .setFooter({ text: 'Healing Error' });
         return void await interaction.editReply({ embeds: [errorEmbed] });
       }
+
+      // ------------------- Force Inventory Sync Before Healing -------------------
+      await interaction.editReply({
+        content: '🔄 **Syncing inventory before healing attempt...**'
+      });
+      await syncInventory(character.name, interaction.user.id, interaction);
+      // Refresh character data after sync
+      character = await fetchCharacterByNameAndUserId(characterName, interaction.user.id);
+      if (!character.inventorySynced) {
+        return void await interaction.editReply({
+          content: '❌ **Inventory sync failed. Please try again or contact support.**'
+        });
+      }
+
       if (character.currentHearts >= character.maxHearts && !item.staminaRecovered) {
         const errorEmbed = new EmbedBuilder()
           .setColor('#59A914') // friendly green tone for RP
@@ -273,72 +288,54 @@ module.exports = {
         const values = [[
           character.name,
           item.itemName,
-          `-${quantity}`,
-          item.category.join(', '),
-          item.type.join(', '),
-          item.subtype.join(', '),
-          'Used for healing',
-          character.job,
-          '',
-          character.currentVillage,
-          interactionUrl,
+          `${quantity}x ${item.itemName} used by ${character.name} for ${healAmount} hearts and ${staminaRecovered} stamina`,
+          uniqueSyncId,
           timestamp,
-          uniqueSyncId
+          interactionUrl
         ]];
 
-        if (character?.name && character?.inventory && character?.userId) {
-    await safeAppendDataToSheet(character.inventory, character, range, values);
-} else {
-    console.error('[safeAppendDataToSheet]: Invalid character object detected before syncing.');
-}
+        await appendSheetData(spreadsheetId, range, values, auth);
 
+        const successEmbed = new EmbedBuilder()
+          .setColor('#59A914')
+          .setTitle('✅ Healing Successful!')
+          .setDescription(`**${character.name}** has been successfully healed using **${item.itemName}**!`)
+          .addFields(
+            { name: '💚 Hearts', value: `> **${character.currentHearts}/${character.maxHearts}**`, inline: true },
+            { name: '🟩 Stamina', value: `> **${character.currentStamina}/${character.maxStamina}**`, inline: true }
+          )
+          .setThumbnail(item.image || character.icon)
+          .setFooter({ text: 'Healing successful! 🌿' });
+
+        return void await interaction.editReply({ embeds: [successEmbed] });
       }
 
+      // Token forfeit option
+      if (tokens) {
+        const userId = interaction.user.id;
+        const userData = await getTokenBalance(userId);
+        const currentTokenBalance = userData.tokens;
+        const tokenTrackerLink = userData.tokenTracker;
 
-      // ------------------- Build and Send Confirmation Embed -------------------
-      // Craft final embed showing pre- and post-values for hearts and stamina.
-      let desc = `**${character.name}** used **${item.itemName}** ${item.emoji || ''}`;
-      if (healAmount) desc += ` to heal **${healAmount}** hearts!`;
-      if (staminaRecovered) desc += ` and recovered **${staminaRecovered}** stamina!`;
+        if (!tokenTrackerLink) {
+          return void await interaction.editReply({
+            content: '❌ **You need to set up your token tracker first!**\n\n' +
+              'Please use `/tokens tokentrackerlink` to link your Google Sheets token tracker.\n\n' +
+              '*(Yes, I know this is a bit messy and confusing - I\'m working on making it better! 😅)*',
+            ephemeral: true
+          });
+        }
 
-      const confirmationEmbed = new EmbedBuilder()
-        .setColor('#59A914')
-        .setTitle('✬ Healing ✬')
-        .setAuthor({
-          name: `${character.name} 🔗`,
-          iconURL: character.icon,
-          url: character.inventory
-        })
-        .setDescription(desc)
-        .addFields(
-          {
-            name: '__❤️ Hearts__',
-            value: `**${character.currentHearts - healAmount}/${character.maxHearts} → ${character.currentHearts}/${character.maxHearts}**`,
-            inline: true
-          },
-          {
-            name: '__🟩 Stamina__',
-            value: `**${character.currentStamina - staminaRecovered}/${character.maxStamina} → ${character.currentStamina}/${character.maxStamina}**`,
-            inline: true
-          }
-        )
-        .setFooter({ text: 'Healing and Stamina Recovery Successful' })
-        .setThumbnail(item.image);
-
-      await interaction.editReply({ embeds: [confirmationEmbed] });
+        if (currentTokenBalance <= 0) {
+          return void await interaction.editReply({
+            content: '❌ **You need to have tokens to use this item.**\n\n' +
+              'Please use `/tokens buy` to purchase tokens.',
+            ephemeral: true
+          });
+        }
+      }
     } catch (error) {
-      // ------------------- Error Handling -------------------
-      // Log and report unexpected errors to user.
-      handleError(error, 'item.js', {
-        commandName: 'item',
-        userTag: interaction.user.tag,
-        userId: interaction.user.id,
-        options: { characterName, itemName, quantity }
-      });
-      console.error('[item.js:logs] Error during healing process:', error);
-      await interaction.editReply({
-        content: '❌ **An error occurred during the healing process.**'
-      });
+      handleError(error, interaction);
     }
   }
 };

@@ -50,9 +50,11 @@ const {
 } = require('../utils/googleSheetsUtils');
 const {
   deleteSubmissionFromStorage,
-  saveSubmissionToStorage
+  saveSubmissionToStorage,
+  retrieveSubmissionFromStorage
 } = require('../utils/storage');
 const { generateUniqueId } = require('../utils/uniqueIdUtils');
+const { syncInventory } = require('./syncHandler');
 
 // ============================================================================
 // ------------------- Blight Submission Persistence -------------------
@@ -282,6 +284,21 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
       return;
     }
 
+    // ------------------- Force Inventory Sync Before Healing -------------------
+    if (!character.inventorySynced) {
+      await interaction.editReply({
+        content: '🔄 **Syncing inventory before healing attempt...**'
+      });
+      await syncInventory(character.name, interaction.user.id, interaction);
+      // Refresh character data after sync
+      character = await Character.findOne({ name: submission.characterName });
+      if (!character.inventorySynced) {
+        return void await interaction.editReply({
+          content: '❌ **Inventory sync failed. Please try again or contact support.**'
+        });
+      }
+    }
+
     // Token forfeit option
     if (tokens) {
       const userId = interaction.user.id;
@@ -501,7 +518,7 @@ You have forfeited **${currentTokenBalance} tokens** in exchange for healing **$
   } catch (error) {
     handleError(error, 'blightHandler.js');
     console.error('[blightHandler]: Error submitting healing task:', error);
-    await interaction.editReply({ content: '❌ An error occurred while submitting your healing task.' });
+    await interaction.editReply({ content: '❌ An error occurred while processing your request.', ephemeral: true });
   }
 }
 
