@@ -189,38 +189,13 @@ module.exports = {
       if (!jobPerk || !jobPerk.perks.includes('GATHERING')) {
         console.log(`[gather.js]: ${character.name} lacks gathering skills for job: "${job}"`);
         await interaction.editReply({
-          content: `❌ **Hmm, ${character.name} can’t gather as a ${job} because they lack the necessary gathering skills.**\n🔄 **Consider switching to a role better suited for gathering, or use a Job Voucher to try something fresh!**`,
+          content: `❌ **Hmm, ${character.name} can't gather as a ${job} because they lack the necessary gathering skills.**\n🔄 **Consider switching to a role better suited for gathering, or use a Job Voucher to try something fresh!**`,
           ephemeral: true,
         });
         return;
       }
 
-      // ------------------- Step 5: Activate Job Voucher -------------------
-      if (character.jobVoucher) {
-        console.log(`[gather.js]: Activating job voucher for ${character.name}.`);
-        const { success: itemSuccess, item: jobVoucherItem, message: itemError } = await fetchJobVoucherItem();
-        if (!itemSuccess) {
-          await interaction.editReply({
-            content: itemError,
-            ephemeral: true,
-          });
-          return;
-        }
-        const activationResult = await activateJobVoucher(character, job, jobVoucherItem, 1, interaction);
-        if (!activationResult.success) {
-          await interaction.editReply({
-            content: activationResult.message,
-            ephemeral: true,
-          });
-          return;
-        }
-        await interaction.followUp({
-          content: activationResult.message,
-          ephemeral: true,
-        });
-      }
-
-      // ------------------- Step 6: Validate Region -------------------
+      // ------------------- Step 5: Validate Region -------------------
       const region = getVillageRegionByName(currentVillage);
       if (!region) {
         await interaction.editReply({
