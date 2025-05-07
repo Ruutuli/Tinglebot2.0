@@ -784,16 +784,12 @@ async function handleShopView(interaction) {
    components: [generateButtons(currentPage)],
   });
 
-  const collector = message.createMessageComponentCollector({ time: 60000 });
+  const collector = message.createMessageComponentCollector({ 
+    time: 300000, // 5 minutes
+    filter: i => i.user.id === interaction.user.id 
+  });
 
   collector.on("collect", async (i) => {
-   if (i.user.id !== interaction.user.id) {
-    return i.reply({
-     content: "❌ You cannot interact with this.",
-     ephemeral: true,
-    });
-   }
-
    try {
      if (i.customId === "prev") currentPage--;
      if (i.customId === "next") currentPage++;
@@ -823,7 +819,10 @@ async function handleShopView(interaction) {
 
   collector.on("end", async () => {
    try {
-    await interaction.editReply({ components: [] });
+    const lastMessage = await interaction.fetchReply();
+    if (lastMessage) {
+     await lastMessage.edit({ components: [] }).catch(() => {});
+    }
    } catch (error) {
     handleError(error, "shops.js");
     console.error("[shops]: Error clearing buttons:", error);
@@ -832,9 +831,13 @@ async function handleShopView(interaction) {
  } catch (error) {
   handleError(error, "shops.js");
   console.error("[shops]: Error viewing shop items:", error);
-  interaction.editReply(
-   "❌ An error occurred while viewing the shop inventory."
-  );
+  try {
+    await interaction.editReply(
+     "❌ An error occurred while viewing the shop inventory."
+    );
+  } catch (replyError) {
+    console.error("[shops]: Error sending error message:", replyError);
+  }
  }
 }
 
