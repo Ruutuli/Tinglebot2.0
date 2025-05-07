@@ -447,6 +447,8 @@ async function handleMount(interaction) {
       return interaction.editReply('❌ You do not have permission to use this command.');
     }
   
+    await interaction.deferReply();
+  
     let village = interaction.options.getString('village');
   
     // ------------------- Determine Village from Channel -------------------
