@@ -90,6 +90,11 @@ async function handleAutocomplete(interaction) {
           await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "gather");
         }
         break;
+      case "loot":
+        if (focusedName === "charactername") {
+          await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "loot");
+        }
+        break;
       case "pet":
         // Handle pet command autocomplete based on the focused option
         if (focusedName === "charactername") {
@@ -193,35 +198,10 @@ async function handleCharacterBasedCommandsAutocomplete(
  try {
   const userId = interaction.user.id;
 
-  let characters = await fetchCharactersByUserId(userId);
+  // Fetch all characters owned by the user
+  const characters = await fetchCharactersByUserId(userId);
 
-  if (commandName === "loot") {
-   characters = characters.filter((character) => {
-    const job = character.jobVoucher ? character.jobVoucherJob : character.job;
-    const jobPerk = getJobPerk(job);
-    return jobPerk && jobPerk.perks.includes("LOOTING");
-   });
-  } else if (commandName === "syncinventory") {
-   characters = characters.filter((character) => !character.inventorySynced);
-  } else if (commandName === "crafting") {
-   characters = characters.filter((character) => {
-    let job = character.job;
-    if (character.jobVoucher && character.jobVoucherJob) {
-     job = character.jobVoucherJob;
-    }
-    const jobPerk = getJobPerk(job);
-    return jobPerk && jobPerk.perks.includes("CRAFTING");
-   });
-  } else if (commandName === "pet") {
-   // For pet commands, we want to show all characters
-   // The subcommand will handle whether the character can have pets or not
-   console.log("[Autocomplete]: Pet command showing all characters.");
-  }
-  // No filtering for mount command
-  if (commandName === "mount") {
-   console.log("[Autocomplete]: Mount command does not require filtering.");
-  }
-
+  // Map all characters to choices with their basic info
   const choices = characters.map((character) => ({
    name: `${character.name} | ${capitalizeFirstLetter(
     character.currentVillage
