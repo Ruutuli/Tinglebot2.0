@@ -105,47 +105,40 @@ module.exports = {
       .addSubcommand(sub =>
         sub.setName('vendingstock')
           .setDescription('Courier delivery of vending stock to a vendor')
-      
           .addStringOption(opt =>
             opt.setName('recipient')
               .setDescription('Vendor receiving stock (must have a vending job); includes their current village')
               .setRequired(true)
               .setAutocomplete(true)
           )
-      
           .addStringOption(opt =>
             opt.setName('courier')
               .setDescription('Courier character who will carry the stock; includes their village')
               .setRequired(true)
               .setAutocomplete(true)
           )
-      
           .addStringOption(opt =>
             opt.setName('vendoritem')
-              .setDescription('Item to deliver from the courier's village vending stock that matches vendor type')
+              .setDescription("Item to deliver from the courier's village vending stock that matches vendor type")
               .setRequired(true)
               .setAutocomplete(true)
           )
-      
           .addIntegerOption(opt =>
             opt.setName('vendoritem_qty')
               .setDescription('Quantity of item to deliver')
               .setRequired(true)
           )
-      
           .addStringOption(opt =>
             opt.setName('payment')
               .setDescription('Payment details for vending stock delivery (tokens, items, etc.)')
               .setRequired(true)
           )
-      
           .addStringOption(opt =>
             opt.setName('flavortext')
               .setDescription('Optional flavor text or delivery note')
               .setRequired(false)
           )
-      )
-      ,      
+      ),
 
   // ------------------- Main Execute Handler -------------------
   async execute(interaction) {
