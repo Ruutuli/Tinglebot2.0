@@ -115,7 +115,7 @@ function formatEncounterData(encounter, characterName, characterStamina, charact
     ],
     color: 0xAA926A,
     image: {
-      url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png',
+      url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png',
     },
     thumbnail: { url: mountThumbnail },
   };
@@ -184,6 +184,15 @@ async function proceedWithRoll(interaction, characterName, encounterId) {
   if (!character) {
     await interaction.editReply({
       embeds: [{ title: '❌ Character not found', description: 'Please try again.', color: 0xFF0000 }],
+      ephemeral: true,
+    });
+    return;
+  }
+
+  // Check if the character's inventory has been synced
+  if (!character.inventorySynced) {
+    await interaction.editReply({
+      content: `❌ **You cannot use the mount command because "${character.name}"'s inventory is not set up yet. Please use the </testinventorysetup:1306176790095728732> and then </syncinventory:1306176789894266898> commands to initialize the inventory.**`,
       ephemeral: true,
     });
     return;
@@ -1457,6 +1466,14 @@ async function handleViewMount(interaction) {
           description: `We couldn't find a character named **${characterName}** that belongs to you. Please check and try again.`,
           color: 0xFF0000,
         }],
+        ephemeral: true,
+      });
+    }
+
+    // Check if the character's inventory has been synced
+    if (!character.inventorySynced) {
+      return interaction.reply({
+        content: `❌ **You cannot use the mount command because "${character.name}"'s inventory is not set up yet. Please use the </testinventorysetup:1306176790095728732> and then </syncinventory:1306176789894266898> commands to initialize the inventory.**`,
         ephemeral: true,
       });
     }
