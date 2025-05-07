@@ -810,6 +810,29 @@ async function checkMissedRolls(client) {
             console.error(`[blightHandler]: Missing userId for ${character.name}`);
             await channel.send({ embeds: [embed] });
           }
+
+          // Send death notification to mod-log channel
+          try {
+            const modLogChannel = client.channels.cache.get(process.env.MOD_LOG_CHANNEL_ID);
+            if (modLogChannel) {
+              const modLogEmbed = new EmbedBuilder()
+                .setColor('#FF0000')
+                .setTitle('☠️ Character Death from Blight')
+                .setDescription(`**Character**: ${character.name}\n**Owner**: <@${character.userId}>\n**Death Time**: <t:${Math.floor(Date.now() / 1000)}:F>`)
+                .setThumbnail(character.icon || 'https://example.com/default-icon.png')
+                .setFooter({ text: 'Blight Death Log', iconURL: 'https://example.com/blight-icon.png' })
+                .setTimestamp();
+
+              await modLogChannel.send({ embeds: [modLogEmbed] });
+              console.log(`[blightHandler]: Sent death notification to mod-log for ${character.name}`);
+            } else {
+              console.error('[blightHandler]: Mod log channel not found');
+            }
+          } catch (error) {
+            handleError(error, 'blightHandler.js');
+            console.error('[blightHandler]: Error sending death notification to mod-log:', error);
+          }
+
           continue;
         }
 
