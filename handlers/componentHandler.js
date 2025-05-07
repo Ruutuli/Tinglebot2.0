@@ -338,10 +338,11 @@ async function handleJobSelect(interaction, characterId, updatedJob) {
   
       const embed = createCharacterEmbed(character);
   
+      // Update the message with empty components to remove all buttons
       await interaction.update({
         content: `✅ **${character.name}'s job has been updated from ${previousJob} to ${updatedJob}.**`,
         embeds: [embed],
-        components: [],
+        components: [], // Set components to empty array to remove all buttons
         ephemeral: true,
       });
   

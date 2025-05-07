@@ -7,16 +7,15 @@
 // ============================================================================
 // Discord.js Components
 // ------------------- Importing Discord.js components -------------------
-const { ChannelType, EmbedBuilder } = require('discord.js');
+const { ChannelType } = require('discord.js');
 
 const { handleError } = require('../utils/globalErrorHandler');
 // ============================================================================
 // Local Modules & Database Models
 // ------------------- Importing local services and models -------------------
 const { getMonstersAboveTierByRegion } = require('../database/db');
-const { monsterMapping } = require('../models/MonsterModel');
 const { getVillageRegionByName } = require('../modules/locationsModule');
-const { applyVillageDamage } = require('../modules/villageModule');
+const { createRaidEmbed, createOrUpdateRaidThread, scheduleRaidTimer } = require('../modules/raidModule');
 
 // ============================================================================
 // Environment Configuration
@@ -38,7 +37,6 @@ const villageChannels = {
   Inariko: process.env.INARIKO_TOWN_HALL,
   Vhintl: process.env.VHINTL_TOWN_HALL,
 };
-
 
 // ============================================================================
 // Message Activity Tracking
@@ -67,11 +65,9 @@ function trackMessageActivity(channelId, userId, isBot, username) {
   messageActivity.set(channelId, activity);
 }
 
-
 // ============================================================================
 // Encounter Triggering Functions
 // ------------------- Check for Random Encounter -------------------
-// Checks message activity in each channel; if thresholds are met, triggers an encounter.
 async function checkForRandomEncounters(client) {
   const currentTime = Date.now();
 
@@ -102,39 +98,9 @@ async function checkForRandomEncounters(client) {
   }
 }
 
-
-// ============================================================================
-// Encounter Embed Creation
-// ------------------- Create Encounter Embed -------------------
-// Generates a Discord embed for a monster encounter with details such as monster hearts, tier, and battle ID.
-function createEncounterEmbed(monster, battleId) {
-  const fallbackImage = 'https://via.placeholder.com/150';
-  const monsterData = monsterMapping[monster.nameMapping] || {};
-  const monsterImage = monsterData.image || monster.image || fallbackImage;
-
-  return new EmbedBuilder()
-    .setTitle(`⚔️ **A Wild ${monster.name} Has Appeared!**`)
-    .setDescription(
-      `📢 **Commands to Engage:**\n` +
-      `> 🔥 **Join the Raid:** Use </raid:1319247998412132384> \n` +
-      `> 💊 **Heal During Raid:** Use </item:1306176789755858979> \n\n`
-    )
-    .addFields(
-      { name: `💙 __Monster Hearts__`, value: `> ${monster.hearts} / ${monster.hearts}`, inline: false },
-      { name: `⭐ __Tier__`, value: `> **Tier ${monster.tier}**`, inline: false },
-      { name: `🔢 __Battle ID__`, value: `\`\`\`${battleId}\`\`\``, inline: false }
-    )
-    .setThumbnail(monsterImage.startsWith('http') ? monsterImage : fallbackImage)
-    .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
-    .setFooter({ text: "⚠️ Act Quickly! You have 10 minutes to complete this raid!" })
-    .setColor('#FF4500');
-}
-
-
 // ============================================================================
 // Random Encounter Trigger
 // ------------------- Trigger Random Encounter -------------------
-// Triggers a random encounter in a given channel by selecting a monster and starting a battle thread.
 async function triggerRandomEncounter(channel) {
   try {
     // Identify the village corresponding to the channel.
@@ -157,7 +123,8 @@ async function triggerRandomEncounter(channel) {
 
     // Generate a battle ID and create an encounter embed.
     const battleId = Date.now();
-    const encounterEmbed = createEncounterEmbed(monster, battleId, selectedVillage);
+    const character = { name: 'Village Defender', currentVillage: selectedVillage }; // Dummy character for embed
+    const encounterEmbed = createRaidEmbed(character, monster, battleId);
 
     // Send the encounter message and start a thread for the battle.
     const sentMessage = await channel.send({
@@ -171,29 +138,17 @@ async function triggerRandomEncounter(channel) {
       reason: 'Random Encounter',
     });
 
-    // Set a timer to apply village damage after 10 minutes.
-    const timerDuration = 10 * 60 * 1000;
-    setTimeout(async () => {
-      try {
-        await applyVillageDamage(selectedVillage, monster, thread);
-      } catch (error) {
-    handleError(error, 'randomEncounters.js');
-
-        console.error(`[Timer LOG] Error during applyVillageDamage execution:`, error);
-      }
-    }, timerDuration);
+    // Schedule the raid timer
+    scheduleRaidTimer(selectedVillage, monster, thread);
   } catch (error) {
     handleError(error, 'randomEncounters.js');
-
     console.error('[Encounter LOG] Error triggering encounter:', error);
   }
 }
 
-
 // ============================================================================
 // Bot Initialization for Random Encounters
 // ------------------- Initialize Random Encounter Bot -------------------
-// Listens for message events to track activity and periodically checks for random encounters.
 function initializeRandomEncounterBot(client) {
   client.on('messageCreate', (message) => {
     if (message.author.bot) return; // Ignore bot messages
@@ -202,7 +157,6 @@ function initializeRandomEncounterBot(client) {
 
   setInterval(() => checkForRandomEncounters(client), CHECK_INTERVAL);
 }
-
 
 // ============================================================================
 // Module Exports
