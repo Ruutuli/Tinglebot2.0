@@ -869,7 +869,7 @@ if (quantity <= 0) {
    return interaction.editReply("❌ Item not found in the shop.");
   }
 
-  const shopQuantity = parseInt(shopItem.quantity, 10);
+  const shopQuantity = parseInt(shopItem.stock, 10);
   if (isNaN(shopQuantity)) {
    return interaction.editReply("❌ Shop item quantity is invalid.");
   }
@@ -906,7 +906,7 @@ if (quantity <= 0) {
   await ShopStock.updateOne(
    { itemName },
    {
-    $set: { quantity: parseInt(shopQuantity, 10) - quantity },
+    $set: { stock: parseInt(shopQuantity, 10) - quantity },
    }
   );
 
@@ -1124,7 +1124,7 @@ if (quantity <= 0) {
 
   await ShopStock.updateOne(
    { itemName },
-   { $inc: { quantity: quantity } },
+   { $inc: { stock: quantity } },
    { upsert: true }
   );
 
