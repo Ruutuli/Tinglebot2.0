@@ -14,5 +14,6 @@
   "ignore": ["node_modules/"],
   "ext": "js,json",
   "exec": "node index.js",
-  "legacy-watch": true
+  "legacy-watch": true,
+  "exitcrash": true
 }
