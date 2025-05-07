@@ -10,7 +10,7 @@ const { EmbedBuilder } = require('discord.js');
 const { handleError } = require('../utils/globalErrorHandler');
 // ------------------- Modules -------------------
 const { applyVillageDamage } = require('../modules/villageModule');
-const { storeBattleProgress } = require('../modules/combatModule');
+const { storeBattleProgress } = require('../modules/raidCombatModule');
 const { createRaidEmbed, createOrUpdateRaidThread, scheduleRaidTimer } = require('../modules/raidModule');
 
 // ------------------- Database Models -------------------
