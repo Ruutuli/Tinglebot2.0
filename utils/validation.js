@@ -21,6 +21,7 @@ const { isVillageExclusiveJob } = require('../modules/jobsModule');
 const { isValidVillage } = require('../modules/locationsModule');
 const { isValidRace, getRaceValueByName } = require('../modules/raceModule');
 const { capitalizeFirstLetter } = require('../modules/formattingModule');
+const { capitalizeVillageName } = require('./stringUtils');
 
 
 // ============================================================================
@@ -115,8 +116,8 @@ async function canChangeVillage(character, newVillage) {
     }
 
     const villageJob = isVillageExclusiveJob(character.job);
-    const capitalizedVillageJob = capitalizeFirstLetter(villageJob);
-    const capitalizedNewVillage = capitalizeFirstLetter(newVillage);
+    const capitalizedVillageJob = capitalizeVillageName(villageJob);
+    const capitalizedNewVillage = capitalizeVillageName(newVillage);
 
     return villageJob && villageJob.toLowerCase() !== newVillage.toLowerCase() ? {
         valid: false,

@@ -16,6 +16,7 @@ const { handleError } = require('../utils/globalErrorHandler');
 const { getMonstersAboveTierByRegion } = require('../database/db');
 const { getVillageRegionByName } = require('../modules/locationsModule');
 const { createRaidEmbed, createOrUpdateRaidThread, scheduleRaidTimer } = require('../modules/raidModule');
+const { capitalizeVillageName } = require('../utils/stringUtils');
 
 // ============================================================================
 // Environment Configuration
@@ -123,23 +124,24 @@ async function triggerRandomEncounter(channel) {
 
     // Generate a battle ID and create an encounter embed.
     const battleId = Date.now();
-    const character = { name: 'Village Defender', currentVillage: selectedVillage }; // Dummy character for embed
+    const capitalizedVillageName = capitalizeVillageName(selectedVillage);
+    const character = { name: 'Village Defender', currentVillage: capitalizedVillageName }; // Dummy character for embed
     const encounterEmbed = createRaidEmbed(character, monster, battleId);
 
     // Send the encounter message and start a thread for the battle.
     const sentMessage = await channel.send({
-      content: `> ⚠️ **A ${monster.name} has appeared in ${selectedVillage}!** Residents and visitors, please respond to the threat!`,
+      content: `> ⚠️ **A ${monster.name} has appeared in ${capitalizedVillageName}!** Residents and visitors, please respond to the threat!`,
       embeds: [encounterEmbed],
     });
 
     const thread = await sentMessage.startThread({
-      name: `⚠️ ${selectedVillage} Attack: ${monster.name}`,
+      name: `⚠️ ${capitalizedVillageName} Attack: ${monster.name}`,
       autoArchiveDuration: 1440,
       reason: 'Random Encounter',
     });
 
     // Schedule the raid timer
-    scheduleRaidTimer(selectedVillage, monster, thread);
+    scheduleRaidTimer(capitalizedVillageName, monster, thread);
   } catch (error) {
     handleError(error, 'randomEncounters.js');
     console.error('[Encounter LOG] Error triggering encounter:', error);

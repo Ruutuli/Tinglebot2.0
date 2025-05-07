@@ -1,5 +1,7 @@
 // flavorTextModule.js
 
+const { capitalizeVillageName } = require('../utils/stringUtils');
+
 // Utility Functions
 // =================
 
@@ -181,43 +183,43 @@ const generateAttackAndDefenseBuffMessage = (isVictory) => {
 
 // Messages for no encounter
 const getNoEncounterMessage = (currentVillage) => {
- // Normalize the village name to avoid case-sensitivity issues
- const villageKey = currentVillage ? currentVillage.toLowerCase() : "default";
+    // Normalize the village name to avoid case-sensitivity issues
+    const villageKey = currentVillage ? capitalizeVillageName(currentVillage).toLowerCase() : "default";
 
- // Village-specific messages
- const villageMessages = {
-  rudania: [
-   "🔥 The air is warm, and no monsters disturb the peace.",
-   "🔥⚒️ The forges hum, but the valley is quiet. No monsters today.",
-   "🌋 A distant rumble from the volcano, but no threats nearby.",
-   "🎉 The sounds of celebration drown out any sign of danger.",
-   "🪓 The farmlands are safe, and no monsters prowl.",
-  ],
-  inariko: [
-   "💦 The river flows quietly. No monsters are here.",
-   "🏞️ Peaceful waters surround you, undisturbed by threats.",
-   "📖 The wisdom of the past guards this place. No danger today.",
-   "🌀 The gentle whirl of the waterwheel is all you hear.",
-   "❄️ The crisp mountain air carries no sign of danger.",
-  ],
-  vhintl: [
-   "🌿 The forest whispers softly, but no monsters reply.",
-   "🕸️ Even the Skulltulas seem to sleep today. All is calm.",
-   "🌧️ The rain falls gently through the trees, masking all sound.",
-   "🪶 A Rito song drifts through the canopy, warding off danger.",
-   "🍃 The mists of the forest conceal no threats today.",
-  ],
-  default: [
-   "🌲🕊️ A quiet day. No monsters were encountered.",
-   "🌿☀️ The area is peaceful. No monsters in sight.",
-   "🌸🌼 Nothing stirs. No monsters to be found.",
-   "🌳🦋 All is calm. No monsters appear.",
-  ],
- };
+    // Village-specific messages
+    const villageMessages = {
+        rudania: [
+            "🔥 The air is warm, and no monsters disturb the peace.",
+            "🔥⚒️ The forges hum, but the valley is quiet. No monsters today.",
+            "🌋 A distant rumble from the volcano, but no threats nearby.",
+            "🎉 The sounds of celebration drown out any sign of danger.",
+            "🪓 The farmlands are safe, and no monsters prowl.",
+        ],
+        inariko: [
+            "💦 The river flows quietly. No monsters are here.",
+            "🏞️ Peaceful waters surround you, undisturbed by threats.",
+            "📖 The wisdom of the past guards this place. No danger today.",
+            "🌀 The gentle whirl of the waterwheel is all you hear.",
+            "❄️ The crisp mountain air carries no sign of danger.",
+        ],
+        vhintl: [
+            "🌿 The forest whispers softly, but no monsters reply.",
+            "🕸️ Even the Skulltulas seem to sleep today. All is calm.",
+            "🌧️ The rain falls gently through the trees, masking all sound.",
+            "🪶 A Rito song drifts through the canopy, warding off danger.",
+            "🍃 The mists of the forest conceal no threats today.",
+        ],
+        default: [
+            "🌲🕊️ A quiet day. No monsters were encountered.",
+            "🌿☀️ The area is peaceful. No monsters in sight.",
+            "🌸🌼 Nothing stirs. No monsters to be found.",
+            "🌳🦋 All is calm. No monsters appear.",
+        ],
+    };
 
- // Return messages for the specific village or fallback to default
- const messages = villageMessages[villageKey] || villageMessages.default;
- return getRandomMessage(messages);
+    // Return messages for the specific village or fallback to default
+    const messages = villageMessages[villageKey] || villageMessages.default;
+    return getRandomMessage(messages);
 };
 
 // Miscellaneous Messages
@@ -351,22 +353,22 @@ const generateGatherFlavorText = (itemType) => {
    "🥛 Rich and wholesome dairy, a gift from gentle hands, was collected.",
    "🧀 The day's yield included provisions crafted with care and tradition.",
    "🍶 Fresh and nourishing, the bounty speaks of peaceful homesteads.",
-   "🐄 The livestock’s offerings, simple yet vital, ensured a good harvest.",
+   "🐄 The livestock's offerings, simple yet vital, ensured a good harvest.",
   ],
   Fish: [
    "🎣 The shimmering waters surrendered their hidden bounty.",
-   "🐟 Quick and silent, the river’s life was skillfully caught.",
+   "🐟 Quick and silent, the river's life was skillfully caught.",
    "🌊 The depths revealed their secrets, glimmering and fleeting.",
    "✨ The tranquil waters whispered of abundance, offering their treasures.",
   ],
   Fruit: [
    "🍎 The trees offered their bounty, ripe and fragrant with the season's best.",
    "🍇 Sweet and vibrant, the fruits of the land were gathered with care.",
-   "🍊 Hidden among the leaves, nature’s flavors were plentiful and inviting.",
-   "🌿 The orchard whispered of life’s abundance, yielding its colorful harvest.",
+   "🍊 Hidden among the leaves, nature's flavors were plentiful and inviting.",
+   "🌿 The orchard whispered of life's abundance, yielding its colorful harvest.",
   ],
   Meat: [
-   "🍖 The land provided its sustenance, a reminder of nature’s cycle.",
+   "🍖 The land provided its sustenance, a reminder of nature's cycle.",
    "🐄 The fields and pastures yielded provisions essential to the journey ahead.",
    "🍗 Carefully prepared, this resource will sustain even the most arduous travels.",
    "🥩 The fruits of careful labor ensured a hearty supply for the days ahead.",
@@ -387,7 +389,7 @@ const generateGatherFlavorText = (itemType) => {
    "🌳 The land yielded its gifts, timeless and versatile.",
    "🪵 A harvest of materials, raw and brimming with potential, was gathered.",
    "🌿 The land offered resources, their use bound only by imagination.",
-   "🌱 Nature’s offerings spoke of resilience and quiet abundance.",
+   "🌱 Nature's offerings spoke of resilience and quiet abundance.",
   ],
   Ore: [
    "⛏️ Deep within the rock, shimmering stones awaited discovery.",
@@ -399,13 +401,13 @@ const generateGatherFlavorText = (itemType) => {
    "🌿 Vibrant herbs and plants whispered of hidden knowledge.",
    "🍃 The forest floor revealed its botanical riches, delicate and rare.",
    "🌱 The land yielded flora both useful and mysterious.",
-   "🌻 The land’s greenery spoke of life’s quiet persistence and beauty.",
+   "🌻 The land's greenery spoke of life's quiet persistence and beauty.",
   ],
   Protein: [
    "🥩 A vital source of strength was carefully gathered and prepared.",
    "🍗 The provisions ensured sustenance for journeys yet to come.",
    "🍖 The bounty, simple yet nourishing, was a gift from the land.",
-   "🐾 Nature’s energy, preserved in its purest form, was secured.",
+   "🐾 Nature's energy, preserved in its purest form, was secured.",
   ],
   default: [
    "✨ The search was fruitful, yielding items of value and wonder.",
@@ -441,8 +443,8 @@ const generateCraftingFlavorText = (job) => {
   ],
   "mask maker": [
    "🎭 In the Mask Maker's hands, ordinary materials transformed into something mystical.",
-   "🖌️ Each brushstroke carried intent, weaving stories into the mask’s design.",
-   "🌟 The Mask Maker’s craft captured the spirit of a forgotten legend.",
+   "🖌️ Each brushstroke carried intent, weaving stories into the mask's design.",
+   "🌟 The Mask Maker's craft captured the spirit of a forgotten legend.",
   ],
   weaver: [
    "🧵 The Weaver's loom hummed softly, threads intertwining into a tapestry of purpose.",
@@ -458,14 +460,14 @@ const generateCraftingFlavorText = (job) => {
    "🍲 As the pot simmered, the Cook smiled, knowing the meal would fortify even the bravest adventurer.",
   ],
   craftsman: [
-   "🛠️ The Craftsman’s tools danced across the workbench, shaping raw materials into something extraordinary.",
+   "🛠️ The Craftsman's tools danced across the workbench, shaping raw materials into something extraordinary.",
    "🔧 Each motion was deliberate, as if the Craftsman could see the finished piece before it began.",
    "✨ By the end of the day, the Craftsman stood back to admire their elegant and functional creation.",
   ],
   witch: [
    "🔮 The Witch's cauldron bubbled, its contents glowing faintly with magical energy.",
    "🌙 Chanting softly, the Witch infused the brew with ancient knowledge and power.",
-   "🧹 A swirl of light marked the completion of the Witch’s spellbound creation.",
+   "🧹 A swirl of light marked the completion of the Witch's spellbound creation.",
   ],
   default: [
    "✨ With effort and care, a new creation was brought into the world.",

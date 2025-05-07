@@ -7,6 +7,7 @@ const { EmbedBuilder } = require('discord.js');
 const { handleError } = require('../utils/globalErrorHandler');
 const { monsterMapping } = require('../models/MonsterModel');
 const { applyVillageDamage } = require('./villageModule');
+const { capitalizeVillageName } = require('../utils/stringUtils');
 
 // ------------------- Constants -------------------
 const RAID_DURATION = 15 * 60 * 1000; // 15 minutes in milliseconds
@@ -15,6 +16,7 @@ const RAID_DURATION = 15 * 60 * 1000; // 15 minutes in milliseconds
 function createRaidEmbed(character, monster, battleId, isBloodMoon = false) {
     const monsterData = monsterMapping[monster.nameMapping] || {};
     const monsterImage = monsterData.image || monster.image;
+    const villageName = capitalizeVillageName(character.currentVillage);
 
     const embed = new EmbedBuilder()
         .setTitle(isBloodMoon ? `🔴 **Blood Moon Raid initiated!**` : `🛡️ **Raid initiated!**`)
@@ -48,7 +50,8 @@ async function createOrUpdateRaidThread(interaction, character, monster, embed, 
         let thread;
         if (!threadId) {
             const emoji = isBloodMoon ? '🔴' : '🛡️';
-            const threadName = `${emoji} ${character.currentVillage || 'Unknown Village'} - ${monster.name} (Tier ${monster.tier})`;
+            const villageName = capitalizeVillageName(character.currentVillage);
+            const threadName = `${emoji} ${villageName} - ${monster.name} (Tier ${monster.tier})`;
         
             await interaction.editReply({ embeds: [embed] });
         
@@ -62,7 +65,7 @@ async function createOrUpdateRaidThread(interaction, character, monster, embed, 
         
             threadId = thread.id;
         
-            const safeVillageName = (character.currentVillage || "UnknownVillage").replace(/\s+/g, '');
+            const safeVillageName = villageName.replace(/\s+/g, '');
             const residentRole = `@${safeVillageName} resident`;
             const visitorRole = `@visiting:${safeVillageName}`;
         
@@ -83,9 +86,10 @@ async function createOrUpdateRaidThread(interaction, character, monster, embed, 
 
 // ------------------- Schedule Raid Timer -------------------
 function scheduleRaidTimer(villageName, monster, thread) {
+    const capitalizedVillageName = capitalizeVillageName(villageName);
     setTimeout(async () => {
         try {
-            await applyVillageDamage(villageName, monster, thread);
+            await applyVillageDamage(capitalizedVillageName, monster, thread);
         } catch (error) {
             handleError(error, 'raidModule.js');
             console.error(`[raidModule.js]: Timer: Error during applyVillageDamage execution:`, error);

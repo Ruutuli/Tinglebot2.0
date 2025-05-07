@@ -2,45 +2,49 @@
 const { Village } = require('../models/VillageModel');
 const { handleError } = require('../utils/globalErrorHandler');
 const { EmbedBuilder } = require('discord.js');
+const { capitalizeVillageName } = require('../utils/stringUtils');
 
 // Placeholder for an in-memory storage of villages
 const villages = {};
 
 // ------------------- Function to Initialize a Village -------------------
 function initializeVillage(villageName) {
-    console.log(`[VILLAGE] Initializing village: ${villageName}`);
-    if (!villages[villageName]) {
-        villages[villageName] = {
+    const capitalizedName = capitalizeVillageName(villageName);
+    console.log(`[VILLAGE] Initializing village: ${capitalizedName}`);
+    if (!villages[capitalizedName]) {
+        villages[capitalizedName] = {
             health: 100, // Default health value
             resources: 50, // Default resources value
         };
-        console.log(`[VILLAGE] Village "${villageName}" initialized.`);
+        console.log(`[VILLAGE] Village "${capitalizedName}" initialized.`);
     } else {
-        console.log(`[VILLAGE] Village "${villageName}" already exists.`);
+        console.log(`[VILLAGE] Village "${capitalizedName}" already exists.`);
     }
-    return villages[villageName];
+    return villages[capitalizedName];
 }
 
 // ------------------- Function to Update Village Health -------------------
 async function updateVillageHealth(villageName, healthChange) {
-    console.log(`[VILLAGE] Updating health for village: ${villageName}, Change: ${healthChange}`);
-    if (!villages[villageName]) {
-        console.warn(`[VILLAGE] Village "${villageName}" does not exist. Initializing it now.`);
-        initializeVillage(villageName);
+    const capitalizedName = capitalizeVillageName(villageName);
+    console.log(`[VILLAGE] Updating health for village: ${capitalizedName}, Change: ${healthChange}`);
+    if (!villages[capitalizedName]) {
+        console.warn(`[VILLAGE] Village "${capitalizedName}" does not exist. Initializing it now.`);
+        initializeVillage(capitalizedName);
     }
-    villages[villageName].health = Math.max(villages[villageName].health + healthChange, 0); // Ensure health doesn't drop below 0
-    console.log(`[VILLAGE] Village "${villageName}" health updated to ${villages[villageName].health}.`);
-    return villages[villageName].health;
+    villages[capitalizedName].health = Math.max(villages[capitalizedName].health + healthChange, 0); // Ensure health doesn't drop below 0
+    console.log(`[VILLAGE] Village "${capitalizedName}" health updated to ${villages[capitalizedName].health}.`);
+    return villages[capitalizedName].health;
 }
 
 // ------------------- Function to Get Village Information -------------------
 async function getVillageInfo(villageName) {
-    console.log(`[VILLAGE] Retrieving information for village: ${villageName}`);
-    if (!villages[villageName]) {
-        console.warn(`[VILLAGE] Village "${villageName}" does not exist. Initializing it now.`);
-        initializeVillage(villageName);
+    const capitalizedName = capitalizeVillageName(villageName);
+    console.log(`[VILLAGE] Retrieving information for village: ${capitalizedName}`);
+    if (!villages[capitalizedName]) {
+        console.warn(`[VILLAGE] Village "${capitalizedName}" does not exist. Initializing it now.`);
+        initializeVillage(capitalizedName);
     }
-    return villages[villageName];
+    return villages[capitalizedName];
 }
 
 // ------------------- Handle Village Damage -------------------
