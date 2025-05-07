@@ -18,6 +18,8 @@ const { capitalizeWords } = require('../../modules/formattingModule');
 const { addItemInventoryDatabase, removeItemInventoryDatabase, addItemToVendingInventory } = require('../../utils/inventoryUtils');
 const { generateUniqueId } = require('../../utils/uniqueIdUtils');
 const { deleteSubmissionFromStorage, retrieveSubmissionFromStorage, saveSubmissionToStorage } = require('../../utils/storage');
+const { validateJobVoucher, activateJobVoucher, fetchJobVoucherItem, deactivateJobVoucher } = require('../../modules/jobVoucherModule');
+const { getJobPerk } = require('../../modules/jobsModule');
 
 // ------------------- Database Models -------------------
 const ItemModel = require('../../models/ItemModel');
@@ -225,6 +227,56 @@ const command = {
         const courierCharacter = await fetchCharacterByName(courierName);
         const recipientCharacter = await fetchCharacterByName(recipientName);
 
+        // ------------------- Validate Courier's Job -------------------
+        let job = (courierCharacter.jobVoucher && courierCharacter.jobVoucherJob) ? courierCharacter.jobVoucherJob : courierCharacter.job;
+        console.log(`[deliver.js]: Determined job for ${courierCharacter.name} is "${job}"`);
+
+        if (courierCharacter.jobVoucher) {
+          console.log(`[deliver.js]: Job voucher detected for ${courierCharacter.name}. Validating voucher.`);
+          const voucherValidation = await validateJobVoucher(courierCharacter, job);
+          if (voucherValidation.skipVoucher) {
+            console.log(`[deliver.js]: ${courierCharacter.name} already has job "${job}". Skipping voucher use.`);
+            // No activation needed
+          } else if (!voucherValidation.success) {
+            if (courierCharacter.jobVoucherJob === null) {
+              console.log(`[deliver.js]: Job voucher is unrestricted. Proceeding with job: "${job}".`);
+            } else {
+              return interaction.editReply({
+                content: voucherValidation.message,
+                ephemeral: true,
+              });
+            }
+          } else {
+            console.log(`[deliver.js]: Activating job voucher for ${courierCharacter.name}.`);
+            const { success: itemSuccess, item: jobVoucherItem, message: itemError } = await fetchJobVoucherItem();
+            if (!itemSuccess) {
+              await interaction.editReply({ content: itemError, ephemeral: true });
+              return;
+            }
+            const activationResult = await activateJobVoucher(courierCharacter, job, jobVoucherItem, 1, interaction);
+            if (!activationResult.success) {
+              await interaction.editReply({
+                content: activationResult.message,
+                ephemeral: true,
+              });
+              return;
+            }
+            await interaction.followUp({
+              content: activationResult.message,
+              ephemeral: true,
+            });
+          }
+        }
+
+        // Validate courier job perks
+        const jobPerk = getJobPerk(job);
+        if (!jobPerk || !jobPerk.perks.includes('DELIVERY')) {
+          return interaction.editReply({
+            content: `❌ **${courierCharacter.name}** cannot make deliveries as a ${job} because they lack the necessary delivery skills.`,
+            ephemeral: true,
+          });
+        }
+
         // ------------------- Ensure inventories are synced -------------------
         const unsynced = [];
         if (!senderCharacter.inventorySynced)
@@ -316,6 +368,16 @@ const command = {
           content: mentionMessage,
           embeds: [deliveryEmbed],
         });
+
+        // ------------------- Deactivate Job Voucher -------------------
+        if (courierCharacter.jobVoucher) {
+          const deactivationResult = await deactivateJobVoucher(courierCharacter._id);
+          if (!deactivationResult.success) {
+            console.error(`[deliver.js]: Failed to deactivate job voucher for ${courierCharacter.name}`);
+          } else {
+            console.log(`[deliver.js]: Job voucher deactivated for ${courierCharacter.name}`);
+          }
+        }
 
       } catch (error) {
         handleError(error, 'deliver.js');

@@ -113,27 +113,49 @@ module.exports = {
 
       if (character.jobVoucher) {
         const voucherValidation = await validateJobVoucher(character, job);
-        if (!voucherValidation.success && character.jobVoucherJob !== null) {
-          return interaction.editReply({ content: voucherValidation.message, ephemeral: true });
-        }
-      
-        // Restrict crafting of items that require more than 5 stamina when using a job voucher
-        if (item.staminaToCraft > 5) {
-          console.log(`[crafting.js]: Item "${itemName}" requires ${item.staminaToCraft} stamina to craft, exceeding the allowed limit for job vouchers.`);
-          await interaction.editReply({
-            content: `❌ **Items requiring more than 5 stamina to craft cannot be crafted with an active job voucher.**\n"${itemName}" requires **${item.staminaToCraft} stamina**.`,
+        if (voucherValidation.skipVoucher) {
+          console.log(`[crafting.js]: ${character.name} already has job "${job}". Skipping voucher use.`);
+          // No activation needed
+        } else if (!voucherValidation.success) {
+          if (character.jobVoucherJob === null) {
+            console.log(`[crafting.js]: Job voucher is unrestricted. Proceeding with job: "${job}".`);
+          } else {
+            return interaction.editReply({ content: voucherValidation.message, ephemeral: true });
+          }
+        } else {
+          // Restrict crafting of items that require more than 5 stamina when using a job voucher
+          if (item.staminaToCraft > 5) {
+            console.log(`[crafting.js]: Item "${itemName}" requires ${item.staminaToCraft} stamina to craft, exceeding the allowed limit for job vouchers.`);
+            await interaction.editReply({
+              content: `❌ **Items requiring more than 5 stamina to craft cannot be crafted with an active job voucher.**\n"${itemName}" requires **${item.staminaToCraft} stamina**.`,
+              ephemeral: true,
+            });
+            return;
+          }
+
+          const lockedVillage = isVillageExclusiveJob(job);
+          if (lockedVillage && character.currentVillage.toLowerCase() !== lockedVillage.toLowerCase()) {
+            return interaction.editReply({ content: `❌ **"${character.name}" cannot use "${job}" while in ${currentVillage}.**`, ephemeral: true });
+          }
+
+          console.log(`[crafting.js]: Activating job voucher for ${character.name}.`);
+          const { success: itemSuccess, item: jobVoucherItem, message: itemError } = await fetchJobVoucherItem();
+          if (!itemSuccess) {
+            await interaction.editReply({ content: itemError, ephemeral: true });
+            return;
+          }
+          const activationResult = await activateJobVoucher(character, job, jobVoucherItem, 1, interaction);
+          if (!activationResult.success) {
+            await interaction.editReply({
+              content: activationResult.message,
+              ephemeral: true,
+            });
+            return;
+          }
+          await interaction.followUp({
+            content: activationResult.message,
             ephemeral: true,
           });
-          return;
-        }
-
-        const lockedVillage = isVillageExclusiveJob(job);
-        if (lockedVillage && character.currentVillage.toLowerCase() !== lockedVillage.toLowerCase()) {
-          return interaction.editReply({ content: `❌ **"${character.name}" cannot use "${job}" while in ${currentVillage}.**`, ephemeral: true });
-        }
-
-        if (item.staminaToCraft > 5) {
-          return interaction.editReply({ content: `❌ **"${itemName}" requires too much stamina to craft with a job voucher.**`, ephemeral: true });
         }
       }
 
