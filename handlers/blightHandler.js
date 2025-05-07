@@ -724,6 +724,37 @@ async function checkMissedRolls(client) {
 
       // Handle Stage 5 death or warning
       if (character.blightStage === 5 && character.deathDeadline) {
+        const now = new Date();
+        const timeUntilDeath = character.deathDeadline - now;
+        const oneDayInMs = 24 * 60 * 60 * 1000;
+
+        // Send 24-hour warning DM
+        if (timeUntilDeath <= oneDayInMs && timeUntilDeath > 0) {
+          try {
+            const user = await client.users.fetch(character.userId);
+            if (user) {
+              const warningEmbed = new EmbedBuilder()
+                .setColor('#FF0000')
+                .setTitle('⚠️ FINAL WARNING: 24 Hours Until Blight Death ⚠️')
+                .setDescription(
+                  `**${character.name}** has only **24 hours** remaining before succumbing to Stage 5 Blight.\n\n` +
+                  `🕒 **Time Remaining**: <t:${Math.floor(character.deathDeadline.getTime() / 1000)}:R>\n\n` +
+                  `⚠️ **This is your final warning**. You must be healed by a **Dragon** before the deadline to avoid death.\n\n` +
+                  `To request blight healing, please use </blight heal:1306176789634355241>`
+                )
+                .setThumbnail(character.icon || 'https://example.com/default-icon.png')
+                .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png')
+                .setTimestamp();
+
+              await user.send({ embeds: [warningEmbed] });
+              console.log(`[blightHandler]: Sent 24-hour warning DM to user ${character.userId} for ${character.name}`);
+            }
+          } catch (error) {
+            handleError(error, 'blightHandler.js');
+            console.error(`[blightHandler]: Failed to send 24-hour warning DM to user ${character.userId} for ${character.name}:`, error);
+          }
+        }
+
         if (new Date() > character.deathDeadline) {
           character.blighted = false;
           character.blightStage = 0;
