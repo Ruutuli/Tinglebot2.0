@@ -102,7 +102,6 @@ async function handleAutocomplete(interaction) {
         }
         break;
       case "pet":
-        // Handle pet command autocomplete based on the focused option
         if (focusedName === "charactername") {
           await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "pet");
         } else if (focusedName === "petname") {
@@ -113,7 +112,76 @@ async function handleAutocomplete(interaction) {
           await handlePetRollTypeAutocomplete(interaction, focusedOption);
         }
         break;
-      // ... other cases ...
+      case "item":
+        if (focusedName === "charactername") {
+          await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "item");
+        } else if (focusedName === "itemname") {
+          await handleItemAutocomplete(interaction, focusedOption);
+        } else if (focusedName === "jobname") {
+          await handleItemJobNameAutocomplete(interaction, focusedOption);
+        }
+        break;
+      case "gear":
+        if (focusedName === "charactername") {
+          await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "gear");
+        } else if (focusedName === "itemname") {
+          await handleGearAutocomplete(interaction, focusedOption);
+        }
+        break;
+      case "customweapon":
+        if (focusedName === "charactername") {
+          await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "customweapon");
+        } else if (focusedName === "baseweapon") {
+          await handleBaseWeaponAutocomplete(interaction);
+        }
+        break;
+      case "mount":
+        if (focusedName === "charactername") {
+          await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "mount");
+        }
+        break;
+      case "explore":
+        if (focusedName === "charactername") {
+          await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "explore");
+        } else if (focusedName === "item1" || focusedName === "item2" || focusedName === "item3") {
+          await handleExploreItemAutocomplete(interaction, focusedOption);
+        }
+        break;
+      case "raid":
+        if (focusedName === "charactername") {
+          await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "raid");
+        }
+        break;
+      case "steal":
+        if (focusedName === "charactername") {
+          await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "steal");
+        } else if (focusedName === "target") {
+          await handleStealTargetAutocomplete(interaction, focusedOption);
+        } else if (focusedName === "rarity") {
+          await handleStealRarityAutocomplete(interaction, focusedOption);
+        }
+        break;
+      case "village":
+        if (focusedName === "charactername") {
+          await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "village");
+        } else if (focusedName === "itemname") {
+          await handleVillageMaterialsAutocomplete(interaction);
+        }
+        break;
+      case "character":
+        if (focusedName === "charactername") {
+          await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "character");
+        } else if (focusedName === "race") {
+          await handleCreateCharacterRaceAutocomplete(interaction, focusedOption);
+        } else if (focusedName === "village") {
+          await handleCreateCharacterVillageAutocomplete(interaction, focusedOption);
+        }
+        break;
+      case "syncinventory":
+        if (focusedName === "charactername") {
+          await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "syncinventory");
+        }
+        break;
       default:
         await interaction.respond([]);
     }
