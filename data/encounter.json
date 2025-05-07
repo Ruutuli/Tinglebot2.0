@@ -321,5 +321,18 @@
     "tameStatus": false,
     "traits": {},
     "totalSpent": 0
+  },
+  "33749c11-5b68-4d03-8166-aaaf79dc1673": {
+    "users": [],
+    "mountType": "Donkey",
+    "rarity": "Regular",
+    "mountLevel": "Basic",
+    "mountStamina": 1,
+    "environment": "Mountainous",
+    "village": "Unknown",
+    "actions": [],
+    "tameStatus": false,
+    "traits": {},
+    "totalSpent": 0
   }
 }

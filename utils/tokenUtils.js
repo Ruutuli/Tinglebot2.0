@@ -168,6 +168,38 @@ function calculateWritingTokens(wordCount) {
   return Math.round(wordCount / 100 * 10); // 10 tokens per 100 words
 }
 
+// ------------------- Handle Token Errors -------------------
+// Provides consistent error handling and user guidance for token-related issues
+function handleTokenError(error, interaction) {
+  console.error('[tokenUtils.js]: Token error:', error);
+
+  let errorMessage = '';
+  let guideMessage = '';
+
+  if (error.message.includes('Invalid URL')) {
+    errorMessage = '❌ Your token tracker link is not set up correctly.';
+    guideMessage = '📝 **Quick Guide:**\n1. Use `/tokens tokentrackerlink` to set up your tracker\n2. Make sure to use a valid Google Sheets URL';
+  } else if (error.message.includes('permission')) {
+    errorMessage = '❌ The bot cannot access your token tracker.';
+    guideMessage = '📝 **Quick Guide:**\n1. Share your sheet with: `tinglebot@rotw-tinglebot.iam.gserviceaccount.com`\n2. Make sure to give **edit** permissions';
+  } else if (error.message.includes('404')) {
+    errorMessage = '❌ Your token tracker sheet or tab is missing.';
+    guideMessage = '📝 **Quick Guide:**\n1. Make sure you have a tab named `loggedTracker`\n2. Check that your sheet URL is correct';
+  } else if (error.message.includes('headers')) {
+    errorMessage = '❌ Your token tracker is missing required headers.';
+    guideMessage = '📝 **Quick Guide:**\n1. Add these headers in cells B7:F7:\n`SUBMISSION | LINK | CATEGORIES | TYPE | TOKEN AMOUNT`';
+  } else {
+    errorMessage = '❌ An error occurred with your token tracker.';
+    guideMessage = '📝 **Quick Guide:**\n1. Use `/tokens test` to check your setup\n2. If issues persist, try setting up a new tracker';
+  }
+
+  return {
+    errorMessage,
+    guideMessage,
+    fullMessage: `${errorMessage}\n\n${guideMessage}\n\n💡 Need more help? Use \`/tokens test\` to verify your setup.`
+  };
+}
+
 // ------------------- Exported Functions -------------------
 // Exporting the unified `calculateTokens` and other utility functions.
 module.exports = {
@@ -175,4 +207,5 @@ module.exports = {
   calculateTokens,
   calculateWritingTokens,
   generateTokenBreakdown,
+  handleTokenError,
 };
