@@ -328,8 +328,6 @@ module.exports = {
   }
  },
 
- 
-
  buttonHandler: async (interaction) => {
   if (interaction.customId.startsWith("completeTrade-")) {
    const tradeSessionId = interaction.customId.split("-")[1];
@@ -479,7 +477,6 @@ async function handleGift(interaction) {
    quantity: interaction.options.getInteger("quantityc"),
   },
  ].filter((item) => item.name && item.quantity);
-
 
  // ------------------- Validate Gift Quantities -------------------
 // Ensure all gifted item quantities are positive integers
@@ -797,13 +794,31 @@ async function handleShopView(interaction) {
     });
    }
 
-   if (i.customId === "prev") currentPage--;
-   if (i.customId === "next") currentPage++;
+   try {
+     if (i.customId === "prev") currentPage--;
+     if (i.customId === "next") currentPage++;
 
-   await i.update({
-    embeds: [await generateEmbed(currentPage)],
-    components: [generateButtons(currentPage)],
-   });
+     await i.update({
+      embeds: [await generateEmbed(currentPage)],
+      components: [generateButtons(currentPage)],
+     });
+   } catch (error) {
+     handleError(error, "shops.js");
+     if (error.code === 10062) {
+       console.warn("[shops]: Interaction expired or already responded to");
+       collector.stop();
+     } else {
+       console.error("[shops]: Error handling button interaction:", error);
+       try {
+         await i.reply({
+           content: "❌ An error occurred while processing your request.",
+           ephemeral: true
+         });
+       } catch (replyError) {
+         console.error("[shops]: Error sending error message:", replyError);
+       }
+     }
+   }
   });
 
   collector.on("end", async () => {
