@@ -295,9 +295,14 @@ const modCommand = new SlashCommandBuilder()
 
 async function execute(interaction) {
   try {
-    await interaction.deferReply({ ephemeral: true });
-
     const subcommand = interaction.options.getSubcommand();
+
+    // Only defer with ephemeral for non-mount commands
+    if (subcommand !== 'mount') {
+      await interaction.deferReply({ ephemeral: true });
+    } else {
+      await interaction.deferReply();
+    }
 
     if (subcommand === 'give') {
         return await handleGive(interaction);      
@@ -446,9 +451,7 @@ async function handleMount(interaction) {
     if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
       return interaction.editReply('❌ You do not have permission to use this command.');
     }
-  
-    await interaction.deferReply();
-  
+
     let village = interaction.options.getString('village');
   
     // ------------------- Determine Village from Channel -------------------
