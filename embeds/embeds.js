@@ -1732,7 +1732,7 @@ module.exports = {
  createSimpleCharacterEmbed,
  createCharacterGearEmbed,
  createVendorEmbed,
- createVendingSetupEmbed,
+ createVendingSetupInstructionsEmbed,
  createExplorationItemEmbed,
  createExplorationMonsterEmbed,
  createSetupInstructionsEmbed,

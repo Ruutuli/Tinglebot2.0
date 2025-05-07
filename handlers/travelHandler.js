@@ -549,17 +549,22 @@ async function handleTravelInteraction(
           result = await handleGather(interaction, character, currentPath, encounterMessage, travelLog);
           break;
         case 'fight':
-            if (!monster) {
-              result = '❌ Could not resolve monster for this encounter.';
-              break;
-            }
-            result = await handleFight(interaction, character, encounterMessage, monster, travelLog);
+          if (!monster) {
+            result = '❌ Could not resolve monster for this encounter.';
             break;
+          }
+          result = await handleFight(interaction, character, encounterMessage, monster, travelLog);
+          break;
         case 'flee':
           result = await handleFlee(interaction, character, encounterMessage, monster, travelLog);
           break;
         default:
-          result = await handleDoNothing(interaction, character, encounterMessage, travelLog);
+          if (monster) {
+            console.warn(`[handleTravelInteraction]: No valid interaction chosen, but monster was present. Auto-resolving to fight.`);
+            result = await handleFight(interaction, character, encounterMessage, monster, travelLog);
+          } else {
+            result = await handleDoNothing(interaction, character, encounterMessage, travelLog);
+          }
       }
   
       return result;
