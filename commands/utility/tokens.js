@@ -217,7 +217,13 @@ module.exports = {
         }
       }
     } catch (error) {
-      handleError(error, 'tokens.js');
+      // Only log actual system errors
+      if (!error.message.includes('Invalid URL') && 
+          !error.message.includes('permission') && 
+          !error.message.includes('404') && 
+          !error.message.includes('headers')) {
+        handleError(error, 'tokens.js');
+      }
       const { fullMessage } = handleTokenError(error, interaction);
       await interaction.reply({
         content: fullMessage,

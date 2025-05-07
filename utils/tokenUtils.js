@@ -171,7 +171,13 @@ function calculateWritingTokens(wordCount) {
 // ------------------- Handle Token Errors -------------------
 // Provides consistent error handling and user guidance for token-related issues
 function handleTokenError(error, interaction) {
-  console.error('[tokenUtils.js]: Token error:', error);
+  // Only log actual system errors, not user-facing errors
+  if (!error.message.includes('Invalid URL') && 
+      !error.message.includes('permission') && 
+      !error.message.includes('404') && 
+      !error.message.includes('headers')) {
+    console.error('[tokenUtils.js]: System error:', error);
+  }
 
   let errorMessage = '';
   let guideMessage = '';
