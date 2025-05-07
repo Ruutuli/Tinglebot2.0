@@ -235,7 +235,7 @@ async function handleRestock(interaction) {
     const itemDoc = villageStock.find(i => i.itemName === itemName);
 
     if (!itemDoc || typeof itemDoc.points !== "number" || itemDoc.points <= 0) {
-      return interaction.editReply(`❌ Item '${itemName}' is missing a valid vending point value in the vending stock.`);
+      return interaction.editReply(`❌ Invalid Item: '${itemName}'\n\nThis item is not available in ${currentVillage}'s vending stock or has an invalid point cost.\n\nPlease check the current month's vending stock list using \`/vending stock\` to see available items.`);
     }
 
     // ------------------- Slot Usage Calculation -------------------
