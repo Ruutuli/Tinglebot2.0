@@ -8,6 +8,8 @@ const messageActivityMap = new Map(); // Map to store message activity per chann
 const MESSAGE_THRESHOLD = 50; // Number of messages needed to trigger a random encounter
 const ENCOUNTER_COOLDOWN = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 const lastEncounterMap = new Map(); // Map to store last encounter time per channel
+const MESSAGE_COOLDOWN = 5 * 60 * 1000; // 5 minutes cooldown between message counts
+const lastMessageTimeMap = new Map(); // Map to store last message time per channel
 
 // Monthly encounter tracking
 const monthlyEncounterMap = new Map(); // Map to store monthly encounters per channel
@@ -27,20 +29,29 @@ function initializeMonthlyTracking() {
 
 // Track message activity
 function trackMessageActivity(channelId) {
+    const now = Date.now();
+    const lastMessageTime = lastMessageTimeMap.get(channelId) || 0;
+    const lastEncounter = lastEncounterMap.get(channelId) || 0;
+    
+    // Check if enough time has passed since last message
+    if (now - lastMessageTime < MESSAGE_COOLDOWN) {
+        return false;
+    }
+    
+    // Check if enough time has passed since last encounter
+    if (now - lastEncounter < ENCOUNTER_COOLDOWN) {
+        return false;
+    }
+    
     const currentCount = messageActivityMap.get(channelId) || 0;
     messageActivityMap.set(channelId, currentCount + 1);
+    lastMessageTimeMap.set(channelId, now);
     
     // Check if we should trigger a random encounter
     if (currentCount + 1 >= MESSAGE_THRESHOLD) {
-        const lastEncounter = lastEncounterMap.get(channelId) || 0;
-        const now = Date.now();
-        
-        // Check if enough time has passed since last encounter
-        if (now - lastEncounter >= ENCOUNTER_COOLDOWN) {
-            messageActivityMap.set(channelId, 0); // Reset message count
-            lastEncounterMap.set(channelId, now);
-            return true; // Signal to create an encounter
-        }
+        messageActivityMap.set(channelId, 0); // Reset message count
+        lastEncounterMap.set(channelId, now);
+        return true; // Signal to create an encounter
     }
     return false;
 }
@@ -48,7 +59,15 @@ function trackMessageActivity(channelId) {
 // Check if channel needs monthly encounter
 function needsMonthlyEncounter(channelId) {
     const now = new Date();
-    const lastMonthlyEncounter = monthlyEncounterMap.get(channelId);
+    const village = getVillageFromChannelId(channelId);
+    
+    if (!village) {
+        console.error('[randomMountEncounterModule]: Invalid channel ID for monthly encounter');
+        return false;
+    }
+    
+    const villageKey = `village_${village.toLowerCase()}`;
+    const lastMonthlyEncounter = monthlyEncounterMap.get(villageKey);
     
     if (!lastMonthlyEncounter) {
         return true;
@@ -75,7 +94,14 @@ function createRandomMountEncounter(channelId, isMonthly = false) {
             // Check if this village already had a monthly encounter
             const villageKey = `village_${village.toLowerCase()}`;
             if (monthlyEncounterMap.has(villageKey)) {
-                return null; // Village already had its monthly encounter
+                const lastEncounter = monthlyEncounterMap.get(villageKey);
+                const now = new Date();
+                
+                // Only allow if it's a different month
+                if (lastEncounter.getMonth() === now.getMonth() && 
+                    lastEncounter.getFullYear() === now.getFullYear()) {
+                    return null; // Village already had its monthly encounter this month
+                }
             }
             
             // Mark this village as having had its monthly encounter
