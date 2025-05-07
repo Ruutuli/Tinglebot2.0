@@ -31,7 +31,7 @@ const { isBloodMoonActive } = require("../../scripts/bloodmoon.js");
 // Modules - Job, Location, Damage, and Formatting Logic
 const { getJobPerk, isValidJob } = require("../../modules/jobsModule.js");
 const { getVillageRegionByName } = require("../../modules/locationsModule.js");
-const { getEncounterOutcome } = require("../../modules/damageModule.js");
+const { getEncounterOutcome } = require("../../modules/encounterModule.js");
 const { capitalizeWords } = require("../../modules/formattingModule.js");
 const {
  activateJobVoucher,
