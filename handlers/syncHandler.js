@@ -103,12 +103,24 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
 
         // ------------------- Retrieve Sheet ID -------------------
         console.log('Fetching sheet ID for "loggedInventory"...');
-        const sheetId = await getSheetIdByTitle(auth, spreadsheetId, 'loggedInventory');
-        if (sheetId === undefined || sheetId === null) {
-            console.log("Sheet 'loggedInventory' not found.");
-            await editSyncErrorMessage(interaction, `❌ **Sheet 'loggedInventory' not found in the spreadsheet.**`);
+        let sheetId;
+        try {
+            sheetId = await getSheetIdByTitle(auth, spreadsheetId, 'loggedInventory');
+            if (sheetId === undefined || sheetId === null) {
+                console.log("Sheet 'loggedInventory' not found.");
+                await editSyncErrorMessage(interaction, `❌ **Sheet 'loggedInventory' not found in the spreadsheet.**`);
+                return;
+            }
+        } catch (err) {
+            if (err.code === 403 || err.message.includes("permission")) {
+                console.error(`[syncHandler.js]: Permission error when accessing Google Sheet: ${err.message}`);
+                await editSyncErrorMessage(interaction, `❌ **Permission Error:**\nMake sure your sheet is shared with this email:\n📧 \`tinglebot@rotw-tinglebot.iam.gserviceaccount.com\``);
+            } else {
+                throw err; // Let other errors fall through to main catch
+            }
             return;
         }
+        
         console.log(`Sheet ID fetched successfully: ${sheetId}`);
 
         // ------------------- Read Data from Google Sheets -------------------
