@@ -997,6 +997,7 @@ async function handleShopSell(interaction) {
   const itemName = interaction.options.getString("itemname");
   const quantity = interaction.options.getInteger("quantity");
 
+  const user = await User.findOne({ discordId: interaction.user.id });
   if (!user || !user.tokensSynced) {
     return interaction.editReply({
       content: `❌ **You must set up and sync your token tracker before you can sell items.**\nPlease use </synctokens:123456789> to set up your token tracker.`,
@@ -1004,8 +1005,6 @@ async function handleShopSell(interaction) {
     });
   }
 
-
-  
   // ------------------- Validate Sell Quantity -------------------
 if (quantity <= 0) {
   await interaction.editReply({
@@ -1135,8 +1134,7 @@ if (quantity <= 0) {
 
   console.log(`[shops]: Updated user's token balance by ${totalPrice}.`);
 
-  const user = await User.findOne({ discordId: interaction.user.id });
-  if (user?.tokenTracker) {
+  if (user.tokenTracker) {
    const spreadsheetId = extractSpreadsheetId(user.tokenTracker);
    const auth = await authorizeSheets();
    const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
