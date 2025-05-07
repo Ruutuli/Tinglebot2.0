@@ -81,6 +81,11 @@ const characterSchema = new Schema({
   canBeStolenFrom: { type: Boolean, default: true },     // Whether the character can be stolen from
   lastGatherDate: { type: Date, default: null },         // Date of last gather action
   lastLootDate: { type: Date, default: null },           // Date of last loot action
+  dailyRoll: {                                          // Daily roll tracking for various activities
+    type: Map,
+    of: Date,
+    default: new Map()
+  },
 
   // ------------------- Additional features -------------------
   jobVoucher: { type: Boolean, default: true },          // Job voucher status

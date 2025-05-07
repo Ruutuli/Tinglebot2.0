@@ -52,6 +52,26 @@ const villageChannels = {
 };
 
 
+// ------------------- Helper Functions -------------------
+// Check if a daily roll is available for a specific activity
+function canUseDailyRoll(character, activity) {
+  const now = new Date();
+  const rollover = new Date();
+  rollover.setUTCHours(13, 0, 0, 0); // 8AM EST = 1PM UTC
+
+  const lastRoll = character.dailyRoll.get(activity);
+  if (!lastRoll) return true;
+
+  const lastRollDate = new Date(lastRoll);
+  return lastRollDate < rollover || now < rollover;
+}
+
+// Update the daily roll timestamp for an activity
+async function updateDailyRoll(character, activity) {
+  character.dailyRoll.set(activity, new Date().toISOString());
+  await character.save();
+}
+
 // ------------------- Command Definition -------------------
 // Define the slash command for gathering.
 module.exports = {
@@ -81,18 +101,13 @@ module.exports = {
       }
 
       // ------------------- Daily Gather Limit -------------------
-      const now = new Date();
-      const rollover = new Date();
-      rollover.setUTCHours(13, 0, 0, 0); // 8AM EST = 1PM UTC
-
-      const lastGathered = character.lastGatheredAt ? new Date(character.lastGatheredAt) : null;
-      if (lastGathered && lastGathered > rollover && now > rollover) {
+      if (!canUseDailyRoll(character, 'gather')) {
         await interaction.editReply({
-          content: `⏳ **${character.name} has already gathered today!**\n🌅 **Daily gather limit resets at midnight EST (4AM UTC).**`,
+          content: `⏳ **${character.name} has already gathered today!**\n🌅 **Daily gather limit resets at 8AM EST (1PM UTC).**`,
           ephemeral: true,
         });
         return;
-        }
+      }
 
        // Check if the character is KOed.
       if (character.isKO) {
@@ -469,6 +484,9 @@ await character.save();
           console.log(`[gather.js]: Job voucher deactivated for ${character.name}`);
         }
       }
+
+      // After successful gathering, update the daily roll
+      await updateDailyRoll(character, 'gather');
 
     } catch (error) {
     handleError(error, 'gather.js');
