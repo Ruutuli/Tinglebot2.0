@@ -2,6 +2,8 @@ const { v4: uuidv4 } = require('uuid');
 const { getRandomMount, getRandomEnvironment, getMountRarity, getMountStamina } = require('./mountModule');
 const { storeEncounter } = require('./mountModule');
 const { handleError } = require('../utils/globalErrorHandler');
+const fs = require('fs');
+const path = require('path');
 
 // Message activity tracking
 const messageActivityMap = new Map(); // Map to store message activity per channel
@@ -12,19 +14,46 @@ const MESSAGE_COOLDOWN = 5 * 60 * 1000; // 5 minutes cooldown between message co
 const lastMessageTimeMap = new Map(); // Map to store last message time per channel
 
 // Monthly encounter tracking
-const monthlyEncounterMap = new Map(); // Map to store monthly encounters per channel
+const MONTHLY_DATA_PATH = path.join(__dirname, '..', 'data', 'monthly_encounters.json');
 const MONTHLY_RESET_KEY = 'monthly_reset'; // Key for monthly reset check
+
+// Load monthly encounter data from file
+function loadMonthlyEncounterData() {
+    try {
+        if (fs.existsSync(MONTHLY_DATA_PATH)) {
+            const data = JSON.parse(fs.readFileSync(MONTHLY_DATA_PATH, 'utf8'));
+            return new Map(Object.entries(data));
+        }
+    } catch (error) {
+        console.error('[randomMountEncounterModule]: Error loading monthly encounter data:', error);
+    }
+    return new Map();
+}
+
+// Save monthly encounter data to file
+function saveMonthlyEncounterData(monthlyEncounterMap) {
+    try {
+        const data = Object.fromEntries(monthlyEncounterMap);
+        fs.writeFileSync(MONTHLY_DATA_PATH, JSON.stringify(data, null, 2));
+    } catch (error) {
+        console.error('[randomMountEncounterModule]: Error saving monthly encounter data:', error);
+    }
+}
 
 // Initialize monthly tracking
 function initializeMonthlyTracking() {
     const now = new Date();
-    const lastReset = monthlyEncounterMap.get(MONTHLY_RESET_KEY) || new Date(0);
+    const monthlyEncounterMap = loadMonthlyEncounterData();
+    const lastReset = monthlyEncounterMap.get(MONTHLY_RESET_KEY) ? new Date(monthlyEncounterMap.get(MONTHLY_RESET_KEY)) : new Date(0);
     
     // Check if we need to reset monthly encounters
     if (now.getMonth() !== lastReset.getMonth() || now.getFullYear() !== lastReset.getFullYear()) {
         monthlyEncounterMap.clear();
-        monthlyEncounterMap.set(MONTHLY_RESET_KEY, now);
+        monthlyEncounterMap.set(MONTHLY_RESET_KEY, now.toISOString());
+        saveMonthlyEncounterData(monthlyEncounterMap);
     }
+    
+    return monthlyEncounterMap;
 }
 
 // Track message activity
@@ -66,6 +95,7 @@ function needsMonthlyEncounter(channelId) {
         return false;
     }
     
+    const monthlyEncounterMap = loadMonthlyEncounterData();
     const villageKey = `village_${village.toLowerCase()}`;
     const lastMonthlyEncounter = monthlyEncounterMap.get(villageKey);
     
@@ -74,14 +104,16 @@ function needsMonthlyEncounter(channelId) {
     }
     
     // Check if last encounter was in a different month
-    return lastMonthlyEncounter.getMonth() !== now.getMonth() || 
-           lastMonthlyEncounter.getFullYear() !== now.getFullYear();
+    const lastEncounterDate = new Date(lastMonthlyEncounter);
+    return lastEncounterDate.getMonth() !== now.getMonth() || 
+           lastEncounterDate.getFullYear() !== now.getFullYear();
 }
 
 // Create a random mount encounter
 function createRandomMountEncounter(channelId, isMonthly = false) {
     try {
-        initializeMonthlyTracking();
+        const monthlyEncounterMap = initializeMonthlyTracking();
+        const now = new Date();
         
         // For monthly encounters, check if this village already had one this month
         if (isMonthly) {
@@ -94,8 +126,7 @@ function createRandomMountEncounter(channelId, isMonthly = false) {
             // Check if this village already had a monthly encounter
             const villageKey = `village_${village.toLowerCase()}`;
             if (monthlyEncounterMap.has(villageKey)) {
-                const lastEncounter = monthlyEncounterMap.get(villageKey);
-                const now = new Date();
+                const lastEncounter = new Date(monthlyEncounterMap.get(villageKey));
                 
                 // Only allow if it's a different month
                 if (lastEncounter.getMonth() === now.getMonth() && 
@@ -105,7 +136,8 @@ function createRandomMountEncounter(channelId, isMonthly = false) {
             }
             
             // Mark this village as having had its monthly encounter
-            monthlyEncounterMap.set(villageKey, new Date());
+            monthlyEncounterMap.set(villageKey, now.toISOString());
+            saveMonthlyEncounterData(monthlyEncounterMap);
         }
         
         // Generate random mount data
@@ -124,7 +156,7 @@ function createRandomMountEncounter(channelId, isMonthly = false) {
             mountStamina: mountStamina,
             environment: environment,
             users: [],
-            createdAt: new Date(),
+            createdAt: now,
             isMonthly: isMonthly
         };
         
@@ -150,15 +182,20 @@ function getVillageFromChannelId(channelId) {
 // Check and create encounters if needed
 function checkAndCreateEncounter(channelId) {
     try {
-        // First check if we need a monthly encounter
-        if (needsMonthlyEncounter(channelId)) {
-            const monthlyEncounter = createRandomMountEncounter(channelId, true);
-            if (monthlyEncounter) {
-                return monthlyEncounter;
+        const village = getVillageFromChannelId(channelId);
+        
+        // If this is a village channel, only check for monthly encounters
+        if (village) {
+            if (needsMonthlyEncounter(channelId)) {
+                const monthlyEncounter = createRandomMountEncounter(channelId, true);
+                if (monthlyEncounter) {
+                    return monthlyEncounter;
+                }
             }
+            return null; // Don't create random encounters in village channels
         }
         
-        // Then check message activity for random encounters
+        // For non-village channels, only check for random encounters
         if (trackMessageActivity(channelId)) {
             return createRandomMountEncounter(channelId, false);
         }
