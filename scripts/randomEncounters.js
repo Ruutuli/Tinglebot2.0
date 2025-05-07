@@ -132,3 +132,39 @@ async function triggerRandomEncounter(channel) {
     await handleError(error);
   }
 }
+
+// ============================================================================
+// Initialization Function
+// ------------------- Initialize Random Encounter Bot -------------------
+function initializeRandomEncounterBot(client) {
+  // Set up message tracking
+  client.on('messageCreate', (message) => {
+    if (message.author.bot) return;
+    trackMessageActivity(
+      message.channel.id,
+      message.author.id,
+      message.author.bot,
+      message.author.username
+    );
+  });
+
+  // Start periodic encounter checks
+  setInterval(() => {
+    checkForRandomEncounters(client).catch(error => {
+      console.error('[Encounter LOG] Error in encounter check:', error);
+      handleError(error, 'randomEncounters.js');
+    });
+  }, CHECK_INTERVAL);
+
+  console.log('[Encounter LOG] Random encounter bot initialized');
+}
+
+// ============================================================================
+// Exports
+// ------------------- Export Functions -------------------
+module.exports = {
+  initializeRandomEncounterBot,
+  trackMessageActivity,
+  checkForRandomEncounters,
+  triggerRandomEncounter
+};
