@@ -162,14 +162,12 @@ async function createCharacterInteraction(interaction) {
         await character.save();
 
         // Create character embed
-        const villageColor = getVillageColorByName(character.homeVillage);
-        const embed = createCharacterEmbed(character, villageColor);
+        const embed = createCharacterEmbed(character);
         await createCharacterInventory(characterName, character._id, character.job);
 
         // ------------------- Embed Validation Fix -------------------
-        if (!embed?.data?.description) {
-            embed.setDescription("📋 Character profile created successfully.");
-        }
+        // Always ensure description is set
+        embed.setDescription("📋 Character profile created successfully.");
 
         // Send success message with the character embed
         await interaction.editReply({
@@ -180,10 +178,10 @@ async function createCharacterInteraction(interaction) {
 
         // Validate Google Sheets URL and send setup instructions if invalid
         if (!isValidGoogleSheetsUrl(googleSheetsUrl)) {
-            const setupInstructionsEmbed = createSetupInstructionsEmbed(characterName, googleSheetsUrl, 'Invalid Google Sheets URL.');
+            const setupInstructionsEmbed = await createSetupInstructionsEmbed(characterName, googleSheetsUrl, 'Invalid Google Sheets URL.');
             await interaction.followUp({ content: 'Invalid Google Sheets URL provided. ⚠️', embeds: [setupInstructionsEmbed], ephemeral: true });
         } else {
-            const setupInstructionsEmbed = createSetupInstructionsEmbed(characterName, googleSheetsUrl);
+            const setupInstructionsEmbed = await createSetupInstructionsEmbed(characterName, googleSheetsUrl);
             await interaction.followUp({ embeds: [setupInstructionsEmbed], ephemeral: true });
         }
     } catch (error) {

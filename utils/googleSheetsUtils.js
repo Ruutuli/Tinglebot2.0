@@ -97,11 +97,14 @@ async function fetchSheetData(auth, spreadsheetId, range) {
         spreadsheetId,
         range
       });
+      if (!response.data.values) {
+        return [];
+      }
       const sanitizedValues = response.data.values.map(row =>
         row.map(cell => (typeof cell === 'string' && cell.includes(',')) ? cell.replace(/,/g, '') : cell)
       );
       return sanitizedValues;
-    }, { suppressLog: true }); // 👈 Add this
+    }, { suppressLog: true });
   }
 
 // ------------------- Read Data from Google Sheets -------------------
@@ -112,8 +115,8 @@ async function readSheetData(auth, spreadsheetId, range) {
         spreadsheetId,
         range
       });
-      return response.data.values;
-    }, { suppressLog: true }); // 👈 Add this
+      return response.data.values || []; // Return empty array if values is undefined
+    }, { suppressLog: true });
   }
 
 // ------------------- Clear Formatting in Google Sheets -------------------
@@ -259,12 +262,22 @@ async function getSheetIdByName(auth, spreadsheetId, sheetName) {
 // ------------------- Get Sheet ID by Title -------------------
 // Retrieves the sheet ID using the sheet's title.
 async function getSheetIdByTitle(auth, spreadsheetId, sheetTitle) {
-    const response = await google.sheets({ version: 'v4', auth }).spreadsheets.get({
-        spreadsheetId,
-        includeGridData: false,
-    });
-    const sheet = response.data.sheets.find(s => s.properties.title === sheetTitle);
-    return sheet ? sheet.properties.sheetId : null;
+    try {
+        const response = await google.sheets({ version: 'v4', auth }).spreadsheets.get({
+            spreadsheetId,
+            includeGridData: false,
+        });
+        const sheet = response.data.sheets.find(s => s.properties.title === sheetTitle);
+        return sheet ? sheet.properties.sheetId : null;
+    } catch (error) {
+        if (error.message.includes('does not have permission')) {
+            throw new Error(
+                'Permission denied. Please share your Google Sheet with Editor access to:\n' +
+                '📧 tinglebot@rotw-tinglebot.iam.gserviceaccount.com'
+            );
+        }
+        throw error;
+    }
 }
 
 // ------------------- Convert Wix Image Link -------------------
