@@ -1093,40 +1093,25 @@ async function updateTokenBalance(userId, change) {
 
 // ------------------- syncTokenTracker -------------------
 async function syncTokenTracker(userId) {
- await connectToTinglebot();
- const user = await getOrCreateToken(userId);
- if (!user.tokenTracker || !isValidGoogleSheetsUrl(user.tokenTracker)) {
-  const errorMessage = "Invalid Google Sheets URL";
-  console.error(`[tokenService.js]: ${errorMessage}`, {
-   userId,
-   tokenTracker: user.tokenTracker,
-  });
-  throw new Error(errorMessage);
- }
- const spreadsheetId = extractSpreadsheetId(user.tokenTracker);
- const auth = await authorizeSheets();
-
  try {
-  const range = "loggedTracker!B7:F";
-  const tokenData = await readSheetData(auth, spreadsheetId, range);
-  if (!tokenData || tokenData.length === 0) {
-   throw new Error("No data found in the specified range.");
+  const user = await getOrCreateToken(userId);
+  if (!user.tokenTracker || !isValidGoogleSheetsUrl(user.tokenTracker)) {
+   throw new Error("Invalid URL");
   }
+
+  const auth = await authorizeSheets();
+  const spreadsheetId = extractSpreadsheetId(user.tokenTracker);
+  const range = "loggedTracker!B7:F";
+  const sheetData = await readSheetData(auth, spreadsheetId, range);
 
   let totalEarned = 0;
   let totalSpent = 0;
-  tokenData.forEach((row, index) => {
-   const type = row[3]?.toLowerCase();
-   const amount = parseInt(row[4], 10);
-   if (!type || isNaN(amount)) {
-    console.warn(
-     `[tokenService.js]: Skipping row ${index + 7} due to invalid data.`
-    );
-    return;
-   }
-   if (type === "earned") {
+
+  sheetData.forEach((row) => {
+   const amount = parseInt(row[4]);
+   if (row[3] === "earned") {
     totalEarned += amount;
-   } else if (type === "spent") {
+   } else if (row[3] === "spent") {
     totalSpent += Math.abs(amount);
    }
   });
@@ -1134,13 +1119,6 @@ async function syncTokenTracker(userId) {
   user.tokens = totalEarned - totalSpent;
   user.tokensSynced = true;
   await user.save();
-
-  const syncRow = ["Initial Sync", "You can delete this!", "", "sync", "0"];
-  if (character?.name && character?.inventory && character?.userId) {
-    await safeAppendDataToSheet(character.inventory, character, range, values);
-} else {
-    console.error('[safeAppendDataToSheet]: Invalid character object detected before syncing.');
-}
 
   return user;
  } catch (error) {
