@@ -25,6 +25,7 @@ const ItemModel = require("../models/ItemModel");
 const Character = require("../models/CharacterModel");
 const { monsterMapping } = require("../models/MonsterModel");
 const { validateInventorySheet } = require('../utils/googleSheetsUtils')
+const { getMountEmoji, getMountThumbnail } = require('../modules/mountModule');
 
 const DEFAULT_EMOJI = "🔹";
 const DEFAULT_IMAGE_URL =
@@ -1713,6 +1714,38 @@ function createUpdatedTravelEmbed({ encounterMessage, character, description, fi
     .setFooter(footer || null);
 }
 
+// Create an embed for mount encounters
+function createMountEncounterEmbed(encounter) {
+    const mountEmoji = getMountEmoji(encounter.mountType);
+    const mountThumbnail = getMountThumbnail(encounter.mountType);
+    const villageWithEmoji = `${getVillageEmojiByName(encounter.village)} ${capitalizeFirstLetter(encounter.village)}`;
+    const allVillageMounts = ['Horse', 'Donkey', 'Mule']; // Add any other mounts that can be kept by anyone
+
+    return new EmbedBuilder()
+        .setTitle(`${mountEmoji} 🌟 ${encounter.mountLevel} Level ${encounter.mountType} Encounter!`)
+        .setDescription(`🐾 A **${encounter.mountLevel} level ${encounter.mountType}** has been spotted in **${villageWithEmoji}**!\n\nTo join the encounter, use </mount:1306176789755858983>.`)
+        .addFields(
+            {
+                name: '📜 Encounter Information',
+                value:
+                    `> You will need **Tokens** for this game if you succeed!\n\n` +
+                    `Use the command below to join:\n` +
+                    `\`\`\`/mount encounterid:${encounter.encounterId} charactername:\`\`\``,
+                inline: false,
+            },
+            {
+                name: '🏠 Village',
+                value: allVillageMounts.includes(encounter.mountType)
+                    ? `> 🏠 This mount can be kept by anyone in **any village**, but only those currently in **${villageWithEmoji}** can participate!`
+                    : `> ❗ This mount can only be kept by villagers from **${villageWithEmoji}**, and only those currently in **${villageWithEmoji}** can participate!`,
+                inline: false,
+            }
+        )
+        .setThumbnail(mountThumbnail || '')
+        .setColor(0xAA926A)
+        .setFooter({ text: '⏳ Wait a minute before rolling again or let others participate.' })
+        .setTimestamp();
+}
 
 module.exports = {
  DEFAULT_EMOJI,
@@ -1758,4 +1791,5 @@ module.exports = {
  createSafeTravelDayEmbed,
  createFinalTravelEmbed,
  createUpdatedTravelEmbed,
+ createMountEncounterEmbed,
 };

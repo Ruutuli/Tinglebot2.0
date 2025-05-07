@@ -50,6 +50,8 @@ const {
 
 const { v4: uuidv4 } = require('uuid');
 
+const { createMountEncounterEmbed } = require('../../embeds/embeds');
+
 // ============================================================================
 // ------------------- Constants -------------------
 // ============================================================================
@@ -499,30 +501,6 @@ async function handleMount(interaction) {
     const emoji = getMountEmoji(species);
     const villageWithEmoji = `${villageEmojis[village]} ${village}`;
   
-    const embed = new EmbedBuilder()
-      .setTitle(`${emoji} 🌟 ${level} Level ${species} Encounter!`)
-      .setDescription(`🐾 A **${level} level ${species}** has been spotted in **${villageWithEmoji}**!\n\nTo join the encounter, use </mount:1306176789755858983>.`)
-      .addFields(
-        {
-          name: '📜 Encounter Information',
-          value:
-            `> You will need **Tokens** for this game if you succeed!\n\n` +
-            `Use the command below to join:\n` +
-            `\`\`\`/mount encounterid:${encounterId} charactername:\`\`\``,
-          inline: false,
-        },
-        {
-          name: '🏠 Village',
-          value: allVillageMounts.includes(species)
-            ? `> 🏠 This mount can be kept by anyone in **any village**, but only those currently in **${villageWithEmoji}** can participate!`
-            : `> ❗ This mount can only be kept by villagers from **${villageWithEmoji}**, and only those currently in **${villageWithEmoji}** can participate!`,
-          inline: false,
-        }
-      )
-      .setThumbnail(getMountThumbnail(species) || '')
-      .setColor(0xAA926A)
-      .setFooter({ text: '⏳ Wait a minute before rolling again or let others participate.' });
-  
     const encounterData = {
       users: [],
       mountType: species,
@@ -533,6 +511,7 @@ async function handleMount(interaction) {
       village,
       actions: [],
       tameStatus: false,
+      encounterId,
     };
   
     try {
@@ -543,6 +522,7 @@ async function handleMount(interaction) {
       return interaction.editReply('❌ Failed to store encounter. Please try again later.');
     }
   
+    const embed = createMountEncounterEmbed(encounterData);
     await interaction.editReply({ embeds: [embed] });
   }
   
