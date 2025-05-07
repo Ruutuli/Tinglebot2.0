@@ -324,6 +324,16 @@ module.exports = {
                     // Prepare a progress bar for the updated donation status.
                     const progressBar = `\`${'▰'.repeat(Math.round(((current + qty) / required[nextLevel]) * 10))}${'▱'.repeat(10 - Math.round(((current + qty) / required[nextLevel]) * 10))}\``;
 
+                    // Check for automatic level up
+                    const leveledUp = await checkAndHandleVillageLevelUp(village);
+                    if (leveledUp) {
+                        embed.setDescription(
+                            `🎉 **${characterName}** has donated **${displayName} x ${qty}** to upgrade the village!\n\n` +
+                            `🌟 **The village has reached level ${village.level}!**\n` +
+                            `Use </village view:1324300899585363968> to check the new requirements.`
+                        );
+                    }
+
                     // Build an embed to confirm the successful donation.
                     const embed = new EmbedBuilder()
                         .setTitle(`${village.name} (Level ${village.level})`)
@@ -392,6 +402,16 @@ module.exports = {
                         progressBar = '`▰▰▰▰▰▰▰▰▰▰`';
                     }
 
+                    // Check for automatic level up
+                    const leveledUp = await checkAndHandleVillageLevelUp(village);
+                    if (leveledUp) {
+                        embed.setDescription(
+                            `🎉 **${interaction.user.username}** has contributed **Tokens x ${qty}** towards upgrading the village!\n\n` +
+                            `🌟 **The village has reached level ${village.level}!**\n` +
+                            `Use </village view:1324300899585363968> to check the new requirements.`
+                        );
+                    }
+
                     // Build an embed to confirm the token donation.
                     const embed = new EmbedBuilder()
                         .setTitle(`${village.name} (Level ${village.level})`)
@@ -419,3 +439,39 @@ module.exports = {
         }
     },
 };
+
+// ------------------- Function to Check and Handle Village Level Up -------------------
+async function checkAndHandleVillageLevelUp(village) {
+    const nextLevel = village.level + 1;
+    const materials = village.materials instanceof Map ? Object.fromEntries(village.materials) : village.materials;
+    const requiredTokens = village.tokenRequirements?.get(nextLevel.toString()) || village.tokenRequirements[nextLevel.toString()] || 0;
+    
+    // Check if all materials are met for next level
+    const allMaterialsMet = Object.entries(materials).every(([key, value]) => {
+        if (key.startsWith('$')) return true; // Skip special keys
+        const required = value.required?.[nextLevel] || 0;
+        return value.current >= required;
+    });
+
+    // Check if tokens are met for next level
+    const tokensMet = village.currentTokens >= requiredTokens;
+
+    // If both materials and tokens are met, level up the village
+    if (allMaterialsMet && tokensMet) {
+        village.level = nextLevel;
+        village.health = village.levelHealth.get(nextLevel.toString()) || 100;
+        
+        // Reset current tokens and materials for the new level
+        village.currentTokens = 0;
+        Object.entries(materials).forEach(([key, value]) => {
+            if (!key.startsWith('$')) {
+                value.current = 0;
+            }
+        });
+        
+        await village.save();
+        return true;
+    }
+    
+    return false;
+}
