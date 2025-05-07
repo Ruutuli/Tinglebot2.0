@@ -129,7 +129,7 @@ async function handleCollectPoints(interaction) {
     const job = character.job?.toLowerCase();
     if (job !== 'shopkeeper' && job !== 'merchant') {
       return interaction.reply({
-        content: `❌ Only characters with the job **Shopkeeper** or **Merchant** can claim vending points.`,
+        content: `❌ **Invalid Vendor Type:** ${character.name} must be a **Shopkeeper** or **Merchant** to collect vending points.\n\nCurrent job: **${character.job || 'None'}**\n\nTo become a vendor:\n1. Use a Job Voucher to change to Shopkeeper or Merchant\n2. Run \`/vending setup\` to initialize your shop\n3. Run \`/vending sync\` to sync your inventory`,
         ephemeral: true
       });
     }
@@ -798,6 +798,16 @@ async function handleVendingSetup(interaction) {
       if (!character) {
         await interaction.reply({
           content: `❌ Character '${characterName}' not found.`,
+          ephemeral: true
+        });
+        return;
+      }
+  
+      // ------------------- Job Validation -------------------
+      const job = character.job?.toLowerCase();
+      if (job !== 'shopkeeper' && job !== 'merchant') {
+        await interaction.reply({
+          content: `❌ **Invalid Vendor Type:** ${character.name} must be a **Shopkeeper** or **Merchant** to set up a shop.\n\nCurrent job: **${character.job || 'None'}**\n\nTo become a vendor:\n1. Use a Job Voucher to change to Shopkeeper or Merchant\n2. Run \`/vending setup\` to initialize your shop\n3. Run \`/vending sync\` to sync your inventory`,
           ephemeral: true
         });
         return;
