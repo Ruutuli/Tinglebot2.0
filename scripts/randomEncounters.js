@@ -15,7 +15,7 @@ const { handleError } = require('../utils/globalErrorHandler');
 // ------------------- Importing local services and models -------------------
 const { getMonstersAboveTierByRegion } = require('../database/db');
 const { getVillageRegionByName } = require('../modules/locationsModule');
-const { createRaidEmbed, createOrUpdateRaidThread, scheduleRaidTimer } = require('../modules/raidModule');
+const { createRaidEmbed, createOrUpdateRaidThread, scheduleRaidTimer, storeRaidProgress, getRaidProgressById } = require('../modules/raidModule');
 const { capitalizeVillageName } = require('../utils/stringUtils');
 
 // ============================================================================
@@ -118,49 +118,17 @@ async function triggerRandomEncounter(channel) {
     const monster = await getMonstersAboveTierByRegion(5, villageRegion);
     if (!monster || !monster.name || !monster.tier) {
       console.error(`[Encounter LOG] No eligible monsters found for region: ${villageRegion}`);
-      await channel.send(`❌ **Error: No eligible monsters found for the region: ${villageRegion}.**`);
+      await channel.send(`❌ **No eligible monsters found for ${selectedVillage} region.**`);
       return;
     }
 
-    // Generate a battle ID and create an encounter embed.
-    const battleId = Date.now();
-    const capitalizedVillageName = capitalizeVillageName(selectedVillage);
-    const character = { name: 'Village Defender', currentVillage: capitalizedVillageName }; // Dummy character for embed
-    const encounterEmbed = createRaidEmbed(character, monster, battleId);
+    // Create encounter embed
+    const encounterEmbed = createRaidEmbed(monster);
 
-    // Send the encounter message and start a thread for the battle.
-    const sentMessage = await channel.send({
-      content: `> ⚠️ **A ${monster.name} has appeared in ${capitalizedVillageName}!** Residents and visitors, please respond to the threat!`,
-      embeds: [encounterEmbed],
-    });
-
-    const thread = await sentMessage.startThread({
-      name: `⚠️ ${capitalizedVillageName} Attack: ${monster.name}`,
-      autoArchiveDuration: 1440,
-      reason: 'Random Encounter',
-    });
-
-    // Schedule the raid timer
-    scheduleRaidTimer(capitalizedVillageName, monster, thread);
+    // Trigger encounter
+    await createOrUpdateRaidThread(encounterEmbed, channel);
   } catch (error) {
-    handleError(error, 'randomEncounters.js');
     console.error('[Encounter LOG] Error triggering encounter:', error);
+    await handleError(error);
   }
 }
-
-// ============================================================================
-// Bot Initialization for Random Encounters
-// ------------------- Initialize Random Encounter Bot -------------------
-function initializeRandomEncounterBot(client) {
-  client.on('messageCreate', (message) => {
-    if (message.author.bot) return; // Ignore bot messages
-    trackMessageActivity(message.channel.id, message.author.id, message.author.bot, message.author.username);
-  });
-
-  setInterval(() => checkForRandomEncounters(client), CHECK_INTERVAL);
-}
-
-// ============================================================================
-// Module Exports
-// ------------------- Exporting Initialization Function -------------------
-module.exports = { initializeRandomEncounterBot };
