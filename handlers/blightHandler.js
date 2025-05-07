@@ -729,6 +729,25 @@ async function checkMissedRolls(client) {
           character.blightStage = 0;
           character.deathDeadline = null;
 
+          // Delete any active blight submissions for this character
+          try {
+            const blightSubmissions = loadBlightSubmissions();
+            const submissionIds = Object.keys(blightSubmissions).filter(id => {
+              const submission = blightSubmissions[id];
+              return submission.characterName === character.name && submission.status === 'pending';
+            });
+            
+            // Delete each pending submission
+            for (const submissionId of submissionIds) {
+              delete blightSubmissions[submissionId];
+              deleteSubmissionFromStorage(submissionId);
+            }
+            saveBlightSubmissions(blightSubmissions);
+          } catch (error) {
+            handleError(error, 'blightHandler.js');
+            console.error('[blightHandler]: Error cleaning up blight submissions:', error);
+          }
+
           // Wipe character's inventory from database only
           try {
             const inventoriesConnection = await dbFunctions.connectToInventories();
