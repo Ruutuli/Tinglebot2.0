@@ -243,5 +243,70 @@
     "tameStatus": false,
     "traits": {},
     "totalSpent": 0
+  },
+  "ee5d00dc-a36d-45e0-a54c-452b02d96c64": {
+    "users": [],
+    "mountType": "Horse",
+    "rarity": "Regular",
+    "mountLevel": "Basic",
+    "mountStamina": 1,
+    "environment": "Mountainous",
+    "village": "Unknown",
+    "actions": [],
+    "tameStatus": false,
+    "traits": {},
+    "totalSpent": 0
+  },
+  "a39caba3": {
+    "users": [],
+    "mountType": "Donkey",
+    "rarity": "To be determined",
+    "mountLevel": "Basic",
+    "mountStamina": "To be determined",
+    "environment": "To be determined",
+    "village": "rudania",
+    "actions": [],
+    "tameStatus": false,
+    "traits": {},
+    "totalSpent": 0
+  },
+  "5c0bd76a": {
+    "users": [],
+    "mountType": "Horse",
+    "rarity": "To be determined",
+    "mountLevel": "Basic",
+    "mountStamina": "To be determined",
+    "environment": "To be determined",
+    "village": "rudania",
+    "actions": [],
+    "tameStatus": false,
+    "traits": {},
+    "totalSpent": 0
+  },
+  "b70bdfe1-66e3-4cec-9fbf-be519fa37eee": {
+    "users": [],
+    "mountType": "Horse",
+    "rarity": "Regular",
+    "mountLevel": "Mid",
+    "mountStamina": 4,
+    "environment": "Plains",
+    "village": "Unknown",
+    "actions": [],
+    "tameStatus": false,
+    "traits": {},
+    "totalSpent": 0
+  },
+  "9a086a20-c043-4053-a6f2-5ce7b8737d2f": {
+    "users": [],
+    "mountType": "Horse",
+    "rarity": "Regular",
+    "mountLevel": "Basic",
+    "mountStamina": 2,
+    "environment": "Mountainous",
+    "village": "Unknown",
+    "actions": [],
+    "tameStatus": false,
+    "traits": {},
+    "totalSpent": 0
   }
 }
