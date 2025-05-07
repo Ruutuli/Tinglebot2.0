@@ -1,4 +1,5 @@
 const { handleError } = require('../../utils/globalErrorHandler.js');
+const { handleTokenError } = require('../../utils/tokenUtils.js');
 
 // ------------------- Import necessary modules and services -------------------
 const { SlashCommandBuilder, EmbedBuilder } = require('@discordjs/builders'); // For building slash commands and embeds
@@ -43,15 +44,15 @@ module.exports = {
     const subcommand = interaction.options.getSubcommand();
     const userId = interaction.user.id;
 
-    // ------------------- Handle 'check' subcommand -------------------
-    if (subcommand === 'check') {
-      try {
+    try {
+      // ------------------- Handle 'check' subcommand -------------------
+      if (subcommand === 'check') {
         const tokenRecord = await getOrCreateToken(userId);
         
         if (!tokenRecord.tokenTracker || !isValidGoogleSheetsUrl(tokenRecord.tokenTracker)) {
-          console.error('[tokens.js]: Invalid Google Sheets URL', { userId, tokenTrackerLink: tokenRecord.tokenTracker });
+          const { fullMessage } = handleTokenError(new Error('Invalid URL'), interaction);
           await interaction.reply({
-            content: '❌ Your token tracker link is not set up or is invalid. Please use `/tokens tokentrackerlink` to set it up.',
+            content: fullMessage,
             ephemeral: true,
           });
           return;
@@ -92,104 +93,74 @@ module.exports = {
 
         await interaction.reply({ embeds: [embed] });
 
-      } catch (error) {
-    handleError(error, 'tokens.js');
+      // ------------------- Handle 'sync' subcommand -------------------
+      } else if (subcommand === 'sync') {
+        const user = await getOrCreateToken(userId);
 
-        console.error('[tokens.js]: Error checking tokens:', error);
-
-        let errorMessage = '❌ An error occurred while checking your tokens.';
-        if (error.message.includes('Invalid URL')) {
-          errorMessage = '❌ The provided Google Sheets URL is invalid. Please check the link and try again.';
-        } else if (error.message.includes('permission')) {
-          errorMessage = '❌ The bot does not have permission to access your Google Sheet. Please share the sheet with `tinglebot@rotw-tinglebot.iam.gserviceaccount.com`.';
-        } else if (error.message.includes('404')) {
-          errorMessage = '❌ The Google Sheet or tab could not be found. Please ensure the link and tab name are correct.';
+        if (user.tokensSynced) {
+          await interaction.reply({
+            content: '❌ Your tokens are already synced. You cannot sync again!',
+            ephemeral: true,
+          });
+          return;
         }
 
-        await interaction.reply({
-          content: errorMessage,
-          ephemeral: true,
-        });
-      }
+        try {
+          const tokenRecord = await syncTokenTracker(userId);
 
-// ------------------- Handle 'sync' subcommand -------------------
-} else if (subcommand === 'sync') {
-  try {
-    const user = await getOrCreateToken(userId);
+          // Prepare embed response
+          const embed = new EmbedBuilder()
+            .setTitle(`${interaction.user.username}'s Token Balance`) // Include the user's name in the title
+            .setDescription('✅ Your token tracker has been synced!') // Add the description
+            .addFields(
+              { name: '🪙 **Current Total**', value: `> **${tokenRecord.tokens || 'Data not found'}**`, inline: false },
+              {
+                name: '🔗 **Token Tracker Link**',
+                value: `> [📄 View your token tracker](${tokenRecord.tokenTracker || 'No link provided'})`,
+                inline: false,
+              }
+            )
+            .setColor(0xAA926A)
+            .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true })) // Add user's profile picture as thumbnail
+            .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png') // Add specified image
+            .setFooter({ text: 'Token Tracker' })
+            .setTimestamp();
 
-    // Prevent re-syncing if tokensSynced is true
-    if (user.tokensSynced) {
-      await interaction.reply({
-        content: '❌ Your tokens are already synced. You cannot sync again!',
-        ephemeral: true,
-      });
-      return;
-    }
-
-    const tokenRecord = await syncTokenTracker(userId);
-
-    // Prepare embed response
-    const embed = new EmbedBuilder()
-      .setTitle(`${interaction.user.username}'s Token Balance`) // Include the user's name in the title
-      .setDescription('✅ Your token tracker has been synced!') // Add the description
-      .addFields(
-        { name: '🪙 **Current Total**', value: `> **${tokenRecord.tokens || 'Data not found'}**`, inline: false },
-        {
-          name: '🔗 **Token Tracker Link**',
-          value: `> [📄 View your token tracker](${tokenRecord.tokenTracker || 'No link provided'})`,
-          inline: false,
+          await interaction.reply({ embeds: [embed] });
+        } catch (error) {
+          const { fullMessage } = handleTokenError(error, interaction);
+          await interaction.reply({
+            content: fullMessage,
+            ephemeral: true,
+          });
         }
-      )
-      .setColor(0xAA926A)
-      .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true })) // Add user's profile picture as thumbnail
-      .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png') // Add specified image
-      .setFooter({ text: 'Token Tracker' })
-      .setTimestamp();
 
-    await interaction.reply({ embeds: [embed] });
-  } catch (error) {
-    handleError(error, 'tokens.js');
+      // ------------------- Handle 'tokentrackerlink' subcommand -------------------
+      } else if (subcommand === 'tokentrackerlink') {
+        const link = interaction.options.getString('link');
 
-    console.error('[tokens.js]: Error syncing tokens:', error);
+        if (!isValidGoogleSheetsUrl(link)) {
+          const { fullMessage } = handleTokenError(new Error('Invalid URL'), interaction);
+          await interaction.reply({
+            content: fullMessage,
+            ephemeral: true,
+          });
+          return;
+        }
 
-    let errorMessage = '❌ An error occurred while syncing your token tracker:';
-    if (error.message.includes('The caller does not have permission')) {
-      errorMessage += ` The caller does not have permission. Please share the Google Sheet with this email with edit permissions:
-📧 tinglebot@rotw-tinglebot.iam.gserviceaccount.com`;
-    } else {
-      errorMessage += ` ${error.message}`;
-    }
-    await interaction.reply({ content: errorMessage, ephemeral: true });
-  }
+        try {
+          const setupEmbed = createTokenTrackerSetupEmbed(interaction.user.username, link);
+          await interaction.reply({ embeds: [setupEmbed], ephemeral: true });
+        } catch (error) {
+          const { fullMessage } = handleTokenError(error, interaction);
+          await interaction.reply({
+            content: fullMessage,
+            ephemeral: true,
+          });
+        }
 
-    // ------------------- Handle 'tokentrackerlink' subcommand -------------------
-    } else if (subcommand === 'tokentrackerlink') {
-      const link = interaction.options.getString('link');
-
-      if (!isValidGoogleSheetsUrl(link)) {
-        await interaction.reply({
-          content: '❌ The provided link is not a valid Google Sheets URL. Please provide a valid link.',
-          ephemeral: true,
-        });
-        return;
-      }
-
-      try {
-        const setupEmbed = createTokenTrackerSetupEmbed(interaction.user.username, link);
-        await interaction.reply({ embeds: [setupEmbed], ephemeral: true });
-      } catch (error) {
-    handleError(error, 'tokens.js');
-
-        console.error('[tokens.js]: Error setting token tracker link:', error);
-        await interaction.reply({
-          content: '❌ An error occurred while setting your token tracker link. Please try again later.',
-          ephemeral: true,
-        });
-      }
-
-    // ------------------- Handle 'test' subcommand -------------------
-    } else if (subcommand === 'test') {
-      try {
+      // ------------------- Handle 'test' subcommand -------------------
+      } else if (subcommand === 'test') {
         const user = await User.findOne({ discordId: userId });
         if (!user) {
           await interaction.reply({
@@ -200,60 +171,58 @@ module.exports = {
         }
 
         if (!user.tokenTracker || !isValidGoogleSheetsUrl(user.tokenTracker)) {
+          const { fullMessage } = handleTokenError(new Error('Invalid URL'), interaction);
           await interaction.reply({
-            content: '❌ Your token tracker is not set up correctly. Please link your Google Sheets URL using `/tokens tokentrackerlink`.',
+            content: fullMessage,
             ephemeral: true,
           });
           return;
         }
 
-        const auth = await authorizeSheets();
-        const spreadsheetId = extractSpreadsheetId(user.tokenTracker);
+        try {
+          const auth = await authorizeSheets();
+          const spreadsheetId = extractSpreadsheetId(user.tokenTracker);
 
-        const sheetId = await getSheetIdByTitle(auth, spreadsheetId, 'loggedTracker');
-        if (!sheetId) {
+          const sheetId = await getSheetIdByTitle(auth, spreadsheetId, 'loggedTracker');
+          if (!sheetId) {
+            const { fullMessage } = handleTokenError(new Error('404'), interaction);
+            await interaction.reply({
+              content: fullMessage,
+              ephemeral: true,
+            });
+            return;
+          }
+
+          const expectedHeaders = ['SUBMISSION', 'LINK', 'CATEGORIES', 'TYPE', 'TOKEN AMOUNT'];
+          const sheetData = await readSheetData(auth, spreadsheetId, 'loggedTracker!B7:F7');
+          if (!sheetData || !expectedHeaders.every(header => sheetData[0]?.includes(header))) {
+            const { fullMessage } = handleTokenError(new Error('headers'), interaction);
+            await interaction.reply({
+              content: fullMessage,
+              ephemeral: true,
+            });
+            return;
+          }
+
           await interaction.reply({
-            content: '❌ The `loggedTracker` tab is missing from your token tracker. Please ensure the tab is named correctly.',
+            content: '✅ Your token tracker is set up correctly!',
             ephemeral: true,
           });
-          return;
-        }
-
-        const expectedHeaders = ['SUBMISSION', 'LINK', 'CATEGORIES', 'TYPE', 'TOKEN AMOUNT'];
-        const sheetData = await readSheetData(auth, spreadsheetId, 'loggedTracker!B7:F7');
-        if (!sheetData || !expectedHeaders.every(header => sheetData[0]?.includes(header))) {
+        } catch (error) {
+          const { fullMessage } = handleTokenError(error, interaction);
           await interaction.reply({
-            content: `❌ The \`loggedTracker\` tab is missing required headers. Please ensure the headers are:
-            \`\`\`SUBMISSION, LINK, CATEGORIES, TYPE, TOKEN AMOUNT\`\`\``,
+            content: fullMessage,
             ephemeral: true,
           });
-          return;
         }
-
-        await interaction.reply({
-          content: '✅ Your token tracker is set up correctly!',
-          ephemeral: true,
-        });
-
-      } catch (error) {
-    handleError(error, 'tokens.js');
-
-        console.error('[tokens.js]: Error in /tokens test command:', error);
-
-        let errorMessage = '❌ An error occurred while testing your token tracker.';
-        if (error.message.includes('Invalid URL')) {
-          errorMessage = '❌ The provided Google Sheets URL is invalid. Please check the link and try again.';
-        } else if (error.message.includes('permission')) {
-          errorMessage = '❌ The bot does not have permission to access your Google Sheet. Please share the sheet with `tinglebot@rotw-tinglebot.iam.gserviceaccount.com`.';
-        } else if (error.message.includes('404')) {
-          errorMessage = '❌ The Google Sheet or tab could not be found. Please ensure the link and tab name are correct.';
-        }
-
-        await interaction.reply({
-          content: errorMessage,
-          ephemeral: true,
-        });
       }
+    } catch (error) {
+      handleError(error, 'tokens.js');
+      const { fullMessage } = handleTokenError(error, interaction);
+      await interaction.reply({
+        content: fullMessage,
+        ephemeral: true,
+      });
     }
   },
 };

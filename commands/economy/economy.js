@@ -6,6 +6,7 @@ const {
  EmbedBuilder,
 } = require("discord.js");
 const { handleError } = require("../../utils/globalErrorHandler.js");
+const { handleTokenError } = require('../../utils/tokenUtils.js');
 const { v4: uuidv4 } = require("uuid");
 const {
  fetchCharacterByNameAndUserId,
@@ -999,8 +1000,9 @@ async function handleShopSell(interaction) {
 
   const user = await User.findOne({ discordId: interaction.user.id });
   if (!user || !user.tokensSynced) {
+    const { fullMessage } = handleTokenError(new Error('Invalid URL'), interaction);
     return interaction.editReply({
-      content: `❌ **You must set up and sync your token tracker before you can sell items.**\nPlease use </synctokens:123456789> to set up your token tracker.`,
+      content: fullMessage,
       ephemeral: true,
     });
   }
@@ -1207,7 +1209,11 @@ if (quantity <= 0) {
  } catch (error) {
   handleError(error, "shops.js");
   console.error("[shops]: Error selling item:", error);
-  interaction.editReply("❌ An error occurred while trying to sell the item.");
+  const { fullMessage } = handleTokenError(error, interaction);
+  await interaction.editReply({
+    content: fullMessage,
+    ephemeral: true,
+  });
  }
 }
 
