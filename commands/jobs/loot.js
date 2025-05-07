@@ -167,6 +167,13 @@ module.exports = {
     return;
    }
 
+   // ------------------- Check for Active Job Voucher -------------------
+   if (character.jobVoucher) {
+     console.log(`[Loot Command]: Active job voucher found for ${character.name}`);
+   } else {
+     console.log(`[Loot Command]: No active job voucher for ${character.name}`);
+   }
+
    // Determine job based on jobVoucher or default job
    let job =
     character.jobVoucher && character.jobVoucherJob
@@ -222,7 +229,7 @@ module.exports = {
      `[Loot Command]: ${character.name} lacks looting skills for job: "${job}"`
     );
     await interaction.editReply({
-     content: `❌ **Hmm, ${character.name} can’t loot as a ${job} because they lack the necessary looting skills.**`,
+     content: `❌ **Hmm, ${character.name} can't loot as a ${job} because they lack the necessary looting skills.**`,
      ephemeral: true,
     });
     return;
@@ -357,60 +364,6 @@ module.exports = {
      const embed = createNoEncounterEmbed(character, bloodMoonActive); // Blood Moon is inactive here
      await interaction.editReply({ embeds: [embed] });
      return; // Stop execution after "No Encounter"
-    }
-
-      // Handle job voucher activation after validation
-      if (character.jobVoucher) {
-        console.log(
-        `[Loot Command]: Activating job voucher for ${character.name}.`
-        );
-        const {
-        success: itemSuccess,
-        item: jobVoucherItem,
-        message: itemError,
-        } = await fetchJobVoucherItem();
-        if (!itemSuccess) {
-        await interaction.editReply({
-          content: itemError,
-          ephemeral: true,
-        });
-        return;
-        }
-
-        const activationResult = await activateJobVoucher(
-        character,
-        job,
-        jobVoucherItem,
-        1,
-        interaction
-        );
-        if (!activationResult.success) {
-        await interaction.editReply({
-          content: activationResult.message,
-          ephemeral: true,
-        });
-        return;
-        }
-
-        await interaction.followUp({
-        content: activationResult.message,
-        ephemeral: true,
-        });
-      }
-
-    // ------------------- Handle Looting for All Tiers -------------------
-    if (encounteredMonster.tier > 4) {
-     console.log(
-      `[LOOT] Monster "${encounteredMonster.name}" qualifies for a raid.`
-     );
-     await triggerRaid(
-      character,
-      encounteredMonster,
-      interaction,
-      null,
-      bloodMoonActive
-     ); // Pass null for threadId
-     return;
     }
    }
    await processLootingLogic(
@@ -679,8 +632,8 @@ async function processLootingLogic(
      content:
       `❌ **Failed to write to your Google Sheet.**\n` +
       `> Make sure your **Inventory** link is a valid Google Sheets URL ` +
-      `and that you’ve shared the sheet with the service account ` +
-      `(the “client_email” in service_account.json).`,
+      `and that you've shared the sheet with the service account ` +
+      `(the "client_email" in service_account.json).`,
      ephemeral: true,
     });
     return;
