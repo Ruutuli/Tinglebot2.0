@@ -149,6 +149,19 @@ module.exports = {
         }
 
         try {
+          // Save the token tracker link to the user's database
+          const user = await User.findOne({ discordId: userId });
+          if (!user) {
+            await interaction.reply({
+              content: '❌ **User data not found. Please try again later.**',
+              ephemeral: true,
+            });
+            return;
+          }
+
+          user.tokenTracker = link;
+          await user.save();
+
           const setupEmbed = createTokenTrackerSetupEmbed(interaction.user.username, link);
           await interaction.reply({ embeds: [setupEmbed], ephemeral: true });
         } catch (error) {
