@@ -25,11 +25,12 @@ const {
   fetchItemByName,
   getCharacterInventoryCollection,
   getTokenBalance,
-  updateTokenBalance
+  updateTokenBalance,
+  dbFunctions
 } = require('../database/db');
 
 // ------------------- Database Models -------------------
-// Character model representing a user’s character document
+// Character model representing a user's character document
 const Character = require('../models/CharacterModel');
 
 // ------------------- Custom Modules -------------------
@@ -45,6 +46,7 @@ const {
   authorizeSheets,
   extractSpreadsheetId,
   safeAppendDataToSheet,
+  deleteInventorySheetData
 } = require('../utils/googleSheetsUtils');
 const {
   deleteSubmissionFromStorage,
@@ -372,7 +374,7 @@ You have forfeited **${currentTokenBalance} tokens** in exchange for healing **$
 
       if (!requiredItem) {
         await interaction.editReply({
-          content: `❌ **${itemName} x${itemQuantityInt}** doesn’t seem to be one of the items **${healer.name}** mentioned! Please check the requirements and try again with the correct item.`,
+          content: `❌ **${itemName} x${itemQuantityInt}** doesn't seem to be one of the items **${healer.name}** mentioned! Please check the requirements and try again with the correct item.`,
           ephemeral: true,
         });
         return;
@@ -509,7 +511,7 @@ You have forfeited **${currentTokenBalance} tokens** in exchange for healing **$
 // ============================================================================
 
 // ------------------- Roll For Blight Progression -------------------
-// Rolls to advance or maintain a character’s blight stage once per daily window.
+// Rolls to advance or maintain a character's blight stage once per daily window.
 async function rollForBlightProgression(interaction, characterName) {
   try {
     if (!characterName || typeof characterName !== 'string') {
@@ -525,7 +527,7 @@ async function rollForBlightProgression(interaction, characterName) {
 
     if (!character.blighted) {
       await interaction.reply({
-        content: `**WOAH! ${characterName} is not blighted! You don’t need to roll for them!** 🌟`,
+        content: `**WOAH! ${characterName} is not blighted! You don't need to roll for them!** 🌟`,
         ephemeral: true,
       });
       return;
@@ -709,12 +711,27 @@ async function checkMissedRolls(client) {
           character.blighted = false;
           character.blightStage = 0;
           character.deathDeadline = null;
+
+          // Wipe character's inventory from database only
+          try {
+            const inventoriesConnection = await dbFunctions.connectToInventories();
+            const db = inventoriesConnection.useDb("inventories");
+            const collectionName = character.name.toLowerCase();
+            const inventoryCollection = db.collection(collectionName);
+            
+            // Delete all items from the character's inventory in database
+            await inventoryCollection.deleteMany({ characterId: character._id });
+          } catch (error) {
+            handleError(error, 'blightHandler.js');
+            console.error('[blightHandler]: Error wiping inventory:', error);
+          }
+
           await character.save();
 
           const embed = new EmbedBuilder()
             .setColor('#D32F2F')
             .setTitle(`<:blight_eye:805576955725611058> **Blight Death Alert** <:blight_eye:805576955725611058>`)
-            .setDescription(`**${character.name}** has succumbed to Stage 5 Blight.\n\n *This character and all of their items have been removed...*`)
+            .setDescription(`**${character.name}** has succumbed to Stage 5 Blight.\n\n *This character's inventory has been cleared from the database, but their inventory sheet remains for record-keeping purposes.*`)
             .setThumbnail(character.icon || 'https://example.com/default-icon.png')
             .setFooter({ text: 'Blight Death Announcement', iconURL: 'https://example.com/blight-icon.png' })
             .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png')
