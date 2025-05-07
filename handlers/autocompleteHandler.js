@@ -182,6 +182,11 @@ async function handleAutocomplete(interaction) {
           await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "syncinventory");
         }
         break;
+      case "travel":
+        if (focusedName === "charactername") {
+          await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "travel");
+        }
+        break;
       default:
         await interaction.respond([]);
     }
