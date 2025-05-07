@@ -85,6 +85,23 @@ async function handleAutocomplete(interaction) {
       case "vending":
         await handleVendingAutocomplete(interaction, focusedName, focusedValue);
         break;
+      case "gather":
+        if (focusedName === "charactername") {
+          await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "gather");
+        }
+        break;
+      case "pet":
+        // Handle pet command autocomplete based on the focused option
+        if (focusedName === "charactername") {
+          await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "pet");
+        } else if (focusedName === "petname") {
+          await handlePetNameAutocomplete(interaction, focusedOption);
+        } else if (focusedName === "species") {
+          await handlePetSpeciesAutocomplete(interaction, focusedOption);
+        } else if (focusedName === "rolltype") {
+          await handlePetRollTypeAutocomplete(interaction, focusedOption);
+        }
+        break;
       // ... other cases ...
       default:
         await interaction.respond([]);
@@ -178,13 +195,7 @@ async function handleCharacterBasedCommandsAutocomplete(
 
   let characters = await fetchCharactersByUserId(userId);
 
-  if (commandName === "gather") {
-   characters = characters.filter((character) => {
-    const job = character.jobVoucher ? character.jobVoucherJob : character.job;
-    const jobPerk = getJobPerk(job);
-    return jobPerk && jobPerk.perks.includes("GATHERING");
-   });
-  } else if (commandName === "loot") {
+  if (commandName === "loot") {
    characters = characters.filter((character) => {
     const job = character.jobVoucher ? character.jobVoucherJob : character.job;
     const jobPerk = getJobPerk(job);
@@ -201,6 +212,10 @@ async function handleCharacterBasedCommandsAutocomplete(
     const jobPerk = getJobPerk(job);
     return jobPerk && jobPerk.perks.includes("CRAFTING");
    });
+  } else if (commandName === "pet") {
+   // For pet commands, we want to show all characters
+   // The subcommand will handle whether the character can have pets or not
+   console.log("[Autocomplete]: Pet command showing all characters.");
   }
   // No filtering for mount command
   if (commandName === "mount") {
@@ -1728,18 +1743,30 @@ async function handlePetNameAutocomplete(interaction, focusedOption) {
   return await interaction.respond([]);
  }
 
- // 4. Query active pets
- const pets = await Pet.find({ owner: character._id, status: "active" }).lean();
+ // 4. Query pets based on subcommand
+ const subcommand = interaction.options.getSubcommand();
+ let pets;
+ if (subcommand === "add") {
+  // For add command, show no pets since we're adding a new one
+  return await interaction.respond([]);
+ } else if (subcommand === "retire") {
+  // For retire command, only show active pets
+  pets = await Pet.find({ owner: character._id, status: "active" }).lean();
+ } else {
+  // For other commands (roll, upgrade, view, edit), show all pets
+  pets = await Pet.find({ owner: character._id }).lean();
+ }
+
  if (!pets.length) {
   console.log(
-   `[autocompleteHandler.js]: logs - No active pets for "${characterName}".`
+   `[autocompleteHandler.js]: logs - No pets found for "${characterName}".`
   );
   return await interaction.respond([]);
  }
 
- // 5. Return pet names (so mod petlevel can match by name)
+ // 5. Return pet names with status indicator
  const choices = pets.map((pet) => ({
-  name: pet.name,
+  name: `${pet.name}${pet.status === "active" ? " (Active)" : " (Inactive)"}`,
   value: pet.name,
  }));
  await respondWithFilteredChoices(interaction, focusedOption, choices);
