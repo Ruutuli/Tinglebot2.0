@@ -308,5 +308,18 @@
     "tameStatus": false,
     "traits": {},
     "totalSpent": 0
+  },
+  "afe9edc0": {
+    "users": [],
+    "mountType": "Donkey",
+    "rarity": "To be determined",
+    "mountLevel": "Mid",
+    "mountStamina": "To be determined",
+    "environment": "To be determined",
+    "village": "rudania",
+    "actions": [],
+    "tameStatus": false,
+    "traits": {},
+    "totalSpent": 0
   }
 }
