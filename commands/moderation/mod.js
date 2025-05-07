@@ -287,6 +287,26 @@ const modCommand = new SlashCommandBuilder()
     .setDescription('👢 Kick users who have been Travelers for 14+ days without a character')
 )
 
+// ------------------- Subcommand: slots -------------------
+.addSubcommand(sub =>
+  sub
+    .setName('slots')
+    .setDescription('🎯 Update a user\'s character slots')
+    .addUserOption(opt =>
+      opt
+        .setName('user')
+        .setDescription('The user to update slots for')
+        .setRequired(true)
+    )
+    .addIntegerOption(opt =>
+      opt
+        .setName('slots')
+        .setDescription('Number of character slots to set')
+        .setRequired(true)
+        .setMinValue(0)
+    )
+)
+
   
 // ============================================================================
 // ------------------- Execute Command Handler -------------------
@@ -353,6 +373,8 @@ async function execute(interaction) {
           });
           
         }      
+      } else if (subcommand === 'slots') {
+        return await handleSlots(interaction);
       } else {
       return interaction.editReply('❌ Unknown subcommand.');
     }
@@ -868,6 +890,40 @@ async function handleKickTravelers(interaction) {
     content: `✅ Kicked ${kicked.length} members:\n${kicked.join('\n') || 'None'}`,
     ephemeral: true
   });
+}
+
+// ------------------- Function: handleSlots -------------------
+// Updates a user's character slots by adding to their current amount
+async function handleSlots(interaction) {
+  const targetUser = interaction.options.getUser('user');
+  const slotsToAdd = interaction.options.getInteger('slots');
+
+  try {
+    let user = await User.findOne({ discordId: targetUser.id });
+    
+    if (!user) {
+      user = new User({
+        discordId: targetUser.id,
+        characterSlot: slotsToAdd,
+        status: 'active'
+      });
+    } else {
+      user.characterSlot = (user.characterSlot || 0) + slotsToAdd;
+    }
+    
+    await user.save();
+    
+    await interaction.editReply({
+      content: `✅ Added **${slotsToAdd}** character slots to <@${targetUser.id}>. They now have **${user.characterSlot}** total slots.`,
+      ephemeral: true
+    });
+  } catch (err) {
+    console.error(`[mod.js] Error updating slots:`, err);
+    return interaction.editReply({
+      content: `❌ Failed to update slots for <@${targetUser.id}>.`,
+      ephemeral: true
+    });
+  }
 }
 
   
