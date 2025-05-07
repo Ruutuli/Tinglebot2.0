@@ -83,7 +83,13 @@ async function handleAutocomplete(interaction) {
         await handleEconomyAutocomplete(interaction, focusedName, focusedValue);
         break;
       case "vending":
-        await handleVendingAutocomplete(interaction, focusedName, focusedValue);
+        if (focusedName === "charactername") {
+          await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "vending");
+        } else if (focusedName === "vendorcharacter") {
+          await handleVendorCharacterAutocomplete(interaction);
+        } else if (focusedName === "itemname") {
+          await handleVendingBarterAutocomplete(interaction, focusedOption);
+        }
         break;
       case "gather":
         if (focusedName === "charactername") {
