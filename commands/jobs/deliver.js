@@ -122,7 +122,7 @@ module.exports = {
       
           .addStringOption(opt =>
             opt.setName('vendoritem')
-              .setDescription('Item to deliver from the courier’s village vending stock that matches vendor type')
+              .setDescription('Item to deliver from the courier's village vending stock that matches vendor type')
               .setRequired(true)
               .setAutocomplete(true)
           )
@@ -880,9 +880,6 @@ if (subcommand === 'vendingstock') {
       });
     }
 
-    // ------------------- Generate Delivery ID -------------------
-    const deliveryId = generateUniqueId('D');
-
     // ------------------- Fetch vendor (recipient) character -------------------
     const recipientChar = await fetchCharacterByName(recipientName);
     if (!recipientChar) {
@@ -892,36 +889,47 @@ if (subcommand === 'vendingstock') {
       });
     }
 
+    // ------------------- Validate Vendor Type -------------------
+    const vendorJob = recipientChar.job?.toLowerCase();
+    if (vendorJob !== 'shopkeeper' && vendorJob !== 'merchant') {
+      return interaction.reply({
+        content: `❌ **Invalid Vendor Type:** ${recipientName} must be a **Shopkeeper** or **Merchant** to receive vending stock.\n\nCurrent job: **${recipientChar.job || 'None'}**\n\nTo become a vendor:\n1. Use a Job Voucher to change to Shopkeeper or Merchant\n2. Run \`/vending setup\` to initialize your shop\n3. Run \`/vending sync\` to sync your inventory`,
+        ephemeral: true,
+      });
+    }
 
-// ------------------- Determine vending points cost for the item -------------------
-const vendingStock = await getCurrentVendingStockList();
-if (!vendingStock || !vendingStock.stockList) {
-  throw new Error('Vending stock list is unavailable. Please try again later.');
-}
-const currentVillage = recipientChar.currentVillage.toLowerCase().trim();
-const villageStock = vendingStock.stockList[currentVillage] || [];
-const limitedItems = vendingStock.limitedItems || [];
-const limitedItem = limitedItems.find(item => item.itemName.toLowerCase() === itemName.toLowerCase());
-// Try to find a village item matching both name and vendingType (vendor's job)
-let villageItem = villageStock.find(item =>
-  item.itemName.toLowerCase() === itemName.toLowerCase() &&
-  item.vendingType.toLowerCase() === recipientChar.job.toLowerCase()
-);
-// Fallback: If not found, try matching by item name only.
-if (!villageItem) {
-  villageItem = villageStock.find(item => item.itemName.toLowerCase() === itemName.toLowerCase());
-}
-const vendingPointsCost = limitedItem ? limitedItem.points : (villageItem ? villageItem.points : null);
-if (vendingPointsCost === null) {
-  throw new Error(`Unable to determine vending points cost for item '${itemName}'.`);
-}
-const totalCost = quantity * vendingPointsCost;
-if ((recipientChar.vendingPoints || 0) < totalCost) {
-  return interaction.reply({
-    content: `❌ Insufficient vending points. ${recipientName} only has ${(recipientChar.vendingPoints || 0)} points, but this delivery requires ${totalCost} points.`,
-    ephemeral: true,
-  });
-}
+    // ------------------- Generate Delivery ID -------------------
+    const deliveryId = generateUniqueId('D');
+
+    // ------------------- Determine vending points cost for the item -------------------
+    const vendingStock = await getCurrentVendingStockList();
+    if (!vendingStock || !vendingStock.stockList) {
+      throw new Error('Vending stock list is unavailable. Please try again later.');
+    }
+    const currentVillage = recipientChar.currentVillage.toLowerCase().trim();
+    const villageStock = vendingStock.stockList[currentVillage] || [];
+    const limitedItems = vendingStock.limitedItems || [];
+    const limitedItem = limitedItems.find(item => item.itemName.toLowerCase() === itemName.toLowerCase());
+    // Try to find a village item matching both name and vendingType (vendor's job)
+    let villageItem = villageStock.find(item =>
+      item.itemName.toLowerCase() === itemName.toLowerCase() &&
+      item.vendingType.toLowerCase() === recipientChar.job.toLowerCase()
+    );
+    // Fallback: If not found, try matching by item name only.
+    if (!villageItem) {
+      villageItem = villageStock.find(item => item.itemName.toLowerCase() === itemName.toLowerCase());
+    }
+    const vendingPointsCost = limitedItem ? limitedItem.points : (villageItem ? villageItem.points : null);
+    if (vendingPointsCost === null) {
+      throw new Error(`Unable to determine vending points cost for item '${itemName}'.`);
+    }
+    const totalCost = quantity * vendingPointsCost;
+    if ((recipientChar.vendingPoints || 0) < totalCost) {
+      return interaction.reply({
+        content: `❌ Insufficient vending points. ${recipientName} only has ${(recipientChar.vendingPoints || 0)} points, but this delivery requires ${totalCost} points.`,
+        ephemeral: true,
+      });
+    }
 
 
     // Save the vending points cost in the delivery task
