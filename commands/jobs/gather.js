@@ -22,7 +22,7 @@ const { fetchCharacterByNameAndUserId, fetchAllItems, fetchItemsByMonster, fetch
 // Import custom modules for RNG, flavor text, damage calculations, job handling, locations, character stats, formatting, and job vouchers.
 const { createWeightedItemList, calculateFinalValue } = require('../../modules/rngModule.js');
 const { generateVictoryMessage, generateDamageMessage, generateFinalOutcomeMessage, generateDefenseBuffMessage, generateAttackBuffMessage } = require('../../modules/flavorTextModule.js');
-const { getEncounterOutcome } = require('../../modules/damageModule.js');
+const { getEncounterOutcome } = require('../../modules/encounterModule.js');
 const { getJobPerk, normalizeJobName, isValidJob } = require('../../modules/jobsModule.js');
 const { getVillageRegionByName } = require('../../modules/locationsModule.js');
 const { useHearts, handleKO, updateCurrentHearts } = require('../../modules/characterStatsModule.js');
