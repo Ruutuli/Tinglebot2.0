@@ -204,5 +204,18 @@
     "tameStatus": false,
     "traits": {},
     "totalSpent": 0
+  },
+  "c82e5a9d-8962-41ba-af04-61a21fcf8b42": {
+    "users": [],
+    "mountType": "Horse",
+    "rarity": "Regular",
+    "mountLevel": "Basic",
+    "mountStamina": 2,
+    "environment": "Mountainous",
+    "village": "Unknown",
+    "actions": [],
+    "tameStatus": false,
+    "traits": {},
+    "totalSpent": 0
   }
 }
