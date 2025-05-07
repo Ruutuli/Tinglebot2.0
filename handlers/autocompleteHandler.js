@@ -185,6 +185,8 @@ async function handleAutocomplete(interaction) {
       case "travel":
         if (focusedName === "charactername") {
           await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "travel");
+        } else if (focusedName === "destination") {
+          await handleVillageBasedCommandsAutocomplete(interaction, focusedOption);
         }
         break;
       default:
