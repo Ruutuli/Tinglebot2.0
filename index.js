@@ -28,7 +28,7 @@ const {
 } = require("./scripts/trello");
 const { isBloodMoonDay } = require("./scripts/bloodmoon");
 const { initializeRandomEncounterBot } = require("./scripts/randomEncounters");
-const scheduler = require("./scheduler");
+const { setupWeatherScheduler } = require('./scheduler');
 const { convertToHyruleanDate } = require("./modules/calendarModule");
 
 // ------------------- Weather -------------------
@@ -39,7 +39,6 @@ const {
   temperatureWeights,
   windWeights,
 } = require("./data/weatherData");
-const { setupWeatherScheduler } = require("./.weather/scheduledWeather");
 
 
 // ============================================================================
@@ -127,16 +126,13 @@ async function initializeClient() {
           logBloodMoonStatus();
           console.log("[index.js]: 🌕 Blood Moon status checked");
 
-          scheduler(client);
-          console.log("[scheduler]: 📅 Scheduler initialized");
+          setupWeatherScheduler(client);
+          console.log("[index.js]: 🌤️ Weather scheduler initialized");
 
           initializeRandomEncounterBot(client);
           console.log(
             "[index.js]: ⚔️ Random encounter functionality initialized"
           );
-
-          setupWeatherScheduler(client);
-          console.log("[index.js]: 🌤️ Weather scheduler initialized");
 
           console.log("==========================================================");
           console.log("Tinglebot 2.0 is fully operational!");
