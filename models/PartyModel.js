@@ -12,6 +12,7 @@ const PartySchema = new Schema({
   characters: [
     {
       _id: { type: mongoose.Schema.Types.ObjectId, required: true }, 
+      userId: { type: String, required: true },
       name: { type: String, required: true },
       items: [{ 
         itemName: { type: String, required: true },
@@ -30,7 +31,11 @@ const PartySchema = new Schema({
     }
   ],
   messageId: { type: String }, 
-  status: { type: String, default: 'open', enum: ['open', 'started'] }
+  status: { type: String, default: 'open', enum: ['open', 'started'] },
+  currentTurn: { type: Number, default: 0 },
+  totalHearts: { type: Number, default: 0 },
+  totalStamina: { type: Number, default: 0 },
+  quadrantState: { type: String, default: 'unexplored', enum: ['unexplored', 'explored', 'secured'] }
 });
 
 module.exports = mongoose.model('Party', PartySchema);
