@@ -38,6 +38,7 @@ const inventoriesUri = process.env.MONGODB_INVENTORIES_URI;
 let tinglebotDbConnection;
 let inventoriesDbConnection;
 let inventoriesDbNativeConnection = null;
+let vendingDbConnection = null;
 
 // ============================================================================
 // ------------------- Configuration Constants -------------------
@@ -114,6 +115,22 @@ const getInventoryCollection = async (characterName) => {
  const collectionName = characterName.trim().toLowerCase();
  return inventoriesDb.collection(collectionName);
 };
+
+// ------------------- connectToVending -------------------
+async function connectToVending() {
+  try {
+    if (!vendingDbConnection) {
+      vendingDbConnection = mongoose.createConnection(inventoriesUri, {
+        dbName: 'vendingInventories'
+      });
+    }
+    return vendingDbConnection;
+  } catch (error) {
+    handleError(error, "db.js");
+    console.error("❌ Error connecting to Vending database:", error);
+    throw error;
+  }
+}
 
 // ============================================================================
 // ------------------- Character Service Functions -------------------
