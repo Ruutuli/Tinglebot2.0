@@ -733,7 +733,7 @@ async function handleVendingSetup(interaction) {
     const shopImage = interaction.options.getString('shopimage');
 
     // Validate character exists
-    const character = await getCharacterByName(characterName);
+    const character = await fetchCharacterByName(characterName);
     if (!character) {
         return interaction.reply({
             content: `❌ Character "${characterName}" not found. Please check the spelling and try again.`,
