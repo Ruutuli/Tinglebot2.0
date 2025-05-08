@@ -726,14 +726,15 @@ async function handleViewShop(interaction) {
   
 // ------------------- handleVendingSetup -------------------
 async function handleVendingSetup(interaction) {
-  try {
+    try {
     await interaction.deferReply({ ephemeral: true });
     
-    const characterName = interaction.options.getString('charactername');
-    const shopLink = interaction.options.getString('shoplink');
-    const pouch = interaction.options.getString('pouch');
-    const userId = interaction.user.id;
-
+      const characterName = interaction.options.getString('charactername');
+      const shopLink = interaction.options.getString('shoplink');
+      const pouch = interaction.options.getString('pouch');
+      const points = interaction.options.getInteger('points') || 0;
+      const userId = interaction.user.id;
+  
     // Create a guide embed
     const guideEmbed = new EmbedBuilder()
       .setTitle('🎪 Setting Up Your Shop')
@@ -745,20 +746,20 @@ async function handleVendingSetup(interaction) {
         { name: '4️⃣ Get Started', value: 'After setup, you can:\n• Add items with `/vending add`\n• Edit your shop with `/vending edit`\n• View your shop with `/vending view`' }
       )
       .setColor('#AA926A')
-      .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png');
+      .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png');
 
     // Send the guide first
     await interaction.editReply({ embeds: [guideEmbed] });
 
     // Validate and process setup
-    const character = await fetchCharacterByNameAndUserId(characterName, userId);
-    if (!character) {
+      const character = await fetchCharacterByNameAndUserId(characterName, userId);
+      if (!character) {
       throw new Error(`Character '${characterName}' not found or doesn't belong to you.`);
     }
 
     // Validate job
-    const job = character.job?.toLowerCase();
-    if (job !== 'shopkeeper' && job !== 'merchant') {
+      const job = character.job?.toLowerCase();
+      if (job !== 'shopkeeper' && job !== 'merchant') {
       throw new Error(`${character.name} must be a Shopkeeper or Merchant to set up a shop.`);
     }
 
@@ -775,6 +776,7 @@ async function handleVendingSetup(interaction) {
       pouchSize: pouch === 'none' ? (character.job.toLowerCase() === 'merchant' ? 3 : 5) : 
                 pouch === 'bronze' ? 15 : 
                 pouch === 'silver' ? 30 : 50,
+      vendingPoints: points,
       vendingSetup: true
     });
 
@@ -800,6 +802,7 @@ async function handleVendingSetup(interaction) {
       .addFields(
         { name: '📊 Shop Link', value: shopLink },
         { name: '🎒 Pouch Size', value: `${pouch.charAt(0).toUpperCase() + pouch.slice(1)}` },
+        { name: '🪙 Vending Points', value: `${points}` },
         { name: '💡 Tip', value: 'Syncing will import all items from your Google Sheet into your shop.' }
       )
       .setColor('#25C059');
@@ -807,18 +810,18 @@ async function handleVendingSetup(interaction) {
     await interaction.followUp({
       embeds: [successEmbed],
       components: [syncRow],
-      ephemeral: true
-    });
+        ephemeral: true
+      });
 
-  } catch (error) {
-    handleError(error, 'vendingHandler.js');
+    } catch (error) {
+      handleError(error, 'vendingHandler.js');
     console.error('[handleVendingSetup]:', error);
     await interaction.editReply({
       content: `❌ Error setting up shop: ${error.message}`,
-      ephemeral: true
-    });
+        ephemeral: true
+      });
+    }
   }
-}
   
 // ------------------- handleVendingSync -------------------
 // Syncs inventory from Google Sheets to the vending database for a character.
@@ -1309,7 +1312,7 @@ async function handleSyncButton(interaction) {
     
     if (characterName === 'later') {
       await interaction.update({
-        content: 'No problem! You can sync your shop anytime by editing an item or updating your shop banner.',
+        content: 'No problem! You can run `/vending setup` again when you\'re ready to sync your shop.',
         embeds: [],
         components: []
       });
