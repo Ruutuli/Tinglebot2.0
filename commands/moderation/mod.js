@@ -307,6 +307,24 @@ const modCommand = new SlashCommandBuilder()
     )
 )
 
+// ------------------- Subcommand: weather -------------------
+.addSubcommand(sub =>
+  sub
+    .setName('weather')
+    .setDescription('🌤️ Test the weather system')
+    .addStringOption(opt =>
+      opt
+        .setName('village')
+        .setDescription('The village to test weather for')
+        .setRequired(true)
+        .addChoices(
+          { name: 'Rudania', value: 'Rudania' },
+          { name: 'Inariko', value: 'Inariko' },
+          { name: 'Vhintl', value: 'Vhintl' }
+        )
+    )
+)
+
   
 // ============================================================================
 // ------------------- Execute Command Handler -------------------
@@ -375,6 +393,8 @@ async function execute(interaction) {
         }      
       } else if (subcommand === 'slots') {
         return await handleSlots(interaction);
+      } else if (subcommand === 'weather') {
+        await handleWeather(interaction);
       } else {
       return interaction.editReply('❌ Unknown subcommand.');
     }
@@ -924,6 +944,49 @@ async function handleSlots(interaction) {
       ephemeral: true
     });
   }
+}
+
+// ============================================================================
+// ------------------- Weather Handler -------------------
+// ============================================================================
+
+async function handleWeather(interaction) {
+  try {
+    const village = interaction.options.getString('village');
+    const { simulateWeightedWeather } = require('../../.weather/weatherHandler');
+    const currentSeason = getCurrentSeason();
+    
+    const weather = simulateWeightedWeather(village, currentSeason);
+    
+    const embed = new EmbedBuilder()
+      .setTitle(`🌤️ Weather Test for ${village}`)
+      .setColor('#00ff00')
+      .addFields(
+        { name: 'Season', value: currentSeason, inline: true },
+        { name: 'Temperature', value: `${weather.temperature.emoji} ${weather.temperature.label}`, inline: true },
+        { name: 'Wind', value: `${weather.wind.emoji} ${weather.wind.label}`, inline: true },
+        { name: 'Conditions', value: `${weather.precipitation.emoji} ${weather.precipitation.label}`, inline: true }
+      );
+      
+    if (weather.special) {
+      embed.addFields({ name: 'Special', value: `${weather.special.emoji} ${weather.special.label}`, inline: true });
+    }
+    
+    await interaction.editReply({ embeds: [embed] });
+  } catch (error) {
+    handleError(error, 'mod.js');
+    await interaction.editReply({ content: '❌ Error testing weather system', ephemeral: true });
+  }
+}
+
+// Helper function to get current season
+function getCurrentSeason() {
+  const month = new Date().getMonth() + 1; // 1-12
+  
+  if (month >= 3 && month <= 5) return 'Spring';
+  if (month >= 6 && month <= 8) return 'Summer';
+  if (month >= 9 && month <= 11) return 'Autumn';
+  return 'Winter';
 }
 
   
