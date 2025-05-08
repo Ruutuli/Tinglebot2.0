@@ -1871,4 +1871,5 @@ module.exports = {
  recordBlightRoll,
  getCharacterBlightHistory,
  getUserBlightHistory,
+ connectToVending
 };

@@ -1688,7 +1688,7 @@ async function handleChangeJob(interaction) {
       await vendingCollection.deleteMany({});
 
       character.vendingPoints = 0;
-      character.vendingSetup = false;
+      character.vendingSetup = null;
       character.vendingSync = false;
       character.shopLink = null;
       character.shopPouch = null;

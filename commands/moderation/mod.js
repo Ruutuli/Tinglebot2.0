@@ -1010,7 +1010,7 @@ async function handleVendingReset(interaction) {
     character.pouchSize = 0;
     character.shopLink = '';
     character.lastCollectedMonth = 0;
-    character.vendingSetup = false;
+    character.vendingSetup = null;
     character.vendingSync = false;
     character.shopImage = '';
     await character.save();
