@@ -1,0 +1,219 @@
+  - Option "race" has autocomplete enabled
+  - Option "race" has autocomplete enabled
+  - Option "race" has autocomplete enabled
+  - Option "race" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+  - Option "updatedinfo" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+  - Option "newjob" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+✅ Loaded command: character from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\character\character.js
+  - Option "charactername" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+✅ Loaded command: mount from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\companions\mount.js
+  - Option "charactername" has autocomplete enabled
+  - Option "petname" has autocomplete enabled
+  - Option "rolltype" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+  - Option "petname" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+  - Option "species" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+  - Option "petname" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+  - Option "petname" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+  - Option "petname" has autocomplete enabled
+⚠️ Command pet has autocomplete options but no autocomplete handler!
+✅ Loaded command: pet from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\companions\pet.js
+  - Option "charactername" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+  - Option "mountname" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+  - Option "mountname" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+  - Option "mountname" has autocomplete enabled
+⚠️ Command stable has autocomplete options but no autocomplete handler!
+✅ Loaded command: stable from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\companions\stable.js
+  - Option "fromcharacter" has autocomplete enabled
+  - Option "tocharacter" has autocomplete enabled
+  - Option "itema" has autocomplete enabled
+  - Option "itemb" has autocomplete enabled
+  - Option "itemc" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+  - Option "itemname" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+  - Option "itemname" has autocomplete enabled
+  - Option "fromcharacter" has autocomplete enabled
+  - Option "tocharacter" has autocomplete enabled
+  - Option "item1" has autocomplete enabled
+  - Option "item2" has autocomplete enabled
+  - Option "item3" has autocomplete enabled
+  - Option "fromcharacter" has autocomplete enabled
+  - Option "tocharacter" has autocomplete enabled
+  - Option "itema" has autocomplete enabled
+  - Option "itemb" has autocomplete enabled
+  - Option "itemc" has autocomplete enabled
+⚠️ Command economy has autocomplete options but no autocomplete handler!
+✅ Loaded command: economy from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\economy\economy.js
+❌ Error loading command from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\exploration\explore.js: OverwriteModelError: Cannot overwrite `Village` model once compiled.
+    at Mongoose.model (C:\Users\Ruu\Desktop\Tinglebot 2.0\node_modules\mongoose\lib\mongoose.js:610:13)
+    at Object.<anonymous> (C:\Users\Ruu\Desktop\Tinglebot 2.0\modules\villageModule.js:178:31)
+    at Module._compile (node:internal/modules/cjs/loader:1358:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1416:10)
+    at Module.load (node:internal/modules/cjs/loader:1208:32)
+    at Module._load (node:internal/modules/cjs/loader:1024:12)
+    at Module.require (node:internal/modules/cjs/loader:1233:19)
+    at require (node:internal/modules/helpers:179:18)
+    at Object.<anonymous> (C:\Users\Ruu\Desktop\Tinglebot 2.0\modules\raidModule.js:9:32)
+    at Module._compile (node:internal/modules/cjs/loader:1358:14)
+✅ Loaded command: viewmap from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\exploration\viewMap.js
+  - Option "charactername" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+  - Option "baseweapon" has autocomplete enabled
+  - Option "subtype" has autocomplete enabled
+⚠️ Command customweapon has autocomplete options but no autocomplete handler!
+✅ Loaded command: customweapon from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\inventory\customWeapon.js
+  - Option "charactername" has autocomplete enabled
+  - Option "itemname" has autocomplete enabled
+⚠️ Command gear has autocomplete options but no autocomplete handler!
+✅ Loaded command: gear from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\inventory\gear.js
+  - Option "charactername" has autocomplete enabled
+  - Option "itemname" has autocomplete enabled
+  - Option "jobname" has autocomplete enabled
+⚠️ Command item has autocomplete options but no autocomplete handler!
+✅ Loaded command: item from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\inventory\item.js
+  - Option "character" has autocomplete enabled
+  - Option "appraiser" has autocomplete enabled
+  - Option "appraiser" has autocomplete enabled
+⚠️ Command relic has autocomplete options but no autocomplete handler!
+✅ Loaded command: relic from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\inventory\relic.js
+  - Option "character" has autocomplete enabled
+  - Option "character" has autocomplete enabled
+⚠️ Command spiritorbs has autocomplete options but no autocomplete handler!
+✅ Loaded command: spiritorbs from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\inventory\spiritOrb.js
+  - Option "charactername" has autocomplete enabled
+✅ Loaded command: syncinventory from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\inventory\syncInventory.js
+  - Option "charactername" has autocomplete enabled
+⚠️ Command testinventorysetup has autocomplete options but no autocomplete handler!
+✅ Loaded command: testinventorysetup from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\inventory\testinventorysetup.js
+  - Option "charactername" has autocomplete enabled
+✅ Loaded command: viewinventory from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\inventory\viewinventory.js
+  - Option "character" has autocomplete enabled
+  - Option "booster" has autocomplete enabled
+  - Option "character" has autocomplete enabled
+⚠️ Command boosting has autocomplete options but no autocomplete handler!
+✅ Loaded command: boosting from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\jobs\boosting.js
+  - Option "charactername" has autocomplete enabled
+  - Option "itemname" has autocomplete enabled
+⚠️ Command crafting has autocomplete options but no autocomplete handler!
+✅ Loaded command: crafting from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\jobs\crafting.js
+  - Option "sender" has autocomplete enabled
+  - Option "courier" has autocomplete enabled
+  - Option "recipient" has autocomplete enabled
+  - Option "item" has autocomplete enabled
+  - Option "courier" has autocomplete enabled
+  - Option "courier" has autocomplete enabled
+  - Option "recipient" has autocomplete enabled
+  - Option "courier" has autocomplete enabled
+  - Option "vendoritem" has autocomplete enabled
+⚠️ Command deliver has autocomplete options but no autocomplete handler!
+✅ Loaded command: deliver from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\jobs\deliver.js
+  - Option "charactername" has autocomplete enabled
+⚠️ Command gather has autocomplete options but no autocomplete handler!
+✅ Loaded command: gather from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\jobs\gather.js
+  - Option "charactername" has autocomplete enabled
+  - Option "healer" has autocomplete enabled
+  - Option "healername" has autocomplete enabled
+✅ Loaded command: heal from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\jobs\heal.js
+❌ Error loading command from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\jobs\loot.js: OverwriteModelError: Cannot overwrite `Village` model once compiled.
+    at Mongoose.model (C:\Users\Ruu\Desktop\Tinglebot 2.0\node_modules\mongoose\lib\mongoose.js:610:13)
+    at Object.<anonymous> (C:\Users\Ruu\Desktop\Tinglebot 2.0\modules\villageModule.js:178:31)
+    at Module._compile (node:internal/modules/cjs/loader:1358:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1416:10)
+    at Module.load (node:internal/modules/cjs/loader:1208:32)
+    at Module._load (node:internal/modules/cjs/loader:1024:12)
+    at Module.require (node:internal/modules/cjs/loader:1233:19)
+    at require (node:internal/modules/helpers:179:18)
+    at Object.<anonymous> (C:\Users\Ruu\Desktop\Tinglebot 2.0\modules\raidModule.js:9:32)
+    at Module._compile (node:internal/modules/cjs/loader:1358:14)
+  - Option "charactername" has autocomplete enabled
+  - Option "target" has autocomplete enabled
+  - Option "rarity" has autocomplete enabled
+✅ Loaded command: steal from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\jobs\steal.js
+  - Option "charactername" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+  - Option "itemname" has autocomplete enabled
+  - Option "slot" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+  - Option "vendorcharacter" has autocomplete enabled
+  - Option "itemname" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+  - Option "itemname" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+⚠️ Command vending has autocomplete options but no autocomplete handler!
+✅ Loaded command: vending from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\jobs\vending.js
+✅ Loaded command: updateparties from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\moderation\fixparties.js
+  - Option "character" has autocomplete enabled
+  - Option "item" has autocomplete enabled
+  - Option "character" has autocomplete enabled
+  - Option "petname" has autocomplete enabled
+  - Option "character" has autocomplete enabled
+⚠️ Command mod has autocomplete options but no autocomplete handler!
+✅ Loaded command: mod from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\moderation\mod.js
+  - Option "item" has autocomplete enabled
+  - Option "ingredient" has autocomplete enabled
+✅ Loaded command: lookup from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\utility\lookup.js
+✅ Loaded command: roll from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\utility\roll.js
+✅ Loaded command: submit from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\utility\submit.js
+✅ Loaded command: tokens from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\utility\tokens.js
+  - Option "character_name" has autocomplete enabled
+  - Option "character_name" has autocomplete enabled
+  - Option "item" has autocomplete enabled
+⚠️ Command blight has autocomplete options but no autocomplete handler!
+✅ Loaded command: blight from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\world\blight.js
+  - Option "attacker" has autocomplete enabled
+  - Option "defender" has autocomplete enabled
+  - Option "attacker" has autocomplete enabled
+⚠️ Command combat has autocomplete options but no autocomplete handler!
+✅ Loaded command: combat from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\world\combat.js
+  - Option "charactername" has autocomplete enabled
+  - Option "questid" has autocomplete enabled
+⚠️ Command quest has autocomplete options but no autocomplete handler!
+✅ Loaded command: quest from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\world\quest.js
+❌ Error loading command from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\world\raid.js: OverwriteModelError: Cannot overwrite `Village` model once compiled.
+    at Mongoose.model (C:\Users\Ruu\Desktop\Tinglebot 2.0\node_modules\mongoose\lib\mongoose.js:610:13)
+    at Object.<anonymous> (C:\Users\Ruu\Desktop\Tinglebot 2.0\modules\villageModule.js:178:31)
+    at Module._compile (node:internal/modules/cjs/loader:1358:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1416:10)
+    at Module.load (node:internal/modules/cjs/loader:1208:32)
+    at Module._load (node:internal/modules/cjs/loader:1024:12)
+    at Module.require (node:internal/modules/cjs/loader:1233:19)
+    at require (node:internal/modules/helpers:179:18)
+    at Object.<anonymous> (C:\Users\Ruu\Desktop\Tinglebot 2.0\modules\raidModule.js:9:32)
+    at Module._compile (node:internal/modules/cjs/loader:1358:14)
+  - Option "charactername" has autocomplete enabled
+  - Option "destination" has autocomplete enabled
+⚠️ Command travel has autocomplete options but no autocomplete handler!
+✅ Loaded command: travel from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\world\travel.js
+  - Option "charactername" has autocomplete enabled
+  - Option "itemname" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+  - Option "itemname" has autocomplete enabled
+⚠️ Command village has autocomplete options but no autocomplete handler!
+✅ Loaded command: village from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\world\village.js
+🔄 Started refreshing 32 guild (/) commands for guild ID: 1305484048063529002
+(node:17380) Warning: Accessing non-existent property 'connectToInventories' of module exports inside circular dependency
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:17380) Warning: Accessing non-existent property 'fetchCharacterById' of module exports inside circular dependency
+(node:17380) Warning: Accessing non-existent property 'updateCharacterById' of module exports inside circular dependency
+✅ Successfully reloaded application (/) commands for guild ID: 1305484048063529002.
+🔄 Started refreshing 32 guild (/) commands for guild ID: 603960955839447050
+✅ Successfully reloaded application (/) commands for guild ID: 603960955839447050.
+✅ Successfully reloaded all guild (/) commands.

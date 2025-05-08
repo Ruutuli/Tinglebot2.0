@@ -4,20 +4,30 @@
 const mongoose = require('mongoose');
 
 // ============================================================================
-// ---- Utility Functions ----
+// ---- Constants ----
 // ============================================================================
-const { handleError } = require('../utils/globalErrorHandler');
+const DEFAULT_HEALTH = {
+    1: 100,
+    2: 200,
+    3: 300
+};
 
-// ============================================================================
-// ---- Imports ----
-// ============================================================================
-const { 
-    VILLAGE_CONFIG,
-    DEFAULT_HEALTH,
-    DEFAULT_TOKEN_REQUIREMENTS,
-    DEFAULT_RAID_PROTECTION,
-    DEFAULT_BLOOD_MOON_PROTECTION
-} = require('../modules/villageModule');
+const DEFAULT_TOKEN_REQUIREMENTS = {
+    2: 10000,
+    3: 50000
+};
+
+const DEFAULT_RAID_PROTECTION = {
+    1: false,
+    2: true,
+    3: true
+};
+
+const DEFAULT_BLOOD_MOON_PROTECTION = {
+    1: false,
+    2: false,
+    3: true
+};
 
 // ============================================================================
 // ---- Schema Definition ----
@@ -122,29 +132,12 @@ const VillageSchema = new mongoose.Schema({
 const Village = mongoose.model('Village', VillageSchema);
 
 // ============================================================================
-// ---- Initialization Functions ----
-// ============================================================================
-
-// ---- Function: initializeVillages ----
-// Initializes all villages in the database with default values
-const initializeVillages = async () => {
-    for (const village of VILLAGE_CONFIG) {
-        try {
-            const existingVillage = await Village.findOne({ name: village.name });
-            if (!existingVillage) {
-                await Village.create(village);
-                console.log(`[VillageModel.js] ✅ Initialized village: ${village.name}`);
-            } else {
-                console.log(`[VillageModel.js] ℹ️ Village already exists: ${village.name}`);
-            }
-        } catch (error) {
-            handleError(error, 'VillageModel.js');
-            console.error(`[VillageModel.js] ❌ Error initializing village: ${village.name}`, error);
-        }
-    }
-};
-
-// ============================================================================
 // ---- Exports ----
 // ============================================================================
-module.exports = { Village, initializeVillages };
+module.exports = { 
+    Village,
+    DEFAULT_HEALTH,
+    DEFAULT_TOKEN_REQUIREMENTS,
+    DEFAULT_RAID_PROTECTION,
+    DEFAULT_BLOOD_MOON_PROTECTION
+};
