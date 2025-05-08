@@ -203,122 +203,6 @@ function getSpecialCondition(seasonData, simTemp, simWind, precipLabel, rainStre
 }
 
 // ============================================================================
-// ------------------- Simulation: Basic -------------------
-// Returns a basic simulation using unweighted random selection
-// ============================================================================
-  
-// ------------------- Basic Weather Simulator -------------------
-// Simulates weather randomly without weighting or smoothing.
-function simulateWeather(village, season) {
-  try {
-    if (!seasonsData[village]) {
-      console.error('[weatherHandler.js]: Unknown village:', village);
-      throw new Error(`[weatherHandler.js]: Unknown village: ${village}`);
-    }
-    const seasonData = seasonsData[village].seasons[season];
-    if (!seasonData) {
-      console.error('[weatherHandler.js]: Unknown season for village:', village, season);
-      throw new Error(`[weatherHandler.js]: Unknown season "${season}" for village "${village}"`);
-    }
-
-    // ------------------- Temperature & Wind -------------------
-    const temperatureLabel = chooseRandom(seasonData.Temperature);
-    const windLabel = chooseRandom(seasonData.Wind);
-    const simTemp = parseFahrenheit(temperatureLabel);
-    const simWind = parseWind(windLabel);
-
-    // ------------------- Precipitation -------------------
-    const validPrecip = seasonData.Precipitation.filter(label =>
-      candidateMatches(label, simTemp, simWind)
-    );
-    const precipitationLabel = chooseRandom(validPrecip.length ? validPrecip : seasonData.Precipitation);
-
-    // ------------------- Special Conditions -------------------
-    const specialLabel = seasonData.Special.length > 0
-      ? chooseRandom(seasonData.Special)
-      : null;
-
-    // ------------------- Emoji Decoration -------------------
-    const temperatureObj = findWeatherEmoji('temperatures', temperatureLabel);
-    const windObj = findWeatherEmoji('winds', windLabel);
-    const precipitationObj = findWeatherEmoji('precipitations', precipitationLabel);
-    const specialObj = specialLabel ? findWeatherEmoji('specials', specialLabel) : null;
-
-    return {
-      village,
-      season,
-      temperature: { label: temperatureLabel, emoji: temperatureObj?.emoji || '' },
-      wind: { label: windLabel, emoji: windObj?.emoji || '' },
-      precipitation: { label: precipitationLabel, emoji: precipitationObj?.emoji || '' },
-      special: specialLabel ? { label: specialLabel, emoji: specialObj?.emoji || '' } : null
-    };
-  } catch (error) {
-    console.error('[weatherHandler.js]: simulateWeather error:', error);
-    throw error;
-  }
-}
-
-// ============================================================================
-// ------------------- Smoothing Helpers -------------------
-// Provides functions to smooth temperature and wind based on recent history
-// ============================================================================
-  
-// ------------------- Temperature Smoothing Choices -------------------
-// Filters temperature options close to the previous temperature.
-function getSmoothTemperatureChoices(currentTempF, seasonTemps, forceDrop = false) {
-  const maxDelta = forceDrop ? 0 : 10;
-  return seasonTemps.filter(label => {
-    const temp = parseFahrenheit(label);
-    return temp !== null && Math.abs(temp - currentTempF) <= maxDelta;
-  });
-}
-
-// ------------------- Wind Smoothing Choices -------------------
-// Restricts wind options to adjacent values in the wind ranking.
-function getSmoothWindChoices(currentWindLabel, seasonWinds) {
-  const index = seasonWinds.indexOf(currentWindLabel);
-  return [index - 1, index, index + 1]
-    .filter(i => i >= 0 && i < seasonWinds.length)
-    .map(i => seasonWinds[i]);
-}
-
-// ============================================================================
-// ------------------- Smoothing Wrappers -------------------
-// Wraps smoothing + weighting for temperature and wind
-// ============================================================================
-  
-// ------------------- Smoothed Temperature Selector -------------------
-// Chooses temperature with smoothing and modifiers.
-function getSmoothedTemperature(tempOptions, previous, hadStormYesterday, weightMap, modifierMap) {
-  const prevTemp = parseFahrenheit(previous?.temperature?.label);
-  const filtered = previous?.temperature?.label
-    ? getSmoothTemperatureChoices(prevTemp, tempOptions, hadStormYesterday)
-    : tempOptions;
-  return weightedChoice(filtered, weightMap, modifierMap);
-}
-
-// ------------------- Smoothed Wind Selector -------------------
-// Chooses wind with smoothing and modifiers.
-function getSmoothedWind(windOptions, previous, weightMap) {
-  const filtered = previous?.wind?.label
-    ? getSmoothWindChoices(previous.wind?.label, windOptions)
-    : windOptions;
-  return weightedChoice(filtered, weightMap);
-}
-
-// ============================================================================
-// ------------------- Weather History Updater -------------------
-// Maintains rolling history for smoothing transitions
-// ============================================================================
-  
-// ------------------- History Updater -------------------
-// Updates weather history buffer for a village.
-function updateWeatherHistory(village, weatherResult) {
-  weatherHistoryByVillage[village] = weatherHistoryByVillage[village].slice(-2);
-  weatherHistoryByVillage[village].push(weatherResult);
-}
-
-// ============================================================================
 // ------------------- Simulation: Weighted -------------------
 // Main exported function for weighted simulation with smoothing and modifiers
 // ============================================================================
@@ -384,15 +268,28 @@ function simulateWeightedWeather(village, season) {
     );
 
     // ------------------- Special Conditions -------------------
-    const specialLabel = getSpecialCondition(
-      seasonData,
-      simTemp,
-      simWind,
-      precipitationLabel,
-      rainStreak,
-      weatherData.specialWeights,
-      specialMods
-    );
+    let specialLabel = null;
+    let specialConsidered = false;
+    let specialReason = '';
+    if (seasonData.Special.length && Math.random() < 0.3) {
+      specialConsidered = true;
+      specialLabel = getSpecialCondition(
+        seasonData,
+        simTemp,
+        simWind,
+        precipitationLabel,
+        rainStreak,
+        weatherData.specialWeights,
+        specialMods
+      );
+      if (!specialLabel) {
+        specialReason = 'No valid special met the conditions.';
+      }
+    } else if (!seasonData.Special.length) {
+      specialReason = 'No specials defined for this season.';
+    } else {
+      specialReason = 'Random chance did not allow special weather today.';
+    }
 
     // ------------------- Probability Calculations -------------------
     const temperatureProbability = calculateCandidateProbability(
@@ -421,6 +318,21 @@ function simulateWeightedWeather(village, season) {
     const windObj = findWeatherEmoji('winds', windLabel);
     const precipitationObj = findWeatherEmoji('precipitations', precipitationLabel);
     const specialObj = specialLabel ? findWeatherEmoji('specials', specialLabel) : null;
+
+    // ------------------- Logging -------------------
+    console.log(`[WeatherSim] ${village} (${season})`);
+    console.log(`  Temperature: ${temperatureLabel} (${temperatureProbability.toFixed(1)}%)`);
+    console.log(`  Wind: ${windLabel} (${windProbability.toFixed(1)}%)`);
+    console.log(`  Precipitation: ${precipitationLabel} (${precipitationProbability.toFixed(1)}%)`);
+    if (specialConsidered) {
+      if (specialLabel) {
+        console.log(`  Special: ${specialLabel} (${specialProbability.toFixed(1)}%)`);
+      } else {
+        console.log(`  Special: None selected. Reason: ${specialReason}`);
+      }
+    } else {
+      console.log(`  Special: Not considered. Reason: ${specialReason}`);
+    }
 
     // ------------------- Update History -------------------
     updateWeatherHistory(village, {
@@ -463,6 +375,66 @@ function simulateWeightedWeather(village, season) {
 }
 
 // ============================================================================
+// ------------------- Smoothing Helpers -------------------
+// Provides functions to smooth temperature and wind based on recent history
+// ============================================================================
+  
+// ------------------- Temperature Smoothing Choices -------------------
+// Filters temperature options close to the previous temperature.
+function getSmoothTemperatureChoices(currentTempF, seasonTemps, forceDrop = false) {
+  const maxDelta = forceDrop ? 0 : 10;
+  return seasonTemps.filter(label => {
+    const temp = parseFahrenheit(label);
+    return temp !== null && Math.abs(temp - currentTempF) <= maxDelta;
+  });
+}
+
+// ------------------- Wind Smoothing Choices -------------------
+// Restricts wind options to adjacent values in the wind ranking.
+function getSmoothWindChoices(currentWindLabel, seasonWinds) {
+  const index = seasonWinds.indexOf(currentWindLabel);
+  return [index - 1, index, index + 1]
+    .filter(i => i >= 0 && i < seasonWinds.length)
+    .map(i => seasonWinds[i]);
+}
+
+// ============================================================================
+// ------------------- Smoothing Wrappers -------------------
+// Wraps smoothing + weighting for temperature and wind
+// ============================================================================
+  
+// ------------------- Smoothed Temperature Selector -------------------
+// Chooses temperature with smoothing and modifiers.
+function getSmoothedTemperature(tempOptions, previous, hadStormYesterday, weightMap, modifierMap) {
+  const prevTemp = parseFahrenheit(previous?.temperature?.label);
+  const filtered = previous?.temperature?.label
+    ? getSmoothTemperatureChoices(prevTemp, tempOptions, hadStormYesterday)
+    : tempOptions;
+  return weightedChoice(filtered, weightMap, modifierMap);
+}
+
+// ------------------- Smoothed Wind Selector -------------------
+// Chooses wind with smoothing and modifiers.
+function getSmoothedWind(windOptions, previous, weightMap) {
+  const filtered = previous?.wind?.label
+    ? getSmoothWindChoices(previous.wind?.label, windOptions)
+    : windOptions;
+  return weightedChoice(filtered, weightMap);
+}
+
+// ============================================================================
+// ------------------- Weather History Updater -------------------
+// Maintains rolling history for smoothing transitions
+// ============================================================================
+  
+// ------------------- History Updater -------------------
+// Updates weather history buffer for a village.
+function updateWeatherHistory(village, weatherResult) {
+  weatherHistoryByVillage[village] = weatherHistoryByVillage[village].slice(-2);
+  weatherHistoryByVillage[village].push(weatherResult);
+}
+
+// ============================================================================
 // ------------------- Exports -------------------
 // Export core simulation methods and utility functions
 // ============================================================================
@@ -474,7 +446,5 @@ module.exports = {
   parseFahrenheit,
   parseWind,
   precipitationMatches,
-  simulateWeather,
-  candidateMatches,
   simulateWeightedWeather
 };
