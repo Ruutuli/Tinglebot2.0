@@ -447,9 +447,8 @@ async function handleBarter(interaction) {
       }
   
       // Use VendingModel to check shop inventory
-      const VendingInventory = mongoose.model('VendingInventory', vendingInventorySchema);
+      const VendingInventory = getVendingModel(targetShopName);
       const requestedItem = await VendingInventory.findOne({ 
-        characterName: targetShopName,
         itemName: requestedItemName
       });
       
@@ -553,9 +552,8 @@ async function handleFulfill(interaction) {
       }
   
       // ------------------- Validate Vendor Inventory -------------------
-      const VendingInventory = mongoose.model('VendingInventory', vendingInventorySchema);
+      const VendingInventory = getVendingModel(vendor.name);
       const stockItem = await VendingInventory.findOne({
-        characterName: vendor.name,
         itemName: itemName
       });
   
@@ -676,8 +674,8 @@ async function handleViewShop(interaction) {
         : VIEW_SHOP_IMAGE_URL;
   
       // Use VendingModel to fetch inventory
-      const VendingInventory = mongoose.model('VendingInventory', vendingInventorySchema);
-      const items = await VendingInventory.find({ characterName: characterName });
+      const VendingInventory = getVendingModel(characterName);
+      const items = await VendingInventory.find({});
 
       if (!items || items.length === 0) {
         console.warn(`[handleViewShop]: No items found in vending inventory for ${characterName}.`);
@@ -1160,10 +1158,10 @@ async function handleVendingSync(interaction) {
       
       // ------------------- Step 7: Insert Into Database -------------------
       console.log('[handleVendingSync] Creating vending inventory entries...');
-      const VendingInventory = mongoose.model('VendingInventory', vendingInventorySchema);
+      const VendingInventory = getVendingModel(character.name);
       
       // Clear any existing vending inventory for this character
-      await VendingInventory.deleteMany({ characterName: character.name });
+      await VendingInventory.deleteMany({});
       
       // Create new vending inventory entries with proper type conversion
       const vendingEntries = parsedRows.map(row => ({
