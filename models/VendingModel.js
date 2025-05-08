@@ -1,7 +1,7 @@
 // ------------------- Import necessary modules -------------------
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
-const { connectToInventories } = require('../database/db');
+const { connectToVending } = require('../database/db');
 
 // ------------------- Define the vending inventory schema -------------------
 const vendingInventorySchema = new Schema({
@@ -23,16 +23,16 @@ const vendingInventorySchema = new Schema({
 // ------------------- Initialize the vending inventory model -------------------
 const initializeVendingInventoryModel = async (characterName) => {
   console.log(`[initializeVendingInventoryModel]: Initializing vending inventory model for ${characterName}`);
-  const inventoriesConnection = await connectToInventories();
+  const vendingConnection = await connectToVending();
 
-  if (!inventoriesConnection) {
-    throw new Error(`[initializeVendingInventoryModel]: Failed to connect to the inventories database.`);
+  if (!vendingConnection) {
+    throw new Error(`[initializeVendingInventoryModel]: Failed to connect to the vending database.`);
   }
-  console.log(`[initializeVendingInventoryModel]: Successfully connected to the inventories database.`);
+  console.log(`[initializeVendingInventoryModel]: Successfully connected to the vending database.`);
 
   // Create a unique model name for each character's vending inventory
   const modelName = `VendingInventory_${characterName.toLowerCase()}`;
-  return inventoriesConnection.model(modelName, vendingInventorySchema, characterName.toLowerCase());
+  return vendingConnection.model(modelName, vendingInventorySchema, characterName.toLowerCase());
 };
 
 // ------------------- Define the vending request schema -------------------

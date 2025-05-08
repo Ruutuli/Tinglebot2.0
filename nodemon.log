@@ -190,7 +190,7 @@
 ⚠️ Command village has autocomplete options but no autocomplete handler!
 ✅ Loaded command: village from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\world\village.js
 🔄 Started refreshing 35 guild (/) commands for guild ID: 1305484048063529002
-(node:42232) Warning: Accessing non-existent property 'connectToInventories' of module exports inside circular dependency
+(node:36780) Warning: Accessing non-existent property 'connectToInventories' of module exports inside circular dependency
 (Use `node --trace-warnings ...` to show where the warning was created)
-(node:42232) Warning: Accessing non-existent property 'fetchCharacterById' of module exports inside circular dependency
-(node:42232) Warning: Accessing non-existent property 'updateCharacterById' of module exports inside circular dependency
+(node:36780) Warning: Accessing non-existent property 'fetchCharacterById' of module exports inside circular dependency
+(node:36780) Warning: Accessing non-existent property 'updateCharacterById' of module exports inside circular dependency
