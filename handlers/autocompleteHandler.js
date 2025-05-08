@@ -89,7 +89,7 @@ async function handleAutocomplete(interaction) {
           await handleVendorCharacterAutocomplete(interaction);
         } else if (focusedName === "itemname") {
           const subcommand = interaction.options.getSubcommand();
-          if (subcommand === "restock") {
+          if (subcommand === "add") {
             await handleVendingRestockAutocomplete(interaction, focusedOption);
           } else {
             await handleVendingBarterAutocomplete(interaction, focusedOption);
