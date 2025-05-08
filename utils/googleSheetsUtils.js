@@ -495,20 +495,20 @@ async function validateVendingSheet(sheetUrl, characterName) {
             };
         }
 
-        // Expected headers
+        // Expected headers - updated to match actual sheet
         const expectedHeaders = [
-            'Character Name',
-            'Slot',
-            'Item Name',
-            'Stock Qty',
-            'Cost Each',
-            'Points Spent',
-            'Bought From',
-            'Token Price',
-            'Art Price',
-            'Other Price',
-            'Trades Open',
-            'Month'
+            'CHARACTER NAME',
+            'SLOT',
+            'ITEM NAME',
+            'STOCK QTY',
+            'COST EACH',
+            'POINTS SPENT',
+            'BOUGHT FROM',
+            'TOKEN PRICE',
+            'ART PRICE',
+            'OTHER PRICE',
+            'TRADES OPEN?',
+            'DATE'
         ];
 
         // Check headers
@@ -519,7 +519,8 @@ async function validateVendingSheet(sheetUrl, characterName) {
             return {
                 success: false,
                 message: `❌ Missing required headers: ${missingHeaders.join(', ')}\n\n` +
-                    'Please make sure your sheet has all the required headers in the correct order.'
+                    'Please make sure your sheet has all the required headers in the correct order:\n' +
+                    expectedHeaders.join(', ')
             };
         }
 
