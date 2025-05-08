@@ -443,6 +443,70 @@ async function validateInventorySheet(spreadsheetUrl, characterName) {
     }
   }
   
+// ------------------- validateVendingSheet------------------- 
+async function validateVendingSheet(spreadsheetUrl, characterName) {
+    const spreadsheetId = extractSpreadsheetId(spreadsheetUrl);
+  
+    if (!spreadsheetId) {
+      return {
+        success: false,
+        message: "**Error:** Invalid Google Sheets URL.\n\n**Fix:** Please double-check you pasted a full valid URL like:\n> https://docs.google.com/spreadsheets/d/your-spreadsheet-id/edit"
+      };
+    }
+  
+    const auth = await authorizeSheets();
+    try {
+      const headerRow = await readSheetData(auth, spreadsheetId, 'vendingShop!A1:L1');
+      const expectedHeaders = [
+        'CHARACTER NAME', 'SLOT', 'ITEM NAME', 'STOCK QTY', 'COST EACH', 'POINTS SPENT',
+        'BOUGHT FROM', 'TOKEN PRICE', 'ART PRICE', 'OTHER PRICE', 'TRADES OPEN?', 'DATE'
+      ];
+  
+      if (!headerRow || headerRow.length === 0) {
+        return {
+          success: false,
+          message: "**Error:** The `vendingShop` tab exists but has no header data.\n\n**Fix:** Please copy the correct header row into A1:L1."
+        };
+      }
+  
+      const headers = headerRow[0];
+      const allHeadersMatch = expectedHeaders.every((header, index) => headers[index] === header);
+  
+      if (!allHeadersMatch) {
+        return {
+          success: false,
+          message: "**Error:** The headers do not match the required format.\n\n**Fix:** Ensure A1:L1 exactly reads:\n```CHARACTER NAME, SLOT, ITEM NAME, STOCK QTY, COST EACH, POINTS SPENT, BOUGHT FROM, TOKEN PRICE, ART PRICE, OTHER PRICE, TRADES OPEN?, DATE```"
+        };
+      }
+  
+      return { success: true, message: "✅ Vending sheet is set up correctly!" };
+  
+    } catch (error) {
+      if (error.message.includes('Requested entity was not found')) {
+        return {
+          success: false,
+          message: "**Error:** The Google Sheet was not found.\n\n**Fix:** Please double-check your URL and that the sheet is shared with editor access to:\n📧 `tinglebot@rotw-tinglebot.iam.gserviceaccount.com`"
+        };
+      }
+      if (error.message.includes('Unable to parse range')) {
+        return {
+          success: false,
+          message: "**Error:** Cannot find the correct cells A1:L1.\n\n**Fix:** Double-check your tab name is exactly `vendingShop` and that there is data starting at row 1."
+        };
+      }
+      if (error.code === 403) {
+        return {
+          success: false,
+          message: "**Error:** Permission denied.\n\n**Fix:** Make sure the Google Sheet is shared with editor access to:\n📧 `tinglebot@rotw-tinglebot.iam.gserviceaccount.com`"
+        };
+      }
+      return {
+        success: false,
+        message: `Unknown error accessing sheet: ${error.message}`
+      };
+    }
+  }
+  
 // ============================================================================
 // Error Logging
 // ------------------- Log Error Details -------------------
@@ -546,6 +610,7 @@ module.exports = {
     convertWixImageLinkForSheets,
     deleteInventorySheetData,
     validateInventorySheet,
+    validateVendingSheet,
     safeAppendDataToSheet,
     
     // Error logging

@@ -726,100 +726,101 @@ async function handleViewShop(interaction) {
   
 // ------------------- handleVendingSetup -------------------
 async function handleVendingSetup(interaction) {
-    try {
-    await interaction.deferReply({ ephemeral: true });
-    
-      const characterName = interaction.options.getString('charactername');
-      const shopLink = interaction.options.getString('shoplink');
-      const pouch = interaction.options.getString('pouch');
-      const points = interaction.options.getInteger('points') || 0;
-      const shopImage = interaction.options.getString('shopimage') || null;
-      const userId = interaction.user.id;
+    const characterName = interaction.options.getString('character');
+    const shopLink = interaction.options.getString('shoplink');
+    const pouchSize = interaction.options.getInteger('pouchsize');
+    const points = interaction.options.getInteger('points') || 0;
+    const shopImage = interaction.options.getString('shopimage');
 
-    // Validate and process setup
-      const character = await fetchCharacterByNameAndUserId(characterName, userId);
-      if (!character) {
-      throw new Error(`Character '${characterName}' not found or doesn't belong to you.`);
+    // Validate character exists
+    const character = await getCharacterByName(characterName);
+    if (!character) {
+        return interaction.reply({
+            content: `❌ Character "${characterName}" not found. Please check the spelling and try again.`,
+            ephemeral: true
+        });
     }
 
-    // Validate job
-      const job = character.job?.toLowerCase();
-      if (job !== 'shopkeeper' && job !== 'merchant') {
-      throw new Error(`${character.name} must be a Shopkeeper or Merchant to set up a shop.`);
+    // Validate pouch size
+    if (pouchSize < 1 || pouchSize > 10) {
+        return interaction.reply({
+            content: '❌ Pouch size must be between 1 and 10.',
+            ephemeral: true
+        });
     }
 
-    // Validate shop link with detailed feedback
+    // Validate shop link
     if (!shopLink) {
-      throw new Error('No shop link provided. Please provide a Google Sheets URL.');
-    }
-
-    if (!shopLink.includes('docs.google.com/spreadsheets')) {
-      throw new Error(`Invalid link format. The link you provided (${shopLink}) is not a Google Sheets URL.\n\nPlease make sure you're using a link that starts with "https://docs.google.com/spreadsheets/..."`);
+        return interaction.reply({
+            content: '❌ Please provide a Google Sheets link for your shop.',
+            ephemeral: true
+        });
     }
 
     if (!isValidGoogleSheetsUrl(shopLink)) {
-      throw new Error(`Invalid Google Sheets link. The link you provided (${shopLink}) appears to be a Google Sheets URL but may not be properly formatted or accessible.\n\nPlease ensure:\n1. The sheet is shared with "Anyone with the link can view" permissions\n2. The link is copied directly from your browser's address bar\n3. The sheet exists and is accessible`);
+        return interaction.reply({
+            content: '❌ Invalid Google Sheets URL. Please provide a valid Google Sheets link.',
+            ephemeral: true
+        });
     }
 
-    // Update character
+    // Validate the vending sheet
+    const validation = await validateVendingSheet(shopLink, characterName);
+    if (!validation.success) {
+        return interaction.reply({
+            content: validation.message,
+            ephemeral: true
+        });
+    }
+
+    // Update character's vending setup
     await updateCharacterById(character._id, {
-      shopLink,
-      vendingType: character.job,
-      shopPouch: pouch,
-      pouchSize: pouch === 'none' ? (character.job.toLowerCase() === 'merchant' ? 3 : 5) : 
-                pouch === 'bronze' ? 15 : 
-                pouch === 'silver' ? 30 : 50,
-      vendingPoints: points,
-      shopImage: shopImage || null,
-      vendingSetup: true
+        vendingSetup: {
+            shopLink,
+            pouchSize,
+            shopImage: shopImage || null
+        },
+        vendingPoints: points
     });
 
-    // Create sync prompt buttons
-    const syncRow = new ActionRowBuilder()
-      .addComponents(
-        new ButtonBuilder()
-          .setCustomId(`vending_sync_${characterName}`)
-          .setLabel('Yes, sync now!')
-          .setStyle(ButtonStyle.Success)
-          .setEmoji('🔄'),
-        new ButtonBuilder()
-          .setCustomId('vending_sync_later')
-          .setLabel('No, I\'ll do it later')
-          .setStyle(ButtonStyle.Secondary)
-          .setEmoji('⏰')
-      );
-
-    // Send success message with sync prompt
+    // Create success embed
     const successEmbed = new EmbedBuilder()
-      .setTitle('✅ Shop Setup Complete!')
-      .setDescription(`Your shop has been set up successfully!\n\nWould you like to sync your inventory now?`)
-      .addFields(
-        { name: '📊 Shop Link', value: shopLink },
-        { name: '🎒 Pouch Size', value: `${pouch.charAt(0).toUpperCase() + pouch.slice(1)}` },
-        { name: '🪙 Vending Points', value: `${points}` },
-        { name: '💡 Tip', value: 'Syncing will import all items from your Google Sheet into your shop.' }
-      )
-      .setColor('#25C059');
+        .setTitle('🎪 Vending Shop Setup Complete!')
+        .setDescription(`Your vending shop has been set up successfully!`)
+        .addFields(
+            { name: '👤 Character', value: characterName },
+            { name: '🔗 Shop Link', value: shopLink },
+            { name: '🎒 Pouch Size', value: `${pouchSize}` },
+            { name: '🪙 Vending Points', value: `${points}` }
+        )
+        .setColor('#00ff00')
+        .setTimestamp();
 
     if (shopImage) {
-      successEmbed.setImage(shopImage);
+        successEmbed.setImage(shopImage);
     }
 
-    await interaction.editReply({
-      embeds: [successEmbed],
-      components: [syncRow],
-      ephemeral: true
+    // Create sync button
+    const syncButton = new ButtonBuilder()
+        .setCustomId(`vending_sync_${characterName}`)
+        .setLabel('Sync Shop Now')
+        .setStyle(ButtonStyle.Primary)
+        .setEmoji('🔄');
+
+    const laterButton = new ButtonBuilder()
+        .setCustomId(`vending_sync_later_${characterName}`)
+        .setLabel('Sync Later')
+        .setStyle(ButtonStyle.Secondary)
+        .setEmoji('⏰');
+
+    const row = new ActionRowBuilder()
+        .addComponents(syncButton, laterButton);
+
+    await interaction.reply({
+        embeds: [successEmbed],
+        components: [row]
     });
-
-    } catch (error) {
-      handleError(error, 'vendingHandler.js');
-    console.error('[handleVendingSetup]:', error);
-    await interaction.editReply({
-      content: `❌ Error setting up shop: ${error.message}`,
-        ephemeral: true
-      });
-    }
-  }
+}
   
 // ------------------- handleVendingSync -------------------
 // Syncs inventory from Google Sheets to the vending database for a character.
