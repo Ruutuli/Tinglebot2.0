@@ -24,7 +24,7 @@ const { appendSheetData, authorizeSheets, extractSpreadsheetId, safeAppendDataTo
 // ---- Database Models ----
 // ============================================================================
 const ItemModel = require('../../models/ItemModel');
-const { Village } = require('../../models/VillageModel');
+const { Village, initializeVillages } = require('../../models/VillageModel');
 
 // ============================================================================
 // ---- Constants ----
@@ -627,10 +627,13 @@ module.exports = {
                 return interaction.reply({ content: '❌ **Village name is required.**', ephemeral: true });
             }
 
+            // Initialize villages if they don't exist
+            await initializeVillages();
+
             // Fetch the village details from the database
             const village = await Village.findOne({ name: { $regex: `^${villageName}$`, $options: 'i' } });
             if (!village) {
-                console.warn(`[village.js] execute: Village "${villageName}" not found.`);
+                console.warn(`[village.js] execute: Village "${villageName}" not found after initialization.`);
                 return interaction.reply({ content: `❌ **Village "${villageName}" not found.**`, ephemeral: true });
             }
 
@@ -677,6 +680,22 @@ module.exports = {
                     statusMessage = '📈 **Upgradable**';
                 }
 
+                // Get next level requirements
+                const requiredTokens = village.tokenRequirements.get(nextLevel.toString()) || 0;
+                const currentTokens = village.currentTokens || 0;
+                const tokenProgress = formatProgress(currentTokens, requiredTokens);
+
+                // Format materials requirements for next level
+                const materialsForNextLevel = await formatMaterials(
+                    Object.fromEntries(
+                        Object.entries(materials).filter(([key, value]) => {
+                            const required = value.required?.[nextLevel];
+                            return required !== undefined && required > 0;
+                        }).map(([key, value]) => [key, value.required[nextLevel]])
+                    ),
+                    materials
+                );
+
                 // Build the embed
                 const embed = new EmbedBuilder()
                     .setTitle(`${village.name} (Level ${village.level})`)
@@ -690,6 +709,15 @@ module.exports = {
                     .setColor(village.color)
                     .setThumbnail(VILLAGE_IMAGES[villageName]?.thumbnail || '')
                     .setImage(VILLAGE_IMAGES[villageName]?.main || '');
+
+                // Add next level requirements if not at max level
+                if (village.level < 3) {
+                    embed.addFields(
+                        { name: `📈 **__Requirements for Level ${nextLevel}__**`, value: '> The following items are needed to upgrade:', inline: false },
+                        { name: '🪙 **__Tokens__**', value: `> ${tokenProgress}`, inline: false },
+                        { name: '📦 **__Materials__**', value: materialsForNextLevel.join('\n'), inline: false }
+                    );
+                }
 
                 return interaction.reply({ embeds: [embed], ephemeral: true });
             }
