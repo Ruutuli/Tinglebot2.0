@@ -35,6 +35,7 @@ const {
  handleCharacterBasedCommandsAutocomplete,
  handleAutocomplete,
  handleChangeJobNewJobAutocomplete,
+ handleCreateCharacterRaceAutocomplete,
 } = require("../../handlers/autocompleteHandler");
 const {
  canChangeJob,
@@ -150,13 +151,14 @@ module.exports = {
         .setRequired(true)
         .setMinValue(1)
       )
-      .addStringOption((option) =>
+      .addNumberOption((option) =>
        option
         .setName("height")
         .setDescription(
          "Height of the character in cm (must be a positive number)"
         )
         .setRequired(true)
+        .setMinValue(0.1)
       )
       .addIntegerOption((option) =>
        option
@@ -228,13 +230,14 @@ module.exports = {
         .setRequired(true)
         .setMinValue(1)
       )
-      .addStringOption((option) =>
+      .addNumberOption((option) =>
        option
         .setName("height")
         .setDescription(
          "Height of the character in cm (must be a positive number)"
         )
         .setRequired(true)
+        .setMinValue(0.1)
       )
       .addIntegerOption((option) =>
        option
@@ -306,13 +309,14 @@ module.exports = {
         .setRequired(true)
         .setMinValue(1)
       )
-      .addStringOption((option) =>
+      .addNumberOption((option) =>
        option
         .setName("height")
         .setDescription(
          "Height of the character in cm (must be a positive number)"
         )
         .setRequired(true)
+        .setMinValue(0.1)
       )
       .addIntegerOption((option) =>
        option
@@ -384,13 +388,14 @@ module.exports = {
         .setRequired(true)
         .setMinValue(1)
       )
-      .addStringOption((option) =>
+      .addNumberOption((option) =>
        option
         .setName("height")
         .setDescription(
          "Height of the character in cm (must be a positive number)"
         )
         .setRequired(true)
+        .setMinValue(0.1)
       )
       .addIntegerOption((option) =>
        option
@@ -642,7 +647,9 @@ module.exports = {
    const focusedOption = interaction.options.getFocused(true);
  
    if (subcommandGroup === "create") {
-    await createCharacterAutocomplete(interaction);
+    if (focusedOption.name === "race") {
+      await handleCreateCharacterRaceAutocomplete(interaction, focusedOption);
+    }
    } else {
     switch (subcommand) {
       case "edit":
@@ -755,8 +762,7 @@ async function handleCreateCharacter(interaction, subcommand) {
   const age = interaction.options.getInteger("age");
   const hearts = interaction.options.getInteger("hearts");
   const stamina = interaction.options.getInteger("stamina");
-  const heightStr = interaction.options.getString("height");
-  const height = parseFloat(heightStr);
+  const height = interaction.options.getNumber("height");
 
   // Validate age
   if (age < 1) {
