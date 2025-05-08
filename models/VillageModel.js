@@ -46,7 +46,62 @@ const VillageSchema = new mongoose.Schema({
   levelHealth: {
     type: Map,
     of: Number,
-    default: { 1: 100, 2: 150, 3: 200 },
+    default: { 1: 100, 2: 200, 3: 300 }, // Updated health values per level
+  },
+  // New fields for raid protection and repair
+  raidProtection: {
+    type: Map,
+    of: Boolean,
+    default: { 1: false, 2: true, 3: true }, // Level 2+ has raid protection
+  },
+  bloodMoonProtection: {
+    type: Map,
+    of: Boolean,
+    default: { 1: false, 2: false, 3: true }, // Only level 3 has blood moon protection
+  },
+  // Track lost resources during damage
+  lostResources: {
+    type: Map,
+    of: Object,
+    default: {},
+  },
+  // Track repair progress
+  repairProgress: {
+    type: Map,
+    of: Object,
+    default: {},
+  },
+  // Track contributors
+  contributors: {
+    type: Map,
+    of: Object,
+    default: {},
+  },
+  // Track cooldowns
+  cooldowns: {
+    type: Map,
+    of: Date,
+    default: {},
+  },
+  // Vending tier and discounts
+  vendingTier: {
+    type: Number,
+    default: 1,
+  },
+  vendingDiscount: {
+    type: Number,
+    default: 0, // Percentage discount
+  },
+  // Status tracking
+  status: {
+    type: String,
+    enum: ['upgradable', 'damaged', 'max'],
+    default: 'upgradable',
+  },
+  // Last damage timestamp
+  lastDamageTime: {
+    type: Date,
+    default: null,
   },
 }, { timestamps: true });
 
@@ -118,8 +173,7 @@ const initializeVillages = async () => {
         console.log(`ℹ️ Village already exists: ${village.name}`);
       }
     } catch (error) {
-    handleError(error, 'VillageModel.js');
-
+      handleError(error, 'VillageModel.js');
       console.error(`❌ Error initializing village: ${village.name}`, error);
     }
   }
