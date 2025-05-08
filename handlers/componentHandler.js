@@ -54,7 +54,7 @@ const {
 
 const { handleModalSubmission } = require('./modalHandler');
 const { syncInventory } = require('../handlers/syncHandler');
-const { handleVendingViewVillage } = require('./vendingHandler');
+const { handleVendingViewVillage, handleSyncButton } = require('./vendingHandler');
 
 // ------------------- Utility Functions -------------------
 const {
@@ -506,6 +506,10 @@ async function handleComponentInteraction(interaction) {
     if (interaction.customId.startsWith('vending_view_')) {
       const villageKey = interaction.customId.replace('vending_view_', '');
       return await handleVendingViewVillage(interaction, villageKey);
+    }
+
+    if (interaction.customId.startsWith('vending_sync_')) {
+      return await handleSyncButton(interaction);
     }
 
     console.warn(`[componentHandler.js]: Unhandled component interaction: ${interaction.customId}`);

@@ -33,7 +33,7 @@ const command = new SlashCommandBuilder()
   // ------------------- Shop Setup & Management -------------------
   .addSubcommand(sub =>
     sub.setName('setup')
-      .setDescription('🎪 Set up your vending shop')
+      .setDescription('🎪 Set up or update your vending shop')
       .addStringOption(opt =>
         opt.setName('charactername')
           .setDescription('Your character\'s name')
@@ -55,6 +55,10 @@ const command = new SlashCommandBuilder()
             { name: 'Silver (+30 slots)', value: 'silver' },
             { name: 'Gold (+50 slots)', value: 'gold' }
           )
+      )
+      .addBooleanOption(opt =>
+        opt.setName('sync')
+          .setDescription('Automatically sync your shop after setup?')
       )
   )
 
@@ -102,26 +106,34 @@ const command = new SlashCommandBuilder()
           .setAutocomplete(true)
       )
       .addStringOption(opt =>
-        opt.setName('itemname')
-          .setDescription('Item to edit (or "shop image" to update banner)')
+        opt.setName('action')
+          .setDescription('What would you like to edit?')
           .setRequired(true)
+          .addChoices(
+            { name: '📝 Edit Item', value: 'item' },
+            { name: '🖼️ Update Shop Banner', value: 'banner' }
+          )
+      )
+      .addStringOption(opt =>
+        opt.setName('itemname')
+          .setDescription('Item to edit (required for item editing)')
           .setAutocomplete(true)
       )
       .addAttachmentOption(opt =>
         opt.setName('shopimagefile')
-          .setDescription('Upload new shop banner image')
+          .setDescription('Upload new shop banner image (required for banner update)')
       )
       .addIntegerOption(opt =>
         opt.setName('tokenprice')
-          .setDescription('New token price')
+          .setDescription('New token price (for item editing)')
       )
       .addStringOption(opt =>
         opt.setName('artprice')
-          .setDescription('New art price')
+          .setDescription('New art price (for item editing)')
       )
       .addStringOption(opt =>
         opt.setName('otherprice')
-          .setDescription('New other price')
+          .setDescription('New other price (for item editing)')
       )
   )
 
