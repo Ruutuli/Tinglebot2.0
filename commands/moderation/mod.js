@@ -51,6 +51,7 @@ const {
 const { v4: uuidv4 } = require('uuid');
 
 const { createMountEncounterEmbed } = require('../../embeds/embeds');
+const { generateWeatherEmbed } = require('../../.weather/weatherEmbed');
 
 // ============================================================================
 // ------------------- Constants -------------------
@@ -957,25 +958,13 @@ async function handleWeather(interaction) {
     const currentSeason = getCurrentSeason();
     
     const weather = simulateWeightedWeather(village, currentSeason);
+    weather.season = currentSeason; // Add season to weather object for embed
     
-    const embed = new EmbedBuilder()
-      .setTitle(`🌤️ Weather Test for ${village}`)
-      .setColor('#00ff00')
-      .addFields(
-        { name: 'Season', value: currentSeason, inline: true },
-        { name: 'Temperature', value: `${weather.temperature.emoji} ${weather.temperature.label}`, inline: true },
-        { name: 'Wind', value: `${weather.wind.emoji} ${weather.wind.label}`, inline: true },
-        { name: 'Conditions', value: `${weather.precipitation.emoji} ${weather.precipitation.label}`, inline: true }
-      );
-      
-    if (weather.special) {
-      embed.addFields({ name: 'Special', value: `${weather.special.emoji} ${weather.special.label}`, inline: true });
-    }
-    
-    await interaction.editReply({ embeds: [embed] });
+    const { embed, files } = await generateWeatherEmbed(village, weather);
+    await interaction.editReply({ embeds: [embed], files });
   } catch (error) {
-    handleError(error, 'mod.js');
-    await interaction.editReply({ content: '❌ Error testing weather system', ephemeral: true });
+    console.error('[mod.js]: Error handling weather command:', error);
+    await interaction.editReply({ content: '❌ An error occurred while generating the weather report.' });
   }
 }
 
