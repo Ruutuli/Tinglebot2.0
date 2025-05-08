@@ -2,38 +2,28 @@
 // ---- Standard Libraries ----
 // ============================================================================
 const mongoose = require('mongoose');
+const { EmbedBuilder } = require('discord.js');
 
 // ============================================================================
 // ---- Utility Functions ----
 // ============================================================================
 const { handleError } = require('../utils/globalErrorHandler');
+const { capitalizeVillageName } = require('../utils/stringUtils');
+
+// ============================================================================
+// ---- Imports ----
+// ============================================================================
+const { 
+    Village,
+    DEFAULT_HEALTH,
+    DEFAULT_TOKEN_REQUIREMENTS,
+    DEFAULT_RAID_PROTECTION,
+    DEFAULT_BLOOD_MOON_PROTECTION
+} = require('../models/VillageModel');
 
 // ============================================================================
 // ---- Constants ----
 // ============================================================================
-const DEFAULT_HEALTH = {
-    1: 100,
-    2: 200,
-    3: 300
-};
-
-const DEFAULT_TOKEN_REQUIREMENTS = {
-    2: 10000,
-    3: 50000
-};
-
-const DEFAULT_RAID_PROTECTION = {
-    1: false,
-    2: true,
-    3: true
-};
-
-const DEFAULT_BLOOD_MOON_PROTECTION = {
-    1: false,
-    2: false,
-    3: true
-};
-
 const VILLAGE_CONFIG = {
     Rudania: {
         name: 'Rudania',
@@ -185,7 +175,7 @@ const VillageSchema = new mongoose.Schema({
 // ============================================================================
 // ---- Model Creation ----
 // ============================================================================
-const Village = mongoose.model('Village', VillageSchema);
+const VillageModel = mongoose.model('Village', VillageSchema);
 
 // ============================================================================
 // ---- Initialization Functions ----
@@ -196,7 +186,7 @@ const Village = mongoose.model('Village', VillageSchema);
 const initializeVillages = async () => {
     for (const [name, config] of Object.entries(VILLAGE_CONFIG)) {
         try {
-            const existingVillage = await Village.findOne({ name });
+            const existingVillage = await VillageModel.findOne({ name });
             if (!existingVillage) {
                 // Create new village with initial state
                 const villageData = {
@@ -208,7 +198,7 @@ const initializeVillages = async () => {
                         ])
                     )
                 };
-                await Village.create(villageData);
+                await VillageModel.create(villageData);
                 console.log(`[villageModule.js] ✅ Initialized village: ${name}`);
             } else {
                 console.log(`[villageModule.js] ℹ️ Village already exists: ${name}`);
@@ -263,7 +253,7 @@ async function getVillageInfo(villageName) {
 // ------------------- Handle Village Damage -------------------
 async function damageVillage(villageName, damageAmount) {
     try {
-        const village = await Village.findOne({ name: { $regex: `^${villageName}$`, $options: 'i' } });
+        const village = await VillageModel.findOne({ name: { $regex: `^${villageName}$`, $options: 'i' } });
         if (!village) {
             throw new Error(`[damageVillage] Village "${villageName}" not found. Ensure the name is correct.`);
         }
@@ -329,7 +319,7 @@ async function damageVillage(villageName, damageAmount) {
         await village.save();
         return { village, removedResources };
     } catch (error) {
-    handleError(error, 'villageModule.js');
+        handleError(error, 'villageModule.js');
 
         console.error(`[damageVillage] Error for village "${villageName}":`, error.message);
         throw error;
@@ -393,7 +383,7 @@ async function applyVillageDamage(villageName, monster, thread) {
             thread.setArchived(true);
         }
     } catch (error) {
-    handleError(error, 'villageModule.js');
+        handleError(error, 'villageModule.js');
 
         console.error('[applyVillageDamage] Error applying village damage:', error);
     }
@@ -403,11 +393,11 @@ async function applyVillageDamage(villageName, monster, thread) {
 // ---- Exports ----
 // ============================================================================
 module.exports = { 
-    Village, 
+    VillageModel,
     initializeVillages,
     VILLAGE_CONFIG,
-    DEFAULT_HEALTH,
-    DEFAULT_TOKEN_REQUIREMENTS,
-    DEFAULT_RAID_PROTECTION,
-    DEFAULT_BLOOD_MOON_PROTECTION
+    damageVillage,
+    applyVillageDamage,
+    updateVillageHealth,
+    getVillageInfo
 };
