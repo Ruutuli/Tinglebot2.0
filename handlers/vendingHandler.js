@@ -796,13 +796,13 @@ async function handleVendingSetup(interaction) {
 
     // Create sync button
     const syncButton = new ButtonBuilder()
-        .setCustomId(`vending_sync_${characterName}`)
+        .setCustomId(`vending_sync_now_${characterName}`)
         .setLabel('Sync Shop Now')
         .setStyle(ButtonStyle.Primary)
         .setEmoji('🔄');
 
     const laterButton = new ButtonBuilder()
-        .setCustomId(`vending_sync_later_${characterName}`)
+        .setCustomId('vending_sync_later')
         .setLabel('Sync Later')
         .setStyle(ButtonStyle.Secondary)
         .setEmoji('⏰');
@@ -827,7 +827,9 @@ async function handleVendingSync(interaction, characterName) {
       throw new Error(`Character ${characterName} not found`);
     }
 
-    if (!character.shopLink) {
+    // Check both possible locations for the shop link
+    const shopLink = character.shopLink || character.vendingSetup?.shopLink;
+    if (!shopLink) {
       throw new Error('No shop link found for this character. Please set up your shop first using /vending setup');
     }
 
@@ -836,7 +838,7 @@ async function handleVendingSync(interaction, characterName) {
     console.log(`[handleVendingSync]: Got vending model for ${characterName}`);
 
     // Parse the sheet data
-    const parsedRows = await parseSheetData(character.shopLink);
+    const parsedRows = await parseSheetData(shopLink);
     console.log(`[handleVendingSync]: Parsed ${parsedRows.length} rows from sheet`);
 
     // Clear existing vending inventory
@@ -853,19 +855,24 @@ async function handleVendingSync(interaction, characterName) {
         continue;
       }
 
+      // Convert price fields, using null for "N/A"
+      const tokenPrice = row.tokenPrice === 'N/A' ? null : Number(row.tokenPrice) || null;
+      const artPrice = row.artPrice === 'N/A' ? null : Number(row.artPrice) || null;
+      const otherPrice = row.otherPrice === 'N/A' ? null : Number(row.otherPrice) || null;
+
       vendingEntries.push({
         characterName: character.name,
         itemName: row.itemName,
-        itemId: item._id, // Use the item's MongoDB ID
-        stockQty: row.stockQty,
-        costEach: row.costEach,
-        pointsSpent: row.pointsSpent,
-        boughtFrom: row.boughtFrom,
-        tokenPrice: row.tokenPrice,
-        artPrice: row.artPrice,
-        otherPrice: row.otherPrice,
-        tradesOpen: row.tradesOpen,
-        slot: row.slot,
+        itemId: item._id,
+        stockQty: Number(row.stockQty) || 0,
+        costEach: Number(row.costEach) || 0,
+        pointsSpent: Number(row.pointsSpent) || 0,
+        boughtFrom: row.boughtFrom || character.currentVillage,
+        tokenPrice,
+        artPrice,
+        otherPrice,
+        tradesOpen: row.tradesOpen === 'Yes' || row.tradesOpen === true,
+        slot: row.slot || 'Slot 1',
         date: new Date()
       });
     }
@@ -1313,17 +1320,20 @@ function generateFulfillEmbed(request) {
 // ------------------- handleSyncButton -------------------
 async function handleSyncButton(interaction) {
   try {
-    const [_, action, characterName] = interaction.customId.split('_');
+    const [_, action, ...nameParts] = interaction.customId.split('_');
     
-    if (action === 'later') {
+    if (action === 'sync' && nameParts[0] === 'later') {
       await interaction.update({
-        content: 'No problem! You can run `/vending setup` again when you\'re ready to sync your shop.',
+        content: '🔄 Syncing cancelled. Please use `/vending setup` again when you are ready to sync and set up your vending character.',
         embeds: [],
         components: []
       });
       return;
     }
 
+    // Extract character name correctly by removing 'now_' prefix if present
+    const characterName = nameParts[0] === 'now' ? nameParts.slice(1).join('_') : nameParts.join('_');
+    
     await interaction.update({
       content: '🔄 Syncing your shop inventory...',
       embeds: [],
