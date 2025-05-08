@@ -5,6 +5,7 @@
 
 const { EmbedBuilder, AttachmentBuilder } = require('discord.js');
 const { generateBanner } = require('./bannerGenerator');
+const { convertToHyruleanDate } = require('../modules/calendarModule');
 
 // ============================================================================
 // ------------------- Constants -------------------
@@ -21,6 +22,12 @@ const SEASON_ICONS = {
   summer: '.weather/assets/seasons/summer.png',
   fall: '.weather/assets/seasons/fall.png',
   winter: '.weather/assets/seasons/winter.png'
+};
+
+const VILLAGE_ICONS = {
+  Rudania: '.weather/assets/icons/[RotW] village crest_rudania_.png',
+  Inariko: '.weather/assets/icons/[RotW] village crest_inariko_.png',
+  Vhintl: '.weather/assets/icons/[RotW] village crest_vhintl_.png'
 };
 
 // ============================================================================
@@ -45,6 +52,11 @@ async function generateWeatherEmbed(village, weather) {
     const seasonIconName = `${seasonKey}.png`;
     const seasonAttachment = new AttachmentBuilder(seasonIconPath, { name: seasonIconName });
 
+    // Village crest icon
+    const crestIconPath = VILLAGE_ICONS[village];
+    const crestIconName = `crest_${village.toLowerCase()}.png`;
+    const crestAttachment = new AttachmentBuilder(crestIconPath, { name: crestIconName });
+
     // Compose emoji summary
     const tempEmoji = weather.temperature.emoji || '🌡️';
     const windEmoji = weather.wind.emoji || '💨';
@@ -52,15 +64,22 @@ async function generateWeatherEmbed(village, weather) {
     const specialEmoji = weather.specialConditions && weather.specialConditions.length > 0 ? '✨' : '';
     const emojiSummary = `${tempEmoji}${windEmoji}${precipEmoji}${specialEmoji}`;
 
+    // Get real and Hyrulean date
+    const now = new Date();
+    const realDate = now.toISOString().slice(0, 10); // YYYY-MM-DD
+    const hyruleanDate = convertToHyruleanDate(now);
+    const dateLine = `Real Date: ${realDate}, Hyrulean Date: ${hyruleanDate}`;
+
     // Create base embed
     const embed = new EmbedBuilder()
       .setColor(VILLAGE_COLORS[village])
       .setTitle(`${village}'s Daily Weather Forecast`)
-      .setDescription(`${emojiSummary}\nCurrent weather conditions for ${village}`)
+      .setDescription(`${emojiSummary}\n${dateLine}`)
+      .setAuthor({ name: `${village} Town Hall`, iconURL: `attachment://${crestIconName}` })
       .addFields(
-        { name: 'Temperature', value: `${tempEmoji} ${weather.temperature.label || `${weather.temperature.value}°F`}`, inline: false },
-        { name: 'Wind', value: `${windEmoji} ${weather.wind.label || `${weather.wind.speed} mph ${weather.wind.direction}`}`, inline: false },
-        { name: 'Precipitation', value: `${precipEmoji} ${weather.precipitation.label}`, inline: false }
+        { name: 'Temperature', value: weather.temperature.label || `${weather.temperature.value}°F`, inline: false },
+        { name: 'Wind', value: weather.wind.label || `${weather.wind.speed} mph ${weather.wind.direction}`, inline: false },
+        { name: 'Precipitation', value: weather.precipitation.label, inline: false }
       )
       .setThumbnail(`attachment://${seasonIconName}`)
       .setTimestamp();
@@ -76,10 +95,11 @@ async function generateWeatherEmbed(village, weather) {
       embed.setImage(`attachment://${banner.name}`);
     }
     
-    // Return both attachments if banner exists, else just season icon
+    // Return all attachments
+    const files = banner ? [banner, seasonAttachment, crestAttachment] : [seasonAttachment, crestAttachment];
     return {
       embed,
-      files: banner ? [banner, seasonAttachment] : [seasonAttachment]
+      files
     };
   } catch (error) {
     console.error('[weatherEmbed.js]: Error generating weather embed:', error);
