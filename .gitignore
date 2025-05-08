@@ -4,8 +4,6 @@
 .cursor/rules/ruurule.mdc
 .dependency-cruiser.js
 config/
-data/encounter.json
-database/
 eslint.config.mjs
 node_modules
 nodemon.log
