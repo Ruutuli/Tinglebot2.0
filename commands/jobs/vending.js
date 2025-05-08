@@ -28,24 +28,39 @@ const {
 // ============================================================================
 const command = new SlashCommandBuilder()
   .setName('vending')
-  .setDescription('Manage vending and barter system')
+  .setDescription('🎪 Manage your vending shop and trades')
 
-  // ------------------- /vending collect_points -------------------
+  // ------------------- Shop Setup & Management -------------------
   .addSubcommand(sub =>
-    sub.setName('collect_points')
-      .setDescription('🎯 Award vending points to a character')
+    sub.setName('setup')
+      .setDescription('🎪 Set up your vending shop')
       .addStringOption(opt =>
         opt.setName('charactername')
-          .setDescription('Name of the character')
+          .setDescription('Your character\'s name')
           .setRequired(true)
           .setAutocomplete(true)
       )
+      .addStringOption(opt =>
+        opt.setName('shoplink')
+          .setDescription('Google Sheets URL for your shop inventory')
+          .setRequired(true)
+      )
+      .addStringOption(opt =>
+        opt.setName('pouch')
+          .setDescription('Choose your shop\'s pouch size')
+          .setRequired(true)
+          .addChoices(
+            { name: 'None', value: 'none' },
+            { name: 'Bronze (+15 slots)', value: 'bronze' },
+            { name: 'Silver (+30 slots)', value: 'silver' },
+            { name: 'Gold (+50 slots)', value: 'gold' }
+          )
+      )
   )
 
-  // ------------------- /vending restock -------------------
   .addSubcommand(sub =>
-    sub.setName('restock')
-      .setDescription('📦 Add a new item to your vending shop')
+    sub.setName('add')
+      .setDescription('📦 Add items to your shop')
       .addStringOption(opt =>
         opt.setName('charactername')
           .setDescription('Your character\'s name')
@@ -54,92 +69,32 @@ const command = new SlashCommandBuilder()
       )
       .addStringOption(opt =>
         opt.setName('itemname')
-          .setDescription('Name of the item to restock')
-          .setRequired(true)
-          .setAutocomplete(true)
-      )
-      .addStringOption(opt =>
-        opt.setName('slot')
-          .setDescription('Manually assign a slot (e.g., Slot 3)')
-          .setRequired(true)
-          .setAutocomplete(true)
-      )
-      .addIntegerOption(opt =>
-        opt.setName('stockqty')
-          .setDescription('Quantity to add to stock')
-          .setRequired(true)
-      )
-      .addIntegerOption(opt =>
-        opt.setName('tokenprice')
-          .setDescription('Token price (optional)')
-      )
-      .addStringOption(opt =>
-        opt.setName('artprice')
-          .setDescription('Art price (optional)')
-      )
-      .addStringOption(opt =>
-        opt.setName('otherprice')
-          .setDescription('Other price (optional)')
-      )
-      .addBooleanOption(opt =>
-        opt.setName('tradesopen')
-          .setDescription('Is this item open for trades?')
-      )
-  )
-
-  // ------------------- /vending barter -------------------
-  .addSubcommand(sub =>
-    sub.setName('barter')
-      .setDescription('🔄 Submit a barter request')
-      .addStringOption(opt =>
-        opt.setName('charactername')
-          .setDescription('Your character\'s name')
-          .setRequired(true)
-          .setAutocomplete(true)
-      )
-      .addStringOption(opt =>
-        opt.setName('vendorcharacter')
-          .setDescription('Name of the character/shop you\'re bartering with')
-          .setRequired(true)
-          .setAutocomplete(true)
-      )
-      .addStringOption(opt =>
-        opt.setName('itemname')
-          .setDescription('Item you want to barter for')
+          .setDescription('Name of the item to add')
           .setRequired(true)
           .setAutocomplete(true)
       )
       .addIntegerOption(opt =>
         opt.setName('quantity')
-          .setDescription('Quantity to request')
+          .setDescription('How many to add')
           .setRequired(true)
       )
-      .addStringOption(opt =>
-        opt.setName('paymentmethod')
-          .setDescription('What you are offering in return')
-          .setRequired(true)
+      .addIntegerOption(opt =>
+        opt.setName('tokenprice')
+          .setDescription('Price in tokens (optional)')
       )
       .addStringOption(opt =>
-        opt.setName('notes')
-          .setDescription('Optional notes for the vendor')
+        opt.setName('artprice')
+          .setDescription('Price in art (optional)')
+      )
+      .addStringOption(opt =>
+        opt.setName('otherprice')
+          .setDescription('Other price details (optional)')
       )
   )
 
-  // ------------------- /vending fulfill -------------------
   .addSubcommand(sub =>
-    sub.setName('fulfill')
-      .setDescription('✅ Fulfill a pending barter request')
-      .addStringOption(opt =>
-        opt.setName('fulfillmentid')
-          .setDescription('The unique Fulfillment ID')
-          .setRequired(true)
-      )
-  )
-
-  // ------------------- /vending editshop -------------------
-  .addSubcommand(sub =>
-    sub.setName('editshop')
-      .setDescription('🛠️ Edit an existing item or upload a shop image')
+    sub.setName('edit')
+      .setDescription('✏️ Edit your shop items or settings')
       .addStringOption(opt =>
         opt.setName('charactername')
           .setDescription('Your character\'s name')
@@ -148,13 +103,13 @@ const command = new SlashCommandBuilder()
       )
       .addStringOption(opt =>
         opt.setName('itemname')
-          .setDescription('Item name or type "shop image" to upload banner')
+          .setDescription('Item to edit (or "shop image" to update banner)')
           .setRequired(true)
           .setAutocomplete(true)
       )
       .addAttachmentOption(opt =>
         opt.setName('shopimagefile')
-          .setDescription('Upload shop banner image (used if itemname is "shop image")')
+          .setDescription('Upload new shop banner image')
       )
       .addIntegerOption(opt =>
         opt.setName('tokenprice')
@@ -168,84 +123,12 @@ const command = new SlashCommandBuilder()
         opt.setName('otherprice')
           .setDescription('New other price')
       )
-      .addBooleanOption(opt =>
-        opt.setName('tradesopen')
-          .setDescription('Update if trades are open')
-      )
   )
 
-  // ------------------- /vending sync -------------------
+  // ------------------- Viewing & Browsing -------------------
   .addSubcommand(sub =>
-    sub.setName('sync')
-      .setDescription('🔁 Sync inventory from Google Sheets (Old Stock only)')
-      .addStringOption(opt =>
-        opt.setName('charactername')
-          .setDescription('Character to sync')
-          .setRequired(true)
-          .setAutocomplete(true)
-      )
-  )
-
-  // ------------------- /vending pouch -------------------
-  .addSubcommand(sub =>
-    sub.setName('pouch')
-      .setDescription('🎒 Upgrade your pouch size')
-      .addStringOption(opt =>
-        opt.setName('charactername')
-          .setDescription('Character upgrading pouch')
-          .setRequired(true)
-          .setAutocomplete(true)
-      )
-      .addStringOption(opt =>
-        opt.setName('pouchtype')
-          .setDescription('Choose a new pouch tier')
-          .setRequired(true)
-          .addChoices(
-            { name: 'None', value: 'none' },
-            { name: 'Bronze', value: 'bronze' },
-            { name: 'Silver', value: 'silver' },
-            { name: 'Gold', value: 'gold' }
-          )
-      )
-  )
-
-  // ------------------- /vending setup -------------------
-  .addSubcommand(sub =>
-    sub.setName('setup')
-      .setDescription('🧾 Set up a character to become a vendor')
-      .addStringOption(opt =>
-        opt.setName('charactername')
-          .setDescription('Name of the vendor character')
-          .setRequired(true)
-          .setAutocomplete(true)
-      )
-      .addStringOption(opt =>
-        opt.setName('shoplink')
-          .setDescription('Google Sheets URL to your shop')
-          .setRequired(true)
-      )
-      .addStringOption(opt =>
-        opt.setName('pouch')
-          .setDescription('Starting pouch tier')
-          .setRequired(true)
-          .addChoices(
-            { name: 'None', value: 'none' },
-            { name: 'Bronze', value: 'bronze' },
-            { name: 'Silver', value: 'silver' },
-            { name: 'Gold', value: 'gold' }
-          )
-      )
-      .addIntegerOption(opt =>
-        opt.setName('points')
-          .setDescription('Initial vending point total')
-          .setRequired(true)
-      )
-  )
-
-  // ------------------- /vending viewshop -------------------
-  .addSubcommand(sub =>
-    sub.setName('viewshop')
-      .setDescription('🛒 View a character’s active vending shop')
+    sub.setName('view')
+      .setDescription('👀 View a shop\'s inventory')
       .addStringOption(opt =>
         opt.setName('charactername')
           .setDescription('Shop owner to view')
@@ -254,30 +137,88 @@ const command = new SlashCommandBuilder()
       )
   )
 
-  // ------------------- /vending shoplink -------------------
   .addSubcommand(sub =>
-    sub.setName('shoplink')
-      .setDescription('🔗 Link or update your character’s vending sheet')
+    sub.setName('stock')
+      .setDescription('📊 View current month\'s vending stock by village')
+  )
+
+  // ------------------- Trading System -------------------
+  .addSubcommand(sub =>
+    sub.setName('buy')
+      .setDescription('🛍️ Buy items from a shop')
       .addStringOption(opt =>
         opt.setName('charactername')
-          .setDescription('Character to assign the sheet to')
+          .setDescription('Your character\'s name')
           .setRequired(true)
           .setAutocomplete(true)
       )
       .addStringOption(opt =>
-        opt.setName('link')
-          .setDescription('Google Sheets URL')
+        opt.setName('vendorcharacter')
+          .setDescription('Shop you\'re buying from')
+          .setRequired(true)
+          .setAutocomplete(true)
+      )
+      .addStringOption(opt =>
+        opt.setName('itemname')
+          .setDescription('Item you want to buy')
+          .setRequired(true)
+          .setAutocomplete(true)
+      )
+      .addIntegerOption(opt =>
+        opt.setName('quantity')
+          .setDescription('How many to buy')
           .setRequired(true)
       )
   )
 
-  // ------------------- /vending viewstock -------------------
   .addSubcommand(sub =>
-    sub.setName('viewstock')
-      .setDescription('📊 View current month’s vending stock by village')
+    sub.setName('trade')
+      .setDescription('🔄 Propose a trade for an item')
+      .addStringOption(opt =>
+        opt.setName('charactername')
+          .setDescription('Your character\'s name')
+          .setRequired(true)
+          .setAutocomplete(true)
+      )
+      .addStringOption(opt =>
+        opt.setName('vendorcharacter')
+          .setDescription('Shop you\'re trading with')
+          .setRequired(true)
+          .setAutocomplete(true)
+      )
+      .addStringOption(opt =>
+        opt.setName('itemname')
+          .setDescription('Item you want to trade for')
+          .setRequired(true)
+          .setAutocomplete(true)
+      )
+      .addIntegerOption(opt =>
+        opt.setName('quantity')
+          .setDescription('Quantity to request')
+          .setRequired(true)
+      )
+      .addStringOption(opt =>
+        opt.setName('offer')
+          .setDescription('What you are offering in return')
+          .setRequired(true)
+      )
+      .addStringOption(opt =>
+        opt.setName('notes')
+          .setDescription('Additional notes for the vendor')
+      )
+  )
+
+  .addSubcommand(sub =>
+    sub.setName('accept')
+      .setDescription('✅ Accept a pending trade request')
+      .addStringOption(opt =>
+        opt.setName('fulfillmentid')
+          .setDescription('The trade request ID')
+          .setRequired(true)
+      )
   );
 
- // ============================================================================
+// ============================================================================
 // ------------------- Dispatcher Function -------------------
 // Routes interaction to the correct handler based on subcommand.
 // ============================================================================
