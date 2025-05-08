@@ -720,7 +720,7 @@ module.exports = {
                     );
                 }
 
-                return interaction.reply({ embeds: [embed], ephemeral: true });
+                return interaction.reply({ embeds: [embed] });
             }
 
             // ------------------- Subcommand: Upgrade -------------------
