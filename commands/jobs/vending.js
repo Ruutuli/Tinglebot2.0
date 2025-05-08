@@ -60,6 +60,10 @@ const command = new SlashCommandBuilder()
         opt.setName('points')
           .setDescription('Your current vending points (if any)')
       )
+      .addStringOption(opt =>
+        opt.setName('shopimage')
+          .setDescription('URL for your shop banner image (optional)')
+      )
   )
 
   .addSubcommand(sub =>
