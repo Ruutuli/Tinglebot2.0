@@ -598,31 +598,43 @@ async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, c
 async function parseSheetData(sheetUrl) {
   try {
     const spreadsheetId = extractSpreadsheetId(sheetUrl);
-    if (!spreadsheetId) {
-      throw new Error('Invalid Google Sheets URL');
-    }
-
     const auth = await authorizeSheets();
-    const sheetData = await readSheetData(auth, spreadsheetId, 'vendingShop!A2:L');
+    const sheetData = await readSheetData(auth, spreadsheetId, 'vendingShop!A2:L') || [];
     
-    if (!Array.isArray(sheetData) || sheetData.length === 0) {
-      return [];
+    if (!Array.isArray(sheetData)) {
+      throw new Error('Unable to read data from the vendingShop sheet');
     }
 
-    return sheetData.map(row => ({
-      itemName: row[2]?.trim() || '',
-      stockQty: parseInt(row[3]) || 0,
-      costEach: parseInt(row[4]) || 0,
-      pointsSpent: parseInt(row[5]) || 0,
-      boughtFrom: row[6]?.trim() || '',
-      tokenPrice: parseInt(row[7]) || 0,
-      artPrice: row[8]?.trim() || 'N/A',
-      otherPrice: row[9]?.trim() || 'N/A',
-      tradesOpen: row[10]?.toLowerCase() === 'true',
-      slot: row[1]?.trim() || ''
-    })).filter(row => row.itemName && row.stockQty > 0);
+    const parsedRows = [];
+    for (const row of sheetData) {
+      // Skip rows that don't have an item name or have zero stock
+      if (!row[2] || !row[3] || row[3] <= 0) continue;
+
+      // Validate that column L contains "Old Stock"
+      if (!row[11] || row[11].trim() !== 'Old Stock') {
+        console.warn(`Skipping item "${row[2]}" - missing "Old Stock" in date column`);
+        continue;
+      }
+
+      parsedRows.push({
+        characterName: row[0]?.trim(),
+        slot: row[1]?.trim(),
+        itemName: row[2]?.trim(),
+        stockQty: parseInt(row[3]) || 0,
+        costEach: parseInt(row[4]) || 0,
+        pointsSpent: parseInt(row[5]) || 0,
+        boughtFrom: row[6]?.trim(),
+        tokenPrice: row[7]?.trim() || 'N/A',
+        artPrice: row[8]?.trim() || 'N/A',
+        otherPrice: row[9]?.trim() || 'N/A',
+        tradesOpen: row[10]?.trim() === 'Yes',
+        date: row[11]?.trim()
+      });
+    }
+
+    return parsedRows;
   } catch (error) {
-    console.error('[parseSheetData]: Error parsing sheet data:', error);
+    console.error('Error parsing sheet data:', error);
     throw error;
   }
 }

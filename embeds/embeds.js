@@ -372,30 +372,38 @@ const createVendorEmbed = (character) => {
 };
 
 // ------------------- Vending Setup Instructions -------------------
-function createVendingSetupInstructionsEmbed(characterName, issueType, sheetLink) {
-  const commonNotice = `Please fix the issue in your Google Sheet and try \`/vending setup\` again.\nIf you're stuck, ask a moderator for help.`;
+function createVendingSetupInstructionsEmbed(character = null) {
+  if (character) {
+    // Success state with character info
+    return new EmbedBuilder()
+      .setTitle('🎪 Vending Shop Setup Complete!')
+      .setDescription(`Your vending shop has been set up successfully!`)
+      .addFields(
+        { name: '👤 Character', value: character.name },
+        { name: '🔗 Shop Link', value: `[View Sheet](${character.shopLink})` },
+        { name: '🎒 Pouch Type', value: capitalizeFirstLetter(character.shopPouch) },
+        { name: '🪙 Vending Points', value: `${character.vendingPoints || 0}` },
+        { name: '⚠️ Important: Old Stock Only', value: 'Column L must contain "Old Stock" for each item. Only add your initial old stock to the sheet - do not edit it after setup.' }
+      )
+      .setColor('#00ff00')
+      .setTimestamp()
+      .setFooter({ text: 'Note: The shop sheet should not be edited after initial setup' });
+  }
 
-  const issueMessages = {
-    missing_sheet: {
-      title: "❌ Missing 'vendingShop' Tab",
-      description: `The sheet is missing a tab named \`vendingShop\`.\n\n1️⃣ Open your Google Sheet\n2️⃣ Create a new tab named exactly:\n\`\`\`text\nvendingShop\n\`\`\`\n\n📎 Sheet: [Open Sheet](${sheetLink})`,
-    },
-    missing_headers: {
-      title: "❌ Missing or Incorrect Headers",
-      description: `The \`vendingShop\` tab must have headers in **A1 to L1** exactly like this:\n\`\`\`text\nCHARACTER NAME, SLOT, ITEM NAME, STOCK QTY, COST EACH, POINTS SPENT, BOUGHT FROM, TOKEN PRICE, ART PRICE, OTHER PRICE, TRADES OPEN?, DATE\n\`\`\`\n\n📎 Sheet: [Open Sheet](${sheetLink})`,
-    },
-  };
-
-  const issue = issueMessages[issueType] || {
-    title: "❌ Unknown Error",
-    description: `Something went wrong. Please double-check your vending sheet.`,
-  };
-
+  // Initial setup instructions
   return new EmbedBuilder()
-    .setTitle(issue.title)
-    .setDescription(`${issue.description}\n\n---\n${commonNotice}`)
-    .setColor("Red")
-    .setTimestamp();
+    .setTitle('🎪 Vending Shop Setup Instructions')
+    .setDescription('Follow these steps to set up your vending shop:')
+    .addFields(
+      { name: '1️⃣ Create Your Shop Sheet', value: 'Create a Google Sheet with a tab named "vendingShop". The sheet must have these columns:\nA: Character Name\nB: Slot\nC: Item Name\nD: Stock Qty\nE: Cost Each\nF: Points Spent\nG: Bought From\nH: Token Price\nI: Art Price\nJ: Other Price\nK: Trades Open\nL: Date (must contain "Old Stock")' },
+      { name: '2️⃣ Add Your Old Stock', value: 'Add your initial old stock items to the sheet. For each item:\n• Fill in all required columns\n• Set column L to "Old Stock"\n• Do not edit the sheet after setup' },
+      { name: '3️⃣ Sync Your Shop', value: 'Click the "Sync Shop Now" button below to sync your inventory. This will:\n• Import your old stock\n• Set up your vending database\n• Initialize your shop' },
+      { name: '4️⃣ Manage Your Shop', value: 'After setup, use these commands:\n• `/vending restock` - Add new items\n• `/vending edit` - Update prices\n• `/vending sync` - Sync changes' },
+      { name: '⚠️ Important: Old Stock Only', value: '• Column L must contain "Old Stock" for each item\n• Only add your initial old stock to the sheet\n• Do not edit the sheet after setup\n• All future changes must be made through bot commands' }
+    )
+    .setColor('#00ff00')
+    .setTimestamp()
+    .setFooter({ text: 'Note: The shop sheet should not be edited after initial setup' });
 }
 
 // ------------------- Subsection Title ------------------- 
