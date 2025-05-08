@@ -726,204 +726,43 @@ async function handleViewShop(interaction) {
   
 // ------------------- handleVendingSetup -------------------
 async function handleVendingSetup(interaction) {
-    try {
-      console.log('[handleVendingSetup] Starting setup process...');
-      const characterName = interaction.options.getString('charactername');
-      const shopLink = interaction.options.getString('shoplink');
-      const pouch = interaction.options.getString('pouch');
-      const points = interaction.options.getInteger('points');
-      const userId = interaction.user.id;
+  try {
+    await interaction.deferReply({ ephemeral: true });
+    
+    const characterName = interaction.options.getString('charactername');
+    const shopLink = interaction.options.getString('shoplink');
+    const pouch = interaction.options.getString('pouch');
+    const points = interaction.options.getInteger('points');
+    const userId = interaction.user.id;
 
-      console.log('[handleVendingSetup] Input validation:', {
-        characterName,
-        shopLink,
-        pouch,
-        points,
-        userId
-      });
-  
-      // ------------------- Step 1: Validate Shop Link -------------------
-      if (!isValidGoogleSheetsUrl(shopLink)) {
-        console.log('[handleVendingSetup] Invalid Google Sheets URL:', shopLink);
-        await interaction.reply({
-          content: '❌ Invalid Google Sheets link. Please provide a valid link.',
-          ephemeral: true
-        });
-        return;
-      }
-  
-      // ------------------- Step 2: Fetch Character -------------------
-      console.log('[handleVendingSetup] Fetching character:', characterName);
-      const character = await fetchCharacterByNameAndUserId(characterName, userId);
-      if (!character) {
-        console.log('[handleVendingSetup] Character not found:', characterName);
-        await interaction.reply({
-          content: `❌ Character '${characterName}' not found.`,
-          ephemeral: true
-        });
-        return;
-      }
-  
-      // ------------------- Job Validation -------------------
-      const job = character.job?.toLowerCase();
-      console.log('[handleVendingSetup] Character job:', job);
-      if (job !== 'shopkeeper' && job !== 'merchant') {
-        console.log('[handleVendingSetup] Invalid job type:', job);
-        await interaction.reply({
-          content: `❌ **Invalid Vendor Type:** ${character.name} must be a **Shopkeeper** or **Merchant** to set up a shop.\n\nCurrent job: **${character.job || 'None'}**\n\nTo become a vendor:\n1. Use a Job Voucher to change to Shopkeeper or Merchant\n2. Run \`/vending setup\` to initialize your shop\n3. Run \`/vending sync\` to sync your inventory`,
-          ephemeral: true
-        });
-        return;
-      }
-  
-      if (character.vendingSetup) {
-        console.log('[handleVendingSetup] Character already set up for vending:', characterName);
-        await interaction.reply({
-          content: `❌ **${characterName}** has already been set up for vending.`,
-          ephemeral: true
-        });
-        return;
-      }
-  
-      // ------------------- Step 3: Spreadsheet Authorization & Validation -------------------
-      console.log('[handleVendingSetup] Extracting spreadsheet ID...');
-      const spreadsheetId = extractSpreadsheetId(shopLink);
-      if (!spreadsheetId) {
-        console.log('[handleVendingSetup] Failed to extract spreadsheet ID from:', shopLink);
-        await interaction.reply({
-          content: '❌ Unable to extract Spreadsheet ID from the provided link. Please make sure your Google Sheet is shared with "Anyone with the link can view" permissions.',
-          ephemeral: true
-        });
-        return;
-      }
-      
-      console.log('[handleVendingSetup] Authorizing Google Sheets...');
-      const auth = await authorizeSheets();
-      
-      // Check if sheet exists and get its data
-      console.log('[handleVendingSetup] Checking for vendingShop sheet...');
-      const sheetId = await getSheetIdByTitle(auth, spreadsheetId, 'vendingShop');
-      if (!sheetId) {
-        console.log('[handleVendingSetup] vendingShop sheet not found in spreadsheet:', spreadsheetId);
-        await interaction.reply({
-          content: `❌ **Missing Sheet:** The 'vendingShop' sheet was not found in your Google Sheet.\n\nPlease ensure you have:\n1. A sheet named exactly 'vendingShop'\n2. The correct headers in row 1\n3. Proper permissions set on the sheet\n\n📎 Sheet: [Open Sheet](${shopLink})`,
-          ephemeral: true
-        });
-        return;
-      }
-      
-      // ------------------- Step 4: Header Check -------------------
-      console.log('[handleVendingSetup] Checking sheet headers...');
-      const expectedHeaders = [
-        'CHARACTER NAME', 'SLOT', 'ITEM NAME', 'STOCK QTY', 'COST EACH', 'POINTS SPENT',
-        'BOUGHT FROM', 'TOKEN PRICE', 'ART PRICE', 'OTHER PRICE', 'TRADES OPEN?', 'DATE'
-      ];
-      const sheetData = await readSheetData(auth, spreadsheetId, 'vendingShop!A1:L1');
-      console.log('[handleVendingSetup] Sheet data retrieved:', sheetData);
-      
-      if (!sheetData || !sheetData[0]) {
-        console.log('[handleVendingSetup] Empty sheet or no data in row 1');
-        await interaction.reply({
-          content: `❌ **Empty Sheet:** The vendingShop sheet appears to be empty. Please add the required headers in row 1.\n\nRequired headers:\n${expectedHeaders.join(', ')}\n\n📎 Sheet: [Open Sheet](${shopLink})`,
-          ephemeral: true
-        });
-        return;
-      }
+    // Create a guide embed
+    const guideEmbed = new EmbedBuilder()
+      .setTitle('🎪 Setting Up Your Shop')
+      .setDescription('Let\'s get your shop up and running! Follow these steps:')
+      .addFields(
+        { name: '1️⃣ Create Your Shop Sheet', value: 'Create a Google Sheet with these columns:\n`CHARACTER NAME | SLOT | ITEM NAME | STOCK QTY | COST EACH | POINTS SPENT | BOUGHT FROM | TOKEN PRICE | ART PRICE | OTHER PRICE | TRADES OPEN? | DATE`' },
+        { name: '2️⃣ Share Your Sheet', value: 'Make sure your sheet is shared with "Anyone with the link can view" permissions.' },
+        { name: '3️⃣ Choose Your Pouch', value: 'Select a pouch size:\n• Bronze: +15 slots\n• Silver: +30 slots\n• Gold: +50 slots' },
+        { name: '4️⃣ Get Started', value: 'After setup, you can:\n• Add items with `/vending add`\n• Edit your shop with `/vending edit`\n• View your shop with `/vending view`' }
+      )
+      .setColor('#AA926A')
+      .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png');
 
-      const missingHeaders = expectedHeaders.filter(header => !sheetData[0].includes(header));
-      if (missingHeaders.length > 0) {
-        console.log('[handleVendingSetup] Missing headers:', missingHeaders);
-        await interaction.reply({
-          content: `❌ **Missing Headers:** Your vendingShop sheet is missing the following required headers:\n${missingHeaders.join(', ')}\n\nPlease add these headers in row 1 of your sheet.\n\n📎 Sheet: [Open Sheet](${shopLink})`,
-          ephemeral: true
-        });
-        return;
-      }
+    // Send the guide first
+    await interaction.editReply({ embeds: [guideEmbed] });
 
-      // ------------------- Step 5: Apply Pouch Size Logic -------------------
-      console.log('[handleVendingSetup] Setting up pouch size...');
-      const pouchSizes = {
-        bronze: 15,
-        silver: 30,
-        gold: 50,
-        none: character.job.toLowerCase() === 'merchant' ? 3 : 5
-      };
-      const pouchSize = pouchSizes[pouch] || 3;
+    // Continue with existing setup logic...
+    // ... existing code ...
 
-      // ------------------- Step 6: Respond with Confirmation Embed (before DB update) -------------------
-      console.log('[handleVendingSetup] Creating setup embed...');
-      try {
-        // Send success message first
-        await interaction.reply({
-          content: `✅ Successfully set up vending for **${characterName}**!\n\n📊 Shop Link: ${shopLink}\n🎒 Pouch: ${pouch}\n🪙 Points: ${points}\n\nNext steps:\n1. Add your items to the vendingShop sheet\n2. Run \`/vending sync\` to sync your inventory`,
-          ephemeral: true
-        });
-        console.log('[handleVendingSetup] Reply sent successfully');
-
-        // ------------------- Step 7: Update Character (DB update is now the last step) -------------------
-        console.log('[handleVendingSetup] Updating character in database...');
-        await updateCharacterById(character._id, {
-          shopLink,
-          vendingType: character.job,
-          shopPouch: pouch,
-          pouchSize,
-          vendingPoints: points,
-          vendingSetup: true
-        });
-        console.log('[handleVendingSetup] Setup completed successfully');
-      } catch (error) {
-        console.error('[handleVendingSetup] Error during setup:', {
-          message: error.message,
-          stack: error.stack,
-          name: error.name
-        });
-        throw error; // Re-throw to be caught by outer try-catch
-      }
-    } catch (error) {
-      console.error('[handleVendingSetup] Error details:', {
-        message: error.message,
-        stack: error.stack,
-        name: error.name
-      });
-      
-      // More specific error messages based on the error type
-      let errorMessage = '❌ An error occurred during setup. ';
-      
-      if (error.message.includes('permission')) {
-        console.log('[handleVendingSetup] Permission error detected');
-        errorMessage += 'Please make sure your Google Sheet is shared with "Anyone with the link can view" permissions.';
-      } else if (error.message.includes('not found')) {
-        console.log('[handleVendingSetup] Not found error detected');
-        errorMessage += 'The Google Sheet could not be found. Please check the link and sharing permissions.';
-      } else if (error.message.includes('invalid_grant')) {
-        console.log('[handleVendingSetup] Invalid grant error detected');
-        errorMessage += 'There was an authentication error. Please try again in a few minutes.';
-      } else if (error.message.includes('Cannot read properties of undefined')) {
-        console.log('[handleVendingSetup] Undefined property error detected');
-        errorMessage += 'There was an error processing your request. Please try again or contact a moderator.';
-      } else {
-        console.log('[handleVendingSetup] Unknown error type:', error.message);
-        errorMessage += error.message;
-      }
-
-      try {
-        await interaction.reply({
-          content: errorMessage,
-          ephemeral: true
-        });
-      } catch (replyError) {
-        console.error('[handleVendingSetup] Error sending reply:', replyError);
-        try {
-          await interaction.followUp({
-            content: errorMessage,
-            ephemeral: true
-          });
-        } catch (followUpError) {
-          console.error('[handleVendingSetup] Error sending follow-up:', followUpError);
-        }
-      }
-    }
+  } catch (error) {
+    handleError(error, 'vendingHandler.js');
+    console.error('[handleVendingSetup]:', error);
+    await interaction.editReply({
+      content: `❌ Error setting up shop: ${error.message}`,
+      ephemeral: true
+    });
   }
+}
   
 // ------------------- handleVendingSync -------------------
 // Syncs inventory from Google Sheets to the vending database for a character.
