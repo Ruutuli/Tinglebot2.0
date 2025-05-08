@@ -242,9 +242,6 @@ async function execute(interaction) {
     const subcommand = interaction.options.getSubcommand();
   
     switch (subcommand) {
-      case 'restock':
-        return await handleRestock(interaction);
-  
       case 'barter':
         return await handleBarter(interaction);
   
@@ -266,7 +263,7 @@ async function execute(interaction) {
       case 'viewshop':
         return await handleViewShop(interaction);
 
-    case 'viewstock':
+      case 'viewstock':
         return await viewVendingStock(interaction);
 
       case 'shoplink':
@@ -274,6 +271,9 @@ async function execute(interaction) {
   
       case 'collect_points':
         return await executeVending(interaction);
+
+      case 'add':
+        return await handleRestock(interaction);
   
       default:
         return interaction.reply({
