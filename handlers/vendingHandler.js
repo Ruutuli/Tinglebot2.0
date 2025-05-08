@@ -786,22 +786,13 @@ async function handleVendingSetup(interaction) {
         vendingPoints: points
     });
 
-    // Create success embed
-    const successEmbed = new EmbedBuilder()
-        .setTitle('🎪 Vending Shop Setup Complete!')
-        .setDescription(`Your vending shop has been set up successfully!`)
-        .addFields(
-            { name: '👤 Character', value: characterName },
-            { name: '🔗 Shop Link', value: shopLink },
-            { name: '🎒 Pouch Type', value: capitalizeFirstLetter(pouchType) },
-            { name: '🪙 Vending Points', value: `${points}` }
-        )
-        .setColor('#00ff00')
-        .setTimestamp();
-
-    if (shopImage) {
-        successEmbed.setImage(shopImage);
-    }
+    // Create success embed using the function from embeds.js
+    const successEmbed = createVendingSetupInstructionsEmbed({
+        name: characterName,
+        shopLink,
+        shopPouch: pouchType,
+        vendingPoints: points
+    });
 
     // Create sync button
     const syncButton = new ButtonBuilder()
