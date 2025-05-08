@@ -46,19 +46,19 @@ const COMMAND_NAME = 'travel';
 const COMMAND_DESCRIPTION = 'Travel between villages';
 
 const {
-  PATH_SCARLET_LEAVES_CHANNEL_ID,
-  PATH_LEAF_DEW_WAY_CHANNEL_ID,
+  PATH_OF_SCARLET_LEAVES_CHANNEL_ID,
+  LEAF_DEW_WAY_CHANNEL_ID,
   TRAVEL_DELAY_MS = '3000'
 } = process.env;
 
-if (!PATH_SCARLET_LEAVES_CHANNEL_ID || !PATH_LEAF_DEW_WAY_CHANNEL_ID) {
+if (!PATH_OF_SCARLET_LEAVES_CHANNEL_ID || !LEAF_DEW_WAY_CHANNEL_ID) {
   console.error(`[travel.js]: Error: Missing required path channel IDs in environment variables.`);
   throw new Error('Missing required path channel IDs in environment variables.');
 }
 
 const PATH_CHANNELS = {
-  pathOfScarletLeaves: PATH_SCARLET_LEAVES_CHANNEL_ID,
-  leafDewWay:      PATH_LEAF_DEW_WAY_CHANNEL_ID
+  pathOfScarletLeaves: PATH_OF_SCARLET_LEAVES_CHANNEL_ID,
+  leafDewWay:      LEAF_DEW_WAY_CHANNEL_ID
 };
 
 const MODE_CHOICES = [
