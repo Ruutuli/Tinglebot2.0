@@ -862,8 +862,18 @@ async function handleVendingSetup(interaction) {
         none: character.job.toLowerCase() === 'merchant' ? 3 : 5
       };
       const pouchSize = pouchSizes[pouch] || 3;
-  
-      // ------------------- Step 6: Update Character -------------------
+
+      // ------------------- Step 6: Respond with Confirmation Embed (before DB update) -------------------
+      // This ensures that if embed creation fails, the DB is not updated.
+      const setupEmbed = createVendingSetupInstructionsEmbed(characterName, shopLink, pouch, points, pouchSize);
+      // Try sending the confirmation first
+      await interaction.reply({
+        embeds: [setupEmbed],
+        ephemeral: true
+      });
+
+      // ------------------- Step 7: Update Character (DB update is now the last step) -------------------
+      // Only update vendingSetup after all validations and replies succeed
       await updateCharacterById(character._id, {
         shopLink,
         vendingType: character.job,
@@ -872,19 +882,20 @@ async function handleVendingSetup(interaction) {
         vendingPoints: points,
         vendingSetup: true
       });
-  
-      // ------------------- Step 7: Respond with Confirmation -------------------
-      const setupEmbed = createVendingSetupInstructionsEmbed(characterName, shopLink, pouch, points, pouchSize);
-      await interaction.reply({
-        embeds: [setupEmbed],
-        ephemeral: true
-      });
+      // Add a comment: DB update is now the last step for atomicity
     } catch (error) {
       handleError(error, 'vendingHandler.js');
       console.error(`[handleVendingSetup]: Error during vending setup:`, error);
+      // Improved error message
       await interaction.reply({
-        content: `❌ An error occurred during setup: ${error.message}`,
+        content: `❌ An error occurred during setup (before database update): ${error.message}`,
         ephemeral: true
+      }).catch(async () => {
+        // If reply fails (e.g., already replied), try followUp
+        await interaction.followUp({
+          content: `❌ An error occurred during setup (before database update): ${error.message}`,
+          ephemeral: true
+        }).catch(() => {});
       });
     }
   }
