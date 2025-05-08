@@ -46,14 +46,14 @@ const command = new SlashCommandBuilder()
           .setRequired(true)
       )
       .addStringOption(opt =>
-        opt.setName('pouch')
-          .setDescription('Choose your shop\'s pouch size')
+        opt.setName('pouchtype')
+          .setDescription('Your shop pouch type')
           .setRequired(true)
           .addChoices(
             { name: 'None', value: 'none' },
-            { name: 'Bronze (+15 slots)', value: 'bronze' },
-            { name: 'Silver (+30 slots)', value: 'silver' },
-            { name: 'Gold (+50 slots)', value: 'gold' }
+            { name: 'Bronze', value: 'bronze' },
+            { name: 'Silver', value: 'silver' },
+            { name: 'Gold', value: 'gold' }
           )
       )
       .addIntegerOption(opt =>

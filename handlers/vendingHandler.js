@@ -726,9 +726,9 @@ async function handleViewShop(interaction) {
   
 // ------------------- handleVendingSetup -------------------
 async function handleVendingSetup(interaction) {
-    const characterName = interaction.options.getString('character');
+    const characterName = interaction.options.getString('charactername');
     const shopLink = interaction.options.getString('shoplink');
-    const pouchSize = interaction.options.getInteger('pouchsize');
+    const pouchType = interaction.options.getString('pouchtype');
     const points = interaction.options.getInteger('points') || 0;
     const shopImage = interaction.options.getString('shopimage');
 
@@ -741,10 +741,11 @@ async function handleVendingSetup(interaction) {
         });
     }
 
-    // Validate pouch size
-    if (pouchSize < 1 || pouchSize > 10) {
+    // Validate pouch type
+    const validPouchTypes = ['none', 'bronze', 'silver', 'gold'];
+    if (!validPouchTypes.includes(pouchType?.toLowerCase())) {
         return interaction.reply({
-            content: '❌ Pouch size must be between 1 and 10.',
+            content: '❌ Invalid pouch type. Please choose from: none, bronze, silver, or gold.',
             ephemeral: true
         });
     }
@@ -777,7 +778,7 @@ async function handleVendingSetup(interaction) {
     await updateCharacterById(character._id, {
         vendingSetup: {
             shopLink,
-            pouchSize,
+            pouchType: pouchType.toLowerCase(),
             shopImage: shopImage || null
         },
         vendingPoints: points
@@ -790,7 +791,7 @@ async function handleVendingSetup(interaction) {
         .addFields(
             { name: '👤 Character', value: characterName },
             { name: '🔗 Shop Link', value: shopLink },
-            { name: '🎒 Pouch Size', value: `${pouchSize}` },
+            { name: '🎒 Pouch Type', value: capitalizeFirstLetter(pouchType) },
             { name: '🪙 Vending Points', value: `${points}` }
         )
         .setColor('#00ff00')
