@@ -6,9 +6,9 @@
 
 // ------------------- Modules -------------------
 // Local modules for seasons data, weather data, and modifier logic
-const seasonsData = require('./seasonsData');
-const weatherData = require('./weatherData');
-const modifiers = require('./weatherModule');
+const seasonsData = require('../data/seasonsData');
+const weatherData = require('../data/weatherData');
+const modifiers = require('../.weather/weatherModule');
 
 // ============================================================================
 // ------------------- Weather History Memory -------------------

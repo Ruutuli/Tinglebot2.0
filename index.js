@@ -32,13 +32,13 @@ const scheduler = require("./scheduler");
 const { convertToHyruleanDate } = require("./modules/calendarModule");
 
 // ------------------- Weather -------------------
-const { simulateWeightedWeather } = require("./.weather/weatherHandler");
+const { simulateWeightedWeather } = require("./handlers/weatherHandler");
 const {
   precipitationWeights,
   specialWeights,
   temperatureWeights,
   windWeights,
-} = require("./.weather/weatherData");
+} = require("./data/weatherData");
 const { setupWeatherScheduler } = require("./.weather/scheduledWeather");
 
 
