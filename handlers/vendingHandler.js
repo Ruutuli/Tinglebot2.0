@@ -733,23 +733,8 @@ async function handleVendingSetup(interaction) {
       const shopLink = interaction.options.getString('shoplink');
       const pouch = interaction.options.getString('pouch');
       const points = interaction.options.getInteger('points') || 0;
+      const shopImage = interaction.options.getString('shopimage') || null;
       const userId = interaction.user.id;
-  
-    // Create a guide embed
-    const guideEmbed = new EmbedBuilder()
-      .setTitle('🎪 Setting Up Your Shop')
-      .setDescription('Let\'s get your shop up and running! Follow these steps:')
-      .addFields(
-        { name: '1️⃣ Create Your Shop Sheet', value: 'Create a Google Sheet with these columns:\n`CHARACTER NAME | SLOT | ITEM NAME | STOCK QTY | COST EACH | POINTS SPENT | BOUGHT FROM | TOKEN PRICE | ART PRICE | OTHER PRICE | TRADES OPEN? | DATE`' },
-        { name: '2️⃣ Share Your Sheet', value: 'Make sure your sheet is shared with "Anyone with the link can view" permissions.' },
-        { name: '3️⃣ Choose Your Pouch', value: 'Select a pouch size:\n• Bronze: +15 slots\n• Silver: +30 slots\n• Gold: +50 slots' },
-        { name: '4️⃣ Get Started', value: 'After setup, you can:\n• Add items with `/vending add`\n• Edit your shop with `/vending edit`\n• View your shop with `/vending view`' }
-      )
-      .setColor('#AA926A')
-      .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png');
-
-    // Send the guide first
-    await interaction.editReply({ embeds: [guideEmbed] });
 
     // Validate and process setup
       const character = await fetchCharacterByNameAndUserId(characterName, userId);
@@ -763,9 +748,17 @@ async function handleVendingSetup(interaction) {
       throw new Error(`${character.name} must be a Shopkeeper or Merchant to set up a shop.`);
     }
 
-    // Validate shop link
+    // Validate shop link with detailed feedback
+    if (!shopLink) {
+      throw new Error('No shop link provided. Please provide a Google Sheets URL.');
+    }
+
+    if (!shopLink.includes('docs.google.com/spreadsheets')) {
+      throw new Error(`Invalid link format. The link you provided (${shopLink}) is not a Google Sheets URL.\n\nPlease make sure you're using a link that starts with "https://docs.google.com/spreadsheets/..."`);
+    }
+
     if (!isValidGoogleSheetsUrl(shopLink)) {
-      throw new Error('Invalid Google Sheets link. Please provide a valid link.');
+      throw new Error(`Invalid Google Sheets link. The link you provided (${shopLink}) appears to be a Google Sheets URL but may not be properly formatted or accessible.\n\nPlease ensure:\n1. The sheet is shared with "Anyone with the link can view" permissions\n2. The link is copied directly from your browser's address bar\n3. The sheet exists and is accessible`);
     }
 
     // Update character
@@ -777,6 +770,7 @@ async function handleVendingSetup(interaction) {
                 pouch === 'bronze' ? 15 : 
                 pouch === 'silver' ? 30 : 50,
       vendingPoints: points,
+      shopImage: shopImage || null,
       vendingSetup: true
     });
 
@@ -807,11 +801,15 @@ async function handleVendingSetup(interaction) {
       )
       .setColor('#25C059');
 
-    await interaction.followUp({
+    if (shopImage) {
+      successEmbed.setImage(shopImage);
+    }
+
+    await interaction.editReply({
       embeds: [successEmbed],
       components: [syncRow],
-        ephemeral: true
-      });
+      ephemeral: true
+    });
 
     } catch (error) {
       handleError(error, 'vendingHandler.js');
@@ -825,7 +823,7 @@ async function handleVendingSetup(interaction) {
   
 // ------------------- handleVendingSync -------------------
 // Syncs inventory from Google Sheets to the vending database for a character.
-async function handleVendingSync(interaction) {
+async function handleVendingSync(interaction, characterName) {
   try {
     console.log(`[handleVendingSync]: Starting vending sync for character: ${characterName}`);
     
@@ -835,17 +833,12 @@ async function handleVendingSync(interaction) {
       throw new Error(`Character ${characterName} not found`);
     }
 
-    // Validate shop image URL
-    if (!character.shopImage || !isValidGoogleSheetsUrl(character.shopImage)) {
-      throw new Error(`Invalid or missing shop image URL for ${characterName}`);
-    }
-
     // Get the vending model for this character
     const VendingInventory = await getVendingModel(characterName);
     console.log(`[handleVendingSync]: Got vending model for ${characterName}`);
 
     // Parse the sheet data
-    const parsedRows = await parseSheetData(character.shopImage);
+    const parsedRows = await parseSheetData(character.shopLink);
     console.log(`[handleVendingSync]: Parsed ${parsedRows.length} rows from sheet`);
 
     // Clear existing vending inventory
@@ -883,23 +876,23 @@ async function handleVendingSync(interaction) {
     try {
       await interaction.editReply({
         content: `✅ Successfully synced ${vendingEntries.length} items to ${characterName}'s vending inventory!`,
-        embeds: [],
-        components: []
-      });
+          embeds: [],
+          components: []
+        });
     } catch (error) {
       // If editing fails, try to send a follow-up message
       await interaction.followUp({
         content: `✅ Successfully synced ${vendingEntries.length} items to ${characterName}'s vending inventory!`,
-        ephemeral: true
-      });
-    }
+          ephemeral: true
+        });
+      }
 
   } catch (error) {
     console.error(`[handleVendingSync]: Error syncing vending inventory:`, error);
     
     // Try to edit the original interaction reply first
     try {
-      await interaction.editReply({
+    await interaction.editReply({
         content: `❌ Error syncing vending inventory: ${error.message}`,
         embeds: [],
         components: []
@@ -908,8 +901,8 @@ async function handleVendingSync(interaction) {
       // If editing fails, try to send a follow-up message
       await interaction.followUp({
         content: `❌ Error syncing vending inventory: ${error.message}`,
-        ephemeral: true
-      });
+      ephemeral: true
+    });
     }
   }
 }
@@ -981,7 +974,7 @@ async function handleEditShop(interaction) {
       }
 
       case 'sync': {
-        await handleVendingSync(interaction);
+        await handleVendingSync(interaction, characterName);
         break;
       }
 
@@ -1308,9 +1301,9 @@ function generateFulfillEmbed(request) {
 // ------------------- handleSyncButton -------------------
 async function handleSyncButton(interaction) {
   try {
-    const [_, characterName] = interaction.customId.split('_');
+    const [_, action, characterName] = interaction.customId.split('_');
     
-    if (characterName === 'later') {
+    if (action === 'later') {
       await interaction.update({
         content: 'No problem! You can run `/vending setup` again when you\'re ready to sync your shop.',
         embeds: [],
@@ -1325,7 +1318,7 @@ async function handleSyncButton(interaction) {
       components: []
     });
 
-    await handleVendingSync(interaction);
+    await handleVendingSync(interaction, characterName);
   } catch (error) {
     handleError(error, 'vendingHandler.js');
     console.error('[handleSyncButton]:', error);

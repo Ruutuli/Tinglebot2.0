@@ -361,6 +361,26 @@ async function handleJobSelect(interaction, characterId, updatedJob) {
         components: [], // Set components to empty array to remove all buttons
         ephemeral: true,
       });
+
+      // If the new job is Shopkeeper or Merchant, show the shop setup guide
+      if (updatedJob.toLowerCase() === 'shopkeeper' || updatedJob.toLowerCase() === 'merchant') {
+        const shopGuideEmbed = new EmbedBuilder()
+          .setTitle('🎪 Setting Up Your Shop')
+          .setDescription('Let\'s get your shop up and running! Follow these steps:')
+          .addFields(
+            { name: '1️⃣ Create Your Shop Sheet', value: 'Create a Google Sheet with these columns:\n`CHARACTER NAME | SLOT | ITEM NAME | STOCK QTY | COST EACH | POINTS SPENT | BOUGHT FROM | TOKEN PRICE | ART PRICE | OTHER PRICE | TRADES OPEN? | DATE`' },
+            { name: '2️⃣ Share Your Sheet', value: 'Make sure your sheet is shared with "Anyone with the link can view" permissions.' },
+            { name: '3️⃣ Choose Your Pouch', value: 'Select a pouch size:\n• Bronze: +15 slots\n• Silver: +30 slots\n• Gold: +50 slots' },
+            { name: '4️⃣ Get Started', value: 'After setup, you can:\n• Add items with `/vending add`\n• Edit your shop with `/vending edit`\n• View your shop with `/vending view`' }
+          )
+          .setColor('#AA926A')
+          .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png');
+
+        await interaction.followUp({
+          embeds: [shopGuideEmbed],
+          ephemeral: true
+        });
+      }
   
       // ------------------- Notify edit log channel -------------------
       const EDIT_NOTIFICATION_CHANNEL_ID = '1319524801408274434';
