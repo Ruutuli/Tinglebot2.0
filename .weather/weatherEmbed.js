@@ -64,11 +64,10 @@ async function generateWeatherEmbed(village, weather) {
     const specialEmoji = weather.specialConditions && weather.specialConditions.length > 0 ? '✨' : '';
     const emojiSummary = `${tempEmoji}${windEmoji}${precipEmoji}${specialEmoji}`;
 
-    // Get real and Hyrulean date
+    // Get Hyrulean date only
     const now = new Date();
-    const realDate = now.toISOString().slice(0, 10); // YYYY-MM-DD
     const hyruleanDate = convertToHyruleanDate(now);
-    const dateLine = `Real Date: ${realDate}, Hyrulean Date: ${hyruleanDate}`;
+    const dateLine = `Hyrulean Date: ${hyruleanDate}`;
 
     // Create base embed
     const embed = new EmbedBuilder()
