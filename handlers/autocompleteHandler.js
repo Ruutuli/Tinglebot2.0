@@ -88,7 +88,12 @@ async function handleAutocomplete(interaction) {
         } else if (focusedName === "vendorcharacter") {
           await handleVendorCharacterAutocomplete(interaction);
         } else if (focusedName === "itemname") {
-          await handleVendingBarterAutocomplete(interaction, focusedOption);
+          const subcommand = interaction.options.getSubcommand();
+          if (subcommand === "restock") {
+            await handleVendingRestockAutocomplete(interaction, focusedOption);
+          } else {
+            await handleVendingBarterAutocomplete(interaction, focusedOption);
+          }
         }
         break;
       case "gather":

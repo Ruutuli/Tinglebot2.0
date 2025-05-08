@@ -883,7 +883,7 @@ async function handleVendingSetup(interaction) {
       handleError(error, 'vendingHandler.js');
       console.error(`[handleVendingSetup]: Error during vending setup:`, error);
       await interaction.reply({
-        content: '❌ An error occurred during setup. Please try again later.',
+        content: `❌ An error occurred during setup: ${error.message}`,
         ephemeral: true
       });
     }
