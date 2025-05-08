@@ -18,8 +18,7 @@ const {
 } = require('discord.js');
 
 // ------------------- Database Models -------------------
-const { VendingRequest } = require('../models/VendingModel');
-const vendingInventorySchema = require('../models/VendingModel');
+const { VendingRequest, initializeVendingInventoryModel } = require('../models/VendingModel');
 const Character = require("../models/CharacterModel");
 const ItemModel = require('../models/ItemModel.js');
 
@@ -72,9 +71,8 @@ const {
  const { createVendingSetupInstructionsEmbed } = require("../embeds/embeds");
 
 // ------------------- Vending Model Helper -------------------
-function getVendingModel(characterName) {
-  const collectionName = characterName.toLowerCase();
-  return mongoose.model(`VendingInventory_${collectionName}`, vendingInventorySchema, collectionName);
+async function getVendingModel(characterName) {
+  return await initializeVendingInventoryModel(characterName);
 }
 
 // ------------------- Constants -------------------
@@ -665,129 +663,66 @@ async function handlePouchUpgrade(interaction) {
   
 // ------------------- handleViewShop -------------------
 async function handleViewShop(interaction) {
-    try {
-      const characterName = interaction.options.getString("charactername");
-  
-      // Fetch the character from the database
-      const character = await Character.findOne({ name: characterName });
-      if (!character) {
-        throw new Error(`Character '${characterName}' not found.`);
-      }
-
-      // Validate the shop image URL
-      const shopImage = isValidUrl(character.shopImage)
-        ? character.shopImage
-        : VIEW_SHOP_IMAGE_URL;
-  
-      // Use VendingModel to fetch inventory
-      const VendingInventory = getVendingModel(characterName);
-      const items = await VendingInventory.find({});
-
-      if (!items || items.length === 0) {
-        console.warn(`[handleViewShop]: No items found in vending inventory for ${characterName}.`);
-        return interaction.reply({
-          content: `📭 ${characterName}'s shop is currently empty. Try restocking using \`/vending restock\`.`,
-          ephemeral: true
-        });
-      }
-
-      const itemDescriptionsArray = await Promise.all(
-        items.map(async (item) => {
-          const itemDetails = await ItemModel.findOne({ itemName: item.itemName });
-          const emoji = itemDetails?.emoji || "🔹";
-          return `**${emoji} ${item.itemName}** - \`qty: ${item.stockQty}\`\n> **Token Price:** ${item.tokenPrice || "N/A"}\n> **Art Price:** ${item.artPrice || "N/A"}\n> **Other Price:** ${item.otherPrice || "N/A"}\n> **Trades Open:** ${item.tradesOpen ? "Yes" : "No"}`;
-        })
-      );
-  
-      // Pagination setup
-      const itemsPerPage = 4;
-      const totalPages = Math.ceil(itemDescriptionsArray.length / itemsPerPage);
-  
-      const generateEmbed = (page) => {
-        const start = (page - 1) * itemsPerPage;
-        const end = start + itemsPerPage;
-        const pageItems = itemDescriptionsArray.slice(start, end).join("\n\n");
-  
-        return new EmbedBuilder()
-          .setTitle(`🛍️ ${characterName}'s Shop (Page ${page}/${totalPages})`)
-          .setDescription(`${pageItems}\n\n💡 Use </vending barter:1306176790095728737> to buy from this character!`)
-          .setColor("#AA926A")
-          .setThumbnail(character.icon || DEFAULT_IMAGE_URL)
-          .setImage(shopImage)
-          .setFooter({
-            text: `${characterName}: ${character.job} is currently in ${capitalizeFirstLetter(character.currentVillage)}!`,
-            iconURL: interaction.user.displayAvatarURL(),
-          });
-      };
-  
-      const createButtons = (currentPage) =>
-        new ActionRowBuilder().addComponents(
-          new ButtonBuilder()
-            .setCustomId("prev_page")
-            .setLabel("Previous")
-            .setStyle(ButtonStyle.Primary)
-            .setDisabled(currentPage === 1),
-          new ButtonBuilder()
-            .setCustomId("next_page")
-            .setLabel("Next")
-            .setStyle(ButtonStyle.Primary)
-            .setDisabled(currentPage === totalPages)
-        );
-  
-      // Initial message
-      let currentPage = 1;
-      const embed = generateEmbed(currentPage);
-      const message = await interaction.reply({
-        embeds: [embed],
-        components: [createButtons(currentPage)],
-        fetchReply: true,
-      });
-  
-      const collector = message.createMessageComponentCollector({
-        filter: (btnInteraction) => btnInteraction.user.id === interaction.user.id,
-        time: 60000,
-      });
-  
-      collector.on("collect", async (btnInteraction) => {
-        try {
-          if (btnInteraction.customId === "prev_page") {
-            currentPage = Math.max(1, currentPage - 1);
-          } else if (btnInteraction.customId === "next_page") {
-            currentPage = Math.min(totalPages, currentPage + 1);
-          }
-  
-          await btnInteraction.update({
-            embeds: [generateEmbed(currentPage)],
-            components: [createButtons(currentPage)],
-          });
-        } catch (error) {
-          handleError(error, "vendingHandler.js");
-          if (error.code === 10008) {
-            collector.stop();
-          }
-        }
-      });
-  
-      collector.on("end", async () => {
-        try {
-          await message.edit({ components: [] });
-        } catch (error) {
-          handleError(error, "vendingHandler.js");
-        }
-      });
-    } catch (error) {
-      handleError(error, "vendingHandler.js");
-      console.error(`[handleViewShop]: Error viewing shop:`, error);
-      try {
-        await interaction.reply({
-          content: `❌ An error occurred while viewing the shop: ${error.message}`,
-          ephemeral: true,
-        });
-      } catch (replyError) {
-        handleError(replyError, "vendingHandler.js");
-      }
+  try {
+    console.log(`[handleViewShop]: Starting view shop for character: ${characterName}`);
+    
+    // Get character from database
+    const character = await Character.findOne({ name: characterName });
+    if (!character) {
+      throw new Error(`Character ${characterName} not found`);
     }
+
+    // Validate shop image URL
+    if (!character.shopImage || !isValidGoogleSheetsUrl(character.shopImage)) {
+      throw new Error(`Invalid or missing shop image URL for ${characterName}`);
+    }
+
+    // Get the vending model for this character
+    const VendingInventory = await getVendingModel(characterName);
+    console.log(`[handleViewShop]: Got vending model for ${characterName}`);
+
+    // Get items from vending inventory
+    const items = await VendingInventory.find({ characterName: character.name });
+    console.log(`[handleViewShop]: Found ${items.length} items in vending inventory`);
+
+    if (!items || items.length === 0) {
+      return await interaction.reply({
+        content: `⚠️ No items found in ${characterName}'s vending inventory.`,
+        ephemeral: true
+      });
+    }
+
+    // Create shop embed
+    const shopEmbed = new EmbedBuilder()
+      .setTitle(`${characterName}'s Shop`)
+      .setDescription(`Welcome to ${characterName}'s shop!`)
+      .setColor('#00FF00')
+      .setImage(character.shopImage || VIEW_SHOP_IMAGE_URL)
+      .setTimestamp();
+
+    // Add items to embed
+    items.forEach(item => {
+      shopEmbed.addFields({
+        name: `${item.itemName} (${item.stockQty} in stock)`,
+        value: `Cost: ${item.costEach} points\nToken Price: ${item.tokenPrice}\nArt Price: ${item.artPrice}\nOther Price: ${item.otherPrice}\nTrades Open: ${item.tradesOpen ? 'Yes' : 'No'}`,
+        inline: true
+      });
+    });
+
+    // Send the embed
+    await interaction.reply({
+      embeds: [shopEmbed],
+      ephemeral: true
+    });
+
+  } catch (error) {
+    console.error(`[handleViewShop]: Error viewing shop:`, error);
+    await interaction.reply({
+      content: `❌ Error viewing shop: ${error.message}`,
+      ephemeral: true
+    });
   }
+}
   
 // ------------------- handleVendingSetup -------------------
 async function handleVendingSetup(interaction) {
@@ -994,249 +929,89 @@ async function handleVendingSetup(interaction) {
 // Syncs inventory from Google Sheets to the vending database for a character.
 async function handleVendingSync(interaction) {
   try {
-    await interaction.deferReply({ ephemeral: true });
-
-    // ------------------- Step 1: Validate Character -------------------
-    const characterName = interaction.options.getString('charactername').split(' | ')[0]; // Only take the first part of the name
-    const userId = interaction.user.id;
-    const character = await fetchCharacterByNameAndUserId(characterName, userId);
-
+    console.log(`[handleVendingSync]: Starting vending sync for character: ${characterName}`);
+    
+    // Get character from database
+    const character = await Character.findOne({ name: characterName });
     if (!character) {
-      throw new Error(`Character '${characterName}' not found or doesn't belong to you.`);
+      throw new Error(`Character ${characterName} not found`);
     }
 
-    // ------------------- Step 2: Validate Job Type -------------------
-    const job = character.job?.toLowerCase();
-    if (job !== 'shopkeeper' && job !== 'merchant') {
-      throw new Error(`❌ **Invalid Vendor Type:** ${character.name} must be a **Shopkeeper** or **Merchant** to sync vending inventory.\n\nCurrent job: **${character.job || 'None'}**\n\nTo become a vendor:\n1. Use a Job Voucher to change to Shopkeeper or Merchant\n2. Run \`/vending setup\` to initialize your shop\n3. Run \`/vending sync\` to sync your inventory`);
+    // Validate shop image URL
+    if (!character.shopImage || !isValidGoogleSheetsUrl(character.shopImage)) {
+      throw new Error(`Invalid or missing shop image URL for ${characterName}`);
     }
 
-    // ------------------- Step 3: Validate Setup -------------------
-    if (!character.vendingSetup || !character.shopLink) {
-      throw new Error(`❌ **Setup Required:** ${character.name} needs to complete vending setup first.\n\nPlease run \`/vending setup\` to:\n1. Link your Google Sheet\n2. Set up your shop pouch\n3. Initialize your vending points`);
-    }
+    // Get the vending model for this character
+    const VendingInventory = await getVendingModel(characterName);
+    console.log(`[handleVendingSync]: Got vending model for ${characterName}`);
 
-    if (character.vendingSync) {
-      throw new Error(`❌ **Already Synced:** ${character.name}'s vending inventory has already been synced.\n\nThis operation cannot be undone. If you need to make changes, please contact a moderator.`);
-    }
+    // Parse the sheet data
+    const parsedRows = await parseSheetData(character.shopImage);
+    console.log(`[handleVendingSync]: Parsed ${parsedRows.length} rows from sheet`);
 
-    // ------------------- Step 4: Validate Sheet Format -------------------
-    const spreadsheetId = extractSpreadsheetId(character.shopLink);
-    const auth = await authorizeSheets();
-    
-    // Check if sheet exists
-    const sheetId = await getSheetIdByTitle(auth, spreadsheetId, 'vendingShop');
-    if (!sheetId) {
-      throw new Error(`❌ **Missing Sheet:** The 'vendingShop' sheet was not found in your Google Sheet.\n\nPlease ensure you have:\n1. A sheet named exactly 'vendingShop'\n2. The correct headers in row 1\n3. Proper permissions set on the sheet`);
-    }
+    // Clear existing vending inventory
+    await VendingInventory.deleteMany({ characterName: character.name });
+    console.log(`[handleVendingSync]: Cleared existing vending inventory for ${character.name}`);
 
-    // Check headers
-    const expectedHeaders = [
-      'CHARACTER NAME', 'SLOT', 'ITEM NAME', 'STOCK QTY', 'COST EACH', 'POINTS SPENT',
-      'BOUGHT FROM', 'TOKEN PRICE', 'ART PRICE', 'OTHER PRICE', 'TRADES OPEN?', 'DATE'
-    ];
-    const sheetData = await readSheetData(auth, spreadsheetId, 'vendingShop!A1:L1');
-    
-    if (!sheetData || !expectedHeaders.every(header => sheetData[0]?.includes(header))) {
-      throw new Error(`❌ **Invalid Sheet Format:** Your vendingShop sheet is missing required headers.\n\nRequired headers:\n${expectedHeaders.join(', ')}\n\nPlease ensure all headers are present and spelled correctly.`);
-    }
+    // Create new vending inventory entries
+    const vendingEntries = parsedRows.map(row => ({
+      characterName: character.name,
+      itemName: row.itemName,
+      itemId: row.itemId,
+      stockQty: parseInt(row.stockQty) || 0,
+      costEach: parseInt(row.costEach) || 0,
+      pointsSpent: parseInt(row.pointsSpent) || 0,
+      boughtFrom: row.boughtFrom || '',
+      tokenPrice: parseInt(row.tokenPrice) || 0,
+      artPrice: row.artPrice || 'N/A',
+      otherPrice: row.otherPrice || 'N/A',
+      tradesOpen: row.tradesOpen === 'true',
+      slot: row.slot || '',
+      date: new Date()
+    }));
 
-    // ------------------- Step 5: Confirm Sync -------------------
-    const confirmEmbed = new EmbedBuilder()
-      .setTitle('⚠️ Confirm Vending Sync')
-      .setDescription(`You are about to sync **${character.name}**'s vending inventory.\n\n**This action cannot be undone!**\n\nPlease ensure:\n1. Your sheet is properly formatted\n2. All items are marked as "Old Stock"\n3. All quantities and prices are correct`)
-      .setColor('#FFA500')
-      .addFields(
-        { name: '📊 Sheet Link', value: `[View Sheet](${character.shopLink})`, inline: false },
-        { name: '⚠️ Warning', value: 'This will permanently sync your inventory. Any items not marked as "Old Stock" will be ignored.', inline: false }
-      );
+    // Insert the new entries
+    await VendingInventory.insertMany(vendingEntries);
+    console.log(`[handleVendingSync]: Created ${vendingEntries.length} vending inventory entries`);
 
-    const confirmRow = new ActionRowBuilder()
-      .addComponents(
-        new ButtonBuilder()
-          .setCustomId('confirm_sync')
-          .setLabel('Confirm Sync')
-          .setStyle(ButtonStyle.Danger),
-        new ButtonBuilder()
-          .setCustomId('cancel_sync')
-          .setLabel('Cancel')
-          .setStyle(ButtonStyle.Secondary)
-      );
+    // Update character's vending sync status
+    await Character.updateOne(
+      { name: characterName },
+      { $set: { vendingSync: true } }
+    );
 
-    const confirmMessage = await interaction.editReply({
-      embeds: [confirmEmbed],
-      components: [confirmRow]
-    });
-
-    // Wait for confirmation
-    const filter = i => i.user.id === userId && ['confirm_sync', 'cancel_sync'].includes(i.customId);
-    const collector = confirmMessage.createMessageComponentCollector({ filter, time: 300000 });
-
-    collector.on('collect', async i => {
-      if (i.customId === 'cancel_sync') {
-        await i.update({
-          content: '❌ Vending sync cancelled.',
-          embeds: [],
-          components: []
-        });
-        return;
-      }
-
-      // Proceed with sync
-      const sheetData = await fetchSheetData(auth, spreadsheetId, 'vendingShop!A2:L');
-
-      // ------------------- Build Slot Tracker -------------------
-      const usedSlotNumbers = new Set();
-      sheetData.forEach(row => {
-        const match = /^Slot (\d+)$/.exec(row[1]);
-        if (match) usedSlotNumbers.add(Number(match[1]));
-      });
-
-      let slotCounter = 1;
-      const getNextSlot = () => {
-        while (usedSlotNumbers.has(slotCounter)) {
-          slotCounter++;
-        }
-        usedSlotNumbers.add(slotCounter);
-        return `Slot ${slotCounter}`;
-      };
-
-      // ------------------- Step 6: Parse and Validate Rows -------------------
-      const parsedRows = [];
-
-      for (const row of sheetData) {
-        const [
-          sheetCharacterName,
-          rawSlot,
-          itemName,
-          stockQtyRaw,
-          costEachRaw,
-          pointsSpentRaw,
-          boughtFrom,
-          tokenPriceRaw,
-          artPrice,
-          otherPrice,
-          tradesOpen,
-          date
-        ] = row;
-
-        const slot = rawSlot?.trim() || getNextSlot();
-
-        if (
-          sheetCharacterName !== character.name ||
-          !itemName ||
-          date?.toLowerCase() !== 'old stock'
-        ) continue;
-
-        const item = await fetchItemByName(itemName);
-        if (!item) {
-          console.warn(`[handleVendingSync]: Skipping unknown item "${itemName}".`);
-          continue;
-        }
-
-        parsedRows.push({
-          characterName: character.name,
-          itemName,
-          itemId: item._id,
-          stockQty: parseInt(stockQtyRaw || 0),
-          costEach: parseInt(costEachRaw || 0),
-          pointsSpent: parseInt(pointsSpentRaw || 0),
-          boughtFrom,
-          tokenPrice: parseInt(tokenPriceRaw || 0),
-          artPrice: artPrice || '',
-          otherPrice: otherPrice || '',
-          tradesOpen: tradesOpen?.toLowerCase() === 'yes',
-          slot,
-          date: new Date()
-        });
-      }
-
-      if (!parsedRows.length) {
-        await updateCharacterById(character._id, {
-          vendingSync: true
-        });
-
-        return await interaction.editReply({
-          content: `⚠️ No valid "Old Stock" entries found. Proceeding to sync with an empty inventory. This cannot be undone.`,
-          ephemeral: true
-        });
-      }
-      
-      // ------------------- Step 7: Insert Into Database -------------------
-      console.log('[handleVendingSync] Creating vending inventory entries...');
-      const VendingInventory = getVendingModel(character.name);
-      
-      // Clear any existing vending inventory for this character
-      await VendingInventory.deleteMany({});
-      
-      // Create new vending inventory entries with proper type conversion
-      const vendingEntries = parsedRows.map(row => ({
-        characterName: character.name,
-        itemName: row.itemName,
-        slot: row.slot,
-        stockQty: parseInt(row.stockQty) || 0,
-        costEach: parseInt(row.costEach) || 0,
-        pointsSpent: parseInt(row.pointsSpent) || 0,
-        boughtFrom: row.boughtFrom || '',
-        tokenPrice: row.tokenPrice === 'N/A' ? 0 : parseInt(row.tokenPrice) || 0,
-        artPrice: row.artPrice === 'N/A' ? 0 : parseInt(row.artPrice) || 0,
-        otherPrice: row.otherPrice === 'N/A' ? 0 : parseInt(row.otherPrice) || 0,
-        tradesOpen: row.tradesOpen === true,
-        date: row.date
-      }));
-
-      // Validate entries before inserting
-      for (const entry of vendingEntries) {
-        if (isNaN(entry.tokenPrice) || isNaN(entry.artPrice) || isNaN(entry.otherPrice)) {
-          throw new Error(`Invalid price values found for item ${entry.itemName}. Please ensure all price fields contain valid numbers or 'N/A'.`);
-        }
-      }
-
-      await VendingInventory.insertMany(vendingEntries);
-      console.log('[handleVendingSync] Successfully created vending inventory entries');
-
-      // ------------------- Step 8: Finalize Sync -------------------
-      await updateCharacterById(character._id, { vendingSync: true });
-
-      try {
-        // Try to edit the original message first
-        await interaction.editReply({
-          content: `✅ Sync Complete\nSuccessfully synced ${parsedRows.length} items to ${character.name}'s vending inventory.`,
-          embeds: [],
-          components: []
-        });
-      } catch (editError) {
-        console.error('[handleVendingSync] Error editing reply:', editError);
-        // If editing fails, try to send a new message
-        try {
-          await interaction.followUp({
-            content: `✅ Sync Complete\nSuccessfully synced ${parsedRows.length} items to ${character.name}'s vending inventory.`,
-            ephemeral: true
-          });
-        } catch (followUpError) {
-          console.error('[handleVendingSync] Error sending follow-up:', followUpError);
-        }
-      }
-    });
-
-  } catch (error) {
-    console.error('[handleVendingSync]:', error);
+    // Try to edit the original interaction reply first
     try {
       await interaction.editReply({
-        content: `❌ Sync failed: ${error.message}`,
+        content: `✅ Successfully synced ${vendingEntries.length} items to ${characterName}'s vending inventory!`,
+        embeds: [],
+        components: []
+      });
+    } catch (error) {
+      // If editing fails, try to send a follow-up message
+      await interaction.followUp({
+        content: `✅ Successfully synced ${vendingEntries.length} items to ${characterName}'s vending inventory!`,
+        ephemeral: true
+      });
+    }
+
+  } catch (error) {
+    console.error(`[handleVendingSync]: Error syncing vending inventory:`, error);
+    
+    // Try to edit the original interaction reply first
+    try {
+      await interaction.editReply({
+        content: `❌ Error syncing vending inventory: ${error.message}`,
         embeds: [],
         components: []
       });
     } catch (editError) {
-      console.error('[handleVendingSync] Error editing error reply:', editError);
-      try {
-        await interaction.followUp({
-          content: `❌ Sync failed: ${error.message}`,
-          ephemeral: true
-        });
-      } catch (followUpError) {
-        console.error('[handleVendingSync] Error sending error follow-up:', followUpError);
-      }
+      // If editing fails, try to send a follow-up message
+      await interaction.followUp({
+        content: `❌ Error syncing vending inventory: ${error.message}`,
+        ephemeral: true
+      });
     }
   }
 }
