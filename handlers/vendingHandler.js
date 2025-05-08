@@ -826,18 +826,21 @@ async function handleVendingSetup(interaction) {
       const spreadsheetId = extractSpreadsheetId(shopLink);
       if (!spreadsheetId) {
         await interaction.reply({
-          content: '❌ Unable to extract Spreadsheet ID from the provided link.',
+          content: '❌ Unable to extract Spreadsheet ID from the provided link. Please make sure your Google Sheet is shared with "Anyone with the link can view" permissions.',
           ephemeral: true
         });
         return;
       }
       
-      const auth = await authorizeSheets(); // ✅ Define auth before use
+      const auth = await authorizeSheets();
       
+      // Check if sheet exists and get its data
       const sheetId = await getSheetIdByTitle(auth, spreadsheetId, 'vendingShop');
       if (!sheetId) {
-        const errorEmbed = createVendingSetupInstructionsEmbed(characterName, 'missing_sheet', shopLink);
-        await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
+        await interaction.reply({
+          content: `❌ **Missing Sheet:** The 'vendingShop' sheet was not found in your Google Sheet.\n\nPlease ensure you have:\n1. A sheet named exactly 'vendingShop'\n2. The correct headers in row 1\n3. Proper permissions set on the sheet\n\n📎 Sheet: [Open Sheet](${shopLink})`,
+          ephemeral: true
+        });
         return;
       }
       
@@ -848,12 +851,23 @@ async function handleVendingSetup(interaction) {
       ];
       const sheetData = await readSheetData(auth, spreadsheetId, 'vendingShop!A1:L1');
       
-      if (!sheetData || !expectedHeaders.every(header => sheetData[0]?.includes(header))) {
-        const errorEmbed = createVendingSetupInstructionsEmbed(characterName, 'missing_headers', shopLink);
-        await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
+      if (!sheetData || !sheetData[0]) {
+        await interaction.reply({
+          content: `❌ **Empty Sheet:** The vendingShop sheet appears to be empty. Please add the required headers in row 1.\n\nRequired headers:\n${expectedHeaders.join(', ')}\n\n📎 Sheet: [Open Sheet](${shopLink})`,
+          ephemeral: true
+        });
         return;
       }
-      
+
+      const missingHeaders = expectedHeaders.filter(header => !sheetData[0].includes(header));
+      if (missingHeaders.length > 0) {
+        await interaction.reply({
+          content: `❌ **Missing Headers:** Your vendingShop sheet is missing the following required headers:\n${missingHeaders.join(', ')}\n\nPlease add these headers in row 1 of your sheet.\n\n📎 Sheet: [Open Sheet](${shopLink})`,
+          ephemeral: true
+        });
+        return;
+      }
+
       // ------------------- Step 5: Apply Pouch Size Logic -------------------
       const pouchSizes = {
         bronze: 15,
@@ -864,16 +878,13 @@ async function handleVendingSetup(interaction) {
       const pouchSize = pouchSizes[pouch] || 3;
 
       // ------------------- Step 6: Respond with Confirmation Embed (before DB update) -------------------
-      // This ensures that if embed creation fails, the DB is not updated.
       const setupEmbed = createVendingSetupInstructionsEmbed(characterName, shopLink, pouch, points, pouchSize);
-      // Try sending the confirmation first
       await interaction.reply({
         embeds: [setupEmbed],
         ephemeral: true
       });
 
       // ------------------- Step 7: Update Character (DB update is now the last step) -------------------
-      // Only update vendingSetup after all validations and replies succeed
       await updateCharacterById(character._id, {
         shopLink,
         vendingType: character.job,
@@ -882,18 +893,29 @@ async function handleVendingSetup(interaction) {
         vendingPoints: points,
         vendingSetup: true
       });
-      // Add a comment: DB update is now the last step for atomicity
     } catch (error) {
       handleError(error, 'vendingHandler.js');
       console.error(`[handleVendingSetup]: Error during vending setup:`, error);
-      // Improved error message
+      
+      // More specific error messages based on the error type
+      let errorMessage = '❌ An error occurred during setup. ';
+      
+      if (error.message.includes('permission')) {
+        errorMessage += 'Please make sure your Google Sheet is shared with "Anyone with the link can view" permissions.';
+      } else if (error.message.includes('not found')) {
+        errorMessage += 'The Google Sheet could not be found. Please check the link and sharing permissions.';
+      } else if (error.message.includes('invalid_grant')) {
+        errorMessage += 'There was an authentication error. Please try again in a few minutes.';
+      } else {
+        errorMessage += error.message;
+      }
+
       await interaction.reply({
-        content: `❌ An error occurred during setup (before database update): ${error.message}`,
+        content: errorMessage,
         ephemeral: true
       }).catch(async () => {
-        // If reply fails (e.g., already replied), try followUp
         await interaction.followUp({
-          content: `❌ An error occurred during setup (before database update): ${error.message}`,
+          content: errorMessage,
           ephemeral: true
         }).catch(() => {});
       });
