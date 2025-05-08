@@ -457,10 +457,10 @@ async function validateVendingSheet(sheetUrl, characterName) {
 
         // Authorize and get sheet data
         const auth = await authorizeSheets();
-        const sheets = google.sheets({ version: 'v4', auth });
 
         // Check if sheet exists and is accessible
         try {
+            const sheets = google.sheets({ version: 'v4', auth });
             await sheets.spreadsheets.get({ spreadsheetId });
         } catch (error) {
             return {
@@ -472,23 +472,10 @@ async function validateVendingSheet(sheetUrl, characterName) {
             };
         }
 
-        // Get the vendingShop tab
-        const response = await sheets.spreadsheets.get({
-            spreadsheetId,
-            ranges: ['vendingShop!A1:L1']
-        });
-
-        const sheet = response.data.sheets?.[0];
-        if (!sheet) {
-            return {
-                success: false,
-                message: '❌ Could not find the vendingShop tab. Please make sure it exists.'
-            };
-        }
-
-        // Get header row
-        const headerRow = sheet.data?.[0]?.rowData?.[0]?.values;
-        if (!headerRow) {
+        // Get header row using readSheetData
+        const headerRow = await readSheetData(auth, spreadsheetId, 'vendingShop!A1:L1');
+        
+        if (!headerRow || headerRow.length === 0 || !headerRow[0]) {
             return {
                 success: false,
                 message: '❌ Could not read the header row. Please make sure the sheet is not empty.'
@@ -512,7 +499,7 @@ async function validateVendingSheet(sheetUrl, characterName) {
         ];
 
         // Check headers
-        const headers = headerRow.map(cell => cell.formattedValue?.trim());
+        const headers = headerRow[0].map(header => header?.toString().trim());
         const missingHeaders = expectedHeaders.filter(header => !headers.includes(header));
 
         if (missingHeaders.length > 0) {
