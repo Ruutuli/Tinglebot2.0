@@ -39,6 +39,7 @@ const {
   temperatureWeights,
   windWeights,
 } = require("./.weather/weatherData");
+const { setupWeatherScheduler } = require("./.weather/scheduledWeather");
 
 
 // ============================================================================
@@ -133,6 +134,9 @@ async function initializeClient() {
           console.log(
             "[index.js]: ⚔️ Random encounter functionality initialized"
           );
+
+          setupWeatherScheduler(client);
+          console.log("[index.js]: 🌤️ Weather scheduler initialized");
 
           console.log("==========================================================");
           console.log("Tinglebot 2.0 is fully operational!");
