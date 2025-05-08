@@ -51,7 +51,7 @@ const {
 const { v4: uuidv4 } = require('uuid');
 
 const { createMountEncounterEmbed } = require('../../embeds/embeds');
-const { generateWeatherEmbed } = require('../../.weather/weatherEmbed');
+const { generateWeatherEmbed } = require('../../embeds/weatherEmbed.js');
 
 // ============================================================================
 // ------------------- Constants -------------------
@@ -954,7 +954,7 @@ async function handleSlots(interaction) {
 async function handleWeather(interaction) {
   try {
     const village = interaction.options.getString('village');
-    const { simulateWeightedWeather } = require('../../.weather/weatherHandler');
+    const { simulateWeightedWeather } = require('../../handlers/weatherHandler.js');
     const currentSeason = getCurrentSeason();
     
     const weather = simulateWeightedWeather(village, currentSeason);
