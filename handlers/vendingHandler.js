@@ -446,8 +446,13 @@ async function handleBarter(interaction) {
         return interaction.editReply(`⚠️ No vending shop found under the name **${targetShopName}**.`);
       }
   
-      const shopStock = shopOwner.vending.stock;
-      const requestedItem = shopStock.find(item => item.name.toLowerCase() === requestedItemName.toLowerCase());
+      // Use VendingModel to check shop inventory
+      const VendingInventory = mongoose.model('VendingInventory', vendingInventorySchema);
+      const requestedItem = await VendingInventory.findOne({ 
+        characterName: targetShopName,
+        itemName: requestedItemName
+      });
+      
       if (!requestedItem) {
         return interaction.editReply(`⚠️ The item **${requestedItemName}** is not available in ${targetShopName}'s shop.`);
       }
@@ -465,8 +470,17 @@ async function handleBarter(interaction) {
       await removeItemFromInventory(buyerInventory, offeredItemName, 1);
       await addItemToInventory(buyerInventory, requestedItemName, 1);
   
-      const shopInventories = await connectToInventories(shopOwner);
-      await addItemToInventory(shopInventories.inventory, offeredItemName, 1);
+      // Add offered item to shop's vending inventory
+      await VendingInventory.create({
+        characterName: shopOwner.name,
+        itemName: offeredItemName,
+        stockQty: 1,
+        tokenPrice: 0,
+        artPrice: 0,
+        otherPrice: 0,
+        tradesOpen: true,
+        date: new Date()
+      });
   
       // ------------------- Save Fulfillment -------------------
       const fulfillmentId = uuidv4();
@@ -474,7 +488,7 @@ async function handleBarter(interaction) {
         fulfillmentId,
         userCharacterName: buyer.name,
         vendorCharacterName: shopOwner.name,
-        itemName: requestedItem.name,
+        itemName: requestedItem.itemName,
         quantity: 1,
         paymentMethod: 'trade',
         notes: `Bartered ${offeredItemName} for ${requestedItemName}`,
@@ -539,17 +553,24 @@ async function handleFulfill(interaction) {
       }
   
       // ------------------- Validate Vendor Inventory -------------------
-      const vendorInventory = await connectToInventories(vendor);
-      const stockItem = vendorInventory.inventory.find(
-        item => item.itemName.toLowerCase() === itemName.toLowerCase()
-      );
+      const VendingInventory = mongoose.model('VendingInventory', vendingInventorySchema);
+      const stockItem = await VendingInventory.findOne({
+        characterName: vendor.name,
+        itemName: itemName
+      });
   
-      if (!stockItem || stockItem.quantity < quantity) {
+      if (!stockItem || stockItem.stockQty < quantity) {
         return interaction.editReply(`⚠️ ${vendor.name} does not have enough stock of **${itemName}** to fulfill this request.`);
       }
   
       // ------------------- Transfer Item -------------------
-      await removeItemFromInventory(vendorInventory.inventory, itemName, quantity);
+      // Update vending inventory
+      await VendingInventory.updateOne(
+        { _id: stockItem._id },
+        { $inc: { stockQty: -quantity } }
+      );
+
+      // Add to buyer's inventory
       const buyerInventory = await connectToInventories(buyer);
       await addItemToInventory(buyerInventory.inventory, itemName, quantity);
   
