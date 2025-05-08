@@ -732,7 +732,6 @@ async function handleVendingSetup(interaction) {
     const characterName = interaction.options.getString('charactername');
     const shopLink = interaction.options.getString('shoplink');
     const pouch = interaction.options.getString('pouch');
-    const points = interaction.options.getInteger('points');
     const userId = interaction.user.id;
 
     // Create a guide embed
@@ -751,8 +750,65 @@ async function handleVendingSetup(interaction) {
     // Send the guide first
     await interaction.editReply({ embeds: [guideEmbed] });
 
-    // Continue with existing setup logic...
-    // ... existing code ...
+    // Validate and process setup
+    const character = await fetchCharacterByNameAndUserId(characterName, userId);
+    if (!character) {
+      throw new Error(`Character '${characterName}' not found or doesn't belong to you.`);
+    }
+
+    // Validate job
+    const job = character.job?.toLowerCase();
+    if (job !== 'shopkeeper' && job !== 'merchant') {
+      throw new Error(`${character.name} must be a Shopkeeper or Merchant to set up a shop.`);
+    }
+
+    // Validate shop link
+    if (!isValidGoogleSheetsUrl(shopLink)) {
+      throw new Error('Invalid Google Sheets link. Please provide a valid link.');
+    }
+
+    // Update character
+    await updateCharacterById(character._id, {
+      shopLink,
+      vendingType: character.job,
+      shopPouch: pouch,
+      pouchSize: pouch === 'none' ? (character.job.toLowerCase() === 'merchant' ? 3 : 5) : 
+                pouch === 'bronze' ? 15 : 
+                pouch === 'silver' ? 30 : 50,
+      vendingSetup: true
+    });
+
+    // Create sync prompt buttons
+    const syncRow = new ActionRowBuilder()
+      .addComponents(
+        new ButtonBuilder()
+          .setCustomId(`vending_sync_${characterName}`)
+          .setLabel('Yes, sync now!')
+          .setStyle(ButtonStyle.Success)
+          .setEmoji('🔄'),
+        new ButtonBuilder()
+          .setCustomId('vending_sync_later')
+          .setLabel('No, I\'ll do it later')
+          .setStyle(ButtonStyle.Secondary)
+          .setEmoji('⏰')
+      );
+
+    // Send success message with sync prompt
+    const successEmbed = new EmbedBuilder()
+      .setTitle('✅ Shop Setup Complete!')
+      .setDescription(`Your shop has been set up successfully!\n\nWould you like to sync your inventory now?`)
+      .addFields(
+        { name: '📊 Shop Link', value: shopLink },
+        { name: '🎒 Pouch Size', value: `${pouch.charAt(0).toUpperCase() + pouch.slice(1)}` },
+        { name: '💡 Tip', value: 'Syncing will import all items from your Google Sheet into your shop.' }
+      )
+      .setColor('#25C059');
+
+    await interaction.followUp({
+      embeds: [successEmbed],
+      components: [syncRow],
+      ephemeral: true
+    });
 
   } catch (error) {
     handleError(error, 'vendingHandler.js');
@@ -860,117 +916,81 @@ async function handleEditShop(interaction) {
   try {
     await interaction.deferReply({ ephemeral: true });
 
-    // ------------------- Extract Inputs -------------------
     const characterName = interaction.options.getString('charactername');
-    const itemName = interaction.options.getString('itemname');
-    const shopImageFile = interaction.options.getAttachment('shopimagefile');
-    const tokenPrice = interaction.options.getInteger('tokenprice');
-    const artPrice = interaction.options.getString('artprice');
-    const otherPrice = interaction.options.getString('otherprice');
-    const tradesOpen = interaction.options.getBoolean('tradesopen');
-    const userId = interaction.user.id;    
+    const action = interaction.options.getString('action');
+    const userId = interaction.user.id;
 
-    // ------------------- Fetch Character -------------------
     const character = await fetchCharacterByNameAndUserId(characterName, userId);
-    if (!character) throw new Error(`Character '${characterName}' not found or does not belong to you.`);
-
-    // ------------------- Handle Shop Image Upload -------------------
-    if (itemName.toLowerCase() === 'shop image') {
-      if (!shopImageFile) throw new Error('No shop image file uploaded.');
-
-      const sanitizedName = characterName.replace(/\s+/g, '');
-      const imageName = `${sanitizedName}_shop_image_${Date.now()}`;
-      const imageUrl = await uploadSubmissionImage(shopImageFile.url, imageName);
-
-      await Character.updateOne({ name: characterName }, { $set: { shopImage: imageUrl } });
-
-      await interaction.editReply({
-        content: `✅ Shop image updated for **${characterName}**!`
-      });
-      return;
+    if (!character) {
+      throw new Error(`Character '${characterName}' not found or doesn't belong to you.`);
     }
 
-    // ------------------- Connect to MongoDB -------------------
-    const db = await connectToVendingDatabase(); // returns vending DB
-    const inventory = db.collection(characterName.toLowerCase());
+    switch (action) {
+      case 'item': {
+        const itemName = interaction.options.getString('itemname');
+        if (!itemName) {
+          throw new Error('Item name is required for item editing.');
+        }
 
-    // ------------------- Attempt to Find Item -------------------
-    const item = await inventory.findOne({
-      itemName: { $regex: new RegExp(`^${itemName.trim()}$`, 'i') }
-    });
+        const tokenPrice = interaction.options.getInteger('tokenprice');
+        const artPrice = interaction.options.getString('artprice');
+        const otherPrice = interaction.options.getString('otherprice');
 
-    if (!item) {
-      throw new Error(`Item '${itemName}' not found in ${characterName}'s shop.`);
+        // Update item in vending inventory
+        const VendingInventory = await getVendingModel(characterName);
+        const updateFields = {};
+        if (tokenPrice !== null) updateFields.tokenPrice = tokenPrice;
+        if (artPrice) updateFields.artPrice = artPrice;
+        if (otherPrice) updateFields.otherPrice = otherPrice;
+
+        await VendingInventory.updateOne(
+          { itemName },
+          { $set: updateFields }
+        );
+
+        await interaction.editReply({
+          content: `✅ Updated item "${itemName}" in your shop.`,
+          ephemeral: true
+        });
+        break;
+      }
+
+      case 'banner': {
+        const shopImageFile = interaction.options.getAttachment('shopimagefile');
+        if (!shopImageFile) {
+          throw new Error('Shop image file is required for banner update.');
+        }
+
+        const sanitizedName = characterName.replace(/\s+/g, '');
+        const imageName = `${sanitizedName}_shop_image_${Date.now()}`;
+        const imageUrl = await uploadSubmissionImage(shopImageFile.url, imageName);
+
+        await Character.updateOne(
+          { name: characterName },
+          { $set: { shopImage: imageUrl } }
+        );
+
+        await interaction.editReply({
+          content: `✅ Updated shop banner for ${characterName}.`,
+          ephemeral: true
+        });
+        break;
+      }
+
+      case 'sync': {
+        await handleVendingSync(interaction);
+        break;
+      }
+
+      default:
+        throw new Error('Invalid action selected.');
     }
-
-    // ------------------- Apply Updates -------------------
-    const updateFields = {};
-    if (tokenPrice !== null) updateFields.tokenPrice = tokenPrice;
-    if (artPrice) updateFields.artPrice = artPrice;
-    if (otherPrice) updateFields.otherPrice = otherPrice;
-    if (tradesOpen !== null) updateFields.tradesOpen = tradesOpen;
-
-    if (newSlot) updateFields.slot = newSlot;
-
-    if (Object.keys(updateFields).length === 0) {
-      throw new Error('No valid fields provided for update.');
-    }    
-
-    await inventory.updateOne({ _id: item._id }, { $set: updateFields });
-
-    // ------------------- Update Google Sheet -------------------
-    const spreadsheetId = extractSpreadsheetId(character.shopLink);
-    if (!spreadsheetId) throw new Error(`Invalid or missing shop link for '${characterName}'.`);
-
-    const auth = await authorizeSheets();
-    const sheetData = await readSheetData(auth, spreadsheetId, 'vendingShop!A:L');
-
-    const rowIndex = sheetData.findIndex(row =>
-      row[1]?.trim().toLowerCase() === itemName.trim().toLowerCase()
-    );
-
-    if (rowIndex === -1) {
-      throw new Error(`Item '${itemName}' not found in the shop spreadsheet.`);
-    }
-
-    const updatedRow = [
-      characterName,
-      newSlot || sheetData[rowIndex][1], // SLOT    
-      itemName,
-      sheetData[rowIndex][3], // Stock Qty
-      sheetData[rowIndex][4], // Cost Each
-      sheetData[rowIndex][5], // Points Spent
-      sheetData[rowIndex][6], // Bought From
-      tokenPrice !== null ? tokenPrice : sheetData[rowIndex][7],
-      artPrice || sheetData[rowIndex][8],
-      otherPrice || sheetData[rowIndex][9],
-      tradesOpen !== null ? (tradesOpen ? 'Yes' : 'No') : sheetData[rowIndex][10],
-      sheetData[rowIndex][11] // Date
-    ];
-
-    const range = `vendingShop!A${rowIndex + 1}:L${rowIndex + 1}`;
-    await writeSheetData(auth, spreadsheetId, range, [updatedRow]);
-
-    // ------------------- Success Embed -------------------
-    const embed = new EmbedBuilder()
-      .setTitle('✅ **Item Updated Successfully!**')
-      .setDescription(`**${itemName}** in **${characterName}'s** shop has been updated.`)
-      .addFields(
-        { name: '💰 Token Price', value: `${tokenPrice ?? item.tokenPrice ?? 'N/A'}`, inline: true },
-        { name: '🎨 Art Price', value: `${artPrice ?? item.artPrice ?? 'N/A'}`, inline: true },
-        { name: '📜 Other Price', value: `${otherPrice ?? item.otherPrice ?? 'N/A'}`, inline: true },
-        { name: '🔄 Trades Open', value: `${tradesOpen !== null ? (tradesOpen ? 'Yes' : 'No') : item.tradesOpen ? 'Yes' : 'No'}`, inline: true }
-      )
-      .setColor('#AA926A')
-      .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png');
-
-    await interaction.editReply({ embeds: [embed] });
 
   } catch (error) {
     handleError(error, 'vendingHandler.js');
     console.error('[handleEditShop]:', error);
     await interaction.editReply({
-      content: `❌ Error editing shop item: ${error.message}`,
+      content: `❌ Error editing shop: ${error.message}`,
       ephemeral: true
     });
   }
@@ -1228,7 +1248,6 @@ async function handleVendingViewVillage(interaction, villageKey) {
 // These support the above handlers internally. Not exported.
 // ============================================================================
 
-
 // ------------------- createFulfillmentRequest -------------------
 function createFulfillmentRequest(data) {
     return new VendingRequest({
@@ -1283,7 +1302,39 @@ function generateFulfillEmbed(request) {
       .setTimestamp();
   }
 
-  // ============================================================================
+// ------------------- handleSyncButton -------------------
+async function handleSyncButton(interaction) {
+  try {
+    const [_, characterName] = interaction.customId.split('_');
+    
+    if (characterName === 'later') {
+      await interaction.update({
+        content: 'No problem! You can sync your shop anytime by editing an item or updating your shop banner.',
+        embeds: [],
+        components: []
+      });
+      return;
+    }
+
+    await interaction.update({
+      content: '🔄 Syncing your shop inventory...',
+      embeds: [],
+      components: []
+    });
+
+    await handleVendingSync(interaction);
+  } catch (error) {
+    handleError(error, 'vendingHandler.js');
+    console.error('[handleSyncButton]:', error);
+    await interaction.update({
+      content: `❌ Error syncing shop: ${error.message}`,
+      embeds: [],
+      components: []
+    });
+  }
+}
+
+// ============================================================================
 // ------------------- Module Exports -------------------
 // Export all public vending subcommand handlers.
 // ============================================================================
@@ -1299,6 +1350,7 @@ module.exports = {
     handleEditShop,
     handleShopLink,
     viewVendingStock,
-    handleVendingViewVillage
-  };
+    handleVendingViewVillage,
+    handleSyncButton
+};
   
