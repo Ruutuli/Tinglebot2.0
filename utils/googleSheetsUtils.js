@@ -611,7 +611,6 @@ async function parseSheetData(sheetUrl) {
 
     return sheetData.map(row => ({
       itemName: row[2]?.trim() || '',
-      itemId: row[3]?.trim() || '',
       stockQty: parseInt(row[3]) || 0,
       costEach: parseInt(row[4]) || 0,
       pointsSpent: parseInt(row[5]) || 0,
