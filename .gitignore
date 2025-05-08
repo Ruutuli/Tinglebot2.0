@@ -1,16 +1,12 @@
 # Ignore .env file
 .env
 
-node_modules
-data/
-config/
-eslint.config.mjs
-.dependency-cruiser.js
-testingCode/
-database/
-nodemon.log
-
-nodemon.log
-nodemon.log
 .cursor/rules/ruurule.mdc
+.dependency-cruiser.js
+config/
 data/encounter.json
+database/
+eslint.config.mjs
+node_modules
+nodemon.log
+testingCode/
