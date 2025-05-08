@@ -594,6 +594,39 @@ async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, c
   }
 }
 
+// ------------------- parseSheetData -------------------
+async function parseSheetData(sheetUrl) {
+  try {
+    const spreadsheetId = extractSpreadsheetId(sheetUrl);
+    if (!spreadsheetId) {
+      throw new Error('Invalid Google Sheets URL');
+    }
+
+    const auth = await authorizeSheets();
+    const sheetData = await readSheetData(auth, spreadsheetId, 'vendingShop!A2:L');
+    
+    if (!Array.isArray(sheetData) || sheetData.length === 0) {
+      return [];
+    }
+
+    return sheetData.map(row => ({
+      itemName: row[2]?.trim() || '',
+      itemId: row[3]?.trim() || '',
+      stockQty: parseInt(row[3]) || 0,
+      costEach: parseInt(row[4]) || 0,
+      pointsSpent: parseInt(row[5]) || 0,
+      boughtFrom: row[6]?.trim() || '',
+      tokenPrice: parseInt(row[7]) || 0,
+      artPrice: row[8]?.trim() || 'N/A',
+      otherPrice: row[9]?.trim() || 'N/A',
+      tradesOpen: row[10]?.toLowerCase() === 'true',
+      slot: row[1]?.trim() || ''
+    })).filter(row => row.itemName && row.stockQty > 0);
+  } catch (error) {
+    console.error('[parseSheetData]: Error parsing sheet data:', error);
+    throw error;
+  }
+}
 
 // ============================================================================
 // Exported Functions
@@ -626,6 +659,7 @@ module.exports = {
     validateInventorySheet,
     validateVendingSheet,
     safeAppendDataToSheet,
+    parseSheetData,
     
     // Error logging
     logErrorDetails

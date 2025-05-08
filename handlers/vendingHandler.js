@@ -50,7 +50,8 @@ const {
   writeSheetData,
   safeAppendDataToSheet,
   fetchSheetData,
-  validateVendingSheet
+  validateVendingSheet,
+  parseSheetData
 } = require("../utils/googleSheetsUtils.js");
 
 const {
@@ -825,7 +826,6 @@ async function handleVendingSetup(interaction) {
 }
   
 // ------------------- handleVendingSync -------------------
-// Syncs inventory from Google Sheets to the vending database for a character.
 async function handleVendingSync(interaction, characterName) {
   try {
     console.log(`[handleVendingSync]: Starting vending sync for character: ${characterName}`);
@@ -834,6 +834,10 @@ async function handleVendingSync(interaction, characterName) {
     const character = await Character.findOne({ name: characterName });
     if (!character) {
       throw new Error(`Character ${characterName} not found`);
+    }
+
+    if (!character.shopLink) {
+      throw new Error('No shop link found for this character. Please set up your shop first using /vending setup');
     }
 
     // Get the vending model for this character
@@ -853,15 +857,15 @@ async function handleVendingSync(interaction, characterName) {
       characterName: character.name,
       itemName: row.itemName,
       itemId: row.itemId,
-      stockQty: parseInt(row.stockQty) || 0,
-      costEach: parseInt(row.costEach) || 0,
-      pointsSpent: parseInt(row.pointsSpent) || 0,
-      boughtFrom: row.boughtFrom || '',
-      tokenPrice: parseInt(row.tokenPrice) || 0,
-      artPrice: row.artPrice || 'N/A',
-      otherPrice: row.otherPrice || 'N/A',
-      tradesOpen: row.tradesOpen === 'true',
-      slot: row.slot || '',
+      stockQty: row.stockQty,
+      costEach: row.costEach,
+      pointsSpent: row.pointsSpent,
+      boughtFrom: row.boughtFrom,
+      tokenPrice: row.tokenPrice,
+      artPrice: row.artPrice,
+      otherPrice: row.otherPrice,
+      tradesOpen: row.tradesOpen,
+      slot: row.slot,
       date: new Date()
     }));
 
@@ -879,23 +883,23 @@ async function handleVendingSync(interaction, characterName) {
     try {
       await interaction.editReply({
         content: `✅ Successfully synced ${vendingEntries.length} items to ${characterName}'s vending inventory!`,
-          embeds: [],
-          components: []
-        });
+        embeds: [],
+        components: []
+      });
     } catch (error) {
       // If editing fails, try to send a follow-up message
       await interaction.followUp({
         content: `✅ Successfully synced ${vendingEntries.length} items to ${characterName}'s vending inventory!`,
-          ephemeral: true
-        });
-      }
+        ephemeral: true
+      });
+    }
 
   } catch (error) {
     console.error(`[handleVendingSync]: Error syncing vending inventory:`, error);
     
     // Try to edit the original interaction reply first
     try {
-    await interaction.editReply({
+      await interaction.editReply({
         content: `❌ Error syncing vending inventory: ${error.message}`,
         embeds: [],
         components: []
@@ -904,8 +908,8 @@ async function handleVendingSync(interaction, characterName) {
       // If editing fails, try to send a follow-up message
       await interaction.followUp({
         content: `❌ Error syncing vending inventory: ${error.message}`,
-      ephemeral: true
-    });
+        ephemeral: true
+      });
     }
   }
 }
