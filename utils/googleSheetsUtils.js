@@ -444,68 +444,94 @@ async function validateInventorySheet(spreadsheetUrl, characterName) {
   }
   
 // ------------------- validateVendingSheet------------------- 
-async function validateVendingSheet(spreadsheetUrl, characterName) {
-    const spreadsheetId = extractSpreadsheetId(spreadsheetUrl);
-  
-    if (!spreadsheetId) {
-      return {
-        success: false,
-        message: "**Error:** Invalid Google Sheets URL.\n\n**Fix:** Please double-check you pasted a full valid URL like:\n> https://docs.google.com/spreadsheets/d/your-spreadsheet-id/edit"
-      };
-    }
-  
-    const auth = await authorizeSheets();
+async function validateVendingSheet(sheetUrl, characterName) {
     try {
-      const headerRow = await readSheetData(auth, spreadsheetId, 'vendingShop!A1:L1');
-      const expectedHeaders = [
-        'CHARACTER NAME', 'SLOT', 'ITEM NAME', 'STOCK QTY', 'COST EACH', 'POINTS SPENT',
-        'BOUGHT FROM', 'TOKEN PRICE', 'ART PRICE', 'OTHER PRICE', 'TRADES OPEN?', 'DATE'
-      ];
-  
-      if (!headerRow || headerRow.length === 0) {
-        return {
-          success: false,
-          message: "**Error:** The `vendingShop` tab exists but has no header data.\n\n**Fix:** Please copy the correct header row into A1:L1."
-        };
-      }
-  
-      const headers = headerRow[0];
-      const allHeadersMatch = expectedHeaders.every((header, index) => headers[index] === header);
-  
-      if (!allHeadersMatch) {
-        return {
-          success: false,
-          message: "**Error:** The headers do not match the required format.\n\n**Fix:** Ensure A1:L1 exactly reads:\n```CHARACTER NAME, SLOT, ITEM NAME, STOCK QTY, COST EACH, POINTS SPENT, BOUGHT FROM, TOKEN PRICE, ART PRICE, OTHER PRICE, TRADES OPEN?, DATE```"
-        };
-      }
-  
-      return { success: true, message: "✅ Vending sheet is set up correctly!" };
-  
+        // Extract spreadsheet ID
+        const spreadsheetId = extractSpreadsheetId(sheetUrl);
+        if (!spreadsheetId) {
+            return {
+                success: false,
+                message: '❌ Invalid Google Sheets URL. Please provide a valid link.'
+            };
+        }
+
+        // Authorize and get sheet data
+        const auth = await authorizeSheets();
+        const sheets = google.sheets({ version: 'v4', auth });
+
+        // Check if sheet exists and is accessible
+        try {
+            await sheets.spreadsheets.get({ spreadsheetId });
+        } catch (error) {
+            return {
+                success: false,
+                message: '❌ Cannot access the Google Sheet. Please make sure:\n' +
+                    '1. The sheet exists\n' +
+                    '2. The sheet is shared with the service account\n' +
+                    '3. The link is correct'
+            };
+        }
+
+        // Get the vendingShop tab
+        const response = await sheets.spreadsheets.get({
+            spreadsheetId,
+            ranges: ['vendingShop!A1:L1']
+        });
+
+        const sheet = response.data.sheets?.[0];
+        if (!sheet) {
+            return {
+                success: false,
+                message: '❌ Could not find the vendingShop tab. Please make sure it exists.'
+            };
+        }
+
+        // Get header row
+        const headerRow = sheet.data?.[0]?.rowData?.[0]?.values;
+        if (!headerRow) {
+            return {
+                success: false,
+                message: '❌ Could not read the header row. Please make sure the sheet is not empty.'
+            };
+        }
+
+        // Expected headers
+        const expectedHeaders = [
+            'Character Name',
+            'Slot',
+            'Item Name',
+            'Stock Qty',
+            'Cost Each',
+            'Points Spent',
+            'Bought From',
+            'Token Price',
+            'Art Price',
+            'Other Price',
+            'Trades Open',
+            'Month'
+        ];
+
+        // Check headers
+        const headers = headerRow.map(cell => cell.formattedValue?.trim());
+        const missingHeaders = expectedHeaders.filter(header => !headers.includes(header));
+
+        if (missingHeaders.length > 0) {
+            return {
+                success: false,
+                message: `❌ Missing required headers: ${missingHeaders.join(', ')}\n\n` +
+                    'Please make sure your sheet has all the required headers in the correct order.'
+            };
+        }
+
+        return { success: true };
     } catch (error) {
-      if (error.message.includes('Requested entity was not found')) {
+        console.error('[validateVendingSheet]:', error);
         return {
-          success: false,
-          message: "**Error:** The Google Sheet was not found.\n\n**Fix:** Please double-check your URL and that the sheet is shared with editor access to:\n📧 `tinglebot@rotw-tinglebot.iam.gserviceaccount.com`"
+            success: false,
+            message: '❌ An error occurred while validating your sheet. Please try again later.'
         };
-      }
-      if (error.message.includes('Unable to parse range')) {
-        return {
-          success: false,
-          message: "**Error:** Cannot find the correct cells A1:L1.\n\n**Fix:** Double-check your tab name is exactly `vendingShop` and that there is data starting at row 1."
-        };
-      }
-      if (error.code === 403) {
-        return {
-          success: false,
-          message: "**Error:** Permission denied.\n\n**Fix:** Make sure the Google Sheet is shared with editor access to:\n📧 `tinglebot@rotw-tinglebot.iam.gserviceaccount.com`"
-        };
-      }
-      return {
-        success: false,
-        message: `Unknown error accessing sheet: ${error.message}`
-      };
     }
-  }
+}
   
 // ============================================================================
 // Error Logging

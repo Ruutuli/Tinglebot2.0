@@ -50,6 +50,7 @@ const {
   writeSheetData,
   safeAppendDataToSheet,
   fetchSheetData,
+  validateVendingSheet
 } = require("../utils/googleSheetsUtils.js");
 
 const {
