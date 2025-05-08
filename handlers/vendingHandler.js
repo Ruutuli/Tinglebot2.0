@@ -35,6 +35,7 @@ const {
   fetchCharacterByNameAndUserId,
   getTokenBalance,
   updateTokenBalance, 
+  fetchItemByName
 } = require('../database/db');
 // ------------------- Utility Functions -------------------
 const {
@@ -895,7 +896,7 @@ async function handleVendingSync(interaction) {
     await interaction.deferReply({ ephemeral: true });
 
     // ------------------- Step 1: Validate Character -------------------
-    const characterName = interaction.options.getString('charactername');
+    const characterName = interaction.options.getString('charactername').split(' | ')[0]; // Only take the first part of the name
     const userId = interaction.user.id;
     const character = await fetchCharacterByNameAndUserId(characterName, userId);
 
@@ -903,115 +904,180 @@ async function handleVendingSync(interaction) {
       throw new Error(`Character '${characterName}' not found or doesn't belong to you.`);
     }
 
-    if (!character.shopLink) {
-      throw new Error(`No shop link found for **${characterName}**. Use \`/vending setup\` first.`);
+    // ------------------- Step 2: Validate Job Type -------------------
+    const job = character.job?.toLowerCase();
+    if (job !== 'shopkeeper' && job !== 'merchant') {
+      throw new Error(`❌ **Invalid Vendor Type:** ${character.name} must be a **Shopkeeper** or **Merchant** to sync vending inventory.\n\nCurrent job: **${character.job || 'None'}**\n\nTo become a vendor:\n1. Use a Job Voucher to change to Shopkeeper or Merchant\n2. Run \`/vending setup\` to initialize your shop\n3. Run \`/vending sync\` to sync your inventory`);
+    }
+
+    // ------------------- Step 3: Validate Setup -------------------
+    if (!character.vendingSetup || !character.shopLink) {
+      throw new Error(`❌ **Setup Required:** ${character.name} needs to complete vending setup first.\n\nPlease run \`/vending setup\` to:\n1. Link your Google Sheet\n2. Set up your shop pouch\n3. Initialize your vending points`);
     }
 
     if (character.vendingSync) {
-      throw new Error(`Sync has already been completed for **${characterName}**.`);
+      throw new Error(`❌ **Already Synced:** ${character.name}'s vending inventory has already been synced.\n\nThis operation cannot be undone. If you need to make changes, please contact a moderator.`);
     }
 
-    // ------------------- Step 2: Fetch Sheet Data -------------------
+    // ------------------- Step 4: Validate Sheet Format -------------------
     const spreadsheetId = extractSpreadsheetId(character.shopLink);
     const auth = await authorizeSheets();
-    const sheetData = await fetchSheetData(auth, spreadsheetId, 'vendingShop!A2:L');
-
-    if (!sheetData?.length) {
-      throw new Error('No data found in the vendingShop sheet.');
+    
+    // Check if sheet exists
+    const sheetId = await getSheetIdByTitle(auth, spreadsheetId, 'vendingShop');
+    if (!sheetId) {
+      throw new Error(`❌ **Missing Sheet:** The 'vendingShop' sheet was not found in your Google Sheet.\n\nPlease ensure you have:\n1. A sheet named exactly 'vendingShop'\n2. The correct headers in row 1\n3. Proper permissions set on the sheet`);
     }
 
-    // ------------------- Build Slot Tracker -------------------
-    const usedSlotNumbers = new Set();
-    sheetData.forEach(row => {
-      const match = /^Slot (\d+)$/.exec(row[1]);
-      if (match) usedSlotNumbers.add(Number(match[1]));
+    // Check headers
+    const expectedHeaders = [
+      'CHARACTER NAME', 'SLOT', 'ITEM NAME', 'STOCK QTY', 'COST EACH', 'POINTS SPENT',
+      'BOUGHT FROM', 'TOKEN PRICE', 'ART PRICE', 'OTHER PRICE', 'TRADES OPEN?', 'DATE'
+    ];
+    const sheetData = await readSheetData(auth, spreadsheetId, 'vendingShop!A1:L1');
+    
+    if (!sheetData || !expectedHeaders.every(header => sheetData[0]?.includes(header))) {
+      throw new Error(`❌ **Invalid Sheet Format:** Your vendingShop sheet is missing required headers.\n\nRequired headers:\n${expectedHeaders.join(', ')}\n\nPlease ensure all headers are present and spelled correctly.`);
+    }
+
+    // ------------------- Step 5: Confirm Sync -------------------
+    const confirmEmbed = new EmbedBuilder()
+      .setTitle('⚠️ Confirm Vending Sync')
+      .setDescription(`You are about to sync **${character.name}**'s vending inventory.\n\n**This action cannot be undone!**\n\nPlease ensure:\n1. Your sheet is properly formatted\n2. All items are marked as "Old Stock"\n3. All quantities and prices are correct`)
+      .setColor('#FFA500')
+      .addFields(
+        { name: '📊 Sheet Link', value: `[View Sheet](${character.shopLink})`, inline: false },
+        { name: '⚠️ Warning', value: 'This will permanently sync your inventory. Any items not marked as "Old Stock" will be ignored.', inline: false }
+      );
+
+    const confirmRow = new ActionRowBuilder()
+      .addComponents(
+        new ButtonBuilder()
+          .setCustomId('confirm_sync')
+          .setLabel('Confirm Sync')
+          .setStyle(ButtonStyle.Danger),
+        new ButtonBuilder()
+          .setCustomId('cancel_sync')
+          .setLabel('Cancel')
+          .setStyle(ButtonStyle.Secondary)
+      );
+
+    const confirmMessage = await interaction.editReply({
+      embeds: [confirmEmbed],
+      components: [confirmRow]
     });
 
-    let slotCounter = 1;
-    const getNextSlot = () => {
-      while (usedSlotNumbers.has(slotCounter)) {
-        slotCounter++;
-      }
-      usedSlotNumbers.add(slotCounter);
-      return `Slot ${slotCounter}`;
-    };
+    // Wait for confirmation
+    const filter = i => i.user.id === userId && ['confirm_sync', 'cancel_sync'].includes(i.customId);
+    const collector = confirmMessage.createMessageComponentCollector({ filter, time: 300000 });
 
-    // ------------------- Step 3: Parse and Validate Rows -------------------
-    const parsedRows = [];
-
-    for (const row of sheetData) {
-      const [
-        sheetCharacterName,
-        rawSlot,
-        itemName,
-        stockQtyRaw,
-        costEachRaw,
-        pointsSpentRaw,
-        boughtFrom,
-        tokenPriceRaw,
-        artPrice,
-        otherPrice,
-        tradesOpen,
-        date
-      ] = row;
-
-      const slot = rawSlot?.trim() || getNextSlot();
-
-      if (
-        sheetCharacterName !== character.name ||
-        !itemName ||
-        date?.toLowerCase() !== 'old stock'
-      ) continue;
-
-      const item = await fetchItemByName(itemName);
-      if (!item) {
-        console.warn(`[handleVendingSync]: Skipping unknown item "${itemName}".`);
-        continue;
+    collector.on('collect', async i => {
+      if (i.customId === 'cancel_sync') {
+        await i.update({
+          content: '❌ Vending sync cancelled.',
+          embeds: [],
+          components: []
+        });
+        return;
       }
 
-      parsedRows.push({
-        characterName: character.name,
-        itemName,
-        itemId: item._id,
-        stockQty: parseInt(stockQtyRaw || 0),
-        costEach: parseInt(costEachRaw || 0),
-        pointsSpent: parseInt(pointsSpentRaw || 0),
-        boughtFrom,
-        tokenPrice: parseInt(tokenPriceRaw || 0),
-        artPrice: artPrice || '',
-        otherPrice: otherPrice || '',
-        tradesOpen: tradesOpen?.toLowerCase() === 'yes',
-        slot,
-        date: new Date()
-      });
-    }
+      // Proceed with sync
+      const sheetData = await fetchSheetData(auth, spreadsheetId, 'vendingShop!A2:L');
 
-    if (!parsedRows.length) {
-      await updateCharacterById(character._id, {
-        vendingSync: true
+      // ------------------- Build Slot Tracker -------------------
+      const usedSlotNumbers = new Set();
+      sheetData.forEach(row => {
+        const match = /^Slot (\d+)$/.exec(row[1]);
+        if (match) usedSlotNumbers.add(Number(match[1]));
       });
 
-      return await interaction.editReply({
-        content: `⚠️ No valid "Old Stock" entries found. Proceeding to sync with an empty inventory. This cannot be undone.`,
-        ephemeral: true
-      });
-    }
-    
-    // ------------------- Step 4: Insert Into Database -------------------
-    const db = await connectToInventories();
-    const collection = db.collection(character.name.toLowerCase());
+      let slotCounter = 1;
+      const getNextSlot = () => {
+        while (usedSlotNumbers.has(slotCounter)) {
+          slotCounter++;
+        }
+        usedSlotNumbers.add(slotCounter);
+        return `Slot ${slotCounter}`;
+      };
 
-    await collection.insertMany(parsedRows);
+      // ------------------- Step 6: Parse and Validate Rows -------------------
+      const parsedRows = [];
 
-    // ------------------- Step 5: Finalize Sync -------------------
-    await updateCharacterById(character._id, { vendingSync: true });
+      for (const row of sheetData) {
+        const [
+          sheetCharacterName,
+          rawSlot,
+          itemName,
+          stockQtyRaw,
+          costEachRaw,
+          pointsSpentRaw,
+          boughtFrom,
+          tokenPriceRaw,
+          artPrice,
+          otherPrice,
+          tradesOpen,
+          date
+        ] = row;
 
-    const embed = new EmbedBuilder()
-      .setTitle(`✅ Sync Complete`)
-      .setDescription(`Successfully synced **${parsedRows.length}** items to **${character.name}**'s vending inventory.`)
-      .setColor('#25C059');
+        const slot = rawSlot?.trim() || getNextSlot();
 
-    await interaction.editReply({ embeds: [embed] });
+        if (
+          sheetCharacterName !== character.name ||
+          !itemName ||
+          date?.toLowerCase() !== 'old stock'
+        ) continue;
+
+        const item = await fetchItemByName(itemName);
+        if (!item) {
+          console.warn(`[handleVendingSync]: Skipping unknown item "${itemName}".`);
+          continue;
+        }
+
+        parsedRows.push({
+          characterName: character.name,
+          itemName,
+          itemId: item._id,
+          stockQty: parseInt(stockQtyRaw || 0),
+          costEach: parseInt(costEachRaw || 0),
+          pointsSpent: parseInt(pointsSpentRaw || 0),
+          boughtFrom,
+          tokenPrice: parseInt(tokenPriceRaw || 0),
+          artPrice: artPrice || '',
+          otherPrice: otherPrice || '',
+          tradesOpen: tradesOpen?.toLowerCase() === 'yes',
+          slot,
+          date: new Date()
+        });
+      }
+
+      if (!parsedRows.length) {
+        await updateCharacterById(character._id, {
+          vendingSync: true
+        });
+
+        return await interaction.editReply({
+          content: `⚠️ No valid "Old Stock" entries found. Proceeding to sync with an empty inventory. This cannot be undone.`,
+          ephemeral: true
+        });
+      }
+      
+      // ------------------- Step 7: Insert Into Database -------------------
+      const db = await connectToInventories();
+      const collection = db.collection(character.name.toLowerCase());
+
+      await collection.insertMany(parsedRows);
+
+      // ------------------- Step 8: Finalize Sync -------------------
+      await updateCharacterById(character._id, { vendingSync: true });
+
+      const embed = new EmbedBuilder()
+        .setTitle(`✅ Sync Complete`)
+        .setDescription(`Successfully synced **${parsedRows.length}** items to **${character.name}**'s vending inventory.`)
+        .setColor('#25C059');
+
+      await interaction.editReply({ embeds: [embed] });
+
+    });
 
   } catch (error) {
     console.error('[handleVendingSync]:', error);
