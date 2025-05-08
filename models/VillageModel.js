@@ -29,6 +29,57 @@ const DEFAULT_BLOOD_MOON_PROTECTION = {
     3: true
 };
 
+const VILLAGE_CONFIG = {
+    Rudania: {
+        name: 'Rudania',
+        region: 'Eldin',
+        color: '#d7342a',
+        emoji: '<:rudania:899492917452890142>',
+        materials: {
+            Wood: { required: { 2: 250, 3: 500 } },
+            "Eldin Ore": { required: { 2: 200, 3: 250 } },
+            "Goron Ore": { required: { 2: 100, 3: 200 } },
+            "Fancy Fabric": { required: { 3: 50 } },
+            "Dinraal's Claw": { required: { 3: 1 } },
+            "Shard of Dinraal's Fang": { required: { 3: 1 } },
+            "Shard of Dinraal's Horn": { required: { 3: 1 } },
+            "Goddess Plume": { required: { 3: 1 } },
+        },
+    },
+    Inariko: {
+        name: 'Inariko',
+        region: 'Lanayru',
+        color: '#277ecd',
+        emoji: '<:inariko:899493009073274920>',
+        materials: {
+            Wood: { required: { 2: 250, 3: 500 } },
+            "Silver Ore": { required: { 2: 200, 3: 250 } },
+            "Luminous Stone": { required: { 3: 100 } },
+            "Silver Thread": { required: { 2: 50, 3: 50 } },
+            "Naydra's Claw": { required: { 3: 1 } },
+            "Shard of Naydra's Fang": { required: { 3: 1 } },
+            "Shard of Naydra's Horn": { required: { 3: 1 } },
+            "Goddess Plume": { required: { 3: 1 } },
+        },
+    },
+    Vhintl: {
+        name: 'Vhintl',
+        region: 'Faron',
+        color: '#25c059',
+        emoji: '<:vhintl:899492879205007450>',
+        materials: {
+            Wood: { required: { 2: 250, 3: 500 } },
+            "Tree Branch": { required: { 2: 200, 3: 250 } },
+            "Korok Leaf": { required: { 2: 50, 3: 100 } },
+            "Vintage Linen": { required: { 3: 50 } },
+            "Farosh's Claw": { required: { 3: 1 } },
+            "Shard of Farosh's Fang": { required: { 3: 1 } },
+            "Shard of Farosh's Horn": { required: { 3: 1 } },
+            "Goddess Plume": { required: { 3: 1 } },
+        },
+    },
+};
+
 // ============================================================================
 // ---- Schema Definition ----
 // ============================================================================
@@ -136,6 +187,7 @@ const Village = mongoose.model('Village', VillageSchema);
 // ============================================================================
 module.exports = { 
     Village,
+    VILLAGE_CONFIG,
     DEFAULT_HEALTH,
     DEFAULT_TOKEN_REQUIREMENTS,
     DEFAULT_RAID_PROTECTION,
