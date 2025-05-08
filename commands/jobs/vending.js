@@ -33,7 +33,7 @@ const command = new SlashCommandBuilder()
   // ------------------- Shop Setup & Management -------------------
   .addSubcommand(sub =>
     sub.setName('setup')
-      .setDescription('🎪 Set up or update your vending shop')
+      .setDescription('🎪 Set up your vending shop')
       .addStringOption(opt =>
         opt.setName('charactername')
           .setDescription('Your character\'s name')
@@ -56,9 +56,9 @@ const command = new SlashCommandBuilder()
             { name: 'Gold (+50 slots)', value: 'gold' }
           )
       )
-      .addBooleanOption(opt =>
-        opt.setName('sync')
-          .setDescription('Automatically sync your shop after setup?')
+      .addIntegerOption(opt =>
+        opt.setName('points')
+          .setDescription('Your current vending points (if any)')
       )
   )
 
