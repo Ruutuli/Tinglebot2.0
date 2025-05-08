@@ -853,25 +853,39 @@ async function handleVendingSync(interaction, characterName) {
     console.log(`[handleVendingSync]: Cleared existing vending inventory for ${character.name}`);
 
     // Create new vending inventory entries
-    const vendingEntries = parsedRows.map(row => ({
-      characterName: character.name,
-      itemName: row.itemName,
-      itemId: row.itemId,
-      stockQty: row.stockQty,
-      costEach: row.costEach,
-      pointsSpent: row.pointsSpent,
-      boughtFrom: row.boughtFrom,
-      tokenPrice: row.tokenPrice,
-      artPrice: row.artPrice,
-      otherPrice: row.otherPrice,
-      tradesOpen: row.tradesOpen,
-      slot: row.slot,
-      date: new Date()
-    }));
+    const vendingEntries = [];
+    for (const row of parsedRows) {
+      // Fetch the item from the database to get its ID
+      const item = await ItemModel.findOne({ itemName: row.itemName });
+      if (!item) {
+        console.warn(`[handleVendingSync]: Item "${row.itemName}" not found in database, skipping...`);
+        continue;
+      }
+
+      vendingEntries.push({
+        characterName: character.name,
+        itemName: row.itemName,
+        itemId: item._id, // Use the item's MongoDB ID
+        stockQty: row.stockQty,
+        costEach: row.costEach,
+        pointsSpent: row.pointsSpent,
+        boughtFrom: row.boughtFrom,
+        tokenPrice: row.tokenPrice,
+        artPrice: row.artPrice,
+        otherPrice: row.otherPrice,
+        tradesOpen: row.tradesOpen,
+        slot: row.slot,
+        date: new Date()
+      });
+    }
 
     // Insert the new entries
-    await VendingInventory.insertMany(vendingEntries);
-    console.log(`[handleVendingSync]: Created ${vendingEntries.length} vending inventory entries`);
+    if (vendingEntries.length > 0) {
+      await VendingInventory.insertMany(vendingEntries);
+      console.log(`[handleVendingSync]: Created ${vendingEntries.length} vending inventory entries`);
+    } else {
+      console.warn(`[handleVendingSync]: No valid items found to sync`);
+    }
 
     // Update character's vending sync status
     await Character.updateOne(
