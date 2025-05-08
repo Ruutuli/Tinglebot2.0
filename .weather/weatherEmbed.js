@@ -67,13 +67,13 @@ async function generateWeatherEmbed(village, weather) {
     // Get Hyrulean date only
     const now = new Date();
     const hyruleanDate = convertToHyruleanDate(now);
-    const dateLine = `Hyrulean Date: ${hyruleanDate}`;
+    const dateLine = `**Hyrulean Date: ${hyruleanDate}**`;
 
     // Create base embed
     const embed = new EmbedBuilder()
       .setColor(VILLAGE_COLORS[village])
       .setTitle(`${village}'s Daily Weather Forecast`)
-      .setDescription(`${emojiSummary}\n${dateLine}`)
+      .setDescription(`${emojiSummary}\n\n${dateLine}`)
       .setAuthor({ name: `${village} Town Hall`, iconURL: `attachment://${crestIconName}` })
       .addFields(
         { name: 'Temperature', value: weather.temperature.label || `${weather.temperature.value}°F`, inline: false },
@@ -84,8 +84,8 @@ async function generateWeatherEmbed(village, weather) {
       .setTimestamp();
 
     // Add special conditions if any
-    if (weather.specialConditions && weather.specialConditions.length > 0) {
-      embed.addFields({ name: 'Special', value: `✨ ${weather.specialConditions.join(', ')}` });
+    if (weather.special && weather.special.label) {
+      embed.addFields({ name: 'Special', value: `✨ ${weather.special.emoji || ''} ${weather.special.label}`.trim() });
     }
 
     // Generate banner (now async)
