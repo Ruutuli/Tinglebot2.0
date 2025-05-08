@@ -194,6 +194,23 @@ async function handleAutocomplete(interaction) {
           await handleVillageBasedCommandsAutocomplete(interaction, focusedOption);
         }
         break;
+      case "mod":
+        if (focusedName === "character" && interaction.options.getSubcommand() === "vendingreset") {
+          // Fetch all characters for vendingreset
+          const characters = await fetchAllCharacters();
+          const filtered = characters
+            .filter(c => c.name.toLowerCase().includes(focusedValue.toLowerCase()))
+            .slice(0, 25)
+            .map(c => ({ name: c.name, value: c.name }));
+          await interaction.respond(filtered);
+        } else if (focusedName === "character" && interaction.options.getSubcommand() === "give") {
+          await handleModGiveCharacterAutocomplete(interaction, focusedOption);
+        } else if (focusedName === "item" && interaction.options.getSubcommand() === "give") {
+          await handleModGiveItemAutocomplete(interaction, focusedOption);
+        } else if (focusedName === "character" && interaction.options.getSubcommand() === "petlevel") {
+          await handleModCharacterAutocomplete(interaction, focusedOption);
+        }
+        break;
       default:
         await interaction.respond([]);
     }
