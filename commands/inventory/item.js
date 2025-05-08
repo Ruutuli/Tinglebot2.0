@@ -22,11 +22,10 @@ const { healKoCharacter, updateCurrentHearts, updateCurrentStamina } = require('
 const { getJobPerk } = require('../../modules/jobsModule');
 const { capitalizeWords } = require('../../modules/formattingModule');
 const { getVillageEmojiByName } = require('../../modules/locationsModule');
-const { syncInventory } = require('../../handlers/syncHandler');
 
 // ------------------- Utility Functions -------------------
 // General-purpose utilities: Google Sheets integration, URL validation, error handling, inventory utils.
-const { authorizeSheets, appendSheetData,  safeAppendDataToSheet, } = require('../../utils/googleSheetsUtils');
+const { authorizeSheets, appendSheetData } = require('../../utils/googleSheetsUtils');
 const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../../utils/validation');
 const { handleError } = require('../../utils/globalErrorHandler');
 const { removeItemInventoryDatabase } = require('../../utils/inventoryUtils');
@@ -191,19 +190,6 @@ module.exports = {
           .setDescription(`**${item.itemName}** cannot recover from KO. Use a Fairy or request healer services.`)
           .setFooter({ text: 'Healing Error' });
         return void await interaction.editReply({ embeds: [errorEmbed] });
-      }
-
-      // ------------------- Force Inventory Sync Before Healing -------------------
-      await interaction.editReply({
-        content: '🔄 **Syncing inventory before healing attempt...**'
-      });
-      await syncInventory(character.name, interaction.user.id, interaction);
-      // Refresh character data after sync
-      character = await fetchCharacterByNameAndUserId(characterName, interaction.user.id);
-      if (!character.inventorySynced) {
-        return void await interaction.editReply({
-          content: '❌ **Inventory sync failed. Please try again or contact support.**'
-        });
       }
 
       if (character.currentHearts >= character.maxHearts && !item.staminaRecovered) {
