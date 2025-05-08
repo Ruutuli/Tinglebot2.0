@@ -8,7 +8,8 @@
 // Local modules for seasons data, weather data, and modifier logic
 const seasonsData = require('../data/seasonsData');
 const weatherData = require('../data/weatherData');
-const modifiers = require('../.weather/weatherModule');
+const { weatherWeightModifiers } = require('../data/weatherData');
+// const weatherModule = require('../.weather/weatherModule'); // Disabled due to missing module
 
 // ============================================================================
 // ------------------- Weather History Memory -------------------
@@ -222,9 +223,9 @@ function simulateWeightedWeather(village, season) {
     }
 
     // ------------------- Modifiers -------------------
-    const tempMods = modifiers[village]?.[season]?.temperature || {};
-    const precipMods = modifiers[village]?.[season]?.precipitation || {};
-    const specialMods = modifiers[village]?.[season]?.special || {};
+    const tempMods = weatherWeightModifiers[village]?.[season]?.temperature || {};
+    const precipMods = weatherWeightModifiers[village]?.[season]?.precipitation || {};
+    const specialMods = weatherWeightModifiers[village]?.[season]?.special || {};
 
     // ------------------- History & Streaks -------------------
     const history = weatherHistoryByVillage[village] || [];
