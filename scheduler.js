@@ -12,10 +12,6 @@ const { convertToHyruleanDate } = require('./modules/calendarModule');
 const Character = require('./models/CharacterModel');
 const weatherHandler = require('./handlers/weatherHandler');
 
-
-module.exports = (client) => {
-  console.log('[scheduler]📅 Scheduler initialized');
-
 // ------------------- Jail Release Check -------------------
 cron.schedule('0 0 * * *', async () => {
   try {
@@ -459,93 +455,95 @@ cron.schedule('0 20 * * *', async () => {
     return 'Winter';
   }
 
-  module.exports.setupWeatherScheduler = setupWeatherScheduler;
-  module.exports.postWeatherUpdate = postWeatherUpdate;
-};
+  // ------------------- Birthday Announcement Logic -------------------
+  // Function to check and announce birthdays
+  async function executeBirthdayAnnouncements(client) {
+    const now = new Date();
+    const estNow = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+    const today = estNow.toISOString().slice(5, 10);
 
-// ------------------- Birthday Announcement Logic -------------------
-// Function to check and announce birthdays
-async function executeBirthdayAnnouncements(client) {
-  const now = new Date();
-  const estNow = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
-  const today = estNow.toISOString().slice(5, 10);
+    console.log(`[Birthday] Today's date: ${today}`);
 
-  console.log(`[Birthday] Today's date: ${today}`);
+    // Parse GUILD_IDS from the .env file
+    const guildIds = process.env.GUILD_IDS ? process.env.GUILD_IDS.split(',') : [];
 
-  // Parse GUILD_IDS from the .env file
-  const guildIds = process.env.GUILD_IDS ? process.env.GUILD_IDS.split(',') : [];
+    // Map of guild IDs to their birthday announcement channels
+    const guildChannelMap = {
+      '1305484048063529002': '1326997448085995530', // Roots Of The Wild
+      '603960955839447050': 'AnotherChannelIDHere', // Replace with the appropriate channel ID
+    };
 
-  // Map of guild IDs to their birthday announcement channels
-  const guildChannelMap = {
-    '1305484048063529002': '1326997448085995530', // Roots Of The Wild
-    '603960955839447050': 'AnotherChannelIDHere', // Replace with the appropriate channel ID
-  };
+    const birthdayMessages = [
+      "🔥🌍 May Din's fiery blessing fill your birthday with the **Power** to overcome any challenge that comes your way! 🔴",
+      "💧❄️ On this nameday, may Nayru's profound **Wisdom** guide you towards new heights of wisdom and understanding! 🔵",
+      "🌿⚡ As you celebrate another year, may Farore's steadfast **Courage** inspire you to embrace every opportunity with bravery and grace! 🟢",
+    ];
 
-  const birthdayMessages = [
-    "🔥🌍 May Din's fiery blessing fill your birthday with the **Power** to overcome any challenge that comes your way! 🔴",
-    "💧❄️ On this nameday, may Nayru's profound **Wisdom** guide you towards new heights of wisdom and understanding! 🔵",
-    "🌿⚡ As you celebrate another year, may Farore's steadfast **Courage** inspire you to embrace every opportunity with bravery and grace! 🟢",
-  ];
+    // Function to convert the real-world date to "January 10"
+    const formatRealWorldDate = (date) => {
+      return date.toLocaleString("en-US", { month: "long", day: "numeric" });
+    };
 
-  // Function to convert the real-world date to "January 10"
-  const formatRealWorldDate = (date) => {
-    return date.toLocaleString("en-US", { month: "long", day: "numeric" });
-  };
+    const realWorldDate = formatRealWorldDate(estNow);
+    const hyruleanDate = convertToHyruleanDate(estNow);
 
-  const realWorldDate = formatRealWorldDate(estNow);
-  const hyruleanDate = convertToHyruleanDate(estNow);
+    for (const guildId of guildIds) {
+      const birthdayChannelId = guildChannelMap[guildId];
+      if (!birthdayChannelId) {
+        console.log(`[Birthday] No birthday channel configured for guild ID ${guildId}.`);
+        continue;
+      }
 
-  for (const guildId of guildIds) {
-    const birthdayChannelId = guildChannelMap[guildId];
-    if (!birthdayChannelId) {
-      console.log(`[Birthday] No birthday channel configured for guild ID ${guildId}.`);
-      continue;
-    }
+      const guild = client.guilds.cache.get(guildId);
+      if (!guild) {
+        console.log(`[Birthday] Guild with ID ${guildId} not found.`);
+        continue;
+      }
 
-    const guild = client.guilds.cache.get(guildId);
-    if (!guild) {
-      console.log(`[Birthday] Guild with ID ${guildId} not found.`);
-      continue;
-    }
+      const announcementChannel = guild.channels.cache.get(birthdayChannelId);
+      if (!announcementChannel) {
+        console.log(`[Birthday] Announcement channel not found for guild ${guild.name}.`);
+        continue;
+      }
 
-    const announcementChannel = guild.channels.cache.get(birthdayChannelId);
-    if (!announcementChannel) {
-      console.log(`[Birthday] Announcement channel not found for guild ${guild.name}.`);
-      continue;
-    }
+      // Fetch characters with birthdays today
+      const characters = await Character.find({ birthday: today });
+      console.log(`[Birthday] Found ${characters.length} characters with birthdays today in guild ${guild.name}.`);
 
-    // Fetch characters with birthdays today
-    const characters = await Character.find({ birthday: today });
-    console.log(`[Birthday] Found ${characters.length} characters with birthdays today in guild ${guild.name}.`);
+      for (const character of characters) {
+        try {
+          const user = await client.users.fetch(character.userId);
+          const randomMessage = birthdayMessages[Math.floor(Math.random() * birthdayMessages.length)];
 
-    for (const character of characters) {
-      try {
-        const user = await client.users.fetch(character.userId);
-        const randomMessage = birthdayMessages[Math.floor(Math.random() * birthdayMessages.length)];
+          const embed = new EmbedBuilder()
+            .setColor('#FF709B')
+            .setTitle(`🎉🎂🎈 Happy Birthday, ${character.name}! 🎈🎂🎉`)
+            .setDescription(randomMessage)
+            .addFields(
+              { name: "Real-World Date", value: realWorldDate, inline: true },
+              { name: "Hyrulean Date", value: hyruleanDate, inline: true }
+            )
+            .setThumbnail(character.icon)
+            .setImage('https://storage.googleapis.com/tinglebot/Graphics/bday.png') // Added image
+            .setFooter({ text: `🎉 ${character.name} belongs to ${user.username}! 🎉` })
+            .setTimestamp();
 
-        const embed = new EmbedBuilder()
-          .setColor('#FF709B')
-          .setTitle(`🎉🎂🎈 Happy Birthday, ${character.name}! 🎈🎂🎉`)
-          .setDescription(randomMessage)
-          .addFields(
-            { name: "Real-World Date", value: realWorldDate, inline: true },
-            { name: "Hyrulean Date", value: hyruleanDate, inline: true }
-          )
-          .setThumbnail(character.icon)
-          .setImage('https://storage.googleapis.com/tinglebot/Graphics/bday.png') // Added image
-          .setFooter({ text: `🎉 ${character.name} belongs to ${user.username}! 🎉` })
-          .setTimestamp();
-
-        await announcementChannel.send({ embeds: [embed] });
-        console.log(`[Birthday] Announced ${character.name}'s birthday in ${guild.name}.`);
-      } catch (error) {
+          await announcementChannel.send({ embeds: [embed] });
+          console.log(`[Birthday] Announced ${character.name}'s birthday in ${guild.name}.`);
+        } catch (error) {
     handleError(error, 'scheduler.js');
 
-        console.error(`[Birthday] Failed to announce for character ${character.name}:`, error.message);
+          console.error(`[Birthday] Failed to announce for character ${character.name}:`, error.message);
+        }
       }
     }
   }
-}
+
+module.exports = {
+  setupWeatherScheduler,
+  postWeatherUpdate,
+  // ...add any other exports as needed
+};
 
 
 

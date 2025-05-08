@@ -9,7 +9,6 @@
 const seasonsData = require('../data/seasonsData');
 const weatherData = require('../data/weatherData');
 const { weatherWeightModifiers } = require('../data/weatherData');
-// const weatherModule = require('../.weather/weatherModule'); // Disabled due to missing module
 
 // ============================================================================
 // ------------------- Weather History Memory -------------------
