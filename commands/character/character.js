@@ -146,28 +146,31 @@ module.exports = {
       .addIntegerOption((option) =>
        option
         .setName("age")
-        .setDescription("Age of the character")
+        .setDescription("Age of the character (must be a positive number)")
         .setRequired(true)
+        .setMinValue(1)
       )
       .addStringOption((option) =>
        option
         .setName("height")
         .setDescription(
-         "Height of the character in cm (can use decimal values)"
+         "Height of the character in cm (must be a positive number)"
         )
         .setRequired(true)
       )
       .addIntegerOption((option) =>
        option
         .setName("hearts")
-        .setDescription("Number of hearts")
+        .setDescription("Number of hearts (must be a positive number)")
         .setRequired(true)
+        .setMinValue(1)
       )
       .addIntegerOption((option) =>
        option
         .setName("stamina")
-        .setDescription("Number of stamina")
+        .setDescription("Number of stamina (must be a positive number)")
         .setRequired(true)
+        .setMinValue(1)
       )
       .addStringOption((option) =>
        option
@@ -221,28 +224,31 @@ module.exports = {
       .addIntegerOption((option) =>
        option
         .setName("age")
-        .setDescription("Age of the character")
+        .setDescription("Age of the character (must be a positive number)")
         .setRequired(true)
+        .setMinValue(1)
       )
       .addStringOption((option) =>
        option
         .setName("height")
         .setDescription(
-         "Height of the character in cm (can use decimal values)"
+         "Height of the character in cm (must be a positive number)"
         )
         .setRequired(true)
       )
       .addIntegerOption((option) =>
        option
         .setName("hearts")
-        .setDescription("Number of hearts")
+        .setDescription("Number of hearts (must be a positive number)")
         .setRequired(true)
+        .setMinValue(1)
       )
       .addIntegerOption((option) =>
        option
         .setName("stamina")
-        .setDescription("Number of stamina")
+        .setDescription("Number of stamina (must be a positive number)")
         .setRequired(true)
+        .setMinValue(1)
       )
       .addStringOption((option) =>
        option
@@ -296,28 +302,31 @@ module.exports = {
       .addIntegerOption((option) =>
        option
         .setName("age")
-        .setDescription("Age of the character")
+        .setDescription("Age of the character (must be a positive number)")
         .setRequired(true)
+        .setMinValue(1)
       )
       .addStringOption((option) =>
        option
         .setName("height")
         .setDescription(
-         "Height of the character in cm (can use decimal values)"
+         "Height of the character in cm (must be a positive number)"
         )
         .setRequired(true)
       )
       .addIntegerOption((option) =>
        option
         .setName("hearts")
-        .setDescription("Number of hearts")
+        .setDescription("Number of hearts (must be a positive number)")
         .setRequired(true)
+        .setMinValue(1)
       )
       .addIntegerOption((option) =>
        option
         .setName("stamina")
-        .setDescription("Number of stamina")
+        .setDescription("Number of stamina (must be a positive number)")
         .setRequired(true)
+        .setMinValue(1)
       )
       .addStringOption((option) =>
        option
@@ -371,28 +380,31 @@ module.exports = {
       .addIntegerOption((option) =>
        option
         .setName("age")
-        .setDescription("Age of the character")
+        .setDescription("Age of the character (must be a positive number)")
         .setRequired(true)
+        .setMinValue(1)
       )
       .addStringOption((option) =>
        option
         .setName("height")
         .setDescription(
-         "Height of the character in cm (can use decimal values)"
+         "Height of the character in cm (must be a positive number)"
         )
         .setRequired(true)
       )
       .addIntegerOption((option) =>
        option
         .setName("hearts")
-        .setDescription("Number of hearts")
+        .setDescription("Number of hearts (must be a positive number)")
         .setRequired(true)
+        .setMinValue(1)
       )
       .addIntegerOption((option) =>
        option
         .setName("stamina")
-        .setDescription("Number of stamina")
+        .setDescription("Number of stamina (must be a positive number)")
         .setRequired(true)
+        .setMinValue(1)
       )
       .addStringOption((option) =>
        option
@@ -739,11 +751,24 @@ async function handleCreateCharacter(interaction, subcommand) {
    return;
   }
 
-  // Add validation here
+  // Validate numeric fields
+  const age = interaction.options.getInteger("age");
   const hearts = interaction.options.getInteger("hearts");
   const stamina = interaction.options.getInteger("stamina");
+  const heightStr = interaction.options.getString("height");
+  const height = parseFloat(heightStr);
 
-  if (hearts < 0 || stamina < 0) {
+  // Validate age
+  if (age < 1) {
+   await interaction.reply({
+    content: "❌ Age must be a positive number.",
+    ephemeral: true,
+   });
+   return;
+  }
+
+  // Validate hearts and stamina
+  if (hearts < 1 || stamina < 1) {
    await interaction.reply({
     content: "❌ Hearts and stamina values must be positive numbers.",
     ephemeral: true,
@@ -751,9 +776,7 @@ async function handleCreateCharacter(interaction, subcommand) {
    return;
   }
 
-  const heightStr = interaction.options.getString("height");
-  const height = parseFloat(heightStr);
-
+  // Validate height
   if (isNaN(height) || height <= 0) {
    await interaction.reply({
     content: "❌ Height must be a positive number.",
@@ -762,6 +785,7 @@ async function handleCreateCharacter(interaction, subcommand) {
    return;
   }
 
+  // Validate race
   const race = interaction.options.getString("race");
   if (!isValidRace(race)) {
    await interaction.reply({
@@ -770,8 +794,56 @@ async function handleCreateCharacter(interaction, subcommand) {
    });
    return;
   }
+
+  // Validate village (for general subcommand)
   const village = interaction.options.getString("village");
+  if (subcommand === "general" && !["inariko", "rudania", "vhintl"].includes(village)) {
+   await interaction.reply({
+    content: `❌ "${village}" is not a valid village. Please select a valid village from the choices.`,
+    ephemeral: true,
+   });
+   return;
+  }
+
+  // Validate job
   const job = interaction.options.getString("job");
+  if (!job) {
+   await interaction.reply({
+    content: "❌ Please select a valid job from the choices.",
+    ephemeral: true,
+   });
+   return;
+  }
+
+  // Validate inventory link
+  const inventory = interaction.options.getString("inventory");
+  if (!isValidGoogleSheetsUrl(inventory)) {
+   await interaction.reply({
+    content: "❌ Please provide a valid Google Sheets URL for the inventory.",
+    ephemeral: true,
+   });
+   return;
+  }
+
+  // Validate app link
+  const appLink = interaction.options.getString("applink");
+  if (!appLink) {
+   await interaction.reply({
+    content: "❌ Please provide a valid application link.",
+    ephemeral: true,
+   });
+   return;
+  }
+
+  // Validate icon
+  const icon = interaction.options.getAttachment("icon");
+  if (!icon) {
+   await interaction.reply({
+    content: "❌ Please provide a valid icon image.",
+    ephemeral: true,
+   });
+   return;
+  }
 
   const formattedRace = `Race: ${race}`;
   const formattedVillage = `${capitalizeFirstLetter(village)} Resident`;
