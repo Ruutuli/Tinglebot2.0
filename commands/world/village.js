@@ -24,7 +24,8 @@ const { appendSheetData, authorizeSheets, extractSpreadsheetId, safeAppendDataTo
 // ---- Database Models ----
 // ============================================================================
 const ItemModel = require('../../models/ItemModel');
-const { Village, initializeVillages } = require('../../models/VillageModel');
+const { Village } = require('../../models/VillageModel');
+const { initializeVillages } = require('../../modules/villageModule');
 
 // ============================================================================
 // ---- Constants ----

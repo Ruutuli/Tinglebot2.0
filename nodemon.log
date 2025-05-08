@@ -58,17 +58,13 @@
   - Option "itemc" has autocomplete enabled
 ⚠️ Command economy has autocomplete options but no autocomplete handler!
 ✅ Loaded command: economy from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\economy\economy.js
-❌ Error loading command from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\exploration\explore.js: OverwriteModelError: Cannot overwrite `Village` model once compiled.
-    at Mongoose.model (C:\Users\Ruu\Desktop\Tinglebot 2.0\node_modules\mongoose\lib\mongoose.js:610:13)
-    at Object.<anonymous> (C:\Users\Ruu\Desktop\Tinglebot 2.0\modules\villageModule.js:178:31)
-    at Module._compile (node:internal/modules/cjs/loader:1358:14)
-    at Module._extensions..js (node:internal/modules/cjs/loader:1416:10)
-    at Module.load (node:internal/modules/cjs/loader:1208:32)
-    at Module._load (node:internal/modules/cjs/loader:1024:12)
-    at Module.require (node:internal/modules/cjs/loader:1233:19)
-    at require (node:internal/modules/helpers:179:18)
-    at Object.<anonymous> (C:\Users\Ruu\Desktop\Tinglebot 2.0\modules\raidModule.js:9:32)
-    at Module._compile (node:internal/modules/cjs/loader:1358:14)
+  - Option "charactername" has autocomplete enabled
+  - Option "item1" has autocomplete enabled
+  - Option "item2" has autocomplete enabled
+  - Option "item3" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+⚠️ Command explore has autocomplete options but no autocomplete handler!
+✅ Loaded command: explore from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\exploration\explore.js
 ✅ Loaded command: viewmap from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\exploration\viewMap.js
   - Option "charactername" has autocomplete enabled
   - Option "charactername" has autocomplete enabled
@@ -128,17 +124,9 @@
   - Option "healer" has autocomplete enabled
   - Option "healername" has autocomplete enabled
 ✅ Loaded command: heal from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\jobs\heal.js
-❌ Error loading command from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\jobs\loot.js: OverwriteModelError: Cannot overwrite `Village` model once compiled.
-    at Mongoose.model (C:\Users\Ruu\Desktop\Tinglebot 2.0\node_modules\mongoose\lib\mongoose.js:610:13)
-    at Object.<anonymous> (C:\Users\Ruu\Desktop\Tinglebot 2.0\modules\villageModule.js:178:31)
-    at Module._compile (node:internal/modules/cjs/loader:1358:14)
-    at Module._extensions..js (node:internal/modules/cjs/loader:1416:10)
-    at Module.load (node:internal/modules/cjs/loader:1208:32)
-    at Module._load (node:internal/modules/cjs/loader:1024:12)
-    at Module.require (node:internal/modules/cjs/loader:1233:19)
-    at require (node:internal/modules/helpers:179:18)
-    at Object.<anonymous> (C:\Users\Ruu\Desktop\Tinglebot 2.0\modules\raidModule.js:9:32)
-    at Module._compile (node:internal/modules/cjs/loader:1358:14)
+  - Option "charactername" has autocomplete enabled
+⚠️ Command loot has autocomplete options but no autocomplete handler!
+✅ Loaded command: loot from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\jobs\loot.js
   - Option "charactername" has autocomplete enabled
   - Option "target" has autocomplete enabled
   - Option "rarity" has autocomplete enabled
@@ -187,17 +175,9 @@
   - Option "questid" has autocomplete enabled
 ⚠️ Command quest has autocomplete options but no autocomplete handler!
 ✅ Loaded command: quest from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\world\quest.js
-❌ Error loading command from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\world\raid.js: OverwriteModelError: Cannot overwrite `Village` model once compiled.
-    at Mongoose.model (C:\Users\Ruu\Desktop\Tinglebot 2.0\node_modules\mongoose\lib\mongoose.js:610:13)
-    at Object.<anonymous> (C:\Users\Ruu\Desktop\Tinglebot 2.0\modules\villageModule.js:178:31)
-    at Module._compile (node:internal/modules/cjs/loader:1358:14)
-    at Module._extensions..js (node:internal/modules/cjs/loader:1416:10)
-    at Module.load (node:internal/modules/cjs/loader:1208:32)
-    at Module._load (node:internal/modules/cjs/loader:1024:12)
-    at Module.require (node:internal/modules/cjs/loader:1233:19)
-    at require (node:internal/modules/helpers:179:18)
-    at Object.<anonymous> (C:\Users\Ruu\Desktop\Tinglebot 2.0\modules\raidModule.js:9:32)
-    at Module._compile (node:internal/modules/cjs/loader:1358:14)
+  - Option "charactername" has autocomplete enabled
+⚠️ Command raid has autocomplete options but no autocomplete handler!
+✅ Loaded command: raid from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\world\raid.js
   - Option "charactername" has autocomplete enabled
   - Option "destination" has autocomplete enabled
 ⚠️ Command travel has autocomplete options but no autocomplete handler!
@@ -208,12 +188,12 @@
   - Option "itemname" has autocomplete enabled
 ⚠️ Command village has autocomplete options but no autocomplete handler!
 ✅ Loaded command: village from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\world\village.js
-🔄 Started refreshing 32 guild (/) commands for guild ID: 1305484048063529002
-(node:17380) Warning: Accessing non-existent property 'connectToInventories' of module exports inside circular dependency
+🔄 Started refreshing 35 guild (/) commands for guild ID: 1305484048063529002
+(node:38724) Warning: Accessing non-existent property 'connectToInventories' of module exports inside circular dependency
 (Use `node --trace-warnings ...` to show where the warning was created)
-(node:17380) Warning: Accessing non-existent property 'fetchCharacterById' of module exports inside circular dependency
-(node:17380) Warning: Accessing non-existent property 'updateCharacterById' of module exports inside circular dependency
+(node:38724) Warning: Accessing non-existent property 'fetchCharacterById' of module exports inside circular dependency
+(node:38724) Warning: Accessing non-existent property 'updateCharacterById' of module exports inside circular dependency
 ✅ Successfully reloaded application (/) commands for guild ID: 1305484048063529002.
-🔄 Started refreshing 32 guild (/) commands for guild ID: 603960955839447050
+🔄 Started refreshing 35 guild (/) commands for guild ID: 603960955839447050
 ✅ Successfully reloaded application (/) commands for guild ID: 603960955839447050.
 ✅ Successfully reloaded all guild (/) commands.
