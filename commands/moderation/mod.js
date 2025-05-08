@@ -326,6 +326,20 @@ const modCommand = new SlashCommandBuilder()
     )
 )
 
+// ------------------- Subcommand: vendingreset -------------------
+.addSubcommand(sub =>
+  sub
+    .setName('vendingreset')
+    .setDescription('🧹 Reset all vending-related fields for a character (mod only)')
+    .addStringOption(opt =>
+      opt
+        .setName('character')
+        .setDescription('Name of the character to reset vending fields for')
+        .setRequired(true)
+        .setAutocomplete(true)
+    )
+)
+
   
 // ============================================================================
 // ------------------- Execute Command Handler -------------------
@@ -396,6 +410,8 @@ async function execute(interaction) {
         return await handleSlots(interaction);
       } else if (subcommand === 'weather') {
         await handleWeather(interaction);
+      } else if (subcommand === 'vendingreset') {
+        return await handleVendingReset(interaction);
       } else {
       return interaction.editReply('❌ Unknown subcommand.');
     }
@@ -976,6 +992,34 @@ function getCurrentSeason() {
   if (month >= 6 && month <= 8) return 'Summer';
   if (month >= 9 && month <= 11) return 'Autumn';
   return 'Winter';
+}
+
+// ------------------- Function: handleVendingReset -------------------
+// Resets all vending-related fields for a character
+async function handleVendingReset(interaction) {
+  const charName = interaction.options.getString('character');
+  try {
+    const character = await fetchCharacterByName(charName);
+    if (!character) {
+      return interaction.editReply(`❌ Character **${charName}** not found.`);
+    }
+    // Reset vending-related fields to defaults
+    character.vendingPoints = 0;
+    character.vendorType = '';
+    character.shopPouch = '';
+    character.pouchSize = 0;
+    character.shopLink = '';
+    character.lastCollectedMonth = 0;
+    character.vendingSetup = false;
+    character.vendingSync = false;
+    character.shopImage = '';
+    await character.save();
+    return interaction.editReply(`✅ All vending fields for **${charName}** have been reset.`);
+  } catch (error) {
+    handleError(error, 'mod.js');
+    console.error('[mod.js]: Error resetting vending fields:', error);
+    return interaction.editReply('❌ Failed to reset vending fields.');
+  }
 }
 
   
