@@ -1793,6 +1793,32 @@ const getUserBlightHistory = async (userId, limit = 20) => {
 // Export all service functions and constants.
 // ============================================================================
 
+// ------------------- addItemToInventory -------------------
+const addItemToInventory = async (inventoryCollection, itemName, quantity) => {
+  try {
+    const existingItem = await inventoryCollection.findOne({
+      itemName: itemName.trim().toLowerCase()
+    });
+
+    if (existingItem) {
+      await inventoryCollection.updateOne(
+        { itemName: itemName.trim().toLowerCase() },
+        { $inc: { quantity: quantity } }
+      );
+    } else {
+      await inventoryCollection.insertOne({
+        itemName: itemName.trim().toLowerCase(),
+        quantity: quantity,
+        date: new Date()
+      });
+    }
+  } catch (error) {
+    handleError(error, "db.js");
+    console.error("[db.js]: Error adding item to inventory:", error);
+    throw error;
+  }
+};
+
 module.exports = {
  connectToTinglebot,
  connectToInventories,
@@ -1871,5 +1897,6 @@ module.exports = {
  recordBlightRoll,
  getCharacterBlightHistory,
  getUserBlightHistory,
- connectToVending
+ connectToVending,
+ addItemToInventory
 };
