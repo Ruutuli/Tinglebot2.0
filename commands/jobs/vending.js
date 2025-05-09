@@ -240,6 +240,17 @@ const command = new SlashCommandBuilder()
           .setDescription('The barter request ID')
           .setRequired(true)
       )
+  )
+
+  .addSubcommand(sub =>
+    sub.setName('collect_points')
+      .setDescription('Collect your monthly vending points')
+      .addStringOption(opt =>
+        opt.setName('charactername')
+          .setDescription('Your character\'s name')
+          .setRequired(true)
+          .setAutocomplete(true)
+      )
   );
 
 // ============================================================================
