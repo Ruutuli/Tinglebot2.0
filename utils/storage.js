@@ -82,7 +82,44 @@ function deleteSubmissionFromStorage(submissionId) {
 // Generic storage functions
 async function saveToStorage(key, type, data) {
   try {
-    await TempData.create({ key, type, data });
+    const now = new Date();
+    let expiresAt;
+
+    // Set expiration based on type
+    switch (type) {
+      case 'healing':
+        expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000); // 24 hours
+        break;
+      case 'vending':
+        expiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // 30 days
+        break;
+      case 'boosting':
+        expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000); // 24 hours
+        break;
+      case 'battle':
+        expiresAt = new Date(now.getTime() + 2 * 60 * 60 * 1000); // 2 hours
+        break;
+      case 'encounter':
+        expiresAt = new Date(now.getTime() + 12 * 60 * 60 * 1000); // 12 hours
+        break;
+      case 'blight':
+        expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days
+        break;
+      case 'travel':
+        expiresAt = new Date(now.getTime() + 6 * 60 * 60 * 1000); // 6 hours
+        break;
+      case 'gather':
+        expiresAt = new Date(now.getTime() + 2 * 60 * 60 * 1000); // 2 hours
+        break;
+      case 'monthly':
+        // Set to end of current month
+        expiresAt = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+        break;
+      default:
+        expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000); // Default 24 hours
+    }
+
+    await TempData.create({ key, type, data, expiresAt });
   } catch (error) {
     handleError(error, 'storage.js');
     throw error;

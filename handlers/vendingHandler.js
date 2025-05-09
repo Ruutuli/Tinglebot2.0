@@ -461,12 +461,33 @@ async function handleVendingBarter(interaction) {
   
       // Use VendingModel to check shop inventory
       const VendingInventory = await getVendingModel(targetShopName);
-      const requestedItem = await VendingInventory.findOne({ 
-        itemName: requestedItemName
-      });
+      
+      // Find all items with the requested name
+      const allItems = await VendingInventory.find({ itemName: requestedItemName });
+      console.log(`[handleVendingBarter] Found ${allItems.length} items named ${requestedItemName}:`, 
+        allItems.map(item => ({
+          slot: item.slot,
+          artPrice: item.artPrice,
+          stockQty: item.stockQty
+        }))
+      );
+
+      // Find the first item that has a valid art price
+      const requestedItem = allItems.find(item => 
+        item.artPrice && 
+        item.artPrice !== 'N/A' && 
+        item.artPrice !== '' && 
+        item.artPrice !== null
+      );
+      
+      console.log(`[handleVendingBarter] Selected item for art purchase:`, requestedItem ? {
+        slot: requestedItem.slot,
+        artPrice: requestedItem.artPrice,
+        stockQty: requestedItem.stockQty
+      } : 'No valid item found');
       
       if (!requestedItem) {
-        return interaction.editReply(`⚠️ The item **${requestedItemName}** is not available in ${targetShopName}'s shop.`);
+        return interaction.editReply(`⚠️ The item **${requestedItemName}** is not available for art purchase in ${targetShopName}'s shop.`);
       }
 
       if (requestedItem.stockQty < quantity) {
@@ -487,9 +508,20 @@ async function handleVendingBarter(interaction) {
           break;
 
         case 'art':
-          if (!requestedItem.artPrice) {
+          console.log(`[handleVendingBarter] Art price validation for ${requestedItemName}:`, {
+            artPrice: requestedItem.artPrice,
+            artPriceType: typeof requestedItem.artPrice,
+            isNull: requestedItem.artPrice === null,
+            isUndefined: requestedItem.artPrice === undefined,
+            isNA: requestedItem.artPrice === 'N/A',
+            isEmpty: requestedItem.artPrice === '',
+            rawItem: requestedItem
+          });
+          if (!requestedItem.artPrice || requestedItem.artPrice === 'N/A' || requestedItem.artPrice === '') {
+            console.log(`[handleVendingBarter] Art price validation failed for ${requestedItemName}`);
             return interaction.editReply(`⚠️ ${requestedItemName} is not available for art purchase.`);
           }
+          console.log(`[handleVendingBarter] Art price validation passed for ${requestedItemName}`);
           break;
 
         case 'barter':
@@ -502,7 +534,7 @@ async function handleVendingBarter(interaction) {
             item.name.toLowerCase() === offeredItemName.toLowerCase()
           );
           if (!offeredItem || offeredItem.quantity < 1) {
-            return interaction.editReply(`⚠️ You don't have **${offeredItemName}** in your inventory.`);
+            return interaction.reply(`⚠️ You don't have **${offeredItemName}** in your inventory.`);
           }
           break;
       }
@@ -523,8 +555,21 @@ async function handleVendingBarter(interaction) {
         date: new Date()
       };
   
+      // Save to both MongoDB model and temporary storage
       const fulfillment = new VendingRequest(barterData);
       await fulfillment.save();
+      
+      // Also save to temporary storage for backward compatibility
+      await saveVendingRequestToStorage(fulfillmentId, barterData);
+      
+      console.log(`[handleVendingBarter] Created barter request:`, {
+        fulfillmentId,
+        itemName: requestedItem.itemName,
+        quantity,
+        paymentMethod: paymentType,
+        buyer: buyer.name,
+        vendor: shopOwner.name
+      });
   
       // ------------------- Confirmation Embed -------------------
       const embed = new EmbedBuilder()
@@ -570,7 +615,18 @@ async function handleFulfill(interaction) {
       // ------------------- Fetch Barter Request -------------------
       const request = await VendingRequest.findOne({ fulfillmentId });
       if (!request) {
-        return interaction.editReply(`⚠️ No pending barter request found with ID **${fulfillmentId}**.`);
+        // Try to get from temporary storage as fallback
+        const tempRequest = await retrieveVendingRequestFromStorage(fulfillmentId);
+        if (!tempRequest) {
+          return interaction.editReply(`⚠️ No pending barter request found with ID **${fulfillmentId}**.`);
+        }
+        // Convert temp request to match MongoDB format
+        request = {
+          userCharacterName: tempRequest.userCharacterName,
+          vendorCharacterName: tempRequest.vendorCharacterName,
+          itemName: tempRequest.itemName,
+          quantity: tempRequest.quantity
+        };
       }
   
       const {
@@ -616,7 +672,17 @@ async function handleFulfill(interaction) {
       await addItemToInventory(buyerInventory, itemName, quantity);
   
       // ------------------- Delete Fulfillment Request -------------------
+      // Delete from both MongoDB and temporary storage
       await VendingRequest.deleteOne({ fulfillmentId });
+      await deleteVendingRequestFromStorage(fulfillmentId);
+      
+      console.log(`[handleFulfill] Fulfilled barter request:`, {
+        fulfillmentId,
+        itemName,
+        quantity,
+        buyer: buyer.name,
+        vendor: vendor.name
+      });
   
       // ------------------- Confirmation Embed -------------------
       const embed = new EmbedBuilder()
@@ -1185,14 +1251,21 @@ async function handleVendingSync(interaction, characterName) {
         pointsSpent: Number(row.pointsSpent) || 0,
         boughtFrom: row.boughtFrom || character.currentVillage,
         tokenPrice: row.tokenPrice === 'N/A' ? null : Number(row.tokenPrice) || null,
-        artPrice: row.artPrice === 'N/A' ? null : Number(row.artPrice) || null,
-        otherPrice: row.otherPrice === 'N/A' ? null : Number(row.otherPrice) || null,
+        artPrice: row.artPrice === 'N/A' ? null : row.artPrice,
+        otherPrice: row.otherPrice === 'N/A' ? null : row.otherPrice,
         barterOpen: row.barterOpen === 'Yes' || row.barterOpen === true,
         slot: row.slot || 'Slot 1',
         date: new Date(),
         stackable: isStackable,
         maxStackSize: maxStackSize,
         slotsUsed: slotsNeeded
+      });
+
+      // Add logging for art price handling
+      console.log(`[handleVendingSync] Processing art price for ${row.itemName}:`, {
+        originalArtPrice: row.artPrice,
+        processedArtPrice: row.artPrice === 'N/A' ? null : row.artPrice,
+        row: row
       });
     }
 
