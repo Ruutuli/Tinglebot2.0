@@ -184,7 +184,7 @@ function handleTokenError(error, interaction) {
 
   if (error.message.includes('Invalid URL')) {
     errorMessage = '❌ Your token tracker link is not set up correctly.';
-    guideMessage = '📝 **Quick Guide:**\n1. Use `/tokens tokentrackerlink` to set up your tracker\n2. Make sure to use a valid Google Sheets URL';
+    guideMessage = '📝 **Quick Guide:**\n1. Use `/tokens setup` to set up your tracker\n2. Make sure to use a valid Google Sheets URL';
   } else if (error.message.includes('permission')) {
     errorMessage = '❌ The bot cannot access your token tracker.';
     guideMessage = '📝 **Quick Guide:**\n1. Share your sheet with: `tinglebot@rotw-tinglebot.iam.gserviceaccount.com`\n2. Make sure to give **edit** permissions';
@@ -208,13 +208,13 @@ function handleTokenError(error, interaction) {
       '```\n\n' +
       '3. Share your sheet with: `tinglebot@rotw-tinglebot.iam.gserviceaccount.com`\n' +
       '4. Make sure you have a tab named exactly `loggedTracker`\n' +
-      '5. Use `/tokens test` to verify your setup';
+      '5. Use `/tokens setup` to verify your setup';
   }
 
   return {
     errorMessage,
     guideMessage,
-    fullMessage: `${errorMessage}\n\n${guideMessage}\n\n💡 Need more help? Use \`/tokens test\` to verify your setup.`
+    fullMessage: `${errorMessage}\n\n${guideMessage}\n\n💡 Need more help? Use \`/tokens setup\` to verify your setup.`
   };
 }
 

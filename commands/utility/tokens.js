@@ -2,16 +2,17 @@ const { handleError } = require('../../utils/globalErrorHandler.js');
 const { handleTokenError } = require('../../utils/tokenUtils.js');
 
 // ------------------- Import necessary modules and services -------------------
-const { SlashCommandBuilder, EmbedBuilder } = require('@discordjs/builders'); // For building slash commands and embeds
-const User = require('../../models/UserModel.js'); // User model for database operations
-const { getOrCreateToken, syncTokenTracker } = require('../../database/db.js'); // Token services
+const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder } = require('@discordjs/builders');
+const { ButtonStyle } = require('discord.js');
+const User = require('../../models/UserModel.js');
+const { getOrCreateToken, syncTokenTracker } = require('../../database/db.js');
 const {
   authorizeSheets,
   getSheetIdByTitle,
   readSheetData,
-} = require('../../utils/googleSheetsUtils.js'); // Google Sheets utilities
-const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../../utils/validation.js'); // Validation utilities
-const { createTokenTrackerSetupEmbed } = require('../../embeds/embeds.js'); // Embed creation utilities
+} = require('../../utils/googleSheetsUtils.js');
+const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../../utils/validation.js');
+const { createTokenTrackerSetupEmbed } = require('../../embeds/embeds.js');
 
 // ------------------- Command data definition for managing tokens -------------------
 module.exports = {
@@ -24,20 +25,12 @@ module.exports = {
         .setDescription('Check your current token balance'))
     .addSubcommand(subcommand =>
       subcommand
-        .setName('sync')
-        .setDescription('Sync your token tracker from Google Sheets'))
-    .addSubcommand(subcommand =>
-      subcommand
-        .setName('tokentrackerlink')
-        .setDescription('Set your token tracker Google Sheets link')
+        .setName('setup')
+        .setDescription('Set up your token tracker')
         .addStringOption(option =>
           option.setName('link')
             .setDescription('Google Sheets link for your token tracker')
-            .setRequired(true)))
-    .addSubcommand(subcommand =>
-      subcommand
-        .setName('test')
-        .setDescription('Test if the token tracker is set up correctly')),
+            .setRequired(true))),
 
   // ------------------- Execute function to handle subcommands -------------------
   async execute(interaction) {
@@ -62,11 +55,9 @@ module.exports = {
           const auth = await authorizeSheets();
           const spreadsheetId = extractSpreadsheetId(tokenRecord.tokenTracker);
 
-          console.log('[tokens.js]: Extracted Spreadsheet ID:', spreadsheetId); // Debug log
-
           // Fetch overall total from F4
           const overallTotalData = await readSheetData(auth, spreadsheetId, 'loggedTracker!F4');
-          const overallTotal = overallTotalData?.[0]?.[0] || 'N/A'; // Adjusted to access the first cell of F4
+          const overallTotal = overallTotalData?.[0]?.[0] || 'N/A';
 
           // Fetch spent tokens from F5
           const spentData = await readSheetData(auth, spreadsheetId, 'loggedTracker!F5');
@@ -74,7 +65,7 @@ module.exports = {
 
           // Prepare embed response
           const embed = new EmbedBuilder()
-            .setTitle(`${interaction.user.username}'s Token Balance`) // Include the user's name in the title
+            .setTitle(`${interaction.user.username}'s Token Balance`)
             .addFields(
               { name: '👛 **Overall Total**', value: `> **${overallTotal !== 'N/A' ? overallTotal : 'Data not found'}**`, inline: false },
               { name: '🪙 **Current Total**', value: `> **${tokenRecord.tokens}**`, inline: false },
@@ -86,72 +77,8 @@ module.exports = {
               }
             )
             .setColor(0xAA926A)
-            .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true })) // Add user's profile picture as thumbnail
-            .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png') // Add specified image
-            .setFooter({ text: 'Token Tracker' })
-            .setTimestamp();
-
-          await interaction.reply({ embeds: [embed] });
-        } catch (error) {
-          let errorMessage = error.message;
-          
-          // Handle specific error cases
-          if (errorMessage.includes("No 'earned' entries found")) {
-            errorMessage = "❌ **No earned entries found in your token tracker!**\n\n" +
-              "Please add at least one entry with type 'earned' in column E of your token tracker.\n\n" +
-              "Your entries should look like this:\n" +
-              "```\n" +
-              "SUBMISSION | LINK | CATEGORIES | TYPE   | TOKEN AMOUNT\n" +
-              "Artwork   | URL  | Art        | earned | 100\n" +
-              "```";
-          } else if (errorMessage.includes("Invalid sheet format")) {
-            errorMessage = "❌ **Invalid token tracker format!**\n\n" +
-              "Please ensure your sheet has the correct headers in row 7:\n" +
-              "```\n" +
-              "B: SUBMISSION\n" +
-              "C: LINK\n" +
-              "D: CATEGORIES\n" +
-              "E: TYPE\n" +
-              "F: TOKEN AMOUNT\n" +
-              "```";
-          }
-
-          await interaction.reply({
-            content: errorMessage,
-            ephemeral: true,
-          });
-        }
-
-      // ------------------- Handle 'sync' subcommand -------------------
-      } else if (subcommand === 'sync') {
-        const user = await getOrCreateToken(userId);
-
-        if (user.tokensSynced) {
-          await interaction.reply({
-            content: '❌ Your tokens are already synced. You cannot sync again!',
-            ephemeral: true,
-          });
-          return;
-        }
-
-        try {
-          const tokenRecord = await syncTokenTracker(userId);
-
-          // Prepare embed response
-          const embed = new EmbedBuilder()
-            .setTitle(`${interaction.user.username}'s Token Balance`) // Include the user's name in the title
-            .setDescription('✅ Your token tracker has been synced!') // Add the description
-            .addFields(
-              { name: '🪙 **Current Total**', value: `> **${tokenRecord.tokens || 'Data not found'}**`, inline: false },
-              {
-                name: '🔗 **Token Tracker Link**',
-                value: `> [📄 View your token tracker](${tokenRecord.tokenTracker || 'No link provided'})`,
-                inline: false,
-              }
-            )
-            .setColor(0xAA926A)
-            .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true })) // Add user's profile picture as thumbnail
-            .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png') // Add specified image
+            .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true }))
+            .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
             .setFooter({ text: 'Token Tracker' })
             .setTimestamp();
 
@@ -164,8 +91,8 @@ module.exports = {
           });
         }
 
-      // ------------------- Handle 'tokentrackerlink' subcommand -------------------
-      } else if (subcommand === 'tokentrackerlink') {
+      // ------------------- Handle 'setup' subcommand -------------------
+      } else if (subcommand === 'setup') {
         const link = interaction.options.getString('link');
 
         if (!isValidGoogleSheetsUrl(link)) {
@@ -191,39 +118,9 @@ module.exports = {
           user.tokenTracker = link;
           await user.save();
 
-          const setupEmbed = createTokenTrackerSetupEmbed(interaction.user.username, link);
-          await interaction.reply({ embeds: [setupEmbed], ephemeral: true });
-        } catch (error) {
-          const { fullMessage } = handleTokenError(error, interaction);
-          await interaction.reply({
-            content: fullMessage,
-            ephemeral: true,
-          });
-        }
-
-      // ------------------- Handle 'test' subcommand -------------------
-      } else if (subcommand === 'test') {
-        const user = await User.findOne({ discordId: userId });
-        if (!user) {
-          await interaction.reply({
-            content: '❌ No user data found. Please ensure your account is registered.',
-            ephemeral: true,
-          });
-          return;
-        }
-
-        if (!user.tokenTracker || !isValidGoogleSheetsUrl(user.tokenTracker)) {
-          const { fullMessage } = handleTokenError(new Error('Invalid URL'), interaction);
-          await interaction.reply({
-            content: fullMessage,
-            ephemeral: true,
-          });
-          return;
-        }
-
-        try {
+          // Test the setup
           const auth = await authorizeSheets();
-          const spreadsheetId = extractSpreadsheetId(user.tokenTracker);
+          const spreadsheetId = extractSpreadsheetId(link);
 
           const sheetId = await getSheetIdByTitle(auth, spreadsheetId, 'loggedTracker');
           if (!sheetId) {
@@ -246,10 +143,69 @@ module.exports = {
             return;
           }
 
-          await interaction.reply({
-            content: '✅ Your token tracker is set up correctly!',
-            ephemeral: true,
+          // Create confirmation buttons
+          const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+              .setCustomId('token-sync-yes')
+              .setLabel('✅ Yes, Sync Now')
+              .setStyle(ButtonStyle.Success),
+            new ButtonBuilder()
+              .setCustomId('token-sync-no')
+              .setLabel('❌ No, Later')
+              .setStyle(ButtonStyle.Danger)
+          );
+
+          const setupEmbed = createTokenTrackerSetupEmbed(interaction.user.username, link);
+          const response = await interaction.reply({ 
+            embeds: [setupEmbed], 
+            components: [row],
+            ephemeral: true 
           });
+
+          // Create a collector for the buttons
+          const filter = i => i.user.id === userId;
+          const collector = response.createMessageComponentCollector({ 
+            filter, 
+            time: 300000 // 5 minutes
+          });
+
+          collector.on('collect', async i => {
+            try {
+              if (i.customId === 'token-sync-yes') {
+                const tokenRecord = await syncTokenTracker(userId);
+                await i.update({
+                  content: '✅ Your token tracker has been synced successfully!',
+                  embeds: [],
+                  components: []
+                });
+              } else if (i.customId === 'token-sync-no') {
+                await i.update({
+                  content: '⏰ Token sync skipped. You can sync later using `/tokens setup` again.',
+                  embeds: [],
+                  components: []
+                });
+              }
+            } catch (error) {
+              const { fullMessage } = handleTokenError(error, interaction);
+              await i.update({
+                content: fullMessage,
+                embeds: [],
+                components: []
+              });
+            }
+            collector.stop();
+          });
+
+          collector.on('end', collected => {
+            if (collected.size === 0) {
+              interaction.editReply({
+                content: '⏰ Token sync timed out. You can sync later using `/tokens setup` again.',
+                embeds: [],
+                components: []
+              }).catch(console.error);
+            }
+          });
+
         } catch (error) {
           const { fullMessage } = handleTokenError(error, interaction);
           await interaction.reply({
