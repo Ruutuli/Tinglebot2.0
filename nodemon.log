@@ -1,5 +1,5 @@
-❌ Error loading command from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\character\character.js: ReferenceError: handleVendingBarterAutocomplete is not defined
-    at Object.<anonymous> (C:\Users\Ruu\Desktop\Tinglebot 2.0\handlers\autocompleteHandler.js:2582:2)
+❌ Error loading command from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\character\character.js: ReferenceError: handleVendingRestockAutocomplete is not defined
+    at Object.<anonymous> (C:\Users\Ruu\Desktop\Tinglebot 2.0\handlers\autocompleteHandler.js:2539:2)
     at Module._compile (node:internal/modules/cjs/loader:1358:14)
     at Module._extensions..js (node:internal/modules/cjs/loader:1416:10)
     at Module.load (node:internal/modules/cjs/loader:1208:32)
@@ -9,8 +9,8 @@
     at Object.<anonymous> (C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\character\character.js:39:5)
     at Module._compile (node:internal/modules/cjs/loader:1358:14)
     at Module._extensions..js (node:internal/modules/cjs/loader:1416:10)
-❌ Error loading command from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\companions\mount.js: ReferenceError: handleVendingBarterAutocomplete is not defined
-    at Object.<anonymous> (C:\Users\Ruu\Desktop\Tinglebot 2.0\handlers\autocompleteHandler.js:2582:2)
+❌ Error loading command from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\companions\mount.js: ReferenceError: handleVendingRestockAutocomplete is not defined
+    at Object.<anonymous> (C:\Users\Ruu\Desktop\Tinglebot 2.0\handlers\autocompleteHandler.js:2539:2)
     at Module._compile (node:internal/modules/cjs/loader:1358:14)
     at Module._extensions..js (node:internal/modules/cjs/loader:1416:10)
     at Module.load (node:internal/modules/cjs/loader:1208:32)
@@ -102,8 +102,8 @@
   - Option "charactername" has autocomplete enabled
 ⚠️ Command testinventorysetup has autocomplete options but no autocomplete handler!
 ✅ Loaded command: testinventorysetup from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\inventory\testinventorysetup.js
-❌ Error loading command from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\inventory\viewinventory.js: ReferenceError: handleVendingBarterAutocomplete is not defined
-    at Object.<anonymous> (C:\Users\Ruu\Desktop\Tinglebot 2.0\handlers\autocompleteHandler.js:2582:2)
+❌ Error loading command from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\inventory\viewinventory.js: ReferenceError: handleVendingRestockAutocomplete is not defined
+    at Object.<anonymous> (C:\Users\Ruu\Desktop\Tinglebot 2.0\handlers\autocompleteHandler.js:2539:2)
     at Module._compile (node:internal/modules/cjs/loader:1358:14)
     at Module._extensions..js (node:internal/modules/cjs/loader:1416:10)
     at Module.load (node:internal/modules/cjs/loader:1208:32)
@@ -136,8 +136,8 @@
   - Option "charactername" has autocomplete enabled
 ⚠️ Command gather has autocomplete options but no autocomplete handler!
 ✅ Loaded command: gather from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\jobs\gather.js
-❌ Error loading command from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\jobs\heal.js: ReferenceError: handleVendingBarterAutocomplete is not defined
-    at Object.<anonymous> (C:\Users\Ruu\Desktop\Tinglebot 2.0\handlers\autocompleteHandler.js:2582:2)
+❌ Error loading command from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\jobs\heal.js: ReferenceError: handleVendingRestockAutocomplete is not defined
+    at Object.<anonymous> (C:\Users\Ruu\Desktop\Tinglebot 2.0\handlers\autocompleteHandler.js:2539:2)
     at Module._compile (node:internal/modules/cjs/loader:1358:14)
     at Module._extensions..js (node:internal/modules/cjs/loader:1416:10)
     at Module.load (node:internal/modules/cjs/loader:1208:32)
@@ -178,8 +178,8 @@
   - Option "character" has autocomplete enabled
 ⚠️ Command mod has autocomplete options but no autocomplete handler!
 ✅ Loaded command: mod from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\moderation\mod.js
-❌ Error loading command from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\utility\lookup.js: ReferenceError: handleVendingBarterAutocomplete is not defined
-    at Object.<anonymous> (C:\Users\Ruu\Desktop\Tinglebot 2.0\handlers\autocompleteHandler.js:2582:2)
+❌ Error loading command from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\utility\lookup.js: ReferenceError: handleVendingRestockAutocomplete is not defined
+    at Object.<anonymous> (C:\Users\Ruu\Desktop\Tinglebot 2.0\handlers\autocompleteHandler.js:2539:2)
     at Module._compile (node:internal/modules/cjs/loader:1358:14)
     at Module._extensions..js (node:internal/modules/cjs/loader:1416:10)
     at Module.load (node:internal/modules/cjs/loader:1208:32)
@@ -220,7 +220,11 @@
 ⚠️ Command village has autocomplete options but no autocomplete handler!
 ✅ Loaded command: village from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\world\village.js
 🔄 Started refreshing 30 guild (/) commands for guild ID: 1305484048063529002
-(node:20584) Warning: Accessing non-existent property 'connectToInventories' of module exports inside circular dependency
+(node:5704) Warning: Accessing non-existent property 'connectToInventories' of module exports inside circular dependency
 (Use `node --trace-warnings ...` to show where the warning was created)
-(node:20584) Warning: Accessing non-existent property 'fetchCharacterById' of module exports inside circular dependency
-(node:20584) Warning: Accessing non-existent property 'updateCharacterById' of module exports inside circular dependency
+(node:5704) Warning: Accessing non-existent property 'fetchCharacterById' of module exports inside circular dependency
+(node:5704) Warning: Accessing non-existent property 'updateCharacterById' of module exports inside circular dependency
+✅ Successfully reloaded application (/) commands for guild ID: 1305484048063529002.
+🔄 Started refreshing 30 guild (/) commands for guild ID: 603960955839447050
+✅ Successfully reloaded application (/) commands for guild ID: 603960955839447050.
+✅ Successfully reloaded all guild (/) commands.

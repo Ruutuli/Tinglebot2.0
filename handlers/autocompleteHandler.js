@@ -218,31 +218,6 @@ async function handleAutocomplete(interaction) {
   }
 }
 
-async function handleVendingRestockAutocomplete(interaction, focusedName, focusedValue) {
-  try {
-    if (!focusedValue) {
-      await interaction.respond([]);
-      return;
-    }
-
-    const items = await Item.find({
-      itemName: { $regex: focusedValue, $options: "i" }
-    })
-    .select("itemName emoji")
-    .limit(25)
-    .lean();
-
-    const choices = items.map(item => ({
-      name: `${item.emoji || "🛒"} ${item.itemName}`,
-      value: item.itemName
-    }));
-
-    await interaction.respond(choices);
-  } catch (error) {
-    await safeRespondWithError(interaction, error);
-  }
-}
-
 // ============================================================================
 // HELPER & UTILITY FUNCTIONS
 // ============================================================================
@@ -2263,12 +2238,8 @@ async function getVendorItems(village, vendorType, searchQuery) {
   );
 }
 
-/**
- * Formats vendor items for autocomplete display
- * @param {Array} items - List of vendor items
- * @param {boolean} includeStock - Whether to include stock quantity
- * @returns {Array} Formatted autocomplete choices
- */
+// ------------------- Function: formatVendorItems -------------------
+// Formats vendor items for autocomplete display with optional stock quantity
 function formatVendorItems(items, includeStock = false) {
   return items.slice(0, 25).map((item) => ({
     name: `${item.itemName} - ${item.points} pts${includeStock ? ` - Qty: ${item.stock}` : ''}`,
@@ -2276,11 +2247,8 @@ function formatVendorItems(items, includeStock = false) {
   }));
 }
 
-/**
- * Calculates available slots for a vendor character
- * @param {Object} character - Character object
- * @returns {number} Total available slots
- */
+// ------------------- Function: calculateAvailableSlots -------------------
+// Calculates total available shop slots based on character's job and pouch type
 function calculateAvailableSlots(character) {
   const baseSlotLimits = { shopkeeper: 5, merchant: 3 };
   const pouchCapacities = { none: 0, bronze: 15, silver: 30, gold: 50 };
@@ -2289,12 +2257,8 @@ function calculateAvailableSlots(character) {
   return baseSlots + extraSlots;
 }
 
-// ------------------- Main Autocomplete Handlers -------------------
-
-/**
- * Handles autocomplete for the vending add command
- * Routes to appropriate handler based on focused field
- */
+// ------------------- Function: handleVendingAddAutocomplete -------------------
+// Routes autocomplete requests for vending add command based on focused option
 async function handleVendingAddAutocomplete(interaction, focusedOption) {
   try {
     const focusedName = focusedOption.name;
@@ -2317,10 +2281,8 @@ async function handleVendingAddAutocomplete(interaction, focusedOption) {
   }
 }
 
-/**
- * Handles autocomplete for vendor items
- * Shows available items based on character's village and job
- */
+// ------------------- Function: handleVendorItemAutocomplete -------------------
+// Provides autocomplete suggestions for items available to vendor characters
 async function handleVendorItemAutocomplete(interaction, focusedOption) {
   try {
     const characterName = interaction.options.getString("charactername");
@@ -2344,10 +2306,8 @@ async function handleVendorItemAutocomplete(interaction, focusedOption) {
   }
 }
 
-/**
- * Handles autocomplete for shop slots
- * Shows available slots and their current contents
- */
+// ------------------- Function: handleSlotAutocomplete -------------------
+// Provides autocomplete suggestions for shop slots with current contents
 async function handleSlotAutocomplete(interaction, focusedOption) {
   try {
     const characterName = interaction.options.getString('charactername');
@@ -2415,10 +2375,8 @@ async function handleSlotAutocomplete(interaction, focusedOption) {
   }
 }
 
-/**
- * Handles autocomplete for vendor characters
- * Shows characters with merchant/shopkeeper jobs
- */
+// ------------------- Function: handleVendorCharacterAutocomplete -------------------
+// Provides autocomplete suggestions for characters with merchant/shopkeeper jobs
 async function handleVendorCharacterAutocomplete(interaction) {
   try {
     const focusedValue = interaction.options.getFocused();
@@ -2579,15 +2537,11 @@ module.exports = {
 
  // ------------------- Vending Functions -------------------
  handleVendingRestockAutocomplete,
- handleVendingBarterAutocomplete,
- handleVendingEditShopAutocomplete,
- handleViewVendingShopAutocomplete,
  handleSlotAutocomplete,
  handleVendingAddAutocomplete,
 
  // ------------------- Village Functions -------------------
- handleVillageUpgradeCharacterAutocomplete,
- handleVillageMaterialsAutocomplete,
+
 
  // ------------------- View Inventory Functions -------------------
  handleViewInventoryAutocomplete,
