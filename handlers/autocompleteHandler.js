@@ -2740,7 +2740,7 @@ async function handleEconomyAutocomplete(interaction, focusedOption) {
           const choices = userCharacters
             .filter(char => char.name.toLowerCase().includes(focusedValue))
             .map(char => ({
-              name: char.name,
+              name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
               value: char.name
             }));
           return await respondWithFilteredChoices(interaction, focusedValue, choices);
@@ -2750,7 +2750,7 @@ async function handleEconomyAutocomplete(interaction, focusedOption) {
           const choices = characters
             .filter(char => char.name.toLowerCase().includes(focusedValue))
             .map(char => ({
-              name: char.name,
+              name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
               value: char.name
             }));
           return await respondWithFilteredChoices(interaction, focusedValue, choices);
@@ -2806,7 +2806,7 @@ async function handleEconomyAutocomplete(interaction, focusedOption) {
 
 async function handleGiftFromCharacterAutocomplete(interaction, focusedValue) {
   const userId = interaction.user.id;
-  const characters = await fetchAllCharactersExceptUser(userId);
+  const characters = await fetchCharactersByUserId(userId);
   const choices = characters
     .filter(char => char.name.toLowerCase().includes(focusedValue))
     .map(char => ({
