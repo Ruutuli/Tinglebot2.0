@@ -859,9 +859,13 @@ async function handleViewShop(interaction) {
     const items = await VendingInventory.find({});
     console.log(`[handleViewShop]: Found ${items.length} items in vending inventory`);
 
-    if (!items || items.length === 0) {
+    // Filter out items with zero stock
+    const availableItems = items.filter(item => item.stockQty > 0);
+    console.log(`[handleViewShop]: Found ${availableItems.length} items with stock`);
+
+    if (!availableItems || availableItems.length === 0) {
       return await interaction.reply({
-        content: `⚠️ No items found in ${characterName}'s vending inventory.`
+        content: `⚠️ No items currently available in ${characterName}'s vending inventory.`
       });
     }
 
@@ -881,10 +885,10 @@ async function handleViewShop(interaction) {
     });
 
     // Add items to embed
-    items.forEach(item => {
+    availableItems.forEach(item => {
       shopEmbed.addFields({
         name: `${item.itemName} (${item.stockQty} in stock)`,
-        value: `Cost: ${item.costEach} points\nToken Price: ${item.tokenPrice}\nArt Price: ${item.artPrice}\nOther Price: ${item.otherPrice}\nBarter Open: ${item.barterOpen ? 'Yes' : 'No'}`,
+        value: `Cost: ${item.costEach} points\nToken Price: ${item.tokenPrice || 'N/A'}\nArt Price: ${item.artPrice || 'N/A'}\nOther Price: ${item.otherPrice || 'N/A'}\nBarter Open: ${item.barterOpen ? 'Yes' : 'No'}`,
         inline: true
       });
     });
