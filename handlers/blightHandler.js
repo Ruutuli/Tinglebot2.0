@@ -51,8 +51,11 @@ const {
 const {
   deleteSubmissionFromStorage,
   saveSubmissionToStorage,
-  retrieveSubmissionFromStorage
-} = require('../utils/storage');
+  retrieveSubmissionFromStorage,
+  saveBlightRequestToStorage,
+  retrieveBlightRequestFromStorage,
+  deleteBlightRequestFromStorage
+} = require('../utils/storage.js');
 const { generateUniqueId } = require('../utils/uniqueIdUtils');
 const { syncInventory } = require('./syncHandler');
 
@@ -173,15 +176,12 @@ async function healBlight(interaction, characterName, healerName) {
     const roleplayResponse = healer.roleplayResponseBefore(characterName);
 
     // Load or initialize submissions
-    const blightSubmissions = loadBlightSubmissions();
-    const existingSubmissionId = Object.keys(blightSubmissions).find((id) => {
-      const sub = blightSubmissions[id];
-      return sub.characterName === characterName && sub.userId === interaction.user.id;
-    });
-    const submissionId = existingSubmissionId || generateUniqueId('B');
+    const submission = await retrieveBlightRequestFromStorage(submissionId);
+    const existingSubmissionId = submission ? submissionId : null;
+    const newSubmissionId = existingSubmissionId || generateUniqueId('B');
 
-    blightSubmissions[submissionId] = {
-      submissionId,
+    const submissionData = {
+      submissionId: newSubmissionId,
       userId: interaction.user.id,
       characterName,
       healerName,
@@ -192,8 +192,7 @@ async function healBlight(interaction, characterName, healerName) {
       createdAt: new Date().toISOString()
     };
 
-    saveBlightSubmissions(blightSubmissions);
-    saveSubmissionToStorage(submissionId, blightSubmissions[submissionId]);
+    await saveBlightRequestToStorage(newSubmissionId, submissionData);
 
     // Build embed
     const fields = [
@@ -209,7 +208,7 @@ async function healBlight(interaction, characterName, healerName) {
       },
       {
         name: '<:bb0:854499720797618207> __Submission ID__',
-        value: `\`\`\`${submissionId}\`\`\``,
+        value: `\`\`\`${newSubmissionId}\`\`\``,
       },
       {
         name: '<:bb0:854499720797618207> __Alternative Option__',
@@ -264,8 +263,7 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
   await interaction.deferReply({ ephemeral: false });
 
   try {
-    const blightSubmissions = loadBlightSubmissions();
-    const submission = blightSubmissions[submissionId];
+    const submission = await retrieveBlightRequestFromStorage(submissionId);
 
     if (!submission) {
       await interaction.editReply({ content: `❌ Submission with ID "${submissionId}" not found.` });
@@ -349,9 +347,7 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
       submission.submittedAt = new Date().toISOString();
       submission.forfeitTokens = true;
 
-      delete blightSubmissions[submissionId];
-      saveBlightSubmissions(blightSubmissions);
-      deleteSubmissionFromStorage(submissionId);
+      await deleteBlightRequestFromStorage(submissionId);
 
       character.blighted = false;
       character.blightStage = 0;
@@ -462,8 +458,7 @@ You have forfeited **${currentTokenBalance} tokens** in exchange for healing **$
       character.blightStage = 0;
       await character.save();
 
-      deleteSubmissionFromStorage(submissionId);
-      saveBlightSubmissions(blightSubmissions);
+      await deleteBlightRequestFromStorage(submissionId);
 
       const embed = new EmbedBuilder()
         .setColor('#AA926A')
@@ -492,9 +487,7 @@ You have forfeited **${currentTokenBalance} tokens** in exchange for healing **$
 
       submission.status = 'completed';
       submission.submittedAt = new Date().toISOString();
-      delete blightSubmissions[submissionId];
-      saveBlightSubmissions(blightSubmissions);
-      deleteSubmissionFromStorage(submissionId);
+      await deleteBlightRequestFromStorage(submissionId);
 
       const embed = new EmbedBuilder()
         .setColor('#AA926A')
@@ -512,7 +505,6 @@ You have forfeited **${currentTokenBalance} tokens** in exchange for healing **$
       character.blighted = false;
       character.blightStage = 0;
       await character.save();
-      deleteSubmissionFromStorage(submissionId);
       return;
     }
   } catch (error) {

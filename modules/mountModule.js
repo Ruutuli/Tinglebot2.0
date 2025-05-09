@@ -4,6 +4,11 @@
 const fs = require('fs');
 const { handleError } = require('../utils/globalErrorHandler');
 const path = require('path');
+const { 
+  saveEncounterToStorage, 
+  retrieveEncounterFromStorage, 
+  deleteEncounterFromStorage 
+} = require('../utils/storage.js');
 
 // Define the path to encounter.json
 const ENCOUNTER_PATH = path.join(__dirname, '..', 'data', 'encounter.json');
@@ -68,7 +73,7 @@ function generateEncounterId() {
 }
 
 // ------------------- Store encounter data in JSON -------------------
-function storeEncounter(encounterId, encounterData) {
+async function storeEncounter(encounterId, encounterData) {
   ensureEncounterFileExists();
 
   try {
@@ -97,6 +102,9 @@ function storeEncounter(encounterId, encounterData) {
 
       // Write back to the file
       fs.writeFileSync(ENCOUNTER_PATH, JSON.stringify(encounterProgress, null, 2));
+
+      // Save to MongoDB
+      await saveEncounterToStorage(encounterId, encounterData);
   } catch (error) {
     handleError(error, 'mountModule.js');
 
@@ -106,11 +114,14 @@ function storeEncounter(encounterId, encounterData) {
 
 
 // ------------------- Retrieve encounter data by ID -------------------
-function getEncounterById(encounterId) {
+async function getEncounterById(encounterId) {
   ensureEncounterFileExists();
   const encounterProgress = JSON.parse(fs.readFileSync(ENCOUNTER_PATH, 'utf8'));
 
-  return encounterProgress[encounterId] || null;
+  // Retrieve from MongoDB
+  const encounter = await retrieveEncounterFromStorage(encounterId);
+
+  return encounter || null;
 }
 
 // ------------------- Available species and their corresponding levels -------------------
@@ -304,7 +315,7 @@ function getRandomLevel() {
 
 
 // ------------------- Delete encounter data by ID -------------------
-function deleteEncounterById(encounterId) {
+async function deleteEncounterById(encounterId) {
   ensureEncounterFileExists();
   const encounterProgress = JSON.parse(fs.readFileSync(ENCOUNTER_PATH, 'utf8'));
 
@@ -313,6 +324,10 @@ function deleteEncounterById(encounterId) {
 
   // Write the updated data back to the file
   fs.writeFileSync(ENCOUNTER_PATH, JSON.stringify(encounterProgress, null, 2));
+
+  // Delete from MongoDB
+  await deleteEncounterFromStorage(encounterId);
+
   console.log(`Encounter ${encounterId} deleted successfully!`);
 }
 

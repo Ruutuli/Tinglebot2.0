@@ -8,6 +8,7 @@ const { useStamina, recoverHearts } = require('../../modules/characterStatsModul
 const { 
   saveHealingRequestToStorage, 
   retrieveHealingRequestFromStorage, 
+  deleteHealingRequestFromStorage 
 } = require('../../utils/storage.js');
 const { createHealEmbed, createHealingEmbed } = require('../../embeds/embeds.js');
 const { validateJobVoucher, activateJobVoucher, fetchJobVoucherItem } = require('../../modules/jobVoucherModule.js');
@@ -156,6 +157,7 @@ if (subcommand === 'request') {
           requesterUserId: interaction.user.id,
           status: 'pending',
           timestamp: Date.now(),
+          messageId: sentMessage.id
       };
 
       const embed = createHealEmbed(null, characterToHeal, heartsToHeal, paymentOffered, healingRequestId);
@@ -168,9 +170,7 @@ if (subcommand === 'request') {
           embeds: [embed],
       });
 
-      // Save the message ID in the healing request data
-      healingRequestData.messageId = sentMessage.id;
-      saveHealingRequestToStorage(healingRequestId, healingRequestData);
+      await saveHealingRequestToStorage(healingRequestId, healingRequestData);
   } catch (error) {
     handleError(error, 'heal.js');
 
@@ -188,7 +188,7 @@ if (subcommand === 'fulfill') {
         await interaction.deferReply();
 
         // ------------------- Retrieve Healing Request -------------------
-        const healingRequest = retrieveHealingRequestFromStorage(requestId);
+        const healingRequest = await retrieveHealingRequestFromStorage(requestId);
         if (!healingRequest) {
             await interaction.editReply(`❌ **Error:** No healing request found with ID **${requestId}**.`);
             return;
@@ -328,7 +328,7 @@ if (subcommand === 'fulfill') {
 
         // Mark the request as fulfilled and save its updated status
         healingRequest.status = 'fulfilled';
-        saveHealingRequestToStorage(requestId, healingRequest);
+        await saveHealingRequestToStorage(requestId, healingRequest);
 
         // ------------------- Edit Original Request Message -------------------
         const channel = interaction.channel;

@@ -3,6 +3,7 @@
 const fs = require('fs');
 const { handleError } = require('../utils/globalErrorHandler');
 const path = require('path');
+const TempData = require('../models/TempDataModel');
 
 
 // ============================================================================
@@ -75,202 +76,153 @@ function deleteSubmissionFromStorage(submissionId) {
 
 
 // ============================================================================
-// ------------------- Healing Requests Storage Functions -------------------
-// Functions for managing healing requests in persistent storage.
+// ------------------- Temporary Data Storage Functions -------------------
+// Functions for managing temporary data in MongoDB
 
-// Define file path for healing requests.
-const healingRequestsFile = path.join(__dirname, '../data/healingRequests.json');
-
-// Create the healing requests file if it doesn't exist.
-if (!fs.existsSync(healingRequestsFile)) {
-  fs.writeFileSync(healingRequestsFile, JSON.stringify({}));
-}
-
-// Save a healing request to storage.
-function saveHealingRequestToStorage(healingRequestId, healingRequestData) {
+// Generic storage functions
+async function saveToStorage(key, type, data) {
   try {
-    const healingRequests = safeReadJSON(healingRequestsFile);
-    healingRequests[healingRequestId] = healingRequestData;
-    fs.writeFileSync(healingRequestsFile, JSON.stringify(healingRequests, null, 2), 'utf-8');
+    await TempData.create({ key, type, data });
   } catch (error) {
     handleError(error, 'storage.js');
-
-    console.error(`[storage.js]: logs Error saving healing request ${healingRequestId}:`, error.message);
+    throw error;
   }
 }
 
-// Retrieve a healing request by its ID, expiring requests older than 24 hours.
-function retrieveHealingRequestFromStorage(healingRequestId) {
-  const healingRequests = safeReadJSON(healingRequestsFile);
-  const request = healingRequests[healingRequestId];
-  if (request && Date.now() - request.timestamp > 24 * 60 * 60 * 1000) {
-    console.warn(`[storage.js]: logs Healing request ${healingRequestId} has expired.`);
-    delete healingRequests[healingRequestId];
-    fs.writeFileSync(healingRequestsFile, JSON.stringify(healingRequests, null, 2), 'utf-8');
-    return null;
-  }
-  return request || null;
-}
-
-// Delete a healing request from storage by its ID.
-function deleteHealingRequestFromStorage(healingRequestId) {
-  const healingRequests = safeReadJSON(healingRequestsFile);
-  if (healingRequests[healingRequestId]) {
-    delete healingRequests[healingRequestId];
-    fs.writeFileSync(healingRequestsFile, JSON.stringify(healingRequests, null, 2));
-  } else {
-    console.warn(`[storage.js]: logs Healing Request ID not found in storage: ${healingRequestId}`);
-  }
-}
-
-// Cleanup healing requests older than 24 hours.
-function cleanupExpiredHealingRequests() {
+async function retrieveFromStorage(key, type) {
   try {
-    const healingRequests = safeReadJSON(healingRequestsFile);
-    const currentTime = Date.now();
-    let updated = false;
-    for (const requestId in healingRequests) {
-      const request = healingRequests[requestId];
-      if (currentTime - request.timestamp > 24 * 60 * 60 * 1000) {
-        delete healingRequests[requestId];
-        updated = true;
-      }
-    }
-    if (updated) {
-      fs.writeFileSync(healingRequestsFile, JSON.stringify(healingRequests, null, 2), 'utf-8');
-    }
+    const result = await TempData.findByTypeAndKey(type, key);
+    return result?.data || null;
   } catch (error) {
     handleError(error, 'storage.js');
-
-    console.error('[storage.js]: logs Error cleaning up expired healing requests:', error.message);
+    throw error;
   }
 }
 
-
-// ============================================================================
-// ------------------- Vending Requests Storage Functions -------------------
-// Functions for managing vending requests in persistent storage.
-
-// Define file path for vending requests.
-const vendingRequestsFile = path.join(__dirname, '../data/vendingRequests.json');
-
-// Create the vending requests file if it doesn't exist.
-if (!fs.existsSync(vendingRequestsFile)) {
-  console.error('[storage.js]: logs Vending Requests storage file does not exist. Creating a new one.');
-  fs.writeFileSync(vendingRequestsFile, JSON.stringify({}));
-}
-
-// Save a vending request to storage.
-function saveVendingRequestToStorage(requestId, requestData) {
+async function deleteFromStorage(key, type) {
   try {
-    const vendingRequests = safeReadJSON(vendingRequestsFile);
-    vendingRequests[requestId] = requestData;
-    fs.writeFileSync(vendingRequestsFile, JSON.stringify(vendingRequests, null, 2), 'utf-8');
+    await TempData.findOneAndDelete({ key, type });
   } catch (error) {
     handleError(error, 'storage.js');
-
-    console.error(`[storage.js]: logs Error saving vending request ${requestId}:`, error.message);
+    throw error;
   }
 }
 
-// Retrieve a vending request by its ID.
-function retrieveVendingRequestFromStorage(requestId) {
-  const vendingRequests = safeReadJSON(vendingRequestsFile);
-  return vendingRequests[requestId] || null;
-}
-
-// Delete a vending request from storage by its ID.
-function deleteVendingRequestFromStorage(requestId) {
-  const vendingRequests = safeReadJSON(vendingRequestsFile);
-  if (vendingRequests[requestId]) {
-    delete vendingRequests[requestId];
-    fs.writeFileSync(vendingRequestsFile, JSON.stringify(vendingRequests, null, 2));
-  } else {
-    console.warn(`[storage.js]: logs Vending Request ID not found in storage: ${requestId}`);
-  }
-}
-
-// Retrieve all vending requests.
-function retrieveAllVendingRequests() {
+async function retrieveAllByType(type) {
   try {
-    const vendingRequests = safeReadJSON(vendingRequestsFile);
-    return Object.values(vendingRequests);
+    const results = await TempData.findAllByType(type);
+    return results.map(doc => doc.data);
   } catch (error) {
     handleError(error, 'storage.js');
-
-    console.error('[storage.js]: logs Error retrieving all vending requests:', error.message);
-    return [];
+    throw error;
   }
 }
 
-// Cleanup vending requests older than 30 days.
-function cleanupExpiredVendingRequests() {
+// Healing request functions
+async function saveHealingRequestToStorage(healingRequestId, requestData) {
+  await saveToStorage(healingRequestId, 'healing', requestData);
+}
+
+async function retrieveHealingRequestFromStorage(healingRequestId) {
+  return retrieveFromStorage(healingRequestId, 'healing');
+}
+
+async function deleteHealingRequestFromStorage(healingRequestId) {
+  await deleteFromStorage(healingRequestId, 'healing');
+}
+
+// Vending request functions
+async function saveVendingRequestToStorage(fulfillmentId, requestData) {
+  await saveToStorage(fulfillmentId, 'vending', requestData);
+}
+
+async function retrieveVendingRequestFromStorage(fulfillmentId) {
+  return retrieveFromStorage(fulfillmentId, 'vending');
+}
+
+async function deleteVendingRequestFromStorage(fulfillmentId) {
+  await deleteFromStorage(fulfillmentId, 'vending');
+}
+
+async function retrieveAllVendingRequests() {
+  return retrieveAllByType('vending');
+}
+
+// Boosting request functions
+async function saveBoostingRequestToStorage(boostRequestId, requestData) {
+  await saveToStorage(boostRequestId, 'boosting', requestData);
+}
+
+async function retrieveBoostingRequestFromStorage(boostRequestId) {
+  return retrieveFromStorage(boostRequestId, 'boosting');
+}
+
+async function retrieveBoostingRequestFromStorageByCharacter(characterName) {
+  const requests = await retrieveAllByType('boosting');
+  return requests.find(request => request.targetCharacter === characterName);
+}
+
+// Battle progress functions
+async function saveBattleProgressToStorage(battleId, battleData) {
+  await saveToStorage(battleId, 'battle', battleData);
+}
+
+async function retrieveBattleProgressFromStorage(battleId) {
+  return retrieveFromStorage(battleId, 'battle');
+}
+
+async function deleteBattleProgressFromStorage(battleId) {
+  await deleteFromStorage(battleId, 'battle');
+}
+
+// Encounter functions
+async function saveEncounterToStorage(encounterId, encounterData) {
+  await saveToStorage(encounterId, 'encounter', encounterData);
+}
+
+async function retrieveEncounterFromStorage(encounterId) {
+  return retrieveFromStorage(encounterId, 'encounter');
+}
+
+async function deleteEncounterFromStorage(encounterId) {
+  await deleteFromStorage(encounterId, 'encounter');
+}
+
+// Blight request functions
+async function saveBlightRequestToStorage(submissionId, requestData) {
+  await saveToStorage(submissionId, 'blight', requestData);
+}
+
+async function retrieveBlightRequestFromStorage(submissionId) {
+  return retrieveFromStorage(submissionId, 'blight');
+}
+
+async function deleteBlightRequestFromStorage(submissionId) {
+  await deleteFromStorage(submissionId, 'blight');
+}
+
+// Monthly encounter functions
+async function saveMonthlyEncounterToStorage(encounterId, encounterData) {
+  await saveToStorage(encounterId, 'monthly', encounterData);
+}
+
+async function retrieveMonthlyEncounterFromStorage(encounterId) {
+  return retrieveFromStorage(encounterId, 'monthly');
+}
+
+async function deleteMonthlyEncounterFromStorage(encounterId) {
+  await deleteFromStorage(encounterId, 'monthly');
+}
+
+// Cleanup function
+async function cleanupExpiredEntries(maxAgeInMs = 86400000) {
   try {
-    const vendingRequests = safeReadJSON(vendingRequestsFile);
-    const currentTime = Date.now();
-    const oneMonthInMillis = 30 * 24 * 60 * 60 * 1000; // 30 days
-    let updated = false;
-    for (const requestId in vendingRequests) {
-      const request = vendingRequests[requestId];
-      if (currentTime - new Date(request.createdAt).getTime() > oneMonthInMillis) {
-        delete vendingRequests[requestId];
-        updated = true;
-      }
-    }
-    if (updated) {
-      fs.writeFileSync(vendingRequestsFile, JSON.stringify(vendingRequests, null, 2), 'utf-8');
-    }
+    const result = await TempData.cleanup(maxAgeInMs);
+    return result;
   } catch (error) {
     handleError(error, 'storage.js');
-
-    console.error('[storage.js]: logs Error cleaning up expired vending requests:', error.message);
+    throw error;
   }
-}
-
-
-// ============================================================================
-// ------------------- Boosting Requests Storage Functions -------------------
-// Functions for managing boosting requests in persistent storage.
-
-// Define file path for boosting requests.
-const boostingRequestsFile = path.join(__dirname, '../data/boostingRequests.json');
-
-// Create the boosting requests file if it doesn't exist.
-if (!fs.existsSync(boostingRequestsFile)) {
-  fs.writeFileSync(boostingRequestsFile, JSON.stringify({}));
-}
-
-// Retrieve a boosting request by character name where the request is fulfilled.
-function retrieveBoostingRequestFromStorageByCharacter(characterName) {
-  const boostingRequests = safeReadJSON(boostingRequestsFile);
-  for (const requestId in boostingRequests) {
-    const request = boostingRequests[requestId];
-    if (request.targetCharacter.toLowerCase() === characterName.toLowerCase() && request.status === 'fulfilled') {
-      return request;
-    }
-  }
-  return null;
-}
-
-// ------------------- Save Boosting Request to Storage -------------------
-// Saves a boosting request to persistent storage.
-function saveBoostingRequestToStorage(requestId, requestData) {
-  try {
-    const boostingRequests = safeReadJSON(boostingRequestsFile);
-    boostingRequests[requestId] = requestData;
-    fs.writeFileSync(boostingRequestsFile, JSON.stringify(boostingRequests, null, 2));
-  } catch (error) {
-    handleError(error, 'storage.js');
-
-    console.error(`[storage.js]: logs Error saving boosting request ${requestId}:`, error.message);
-  }
-}
-
-// ------------------- Retrieve Boosting Request from Storage -------------------
-// Retrieves a boosting request by its ID.
-function retrieveBoostingRequestFromStorage(requestId) {
-  const boostingRequests = safeReadJSON(boostingRequestsFile);
-  return boostingRequests[requestId] || null;
 }
 
 
@@ -286,15 +238,31 @@ module.exports = {
   saveHealingRequestToStorage,
   retrieveHealingRequestFromStorage,
   deleteHealingRequestFromStorage,
-  cleanupExpiredHealingRequests,
   
   saveVendingRequestToStorage,
   retrieveVendingRequestFromStorage,
   deleteVendingRequestFromStorage,
   retrieveAllVendingRequests,
-  cleanupExpiredVendingRequests,
   
   saveBoostingRequestToStorage,
   retrieveBoostingRequestFromStorage,
-  retrieveBoostingRequestFromStorageByCharacter
+  retrieveBoostingRequestFromStorageByCharacter,
+  
+  saveBattleProgressToStorage,
+  retrieveBattleProgressFromStorage,
+  deleteBattleProgressFromStorage,
+  
+  saveEncounterToStorage,
+  retrieveEncounterFromStorage,
+  deleteEncounterFromStorage,
+  
+  saveBlightRequestToStorage,
+  retrieveBlightRequestFromStorage,
+  deleteBlightRequestFromStorage,
+  
+  saveMonthlyEncounterToStorage,
+  retrieveMonthlyEncounterFromStorage,
+  deleteMonthlyEncounterFromStorage,
+  
+  cleanupExpiredEntries
 };
