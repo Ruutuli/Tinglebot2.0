@@ -767,12 +767,12 @@ async function handleShopView(interaction) {
   const generateButtons = (page) => {
    return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
-     .setCustomId("prev")
+     .setCustomId(`shop-prev-${page}`)
      .setLabel("⬅️Previous")
      .setStyle(ButtonStyle.Primary)
      .setDisabled(page === 0),
     new ButtonBuilder()
-     .setCustomId("next")
+     .setCustomId(`shop-next-${page}`)
      .setLabel("Next➡️")
      .setStyle(ButtonStyle.Primary)
      .setDisabled(page === pages - 1)
@@ -791,41 +791,46 @@ async function handleShopView(interaction) {
 
   collector.on("collect", async (i) => {
    try {
-     if (i.customId === "prev") currentPage--;
-     if (i.customId === "next") currentPage++;
+     if (i.customId.startsWith('shop-prev-')) {
+       currentPage = Math.max(0, currentPage - 1);
+     } else if (i.customId.startsWith('shop-next-')) {
+       currentPage = Math.min(pages - 1, currentPage + 1);
+     }
 
      await i.update({
       embeds: [await generateEmbed(currentPage)],
       components: [generateButtons(currentPage)],
+     }).catch(error => {
+       if (error.code === 10062) {
+         console.warn("[shops]: Interaction expired or already responded to");
+         collector.stop();
+       } else {
+         throw error;
+       }
      });
    } catch (error) {
      handleError(error, "shops.js");
-     if (error.code === 10062) {
-       console.warn("[shops]: Interaction expired or already responded to");
-       collector.stop();
-     } else {
-       console.error("[shops]: Error handling button interaction:", error);
-       try {
-         await i.reply({
-           content: "❌ An error occurred while processing your request.",
-           ephemeral: true
-         });
-       } catch (replyError) {
-         console.error("[shops]: Error sending error message:", replyError);
-       }
+     console.error("[shops]: Error handling button interaction:", error);
+     try {
+       await i.reply({
+         content: "❌ An error occurred while processing your request.",
+         ephemeral: true
+       }).catch(() => {}); // Ignore if this fails too
+     } catch (replyError) {
+       console.error("[shops]: Error sending error message:", replyError);
      }
    }
   });
 
   collector.on("end", async () => {
    try {
-    const lastMessage = await interaction.fetchReply();
-    if (lastMessage) {
-     await lastMessage.edit({ components: [] }).catch(() => {});
-    }
+     const lastMessage = await interaction.fetchReply().catch(() => null);
+     if (lastMessage) {
+       await lastMessage.edit({ components: [] }).catch(() => {});
+     }
    } catch (error) {
-    handleError(error, "shops.js");
-    console.error("[shops]: Error clearing buttons:", error);
+     handleError(error, "shops.js");
+     console.error("[shops]: Error clearing buttons:", error);
    }
   });
  } catch (error) {
@@ -834,7 +839,7 @@ async function handleShopView(interaction) {
   try {
     await interaction.editReply(
      "❌ An error occurred while viewing the shop inventory."
-    );
+    ).catch(() => {}); // Ignore if this fails too
   } catch (replyError) {
     console.error("[shops]: Error sending error message:", replyError);
   }
