@@ -11,7 +11,7 @@ const {
     executeVending,
     handleCollectPoints,
     handleRestock,
-    handleBarter,
+    handleVendingBarter,
     handleFulfill,
     handleEditShop,
     handleVendingSync,
@@ -28,7 +28,7 @@ const {
 // ============================================================================
 const command = new SlashCommandBuilder()
   .setName('vending')
-  .setDescription('🎪 Manage your vending shop and trades')
+  .setDescription('🎪 Manage your vending shop and barters')
 
   // ------------------- Shop Setup & Management -------------------
   .addSubcommand(sub =>
@@ -188,7 +188,7 @@ const command = new SlashCommandBuilder()
   // ------------------- Trading System -------------------
   .addSubcommand(sub =>
     sub.setName('barter')
-      .setDescription('🔄 Buy or trade for items from a shop')
+      .setDescription('🔄 Buy or barter for items from a shop')
       .addStringOption(opt =>
         opt.setName('charactername')
           .setDescription('Your character\'s name')
@@ -219,12 +219,12 @@ const command = new SlashCommandBuilder()
           .addChoices(
             { name: '💰 Tokens', value: 'tokens' },
             { name: '🎨 Art', value: 'art' },
-            { name: '🔄 Trade', value: 'trade' }
+            { name: '🔄 Barter', value: 'barter' }
           )
       )
       .addStringOption(opt =>
         opt.setName('offer')
-          .setDescription('What you are offering in return (required for trade)')
+          .setDescription('What you are offering in return (required for barter)')
       )
       .addStringOption(opt =>
         opt.setName('notes')
@@ -234,10 +234,10 @@ const command = new SlashCommandBuilder()
 
   .addSubcommand(sub =>
     sub.setName('accept')
-      .setDescription('✅ Accept a pending trade request')
+      .setDescription('✅ Accept a pending barter request')
       .addStringOption(opt =>
         opt.setName('fulfillmentid')
-          .setDescription('The trade request ID')
+          .setDescription('The barter request ID')
           .setRequired(true)
       )
   );
