@@ -954,7 +954,7 @@ async function handleVendorItemAutocomplete(interaction, focusedOption) {
     // Combine and format all items
     const allItems = [...vendorItems, ...limitedItems];
     const choices = allItems.map(item => ({
-      name: `${item.itemName} - ${item.points} pts${item.isLimited ? ' (Limited)' : ''}`,
+      name: `${item.itemName} - ${item.points} pts${item.isLimited ? ` (Limited - Qty: ${item.stock})` : ''}`,
       value: item.itemName
     }));
 
@@ -2359,7 +2359,7 @@ async function handleVendorItemAutocomplete(interaction, focusedOption) {
     // Combine and format all items
     const allItems = [...vendorItems, ...limitedItems];
     const choices = allItems.map(item => ({
-      name: `${item.itemName} - ${item.points} pts${item.isLimited ? ' (Limited)' : ''}`,
+      name: `${item.itemName} - ${item.points} pts${item.isLimited ? ` (Limited - Qty: ${item.stock})` : ''}`,
       value: item.itemName
     }));
 
