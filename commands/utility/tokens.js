@@ -58,40 +58,69 @@ module.exports = {
           return;
         }
         
-        const auth = await authorizeSheets();
-        const spreadsheetId = extractSpreadsheetId(tokenRecord.tokenTracker);
+        try {
+          const auth = await authorizeSheets();
+          const spreadsheetId = extractSpreadsheetId(tokenRecord.tokenTracker);
 
-        console.log('[tokens.js]: Extracted Spreadsheet ID:', spreadsheetId); // Debug log
+          console.log('[tokens.js]: Extracted Spreadsheet ID:', spreadsheetId); // Debug log
 
-        // Fetch overall total from F4
-        const overallTotalData = await readSheetData(auth, spreadsheetId, 'loggedTracker!F4');
-        const overallTotal = overallTotalData?.[0]?.[0] || 'N/A'; // Adjusted to access the first cell of F4
+          // Fetch overall total from F4
+          const overallTotalData = await readSheetData(auth, spreadsheetId, 'loggedTracker!F4');
+          const overallTotal = overallTotalData?.[0]?.[0] || 'N/A'; // Adjusted to access the first cell of F4
 
-        // Fetch spent tokens from F5
-        const spentData = await readSheetData(auth, spreadsheetId, 'loggedTracker!F5');
-        const spent = spentData?.[0]?.[0] || 'N/A';
+          // Fetch spent tokens from F5
+          const spentData = await readSheetData(auth, spreadsheetId, 'loggedTracker!F5');
+          const spent = spentData?.[0]?.[0] || 'N/A';
 
-        // Prepare embed response
-        const embed = new EmbedBuilder()
-          .setTitle(`${interaction.user.username}'s Token Balance`) // Include the user's name in the title
-          .addFields(
-            { name: '👛 **Overall Total**', value: `> **${overallTotal !== 'N/A' ? overallTotal : 'Data not found'}**`, inline: false },
-            { name: '🪙 **Current Total**', value: `> **${tokenRecord.tokens}**`, inline: false },
-            { name: '🧾 **Spent**', value: `> **${spent !== 'N/A' ? spent : 'Data not found'}**`, inline: false },
-            {
-              name: '🔗 **Token Tracker Link**',
-              value: `> [📄 View your token tracker](${tokenRecord.tokenTracker})`,
-              inline: false,
-            }
-          )
-          .setColor(0xAA926A)
-          .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true })) // Add user's profile picture as thumbnail
-          .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png') // Add specified image
-          .setFooter({ text: 'Token Tracker' })
-          .setTimestamp();
+          // Prepare embed response
+          const embed = new EmbedBuilder()
+            .setTitle(`${interaction.user.username}'s Token Balance`) // Include the user's name in the title
+            .addFields(
+              { name: '👛 **Overall Total**', value: `> **${overallTotal !== 'N/A' ? overallTotal : 'Data not found'}**`, inline: false },
+              { name: '🪙 **Current Total**', value: `> **${tokenRecord.tokens}**`, inline: false },
+              { name: '🧾 **Spent**', value: `> **${spent !== 'N/A' ? spent : 'Data not found'}**`, inline: false },
+              {
+                name: '🔗 **Token Tracker Link**',
+                value: `> [📄 View your token tracker](${tokenRecord.tokenTracker})`,
+                inline: false,
+              }
+            )
+            .setColor(0xAA926A)
+            .setThumbnail(interaction.user.displayAvatarURL({ dynamic: true })) // Add user's profile picture as thumbnail
+            .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png') // Add specified image
+            .setFooter({ text: 'Token Tracker' })
+            .setTimestamp();
 
+          await interaction.reply({ embeds: [embed] });
+        } catch (error) {
+          let errorMessage = error.message;
+          
+          // Handle specific error cases
+          if (errorMessage.includes("No 'earned' entries found")) {
+            errorMessage = "❌ **No earned entries found in your token tracker!**\n\n" +
+              "Please add at least one entry with type 'earned' in column E of your token tracker.\n\n" +
+              "Your entries should look like this:\n" +
+              "```\n" +
+              "SUBMISSION | LINK | CATEGORIES | TYPE   | TOKEN AMOUNT\n" +
+              "Artwork   | URL  | Art        | earned | 100\n" +
+              "```";
+          } else if (errorMessage.includes("Invalid sheet format")) {
+            errorMessage = "❌ **Invalid token tracker format!**\n\n" +
+              "Please ensure your sheet has the correct headers in row 7:\n" +
+              "```\n" +
+              "B: SUBMISSION\n" +
+              "C: LINK\n" +
+              "D: CATEGORIES\n" +
+              "E: TYPE\n" +
+              "F: TOKEN AMOUNT\n" +
+              "```";
+          }
 
-        await interaction.reply({ embeds: [embed] });
+          await interaction.reply({
+            content: errorMessage,
+            ephemeral: true,
+          });
+        }
 
       // ------------------- Handle 'sync' subcommand -------------------
       } else if (subcommand === 'sync') {

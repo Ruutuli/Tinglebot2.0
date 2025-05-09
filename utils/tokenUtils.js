@@ -195,8 +195,20 @@ function handleTokenError(error, interaction) {
     errorMessage = '❌ Your token tracker is missing required headers.';
     guideMessage = '📝 **Quick Guide:**\n1. Add these headers in cells B7:F7:\n`SUBMISSION | LINK | CATEGORIES | TYPE | TOKEN AMOUNT`';
   } else {
-    errorMessage = '❌ An error occurred with your token tracker.';
-    guideMessage = '📝 **Quick Guide:**\n1. Use `/tokens test` to check your setup\n2. If issues persist, try setting up a new tracker';
+    errorMessage = '❌ **An error occurred with your token tracker!**';
+    guideMessage = '📝 **Quick Guide:**\n\n' +
+      '1. Make sure your sheet has these headers in row 7 (B7:F7):\n' +
+      '```\n' +
+      'SUBMISSION | LINK | CATEGORIES | TYPE | TOKEN AMOUNT\n' +
+      '```\n\n' +
+      '2. Add at least one entry with type "earned" in column E:\n' +
+      '```\n' +
+      'SUBMISSION | LINK | CATEGORIES | TYPE   | TOKEN AMOUNT\n' +
+      'Artwork   | URL  | Art        | earned | 100\n' +
+      '```\n\n' +
+      '3. Share your sheet with: `tinglebot@rotw-tinglebot.iam.gserviceaccount.com`\n' +
+      '4. Make sure you have a tab named exactly `loggedTracker`\n' +
+      '5. Use `/tokens test` to verify your setup';
   }
 
   return {
