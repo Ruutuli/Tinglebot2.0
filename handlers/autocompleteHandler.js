@@ -140,6 +140,11 @@ async function handleAutocomplete(interaction) {
     }
 
     switch (commandName) {
+      // ------------------- Lookup Command -------------------
+      case "lookup":
+        await handleLookupAutocomplete(interaction, focusedOption);
+        break;
+
       // ------------------- Economy Commands -------------------
       case "economy":
         await handleEconomyAutocomplete(interaction, focusedOption);
@@ -310,24 +315,18 @@ async function handleAutocomplete(interaction) {
 
 // ------------------- Helper Function to Filter and Respond with Choices -------------------
 async function respondWithFilteredChoices(interaction, focusedOption, choices) {
-  if (!focusedOption || typeof focusedOption.value === "undefined") {
-    const sortedChoices = [...choices]
-      .sort((a, b) => a.name.localeCompare(b.name))
+  try {
+    const focusedValue = focusedOption?.value?.toLowerCase() || '';
+
+    const filteredChoices = choices
+      .filter(choice => choice.name.toLowerCase().includes(focusedValue))
       .slice(0, 25);
-    await safeAutocompleteResponse(interaction, sortedChoices);
-    return;
+
+    return await interaction.respond(filteredChoices);
+  } catch (error) {
+    console.error('[respondWithFilteredChoices]: Error:', error);
+    return await safeRespondWithError(interaction);
   }
-
-  const filteredChoices = focusedOption.value === ""
-    ? choices.slice(0, 25)
-    : choices
-      .filter((choice) =>
-        choice.name.toLowerCase().includes(focusedOption.value.toLowerCase())
-      )
-      .slice(0, 25);
-
-  filteredChoices.sort((a, b) => a.name.localeCompare(b.name));
-  await safeAutocompleteResponse(interaction, filteredChoices);
 }
 
 // ------------------- Helper Function to Safely Respond with Error -------------------
@@ -2036,30 +2035,100 @@ async function handleHealAutocomplete(interaction, focusedOption) {
 // ------------------- Lookup Autocomplete -------------------
 // Provides autocomplete suggestions for items or ingredients in the database.
 async function handleLookupAutocomplete(interaction, focusedOption) {
- try {
-  // Fetch all items from the database
-  const items = await Item.find().select("itemName").exec();
+  try {
+    const focusedValue = focusedOption.value;
 
-  // Map items to choices
-  const choices = items.map((item) => ({
-   name: item.itemName,
-   value: item.itemName,
-  }));
+    // Route based on the focused option name
+    if (focusedOption.name === 'item') {
+      return await handleLookupItemAutocomplete(interaction, focusedValue);
+    } else if (focusedOption.name === 'ingredient') {
+      return await handleLookupIngredientAutocomplete(interaction, focusedValue);
+    }
 
-  // Sort choices alphabetically
-  choices.sort((a, b) => a.name.localeCompare(b.name));
+    return await interaction.respond([]);
+  } catch (error) {
+    console.error('[handleLookupAutocomplete]: Error:', error);
+    return await safeRespondWithError(interaction);
+  }
+}
 
-  // Respond with filtered choices
-  await respondWithFilteredChoices(interaction, focusedOption, choices);
- } catch (error) {
-  handleError(error, "autocompleteHandler.js");
+// ------------------- Function: handleLookupItemAutocomplete -------------------
+// Provides autocomplete for all items in the database
+async function handleLookupItemAutocomplete(interaction, focusedValue) {
+  try {
+    const items = await Item.find()
+      .sort({ itemName: 1 })
+      .select('itemName')
+      .lean();
 
-  console.error(
-   "[handleLookupAutocomplete]: Error handling lookup autocomplete:",
-   error
-  );
-  await safeRespondWithError(interaction);
- }
+    if (items.length === 0) {
+      return await interaction.respond([]);
+    }
+
+    const choices = items
+      .filter(item => item.itemName.toLowerCase().includes(focusedValue.toLowerCase()))
+      .map(item => ({
+        name: capitalizeWords(item.itemName),
+        value: item.itemName
+      }));
+
+    if (choices.length === 0) {
+      return await interaction.respond([]);
+    }
+
+    // Create a focusedOption object to match the expected parameter
+    const focusedOption = {
+      value: focusedValue,
+      name: 'item'
+    };
+
+    return await respondWithFilteredChoices(interaction, focusedOption, choices);
+  } catch (error) {
+    console.error('[handleLookupItemAutocomplete]: Error:', error);
+    return await safeRespondWithError(interaction);
+  }
+}
+
+// ------------------- Function: handleLookupIngredientAutocomplete -------------------
+// Provides autocomplete for ingredients in the database
+async function handleLookupIngredientAutocomplete(interaction, focusedValue) {
+  try {
+    const items = await Item.find({
+      $or: [
+        { type: 'Ingredient' },
+        { category: { $in: ['Ingredients', 'Raw Materials'] } }
+      ]
+    })
+      .sort({ itemName: 1 })
+      .select('itemName')
+      .lean();
+
+    if (items.length === 0) {
+      return await interaction.respond([]);
+    }
+
+    const choices = items
+      .filter(item => item.itemName.toLowerCase().includes(focusedValue.toLowerCase()))
+      .map(item => ({
+        name: capitalizeWords(item.itemName),
+        value: item.itemName
+      }));
+
+    if (choices.length === 0) {
+      return await interaction.respond([]);
+    }
+
+    // Create a focusedOption object to match the expected parameter
+    const focusedOption = {
+      value: focusedValue,
+      name: 'ingredient'
+    };
+
+    return await respondWithFilteredChoices(interaction, focusedOption, choices);
+  } catch (error) {
+    console.error('[handleLookupIngredientAutocomplete]: Error:', error);
+    return await safeRespondWithError(interaction);
+  }
 }
 
 // ============================================================================
