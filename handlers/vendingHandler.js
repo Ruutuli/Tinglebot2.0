@@ -604,82 +604,194 @@ async function handleFulfill(interaction) {
   
 // ------------------- handlePouchUpgrade -------------------
 async function handlePouchUpgrade(interaction) {
-    try {
-      const characterName = interaction.options.getString('charactername');
-      const pouchType = interaction.options.getString('pouchtype');
-      const userId = interaction.user.id;
-  
-      // Fetch character
-      const character = await fetchCharacterByNameAndUserId(characterName, userId);
-      if (!character) {
-        throw new Error(`Character '${characterName}' not found or does not belong to you.`);
-      }
-  
-      // Define pouch tiers and pricing
-      const pouchCapacities = { none: 0, bronze: 15, silver: 30, gold: 50 };
-      const pouchCosts = { bronze: 1000, silver: 5000, gold: 10000 };
-      const pouchRequirements = {
-        bronze: 'none',
-        silver: 'bronze',
-        gold: 'silver'
-      };
-  
-      // Prevent downgrading or selecting same tier
-      const currentTier = character.shopPouch || 'none';
-      if (pouchCapacities[pouchType] <= pouchCapacities[currentTier]) {
-        throw new Error(`You cannot downgrade or select the same pouch type.`);
-      }
-  
-      // Check if user has the required previous pouch
-      if (pouchRequirements[pouchType] && character.shopPouch !== pouchRequirements[pouchType]) {
-        throw new Error(`You must have a ${pouchRequirements[pouchType]} pouch before upgrading to ${pouchType}.`);
-      }
-  
-      // Check if user can afford it
-      const userTokens = await getTokenBalance(userId);
-      const cost = pouchCosts[pouchType];
-      if (userTokens < cost) {
-        throw new Error(`Upgrading to ${pouchType} costs ${cost} tokens, but you only have ${userTokens}.`);
-      }
-  
-      // Perform upgrade and update data
-      await updateTokenBalance(userId, -cost);
-      
-      // Update character's pouch and reset vending sync status
-      await Character.updateOne(
-        { _id: character._id },
-        { 
-          $set: { 
-            shopPouch: pouchType.toLowerCase(),
-            pouchSize: pouchCapacities[pouchType],
-            vendingSync: false // Reset sync status since pouch size changed
-          }
-        }
+  try {
+    await interaction.deferReply({ ephemeral: true });
+
+    const characterName = interaction.options.getString('charactername');
+    const newPouchType = interaction.options.getString('pouchtype');
+    const userId = interaction.user.id;
+
+    // ------------------- Character Validation -------------------
+    const character = await fetchCharacterByName(characterName);
+    if (!character || character.userId !== userId) {
+      return interaction.editReply("❌ Character not found or doesn't belong to you.");
+    }
+
+    // ------------------- Job Validation -------------------
+    if (character.job?.toLowerCase() !== 'shopkeeper' && character.job?.toLowerCase() !== 'merchant') {
+      return interaction.editReply("❌ Only Shopkeepers and Merchants can upgrade their shop pouches.");
+    }
+
+    // ------------------- Pouch Upgrade Validation -------------------
+    const pouchTiers = {
+      none: { slots: 0, cost: 0 },
+      bronze: { slots: 15, cost: 1000 },
+      silver: { slots: 30, cost: 5000 },
+      gold: { slots: 50, cost: 10000 }
+    };
+
+    const currentPouch = character.shopPouch?.toLowerCase() || 'none';
+    const currentTier = Object.keys(pouchTiers).indexOf(currentPouch);
+    const newTier = Object.keys(pouchTiers).indexOf(newPouchType);
+
+    // Check if trying to downgrade or select same tier
+    if (newTier <= currentTier) {
+      return interaction.editReply(
+        `❌ Cannot downgrade or select the same pouch tier.\n` +
+        `Current tier: ${currentPouch.toUpperCase()}\n` +
+        `Selected tier: ${newPouchType.toUpperCase()}`
       );
-  
-      // Respond with confirmation embed
-      const embed = new EmbedBuilder()
-        .setTitle('✅ **Pouch Upgrade Successful!**')
-        .setDescription(`**${character.name}** has upgraded their pouch to **${capitalizeFirstLetter(pouchType)}**.`)
-        .addFields(
-          { name: '🛍️ **New Capacity**', value: `${pouchCapacities[pouchType]} slots`, inline: true },
-          { name: '💰 **Tokens Spent**', value: `${cost}`, inline: true },
-          { name: '💰 **Remaining Tokens**', value: `${userTokens - cost}`, inline: true }
-        )
-        .setColor('#AA926A')
-        .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png');
-  
-      await interaction.reply({ embeds: [embed], ephemeral: false });
-    } catch (error) {
-      handleError(error, 'vendingHandler.js');
-      console.error('[handlePouchUpgrade]: Error:', error);
-      await interaction.reply({
-        content: `❌ **Error:** ${error.message}`,
-        ephemeral: true,
+    }
+
+    // Check if skipping tiers
+    if (newTier - currentTier > 1) {
+      const requiredTier = Object.keys(pouchTiers)[currentTier + 1];
+      return interaction.editReply(
+        `❌ You must upgrade to ${requiredTier.toUpperCase()} first before upgrading to ${newPouchType.toUpperCase()}.`
+      );
+    }
+
+    // ------------------- Token Balance Check -------------------
+    const userTokens = await getTokenBalance(userId);
+    const upgradeCost = pouchTiers[newPouchType].cost;
+
+    if (userTokens < upgradeCost) {
+      return interaction.editReply(
+        `❌ Not enough tokens for this upgrade.\n` +
+        `Required: ${upgradeCost} tokens\n` +
+        `Your balance: ${userTokens} tokens`
+      );
+    }
+
+    // ------------------- Confirm Upgrade -------------------
+    const confirmButton = new ButtonBuilder()
+      .setCustomId(`confirm_pouch_upgrade_${characterName}_${newPouchType}`)
+      .setLabel('Confirm Upgrade')
+      .setStyle(ButtonStyle.Success);
+
+    const cancelButton = new ButtonBuilder()
+      .setCustomId('cancel_pouch_upgrade')
+      .setLabel('Cancel')
+      .setStyle(ButtonStyle.Danger);
+
+    const row = new ActionRowBuilder()
+      .addComponents(confirmButton, cancelButton);
+
+    const confirmEmbed = new EmbedBuilder()
+      .setColor('#FFD700')
+      .setTitle('🛍️ Confirm Pouch Upgrade')
+      .setDescription(`Are you sure you want to upgrade ${characterName}'s shop pouch?`)
+      .addFields(
+        { name: 'Current Pouch', value: `${currentPouch.toUpperCase()} (${pouchTiers[currentPouch].slots} slots)`, inline: true },
+        { name: 'New Pouch', value: `${newPouchType.toUpperCase()} (${pouchTiers[newPouchType].slots} slots)`, inline: true },
+        { name: 'Upgrade Cost', value: `${upgradeCost} tokens`, inline: true },
+        { name: 'Your Balance', value: `${userTokens} tokens`, inline: true },
+        { name: 'Balance After', value: `${userTokens - upgradeCost} tokens`, inline: true }
+      )
+      .setFooter({ text: 'Click Confirm to proceed with the upgrade' });
+
+    await interaction.editReply({
+      embeds: [confirmEmbed],
+      components: [row]
+    });
+
+  } catch (error) {
+    console.error('[handlePouchUpgrade]: Error:', error);
+    await interaction.editReply('❌ An error occurred while processing the pouch upgrade.');
+  }
+}
+
+// ------------------- handlePouchUpgradeConfirm -------------------
+async function handlePouchUpgradeConfirm(interaction) {
+  try {
+    const [_, __, ___, characterName, newPouchType] = interaction.customId.split('_');
+    const userId = interaction.user.id;
+
+    // ------------------- Character Validation -------------------
+    const character = await fetchCharacterByName(characterName);
+    if (!character || character.userId !== userId) {
+      return interaction.update({
+        content: "❌ Character not found or doesn't belong to you.",
+        embeds: [],
+        components: []
       });
     }
+
+    // ------------------- Pouch Upgrade Validation -------------------
+    const pouchTiers = {
+      none: { slots: 0, cost: 0 },
+      bronze: { slots: 15, cost: 1000 },
+      silver: { slots: 30, cost: 5000 },
+      gold: { slots: 50, cost: 10000 }
+    };
+
+    const currentPouch = character.shopPouch?.toLowerCase() || 'none';
+    const currentTier = Object.keys(pouchTiers).indexOf(currentPouch);
+    const newTier = Object.keys(pouchTiers).indexOf(newPouchType);
+
+    // Double check upgrade validity
+    if (newTier <= currentTier || newTier - currentTier > 1) {
+      return interaction.update({
+        content: "❌ Invalid upgrade path. Please try the upgrade command again.",
+        embeds: [],
+        components: []
+      });
+    }
+
+    // ------------------- Token Balance Check -------------------
+    const userTokens = await getTokenBalance(userId);
+    const upgradeCost = pouchTiers[newPouchType].cost;
+
+    if (userTokens < upgradeCost) {
+      return interaction.update({
+        content: "❌ Not enough tokens for this upgrade. Your balance has changed since the initial check.",
+        embeds: [],
+        components: []
+      });
+    }
+
+    // ------------------- Process Upgrade -------------------
+    // Update token balance
+    await updateTokenBalance(userId, -upgradeCost);
+
+    // Update character's pouch
+    await Character.updateOne(
+      { _id: character._id },
+      { 
+        $set: { 
+          shopPouch: newPouchType,
+          pouchSize: pouchTiers[newPouchType].slots
+        }
+      }
+    );
+
+    // ------------------- Success Response -------------------
+    const successEmbed = new EmbedBuilder()
+      .setColor('#00FF00')
+      .setTitle('✅ Pouch Upgrade Successful!')
+      .setDescription(`${characterName}'s shop pouch has been upgraded!`)
+      .addFields(
+        { name: 'New Pouch Tier', value: newPouchType.toUpperCase(), inline: true },
+        { name: 'New Slot Capacity', value: `${pouchTiers[newPouchType].slots} slots`, inline: true },
+        { name: 'Tokens Spent', value: `${upgradeCost} tokens`, inline: true },
+        { name: 'Remaining Tokens', value: `${userTokens - upgradeCost} tokens`, inline: true }
+      );
+
+    await interaction.update({
+      embeds: [successEmbed],
+      components: []
+    });
+
+  } catch (error) {
+    console.error('[handlePouchUpgradeConfirm]: Error:', error);
+    await interaction.update({
+      content: '❌ An error occurred while processing the upgrade. Please try again.',
+      embeds: [],
+      components: []
+    });
   }
-  
+}
+
 // ------------------- handleViewShop -------------------
 async function handleViewShop(interaction) {
   try {
@@ -1504,6 +1616,7 @@ module.exports = {
     handleBarter,
     handleFulfill,
     handlePouchUpgrade,
+    handlePouchUpgradeConfirm,
     handleViewShop,
     handleVendingSetup,
     handleVendingSync,
