@@ -2531,36 +2531,83 @@ async function handleViewInventoryAutocomplete(interaction, focusedOption) {
 async function handleVendingBarterAutocomplete(interaction, focusedOption) {
   try {
     const subcommand = interaction.options.getSubcommand();
-    const vendorName = subcommand === 'barter' 
-      ? interaction.options.getString("vendorcharacter")
-      : interaction.options.getString("charactername");
-      
-    if (!vendorName) return await interaction.respond([]);
-
-    // Get vendor character
-    const vendor = await fetchCharacterByName(vendorName);
-    if (!vendor) return await interaction.respond([]);
-
+    const focusedName = focusedOption.name;
     const searchQuery = focusedOption.value?.toLowerCase() || "";
 
-    // Get items from vendor's vending inventory ONLY
-    const vendingClient = new MongoClient(process.env.MONGODB_INVENTORIES_URI);
-    await vendingClient.connect();
-    const vendCollection = vendingClient.db('vendingInventories').collection(vendorName.toLowerCase());
-    const vendingItems = await vendCollection.find({}).toArray();
-    await vendingClient.close();
+    // Handle character name autocomplete (user's characters)
+    if (focusedName === 'charactername') {
+      const userId = interaction.user.id;
+      const characters = await fetchAllCharacters();
+      
+      // Filter for user's characters
+      const userCharacters = characters.filter(char => char.userId === userId);
+      
+      const choices = userCharacters.map(char => ({
+        name: `${char.name} | ${char.currentVillage || 'No Village'} | ${char.job || 'No Job'}`,
+        value: char.name
+      }));
 
-    // Filter and format items
-    const filteredItems = vendingItems.filter(item =>
-      item.itemName?.toLowerCase().includes(searchQuery)
-    );
+      const filteredChoices = choices.filter(choice => 
+        choice.name.toLowerCase().includes(searchQuery)
+      );
 
-    const choices = filteredItems.map(item => ({
-      name: `${item.slot || 'Unknown Slot'} | ${item.itemName} | Qty:${item.stockQty ?? 'undefined'} | Token:${item.tokenPrice || 'N/A'} | Art:${item.artPrice || 'N/A'}`,
-      value: item.itemName
-    }));
+      return await interaction.respond(filteredChoices.slice(0, 25));
+    }
 
-    await interaction.respond(choices.slice(0, 25));
+    // Handle vendor character autocomplete (all vendors)
+    if (focusedName === 'vendorcharacter') {
+      const characters = await fetchAllCharacters();
+      
+      // Filter for only characters with vending jobs and completed setup
+      const vendorCharacters = characters.filter(character => {
+        const job = character.job?.toLowerCase();
+        return (job === 'shopkeeper' || job === 'merchant') && 
+               character.vendingSetup?.shopLink && 
+               character.vendingSync;
+      });
+
+      const choices = vendorCharacters.map(char => ({
+        name: `${char.name} | ${char.currentVillage || 'No Village'} | ${char.job}`,
+        value: char.name
+      }));
+
+      const filteredChoices = choices.filter(choice => 
+        choice.name.toLowerCase().includes(searchQuery)
+      );
+
+      return await interaction.respond(filteredChoices.slice(0, 25));
+    }
+
+    // Handle item name autocomplete
+    if (focusedName === 'itemname') {
+      const vendorName = interaction.options.getString("vendorcharacter");
+      if (!vendorName) return await interaction.respond([]);
+
+      // Get vendor character
+      const vendor = await fetchCharacterByName(vendorName);
+      if (!vendor) return await interaction.respond([]);
+
+      // Get items from vendor's vending inventory ONLY
+      const vendingClient = new MongoClient(process.env.MONGODB_INVENTORIES_URI);
+      await vendingClient.connect();
+      const vendCollection = vendingClient.db('vendingInventories').collection(vendorName.toLowerCase());
+      const vendingItems = await vendCollection.find({}).toArray();
+      await vendingClient.close();
+
+      // Filter and format items
+      const filteredItems = vendingItems.filter(item =>
+        item.itemName?.toLowerCase().includes(searchQuery)
+      );
+
+      const choices = filteredItems.map(item => ({
+        name: `${item.slot || 'Unknown Slot'} | ${item.itemName} | Qty:${item.stockQty ?? 'undefined'} | Token:${item.tokenPrice || 'N/A'} | Art:${item.artPrice || 'N/A'}`,
+        value: item.itemName
+      }));
+
+      return await interaction.respond(choices.slice(0, 25));
+    }
+
+    return await interaction.respond([]);
   } catch (error) {
     console.error("[handleVendingBarterAutocomplete]: Error:", error);
     await interaction.respond([]);

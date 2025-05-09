@@ -253,7 +253,7 @@ async function execute(interaction) {
       case 'barter':
         return await handleVendingBarter(interaction);
   
-      case 'fulfill':
+      case 'accept':
         return await handleFulfill(interaction);
   
       case 'edit':
