@@ -59,13 +59,11 @@ const characterSchema = new Schema({
   pouchSize: { type: Number, default: 0 },               // Pouch size
   shopLink: { type: String, default: '' },               // Link to vending shop spreadsheet
   lastCollectedMonth: { type: Number, default: 0 },      // Last month points were collected
-  vendingSetup: {                                        // Vending setup status and details
-    type: {
-      shopLink: { type: String },
-      pouchType: { type: String },
-      shopImage: { type: String }
-    },
-    default: null
+  vendingSetup: {
+    shopLink: { type: String },
+    pouchType: { type: String },
+    shopImage: { type: String },
+    setupDate: { type: Date }
   },
   vendingSync: { type: Boolean, default: false },        // Vending sync status
 

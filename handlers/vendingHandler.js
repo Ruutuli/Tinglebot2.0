@@ -468,10 +468,14 @@ async function handleVendingBarter(interaction) {
         return interaction.editReply("❌ Could not find user data for either buyer or vendor.");
       }
 
+      // Get vendor's Discord username
+      const vendorDiscordUser = await interaction.client.users.fetch(shopOwner.userId);
+      const vendorUsername = vendorDiscordUser?.username || 'Unknown User';
+
       if (!buyerUser.tokensSynced || !vendorUser.tokensSynced) {
         const unsyncedUsers = [];
         if (!buyerUser.tokensSynced) unsyncedUsers.push(buyerName);
-        if (!vendorUser.tokensSynced) unsyncedUsers.push(shopOwner.username);
+        if (!vendorUser.tokensSynced) unsyncedUsers.push(vendorUsername);
         
         return interaction.editReply(
           `❌ Cannot proceed with barter. Token trackers need to be synced for:\n` +
