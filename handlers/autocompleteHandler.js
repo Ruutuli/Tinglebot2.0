@@ -2390,6 +2390,10 @@ async function handleSlotAutocomplete(interaction, focusedOption) {
     const items = await vendCollection.find({}).toArray();
     await vendingClient.close();
 
+    // Import Item model for stackable info
+    const { default: mongoose } = await import('mongoose');
+    const ItemModel = mongoose.models.Item || (await import('../models/ItemModel')).default || require('../models/ItemModel');
+
     // Create a map of slot => item info
     const slotMap = new Map();
     for (const item of items) {
@@ -2402,7 +2406,17 @@ async function handleSlotAutocomplete(interaction, focusedOption) {
           slotMap.set(item.slot, { itemName: "❌ Multiple Items", qty: null });
         }
       } else {
-        slotMap.set(item.slot, { itemName: item.itemName, qty: item.stockQty });
+        // Fetch stackable info for this item
+        let stackable = false;
+        let maxStackSize = 1;
+        try {
+          const itemDoc = await Item.findOne({ itemName: item.itemName });
+          if (itemDoc) {
+            stackable = itemDoc.stackable;
+            maxStackSize = itemDoc.maxStackSize || 1;
+          }
+        } catch (e) {}
+        slotMap.set(item.slot, { itemName: item.itemName, qty: item.stockQty, stackable, maxStackSize });
       }
     }
 
@@ -2413,7 +2427,14 @@ async function handleSlotAutocomplete(interaction, focusedOption) {
       const slotInfo = slotMap.get(slotName);
       
       if (slotInfo) {
-        const fullness = slotInfo.qty !== null ? `${Math.min(slotInfo.qty, 10)}/10` : `🚫 Conflict`;
+        let fullness;
+        if (slotInfo.qty === null) {
+          fullness = `🚫 Conflict`;
+        } else if (slotInfo.stackable) {
+          fullness = `${Math.min(slotInfo.qty, slotInfo.maxStackSize)}/${slotInfo.maxStackSize}`;
+        } else {
+          fullness = `${slotInfo.qty}/1`;
+        }
         slotChoices.push({
           name: `${slotName} – ${slotInfo.itemName} – ${fullness}`,
           value: slotName
