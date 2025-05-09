@@ -62,6 +62,13 @@ const { generateUniqueId } = require('../utils/uniqueIdUtils');
 // Define file path for storing battle progress.
 const BATTLE_PROGRESS_PATH = path.join(__dirname, '..', 'data', 'raidBattleProgress.json');
 
+// ------------------- New Storage Functions -------------------
+const { 
+  saveBattleProgressToStorage, 
+  retrieveBattleProgressFromStorage, 
+  deleteBattleProgressFromStorage 
+} = require('../utils/storage.js');
+
 // ============================================================================
 // File Initialization Functions
 // ------------------- Ensure Battle Progress File Exists -------------------
@@ -103,7 +110,7 @@ async function storeBattleProgress(character, monster, tier, monsterHearts, prog
   };
 
   try {
-    fs.writeFileSync(BATTLE_PROGRESS_PATH, JSON.stringify(battleProgress, null, 2));
+    await saveBattleProgressToStorage(battleId, battleProgress);
   } catch (err) {
     handleError(err, 'raidCombatModule.js');
     console.error(`[raidCombatModule.js]: ❌ Error storing battle progress for Battle ID "${battleId}":`, err);
@@ -117,11 +124,10 @@ async function storeBattleProgress(character, monster, tier, monsterHearts, prog
 // Handles both PvP and legacy/raid formats.
 async function getBattleProgressById(battleId) {
   ensureBattleProgressFileExists();
-  const raw = fs.readFileSync(BATTLE_PROGRESS_PATH, 'utf8');
-  const battleProgress = JSON.parse(raw);
+  const battleProgress = await retrieveBattleProgressFromStorage(battleId);
 
-  if (battleProgress[battleId]) {
-    return battleProgress[battleId];
+  if (battleProgress) {
+    return battleProgress;
   }
 
   // Handle legacy/raid-style format (if applicable)
@@ -139,7 +145,7 @@ async function getBattleProgressById(battleId) {
 // and appends new progress information.
 async function updateBattleProgress(battleId, updatedProgress, outcome) {
   ensureBattleProgressFileExists();
-  const battleProgress = JSON.parse(fs.readFileSync(BATTLE_PROGRESS_PATH, 'utf8'));
+  const battleProgress = await getBattleProgressById(battleId);
   if (!battleProgress) return;
 
   // Deduct monster hearts without dropping below zero.
@@ -157,7 +163,7 @@ async function updateBattleProgress(battleId, updatedProgress, outcome) {
   battleProgress.progress += `\n${updatedProgress}`;
   
   try {
-    fs.writeFileSync(BATTLE_PROGRESS_PATH, JSON.stringify(battleProgress, null, 2));
+    await saveBattleProgressToStorage(battleId, battleProgress);
   } catch (err) {
     handleError(err, 'raidCombatModule.js');
     console.error(`[raidCombatModule.js]: ❌ Error updating battle progress for Battle ID "${battleId}":`, err);
@@ -170,11 +176,7 @@ async function updateBattleProgress(battleId, updatedProgress, outcome) {
 async function deleteBattleProgressById(battleId) {
   ensureBattleProgressFileExists();
   try {
-    const battleProgress = JSON.parse(fs.readFileSync(BATTLE_PROGRESS_PATH, 'utf8'));
-    if (battleProgress[battleId]) {
-      delete battleProgress[battleId];
-      fs.writeFileSync(BATTLE_PROGRESS_PATH, JSON.stringify(battleProgress, null, 2));
-    }
+    await deleteBattleProgressFromStorage(battleId);
   } catch (error) {
     handleError(error, 'raidCombatModule.js');
     console.error(`[raidCombatModule.js]: ❌ Error deleting battle progress for Battle ID "${battleId}":`, error);
@@ -185,11 +187,11 @@ async function deleteBattleProgressById(battleId) {
 // Sets the monster's current hearts to zero for the specified battle.
 async function updateMonsterHeartsToZero(battleId) {
   ensureBattleProgressFileExists();
-  const battleProgress = JSON.parse(fs.readFileSync(BATTLE_PROGRESS_PATH, 'utf8'));
-  if (battleProgress[battleId]) {
-    battleProgress[battleId].monsterHearts.current = 0;
+  const battleProgress = await getBattleProgressById(battleId);
+  if (battleProgress) {
+    battleProgress.monsterHearts.current = 0;
     try {
-      fs.writeFileSync(BATTLE_PROGRESS_PATH, JSON.stringify(battleProgress, null, 2));
+      await saveBattleProgressToStorage(battleId, battleProgress);
     } catch (err) {
       handleError(err, 'raidCombatModule.js');
       console.error(`[raidCombatModule.js]: ❌ Error updating monster hearts for Battle ID "${battleId}":`, err);

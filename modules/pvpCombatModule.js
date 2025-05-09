@@ -58,6 +58,13 @@ const { generateUniqueId } = require('../utils/uniqueIdUtils');
 // ------------------- Configuration Constants -------------------
 const BATTLE_PROGRESS_PATH = path.join(__dirname, '..', 'data', 'pvpBattleProgress.json');
 
+// ------------------- New Storage Functions -------------------
+const { 
+  saveBattleProgressToStorage, 
+  retrieveBattleProgressFromStorage, 
+  deleteBattleProgressFromStorage 
+} = require('../utils/storage.js');
+
 // ============================================================================
 // File Initialization Functions
 // ------------------- Ensure Battle Progress File Exists -------------------
