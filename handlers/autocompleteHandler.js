@@ -65,6 +65,14 @@ async function safeRespondWithError(interaction, error) {
   }
 }
 
+// ============================================================================
+// ------------------- MAIN AUTOCOMPLETE HANDLER -------------------
+// Central handler for all autocomplete interactions, routing requests to specific
+// command handlers based on command name and focused option.
+// ============================================================================
+
+// ------------------- Function: handleAutocomplete -------------------
+// Routes autocomplete requests to appropriate handlers based on command and focused option
 async function handleAutocomplete(interaction) {
   try {
     const commandName = interaction.commandName;
@@ -79,9 +87,12 @@ async function handleAutocomplete(interaction) {
     const focusedName = focusedOption.name;
 
     switch (commandName) {
+      // ------------------- Economy Commands -------------------
       case "economy":
         await handleEconomyAutocomplete(interaction, focusedName, focusedValue);
         break;
+
+      // ------------------- Vending Commands -------------------
       case "vending":
         const subcommand = interaction.options.getSubcommand();
         if (subcommand === "add") {
@@ -94,16 +105,21 @@ async function handleAutocomplete(interaction) {
           await handleVendingBarterAutocomplete(interaction, focusedOption);
         }
         break;
+
+      // ------------------- Resource Gathering Commands -------------------
       case "gather":
         if (focusedName === "charactername") {
           await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "gather");
         }
         break;
+
       case "loot":
         if (focusedName === "charactername") {
           await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "loot");
         }
         break;
+
+      // ------------------- Pet Management Commands -------------------
       case "pet":
         if (focusedName === "charactername") {
           await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "pet");
@@ -115,6 +131,8 @@ async function handleAutocomplete(interaction) {
           await handlePetRollTypeAutocomplete(interaction, focusedOption);
         }
         break;
+
+      // ------------------- Item Management Commands -------------------
       case "item":
         if (focusedName === "charactername") {
           await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "item");
@@ -124,6 +142,8 @@ async function handleAutocomplete(interaction) {
           await handleItemJobNameAutocomplete(interaction, focusedOption);
         }
         break;
+
+      // ------------------- Equipment Commands -------------------
       case "gear":
         if (focusedName === "charactername") {
           await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "gear");
@@ -131,6 +151,7 @@ async function handleAutocomplete(interaction) {
           await handleGearAutocomplete(interaction, focusedOption);
         }
         break;
+
       case "customweapon":
         if (focusedName === "charactername") {
           await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "customweapon");
@@ -138,11 +159,15 @@ async function handleAutocomplete(interaction) {
           await handleBaseWeaponAutocomplete(interaction);
         }
         break;
+
+      // ------------------- Mount Commands -------------------
       case "mount":
         if (focusedName === "charactername") {
           await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "mount");
         }
         break;
+
+      // ------------------- Exploration Commands -------------------
       case "explore":
         if (focusedName === "charactername") {
           await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "explore");
@@ -150,11 +175,14 @@ async function handleAutocomplete(interaction) {
           await handleExploreItemAutocomplete(interaction, focusedOption);
         }
         break;
+
       case "raid":
         if (focusedName === "charactername") {
           await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "raid");
         }
         break;
+
+      // ------------------- Stealth Commands -------------------
       case "steal":
         if (focusedName === "charactername") {
           await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "steal");
@@ -164,6 +192,8 @@ async function handleAutocomplete(interaction) {
           await handleStealRarityAutocomplete(interaction, focusedOption);
         }
         break;
+
+      // ------------------- Village Commands -------------------
       case "village":
         if (focusedName === "charactername") {
           await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "village");
@@ -171,6 +201,8 @@ async function handleAutocomplete(interaction) {
           await handleVillageMaterialsAutocomplete(interaction);
         }
         break;
+
+      // ------------------- Character Management Commands -------------------
       case "character":
         if (focusedName === "charactername") {
           await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "character");
@@ -180,11 +212,14 @@ async function handleAutocomplete(interaction) {
           await handleCreateCharacterVillageAutocomplete(interaction, focusedOption);
         }
         break;
+
       case "syncinventory":
         if (focusedName === "charactername") {
           await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "syncinventory");
         }
         break;
+
+      // ------------------- Travel Commands -------------------
       case "travel":
         if (focusedName === "charactername") {
           await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "travel");
@@ -192,6 +227,8 @@ async function handleAutocomplete(interaction) {
           await handleVillageBasedCommandsAutocomplete(interaction, focusedOption);
         }
         break;
+
+      // ------------------- Mod Commands -------------------
       case "mod":
         if (focusedName === "character" && interaction.options.getSubcommand() === "vendingreset") {
           // Fetch all characters for vendingreset
@@ -209,6 +246,7 @@ async function handleAutocomplete(interaction) {
           await handleModCharacterAutocomplete(interaction, focusedOption);
         }
         break;
+
       default:
         await interaction.respond([]);
     }
@@ -2536,7 +2574,6 @@ module.exports = {
  handleVillageBasedCommandsAutocomplete,
 
  // ------------------- Vending Functions -------------------
- handleVendingRestockAutocomplete,
  handleSlotAutocomplete,
  handleVendingAddAutocomplete,
 
