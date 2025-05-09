@@ -1121,16 +1121,31 @@ async function syncTokenTracker(userId) {
   const range = "loggedTracker!B7:F";
   const sheetData = await readSheetData(auth, spreadsheetId, range);
 
+  // Validate headers
+  const headers = sheetData[0];
+  if (!headers || headers.length < 5) {
+    throw new Error("Invalid sheet format. Please ensure your sheet has the correct headers in row 7.");
+  }
+
+  // Check if there are any earned entries
+  const hasEarnedEntries = sheetData.slice(1).some(row => row[3] === "earned");
+  if (!hasEarnedEntries) {
+    throw new Error("No 'earned' entries found in your token tracker. Please add at least one entry with type 'earned' in column E.");
+  }
+
   let totalEarned = 0;
   let totalSpent = 0;
 
-  sheetData.forEach((row) => {
-   const amount = parseInt(row[4]);
-   if (row[3] === "earned") {
-    totalEarned += amount;
-   } else if (row[3] === "spent") {
-    totalSpent += Math.abs(amount);
-   }
+  sheetData.slice(1).forEach((row) => {
+    if (row.length < 5) return; // Skip invalid rows
+    const amount = parseInt(row[4]);
+    if (isNaN(amount)) return; // Skip rows with invalid amounts
+    
+    if (row[3] === "earned") {
+      totalEarned += amount;
+    } else if (row[3] === "spent") {
+      totalSpent += Math.abs(amount);
+    }
   });
 
   user.tokens = totalEarned - totalSpent;
@@ -1141,7 +1156,7 @@ async function syncTokenTracker(userId) {
  } catch (error) {
   handleError(error, "tokenService.js");
   console.error("[tokenService.js]: ❌ Error syncing token tracker:", error);
-  throw new Error("Error syncing token tracker.");
+  throw error; // Pass the original error to maintain the specific error message
  }
 }
 
