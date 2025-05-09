@@ -269,7 +269,7 @@ async function execute(interaction) {
     const subcommand = interaction.options.getSubcommand();
   
     switch (subcommand) {
-      case 'barter':
+      case 'trade':
         return await handleBarter(interaction);
   
       case 'fulfill':

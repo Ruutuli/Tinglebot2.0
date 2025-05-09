@@ -423,8 +423,8 @@ async function handleRestock(interaction) {
   }
 }
 
-// ------------------- handleBarter -------------------
-async function handleBarter(interaction) {
+// ------------------- handleVendingTrade -------------------
+async function handleVendingTrade(interaction) {
     try {
       await interaction.deferReply({ ephemeral: true });
   
@@ -486,26 +486,26 @@ async function handleBarter(interaction) {
   
       // ------------------- Save Fulfillment -------------------
       const fulfillmentId = uuidv4();
-      const barterData = {
+      const tradeData = {
         fulfillmentId,
         userCharacterName: buyer.name,
         vendorCharacterName: shopOwner.name,
         itemName: requestedItem.itemName,
         quantity: 1,
         paymentMethod: 'trade',
-        notes: `Bartered ${offeredItemName} for ${requestedItemName}`,
+        notes: `Traded ${offeredItemName} for ${requestedItemName}`,
         buyerId,
         buyerUsername: buyerName,
         date: new Date()
       };
   
-      const fulfillment = new VendingRequest(barterData);
+      const fulfillment = new VendingRequest(tradeData);
       await fulfillment.save();
   
       // ------------------- Confirmation Embed -------------------
       const embed = new EmbedBuilder()
-        .setTitle(`🛒 Barter Successful`)
-        .setDescription(`**${buyer.name}** has bartered with **${shopOwner.name}**.`)
+        .setTitle(`🛒 Trade Successful`)
+        .setDescription(`**${buyer.name}** has traded with **${shopOwner.name}**.`)
         .addFields(
           { name: '🧾 Offered', value: `\`${offeredItemName}\``, inline: true },
           { name: '📦 Received', value: `\`${requestedItemName}\``, inline: true },
@@ -518,8 +518,11 @@ async function handleBarter(interaction) {
       await interaction.editReply({ embeds: [embed] });
   
     } catch (error) {
-      console.error("[handleBarter]:", error);
-      await interaction.editReply({ content: `❌ ${error.message}`, ephemeral: true });
+      console.error("[handleVendingTrade]:", error);
+      await interaction.editReply({
+        content: "❌ An error occurred while processing the trade. Please try again later.",
+        ephemeral: true
+      });
     }
 }
   
@@ -1558,7 +1561,7 @@ function parsePriceInputs(inputs) {
 // ------------------- generateFulfillEmbed -------------------
 function generateFulfillEmbed(request) {
     return new EmbedBuilder()
-      .setTitle(`📦 Barter Request`)
+      .setTitle(`📦 Trade Request`)
       .setDescription(`**${request.userCharacterName}** requested \`${request.itemName} x${request.quantity}\``)
       .addFields(
         { name: 'Vendor', value: request.vendorCharacterName, inline: true },
@@ -1569,7 +1572,7 @@ function generateFulfillEmbed(request) {
       .setColor('#f5a623')
       .setFooter({ text: `Requested by ${request.buyerUsername}` })
       .setTimestamp();
-  }
+}
 
 // ------------------- handleSyncButton -------------------
 async function handleSyncButton(interaction) {
@@ -1613,7 +1616,7 @@ async function handleSyncButton(interaction) {
 module.exports = {
     executeVending,
     handleRestock,
-    handleBarter,
+    handleVendingTrade,
     handleFulfill,
     handlePouchUpgrade,
     handlePouchUpgradeConfirm,
