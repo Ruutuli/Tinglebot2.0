@@ -820,17 +820,21 @@ async function handlePouchUpgradeConfirm(interaction) {
 // ------------------- handleViewShop -------------------
 async function handleViewShop(interaction) {
   try {
+    const characterName = interaction.options.getString('charactername');
+    if (!characterName) {
+      return await interaction.reply({
+        content: '❌ Please provide a character name.'
+      });
+    }
+
     console.log(`[handleViewShop]: Starting view shop for character: ${characterName}`);
     
     // Get character from database
     const character = await Character.findOne({ name: characterName });
     if (!character) {
-      throw new Error(`Character ${characterName} not found`);
-    }
-
-    // Validate shop image URL
-    if (!character.shopImage || !isValidGoogleSheetsUrl(character.shopImage)) {
-      throw new Error(`Invalid or missing shop image URL for ${characterName}`);
+      return await interaction.reply({
+        content: `❌ Character ${characterName} not found.`
+      });
     }
 
     // Get the vending model for this character
@@ -838,7 +842,7 @@ async function handleViewShop(interaction) {
     console.log(`[handleViewShop]: Got vending model for ${characterName}`);
 
     // Get items from vending inventory
-    const items = await VendingInventory.find({ characterName: character.name });
+    const items = await VendingInventory.find({});
     console.log(`[handleViewShop]: Found ${items.length} items in vending inventory`);
 
     if (!items || items.length === 0) {
