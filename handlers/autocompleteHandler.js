@@ -361,9 +361,7 @@ async function handleCharacterBasedCommandsAutocomplete(
 
   // Map all characters to choices with their basic info
   const choices = characters.map((character) => ({
-   name: `${character.name} | ${capitalizeFirstLetter(
-    character.currentVillage
-   )} | ${capitalizeFirstLetter(character.job)}`,
+   name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
    value: character.name,
   }));
 
@@ -391,32 +389,15 @@ async function handleCharacterBasedCommandsAutocomplete(
 // in the "blight" command based on the user's input.
 async function handleBlightCharacterAutocomplete(interaction, focusedOption) {
  try {
-  // Extract the user ID from the interaction object
   const userId = interaction.user.id;
-
-  // Provide suggestions based on which option is being autocompleted
-  if (focusedOption.name === "character_name") {
-   // Fetch blighted characters and format them to display "Name - Village"
-   const blightedCharacters = await fetchBlightedCharactersByUserId(userId);
-   const choices = blightedCharacters.map((character) => ({
-    name: `${character.name} - ${capitalize(character.currentVillage)}`,
-    value: character.name,
-   }));
-   // Respond with filtered character suggestions
-   await respondWithFilteredChoices(interaction, focusedOption, choices);
-  } else if (focusedOption.name === "healer_name") {
-   // In case of healer suggestions, format the names similarly to include village info
-   const choices = healers.map((healer) => ({
-    name: `${healer.name} - ${capitalize(healer.village)}`,
-    value: healer.name,
-   }));
-   // Respond with filtered healer suggestions
-   await respondWithFilteredChoices(interaction, focusedOption, choices);
-  }
+  const blightedCharacters = await fetchBlightedCharactersByUserId(userId);
+  const choices = blightedCharacters.map((character) => ({
+   name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
+   value: character.name,
+  }));
+  await respondWithFilteredChoices(interaction, focusedOption, choices);
  } catch (error) {
   handleError(error, "autocompleteHandler.js");
-
-  // Log error and respond safely in case of failure
   console.error("[handleBlightCharacterAutocomplete]: Error occurred:", error);
   await safeRespondWithError(interaction);
  }
@@ -1081,23 +1062,11 @@ async function handleExploreRollCharacterAutocomplete(
    ]);
   }
 
-  console.log(
-   `[DEBUG] Expedition ${expeditionId} found, checking characters...`
-  );
-  console.log(`[DEBUG] User ID: ${userId}`);
-  console.log(`[DEBUG] Party characters:`, JSON.stringify(party.characters));
-
   const userCharacters = await fetchCharactersByUserId(userId);
   const userCharacterNames = userCharacters.map((char) => char.name);
 
-  console.log(`[DEBUG] User's character names:`, userCharacterNames);
-
   const userPartyCharacters = party.characters.filter((partyChar) =>
    userCharacterNames.includes(partyChar.name)
-  );
-
-  console.log(
-   `[DEBUG] Found ${userPartyCharacters.length} characters for user in party`
   );
 
   if (userPartyCharacters.length === 0) {
@@ -1109,13 +1078,9 @@ async function handleExploreRollCharacterAutocomplete(
   const currentTurnCharacter = party.characters[party.currentTurn];
 
   const choices = userPartyCharacters.map((char) => {
-   const isTurn =
-    currentTurnCharacter && char.name === currentTurnCharacter.name;
-
+   const isTurn = currentTurnCharacter && char.name === currentTurnCharacter.name;
    return {
-    name: `${char.name} | ❤️ ${char.currentHearts || 0} | 🟩 ${
-     char.currentStamina || 0
-    }${isTurn ? " (Current Turn)" : ""}`,
+    name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)} | ❤️ ${char.currentHearts || 0} | 🟩 ${char.currentStamina || 0}${isTurn ? " (Current Turn)" : ""}`,
     value: char.name,
    };
   });
@@ -1201,7 +1166,7 @@ async function handleExploreCharacterAutocomplete(interaction, focusedOption) {
 
   if (!expeditionId) {
    const choices = userCharacters.map((char) => ({
-    name: `${char.name} | ${char.currentVillage} | ${char.job}`,
+    name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
     value: char.name,
    }));
 
@@ -1250,7 +1215,7 @@ async function handleExploreCharacterAutocomplete(interaction, focusedOption) {
   }
 
   const choices = eligibleCharacters.map((char) => ({
-   name: `${char.name} | ${char.currentVillage} | ${char.job} | ❤️ ${char.currentHearts} | 🟩 ${char.currentStamina}`,
+   name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)} | ❤️ ${char.currentHearts} | 🟩 ${char.currentStamina}`,
    value: char.name,
   }));
 
@@ -2515,7 +2480,7 @@ async function handleVendorCharacterAutocomplete(interaction) {
     }).limit(25);
 
     const results = matchingCharacters.map((char) => ({
-      name: `${char.name} | ${char.currentVillage} | ${char.job}`,
+      name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
       value: char.name
     }));
 
@@ -2845,7 +2810,7 @@ async function handleGiftFromCharacterAutocomplete(interaction, focusedValue) {
   const choices = characters
     .filter(char => char.name.toLowerCase().includes(focusedValue))
     .map(char => ({
-      name: char.name,
+      name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
       value: char.name
     }));
   return await respondWithFilteredChoices(interaction, focusedValue, choices);
@@ -2857,7 +2822,7 @@ async function handleGiftToCharacterAutocomplete(interaction, focusedValue) {
   const choices = characters
     .filter(char => char.name.toLowerCase().includes(focusedValue))
     .map(char => ({
-      name: char.name,
+      name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
       value: char.name
     }));
   return await respondWithFilteredChoices(interaction, focusedValue, choices);
@@ -2886,7 +2851,7 @@ async function handleShopCharacterAutocomplete(interaction, focusedValue) {
   const choices = characters
     .filter(char => char.name.toLowerCase().includes(focusedValue))
     .map(char => ({
-      name: char.name,
+      name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
       value: char.name
     }));
   return await respondWithFilteredChoices(interaction, focusedValue, choices);
@@ -2911,7 +2876,7 @@ async function handleTransferFromCharacterAutocomplete(interaction, focusedValue
   const choices = characters
     .filter(char => char.name.toLowerCase().includes(focusedValue))
     .map(char => ({
-      name: char.name,
+      name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
       value: char.name
     }));
   return await respondWithFilteredChoices(interaction, focusedValue, choices);
@@ -2923,7 +2888,7 @@ async function handleTransferToCharacterAutocomplete(interaction, focusedValue) 
   const choices = characters
     .filter(char => char.name.toLowerCase().includes(focusedValue))
     .map(char => ({
-      name: char.name,
+      name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
       value: char.name
     }));
   return await respondWithFilteredChoices(interaction, focusedValue, choices);
