@@ -24,6 +24,29 @@ async function handleError(error, source = "Unknown Source", context = {}) {
   const message = error?.stack || error?.message || String(error);
   const timestamp = new Date().toLocaleString("en-US", { timeZone: "America/New_York" });
 
+  // ---- Extra context for Mongo/network errors ----
+  let extraInfo = "";
+  if (
+    error?.name === "MongoNetworkError" ||
+    error?.code === 'ETIMEDOUT' ||
+    (error?.message && error.message.includes('ETIMEDOUT')) ||
+    (error?.message && error.message.includes('Connect Timeout'))
+  ) {
+    // Try to extract host/port from error message
+    let hostPortMatch = message.match(/([\d.]+):(\d+)/);
+    let host = hostPortMatch ? hostPortMatch[1] : undefined;
+    let port = hostPortMatch ? hostPortMatch[2] : undefined;
+    // Redact password in connection string
+    const redact = (str) => str ? str.replace(/(mongodb(?:\+srv)?:\/\/)(.*:.*)@(.*)/, '$1[REDACTED]@$3') : '';
+    extraInfo += `\n🌐 **Mongo/Network Error Details:**\n`;
+    if (host) extraInfo += `• Host: ${host}\n`;
+    if (port) extraInfo += `• Port: ${port}\n`;
+    if (process.env.MONGODB_TINGLEBOT_URI) extraInfo += `• Tinglebot URI: ${redact(process.env.MONGODB_TINGLEBOT_URI)}\n`;
+    if (process.env.MONGODB_INVENTORIES_URI) extraInfo += `• Inventories URI: ${redact(process.env.MONGODB_INVENTORIES_URI)}\n`;
+    if (process.env.NODE_ENV) extraInfo += `• Node Env: ${process.env.NODE_ENV}\n`;
+    if (context.options) extraInfo += `• Command Options: ${JSON.stringify(context.options)}\n`;
+  }
+
   const logBlock = `
 =================== [ERROR LOG - ${source}] ===================
 🕒 Time: ${timestamp}
@@ -31,7 +54,7 @@ async function handleError(error, source = "Unknown Source", context = {}) {
 ${context.commandName ? `💻 Command: ${context.commandName}` : ""}
 ${context.userTag ? `🙋 User: ${context.userTag} (${context.userId})` : ""}
 ${context.options ? `📦 Options: ${JSON.stringify(context.options)}` : ""}
-
+${extraInfo}
 ❌ Error:
 ${message}
 ===============================================================
@@ -46,6 +69,7 @@ ${message}
     let trelloContent = `**Error Message:**\n\`\`\`${message}\`\`\`\n`;
     trelloContent += `**File:** ${source}\n`;
     trelloContent += `**Time:** ${timestamp}\n`;
+    if (extraInfo) trelloContent += `**Network/DB Context:**\n${extraInfo}\n`;
 
     if (context.commandName) trelloContent += `**Command:** ${context.commandName}\n`;
     if (context.userTag) trelloContent += `**User:** ${context.userTag} (${context.userId})\n`;
@@ -73,6 +97,7 @@ if (client && client.channels?.cache.has(ERROR_LOG_CHANNEL_ID)) {
         { name: "🙋 User", value: context.userTag ? `${context.userTag} (${context.userId})` : "Unknown", inline: false },
         { name: "📦 Options", value: context.options ? `\`\`\`json\n${JSON.stringify(context.options, null, 2)}\n\`\`\`` : "None" },
         { name: "📝 Error Message", value: `\`\`\`\n${message.slice(0, 1000)}\n\`\`\`` },
+        ...(extraInfo ? [{ name: "🌐 Network/DB Context", value: extraInfo }] : []),
         { name: "🔗 Trello Link", value: trelloLink ? trelloLink : "No Trello card available." }
       )
       .setTimestamp();
