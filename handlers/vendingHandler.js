@@ -566,11 +566,21 @@ async function handlePouchUpgrade(interaction) {
       // Define pouch tiers and pricing
       const pouchCapacities = { none: 0, bronze: 15, silver: 30, gold: 50 };
       const pouchCosts = { bronze: 1000, silver: 5000, gold: 10000 };
+      const pouchRequirements = {
+        bronze: 'none',
+        silver: 'bronze',
+        gold: 'silver'
+      };
   
       // Prevent downgrading or selecting same tier
       const currentTier = character.shopPouch || 'none';
       if (pouchCapacities[pouchType] <= pouchCapacities[currentTier]) {
         throw new Error(`You cannot downgrade or select the same pouch type.`);
+      }
+  
+      // Check if user has the required previous pouch
+      if (pouchRequirements[pouchType] && character.shopPouch !== pouchRequirements[pouchType]) {
+        throw new Error(`You must have a ${pouchRequirements[pouchType]} pouch before upgrading to ${pouchType}.`);
       }
   
       // Check if user can afford it
@@ -582,8 +592,18 @@ async function handlePouchUpgrade(interaction) {
   
       // Perform upgrade and update data
       await updateTokenBalance(userId, -cost);
-      character.shopPouch = pouchType;
-      await character.save();
+      
+      // Update character's pouch and reset vending sync status
+      await Character.updateOne(
+        { _id: character._id },
+        { 
+          $set: { 
+            shopPouch: pouchType.toLowerCase(),
+            pouchSize: pouchCapacities[pouchType],
+            vendingSync: false // Reset sync status since pouch size changed
+          }
+        }
+      );
   
       // Respond with confirmation embed
       const embed = new EmbedBuilder()
@@ -837,11 +857,15 @@ async function handleVendingSync(interaction, characterName) {
 
     // Create new vending inventory entries
     const vendingEntries = [];
+    const errors = [];
+    let totalSlotsUsed = 0;
+
     for (const row of parsedRows) {
       // Fetch the item from the database to get its ID
       const item = await ItemModel.findOne({ itemName: row.itemName });
       if (!item) {
         console.warn(`[handleVendingSync]: Item "${row.itemName}" not found in database, skipping...`);
+        errors.push(`Item "${row.itemName}" not found in database`);
         continue;
       }
 
@@ -850,11 +874,39 @@ async function handleVendingSync(interaction, characterName) {
       const artPrice = row.artPrice === 'N/A' ? null : Number(row.artPrice) || null;
       const otherPrice = row.otherPrice === 'N/A' ? null : Number(row.otherPrice) || null;
 
+      // Calculate slots needed based on item type and quantity
+      const stockQty = Number(row.stockQty) || 0;
+      const isStackable = row.stackable === 'Yes' || row.stackable === true;
+      const maxStackSize = Number(row.maxStackSize) || 10;
+      let slotsNeeded = 1;
+
+      if (isStackable) {
+        // For stackable items (raw materials), calculate how many slots needed
+        if (stockQty > maxStackSize) {
+          console.warn(`[handleVendingSync]: Item "${row.itemName}" exceeds max stack size of ${maxStackSize}, adjusting to max...`);
+          errors.push(`Item "${row.itemName}" quantity (${stockQty}) exceeds max stack size of ${maxStackSize}, adjusted to max`);
+          stockQty = maxStackSize;
+        }
+        // Stackable items take 1 slot per maxStackSize items
+        slotsNeeded = Math.ceil(stockQty / maxStackSize);
+      } else {
+        // Non-stackable items (craftable items) take 1 slot per item
+        slotsNeeded = stockQty;
+      }
+
+      // Check if we have enough slots available
+      if (totalSlotsUsed + slotsNeeded > character.pouchSize) {
+        console.warn(`[handleVendingSync]: Not enough slots available for "${row.itemName}", skipping...`);
+        errors.push(`Not enough slots available for "${row.itemName}" (needs ${slotsNeeded} slots, but only ${character.pouchSize - totalSlotsUsed} slots remaining)`);
+        continue;
+      }
+
+      // Add the item to vending entries
       vendingEntries.push({
         characterName: character.name,
         itemName: row.itemName,
         itemId: item._id,
-        stockQty: Number(row.stockQty) || 0,
+        stockQty: stockQty,
         costEach: Number(row.costEach) || 0,
         pointsSpent: Number(row.pointsSpent) || 0,
         boughtFrom: row.boughtFrom || character.currentVillage,
@@ -863,8 +915,13 @@ async function handleVendingSync(interaction, characterName) {
         otherPrice,
         tradesOpen: row.tradesOpen === 'Yes' || row.tradesOpen === true,
         slot: row.slot || 'Slot 1',
-        date: new Date()
+        date: new Date(),
+        stackable: isStackable,
+        maxStackSize: maxStackSize,
+        slotsUsed: slotsNeeded
       });
+
+      totalSlotsUsed += slotsNeeded;
     }
 
     // Insert the new entries
@@ -881,38 +938,33 @@ async function handleVendingSync(interaction, characterName) {
       { $set: { vendingSync: true } }
     );
 
+    // Create response message
+    let responseMessage = `✅ Successfully synced ${vendingEntries.length} items to ${characterName}'s vending inventory!\n`;
+    responseMessage += `📦 Total slots used: ${totalSlotsUsed}/${character.pouchSize}`;
+    
+    if (errors.length > 0) {
+      responseMessage += '\n\n⚠️ **Warnings:**\n' + errors.map(err => `• ${err}`).join('\n');
+    }
+
     // Try to edit the original interaction reply first
     try {
       await interaction.editReply({
-        content: `✅ Successfully synced ${vendingEntries.length} items to ${characterName}'s vending inventory!`,
+        content: responseMessage,
         embeds: [],
         components: []
       });
     } catch (error) {
       // If editing fails, try to send a follow-up message
       await interaction.followUp({
-        content: `✅ Successfully synced ${vendingEntries.length} items to ${characterName}'s vending inventory!`,
+        content: responseMessage,
         ephemeral: true
       });
     }
 
   } catch (error) {
-    console.error(`[handleVendingSync]: Error syncing vending inventory:`, error);
-    
-    // Try to edit the original interaction reply first
-    try {
-      await interaction.editReply({
-        content: `❌ Error syncing vending inventory: ${error.message}`,
-        embeds: [],
-        components: []
-      });
-    } catch (editError) {
-      // If editing fails, try to send a follow-up message
-      await interaction.followUp({
-        content: `❌ Error syncing vending inventory: ${error.message}`,
-        ephemeral: true
-      });
-    }
+    handleError(error, 'vendingHandler.js');
+    console.error(`[handleVendingSync]: Error syncing vending inventory: ${error.message}`);
+    await interaction.editReply(`❌ Failed to sync vending inventory: ${error.message}`);
   }
 }
   
