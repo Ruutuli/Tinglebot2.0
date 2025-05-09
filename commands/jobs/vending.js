@@ -256,7 +256,7 @@ async function execute(interaction) {
       case 'fulfill':
         return await handleFulfill(interaction);
   
-      case 'editshop':
+      case 'edit':
         return await handleEditShop(interaction);
   
       case 'sync':

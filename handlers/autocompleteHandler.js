@@ -102,7 +102,7 @@ async function handleAutocomplete(interaction) {
           await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "vending");
         } else if (focusedName === "vendorcharacter") {
           await handleVendorCharacterAutocomplete(interaction);
-        } else if (focusedName === "itemname" && subcommand === "barter") {
+        } else if (focusedName === "itemname" && (subcommand === "barter" || subcommand === "edit")) {
           await handleVendingBarterAutocomplete(interaction, focusedOption);
         } else {
           await interaction.respond([]);
@@ -2528,7 +2528,11 @@ async function handleViewInventoryAutocomplete(interaction, focusedOption) {
 // Provides autocomplete suggestions for items in a vendor's shop during barter
 async function handleVendingBarterAutocomplete(interaction, focusedOption) {
   try {
-    const vendorName = interaction.options.getString("vendorcharacter");
+    const subcommand = interaction.options.getSubcommand();
+    const vendorName = subcommand === 'barter' 
+      ? interaction.options.getString("vendorcharacter")
+      : interaction.options.getString("charactername");
+      
     if (!vendorName) return await interaction.respond([]);
 
     // Get vendor character
@@ -2550,7 +2554,7 @@ async function handleVendingBarterAutocomplete(interaction, focusedOption) {
     );
 
     const choices = filteredItems.map(item => ({
-      name: `${item.slot || 'Unknown Slot'} | ${item.itemName} | Qty:${item.stockQty ?? 'undefined'}`,
+      name: `${item.slot || 'Unknown Slot'} | ${item.itemName} | Qty:${item.stockQty ?? 'undefined'} | Token:${item.tokenPrice || 'N/A'} | Art:${item.artPrice || 'N/A'}`,
       value: item.itemName
     }));
 
