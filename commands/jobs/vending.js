@@ -67,6 +67,27 @@ const command = new SlashCommandBuilder()
   )
 
   .addSubcommand(sub =>
+    sub.setName('pouch')
+      .setDescription('🛍️ Upgrade your shop pouch to get more vending slots')
+      .addStringOption(opt =>
+        opt.setName('charactername')
+          .setDescription('Your character\'s name')
+          .setRequired(true)
+          .setAutocomplete(true)
+      )
+      .addStringOption(opt =>
+        opt.setName('pouchtype')
+          .setDescription('The pouch tier you want to upgrade to')
+          .setRequired(true)
+          .addChoices(
+            { name: 'Bronze (15 slots) - 1,000 tokens', value: 'bronze' },
+            { name: 'Silver (30 slots) - 5,000 tokens', value: 'silver' },
+            { name: 'Gold (50 slots) - 10,000 tokens', value: 'gold' }
+          )
+      )
+  )
+
+  .addSubcommand(sub =>
     sub.setName('add')
       .setDescription('📦 Add items to your shop')
       .addStringOption(opt =>
