@@ -16,7 +16,7 @@ const {
 } = require('discord.js');
 
 // ------------------- Project Utilities -------------------
-const { fetchCharacterById, getCharacterInventoryCollection } = require('../../database/db.js');
+const { fetchCharacterByNameAndUserId, getCharacterInventoryCollection } = require('../../database/db.js');
 const { handleAutocomplete } = require('../../handlers/autocompleteHandler.js');
 const { handleError } = require('../../utils/globalErrorHandler.js');
 const { typeColors } = require('../../modules/formattingModule.js');
@@ -55,15 +55,15 @@ module.exports = {
     try {
       await interaction.deferReply({ ephemeral: true });
 
-      const characterId = interaction.options.getString('charactername');
-      if (!characterId) {
-        await interaction.editReply({ content: '❌ **Character ID is required.**' });
+      const characterName = interaction.options.getString('charactername');
+      if (!characterName) {
+        await interaction.editReply({ content: '❌ **Character name is required.**' });
         return;
       }
 
-      const character = await fetchCharacterById(characterId);
+      const character = await fetchCharacterByNameAndUserId(characterName, interaction.user.id);
       if (!character) {
-        await interaction.editReply({ content: `❌ **Character with ID \`${characterId}\` not found.**` });
+        await interaction.editReply({ content: `❌ **Character \`${characterName}\` not found.**` });
         return;
       }
 
@@ -147,7 +147,7 @@ module.exports = {
           .setAuthor({
             name: `${character.name}: Inventory`,
             iconURL: character.icon,
-            url: `https://example.com/inventory/${characterId}`
+            url: `https://example.com/inventory/${characterName}`
           })
           .setDescription(description)
           .setFooter({ text: `${type} ▴ Page ${page + 1} of ${totalPages}` });
@@ -169,12 +169,12 @@ module.exports = {
         const totalPages = Math.ceil((itemsByType[currentType] || []).length / ITEMS_PER_PAGE);
         return new ActionRowBuilder().addComponents(
           new ButtonBuilder()
-            .setCustomId(`prev|${characterId}`)
+            .setCustomId(`prev|${characterName}`)
             .setLabel('Previous')
             .setStyle(ButtonStyle.Primary)
             .setDisabled(currentPage === 0),
           new ButtonBuilder()
-            .setCustomId(`next|${characterId}`)
+            .setCustomId(`next|${characterName}`)
             .setLabel('Next')
             .setStyle(ButtonStyle.Primary)
             .setDisabled(currentPage === totalPages - 1)
