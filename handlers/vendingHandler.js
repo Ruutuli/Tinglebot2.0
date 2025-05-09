@@ -458,7 +458,7 @@ async function handleVendingBarter(interaction) {
       }
   
       // Use VendingModel to check shop inventory
-      const VendingInventory = getVendingModel(targetShopName);
+      const VendingInventory = await getVendingModel(targetShopName);
       const requestedItem = await VendingInventory.findOne({ 
         itemName: requestedItemName
       });
@@ -588,7 +588,7 @@ async function handleFulfill(interaction) {
       }
   
       // ------------------- Validate Vendor Inventory -------------------
-      const VendingInventory = getVendingModel(vendor.name);
+      const VendingInventory = await getVendingModel(vendor.name);
       const stockItem = await VendingInventory.findOne({
         itemName: itemName
       });
@@ -1249,6 +1249,42 @@ async function handleEditShop(interaction) {
           { itemName },
           { $set: updateFields }
         );
+
+        // Update Google Sheet
+        if (character.vendingSheetUrl) {
+          const spreadsheetId = extractSpreadsheetId(character.vendingSheetUrl);
+          const auth = await authorizeSheets();
+          
+          // Read current sheet data
+          const sheetData = await readSheetData(auth, spreadsheetId, 'vendingShop!A2:L');
+          
+          // Find the row with the item
+          const itemRowIndex = sheetData.findIndex(row => row[2] === itemName);
+          if (itemRowIndex !== -1) {
+            const row = itemRowIndex + 2; // +2 because sheet data starts at A2
+            const updateData = [];
+            
+            // Keep existing values except for the ones we're updating
+            const existingRow = sheetData[itemRowIndex];
+            updateData.push(
+              existingRow[0], // Character Name
+              existingRow[1], // Slot
+              existingRow[2], // Item Name
+              existingRow[3], // Stock Qty
+              existingRow[4], // Cost Each
+              existingRow[5], // Points Spent
+              existingRow[6], // Bought From
+              tokenPrice !== null ? tokenPrice : existingRow[7], // Token Price
+              artPrice || existingRow[8], // Art Price
+              otherPrice || existingRow[9], // Other Price
+              existingRow[10], // Trades Open
+              existingRow[11] // Date
+            );
+            
+            // Update the row in the sheet
+            await writeSheetData(auth, spreadsheetId, `vendingShop!A${row}:L${row}`, [updateData]);
+          }
+        }
 
         await interaction.editReply({
           content: `✅ Updated item "${itemName}" in your shop.`,
