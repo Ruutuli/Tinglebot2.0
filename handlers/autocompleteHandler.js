@@ -2093,10 +2093,12 @@ async function handleLookupItemAutocomplete(interaction, focusedValue) {
 // Provides autocomplete for ingredients in the database
 async function handleLookupIngredientAutocomplete(interaction, focusedValue) {
   try {
+    // Query for items that are either ingredients or raw materials
     const items = await Item.find({
       $or: [
-        { type: 'Ingredient' },
-        { category: { $in: ['Ingredients', 'Raw Materials'] } }
+        { type: { $regex: /ingredient/i } },
+        { category: { $regex: /(ingredients|raw materials)/i } },
+        { recipeTag: { $exists: true } }  // Also include items that can be used in recipes
       ]
     })
       .sort({ itemName: 1 })
