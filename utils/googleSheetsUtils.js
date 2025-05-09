@@ -75,8 +75,13 @@ async function retryWithBackoff(fn, options = {}) {
             if (!suppressLog) {
               if (error.message.includes('Requested entity was not found')) {
                 console.warn(`[googleSheetsUtils.js]: Warning: Requested Google Sheet entity was not found. Suppressing error log.`);
+              } else if (error.message.includes('does not have permission')) {
+                const serviceAccountEmail = JSON.parse(fs.readFileSync(SERVICE_ACCOUNT_PATH)).client_email;
+                const errorMessage = `⚠️ Permission Error: The service account (${serviceAccountEmail}) does not have access to this spreadsheet.\n\nTo fix this:\n1. Open the Google Spreadsheet\n2. Click "Share" in the top right\n3. Add ${serviceAccountEmail} as an Editor\n4. Make sure to give it at least "Editor" access`;
+                console.error(`[googleSheetsUtils.js]: ${errorMessage}`);
+                throw new Error(errorMessage);
               } else {
-                handleError(error, 'googleSheetsUtils.js'); // ❌ Only log real errors
+                handleError(error, 'googleSheetsUtils.js');
               }
             }
             throw error;
@@ -85,7 +90,7 @@ async function retryWithBackoff(fn, options = {}) {
         await delay(500 * Math.pow(2, i)); // Exponential backoff delay
       }
     }
-  }
+}
   
   
 // ============================================================================
