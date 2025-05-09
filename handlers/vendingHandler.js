@@ -200,12 +200,17 @@ async function handleRestock(interaction) {
     const characterName = interaction.options.getString('charactername');
     const itemName = interaction.options.getString('itemname');
     const manualSlot = interaction.options.getString('slot');
-    const stockQty = interaction.options.getInteger('stockqty');
+    const stockQty = interaction.options.getInteger('quantity');
     const tokenPrice = interaction.options.getInteger('tokenprice') || 'N/A';
     const artPrice = interaction.options.getInteger('artprice') || 'N/A';
     const otherPrice = interaction.options.getInteger('otherprice') || 'N/A';
     const tradesOpen = interaction.options.getBoolean('tradesopen') || false;
     const userId = interaction.user.id;
+
+    // Validate stock quantity
+    if (!stockQty || stockQty <= 0) {
+      return interaction.editReply("❌ Please provide a valid stock quantity greater than 0.");
+    }
 
     // ------------------- Character Validation -------------------
     const character = await fetchCharacterByName(characterName);
@@ -359,13 +364,29 @@ async function handleRestock(interaction) {
       });
 
       if (existingMatch) {
-        await vendCollection.updateOne(
-          { _id: existingMatch._id },
-          {
-            $inc: { stockQty: stockQty, pointsSpent: totalCost },
-            $set: { date: new Date(), boughtFrom: character.currentVillage }
-          }
-        );
+        // If the existing match has a null stockQty, set it to the new quantity
+        if (existingMatch.stockQty === null) {
+          await vendCollection.updateOne(
+            { _id: existingMatch._id },
+            {
+              $set: { 
+                stockQty: stockQty,
+                pointsSpent: totalCost,
+                date: new Date(),
+                boughtFrom: character.currentVillage
+              }
+            }
+          );
+        } else {
+          // Otherwise increment the existing quantity
+          await vendCollection.updateOne(
+            { _id: existingMatch._id },
+            {
+              $inc: { stockQty: stockQty, pointsSpent: totalCost },
+              $set: { date: new Date(), boughtFrom: character.currentVillage }
+            }
+          );
+        }
       } else {
         await vendCollection.insertOne({
           itemName,
