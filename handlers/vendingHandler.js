@@ -199,11 +199,11 @@ async function handleRestock(interaction) {
     // ------------------- Input Parsing -------------------
     const characterName = interaction.options.getString('charactername');
     const itemName = interaction.options.getString('itemname');
-    const manualSlot = interaction.options.getString('slot');
     const stockQty = interaction.options.getInteger('quantity');
+    const manualSlot = interaction.options.getString('slot');
     const tokenPrice = interaction.options.getInteger('tokenprice') || 'N/A';
-    const artPrice = interaction.options.getInteger('artprice') || 'N/A';
-    const otherPrice = interaction.options.getInteger('otherprice') || 'N/A';
+    const artPrice = interaction.options.getString('artprice') || 'N/A';
+    const otherPrice = interaction.options.getString('otherprice') || 'N/A';
     const tradesOpen = interaction.options.getBoolean('tradesopen') || false;
     const userId = interaction.user.id;
 
@@ -225,232 +225,152 @@ async function handleRestock(interaction) {
     const extraSlots = pouchCapacities[character.shopPouch?.toLowerCase()] || 0;
     const totalSlots = baseSlots + extraSlots;
 
+    // If manual slot is provided, validate it
+    if (manualSlot) {
+      const slotNumber = parseInt(manualSlot.replace(/[^0-9]/g, ''));
+      if (isNaN(slotNumber) || slotNumber < 1 || slotNumber > totalSlots) {
+        return interaction.editReply(`❌ Invalid slot number. You have ${totalSlots} total slots available.`);
+      }
+    }
+
     // ------------------- DB Connections -------------------
     const vendingClient = new MongoClient(process.env.MONGODB_INVENTORIES_URI);
     await vendingClient.connect();
-    const vendDb = vendingClient.db("vending");
-    const vendCollection = vendDb.collection(characterName.toLowerCase());
-    const items = await vendCollection.find({}).toArray();
+    const vendCollection = vendingClient.db('vending').collection(characterName.toLowerCase());
 
-    // ------------------- Fetch Stock Data -------------------
-    const currentMonth = new Date().getMonth() + 1;
-    const currentVillage = character.currentVillage.toLowerCase().trim();
-    console.log(`[handleRestock] Looking for item "${itemName}" in ${currentVillage}'s stock for month ${currentMonth}`);
-    
-    const stockDbClient = new MongoClient(process.env.MONGODB_INVENTORIES_URI);
-    await stockDbClient.connect();
-    const stockDb = stockDbClient.db("tinglebot");
-    const stockDoc = await stockDb.collection("vending_stock").findOne({ month: currentMonth });
-    await stockDbClient.close();
-
-    if (!stockDoc) {
-      console.log(`[handleRestock] No stock document found for month ${currentMonth}`);
-      return interaction.editReply(`❌ No vending stock found for month ${currentMonth}.`);
+    // ------------------- Stock Validation -------------------
+    const stockList = await getCurrentVendingStockList();
+    if (!stockList?.stockList) {
+      await vendingClient.close();
+      return interaction.editReply("❌ Failed to fetch current vending stock list.");
     }
 
-    // Normalize stock list keys to lowercase
-    const normalizedStockList = {};
-    Object.entries(stockDoc.stockList).forEach(([village, items]) => {
-      normalizedStockList[village.toLowerCase()] = items;
+    const normalizedVillage = character.currentVillage.toLowerCase().trim();
+    const villageStock = stockList.stockList[normalizedVillage] || [];
+    const itemDoc = villageStock.find(item => 
+      item.itemName.toLowerCase() === itemName.toLowerCase() && 
+      item.vendingType.toLowerCase() === character.job.toLowerCase()
+    );
+
+    if (!itemDoc) {
+      await vendingClient.close();
+      return interaction.editReply(`❌ Item "${itemName}" not found in ${character.currentVillage}'s stock for ${character.job}s.`);
+    }
+
+    // ------------------- Point Cost Calculation -------------------
+    const pointCost = itemDoc.points;
+    const totalCost = pointCost * stockQty;
+
+    if (character.vendingPoints < totalCost) {
+      await vendingClient.close();
+      return interaction.editReply(`❌ Not enough vending points. You need ${totalCost} points (${pointCost} per item × ${stockQty} items).`);
+    }
+
+    // ------------------- Slot Assignment -------------------
+    let newSlot;
+    if (manualSlot) {
+      // Check if slot is already taken
+      const existingItem = await vendCollection.findOne({ slot: manualSlot });
+      if (existingItem) {
+        await vendingClient.close();
+        return interaction.editReply(`❌ Slot ${manualSlot} is already occupied by ${existingItem.itemName}.`);
+      }
+      newSlot = manualSlot;
+    } else {
+      // Find first available slot
+      const usedSlots = await vendCollection.distinct('slot');
+      for (let i = 1; i <= totalSlots; i++) {
+        const slotName = `Slot ${i}`;
+        if (!usedSlots.includes(slotName)) {
+          newSlot = slotName;
+          break;
+        }
+      }
+      if (!newSlot) {
+        await vendingClient.close();
+        return interaction.editReply(`❌ No available slots. You have used all ${totalSlots} slots.`);
+      }
+    }
+
+    // ------------------- Update Inventory -------------------
+    const existingMatch = await vendCollection.findOne({
+      itemName,
+      costEach: pointCost,
+      tokenPrice,
+      artPrice,
+      otherPrice,
+      tradesOpen,
+      stackable
     });
 
-    console.log(`[handleRestock] Found stock document:`, JSON.stringify(normalizedStockList, null, 2));
-    console.log(`[handleRestock] Available villages:`, Object.keys(normalizedStockList));
-    
-    const villageStock = normalizedStockList[currentVillage] || [];
-    console.log(`[handleRestock] Items in ${currentVillage}'s stock:`, JSON.stringify(villageStock, null, 2));
-    
-    const itemDoc = villageStock.find(i => i.itemName === itemName);
-    console.log(`[handleRestock] Found item document:`, JSON.stringify(itemDoc, null, 2));
-
-    if (!itemDoc || typeof itemDoc.points !== "number" || itemDoc.points <= 0) {
-      console.log(`[handleRestock] Item validation failed:`, {
-        itemFound: !!itemDoc,
-        points: itemDoc?.points,
-        pointsValid: typeof itemDoc?.points === "number" && itemDoc?.points > 0
-      });
-      return interaction.editReply(`❌ Invalid Item: '${itemName}'\n\nThis item is not available in ${currentVillage}'s vending stock or has an invalid point cost.\n\nPlease check the current month's vending stock list using \`/vending stock\` to see available items.`);
-    }
-
-    // ------------------- Slot Usage Calculation -------------------
-    const stackable = !itemDoc.crafting;
-    const slotsUsed = items.reduce((acc, item) => {
-      return acc + (item.stackable ? Math.ceil(item.stockQty / 10) : item.stockQty);
-    }, 0);
-    const slotsRequired = stackable ? Math.ceil(stockQty / 10) : stockQty;
-
-    if (slotsUsed + slotsRequired > totalSlots) {
-      return interaction.editReply(
-        `⚠️ Not enough space.\n` +
-        `**${characterName}** has **${totalSlots} slots** (${slotsUsed} used).\n` +
-        `Adding \`${itemName}\` would need \`${slotsRequired}\`.\n\n` +
-        `${stackable ? 'Stackable item (1 slot per 10 units)' : 'Crafting item (1 slot per unit)'}`
-      );
-    }
-
-    // ------------------- Vending Point Validation -------------------
-    const vendingPoints = character.vendingPoints || 0;
-    const pointCost = itemDoc.points;
-    const totalCost = stockQty * pointCost;
-    if (vendingPoints < totalCost) {
-      return interaction.editReply(`⚠️ Not enough vending points. You need ${totalCost}, but only have ${vendingPoints}.`);
-    }
-
-    // ------------------- Authorize Sheets & Get Slot -------------------
-    const spreadsheetId = extractSpreadsheetId(character.shopLink);
-    if (!spreadsheetId) {
-      return interaction.editReply(`❌ Invalid shop link for ${characterName}. Please set up your shop first using \`/vending setup\` with a valid Google Sheets link.`);
-    }
-
-    const auth = await authorizeSheets();
-    try {
-      const sheetData = await readSheetData(auth, spreadsheetId, 'vendingShop!A2:L') || [];
-      
-      if (!Array.isArray(sheetData)) {
-        return interaction.editReply("❌ Unable to read data from the vendingShop sheet. Make sure the sheet exists and has proper permissions.");
-      }
-      
-      const existingSlots = sheetData.map(row => row[1]?.trim()).filter(s => /^Slot \d+$/.test(s));    
-
-      const usedSlotNums = new Set();
-      for (const slot of existingSlots) {
-        const match = /^Slot (\d+)$/.exec(slot);
-        if (match) usedSlotNums.add(Number(match[1]));
-      }
-
-      let newSlot = manualSlot || null;
-
-      if (!newSlot && stackable) {
-        const matchingStacks = await vendCollection.find({ itemName, stackable: true }).toArray();
-        const slotTotals = {};
-        for (const entry of matchingStacks) {
-          if (!/^Slot \d+$/.test(entry.slot)) continue;
-          slotTotals[entry.slot] = (slotTotals[entry.slot] || 0) + entry.stockQty;
-        }
-        for (const [slot, totalQty] of Object.entries(slotTotals)) {
-          if (totalQty + stockQty <= 10) {
-            newSlot = slot;
-            break;
+    if (existingMatch) {
+      // If the existing match has a null stockQty, set it to the new quantity
+      if (existingMatch.stockQty === null) {
+        await vendCollection.updateOne(
+          { _id: existingMatch._id },
+          {
+            $set: { 
+              stockQty: stockQty,
+              pointsSpent: totalCost,
+              date: new Date(),
+              boughtFrom: character.currentVillage,
+              slot: newSlot
+            }
           }
-        }
-      }
-      
-      if (!newSlot) {
-        let nextSlot = 1;
-        while (usedSlotNums.has(nextSlot)) nextSlot++;
-        newSlot = `Slot ${nextSlot}`;
-      }    
-
-      // ------------------- Insert or Merge Inventory -------------------
-      // Prevent overfilling stackable items in a slot
-      if (stackable) {
-        const existingStack = await vendCollection.findOne({ itemName, slot: newSlot, stackable: true });
-        if (existingStack) {
-          const totalAfterAdd = existingStack.stockQty + stockQty;
-          if (totalAfterAdd > 10) {
-            return interaction.editReply(`⚠️ Cannot restock \`${itemName}\` into ${newSlot}. That slot already holds ${existingStack.stockQty}, and adding ${stockQty} would exceed the max of 10.`);
+        );
+      } else {
+        // Otherwise increment the existing quantity
+        await vendCollection.updateOne(
+          { _id: existingMatch._id },
+          {
+            $inc: { stockQty: stockQty, pointsSpent: totalCost },
+            $set: { 
+              date: new Date(), 
+              boughtFrom: character.currentVillage,
+              slot: newSlot
+            }
           }
-        }
+        );
       }
-
-      const existingMatch = await vendCollection.findOne({
+    } else {
+      await vendCollection.insertOne({
         itemName,
+        stockQty,
         costEach: pointCost,
+        pointsSpent: totalCost,
         tokenPrice,
         artPrice,
         otherPrice,
         tradesOpen,
-        stackable
+        stackable,
+        boughtFrom: character.currentVillage,
+        slot: newSlot,
+        date: new Date()
       });
-
-      if (existingMatch) {
-        // If the existing match has a null stockQty, set it to the new quantity
-        if (existingMatch.stockQty === null) {
-          await vendCollection.updateOne(
-            { _id: existingMatch._id },
-            {
-              $set: { 
-                stockQty: stockQty,
-                pointsSpent: totalCost,
-                date: new Date(),
-                boughtFrom: character.currentVillage
-              }
-            }
-          );
-        } else {
-          // Otherwise increment the existing quantity
-          await vendCollection.updateOne(
-            { _id: existingMatch._id },
-            {
-              $inc: { stockQty: stockQty, pointsSpent: totalCost },
-              $set: { date: new Date(), boughtFrom: character.currentVillage }
-            }
-          );
-        }
-      } else {
-        await vendCollection.insertOne({
-          itemName,
-          stockQty,
-          costEach: pointCost,
-          pointsSpent: totalCost,
-          tokenPrice,
-          artPrice,
-          otherPrice,
-          tradesOpen,
-          stackable,
-          boughtFrom: character.currentVillage,
-          slot: newSlot,
-          date: new Date()
-        });
-      }
-
-      // ------------------- Update Google Sheet -------------------
-      const monthLabel = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
-      let rowMatched = false;
-
-      if (!rowMatched) {
-        const newRow = [[
-          characterName,
-          newSlot,
-          itemName,
-          stockQty,
-          pointCost,
-          totalCost,
-          character.currentVillage,
-          tokenPrice,
-          artPrice,
-          otherPrice,
-          tradesOpen ? 'Yes' : 'No',
-          monthLabel
-        ]];
-        await safeAppendDataToSheet(character.shopLink, character, 'vendingShop!A:L', newRow, interaction.client);
-      }
-
-      // ------------------- Update Points & Send Embed -------------------
-      await Character.updateOne({ name: characterName }, {
-        $set: { vendingPoints: vendingPoints - totalCost }
-      });
-
-      const embed = new EmbedBuilder()
-        .setTitle(`✅ Restock Successful`)
-        .setDescription(`${characterName} has restocked \`${itemName} x${stockQty}\`.`)
-        .addFields(
-          { name: 'Points Used', value: `${totalCost}`, inline: true },
-          { name: 'Slots Used', value: `${slotsRequired}`, inline: true },
-          { name: 'Remaining Points', value: `${vendingPoints - totalCost}`, inline: true }
-        )
-        .setColor('#25C059')
-        .setTimestamp();
-
-      await interaction.editReply({ embeds: [embed] });
-      await vendingClient.close();
-    } catch (error) {
-      console.error('[handleRestock]: Error', error);
-      await interaction.editReply({ content: `❌ ${error.message}`, ephemeral: true });
     }
+
+    // ------------------- Update Character Points -------------------
+    await Character.updateOne(
+      { _id: character._id },
+      { $inc: { vendingPoints: -totalCost } }
+    );
+
+    // ------------------- Success Response -------------------
+    const successEmbed = new EmbedBuilder()
+      .setColor('#00FF00')
+      .setTitle('✅ Item Added to Shop')
+      .setDescription(`Successfully added ${stockQty}x ${itemName} to your shop in ${newSlot}.`)
+      .addFields(
+        { name: 'Points Spent', value: `${totalCost} points`, inline: true },
+        { name: 'Remaining Points', value: `${character.vendingPoints - totalCost} points`, inline: true }
+      );
+
+    await interaction.editReply({ embeds: [successEmbed] });
+    await vendingClient.close();
+
   } catch (error) {
-    console.error('[handleRestock]: Error', error);
-    await interaction.editReply({ content: `❌ ${error.message}`, ephemeral: true });
+    console.error('[handleRestock]: Error:', error);
+    await interaction.editReply('❌ An error occurred while adding items to your shop.');
   }
 }
 
