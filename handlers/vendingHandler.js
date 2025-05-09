@@ -859,12 +859,7 @@ async function handleVendingSync(interaction, characterName) {
     const parsedRows = await parseSheetData(shopLink);
     console.log(`[handleVendingSync]: Parsed ${parsedRows.length} rows from sheet`);
 
-    // Clear existing vending inventory
-    await VendingInventory.deleteMany({ characterName: character.name });
-    console.log(`[handleVendingSync]: Cleared existing vending inventory for ${character.name}`);
-
-    // Create new vending inventory entries
-    const vendingEntries = [];
+    // Validate all items before proceeding
     const errors = [];
     let totalSlotsUsed = 0;
 
@@ -872,7 +867,6 @@ async function handleVendingSync(interaction, characterName) {
       // Fetch the item from the database to get its ID and stackable status
       const item = await ItemModel.findOne({ itemName: row.itemName });
       if (!item) {
-        console.warn(`[handleVendingSync]: Item "${row.itemName}" not found in database, skipping...`);
         errors.push(`Item "${row.itemName}" not found in database`);
         continue;
       }
@@ -885,8 +879,7 @@ async function handleVendingSync(interaction, characterName) {
 
       if (isStackable) {
         if (stockQty > maxStackSize) {
-          errors.push(`Item "${row.itemName}" quantity (${stockQty}) exceeds max stack size of ${maxStackSize}, adjusted to max`);
-          stockQty = maxStackSize;
+          errors.push(`Item "${row.itemName}" quantity (${stockQty}) exceeds max stack size of ${maxStackSize}`);
         }
         slotsNeeded = Math.ceil(stockQty / maxStackSize);
       } else {
@@ -896,10 +889,43 @@ async function handleVendingSync(interaction, characterName) {
       // Check if we have enough slots available
       if (totalSlotsUsed + slotsNeeded > character.pouchSize) {
         errors.push(`Not enough slots available for "${row.itemName}" (needs ${slotsNeeded} slots, but only ${character.pouchSize - totalSlotsUsed} slots remaining)`);
-        continue;
       }
 
-      // Add the item to vending entries
+      totalSlotsUsed += slotsNeeded;
+    }
+
+    // If there are any errors, return them and don't proceed with sync
+    if (errors.length > 0) {
+      let errorMessage = `❌ **Sync Failed:** Please fix the following issues in your sheet and try again:\n\n`;
+      errorMessage += errors.map(err => `• ${err}`).join('\n');
+      
+      return interaction.editReply({
+        content: errorMessage,
+        embeds: [],
+        components: []
+      });
+    }
+
+    // Clear existing vending inventory
+    await VendingInventory.deleteMany({ characterName: character.name });
+    console.log(`[handleVendingSync]: Cleared existing vending inventory for ${character.name}`);
+
+    // Create new vending inventory entries
+    const vendingEntries = [];
+
+    for (const row of parsedRows) {
+      const item = await ItemModel.findOne({ itemName: row.itemName });
+      const isStackable = item.stackable;
+      const maxStackSize = item.maxStackSize || 10;
+      let stockQty = Number(row.stockQty) || 0;
+      let slotsNeeded = 1;
+
+      if (isStackable) {
+        slotsNeeded = Math.ceil(stockQty / maxStackSize);
+      } else {
+        slotsNeeded = stockQty;
+      }
+
       vendingEntries.push({
         characterName: character.name,
         itemName: row.itemName,
@@ -918,16 +944,12 @@ async function handleVendingSync(interaction, characterName) {
         maxStackSize: maxStackSize,
         slotsUsed: slotsNeeded
       });
-
-      totalSlotsUsed += slotsNeeded;
     }
 
     // Insert the new entries
     if (vendingEntries.length > 0) {
       await VendingInventory.insertMany(vendingEntries);
       console.log(`[handleVendingSync]: Created ${vendingEntries.length} vending inventory entries`);
-    } else {
-      console.warn(`[handleVendingSync]: No valid items found to sync`);
     }
 
     // Update character's vending sync status
@@ -936,25 +958,20 @@ async function handleVendingSync(interaction, characterName) {
       { $set: { vendingSync: true } }
     );
 
-    // Create response message
-    let responseMessage = `✅ Successfully synced ${vendingEntries.length} items to ${characterName}'s vending inventory!\n`;
-    responseMessage += `📦 Total slots used: ${totalSlotsUsed}/${character.pouchSize}`;
-    
-    if (errors.length > 0) {
-      responseMessage += '\n\n⚠️ **Warnings:**\n' + errors.map(err => `• ${err}`).join('\n');
-    }
+    // Create success message
+    const successMessage = `✅ Successfully synced ${vendingEntries.length} items to ${characterName}'s vending inventory!\n📦 Total slots used: ${totalSlotsUsed}/${character.pouchSize}`;
 
     // Try to edit the original interaction reply first
     try {
       await interaction.editReply({
-        content: responseMessage,
+        content: successMessage,
         embeds: [],
         components: []
       });
     } catch (error) {
       // If editing fails, try to send a follow-up message
       await interaction.followUp({
-        content: responseMessage,
+        content: successMessage,
         ephemeral: true
       });
     }
