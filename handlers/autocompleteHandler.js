@@ -2246,158 +2246,108 @@ async function handleVillageBasedCommandsAutocomplete(
 // - Barter Items
 // - Edit Shop Items
 // - View Shop Characters
+// - Add Items to Shop
+// - Select Shop Slots
 
-// ------------------- Vending Restock Autocomplete -------------------
-async function handleVendingRestockAutocomplete(interaction, focusedOption) {
- try {
-  const characterName = interaction.options.getString("charactername");
-  if (!characterName) return await interaction.respond([]);
-
-  const userId = interaction.user.id;
-  const character = await fetchCharacterByNameAndUserId(characterName, userId);
-  if (!character) return await interaction.respond([]);
-
+// ------------------- Function: getVendorItems -------------------
+// Fetches vendor items based on character's village and job type
+async function getVendorItems(village, vendorType, searchQuery) {
   const stockList = await getCurrentVendingStockList();
-  if (!stockList?.stockList) return await interaction.respond([]);
+  if (!stockList?.stockList?.[village]) return [];
 
-  const normalizedVillage = character.currentVillage.toLowerCase().trim();
-  const villageStock = stockList.stockList[normalizedVillage] || [];
-
-  const filteredVillageItems = villageStock.filter(
-   (item) => item.vendingType.toLowerCase() === character.job.toLowerCase()
+  const villageStock = stockList.stockList[village];
+  return villageStock.filter(
+    (item) =>
+      item.vendingType?.toLowerCase() === vendorType?.toLowerCase() &&
+      item.itemName?.toLowerCase().includes(searchQuery?.toLowerCase())
   );
+}
 
-  const limitedItems = (stockList.limitedItems || []).map((item) => ({
-   ...item,
-   formattedName: `${item.itemName} - ${item.points} points - Qty: ${item.stock}`,
+/**
+ * Formats vendor items for autocomplete display
+ * @param {Array} items - List of vendor items
+ * @param {boolean} includeStock - Whether to include stock quantity
+ * @returns {Array} Formatted autocomplete choices
+ */
+function formatVendorItems(items, includeStock = false) {
+  return items.slice(0, 25).map((item) => ({
+    name: `${item.itemName} - ${item.points} pts${includeStock ? ` - Qty: ${item.stock}` : ''}`,
+    value: item.itemName,
   }));
-
-  const allAvailableItems = [
-   ...filteredVillageItems.map((item) => ({
-    ...item,
-    formattedName: `${item.itemName} - ${item.points} points`,
-   })),
-   ...limitedItems,
-  ];
-
-  const searchQuery = focusedOption.value.toLowerCase();
-  const filteredItems = allAvailableItems
-   .filter((item) => item.itemName.toLowerCase().includes(searchQuery))
-   .map((item) => ({
-    name: item.formattedName,
-    value: item.itemName,
-   }))
-   .slice(0, 25);
-
-  await interaction.respond(filteredItems);
- } catch (error) {
-  handleError(error, "autocompleteHandler.js");
-
-  console.error("[handleVendingRestockAutocomplete]: Error:", error);
-  await interaction.respond([]);
- }
 }
 
-// ------------------- Vending Barter Autocomplete -------------------
-async function handleVendingBarterAutocomplete(interaction, focusedOption) {
- try {
-  const characterName = interaction.options.getString("charactername");
-  if (!characterName) return await interaction.respond([]);
-
-  const client = new MongoClient(process.env.MONGODB_INVENTORIES_URI, {});
-  await client.connect();
-  const db = client.db("vending");
-  const inventoryCollection = db.collection(characterName.toLowerCase());
-  const items = await inventoryCollection.find({}).toArray();
-  await client.close();
-
-  if (!items.length) return await interaction.respond([]);
-
-  const searchQuery = focusedOption.value.toLowerCase();
-  const filteredItems = items
-   .filter((item) => item.itemName.toLowerCase().includes(searchQuery))
-   .map((item) => ({
-    name: `${item.itemName} - Qty: ${item.stockQty}`,
-    value: item.itemName,
-   }))
-   .slice(0, 25);
-
-  await interaction.respond(filteredItems);
- } catch (error) {
-  handleError(error, "autocompleteHandler.js");
-
-  console.error("[handleVendingBarterAutocomplete]: Error:", error);
-  await interaction.respond([]);
- }
+/**
+ * Calculates available slots for a vendor character
+ * @param {Object} character - Character object
+ * @returns {number} Total available slots
+ */
+function calculateAvailableSlots(character) {
+  const baseSlotLimits = { shopkeeper: 5, merchant: 3 };
+  const pouchCapacities = { none: 0, bronze: 15, silver: 30, gold: 50 };
+  const baseSlots = baseSlotLimits[character.job?.toLowerCase()] || 0;
+  const extraSlots = pouchCapacities[character.shopPouch?.toLowerCase()] || 0;
+  return baseSlots + extraSlots;
 }
 
-// ------------------- Vending Edit Shop Autocomplete -------------------
-async function handleVendingEditShopAutocomplete(interaction, focusedOption) {
- try {
-  const characterName = interaction.options.getString("charactername");
-  if (!characterName) return await interaction.respond([]);
+// ------------------- Main Autocomplete Handlers -------------------
 
-  const userId = interaction.user.id;
-  const character = await fetchCharacterByNameAndUserId(characterName, userId);
-  if (!character) return await interaction.respond([]);
-
-  const client = new MongoClient(process.env.MONGODB_INVENTORIES_URI, {});
-  await client.connect();
-  const db = client.db("vending");
-  const inventoryCollection = db.collection(characterName.toLowerCase());
-  const shopItems = await inventoryCollection.find({}).toArray();
-  await client.close();
-
-  if (!shopItems.length) return await interaction.respond([]);
-
-  const searchQuery = focusedOption.value.toLowerCase();
-const slotFilter = interaction.options.getString("slot");
-const filteredItems = shopItems
-  .filter((item) => {
-    const matchesSlot = slotFilter ? item.slot === slotFilter : true;
-    return item.itemName.toLowerCase().includes(searchQuery) && matchesSlot;
-  })
-  .map((item) => ({
-    name: `${item.itemName} (${item.slot}) - Qty: ${item.stockQty}`,
-    value: item.itemName,
-  }))
-   .slice(0, 25);
-
-  await interaction.respond(filteredItems);
- } catch (error) {
-  handleError(error, "autocompleteHandler.js");
-
-  console.error("[handleVendingEditShopAutocomplete]: Error:", error);
-  await interaction.respond([]);
- }
+/**
+ * Handles autocomplete for the vending add command
+ * Routes to appropriate handler based on focused field
+ */
+async function handleVendingAddAutocomplete(interaction, focusedOption) {
+  try {
+    const focusedName = focusedOption.name;
+    switch (focusedName) {
+      case 'charactername':
+        await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, 'vending');
+        break;
+      case 'itemname':
+        await handleVendorItemAutocomplete(interaction, focusedOption);
+        break;
+      case 'slot':
+        await handleSlotAutocomplete(interaction, focusedOption);
+        break;
+      default:
+        await interaction.respond([]);
+    }
+  } catch (error) {
+    console.error("[handleVendingAddAutocomplete]: Error:", error);
+    await interaction.respond([]);
+  }
 }
 
-// ------------------- Vending View Shop Autocomplete -------------------
-async function handleViewVendingShopAutocomplete(interaction) {
- const focusedOption = interaction.options.getFocused(true);
- if (focusedOption.name !== "charactername") return;
+/**
+ * Handles autocomplete for vendor items
+ * Shows available items based on character's village and job
+ */
+async function handleVendorItemAutocomplete(interaction, focusedOption) {
+  try {
+    const characterName = interaction.options.getString("charactername");
+    if (!characterName) return await interaction.respond([]);
 
- try {
-  const targetJobs = ["merchant", "shopkeeper"];
-  const characters = await Character.find({
-   job: { $regex: new RegExp(`^(${targetJobs.join("|")})$`, "i") },
-  });
+    const userId = interaction.user.id;
+    const character = await fetchCharacterByNameAndUserId(characterName, userId);
+    if (!character) return await interaction.respond([]);
 
-  const choices = characters.map((character) => ({
-   name: character.name,
-   value: character.name,
-  }));
+    const village = character.currentVillage?.toLowerCase()?.trim();
+    const vendorType = character.job?.toLowerCase();
+    const searchQuery = focusedOption.value;
 
-  await interaction.respond(choices.slice(0, 25));
- } catch (error) {
-  handleError(error, "autocompleteHandler.js");
+    const items = await getVendorItems(village, vendorType, searchQuery);
+    const choices = formatVendorItems(items);
 
-  console.error("[handleViewVendingShopAutocomplete]: Error:", error);
-  await interaction.respond([]);
- }
+    await interaction.respond(choices);
+  } catch (error) {
+    console.error("[handleVendorItemAutocomplete]: Error:", error);
+    await interaction.respond([]);
+  }
 }
 
-// ------------------- handleSlotAutocomplete -------------------
+/**
+ * Handles autocomplete for shop slots
+ * Shows available slots and their current contents
+ */
 async function handleSlotAutocomplete(interaction, focusedOption) {
   try {
     const characterName = interaction.options.getString('charactername');
@@ -2407,12 +2357,7 @@ async function handleSlotAutocomplete(interaction, focusedOption) {
     const character = await fetchCharacterByNameAndUserId(characterName, userId);
     if (!character) return await interaction.respond([]);
 
-    // Calculate total available slots
-    const baseSlotLimits = { shopkeeper: 5, merchant: 3 };
-    const pouchCapacities = { none: 0, bronze: 15, silver: 30, gold: 50 };
-    const baseSlots = baseSlotLimits[character.job?.toLowerCase()] || 0;
-    const extraSlots = pouchCapacities[character.shopPouch?.toLowerCase()] || 0;
-    const totalSlots = baseSlots + extraSlots;
+    const totalSlots = calculateAvailableSlots(character);
 
     // Get used slots with their items
     const vendingClient = new MongoClient(process.env.MONGODB_INVENTORIES_URI);
@@ -2470,7 +2415,10 @@ async function handleSlotAutocomplete(interaction, focusedOption) {
   }
 }
 
-// ------------------- handleVendorCharacterAutocomplete -------------------
+/**
+ * Handles autocomplete for vendor characters
+ * Shows characters with merchant/shopkeeper jobs
+ */
 async function handleVendorCharacterAutocomplete(interaction) {
   try {
     const focusedValue = interaction.options.getFocused();
@@ -2490,114 +2438,6 @@ async function handleVendorCharacterAutocomplete(interaction) {
     console.error('[handleVendorCharacterAutocomplete]:', error);
     return await interaction.respond([]);
   }
-}
-
-
-// ============================================================================
-// VILLAGE COMMANDS
-// ============================================================================
-// This section handles autocomplete interactions for the "village" command family.
-// It provides suggestions for:
-// - Character Names (user-owned characters within a village)
-// - Material Items needed for village upgrades
-// - Destination Villages (for travel)
-
-// ------------------- Village Upgrade Character Autocomplete -------------------
-async function handleVillageUpgradeCharacterAutocomplete(interaction) {
- const userId = interaction.user.id;
- const villageName = interaction.options.getString("name");
-
- try {
-  if (!villageName) return await interaction.respond([]);
-
-  const characters = await fetchCharactersByUserId(userId);
-  const focusedValue = interaction.options.getFocused().toLowerCase();
-
-  const choices = characters
-   .filter(
-    (character) =>
-     character.homeVillage?.toLowerCase() === villageName.toLowerCase() &&
-     character.name.toLowerCase().includes(focusedValue)
-   )
-   .map((character) => ({
-    name: character.name,
-    value: character.name,
-   }));
-
-  await interaction.respond(choices.slice(0, 25));
- } catch (error) {
-  handleError(error, "autocompleteHandler.js");
-
-  console.error("[handleVillageUpgradeCharacterAutocomplete]: Error:", error);
-  await interaction.respond([]);
- }
-}
-
-// ------------------- Village Materials Autocomplete -------------------
-async function handleVillageMaterialsAutocomplete(interaction) {
- const focusedValue = interaction.options.getFocused();
- const villageName = interaction.options.getString("name");
- const characterName = interaction.options.getString("charactername");
- const userId = interaction.user.id;
-
- try {
-  const village = await Village.findOne({
-   name: { $regex: `^${villageName}$`, $options: "i" },
-  });
-  if (!village) return await interaction.respond([]);
-
-  const nextLevel = village.level + 1;
-  const materials =
-   village.materials instanceof Map
-    ? Object.fromEntries(village.materials)
-    : village.materials;
-
-  const requiredMaterials = Object.keys(materials).filter(
-   (material) => materials[material].required?.[nextLevel] !== undefined
-  );
-
-  if (!characterName) return await interaction.respond([]);
-
-  const character = await Character.findOne({
-   userId,
-   name: { $regex: `^${characterName}$`, $options: "i" },
-  }).lean();
-  if (!character) return await interaction.respond([]);
-
-  const inventoriesConnection = await connectToInventories();
-  const db = inventoriesConnection.useDb("inventories");
-  const inventoryCollection = db.collection(character.name.toLowerCase());
-
-  const inventoryItems = await inventoryCollection.find({}).toArray();
-  const materialsMap = {};
-
-  inventoryItems.forEach((item) => {
-   const lowerName = item.itemName.toLowerCase();
-   const matchedMaterial = requiredMaterials.find(
-    (material) => material.toLowerCase() === lowerName
-   );
-   if (matchedMaterial) {
-    if (!materialsMap[matchedMaterial]) materialsMap[matchedMaterial] = 0;
-    materialsMap[matchedMaterial] += item.quantity;
-   }
-  });
-
-  const filteredMaterials = Object.entries(materialsMap)
-   .filter(([itemname]) =>
-    itemname.toLowerCase().includes(focusedValue.toLowerCase())
-   )
-   .map(([itemname, quantity]) => ({
-    name: `${itemname} (qty ${quantity})`,
-    value: itemname,
-   }));
-
-  await interaction.respond(filteredMaterials.slice(0, 25));
- } catch (error) {
-  handleError(error, "autocompleteHandler.js");
-
-  console.error("[handleVillageMaterialsAutocomplete]: Error:", error);
-  await interaction.respond([]);
- }
 }
 
 // ============================================================================
@@ -2636,66 +2476,38 @@ async function handleViewInventoryAutocomplete(interaction, focusedOption) {
 // EXPORT FUNCTIONS
 // ============================================================================
 
-// ------------------- handleVendingAddAutocomplete -------------------
-async function handleVendingAddAutocomplete(interaction, focusedOption) {
-  try {
-    const focusedName = focusedOption.name;
-    const focusedValue = focusedOption.value;
-
-    switch (focusedName) {
-      case 'charactername':
-        await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, 'vending');
-        break;
-      case 'itemname':
-        await handleItemAutocomplete(interaction, focusedOption);
-        break;
-      case 'slot':
-        await handleSlotAutocomplete(interaction, focusedOption);
-        break;
-      default:
-        await interaction.respond([]);
-    }
-  } catch (error) {
-    console.error("[handleVendingAddAutocomplete]: Error:", error);
-    await interaction.respond([]);
-  }
-}
-
 module.exports = {
  handleAutocomplete,
  handleCharacterBasedCommandsAutocomplete,
  handleExploreCharacterAutocomplete,
- handleVendingAddAutocomplete,
-
  handleQuestIdAutocomplete,
 
- // CHARACTER-BASED
-
- // BLIGHT
+ // ------------------- Character-Based Functions -------------------
+ // ------------------- Blight Functions -------------------
  handleBlightCharacterAutocomplete,
  handleBlightItemAutocomplete,
 
- // BOOSTING
+ // ------------------- Boosting Functions -------------------
  handleBoostingCharacterAutocomplete,
 
- // CHANGEJOB
+ // ------------------- Change Job Functions -------------------
  handleChangeJobNewJobAutocomplete,
  handleChangeJobCharacterAutocomplete,
 
- // COMBAT
+ // ------------------- Combat Functions -------------------
 
- // CRAFTING
+ // ------------------- Crafting Functions -------------------
  handleCraftingAutocomplete,
 
- // CREATECHARACTER
+ // ------------------- Create Character Functions -------------------
  handleCreateCharacterVillageAutocomplete,
  handleCreateCharacterRaceAutocomplete,
 
- // CUSTOMWEAPON
+ // ------------------- Custom Weapon Functions -------------------
  handleBaseWeaponAutocomplete,
  handleSubtypeAutocomplete,
 
- // DELIVER
+ // ------------------- Deliver Functions -------------------
  handleCourierSenderAutocomplete,
  handleCourierAutocomplete,
  handleRecipientAutocomplete,
@@ -2706,76 +2518,77 @@ module.exports = {
  handleVendorItemAutocomplete,
  handleVendorCharacterAutocomplete,
 
- // EDITCHARACTER
+ // ------------------- Edit Character Functions -------------------
  handleEditCharacterAutocomplete,
 
- // EXPLORE
+ // ------------------- Explore Functions -------------------
  handleExploreItemAutocomplete,
  handleExploreRollCharacterAutocomplete,
 
- // GEAR
+ // ------------------- Gear Functions -------------------
  handleGearAutocomplete,
 
- // GIFT
+ // ------------------- Gift Functions -------------------
  handleGiftAutocomplete,
 
- // HEAL
+ // ------------------- Heal Functions -------------------
  handleHealAutocomplete,
 
- // ITEM
+ // ------------------- Item Functions -------------------
  handleItemAutocomplete,
  handleItemJobVoucherAutocomplete,
  handleItemJobNameAutocomplete,
 
- // LOOKUP
+ // ------------------- Lookup Functions -------------------
  handleLookupAutocomplete,
 
- // MODGIVE
+ // ------------------- Mod Give Functions -------------------
  handleModGiveCharacterAutocomplete,
  handleModGiveItemAutocomplete,
 
- // MOUNT/STABLE
+ // ------------------- Mount/Stable Functions -------------------
  handleMountAutocomplete,
  handleMountNameAutocomplete,
 
- // PET
+ // ------------------- Pet Functions -------------------
  handlePetNameAutocomplete,
  handlePetSpeciesAutocomplete,
  handlePetRollTypeAutocomplete,
 
- // RELIC
+ // ------------------- Relic Functions -------------------
 
- // SHOPS
+ // ------------------- Shops Functions -------------------
  handleShopsAutocomplete,
 
- // STEAL
+ // ------------------- Steal Functions -------------------
  handleStealCharacterAutocomplete,
  handleStealTargetAutocomplete,
  handleStealRarityAutocomplete,
 
- // TRADE
+ // ------------------- Trade Functions -------------------
  handleTradeToCharacterAutocomplete,
  handleTradeItemAutocomplete,
 
- // TRANSFER
+ // ------------------- Transfer Functions -------------------
  handleTransferCharacterAutocomplete,
  handleTransferItemAutocomplete,
 
- // TRAVEL
+ // ------------------- Travel Functions -------------------
  handleTravelAutocomplete,
  handleVillageBasedCommandsAutocomplete,
 
- // VENDING
+ // ------------------- Vending Functions -------------------
  handleVendingRestockAutocomplete,
  handleVendingBarterAutocomplete,
  handleVendingEditShopAutocomplete,
  handleViewVendingShopAutocomplete,
  handleSlotAutocomplete,
+ handleVendingAddAutocomplete,
 
- // VILLAGE
+ // ------------------- Village Functions -------------------
  handleVillageUpgradeCharacterAutocomplete,
  handleVillageMaterialsAutocomplete,
 
- // VIEWINVENTORY
+ // ------------------- View Inventory Functions -------------------
  handleViewInventoryAutocomplete,
 };
