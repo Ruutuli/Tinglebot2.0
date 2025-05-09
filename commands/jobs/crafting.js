@@ -111,6 +111,52 @@ module.exports = {
       let job = (character.jobVoucher && character.jobVoucherJob) ? character.jobVoucherJob : character.job;
       console.log(`[crafting.js]: Determined job for ${character.name} is "${job}"`);
 
+      // ------------------- Validate Job Perks -------------------
+      const jobPerk = getJobPerk(job);
+      const craftingTagsLower = item.craftingTags.map(tag => tag.toLowerCase());
+      if (!jobPerk || !jobPerk.perks.includes('CRAFTING') || !craftingTagsLower.includes(job.toLowerCase())) {
+        return interaction.editReply({ content: `❌ **"${character.name}" cannot craft "${itemName}". Required jobs: ${item.craftingTags.join(', ')}.**`, ephemeral: true });
+      }
+
+      // ------------------- Validate Stamina -------------------
+      const staminaCost = item.staminaToCraft * quantity;
+      if (character.currentStamina < staminaCost) {
+        return interaction.editReply({ content: `❌ **Not enough stamina. Needed: ${staminaCost}, Available: ${character.currentStamina}.**`, ephemeral: true });
+      }
+
+      // ------------------- Validate Required Materials -------------------
+      const inventoryCollection = await getCharacterInventoryCollection(character.name);
+      const inventory = await inventoryCollection.find().toArray();
+
+      const missingMaterials = [];
+      for (const material of item.craftingMaterial) {
+        const requiredQty = material.quantity * quantity;
+        let ownedQty = 0;
+
+        if (generalCategories[material.itemName]) {
+          ownedQty = inventory.filter(invItem => generalCategories[material.itemName].includes(invItem.itemName)).reduce((sum, inv) => sum + inv.quantity, 0);
+        } else {
+          ownedQty = inventory.filter(invItem => invItem.itemName === material.itemName).reduce((sum, inv) => sum + inv.quantity, 0);
+        }
+
+        if (ownedQty < requiredQty) {
+          missingMaterials.push(`• ${material.itemName} (Required: ${requiredQty}, Found: ${ownedQty})`);
+        }
+      }
+
+      if (missingMaterials.length > 0) {
+        return interaction.editReply({
+          embeds: [{
+            title: `❌ Missing Required Materials`,
+            description: `You are missing the following materials to craft **${quantity}x ${itemName}**:\n\n${missingMaterials.join('\n')}`,
+            color: 0xff0000,
+            footer: { text: 'Sync your inventory or gather more materials.' }
+          }],
+          ephemeral: true
+        });
+      }
+
+      // ------------------- Activate Job Voucher (only after all checks pass) -------------------
       if (character.jobVoucher) {
         const voucherValidation = await validateJobVoucher(character, job);
         if (voucherValidation.skipVoucher) {
@@ -157,51 +203,6 @@ module.exports = {
             ephemeral: true,
           });
         }
-      }
-
-      // ------------------- Validate Job Perks -------------------
-      const jobPerk = getJobPerk(job);
-      const craftingTagsLower = item.craftingTags.map(tag => tag.toLowerCase());
-      if (!jobPerk || !jobPerk.perks.includes('CRAFTING') || !craftingTagsLower.includes(job.toLowerCase())) {
-        return interaction.editReply({ content: `❌ **"${character.name}" cannot craft "${itemName}". Required jobs: ${item.craftingTags.join(', ')}.**`, ephemeral: true });
-      }
-
-      // ------------------- Validate Stamina -------------------
-      const staminaCost = item.staminaToCraft * quantity;
-      if (character.currentStamina < staminaCost) {
-        return interaction.editReply({ content: `❌ **Not enough stamina. Needed: ${staminaCost}, Available: ${character.currentStamina}.**`, ephemeral: true });
-      }
-
-      // ------------------- Validate Required Materials -------------------
-      const inventoryCollection = await getCharacterInventoryCollection(character.name);
-      const inventory = await inventoryCollection.find().toArray();
-
-      const missingMaterials = [];
-      for (const material of item.craftingMaterial) {
-        const requiredQty = material.quantity * quantity;
-        let ownedQty = 0;
-
-        if (generalCategories[material.itemName]) {
-          ownedQty = inventory.filter(invItem => generalCategories[material.itemName].includes(invItem.itemName)).reduce((sum, inv) => sum + inv.quantity, 0);
-        } else {
-          ownedQty = inventory.filter(invItem => invItem.itemName === material.itemName).reduce((sum, inv) => sum + inv.quantity, 0);
-        }
-
-        if (ownedQty < requiredQty) {
-          missingMaterials.push(`• ${material.itemName} (Required: ${requiredQty}, Found: ${ownedQty})`);
-        }
-      }
-
-      if (missingMaterials.length > 0) {
-        return interaction.editReply({
-          embeds: [{
-            title: `❌ Missing Required Materials`,
-            description: `You are missing the following materials to craft **${quantity}x ${itemName}**:\n\n${missingMaterials.join('\n')}`,
-            color: 0xff0000,
-            footer: { text: 'Sync your inventory or gather more materials.' }
-          }],
-          ephemeral: true
-        });
       }
 
       // ------------------- Process Materials -------------------
