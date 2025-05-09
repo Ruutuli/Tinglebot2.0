@@ -223,6 +223,14 @@ async function handleRestock(interaction) {
       return interaction.editReply("❌ Character not found or doesn't belong to you.");
     }
 
+    // ------------------- Shopkeeper Village Restrictions -------------------
+    if (character.job?.toLowerCase() === 'shopkeeper') {
+      // Block buying stock from other village town halls
+      if (character.currentVillage.toLowerCase() !== character.homeVillage.toLowerCase()) {
+        return interaction.editReply('❌ Shopkeepers can only buy stock from their home village town hall.');
+      }
+    }
+
     // ------------------- Slot Limits -------------------
     const baseSlotLimits = { shopkeeper: 5, merchant: 3 };
     const pouchCapacities = { none: 0, bronze: 15, silver: 30, gold: 50 };
@@ -861,7 +869,7 @@ async function handleVendingSync(interaction, characterName) {
     let totalSlotsUsed = 0;
 
     for (const row of parsedRows) {
-      // Fetch the item from the database to get its ID
+      // Fetch the item from the database to get its ID and stackable status
       const item = await ItemModel.findOne({ itemName: row.itemName });
       if (!item) {
         console.warn(`[handleVendingSync]: Item "${row.itemName}" not found in database, skipping...`);
@@ -869,34 +877,24 @@ async function handleVendingSync(interaction, characterName) {
         continue;
       }
 
-      // Convert price fields, using null for "N/A"
-      const tokenPrice = row.tokenPrice === 'N/A' ? null : Number(row.tokenPrice) || null;
-      const artPrice = row.artPrice === 'N/A' ? null : Number(row.artPrice) || null;
-      const otherPrice = row.otherPrice === 'N/A' ? null : Number(row.otherPrice) || null;
-
-      // Calculate slots needed based on item type and quantity
-      const stockQty = Number(row.stockQty) || 0;
-      const isStackable = row.stackable === 'Yes' || row.stackable === true;
-      const maxStackSize = Number(row.maxStackSize) || 10;
+      // Always use stackable and maxStackSize from ItemModel
+      const isStackable = item.stackable;
+      const maxStackSize = item.maxStackSize || 10;
+      let stockQty = Number(row.stockQty) || 0;
       let slotsNeeded = 1;
 
       if (isStackable) {
-        // For stackable items (raw materials), calculate how many slots needed
         if (stockQty > maxStackSize) {
-          console.warn(`[handleVendingSync]: Item "${row.itemName}" exceeds max stack size of ${maxStackSize}, adjusting to max...`);
           errors.push(`Item "${row.itemName}" quantity (${stockQty}) exceeds max stack size of ${maxStackSize}, adjusted to max`);
           stockQty = maxStackSize;
         }
-        // Stackable items take 1 slot per maxStackSize items
         slotsNeeded = Math.ceil(stockQty / maxStackSize);
       } else {
-        // Non-stackable items (craftable items) take 1 slot per item
         slotsNeeded = stockQty;
       }
 
       // Check if we have enough slots available
       if (totalSlotsUsed + slotsNeeded > character.pouchSize) {
-        console.warn(`[handleVendingSync]: Not enough slots available for "${row.itemName}", skipping...`);
         errors.push(`Not enough slots available for "${row.itemName}" (needs ${slotsNeeded} slots, but only ${character.pouchSize - totalSlotsUsed} slots remaining)`);
         continue;
       }
@@ -910,9 +908,9 @@ async function handleVendingSync(interaction, characterName) {
         costEach: Number(row.costEach) || 0,
         pointsSpent: Number(row.pointsSpent) || 0,
         boughtFrom: row.boughtFrom || character.currentVillage,
-        tokenPrice,
-        artPrice,
-        otherPrice,
+        tokenPrice: row.tokenPrice === 'N/A' ? null : Number(row.tokenPrice) || null,
+        artPrice: row.artPrice === 'N/A' ? null : Number(row.artPrice) || null,
+        otherPrice: row.otherPrice === 'N/A' ? null : Number(row.otherPrice) || null,
         tradesOpen: row.tradesOpen === 'Yes' || row.tradesOpen === true,
         slot: row.slot || 'Slot 1',
         date: new Date(),

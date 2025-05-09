@@ -18,8 +18,6 @@ const vendingInventorySchema = new Schema({
   tradesOpen: { type: Boolean, default: false }, // Whether trades are open
   slot: { type: String }, // Slot number
   date: { type: Date, default: Date.now }, // Date added to inventory
-  stackable: { type: Boolean, default: false }, // Whether the item can be stacked
-  maxStackSize: { type: Number, default: 10 }, // Maximum stack size for stackable items
   slotsUsed: { type: Number, default: 1 } // Number of slots this item takes up
 });
 
