@@ -163,26 +163,17 @@ async function addItemInventoryDatabase(
   if (!character) {
    throw new Error(`Character with ID ${characterId} not found`);
   }
-  console.log(
-   `[inventoryUtils.js]: logs Found character: ${character.name}, ID: ${character._id}`
-  );
+  console.log(`[inventoryUtils.js]: 📦 Processing inventory for ${character.name}`);
 
   const inventoriesConnection = await dbFunctions.connectToInventories();
   const db = inventoriesConnection.useDb("inventories");
   const collectionName = character.name.toLowerCase().replace(/\s+/g, "_");
   const inventoryCollection = db.collection(collectionName);
 
-  console.log(
-   `[inventoryUtils.js]: logs Checking inventory for character "${character.name}" in collection "${collectionName}"`
-  );
-
   const item = await dbFunctions.fetchItemByName(itemName);
   if (!item) {
    throw new Error(`Item with name "${itemName}" not found`);
   }
-  console.log(
-   `[inventoryUtils.js]: logs Found item: ${item.itemName}, ID: ${item._id}`
-  );
 
   const inventoryItem = await inventoryCollection.findOne({
    characterId,
@@ -195,9 +186,7 @@ async function addItemInventoryDatabase(
 
   if (inventoryItem) {
    const newQuantity = inventoryItem.quantity + quantity;
-   console.log(
-    `[inventoryUtils.js]: logs Updating existing item "${itemName}" - New Quantity: ${newQuantity}`
-   );
+   console.log(`[inventoryUtils.js]: 🔄 Updated ${itemName} quantity to ${newQuantity}`);
    await inventoryCollection.updateOne(
     { characterId, itemName: inventoryItem.itemName, obtain },
     { $set: { quantity: newQuantity } }
@@ -215,19 +204,13 @@ async function addItemInventoryDatabase(
     date: new Date(),
     obtain,
    };
-   console.log(
-    `[inventoryUtils.js]: logs Adding new item "${itemName}" to collection "${collectionName}"`
-   );
+   console.log(`[inventoryUtils.js]: ➕ Added new item ${itemName} to inventory`);
    await inventoryCollection.insertOne(newItem);
   }
   return true;
  } catch (error) {
   handleError(error, "inventoryUtils.js");
-
-  console.error(
-   "[inventoryUtils.js]: logs Error adding item to inventory database:",
-   error
-  );
+  console.error(`[inventoryUtils.js]: ❌ Error adding item to inventory:`, error.message);
   throw error;
  }
 }
