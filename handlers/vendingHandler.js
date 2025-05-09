@@ -873,6 +873,13 @@ async function handleViewShop(interaction) {
       .setImage(character.shopImage || VIEW_SHOP_IMAGE_URL)
       .setTimestamp();
 
+    // Add vending points to embed
+    shopEmbed.addFields({
+      name: '🪙 Vending Points',
+      value: `${character.vendingPoints || 0} points`,
+      inline: false
+    });
+
     // Add items to embed
     items.forEach(item => {
       shopEmbed.addFields({
