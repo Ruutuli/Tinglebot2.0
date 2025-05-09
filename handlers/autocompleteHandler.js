@@ -2893,7 +2893,7 @@ async function handleShopItemAutocomplete(interaction, focusedValue) {
 
 async function handleTransferFromCharacterAutocomplete(interaction, focusedValue) {
   const userId = interaction.user.id;
-  const characters = await fetchAllCharactersExceptUser(userId);
+  const characters = await fetchCharactersByUserId(userId);
   const choices = characters
     .filter(char => char.name.toLowerCase().includes(focusedValue))
     .map(char => ({
@@ -2905,7 +2905,7 @@ async function handleTransferFromCharacterAutocomplete(interaction, focusedValue
 
 async function handleTransferToCharacterAutocomplete(interaction, focusedValue) {
   const userId = interaction.user.id;
-  const characters = await fetchAllCharactersExceptUser(userId);
+  const characters = await fetchCharactersByUserId(userId);
   const choices = characters
     .filter(char => char.name.toLowerCase().includes(focusedValue))
     .map(char => ({
