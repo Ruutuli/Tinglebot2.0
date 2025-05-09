@@ -209,7 +209,7 @@ async function handleRestock(interaction) {
     const tokenPrice = interaction.options.getInteger('tokenprice') || 'N/A';
     const artPrice = interaction.options.getString('artprice') || 'N/A';
     const otherPrice = interaction.options.getString('otherprice') || 'N/A';
-    const tradesOpen = interaction.options.getBoolean('tradesopen') || false;
+    const barterOpen = interaction.options.getBoolean('barteropen') || false;
     const userId = interaction.user.id;
 
     // Validate stock quantity
@@ -357,7 +357,7 @@ async function handleRestock(interaction) {
         tokenPrice,
         artPrice,
         otherPrice,
-        tradesOpen,
+        barterOpen,
         boughtFrom: character.currentVillage,
         slot: newSlot,
         date: new Date()
@@ -393,7 +393,7 @@ async function handleRestock(interaction) {
             tokenPrice,
             artPrice,
             otherPrice,
-            tradesOpen ? 'Yes' : 'No',
+            barterOpen ? 'Yes' : 'No',
             currentDate
           ];
           // Always append a new row for every transaction
@@ -442,9 +442,9 @@ async function handleVendingBarter(interaction) {
         return interaction.editReply("⚠️ Please provide all required options: `vendorcharacter`, `itemname`, `quantity`, and `payment_type`.");
       }
 
-      // Validate offer for trade payment type
-      if (paymentType === 'trade' && !offeredItemName) {
-        return interaction.editReply("⚠️ Please provide an item to offer when using trade payment type.");
+      // Validate offer for barter payment type
+      if (paymentType === 'barter' && !offeredItemName) {
+        return interaction.editReply("⚠️ Please provide an item to offer when using barter payment type.");
       }
   
       const buyer = await fetchCharacterByDiscordId(buyerId);
@@ -490,9 +490,9 @@ async function handleVendingBarter(interaction) {
           }
           break;
 
-        case 'trade':
-          if (!requestedItem.tradesOpen) {
-            return interaction.editReply(`⚠️ ${targetShopName} is not accepting trades for ${requestedItemName}.`);
+        case 'barter':
+          if (!requestedItem.barterOpen) {
+            return interaction.editReply(`⚠️ ${targetShopName} is not accepting barters for ${requestedItemName}.`);
           }
           // Check if buyer has the offered item
           const buyerInventory = await connectToInventories(buyer);
@@ -514,7 +514,7 @@ async function handleVendingBarter(interaction) {
         itemName: requestedItem.itemName,
         quantity: quantity,
         paymentMethod: paymentType,
-        offeredItem: paymentType === 'trade' ? offeredItemName : null,
+        offeredItem: paymentType === 'barter' ? offeredItemName : null,
         notes: notes || '',
         buyerId,
         buyerUsername: buyerName,
@@ -533,7 +533,7 @@ async function handleVendingBarter(interaction) {
           { name: '💱 Payment Method', value: paymentType.charAt(0).toUpperCase() + paymentType.slice(1), inline: true }
         );
 
-      if (paymentType === 'trade') {
+      if (paymentType === 'barter') {
         embed.addFields({ name: '🔄 Offered Item', value: `\`${offeredItemName}\``, inline: true });
       }
       if (notes) {
@@ -868,7 +868,7 @@ async function handleViewShop(interaction) {
     items.forEach(item => {
       shopEmbed.addFields({
         name: `${item.itemName} (${item.stockQty} in stock)`,
-        value: `Cost: ${item.costEach} points\nToken Price: ${item.tokenPrice}\nArt Price: ${item.artPrice}\nOther Price: ${item.otherPrice}\nTrades Open: ${item.tradesOpen ? 'Yes' : 'No'}`,
+        value: `Cost: ${item.costEach} points\nToken Price: ${item.tokenPrice}\nArt Price: ${item.artPrice}\nOther Price: ${item.otherPrice}\nBarter Open: ${item.barterOpen ? 'Yes' : 'No'}`,
         inline: true
       });
     });
@@ -1167,7 +1167,7 @@ async function handleVendingSync(interaction, characterName) {
         tokenPrice: row.tokenPrice === 'N/A' ? null : Number(row.tokenPrice) || null,
         artPrice: row.artPrice === 'N/A' ? null : Number(row.artPrice) || null,
         otherPrice: row.otherPrice === 'N/A' ? null : Number(row.otherPrice) || null,
-        tradesOpen: row.tradesOpen === 'Yes' || row.tradesOpen === true,
+        barterOpen: row.barterOpen === 'Yes' || row.barterOpen === true,
         slot: row.slot || 'Slot 1',
         date: new Date(),
         stackable: isStackable,
@@ -1584,14 +1584,14 @@ function parsePriceInputs(inputs) {
       tokenPrice: typeof inputs.tokenPrice === 'number' ? inputs.tokenPrice : 'N/A',
       artPrice: inputs.artPrice?.trim() || 'N/A',
       otherPrice: inputs.otherPrice?.trim() || 'N/A',
-      tradesOpen: inputs.tradesOpen === true
+      barterOpen: inputs.barterOpen === true
     };
   }
 
 // ------------------- generateFulfillEmbed -------------------
 function generateFulfillEmbed(request) {
     return new EmbedBuilder()
-      .setTitle(`📦 Trade Request`)
+      .setTitle(`📦 Barter Request`)
       .setDescription(`**${request.userCharacterName}** requested \`${request.itemName} x${request.quantity}\``)
       .addFields(
         { name: 'Vendor', value: request.vendorCharacterName, inline: true },
@@ -1645,15 +1645,15 @@ async function handleSyncButton(interaction) {
 // ============================================================================
 module.exports = {
     executeVending,
+    handleCollectPoints,
     handleRestock,
     handleVendingBarter,
     handleFulfill,
-    handlePouchUpgrade,
-    handlePouchUpgradeConfirm,
-    handleViewShop,
-    handleVendingSetup,
-    handleVendingSync,
     handleEditShop,
+    handleVendingSync,
+    handlePouchUpgrade,
+    handleVendingSetup,
+    handleViewShop,
     handleShopLink,
     viewVendingStock,
     handleVendingViewVillage,
