@@ -732,9 +732,18 @@ if (toCharacter?.name && toCharacter?.inventory && toCharacter?.userId) {
 async function handleShopView(interaction) {
  try {
   await interaction.deferReply({ ephemeral: true });
-  const items = await ShopStock.find().sort({ itemName: 1 }).lean();
+  
+  // Add error handling for database connection
+  let items;
+  try {
+    items = await ShopStock.find().sort({ itemName: 1 }).lean();
+  } catch (dbError) {
+    console.error("[shops]: Database connection error:", dbError);
+    return interaction.editReply("❌ Unable to connect to the shop database. Please try again later.");
+  }
+
   if (!items || items.length === 0) {
-   return interaction.editReply("❌ The shop is currently empty.");
+   return interaction.editReply("❌ The shop is currently empty. Please try again later.");
   }
 
   const ITEMS_PER_PAGE = 10;
@@ -746,7 +755,18 @@ async function handleShopView(interaction) {
    const end = start + ITEMS_PER_PAGE;
    const itemsList = await Promise.all(
     items.slice(start, end).map(async (item) => {
-     const itemDetails = await fetchItemByName(item.itemName);
+     let itemDetails;
+     try {
+       itemDetails = await fetchItemByName(item.itemName);
+     } catch (error) {
+       console.error(`[shops]: Error fetching item details for ${item.itemName}:`, error);
+       // Use fallback values if item details can't be fetched
+       itemDetails = {
+         buyPrice: "N/A",
+         sellPrice: "N/A",
+         emoji: "🛒"
+       };
+     }
      const buyPrice = itemDetails?.buyPrice || "N/A";
      const sellPrice = itemDetails?.sellPrice || "N/A";
      const emoji = itemDetails?.emoji || "🛒";
@@ -764,6 +784,17 @@ async function handleShopView(interaction) {
     .setFooter({ text: `Page ${page + 1} of ${pages}` });
   };
 
+  // Pre-generate all embeds to avoid async operations during button clicks
+  let embeds;
+  try {
+    embeds = await Promise.all(
+      Array.from({ length: pages }, (_, i) => generateEmbed(i))
+    );
+  } catch (error) {
+    console.error("[shops]: Error generating embeds:", error);
+    return interaction.editReply("❌ An error occurred while loading the shop inventory. Please try again later.");
+  }
+
   const generateButtons = (page) => {
    return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
@@ -780,7 +811,7 @@ async function handleShopView(interaction) {
   };
 
   const message = await interaction.editReply({
-   embeds: [await generateEmbed(currentPage)],
+   embeds: [embeds[currentPage]],
    components: [generateButtons(currentPage)],
   });
 
@@ -791,14 +822,18 @@ async function handleShopView(interaction) {
 
   collector.on("collect", async (i) => {
    try {
+     // Immediately defer the update to prevent timeout
+     await i.deferUpdate();
+
      if (i.customId.startsWith('shop-prev-')) {
        currentPage = Math.max(0, currentPage - 1);
      } else if (i.customId.startsWith('shop-next-')) {
        currentPage = Math.min(pages - 1, currentPage + 1);
      }
 
-     await i.update({
-      embeds: [await generateEmbed(currentPage)],
+     // Use the pre-generated embed
+     await i.editReply({
+      embeds: [embeds[currentPage]],
       components: [generateButtons(currentPage)],
      }).catch(error => {
        if (error.code === 10062) {
@@ -809,10 +844,9 @@ async function handleShopView(interaction) {
        }
      });
    } catch (error) {
-     handleError(error, "shops.js");
      console.error("[shops]: Error handling button interaction:", error);
      try {
-       await i.reply({
+       await i.followUp({
          content: "❌ An error occurred while processing your request.",
          ephemeral: true
        }).catch(() => {}); // Ignore if this fails too
@@ -829,12 +863,10 @@ async function handleShopView(interaction) {
        await lastMessage.edit({ components: [] }).catch(() => {});
      }
    } catch (error) {
-     handleError(error, "shops.js");
      console.error("[shops]: Error clearing buttons:", error);
    }
   });
  } catch (error) {
-  handleError(error, "shops.js");
   console.error("[shops]: Error viewing shop items:", error);
   try {
     await interaction.editReply(

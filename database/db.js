@@ -40,6 +40,10 @@ let inventoriesDbConnection;
 let inventoriesDbNativeConnection = null;
 let vendingDbConnection = null;
 
+// Add these at the top with other connection variables
+let inventoriesClient = null;
+let inventoriesDb = null;
+
 // ============================================================================
 // ------------------- Configuration Constants -------------------
 // Definitions of static constants like village names and icons.
@@ -72,7 +76,22 @@ async function connectToTinglebot() {
  try {
   if (!tinglebotDbConnection || mongoose.connection.readyState === 0) {
    mongoose.set("strictQuery", false);
-   tinglebotDbConnection = await mongoose.connect(tinglebotUri, {});
+   tinglebotDbConnection = await mongoose.connect(tinglebotUri, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+    serverSelectionTimeoutMS: 30000, // 30 seconds
+    socketTimeoutMS: 45000, // 45 seconds
+    connectTimeoutMS: 30000, // 30 seconds
+    maxPoolSize: 10,
+    minPoolSize: 5,
+    retryWrites: true,
+    retryReads: true,
+    w: 'majority',
+    wtimeoutMS: 2500,
+    heartbeatFrequencyMS: 10000,
+    maxIdleTimeMS: 60000,
+    family: 4
+   });
   }
   return tinglebotDbConnection;
  } catch (error) {
@@ -514,119 +533,99 @@ async function resetPetRollsForAllCharacters() {
 
 // ------------------- fetchAllItems -------------------
 const fetchAllItems = async () => {
- const client = await connectToInventoriesForItems();
- try {
-  const db = client.db("tinglebot");
-  const items = await db.collection("items").find().toArray();
-  return items;
- } catch (error) {
-  handleError(error, "itemService.js");
-  console.error("[itemService.js]: ❌ Error fetching all items:", error);
-  throw error;
- } finally {
-  await client.close();
- }
+    try {
+        const db = await connectToInventoriesForItems();
+        const items = await db.collection("items").find().toArray();
+        return items;
+    } catch (error) {
+        handleError(error, "itemService.js");
+        console.error("[itemService.js]: ❌ Error fetching all items:", error);
+        throw error;
+    }
 };
 
 // ------------------- fetchItemByName -------------------
 async function fetchItemByName(itemName) {
- const client = await connectToInventoriesForItems();
- try {
-  const db = client.db("tinglebot");
-  const normalizedItemName = itemName.trim().toLowerCase();
-  const escapedName = normalizedItemName.replace(
-   /[-\/\\^$*+?.()|[\]{}]/g,
-   "\\$&"
-  );
-  const item = await db.collection("items").findOne({
-   itemName: new RegExp(`^${escapedName}$`, "i"),
-  });
-  if (!item) {
-   console.warn(
-    `[itemService.js]: ⚠️ No item found for "${normalizedItemName}"`
-   );
-   return null;
-  }
-  return item;
- } catch (error) {
-  handleError(error, "itemService.js");
-  console.error("[itemService.js]: ❌ Error fetching item by name:", error);
-  throw error;
- } finally {
-  await client.close();
- }
-}
+    try {
+        const db = await connectToInventoriesForItems();
+        const normalizedItemName = itemName.trim().toLowerCase();
+        const escapedName = normalizedItemName.replace(/[-\/\\^$*+?.()|[\]{}]/g, "\\$&");
+        const item = await db.collection("items").findOne({
+            itemName: new RegExp(`^${escapedName}$`, "i"),
+        });
+        if (!item) {
+            console.warn(`[itemService.js]: ⚠️ No item found for "${normalizedItemName}"`);
+            return null;
+        }
+        return item;
+    } catch (error) {
+        handleError(error, "itemService.js");
+        console.error("[itemService.js]: ❌ Error fetching item by name:", error);
+        throw error;
+    }
+};
 
 // ------------------- fetchItemById -------------------
 const fetchItemById = async (itemId) => {
- const client = await connectToInventoriesForItems();
- try {
-  const db = client.db("tinglebot");
-  const item = await db.collection("items").findOne({ _id: ObjectId(itemId) });
-  return item;
- } catch (error) {
-  handleError(error, "itemService.js");
-  console.error("[itemService.js]: ❌ Error fetching item by ID:", error);
-  throw error;
- } finally {
-  await client.close();
- }
+    try {
+        const db = await connectToInventoriesForItems();
+        const item = await db.collection("items").findOne({ _id: ObjectId(itemId) });
+        return item;
+    } catch (error) {
+        handleError(error, "itemService.js");
+        console.error("[itemService.js]: ❌ Error fetching item by ID:", error);
+        throw error;
+    }
 };
 
 // ------------------- fetchItemsByMonster -------------------
 const fetchItemsByMonster = async (monsterName) => {
- const client = await connectToInventoriesForItems();
- try {
-  const db = client.db("tinglebot");
-  const query = {
-   $or: [{ monsterList: monsterName }, { [monsterName]: true }],
-  };
-  const items = await db.collection("items").find(query).toArray();
-  return items.filter((item) => item.itemName && item.itemRarity);
- } catch (error) {
-  handleError(error, "itemService.js");
-  console.error("[itemService.js]: ❌ Error fetching items by monster:", error);
-  throw error;
- } finally {
-  await client.close();
- }
+    try {
+        const db = await connectToInventoriesForItems();
+        const query = {
+            $or: [{ monsterList: monsterName }, { [monsterName]: true }],
+        };
+        const items = await db.collection("items").find(query).toArray();
+        return items.filter((item) => item.itemName && item.itemRarity);
+    } catch (error) {
+        handleError(error, "itemService.js");
+        console.error("[itemService.js]: ❌ Error fetching items by monster:", error);
+        throw error;
+    }
 };
 
 // ------------------- fetchCraftableItemsAndCheckMaterials -------------------
 const fetchCraftableItemsAndCheckMaterials = async (inventory) => {
- const client = await connectToInventoriesForItems();
- try {
-  const db = client.db("tinglebot");
-  const craftableItems = await db
-   .collection("items")
-   .find({ crafting: true })
-   .toArray();
-  const craftableItemsWithMaterials = [];
+    try {
+        const db = await connectToInventoriesForItems();
+        const craftableItems = await db
+            .collection("items")
+            .find({ crafting: true })
+            .toArray();
+        const craftableItemsWithMaterials = [];
 
-  for (const item of craftableItems) {
-   const { craftingMaterial } = item;
-   if (!craftingMaterial || craftingMaterial.length === 0) {
-    continue;
-   }
-   const allMaterialsAvailable = checkMaterialAvailability(
-    craftingMaterial,
-    inventory
-   );
-   if (allMaterialsAvailable) {
-    craftableItemsWithMaterials.push(item);
-   }
-  }
-  return craftableItemsWithMaterials;
- } catch (error) {
-  handleError(error, "itemService.js");
-  console.error(
-   "[itemService.js]: ❌ Error fetching craftable items and checking materials:",
-   error
-  );
-  throw error;
- } finally {
-  await client.close();
- }
+        for (const item of craftableItems) {
+            const { craftingMaterial } = item;
+            if (!craftingMaterial || craftingMaterial.length === 0) {
+                continue;
+            }
+            const allMaterialsAvailable = checkMaterialAvailability(
+                craftingMaterial,
+                inventory
+            );
+            if (allMaterialsAvailable) {
+                craftableItemsWithMaterials.push(item);
+            }
+        }
+        return craftableItemsWithMaterials;
+    } catch (error) {
+        handleError(error, "itemService.js");
+        console.error(
+            "[itemService.js]: ❌ Error fetching craftable items and checking materials:",
+            error
+        );
+        throw error;
+    }
 };
 
 // ------------------- getIngredientItems -------------------
@@ -656,95 +655,80 @@ const getIngredientItems = async (ingredientName) => {
 
 // ------------------- fetchItemsByIds -------------------
 const fetchItemsByIds = async (itemIds) => {
- const client = await connectToInventoriesForItems();
- try {
-  const db = client.db("tinglebot");
-  const items = await db
-   .collection("items")
-   .find({ _id: { $in: itemIds } })
-   .toArray();
-  return items;
- } catch (error) {
-  handleError(error, "itemService.js");
-  console.error("[itemService.js]: ❌ Error fetching items by IDs:", error);
-  throw error;
- } finally {
-  await client.close();
- }
+    try {
+        const db = await connectToInventoriesForItems();
+        const items = await db
+            .collection("items")
+            .find({ _id: { $in: itemIds } })
+            .toArray();
+        return items;
+    } catch (error) {
+        handleError(error, "itemService.js");
+        console.error("[itemService.js]: ❌ Error fetching items by IDs:", error);
+        throw error;
+    }
 };
 
 // ------------------- fetchItemRarityByName -------------------
 const fetchItemRarityByName = async (itemName) => {
- const client = await connectToInventoriesForItems();
- try {
-  const db = client.db("tinglebot");
-  const normalizedItemName = itemName.trim().toLowerCase();
-  const escapedName = normalizedItemName.replace(
-   /[-\/\\^$*+?.()|[\]{}]/g,
-   "\\$&"
-  );
-  const item = await db.collection("items").findOne({
-   itemName: new RegExp(`^${escapedName}$`, "i"),
-  });
-  return item ? item.itemRarity : null;
- } catch (error) {
-  handleError(error, "itemService.js");
-  console.error(
-   "[itemService.js]: ❌ Error fetching item rarity by name:",
-   error
-  );
-  throw error;
- } finally {
-  await client.close();
- }
+    try {
+        const db = await connectToInventoriesForItems();
+        const normalizedItemName = itemName.trim().toLowerCase();
+        const escapedName = normalizedItemName.replace(/[-\/\\^$*+?.()|[\]{}]/g, "\\$&");
+        const item = await db.collection("items").findOne({
+            itemName: new RegExp(`^${escapedName}$`, "i"),
+        });
+        return item ? item.itemRarity : null;
+    } catch (error) {
+        handleError(error, "itemService.js");
+        console.error(
+            "[itemService.js]: ❌ Error fetching item rarity by name:",
+            error
+        );
+        throw error;
+    }
 };
 
 // ------------------- fetchItemsByCategory -------------------
 const fetchItemsByCategory = async (category) => {
- const client = await connectToInventoriesForItems();
- try {
-  const db = client.db("tinglebot");
-  const items = await db
-   .collection("items")
-   .find({
-    category: { $regex: `^${category}$`, $options: "i" },
-   })
-   .toArray();
+    try {
+        const db = await connectToInventoriesForItems();
+        const items = await db
+            .collection("items")
+            .find({
+                category: { $regex: `^${category}$`, $options: "i" },
+            })
+            .toArray();
 
-  if (!items || items.length === 0) {
-   console.warn(`[itemService.js]: ⚠️ No items found in category: ${category}`);
-   return [];
-  }
-  return items;
- } catch (error) {
-  handleError(error, "itemService.js");
-  console.error(
-   "[itemService.js]: ❌ Error fetching items by category:",
-   error
-  );
-  throw error;
- } finally {
-  await client.close();
- }
+        if (!items || items.length === 0) {
+            console.warn(`[itemService.js]: ⚠️ No items found in category: ${category}`);
+            return [];
+        }
+        return items;
+    } catch (error) {
+        handleError(error, "itemService.js");
+        console.error(
+            "[itemService.js]: ❌ Error fetching items by category:",
+            error
+        );
+        throw error;
+    }
 };
 
 // ------------------- fetchValidWeaponSubtypes -------------------
 const fetchValidWeaponSubtypes = async () => {
- const client = await connectToInventoriesForItems();
- try {
-  const db = client.db("tinglebot");
-  const subtypes = await db.collection("items").distinct("subtype");
-  return subtypes.filter(Boolean).map((sub) => sub.toLowerCase());
- } catch (error) {
-  handleError(error, "itemService.js");
-  console.error(
-   "[itemService.js]: ❌ Error fetching valid weapon subtypes:",
-   error
-  );
-  return [];
- } finally {
-  await client.close();
- }
+    try {
+        const db = await connectToInventoriesForItems();
+        const subtypes = await db.collection("items").distinct("subtype");
+        return subtypes.filter(Boolean).map((sub) => sub.toLowerCase());
+    } catch (error) {
+        handleError(error, "itemService.js");
+        console.error(
+            "[itemService.js]: ❌ Error fetching valid weapon subtypes:",
+            error
+        );
+        return [];
+    }
 };
 
 // ============================================================================
@@ -1714,18 +1698,34 @@ const checkMaterial = (materialId, materialName, quantityNeeded, inventory) => {
 };
 
 const connectToInventoriesForItems = async () => {
- const client = new MongoClient(inventoriesUri, {});
- try {
-  await client.connect();
-  return client;
- } catch (error) {
-  handleError(error, "itemService.js");
-  console.error(
-   "[itemService.js]: ❌ Error connecting to Inventories database:",
-   error
-  );
-  throw error;
- }
+    try {
+        if (!inventoriesClient || !inventoriesClient.isConnected()) {
+            if (inventoriesClient) {
+                await inventoriesClient.close();
+            }
+            inventoriesClient = new MongoClient(inventoriesUri, {
+                maxPoolSize: 10,
+                minPoolSize: 5,
+                serverSelectionTimeoutMS: 30000,
+                connectTimeoutMS: 30000,
+                socketTimeoutMS: 45000,
+                retryWrites: true,
+                retryReads: true,
+                w: 'majority',
+                wtimeoutMS: 2500,
+                heartbeatFrequencyMS: 10000,
+                maxIdleTimeMS: 60000,
+                family: 4
+            });
+            await inventoriesClient.connect();
+            inventoriesDb = inventoriesClient.db('tinglebot');
+        }
+        return inventoriesDb;
+    } catch (error) {
+        handleError(error, "itemService.js");
+        console.error("[itemService.js]: ❌ Error connecting to Inventories database:", error);
+        throw error;
+    }
 };
 
 // Initialize the inventoryUtils module with the necessary functions
@@ -1833,6 +1833,14 @@ const addItemToInventory = async (inventoryCollection, itemName, quantity) => {
     throw error;
   }
 };
+
+// Add this at the end of the file, before module.exports
+process.on('SIGINT', async () => {
+    if (inventoriesClient) {
+        await inventoriesClient.close();
+    }
+    process.exit(0);
+});
 
 module.exports = {
  connectToTinglebot,
