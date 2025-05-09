@@ -87,26 +87,28 @@ async function handleAutocomplete(interaction) {
     const focusedValue = focusedOption.value;
     const focusedName = focusedOption.name;
 
+    // Handle vending command autocomplete
+    if (commandName === 'vending') {
+      const subcommand = interaction.options.getSubcommand();
+      
+      switch (subcommand) {
+        case 'view':
+          return await handleVendingViewAutocomplete(interaction, focusedOption);
+        case 'barter':
+          return await handleVendingBarterAutocomplete(interaction, focusedOption);
+        case 'add':
+          return await handleVendingAddAutocomplete(interaction, focusedOption);
+        case 'edit':
+          return await handleVendingBarterAutocomplete(interaction, focusedOption);
+        default:
+          return await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, commandName);
+      }
+    }
+
     switch (commandName) {
       // ------------------- Economy Commands -------------------
       case "economy":
         await handleEconomyAutocomplete(interaction, focusedName, focusedValue);
-        break;
-
-      // ------------------- Vending Commands -------------------
-      case "vending":
-        const subcommand = interaction.options.getSubcommand();
-        if (subcommand === "add") {
-          await handleVendingAddAutocomplete(interaction, focusedOption);
-        } else if (focusedName === "charactername") {
-          await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "vending");
-        } else if (focusedName === "vendorcharacter") {
-          await handleVendorCharacterAutocomplete(interaction);
-        } else if (focusedName === "itemname" && (subcommand === "barter" || subcommand === "edit")) {
-          await handleVendingBarterAutocomplete(interaction, focusedOption);
-        } else {
-          await interaction.respond([]);
-        }
         break;
 
       // ------------------- Resource Gathering Commands -------------------
@@ -2565,6 +2567,40 @@ async function handleVendingBarterAutocomplete(interaction, focusedOption) {
   }
 }
 
+// ------------------- Function: handleVendingViewAutocomplete -------------------
+// Provides autocomplete suggestions for viewing a vendor's shop
+async function handleVendingViewAutocomplete(interaction, focusedOption) {
+  try {
+    // Fetch all characters from the database
+    const characters = await fetchAllCharacters();
+
+    // Filter for only characters with vending jobs and completed setup
+    const vendorCharacters = characters.filter(character => {
+      const job = character.job?.toLowerCase();
+      return (job === 'shopkeeper' || job === 'merchant') && 
+             character.vendingSetup?.shopLink && 
+             character.vendingSync;
+    });
+
+    // Map characters to autocomplete choices
+    const choices = vendorCharacters.map((character) => ({
+      name: `${character.name} (${character.job})`,
+      value: character.name
+    }));
+
+    // Filter based on user input
+    const searchQuery = focusedOption.value?.toLowerCase() || "";
+    const filteredChoices = choices.filter(choice => 
+      choice.name.toLowerCase().includes(searchQuery)
+    );
+
+    await interaction.respond(filteredChoices.slice(0, 25));
+  } catch (error) {
+    console.error("[handleVendingViewAutocomplete]: Error:", error);
+    await interaction.respond([]);
+  }
+}
+
 module.exports = {
  handleAutocomplete,
  handleCharacterBasedCommandsAutocomplete,
@@ -2670,6 +2706,7 @@ module.exports = {
  handleSlotAutocomplete,
  handleVendingAddAutocomplete,
  handleVendingBarterAutocomplete,
+ handleVendingViewAutocomplete,
 
  // ------------------- Village Functions -------------------
 

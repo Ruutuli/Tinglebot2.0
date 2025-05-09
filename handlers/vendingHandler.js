@@ -120,8 +120,7 @@ async function handleCollectPoints(interaction) {
 
     if (!character) {
       return interaction.reply({
-        content: `❌ Character "${characterName}" not found.`,
-        ephemeral: true
+        content: `❌ Character "${characterName}" not found.`
       });
     }
 
@@ -134,8 +133,7 @@ async function handleCollectPoints(interaction) {
 
     if (alreadyClaimed) {
       return interaction.reply({
-        content: `⚠️ ${characterName} has already claimed vending points this month.`,
-        ephemeral: true
+        content: `⚠️ ${characterName} has already claimed vending points this month.`
       });
     }
 
@@ -143,23 +141,20 @@ async function handleCollectPoints(interaction) {
     const job = character.job?.toLowerCase();
     if (job !== 'shopkeeper' && job !== 'merchant') {
       return interaction.reply({
-        content: `❌ **Invalid Vendor Type:** ${character.name} must be a **Shopkeeper** or **Merchant** to collect vending points.\n\nCurrent job: **${character.job || 'None'}**\n\nTo become a vendor:\n1. Use a Job Voucher to change to Shopkeeper or Merchant\n2. Run \`/vending setup\` to initialize your shop\n3. Run \`/vending sync\` to sync your inventory`,
-        ephemeral: true
+        content: `❌ **Invalid Vendor Type:** ${character.name} must be a **Shopkeeper** or **Merchant** to collect vending points.\n\nCurrent job: **${character.job || 'None'}**\n\nTo become a vendor:\n1. Use a Job Voucher to change to Shopkeeper or Merchant\n2. Run \`/vending setup\` to initialize your shop\n3. Run \`/vending sync\` to sync your inventory`
       });
     }
 
     // ------------------- Setup Validation -------------------
     if (!character.vendingSetup?.shopLink || !character.shopLink) {
         return interaction.reply({
-            content: `❌ You must complete vending setup before collecting points. Please run \`/vending setup\` first.`,
-            ephemeral: true
+            content: `❌ You must complete vending setup before collecting points. Please run \`/vending setup\` first.`
         });
     }
 
     if (!character.vendingSync) {
       return interaction.reply({
-        content: `❌ You must sync your vending sheet before collecting points. Please run \`/vending sync\` first.`,
-        ephemeral: true
+        content: `❌ You must sync your vending sheet before collecting points. Please run \`/vending sync\` first.`
       });
     }
 
@@ -185,12 +180,11 @@ async function handleCollectPoints(interaction) {
       });
     }
 
-    return interaction.reply({ embeds: [embed], ephemeral: true });
+    return interaction.reply({ embeds: [embed] });
   } catch (error) {
     console.error('[handleCollectPoints]: Error', error);
     return interaction.reply({
-      content: `❌ An unexpected error occurred. Please try again later.`,
-      ephemeral: true
+      content: `❌ An unexpected error occurred. Please try again later.`
     });
   }
 }
@@ -199,7 +193,7 @@ async function handleCollectPoints(interaction) {
 // Allows Shopkeepers/Merchants to restock items from monthly vending stock.
 async function handleRestock(interaction) {
   try {
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply();
 
     // ------------------- Input Parsing -------------------
     const characterName = interaction.options.getString('charactername');
@@ -426,7 +420,7 @@ async function handleRestock(interaction) {
 // ------------------- handleVendingBarter -------------------
 async function handleVendingBarter(interaction) {
     try {
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply();
   
       const buyerId = interaction.user.id;
       const buyerName = interaction.user.username;
@@ -550,8 +544,7 @@ async function handleVendingBarter(interaction) {
     } catch (error) {
       console.error("[handleVendingBarter]:", error);
       await interaction.editReply({
-        content: "❌ An error occurred while processing the barter request. Please try again later.",
-        ephemeral: true
+        content: "❌ An error occurred while processing the barter request. Please try again later."
       });
     }
 }
@@ -559,7 +552,7 @@ async function handleVendingBarter(interaction) {
 // ------------------- handleFulfill -------------------
 async function handleFulfill(interaction) {
     try {
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply();
   
       const fulfillmentId = interaction.options.getString("fulfillmentid");
       if (!fulfillmentId) {
@@ -629,8 +622,7 @@ async function handleFulfill(interaction) {
     } catch (error) {
       console.error("[handleFulfill]:", error);
       await interaction.editReply({
-        content: "❌ An error occurred while fulfilling the barter. Please try again later.",
-        ephemeral: true
+        content: "❌ An error occurred while fulfilling the barter. Please try again later."
       });
     }
   }
@@ -638,7 +630,7 @@ async function handleFulfill(interaction) {
 // ------------------- handlePouchUpgrade -------------------
 async function handlePouchUpgrade(interaction) {
   try {
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply();
 
     const characterName = interaction.options.getString('charactername');
     const newPouchType = interaction.options.getString('pouchtype');
@@ -851,8 +843,7 @@ async function handleViewShop(interaction) {
 
     if (!items || items.length === 0) {
       return await interaction.reply({
-        content: `⚠️ No items found in ${characterName}'s vending inventory.`,
-        ephemeral: true
+        content: `⚠️ No items found in ${characterName}'s vending inventory.`
       });
     }
 
@@ -875,15 +866,13 @@ async function handleViewShop(interaction) {
 
     // Send the embed
     await interaction.reply({
-      embeds: [shopEmbed],
-      ephemeral: true
+      embeds: [shopEmbed]
     });
 
   } catch (error) {
     console.error(`[handleViewShop]: Error viewing shop:`, error);
     await interaction.reply({
-      content: `❌ Error viewing shop: ${error.message}`,
-      ephemeral: true
+      content: `❌ Error viewing shop: ${error.message}`
     });
   }
 }
@@ -901,16 +890,14 @@ async function handleVendingSetup(interaction) {
     const character = await fetchCharacterByNameAndUserId(characterName, userId);
     if (!character) {
         return interaction.reply({
-            content: `❌ Character "${characterName}" not found or doesn't belong to you.`,
-            ephemeral: true
+            content: `❌ Character "${characterName}" not found or doesn't belong to you.`
         });
     }
 
     // Check if character already has vending setup
     if (character.vendingSetup?.shopLink && character.vendingSync) {
         return interaction.reply({
-            content: `❌ ${characterName} already has a vending shop set up and synced. Use \`/vending edit\` to modify your shop settings.`,
-            ephemeral: true
+            content: `❌ ${characterName} already has a vending shop set up and synced. Use \`/vending edit\` to modify your shop settings.`
         });
     }
 
@@ -918,23 +905,20 @@ async function handleVendingSetup(interaction) {
     const validPouchTypes = ['none', 'bronze', 'silver', 'gold'];
     if (!validPouchTypes.includes(pouchType?.toLowerCase())) {
         return interaction.reply({
-            content: '❌ Invalid pouch type. Please choose from: none, bronze, silver, or gold.',
-            ephemeral: true
+            content: '❌ Invalid pouch type. Please choose from: none, bronze, silver, or gold.'
         });
     }
 
     // Validate shop link
     if (!shopLink) {
         return interaction.reply({
-            content: '❌ Please provide a Google Sheets link for your shop.',
-            ephemeral: true
+            content: '❌ Please provide a Google Sheets link for your shop.'
         });
     }
 
     if (!isValidGoogleSheetsUrl(shopLink)) {
         return interaction.reply({
-            content: '❌ Invalid Google Sheets URL. Please provide a valid Google Sheets link.',
-            ephemeral: true
+            content: '❌ Invalid Google Sheets URL. Please provide a valid Google Sheets link.'
         });
     }
 
@@ -942,8 +926,7 @@ async function handleVendingSetup(interaction) {
     const validation = await validateVendingSheet(shopLink, characterName);
     if (!validation.success) {
         return interaction.reply({
-            content: validation.message,
-            ephemeral: true
+            content: validation.message
         });
     }
 
@@ -961,8 +944,7 @@ async function handleVendingSetup(interaction) {
 
     if (!vendorType) {
         return interaction.reply({
-            content: `❌ ${characterName} must be a Shopkeeper or Merchant to set up a vending shop.`,
-            ephemeral: true
+            content: `❌ ${characterName} must be a Shopkeeper or Merchant to set up a vending shop.`
         });
     }
 
@@ -988,8 +970,7 @@ async function handleVendingSetup(interaction) {
     } catch (error) {
         console.error('[handleVendingSetup]: Error updating character:', error);
         return interaction.reply({
-            content: '❌ Failed to update character data. Please try again later.',
-            ephemeral: true
+            content: '❌ Failed to update character data. Please try again later.'
         });
     }
 
@@ -1202,7 +1183,7 @@ async function handleVendingSync(interaction, characterName) {
       // If editing fails, try to send a follow-up message
       await interaction.followUp({
         content: successMessage,
-        ephemeral: true
+        ephemeral: false
       });
     }
 
@@ -1216,7 +1197,7 @@ async function handleVendingSync(interaction, characterName) {
 // ------------------- handleEditShop -------------------
 async function handleEditShop(interaction) {
   try {
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply();
 
     const characterName = interaction.options.getString('charactername');
     const action = interaction.options.getString('action');
@@ -1251,8 +1232,9 @@ async function handleEditShop(interaction) {
         );
 
         // Update Google Sheet
-        if (character.vendingSheetUrl) {
-          const spreadsheetId = extractSpreadsheetId(character.vendingSheetUrl);
+        const shopLink = character.shopLink || character.vendingSetup?.shopLink;
+        if (shopLink) {
+          const spreadsheetId = extractSpreadsheetId(shopLink);
           const auth = await authorizeSheets();
           
           // Read current sheet data
@@ -1309,8 +1291,7 @@ async function handleEditShop(interaction) {
         );
 
         await interaction.editReply({
-          content: `✅ Updated shop banner for ${characterName}.`,
-          ephemeral: true
+          content: `✅ Updated shop banner for ${characterName}.`
         });
         break;
       }
@@ -1328,8 +1309,7 @@ async function handleEditShop(interaction) {
     handleError(error, 'vendingHandler.js');
     console.error('[handleEditShop]:', error);
     await interaction.editReply({
-      content: `❌ Error editing shop: ${error.message}`,
-      ephemeral: true
+      content: `❌ Error editing shop: ${error.message}`
     });
   }
 }
@@ -1344,8 +1324,7 @@ async function handleShopLink(interaction) {
       // ------------------- Step 1: Validate Link -------------------
       if (!isValidGoogleSheetsUrl(shopLink)) {
         await interaction.reply({
-          content: '❌ Invalid Google Sheets link. Please provide a valid link.',
-          ephemeral: true,
+          content: '❌ Invalid Google Sheets link. Please provide a valid link.'
         });
         return;
       }
@@ -1355,8 +1334,7 @@ async function handleShopLink(interaction) {
       const character = await fetchCharacterByNameAndUserId(characterName, userId);
       if (!character) {
         await interaction.reply({
-          content: `❌ Character '${characterName}' not found.`,
-          ephemeral: true,
+          content: `❌ Character '${characterName}' not found.`
         });
         return;
       }
@@ -1369,15 +1347,13 @@ async function handleShopLink(interaction) {
   
       // ------------------- Step 4: Respond to User -------------------
       await interaction.reply({
-        content: `✅ Shop link for **${characterName}** updated successfully!`,
-        ephemeral: false,
+        content: `✅ Shop link for **${characterName}** updated successfully!`
       });
     } catch (error) {
       handleError(error, 'vendingHandler.js');
       console.error('[handleShopLink]: Error updating shop link:', error);
       await interaction.reply({
-        content: '❌ An error occurred while updating the shop link. Please try again later.',
-        ephemeral: true,
+        content: '❌ An error occurred while updating the shop link. Please try again later.'
       });
     }
   }
@@ -1417,7 +1393,7 @@ function generateVillageButtonRow(currentVillageKey = '') {
 
 // ------------------- viewVendingStock -------------------
 async function viewVendingStock(interaction) {
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply();
 
   try {
     const now = new Date();
@@ -1435,8 +1411,7 @@ async function viewVendingStock(interaction) {
 
     if (!result || !result.stockList || Object.keys(result.stockList).length === 0) {
       return interaction.editReply({
-        content: `📭 No vending stock available for **${monthName}**, even after regeneration.`,
-        ephemeral: true
+        content: `📭 No vending stock available for **${monthName}**, even after regeneration.`
       });
     }
 
@@ -1482,8 +1457,7 @@ async function viewVendingStock(interaction) {
   } catch (err) {
     console.error('[viewVendingStock]: Error loading vending_stock:', err);
     return interaction.editReply({
-      content: `❌ An error occurred while retrieving vending stock.`,
-      ephemeral: true
+      content: `❌ An error occurred while retrieving vending stock.`
     });
   }
 }
