@@ -49,6 +49,40 @@ const Pet = require("../models/PetModel");
 const ShopStock = require("../models/VillageShopsModel");
 const { Village } = require("../models/VillageModel");
 
+// Add at the top of the file after imports
+const AUTOCOMPLETE_TIMEOUT = 2500; // 2.5 seconds
+
+// Add timeout utility
+const createTimeoutPromise = (ms = AUTOCOMPLETE_TIMEOUT) => new Promise((_, reject) => {
+  setTimeout(() => reject(new Error('Autocomplete timeout')), ms);
+});
+
+// Add safe response utility
+async function safeAutocompleteResponse(interaction, choices) {
+  try {
+    const timeoutPromise = createTimeoutPromise();
+    await Promise.race([
+      interaction.respond(choices),
+      timeoutPromise
+    ]);
+  } catch (error) {
+    if (error.code === 10062) {
+      console.log('[autocomplete]: Interaction already expired');
+      return;
+    }
+    if (error.message === 'Autocomplete timeout') {
+      console.log('[autocomplete]: Response timed out');
+      return;
+    }
+    console.error('[autocomplete]: Error:', error);
+    try {
+      await interaction.respond([]).catch(() => {});
+    } catch (e) {
+      // Ignore any errors from the fallback response
+    }
+  }
+}
+
 // ============================================================================
 // MAIN FUNCTION TO HANDLE AUTOCOMPLETE INTERACTIONS
 // ============================================================================
@@ -267,29 +301,24 @@ async function handleAutocomplete(interaction) {
 
 // ------------------- Helper Function to Filter and Respond with Choices -------------------
 async function respondWithFilteredChoices(interaction, focusedOption, choices) {
- // Add this check at the beginning of the function
- if (!focusedOption || typeof focusedOption.value === "undefined") {
-  // If focusedOption is missing or doesn't have a value property,
-  // just return sorted choices without filtering
-  const sortedChoices = [...choices]
-   .sort((a, b) => a.name.localeCompare(b.name))
-   .slice(0, 25);
-  await interaction.respond(sortedChoices);
-  return;
- }
+  if (!focusedOption || typeof focusedOption.value === "undefined") {
+    const sortedChoices = [...choices]
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .slice(0, 25);
+    await safeAutocompleteResponse(interaction, sortedChoices);
+    return;
+  }
 
- // The rest of the function remains the same
- const filteredChoices =
-  focusedOption.value === ""
-   ? choices.slice(0, 25)
-   : choices
+  const filteredChoices = focusedOption.value === ""
+    ? choices.slice(0, 25)
+    : choices
       .filter((choice) =>
-       choice.name.toLowerCase().includes(focusedOption.value.toLowerCase())
+        choice.name.toLowerCase().includes(focusedOption.value.toLowerCase())
       )
       .slice(0, 25);
 
- filteredChoices.sort((a, b) => a.name.localeCompare(b.name));
- await interaction.respond(filteredChoices);
+  filteredChoices.sort((a, b) => a.name.localeCompare(b.name));
+  await safeAutocompleteResponse(interaction, filteredChoices);
 }
 
 // ------------------- Helper Function to Safely Respond with Error -------------------
@@ -2530,6 +2559,11 @@ async function handleViewInventoryAutocomplete(interaction, focusedOption) {
 // Provides autocomplete suggestions for items in a vendor's shop during barter
 async function handleVendingBarterAutocomplete(interaction, focusedOption) {
   try {
+    // Create a timeout promise
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Autocomplete timeout')), 2500);
+    });
+
     const subcommand = interaction.options.getSubcommand();
     const focusedName = focusedOption.name;
     const searchQuery = focusedOption.value?.toLowerCase() || "";
@@ -2551,7 +2585,12 @@ async function handleVendingBarterAutocomplete(interaction, focusedOption) {
         choice.name.toLowerCase().includes(searchQuery)
       );
 
-      return await interaction.respond(filteredChoices.slice(0, 25));
+      // Race between the response and timeout
+      await Promise.race([
+        interaction.respond(filteredChoices.slice(0, 25)),
+        timeoutPromise
+      ]);
+      return;
     }
 
     // Handle vendor character autocomplete (all vendors)
@@ -2575,22 +2614,48 @@ async function handleVendingBarterAutocomplete(interaction, focusedOption) {
         choice.name.toLowerCase().includes(searchQuery)
       );
 
-      return await interaction.respond(filteredChoices.slice(0, 25));
+      // Race between the response and timeout
+      await Promise.race([
+        interaction.respond(filteredChoices.slice(0, 25)),
+        timeoutPromise
+      ]);
+      return;
     }
 
     // Handle item name autocomplete
     if (focusedName === 'itemname') {
-      const vendorName = interaction.options.getString("vendorcharacter");
-      if (!vendorName) return await interaction.respond([]);
+      let targetCharacter;
+      
+      if (subcommand === 'edit') {
+        // For edit command, use charactername (your own shop)
+        targetCharacter = interaction.options.getString("charactername");
+      } else {
+        // For barter command, use vendorcharacter (the shop you're buying from)
+        targetCharacter = interaction.options.getString("vendorcharacter");
+      }
 
-      // Get vendor character
-      const vendor = await fetchCharacterByName(vendorName);
-      if (!vendor) return await interaction.respond([]);
+      if (!targetCharacter) {
+        await Promise.race([
+          interaction.respond([]),
+          timeoutPromise
+        ]);
+        return;
+      }
 
-      // Get items from vendor's vending inventory ONLY
+      // Get character
+      const character = await fetchCharacterByName(targetCharacter);
+      if (!character) {
+        await Promise.race([
+          interaction.respond([]),
+          timeoutPromise
+        ]);
+        return;
+      }
+
+      // Get items from character's vending inventory
       const vendingClient = new MongoClient(process.env.MONGODB_INVENTORIES_URI);
       await vendingClient.connect();
-      const vendCollection = vendingClient.db('vendingInventories').collection(vendorName.toLowerCase());
+      const vendCollection = vendingClient.db('vendingInventories').collection(targetCharacter.toLowerCase());
       const vendingItems = await vendCollection.find({}).toArray();
       await vendingClient.close();
 
@@ -2599,18 +2664,52 @@ async function handleVendingBarterAutocomplete(interaction, focusedOption) {
         item.itemName?.toLowerCase().includes(searchQuery)
       );
 
-      const choices = filteredItems.map(item => ({
-        name: `${item.slot || 'Unknown Slot'} | ${item.itemName} | Qty:${item.stockQty ?? 'undefined'} | Token:${item.tokenPrice || 'N/A'} | Art:${item.artPrice || 'N/A'}`,
-        value: item.itemName
-      }));
+      // Format items based on subcommand
+      const choices = filteredItems.map(item => {
+        if (subcommand === 'edit') {
+          // For edit command, show slot | item | qty format
+          return {
+            name: `${item.slot || 'Unknown'} | ${item.itemName} | Qty:${item.stockQty ?? '0'}`,
+            value: item.itemName
+          };
+        } else {
+          // For barter command, show full details
+          return {
+            name: `${item.slot || 'Unknown Slot'} | ${item.itemName} | Qty:${item.stockQty ?? 'undefined'} | Token:${item.tokenPrice || 'N/A'} | Art:${item.artPrice || 'N/A'}`,
+            value: item.itemName
+          };
+        }
+      });
 
-      return await interaction.respond(choices.slice(0, 25));
+      // Race between the response and timeout
+      await Promise.race([
+        interaction.respond(choices.slice(0, 25)),
+        timeoutPromise
+      ]);
+      return;
     }
 
-    return await interaction.respond([]);
+    // Default empty response with timeout
+    await Promise.race([
+      interaction.respond([]),
+      timeoutPromise
+    ]);
   } catch (error) {
+    // Handle specific error types
+    if (error.code === 10062) {
+      console.log('[handleVendingBarterAutocomplete]: Interaction already expired');
+      return;
+    }
+    if (error.message === 'Autocomplete timeout') {
+      console.log('[handleVendingBarterAutocomplete]: Autocomplete response timed out');
+      return;
+    }
     console.error("[handleVendingBarterAutocomplete]: Error:", error);
-    await interaction.respond([]);
+    try {
+      await interaction.respond([]).catch(() => {});
+    } catch (e) {
+      // Ignore any errors from the fallback response
+    }
   }
 }
 

@@ -37,7 +37,8 @@ const {
   fetchCharacterByNameAndUserId,
   getTokenBalance,
   updateTokenBalance, 
-  fetchItemByName
+  fetchItemByName,
+  addItemToInventory
 } = require('../database/db');
 
 // ------------------- Utility Functions -------------------
@@ -56,8 +57,7 @@ const {
 } = require("../utils/googleSheetsUtils.js");
 
 const {
-  addItemToVendingInventory,
-  addItemToInventory
+  addItemToVendingInventory
 } = require("../utils/inventoryUtils.js");
 
 const {
@@ -635,7 +635,7 @@ async function handleFulfill(interaction) {
       }
 
       // Add to buyer's inventory
-      const buyerInventory = await connectToInventories(buyer);
+      const buyerInventory = await getInventoryCollection(buyer.name);
       await addItemToInventory(buyerInventory, itemName, quantity);
   
       // ------------------- Delete Fulfillment Request -------------------
@@ -664,7 +664,7 @@ async function handleFulfill(interaction) {
         content: "❌ An error occurred while fulfilling the barter. Please try again later."
       });
     }
-  }
+}
   
 // ------------------- handlePouchUpgrade -------------------
 async function handlePouchUpgrade(interaction) {
@@ -1080,6 +1080,16 @@ async function handleVendingSync(interaction, characterName) {
     const errors = [];
     let totalSlotsUsed = 0;
 
+    // Calculate total available slots
+    const baseSlotLimits = { shopkeeper: 5, merchant: 3 };
+    const pouchCapacities = { none: 0, bronze: 15, silver: 30, gold: 50 };
+    const baseSlots = baseSlotLimits[character.job?.toLowerCase()] || 0;
+    const extraSlots = pouchCapacities[character.shopPouch?.toLowerCase()] || 0;
+    const totalSlots = baseSlots + extraSlots;
+
+    // Track used slots
+    const usedSlots = new Set();
+
     for (const row of parsedRows) {
       const item = await ItemModel.findOne({ itemName: row.itemName });
       if (!item) {
@@ -1103,6 +1113,32 @@ async function handleVendingSync(interaction, characterName) {
         slotsNeeded = stockQty;
       }
 
+      // Auto-assign slot if none specified
+      let slot = row.slot;
+      if (!slot) {
+        // Find first available slot
+        for (let i = 1; i <= totalSlots; i++) {
+          const slotName = `Slot ${i}`;
+          if (!usedSlots.has(slotName)) {
+            slot = slotName;
+            usedSlots.add(slotName);
+            break;
+          }
+        }
+        if (!slot) {
+          errors.push(`No available slots for ${row.itemName}. You have used all ${totalSlots} slots.`);
+          continue;
+        }
+      } else {
+        // Validate manually specified slot
+        const slotNumber = parseInt(slot.replace(/[^0-9]/g, ''));
+        if (isNaN(slotNumber) || slotNumber < 1 || slotNumber > totalSlots) {
+          errors.push(`Invalid slot number "${slot}" for ${row.itemName}. You have ${totalSlots} total slots available.`);
+          continue;
+        }
+        usedSlots.add(slot);
+      }
+
       vendingEntries.push({
         characterName: character.name,
         itemName: row.itemName,
@@ -1115,7 +1151,7 @@ async function handleVendingSync(interaction, characterName) {
         artPrice: row.artPrice === 'N/A' ? null : row.artPrice,
         otherPrice: row.otherPrice === 'N/A' ? null : row.otherPrice,
         barterOpen: row.barterOpen === 'Yes' || row.barterOpen === true,
-        slot: row.slot || 'Slot 1',
+        slot: slot,
         date: new Date(),
         stackable: isStackable,
         maxStackSize: maxStackSize,
@@ -1168,24 +1204,56 @@ async function handleEditShop(interaction) {
     const action = interaction.options.getString('action');
     const userId = interaction.user.id;
 
+    // Validate character exists and belongs to user
     const character = await fetchCharacterByNameAndUserId(characterName, userId);
     if (!character) {
-      throw new Error(`Character '${characterName}' not found or doesn't belong to you.`);
+      return interaction.editReply({
+        content: `❌ Character '${characterName}' not found or doesn't belong to you.`,
+        ephemeral: true
+      });
+    }
+
+    // Validate character has a shop setup
+    if (!character.vendingSetup?.shopLink && !character.shopLink) {
+      return interaction.editReply({
+        content: `❌ ${characterName} doesn't have a shop set up yet. Use \`/vending setup\` first.`,
+        ephemeral: true
+      });
     }
 
     switch (action) {
       case 'item': {
         const itemName = interaction.options.getString('itemname');
         if (!itemName) {
-          throw new Error('Item name is required for item editing.');
+          return interaction.editReply({
+            content: '❌ Item name is required for item editing.',
+            ephemeral: true
+          });
         }
 
         const tokenPrice = interaction.options.getInteger('tokenprice');
         const artPrice = interaction.options.getString('artprice');
         const otherPrice = interaction.options.getString('otherprice');
 
+        // Validate at least one price is being updated
+        if (tokenPrice === null && !artPrice && !otherPrice) {
+          return interaction.editReply({
+            content: '❌ Please provide at least one price to update (token price, art price, or other price).',
+            ephemeral: true
+          });
+        }
+
         // Update item in vending inventory
         const VendingInventory = await getVendingModel(characterName);
+        const existingItem = await VendingInventory.findOne({ itemName });
+        
+        if (!existingItem) {
+          return interaction.editReply({
+            content: `❌ Item "${itemName}" not found in your shop inventory.`,
+            ephemeral: true
+          });
+        }
+
         const updateFields = {};
         if (tokenPrice !== null) updateFields.tokenPrice = tokenPrice;
         if (artPrice) updateFields.artPrice = artPrice;
@@ -1199,37 +1267,42 @@ async function handleEditShop(interaction) {
         // Update Google Sheet
         const shopLink = character.shopLink || character.vendingSetup?.shopLink;
         if (shopLink) {
-          const spreadsheetId = extractSpreadsheetId(shopLink);
-          const auth = await authorizeSheets();
-          
-          // Read current sheet data
-          const sheetData = await readSheetData(auth, spreadsheetId, 'vendingShop!A2:L');
-          
-          // Find the row with the item
-          const itemRowIndex = sheetData.findIndex(row => row[2] === itemName);
-          if (itemRowIndex !== -1) {
-            const row = itemRowIndex + 2; // +2 because sheet data starts at A2
-            const updateData = [];
+          try {
+            const spreadsheetId = extractSpreadsheetId(shopLink);
+            const auth = await authorizeSheets();
             
-            // Keep existing values except for the ones we're updating
-            const existingRow = sheetData[itemRowIndex];
-            updateData.push(
-              existingRow[0], // Character Name
-              existingRow[1], // Slot
-              existingRow[2], // Item Name
-              existingRow[3], // Stock Qty
-              existingRow[4], // Cost Each
-              existingRow[5], // Points Spent
-              existingRow[6], // Bought From
-              tokenPrice !== null ? tokenPrice : existingRow[7], // Token Price
-              artPrice || existingRow[8], // Art Price
-              otherPrice || existingRow[9], // Other Price
-              existingRow[10], // Trades Open
-              existingRow[11] // Date
-            );
+            // Read current sheet data
+            const sheetData = await readSheetData(auth, spreadsheetId, 'vendingShop!A2:L');
             
-            // Update the row in the sheet
-            await writeSheetData(auth, spreadsheetId, `vendingShop!A${row}:L${row}`, [updateData]);
+            // Find the row with the item
+            const itemRowIndex = sheetData.findIndex(row => row[2] === itemName);
+            if (itemRowIndex !== -1) {
+              const row = itemRowIndex + 2; // +2 because sheet data starts at A2
+              const updateData = [];
+              
+              // Keep existing values except for the ones we're updating
+              const existingRow = sheetData[itemRowIndex];
+              updateData.push(
+                existingRow[0], // Character Name
+                existingRow[1], // Slot
+                existingRow[2], // Item Name
+                existingRow[3], // Stock Qty
+                existingRow[4], // Cost Each
+                existingRow[5], // Points Spent
+                existingRow[6], // Bought From
+                tokenPrice !== null ? tokenPrice : existingRow[7], // Token Price
+                artPrice || existingRow[8], // Art Price
+                otherPrice || existingRow[9], // Other Price
+                existingRow[10], // Trades Open
+                existingRow[11] // Date
+              );
+              
+              // Update the row in the sheet
+              await writeSheetData(auth, spreadsheetId, `vendingShop!A${row}:L${row}`, [updateData]);
+            }
+          } catch (sheetError) {
+            console.error('[handleEditShop]: Error updating Google Sheet:', sheetError);
+            // Don't fail the whole operation if sheet update fails
           }
         }
 
@@ -1243,7 +1316,28 @@ async function handleEditShop(interaction) {
       case 'banner': {
         const shopImageFile = interaction.options.getAttachment('shopimagefile');
         if (!shopImageFile) {
-          throw new Error('Shop image file is required for banner update.');
+          return interaction.editReply({
+            content: '❌ Shop image file is required for banner update.',
+            ephemeral: true
+          });
+        }
+
+        // Validate file type
+        const validImageTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+        if (!validImageTypes.includes(shopImageFile.contentType)) {
+          return interaction.editReply({
+            content: '❌ Invalid file type. Please upload a valid image file (JPEG, PNG, GIF, or WebP).',
+            ephemeral: true
+          });
+        }
+
+        // Validate file size (max 8MB)
+        const MAX_FILE_SIZE = 8 * 1024 * 1024; // 8MB in bytes
+        if (shopImageFile.size > MAX_FILE_SIZE) {
+          return interaction.editReply({
+            content: '❌ File size too large. Maximum size is 8MB.',
+            ephemeral: true
+          });
         }
 
         const sanitizedName = characterName.replace(/\s+/g, '');
@@ -1256,7 +1350,8 @@ async function handleEditShop(interaction) {
         );
 
         await interaction.editReply({
-          content: `✅ Updated shop banner for ${characterName}.`
+          content: `✅ Updated shop banner for ${characterName}.`,
+          ephemeral: true
         });
         break;
       }
@@ -1267,14 +1362,17 @@ async function handleEditShop(interaction) {
       }
 
       default:
-        throw new Error('Invalid action selected.');
+        return interaction.editReply({
+          content: '❌ Invalid action selected.',
+          ephemeral: true
+        });
     }
 
   } catch (error) {
-    handleError(error, 'vendingHandler.js');
     console.error('[handleEditShop]:', error);
     await interaction.editReply({
-      content: `❌ Error editing shop: ${error.message}`
+      content: `❌ Error editing shop: ${error.message}`,
+      ephemeral: true
     });
   }
 }
