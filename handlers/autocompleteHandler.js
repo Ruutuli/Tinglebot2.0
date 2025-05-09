@@ -19,6 +19,7 @@ const {
  getCharacterInventoryCollection,
  fetchCraftableItemsAndCheckMaterials,
  getCurrentVendingStockList,
+ getVendingModel
 } = require("../database/db");
 // ------------------- Modules -------------------
 const {
@@ -101,8 +102,8 @@ async function handleAutocomplete(interaction) {
           await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "vending");
         } else if (focusedName === "vendorcharacter") {
           await handleVendorCharacterAutocomplete(interaction);
-        } else if (focusedName === "itemname" && subcommand === "trade") {
-          await handleVendingTradeAutocomplete(interaction, focusedOption);
+        } else if (focusedName === "itemname" && subcommand === "barter") {
+          await handleVendingBarterAutocomplete(interaction, focusedOption);
         } else {
           await interaction.respond([]);
         }
@@ -2521,61 +2522,11 @@ async function handleViewInventoryAutocomplete(interaction, focusedOption) {
 // EXPORT FUNCTIONS
 // ============================================================================
 
+
+
 // ------------------- Function: handleVendingBarterAutocomplete -------------------
-// Provides autocomplete suggestions for items in a vendor's shop during trade/barter
+// Provides autocomplete suggestions for items in a vendor's shop during barter
 async function handleVendingBarterAutocomplete(interaction, focusedOption) {
-  try {
-    const vendorName = interaction.options.getString("vendorcharacter");
-    if (!vendorName) return await interaction.respond([]);
-
-    // Get vendor character
-    const vendor = await fetchCharacterByName(vendorName);
-    if (!vendor) return await interaction.respond([]);
-
-    const village = vendor.currentVillage?.toLowerCase()?.trim();
-    const vendorType = vendor.job?.toLowerCase();
-    const searchQuery = focusedOption.value?.toLowerCase() || "";
-
-    // Get regular vendor items
-    const vendorItems = await getVendorItems(village, vendorType, searchQuery);
-    
-    // Get items from vendor's vending inventory
-    const vendingClient = new MongoClient(process.env.MONGODB_INVENTORIES_URI);
-    await vendingClient.connect();
-    const vendCollection = vendingClient.db('vendingInventories').collection(vendorName.toLowerCase());
-    const vendingItems = await vendCollection.find({}).toArray();
-    await vendingClient.close();
-
-    // Combine and format all items
-    const allItems = [...vendorItems];
-    
-    // Add vending inventory items
-    for (const item of vendingItems) {
-      if (item.itemName?.toLowerCase().includes(searchQuery)) {
-        allItems.push({
-          itemName: item.itemName,
-          points: item.tokenPrice || 0,
-          stock: item.stockQty || 0,
-          isLimited: true
-        });
-      }
-    }
-
-    const choices = allItems.map(item => ({
-      name: `${item.itemName} - ${item.points} pts${item.isLimited ? ` (Qty: ${item.stock})` : ''}`,
-      value: item.itemName
-    }));
-
-    await interaction.respond(choices.slice(0, 25));
-  } catch (error) {
-    console.error("[handleVendingBarterAutocomplete]: Error:", error);
-    await interaction.respond([]);
-  }
-}
-
-// ------------------- Function: handleVendingTradeAutocomplete -------------------
-// Provides autocomplete suggestions for items in a vendor's shop during trade
-async function handleVendingTradeAutocomplete(interaction, focusedOption) {
   try {
     const vendorName = interaction.options.getString("vendorcharacter");
     if (!vendorName) return await interaction.respond([]);
@@ -2605,7 +2556,7 @@ async function handleVendingTradeAutocomplete(interaction, focusedOption) {
 
     await interaction.respond(choices.slice(0, 25));
   } catch (error) {
-    console.error("[handleVendingTradeAutocomplete]: Error:", error);
+    console.error("[handleVendingBarterAutocomplete]: Error:", error);
     await interaction.respond([]);
   }
 }
@@ -2715,7 +2666,6 @@ module.exports = {
  handleSlotAutocomplete,
  handleVendingAddAutocomplete,
  handleVendingBarterAutocomplete,
- handleVendingTradeAutocomplete,
 
  // ------------------- Village Functions -------------------
 
