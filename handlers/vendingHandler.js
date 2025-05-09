@@ -465,16 +465,43 @@ async function handleVendingBarter(interaction) {
       // Find all items with the requested name
       const allItems = await VendingInventory.find({ itemName: requestedItemName });
 
-      // Find the first item that has a valid art price
-      const requestedItem = allItems.find(item => 
-        item.artPrice && 
-        item.artPrice !== 'N/A' && 
-        item.artPrice !== '' && 
-        item.artPrice !== null
-      );
-      
+      // Find the first item that has a valid price for the selected payment type
+      let requestedItem;
+      switch (paymentType) {
+        case 'tokens':
+          requestedItem = allItems.find(item => 
+            item.tokenPrice && 
+            item.tokenPrice !== 'N/A' && 
+            item.tokenPrice !== '' && 
+            item.tokenPrice !== null
+          );
+          if (!requestedItem) {
+            return interaction.editReply(`⚠️ The item **${requestedItemName}** is not available for token purchase in ${targetShopName}'s shop.`);
+          }
+          break;
+        case 'art':
+          requestedItem = allItems.find(item => 
+            item.artPrice && 
+            item.artPrice !== 'N/A' && 
+            item.artPrice !== '' && 
+            item.artPrice !== null
+          );
+          if (!requestedItem) {
+            return interaction.editReply(`⚠️ The item **${requestedItemName}** is not available for art purchase in ${targetShopName}'s shop.`);
+          }
+          break;
+        case 'barter':
+          requestedItem = allItems.find(item => 
+            item.barterOpen === true
+          );
+          if (!requestedItem) {
+            return interaction.editReply(`⚠️ The item **${requestedItemName}** is not available for barter in ${targetShopName}'s shop.`);
+          }
+          break;
+      }
+
       if (!requestedItem) {
-        return interaction.editReply(`⚠️ The item **${requestedItemName}** is not available for art purchase in ${targetShopName}'s shop.`);
+        return interaction.editReply(`⚠️ The item **${requestedItemName}** is not available in ${targetShopName}'s shop.`);
       }
 
       if (requestedItem.stockQty < quantity) {
