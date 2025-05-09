@@ -343,6 +343,12 @@ async function handleRestock(interaction) {
           }
         }
       );
+
+      // Check if stock reached zero and delete if needed
+      const updatedItem = await vendCollection.findOne({ _id: existingItem._id });
+      if (updatedItem.stockQty <= 0) {
+        await vendCollection.deleteOne({ _id: existingItem._id });
+      }
     } else {
       // Insert new item
       await vendCollection.insertOne({
@@ -598,6 +604,12 @@ async function handleFulfill(interaction) {
         { _id: stockItem._id },
         { $inc: { stockQty: -quantity } }
       );
+
+      // Add check for zero stock and delete if needed
+      const updatedItem = await VendingInventory.findOne({ _id: stockItem._id });
+      if (updatedItem.stockQty <= 0) {
+        await VendingInventory.deleteOne({ _id: stockItem._id });
+      }
 
       // Add to buyer's inventory
       const buyerInventory = await connectToInventories(buyer);
@@ -1058,6 +1070,11 @@ async function handleVendingSync(interaction, characterName) {
       let stockQty = Number(row.stockQty) || 0;
       let slotsNeeded = 1;
 
+      // Skip items with zero or negative stock
+      if (stockQty <= 0) {
+        continue;
+      }
+
       if (isStackable) {
         if (stockQty > maxStackSize) {
           errors.push({
@@ -1136,6 +1153,11 @@ async function handleVendingSync(interaction, characterName) {
       const maxStackSize = item.maxStackSize || 10;
       let stockQty = Number(row.stockQty) || 0;
       let slotsNeeded = 1;
+
+      // Skip items with zero or negative stock
+      if (stockQty <= 0) {
+        continue;
+      }
 
       if (isStackable) {
         slotsNeeded = Math.ceil(stockQty / maxStackSize);
