@@ -918,50 +918,51 @@ async function handleDeliverItemAutocomplete(interaction, focusedOption) {
 // ------------------- Deliver: Vendor Item Autocomplete -------------------
 // Provides autocomplete suggestions for items from the village vendor stock.
 async function handleVendorItemAutocomplete(interaction, focusedOption) {
- try {
-  const courierName = interaction.options.getString("courier");
-  const recipientName = interaction.options.getString("recipient");
-  const searchQuery = focusedOption.value.toLowerCase();
+  try {
+    const characterName = interaction.options.getString("charactername");
+    if (!characterName) return await interaction.respond([]);
 
-  if (!courierName || !recipientName) return await interaction.respond([]);
+    const userId = interaction.user.id;
+    const character = await fetchCharacterByNameAndUserId(characterName, userId);
+    if (!character) return await interaction.respond([]);
 
-  const courier = await fetchCharacterByName(courierName);
-  const recipient = await fetchCharacterByName(recipientName);
-  if (!courier || !recipient) return await interaction.respond([]);
+    const village = character.currentVillage?.toLowerCase()?.trim();
+    const vendorType = character.job?.toLowerCase();
+    const searchQuery = focusedOption.value?.toLowerCase() || "";
 
-  const village = courier.currentVillage?.toLowerCase()?.trim();
-  const vendorType = recipient.job?.toLowerCase();
+    // Get regular vendor items
+    const vendorItems = await getVendorItems(village, vendorType, searchQuery);
+    
+    // Get limited items if this is a vending add command
+    let limitedItems = [];
+    if (interaction.commandName === "vending" && interaction.options.getSubcommand() === "add") {
+      const limitedStockList = await getCurrentVendingStockList();
+      if (limitedStockList?.limitedItems) {
+        limitedItems = limitedStockList.limitedItems
+          .filter(item => 
+            item.itemName?.toLowerCase().includes(searchQuery) &&
+            item.stock > 0
+          )
+          .map(item => ({
+            ...item,
+            isLimited: true,
+            vendingType: vendorType // Add vendingType to match regular items format
+          }));
+      }
+    }
 
-  const stockList = await getCurrentVendingStockList();
-  if (!stockList?.stockList?.[village]) {
-   return await interaction.respond([]);
+    // Combine and format all items
+    const allItems = [...vendorItems, ...limitedItems];
+    const choices = allItems.map(item => ({
+      name: `${item.itemName} - ${item.points} pts${item.isLimited ? ' (Limited)' : ''}`,
+      value: item.itemName
+    }));
+
+    await interaction.respond(choices.slice(0, 25));
+  } catch (error) {
+    console.error("[handleVendorItemAutocomplete]: Error:", error);
+    await interaction.respond([]);
   }
-
-  const villageStock = stockList.stockList[village];
-
-  const filteredItems = villageStock.filter(
-   (item) =>
-    item.vendingType?.toLowerCase() === vendorType &&
-    item.itemName?.toLowerCase().includes(searchQuery)
-  );
-
-  const choices = filteredItems.slice(0, 25).map((item) => ({
-   name: `${item.itemName} - ${item.points} pts`,
-   value: item.itemName,
-  }));
-
-  if (interaction.deferred || interaction.replied || interaction.responded)
-   return;
-  await interaction.respond(choices);
- } catch (error) {
-  handleError(error, "autocompleteHandler.js");
-
-  console.error(
-   "[courierAutocomplete.js]: logs -> Error in handleVendorItemAutocomplete:",
-   error
-  );
-  await safeRespondWithError(interaction);
- }
 }
 
 // ============================================================================
@@ -2332,12 +2333,37 @@ async function handleVendorItemAutocomplete(interaction, focusedOption) {
 
     const village = character.currentVillage?.toLowerCase()?.trim();
     const vendorType = character.job?.toLowerCase();
-    const searchQuery = focusedOption.value;
+    const searchQuery = focusedOption.value?.toLowerCase() || "";
 
-    const items = await getVendorItems(village, vendorType, searchQuery);
-    const choices = formatVendorItems(items);
+    // Get regular vendor items
+    const vendorItems = await getVendorItems(village, vendorType, searchQuery);
+    
+    // Get limited items if this is a vending add command
+    let limitedItems = [];
+    if (interaction.commandName === "vending" && interaction.options.getSubcommand() === "add") {
+      const limitedStockList = await getCurrentVendingStockList();
+      if (limitedStockList?.limitedItems) {
+        limitedItems = limitedStockList.limitedItems
+          .filter(item => 
+            item.itemName?.toLowerCase().includes(searchQuery) &&
+            item.stock > 0
+          )
+          .map(item => ({
+            ...item,
+            isLimited: true,
+            vendingType: vendorType // Add vendingType to match regular items format
+          }));
+      }
+    }
 
-    await interaction.respond(choices);
+    // Combine and format all items
+    const allItems = [...vendorItems, ...limitedItems];
+    const choices = allItems.map(item => ({
+      name: `${item.itemName} - ${item.points} pts${item.isLimited ? ' (Limited)' : ''}`,
+      value: item.itemName
+    }));
+
+    await interaction.respond(choices.slice(0, 25));
   } catch (error) {
     console.error("[handleVendorItemAutocomplete]: Error:", error);
     await interaction.respond([]);
