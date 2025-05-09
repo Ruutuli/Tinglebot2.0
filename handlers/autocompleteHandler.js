@@ -83,17 +83,15 @@ async function handleAutocomplete(interaction) {
         await handleEconomyAutocomplete(interaction, focusedName, focusedValue);
         break;
       case "vending":
-        if (focusedName === "charactername") {
+        const subcommand = interaction.options.getSubcommand();
+        if (subcommand === "add") {
+          await handleVendingAddAutocomplete(interaction, focusedOption);
+        } else if (focusedName === "charactername") {
           await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "vending");
         } else if (focusedName === "vendorcharacter") {
           await handleVendorCharacterAutocomplete(interaction);
         } else if (focusedName === "itemname") {
-          const subcommand = interaction.options.getSubcommand();
-          if (subcommand === "add") {
-            await handleVendingRestockAutocomplete(interaction, focusedOption);
-          } else {
-            await handleVendingBarterAutocomplete(interaction, focusedOption);
-          }
+          await handleVendingBarterAutocomplete(interaction, focusedOption);
         }
         break;
       case "gather":
@@ -215,7 +213,8 @@ async function handleAutocomplete(interaction) {
         await interaction.respond([]);
     }
   } catch (error) {
-    await safeRespondWithError(interaction, error);
+    console.error('[handleAutocomplete]: Error:', error);
+    await interaction.respond([]);
   }
 }
 
@@ -2636,8 +2635,37 @@ async function handleViewInventoryAutocomplete(interaction, focusedOption) {
 // ============================================================================
 // EXPORT FUNCTIONS
 // ============================================================================
+
+// ------------------- handleVendingAddAutocomplete -------------------
+async function handleVendingAddAutocomplete(interaction, focusedOption) {
+  try {
+    const focusedName = focusedOption.name;
+    const focusedValue = focusedOption.value;
+
+    switch (focusedName) {
+      case 'charactername':
+        await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, 'vending');
+        break;
+      case 'itemname':
+        await handleItemAutocomplete(interaction, focusedOption);
+        break;
+      case 'slot':
+        await handleSlotAutocomplete(interaction, focusedOption);
+        break;
+      default:
+        await interaction.respond([]);
+    }
+  } catch (error) {
+    console.error("[handleVendingAddAutocomplete]: Error:", error);
+    await interaction.respond([]);
+  }
+}
+
 module.exports = {
  handleAutocomplete,
+ handleCharacterBasedCommandsAutocomplete,
+ handleExploreCharacterAutocomplete,
+ handleVendingAddAutocomplete,
 
  handleQuestIdAutocomplete,
 
@@ -2750,7 +2778,4 @@ module.exports = {
 
  // VIEWINVENTORY
  handleViewInventoryAutocomplete,
-
- handleCharacterBasedCommandsAutocomplete,
- handleExploreCharacterAutocomplete,
 };

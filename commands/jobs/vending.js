@@ -84,7 +84,7 @@ const command = new SlashCommandBuilder()
       .addStringOption(opt =>
         opt.setName('slot')
           .setDescription('Which slot to add the item to (e.g. "Slot 1")')
-          .setRequired(false)
+          .setRequired(true)
           .setAutocomplete(true)
       )
       .addIntegerOption(opt =>
