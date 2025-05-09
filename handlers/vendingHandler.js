@@ -22,6 +22,7 @@ const {
 const { VendingRequest, initializeVendingInventoryModel } = require('../models/VendingModel');
 const Character = require("../models/CharacterModel");
 const ItemModel = require('../models/ItemModel.js');
+const User = require('../models/UserModel.js');
 
 // ------------------- Database Connections -------------------
 const {
@@ -458,6 +459,26 @@ async function handleVendingBarter(interaction) {
       if (!shopOwner || !shopOwner.vendingSetup?.shopLink) {
         return interaction.editReply(`⚠️ No vending shop found under the name **${targetShopName}**.`);
       }
+
+      // ------------------- Token Tracker Sync Validation -------------------
+      const buyerUser = await User.findOne({ discordId: buyerId });
+      const vendorUser = await User.findOne({ discordId: shopOwner.userId });
+
+      if (!buyerUser || !vendorUser) {
+        return interaction.editReply("❌ Could not find user data for either buyer or vendor.");
+      }
+
+      if (!buyerUser.tokensSynced || !vendorUser.tokensSynced) {
+        const unsyncedUsers = [];
+        if (!buyerUser.tokensSynced) unsyncedUsers.push(buyerName);
+        if (!vendorUser.tokensSynced) unsyncedUsers.push(shopOwner.username);
+        
+        return interaction.editReply(
+          `❌ Cannot proceed with barter. Token trackers need to be synced for:\n` +
+          unsyncedUsers.map(name => `• ${name}`).join('\n') + '\n\n' +
+          `Please use \`/token sync\` to sync your token tracker first.`
+        );
+      }
   
       // Use VendingModel to check shop inventory
       const VendingInventory = await getVendingModel(targetShopName);
@@ -658,11 +679,12 @@ async function handleFulfill(interaction) {
         return interaction.editReply(`⚠️ ${vendor.name} does not have enough stock of **${itemName}** to fulfill this request.`);
       }
 
-      // ------------------- Update Google Sheet -------------------
-      const shopLink = vendor.shopLink || vendor.vendingSetup?.shopLink;
-      if (shopLink) {
+      // ------------------- Update Google Sheets -------------------
+      // Update vendor's vendingShop sheet
+      const vendorShopLink = vendor.shopLink || vendor.vendingSetup?.shopLink;
+      if (vendorShopLink) {
         try {
-          const spreadsheetId = extractSpreadsheetId(shopLink);
+          const spreadsheetId = extractSpreadsheetId(vendorShopLink);
           const auth = await authorizeSheets();
           
           // Read current sheet data
@@ -690,30 +712,77 @@ async function handleFulfill(interaction) {
               existingRow[8], // Art Price
               existingRow[9], // Other Price
               existingRow[10], // Trades Open
-              new Date().toLocaleDateString('en-US') // Current Date
+              new Date().toLocaleDateString('en-US') // Current Date in column L
             ];
             
             await writeSheetData(auth, spreadsheetId, `vendingShop!A${row}:L${row}`, [updateData]);
 
-            // Add transaction log
+            // Add transaction log to vendor's vendingShop sheet with negative quantity
             const transactionRow = [
               [
                 vendor.name, // Vendor
                 userCharacterName, // Buyer
                 itemName, // Item
-                quantity, // Quantity
+                -quantity, // Negative Quantity for sales
                 paymentMethod, // Payment Method
                 offeredItem || 'N/A', // Offered Item
                 notes || 'N/A', // Notes
-                new Date().toLocaleDateString('en-US') // Date
+                new Date().toLocaleDateString('en-US') // Date in column L
               ]
             ];
-            await appendSheetData(auth, spreadsheetId, 'transactions!A:H', transactionRow);
+            await appendSheetData(auth, spreadsheetId, 'vendingShop!A:L', transactionRow);
           }
         } catch (sheetError) {
-          console.error('[handleFulfill]: Error updating Google Sheet:', sheetError);
-          // Don't fail the whole operation if sheet update fails
+          console.error('[handleFulfill]: Error updating vendor sheet:', sheetError.message);
         }
+      }
+
+      // Update buyer's inventory sheet
+      const buyerInventoryLink = buyer.inventory;
+      if (buyerInventoryLink) {
+        try {
+          const spreadsheetId = extractSpreadsheetId(buyerInventoryLink);
+          const auth = await authorizeSheets();
+          const range = 'loggedInventory!A2:M';
+          const uniqueSyncId = uuidv4();
+          const formattedDateTime = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
+          const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
+          
+          // Get item details for proper categorization
+          const itemDetails = await ItemModel.findOne({ itemName: { $regex: new RegExp(`^${itemName}$`, 'i') } });
+          
+          // Add purchase to buyer's inventory sheet
+          const purchaseRow = [
+            [
+              buyer.name, // Character Name
+              itemName, // Item Name
+              quantity.toString(), // Quantity
+              itemDetails?.category?.join(', ') || 'Unknown', // Category
+              itemDetails?.type?.join(', ') || 'Unknown', // Type
+              itemDetails?.subtype?.join(', ') || '', // Subtype
+              'Bought', // Obtain
+              buyer.job || '', // Job
+              '', // Perk
+              vendor.name, // Location (Vendor)
+              interactionUrl, // Link
+              formattedDateTime, // Date/Time
+              uniqueSyncId // Confirmed Sync
+            ]
+          ];
+          
+          if (buyer?.name && buyer?.inventory && buyer?.userId) {
+            await safeAppendDataToSheet(buyer.inventory, buyer, range, purchaseRow);
+          } else {
+            console.error('[handleFulfill]: Invalid buyer object:', {
+              buyer: buyer.name,
+              hasInventory: Boolean(buyer.inventory)
+            });
+          }
+        } catch (sheetError) {
+          console.error('[handleFulfill]: Error updating buyer sheet:', sheetError.message);
+        }
+      } else {
+        console.error('[handleFulfill]: No inventory link for buyer:', buyer.name);
       }
   
       // ------------------- Transfer Item -------------------
@@ -1601,19 +1670,19 @@ async function viewVendingStock(interaction) {
       new ButtonBuilder()
         .setCustomId('vending_view|rudania')
         .setLabel('Rudania')
-        .setEmoji({ id: '899492917452890142', name: 'rudania' })
+        .setEmoji(villageEmojis.rudania)
         .setStyle(ButtonStyle.Danger),
 
       new ButtonBuilder()
         .setCustomId('vending_view|inariko')
         .setLabel('Inariko')
-        .setEmoji({ id: '899493009073274920', name: 'inariko' })
+        .setEmoji(villageEmojis.inariko)
         .setStyle(ButtonStyle.Primary),
 
       new ButtonBuilder()
         .setCustomId('vending_view|vhintl')
         .setLabel('Vhintl')
-        .setEmoji({ id: '899492879205007450', name: 'vhintl' })
+        .setEmoji(villageEmojis.vhintl)
         .setStyle(ButtonStyle.Success)
     );
 
