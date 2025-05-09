@@ -447,13 +447,13 @@ async function handleVendingBarter(interaction) {
         return interaction.editReply("⚠️ Please provide an item to offer when using barter payment type.");
       }
   
-      const buyer = await fetchCharacterByDiscordId(buyerId);
+      const buyer = await fetchCharacterByNameAndUserId(interaction.options.getString('charactername'), buyerId);
       if (!buyer) {
         return interaction.editReply("⚠️ Your character could not be found. Please create one first.");
       }
   
       const shopOwner = await fetchCharacterByName(targetShopName);
-      if (!shopOwner || !shopOwner.vending?.stock) {
+      if (!shopOwner || !shopOwner.vendingSetup?.shopLink) {
         return interaction.editReply(`⚠️ No vending shop found under the name **${targetShopName}**.`);
       }
   
