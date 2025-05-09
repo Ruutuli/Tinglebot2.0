@@ -1073,12 +1073,20 @@ async function handleVendingSync(interaction, characterName) {
     // Parse the sheet data
     const parsedRows = await parseSheetData(shopLink);
 
+    // Initialize vendingEntries array
+    const vendingEntries = [];
+
     // Validate all items before proceeding
     const errors = [];
     let totalSlotsUsed = 0;
 
     for (const row of parsedRows) {
       const item = await ItemModel.findOne({ itemName: row.itemName });
+      if (!item) {
+        errors.push(`Item "${row.itemName}" not found in database`);
+        continue;
+      }
+
       const isStackable = item.stackable;
       const maxStackSize = item.maxStackSize || 10;
       let stockQty = Number(row.stockQty) || 0;
@@ -1115,6 +1123,14 @@ async function handleVendingSync(interaction, characterName) {
       });
     }
 
+    // If there are validation errors, throw them
+    if (errors.length > 0) {
+      throw new Error(`Validation errors:\n${errors.join('\n')}`);
+    }
+
+    // Clear existing inventory before inserting new entries
+    await VendingInventory.deleteMany({});
+
     // Insert the new entries
     if (vendingEntries.length > 0) {
       await VendingInventory.insertMany(vendingEntries);
@@ -1126,10 +1142,19 @@ async function handleVendingSync(interaction, characterName) {
       { $set: { vendingSync: true } }
     );
 
+    // Send success message
+    await interaction.editReply({
+      content: `✅ Successfully synced ${characterName}'s vending shop with ${vendingEntries.length} items.`,
+      embeds: [],
+      components: []
+    });
+
   } catch (error) {
     console.error("[handleVendingSync]:", error);
     await interaction.editReply({
-      content: "❌ An error occurred while syncing your vending shop. Please try again later."
+      content: `❌ An error occurred while syncing your vending shop: ${error.message}`,
+      embeds: [],
+      components: []
     });
   }
 }

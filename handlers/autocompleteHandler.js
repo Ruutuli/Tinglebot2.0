@@ -108,7 +108,7 @@ async function handleAutocomplete(interaction) {
     switch (commandName) {
       // ------------------- Economy Commands -------------------
       case "economy":
-        await handleEconomyAutocomplete(interaction, focusedName, focusedValue);
+        await handleEconomyAutocomplete(interaction, focusedOption);
         break;
 
       // ------------------- Resource Gathering Commands -------------------
@@ -2657,8 +2657,9 @@ async function handleEconomyAutocomplete(interaction, focusedOption) {
       case 'trade':
         if (focusedOption.name === 'fromcharacter') {
           const userId = interaction.user.id;
-          const characters = await fetchAllCharactersExceptUser(userId);
-          const choices = characters
+          const characters = await fetchAllCharacters();
+          const userCharacters = characters.filter(char => char.userId === userId);
+          const choices = userCharacters
             .filter(char => char.name.toLowerCase().includes(focusedValue))
             .map(char => ({
               name: char.name,
