@@ -277,8 +277,11 @@ async function handleRestock(interaction) {
     // ------------------- Slot Assignment -------------------
     let newSlot;
     if (manualSlot) {
-      // Check if slot is already taken
-      const existingItem = await vendCollection.findOne({ slot: manualSlot });
+      // Check if slot is already taken by a different item
+      const existingItem = await vendCollection.findOne({ 
+        slot: manualSlot,
+        itemName: { $ne: itemName } // Only check for different items
+      });
       if (existingItem) {
         return interaction.editReply(`❌ Slot ${manualSlot} is already occupied by ${existingItem.itemName}.`);
       }
@@ -298,46 +301,54 @@ async function handleRestock(interaction) {
       }
     }
 
-    // ------------------- Update Inventory -------------------
-    const existingMatch = await vendCollection.findOne({
+    // ------------------- Stack Size Validation -------------------
+    const existingItem = await vendCollection.findOne({
       itemName,
-      costEach: pointCost,
-      tokenPrice,
-      artPrice,
-      otherPrice,
-      tradesOpen
+      slot: newSlot
     });
 
-    if (existingMatch) {
-      // If the existing match has a null stockQty, set it to the new quantity
-      if (existingMatch.stockQty === null) {
-        await vendCollection.updateOne(
-          { _id: existingMatch._id },
-          {
-            $set: { 
-              stockQty: stockQty,
-              pointsSpent: totalCost,
-              date: new Date(),
-              boughtFrom: character.currentVillage,
-              slot: newSlot
-            }
-          }
-        );
-      } else {
-        // Otherwise increment the existing quantity
-        await vendCollection.updateOne(
-          { _id: existingMatch._id },
-          {
-            $inc: { stockQty: stockQty, pointsSpent: totalCost },
-            $set: { 
-              date: new Date(), 
-              boughtFrom: character.currentVillage,
-              slot: newSlot
-            }
-          }
+    // Get item details to check stackable status
+    const itemDetails = await ItemModel.findOne({ itemName });
+    if (!itemDetails) {
+      return interaction.editReply(`❌ Could not find item details for ${itemName}.`);
+    }
+
+    const maxStackSize = itemDetails.maxStackSize || 10;
+    const isStackable = itemDetails.stackable;
+
+    if (!isStackable && stockQty > 1) {
+      return interaction.editReply(`❌ ${itemName} is not stackable. You can only add 1 at a time.`);
+    }
+
+    if (existingItem) {
+      const newTotal = existingItem.stockQty + stockQty;
+      if (newTotal > maxStackSize) {
+        return interaction.editReply(
+          `❌ Cannot add ${stockQty} more ${itemName}. This would exceed the maximum stack size of ${maxStackSize}. ` +
+          `Current stack: ${existingItem.stockQty}, Maximum allowed: ${maxStackSize}`
         );
       }
+    } else if (stockQty > maxStackSize) {
+      return interaction.editReply(
+        `❌ Cannot add ${stockQty} ${itemName}. Maximum stack size is ${maxStackSize}.`
+      );
+    }
+
+    // ------------------- Update Inventory -------------------
+    if (existingItem) {
+      // Update existing item
+      await vendCollection.updateOne(
+        { _id: existingItem._id },
+        {
+          $inc: { stockQty: stockQty, pointsSpent: totalCost },
+          $set: { 
+            date: new Date(), 
+            boughtFrom: character.currentVillage
+          }
+        }
+      );
     } else {
+      // Insert new item
       await vendCollection.insertOne({
         itemName,
         stockQty,
@@ -366,6 +377,11 @@ async function handleRestock(interaction) {
         const spreadsheetId = extractSpreadsheetId(shopLink);
         if (spreadsheetId) {
           const auth = await authorizeSheets();
+          const currentDate = new Date().toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+          });
           const rowData = [
             characterName,
             newSlot,
@@ -378,8 +394,9 @@ async function handleRestock(interaction) {
             artPrice,
             otherPrice,
             tradesOpen ? 'Yes' : 'No',
-            'Old Stock'
+            currentDate
           ];
+          // Always append a new row for every transaction
           await appendSheetData(auth, spreadsheetId, 'vendingShop!A:L', [rowData]);
         }
       } catch (sheetError) {
