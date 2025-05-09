@@ -8,6 +8,7 @@ const { v4: uuidv4 } = require('uuid');
 const { MongoClient } = require("mongodb");
 const mongoose = require('mongoose');
 const VENDING_DB_URI = process.env.MONGODB_INVENTORIES_URI;
+const { generateUniqueId } = require('../utils/uniqueIdUtils');
 
 // ------------------- Discord.js Components -------------------
 const {
@@ -56,6 +57,7 @@ const {
 
 const {
   addItemToVendingInventory,
+  addItemToInventory
 } = require("../utils/inventoryUtils.js");
 
 const {
@@ -500,7 +502,7 @@ async function handleVendingBarter(interaction) {
       }
   
       // ------------------- Create Barter Request -------------------
-      const fulfillmentId = uuidv4();
+      const fulfillmentId = generateUniqueId('V');
       const barterData = {
         fulfillmentId,
         userCharacterName: buyer.name,
@@ -599,7 +601,7 @@ async function handleFulfill(interaction) {
 
       // Add to buyer's inventory
       const buyerInventory = await connectToInventories(buyer);
-      await addItemToInventory(buyerInventory.inventory, itemName, quantity);
+      await addItemToInventory(buyerInventory, itemName, quantity);
   
       // ------------------- Delete Fulfillment Request -------------------
       await VendingRequest.deleteOne({ fulfillmentId });
