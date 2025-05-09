@@ -464,13 +464,6 @@ async function handleVendingBarter(interaction) {
       
       // Find all items with the requested name
       const allItems = await VendingInventory.find({ itemName: requestedItemName });
-      console.log(`[handleVendingBarter] Found ${allItems.length} items named ${requestedItemName}:`, 
-        allItems.map(item => ({
-          slot: item.slot,
-          artPrice: item.artPrice,
-          stockQty: item.stockQty
-        }))
-      );
 
       // Find the first item that has a valid art price
       const requestedItem = allItems.find(item => 
@@ -479,12 +472,6 @@ async function handleVendingBarter(interaction) {
         item.artPrice !== '' && 
         item.artPrice !== null
       );
-      
-      console.log(`[handleVendingBarter] Selected item for art purchase:`, requestedItem ? {
-        slot: requestedItem.slot,
-        artPrice: requestedItem.artPrice,
-        stockQty: requestedItem.stockQty
-      } : 'No valid item found');
       
       if (!requestedItem) {
         return interaction.editReply(`⚠️ The item **${requestedItemName}** is not available for art purchase in ${targetShopName}'s shop.`);
@@ -508,20 +495,9 @@ async function handleVendingBarter(interaction) {
           break;
 
         case 'art':
-          console.log(`[handleVendingBarter] Art price validation for ${requestedItemName}:`, {
-            artPrice: requestedItem.artPrice,
-            artPriceType: typeof requestedItem.artPrice,
-            isNull: requestedItem.artPrice === null,
-            isUndefined: requestedItem.artPrice === undefined,
-            isNA: requestedItem.artPrice === 'N/A',
-            isEmpty: requestedItem.artPrice === '',
-            rawItem: requestedItem
-          });
           if (!requestedItem.artPrice || requestedItem.artPrice === 'N/A' || requestedItem.artPrice === '') {
-            console.log(`[handleVendingBarter] Art price validation failed for ${requestedItemName}`);
             return interaction.editReply(`⚠️ ${requestedItemName} is not available for art purchase.`);
           }
-          console.log(`[handleVendingBarter] Art price validation passed for ${requestedItemName}`);
           break;
 
         case 'barter':
@@ -561,15 +537,6 @@ async function handleVendingBarter(interaction) {
       
       // Also save to temporary storage for backward compatibility
       await saveVendingRequestToStorage(fulfillmentId, barterData);
-      
-      console.log(`[handleVendingBarter] Created barter request:`, {
-        fulfillmentId,
-        itemName: requestedItem.itemName,
-        quantity,
-        paymentMethod: paymentType,
-        buyer: buyer.name,
-        vendor: shopOwner.name
-      });
   
       // ------------------- Confirmation Embed -------------------
       const embed = new EmbedBuilder()
@@ -676,14 +643,6 @@ async function handleFulfill(interaction) {
       await VendingRequest.deleteOne({ fulfillmentId });
       await deleteVendingRequestFromStorage(fulfillmentId);
       
-      console.log(`[handleFulfill] Fulfilled barter request:`, {
-        fulfillmentId,
-        itemName,
-        quantity,
-        buyer: buyer.name,
-        vendor: vendor.name
-      });
-  
       // ------------------- Confirmation Embed -------------------
       const embed = new EmbedBuilder()
         .setTitle(`✅ Barter Fulfilled`)
@@ -907,8 +866,6 @@ async function handleViewShop(interaction) {
       });
     }
 
-    console.log(`[handleViewShop]: Starting view shop for character: ${characterName}`);
-    
     // Get character from database
     const character = await Character.findOne({ name: characterName });
     if (!character) {
@@ -919,15 +876,12 @@ async function handleViewShop(interaction) {
 
     // Get the vending model for this character
     const VendingInventory = await getVendingModel(characterName);
-    console.log(`[handleViewShop]: Got vending model for ${characterName}`);
 
     // Get items from vending inventory
     const items = await VendingInventory.find({});
-    console.log(`[handleViewShop]: Found ${items.length} items in vending inventory`);
 
     // Filter out items with zero stock
     const availableItems = items.filter(item => item.stockQty > 0);
-    console.log(`[handleViewShop]: Found ${availableItems.length} items with stock`);
 
     if (!availableItems || availableItems.length === 0) {
       return await interaction.reply({
@@ -1061,7 +1015,6 @@ async function handleVendingSetup(interaction) {
 
     try {
         await updateCharacterById(character._id, updateData);
-        console.log(`[handleVendingSetup]: Successfully updated vending setup for ${characterName}`);
     } catch (error) {
         console.error('[handleVendingSetup]: Error updating character:', error);
         return interaction.reply({
@@ -1102,8 +1055,6 @@ async function handleVendingSetup(interaction) {
 // ------------------- handleVendingSync -------------------
 async function handleVendingSync(interaction, characterName) {
   try {
-    console.log(`[handleVendingSync]: Starting vending sync for character: ${characterName}`);
-    
     // Get character from database
     const character = await Character.findOne({ name: characterName });
     if (!character) {
@@ -1118,111 +1069,13 @@ async function handleVendingSync(interaction, characterName) {
 
     // Get the vending model for this character
     const VendingInventory = await getVendingModel(characterName);
-    console.log(`[handleVendingSync]: Got vending model for ${characterName}`);
 
     // Parse the sheet data
     const parsedRows = await parseSheetData(shopLink);
-    console.log(`[handleVendingSync]: Parsed ${parsedRows.length} rows from sheet`);
 
     // Validate all items before proceeding
     const errors = [];
     let totalSlotsUsed = 0;
-
-    // First pass: validate all items and collect errors
-    for (const row of parsedRows) {
-      // Fetch the item from the database to get its ID and stackable status
-      const item = await ItemModel.findOne({ itemName: row.itemName });
-      if (!item) {
-        errors.push({
-          type: 'missing_item',
-          itemName: row.itemName,
-          slot: row.slot || 'Unknown Slot'
-        });
-        continue;
-      }
-
-      // Always use stackable and maxStackSize from ItemModel
-      const isStackable = item.stackable;
-      const maxStackSize = item.maxStackSize || 10;
-      let stockQty = Number(row.stockQty) || 0;
-      let slotsNeeded = 1;
-
-      // Skip items with zero or negative stock
-      if (stockQty <= 0) {
-        continue;
-      }
-
-      if (isStackable) {
-        if (stockQty > maxStackSize) {
-          errors.push({
-            type: 'stack_size',
-            itemName: row.itemName,
-            quantity: stockQty,
-            maxSize: maxStackSize,
-            slot: row.slot || 'Unknown Slot'
-          });
-        }
-        slotsNeeded = Math.ceil(stockQty / maxStackSize);
-      } else {
-        // For non-stackable items, quantity must be 1
-        if (stockQty > 1) {
-          errors.push({
-            type: 'non_stackable',
-            itemName: row.itemName,
-            quantity: stockQty,
-            slot: row.slot || 'Unknown Slot'
-          });
-        }
-        slotsNeeded = stockQty;
-      }
-
-      // Check if we have enough slots available
-      if (totalSlotsUsed + slotsNeeded > character.pouchSize) {
-        errors.push({
-          type: 'slot_capacity',
-          itemName: row.itemName,
-          needed: slotsNeeded,
-          remaining: character.pouchSize - totalSlotsUsed,
-          slot: row.slot || 'Unknown Slot'
-        });
-      }
-
-      totalSlotsUsed += slotsNeeded;
-    }
-
-    // If there are any errors, return them and don't proceed with sync
-    if (errors.length > 0) {
-      let errorMessage = `❌ **Sync Failed:** Please fix the following issues in your sheet and try again:\n\n`;
-      errorMessage += errors.map(err => {
-        switch (err.type) {
-          case 'stack_size':
-            return `• **${err.slot}:** "${err.itemName}" has ${err.quantity} items, but maximum stack size is ${err.maxSize}. Please reduce the quantity to ${err.maxSize} or less.`;
-          case 'non_stackable':
-            return `• **${err.slot}:** "${err.itemName}" is a non-stackable item and can only have 1 per slot. Please reduce the quantity to 1.`;
-          case 'slot_capacity':
-            return `• **${err.slot}:** "${err.itemName}" needs ${err.needed} slots, but you only have ${err.remaining} slots remaining. Please reduce quantities or remove some items.`;
-          case 'missing_item':
-            return `• **${err.slot}:** Item "${err.itemName}" not found in database. Please check the item name.`;
-          default:
-            return `• ${err.message || 'Unknown error'}`;
-        }
-      }).join('\n\n');
-      
-      errorMessage += '\n\n**Instructions:**\n1. Open your shop sheet\n2. Fix the quantities to match the requirements above\n3. Save your changes\n4. Try syncing again';
-      
-      return interaction.editReply({
-        content: errorMessage,
-        embeds: [],
-        components: []
-      });
-    }
-
-    // Clear existing vending inventory
-    await VendingInventory.deleteMany({ characterName: character.name });
-    console.log(`[handleVendingSync]: Cleared existing vending inventory for ${character.name}`);
-
-    // Create new vending inventory entries
-    const vendingEntries = [];
 
     for (const row of parsedRows) {
       const item = await ItemModel.findOne({ itemName: row.itemName });
@@ -1260,19 +1113,11 @@ async function handleVendingSync(interaction, characterName) {
         maxStackSize: maxStackSize,
         slotsUsed: slotsNeeded
       });
-
-      // Add logging for art price handling
-      console.log(`[handleVendingSync] Processing art price for ${row.itemName}:`, {
-        originalArtPrice: row.artPrice,
-        processedArtPrice: row.artPrice === 'N/A' ? null : row.artPrice,
-        row: row
-      });
     }
 
     // Insert the new entries
     if (vendingEntries.length > 0) {
       await VendingInventory.insertMany(vendingEntries);
-      console.log(`[handleVendingSync]: Created ${vendingEntries.length} vending inventory entries`);
     }
 
     // Update character's vending sync status
@@ -1281,28 +1126,11 @@ async function handleVendingSync(interaction, characterName) {
       { $set: { vendingSync: true } }
     );
 
-    // Create success message
-    const successMessage = `✅ Successfully synced ${vendingEntries.length} items to ${characterName}'s vending inventory!\n📦 Total slots used: ${totalSlotsUsed}/${character.pouchSize}`;
-
-    // Try to edit the original interaction reply first
-    try {
-      await interaction.editReply({
-        content: successMessage,
-        embeds: [],
-        components: []
-      });
-    } catch (error) {
-      // If editing fails, try to send a follow-up message
-      await interaction.followUp({
-        content: successMessage,
-        ephemeral: false
-      });
-    }
-
   } catch (error) {
-    handleError(error, 'vendingHandler.js');
-    console.error(`[handleVendingSync]: Error syncing vending inventory: ${error.message}`);
-    await interaction.editReply(`❌ Failed to sync vending inventory: ${error.message}`);
+    console.error("[handleVendingSync]:", error);
+    await interaction.editReply({
+      content: "❌ An error occurred while syncing your vending shop. Please try again later."
+    });
   }
 }
   

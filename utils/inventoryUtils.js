@@ -531,11 +531,6 @@ const addItemToVendingInventory = async (collectionName, item) => {
   }
  } catch (error) {
   handleError(error, "inventoryUtils.js");
-
-  console.error(
-   "[inventoryUtils.js]: logs Error adding item to vending inventory:",
-   error
-  );
   throw error;
  }
 };

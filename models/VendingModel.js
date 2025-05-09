@@ -39,13 +39,11 @@ vendingInventorySchema.pre('save', function(next) {
 
 // ------------------- Initialize the vending inventory model -------------------
 const initializeVendingInventoryModel = async (characterName) => {
-  console.log(`[initializeVendingInventoryModel]: Initializing vending inventory model for ${characterName}`);
   const vendingConnection = await connectToVending();
 
   if (!vendingConnection) {
     throw new Error(`[initializeVendingInventoryModel]: Failed to connect to the vending database.`);
   }
-  console.log(`[initializeVendingInventoryModel]: Successfully connected to the vending database.`);
 
   // Create a unique model name for each character's vending inventory
   const modelName = `VendingInventory_${characterName.toLowerCase()}`;
