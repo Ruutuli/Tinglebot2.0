@@ -145,6 +145,13 @@ async function handleAutocomplete(interaction) {
         await handleEconomyAutocomplete(interaction, focusedOption);
         break;
 
+      // ------------------- View Inventory Command -------------------
+      case "viewinventory":
+        if (focusedName === "charactername") {
+          await handleViewInventoryAutocomplete(interaction, focusedOption);
+        }
+        break;
+
       // ------------------- Resource Gathering Commands -------------------
       case "gather":
         if (focusedName === "charactername") {
@@ -202,7 +209,9 @@ async function handleAutocomplete(interaction) {
       // ------------------- Mount Commands -------------------
       case "mount":
         if (focusedName === "charactername") {
-          await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "mount");
+          await handleMountAutocomplete(interaction, focusedOption);
+        } else if (focusedName === "mountname") {
+          await handleMountNameAutocomplete(interaction, focusedOption);
         }
         break;
 
@@ -2529,14 +2538,20 @@ async function handleViewInventoryAutocomplete(interaction, focusedOption) {
   // Fetch all characters from the database
   const characters = await fetchAllCharacters();
 
-  // Map characters to autocomplete choices
+  // Map characters to autocomplete choices with formatted display
   const choices = characters.map((character) => ({
-   name: character.name, // Display character name
-   value: character._id.toString(), // Use character ID as value
+   name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
+   value: character.name
   }));
 
-  // Respond with filtered character choices
-  await respondWithFilteredChoices(interaction, focusedOption, choices);
+  // Filter based on user input
+  const searchQuery = focusedOption.value?.toLowerCase() || "";
+  const filteredChoices = choices.filter(choice => 
+   choice.name.toLowerCase().includes(searchQuery)
+  );
+
+  // Respond with filtered choices (limit to 25)
+  await interaction.respond(filteredChoices.slice(0, 25));
  } catch (error) {
   handleError(error, "autocompleteHandler.js");
 
@@ -2548,7 +2563,6 @@ async function handleViewInventoryAutocomplete(interaction, focusedOption) {
   await safeRespondWithError(interaction);
  }
 }
-
 // ============================================================================
 // EXPORT FUNCTIONS
 // ============================================================================
@@ -3046,3 +3060,4 @@ module.exports = {
  // ------------------- View Inventory Functions -------------------
  handleViewInventoryAutocomplete,
 };
+
