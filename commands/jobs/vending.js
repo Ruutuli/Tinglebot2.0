@@ -268,10 +268,10 @@ async function execute(interaction) {
       case 'setup':
         return await handleVendingSetup(interaction);
   
-      case 'viewshop':
+      case 'view':
         return await handleViewShop(interaction);
 
-      case 'viewstock':
+      case 'stock':
         return await viewVendingStock(interaction);
 
       case 'shoplink':
