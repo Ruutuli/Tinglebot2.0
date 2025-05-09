@@ -1699,10 +1699,7 @@ const checkMaterial = (materialId, materialName, quantityNeeded, inventory) => {
 
 const connectToInventoriesForItems = async () => {
     try {
-        if (!inventoriesClient || !inventoriesClient.isConnected()) {
-            if (inventoriesClient) {
-                await inventoriesClient.close();
-            }
+        if (!inventoriesClient) {
             inventoriesClient = new MongoClient(inventoriesUri, {
                 maxPoolSize: 10,
                 minPoolSize: 5,
@@ -1719,6 +1716,30 @@ const connectToInventoriesForItems = async () => {
             });
             await inventoriesClient.connect();
             inventoriesDb = inventoriesClient.db('tinglebot');
+        } else {
+            // Try to ping the server to check connection
+            try {
+                await inventoriesClient.db('tinglebot').command({ ping: 1 });
+            } catch (error) {
+                // If ping fails, reconnect
+                await inventoriesClient.close();
+                inventoriesClient = new MongoClient(inventoriesUri, {
+                    maxPoolSize: 10,
+                    minPoolSize: 5,
+                    serverSelectionTimeoutMS: 30000,
+                    connectTimeoutMS: 30000,
+                    socketTimeoutMS: 45000,
+                    retryWrites: true,
+                    retryReads: true,
+                    w: 'majority',
+                    wtimeoutMS: 2500,
+                    heartbeatFrequencyMS: 10000,
+                    maxIdleTimeMS: 60000,
+                    family: 4
+                });
+                await inventoriesClient.connect();
+                inventoriesDb = inventoriesClient.db('tinglebot');
+            }
         }
         return inventoriesDb;
     } catch (error) {
