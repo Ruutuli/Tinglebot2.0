@@ -280,7 +280,7 @@ module.exports = {
           interactionUrl
         ]];
 
-        await appendSheetData(spreadsheetId, range, values, auth);
+        await appendSheetData(auth, spreadsheetId, range, values);
 
         const successEmbed = new EmbedBuilder()
           .setColor('#59A914')

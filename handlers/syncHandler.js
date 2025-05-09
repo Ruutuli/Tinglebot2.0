@@ -141,22 +141,22 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
         }));
 
         const filteredData = mappedData.filter(data => data.row[0] === character.name && data.row[1]);
-        console.log(`Filtered data size: ${filteredData.length}`);
+        console.log(`[syncHandler.js]: 📊 Found ${filteredData.length} items to sync`);
 
         if (filteredData.length === 0) {
-            console.log('No matching data found for character in the Google Sheet.');
+            console.log('[syncHandler.js]: ⚠️ No matching data found for character in the Google Sheet');
             await editSyncErrorMessage(interaction, `❌ **No matching data found for ${character.name} in the Google Sheet.**`);
             return;
         }
 
         // ------------------- Process Rows in Batches -------------------
-        console.log(`Fetching inventory collection for character: ${character.name}`);
+        console.log(`[syncHandler.js]: 🔄 Starting sync for ${character.name}`);
         let batchRequests = [];
 
-        console.log('Processing rows in batches...');
+        console.log('[syncHandler.js]: 📦 Processing items in batches...');
         for (let i = 0; i < filteredData.length; i += BATCH_SIZE) {
             const batch = filteredData.slice(i, i + BATCH_SIZE);
-            console.log(`Processing batch: ${Math.floor(i / BATCH_SIZE) + 1}`);
+            console.log(`[syncHandler.js]: 📥 Processing batch ${Math.floor(i / BATCH_SIZE) + 1}`);
 
             for (let j = 0; j < batch.length; j++) {
                 const { row, originalRowIndex } = batch[j];
@@ -166,14 +166,13 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
                 if (confirmedSync) continue;
 
                 try {
-                    console.log(`Processing item: ${itemName}, Quantity: ${qty}`);
                     const item = await ItemModel.findOne({ itemName });
                     if (!item) {
-                        console.warn(`[syncInventory]: Skipping unknown item: ${itemName} (row ${originalRowIndex})`);
+                        console.warn(`[syncHandler.js]: ⚠️ Skipping unknown item: ${itemName} (row ${originalRowIndex})`);
                         errors.push(`Row ${originalRowIndex}: Item not found - ${itemName}`);
                         skippedLinesCount++;
-                        continue; // skip this row without throwing
-                    }                    
+                        continue;
+                    }
 
                     const cleanedQty = String(qty).replace(/,/g, ''); // Remove commas
                     const quantity = parseInt(cleanedQty, 10);
@@ -222,8 +221,7 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
                     const updateRange = `loggedInventory!A${originalRowIndex}:M${originalRowIndex}`;
                     batchRequests.push({ range: updateRange, values: [updatedRowData], sheetId });
                 } catch (error) {
-    handleError(error, 'syncHandler.js');
-
+                    handleError(error, 'syncHandler.js');
                     console.error(`[syncHandler.js]: syncInventory: Error processing row ${originalRowIndex}: ${error.message}`);
                     errors.push(`Row ${originalRowIndex}: ${error.message}`);
                     skippedLinesCount++;
@@ -258,8 +256,7 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
             console.log('Initial Item removal process completed.');
             console.log('inventorySynced status updated successfully.');
         } catch (updateError) {
-    handleError(updateError, 'syncHandler.js');
-
+            handleError(updateError, 'syncHandler.js');
             console.error(`[syncHandler.js]: syncInventory: Failed to update inventorySynced status: ${updateError.message}`);
         }
 
@@ -276,10 +273,9 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
             character.inventory // Character's inventory link
         );
     } catch (error) {
-    handleError(error, 'syncHandler.js');
-
-        console.error(`[syncHandler.js]: syncInventory: Error in syncInventory: ${error.message}`, error);
-        await editSyncErrorMessage(interaction, `❌ **Sync canceled! An error occurred: ${error.message}**`);
+        handleError(error, 'syncHandler.js');
+        console.error(`[syncHandler.js]: ❌ Sync failed:`, error.message);
+        await editSyncErrorMessage(interaction, `❌ **An error occurred during sync:** ${error.message}`);
     }
 }
 
