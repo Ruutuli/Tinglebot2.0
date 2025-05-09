@@ -592,7 +592,12 @@ async function handleFulfill(interaction) {
           userCharacterName: tempRequest.userCharacterName,
           vendorCharacterName: tempRequest.vendorCharacterName,
           itemName: tempRequest.itemName,
-          quantity: tempRequest.quantity
+          quantity: tempRequest.quantity,
+          paymentMethod: tempRequest.paymentMethod,
+          offeredItem: tempRequest.offeredItem,
+          notes: tempRequest.notes,
+          buyerId: tempRequest.buyerId,
+          buyerUsername: tempRequest.buyerUsername
         };
       }
   
@@ -600,7 +605,12 @@ async function handleFulfill(interaction) {
         userCharacterName,
         vendorCharacterName,
         itemName,
-        quantity
+        quantity,
+        paymentMethod,
+        offeredItem,
+        notes,
+        buyerId,
+        buyerUsername
       } = request;
   
       // ------------------- Fetch Characters -------------------
@@ -620,6 +630,64 @@ async function handleFulfill(interaction) {
       if (!stockItem || stockItem.stockQty < quantity) {
         return interaction.editReply(`⚠️ ${vendor.name} does not have enough stock of **${itemName}** to fulfill this request.`);
       }
+
+      // ------------------- Update Google Sheet -------------------
+      const shopLink = vendor.shopLink || vendor.vendingSetup?.shopLink;
+      if (shopLink) {
+        try {
+          const spreadsheetId = extractSpreadsheetId(shopLink);
+          const auth = await authorizeSheets();
+          
+          // Read current sheet data
+          const sheetData = await readSheetData(auth, spreadsheetId, 'vendingShop!A2:L');
+          
+          // Find the row with the item
+          const itemRowIndex = sheetData.findIndex(row => row[2] === itemName);
+          if (itemRowIndex !== -1) {
+            const row = itemRowIndex + 2; // +2 because sheet data starts at A2
+            const existingRow = sheetData[itemRowIndex];
+            
+            // Calculate new stock quantity
+            const newStockQty = Number(existingRow[3]) - quantity;
+            
+            // Update the row in the sheet
+            const updateData = [
+              existingRow[0], // Character Name
+              existingRow[1], // Slot
+              existingRow[2], // Item Name
+              newStockQty, // Updated Stock Qty
+              existingRow[4], // Cost Each
+              existingRow[5], // Points Spent
+              existingRow[6], // Bought From
+              existingRow[7], // Token Price
+              existingRow[8], // Art Price
+              existingRow[9], // Other Price
+              existingRow[10], // Trades Open
+              new Date().toLocaleDateString('en-US') // Current Date
+            ];
+            
+            await writeSheetData(auth, spreadsheetId, `vendingShop!A${row}:L${row}`, [updateData]);
+
+            // Add transaction log
+            const transactionRow = [
+              [
+                vendor.name, // Vendor
+                userCharacterName, // Buyer
+                itemName, // Item
+                quantity, // Quantity
+                paymentMethod, // Payment Method
+                offeredItem || 'N/A', // Offered Item
+                notes || 'N/A', // Notes
+                new Date().toLocaleDateString('en-US') // Date
+              ]
+            ];
+            await appendSheetData(auth, spreadsheetId, 'transactions!A:H', transactionRow);
+          }
+        } catch (sheetError) {
+          console.error('[handleFulfill]: Error updating Google Sheet:', sheetError);
+          // Don't fail the whole operation if sheet update fails
+        }
+      }
   
       // ------------------- Transfer Item -------------------
       // Update vending inventory
@@ -637,6 +705,14 @@ async function handleFulfill(interaction) {
       // Add to buyer's inventory
       const buyerInventory = await getInventoryCollection(buyer.name);
       await addItemToInventory(buyerInventory, itemName, quantity);
+
+      // If this was a barter, remove the offered item from buyer's inventory
+      if (paymentMethod === 'barter' && offeredItem) {
+        await buyerInventory.updateOne(
+          { 'inventory.name': offeredItem },
+          { $inc: { 'inventory.$.quantity': -1 } }
+        );
+      }
   
       // ------------------- Delete Fulfillment Request -------------------
       // Delete from both MongoDB and temporary storage
@@ -651,8 +727,18 @@ async function handleFulfill(interaction) {
           { name: '📦 Item', value: `\`${itemName} x${quantity}\``, inline: true },
           { name: '👤 Buyer', value: buyer.name, inline: true },
           { name: '🧾 Vendor', value: vendor.name, inline: true },
-          { name: '🔐 Fulfillment ID', value: fulfillmentId, inline: false }
-        )
+          { name: '💱 Payment', value: paymentMethod.charAt(0).toUpperCase() + paymentMethod.slice(1), inline: true }
+        );
+
+      if (paymentMethod === 'barter' && offeredItem) {
+        embed.addFields({ name: '🔄 Offered', value: offeredItem, inline: true });
+      }
+
+      if (notes) {
+        embed.addFields({ name: '📝 Notes', value: notes, inline: false });
+      }
+
+      embed.addFields({ name: '🔐 Fulfillment ID', value: fulfillmentId, inline: false })
         .setColor(0x00cc99)
         .setTimestamp();
   
