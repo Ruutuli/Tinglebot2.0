@@ -495,6 +495,12 @@ async function handleComponentInteraction(interaction) {
   const [action] = interaction.customId.split('|');
 
   try {
+    // Handle shop navigation buttons first
+    if (interaction.customId.startsWith('shop-')) {
+      // These buttons are handled by their own collectors in the shop view
+      return;
+    }
+
     if ([
       'sync-yes',
       'sync-no',
