@@ -990,6 +990,678 @@ async function handleVendorItemAutocomplete(interaction, focusedOption) {
 }
 
 // ============================================================================
+// ECONOMY COMMANDS
+// ============================================================================
+// This section handles autocomplete interactions for the "economy" command.
+// It provides suggestions for the subcommands "trade", "gift", "shop-buy", "shop-sell", and "transfer".
+
+// ============================================================================
+// ------------------- ECONOMY COMMANDS -------------------
+// Handles autocomplete interactions for economy-related commands including:
+// - Trade: Character selection and item trading
+// - Gift: Character and item gifting
+// - Shop: Buying and selling items
+// - Transfer: Moving items between characters
+// ============================================================================
+
+// ------------------- Function: handleEconomyAutocomplete -------------------
+// Main handler for economy command autocomplete, routes to specific subcommand handlers
+async function handleEconomyAutocomplete(interaction, focusedOption) {
+  try {
+    const subcommand = interaction.options.getSubcommand();
+    const focusedValue = focusedOption?.value?.toLowerCase() || '';
+
+    switch (subcommand) {
+      case 'trade':
+        return await handleTradeAutocomplete(interaction, focusedOption, focusedValue);
+      case 'gift':
+        return await handleGiftAutocomplete(interaction, focusedOption, focusedValue);
+      case 'shop-buy':
+      case 'shop-sell':
+        return await handleShopAutocomplete(interaction, focusedOption, focusedValue);
+      case 'transfer':
+        return await handleTransferAutocomplete(interaction, focusedOption, focusedValue);
+    }
+  } catch (error) {
+    console.error('[handleEconomyAutocomplete]: Error:', error);
+    return await safeRespondWithError(interaction);
+  }
+}
+
+// ------------------- Function: handleTradeAutocomplete -------------------
+// Handles autocomplete for trade command's character and item selection
+async function handleTradeAutocomplete(interaction, focusedOption, focusedValue) {
+  if (focusedOption.name === 'fromcharacter') {
+    return await handleTradeFromCharacterAutocomplete(interaction, focusedValue);
+  } else if (focusedOption.name === 'tocharacter') {
+    return await handleTradeToCharacterAutocomplete(interaction, focusedValue);
+  } else if (['item1', 'item2', 'item3'].includes(focusedOption.name)) {
+    return await handleTradeItemAutocomplete(interaction, focusedValue);
+  }
+}
+
+// ------------------- Function: handleTradeFromCharacterAutocomplete -------------------
+// Provides autocomplete for selecting the source character in a trade
+async function handleTradeFromCharacterAutocomplete(interaction, focusedValue) {
+  try {
+    const userId = interaction.user.id;
+    const characters = await fetchCharactersByUserId(userId);
+    const choices = characters
+      .filter(char => char.name.toLowerCase().includes(focusedValue))
+      .map(char => ({
+        name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
+        value: char.name
+      }));
+    return await respondWithFilteredChoices(interaction, focusedValue, choices);
+  } catch (error) {
+    console.error('[handleTradeFromCharacterAutocomplete]: Error:', error);
+    return await safeRespondWithError(interaction);
+  }
+}
+
+// ------------------- Function: handleTradeToCharacterAutocomplete -------------------
+// Provides autocomplete for selecting the target character in a trade
+async function handleTradeToCharacterAutocomplete(interaction, focusedValue) {
+  try {
+    const userId = interaction.user.id;
+    const characters = await fetchAllCharactersExceptUser(userId);
+    const choices = characters
+      .filter(char => char.name.toLowerCase().includes(focusedValue))
+      .map(char => ({
+        name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
+        value: char.name
+      }));
+    return await respondWithFilteredChoices(interaction, focusedValue, choices);
+  } catch (error) {
+    console.error('[handleTradeToCharacterAutocomplete]: Error:', error);
+    return await safeRespondWithError(interaction);
+  }
+}
+
+// ------------------- Function: handleTradeItemAutocomplete -------------------
+// Provides autocomplete for selecting items to trade
+async function handleTradeItemAutocomplete(interaction, focusedValue) {
+  try {
+    const fromCharacter = interaction.options.getString('fromcharacter');
+    if (!fromCharacter) return await interaction.respond([]);
+
+    const inventoryCollection = await getCharacterInventoryCollection(fromCharacter);
+    const items = await inventoryCollection
+      .find({ itemName: { $regex: focusedValue, $options: 'i' } })
+      .toArray();
+
+    const choices = items.map(item => ({
+      name: `${item.itemName} (Qty: ${item.quantity})`,
+      value: item.itemName
+    }));
+    return await respondWithFilteredChoices(interaction, focusedValue, choices);
+  } catch (error) {
+    console.error('[handleTradeItemAutocomplete]: Error:', error);
+    return await safeRespondWithError(interaction);
+  }
+}
+
+// ------------------- Function: handleGiftAutocomplete -------------------
+// Routes gift command autocomplete to appropriate handlers
+async function handleGiftAutocomplete(interaction, focusedOption, focusedValue) {
+  if (focusedOption.name === 'fromcharacter') {
+    return await handleGiftFromCharacterAutocomplete(interaction, focusedValue);
+  } else if (focusedOption.name === 'tocharacter') {
+    return await handleGiftToCharacterAutocomplete(interaction, focusedValue);
+  } else if (['itema', 'itemb', 'itemc'].includes(focusedOption.name)) {
+    return await handleGiftItemAutocomplete(interaction, focusedValue);
+  }
+}
+
+// ------------------- Function: handleGiftFromCharacterAutocomplete -------------------
+// Provides autocomplete for selecting the source character in a gift
+async function handleGiftFromCharacterAutocomplete(interaction, focusedValue) {
+  try {
+    const userId = interaction.user.id;
+    const characters = await fetchCharactersByUserId(userId);
+    const choices = characters
+      .filter(char => char.name.toLowerCase().includes(focusedValue))
+      .map(char => ({
+        name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
+        value: char.name
+      }));
+    return await respondWithFilteredChoices(interaction, focusedValue, choices);
+  } catch (error) {
+    console.error('[handleGiftFromCharacterAutocomplete]: Error:', error);
+    return await safeRespondWithError(interaction);
+  }
+}
+
+// ------------------- Function: handleGiftToCharacterAutocomplete -------------------
+// Provides autocomplete for selecting the target character in a gift
+async function handleGiftToCharacterAutocomplete(interaction, focusedValue) {
+  try {
+    const userId = interaction.user.id;
+    const characters = await fetchAllCharactersExceptUser(userId);
+    const choices = characters
+      .filter(char => char.name.toLowerCase().includes(focusedValue))
+      .map(char => ({
+        name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
+        value: char.name
+      }));
+    return await respondWithFilteredChoices(interaction, focusedValue, choices);
+  } catch (error) {
+    console.error('[handleGiftToCharacterAutocomplete]: Error:', error);
+    return await safeRespondWithError(interaction);
+  }
+}
+
+// ------------------- Function: handleGiftItemAutocomplete -------------------
+// Provides autocomplete for selecting items to gift
+async function handleGiftItemAutocomplete(interaction, focusedValue) {
+  try {
+    const fromCharacter = interaction.options.getString('fromcharacter');
+    if (!fromCharacter) return await interaction.respond([]);
+
+    const inventoryCollection = await getCharacterInventoryCollection(fromCharacter);
+    const items = await inventoryCollection
+      .find({ itemName: { $regex: focusedValue, $options: 'i' } })
+      .toArray();
+
+    const choices = items.map(item => ({
+      name: `${item.itemName} (Qty: ${item.quantity})`,
+      value: item.itemName
+    }));
+    return await respondWithFilteredChoices(interaction, focusedValue, choices);
+  } catch (error) {
+    console.error('[handleGiftItemAutocomplete]: Error:', error);
+    return await safeRespondWithError(interaction);
+  }
+}
+
+// ------------------- Function: handleShopAutocomplete -------------------
+// Routes shop command autocomplete to appropriate handlers
+async function handleShopAutocomplete(interaction, focusedOption, focusedValue) {
+  if (focusedOption.name === 'charactername') {
+    return await handleShopCharacterAutocomplete(interaction, focusedValue);
+  } else if (focusedOption.name === 'itemname') {
+    return await handleShopItemAutocomplete(interaction, focusedValue);
+  }
+}
+
+// ------------------- Function: handleShopCharacterAutocomplete -------------------
+// Provides autocomplete for selecting character in shop commands
+async function handleShopCharacterAutocomplete(interaction, focusedValue) {
+  try {
+    const userId = interaction.user.id;
+    const characters = await fetchCharactersByUserId(userId);
+    const choices = characters
+      .filter(char => char.name.toLowerCase().includes(focusedValue))
+      .map(char => ({
+        name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
+        value: char.name
+      }));
+    return await respondWithFilteredChoices(interaction, focusedValue, choices);
+  } catch (error) {
+    console.error('[handleShopCharacterAutocomplete]: Error:', error);
+    return await safeRespondWithError(interaction);
+  }
+}
+
+// ------------------- Function: handleShopItemAutocomplete -------------------
+// Provides autocomplete for selecting items in shop commands
+async function handleShopItemAutocomplete(interaction, focusedValue) {
+  try {
+    const character = interaction.options.getString('charactername');
+    if (!character) return await interaction.respond([]);
+
+    const inventoryCollection = await getCharacterInventoryCollection(character);
+    const items = await inventoryCollection
+      .find({ itemName: { $regex: focusedValue, $options: 'i' } })
+      .toArray();
+
+    const choices = items.map(item => ({
+      name: `${item.itemName} (Qty: ${item.quantity})`,
+      value: item.itemName
+    }));
+    return await respondWithFilteredChoices(interaction, focusedValue, choices);
+  } catch (error) {
+    console.error('[handleShopItemAutocomplete]: Error:', error);
+    return await safeRespondWithError(interaction);
+  }
+}
+
+// ------------------- Function: handleTransferAutocomplete -------------------
+// Routes transfer command autocomplete to appropriate handlers
+async function handleTransferAutocomplete(interaction, focusedOption, focusedValue) {
+  if (focusedOption.name === 'fromcharacter') {
+    return await handleTransferFromCharacterAutocomplete(interaction, focusedValue);
+  } else if (focusedOption.name === 'tocharacter') {
+    return await handleTransferToCharacterAutocomplete(interaction, focusedValue);
+  } else if (['itema', 'itemb', 'itemc'].includes(focusedOption.name)) {
+    return await handleTransferItemAutocomplete(interaction, focusedValue);
+  }
+}
+
+// ------------------- Function: handleTransferFromCharacterAutocomplete -------------------
+// Provides autocomplete for selecting the source character in a transfer
+async function handleTransferFromCharacterAutocomplete(interaction, focusedValue) {
+  try {
+    const userId = interaction.user.id;
+    const characters = await fetchCharactersByUserId(userId);
+    const choices = characters
+      .filter(char => char.name.toLowerCase().includes(focusedValue))
+      .map(char => ({
+        name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
+        value: char.name
+      }));
+    return await respondWithFilteredChoices(interaction, focusedValue, choices);
+  } catch (error) {
+    console.error('[handleTransferFromCharacterAutocomplete]: Error:', error);
+    return await safeRespondWithError(interaction);
+  }
+}
+
+// ------------------- Function: handleTransferToCharacterAutocomplete -------------------
+// Provides autocomplete for selecting the target character in a transfer
+async function handleTransferToCharacterAutocomplete(interaction, focusedValue) {
+  try {
+    const userId = interaction.user.id;
+    const characters = await fetchAllCharactersExceptUser(userId);
+    const choices = characters
+      .filter(char => char.name.toLowerCase().includes(focusedValue))
+      .map(char => ({
+        name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
+        value: char.name
+      }));
+    return await respondWithFilteredChoices(interaction, focusedValue, choices);
+  } catch (error) {
+    console.error('[handleTransferToCharacterAutocomplete]: Error:', error);
+    return await safeRespondWithError(interaction);
+  }
+}
+
+// ------------------- Function: handleTransferItemAutocomplete -------------------
+// Provides autocomplete for selecting items to transfer
+async function handleTransferItemAutocomplete(interaction, focusedValue) {
+  try {
+    const fromCharacter = interaction.options.getString('fromcharacter');
+    if (!fromCharacter) return await interaction.respond([]);
+
+    const inventoryCollection = await getCharacterInventoryCollection(fromCharacter);
+    const items = await inventoryCollection
+      .find({ itemName: { $regex: focusedValue, $options: 'i' } })
+      .toArray();
+
+    const choices = items.map(item => ({
+      name: `${item.itemName} (Qty: ${item.quantity})`,
+      value: item.itemName
+    }));
+    return await respondWithFilteredChoices(interaction, focusedValue, choices);
+  } catch (error) {
+    console.error('[handleTransferItemAutocomplete]: Error:', error);
+    return await safeRespondWithError(interaction);
+  }
+}
+
+// ------------------- Gift Autocomplete -------------------
+// Provides autocomplete suggestions for gifting characters and items.
+async function handleGiftAutocomplete(interaction, focusedOption) {
+  try {
+   const userId = interaction.user.id;
+ 
+   if (focusedOption.name === "tocharacter") {
+    // Autocomplete for all characters excluding the user's own (recipient)
+    const allCharacters = await fetchAllCharactersExceptUser(userId);
+    const choices = allCharacters.map((character) => ({
+     name: `${character.name} | ${capitalize(character.currentVillage)}`,
+     value: character.name,
+    }));
+    await respondWithFilteredChoices(interaction, focusedOption, choices);
+   } else if (["itema", "itemb", "itemc"].includes(focusedOption.name)) {
+    // Autocomplete for inventory items from the sender
+    const fromCharacterName = interaction.options.getString("fromcharacter");
+    if (!fromCharacterName) return await interaction.respond([]);
+ 
+    const fromCharacter = await fetchCharacterByNameAndUserId(
+     fromCharacterName,
+     userId
+    );
+    if (!fromCharacter) return await interaction.respond([]);
+ 
+    const inventoryCollection = await getCharacterInventoryCollection(
+     fromCharacter.name
+    );
+    const fromInventory = await inventoryCollection.find().toArray();
+ 
+    const itemMap = new Map();
+    for (const item of fromInventory) {
+     if (item.itemName && item.itemName !== "Initial Item") {
+      itemMap.set(
+       item.itemName,
+       (itemMap.get(item.itemName) || 0) + item.quantity
+      );
+     }
+    }
+ 
+    const choices = Array.from(itemMap.entries()).map(
+     ([itemName, quantity]) => ({
+      name: `${capitalizeWords(itemName)} - QTY:${quantity}`,
+      value: itemName,
+     })
+    );
+ 
+    await respondWithFilteredChoices(interaction, focusedOption, choices);
+   }
+  } catch (error) {
+   handleError(error, "autocompleteHandler.js");
+ 
+   await safeRespondWithError(interaction);
+  }
+ }
+
+// ------------------- Item Autocomplete -------------------
+// Provides autocomplete suggestions for items in a character's inventory.
+async function handleItemAutocomplete(interaction, focusedOption) {
+  try {
+   const userId = interaction.user.id;
+   const focusedName = focusedOption.name;
+   const characterName = interaction.options.getString("charactername");
+   const searchQuery = focusedOption.value?.toLowerCase() || "";
+ 
+   if (!characterName) return await interaction.respond([]);
+ 
+   const character = await fetchCharacterByNameAndUserId(characterName, userId);
+   if (!character) return await interaction.respond([]);
+ 
+   const inventoryCollection = await getCharacterInventoryCollection(
+    character.name
+   );
+   const inventoryItems = await inventoryCollection.find().toArray();
+ 
+   let choices = [];
+ 
+   // Only fetch subcommand if autocompleting itemname
+   if (focusedName === "itemname") {
+    const subcommand = interaction.options.getSubcommand(false); // Pass false to prevent crash
+ 
+    if (subcommand !== "sell") {
+     // --- Updated Healing Item + Voucher Filter ---
+     const itemNames = inventoryItems.map((item) => item.itemName);
+ 
+     const allowedItems = await Item.find({
+      itemName: { $in: itemNames },
+      $or: [
+       { "recipeTag.0": { $exists: true } }, // has at least one tag (healing)
+       { itemName: "Fairy" },
+       { itemName: "Job Voucher" },
+      ],
+     })
+      .select("itemName")
+      .lean();
+ 
+     const allowedNames = new Set(
+      allowedItems.map((item) => item.itemName.toLowerCase())
+     );
+ 
+     choices = inventoryItems
+      .filter(
+       (item) =>
+        item.itemName &&
+        allowedNames.has(item.itemName.toLowerCase()) &&
+        item.itemName.toLowerCase().includes(searchQuery)
+      )
+      .map((item) => ({
+       name: `${capitalizeWords(item.itemName)} - Qty: ${item.quantity}`,
+       value: item.itemName,
+      }));
+    } else {
+     const itemNames = inventoryItems.map((item) => item.itemName);
+     const itemsFromDB = await Item.find({ itemName: { $in: itemNames } })
+      .select("itemName sellPrice")
+      .lean();
+     const itemsMap = new Map(
+      itemsFromDB.map((item) => [item.itemName, item.sellPrice])
+     );
+ 
+     choices = inventoryItems
+      .filter(
+       (item) =>
+        item.itemName &&
+        item.itemName.toLowerCase().includes(searchQuery) &&
+        item.itemName.toLowerCase() !== "initial item"
+      )
+      .sort((a, b) => a.itemName.localeCompare(b.itemName))
+      .map((item) => ({
+       name: `${capitalizeWords(item.itemName)} - Qty: ${
+        item.quantity
+       } - Sell: ${itemsMap.get(item.itemName) || "N/A"}`,
+       value: item.itemName,
+      }));
+    }
+   } else {
+    // If we're not focusing itemname, don't do anything fancy
+    choices = inventoryItems
+     .filter(
+      (item) =>
+       item.itemName && item.itemName.toLowerCase().includes(searchQuery)
+     )
+     .map((item) => ({
+      name: `${capitalizeWords(item.itemName)} - Qty: ${item.quantity}`,
+      value: item.itemName,
+     }));
+   }
+ 
+   await interaction.respond(choices.slice(0, 25));
+  } catch (error) {
+   handleError(error, "autocompleteHandler.js");
+ 
+   console.error("[handleItemAutocomplete]: Error:", error);
+   if (!interaction.responded) await interaction.respond([]);
+  }
+ }
+ 
+ // ------------------- Item Job Voucher Autocomplete -------------------
+ // Provides autocomplete suggestions for Job Voucher items from a character's inventory.
+ async function handleItemJobVoucherAutocomplete(interaction, focusedOption) {
+  try {
+   const characterName = interaction.options.getString("charactername");
+   if (!characterName) return await interaction.respond([]);
+ 
+   const inventoryCollection = await getCharacterInventoryCollection(
+    characterName
+   );
+   const inventoryItems = await inventoryCollection
+    .find({ itemName: /Voucher/i })
+    .toArray();
+ 
+   const choices = inventoryItems.map((item) => ({
+    name: `${item.itemName} - Qty: ${item.quantity}`,
+    value: item.itemName,
+   }));
+ 
+   await respondWithFilteredChoices(interaction, focusedOption, choices);
+  } catch (error) {
+   handleError(error, "autocompleteHandler.js");
+ 
+   console.error("[handleItemJobVoucherAutocomplete]: Error:", error);
+   await safeRespondWithError(interaction);
+  }
+ }
+ 
+ // ------------------- Job Voucher Job Name Autocomplete -------------------
+ 
+ async function handleItemJobNameAutocomplete(interaction, focusedOption) {
+  try {
+   // Fetch general jobs
+   const generalJobs = getGeneralJobsPage(1).concat(getGeneralJobsPage(2));
+ 
+   // Fetch village-specific jobs based on character's home village
+   const characterName = interaction.options.getString("charactername");
+   const userId = interaction.user.id;
+   if (!characterName) return await interaction.respond([]);
+ 
+   const character = await fetchCharacterByNameAndUserId(characterName, userId);
+   if (!character) return await interaction.respond([]);
+ 
+   const villageJobs = getVillageExclusiveJobs(character.homeVillage);
+ 
+   // Combine all jobs
+   const allJobs = [...generalJobs, ...villageJobs];
+ 
+   // Filter jobs based on user's typing
+   const searchQuery = focusedOption.value?.toLowerCase() || "";
+   const filteredJobs = allJobs.filter((job) =>
+    job.toLowerCase().includes(searchQuery)
+   );
+ 
+   // Format autocomplete choices
+   const formattedChoices = filteredJobs.map((job) => ({
+    name: capitalizeWords(job),
+    value: job,
+   }));
+ 
+   await interaction.respond(formattedChoices.slice(0, 25));
+  } catch (error) {
+   handleError(error, "autocompleteHandler.js");
+   console.error("[handleItemJobNameAutocomplete]: Error:", error);
+   await safeRespondWithError(interaction);
+  }
+ }
+
+// ------------------- Shops Autocomplete -------------------
+async function handleShopsAutocomplete(interaction, focusedOption) {
+  try {
+   const subcommand = interaction.options.getSubcommand();
+   const searchQuery = focusedOption.value.toLowerCase();
+   let choices = [];
+ 
+   if (subcommand === "shop-buy") {
+    const items = await ShopStock.find()
+     .sort({ itemName: 1 })
+     .select("itemName stock")
+     .lean();
+ 
+    choices = items
+     .filter((item) => item.itemName.toLowerCase().includes(searchQuery))
+     .map((item) => ({
+      name: `${item.itemName} - Stock: ${item.stock}`,
+      value: item.itemName,
+     }));
+   } else if (subcommand === "shop-sell") {
+    const characterName = interaction.options.getString("charactername");
+    if (!characterName) return await interaction.respond([]);
+ 
+    const inventoryCollection = await getCharacterInventoryCollection(
+     characterName
+    );
+    const inventoryItems = await inventoryCollection.find().toArray();
+ 
+    choices = inventoryItems
+     .filter((item) => item.itemName.toLowerCase().includes(searchQuery))
+     .map((item) => ({
+      name: `${item.itemName} - Qty: ${item.quantity}`,
+      value: item.itemName,
+     }));
+   }
+ 
+   await interaction.respond(choices.slice(0, 25));
+  } catch (error) {
+   handleError(error, "autocompleteHandler.js");
+ 
+   console.error("[handleShopsAutocomplete]: Error:", error);
+   await safeRespondWithError(interaction);
+  }
+ }
+
+ // ------------------- Trade To Character Autocomplete -------------------
+async function handleTradeToCharacterAutocomplete(interaction, focusedOption) {
+  try {
+   const userId = interaction.user.id;
+ 
+   const characters = await fetchAllCharactersExceptUser(userId);
+ 
+   const choices = characters.map((character) => ({
+    name: `${character.name} | ${capitalize(character.currentVillage)}`,
+    value: character.name,
+   }));
+ 
+   await respondWithFilteredChoices(interaction, focusedOption, choices);
+  } catch (error) {
+   handleError(error, "autocompleteHandler.js");
+ 
+   console.error("[handleTradeToCharacterAutocomplete]: Error:", error);
+   await safeRespondWithError(interaction);
+  }
+ }
+ 
+ // ------------------- Trade Item Autocomplete -------------------
+ async function handleTradeItemAutocomplete(interaction, focusedOption) {
+  try {
+   const userId = interaction.user.id;
+   const characterName = interaction.options.getString("fromcharacter");
+   if (!characterName) return await interaction.respond([]);
+ 
+   const character = await fetchCharacterByNameAndUserId(characterName, userId);
+   if (!character) return await interaction.respond([]);
+ 
+   const inventoryCollection = await getCharacterInventoryCollection(
+    character.name
+   );
+   const inventory = await inventoryCollection.find().toArray();
+ 
+   const choices = inventory.map((item) => ({
+    name: `${item.itemName} - QTY:${item.quantity}`,
+    value: item.itemName,
+   }));
+ 
+   await respondWithFilteredChoices(interaction, focusedOption, choices);
+  } catch (error) {
+   handleError(error, "autocompleteHandler.js");
+ 
+   console.error("[handleTradeItemAutocomplete]: Error:", error);
+   await safeRespondWithError(interaction);
+  }
+ }
+
+ // ------------------- Transfer From/To Character Autocomplete -------------------
+async function handleTransferCharacterAutocomplete(interaction, focusedOption) {
+  try {
+   const userId = interaction.user.id;
+   const characters = await fetchCharactersByUserId(userId);
+ 
+   const choices = characters.map((character) => ({
+    name: character.name,
+    value: character.name,
+   }));
+ 
+   await respondWithFilteredChoices(interaction, focusedOption, choices);
+  } catch (error) {
+   handleError(error, "autocompleteHandler.js");
+ 
+   console.error("[handleTransferCharacterAutocomplete]: Error:", error);
+   await safeRespondWithError(interaction);
+  }
+ }
+ 
+ // ------------------- Transfer Item Autocomplete -------------------
+ async function handleTransferItemAutocomplete(interaction, focusedOption) {
+  try {
+   const fromCharacter = interaction.options.getString('fromcharacter');
+   if (!fromCharacter) return await interaction.respond([]);
+ 
+   const inventoryCollection = await getCharacterInventoryCollection(fromCharacter);
+   const items = await inventoryCollection
+     .find({ itemName: { $regex: focusedOption.value, $options: 'i' } })
+     .toArray();
+ 
+   const choices = items.map(item => ({
+     name: `${item.itemName} (Qty: ${item.quantity})`,
+     value: item.itemName
+   }));
+   return await respondWithFilteredChoices(interaction, focusedOption, choices);
+  } catch (error) {
+   console.error('[handleTransferItemAutocomplete]: Error:', error);
+   return await safeRespondWithError(interaction);
+  }
+ }
+ 
+// ============================================================================
 // EDITCHARACTER COMMANDS
 // ============================================================================
 // This section handles autocomplete interactions for the "editcharacter" command.
@@ -1291,68 +1963,6 @@ async function handleGearAutocomplete(interaction, focusedOption) {
  }
 }
 
-// ============================================================================
-// GIFT COMMANDS
-// ============================================================================
-// This section handles autocomplete interactions for the "gift" command.
-// It provides suggestions for the sender, recipient, and items being gifted.
-
-// ------------------- Gift Autocomplete -------------------
-// Provides autocomplete suggestions for gifting characters and items.
-async function handleGiftAutocomplete(interaction, focusedOption) {
- try {
-  const userId = interaction.user.id;
-
-  if (focusedOption.name === "tocharacter") {
-   // Autocomplete for all characters excluding the user's own (recipient)
-   const allCharacters = await fetchAllCharactersExceptUser(userId);
-   const choices = allCharacters.map((character) => ({
-    name: `${character.name} | ${capitalize(character.currentVillage)}`,
-    value: character.name,
-   }));
-   await respondWithFilteredChoices(interaction, focusedOption, choices);
-  } else if (["itema", "itemb", "itemc"].includes(focusedOption.name)) {
-   // Autocomplete for inventory items from the sender
-   const fromCharacterName = interaction.options.getString("fromcharacter");
-   if (!fromCharacterName) return await interaction.respond([]);
-
-   const fromCharacter = await fetchCharacterByNameAndUserId(
-    fromCharacterName,
-    userId
-   );
-   if (!fromCharacter) return await interaction.respond([]);
-
-   const inventoryCollection = await getCharacterInventoryCollection(
-    fromCharacter.name
-   );
-   const fromInventory = await inventoryCollection.find().toArray();
-
-   const itemMap = new Map();
-   for (const item of fromInventory) {
-    if (item.itemName && item.itemName !== "Initial Item") {
-     itemMap.set(
-      item.itemName,
-      (itemMap.get(item.itemName) || 0) + item.quantity
-     );
-    }
-   }
-
-   const choices = Array.from(itemMap.entries()).map(
-    ([itemName, quantity]) => ({
-     name: `${capitalizeWords(itemName)} - QTY:${quantity}`,
-     value: itemName,
-    })
-   );
-
-   await respondWithFilteredChoices(interaction, focusedOption, choices);
-  }
- } catch (error) {
-  handleError(error, "autocompleteHandler.js");
-
-  await safeRespondWithError(interaction);
- }
-}
-
 // ------------------- Quest ID Autocomplete -------------------
 async function handleQuestIdAutocomplete(interaction, focusedOption) {
   try {
@@ -1442,184 +2052,6 @@ async function handleHealAutocomplete(interaction, focusedOption) {
    "[handleHealAutocomplete]: Error handling heal autocomplete:",
    error
   );
-  await safeRespondWithError(interaction);
- }
-}
-
-// ============================================================================
-// ITEM COMMANDS
-// ============================================================================
-// This section handles autocomplete interactions for the "item" command family.
-// It provides suggestions for item names from a character's inventory across:
-// - General Item Usage
-// - Healing Items
-// - Job Voucher Items
-
-// ------------------- Item Autocomplete -------------------
-// Provides autocomplete suggestions for items in a character's inventory.
-async function handleItemAutocomplete(interaction, focusedOption) {
- try {
-  const userId = interaction.user.id;
-  const focusedName = focusedOption.name;
-  const characterName = interaction.options.getString("charactername");
-  const searchQuery = focusedOption.value?.toLowerCase() || "";
-
-  if (!characterName) return await interaction.respond([]);
-
-  const character = await fetchCharacterByNameAndUserId(characterName, userId);
-  if (!character) return await interaction.respond([]);
-
-  const inventoryCollection = await getCharacterInventoryCollection(
-   character.name
-  );
-  const inventoryItems = await inventoryCollection.find().toArray();
-
-  let choices = [];
-
-  // Only fetch subcommand if autocompleting itemname
-  if (focusedName === "itemname") {
-   const subcommand = interaction.options.getSubcommand(false); // Pass false to prevent crash
-
-   if (subcommand !== "sell") {
-    // --- Updated Healing Item + Voucher Filter ---
-    const itemNames = inventoryItems.map((item) => item.itemName);
-
-    const allowedItems = await Item.find({
-     itemName: { $in: itemNames },
-     $or: [
-      { "recipeTag.0": { $exists: true } }, // has at least one tag (healing)
-      { itemName: "Fairy" },
-      { itemName: "Job Voucher" },
-     ],
-    })
-     .select("itemName")
-     .lean();
-
-    const allowedNames = new Set(
-     allowedItems.map((item) => item.itemName.toLowerCase())
-    );
-
-    choices = inventoryItems
-     .filter(
-      (item) =>
-       item.itemName &&
-       allowedNames.has(item.itemName.toLowerCase()) &&
-       item.itemName.toLowerCase().includes(searchQuery)
-     )
-     .map((item) => ({
-      name: `${capitalizeWords(item.itemName)} - Qty: ${item.quantity}`,
-      value: item.itemName,
-     }));
-   } else {
-    const itemNames = inventoryItems.map((item) => item.itemName);
-    const itemsFromDB = await Item.find({ itemName: { $in: itemNames } })
-     .select("itemName sellPrice")
-     .lean();
-    const itemsMap = new Map(
-     itemsFromDB.map((item) => [item.itemName, item.sellPrice])
-    );
-
-    choices = inventoryItems
-     .filter(
-      (item) =>
-       item.itemName &&
-       item.itemName.toLowerCase().includes(searchQuery) &&
-       item.itemName.toLowerCase() !== "initial item"
-     )
-     .sort((a, b) => a.itemName.localeCompare(b.itemName))
-     .map((item) => ({
-      name: `${capitalizeWords(item.itemName)} - Qty: ${
-       item.quantity
-      } - Sell: ${itemsMap.get(item.itemName) || "N/A"}`,
-      value: item.itemName,
-     }));
-   }
-  } else {
-   // If we're not focusing itemname, don't do anything fancy
-   choices = inventoryItems
-    .filter(
-     (item) =>
-      item.itemName && item.itemName.toLowerCase().includes(searchQuery)
-    )
-    .map((item) => ({
-     name: `${capitalizeWords(item.itemName)} - Qty: ${item.quantity}`,
-     value: item.itemName,
-    }));
-  }
-
-  await interaction.respond(choices.slice(0, 25));
- } catch (error) {
-  handleError(error, "autocompleteHandler.js");
-
-  console.error("[handleItemAutocomplete]: Error:", error);
-  if (!interaction.responded) await interaction.respond([]);
- }
-}
-
-// ------------------- Item Job Voucher Autocomplete -------------------
-// Provides autocomplete suggestions for Job Voucher items from a character's inventory.
-async function handleItemJobVoucherAutocomplete(interaction, focusedOption) {
- try {
-  const characterName = interaction.options.getString("charactername");
-  if (!characterName) return await interaction.respond([]);
-
-  const inventoryCollection = await getCharacterInventoryCollection(
-   characterName
-  );
-  const inventoryItems = await inventoryCollection
-   .find({ itemName: /Voucher/i })
-   .toArray();
-
-  const choices = inventoryItems.map((item) => ({
-   name: `${item.itemName} - Qty: ${item.quantity}`,
-   value: item.itemName,
-  }));
-
-  await respondWithFilteredChoices(interaction, focusedOption, choices);
- } catch (error) {
-  handleError(error, "autocompleteHandler.js");
-
-  console.error("[handleItemJobVoucherAutocomplete]: Error:", error);
-  await safeRespondWithError(interaction);
- }
-}
-
-// ------------------- Job Voucher Job Name Autocomplete -------------------
-
-async function handleItemJobNameAutocomplete(interaction, focusedOption) {
- try {
-  // Fetch general jobs
-  const generalJobs = getGeneralJobsPage(1).concat(getGeneralJobsPage(2));
-
-  // Fetch village-specific jobs based on character's home village
-  const characterName = interaction.options.getString("charactername");
-  const userId = interaction.user.id;
-  if (!characterName) return await interaction.respond([]);
-
-  const character = await fetchCharacterByNameAndUserId(characterName, userId);
-  if (!character) return await interaction.respond([]);
-
-  const villageJobs = getVillageExclusiveJobs(character.homeVillage);
-
-  // Combine all jobs
-  const allJobs = [...generalJobs, ...villageJobs];
-
-  // Filter jobs based on user's typing
-  const searchQuery = focusedOption.value?.toLowerCase() || "";
-  const filteredJobs = allJobs.filter((job) =>
-   job.toLowerCase().includes(searchQuery)
-  );
-
-  // Format autocomplete choices
-  const formattedChoices = filteredJobs.map((job) => ({
-   name: capitalizeWords(job),
-   value: job,
-  }));
-
-  await interaction.respond(formattedChoices.slice(0, 25));
- } catch (error) {
-  handleError(error, "autocompleteHandler.js");
-  console.error("[handleItemJobNameAutocomplete]: Error:", error);
   await safeRespondWithError(interaction);
  }
 }
@@ -1934,58 +2366,7 @@ async function handlePetRollTypeAutocomplete(interaction, focusedOption) {
 // RELIC
 // ============================================================================
 
-// ============================================================================
-// SHOPS COMMANDS
-// ============================================================================
-// This section handles autocomplete interactions for the "shops" command.
-// It provides suggestions for:
-// - Item names available for purchase
-// - Item names from a character's inventory when selling
 
-// ------------------- Shops Autocomplete -------------------
-async function handleShopsAutocomplete(interaction, focusedOption) {
- try {
-  const subcommand = interaction.options.getSubcommand();
-  const searchQuery = focusedOption.value.toLowerCase();
-  let choices = [];
-
-  if (subcommand === "shop-buy") {
-   const items = await ShopStock.find()
-    .sort({ itemName: 1 })
-    .select("itemName stock")
-    .lean();
-
-   choices = items
-    .filter((item) => item.itemName.toLowerCase().includes(searchQuery))
-    .map((item) => ({
-     name: `${item.itemName} - Stock: ${item.stock}`,
-     value: item.itemName,
-    }));
-  } else if (subcommand === "shop-sell") {
-   const characterName = interaction.options.getString("charactername");
-   if (!characterName) return await interaction.respond([]);
-
-   const inventoryCollection = await getCharacterInventoryCollection(
-    characterName
-   );
-   const inventoryItems = await inventoryCollection.find().toArray();
-
-   choices = inventoryItems
-    .filter((item) => item.itemName.toLowerCase().includes(searchQuery))
-    .map((item) => ({
-     name: `${item.itemName} - Qty: ${item.quantity}`,
-     value: item.itemName,
-    }));
-  }
-
-  await interaction.respond(choices.slice(0, 25));
- } catch (error) {
-  handleError(error, "autocompleteHandler.js");
-
-  console.error("[handleShopsAutocomplete]: Error:", error);
-  await safeRespondWithError(interaction);
- }
-}
 
 // ============================================================================
 // STEAL COMMANDS
@@ -2072,115 +2453,6 @@ async function handleStealRarityAutocomplete(interaction, focusedOption) {
 
   console.error("[handleStealRarityAutocomplete]: Error:", error);
   await safeRespondWithError(interaction);
- }
-}
-
-// ============================================================================
-// TRADE COMMANDS
-// ============================================================================
-// This section handles autocomplete interactions for the "trade" command.
-// It provides suggestions for:
-// - To Character (any character not owned by user)
-// - Items from From Character's Inventory
-
-// ------------------- Trade To Character Autocomplete -------------------
-async function handleTradeToCharacterAutocomplete(interaction, focusedOption) {
- try {
-  const userId = interaction.user.id;
-
-  const characters = await fetchAllCharactersExceptUser(userId);
-
-  const choices = characters.map((character) => ({
-   name: `${character.name} | ${capitalize(character.currentVillage)}`,
-   value: character.name,
-  }));
-
-  await respondWithFilteredChoices(interaction, focusedOption, choices);
- } catch (error) {
-  handleError(error, "autocompleteHandler.js");
-
-  console.error("[handleTradeToCharacterAutocomplete]: Error:", error);
-  await safeRespondWithError(interaction);
- }
-}
-
-// ------------------- Trade Item Autocomplete -------------------
-async function handleTradeItemAutocomplete(interaction, focusedOption) {
- try {
-  const userId = interaction.user.id;
-  const characterName = interaction.options.getString("fromcharacter");
-  if (!characterName) return await interaction.respond([]);
-
-  const character = await fetchCharacterByNameAndUserId(characterName, userId);
-  if (!character) return await interaction.respond([]);
-
-  const inventoryCollection = await getCharacterInventoryCollection(
-   character.name
-  );
-  const inventory = await inventoryCollection.find().toArray();
-
-  const choices = inventory.map((item) => ({
-   name: `${item.itemName} - QTY:${item.quantity}`,
-   value: item.itemName,
-  }));
-
-  await respondWithFilteredChoices(interaction, focusedOption, choices);
- } catch (error) {
-  handleError(error, "autocompleteHandler.js");
-
-  console.error("[handleTradeItemAutocomplete]: Error:", error);
-  await safeRespondWithError(interaction);
- }
-}
-
-// ============================================================================
-// TRANSFER COMMANDS
-// ============================================================================
-// This section handles autocomplete interactions for the "transfer" command.
-// It provides suggestions for:
-// - From Character (user-owned characters)
-// - To Character (user-owned characters)
-// - Items from From Character's Inventory
-
-// ------------------- Transfer From/To Character Autocomplete -------------------
-async function handleTransferCharacterAutocomplete(interaction, focusedOption) {
- try {
-  const userId = interaction.user.id;
-  const characters = await fetchCharactersByUserId(userId);
-
-  const choices = characters.map((character) => ({
-   name: character.name,
-   value: character.name,
-  }));
-
-  await respondWithFilteredChoices(interaction, focusedOption, choices);
- } catch (error) {
-  handleError(error, "autocompleteHandler.js");
-
-  console.error("[handleTransferCharacterAutocomplete]: Error:", error);
-  await safeRespondWithError(interaction);
- }
-}
-
-// ------------------- Transfer Item Autocomplete -------------------
-async function handleTransferItemAutocomplete(interaction, focusedOption) {
- try {
-  const fromCharacter = interaction.options.getString('fromcharacter');
-  if (!fromCharacter) return await interaction.respond([]);
-
-  const inventoryCollection = await getCharacterInventoryCollection(fromCharacter);
-  const items = await inventoryCollection
-    .find({ itemName: { $regex: focusedOption.value, $options: 'i' } })
-    .toArray();
-
-  const choices = items.map(item => ({
-    name: `${item.itemName} (Qty: ${item.quantity})`,
-    value: item.itemName
-  }));
-  return await respondWithFilteredChoices(interaction, focusedOption, choices);
- } catch (error) {
-  console.error('[handleTransferItemAutocomplete]: Error:', error);
-  return await safeRespondWithError(interaction);
  }
 }
 
@@ -2476,49 +2748,6 @@ async function handleVendorCharacterAutocomplete(interaction) {
   }
 }
 
-// ============================================================================
-// VIEWINVENTORY
-// ============================================================================
-// Handles autocomplete logic for viewing a character's inventory.
-// This suggests all characters for selection by name.
-
-// ------------------- Autocomplete: View Character Inventory -------------------
-async function handleViewInventoryAutocomplete(interaction, focusedOption) {
- try {
-  // Fetch all characters from the database
-  const characters = await fetchAllCharacters();
-
-  // Map characters to autocomplete choices with formatted display
-  const choices = characters.map((character) => ({
-   name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
-   value: character.name
-  }));
-
-  // Filter based on user input
-  const searchQuery = focusedOption.value?.toLowerCase() || "";
-  const filteredChoices = choices.filter(choice => 
-   choice.name.toLowerCase().includes(searchQuery)
-  );
-
-  // Respond with filtered choices (limit to 25)
-  await interaction.respond(filteredChoices.slice(0, 25));
- } catch (error) {
-  handleError(error, "autocompleteHandler.js");
-
-  // Log and handle errors gracefully
-  console.error(
-   "[handleViewInventoryAutocomplete]: Error handling inventory autocomplete:",
-   error
-  );
-  await safeRespondWithError(interaction);
- }
-}
-// ============================================================================
-// EXPORT FUNCTIONS
-// ============================================================================
-
-
-
 // ------------------- Function: handleVendingBarterAutocomplete -------------------
 // Provides autocomplete suggestions for items in a vendor's shop during barter
 async function handleVendingBarterAutocomplete(interaction, focusedOption) {
@@ -2711,229 +2940,46 @@ async function handleVendingViewAutocomplete(interaction, focusedOption) {
   }
 }
 
-async function handleEconomyAutocomplete(interaction, focusedOption) {
-  try {
-    const subcommand = interaction.options.getSubcommand();
-    const focusedValue = focusedOption?.value?.toLowerCase() || '';
+// ============================================================================
+// VIEWINVENTORY
+// ============================================================================
+// Handles autocomplete logic for viewing a character's inventory.
+// This suggests all characters for selection by name.
 
-    switch (subcommand) {
-      case 'trade':
-        if (focusedOption.name === 'fromcharacter') {
-          const userId = interaction.user.id;
-          const characters = await fetchCharactersByUserId(userId);
-          const choices = characters
-            .filter(char => char.name.toLowerCase().includes(focusedValue))
-            .map(char => ({
-              name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
-              value: char.name
-            }));
-          return await respondWithFilteredChoices(interaction, focusedValue, choices);
-        } else if (focusedOption.name === 'tocharacter') {
-          const userId = interaction.user.id;
-          const characters = await fetchAllCharactersExceptUser(userId);
-          const choices = characters
-            .filter(char => char.name.toLowerCase().includes(focusedValue))
-            .map(char => ({
-              name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
-              value: char.name
-            }));
-          return await respondWithFilteredChoices(interaction, focusedValue, choices);
-        } else if (focusedOption.name === 'item1' || focusedOption.name === 'item2' || focusedOption.name === 'item3') {
-          const fromCharacter = interaction.options.getString('fromcharacter');
-          if (!fromCharacter) return await interaction.respond([]);
+// ------------------- Autocomplete: View Character Inventory -------------------
+async function handleViewInventoryAutocomplete(interaction, focusedOption) {
+ try {
+  // Fetch all characters from the database
+  const characters = await fetchAllCharacters();
 
-          const inventoryCollection = await getCharacterInventoryCollection(fromCharacter);
-          const items = await inventoryCollection
-            .find({ itemName: { $regex: focusedValue, $options: 'i' } })
-            .toArray();
+  // Map characters to autocomplete choices with formatted display
+  const choices = characters.map((character) => ({
+   name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
+   value: character.name
+  }));
 
-          const choices = items.map(item => ({
-            name: `${item.itemName} (Qty: ${item.quantity})`,
-            value: item.itemName
-          }));
-          return await respondWithFilteredChoices(interaction, focusedValue, choices);
-        }
-        break;
-      case 'gift':
-        if (focusedOption.name === 'fromcharacter') {
-          return handleGiftFromCharacterAutocomplete(interaction, focusedValue);
-        } else if (focusedOption.name === 'tocharacter') {
-          return handleGiftToCharacterAutocomplete(interaction, focusedValue);
-        } else if (focusedOption.name === 'itema' || focusedOption.name === 'itemb' || focusedOption.name === 'itemc') {
-          return handleGiftItemAutocomplete(interaction, focusedValue);
-        }
-        break;
-      case 'shop-buy':
-      case 'shop-sell':
-        if (focusedOption.name === 'charactername') {
-          return handleShopCharacterAutocomplete(interaction, focusedValue);
-        } else if (focusedOption.name === 'itemname') {
-          return handleShopItemAutocomplete(interaction, focusedValue);
-        }
-        break;
-      case 'transfer':
-        if (focusedOption.name === 'fromcharacter') {
-          return handleTransferFromCharacterAutocomplete(interaction, focusedValue);
-        } else if (focusedOption.name === 'tocharacter') {
-          return handleTransferToCharacterAutocomplete(interaction, focusedValue);
-        } else if (focusedOption.name === 'itema' || focusedOption.name === 'itemb' || focusedOption.name === 'itemc') {
-          return handleTransferItemAutocomplete(interaction, focusedValue);
-        }
-        break;
-    }
-  } catch (error) {
-    console.error('[handleEconomyAutocomplete]: Error:', error);
-    return await safeRespondWithError(interaction);
-  }
+  // Filter based on user input
+  const searchQuery = focusedOption.value?.toLowerCase() || "";
+  const filteredChoices = choices.filter(choice => 
+   choice.name.toLowerCase().includes(searchQuery)
+  );
+
+  // Respond with filtered choices (limit to 25)
+  await interaction.respond(filteredChoices.slice(0, 25));
+ } catch (error) {
+  handleError(error, "autocompleteHandler.js");
+
+  // Log and handle errors gracefully
+  console.error(
+   "[handleViewInventoryAutocomplete]: Error handling inventory autocomplete:",
+   error
+  );
+  await safeRespondWithError(interaction);
+ }
 }
-
-async function handleGiftFromCharacterAutocomplete(interaction, focusedValue) {
-  try {
-    const userId = interaction.user.id;
-    const characters = await fetchCharactersByUserId(userId);
-    const choices = characters
-      .filter(char => char.name.toLowerCase().includes(focusedValue))
-      .map(char => ({
-        name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
-        value: char.name
-      }));
-    return await respondWithFilteredChoices(interaction, focusedValue, choices);
-  } catch (error) {
-    console.error('[handleGiftFromCharacterAutocomplete]: Error:', error);
-    return await safeRespondWithError(interaction);
-  }
-}
-
-async function handleGiftToCharacterAutocomplete(interaction, focusedValue) {
-  try {
-    const userId = interaction.user.id;
-    const characters = await fetchAllCharactersExceptUser(userId);
-    const choices = characters
-      .filter(char => char.name.toLowerCase().includes(focusedValue))
-      .map(char => ({
-        name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
-        value: char.name
-      }));
-    return await respondWithFilteredChoices(interaction, focusedValue, choices);
-  } catch (error) {
-    console.error('[handleGiftToCharacterAutocomplete]: Error:', error);
-    return await safeRespondWithError(interaction);
-  }
-}
-
-async function handleGiftItemAutocomplete(interaction, focusedValue) {
-  try {
-    const fromCharacter = interaction.options.getString('fromcharacter');
-    if (!fromCharacter) return await interaction.respond([]);
-
-    const inventoryCollection = await getCharacterInventoryCollection(fromCharacter);
-    const items = await inventoryCollection
-      .find({ itemName: { $regex: focusedValue, $options: 'i' } })
-      .toArray();
-
-    const choices = items.map(item => ({
-      name: `${item.itemName} (Qty: ${item.quantity})`,
-      value: item.itemName
-    }));
-    return await respondWithFilteredChoices(interaction, focusedValue, choices);
-  } catch (error) {
-    console.error('[handleGiftItemAutocomplete]: Error:', error);
-    return await safeRespondWithError(interaction);
-  }
-}
-
-async function handleShopCharacterAutocomplete(interaction, focusedValue) {
-  try {
-    const userId = interaction.user.id;
-    const characters = await fetchCharactersByUserId(userId);
-    const choices = characters
-      .filter(char => char.name.toLowerCase().includes(focusedValue))
-      .map(char => ({
-        name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
-        value: char.name
-      }));
-    return await respondWithFilteredChoices(interaction, focusedValue, choices);
-  } catch (error) {
-    console.error('[handleShopCharacterAutocomplete]: Error:', error);
-    return await safeRespondWithError(interaction);
-  }
-}
-
-async function handleShopItemAutocomplete(interaction, focusedValue) {
-  try {
-    const character = interaction.options.getString('charactername');
-    if (!character) return await interaction.respond([]);
-
-    const inventoryCollection = await getCharacterInventoryCollection(character);
-    const items = await inventoryCollection
-      .find({ itemName: { $regex: focusedValue, $options: 'i' } })
-      .toArray();
-
-    const choices = items.map(item => ({
-      name: `${item.itemName} (Qty: ${item.quantity})`,
-      value: item.itemName
-    }));
-    return await respondWithFilteredChoices(interaction, focusedValue, choices);
-  } catch (error) {
-    console.error('[handleShopItemAutocomplete]: Error:', error);
-    return await safeRespondWithError(interaction);
-  }
-}
-
-async function handleTransferFromCharacterAutocomplete(interaction, focusedValue) {
-  try {
-    const userId = interaction.user.id;
-    const characters = await fetchCharactersByUserId(userId);
-    const choices = characters
-      .filter(char => char.name.toLowerCase().includes(focusedValue))
-      .map(char => ({
-        name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
-        value: char.name
-      }));
-    return await respondWithFilteredChoices(interaction, focusedValue, choices);
-  } catch (error) {
-    console.error('[handleTransferFromCharacterAutocomplete]: Error:', error);
-    return await safeRespondWithError(interaction);
-  }
-}
-
-async function handleTransferToCharacterAutocomplete(interaction, focusedValue) {
-  try {
-    const userId = interaction.user.id;
-    const characters = await fetchAllCharactersExceptUser(userId);
-    const choices = characters
-      .filter(char => char.name.toLowerCase().includes(focusedValue))
-      .map(char => ({
-        name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
-        value: char.name
-      }));
-    return await respondWithFilteredChoices(interaction, focusedValue, choices);
-  } catch (error) {
-    console.error('[handleTransferToCharacterAutocomplete]: Error:', error);
-    return await safeRespondWithError(interaction);
-  }
-}
-
-async function handleTransferItemAutocomplete(interaction, focusedValue) {
-  try {
-    const fromCharacter = interaction.options.getString('fromcharacter');
-    if (!fromCharacter) return await interaction.respond([]);
-
-    const inventoryCollection = await getCharacterInventoryCollection(fromCharacter);
-    const items = await inventoryCollection
-      .find({ itemName: { $regex: focusedValue, $options: 'i' } })
-      .toArray();
-
-    const choices = items.map(item => ({
-      name: `${item.itemName} (Qty: ${item.quantity})`,
-      value: item.itemName
-    }));
-    return await respondWithFilteredChoices(interaction, focusedValue, choices);
-  } catch (error) {
-    console.error('[handleTransferItemAutocomplete]: Error:', error);
-    return await safeRespondWithError(interaction);
-  }
-}
+// ============================================================================
+// EXPORT FUNCTIONS
+// ============================================================================
 
 module.exports = {
  handleAutocomplete,
