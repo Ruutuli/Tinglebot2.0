@@ -119,12 +119,18 @@ async function executeVending(interaction) {
 async function handleCollectPoints(interaction) {
   try {
     const characterName = interaction.options.getString('charactername');
-    const character = await fetchCharacterByName(characterName);
-
-    if (!character) {
-      return interaction.reply({
-        content: `❌ Character "${characterName}" not found.`
-      });
+    
+    // First check if character exists
+    let character;
+    try {
+      character = await fetchCharacterByName(characterName);
+    } catch (error) {
+      if (error.message === "Character not found") {
+        return interaction.reply({
+          content: `❌ **Character Not Found**\n\nCould not find a character named "${characterName}". Please check:\n• The spelling of your character's name\n• That the character exists in the system\n• That you're using the correct character name\n\nIf you're sure the name is correct, try:\n1. Running \`/vending setup\` to register your character\n2. Contacting a moderator if the issue persists`
+        });
+      }
+      throw error; // Re-throw other errors
     }
 
     const now = new Date();
@@ -136,7 +142,7 @@ async function handleCollectPoints(interaction) {
 
     if (alreadyClaimed) {
       return interaction.reply({
-        content: `⚠️ ${characterName} has already claimed vending points this month.`
+        content: `⚠️ **Already Claimed**\n\n${characterName} has already claimed vending points for this month.\n\nNext claim available: **${new Date(now.getFullYear(), now.getMonth() + 1, 1).toLocaleDateString()}**`
       });
     }
 
@@ -144,20 +150,20 @@ async function handleCollectPoints(interaction) {
     const job = character.job?.toLowerCase();
     if (job !== 'shopkeeper' && job !== 'merchant') {
       return interaction.reply({
-        content: `❌ **Invalid Vendor Type:** ${character.name} must be a **Shopkeeper** or **Merchant** to collect vending points.\n\nCurrent job: **${character.job || 'None'}**\n\nTo become a vendor:\n1. Use a Job Voucher to change to Shopkeeper or Merchant\n2. Run \`/vending setup\` to initialize your shop\n3. Run \`/vending sync\` to sync your inventory`
+        content: `❌ **Invalid Vendor Type**\n\n${character.name} must be a **Shopkeeper** or **Merchant** to collect vending points.\n\nCurrent job: **${character.job || 'None'}**\n\nTo become a vendor:\n1. Use a Job Voucher to change to Shopkeeper or Merchant\n2. Run \`/vending setup\` to initialize your shop\n3. Run \`/vending sync\` to sync your inventory`
       });
     }
 
     // ------------------- Setup Validation -------------------
     if (!character.vendingSetup?.shopLink || !character.shopLink) {
         return interaction.reply({
-            content: `❌ You must complete vending setup before collecting points. Please run \`/vending setup\` first.`
+            content: `❌ **Setup Required**\n\nYou must complete vending setup before collecting points.\n\nPlease run \`/vending setup\` to:\n1. Initialize your shop\n2. Set up your vending sheet\n3. Configure your shop settings`
         });
     }
 
     if (!character.vendingSync) {
       return interaction.reply({
-        content: `❌ You must sync your vending sheet before collecting points. Please run \`/vending sync\` first.`
+        content: `❌ **Sync Required**\n\nYou must sync your vending sheet before collecting points.\n\nPlease run \`/vending sync\` to:\n1. Connect your shop sheet\n2. Update your inventory\n3. Enable point collection`
       });
     }
 
@@ -187,7 +193,7 @@ async function handleCollectPoints(interaction) {
   } catch (error) {
     console.error('[handleCollectPoints]: Error', error);
     return interaction.reply({
-      content: `❌ An unexpected error occurred. Please try again later.`
+      content: `❌ **System Error**\n\nAn unexpected error occurred while processing your request.\n\nPlease try again in a few minutes. If the problem persists, contact a moderator with the following details:\n• Command: \`/vending collect_points\`\n• Character: ${interaction.options.getString('charactername')}\n• Time: ${new Date().toLocaleString()}`
     });
   }
 }
