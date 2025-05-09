@@ -863,11 +863,16 @@ async function handleVendingSync(interaction, characterName) {
     const errors = [];
     let totalSlotsUsed = 0;
 
+    // First pass: validate all items and collect errors
     for (const row of parsedRows) {
       // Fetch the item from the database to get its ID and stackable status
       const item = await ItemModel.findOne({ itemName: row.itemName });
       if (!item) {
-        errors.push(`Item "${row.itemName}" not found in database`);
+        errors.push({
+          type: 'missing_item',
+          itemName: row.itemName,
+          slot: row.slot || 'Unknown Slot'
+        });
         continue;
       }
 
@@ -879,16 +884,37 @@ async function handleVendingSync(interaction, characterName) {
 
       if (isStackable) {
         if (stockQty > maxStackSize) {
-          errors.push(`Item "${row.itemName}" quantity (${stockQty}) exceeds max stack size of ${maxStackSize}`);
+          errors.push({
+            type: 'stack_size',
+            itemName: row.itemName,
+            quantity: stockQty,
+            maxSize: maxStackSize,
+            slot: row.slot || 'Unknown Slot'
+          });
         }
         slotsNeeded = Math.ceil(stockQty / maxStackSize);
       } else {
+        // For non-stackable items, quantity must be 1
+        if (stockQty > 1) {
+          errors.push({
+            type: 'non_stackable',
+            itemName: row.itemName,
+            quantity: stockQty,
+            slot: row.slot || 'Unknown Slot'
+          });
+        }
         slotsNeeded = stockQty;
       }
 
       // Check if we have enough slots available
       if (totalSlotsUsed + slotsNeeded > character.pouchSize) {
-        errors.push(`Not enough slots available for "${row.itemName}" (needs ${slotsNeeded} slots, but only ${character.pouchSize - totalSlotsUsed} slots remaining)`);
+        errors.push({
+          type: 'slot_capacity',
+          itemName: row.itemName,
+          needed: slotsNeeded,
+          remaining: character.pouchSize - totalSlotsUsed,
+          slot: row.slot || 'Unknown Slot'
+        });
       }
 
       totalSlotsUsed += slotsNeeded;
@@ -897,7 +923,22 @@ async function handleVendingSync(interaction, characterName) {
     // If there are any errors, return them and don't proceed with sync
     if (errors.length > 0) {
       let errorMessage = `❌ **Sync Failed:** Please fix the following issues in your sheet and try again:\n\n`;
-      errorMessage += errors.map(err => `• ${err}`).join('\n');
+      errorMessage += errors.map(err => {
+        switch (err.type) {
+          case 'stack_size':
+            return `• **${err.slot}:** "${err.itemName}" has ${err.quantity} items, but maximum stack size is ${err.maxSize}. Please reduce the quantity to ${err.maxSize} or less.`;
+          case 'non_stackable':
+            return `• **${err.slot}:** "${err.itemName}" is a non-stackable item and can only have 1 per slot. Please reduce the quantity to 1.`;
+          case 'slot_capacity':
+            return `• **${err.slot}:** "${err.itemName}" needs ${err.needed} slots, but you only have ${err.remaining} slots remaining. Please reduce quantities or remove some items.`;
+          case 'missing_item':
+            return `• **${err.slot}:** Item "${err.itemName}" not found in database. Please check the item name.`;
+          default:
+            return `• ${err.message || 'Unknown error'}`;
+        }
+      }).join('\n\n');
+      
+      errorMessage += '\n\n**Instructions:**\n1. Open your shop sheet\n2. Fix the quantities to match the requirements above\n3. Save your changes\n4. Try syncing again';
       
       return interaction.editReply({
         content: errorMessage,
