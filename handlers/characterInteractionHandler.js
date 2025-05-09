@@ -80,8 +80,7 @@ async function createCharacterInteraction(interaction) {
     }
     
     // NEW: Parse height as string and convert to float
-    const heightStr = interaction.options.getString('height');
-    const height = parseFloat(heightStr);
+    const height = interaction.options.getNumber('height');
     
     // NEW: Validate height is a valid number and positive
     if (isNaN(height) || height <= 0) {
