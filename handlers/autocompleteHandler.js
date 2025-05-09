@@ -2398,87 +2398,75 @@ async function handleViewVendingShopAutocomplete(interaction) {
  }
 }
 
-// ------------------- handleSlotAutocomplete Autocomplete -------------------
-async function handleSlotAutocomplete(interaction) {
+// ------------------- handleSlotAutocomplete -------------------
+async function handleSlotAutocomplete(interaction, focusedOption) {
   try {
     const characterName = interaction.options.getString('charactername');
     if (!characterName) return await interaction.respond([]);
 
-    let character;
-    try {
-      character = await fetchCharacterByName(characterName);
-    } catch (err) {
-      console.error(`[handleSlotAutocomplete]: Character "${characterName}" not found or fetch failed.`);
-      return await interaction.respond([]);
-    }
+    const userId = interaction.user.id;
+    const character = await fetchCharacterByNameAndUserId(characterName, userId);
     if (!character) return await interaction.respond([]);
 
+    // Calculate total available slots
     const baseSlotLimits = { shopkeeper: 5, merchant: 3 };
     const pouchCapacities = { none: 0, bronze: 15, silver: 30, gold: 50 };
     const baseSlots = baseSlotLimits[character.job?.toLowerCase()] || 0;
     const extraSlots = pouchCapacities[character.shopPouch?.toLowerCase()] || 0;
     const totalSlots = baseSlots + extraSlots;
 
-    // Connect to the vending DB
-    const client = new MongoClient(process.env.MONGODB_INVENTORIES_URI);
-    await client.connect();
-    const vendDb = client.db("vending");
-    const vendCollection = vendDb.collection(characterName.toLowerCase());
+    // Get used slots with their items
+    const vendingClient = new MongoClient(process.env.MONGODB_INVENTORIES_URI);
+    await vendingClient.connect();
+    const vendCollection = vendingClient.db('vending').collection(characterName.toLowerCase());
     const items = await vendCollection.find({}).toArray();
-    await client.close();
+    await vendingClient.close();
 
-    // ------------------- Accurate Slot Aggregation -------------------
-    const slotMap = new Map(); // Slot => { itemName, qty }
-
+    // Create a map of slot => item info
+    const slotMap = new Map();
     for (const item of items) {
-      const slot = item.slot;
-      if (!slot || !/^Slot \d+$/.test(slot)) continue;
-
-      // If this slot already has data, add to total if same item
-      if (slotMap.has(slot)) {
-        const entry = slotMap.get(slot);
-        if (entry.itemName === item.itemName) {
-          entry.qty += item.stockQty;
+      if (!item.slot) continue;
+      if (slotMap.has(item.slot)) {
+        const existing = slotMap.get(item.slot);
+        if (existing.itemName === item.itemName) {
+          existing.qty += item.stockQty;
         } else {
-          // Mixed item types in same slot — mark as invalid
-          slotMap.set(slot, { itemName: "❌ Multiple Items", qty: null });
+          slotMap.set(item.slot, { itemName: "❌ Multiple Items", qty: null });
         }
       } else {
-        slotMap.set(slot, { itemName: item.itemName, qty: item.stockQty });
+        slotMap.set(item.slot, { itemName: item.itemName, qty: item.stockQty });
       }
     }
 
-
+    // Generate slot options
     const slotChoices = [];
+    for (let i = 1; i <= totalSlots; i++) {
+      const slotName = `Slot ${i}`;
+      const slotInfo = slotMap.get(slotName);
+      
+      if (slotInfo) {
+        const fullness = slotInfo.qty !== null ? `${Math.min(slotInfo.qty, 10)}/10` : `🚫 Conflict`;
+        slotChoices.push({
+          name: `${slotName} – ${slotInfo.itemName} – ${fullness}`,
+          value: slotName
+        });
+      } else {
+        slotChoices.push({
+          name: `${slotName} – (Empty)`,
+          value: slotName
+        });
+      }
+    }
 
-for (let i = 1; i <= totalSlots; i++) {
-  const displayNum = String(i).padStart(2, '0'); // For visible sorting
-  const slotNameDisplay = `Slot ${displayNum}`;  // 👁️ Shown to user
-  const slotNameValue = `Slot ${i}`;             // 💾 Used internally
+    // Filter based on user input
+    const searchQuery = focusedOption.value.toLowerCase();
+    const filteredSlots = slotChoices
+      .filter(slot => slot.name.toLowerCase().includes(searchQuery))
+      .slice(0, 25);
 
-  if (slotMap.has(slotNameValue)) {
-    const { itemName, qty } = slotMap.get(slotNameValue);
-    const fullness = qty !== null ? `${Math.min(qty, 10)}/10` : `🚫 Conflict`;
-    
-    slotChoices.push({
-      name: `${slotNameDisplay} – ${itemName} – ${fullness}`,
-      value: slotNameValue,
-    });
-    
-  } else {
-    slotChoices.push({
-      name: `${slotNameDisplay} – (Empty)`,
-      value: slotNameValue,
-    });
-  }
-}
-
-// No custom sorting needed now
-await respondWithFilteredChoices(interaction, interaction.options.getFocused(true), slotChoices);
-
-
+    await interaction.respond(filteredSlots);
   } catch (error) {
-    handleError(error, "autocompleteHandler.js");
+    console.error('[handleSlotAutocomplete]: Error:', error);
     await interaction.respond([]);
   }
 }
