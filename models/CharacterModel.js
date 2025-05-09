@@ -68,7 +68,6 @@ const characterSchema = new Schema({
     default: null
   },
   vendingSync: { type: Boolean, default: false },        // Vending sync status
-  shopImage: { type: String, default: '' },              // Shop image link
 
   // ------------------- Special status -------------------
   blighted: { type: Boolean, default: false },           // Blighted status
