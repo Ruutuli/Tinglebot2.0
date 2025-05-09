@@ -2582,9 +2582,9 @@ async function handleVendingViewAutocomplete(interaction, focusedOption) {
              character.vendingSync;
     });
 
-    // Map characters to autocomplete choices
+    // Map characters to autocomplete choices with formatted display
     const choices = vendorCharacters.map((character) => ({
-      name: `${character.name} (${character.job})`,
+      name: `${character.name} | ${character.currentVillage || 'No Village'} | ${character.job}`,
       value: character.name
     }));
 
