@@ -2584,37 +2584,22 @@ async function handleVendingTradeAutocomplete(interaction, focusedOption) {
     const vendor = await fetchCharacterByName(vendorName);
     if (!vendor) return await interaction.respond([]);
 
-    const village = vendor.currentVillage?.toLowerCase()?.trim();
-    const vendorType = vendor.job?.toLowerCase();
     const searchQuery = focusedOption.value?.toLowerCase() || "";
 
-    // Get regular vendor items
-    const vendorItems = await getVendorItems(village, vendorType, searchQuery);
-    
-    // Get items from vendor's vending inventory
+    // Get items from vendor's vending inventory ONLY
     const vendingClient = new MongoClient(process.env.MONGODB_INVENTORIES_URI);
     await vendingClient.connect();
     const vendCollection = vendingClient.db('vendingInventories').collection(vendorName.toLowerCase());
     const vendingItems = await vendCollection.find({}).toArray();
     await vendingClient.close();
 
-    // Combine and format all items
-    const allItems = [...vendorItems];
-    
-    // Add vending inventory items
-    for (const item of vendingItems) {
-      if (item.itemName?.toLowerCase().includes(searchQuery)) {
-        allItems.push({
-          itemName: item.itemName,
-          points: item.tokenPrice || 0,
-          stock: item.stockQty || 0,
-          isLimited: true
-        });
-      }
-    }
+    // Filter and format items
+    const filteredItems = vendingItems.filter(item =>
+      item.itemName?.toLowerCase().includes(searchQuery)
+    );
 
-    const choices = allItems.map(item => ({
-      name: `${item.itemName} - ${item.points} pts${item.isLimited ? ` (Qty: ${item.stock})` : ''}`,
+    const choices = filteredItems.map(item => ({
+      name: `${item.slot || 'Unknown Slot'} | ${item.itemName} | Qty:${item.stockQty ?? 'undefined'}`,
       value: item.itemName
     }));
 
