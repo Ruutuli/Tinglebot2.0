@@ -305,8 +305,7 @@ async function handleRestock(interaction) {
       tokenPrice,
       artPrice,
       otherPrice,
-      tradesOpen,
-      stackable
+      tradesOpen
     });
 
     if (existingMatch) {
@@ -348,7 +347,6 @@ async function handleRestock(interaction) {
         artPrice,
         otherPrice,
         tradesOpen,
-        stackable,
         boughtFrom: character.currentVillage,
         slot: newSlot,
         date: new Date()
@@ -360,6 +358,35 @@ async function handleRestock(interaction) {
       { _id: character._id },
       { $inc: { vendingPoints: -totalCost } }
     );
+
+    // ------------------- Update Google Sheets -------------------
+    const shopLink = character.shopLink || character.vendingSetup?.shopLink;
+    if (shopLink) {
+      try {
+        const spreadsheetId = extractSpreadsheetId(shopLink);
+        if (spreadsheetId) {
+          const auth = await authorizeSheets();
+          const rowData = [
+            characterName,
+            newSlot,
+            itemName,
+            stockQty,
+            pointCost,
+            totalCost,
+            character.currentVillage,
+            tokenPrice,
+            artPrice,
+            otherPrice,
+            tradesOpen ? 'Yes' : 'No',
+            'Old Stock'
+          ];
+          await appendSheetData(auth, spreadsheetId, 'vendingShop!A:L', [rowData]);
+        }
+      } catch (sheetError) {
+        console.error('[handleRestock]: Error updating Google Sheet:', sheetError);
+        // Don't fail the whole operation if sheet update fails
+      }
+    }
 
     // ------------------- Success Response -------------------
     const successEmbed = new EmbedBuilder()
