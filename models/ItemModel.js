@@ -49,6 +49,8 @@ const ItemSchema = new Schema({
   locations: { type: [String], default: [] }, // Available locations
   locationsTags: { type: [String], default: [] }, // Tags for item locations
   emoji: { type: String, default: '' }, // Emoji representing the item
+  stackable: { type: Boolean, default: false }, // Whether the item can be stacked
+  maxStackSize: { type: Number, default: 10 }, // Maximum stack size for stackable items
 
   // Flags for various monsters (e.g., Bokoblin, Chuchu, etc.)
   blackBokoblin: { type: Boolean, default: false },

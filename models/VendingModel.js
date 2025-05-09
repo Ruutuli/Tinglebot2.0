@@ -17,7 +17,26 @@ const vendingInventorySchema = new Schema({
   otherPrice: { type: String, default: 'N/A' }, // Other price type
   tradesOpen: { type: Boolean, default: false }, // Whether trades are open
   slot: { type: String }, // Slot number
-  date: { type: Date, default: Date.now } // Date added to inventory
+  date: { type: Date, default: Date.now }, // Date added to inventory
+  stackable: { type: Boolean, default: false }, // Whether the item can be stacked
+  maxStackSize: { type: Number, default: 10 }, // Maximum stack size for stackable items
+  slotsUsed: { type: Number, default: 1 } // Number of slots this item takes up
+});
+
+// Add pre-save hook to validate stack sizes
+vendingInventorySchema.pre('save', function(next) {
+  if (this.stackable) {
+    // For stackable items, ensure quantity doesn't exceed maxStackSize
+    if (this.stockQty > this.maxStackSize) {
+      this.stockQty = this.maxStackSize;
+    }
+    // Calculate slots needed based on quantity and maxStackSize
+    this.slotsUsed = Math.ceil(this.stockQty / this.maxStackSize);
+  } else {
+    // For non-stackable items, each item takes one slot
+    this.slotsUsed = this.stockQty;
+  }
+  next();
 });
 
 // ------------------- Initialize the vending inventory model -------------------
