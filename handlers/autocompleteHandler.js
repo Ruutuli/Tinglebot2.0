@@ -2417,7 +2417,7 @@ async function handleSlotAutocomplete(interaction, focusedOption) {
     // Get used slots with their items
     const vendingClient = new MongoClient(process.env.MONGODB_INVENTORIES_URI);
     await vendingClient.connect();
-    const vendCollection = vendingClient.db('vending').collection(characterName.toLowerCase());
+    const vendCollection = vendingClient.db('vendingInventories').collection(characterName.toLowerCase());
     const items = await vendCollection.find({}).toArray();
     await vendingClient.close();
 

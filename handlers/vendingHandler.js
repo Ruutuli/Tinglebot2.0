@@ -93,13 +93,18 @@ async function connectToVendingDatabase() {
   const client = new MongoClient(process.env.MONGODB_INVENTORIES_URI, {});
   try {
     await client.connect();
-    return client.db("vending");
+    return client.db("vendingInventories");
   } catch (error) {
     handleError(error, 'vendingHandler.js');
     throw error;
   }
 }
 
+// ------------------- Get Vending Collection -------------------
+async function getVendingCollection(characterName) {
+  const db = await connectToVendingDatabase();
+  return db.collection(characterName.toLowerCase());
+}
 
 // ------------------- executeVending -------------------
 async function executeVending(interaction) {
@@ -234,14 +239,11 @@ async function handleRestock(interaction) {
     }
 
     // ------------------- DB Connections -------------------
-    const vendingClient = new MongoClient(process.env.MONGODB_INVENTORIES_URI);
-    await vendingClient.connect();
-    const vendCollection = vendingClient.db('vending').collection(characterName.toLowerCase());
+    const vendCollection = await getVendingCollection(characterName);
 
     // ------------------- Stock Validation -------------------
     const stockList = await getCurrentVendingStockList();
     if (!stockList?.stockList) {
-      await vendingClient.close();
       return interaction.editReply("❌ Failed to fetch current vending stock list.");
     }
 
@@ -253,7 +255,6 @@ async function handleRestock(interaction) {
     );
 
     if (!itemDoc) {
-      await vendingClient.close();
       return interaction.editReply(`❌ Item "${itemName}" not found in ${character.currentVillage}'s stock for ${character.job}s.`);
     }
 
@@ -262,7 +263,6 @@ async function handleRestock(interaction) {
     const totalCost = pointCost * stockQty;
 
     if (character.vendingPoints < totalCost) {
-      await vendingClient.close();
       return interaction.editReply(`❌ Not enough vending points. You need ${totalCost} points (${pointCost} per item × ${stockQty} items).`);
     }
 
@@ -272,7 +272,6 @@ async function handleRestock(interaction) {
       // Check if slot is already taken
       const existingItem = await vendCollection.findOne({ slot: manualSlot });
       if (existingItem) {
-        await vendingClient.close();
         return interaction.editReply(`❌ Slot ${manualSlot} is already occupied by ${existingItem.itemName}.`);
       }
       newSlot = manualSlot;
@@ -287,7 +286,6 @@ async function handleRestock(interaction) {
         }
       }
       if (!newSlot) {
-        await vendingClient.close();
         return interaction.editReply(`❌ No available slots. You have used all ${totalSlots} slots.`);
       }
     }
@@ -366,7 +364,6 @@ async function handleRestock(interaction) {
       );
 
     await interaction.editReply({ embeds: [successEmbed] });
-    await vendingClient.close();
 
   } catch (error) {
     console.error('[handleRestock]: Error:', error);
