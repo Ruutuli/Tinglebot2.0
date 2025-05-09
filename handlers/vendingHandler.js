@@ -423,20 +423,28 @@ async function handleRestock(interaction) {
   }
 }
 
-// ------------------- handleVendingTrade -------------------
-async function handleVendingTrade(interaction) {
+// ------------------- handleVendingBarter -------------------
+async function handleVendingBarter(interaction) {
     try {
       await interaction.deferReply({ ephemeral: true });
   
       const buyerId = interaction.user.id;
       const buyerName = interaction.user.username;
-      const targetShopName = interaction.options.getString("shop");
+      const targetShopName = interaction.options.getString("vendorcharacter");
+      const requestedItemName = interaction.options.getString("itemname");
+      const quantity = interaction.options.getInteger("quantity");
+      const paymentType = interaction.options.getString("payment_type");
       const offeredItemName = interaction.options.getString("offer");
-      const requestedItemName = interaction.options.getString("request");
+      const notes = interaction.options.getString("notes");
   
       // ------------------- Validate Inputs -------------------
-      if (!targetShopName || !offeredItemName || !requestedItemName) {
-        return interaction.editReply("⚠️ Please provide all required options: `shop`, `offer`, and `request`.");
+      if (!targetShopName || !requestedItemName || !quantity || !paymentType) {
+        return interaction.editReply("⚠️ Please provide all required options: `vendorcharacter`, `itemname`, `quantity`, and `payment_type`.");
+      }
+
+      // Validate offer for trade payment type
+      if (paymentType === 'trade' && !offeredItemName) {
+        return interaction.editReply("⚠️ Please provide an item to offer when using trade payment type.");
       }
   
       const buyer = await fetchCharacterByDiscordId(buyerId);
@@ -458,59 +466,81 @@ async function handleVendingTrade(interaction) {
       if (!requestedItem) {
         return interaction.editReply(`⚠️ The item **${requestedItemName}** is not available in ${targetShopName}'s shop.`);
       }
-  
-      // ------------------- Check Buyer's Inventory -------------------
-      const inventories = await connectToInventories(buyer);
-      const buyerInventory = inventories.inventory;
-      const offeredItem = buyerInventory.find(item => item.name.toLowerCase() === offeredItemName.toLowerCase());
-  
-      if (!offeredItem || offeredItem.quantity < 1) {
-        return interaction.editReply(`⚠️ You do not have **${offeredItemName}** in your inventory.`);
+
+      if (requestedItem.stockQty < quantity) {
+        return interaction.editReply(`⚠️ ${targetShopName} only has ${requestedItem.stockQty} ${requestedItemName} in stock.`);
       }
   
-      // ------------------- Execute Trade -------------------
-      await removeItemFromInventory(buyerInventory, offeredItemName, 1);
-      await addItemToInventory(buyerInventory, requestedItemName, 1);
+      // ------------------- Payment Type Specific Validation -------------------
+      switch (paymentType) {
+        case 'tokens':
+          if (!requestedItem.tokenPrice) {
+            return interaction.editReply(`⚠️ ${requestedItemName} is not available for token purchase.`);
+          }
+          const totalCost = requestedItem.tokenPrice * quantity;
+          const userTokens = await getTokenBalance(buyerId);
+          if (userTokens < totalCost) {
+            return interaction.editReply(`⚠️ You don't have enough tokens. Required: ${totalCost}, Your balance: ${userTokens}`);
+          }
+          break;
+
+        case 'art':
+          if (!requestedItem.artPrice) {
+            return interaction.editReply(`⚠️ ${requestedItemName} is not available for art purchase.`);
+          }
+          break;
+
+        case 'trade':
+          if (!requestedItem.tradesOpen) {
+            return interaction.editReply(`⚠️ ${targetShopName} is not accepting trades for ${requestedItemName}.`);
+          }
+          // Check if buyer has the offered item
+          const buyerInventory = await connectToInventories(buyer);
+          const offeredItem = buyerInventory.inventory.find(item => 
+            item.name.toLowerCase() === offeredItemName.toLowerCase()
+          );
+          if (!offeredItem || offeredItem.quantity < 1) {
+            return interaction.editReply(`⚠️ You don't have **${offeredItemName}** in your inventory.`);
+          }
+          break;
+      }
   
-      // Add offered item to shop's vending inventory
-      await VendingInventory.create({
-        characterName: shopOwner.name,
-        itemName: offeredItemName,
-        stockQty: 1,
-        tokenPrice: 0,
-        artPrice: 0,
-        otherPrice: 0,
-        tradesOpen: true,
-        date: new Date()
-      });
-  
-      // ------------------- Save Fulfillment -------------------
+      // ------------------- Create Barter Request -------------------
       const fulfillmentId = uuidv4();
-      const tradeData = {
+      const barterData = {
         fulfillmentId,
         userCharacterName: buyer.name,
         vendorCharacterName: shopOwner.name,
         itemName: requestedItem.itemName,
-        quantity: 1,
-        paymentMethod: 'trade',
-        notes: `Traded ${offeredItemName} for ${requestedItemName}`,
+        quantity: quantity,
+        paymentMethod: paymentType,
+        offeredItem: paymentType === 'trade' ? offeredItemName : null,
+        notes: notes || '',
         buyerId,
         buyerUsername: buyerName,
         date: new Date()
       };
   
-      const fulfillment = new VendingRequest(tradeData);
+      const fulfillment = new VendingRequest(barterData);
       await fulfillment.save();
   
       // ------------------- Confirmation Embed -------------------
       const embed = new EmbedBuilder()
-        .setTitle(`🛒 Trade Successful`)
-        .setDescription(`**${buyer.name}** has traded with **${shopOwner.name}**.`)
+        .setTitle(`🔄 Barter Request Created`)
+        .setDescription(`**${buyer.name}** has requested to barter with **${shopOwner.name}**.`)
         .addFields(
-          { name: '🧾 Offered', value: `\`${offeredItemName}\``, inline: true },
-          { name: '📦 Received', value: `\`${requestedItemName}\``, inline: true },
-          { name: '🪪 Fulfillment ID', value: fulfillmentId, inline: false }
-        )
+          { name: '📦 Requested Item', value: `\`${requestedItemName} x${quantity}\``, inline: true },
+          { name: '💱 Payment Method', value: paymentType.charAt(0).toUpperCase() + paymentType.slice(1), inline: true }
+        );
+
+      if (paymentType === 'trade') {
+        embed.addFields({ name: '🔄 Offered Item', value: `\`${offeredItemName}\``, inline: true });
+      }
+      if (notes) {
+        embed.addFields({ name: '📝 Notes', value: notes, inline: false });
+      }
+      
+      embed.addFields({ name: '🪪 Fulfillment ID', value: fulfillmentId, inline: false })
         .setFooter({ text: `Buyer: ${buyerName}` })
         .setColor('#3498db')
         .setTimestamp();
@@ -518,9 +548,9 @@ async function handleVendingTrade(interaction) {
       await interaction.editReply({ embeds: [embed] });
   
     } catch (error) {
-      console.error("[handleVendingTrade]:", error);
+      console.error("[handleVendingBarter]:", error);
       await interaction.editReply({
-        content: "❌ An error occurred while processing the trade. Please try again later.",
+        content: "❌ An error occurred while processing the barter request. Please try again later.",
         ephemeral: true
       });
     }
@@ -1616,7 +1646,7 @@ async function handleSyncButton(interaction) {
 module.exports = {
     executeVending,
     handleRestock,
-    handleVendingTrade,
+    handleVendingBarter,
     handleFulfill,
     handlePouchUpgrade,
     handlePouchUpgradeConfirm,

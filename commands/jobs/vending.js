@@ -33,7 +33,7 @@ const command = new SlashCommandBuilder()
   // ------------------- Shop Setup & Management -------------------
   .addSubcommand(sub =>
     sub.setName('setup')
-      .setDescription('🎪 Set up your vending shop')
+      .setDescription('Set up your vending shop')
       .addStringOption(opt =>
         opt.setName('charactername')
           .setDescription('Your character\'s name')
@@ -68,7 +68,7 @@ const command = new SlashCommandBuilder()
 
   .addSubcommand(sub =>
     sub.setName('pouch')
-      .setDescription('🛍️ Upgrade your shop pouch to get more vending slots')
+      .setDescription('Upgrade your shop pouch to get more vending slots')
       .addStringOption(opt =>
         opt.setName('charactername')
           .setDescription('Your character\'s name')
@@ -89,7 +89,7 @@ const command = new SlashCommandBuilder()
 
   .addSubcommand(sub =>
     sub.setName('add')
-      .setDescription('📦 Add items to your shop')
+      .setDescription('Add items to your shop')
       .addStringOption(opt =>
         opt.setName('charactername')
           .setDescription('Your character\'s name')
@@ -129,7 +129,7 @@ const command = new SlashCommandBuilder()
 
   .addSubcommand(sub =>
     sub.setName('edit')
-      .setDescription('✏️ Edit your shop items or settings')
+      .setDescription('Edit your shop items or settings')
       .addStringOption(opt =>
         opt.setName('charactername')
           .setDescription('Your character\'s name')
@@ -171,7 +171,7 @@ const command = new SlashCommandBuilder()
   // ------------------- Viewing & Browsing -------------------
   .addSubcommand(sub =>
     sub.setName('view')
-      .setDescription('👀 View a shop\'s inventory')
+      .setDescription('View a shop\'s inventory')
       .addStringOption(opt =>
         opt.setName('charactername')
           .setDescription('Shop owner to view')
@@ -182,13 +182,13 @@ const command = new SlashCommandBuilder()
 
   .addSubcommand(sub =>
     sub.setName('stock')
-      .setDescription('📊 View current month\'s vending stock by village')
+      .setDescription('View current month\'s vending stock by village')
   )
 
   // ------------------- Trading System -------------------
   .addSubcommand(sub =>
-    sub.setName('buy')
-      .setDescription('🛍️ Buy items from a shop')
+    sub.setName('barter')
+      .setDescription('🔄 Buy or trade for items from a shop')
       .addStringOption(opt =>
         opt.setName('charactername')
           .setDescription('Your character\'s name')
@@ -197,41 +197,13 @@ const command = new SlashCommandBuilder()
       )
       .addStringOption(opt =>
         opt.setName('vendorcharacter')
-          .setDescription('Shop you\'re buying from')
+          .setDescription('Shop you\'re bartering with')
           .setRequired(true)
           .setAutocomplete(true)
       )
       .addStringOption(opt =>
         opt.setName('itemname')
-          .setDescription('Item you want to buy')
-          .setRequired(true)
-          .setAutocomplete(true)
-      )
-      .addIntegerOption(opt =>
-        opt.setName('quantity')
-          .setDescription('How many to buy')
-          .setRequired(true)
-      )
-  )
-
-  .addSubcommand(sub =>
-    sub.setName('trade')
-      .setDescription('🔄 Propose a trade for an item')
-      .addStringOption(opt =>
-        opt.setName('charactername')
-          .setDescription('Your character\'s name')
-          .setRequired(true)
-          .setAutocomplete(true)
-      )
-      .addStringOption(opt =>
-        opt.setName('vendorcharacter')
-          .setDescription('Shop you\'re trading with')
-          .setRequired(true)
-          .setAutocomplete(true)
-      )
-      .addStringOption(opt =>
-        opt.setName('itemname')
-          .setDescription('Item you want to trade for')
+          .setDescription('Item you want to barter for')
           .setRequired(true)
           .setAutocomplete(true)
       )
@@ -241,9 +213,18 @@ const command = new SlashCommandBuilder()
           .setRequired(true)
       )
       .addStringOption(opt =>
-        opt.setName('offer')
-          .setDescription('What you are offering in return')
+        opt.setName('payment_type')
+          .setDescription('How you want to pay for the item')
           .setRequired(true)
+          .addChoices(
+            { name: '💰 Tokens', value: 'tokens' },
+            { name: '🎨 Art', value: 'art' },
+            { name: '🔄 Trade', value: 'trade' }
+          )
+      )
+      .addStringOption(opt =>
+        opt.setName('offer')
+          .setDescription('What you are offering in return (required for trade)')
       )
       .addStringOption(opt =>
         opt.setName('notes')
@@ -269,8 +250,8 @@ async function execute(interaction) {
     const subcommand = interaction.options.getSubcommand();
   
     switch (subcommand) {
-      case 'trade':
-        return await handleBarter(interaction);
+      case 'barter':
+        return await handleVendingBarter(interaction);
   
       case 'fulfill':
         return await handleFulfill(interaction);
