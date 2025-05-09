@@ -1069,7 +1069,7 @@ async function handleTradeToCharacterAutocomplete(interaction, focusedValue) {
       .filter(char => char.name.toLowerCase().includes(focusedValue))
       .map(char => ({
         name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
-        value: char.name
+        value: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`
       }));
     return await respondWithFilteredChoices(interaction, focusedValue, choices);
   } catch (error) {
