@@ -262,7 +262,10 @@ const fetchCharactersByUserId = async (userId) => {
 const fetchCharacterByNameAndUserId = async (characterName, userId) => {
  try {
   await connectToTinglebot();
-  const character = await Character.findOne({ name: characterName, userId });
+  const character = await Character.findOne({
+    name: new RegExp(`^${characterName.trim()}$`, "i"),
+    userId
+  });
   return character;
  } catch (error) {
   handleError(error, "db.js");
