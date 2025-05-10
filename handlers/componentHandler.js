@@ -157,6 +157,14 @@ async function handleSyncYes(interaction, characterId) {
     return interaction.editReply({ content: '❌ **Character not found.**' });
   }
 
+  // Check if inventory is already synced
+  if (character.inventorySynced) {
+    return interaction.editReply({ 
+      content: `❌ **Inventory for ${character.name} has already been synced and cannot be synced again.**`,
+      components: [] // Remove the buttons
+    });
+  }
+
   await syncInventory(character.name, interaction.user.id, interaction);
 }
 
