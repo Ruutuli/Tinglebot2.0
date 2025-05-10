@@ -145,7 +145,7 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
 
         if (filteredData.length === 0) {
             console.log('[syncHandler.js]: ⚠️ No matching data found for character in the Google Sheet');
-            await editSyncErrorMessage(interaction, `❌ **No matching data found for ${character.name} in the Google Sheet.**`);
+            await editSyncErrorMessage(interaction, `❌ **No matching data found for ${character.name} in the Google Sheet.**\n\nYou must have at least 1 item! If this is a new character, please add their starter gear.`);
             return;
         }
 

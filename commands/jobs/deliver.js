@@ -18,7 +18,7 @@ const { capitalizeWords } = require('../../modules/formattingModule');
 const { addItemInventoryDatabase, removeItemInventoryDatabase, addItemToVendingInventory } = require('../../utils/inventoryUtils');
 const { generateUniqueId } = require('../../utils/uniqueIdUtils');
 const { deleteSubmissionFromStorage, retrieveSubmissionFromStorage, saveSubmissionToStorage } = require('../../utils/storage');
-const { validateJobVoucher, activateJobVoucher, fetchJobVoucherItem, deactivateJobVoucher } = require('../../modules/jobVoucherModule');
+const { validateJobVoucher, activateJobVoucher, fetchJobVoucherItem, deactivateJobVoucher, getJobVoucherErrorMessage } = require('../../modules/jobVoucherModule');
 const { getJobPerk } = require('../../modules/jobsModule');
 
 // ------------------- Database Models -------------------
@@ -231,18 +231,19 @@ const command = {
         let job = (courierCharacter.jobVoucher && courierCharacter.jobVoucherJob) ? courierCharacter.jobVoucherJob : courierCharacter.job;
         console.log(`[deliver.js]: Determined job for ${courierCharacter.name} is "${job}"`);
 
+        let voucherCheck;
         if (courierCharacter.jobVoucher) {
           console.error(`[deliver.js]: Job voucher detected for ${courierCharacter.name}. Validating voucher.`);
-          const voucherValidation = await validateJobVoucher(courierCharacter, job);
-          if (voucherValidation.skipVoucher) {
+          voucherCheck = await validateJobVoucher(courierCharacter, job);
+          if (voucherCheck.skipVoucher) {
             console.error(`[deliver.js]: ${courierCharacter.name} already has job "${job}". Skipping voucher use.`);
             // No activation needed
-          } else if (!voucherValidation.success) {
+          } else if (!voucherCheck.success) {
             if (courierCharacter.jobVoucherJob === null) {
               console.error(`[deliver.js]: Job voucher is unrestricted. Proceeding with job: "${job}".`);
             } else {
               return interaction.editReply({
-                content: voucherValidation.message,
+                content: voucherCheck.message,
                 ephemeral: true,
               });
             }
@@ -272,7 +273,10 @@ const command = {
         const jobPerk = getJobPerk(job);
         if (!jobPerk || !jobPerk.perks.includes('DELIVERY')) {
           return interaction.editReply({
-            content: `❌ **${courierCharacter.name}** cannot make deliveries as a ${job} because they lack the necessary delivery skills.`,
+            content: getJobVoucherErrorMessage('MISSING_SKILLS', {
+              characterName: courierCharacter.name,
+              jobName: job
+            }).message,
             ephemeral: true,
           });
         }
@@ -370,7 +374,7 @@ const command = {
         });
 
         // ------------------- Deactivate Job Voucher -------------------
-        if (courierCharacter.jobVoucher) {
+        if (courierCharacter.jobVoucher && !voucherCheck?.skipVoucher) {
           const deactivationResult = await deactivateJobVoucher(courierCharacter._id);
           if (!deactivationResult.success) {
             console.error(`[deliver.js]: Failed to deactivate job voucher for ${courierCharacter.name}`);
