@@ -8,6 +8,7 @@
 // ============================================================================
 
 const { v4: uuidv4 } = require('uuid');
+const fs = require('fs');
 
 const { handleError } = require('../utils/globalErrorHandler');
 
@@ -65,8 +66,8 @@ function formatDateTime(date) {
 // Synchronizes the inventory of a character from a Google Sheet to the database.
 // It fetches the character, validates the sheet URL, reads data, processes rows in batches,
 // updates the database, and sends appropriate feedback messages.
-async function syncInventory(characterName, userId, interaction, retryCount = 0, totalSyncedItemsCount = 0) {
-    console.log(`syncInventory called for character: ${characterName}, user: ${userId}, retryCount: ${retryCount}`);
+async function syncInventory(characterName, userId, interaction, totalSyncedItemsCount = 0) {
+    console.log(`syncInventory called for character: ${characterName}, user: ${userId}`);
 
     let errors = [];
     let syncedItemsCount = 0;
@@ -112,13 +113,22 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
                 return;
             }
         } catch (err) {
-            if (err.code === 403 || err.message.includes("permission")) {
-                console.error(`[syncHandler.js]: Permission error when accessing Google Sheet: ${err.message}`);
-                await editSyncErrorMessage(interaction, `❌ **Permission Error:**\nMake sure your sheet is shared with this email:\n📧 \`tinglebot@rotw-tinglebot.iam.gserviceaccount.com\``);
+            if (err.code === 403 || err.message.includes("permission") || err.message.includes("Editor access")) {
+                const serviceAccountEmail = JSON.parse(fs.readFileSync(SERVICE_ACCOUNT_PATH)).client_email;
+                console.error(`[syncHandler.js]: ❌ Permission error when accessing Google Sheet: ${err.message}`);
+                await editSyncErrorMessage(interaction, 
+                    `❌ **Permission Error:**\n` +
+                    `The bot cannot access your Google Sheet. Please follow these steps:\n\n` +
+                    `1. Open your Google Sheet\n` +
+                    `2. Click "Share" in the top right\n` +
+                    `3. Add this email as an Editor:\n` +
+                    `📧 \`${serviceAccountEmail}\`\n\n` +
+                    `After sharing, try the sync command again.`
+                );
+                return;
             } else {
-                throw err; // Let other errors fall through to main catch
+                throw err;
             }
-            return;
         }
         
         console.log(`Sheet ID fetched successfully: ${sheetId}`);
