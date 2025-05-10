@@ -8,40 +8,27 @@ const { handleError } = require('../utils/globalErrorHandler');
 const { monsterMapping } = require('../models/MonsterModel');
 const { applyVillageDamage } = require('./villageModule');
 const { capitalizeVillageName } = require('../utils/stringUtils');
-const fs = require('fs');
-const path = require('path');
 const { generateUniqueId } = require('../utils/uniqueIdUtils');
+
+// ------------------- Storage Functions -------------------
+const { 
+  saveBattleProgressToStorage, 
+  retrieveBattleProgressFromStorage, 
+  deleteBattleProgressFromStorage 
+} = require('../utils/storage.js');
 
 // ------------------- Constants -------------------
 const RAID_DURATION = 15 * 60 * 1000; // 15 minutes in milliseconds
-const RAID_BATTLE_PROGRESS_PATH = path.join(__dirname, '..', 'data', 'raidBattleProgress.json');
 
 // ============================================================================
 // Raid Battle Progress Functions
 // ============================================================================
 
-// ------------------- Ensure Raid Battle Progress File Exists -------------------
-function ensureRaidBattleProgressFileExists() {
-  if (!fs.existsSync(RAID_BATTLE_PROGRESS_PATH)) {
-    fs.writeFileSync(RAID_BATTLE_PROGRESS_PATH, JSON.stringify({}));
-  } else {
-    try {
-      JSON.parse(fs.readFileSync(RAID_BATTLE_PROGRESS_PATH, 'utf8'));
-    } catch (error) {
-      handleError(error, 'raidModule.js');
-      fs.writeFileSync(RAID_BATTLE_PROGRESS_PATH, JSON.stringify({}));
-    }
-  }
-}
-
 // ------------------- Store Raid Progress -------------------
 async function storeRaidProgress(character, monster, tier, monsterHearts, progress) {
-  ensureRaidBattleProgressFileExists();
-  const battleProgress = JSON.parse(fs.readFileSync(RAID_BATTLE_PROGRESS_PATH, 'utf8'));
-  
   const battleId = generateUniqueId('R'); // 'R' prefix for Raid battles
   
-  battleProgress[battleId] = {
+  const battleData = {
     battleId,
     characters: [character],
     monster: monster.name,
@@ -56,7 +43,7 @@ async function storeRaidProgress(character, monster, tier, monsterHearts, progre
   };
 
   try {
-    fs.writeFileSync(RAID_BATTLE_PROGRESS_PATH, JSON.stringify(battleProgress, null, 2));
+    await saveBattleProgressToStorage(battleId, battleData);
   } catch (err) {
     handleError(err, 'raidModule.js');
     console.error(`[raidModule.js]: ❌ Error storing raid progress for Battle ID "${battleId}":`, err);
@@ -67,21 +54,22 @@ async function storeRaidProgress(character, monster, tier, monsterHearts, progre
 
 // ------------------- Get Raid Progress by ID -------------------
 async function getRaidProgressById(battleId) {
-  ensureRaidBattleProgressFileExists();
-  const raw = fs.readFileSync(RAID_BATTLE_PROGRESS_PATH, 'utf8');
-  const battleProgress = JSON.parse(raw);
-
-  if (battleProgress[battleId]) {
-    return battleProgress[battleId];
+  try {
+    const battleProgress = await retrieveBattleProgressFromStorage(battleId);
+    if (!battleProgress) {
+      console.error(`[raidModule.js]: ❌ Error - No raid progress found for Battle ID: ${battleId}`);
+      return null;
+    }
+    return battleProgress;
+  } catch (error) {
+    handleError(error, 'raidModule.js');
+    console.error(`[raidModule.js]: ❌ Error retrieving raid progress for Battle ID "${battleId}":`, error);
+    return null;
   }
-
-  console.error(`[raidModule.js]: ❌ Error - No raid progress found for Battle ID: ${battleId}`);
-  return null;
 }
 
 // ------------------- Update Raid Progress -------------------
 async function updateRaidProgress(battleId, updatedProgress, outcome) {
-  ensureRaidBattleProgressFileExists();
   const battleProgress = await getRaidProgressById(battleId);
   if (!battleProgress) return;
 
@@ -89,7 +77,7 @@ async function updateRaidProgress(battleId, updatedProgress, outcome) {
   battleProgress.progress += `\n${updatedProgress}`;
   
   try {
-    fs.writeFileSync(RAID_BATTLE_PROGRESS_PATH, JSON.stringify(battleProgress, null, 2));
+    await saveBattleProgressToStorage(battleId, battleProgress);
   } catch (err) {
     handleError(err, 'raidModule.js');
     console.error(`[raidModule.js]: ❌ Error updating raid progress for Battle ID "${battleId}":`, err);
@@ -99,13 +87,8 @@ async function updateRaidProgress(battleId, updatedProgress, outcome) {
 
 // ------------------- Delete Raid Progress -------------------
 async function deleteRaidProgressById(battleId) {
-  ensureRaidBattleProgressFileExists();
   try {
-    const battleProgress = JSON.parse(fs.readFileSync(RAID_BATTLE_PROGRESS_PATH, 'utf8'));
-    if (battleProgress[battleId]) {
-      delete battleProgress[battleId];
-      fs.writeFileSync(RAID_BATTLE_PROGRESS_PATH, JSON.stringify(battleProgress, null, 2));
-    }
+    await deleteBattleProgressFromStorage(battleId);
   } catch (error) {
     handleError(error, 'raidModule.js');
     console.error(`[raidModule.js]: ❌ Error deleting raid progress for Battle ID "${battleId}":`, error);

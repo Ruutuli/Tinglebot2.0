@@ -58,11 +58,7 @@ const { getGearModLevel } = require('../modules/gearModule');
 // Unique ID generation for battle IDs.
 const { generateUniqueId } = require('../utils/uniqueIdUtils');
 
-// ------------------- Configuration Constants -------------------
-// Define file path for storing battle progress.
-const BATTLE_PROGRESS_PATH = path.join(__dirname, '..', 'data', 'raidBattleProgress.json');
-
-// ------------------- New Storage Functions -------------------
+// ------------------- Storage Functions -------------------
 const { 
   saveBattleProgressToStorage, 
   retrieveBattleProgressFromStorage, 
@@ -88,16 +84,15 @@ function ensureBattleProgressFileExists() {
 
 // ============================================================================
 // Battle Progress Storage Functions
+// ============================================================================
+
 // ------------------- Store Battle Progress -------------------
 // Saves battle progress data and returns a unique battle ID.
 async function storeBattleProgress(character, monster, tier, monsterHearts, progress) {
-  ensureBattleProgressFileExists();
-  const battleProgress = JSON.parse(fs.readFileSync(BATTLE_PROGRESS_PATH, 'utf8'));
-  
   // Generate a unique battle ID with "R" prefix.
   const battleId = generateUniqueId('R');
   
-  battleProgress[battleId] = {
+  const battleData = {
     battleId,
     characters: [character], // Full character object stored
     monster: monster.name,
@@ -107,10 +102,12 @@ async function storeBattleProgress(character, monster, tier, monsterHearts, prog
       current: monsterHearts.current,
     },
     progress: progress ? `\n${progress}` : '',
+    isBloodMoon: false,
+    startTime: Date.now()
   };
 
   try {
-    await saveBattleProgressToStorage(battleId, battleProgress);
+    await saveBattleProgressToStorage(battleId, battleData);
   } catch (err) {
     handleError(err, 'raidCombatModule.js');
     console.error(`[raidCombatModule.js]: ❌ Error storing battle progress for Battle ID "${battleId}":`, err);
@@ -121,30 +118,25 @@ async function storeBattleProgress(character, monster, tier, monsterHearts, prog
 
 // ------------------- Get Battle Progress by ID -------------------
 // Retrieves battle progress using the given battle ID.
-// Handles both PvP and legacy/raid formats.
 async function getBattleProgressById(battleId) {
-  ensureBattleProgressFileExists();
-  const battleProgress = await retrieveBattleProgressFromStorage(battleId);
-
-  if (battleProgress) {
+  try {
+    const battleProgress = await retrieveBattleProgressFromStorage(battleId);
+    if (!battleProgress) {
+      console.error(`[raidCombatModule.js]: ❌ Error - No battle progress found for Battle ID: ${battleId}`);
+      return null;
+    }
     return battleProgress;
+  } catch (error) {
+    handleError(error, 'raidCombatModule.js');
+    console.error(`[raidCombatModule.js]: ❌ Error retrieving battle progress for Battle ID "${battleId}":`, error);
+    return null;
   }
-
-  // Handle legacy/raid-style format (if applicable)
-  if (battleProgress.battleId === battleId) {
-    console.warn(`[raidCombatModule.js]: ⚠️ Legacy battle format detected for ID ${battleId}`);
-    return battleProgress;
-  }
-
-  console.error(`[raidCombatModule.js]: ❌ Error - No battle progress found for Battle ID: ${battleId}`);
-  return null;
 }
 
 // ------------------- Update Battle Progress -------------------
 // Updates battle progress: deducts monster hearts, updates character hearts,
 // and appends new progress information.
 async function updateBattleProgress(battleId, updatedProgress, outcome) {
-  ensureBattleProgressFileExists();
   const battleProgress = await getBattleProgressById(battleId);
   if (!battleProgress) return;
 
@@ -174,7 +166,6 @@ async function updateBattleProgress(battleId, updatedProgress, outcome) {
 // ------------------- Delete Battle Progress -------------------
 // Removes battle progress data for the specified battle ID.
 async function deleteBattleProgressById(battleId) {
-  ensureBattleProgressFileExists();
   try {
     await deleteBattleProgressFromStorage(battleId);
   } catch (error) {
@@ -186,7 +177,6 @@ async function deleteBattleProgressById(battleId) {
 // ------------------- Update Monster Hearts to Zero -------------------
 // Sets the monster's current hearts to zero for the specified battle.
 async function updateMonsterHeartsToZero(battleId) {
-  ensureBattleProgressFileExists();
   const battleProgress = await getBattleProgressById(battleId);
   if (battleProgress) {
     battleProgress.monsterHearts.current = 0;
