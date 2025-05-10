@@ -810,7 +810,31 @@ async function handleFulfill(interaction) {
 
       // Add to buyer's inventory
       const buyerInventory = await getInventoryCollection(buyer.name);
-      await addItemToInventory(buyerInventory, itemName, quantity);
+      // Fetch item details for full inventory record
+      const itemDetails = await ItemModel.findOne({ itemName: { $regex: new RegExp(`^${itemName}$`, 'i') } });
+      if (itemDetails) {
+        await buyerInventory.insertOne({
+          characterId: buyer._id,
+          itemName: itemDetails.itemName,
+          itemId: itemDetails._id,
+          quantity: quantity,
+          category: Array.isArray(itemDetails.category) ? itemDetails.category.join(', ') : itemDetails.category,
+          type: Array.isArray(itemDetails.type) ? itemDetails.type.join(', ') : itemDetails.type,
+          subtype: Array.isArray(itemDetails.subtype) ? itemDetails.subtype.join(', ') : itemDetails.subtype,
+          location: buyer.currentVillage || 'Unknown',
+          date: new Date(),
+          obtain: 'Bought',
+        });
+      } else {
+        // fallback: insert minimal record if item details not found
+        await buyerInventory.insertOne({
+          characterId: buyer._id,
+          itemName: itemName,
+          quantity: quantity,
+          date: new Date(),
+          obtain: 'Bought',
+        });
+      }
 
       // If this was a barter, remove the offered item from buyer's inventory
       if (paymentMethod === 'barter' && offeredItem) {

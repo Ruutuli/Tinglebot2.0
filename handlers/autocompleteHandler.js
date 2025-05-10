@@ -1665,7 +1665,7 @@ async function handleEditCharacterAutocomplete(interaction, focusedOption) {
     name: capitalize(race),
     value: race,
    }));
-  } else if (category === "homeVillage") {
+  } else if (category === "homeVillage" || category === "Village") {
    choices = getAllVillages().map((village) => ({
     name: village,
     value: village,
