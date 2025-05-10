@@ -54,6 +54,28 @@ Requests expire based on their type. The system is managed through:
 - Travel cooldowns: 48 hours
 - Gathering cooldowns: 48 hours
 - Monthly encounter tracking: End of month
+- Delivery requests: 48 hours
+
+### Notification System
+The system sends customized DM notifications for each type of expired request:
+
+```javascript
+// Example notification messages
+case 'healing':
+  message = `Your healing request for ${data.characterName} has expired after 48 hours without being fulfilled.`;
+case 'vending':
+  message = `Your vending request for ${data.characterName} has expired after 48 hours without being fulfilled.`;
+case 'battle':
+  message = `Your battle progress for ${data.characterName} has expired after 48 hours without being completed.`;
+// etc...
+```
+
+Features:
+- Customized messages for each request type
+- Includes character name in notifications
+- Handles DM failures gracefully
+- Logs all notification attempts
+- Continues processing other requests if one fails
 
 ## Error Handling
 All scheduled tasks use the `createCronJob` function which provides:
@@ -72,6 +94,9 @@ Example:
 ```javascript
 createCronJob('0 8 * * *', 'task name', () => yourTaskFunction());
 ```
+
+
+
 
 
 

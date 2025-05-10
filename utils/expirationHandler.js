@@ -49,6 +49,10 @@ async function checkExpiredRequests(client) {
             message = `Your gathering request for ${data.characterName} has expired after 48 hours without being completed.`;
             userId = data.userId;
             break;
+          case 'delivery':
+            message = `Your delivery request from ${data.sender} to ${data.recipient} has expired after 48 hours without being completed.`;
+            userId = data.userId;
+            break;
           default:
             message = `Your ${type} request has expired after 48 hours without being fulfilled.`;
             userId = data.userId;
