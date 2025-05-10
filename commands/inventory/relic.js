@@ -37,6 +37,7 @@ const MapModule = require('../../modules/mapModule.js');
 const { generateUniqueId } = require('../../utils/uniqueIdUtils.js');
 // ------------------- Import submission storage operations -------------------
 const { saveSubmissionToStorage, retrieveSubmissionFromStorage, deleteSubmissionFromStorage } = require('../../utils/storage.js');
+const { checkInventorySync } = require('../../utils/characterUtils');
 
 // ============================================================================
 // Configuration and Paths
@@ -155,37 +156,45 @@ module.exports = {
   // Command Execution Handler for Relic Operations
   // ============================================================================ 
   async execute(interaction) {
-    // ------------------- Determine which subcommand was invoked -------------------
-    const sub = interaction.options.getSubcommand();
+    try {
+      const sub = interaction.options.getSubcommand();
 
-    // ------------------- Check Interaction Age -------------------
-    if (Date.now() - interaction.createdTimestamp > 2500) {
-      console.warn(`[relic.js]: Interaction token is too old (${Date.now() - interaction.createdTimestamp}ms) for subcommand "${sub}".`);
-      return interaction.reply({ content: '❌ Interaction expired. Please try again.', ephemeral: true });
-    }
-
-    // ------------------- Defer reply for asynchronous subcommands -------------------
-    if (["test", "appraisalrequest", "appraisalaccept"].includes(sub)) {
-      try {
-        if (!interaction.deferred && !interaction.replied) {
-          await interaction.deferReply();
-        }
-      } catch (error) {
-    handleError(error, 'relic.js');
-
-        if (error.code === 40060) {
-          console.warn(`[relic.js]: Interaction already acknowledged for subcommand "${sub}".`);
-        } else if (error.code === 10062) {
-          console.error(`[relic.js]: Interaction expired or no longer valid for subcommand "${sub}".`);
-          return;
-        } else {
-          console.error(`[relic.js]: Unexpected error deferring reply for subcommand "${sub}":`, error);
-          return;
+      // Get character name from options
+      const characterName = interaction.options.getString('character');
+      if (characterName) {
+        const character = await fetchCharacterByName(characterName);
+        if (character) {
+          await checkInventorySync(character);
         }
       }
-    }
 
-    try {
+      // ------------------- Check Interaction Age -------------------
+      if (Date.now() - interaction.createdTimestamp > 2500) {
+        console.warn(`[relic.js]: Interaction token is too old (${Date.now() - interaction.createdTimestamp}ms) for subcommand "${sub}".`);
+        return interaction.reply({ content: '❌ Interaction expired. Please try again.', ephemeral: true });
+      }
+
+      // ------------------- Defer reply for asynchronous subcommands -------------------
+      if (["test", "appraisalrequest", "appraisalaccept"].includes(sub)) {
+        try {
+          if (!interaction.deferred && !interaction.replied) {
+            await interaction.deferReply();
+          }
+        } catch (error) {
+          handleError(error, 'relic.js');
+
+          if (error.code === 40060) {
+            console.warn(`[relic.js]: Interaction already acknowledged for subcommand "${sub}".`);
+          } else if (error.code === 10062) {
+            console.error(`[relic.js]: Interaction expired or no longer valid for subcommand "${sub}".`);
+            return;
+          } else {
+            console.error(`[relic.js]: Unexpected error deferring reply for subcommand "${sub}":`, error);
+            return;
+          }
+        }
+      }
+
       // ------------------- /relic test: Assign a random unappraised relic to a character -------------------
       if (sub === 'test') {
         // Generate a random location.
@@ -219,7 +228,7 @@ module.exports = {
             const fileData = fs.readFileSync(relicStoragePath, 'utf8');
             relicStorage = fileData.trim() ? JSON.parse(fileData) : [];
           } catch (err) {
-    handleError(err, 'relic.js');
+            handleError(err, 'relic.js');
 
             console.error('[relic.js]: Error reading relicStorage.json:', err);
             relicStorage = [];
@@ -254,7 +263,7 @@ module.exports = {
 
 *You can now use /relic appraisalrequest to request its appraisal.*`);
         } catch (finalError) {
-    handleError(finalError, 'relic.js');
+          handleError(finalError, 'relic.js');
 
           // If editReply fails because no reply was sent, fall back to a direct reply.
           if (finalError.code === 'InteractionNotReplied' || finalError.message.includes("has not been sent or deferred")) {
@@ -265,7 +274,7 @@ module.exports = {
 
 *You can now use /relic appraisalrequest to request its appraisal.*`);
             } catch (fallbackError) {
-    handleError(fallbackError, 'relic.js');
+              handleError(fallbackError, 'relic.js');
 
               console.error('[relic.js]: Failed to send fallback reply in test subcommand:', fallbackError);
             }
@@ -399,7 +408,7 @@ module.exports = {
         return interaction.reply({ content: '❌ Unknown subcommand.', ephemeral: true });
       }
     } catch (error) {
-    handleError(error, 'relic.js');
+      handleError(error, 'relic.js');
 
       console.error('[relic.js]: Error executing relic command:', error);
       if (interaction.deferred || interaction.replied) {
