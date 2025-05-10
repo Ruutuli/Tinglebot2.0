@@ -1,7 +1,7 @@
 # Ignore .env file
 .env
 
-.cursor/rules/ruurule.mdc
+.cursor/rules/
 .dependency-cruiser.js
 config/
 eslint.config.mjs
