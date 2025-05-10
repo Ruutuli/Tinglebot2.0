@@ -441,9 +441,9 @@ async function handleGive(interaction) {
     }
   
     // ------------------- Fetch Character & Item -------------------
-    const character = await fetchCharacterByNameAndUserId(charName, userId);
+    const character = await fetchCharacterByName(charName);
     if (!character) {
-      return interaction.editReply(`❌ Character **${charName}** not found for your account.`);
+      return interaction.editReply(`❌ Character **${charName}** not found.`);
     }
   
     const item = await fetchItemByName(itemName);

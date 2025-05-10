@@ -2169,17 +2169,26 @@ async function handleModGiveCharacterAutocomplete(interaction, focusedOption) {
 // ------------------- /mod give: Item Autocomplete -------------------
 async function handleModGiveItemAutocomplete(interaction, focusedOption) {
  try {
-  const characterName = interaction.options.getString("character");
-  if (!characterName) return await interaction.respond([]);
-  // Fetch mod character details
-  const character = getModCharacterByName(characterName);
-  if (!character) return await interaction.respond([]);
-  // Map mod character's inventory to autocomplete choices
-  const choices = character.inventory.map((item) => ({
-   name: `${item.name} - Qty: ${item.quantity}`, // Item name with quantity
-   value: item.name, // Item name for value
+  // Fetch all items from the database
+  const items = await Item.find()
+    .sort({ itemName: 1 })
+    .select('itemName')
+    .lean();
+
+  // Map items to autocomplete choices
+  const choices = items.map((item) => ({
+   name: capitalizeWords(item.itemName),
+   value: item.itemName
   }));
-  await respondWithFilteredChoices(interaction, focusedOption, choices);
+
+  // Filter based on user input
+  const searchQuery = focusedOption.value?.toLowerCase() || "";
+  const filteredChoices = choices.filter(choice => 
+   choice.name.toLowerCase().includes(searchQuery)
+  );
+
+  // Respond with filtered choices (limit to 25)
+  await interaction.respond(filteredChoices.slice(0, 25));
  } catch (error) {
   handleError(error, "autocompleteHandler.js");
   console.error("[handleModGiveItemAutocomplete]: Error:", error);
