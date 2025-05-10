@@ -22,7 +22,8 @@ const tempDataSchema = new mongoose.Schema({
       'blight',       // Blight healing requests
       'travel',       // Travel cooldowns
       'gather',       // Gathering cooldowns
-      'monthly'       // Monthly encounter tracking
+      'monthly',      // Monthly encounter tracking
+      'delivery'      // Delivery requests
     ],
     index: true
   },
@@ -47,14 +48,19 @@ tempDataSchema.pre('save', function(next) {
   // Set expiration based on type
   switch (this.type) {
     case 'blight':
-      this.expiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // 30 days
+      this.expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
       break;
     case 'monthly':
       // Set to end of current month
-      this.expiresAt = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+      const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      lastDay.setHours(23, 59, 59, 999);
+      this.expiresAt = lastDay;
+      break;
+    case 'delivery':
+      this.expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours
       break;
     default:
-      this.expiresAt = new Date(now.getTime() + 48 * 60 * 60 * 1000); // 48 hours
+      this.expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours
   }
   
   next();

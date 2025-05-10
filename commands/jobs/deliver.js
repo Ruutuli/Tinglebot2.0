@@ -23,6 +23,7 @@ const { getJobPerk } = require('../../modules/jobsModule');
 
 // ------------------- Database Models -------------------
 const ItemModel = require('../../models/ItemModel');
+const TempData = require('../../models/TempDataModel');
 
 // ------------------- Google Sheets API -------------------
 const { 
@@ -199,15 +200,7 @@ const command = {
         // ------------------- Generate unique delivery ID -------------------
         const deliveryId = generateUniqueId('D');
 
-        // ------------------- Validate: Prevent duplicate delivery ID (edge-case safety) -------------------
-        if (retrieveSubmissionFromStorage(deliveryId)) {
-          return interaction.reply({
-            content: `❌ A delivery with ID **${deliveryId}** already exists. Please try again.`,
-            ephemeral: true,
-          });
-        }
-
-        // ------------------- Create delivery task object and persist to memory/storage -------------------
+        // ------------------- Create delivery task object and persist to database -------------------
         const deliveryTask = {
           sender: senderName,
           courier: courierName,
@@ -218,9 +211,15 @@ const command = {
           flavortext,
           status: 'pending',
           createdAt: new Date().toISOString(),
+          userId: interaction.user.id
         };
-        deliveryTasks[deliveryId] = deliveryTask;
-        saveSubmissionToStorage(deliveryId, deliveryTask);
+
+        // Save to TempData instead of using saveSubmissionToStorage
+        await TempData.create({
+          key: deliveryId,
+          type: 'delivery',
+          data: deliveryTask
+        });
 
         // ------------------- Fetch character profiles -------------------
         const senderCharacter = await fetchCharacterByNameAndUserId(senderName, interaction.user.id);
@@ -390,9 +389,89 @@ const command = {
           ephemeral: true,
         });
       }
-    }
+    } else if (subcommand === 'accept') {
+      try {
+        const courierName = interaction.options.getString('courier');
+        const deliveryId = interaction.options.getString('deliveryid');
 
-    // ... rest of the subcommand handlers ...
+        // Find the delivery request in TempData
+        const deliveryRequest = await TempData.findOne({ 
+          key: deliveryId,
+          type: 'delivery'
+        });
+
+        if (!deliveryRequest) {
+          return interaction.reply({
+            content: `❌ No delivery request found with ID **${deliveryId}**.`,
+            ephemeral: true,
+          });
+        }
+
+        const { data: deliveryTask } = deliveryRequest;
+
+        // Validate courier matches
+        if (deliveryTask.courier !== courierName) {
+          return interaction.reply({
+            content: `❌ You can only accept delivery requests assigned to **${courierName}**.`,
+            ephemeral: true,
+          });
+        }
+
+        // Update the delivery status
+        deliveryTask.status = 'accepted';
+        await TempData.findByIdAndUpdate(deliveryRequest._id, { data: deliveryTask });
+
+        // ... rest of accept handler code ...
+
+      } catch (error) {
+        handleError(error, 'deliver.js');
+      }
+    } else if (subcommand === 'fulfill') {
+      try {
+        const courierName = interaction.options.getString('courier');
+        const deliveryId = interaction.options.getString('deliveryid');
+
+        // Find the delivery request in TempData
+        const deliveryRequest = await TempData.findOne({ 
+          key: deliveryId,
+          type: 'delivery'
+        });
+
+        if (!deliveryRequest) {
+          return interaction.reply({
+            content: `❌ No delivery request found with ID **${deliveryId}**.`,
+            ephemeral: true,
+          });
+        }
+
+        const { data: deliveryTask } = deliveryRequest;
+
+        // Validate courier matches
+        if (deliveryTask.courier !== courierName) {
+          return interaction.reply({
+            content: `❌ You can only fulfill delivery requests assigned to **${courierName}**.`,
+            ephemeral: true,
+          });
+        }
+
+        // Validate status is 'accepted'
+        if (deliveryTask.status !== 'accepted') {
+          return interaction.reply({
+            content: `❌ This delivery request has not been accepted yet.`,
+            ephemeral: true,
+          });
+        }
+
+        // Update the delivery status
+        deliveryTask.status = 'fulfilled';
+        await TempData.findByIdAndUpdate(deliveryRequest._id, { data: deliveryTask });
+
+        // ... rest of fulfill handler code ...
+
+      } catch (error) {
+        handleError(error, 'deliver.js');
+      }
+    }
   }
 };
 
