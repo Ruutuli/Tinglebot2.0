@@ -11,505 +11,305 @@ const { authorizeSheets, clearSheetFormatting, writeSheetData } = require('./uti
 const { convertToHyruleanDate } = require('./modules/calendarModule');
 const Character = require('./models/CharacterModel');
 const weatherHandler = require('./handlers/weatherHandler');
+const { sendUserDM } = require('./utils/messageUtils');
 
-// ------------------- Jail Release Check -------------------
-cron.schedule('0 0 * * *', async () => {
-  try {
-    console.log('[scheduler]⏰ Checking for characters eligible for jail release...');
-    const now = new Date();
-    const charactersToRelease = await Character.find({ inJail: true, jailReleaseTime: { $lte: now } });
-    if (charactersToRelease.length > 0) {
-      // Fetch the announcement channel using its ID.
-      const announcementChannelId = '1354451878053937215';
-      const announcementChannel = await client.channels.fetch(announcementChannelId);
-      
-      for (const character of charactersToRelease) {
-        // Reset jail status.
-        character.inJail = false;
-        character.failedStealAttempts = 0;
-        character.jailReleaseTime = null;
-        await character.save();
-        console.log(`[scheduler]✅ Released character ${character.name} from jail.`);
-        
-        // Build the release announcement embed.
-        const releaseEmbed = new EmbedBuilder()
-          .setColor('#88cc88')
-          .setTitle('🏛️ Town Hall Proclamation')
-          .setDescription(`The town hall doors creak open and a voice rings out:\n\n> **${character.name}** has served their time and is hereby released from jail.\n\nMay you walk the path of virtue henceforth.`)
-          .setThumbnail(character.icon)
-          .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
-          .setTimestamp()
-          .setFooter({ text: 'Town Hall Records • Reformed & Released' });
-        
-        // Send the announcement in the designated channel.
-        if (announcementChannel) {
-          await announcementChannel.send({
-            content: `<@${character.userId}>, your character **${character.name}** has been released from jail.`,
-            embeds: [releaseEmbed]
-          });
-        }
-        
-        // DM the user to notify them.
-        try {
-          const user = await client.users.fetch(character.userId);
-          if (user) {
-            await user.send(`🏛️ **Town Hall Notice**\n\nYour character **${character.name}** has been released from jail. Remember, a fresh start awaits you!`);
-          }          
-        } catch (dmError) {
-    handleError(dmError, 'scheduler.js');
+// ============================================================================
+// ---- Utility Functions ----
+// ============================================================================
 
-          console.error(`[scheduler]❌ Error sending DM for character ${character.name}:`, dmError.message);
-        }
-      }
-    } else {
-      console.log('[scheduler] No characters to release from jail at this time.');
-    }
-  } catch (error) {
-    handleError(error, 'scheduler.js');
-
-    console.error('[scheduler]❌ Error during jail release check:', error.message);
-  }
-}, { timezone: 'America/New_York' });
-
-
-  // ------------------- Daily Stamina Recovery -------------------
-  cron.schedule('0 8 * * *', async () => {
+// ---- Function: createCronJob ----
+// Creates a cron job with standardized error handling and logging
+function createCronJob(schedule, jobName, jobFunction, timezone = 'America/New_York') {
+  return cron.schedule(schedule, async () => {
     try {
-      console.log('[scheduler]⏰ Running daily stamina recovery job...');
-      await recoverDailyStamina();
-      console.log('[scheduler]✅ Daily stamina recovery completed.');
+      console.log(`[scheduler]⏰ Running ${jobName}...`);
+      await jobFunction();
+      console.log(`[scheduler]✅ ${jobName} completed successfully.`);
     } catch (error) {
-    handleError(error, 'scheduler.js');
-
-      console.error('❌ [Scheduler.js] Error during stamina recovery:', error);
-    }
-  }, { timezone: 'America/New_York' });
-
-  // ------------------- Monthly Vending Stock Generation -------------------
-cron.schedule('0 0 1 * *', async () => {
-  try {
-    console.log('[scheduler]📦 Generating monthly vending stock...');
-    await generateVendingStockList();
-    console.log('[scheduler]✅ Monthly vending stock generated.');
-  } catch (error) {
-    handleError(error, 'scheduler.js');
-
-    console.error('[scheduler]❌ Error during monthly vending stock generation:', error.message);
-  }
-}, { timezone: 'America/New_York' });
-
-// ------------------- Monthly Push to Google Sheets -------------------
-cron.schedule('0 2 1 * *', async () => {
-  try {
-      console.log('[scheduler]📊 Starting monthly vending stock push to Google Sheets...');
-      
-      // Authenticate with Google Sheets
-      const auth = await authorizeSheets();
-
-      // Spreadsheet ID and tab details
-      const spreadsheetId = '163UPIMTyHLLCei598sP5Ezonpgl2W-DaSxn8JBSRRSw';
-      const tabName = 'monthlyVending';
-
-      // Clear only columns A:D
-      const clearRange = `${tabName}!A1:D1000`;
-      await clearSheetFormatting(auth, spreadsheetId, clearRange);
-      console.log(`[scheduler]🧹 Cleared columns A:D in tab "${tabName}".`);
-
-      // Fetch the current month's vending stock
-      const stockList = await getCurrentVendingStockList();
-      if (!stockList) {
-          console.error('[scheduler]❌ No vending stock data available for the current month.');
-          return;
-      }
-
-      // Determine the current month and year
-      const now = new Date();
-      const monthYear = `${now.toLocaleString('default', { month: 'long' })} ${now.getFullYear()}`;
-
-      // Write the header "Vending for Month Year" in A1
-      const headerTitle = `Vending for ${monthYear}`;
-      await writeSheetData(auth, spreadsheetId, `${tabName}!A1`, [[headerTitle]]);
-      console.log(`[scheduler]📝 Header written: "${headerTitle}"`);
-
-      // Write column headers in A2:D2
-      const columnHeaders = ['Village Name', 'Item Name', 'Points Cost', 'Vending Type'];
-      await writeSheetData(auth, spreadsheetId, `${tabName}!A2:D2`, [columnHeaders]);
-      console.log(`[scheduler]📝 Column headers written: ${columnHeaders.join(', ')}`);
-
-      // Format data for Google Sheets
-      const formattedVillageData = [];
-      for (const [village, items] of Object.entries(stockList.stockList)) {
-          for (const item of items) {
-              formattedVillageData.push([
-                  village,                       // Village name
-                  item.itemName,                 // Item name
-                  item.points,                   // Points cost
-                  item.vendingType,              // Vending type (Shopkeeper/Merchant)
-              ]);
-          }
-      }
-
-      // Log the number of village entries
-      console.log(`[scheduler]🛒 Preparing to push ${formattedVillageData.length} village entries to Google Sheets...`);
-
-      // Write village stock data starting in A3
-      const villageDataRange = `${tabName}!A3:D`;
-      await writeSheetData(auth, spreadsheetId, villageDataRange, formattedVillageData);
-
-      // Handle limited items
-      const limitedItems = stockList.limitedItems || [];
-      if (limitedItems.length > 0) {
-          // Calculate starting row for limited items
-          const limitedItemsStartRow = formattedVillageData.length + 3; // Adjust for spacing
-          const headersRange = `${tabName}!B${limitedItemsStartRow}:C${limitedItemsStartRow}`;
-          const dataRange = `${tabName}!B${limitedItemsStartRow + 1}:C`;
-
-          // Write headers for limited items
-          const limitedItemsHeaders = ['Item Name', 'Points Cost'];
-          await writeSheetData(auth, spreadsheetId, headersRange, [limitedItemsHeaders]);
-
-          // Write limited items data
-          const formattedLimitedItems = limitedItems.map(item => [
-              item.itemName,
-              item.points,
-          ]);
-          await writeSheetData(auth, spreadsheetId, dataRange, formattedLimitedItems);
-
-          console.log(`[scheduler]✅ Successfully appended ${limitedItems.length} limited items to Google Sheets.`);
-      } else {
-          console.log('[scheduler]ℹ️ No limited items to append.');
-      }
-
-      console.log('[scheduler]✅ Successfully updated Google Sheets with vending stock and limited items.');
-  } catch (error) {
-      // Log failure with details
-      console.error('[scheduler]❌ Error updating Google Sheets:', error.message);
       handleError(error, 'scheduler.js');
-  }
-}, { timezone: 'America/New_York' });
-
-  // ------------------- Daily Blight Roll Call, Missed Rolls, and Death Check -------------------
-function setupBlightScheduler(client) {
-  cron.schedule('0 20 * * *', async () => { 
-    try {
-      console.log('[scheduler]⏰ Running Blight Roll Call, Missed Rolls Check, and Death Check...');
-
-      // Step 1: Post Blight Roll Call once
-      try {
-        await postBlightRollCall(client);
-        console.log('[scheduler]✅ Blight roll call posted.');
-      } catch (error) {
-        console.error('[scheduler]❌ Failed to post Blight roll call:', error.message);
-        handleError(error, 'scheduler.js');
-      }
-
-      // Step 2: Check for missed rolls
-      try {
-        await checkMissedRolls(client);
-        console.log('[scheduler]✅ Missed rolls check completed.');
-      } catch (error) {
-        console.error('[scheduler]❌ Error during missed rolls check:', error.message);
-        handleError(error, 'scheduler.js');
-      }
-    } catch (error) {
-      console.error('[scheduler]❌ Error during blight roll call sequence:', error.message);
-      handleError(error, 'scheduler.js');
+      console.error(`[scheduler]❌ Error during ${jobName}:`, error.message);
     }
-  }, { timezone: 'America/New_York' });
+  }, { timezone });
 }
 
-   // ------------------- Daily Blood Moon Tracking and Announcement -------------------
-   cron.schedule(
-    '24 12 * * *', // Run daily at midnight
-    async () => {
-      const channels = [
-        process.env.RUDANIA_TOWN_HALL,
-        process.env.INARIKO_TOWN_HALL,
-        process.env.VHINTL_TOWN_HALL,
-      ];
+// ---- Function: createAnnouncementEmbed ----
+// Creates a standardized embed for announcements
+function createAnnouncementEmbed(title, description, thumbnail, image, footer) {
+  return new EmbedBuilder()
+    .setColor('#88cc88')
+    .setTitle(title)
+    .setDescription(description)
+    .setThumbnail(thumbnail)
+    .setImage(image)
+    .setTimestamp()
+    .setFooter({ text: footer });
+}
 
-      for (const channelId of channels) {
-        try {
-          if (isBloodMoonDay()) {
-            console.log('[scheduler] 🌕 Blood Moon is ACTIVE.');
-            await renameChannels(client);
-            await sendBloodMoonAnnouncement(client, channelId, 'The Blood Moon is upon us! Beware!');
-          } else {
-            console.log('[scheduler] 🌑 No Blood Moon today.');
-            await revertChannelNames(client);
-          }
-        } catch (error) {
-    handleError(error, 'scheduler.js');
+// ============================================================================
+// ---- Weather Functions ----
+// ============================================================================
 
-          console.error(`[scheduler] ❌ Error during Blood Moon tracking for channel ${channelId}:`, error.message);
+const TOWNHALL_CHANNELS = {
+  Rudania: 'rudania-townhall',
+  Inariko: 'inariko-townhall',
+  Vhintl: 'vhintl-townhall'
+};
+
+function getCurrentSeason() {
+  const month = new Date().getMonth() + 1;
+  if (month >= 3 && month <= 5) return 'Spring';
+  if (month >= 6 && month <= 8) return 'Summer';
+  if (month >= 9 && month <= 11) return 'Autumn';
+  return 'Winter';
+}
+
+function formatWeatherMessage(village, weather) {
+  const { temperature, wind, precipitation, special } = weather;
+  let message = `## 🌤️ Daily Weather Report for ${village}\n\n`;
+  message += `**Temperature:** ${temperature.emoji} ${temperature.label}\n`;
+  message += `**Wind:** ${wind.emoji} ${wind.label}\n`;
+  message += `**Conditions:** ${precipitation.emoji} ${precipitation.label}\n`;
+  if (special) {
+    message += `**Special:** ${special.emoji} ${special.label}\n`;
+  }
+  return message;
+}
+
+async function postWeatherUpdate(client) {
+  try {
+    console.log('[scheduler] Starting daily weather update...');
+    const villages = Object.keys(TOWNHALL_CHANNELS);
+    const currentSeason = getCurrentSeason();
+    
+    for (const village of villages) {
+      try {
+        const weather = weatherHandler.simulateWeightedWeather(village, currentSeason);
+        const channelName = TOWNHALL_CHANNELS[village];
+        const channel = client.channels.cache.find(ch => ch.name === channelName);
+        
+        if (!channel) {
+          console.error(`[scheduler] Could not find channel: ${channelName}`);
+          continue;
         }
+        
+        const message = formatWeatherMessage(village, weather);
+        await channel.send(message);
+        console.log(`[scheduler] Posted weather update for ${village}`);
+      } catch (error) {
+        console.error(`[scheduler] Error posting weather for ${village}:`, error);
       }
-    },
-    { timezone: 'America/New_York' }
-  );
-
-  console.log('[scheduler] 🌕 Blood Moon scheduling tasks initialized.');
-
-  // ------------------- Daily Birthday Announcements -------------------
-  cron.schedule('0 0 * * *', async () => {
-    try {
-      console.log('🎂 Checking for birthdays...');
-      await executeBirthdayAnnouncements(client);
-      console.log('🎉 Birthday announcements completed.');
-    } catch (error) {
-    handleError(error, 'scheduler.js');
-
-      console.error('❌ [Scheduler.js] Error during birthday announcements:', error);
     }
-  }, { timezone: 'America/New_York' });
+    console.log('[scheduler] Completed daily weather update');
+  } catch (error) {
+    console.error('[scheduler] Error in weather update process:', error);
+  }
+}
 
-  // ------------------- Weekly Pet Rolls Reset -------------------
-  cron.schedule('0 0 * * 0', async () => {
-    try {
-      console.log('🔄 Resetting pet rolls for the week...');
-      await resetPetRollsForAllCharacters();
-      console.log('✅ Pet rolls reset successfully.');
-    } catch (error) {
-    handleError(error, 'scheduler.js');
+function setupWeatherScheduler(client) {
+  const now = new Date();
+  const nextRun = new Date(now);
+  nextRun.setHours(8, 0, 0, 0);
+  if (now >= nextRun) {
+    nextRun.setDate(nextRun.getDate() + 1);
+  }
+  const timeUntilNext = nextRun - now;
+  
+  setTimeout(() => {
+    postWeatherUpdate(client);
+    setInterval(() => postWeatherUpdate(client), 24 * 60 * 60 * 1000);
+  }, timeUntilNext);
+  
+  console.log(`[scheduler] Weather scheduler initialized. Next update in ${timeUntilNext / 1000 / 60} minutes`);
+}
 
-      console.error('❌ [Scheduler.js] Error during pet rolls reset:', error);
-    }
-  }, { timezone: 'America/New_York' });
+// ============================================================================
+// ---- Birthday Functions ----
+// ============================================================================
 
-  // ------------------- Daily Cleanup of Expired Vending Requests -------------------
-  cron.schedule('0 0 * * *', async () => {
-    try {
-        console.log('[scheduler]🧹 Running daily cleanup of expired vending requests...');
-        cleanupExpiredVendingRequests();
-        console.log('[scheduler]✅ Expired vending requests cleaned up successfully.');
-    } catch (error) {
-    handleError(error, 'scheduler.js');
-
-        console.error('[scheduler]❌ Error during daily cleanup of vending requests:', error.message);
-    }
-  }, { timezone: 'America/New_York' });
-
-  // ------------------- Daily Cleanup of Expired Healing Requests -------------------
-  cron.schedule('0 0 * * *', async () => {
-    try {
-      console.log('[scheduler]🧹 Running daily cleanup of expired healing requests...');
-      cleanupExpiredHealingRequests();
-      console.log('[scheduler]✅ Expired healing requests cleaned up successfully.');
-    } catch (error) {
-    handleError(error, 'scheduler.js');
-
-      console.error('❌ [scheduler.js] Error during daily cleanup of healing requests:', error.message);
-    }
-  }, { timezone: 'America/New_York' });
-
-  // ------------------- Daily Debuff Expiry Check with DM Notifications -------------------
-  cron.schedule('0 0 * * *', async () => {
-    try {
-      console.log('[scheduler]⏰ Checking for expired debuffs...');
-
-      const now = new Date();
-      const charactersWithActiveDebuffs = await Character.find({
-        'debuff.active': true,
-        'debuff.endDate': { $lte: now }
-      });
-
-      for (const character of charactersWithActiveDebuffs) {
-        character.debuff.active = false; // Deactivate the debuff
-        character.debuff.endDate = null; // Clear the end date
-        await character.save(); // Save the updated character state
-
-        console.log(`[scheduler]✅ Debuff removed for character: ${character.name}`);
-
-        // Notify the user via DM
-        try {
-          const user = await client.users.fetch(character.userId);
-          if (user) {
-            await user.send(`💖 Your character **${character.name}**'s week-long debuff has ended! You can now heal them with items or a Healer.`);
-            console.log(`[scheduler]✅ Notified user ${user.username} about debuff removal for ${character.name}.`);
-          }
-        } catch (dmError) {
-    handleError(dmError, 'scheduler.js');
-
-          console.error(`❌ [scheduler] Failed to DM user:`, dmError);
-        }
-      }
-
-      console.log('[scheduler]✅ Completed debuff expiry check.');
-    } catch (error) {
-    handleError(error, 'scheduler.js');
-
-      console.error('❌ [scheduler] Error during debuff expiry check:', error);
-    }
-  }, { timezone: 'America/New_York' });
-
-  // ============================================================================
-  // ---- Scheduled Weather Posting ----
-  // Handles daily weather updates in townhall channels at 8am
-  // ============================================================================
-
-  const TOWNHALL_CHANNELS = {
-    Rudania: 'rudania-townhall',
-    Inariko: 'inariko-townhall',
-    Vhintl: 'vhintl-townhall'
+async function executeBirthdayAnnouncements(client) {
+  const now = new Date();
+  const estNow = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+  const today = estNow.toISOString().slice(5, 10);
+  const guildIds = process.env.GUILD_IDS ? process.env.GUILD_IDS.split(',') : [];
+  
+  const guildChannelMap = {
+    '1305484048063529002': '1326997448085995530', // Roots Of The Wild
+    '603960955839447050': 'AnotherChannelIDHere', // Replace with the appropriate channel ID
   };
 
-  // ---- Function: formatWeatherMessage ----
-  // Creates a formatted Discord message for weather updates
-  function formatWeatherMessage(village, weather) {
-    const { temperature, wind, precipitation, special } = weather;
-    let message = `## 🌤️ Daily Weather Report for ${village}\n\n`;
-    message += `**Temperature:** ${temperature.emoji} ${temperature.label}\n`;
-    message += `**Wind:** ${wind.emoji} ${wind.label}\n`;
-    message += `**Conditions:** ${precipitation.emoji} ${precipitation.label}\n`;
-    if (special) {
-      message += `**Special:** ${special.emoji} ${special.label}\n`;
-    }
-    return message;
-  }
+  const birthdayMessages = [
+    "🔥🌍 May Din's fiery blessing fill your birthday with the **Power** to overcome any challenge that comes your way! 🔴",
+    "💧❄️ On this nameday, may Nayru's profound **Wisdom** guide you towards new heights of wisdom and understanding! 🔵",
+    "🌿⚡ As you celebrate another year, may Farore's steadfast **Courage** inspire you to embrace every opportunity with bravery and grace! 🟢",
+  ];
 
-  // ---- Function: postWeatherUpdate ----
-  // Posts weather updates to all townhall channels
-  async function postWeatherUpdate(client) {
-    try {
-      console.log('[scheduler.js]: Starting daily weather update...');
-      const villages = Object.keys(TOWNHALL_CHANNELS);
-      const currentSeason = getCurrentSeason();
-      for (const village of villages) {
-        try {
-          const weather = weatherHandler.simulateWeightedWeather(village, currentSeason);
-          const channelName = TOWNHALL_CHANNELS[village];
-          const channel = client.channels.cache.find(ch => ch.name === channelName);
-          if (!channel) {
-            console.error(`[scheduler.js]: Could not find channel: ${channelName}`);
-            continue;
-          }
-          const message = formatWeatherMessage(village, weather);
-          await channel.send(message);
-          console.log(`[scheduler.js]: Posted weather update for ${village}`);
-        } catch (error) {
-          console.error(`[scheduler.js]: Error posting weather for ${village}:`, error);
-        }
+  const realWorldDate = estNow.toLocaleString("en-US", { month: "long", day: "numeric" });
+  const hyruleanDate = convertToHyruleanDate(estNow);
+
+  for (const guildId of guildIds) {
+    const birthdayChannelId = guildChannelMap[guildId];
+    if (!birthdayChannelId) continue;
+
+    const guild = client.guilds.cache.get(guildId);
+    if (!guild) continue;
+
+    const announcementChannel = guild.channels.cache.get(birthdayChannelId);
+    if (!announcementChannel) continue;
+
+    const characters = await Character.find({ birthday: today });
+    console.log(`[scheduler] Found ${characters.length} characters with birthdays today in guild ${guild.name}.`);
+
+    for (const character of characters) {
+      try {
+        const user = await client.users.fetch(character.userId);
+        const randomMessage = birthdayMessages[Math.floor(Math.random() * birthdayMessages.length)];
+
+        const embed = new EmbedBuilder()
+          .setColor('#FF709B')
+          .setTitle(`🎉🎂🎈 Happy Birthday, ${character.name}! 🎈🎂🎉`)
+          .setDescription(randomMessage)
+          .addFields(
+            { name: "Real-World Date", value: realWorldDate, inline: true },
+            { name: "Hyrulean Date", value: hyruleanDate, inline: true }
+          )
+          .setThumbnail(character.icon)
+          .setImage('https://storage.googleapis.com/tinglebot/Graphics/bday.png')
+          .setFooter({ text: `🎉 ${character.name} belongs to ${user.username}! 🎉` })
+          .setTimestamp();
+
+        await announcementChannel.send({ embeds: [embed] });
+        console.log(`[scheduler] Announced ${character.name}'s birthday in ${guild.name}.`);
+      } catch (error) {
+        handleError(error, 'scheduler.js');
+        console.error(`[scheduler] Failed to announce for character ${character.name}:`, error.message);
       }
-      console.log('[scheduler.js]: Completed daily weather update');
-    } catch (error) {
-      console.error('[scheduler.js]: Error in weather update process:', error);
     }
   }
+}
 
-  // ---- Function: setupWeatherScheduler ----
-  // Sets up the daily weather posting schedule
-  function setupWeatherScheduler(client) {
-    const now = new Date();
-    const nextRun = new Date(now);
-    nextRun.setHours(8, 0, 0, 0);
-    if (now >= nextRun) {
-      nextRun.setDate(nextRun.getDate() + 1);
+// ============================================================================
+// ---- Job Functions ----
+// ============================================================================
+
+async function handleJailRelease() {
+  const now = new Date();
+  const charactersToRelease = await Character.find({ inJail: true, jailReleaseTime: { $lte: now } });
+  
+  if (charactersToRelease.length === 0) {
+    console.log('[scheduler] No characters to release from jail at this time.');
+    return;
+  }
+
+  const announcementChannelId = '1354451878053937215';
+  const announcementChannel = await client.channels.fetch(announcementChannelId);
+
+  for (const character of charactersToRelease) {
+    character.inJail = false;
+    character.failedStealAttempts = 0;
+    character.jailReleaseTime = null;
+    await character.save();
+
+    const releaseEmbed = createAnnouncementEmbed(
+      '🏛️ Town Hall Proclamation',
+      `The town hall doors creak open and a voice rings out:\n\n> **${character.name}** has served their time and is hereby released from jail.\n\nMay you walk the path of virtue henceforth.`,
+      character.icon,
+      'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png',
+      'Town Hall Records • Reformed & Released'
+    );
+
+    if (announcementChannel) {
+      await announcementChannel.send({
+        content: `<@${character.userId}>, your character **${character.name}** has been released from jail.`,
+        embeds: [releaseEmbed]
+      });
     }
-    const timeUntilNext = nextRun - now;
-    setTimeout(() => {
-      postWeatherUpdate(client);
-      setInterval(() => {
-        postWeatherUpdate(client);
-      }, 24 * 60 * 60 * 1000);
-    }, timeUntilNext);
-    console.log(`[scheduler.js]: Weather scheduler initialized. Next update in ${timeUntilNext / 1000 / 60} minutes`);
+
+    await sendUserDM(character.userId, `🏛️ **Town Hall Notice**\n\nYour character **${character.name}** has been released from jail. Remember, a fresh start awaits you!`);
   }
+}
 
-  // ---- Function: getCurrentSeason ----
-  // Determines the current season based on date
-  function getCurrentSeason() {
-    const month = new Date().getMonth() + 1;
-    if (month >= 3 && month <= 5) return 'Spring';
-    if (month >= 6 && month <= 8) return 'Summer';
-    if (month >= 9 && month <= 11) return 'Autumn';
-    return 'Winter';
+async function handleDebuffExpiry() {
+  const now = new Date();
+  const charactersWithActiveDebuffs = await Character.find({
+    'debuff.active': true,
+    'debuff.endDate': { $lte: now }
+  });
+
+  for (const character of charactersWithActiveDebuffs) {
+    character.debuff.active = false;
+    character.debuff.endDate = null;
+    await character.save();
+
+    await sendUserDM(
+      character.userId,
+      `💖 Your character **${character.name}**'s week-long debuff has ended! You can now heal them with items or a Healer.`
+    );
   }
+}
 
-  // ------------------- Birthday Announcement Logic -------------------
-  // Function to check and announce birthdays
-  async function executeBirthdayAnnouncements(client) {
-    const now = new Date();
-    const estNow = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
-    const today = estNow.toISOString().slice(5, 10);
+// ============================================================================
+// ---- Scheduler Initialization ----
+// ============================================================================
 
-    console.log(`[Birthday] Today's date: ${today}`);
+function initializeScheduler(client) {
+  // Jail Release Check (Daily at midnight)
+  createCronJob('0 0 * * *', 'jail release check', handleJailRelease);
 
-    // Parse GUILD_IDS from the .env file
-    const guildIds = process.env.GUILD_IDS ? process.env.GUILD_IDS.split(',') : [];
+  // Daily Stamina Recovery (8 AM)
+  createCronJob('0 8 * * *', 'daily stamina recovery', recoverDailyStamina);
 
-    // Map of guild IDs to their birthday announcement channels
-    const guildChannelMap = {
-      '1305484048063529002': '1326997448085995530', // Roots Of The Wild
-      '603960955839447050': 'AnotherChannelIDHere', // Replace with the appropriate channel ID
-    };
+  // Monthly Vending Stock Generation (1st of month)
+  createCronJob('0 0 1 * *', 'monthly vending stock generation', generateVendingStockList);
 
-    const birthdayMessages = [
-      "🔥🌍 May Din's fiery blessing fill your birthday with the **Power** to overcome any challenge that comes your way! 🔴",
-      "💧❄️ On this nameday, may Nayru's profound **Wisdom** guide you towards new heights of wisdom and understanding! 🔵",
-      "🌿⚡ As you celebrate another year, may Farore's steadfast **Courage** inspire you to embrace every opportunity with bravery and grace! 🟢",
+  // Weekly Pet Rolls Reset (Sunday at midnight)
+  createCronJob('0 0 * * 0', 'weekly pet rolls reset', resetPetRollsForAllCharacters);
+
+  // Daily Cleanup Tasks (Midnight)
+  createCronJob('0 0 * * *', 'daily cleanup tasks', async () => {
+    await Promise.all([
+      cleanupExpiredVendingRequests(),
+      cleanupExpiredHealingRequests()
+    ]);
+  });
+
+  // Debuff Expiry Check (Daily at midnight)
+  createCronJob('0 0 * * *', 'debuff expiry check', handleDebuffExpiry);
+
+  // Daily Weather Update (8 AM)
+  createCronJob('0 8 * * *', 'daily weather update', () => postWeatherUpdate(client));
+
+  // Daily Birthday Announcements (Midnight)
+  createCronJob('0 0 * * *', 'birthday announcements', () => executeBirthdayAnnouncements(client));
+
+  // Blood Moon Tracking (12:24 PM)
+  createCronJob('24 12 * * *', 'blood moon tracking', async () => {
+    const channels = [
+      process.env.RUDANIA_TOWN_HALL,
+      process.env.INARIKO_TOWN_HALL,
+      process.env.VHINTL_TOWN_HALL,
     ];
 
-    // Function to convert the real-world date to "January 10"
-    const formatRealWorldDate = (date) => {
-      return date.toLocaleString("en-US", { month: "long", day: "numeric" });
-    };
-
-    const realWorldDate = formatRealWorldDate(estNow);
-    const hyruleanDate = convertToHyruleanDate(estNow);
-
-    for (const guildId of guildIds) {
-      const birthdayChannelId = guildChannelMap[guildId];
-      if (!birthdayChannelId) {
-        console.log(`[Birthday] No birthday channel configured for guild ID ${guildId}.`);
-        continue;
-      }
-
-      const guild = client.guilds.cache.get(guildId);
-      if (!guild) {
-        console.log(`[Birthday] Guild with ID ${guildId} not found.`);
-        continue;
-      }
-
-      const announcementChannel = guild.channels.cache.get(birthdayChannelId);
-      if (!announcementChannel) {
-        console.log(`[Birthday] Announcement channel not found for guild ${guild.name}.`);
-        continue;
-      }
-
-      // Fetch characters with birthdays today
-      const characters = await Character.find({ birthday: today });
-      console.log(`[Birthday] Found ${characters.length} characters with birthdays today in guild ${guild.name}.`);
-
-      for (const character of characters) {
-        try {
-          const user = await client.users.fetch(character.userId);
-          const randomMessage = birthdayMessages[Math.floor(Math.random() * birthdayMessages.length)];
-
-          const embed = new EmbedBuilder()
-            .setColor('#FF709B')
-            .setTitle(`🎉🎂🎈 Happy Birthday, ${character.name}! 🎈🎂🎉`)
-            .setDescription(randomMessage)
-            .addFields(
-              { name: "Real-World Date", value: realWorldDate, inline: true },
-              { name: "Hyrulean Date", value: hyruleanDate, inline: true }
-            )
-            .setThumbnail(character.icon)
-            .setImage('https://storage.googleapis.com/tinglebot/Graphics/bday.png') // Added image
-            .setFooter({ text: `🎉 ${character.name} belongs to ${user.username}! 🎉` })
-            .setTimestamp();
-
-          await announcementChannel.send({ embeds: [embed] });
-          console.log(`[Birthday] Announced ${character.name}'s birthday in ${guild.name}.`);
-        } catch (error) {
-    handleError(error, 'scheduler.js');
-
-          console.error(`[Birthday] Failed to announce for character ${character.name}:`, error.message);
+    for (const channelId of channels) {
+      try {
+        if (isBloodMoonDay()) {
+          await renameChannels(client);
+          await sendBloodMoonAnnouncement(client, channelId, 'The Blood Moon is upon us! Beware!');
+        } else {
+          await revertChannelNames(client);
         }
+      } catch (error) {
+        handleError(error, 'scheduler.js');
+        console.error(`[scheduler]❌ Error during Blood Moon tracking for channel ${channelId}:`, error.message);
       }
     }
-  }
+  });
+
+  // Initialize weather scheduler
+  setupWeatherScheduler(client);
+}
 
 module.exports = {
+  initializeScheduler,
   setupWeatherScheduler,
   postWeatherUpdate,
   setupBlightScheduler
