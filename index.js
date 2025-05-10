@@ -156,42 +156,25 @@ async function initializeClient() {
   // --------------------------------------------------------------------------
   client.on("interactionCreate", async (interaction) => {
     try {
-      const allowedChannels = [
-        "1305487405985431583",
-        "1305487571228557322",
-      ];
-
       if (interaction.isCommand()) {
-        if (
-          allowedChannels.includes(interaction.channelId) &&
-          interaction.commandName !== "travel"
-        ) {
-          console.warn(
-            `[index.js]: Command '${interaction.commandName}' not allowed in channel ${interaction.channelId}.`
-          );
-          await interaction.reply({
-            content: "🚫 Only the `/travel` command is allowed in this channel.",
-            ephemeral: true,
-          });
-          return;
-        }
-
         const command = client.commands.get(interaction.commandName);
-        if (command) {
-          console.info(
-            `[index.js]: Executing command '${interaction.commandName}'.`
-          );
+        if (!command) return;
+
+        try {
           await command.execute(interaction);
+        } catch (error) {
+          handleError(error, 'index.js');
+          const errorMessage = { content: 'There was an error while executing this command!', ephemeral: true };
+          if (interaction.replied || interaction.deferred) {
+            await interaction.followUp(errorMessage);
+          } else {
+            await interaction.reply(errorMessage);
+          }
         }
       } else if (interaction.isButton()) {
-        console.info(
-          `[index.js]: Button interaction detected. CustomId=${interaction.customId}`
-        );
-        if (interaction.customId.startsWith("triggerModal-")) {
-          const { handleButtonModalTrigger } = require("./handlers/modalHandler");
-          await handleButtonModalTrigger(interaction);
-        } else {
-          await handleComponentInteraction(interaction);
+        const handler = client.componentHandlers.get(interaction.customId);
+        if (handler) {
+          await handler(interaction);
         }
       } else if (interaction.isStringSelectMenu()) {
         await handleSelectMenuInteraction(interaction);

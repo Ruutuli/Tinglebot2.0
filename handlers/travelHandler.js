@@ -104,7 +104,7 @@ async function handleRecover(interaction, character, encounterMessage, travelLog
       await updateCurrentHearts(character._id, character.currentHearts);
   
       decision = `💖 Recovered 1 heart${hasPerk(character,'DELIVERING') ? '' : ' (-1 🟩 stamina)'}.`;
-      outcomeMessage = `${character.name} recovered a heart${hasPerk(character,'DELIVERING') ? '' : ' and lost 1 �� stamina'}.`;
+      outcomeMessage = `${character.name} recovered a heart${hasPerk(character,'DELIVERING') ? '' : ' and lost 1 🟩 stamina'}.`;
     } else {
       decision = `❌ Not enough stamina to recover.`;
       outcomeMessage = `${character.name} tried to recover but lacked stamina.`;
@@ -194,7 +194,7 @@ async function handleGather(interaction, character, currentPath, encounterMessag
       if (!hasPerk(character, 'DELIVERING')) {
         await useStamina(character._id, 1);
         character.currentStamina = Math.max(0, character.currentStamina - 1);
-        outcomeMessage += ' (-1 �� stamina)';
+        outcomeMessage += ' (-1 🟩 stamina)';
       }        
       decision = `🌱 ${outcomeMessage}`;
     }
@@ -241,7 +241,6 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
 
     const { damageValue, adjustedRandomValue, attackSuccess, defenseSuccess } = calculateFinalValue(character);
     const outcome = await getEncounterOutcome(character, monster, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess);
-    console.log(`[handleFight]: Encounter outcome →`, outcome);
 
     // ------------------- KO Branch -------------------
     if (outcome.result === 'KO') {
@@ -268,7 +267,7 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
     // ------------------- Fallback Heart Damage -------------------
     if (outcome.result !== 'Win!/Loot' && outcome.result !== 'KO') {
       if (typeof outcome.hearts !== 'number' || isNaN(outcome.hearts)) {
-        console.warn(`[handleFight]: Invalid or missing outcome.hearts for monster: ${monster.name}, forcing fallback.`);
+        console.warn(`[travelHandler.js]: ⚠️ Invalid hearts value for ${monster.name}, using fallback`);
         outcome.hearts = 1;
         outcome.result = `💥⚔️ The monster attacks! You lose ❤️ 1 heart!`;
       }
@@ -278,8 +277,6 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
     const latestCharacter = await Character.findById(character._id);
     character.currentStamina = latestCharacter.currentStamina;
     character.currentHearts = latestCharacter.currentHearts;
-
-    console.log(`[travelHandler.js]: Tracked ${outcome.hearts} heart(s) damage.`);
 
     // ------------------- Loot & Combat Result -------------------
     let decision, outcomeMessage, lootLine = '';
@@ -525,14 +522,12 @@ async function handleTravelInteraction(
           await interaction.deferUpdate();
         } catch (err) {
           if (err.code === 10062) {
-            console.warn(`[handleTravelInteraction]: Interaction expired or already responded to.`);
             return '❌ This interaction has expired. Please try again or reissue the command.';
           } else {
             throw err;
           }
         }
       }
-      
       
       const customId = interaction.customId;
       let result;
@@ -556,7 +551,6 @@ async function handleTravelInteraction(
           break;
         default:
           if (monster) {
-            console.warn(`[handleTravelInteraction]: No valid interaction chosen, but monster was present. Auto-resolving to fight.`);
             result = await handleFight(interaction, character, encounterMessage, monster, travelLog);
           } else {
             result = await handleDoNothing(interaction, character, encounterMessage, travelLog);
@@ -566,7 +560,6 @@ async function handleTravelInteraction(
       return result;
     } catch (error) {
       handleError(error, 'travelHandler.js (main)');
-      console.error(`[travelHandler.js]: Error routing interaction: ${error.message}`, error);
       throw error;
     }
   }
