@@ -1318,10 +1318,13 @@ async function handleTransferToCharacterAutocomplete(interaction, focusedValue) 
 
 // ------------------- Function: handleTransferItemAutocomplete -------------------
 // Provides autocomplete for selecting items to transfer
-async function handleTransferItemAutocomplete(interaction, focusedValue) {
+async function handleTransferItemAutocomplete(interaction, focusedOption) {
   try {
     const fromCharacter = interaction.options.getString('fromcharacter');
     if (!fromCharacter) return await interaction.respond([]);
+
+    // Ensure focusedValue is a string and has a default value
+    const focusedValue = focusedOption?.value?.toString() || '';
 
     const inventoryCollection = await getCharacterInventoryCollection(fromCharacter);
     const items = await inventoryCollection
@@ -1332,7 +1335,7 @@ async function handleTransferItemAutocomplete(interaction, focusedValue) {
       name: `${item.itemName} (Qty: ${item.quantity})`,
       value: item.itemName
     }));
-    return await respondWithFilteredChoices(interaction, focusedValue, choices);
+    return await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
     console.error('[handleTransferItemAutocomplete]: Error:', error);
     return await safeRespondWithError(interaction);
