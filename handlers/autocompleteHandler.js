@@ -2142,13 +2142,23 @@ async function handleLookupIngredientAutocomplete(interaction, focusedValue) {
 // ------------------- /mod give: Character Autocomplete -------------------
 async function handleModGiveCharacterAutocomplete(interaction, focusedOption) {
  try {
-  // Map modCharacters to autocomplete choices
-  const choices = modCharacters.map((character) => ({
-   name: character.name, // Character name for display
-   value: character.name, // Character name for value
+  // Fetch all characters from the database
+  const characters = await fetchAllCharacters();
+  
+  // Map characters to autocomplete choices
+  const choices = characters.map((character) => ({
+   name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
+   value: character.name
   }));
-  // Respond with filtered character choices
-  await respondWithFilteredChoices(interaction, focusedOption, choices);
+
+  // Filter based on user input
+  const searchQuery = focusedOption.value?.toLowerCase() || "";
+  const filteredChoices = choices.filter(choice => 
+   choice.name.toLowerCase().includes(searchQuery)
+  );
+
+  // Respond with filtered choices (limit to 25)
+  await interaction.respond(filteredChoices.slice(0, 25));
  } catch (error) {
   handleError(error, "autocompleteHandler.js");
   console.error("[handleModGiveCharacterAutocomplete]: Error:", error);
