@@ -28,6 +28,7 @@ const {
  extractSpreadsheetId,
  safeAppendDataToSheet,
 } = require("../../utils/googleSheetsUtils.js");
+const { checkInventorySync } = require("../../utils/characterUtils.js");
 const ItemModel = require("../../models/ItemModel.js");
 const ShopStock = require("../../models/VillageShopsModel");
 const User = require("../../models/UserModel");
@@ -532,18 +533,16 @@ for (const { quantity } of items) {
    return;
   }
 
-  if (!fromCharacter.inventorySynced) {
-   return interaction.editReply({
-    content: `❌ **You cannot gift items from \`${fromCharacterName}\` because their inventory is not set up yet. Please use the </testinventorysetup:1306176790095728732> and then </syncinventory:1306176789894266898> commands to initialize the inventory.**`,
-    ephemeral: true,
-   });
-  }
-
-  if (!toCharacter.inventorySynced) {
-   return interaction.editReply({
-    content: `❌ **You cannot gift items to \`${toCharacterName}\` because their inventory is not set up yet.**`,
-    ephemeral: true,
-   });
+  // ------------------- Check Inventory Sync for Both Characters -------------------
+  try {
+    await checkInventorySync(fromCharacter);
+    await checkInventorySync(toCharacter);
+  } catch (error) {
+    await interaction.editReply({
+      content: error.message,
+      ephemeral: true
+    });
+    return;
   }
 
   const toCharacterOwnerId = toCharacter.userId;
@@ -911,11 +910,15 @@ if (quantity <= 0) {
    return interaction.editReply("❌ Character not found.");
   }
 
-  if (!character.inventorySynced) {
-    return interaction.editReply({
-      content: `❌ **${character.name}'s inventory is not set up yet. Please initialize and sync their inventory before purchasing from the shop.**`,
-      ephemeral: true,
+  // ------------------- Check Inventory Sync -------------------
+  try {
+    await checkInventorySync(character);
+  } catch (error) {
+    await interaction.editReply({
+      content: error.message,
+      ephemeral: true
     });
+    return;
   }
   
 
@@ -1306,18 +1309,16 @@ async function handleTrade(interaction) {
    return;
   }
 
-  if (!fromCharacter.inventorySynced) {
-   return interaction.editReply({
-    content: `❌ **You cannot trade items from \`${characterName}\` because their inventory is not set up yet. Please use the </testinventorysetup:1306176790095728732> and then </syncinventory:1306176789894266898> commands to initialize the inventory.**`,
-    ephemeral: true,
-   });
-  }
-
-  if (!toCharacter.inventorySynced) {
-   return interaction.editReply({
-    content: `❌ **You cannot trade items to \`${tradingWithName}\` because their inventory is not set up yet.**`,
-    ephemeral: true,
-   });
+  // ------------------- Check Inventory Sync for Both Characters -------------------
+  try {
+    await checkInventorySync(fromCharacter);
+    await checkInventorySync(toCharacter);
+  } catch (error) {
+    await interaction.editReply({
+      content: error.message,
+      ephemeral: true
+    });
+    return;
   }
 
   if (tradeId) {
@@ -1326,9 +1327,6 @@ async function handleTrade(interaction) {
     await interaction.editReply({ content: `❌ Invalid Trade ID.` });
     return;
    }
-
-
-
 
    if (tradeSession.tradingWithCharacterName !== characterName) {
     await interaction.editReply({
@@ -1342,25 +1340,6 @@ async function handleTrade(interaction) {
     { name: item2, quantity: quantity2 },
     { name: item3, quantity: quantity3 },
    ].filter((item) => item.name);
-
-    // ------------------- NEW: Prevent using equipped items -------------------
-const equippedItems = [
-  fromCharacter.gearArmor?.head?.name,
-  fromCharacter.gearArmor?.chest?.name,
-  fromCharacter.gearArmor?.legs?.name,
-  fromCharacter.gearWeapon?.name,
-  fromCharacter.gearShield?.name,
-].filter(Boolean);
-
-for (const { name } of items) {
-  if (equippedItems.includes(name)) {
-    await interaction.editReply({
-      content: `❌ You cannot sell/trade/transfer \`${name}\` because it is currently equipped. Please unequip it first.`,
-      ephemeral: true,
-    });
-    return;
-  }
-}
 
    const characterInventoryCollection = await getCharacterInventoryCollection(
     fromCharacter.name
@@ -1754,18 +1733,16 @@ for (const { name } of items) {
 }
 
 
-  if (!fromCharacter.inventorySynced) {
-   return interaction.editReply({
-    content: `❌ **You cannot transfer items from \`${fromCharacterName}\` because their inventory is not set up yet. Please use the </testinventorysetup:1306176790095728732> and then </syncinventory:1306176789894266898> commands to initialize the inventory.**`,
-    ephemeral: true,
-   });
-  }
-
-  if (!toCharacter.inventorySynced) {
-   return interaction.editReply({
-    content: `❌ **You cannot transfer items to \`${toCharacterName}\` because their inventory is not set up yet.**`,
-    ephemeral: true,
-   });
+  // ------------------- Check Inventory Sync for Both Characters -------------------
+  try {
+    await checkInventorySync(fromCharacter);
+    await checkInventorySync(toCharacter);
+  } catch (error) {
+    await interaction.editReply({
+      content: error.message,
+      ephemeral: true
+    });
+    return;
   }
 
   let allItemsAvailable = true;

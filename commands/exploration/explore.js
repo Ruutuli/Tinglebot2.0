@@ -8,6 +8,7 @@ const { storeRaidProgress, getRaidProgressById } = require('../../modules/raidMo
 const { handleKO } = require('../../modules/characterStatsModule.js');
 const { triggerRaid } = require('../../modules/raidModule.js');
 const { addItemInventoryDatabase } = require('../../utils/inventoryUtils.js');
+const { checkInventorySync } = require('../../utils/characterUtils.js');
 const Party = require('../../models/PartyModel.js');
 const Character = require('../../models/CharacterModel.js');
 const ItemModel = require('../../models/ItemModel.js');
@@ -195,11 +196,15 @@ module.exports = {
                 return interaction.reply('❌ You already have a character in this expedition.');
             }
 
-            if (!character.inventorySynced) {
-                return interaction.reply({
-                    content: `❌ **You cannot use this command because your character does not have an inventory set up yet. Please use the </testinventorysetup:1306176790095728732> and then </syncinventory:1306176789894266898> command to initialize your inventory.**`,
-                    ephemeral: true,
+            // ------------------- Check Inventory Sync -------------------
+            try {
+                await checkInventorySync(character);
+            } catch (error) {
+                await interaction.reply({
+                    content: error.message,
+                    ephemeral: true
                 });
+                return;
             }
 
             const regionToVillage = {
