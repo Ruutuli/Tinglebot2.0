@@ -193,9 +193,6 @@ async function initializeClient() {
       } else if (interaction.isStringSelectMenu()) {
         await handleSelectMenuInteraction(interaction);
       } else if (interaction.isAutocomplete()) {
-        console.log(
-          `[index.js]: Autocomplete interaction detected: ${interaction.commandName}`
-        );
         const command = client.commands.get(interaction.commandName);
         if (command && typeof command.autocomplete === "function") {
           try {
