@@ -58,7 +58,6 @@ function convertToHyruleanDate(date) {
     const hyruleanMonth = getHyruleanMonth(date);
     if (hyruleanMonth) {
         const dayInMonth = moment(date).diff(moment(hyruleanMonth.start, 'MM-DD'), 'days') + 1;
-        console.log(`Converted real-world date to Hyrulean: ${hyruleanMonth.name} ${dayInMonth}`);
         return `${hyruleanMonth.name} ${dayInMonth}`;
     }
     console.error('Invalid date for Hyrulean conversion.');

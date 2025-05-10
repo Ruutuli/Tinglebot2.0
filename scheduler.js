@@ -115,8 +115,6 @@ function setupWeatherScheduler(client) {
     postWeatherUpdate(client);
     setInterval(() => postWeatherUpdate(client), 24 * 60 * 60 * 1000);
   }, timeUntilNext);
-  
-  console.log(`[scheduler] Weather scheduler initialized. Next update in ${timeUntilNext / 1000 / 60} minutes`);
 }
 
 // ============================================================================
@@ -261,36 +259,20 @@ function setupBlightScheduler(client) {
 // ============================================================================
 
 function initializeScheduler(client) {
-  // Jail Release Check (Daily at midnight)
+  // Initialize all schedulers
   createCronJob('0 0 * * *', 'jail release check', handleJailRelease);
-
-  // Daily Stamina Recovery (8 AM)
   createCronJob('0 8 * * *', 'daily stamina recovery', recoverDailyStamina);
-
-  // Monthly Vending Stock Generation (1st of month)
   createCronJob('0 0 1 * *', 'monthly vending stock generation', generateVendingStockList);
-
-  // Weekly Pet Rolls Reset (Sunday at midnight)
   createCronJob('0 0 * * 0', 'weekly pet rolls reset', resetPetRollsForAllCharacters);
-
-  // Daily Cleanup Tasks (Midnight)
   createCronJob('0 0 * * *', 'daily cleanup tasks', async () => {
     await Promise.all([
       cleanupExpiredVendingRequests(),
       cleanupExpiredHealingRequests()
     ]);
   });
-
-  // Debuff Expiry Check (Daily at midnight)
   createCronJob('0 0 * * *', 'debuff expiry check', handleDebuffExpiry);
-
-  // Daily Weather Update (8 AM)
   createCronJob('0 8 * * *', 'daily weather update', () => postWeatherUpdate(client));
-
-  // Daily Birthday Announcements (Midnight)
   createCronJob('0 0 * * *', 'birthday announcements', () => executeBirthdayAnnouncements(client));
-
-  // Blood Moon Tracking (12:24 PM)
   createCronJob('24 12 * * *', 'blood moon tracking', async () => {
     const channels = [
       process.env.RUDANIA_TOWN_HALL,
@@ -308,16 +290,16 @@ function initializeScheduler(client) {
         }
       } catch (error) {
         handleError(error, 'scheduler.js');
-        console.error(`[scheduler]❌ Error during Blood Moon tracking for channel ${channelId}:`, error.message);
+        console.error(`[scheduler.js]: ❌ Blood Moon tracking failed: ${error.message}`);
       }
     }
   });
 
-  // Initialize weather scheduler
+  // Initialize weather and blight schedulers
   setupWeatherScheduler(client);
-
-  // Initialize Blight scheduler
   setupBlightScheduler(client);
+
+  console.log('[scheduler.js]: ✅ All schedulers initialized');
 }
 
 module.exports = {

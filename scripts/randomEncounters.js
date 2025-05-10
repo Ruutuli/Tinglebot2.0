@@ -151,12 +151,11 @@ function initializeRandomEncounterBot(client) {
   // Start periodic encounter checks
   setInterval(() => {
     checkForRandomEncounters(client).catch(error => {
-      console.error('[Encounter LOG] Error in encounter check:', error);
+      console.error('[encounters.js]: ❌ Encounter check failed:', error);
       handleError(error, 'randomEncounters.js');
     });
   }, CHECK_INTERVAL);
 
-  console.log('[Encounter LOG] Random encounter bot initialized');
 }
 
 // ============================================================================
