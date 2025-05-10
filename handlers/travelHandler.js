@@ -307,16 +307,28 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
 
       // Optional: Sheet Sync
       if (character.inventoryLink && isValidGoogleSheetsUrl(character.inventoryLink)) {
-        const sheetId = extractSpreadsheetId(character.inventoryLink);
-        const auth = await authorizeSheets();
-        await safeAppendDataToSheet(sheetId, auth, 'loggedInventory!A2:M', [[
+        const range = 'loggedInventory!A2:M';
+        const values = [[
           character.name,
+          item.itemName,
+          item.quantity.toString(),
           item.category.join(', '),
           item.type.join(', '),
+          item.subtype ? item.subtype.join(', ') : 'N/A',
+          'Looted',
+          character.job,
+          '',
+          character.currentVillage,
           `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`,
           new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }),
           uuidv4()
-        ]]);
+        ]];
+
+        if (character?.name && character?.inventoryLink && character?.userId) {
+          await safeAppendDataToSheet(character.inventoryLink, character, range, values, interaction.client);
+        } else {
+          console.error('[safeAppendDataToSheet]: Invalid character object detected before syncing.');
+        }
       }
 
       lootLine = `\n> Looted ${item.quantity}× ${item.itemName}`;
