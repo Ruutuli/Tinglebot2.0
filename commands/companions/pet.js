@@ -43,6 +43,7 @@ const {
  safeAppendDataToSheet,
 } = require("../../utils/googleSheetsUtils");
 const { uploadPetImage } = require("../../utils/uploadUtils");
+const { checkInventorySync } = require("../../utils/characterUtils");
 
 // ------------------- Database Models -------------------
 // Data schemas for pet and character documents.
@@ -76,14 +77,14 @@ module.exports = {
     .addStringOption((option) =>
      option
       .setName("charactername")
-      .setDescription("Enter your character’s name")
+      .setDescription("Enter your character's name")
       .setRequired(true)
       .setAutocomplete(true)
     )
     .addStringOption((option) =>
      option
       .setName("petname")
-      .setDescription("Enter your pet’s name")
+      .setDescription("Enter your pet's name")
       .setRequired(true)
       .setAutocomplete(true)
     )
@@ -99,18 +100,18 @@ module.exports = {
   .addSubcommand((subcommand) =>
    subcommand
     .setName("upgrade")
-    .setDescription("⬆️ Upgrade your pet’s level")
+    .setDescription("⬆️ Upgrade your pet's level")
     .addStringOption((option) =>
      option
       .setName("charactername")
-      .setDescription("Enter your character’s name")
+      .setDescription("Enter your character's name")
       .setRequired(true)
       .setAutocomplete(true)
     )
     .addStringOption((option) =>
      option
       .setName("petname")
-      .setDescription("Enter your pet’s name")
+      .setDescription("Enter your pet's name")
       .setRequired(true)
       .setAutocomplete(true)
     )
@@ -130,18 +131,18 @@ module.exports = {
   .addSubcommand((subcommand) =>
    subcommand
     .setName("add")
-    .setDescription(" Add a new pet or update an existing pet’s image")
+    .setDescription(" Add a new pet or update an existing pet's image")
     .addStringOption((option) =>
      option
       .setName("charactername")
-      .setDescription("Enter your character’s name")
+      .setDescription("Enter your character's name")
       .setRequired(true)
       .setAutocomplete(true)
     )
     .addStringOption((option) =>
      option
       .setName("petname")
-      .setDescription("Enter the pet’s name")
+      .setDescription("Enter the pet's name")
       .setRequired(true)
     )
     .addStringOption((option) =>
@@ -197,18 +198,18 @@ module.exports = {
   .addSubcommand((subcommand) =>
    subcommand
     .setName("edit")
-    .setDescription("Edit your pet’s image")
+    .setDescription("Edit your pet's image")
     .addStringOption((option) =>
      option
       .setName("charactername")
-      .setDescription("Enter your character’s name")
+      .setDescription("Enter your character's name")
       .setRequired(true)
       .setAutocomplete(true)
     )
     .addStringOption((option) =>
      option
       .setName("petname")
-      .setDescription("Enter the pet’s name")
+      .setDescription("Enter the pet's name")
       .setRequired(true)
       .setAutocomplete(true)
     )
@@ -227,14 +228,14 @@ module.exports = {
     .addStringOption((option) =>
      option
       .setName("charactername")
-      .setDescription("Enter your character’s name")
+      .setDescription("Enter your character's name")
       .setRequired(true)
       .setAutocomplete(true)
     )
     .addStringOption((option) =>
      option
       .setName("petname")
-      .setDescription("Enter the pet’s name to retire")
+      .setDescription("Enter the pet's name to retire")
       .setRequired(true)
       .setAutocomplete(true)
     )
@@ -247,14 +248,14 @@ module.exports = {
     .addStringOption((option) =>
      option
       .setName("charactername")
-      .setDescription("Enter your character’s name")
+      .setDescription("Enter your character's name")
       .setRequired(true)
       .setAutocomplete(true)
     )
     .addStringOption((option) =>
      option
       .setName("petname")
-      .setDescription("Enter your pet’s name")
+      .setDescription("Enter your pet's name")
       .setRequired(true)
       .setAutocomplete(true)
     )
@@ -292,7 +293,7 @@ module.exports = {
    if (!character.pets) character.pets = [];
 
    // ------------------- Check for Existing Pet -------------------
-   // Find the pet by name in the character’s pets array.
+   // Find the pet by name in the character's pets array.
    const existingPet = character.pets.find((pet) => pet.name === petName);
 
    // ------------------- Subcommand: Add Pet or Update Pet Details -------------------
@@ -496,18 +497,22 @@ if (!canSpeciesPerformPetType(normalizedSpeciesKey, petType)) {
     // ------------------- Defer Reply for Longer Operations -------------------
     await interaction.deferReply();
 
-// ------------------- Check Available Pet Rolls -------------------
-if (pet.rollsRemaining <= 0) {
-  return interaction.editReply(
-    "❌ Your pet has no rolls left this week. Rolls reset every Sunday. You can increase your roll limit by training your pet! [Learn more](#)"
-  );
-}
-    // ------------------- Verify Inventory Setup -------------------
-    if (!character.inventorySynced) {
-     return interaction.reply({
-      content: `❌ **Inventory not set up for "${character.name}". Please initialize your inventory using the appropriate commands.**`,
-      ephemeral: true,
-     });
+    // ------------------- Check Available Pet Rolls -------------------
+    if (pet.rollsRemaining <= 0) {
+      return interaction.editReply(
+        "❌ Your pet has no rolls left this week. Rolls reset every Sunday. You can increase your roll limit by training your pet! [Learn more](#)"
+      );
+    }
+
+    // ------------------- Check Inventory Sync -------------------
+    try {
+      await checkInventorySync(character);
+    } catch (error) {
+      await interaction.editReply({
+        content: error.message,
+        ephemeral: true
+      });
+      return;
     }
 
     // ------------------- Determine Roll Combination and Type -------------------

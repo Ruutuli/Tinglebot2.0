@@ -37,6 +37,7 @@ const { getMonstersByPath, getRandomTravelEncounter } = require('../../modules/r
 const { handleError } = require('../../utils/globalErrorHandler.js');
 const { hasPerk } = require('../../modules/jobsModule.js');
 const { isValidVillage } = require('../../modules/locationsModule.js');
+const { checkInventorySync } = require('../../utils/characterUtils');
 
 // ============================================================================
 // ------------------- Constants -------------------
@@ -179,11 +180,14 @@ async execute(interaction) {
     }
 
     // ------------------- Check Inventory Sync -------------------
-    if (!character.inventorySynced) {
-      return interaction.editReply({
-        content: `❌ **Inventory not synced.** Use \`/testinventorysetup\` then \`/syncinventory\` before traveling.`,
+    try {
+      await checkInventorySync(character);
+    } catch (error) {
+      await interaction.editReply({
+        content: error.message,
         ephemeral: true
       });
+      return;
     }
 
     // ------------------- Check if KO'd -------------------
