@@ -13,6 +13,7 @@ const Character = require('./models/CharacterModel');
 const weatherHandler = require('./handlers/weatherHandler');
 const { sendUserDM } = require('./utils/messageUtils');
 const { generateWeatherEmbed } = require('./embeds/weatherEmbed');
+const { checkExpiredRequests } = require('./utils/expirationHandler');
 
 // ============================================================================
 // ---- Utility Functions ----
@@ -264,15 +265,22 @@ function initializeScheduler(client) {
   createCronJob('0 8 * * *', 'daily stamina recovery', recoverDailyStamina);
   createCronJob('0 0 1 * *', 'monthly vending stock generation', generateVendingStockList);
   createCronJob('0 0 * * 0', 'weekly pet rolls reset', resetPetRollsForAllCharacters);
-  createCronJob('0 0 * * *', 'daily cleanup tasks', async () => {
+  createCronJob('0 8 * * *', 'request expiration and cleanup', async () => {
     await Promise.all([
       cleanupExpiredVendingRequests(),
-      cleanupExpiredHealingRequests()
+      cleanupExpiredHealingRequests(),
+      checkExpiredRequests(client)
     ]);
   });
   createCronJob('0 0 * * *', 'debuff expiry check', handleDebuffExpiry);
   createCronJob('0 8 * * *', 'daily weather update', () => postWeatherUpdate(client));
   createCronJob('0 0 * * *', 'birthday announcements', () => executeBirthdayAnnouncements(client));
+  createCronJob('0 20 * * *', 'blight management', async () => {
+    await Promise.all([
+      postBlightRollCall(client),
+      checkMissedRolls(client)
+    ]);
+  });
   createCronJob('24 12 * * *', 'blood moon tracking', async () => {
     const channels = [
       process.env.RUDANIA_TOWN_HALL,

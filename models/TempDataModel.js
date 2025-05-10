@@ -46,37 +46,15 @@ tempDataSchema.pre('save', function(next) {
   
   // Set expiration based on type
   switch (this.type) {
-    case 'healing':
-      this.expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000); // 24 hours
-      break;
-    case 'vending':
-      this.expiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // 30 days
-      break;
-    case 'boosting':
-      this.expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000); // 24 hours
-      break;
-    case 'battle':
-      this.expiresAt = new Date(now.getTime() + 2 * 60 * 60 * 1000); // 2 hours
-      break;
-    case 'encounter':
-      this.expiresAt = new Date(now.getTime() + 12 * 60 * 60 * 1000); // 12 hours
-      break;
     case 'blight':
-      this.expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days
-      break;
-    case 'travel':
-      this.expiresAt = new Date(now.getTime() + 6 * 60 * 60 * 1000); // 6 hours
-      break;
-    case 'gather':
-      this.expiresAt = new Date(now.getTime() + 2 * 60 * 60 * 1000); // 2 hours
+      this.expiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000); // 30 days
       break;
     case 'monthly':
       // Set to end of current month
-      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
-      this.expiresAt = endOfMonth;
+      this.expiresAt = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
       break;
     default:
-      this.expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000); // Default 24 hours
+      this.expiresAt = new Date(now.getTime() + 48 * 60 * 60 * 1000); // 48 hours
   }
   
   next();
