@@ -9,6 +9,7 @@
 
 const { v4: uuidv4 } = require('uuid');
 const fs = require('fs');
+const { google } = require('googleapis');
 
 const { handleError } = require('../utils/globalErrorHandler');
 
@@ -42,6 +43,7 @@ const ItemModel = require('../models/ItemModel');
 
 const BATCH_SIZE = 25;
 const BATCH_DELAY = 15000; // 15 seconds
+const SERVICE_ACCOUNT_PATH = './service-account.json';
 
 // ============================================================================
 // Helper Functions
@@ -293,28 +295,4 @@ async function syncInventory(characterName, userId, interaction, totalSyncedItem
             console.log('inventorySynced status updated successfully.');
         } catch (updateError) {
             handleError(updateError, 'syncHandler.js');
-            console.error(`[syncHandler.js]: syncInventory: Failed to update inventorySynced status: ${updateError.message}`);
-        }
-
-        // ------------------- Send Sync Completion Message -------------------
-        await editSyncMessage(
-            interaction,
-            character.name,
-            totalSyncedItemsCount,
-            errors.map(error => ({
-                reason: error.split(': ')[1], // Extract reason from error message
-                itemName: error.includes('Item with name') ? error.split('Item with name ')[1].split(' not found')[0] : 'Unknown'
-            })),
-            now, // Current timestamp
-            character.inventory // Character's inventory link
-        );
-    } catch (error) {
-        handleError(error, 'syncHandler.js');
-        console.error(`[syncHandler.js]: ❌ Sync failed:`, error.message);
-        await editSyncErrorMessage(interaction, `❌ **An error occurred during sync:** ${error.message}`);
-    }
-}
-
-module.exports = {
-    syncInventory,
-};
+            console.error(`
