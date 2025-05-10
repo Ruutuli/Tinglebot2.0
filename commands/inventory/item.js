@@ -29,6 +29,7 @@ const { authorizeSheets, appendSheetData } = require('../../utils/googleSheetsUt
 const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../../utils/validation');
 const { handleError } = require('../../utils/globalErrorHandler');
 const { removeItemInventoryDatabase } = require('../../utils/inventoryUtils');
+const { checkInventorySync } = require('../../utils/characterUtils');
 
 
 // ------------------- Command Definition -------------------
@@ -174,9 +175,13 @@ module.exports = {
           content: `❌ **${character.name} is currently debuffed and cannot use items to heal.**\n🕒 **Debuff Expires:** <t:${expireUnix}:F>`
         });
       }
-      if (!character.inventorySynced) {
+
+      try {
+        await checkInventorySync(character);
+      } catch (error) {
         return void await interaction.editReply({
-          content: '❌ **Inventory not synced. Please initialize and sync before using items.**'
+          content: error.message,
+          ephemeral: true
         });
       }
 
