@@ -58,7 +58,6 @@ const villageChannels = {
 function canUseDailyRoll(character, activity) {
   // If character has an active job voucher, they can always use the command
   if (character.jobVoucher) {
-    console.log(`[gather.js]: Job voucher active for ${character.name}, bypassing daily limit`);
     return true;
   }
 
@@ -73,20 +72,11 @@ function canUseDailyRoll(character, activity) {
 
   const lastRoll = character.dailyRoll.get(activity);
   if (!lastRoll) {
-    console.log(`[gather.js]: No previous roll found for ${character.name}`);
     return true;
   }
 
   const lastRollDate = new Date(lastRoll);
-  const canUse = lastRollDate < rollover;
-  
-  console.log(`[gather.js]: Daily roll check for ${character.name}:`, {
-    lastRoll: lastRollDate.toISOString(),
-    rollover: rollover.toISOString(),
-    canUse: canUse
-  });
-  
-  return canUse;
+  return lastRollDate < rollover;
 }
 
 // Update the daily roll timestamp for an activity
@@ -97,7 +87,6 @@ async function updateDailyRoll(character, activity) {
   const now = new Date().toISOString();
   character.dailyRoll.set(activity, now);
   await character.save();
-  console.log(`[gather.js]: Updated daily roll for ${character.name} - ${activity} at ${now}`);
 }
 
 // ------------------- Command Definition -------------------
@@ -131,16 +120,13 @@ module.exports = {
 
       // Check for job voucher and daily roll at the start
       if (character.jobVoucher) {
-        console.log(`[gather.js]: Active job voucher found for ${character.name}`);
-      } else {
-        console.log(`[gather.js]: No active job voucher for ${character.name}`);
-        if (!canUseDailyRoll(character, 'gather')) {
-          await interaction.editReply({
-            content: `*${character.name} looks tired from their earlier gathering...*\n\n**Daily gathering limit reached.**\nThe next opportunity to gather will be available at 8AM EST.\n\n*Tip: A job voucher would allow you to gather again today.*`,
-            ephemeral: true
-          });
-          return;
-        }
+        // Skip daily roll check if job voucher is active
+      } else if (!canUseDailyRoll(character, 'gather')) {
+        await interaction.editReply({
+          content: `*${character.name} looks tired from their earlier gathering...*\n\n**Daily gathering limit reached.**\nThe next opportunity to gather will be available at 8AM EST.\n\n*Tip: A job voucher would allow you to gather again today.*`,
+          ephemeral: true
+        });
+        return;
       }
 
       // Check if the character is KOed.
@@ -521,7 +507,7 @@ await character.save();
       console.log(`[gather.js]: Successfully updated daily roll for ${character.name}`);
 
     } catch (error) {
-    handleError(error, 'gather.js');
+      handleError(error, 'gather.js');
 
       console.error(`[gather.js]: Error during gathering process: ${error.message}`, {
         stack: error.stack,
@@ -533,7 +519,7 @@ await character.save();
         },
       });
       await interaction.editReply({
-        content: `⚠️ **An error occurred during the gathering process.**`,
+        content: error.message || `⚠️ **An error occurred during the gathering process.**`,
       });
     }
   },
