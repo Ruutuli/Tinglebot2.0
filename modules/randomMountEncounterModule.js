@@ -19,11 +19,14 @@ const MONTHLY_RESET_KEY = 'monthly_reset'; // Key for monthly reset check
 async function loadMonthlyEncounterData() {
     try {
         const monthlyData = await TempData.findAllByType('monthly');
+        console.log('[randomMountEncounterModule]: 📊 Raw monthly data from DB:', monthlyData);
         const data = {};
         for (const entry of monthlyData) {
             data[entry.key] = entry.data;
         }
-        return new Map(Object.entries(data));
+        const map = new Map(Object.entries(data));
+        console.log(`[randomMountEncounterModule]: 📊 Loaded monthly encounter map:`, map);
+        return map;
     } catch (error) {
         console.error('[randomMountEncounterModule]: Error loading monthly encounter data:', error);
         return new Map();
@@ -33,13 +36,17 @@ async function loadMonthlyEncounterData() {
 // Save monthly encounter data to MongoDB
 async function saveMonthlyEncounterData(monthlyEncounterMap) {
     try {
+        const now = new Date();
+        // Calculate end of month for all monthly entries
+        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
         for (const [key, value] of monthlyEncounterMap.entries()) {
             await TempData.findOneAndUpdate(
                 { type: 'monthly', key },
-                { data: value },
+                { data: value, expiresAt: endOfMonth },
                 { upsert: true, new: true }
             );
         }
+        console.log(`[randomMountEncounterModule]: 📊 Saved monthly encounter map:`, monthlyEncounterMap);
     } catch (error) {
         console.error('[randomMountEncounterModule]: Error saving monthly encounter data:', error);
     }
@@ -49,15 +56,25 @@ async function saveMonthlyEncounterData(monthlyEncounterMap) {
 async function initializeMonthlyTracking() {
     const now = new Date();
     const monthlyEncounterMap = await loadMonthlyEncounterData();
-    const lastReset = monthlyEncounterMap.get(MONTHLY_RESET_KEY) ? new Date(monthlyEncounterMap.get(MONTHLY_RESET_KEY)) : new Date(0);
-    
+    let lastReset;
+    if (monthlyEncounterMap.has(MONTHLY_RESET_KEY)) {
+        lastReset = new Date(monthlyEncounterMap.get(MONTHLY_RESET_KEY));
+    } else {
+        lastReset = null;
+    }
+    console.log(`[randomMountEncounterModule]: 📊 Last reset:`, lastReset);
     // Check if we need to reset monthly encounters
-    if (now.getMonth() !== lastReset.getMonth() || now.getFullYear() !== lastReset.getFullYear()) {
-        monthlyEncounterMap.clear();
+    if (!lastReset || now.getMonth() !== lastReset.getMonth() || now.getFullYear() !== lastReset.getFullYear()) {
+        console.log(`[randomMountEncounterModule]: 🔄 Resetting monthly encounters. Reason: ${!lastReset ? 'No last reset found' : 'Month/year changed'}`);
+        // Only clear village keys, not the reset key itself
+        for (const key of Array.from(monthlyEncounterMap.keys())) {
+            if (key !== MONTHLY_RESET_KEY) {
+                monthlyEncounterMap.delete(key);
+            }
+        }
         monthlyEncounterMap.set(MONTHLY_RESET_KEY, now.toISOString());
         await saveMonthlyEncounterData(monthlyEncounterMap);
     }
-    
     return monthlyEncounterMap;
 }
 
@@ -110,8 +127,16 @@ async function needsMonthlyEncounter(channelId) {
     
     // Check if last encounter was in a different month
     const lastEncounterDate = new Date(lastMonthlyEncounter);
-    return lastEncounterDate.getMonth() !== now.getMonth() || 
-           lastEncounterDate.getFullYear() !== now.getFullYear();
+    const isDifferentMonth = lastEncounterDate.getMonth() !== now.getMonth() || 
+                            lastEncounterDate.getFullYear() !== now.getFullYear();
+    
+    // Log the check for debugging
+    console.log(`[randomMountEncounterModule]: Checking monthly encounter for ${village}`);
+    console.log(`Last encounter: ${lastEncounterDate.toISOString()}`);
+    console.log(`Current time: ${now.toISOString()}`);
+    console.log(`Is different month: ${isDifferentMonth}`);
+    
+    return isDifferentMonth;
 }
 
 // Create a random mount encounter
@@ -130,12 +155,14 @@ async function createRandomMountEncounter(channelId, isMonthly = false) {
             
             // Check if this village already had a monthly encounter
             const villageKey = `village_${village.toLowerCase()}`;
-            if (monthlyEncounterMap.has(villageKey)) {
-                const lastEncounter = new Date(monthlyEncounterMap.get(villageKey));
-                
+            const lastEncounter = monthlyEncounterMap.get(villageKey);
+            
+            if (lastEncounter) {
+                const lastEncounterDate = new Date(lastEncounter);
                 // Only allow if it's a different month
-                if (lastEncounter.getMonth() === now.getMonth() && 
-                    lastEncounter.getFullYear() === now.getFullYear()) {
+                if (lastEncounterDate.getMonth() === now.getMonth() && 
+                    lastEncounterDate.getFullYear() === now.getFullYear()) {
+                    console.log(`[randomMountEncounterModule]: Village ${village} already had a monthly encounter this month`);
                     return null; // Village already had its monthly encounter this month
                 }
             }
@@ -143,6 +170,7 @@ async function createRandomMountEncounter(channelId, isMonthly = false) {
             // Mark this village as having had its monthly encounter
             monthlyEncounterMap.set(villageKey, now.toISOString());
             await saveMonthlyEncounterData(monthlyEncounterMap);
+            console.log(`[randomMountEncounterModule]: Created new monthly encounter for ${village}`);
         }
         
         // Generate random mount data
@@ -185,14 +213,15 @@ function getVillageFromChannelId(channelId) {
 }
 
 // Check and create encounters if needed
-function checkAndCreateEncounter(channelId) {
+async function checkAndCreateEncounter(channelId) {
     try {
         const village = getVillageFromChannelId(channelId);
         
         // If this is a village channel, only check for monthly encounters
         if (village) {
-            if (needsMonthlyEncounter(channelId)) {
-                const monthlyEncounter = createRandomMountEncounter(channelId, true);
+            const needsEncounter = await needsMonthlyEncounter(channelId);
+            if (needsEncounter) {
+                const monthlyEncounter = await createRandomMountEncounter(channelId, true);
                 if (monthlyEncounter) {
                     return monthlyEncounter;
                 }
@@ -202,7 +231,7 @@ function checkAndCreateEncounter(channelId) {
         
         // For non-village channels, only check for random encounters
         if (trackMessageActivity(channelId)) {
-            return createRandomMountEncounter(channelId, false);
+            return await createRandomMountEncounter(channelId, false);
         }
         
         return null;

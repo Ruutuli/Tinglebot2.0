@@ -1,76 +1,47 @@
 // ------------------- Standard Libraries -------------------
 // Import core Node.js modules.
-const fs = require('fs');
 const { handleError } = require('../utils/globalErrorHandler');
-const path = require('path');
 const TempData = require('../models/TempDataModel');
-
-
-// ============================================================================
-// ------------------- File Path Constants -------------------
-// Define and ensure file paths and directories for persistent storage.
-
-// Define file path for submissions data.
-const storageFile = path.join(__dirname, '../data/submissions.json');
-
-// Ensure the data directory exists.
-if (!fs.existsSync(path.join(__dirname, '../data'))) {
-  fs.mkdirSync(path.join(__dirname, '../data'));
-}
-
-// Create the submissions file if it doesn't exist.
-if (!fs.existsSync(storageFile)) {
-  console.error('[storage.js]: logs Submissions storage file does not exist. Creating a new one.');
-  fs.writeFileSync(storageFile, JSON.stringify({}));
-}
-
-
-// ------------------- In-Memory Store -------------------
-// Define an in-memory store for submissions using a Map.
-const submissionStore = new Map();
-
-
-// ------------------- JSON File Handling Functions -------------------
-// Safely reads a JSON file and returns the parsed data; returns an empty object on error.
-function safeReadJSON(filePath) {
-  try {
-    const data = fs.readFileSync(filePath, 'utf-8');
-    return data ? JSON.parse(data) : {};
-  } catch (error) {
-    handleError(error, 'storage.js');
-
-    console.error(`[storage.js]: logs Error reading JSON file at ${filePath}:`, error.message);
-    return {};
-  }
-}
-
 
 // ============================================================================
 // ------------------- Submission Storage Functions -------------------
 // Functions for saving, retrieving, and deleting submissions from persistent storage.
 
 // Save a submission to storage.
-function saveSubmissionToStorage(submissionId, submissionData) {
+async function saveSubmissionToStorage(submissionId, submissionData) {
   if (!submissionId || !submissionData) {
     return;
   }
-  const submissions = safeReadJSON(storageFile);
-  submissions[submissionId] = submissionData;
-  fs.writeFileSync(storageFile, JSON.stringify(submissions, null, 2));
+  try {
+    await TempData.findOneAndUpdate(
+      { type: 'submission', key: submissionId },
+      { data: submissionData },
+      { upsert: true, new: true }
+    );
+  } catch (error) {
+    handleError(error, 'storage.js');
+    throw new Error('Failed to save submission');
+  }
 }
 
 // Retrieve a submission by its ID.
-function retrieveSubmissionFromStorage(submissionId) {
-  const submissions = safeReadJSON(storageFile);
-  return submissions[submissionId] || null;
+async function retrieveSubmissionFromStorage(submissionId) {
+  try {
+    const result = await TempData.findByTypeAndKey('submission', submissionId);
+    return result?.data || null;
+  } catch (error) {
+    handleError(error, 'storage.js');
+    throw new Error('Failed to retrieve submission');
+  }
 }
 
 // Delete a submission from storage by its ID.
-function deleteSubmissionFromStorage(submissionId) {
-  const submissions = safeReadJSON(storageFile);
-  if (submissions[submissionId]) {
-    delete submissions[submissionId];
-    fs.writeFileSync(storageFile, JSON.stringify(submissions, null, 2));
+async function deleteSubmissionFromStorage(submissionId) {
+  try {
+    await TempData.findOneAndDelete({ type: 'submission', key: submissionId });
+  } catch (error) {
+    handleError(error, 'storage.js');
+    throw new Error('Failed to delete submission');
   }
 }
 
@@ -267,7 +238,6 @@ async function cleanupExpiredEntries(maxAgeInMs = 86400000) {
 // ------------------- Module Exports -------------------
 // Export all storage-related functions for use in other modules.
 module.exports = {
-  submissionStore,
   saveSubmissionToStorage,
   retrieveSubmissionFromStorage,
   deleteSubmissionFromStorage,
