@@ -164,7 +164,15 @@ module.exports = {
       if (characterName) {
         const character = await fetchCharacterByName(characterName);
         if (character) {
-          await checkInventorySync(character);
+          try {
+            await checkInventorySync(character);
+          } catch (error) {
+            await interaction.reply({
+              content: error.message,
+              ephemeral: true
+            });
+            return;
+          }
         }
       }
 
