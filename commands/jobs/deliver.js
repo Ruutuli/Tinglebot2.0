@@ -116,6 +116,21 @@ const command = {
           )
       )
       .addSubcommand(sub =>
+        sub.setName('cancel')
+          .setDescription('Cancel a delivery request')
+          .addStringOption(opt =>
+            opt.setName('deliveryid')
+              .setDescription('Delivery ID to cancel')
+              .setRequired(true)
+          )
+          .addStringOption(opt =>
+            opt.setName('character')
+              .setDescription('Character cancelling the delivery (must be sender or courier)')
+              .setRequired(true)
+              .setAutocomplete(true)
+          )
+      )
+      .addSubcommand(sub =>
         sub.setName('vendingstock')
           .setDescription('Courier delivery of vending stock to a vendor')
           .addStringOption(opt =>
@@ -468,8 +483,88 @@ const command = {
 
         // ... rest of fulfill handler code ...
 
+        // Delete the delivery request after successful fulfillment
+        await TempData.findByIdAndDelete(deliveryRequest._id);
+        console.log(`[deliver.js]: Deleted fulfilled delivery request ${deliveryId}`);
+
       } catch (error) {
         handleError(error, 'deliver.js');
+      }
+    } else if (subcommand === 'cancel') {
+      try {
+        const deliveryId = interaction.options.getString('deliveryid');
+        const characterName = interaction.options.getString('character');
+
+        // Find the delivery request in TempData
+        const deliveryRequest = await TempData.findOne({ 
+          key: deliveryId,
+          type: 'delivery'
+        });
+
+        if (!deliveryRequest) {
+          return interaction.reply({
+            content: `❌ No delivery request found with ID **${deliveryId}**.`,
+            ephemeral: true,
+          });
+        }
+
+        const { data: deliveryTask } = deliveryRequest;
+
+        // Validate character is either sender or courier
+        if (deliveryTask.sender !== characterName && deliveryTask.courier !== characterName) {
+          return interaction.reply({
+            content: `❌ Only the sender (${deliveryTask.sender}) or courier (${deliveryTask.courier}) can cancel this delivery.`,
+            ephemeral: true,
+          });
+        }
+
+        // Delete the delivery request
+        await TempData.findByIdAndDelete(deliveryRequest._id);
+        console.log(`[deliver.js]: Deleted cancelled delivery request ${deliveryId}`);
+
+        // Notify relevant users
+        const senderCharacter = await fetchCharacterByName(deliveryTask.sender);
+        const courierCharacter = await fetchCharacterByName(deliveryTask.courier);
+        const recipientCharacter = await fetchCharacterByName(deliveryTask.recipient);
+
+        const cancelMessage = `📦 Delivery request **${deliveryId}** has been cancelled by **${characterName}**.\n\n` +
+          `**Details:**\n` +
+          `📤 Sender: ${deliveryTask.sender}\n` +
+          `✉️ Courier: ${deliveryTask.courier}\n` +
+          `📥 Recipient: ${deliveryTask.recipient}\n` +
+          `📦 Item: ${deliveryTask.item} x${deliveryTask.quantity}`;
+
+        // Send notifications to all involved parties
+        const notifyUser = async (userId) => {
+          if (userId) {
+            try {
+              const user = await interaction.client.users.fetch(userId);
+              if (user) {
+                await user.send(cancelMessage);
+              }
+            } catch (dmError) {
+              console.error(`[deliver.js]: Failed to send DM to user ${userId}:`, dmError);
+            }
+          }
+        };
+
+        await Promise.all([
+          notifyUser(senderCharacter?.userId),
+          notifyUser(courierCharacter?.userId),
+          notifyUser(recipientCharacter?.userId)
+        ]);
+
+        return interaction.reply({
+          content: `✅ Delivery request **${deliveryId}** has been cancelled.`,
+          ephemeral: true,
+        });
+
+      } catch (error) {
+        handleError(error, 'deliver.js');
+        return interaction.reply({
+          content: `❌ An error occurred while cancelling the delivery request.`,
+          ephemeral: true,
+        });
       }
     }
   }
