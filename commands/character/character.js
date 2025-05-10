@@ -36,6 +36,7 @@ const {
  handleAutocomplete,
  handleChangeJobNewJobAutocomplete,
  handleCreateCharacterRaceAutocomplete,
+ handleEditCharacterAutocomplete,
 } = require("../../handlers/autocompleteHandler");
 const {
  canChangeJob,
@@ -63,6 +64,7 @@ const {
  getGeneralJobsPage,
  getJobsByCategory,
  getAllJobs,
+ isValidJob,
 } = require("../../modules/jobsModule");
 const { roles } = require("../../modules/rolesModule");
 const {
@@ -679,6 +681,8 @@ module.exports = {
               .map(village => ({ name: village, value: village }));
       
             await interaction.respond(filteredVillages);
+          } else if (selectedCategory === "race") {
+            await handleEditCharacterAutocomplete(interaction, focusedOption);
           } else {
             await interaction.respond([]);
           }
@@ -1024,6 +1028,14 @@ async function handleEditCharacter(interaction) {
 
   if (category === "job") {
    try {
+    // Validate job exists
+    if (!isValidJob(updatedInfo)) {
+      await interaction.followUp({
+        content: `❌ **${updatedInfo}** is not a valid job. Please select a valid job from the list.`,
+        ephemeral: true,
+      });
+      return;
+    }
     const validationResult = await canChangeJob(character, updatedInfo);
 
     if (!validationResult.valid) {

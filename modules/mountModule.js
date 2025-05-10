@@ -9,6 +9,8 @@ const {
   retrieveEncounterFromStorage, 
   deleteEncounterFromStorage 
 } = require('../utils/storage.js');
+const { v4: uuidv4 } = require('uuid');
+const TempData = require('../models/TempDataModel');
 
 // Define the path to encounter.json
 const ENCOUNTER_PATH = path.join(__dirname, '..', 'data', 'encounter.json');
@@ -72,56 +74,45 @@ function generateEncounterId() {
   return Date.now().toString();
 }
 
-// ------------------- Store encounter data in JSON -------------------
+// ------------------- Store encounter data in MongoDB -------------------
 async function storeEncounter(encounterId, encounterData) {
-  ensureEncounterFileExists();
-
   try {
-      const fileData = fs.readFileSync(ENCOUNTER_PATH, 'utf8');
-      let encounterProgress = {};
+    // Ensure the encounter object includes all necessary fields
+    const encounter = {
+      users: encounterData.users || [], // Ensure users array with userId and characterName is included
+      mountType: encounterData.mountType || 'Unknown',
+      rarity: encounterData.rarity || 'Regular', // Default to 'Regular'
+      mountLevel: encounterData.mountLevel || '1', // Default to level 1
+      mountStamina: encounterData.mountStamina || '1', // Default to 1 🟩 stamina
+      environment: encounterData.environment || 'Plains', // Default to 'Plains'
+      village: encounterData.village || 'Unknown',
+      actions: encounterData.actions || [],
+      tameStatus: encounterData.tameStatus || false, // Default to false
+      traits: encounterData.traits || {}, // Include traits to store customization
+      totalSpent: encounterData.totalSpent || 0, // Ensure totalSpent is included and defaults to 0
+    };
 
-      // Parse existing data if available
-      if (fileData.trim()) {
-          encounterProgress = JSON.parse(fileData);
-      }
-
-      // Ensure the encounter object includes all necessary fields
-      encounterProgress[encounterId] = {
-          users: encounterData.users || [], // Ensure users array with userId and characterName is included
-          mountType: encounterData.mountType || 'Unknown',
-          rarity: encounterData.rarity || 'Regular', // Default to 'Regular'
-          mountLevel: encounterData.mountLevel || '1', // Default to level 1
-          mountStamina: encounterData.mountStamina || '1', // Default to 1 🟩 stamina
-          environment: encounterData.environment || 'Plains', // Default to 'Plains'
-          village: encounterData.village || 'Unknown',
-          actions: encounterData.actions || [],
-          tameStatus: encounterData.tameStatus || false, // Default to false
-          traits: encounterData.traits || {}, // Include traits to store customization
-          totalSpent: encounterData.totalSpent || 0, // Ensure totalSpent is included and defaults to 0
-      };
-
-      // Write back to the file
-      fs.writeFileSync(ENCOUNTER_PATH, JSON.stringify(encounterProgress, null, 2));
-
-      // Save to MongoDB
-      await saveEncounterToStorage(encounterId, encounterData);
+    // Save to MongoDB
+    await TempData.create({
+      key: encounterId,
+      type: 'encounter',
+      data: encounter
+    });
   } catch (error) {
     handleError(error, 'mountModule.js');
-
-      throw new Error('Failed to store encounter data.');
+    throw new Error('Failed to store encounter data.');
   }
 }
 
-
 // ------------------- Retrieve encounter data by ID -------------------
 async function getEncounterById(encounterId) {
-  ensureEncounterFileExists();
-  const encounterProgress = JSON.parse(fs.readFileSync(ENCOUNTER_PATH, 'utf8'));
-
-  // Retrieve from MongoDB
-  const encounter = await retrieveEncounterFromStorage(encounterId);
-
-  return encounter || null;
+  try {
+    const encounter = await TempData.findByTypeAndKey('encounter', encounterId);
+    return encounter ? encounter.data : null;
+  } catch (error) {
+    handleError(error, 'mountModule.js');
+    return null;
+  }
 }
 
 // ------------------- Available species and their corresponding levels -------------------
