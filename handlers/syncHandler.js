@@ -11,25 +11,11 @@ const { v4: uuidv4 } = require('uuid');
 const fs = require('fs');
 const { google } = require('googleapis');
 
-const { handleError } = require('../utils/globalErrorHandler');
-
-const {connectToTinglebot, fetchCharacterByNameAndUserId } = require('../database/db');
-
 // ============================================================================
-// Modules
+// Database Connections
 // ============================================================================
 
-const { editCharacterNotFoundMessage, editSyncErrorMessage, editSyncMessage } = require('../embeds/embeds');
-
-const { removeInitialItemIfSynced, syncToInventoryDatabase } = require('../utils/inventoryUtils');
-
-
-// ============================================================================
-// Utility Functions
-// ============================================================================
-
-const { authorizeSheets, getSheetIdByTitle, readSheetData, writeBatchData } = require('../utils/googleSheetsUtils');
-const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../utils/validation');
+const { connectToTinglebot, fetchCharacterByNameAndUserId } = require('../database/db');
 
 // ============================================================================
 // Database Models
@@ -38,12 +24,23 @@ const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../utils/valid
 const ItemModel = require('../models/ItemModel');
 
 // ============================================================================
-// Constants for Batch Processing
+// Utility Functions
+// ============================================================================
+
+const { handleError } = require('../utils/globalErrorHandler');
+const { editCharacterNotFoundMessage, editSyncErrorMessage, editSyncMessage } = require('../embeds/embeds');
+const { removeInitialItemIfSynced, syncToInventoryDatabase } = require('../utils/inventoryUtils');
+const { authorizeSheets, getSheetIdByTitle, readSheetData, writeBatchData } = require('../utils/googleSheetsUtils');
+const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../utils/validation');
+
+// ============================================================================
+// Constants
 // ============================================================================
 
 const BATCH_SIZE = 25;
 const BATCH_DELAY = 15000; // 15 seconds
 const SERVICE_ACCOUNT_PATH = './service-account.json';
+const MAX_RETRIES = 3;
 
 // ============================================================================
 // Helper Functions
@@ -53,11 +50,93 @@ const SERVICE_ACCOUNT_PATH = './service-account.json';
 // Formats a given date into a readable string with EST timezone.
 function formatDateTime(date) {
     const options = {
-        year: 'numeric', month: '2-digit', day: '2-digit',
-        hour: '2-digit', minute: '2-digit', hour12: true,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
         timeZone: 'America/New_York'
     };
     return new Date(date).toLocaleString('en-US', options).replace(',', ' |') + ' EST';
+}
+
+// ------------------- checkGoogleSheetsPermissions -------------------
+// Verifies that the service account has proper access to the Google Sheet.
+async function checkGoogleSheetsPermissions(auth, spreadsheetId, interaction) {
+    try {
+        await google.sheets({ version: 'v4', auth }).spreadsheets.get({ spreadsheetId });
+        return true;
+    } catch (error) {
+        if (error.status === 403 || error.message.includes('does not have permission')) {
+            const serviceAccountEmail = JSON.parse(fs.readFileSync(SERVICE_ACCOUNT_PATH)).client_email;
+            console.error(`[syncHandler.js]: ⚠️ Permission error when accessing Google Sheet: ${error.message}`);
+            await editSyncErrorMessage(interaction, 
+                `⚠️ **Permission Error:**\n` +
+                `The service account (${serviceAccountEmail}) does not have access to this spreadsheet.\n\n` +
+                `To fix this:\n1. Open the Google Spreadsheet\n2. Click "Share" in the top right\n3. Add ${serviceAccountEmail} as an Editor\n4. Make sure to give it at least "Editor" access`
+            );
+            return false;
+        }
+        throw error;
+    }
+}
+
+// ------------------- processInventoryItem -------------------
+// Processes a single inventory item and prepares it for database sync.
+async function processInventoryItem(row, originalRowIndex, character, interaction) {
+    const [sheetCharacterName, itemName, qty, , , , , , , , , , confirmedSync] = row;
+
+    if (confirmedSync) {
+        return null;
+    }
+
+    const item = await ItemModel.findOne({ itemName });
+    if (!item) {
+        console.warn(`[syncHandler.js]: ⚠️ Skipping unknown item: ${itemName} (row ${originalRowIndex})`);
+        return { error: `Row ${originalRowIndex}: Item not found - ${itemName}` };
+    }
+
+    const cleanedQty = String(qty).replace(/,/g, '');
+    const quantity = parseInt(cleanedQty, 10);
+    if (isNaN(quantity)) {
+        throw new Error(`Invalid quantity for item ${itemName}: ${qty}`);
+    }
+
+    return {
+        inventoryItem: {
+            characterId: character._id,
+            itemId: item._id,
+            characterName: character.name,
+            itemName,
+            quantity,
+            category: item.category.join(', ') || 'Uncategorized',
+            type: item.type.join(', ') || 'Unknown',
+            subtype: item.subtype || '',
+            job: character.job || '',
+            perk: character.perk || '',
+            location: character.currentVillage || character.homeVillage || '',
+            link: `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`,
+            date: new Date(),
+            obtain: 'Manual Sync',
+            synced: uuidv4()
+        },
+        updatedRowData: [
+            sheetCharacterName,
+            itemName,
+            quantity,
+            item.category.join(', ') || 'Uncategorized',
+            item.type.join(', ') || 'Unknown',
+            item.subtype || '',
+            'Manual Sync',
+            character.job || '',
+            character.perk || '',
+            character.currentVillage || character.homeVillage || '',
+            `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`,
+            formatDateTime(new Date()),
+            uuidv4()
+        ]
+    };
 }
 
 // ============================================================================
@@ -66,233 +145,145 @@ function formatDateTime(date) {
 
 // ------------------- syncInventory -------------------
 // Synchronizes the inventory of a character from a Google Sheet to the database.
-// It fetches the character, validates the sheet URL, reads data, processes rows in batches,
-// updates the database, and sends appropriate feedback messages.
-async function syncInventory(characterName, userId, interaction, totalSyncedItemsCount = 0) {
-    console.log(`syncInventory called for character: ${characterName}, user: ${userId}`);
+async function syncInventory(characterName, userId, interaction, retryCount = 0, totalSyncedItemsCount = 0) {
+    console.log(`[syncHandler.js]: 🔄 Starting sync for character: ${characterName}, user: ${userId}, retry: ${retryCount}`);
+
+    if (retryCount >= MAX_RETRIES) {
+        console.error(`[syncHandler.js]: ❌ Maximum retry attempts reached for ${characterName}`);
+        await editSyncErrorMessage(interaction, `❌ **Maximum retry attempts reached.** Please try again later or contact support if the issue persists.`);
+        return;
+    }
 
     let errors = [];
     let syncedItemsCount = 0;
     let skippedLinesCount = 0;
 
     try {
-        // ------------------- Connect to Database -------------------
+        // Connect to database and fetch character
         await connectToTinglebot();
-
-        // ------------------- Fetch Character Data -------------------
-        console.log(`Fetching character: ${characterName} for user: ${userId}`);
-        let character = await fetchCharacterByNameAndUserId(characterName, userId);
+        const character = await fetchCharacterByNameAndUserId(characterName, userId);
         if (!character) {
-            console.log(`Character not found: ${characterName}`);
+            console.log(`[syncHandler.js]: ⚠️ Character not found: ${characterName}`);
             await editCharacterNotFoundMessage(interaction, characterName);
             return;
         }
-        console.log(`Character fetched successfully: ${character.name}`);
 
-        // ------------------- Validate Google Sheets URL -------------------
+        // Validate Google Sheets URL
         const inventoryUrl = character.inventory;
-        console.log(`Validating Google Sheets URL: ${inventoryUrl}`);
         if (!isValidGoogleSheetsUrl(inventoryUrl)) {
-            console.log('Invalid Google Sheets URL.');
+            console.log(`[syncHandler.js]: ⚠️ Invalid Google Sheets URL: ${inventoryUrl}`);
             await editSyncErrorMessage(interaction, '❌ **Invalid Google Sheets URL. Please check the URL and try again.**');
             return;
         }
 
-        // ------------------- Authorize Google Sheets API & Extract Spreadsheet ID -------------------
-        console.log('Authorizing Google Sheets API...');
+        // Authorize and check permissions
         const auth = await authorizeSheets();
         const spreadsheetId = extractSpreadsheetId(inventoryUrl);
-        console.log(`Spreadsheet ID extracted: ${spreadsheetId}`);
-
-        // ------------------- Check Permissions -------------------
-        console.log('Checking Google Sheets API permissions...');
-        try {
-            await google.sheets({ version: 'v4', auth }).spreadsheets.get({
-                spreadsheetId
-            });
-        } catch (error) {
-            if (error.status === 403 || error.message.includes('does not have permission')) {
-                const serviceAccountEmail = JSON.parse(fs.readFileSync(SERVICE_ACCOUNT_PATH)).client_email;
-                console.error(`[syncHandler.js]: ⚠️ Permission error when accessing Google Sheet: ${error.message}`);
-                await editSyncErrorMessage(interaction, 
-                    `⚠️ **Permission Error:**\n` +
-                    `The service account (${serviceAccountEmail}) does not have access to this spreadsheet.\n\n` +
-                    `To fix this:\n1. Open the Google Spreadsheet\n2. Click "Share" in the top right\n3. Add ${serviceAccountEmail} as an Editor\n4. Make sure to give it at least "Editor" access`
-                );
-                return;
-            } else {
-                throw error;
-            }
+        if (!await checkGoogleSheetsPermissions(auth, spreadsheetId, interaction)) {
+            return;
         }
-        
-        console.log(`Spreadsheet ID verified successfully: ${spreadsheetId}`);
 
-        // ------------------- Retrieve Sheet ID -------------------
-        console.log('Fetching sheet ID for "loggedInventory"...');
-        let sheetId;
-        try {
-            sheetId = await getSheetIdByTitle(auth, spreadsheetId, 'loggedInventory');
-            if (sheetId === undefined || sheetId === null) {
-                console.log("Sheet 'loggedInventory' not found.");
-                await editSyncErrorMessage(interaction, `❌ **Sheet 'loggedInventory' not found in the spreadsheet.**`);
-                return;
-            }
-        } catch (err) {
-            if (err.code === 403 || err.message.includes("permission") || err.message.includes("Editor access")) {
-                const serviceAccountEmail = JSON.parse(fs.readFileSync(SERVICE_ACCOUNT_PATH)).client_email;
-                console.error(`[syncHandler.js]: ❌ Permission error when accessing Google Sheet: ${err.message}`);
-                await editSyncErrorMessage(interaction, 
-                    `❌ **Permission Error:**\n` +
-                    `The bot cannot access your Google Sheet. Please follow these steps:\n\n` +
-                    `1. Open your Google Sheet\n` +
-                    `2. Click "Share" in the top right\n` +
-                    `3. Add this email as an Editor:\n` +
-                    `📧 \`${serviceAccountEmail}\`\n\n` +
-                    `After sharing, try the sync command again.`
-                );
-                return;
-            } else {
-                throw err;
-            }
+        // Get sheet ID and read data
+        const sheetId = await getSheetIdByTitle(auth, spreadsheetId, 'loggedInventory');
+        if (!sheetId) {
+            console.log(`[syncHandler.js]: ⚠️ Sheet 'loggedInventory' not found`);
+            await editSyncErrorMessage(interaction, `❌ **Sheet 'loggedInventory' not found in the spreadsheet.**`);
+            return;
         }
-        
-        console.log(`Sheet ID fetched successfully: ${sheetId}`);
 
-        // ------------------- Read Data from Google Sheets -------------------
-        console.log('Reading data from Google Sheets...');
-        const range = 'loggedInventory!A2:M';
-        const sheetData = await readSheetData(auth, spreadsheetId, range);
-        if (!sheetData || sheetData.length === 0) {
-            console.log('No data found in the Google Sheet.');
+        const sheetData = await readSheetData(auth, spreadsheetId, 'loggedInventory!A2:M');
+        if (!sheetData?.length) {
+            console.log(`[syncHandler.js]: ⚠️ No data found in sheet`);
             await editSyncErrorMessage(interaction, `❌ **No data found in the Google Sheet. Please ensure the sheet is correctly set up.**`);
             return;
         }
 
-        // ------------------- Map and Filter Sheet Data -------------------
-        // Map each row to include its original row index (accounting for headers) and filter rows by character name.
+        // Process data
         const mappedData = sheetData.map((row, index) => ({
             row,
-            originalRowIndex: index + 2 // Adding 2 because header row (A1:M1) is skipped
+            originalRowIndex: index + 2
         }));
 
         const filteredData = mappedData.filter(data => data.row[0] === character.name && data.row[1]);
-        console.log(`[syncHandler.js]: 📊 Found ${filteredData.length} items to sync`);
-
-        if (filteredData.length === 0) {
-            console.log('[syncHandler.js]: ⚠️ No matching data found for character in the Google Sheet');
+        if (!filteredData.length) {
+            console.log(`[syncHandler.js]: ⚠️ No matching data for ${character.name}`);
             await editSyncErrorMessage(interaction, `❌ **No matching data found for ${character.name} in the Google Sheet.**\n\nYou must have at least 1 item! If this is a new character, please add their starter gear.`);
             return;
         }
 
-        // ------------------- Process Rows in Batches -------------------
-        console.log(`[syncHandler.js]: 🔄 Starting sync for ${character.name}`);
+        // Process items in batches
         let batchRequests = [];
-
-        console.log('[syncHandler.js]: 📦 Processing items in batches...');
         for (let i = 0; i < filteredData.length; i += BATCH_SIZE) {
             const batch = filteredData.slice(i, i + BATCH_SIZE);
-            console.log(`[syncHandler.js]: 📥 Processing batch ${Math.floor(i / BATCH_SIZE) + 1}`);
+            console.log(`[syncHandler.js]: 📦 Processing batch ${Math.floor(i / BATCH_SIZE) + 1}`);
 
-            for (let j = 0; j < batch.length; j++) {
-                const { row, originalRowIndex } = batch[j];
-                const [sheetCharacterName, itemName, qty, , , , , , , , , , confirmedSync] = row;
-
-                // Skip rows that have been confirmed
-                if (confirmedSync) continue;
-
+            for (const { row, originalRowIndex } of batch) {
                 try {
-                    const item = await ItemModel.findOne({ itemName });
-                    if (!item) {
-                        console.warn(`[syncHandler.js]: ⚠️ Skipping unknown item: ${itemName} (row ${originalRowIndex})`);
-                        errors.push(`Row ${originalRowIndex}: Item not found - ${itemName}`);
+                    const result = await processInventoryItem(row, originalRowIndex, character, interaction);
+                    if (!result) continue;
+                    if (result.error) {
+                        errors.push(result.error);
                         skippedLinesCount++;
                         continue;
                     }
 
-                    const cleanedQty = String(qty).replace(/,/g, ''); // Remove commas
-                    const quantity = parseInt(cleanedQty, 10);
-                    if (isNaN(quantity)) throw new Error(`Invalid quantity for item ${itemName}: ${qty}`);
-
-                    const inventoryItem = {
-                        characterId: character._id,
-                        itemId: item._id,
-                        characterName,
-                        itemName,
-                        quantity,
-                        category: item.category.join(', ') || 'Uncategorized',
-                        type: item.type.join(', ') || 'Unknown',
-                        subtype: item.subtype || '',
-                        job: character.job || '',
-                        perk: character.perk || '',
-                        location: character.currentVillage || character.homeVillage || '',
-                        link: `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`,
-                        date: new Date(),
-                        obtain: 'Manual Sync',
-                        synced: uuidv4()
-                    };
-
-                    console.log(`Saving item to database: ${itemName}, Quantity: ${quantity}`);
+                    const { inventoryItem, updatedRowData } = result;
                     await syncToInventoryDatabase(character, inventoryItem, interaction);
                     syncedItemsCount++;
 
-                    // Prepare updated row data for batch update
-                    const updatedRowData = [
-                        sheetCharacterName,
-                        itemName,
-                        quantity,
-                        inventoryItem.category,
-                        inventoryItem.type,
-                        inventoryItem.subtype,
-                        inventoryItem.obtain,
-                        inventoryItem.job,
-                        inventoryItem.perk,
-                        inventoryItem.location,
-                        inventoryItem.link,
-                        formatDateTime(inventoryItem.date),
-                        inventoryItem.synced
-                    ];
-
-                    // Determine the update range based on the original row index
-                    const updateRange = `loggedInventory!A${originalRowIndex}:M${originalRowIndex}`;
-                    batchRequests.push({ range: updateRange, values: [updatedRowData], sheetId });
+                    batchRequests.push({
+                        range: `loggedInventory!A${originalRowIndex}:M${originalRowIndex}`,
+                        values: [updatedRowData],
+                        sheetId
+                    });
                 } catch (error) {
-                    // If it's a permission error, throw it immediately to stop processing
-                    if (error.message.includes('Permission Error')) {
-                        throw error;
-                    }
-                    console.error(`[syncHandler.js]: syncInventory: Error processing row ${originalRowIndex}: ${error.message}`);
+                    handleError(error, 'syncHandler.js');
+                    console.error(`[syncHandler.js]: ❌ Error processing row ${originalRowIndex}: ${error.message}`);
                     errors.push(`Row ${originalRowIndex}: ${error.message}`);
                     skippedLinesCount++;
                 }
             }
 
-            // ------------------- Write Batch Data -------------------
-            if (batchRequests.length > 0) {
-                console.log('Writing batch data to Google Sheets...');
+            if (batchRequests.length) {
                 await writeBatchData(auth, spreadsheetId, batchRequests);
                 batchRequests = [];
             }
 
-            console.log('Pausing for batch delay...');
             await new Promise(resolve => setTimeout(resolve, BATCH_DELAY));
         }
 
-        console.log(`Total synced items: ${syncedItemsCount}, Skipped lines: ${skippedLinesCount}`);
+        // Update character sync status
+        character.inventorySynced = true;
+        await character.save();
+        await removeInitialItemIfSynced(character._id);
+
+        // Send completion message
         totalSyncedItemsCount += syncedItemsCount;
         const now = formatDateTime(new Date());
+        await editSyncMessage(
+            interaction,
+            character.name,
+            totalSyncedItemsCount,
+            errors.map(error => ({
+                reason: error.split(': ')[1],
+                itemName: error.includes('Item with name') ? error.split('Item with name ')[1].split(' not found')[0] : 'Unknown'
+            })),
+            now,
+            character.inventory
+        );
 
-        console.log(`Sync completed for character: ${character.name} at ${now}`);
+        console.log(`[syncHandler.js]: ✅ Sync completed for ${character.name} at ${now}`);
+    } catch (error) {
+        handleError(error, 'syncHandler.js');
+        console.error(`[syncHandler.js]: ❌ Sync failed: ${error.message}`);
+        await editSyncErrorMessage(interaction, `❌ **An error occurred during sync:** ${error.message}`);
+    }
+}
 
-        // ------------------- Update Character Sync Status -------------------
-        try {
-            console.log('Updating inventorySynced status...');
-            character.inventorySynced = true;
-            await character.save();
-            
-            // Remove the initial item if necessary
-            await removeInitialItemIfSynced(character._id);
-            console.log('Initial Item removal process completed.');
-            console.log('inventorySynced status updated successfully.');
-        } catch (updateError) {
-            handleError(updateError, 'syncHandler.js');
-            console.error(`
+// ============================================================================
+// Exports
+// ============================================================================
+
+module.exports = {
+    syncInventory
+};
