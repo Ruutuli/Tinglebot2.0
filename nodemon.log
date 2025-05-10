@@ -77,6 +77,10 @@
 ⚠️ Command gear has autocomplete options but no autocomplete handler!
 ✅ Loaded command: gear from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\inventory\gear.js
   - Option "charactername" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+✅ Loaded command: inventory from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\inventory\inventory.js
+  - Option "charactername" has autocomplete enabled
   - Option "itemname" has autocomplete enabled
   - Option "jobname" has autocomplete enabled
 ⚠️ Command item has autocomplete options but no autocomplete handler!
@@ -86,21 +90,10 @@
   - Option "appraiser" has autocomplete enabled
 ⚠️ Command relic has autocomplete options but no autocomplete handler!
 ✅ Loaded command: relic from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\inventory\relic.js
-❌ Error loading command from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\inventory\spiritOrb.js: C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\inventory\spiritOrb.js:144
-        'The statue's eyes briefly glow, acknowledging your sacrifice.'
-                    ^
-
-SyntaxError: Unexpected identifier 's'
-    at wrapSafe (node:internal/modules/cjs/loader:1281:20)
-    at Module._compile (node:internal/modules/cjs/loader:1321:27)
-    at Module._extensions..js (node:internal/modules/cjs/loader:1416:10)
-    at Module.load (node:internal/modules/cjs/loader:1208:32)
-    at Module._load (node:internal/modules/cjs/loader:1024:12)
-    at Module.require (node:internal/modules/cjs/loader:1233:19)
-    at require (node:internal/modules/helpers:179:18)
-    at Object.<anonymous> (C:\Users\Ruu\Desktop\Tinglebot 2.0\scripts\deploy-commands.js:29:25)
-    at Module._compile (node:internal/modules/cjs/loader:1358:14)
-    at Module._extensions..js (node:internal/modules/cjs/loader:1416:10)
+  - Option "character" has autocomplete enabled
+  - Option "character" has autocomplete enabled
+⚠️ Command spiritorbs has autocomplete options but no autocomplete handler!
+✅ Loaded command: spiritorbs from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\inventory\spiritOrb.js
   - Option "charactername" has autocomplete enabled
 ✅ Loaded command: syncinventory from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\inventory\syncInventory.js
   - Option "charactername" has autocomplete enabled
@@ -199,8 +192,12 @@ SyntaxError: Unexpected identifier 's'
   - Option "itemname" has autocomplete enabled
 ⚠️ Command village has autocomplete options but no autocomplete handler!
 ✅ Loaded command: village from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\world\village.js
-🔄 Started refreshing 34 guild (/) commands for guild ID: 1305484048063529002
-(node:45636) Warning: Accessing non-existent property 'connectToInventories' of module exports inside circular dependency
+🔄 Started refreshing 36 guild (/) commands for guild ID: 1305484048063529002
+(node:29908) Warning: Accessing non-existent property 'connectToInventories' of module exports inside circular dependency
 (Use `node --trace-warnings ...` to show where the warning was created)
-(node:45636) Warning: Accessing non-existent property 'fetchCharacterById' of module exports inside circular dependency
-(node:45636) Warning: Accessing non-existent property 'updateCharacterById' of module exports inside circular dependency
+(node:29908) Warning: Accessing non-existent property 'fetchCharacterById' of module exports inside circular dependency
+(node:29908) Warning: Accessing non-existent property 'updateCharacterById' of module exports inside circular dependency
+✅ Successfully reloaded application (/) commands for guild ID: 1305484048063529002.
+🔄 Started refreshing 36 guild (/) commands for guild ID: 603960955839447050
+✅ Successfully reloaded application (/) commands for guild ID: 603960955839447050.
+✅ Successfully reloaded all guild (/) commands.
