@@ -2,8 +2,7 @@ const { v4: uuidv4 } = require('uuid');
 const { getRandomMount, getRandomEnvironment, getMountRarity, getMountStamina } = require('./mountModule');
 const { storeEncounter } = require('./mountModule');
 const { handleError } = require('../utils/globalErrorHandler');
-const fs = require('fs');
-const path = require('path');
+const TempData = require('../models/TempDataModel');
 
 // Message activity tracking
 const messageActivityMap = new Map(); // Map to store message activity per channel
@@ -14,43 +13,49 @@ const MESSAGE_COOLDOWN = 5 * 60 * 1000; // 5 minutes cooldown between message co
 const lastMessageTimeMap = new Map(); // Map to store last message time per channel
 
 // Monthly encounter tracking
-const MONTHLY_DATA_PATH = path.join(__dirname, '..', 'data', 'monthly_encounters.json');
 const MONTHLY_RESET_KEY = 'monthly_reset'; // Key for monthly reset check
 
-// Load monthly encounter data from file
-function loadMonthlyEncounterData() {
+// Load monthly encounter data from MongoDB
+async function loadMonthlyEncounterData() {
     try {
-        if (fs.existsSync(MONTHLY_DATA_PATH)) {
-            const data = JSON.parse(fs.readFileSync(MONTHLY_DATA_PATH, 'utf8'));
-            return new Map(Object.entries(data));
+        const monthlyData = await TempData.findAllByType('monthly');
+        const data = {};
+        for (const entry of monthlyData) {
+            data[entry.key] = entry.data;
         }
+        return new Map(Object.entries(data));
     } catch (error) {
         console.error('[randomMountEncounterModule]: Error loading monthly encounter data:', error);
+        return new Map();
     }
-    return new Map();
 }
 
-// Save monthly encounter data to file
-function saveMonthlyEncounterData(monthlyEncounterMap) {
+// Save monthly encounter data to MongoDB
+async function saveMonthlyEncounterData(monthlyEncounterMap) {
     try {
-        const data = Object.fromEntries(monthlyEncounterMap);
-        fs.writeFileSync(MONTHLY_DATA_PATH, JSON.stringify(data, null, 2));
+        for (const [key, value] of monthlyEncounterMap.entries()) {
+            await TempData.findOneAndUpdate(
+                { type: 'monthly', key },
+                { data: value },
+                { upsert: true, new: true }
+            );
+        }
     } catch (error) {
         console.error('[randomMountEncounterModule]: Error saving monthly encounter data:', error);
     }
 }
 
 // Initialize monthly tracking
-function initializeMonthlyTracking() {
+async function initializeMonthlyTracking() {
     const now = new Date();
-    const monthlyEncounterMap = loadMonthlyEncounterData();
+    const monthlyEncounterMap = await loadMonthlyEncounterData();
     const lastReset = monthlyEncounterMap.get(MONTHLY_RESET_KEY) ? new Date(monthlyEncounterMap.get(MONTHLY_RESET_KEY)) : new Date(0);
     
     // Check if we need to reset monthly encounters
     if (now.getMonth() !== lastReset.getMonth() || now.getFullYear() !== lastReset.getFullYear()) {
         monthlyEncounterMap.clear();
         monthlyEncounterMap.set(MONTHLY_RESET_KEY, now.toISOString());
-        saveMonthlyEncounterData(monthlyEncounterMap);
+        await saveMonthlyEncounterData(monthlyEncounterMap);
     }
     
     return monthlyEncounterMap;
@@ -86,7 +91,7 @@ function trackMessageActivity(channelId) {
 }
 
 // Check if channel needs monthly encounter
-function needsMonthlyEncounter(channelId) {
+async function needsMonthlyEncounter(channelId) {
     const now = new Date();
     const village = getVillageFromChannelId(channelId);
     
@@ -95,7 +100,7 @@ function needsMonthlyEncounter(channelId) {
         return false;
     }
     
-    const monthlyEncounterMap = loadMonthlyEncounterData();
+    const monthlyEncounterMap = await loadMonthlyEncounterData();
     const villageKey = `village_${village.toLowerCase()}`;
     const lastMonthlyEncounter = monthlyEncounterMap.get(villageKey);
     
@@ -110,9 +115,9 @@ function needsMonthlyEncounter(channelId) {
 }
 
 // Create a random mount encounter
-function createRandomMountEncounter(channelId, isMonthly = false) {
+async function createRandomMountEncounter(channelId, isMonthly = false) {
     try {
-        const monthlyEncounterMap = initializeMonthlyTracking();
+        const monthlyEncounterMap = await initializeMonthlyTracking();
         const now = new Date();
         
         // For monthly encounters, check if this village already had one this month
@@ -137,7 +142,7 @@ function createRandomMountEncounter(channelId, isMonthly = false) {
             
             // Mark this village as having had its monthly encounter
             monthlyEncounterMap.set(villageKey, now.toISOString());
-            saveMonthlyEncounterData(monthlyEncounterMap);
+            await saveMonthlyEncounterData(monthlyEncounterMap);
         }
         
         // Generate random mount data
@@ -161,7 +166,7 @@ function createRandomMountEncounter(channelId, isMonthly = false) {
         };
         
         // Store the encounter
-        storeEncounter(encounterId, encounter);
+        await storeEncounter(encounterId, encounter);
         
         return encounter;
     } catch (error) {
