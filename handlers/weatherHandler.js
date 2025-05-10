@@ -319,21 +319,6 @@ function simulateWeightedWeather(village, season) {
     const precipitationObj = findWeatherEmoji('precipitations', precipitationLabel);
     const specialObj = specialLabel ? findWeatherEmoji('specials', specialLabel) : null;
 
-    // ------------------- Logging -------------------
-    console.log(`[WeatherSim] ${village} (${season})`);
-    console.log(`  Temperature: ${temperatureLabel} (${temperatureProbability.toFixed(1)}%)`);
-    console.log(`  Wind: ${windLabel} (${windProbability.toFixed(1)}%)`);
-    console.log(`  Precipitation: ${precipitationLabel} (${precipitationProbability.toFixed(1)}%)`);
-    if (specialConsidered) {
-      if (specialLabel) {
-        console.log(`  Special: ${specialLabel} (${specialProbability.toFixed(1)}%)`);
-      } else {
-        console.log(`  Special: None selected. Reason: ${specialReason}`);
-      }
-    } else {
-      console.log(`  Special: Not considered. Reason: ${specialReason}`);
-    }
-
     // ------------------- Update History -------------------
     updateWeatherHistory(village, {
       temperature: { label: temperatureLabel },

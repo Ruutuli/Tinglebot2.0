@@ -12,39 +12,39 @@ const { convertToHyruleanDate } = require('../modules/calendarModule');
 
 // ---- Constants ----
 const VILLAGE_COLORS = {
-  Rudania: 0xFF6B6B,
-  Inariko: 0x4ECDC4,
-  Vhintl: 0x45B7D1
+  Rudania: 0xd7342a,
+  Inariko: 0x277ecd,
+  Vhintl: 0x25c059
 };
 
 const SEASON_ICONS = {
-  spring: '.weather/assets/seasons/spring.png',
-  summer: '.weather/assets/seasons/summer.png',
-  fall: '.weather/assets/seasons/fall.png',
-  winter: '.weather/assets/seasons/winter.png'
+  spring: path.join(__dirname, '..', 'assets', 'seasons', 'spring.png'),
+  summer: path.join(__dirname, '..', 'assets', 'seasons', 'summer.png'),
+  fall: path.join(__dirname, '..', 'assets', 'seasons', 'fall.png'),
+  winter: path.join(__dirname, '..', 'assets', 'seasons', 'winter.png')
 };
 
 const VILLAGE_ICONS = {
-  Rudania: '.weather/assets/icons/[RotW] village crest_rudania_.png',
-  Inariko: '.weather/assets/icons/[RotW] village crest_inariko_.png',
-  Vhintl: '.weather/assets/icons/[RotW] village crest_vhintl_.png'
+  Rudania: path.join(__dirname, '..', 'assets', 'icons', '[RotW] village crest_rudania_.png'),
+  Inariko: path.join(__dirname, '..', 'assets', 'icons', '[RotW] village crest_inariko_.png'),
+  Vhintl: path.join(__dirname, '..', 'assets', 'icons', '[RotW] village crest_vhintl_.png')
 };
 
 const BANNER_PATHS = {
   Rudania: [
-    path.join(__dirname, 'assets', 'banners', 'Rudania1.png'),
-    path.join(__dirname, 'assets', 'banners', 'Rudania2.png'),
-    path.join(__dirname, 'assets', 'banners', 'Rudania3.png')
+    path.join(__dirname, '..', 'assets', 'banners', 'Rudania1.png'),
+    path.join(__dirname, '..', 'assets', 'banners', 'Rudania2.png'),
+    path.join(__dirname, '..', 'assets', 'banners', 'Rudania3.png')
   ],
   Inariko: [
-    path.join(__dirname, 'assets', 'banners', 'Inariko1.png'),
-    path.join(__dirname, 'assets', 'banners', 'Inariko2.png'),
-    path.join(__dirname, 'assets', 'banners', 'Inariko3.png')
+    path.join(__dirname, '..', 'assets', 'banners', 'Inariko1.png'),
+    path.join(__dirname, '..', 'assets', 'banners', 'Inariko2.png'),
+    path.join(__dirname, '..', 'assets', 'banners', 'Inariko3.png')
   ],
   Vhintl: [
-    path.join(__dirname, 'assets', 'banners', 'Vhintl1.png'),
-    path.join(__dirname, 'assets', 'banners', 'Vhintl2.png'),
-    path.join(__dirname, 'assets', 'banners', 'Vhintl3.png')
+    path.join(__dirname, '..', 'assets', 'banners', 'Vhintl1.png'),
+    path.join(__dirname, '..', 'assets', 'banners', 'Vhintl2.png'),
+    path.join(__dirname, '..', 'assets', 'banners', 'Vhintl3.png')
   ]
 };
 
