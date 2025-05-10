@@ -261,15 +261,28 @@ module.exports = {
        console.error(
          `[Loot Command]: ${character.name} already has job "${job}". Skipping voucher use.`
        );
-       // No activation needed
+       // No activation needed, but check if job is valid for looting
+       const jobPerk = getJobPerk(job);
+       if (!jobPerk || !jobPerk.perks.includes("LOOTING")) {
+         const msg = getJobVoucherErrorMessage('MISSING_SKILLS', {
+           characterName: character.name,
+           jobName: job
+         }).message;
+         await interaction.editReply({
+           content: msg,
+           ephemeral: true,
+         });
+         return;
+       }
      } else {
        if (character.jobVoucherJob === null) {
          console.error(
            `[Loot Command]: Job voucher is unrestricted. Proceeding with job: "${job}".`
          );
+         // No reply needed, continue
        } else {
          await interaction.editReply({
-           content: voucherCheck.message,
+           content: voucherCheck.message || '❌ Invalid job voucher.',
            ephemeral: true,
          });
          return;
@@ -279,13 +292,13 @@ module.exports = {
      console.error(`[Loot Command]: Activating job voucher for ${character.name}.`);
      const { success: itemSuccess, item: jobVoucherItem, message: itemError } = await fetchJobVoucherItem();
      if (!itemSuccess) {
-       await interaction.editReply({ content: itemError, ephemeral: true });
+       await interaction.editReply({ content: itemError || '❌ Could not fetch job voucher item.', ephemeral: true });
        return;
      }
      const activationResult = await activateJobVoucher(character, job, jobVoucherItem, 1, interaction);
      if (!activationResult.success) {
        await interaction.editReply({
-         content: activationResult.message,
+         content: activationResult.message || '❌ Failed to activate job voucher.',
          ephemeral: true,
        });
        return;
