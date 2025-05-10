@@ -190,7 +190,6 @@ async function getMonsterEncounterFromList(monsters) {
   try {
     const encounterType = getRandomEncounter();
     if (encounterType === 'No Encounter') {
-      console.log('[rngModule.js]: logs No encounter triggered.');
       return { encounter: 'No Encounter', monsters: [] };
     }
 
@@ -200,12 +199,10 @@ async function getMonsterEncounterFromList(monsters) {
     // Fallback: if no monsters available for the selected tier, try lower tiers.
     while (filteredMonsters.length === 0 && tier > 1) {
       tier--;
-      console.log(`[rngModule.js]: logs No monsters found for Tier ${tier + 1}. Trying Tier ${tier}...`);
       filteredMonsters = monsters.filter(monster => monster.tier === tier);
     }
 
     if (filteredMonsters.length === 0) {
-      console.log('[rngModule.js]: logs No monsters available for any tier.');
       return { encounter: 'No Encounter', monsters: [] };
     }
 
@@ -213,8 +210,7 @@ async function getMonsterEncounterFromList(monsters) {
     return { encounter: `Tier ${tier}`, monsters: [selectedMonster] };
   } catch (error) {
     handleError(error, 'rngModule.js');
-
-    console.error('[rngModule.js]: logs ENCOUNTER ERROR', error);
+    console.error('[rngModule.js]: ❌ Encounter error:', error.message);
     return { encounter: 'Error', monsters: [] };
   }
 }
@@ -312,34 +308,29 @@ function calculateWeightedDamage(tier) {
 // and updates character state accordingly.
 async function attemptFlee(character, monster) {
   try {
-    console.log(`[rngModule.js]: logs [FLEE ATTEMPT] Starting flee attempt for character: ${character.name}`);
-    console.log(`[rngModule.js]: logs [FLEE ATTEMPT] Initial Stamina: ${character.currentStamina}`);
+    console.log(`[rngModule.js]: 🎲 Flee attempt for ${character.name}`);
     
-    const baseFleeChance = 0.5; // Base 50% chance
-    const bonusFleeChance = character.failedFleeAttempts * 0.05; // 5% bonus per failed attempt
+    const baseFleeChance = 0.5;
+    const bonusFleeChance = character.failedFleeAttempts * 0.05;
     const fleeChance = Math.min(baseFleeChance + bonusFleeChance, 0.95);
     const fleeRoll = Math.random();
-    console.log(`[rngModule.js]: logs [FLEE ATTEMPT] Flee Chance: ${fleeChance * 100}%, Roll: ${fleeRoll}`);
 
     if (fleeRoll < fleeChance) {
-      console.log("[rngModule.js]: logs [FLEE ATTEMPT] Flee was successful!");
+      console.log(`[rngModule.js]: ✅ ${character.name} successfully fled`);
       character.failedFleeAttempts = 0;
       await character.save();
       return { success: true, message: "You successfully fled!" };
     }
 
-    console.log("[rngModule.js]: logs [FLEE ATTEMPT] Flee failed! Monster will attempt to attack...");
     character.failedFleeAttempts += 1;
     await character.save();
 
     const monsterDamage = calculateWeightedDamage(monster.tier);
-    console.log(`[rngModule.js]: logs [FLEE ATTEMPT] Weighted damage calculated for Tier ${monster.tier}: ${monsterDamage} hearts.`);
-    
     await useHearts(character._id, monsterDamage);
     character.currentHearts -= monsterDamage;
     
     if (character.currentHearts <= 0) {
-      console.log(`[rngModule.js]: logs [FLEE ATTEMPT] Character is KO'd after taking ${monsterDamage} hearts of damage.`);
+      console.log(`[rngModule.js]: 💀 ${character.name} KO'd during flee attempt`);
       await handleKO(character._id);
       return {
         success: false,
@@ -357,8 +348,7 @@ async function attemptFlee(character, monster) {
     };
   } catch (error) {
     handleError(error, 'rngModule.js');
-
-    console.error("[rngModule.js]: logs [FLEE ATTEMPT ERROR] An error occurred during the flee attempt:", error);
+    console.error(`[rngModule.js]: ❌ Flee attempt failed:`, error.message);
     throw error;
   }
 }

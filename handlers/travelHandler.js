@@ -56,179 +56,176 @@ const Character = require('../models/CharacterModel');
 async function handleRecover(interaction, character, encounterMessage, travelLog) {
   try {
     travelLog = Array.isArray(travelLog) ? travelLog : [];
-      const jobPerk = getJobPerk(character.job);
-      character.perk = jobPerk?.perks[0];
-      console.log(`[travelHandler.js]: Recover Hearts → ${character.name} (Perk: ${character.perk})`);
+    const jobPerk = getJobPerk(character.job);
+    character.perk = jobPerk?.perks[0];
+    console.log(`[travelHandler.js]: 💖 ${character.name} attempting recovery`);
   
-      // KO check
-      if (character.ko) {
-        const decision = `❌ ${character.name} is KO'd and cannot recover.`;
-        const description = 
-          `🌸 It's a nice and safe day of traveling. What do you want to do next?\n> ${decision}\n\n` +
-          `**❤️ Hearts:** ${character.currentHearts}/${character.maxHearts}\n` +
-          `**🟩 Stamina:** ${character.currentStamina}/${character.maxStamina}`;
-        const embed = new EmbedBuilder(encounterMessage.embeds[0].toJSON())
-          .setDescription(description);
-        if (typeof encounterMessage?.edit === 'function') {
-  await encounterMessage.edit({ embeds: [embed], components: [] });
-}
-        travelLog.push(`recover: failed KO`);
-        return decision;
+    // KO check
+    if (character.ko) {
+      const decision = `❌ ${character.name} is KO'd and cannot recover.`;
+      const description = 
+        `🌸 It's a nice and safe day of traveling. What do you want to do next?\n> ${decision}\n\n` +
+        `**❤️ Hearts:** ${character.currentHearts}/${character.maxHearts}\n` +
+        `**🟩 Stamina:** ${character.currentStamina}/${character.maxStamina}`;
+      const embed = new EmbedBuilder(encounterMessage.embeds[0].toJSON())
+        .setDescription(description);
+      if (typeof encounterMessage?.edit === 'function') {
+        await encounterMessage.edit({ embeds: [embed], components: [] });
       }
-  
-      // Already full hearts
-      if (character.currentHearts >= character.maxHearts) {
-        const decision = `❌ ${character.name} is already at full hearts.`;
-        const description = 
-          `🌸 It's a nice and safe day of traveling. What do you want to do next?\n> ${decision}\n\n` +
-          `**❤️ Hearts:** ${character.currentHearts}/${character.maxHearts}\n` +
-          `**🟩 Stamina:** ${character.currentStamina}/${character.maxStamina}`;
-        const embed = new EmbedBuilder(encounterMessage.embeds[0].toJSON())
-          .setDescription(description);
-        if (typeof encounterMessage?.edit === 'function') {
-  await encounterMessage.edit({ embeds: [embed], components: [] });
-}
-        travelLog.push(`recover: full hearts`);
-        return decision;
-      }
-  
-      // Stamina check & perform recovery
-      let decision, outcomeMessage;
-      if (character.currentStamina >= 1 || hasPerk(character, 'DELIVERING')) {
-        if (!hasPerk(character, 'DELIVERING')) {
-          await useStamina(character._id, 1);
-          character.currentStamina -= 1;
-        }
-        await recoverHearts(character._id, 1);
-        character.currentHearts = Math.min(character.maxHearts, character.currentHearts + 1);
-        await updateCurrentHearts(character._id, character.currentHearts);
-  
-        decision = `💖 Recovered 1 heart${hasPerk(character,'DELIVERING') ? '' : ' (-1 🟩 stamina)'}.`;
-        outcomeMessage = `${character.name} recovered a heart${hasPerk(character,'DELIVERING') ? '' : ' and lost 1 🟩 stamina'}.`;
-      } else {
-        decision = `❌ Not enough stamina to recover.`;
-        outcomeMessage = `${character.name} tried to recover but lacked stamina.`;
-      }
-  
-// Update embed
-const description = 
-  `🌸 It's a nice and safe day of traveling. What do you want to do next?\n> ${decision}\n\n` +
-  `**❤️ Hearts:** ${character.currentHearts}/${character.maxHearts}\n` +
-  `**🟩 Stamina:** ${character.currentStamina}/${character.maxStamina}`;
-
-  const embed = createUpdatedTravelEmbed({
-    encounterMessage,
-    character,
-    description,
-    fields: [], // or just omit `fields` entirely if you're not adding anything else
-  });
-
-if (typeof encounterMessage?.edit === 'function') {
-  await encounterMessage.edit({ embeds: [embed], components: [] });
-}
-
-return decision;
-  
-    } catch (error) {
-      handleError(error, 'travelHandler.js (handleRecover)');
-      throw error;
+      travelLog.push(`recover: failed KO`);
+      return decision;
     }
+  
+    // Already full hearts
+    if (character.currentHearts >= character.maxHearts) {
+      const decision = `❌ ${character.name} is already at full hearts.`;
+      const description = 
+        `🌸 It's a nice and safe day of traveling. What do you want to do next?\n> ${decision}\n\n` +
+        `**❤️ Hearts:** ${character.currentHearts}/${character.maxHearts}\n` +
+        `**🟩 Stamina:** ${character.currentStamina}/${character.maxStamina}`;
+      const embed = new EmbedBuilder(encounterMessage.embeds[0].toJSON())
+        .setDescription(description);
+      if (typeof encounterMessage?.edit === 'function') {
+        await encounterMessage.edit({ embeds: [embed], components: [] });
+      }
+      travelLog.push(`recover: full hearts`);
+      return decision;
+    }
+  
+    // Stamina check & perform recovery
+    let decision, outcomeMessage;
+    if (character.currentStamina >= 1 || hasPerk(character, 'DELIVERING')) {
+      if (!hasPerk(character, 'DELIVERING')) {
+        await useStamina(character._id, 1);
+        character.currentStamina -= 1;
+      }
+      await recoverHearts(character._id, 1);
+      character.currentHearts = Math.min(character.maxHearts, character.currentHearts + 1);
+      await updateCurrentHearts(character._id, character.currentHearts);
+  
+      decision = `💖 Recovered 1 heart${hasPerk(character,'DELIVERING') ? '' : ' (-1 🟩 stamina)'}.`;
+      outcomeMessage = `${character.name} recovered a heart${hasPerk(character,'DELIVERING') ? '' : ' and lost 1 �� stamina'}.`;
+    } else {
+      decision = `❌ Not enough stamina to recover.`;
+      outcomeMessage = `${character.name} tried to recover but lacked stamina.`;
+    }
+  
+    // Update embed
+    const description = 
+      `🌸 It's a nice and safe day of traveling. What do you want to do next?\n> ${decision}\n\n` +
+      `**❤️ Hearts:** ${character.currentHearts}/${character.maxHearts}\n` +
+      `**🟩 Stamina:** ${character.currentStamina}/${character.maxStamina}`;
+
+    const embed = createUpdatedTravelEmbed({
+      encounterMessage,
+      character,
+      description,
+      fields: [], // or just omit `fields` entirely if you're not adding anything else
+    });
+
+    if (typeof encounterMessage?.edit === 'function') {
+      await encounterMessage.edit({ embeds: [embed], components: [] });
+    }
+
+    return decision;
+  
+  } catch (error) {
+    handleError(error, 'travelHandler.js (handleRecover)');
+    throw error;
+  }
+}
+  
+// ------------------- Gather Helper -------------------
+// Picks a random resource along path, updates inventory, stamina, logs outcome,
+// syncs sheet, and edits encounter embed.
+async function handleGather(interaction, character, currentPath, encounterMessage, travelLog) {
+  if (typeof currentPath !== 'string') {
+    console.error(`[handleGather]: Invalid currentPath type: ${typeof currentPath} (${currentPath})`);
+    throw new Error(`Invalid currentPath value: "${currentPath}" — expected a string like "leafDewWay".`);
   }
   
-  // ------------------- Gather Helper -------------------
-  // Picks a random resource along path, updates inventory, stamina, logs outcome,
-  // syncs sheet, and edits encounter embed.
-  async function handleGather(interaction, character, currentPath, encounterMessage, travelLog) {
-    if (typeof currentPath !== 'string') {
-      console.error(`[handleGather]: Invalid currentPath type: ${typeof currentPath} (${currentPath})`);
-      throw new Error(`Invalid currentPath value: "${currentPath}" — expected a string like "leafDewWay".`);
+  try {
+    travelLog = Array.isArray(travelLog) ? travelLog : [];
+    const jobPerk = getJobPerk(character.job);
+    character.perk = jobPerk?.perks[0];
+    console.log(`[travelHandler.js]: 📦 ${character.name} gathering on ${currentPath}`);
+
+    const items = await fetchAllItems();
+    const available = items.filter(i => i[currentPath] === true);
+    
+    if (!available.length) {
+      console.warn(`[travelHandler.js]: ⚠️ No items available for path "${currentPath}"`);
     }
     
-    try {
-      travelLog = Array.isArray(travelLog) ? travelLog : [];
-      const jobPerk = getJobPerk(character.job);
-      character.perk = jobPerk?.perks[0];
-      console.log(`[travelHandler.js]: Gather → ${character.name} (Path Key: "${currentPath}", Type: ${typeof currentPath})`);
+    let decision, outcomeMessage;
 
-      const items = await fetchAllItems();
-      const available = items.filter(i => i[currentPath] === true);
-      
-      if (!available.length) {
-        console.warn(`[handleGather]: No items available for path "${currentPath}". Check database item path keys.`);
-        console.warn(`Fetched ${items.length} total items. First few:`, items.slice(0, 5).map(i => i.itemName));
+    if (!available.length) {
+      decision = `❌ No resources to gather.`;
+    } else {
+      const weighted = createWeightedItemList(available);
+      const chosen = weighted[Math.floor(Math.random() * weighted.length)];
+      await addItemInventoryDatabase(
+        character._id,
+        chosen.itemName || chosen.type.join(', '),
+        chosen.quantity || 1,
+        chosen.category.join(', '),
+        chosen.type.join(', '),
+        interaction
+      );
+      outcomeMessage = `Gathered ${chosen.quantity||1}× ${chosen.itemName||chosen.type.join(', ')}.`;
 
-      }
-      
-      let decision, outcomeMessage;
-  
-      if (!available.length) {
-        decision = `❌ No resources to gather.`;
-      } else {
-        const weighted = createWeightedItemList(available);
-        const chosen = weighted[Math.floor(Math.random() * weighted.length)];
-        await addItemInventoryDatabase(
-          character._id,
-          chosen.itemName || chosen.type.join(', '),
-          chosen.quantity || 1,
+      // Sheet sync
+      if (character.inventoryLink && isValidGoogleSheetsUrl(character.inventoryLink)) {
+        const sheetId = extractSpreadsheetId(character.inventoryLink);
+        const auth = await authorizeSheets();
+        const range = 'loggedInventory!A2:M';
+        const values = [[
+          character.name,
           chosen.category.join(', '),
           chosen.type.join(', '),
-          interaction
-        );
-        outcomeMessage = `Gathered ${chosen.quantity||1}× ${chosen.itemName||chosen.type.join(', ')}.`;
-  
-        // Sheet sync
-        if (character.inventoryLink && isValidGoogleSheetsUrl(character.inventoryLink)) {
-          const sheetId = extractSpreadsheetId(character.inventoryLink);
-          const auth = await authorizeSheets();
-          const range = 'loggedInventory!A2:M';
-          const values = [[
-            character.name,
-            chosen.category.join(', '),
-            chosen.type.join(', '),
-            `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`,
-            new Date().toLocaleString('en-US',{timeZone:'America/New_York'}),
-            uuidv4()
-          ]];
-          await safeAppendDataToSheet(sheetId, auth, range, values);
-        }
-  
-        // Deduct stamina
-        if (!hasPerk(character, 'DELIVERING')) {
-          await useStamina(character._id, 1);
-          character.currentStamina = Math.max(0, character.currentStamina - 1);
-          outcomeMessage += ' (-1 🟩 stamina)';
-        }        
-        decision = `🌱 ${outcomeMessage}`;
+          `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`,
+          new Date().toLocaleString('en-US',{timeZone:'America/New_York'}),
+          uuidv4()
+        ]];
+        await safeAppendDataToSheet(sheetId, auth, range, values);
       }
-  
-// Update embed
-const description = 
-  `🌸 It's a nice and safe day of traveling. What do you want to do next?\n> ${decision}\n\n` +
-  `**❤️ Hearts:** ${character.currentHearts}/${character.maxHearts}\n` +
-  `**🟩 Stamina:** ${character.currentStamina}/${character.maxStamina}`;
 
-  const embed = createUpdatedTravelEmbed({
-    encounterMessage,
-    character,
-    description,
-    fields: [{ name: '🔹 __Outcome__', value: outcomeMessage || 'No resources found', inline: false }],
-  });
-  
-
-if (typeof encounterMessage?.edit === 'function') {
-  await encounterMessage.edit({ embeds: [embed], components: [] });
-}
-
-return decision;
-
-  
-    } catch (error) {
-      handleError(error, 'travelHandler.js (handleGather)');
-      throw error;
+      // Deduct stamina
+      if (!hasPerk(character, 'DELIVERING')) {
+        await useStamina(character._id, 1);
+        character.currentStamina = Math.max(0, character.currentStamina - 1);
+        outcomeMessage += ' (-1 �� stamina)';
+      }        
+      decision = `🌱 ${outcomeMessage}`;
     }
+
+    // Update embed
+    const description = 
+      `🌸 It's a nice and safe day of traveling. What do you want to do next?\n> ${decision}\n\n` +
+      `**❤️ Hearts:** ${character.currentHearts}/${character.maxHearts}\n` +
+      `**🟩 Stamina:** ${character.currentStamina}/${character.maxStamina}`;
+
+    const embed = createUpdatedTravelEmbed({
+      encounterMessage,
+      character,
+      description,
+      fields: [{ name: '🔹 __Outcome__', value: outcomeMessage || 'No resources found', inline: false }],
+    });
+    
+
+    if (typeof encounterMessage?.edit === 'function') {
+      await encounterMessage.edit({ embeds: [embed], components: [] });
+    }
+
+    return decision;
+
+  } catch (error) {
+    handleError(error, 'travelHandler.js (handleGather)');
+    throw error;
   }
+}
   
-  // ------------------- Fight Helper -------------------
+// ------------------- Fight Helper -------------------
 // Resolves combat, handles KO relocation, loot (incl. Chuchu logic),
 // sheet sync, stamina, updates embed fields & footer, logs outcomes.
 async function handleFight(interaction, character, encounterMessage, monster, travelLog) {
@@ -236,8 +233,7 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
     travelLog = Array.isArray(travelLog) ? travelLog : [];
     const jobPerk = getJobPerk(character.job);
     character.perk = jobPerk?.perks[0];
-
-    console.log(`[travelHandler.js]: Fight → ${character.name} vs ${monster.name}`);
+    console.log(`[travelHandler.js]: ⚔️ ${character.name} fighting ${monster.name}`);
 
     if (!monster || typeof monster.tier === 'undefined') {
       throw new Error(`Invalid monster passed to handleFight: ${JSON.stringify(monster)}`);
@@ -369,7 +365,7 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
   
       const jobPerk = getJobPerk(character.job);
       character.perk = jobPerk?.perks[0];
-      console.log(`[travelHandler.js]: Flee → ${character.name} from ${monster.name}`);
+      console.log(`[travelHandler.js]: 🏃 ${character.name} attempting to flee from ${monster.name}`);
   
   
       const result = await attemptFlee(character, monster);
@@ -465,7 +461,7 @@ async function handleDoNothing(interaction, character, encounterMessage, travelL
     travelLog = Array.isArray(travelLog) ? travelLog : [];
     const jobPerk = getJobPerk(character.job);
     character.perk = jobPerk?.perks[0];
-    console.log(`[travelHandler.js]: Do Nothing → ${character.name}`);
+    console.log(`[travelHandler.js]: 🔄 ${character.name} resting`);
 
     const flavorTexts = [
       `${character.name} lay under a blanket of stars. 🌌`,
