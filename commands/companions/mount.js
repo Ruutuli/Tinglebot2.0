@@ -9,6 +9,7 @@ const { getEncounterById } = require('../../modules/mountModule'); // Module to 
 const { proceedWithRoll,handleViewMount  } = require('../../handlers/mountComponentHandler'); // Handler to proceed with rolling logic
 const { handleMountAutocomplete } = require('../../handlers/autocompleteHandler'); // Handler for character name autocomplete
 const { fetchCharacterByNameAndUserId } = require('../../database/db'); // Import fetchCharacterByNameAndUserId
+const { checkInventorySync } = require('../../utils/characterUtils');
 
 
 
@@ -107,24 +108,27 @@ async function handleEncounter(interaction) {
             });
         }
 
-            // Check if the character's inventory has been synced
-            if (!character.inventorySynced) {
-                return interaction.reply({
-                    content: `❌ **You cannot use the mount command because "${character.name}"'s inventory is not set up yet. Please use the </testinventorysetup:1306176790095728732> and then </syncinventory:1306176789894266898> commands to initialize the inventory.**`,
-                    ephemeral: true,
-                });
-            }
+        // Check inventory sync
+        try {
+            await checkInventorySync(character);
+        } catch (error) {
+            await interaction.reply({
+                content: error.message,
+                ephemeral: true
+            });
+            return;
+        }
 
-            // ------------------- NEW: Validate village match -------------------
-            if (character.currentVillage?.toLowerCase() !== encounter.village?.toLowerCase()) {
-                return interaction.reply({
-                    content: `❌ **${character.name} is currently located in ${capitalizeVillageName(character.currentVillage) || 'an unknown location'}, but this encounter is in ${capitalizeVillageName(encounter.village)}. Characters must be in the correct village to roll!**`,
-                    ephemeral: true,
-                });
-            }
+        // ------------------- NEW: Validate village match -------------------
+        if (character.currentVillage?.toLowerCase() !== encounter.village?.toLowerCase()) {
+            return interaction.reply({
+                content: `❌ **${character.name} is currently located in ${capitalizeVillageName(character.currentVillage) || 'an unknown location'}, but this encounter is in ${capitalizeVillageName(encounter.village)}. Characters must be in the correct village to roll!**`,
+                ephemeral: true,
+            });
+        }
 
-            // Proceed with rolling logic for the character in the encounter
-            await proceedWithRoll(interaction, characterName, encounterId);
+        // Proceed with rolling logic for the character in the encounter
+        await proceedWithRoll(interaction, characterName, encounterId);
 
     } catch (error) {
     handleError(error, 'mount.js');
