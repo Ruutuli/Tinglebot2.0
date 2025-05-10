@@ -539,7 +539,7 @@ const createSetupInstructionsEmbed = async (characterName, googleSheetsUrl) => {
     fields.push(
       {
         name: "❌ Validation Error",
-        value: `> ⚠️ **Problem Detected:**\n> \`\`\`text\n> ${problem?.trim() || 'Unknown Problem'}\n> \`\`\`\n\n> ---`,
+        value: `> ⚠️ **Problem Detected:**\n> \n> ${problem?.trim() || 'Unknown Problem'}\n> \n\n> ---`,
       },
       {
         name: "🛠️ How to Fix:",
@@ -591,10 +591,9 @@ const createSyncEmbed = (characterName, googleSheetsUrl) => {
       name: "📝 Step 3: Example Format",
       value:
         "Your items should look like this in your sheet:\n" +
-        "```text\n" +
+        "\n" +
         "Tingle | Palm Fruit | 47\n" +
-        "Tingle | Bokoblin Fang | 3\n" +
-        "```\n" +
+        "\n" +
         "Each row = one item your character actually has.",
     },
     {

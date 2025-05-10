@@ -415,7 +415,7 @@ async function validateInventorySheet(spreadsheetUrl, characterName) {
         console.log(`[googleSheetsUtils.js]: ❌ Headers do not match expected format`);
         return {
           success: false,
-          message: "**Error:** The headers do not match the required format.\n\n**Fix:** Ensure A1:M1 exactly reads:\n```Character Name, Item Name, Qty of Item, Category, Type, Subtype, Obtain, Job, Perk, Location, Link, Date/Time, Confirmed Sync```"
+          message: "**Error:** The headers do not match the required format.\n\n**Fix:** Ensure A1:M1 exactly reads:\nCharacter Name, Item Name, Qty of Item, Category, Type, Subtype, Obtain, Job, Perk, Location, Link, Date/Time, Confirmed Sync"
         };
       }
 
