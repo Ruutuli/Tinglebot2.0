@@ -172,10 +172,11 @@ async function initializeClient() {
           }
         }
       } else if (interaction.isButton()) {
-        const handler = client.componentHandlers.get(interaction.customId);
-        if (handler) {
-          await handler(interaction);
-        }
+        console.log('[index.js]: Button interaction received:', {
+          customId: interaction.customId
+        });
+        
+        await handleComponentInteraction(interaction);
       } else if (interaction.isStringSelectMenu()) {
         await handleSelectMenuInteraction(interaction);
       } else if (interaction.isAutocomplete()) {

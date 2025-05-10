@@ -1588,11 +1588,16 @@ const createInitialTravelEmbed = (
  startingVillage,
  destination,
  paths,
- totalTravelDuration
+ totalTravelDuration,
+ mount = null,
+ mode = 'on foot'
 ) => {
  const startEmoji = villageEmojis[startingVillage.toLowerCase()] || "";
  const destEmoji = villageEmojis[destination.toLowerCase()] || "";
-
+ let staminaLine = `**🟩 __Stamina:__** ${character.currentStamina}/${character.maxStamina}`;
+ if (mode === 'on mount' && mount) {
+   staminaLine = `**🥕 __${mount.name}'s Stamina:__** ${mount.currentStamina}/${mount.level === 'Basic' ? 2 : mount.level === 'Mid' ? 4 : mount.level === 'High' ? 6 : mount.stamina}`;
+ }
  return new EmbedBuilder()
   .setTitle(
    `**${
@@ -1613,9 +1618,7 @@ const createInitialTravelEmbed = (
      ", "
     )}\n**Total Travel Duration:** ${totalTravelDuration} days\n**❤️ __Hearts:__** ${
     character.currentHearts
-   }/${character.maxHearts}\n**🟩 __Stamina:__** ${character.currentStamina}/${
-    character.maxStamina
-   }`
+   }/${character.maxHearts}\n${staminaLine}`
   )
   .setColor("#AA926A")
   .setAuthor({ name: "Travel Announcement", iconURL: character.icon })

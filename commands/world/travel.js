@@ -39,6 +39,9 @@ const { hasPerk } = require('../../modules/jobsModule.js');
 const { isValidVillage } = require('../../modules/locationsModule.js');
 const { checkInventorySync } = require('../../utils/characterUtils');
 
+// ------------------- Database Models -------------------
+const Mount = require('../../models/MountModel');
+
 // ============================================================================
 // ------------------- Constants -------------------
 // ============================================================================
@@ -171,6 +174,42 @@ async execute(interaction) {
       });
     }
 
+    // ------------------- Mount Travel Logic -------------------
+    let mount = null;
+    if (mode === 'on mount') {
+      mount = await Mount.findOne({ characterId: character._id });
+      if (!mount) {
+        return interaction.editReply({
+          content: `❌ **${character.name}** does not have a registered mount. You must register a mount before traveling on mount.`
+        });
+      }
+      // Recover mount stamina if a day has passed since lastMountTravel
+      const now = new Date();
+      if (mount.lastMountTravel) {
+        const last = new Date(mount.lastMountTravel);
+        const msInDay = 24 * 60 * 60 * 1000;
+        const daysPassed = Math.floor((now - last) / msInDay);
+        if (daysPassed > 0) {
+          const maxStamina = mount.level === 'Basic' ? 2 : mount.level === 'Mid' ? 4 : mount.level === 'High' ? 6 : mount.stamina;
+          mount.currentStamina = Math.min(maxStamina, (mount.currentStamina || maxStamina) + daysPassed);
+          await mount.save();
+        }
+        // Enforce 1 day cooldown
+        if ((now - last) < msInDay) {
+          return interaction.editReply({
+            content: `❌ **${mount.name}** must rest for 1 day before traveling again. Please wait before using your mount for travel.`
+          });
+        }
+      } else {
+        // If never traveled, initialize currentStamina
+        if (mount.currentStamina == null) {
+          const maxStamina = mount.level === 'Basic' ? 2 : mount.level === 'Mid' ? 4 : mount.level === 'High' ? 6 : mount.stamina;
+          mount.currentStamina = maxStamina;
+          await mount.save();
+        }
+      }
+    }
+
     // ------------------- Check for Debuff -------------------
     if (character.debuff?.active) {
       const remainingDays = Math.ceil((new Date(character.debuff.endDate) - new Date()) / (1000 * 60 * 60 * 24));
@@ -212,6 +251,23 @@ async execute(interaction) {
 
     // ------------------- Calculate Travel Duration -------------------
 const totalTravelDuration = calculateTravelDuration(startingVillage, destination, mode, character);
+
+if (mode === 'on mount') {
+  if (!mount) {
+    return interaction.editReply({
+      content: `❌ **${character.name}** does not have a registered mount. You must register a mount before traveling on mount.`
+    });
+  }
+  if (mount.currentStamina < totalTravelDuration) {
+    return interaction.editReply({
+      content: `❌ **${mount.name}** does not have enough stamina to complete this journey. Required: ${totalTravelDuration}, Available: ${mount.currentStamina}`
+    });
+  }
+  // Deduct mount stamina and update lastMountTravel
+  mount.currentStamina -= totalTravelDuration;
+  mount.lastMountTravel = new Date();
+  await mount.save();
+}
 
 if (
   (startingVillage === 'rudania' && destination === 'vhintl') ||
@@ -264,7 +320,7 @@ if (totalTravelDuration === -1) {
     }
 
     // ------------------- Send Initial Travel Embed -------------------
-    const initialEmbed = createInitialTravelEmbed(character, startingVillage, destination, paths, totalTravelDuration);
+    const initialEmbed = createInitialTravelEmbed(character, startingVillage, destination, paths, totalTravelDuration, mount, mode);
     await interaction.followUp({ embeds: [initialEmbed] });
 
     // ------------------- Start Travel Processing -------------------
@@ -277,7 +333,9 @@ if (totalTravelDuration === -1) {
       interaction,
       travelingMessages: [],
       currentChannel: interaction.channelId,
-      travelLog: []
+      travelLog: [],
+      mount,
+      mode
     });
     
   } catch (error) {
@@ -351,8 +409,49 @@ async function processTravelDay(day, context) {
     travelingMessages,
     currentChannel,
     travelLog,
-    channel: savedChannel // <-- safely rename to avoid conflict
+    channel: savedChannel,
+    mount,
+    mode
   } = context;
+
+  // ------------------- Mount Travel: Skip Encounters & Gathering -------------------
+  if (mode === 'on mount') {
+    if (day > totalTravelDuration) {
+      character.currentVillage = destination;
+      await character.save();
+      const finalChannelId = PATH_CHANNELS[paths[paths.length - 1]] || currentChannel;
+      const finalChannel = await interaction.client.channels.fetch(finalChannelId);
+      const finalEmbed = new EmbedBuilder()
+        .setTitle(`🚀 Mount Travel Complete!`)
+        .setDescription(`✅ **${character.name}** has arrived at **${capitalizeFirstLetter(destination)}** by mount!
+
+🥕 **${mount.name}**'s stamina remaining: ${mount.currentStamina}`)
+        .setColor('#AA926A')
+        .setTimestamp();
+      await finalChannel.send({ embeds: [finalEmbed] });
+      for (const msg of travelingMessages) {
+        await msg.delete();
+      }
+      return;
+    }
+    // Send a simple embed for each travel day
+    const currentPath = paths[0];
+    const channelId = PATH_CHANNELS[currentPath];
+    const channel = savedChannel || await interaction.client.channels.fetch(channelId);
+    const pathEmoji = pathEmojis[currentPath];
+    const travelDayEmbed = new EmbedBuilder()
+      .setTitle(`🐴 Traveling by Mount: Day ${day}`)
+      .setDescription(`**${character.name}** is traveling safely by mount (${mount.name}) to **${capitalizeFirstLetter(destination)}**.
+
+${pathEmoji || ''} No monsters or gathering today!`)
+      .setColor('#AA926A')
+      .setTimestamp();
+    const travelMsg = await channel.send({ embeds: [travelDayEmbed] });
+    travelingMessages.push(travelMsg);
+    await new Promise(resolve => setTimeout(resolve, DELAY_MS));
+    await processTravelDay(day + 1, { ...context, channel });
+    return;
+  }
 
   // ------------------- Check if Journey is Complete -------------------
   if (day > totalTravelDuration) {
