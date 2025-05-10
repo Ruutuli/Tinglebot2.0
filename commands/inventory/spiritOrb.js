@@ -141,7 +141,7 @@ async function execute(interaction) {
         'A serene glow surrounds the area as your offering is accepted.',
         'You hear a distant chime as your prayer is answered.',
         'The ground hums beneath you, resonating with power.',
-        'The statue's eyes briefly glow, acknowledging your sacrifice.'
+        'The Goddess Statue\'s eyes briefly glow, acknowledging your sacrifice.'
       ];
       const chosenFlavor = flavorOptions[Math.floor(Math.random() * flavorOptions.length)];
 
