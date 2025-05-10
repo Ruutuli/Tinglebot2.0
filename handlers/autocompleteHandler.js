@@ -953,25 +953,32 @@ async function handleVendorItemAutocomplete(interaction, focusedOption) {
     const vendorType = character.job?.toLowerCase();
     const searchQuery = focusedOption.value?.toLowerCase() || "";
 
-    // Get regular vendor items
-    const vendorItems = await getVendorItems(village, vendorType, searchQuery);
-    
-    // Get limited items if this is a vending add command
+    // Get current vending stock
+    const stockList = await getCurrentVendingStockList();
+    let vendorItems = [];
     let limitedItems = [];
-    if (interaction.commandName === "vending" && interaction.options.getSubcommand() === "add") {
-      const limitedStockList = await getCurrentVendingStockList();
-      if (limitedStockList?.limitedItems) {
-        limitedItems = limitedStockList.limitedItems
-          .filter(item => 
-            item.itemName?.toLowerCase().includes(searchQuery) &&
-            item.stock > 0
-          )
-          .map(item => ({
-            ...item,
-            isLimited: true,
-            vendingType: vendorType // Add vendingType to match regular items format
-          }));
-      }
+
+    // Only show regular items for this vendor's type and village
+    if (stockList?.stockList?.[village]) {
+      vendorItems = stockList.stockList[village].filter(
+        (item) =>
+          item.vendingType?.toLowerCase() === vendorType &&
+          item.itemName?.toLowerCase().includes(searchQuery)
+      );
+    }
+
+    // Only show limited items if in stock
+    if (stockList?.limitedItems && interaction.commandName === "vending" && interaction.options.getSubcommand() === "add") {
+      limitedItems = stockList.limitedItems
+        .filter(item =>
+          item.itemName?.toLowerCase().includes(searchQuery) &&
+          item.stock > 0
+        )
+        .map(item => ({
+          ...item,
+          isLimited: true,
+          vendingType: vendorType
+        }));
     }
 
     // Combine and format all items
@@ -2661,25 +2668,32 @@ async function handleVendorItemAutocomplete(interaction, focusedOption) {
     const vendorType = character.job?.toLowerCase();
     const searchQuery = focusedOption.value?.toLowerCase() || "";
 
-    // Get regular vendor items
-    const vendorItems = await getVendorItems(village, vendorType, searchQuery);
-    
-    // Get limited items if this is a vending add command
+    // Get current vending stock
+    const stockList = await getCurrentVendingStockList();
+    let vendorItems = [];
     let limitedItems = [];
-    if (interaction.commandName === "vending" && interaction.options.getSubcommand() === "add") {
-      const limitedStockList = await getCurrentVendingStockList();
-      if (limitedStockList?.limitedItems) {
-        limitedItems = limitedStockList.limitedItems
-          .filter(item => 
-            item.itemName?.toLowerCase().includes(searchQuery) &&
-            item.stock > 0
-          )
-          .map(item => ({
-            ...item,
-            isLimited: true,
-            vendingType: vendorType // Add vendingType to match regular items format
-          }));
-      }
+
+    // Only show regular items for this vendor's type and village
+    if (stockList?.stockList?.[village]) {
+      vendorItems = stockList.stockList[village].filter(
+        (item) =>
+          item.vendingType?.toLowerCase() === vendorType &&
+          item.itemName?.toLowerCase().includes(searchQuery)
+      );
+    }
+
+    // Only show limited items if in stock
+    if (stockList?.limitedItems && interaction.commandName === "vending" && interaction.options.getSubcommand() === "add") {
+      limitedItems = stockList.limitedItems
+        .filter(item =>
+          item.itemName?.toLowerCase().includes(searchQuery) &&
+          item.stock > 0
+        )
+        .map(item => ({
+          ...item,
+          isLimited: true,
+          vendingType: vendorType
+        }));
     }
 
     // Combine and format all items
