@@ -9,6 +9,7 @@
 const seasonsData = require('../data/seasonsData');
 const weatherData = require('../data/weatherData');
 const { weatherWeightModifiers } = require('../data/weatherData');
+const { saveWeather } = require('../modules/weatherModule.js');
 
 // ============================================================================
 // ------------------- Weather History Memory -------------------
@@ -414,9 +415,12 @@ function getSmoothedWind(windOptions, previous, weightMap) {
   
 // ------------------- History Updater -------------------
 // Updates weather history buffer for a village.
-function updateWeatherHistory(village, weatherResult) {
+async function updateWeatherHistory(village, weatherResult) {
   weatherHistoryByVillage[village] = weatherHistoryByVillage[village].slice(-2);
   weatherHistoryByVillage[village].push(weatherResult);
+  
+  // Save weather to database
+  await saveWeather(village, weatherResult);
 }
 
 // ============================================================================
