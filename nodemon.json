@@ -15,5 +15,9 @@
   "ext": "js,json",
   "exec": "node index.js",
   "legacy-watch": true,
-  "exitcrash": true
+  "exitcrash": true,
+  "restartable": "rs",
+  "delay": "1000",
+  "maxRestarts": 10,
+  "restartDelay": 3000
 }
