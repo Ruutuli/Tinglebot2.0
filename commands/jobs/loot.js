@@ -84,21 +84,48 @@ const villageChannels = {
 // ------------------- Helper Functions -------------------
 // Check if a daily roll is available for a specific activity
 function canUseDailyRoll(character, activity) {
+  // If character has an active job voucher, they can always use the command
+  if (character.jobVoucher) {
+    console.log(`[loot.js]: Job voucher active for ${character.name}, bypassing daily limit`);
+    return true;
+  }
+
   const now = new Date();
   const rollover = new Date();
   rollover.setUTCHours(13, 0, 0, 0); // 8AM EST = 1PM UTC
 
+  // If we're before rollover time, use yesterday's rollover
+  if (now < rollover) {
+    rollover.setDate(rollover.getDate() - 1);
+  }
+
   const lastRoll = character.dailyRoll.get(activity);
-  if (!lastRoll) return true;
+  if (!lastRoll) {
+    console.log(`[loot.js]: No previous roll found for ${character.name}`);
+    return true;
+  }
 
   const lastRollDate = new Date(lastRoll);
-  return lastRollDate < rollover || now < rollover;
+  const canUse = lastRollDate < rollover;
+  
+  console.log(`[loot.js]: Daily roll check for ${character.name}:`, {
+    lastRoll: lastRollDate.toISOString(),
+    rollover: rollover.toISOString(),
+    canUse: canUse
+  });
+  
+  return canUse;
 }
 
 // Update the daily roll timestamp for an activity
 async function updateDailyRoll(character, activity) {
-  character.dailyRoll.set(activity, new Date().toISOString());
+  if (!character.dailyRoll) {
+    character.dailyRoll = new Map();
+  }
+  const now = new Date().toISOString();
+  character.dailyRoll.set(activity, now);
   await character.save();
+  console.log(`[loot.js]: Updated daily roll for ${character.name} - ${activity} at ${now}`);
 }
 
 // ------------------- Command Definition -------------------
@@ -133,14 +160,19 @@ module.exports = {
     return;
    }
 
-   // ------------------- Daily Loot Limit -------------------
-    if (!canUseDailyRoll(character, 'loot')) {
-      await interaction.editReply({
-        content: `⏳ **${character.name} has already looted today!**\n🌅 **Daily loot limit resets at 8AM EST (1PM UTC).**`,
-        ephemeral: true,
-      });
-      return;
-    }
+   // Check for job voucher and daily roll at the start
+   if (character.jobVoucher) {
+     console.log(`[Loot Command]: Active job voucher found for ${character.name}`);
+   } else {
+     console.log(`[Loot Command]: No active job voucher for ${character.name}`);
+     if (!canUseDailyRoll(character, 'loot')) {
+       await interaction.editReply({
+         content: `*${character.name} seems exhausted from their earlier looting...*\n\n**Daily looting limit reached.**\nThe next opportunity to loot will be available at 8AM EST.\n\n*Tip: A job voucher would allow you to loot again today.*`,
+         ephemeral: true,
+       });
+       return;
+     }
+   }
 
    if (character.debuff?.active) {
     const debuffEndDate = new Date(character.debuff.endDate);
@@ -180,13 +212,6 @@ module.exports = {
     const embed = createKOEmbed(character); // Create embed for KO status
     await interaction.editReply({ embeds: [embed] });
     return;
-   }
-
-   // ------------------- Check for Active Job Voucher -------------------
-   if (character.jobVoucher) {
-     console.log(`[Loot Command]: Active job voucher found for ${character.name}`);
-   } else {
-     console.log(`[Loot Command]: No active job voucher for ${character.name}`);
    }
 
    // Determine job based on jobVoucher or default job
@@ -400,6 +425,7 @@ module.exports = {
 
    // After successful looting, update the daily roll
    await updateDailyRoll(character, 'loot');
+   console.log(`[loot.js]: Successfully updated daily roll for ${character.name}`);
 
   } catch (error) {
    handleError(error, "loot.js");
