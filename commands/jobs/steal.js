@@ -167,7 +167,6 @@ module.exports = {
                     const selectedItem = getRandomItemByWeight(filteredItems);
                     const roll = Math.floor(Math.random() * 99) + 1; // d99 roll
                     const failureThreshold = failureChances[selectedItem.tier]; // Failure threshold (e.g. 10 for common)
-                    console.log(`[steal.js]: NPC Roll: ${roll}, Failure Threshold: ${failureThreshold} (roll <= threshold means failure)`);
                     if (roll <= failureThreshold) {
                         return interaction.editReply({ 
                             content: `❌ **Failed to steal from ${targetName}.** (Roll: ${roll} ≤ ${failureThreshold}) Better luck next time!`, 
@@ -260,7 +259,6 @@ module.exports = {
             const selectedItemPlayer = getRandomItemByWeight(filteredItemsPlayer);
             const rollPlayer = Math.floor(Math.random() * 99) + 1; // d99 roll for player branch
             const failureThresholdPlayer = failureChances[selectedItemPlayer.tier];
-            console.log(`[steal.js]: Player Roll: ${rollPlayer}, Failure Threshold: ${failureThresholdPlayer} (roll <= threshold means failure)`);
             if (rollPlayer <= failureThresholdPlayer) {
                 return handleFailedSteal(interaction, thiefCharacter, targetCharacter, selectedItemPlayer, rollPlayer, failureThresholdPlayer);
             } else {
@@ -273,7 +271,7 @@ module.exports = {
                     if (!deactivationResult.success) {
                     console.error(`[steal.js]: Failed to deactivate job voucher for ${thiefCharacter.name}`);
                     } else {
-                    console.log(`[steal.js]: Job voucher deactivated for ${thiefCharacter.name}`);
+                    console.error(`[steal.js]: Job voucher deactivated for ${thiefCharacter.name}`);
                     }
                 }
   

@@ -232,14 +232,14 @@ const command = {
         console.log(`[deliver.js]: Determined job for ${courierCharacter.name} is "${job}"`);
 
         if (courierCharacter.jobVoucher) {
-          console.log(`[deliver.js]: Job voucher detected for ${courierCharacter.name}. Validating voucher.`);
+          console.error(`[deliver.js]: Job voucher detected for ${courierCharacter.name}. Validating voucher.`);
           const voucherValidation = await validateJobVoucher(courierCharacter, job);
           if (voucherValidation.skipVoucher) {
-            console.log(`[deliver.js]: ${courierCharacter.name} already has job "${job}". Skipping voucher use.`);
+            console.error(`[deliver.js]: ${courierCharacter.name} already has job "${job}". Skipping voucher use.`);
             // No activation needed
           } else if (!voucherValidation.success) {
             if (courierCharacter.jobVoucherJob === null) {
-              console.log(`[deliver.js]: Job voucher is unrestricted. Proceeding with job: "${job}".`);
+              console.error(`[deliver.js]: Job voucher is unrestricted. Proceeding with job: "${job}".`);
             } else {
               return interaction.editReply({
                 content: voucherValidation.message,
@@ -247,7 +247,7 @@ const command = {
               });
             }
           } else {
-            console.log(`[deliver.js]: Activating job voucher for ${courierCharacter.name}.`);
+            console.error(`[deliver.js]: Activating job voucher for ${courierCharacter.name}.`);
             const { success: itemSuccess, item: jobVoucherItem, message: itemError } = await fetchJobVoucherItem();
             if (!itemSuccess) {
               await interaction.editReply({ content: itemError, ephemeral: true });
@@ -375,7 +375,7 @@ const command = {
           if (!deactivationResult.success) {
             console.error(`[deliver.js]: Failed to deactivate job voucher for ${courierCharacter.name}`);
           } else {
-            console.log(`[deliver.js]: Job voucher deactivated for ${courierCharacter.name}`);
+            console.error(`[deliver.js]: Job voucher deactivated for ${courierCharacter.name}`);
           }
         }
 

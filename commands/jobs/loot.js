@@ -199,7 +199,7 @@ module.exports = {
 
    // Validate job
    if (!job || typeof job !== "string" || !job.trim() || !isValidJob(job)) {
-    console.log(
+    console.error(
      `[Loot Command]: Invalid or unsupported job detected for ${character.name}. Job: "${job}"`
     );
     await interaction.editReply({
@@ -215,18 +215,18 @@ module.exports = {
 
    // Validate job voucher (without consuming it)
    if (character.jobVoucher) {
-    console.log(
+    console.error(
      `[Loot Command]: Job voucher detected for ${character.name}. Validating voucher.`
     );
     const voucherValidation = await validateJobVoucher(character, job);
     if (voucherValidation.skipVoucher) {
-      console.log(
+      console.error(
        `[Loot Command]: ${character.name} already has job "${job}". Skipping voucher use.`
       );
       // No activation needed
-    } else if (!voucherValidation.success) {
+    }
       if (character.jobVoucherJob === null) {
-        console.log(
+        console.error(
          `[Loot Command]: Job voucher is unrestricted. Proceeding with job: "${job}".`
         );
       } else {
@@ -237,7 +237,7 @@ module.exports = {
         return;
       }
     } else {
-      console.log(`[Loot Command]: Activating job voucher for ${character.name}.`);
+      console.error(`[Loot Command]: Activating job voucher for ${character.name}.`);
       const { success: itemSuccess, item: jobVoucherItem, message: itemError } = await fetchJobVoucherItem();
       if (!itemSuccess) {
         await interaction.editReply({ content: itemError, ephemeral: true });
@@ -260,10 +260,10 @@ module.exports = {
 
    // Validate job perks
    const jobPerk = getJobPerk(job);
-   console.log(`[Loot Command]: Retrieved job perks for ${job}:`, jobPerk);
+   console.error(`[Loot Command]: Retrieved job perks for ${job}:`, jobPerk);
 
    if (!jobPerk || !jobPerk.perks.includes("LOOTING")) {
-    console.log(
+    console.error(
      `[Loot Command]: ${character.name} lacks looting skills for job: "${job}"`
     );
     await interaction.editReply({
@@ -288,17 +288,12 @@ module.exports = {
 
    // ------------------- Step 4: Blood Moon Encounter Handling -------------------
    const bloodMoonActive = isBloodMoonActive(); // Determine Blood Moon status
-   console.log(
-    `[Blood Moon Status] Current Day: ${new Date().getDate()}, Active: ${bloodMoonActive}`
-   );
    let encounteredMonster;
 
    if (bloodMoonActive) {
-    console.log(`[LOOT] Blood Moon is active. Generating encounter...`);
     try {
      // Handle Blood Moon-specific encounter logic
      const encounterType = getRandomBloodMoonEncounter();
-     console.log(`[LOOT] Encounter Type: ${encounterType}`);
 
      // Normalize the encounter type
      const normalizedEncounterType = encounterType.trim().toLowerCase();
@@ -308,7 +303,6 @@ module.exports = {
       normalizedEncounterType === "noencounter" ||
       normalizedEncounterType === "no encounter"
      ) {
-      console.log(`[LOOT] No encounter generated for this roll.`);
       const embed = createNoEncounterEmbed(character, true); // Pass `true` for Blood Moon
       await interaction.followUp({ embeds: [embed] });
       return;
@@ -317,9 +311,6 @@ module.exports = {
      // Process other encounter types (tiers)
      const tier = parseInt(normalizedEncounterType.replace("tier", ""), 10);
      if (isNaN(tier)) {
-      console.error(
-       `[LOOT] Invalid encounter type "${encounterType}" detected.`
-      );
       await interaction.followUp(
        `🌕 **Blood Moon is active, but no valid monsters could be determined.**`
       );
@@ -339,14 +330,8 @@ module.exports = {
      if (filteredMonsters.length > 0) {
       encounteredMonster =
        filteredMonsters[Math.floor(Math.random() * filteredMonsters.length)];
-      console.log(
-       `[LOOT] Blood Moon Encounter: Monster "${encounteredMonster.name}" (Tier ${encounteredMonster.tier})`
-      );
 
       if (encounteredMonster.tier > 4) {
-       console.log(
-        `[LOOT] Initiating raid for monster "${encounteredMonster.name}" (Tier ${encounteredMonster.tier})`
-       );
        await triggerRaid(
         character,
         encounteredMonster,
@@ -357,9 +342,6 @@ module.exports = {
        return;
       }
      } else {
-      console.log(
-       `[LOOT] No monsters found matching the criteria. Initiating reroll logic.`
-      );
       await handleBloodMoonRerolls(
        interaction,
        monstersByCriteria,
@@ -373,19 +355,12 @@ module.exports = {
      }
     } catch (error) {
      handleError(error, "loot.js");
-
-     console.error(
-      `[LOOT] Error during Blood Moon encounter logic: ${error.message}`
-     );
      await interaction.followUp(
       `🌕 **Blood Moon is active, but an error occurred while determining an encounter.**`
      );
      return;
     }
    } else {
-    console.log(
-     `[LOOT] Blood Moon is not active. Proceeding with normal encounter logic.`
-    );
     // ------------------- Normal Encounter Logic -------------------
     encounteredMonster = await handleNormalEncounter(
      interaction,
@@ -396,8 +371,6 @@ module.exports = {
     );
 
     if (!encounteredMonster) {
-     console.log(`[LOOT] No valid monster encountered during normal looting.`);
-
      // Send a "No Encounter" embed to the user
      const embed = createNoEncounterEmbed(character, bloodMoonActive); // Blood Moon is inactive here
      await interaction.editReply({ embeds: [embed] });
@@ -417,7 +390,7 @@ module.exports = {
      if (!deactivationResult.success) {
        console.error(`[Loot Command]: Failed to deactivate job voucher for ${character.name}`);
      } else {
-       console.log(`[Loot Command]: Job voucher deactivated for ${character.name}`);
+       console.error(`[Loot Command]: Job voucher deactivated for ${character.name}`);
      }
    }
 
@@ -426,8 +399,6 @@ module.exports = {
 
   } catch (error) {
    handleError(error, "loot.js");
-
-   console.error(`[LOOT] Error during command execution: ${error}`);
    await interaction.editReply({
     content: `❌ **An error occurred during the loot command execution.**`,
    });
@@ -445,18 +416,6 @@ async function handleBloodMoonRerolls(
  currentVillage,
  bloodMoonActive
 ) {
- console.log(
-  `[LOOT] Blood Moon Encounter: No suitable monsters found for tier ${tier}.`
- );
- console.log(
-  `[LOOT] Details: Character "${
-   character.name
-  }", Job "${job}", Available Monsters: ${
-   monstersByCriteria.map((m) => `${m.name} (Tier ${m.tier})`).join(", ") ||
-   "None"
-  }`
- );
-
  let rerollCount = 0;
  const maxRerolls = 5; // Limit the number of rerolls to prevent infinite loops
 
@@ -469,14 +428,8 @@ async function handleBloodMoonRerolls(
   if (rerolledMonsters.length > 0) {
    const encounteredMonster =
     rerolledMonsters[Math.floor(Math.random() * rerolledMonsters.length)];
-   console.log(
-    `[LOOT] Reroll Successful: Monster "${encounteredMonster.name}" (Tier ${encounteredMonster.tier})`
-   );
 
    if (encounteredMonster.tier > 4) {
-    console.log(
-     `[LOOT] Initiating raid for monster "${encounteredMonster.name}" (Tier ${encounteredMonster.tier})`
-    );
     await triggerRaid(
      character,
      encounteredMonster,
@@ -486,9 +439,6 @@ async function handleBloodMoonRerolls(
     ); // Let triggerRaid handle thread creation
     return;
    } else {
-    console.log(
-     `[LOOT] Processing looting logic for Tier ${encounteredMonster.tier}`
-    );
     await processLootingLogic(
      interaction,
      character,
@@ -500,15 +450,9 @@ async function handleBloodMoonRerolls(
   }
 
   rerollCount++;
-  console.log(
-   `[LOOT] Reroll ${rerollCount}/${maxRerolls} failed. No monsters found for tier ${rerollTier}.`
-  );
  }
 
  // If rerolls are exhausted and no monster is found
- console.log(
-  `[LOOT] Reroll Exhausted: No suitable monster could be found after ${maxRerolls} attempts.`
- );
  await interaction.followUp(
   `🌕 **Blood Moon is active: No suitable monster could be found after multiple attempts.**`
  );
@@ -549,19 +493,11 @@ async function processLootingLogic(
  bloodMoonActive
 ) {
  try {
-  console.log(
-   `[LOOT.JS DEBUG] Starting looting logic for ${character.name}. Current Hearts: ${character.currentHearts}`
-  );
-
   const items = await fetchItemsByMonster(encounteredMonster.name);
 
   // Step 1: Calculate Encounter Outcome
   const { damageValue, adjustedRandomValue, attackSuccess, defenseSuccess } =
    calculateFinalValue(character);
-
-  console.log(
-   `[LOOT.JS DEBUG] Damage Value: ${damageValue}, Adjusted Random Value: ${adjustedRandomValue}`
-  );
 
   const weightedItems = createWeightedItemList(items, adjustedRandomValue);
   const outcome = await getEncounterOutcome(
@@ -573,28 +509,17 @@ async function processLootingLogic(
    defenseSuccess
   );
 
-  console.log(`[LOOT.JS DEBUG] Outcome for ${character.name}:`, outcome);
-
   // Step 2: Handle KO Logic (if not already handled in getEncounterOutcome)
   const updatedCharacter = await Character.findById(character._id);
   if (!updatedCharacter) {
    throw new Error(
-    `[LOOT.JS DEBUG] Unable to find updated character with ID ${character._id}`
+    `Unable to find updated character with ID ${character._id}`
    );
   }
 
-  console.log(
-   `[LOOT.JS DEBUG] Updated Hearts for ${character.name}: ${updatedCharacter.currentHearts}`
-  );
-
   if (updatedCharacter.currentHearts === 0 && !updatedCharacter.ko) {
-   console.log(`[LOOT.JS DEBUG] Triggering KO for ${character.name}`);
    await handleKO(updatedCharacter._id);
   }
-
-  console.log(
-   `[LOOT.JS DEBUG] Final Hearts for ${character.name}: ${updatedCharacter.currentHearts}`
-  );
 
   // Step 3: Generate Outcome Message
   const outcomeMessage = generateOutcomeMessage(outcome);
@@ -672,7 +597,7 @@ async function processLootingLogic(
     await interaction.editReply({
      content:
       `❌ **Failed to write to your Google Sheet.**\n` +
-      `> Make sure your **Inventory** link is a valid Google Sheets URL ` +
+      `> Make sure your **Inventory** link is a valid Google Sheets URL ` +
       `and that you've shared the sheet with the service account ` +
       `(the "client_email" in service_account.json).`,
      ephemeral: true,
@@ -710,8 +635,6 @@ await character.save();
   }
  } catch (error) {
   handleError(error, "loot.js");
-
-  console.error(`[LOOT] Error during loot processing: ${error.message}`);
   await interaction.editReply({
    content: `❌ **An error occurred while processing the loot.**`,
   });
