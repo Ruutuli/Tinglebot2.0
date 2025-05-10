@@ -12,6 +12,7 @@ const { convertToHyruleanDate } = require('./modules/calendarModule');
 const Character = require('./models/CharacterModel');
 const weatherHandler = require('./handlers/weatherHandler');
 const { sendUserDM } = require('./utils/messageUtils');
+const { generateWeatherEmbed } = require('./embeds/weatherEmbed');
 
 // ============================================================================
 // ---- Utility Functions ----
@@ -22,12 +23,10 @@ const { sendUserDM } = require('./utils/messageUtils');
 function createCronJob(schedule, jobName, jobFunction, timezone = 'America/New_York') {
   return cron.schedule(schedule, async () => {
     try {
-      console.log(`[scheduler]⏰ Running ${jobName}...`);
       await jobFunction();
-      console.log(`[scheduler]✅ ${jobName} completed successfully.`);
     } catch (error) {
       handleError(error, 'scheduler.js');
-      console.error(`[scheduler]❌ Error during ${jobName}:`, error.message);
+      console.error(`[Scheduler] ❌ ${jobName} failed:`, error.message);
     }
   }, { timezone });
 }
@@ -50,9 +49,9 @@ function createAnnouncementEmbed(title, description, thumbnail, image, footer) {
 // ============================================================================
 
 const TOWNHALL_CHANNELS = {
-  Rudania: 'rudania-townhall',
-  Inariko: 'inariko-townhall',
-  Vhintl: 'vhintl-townhall'
+  Rudania: process.env.RUDANIA_TOWN_HALL,
+  Inariko: process.env.INARIKO_TOWN_HALL,
+  Vhintl: process.env.VHINTL_TOWN_HALL
 };
 
 function getCurrentSeason() {
@@ -77,31 +76,29 @@ function formatWeatherMessage(village, weather) {
 
 async function postWeatherUpdate(client) {
   try {
-    console.log('[scheduler] Starting daily weather update...');
     const villages = Object.keys(TOWNHALL_CHANNELS);
     const currentSeason = getCurrentSeason();
     
     for (const village of villages) {
       try {
         const weather = weatherHandler.simulateWeightedWeather(village, currentSeason);
-        const channelName = TOWNHALL_CHANNELS[village];
-        const channel = client.channels.cache.find(ch => ch.name === channelName);
+        const channelId = TOWNHALL_CHANNELS[village];
+        const channel = client.channels.cache.get(channelId);
         
         if (!channel) {
-          console.error(`[scheduler] Could not find channel: ${channelName}`);
+          console.error(`[Scheduler] ❌ Channel not found: ${channelId}`);
           continue;
         }
         
-        const message = formatWeatherMessage(village, weather);
-        await channel.send(message);
-        console.log(`[scheduler] Posted weather update for ${village}`);
+        const { embed, files } = await generateWeatherEmbed(village, weather);
+        await channel.send({ embeds: [embed], files });
+        console.log(`[Scheduler] ✅ Posted weather for ${village}`);
       } catch (error) {
-        console.error(`[scheduler] Error posting weather for ${village}:`, error);
+        console.error(`[Scheduler] ❌ Error posting weather for ${village}:`, error.message);
       }
     }
-    console.log('[scheduler] Completed daily weather update');
   } catch (error) {
-    console.error('[scheduler] Error in weather update process:', error);
+    console.error('[Scheduler] ❌ Weather update process failed:', error.message);
   }
 }
 
@@ -252,8 +249,8 @@ async function handleDebuffExpiry() {
 // ============================================================================
 
 function setupBlightScheduler(client) {
-  // Daily Blight Roll Call (8 AM)
-  createCronJob('0 8 * * *', 'blight roll call', () => postBlightRollCall(client));
+  // Daily Blight Roll Call (8 PM)
+  createCronJob('0 20 * * *', 'blight roll call', () => postBlightRollCall(client));
 
   // Check for Missed Rolls (Every 6 hours)
   createCronJob('0 */6 * * *', 'check missed blight rolls', () => checkMissedRolls(client));
