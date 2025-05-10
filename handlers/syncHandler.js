@@ -102,6 +102,29 @@ async function syncInventory(characterName, userId, interaction, totalSyncedItem
         const spreadsheetId = extractSpreadsheetId(inventoryUrl);
         console.log(`Spreadsheet ID extracted: ${spreadsheetId}`);
 
+        // ------------------- Check Permissions -------------------
+        console.log('Checking Google Sheets API permissions...');
+        try {
+            await google.sheets({ version: 'v4', auth }).spreadsheets.get({
+                spreadsheetId
+            });
+        } catch (error) {
+            if (error.status === 403 || error.message.includes('does not have permission')) {
+                const serviceAccountEmail = JSON.parse(fs.readFileSync(SERVICE_ACCOUNT_PATH)).client_email;
+                console.error(`[syncHandler.js]: ⚠️ Permission error when accessing Google Sheet: ${error.message}`);
+                await editSyncErrorMessage(interaction, 
+                    `⚠️ **Permission Error:**\n` +
+                    `The service account (${serviceAccountEmail}) does not have access to this spreadsheet.\n\n` +
+                    `To fix this:\n1. Open the Google Spreadsheet\n2. Click "Share" in the top right\n3. Add ${serviceAccountEmail} as an Editor\n4. Make sure to give it at least "Editor" access`
+                );
+                return;
+            } else {
+                throw error;
+            }
+        }
+        
+        console.log(`Spreadsheet ID verified successfully: ${spreadsheetId}`);
+
         // ------------------- Retrieve Sheet ID -------------------
         console.log('Fetching sheet ID for "loggedInventory"...');
         let sheetId;
@@ -231,7 +254,10 @@ async function syncInventory(characterName, userId, interaction, totalSyncedItem
                     const updateRange = `loggedInventory!A${originalRowIndex}:M${originalRowIndex}`;
                     batchRequests.push({ range: updateRange, values: [updatedRowData], sheetId });
                 } catch (error) {
-                    handleError(error, 'syncHandler.js');
+                    // If it's a permission error, throw it immediately to stop processing
+                    if (error.message.includes('Permission Error')) {
+                        throw error;
+                    }
                     console.error(`[syncHandler.js]: syncInventory: Error processing row ${originalRowIndex}: ${error.message}`);
                     errors.push(`Row ${originalRowIndex}: ${error.message}`);
                     skippedLinesCount++;
