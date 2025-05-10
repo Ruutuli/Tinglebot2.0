@@ -248,6 +248,18 @@ async function handleDebuffExpiry() {
 }
 
 // ============================================================================
+// ---- Blight Functions ----
+// ============================================================================
+
+function setupBlightScheduler(client) {
+  // Daily Blight Roll Call (8 AM)
+  createCronJob('0 8 * * *', 'blight roll call', () => postBlightRollCall(client));
+
+  // Check for Missed Rolls (Every 6 hours)
+  createCronJob('0 */6 * * *', 'check missed blight rolls', () => checkMissedRolls(client));
+}
+
+// ============================================================================
 // ---- Scheduler Initialization ----
 // ============================================================================
 
@@ -306,6 +318,9 @@ function initializeScheduler(client) {
 
   // Initialize weather scheduler
   setupWeatherScheduler(client);
+
+  // Initialize Blight scheduler
+  setupBlightScheduler(client);
 }
 
 module.exports = {
