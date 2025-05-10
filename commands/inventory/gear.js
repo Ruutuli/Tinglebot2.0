@@ -26,6 +26,7 @@ const { createCharacterGearEmbed } = require('../../embeds/embeds.js');
 // ------------------- Modules -------------------
 // Import character stats modules for updating defense and attack.
 const { updateCharacterDefense, updateCharacterAttack } = require('../../modules/characterStatsModule.js');
+const { checkInventorySync } = require('../../utils/characterUtils.js');
 
 
 // ------------------- Command Definition -------------------
@@ -99,12 +100,14 @@ module.exports = {
       }
 
       // ------------------- Check Inventory Sync -------------------
-      // Ensure the character's inventory has been initialized.
-      if (!character.inventorySynced) {
-        return interaction.editReply({
-          content: `❌ **You cannot use this command because your character does not have an inventory set up yet. Please use the </testinventorysetup:1306176790095728732> and then </syncinventory:1306176789894266898> command to initialize your inventory.**`,
-          ephemeral: true,
+      try {
+        await checkInventorySync(character);
+      } catch (error) {
+        await interaction.editReply({
+          content: error.message,
+          ephemeral: true
         });
+        return;
       }
 
       // ------------------- Handle Unequipping Gear -------------------
