@@ -15,6 +15,7 @@ const { handleComponentInteraction } = require("./handlers/componentHandler");
 const { handleSelectMenuInteraction } = require("./handlers/selectMenuHandler");
 const { handleInteraction, initializeReactionHandler } = require('./handlers/interactionHandler');
 const { handleMessage } = require('./handlers/messageHandler');
+const { startExpirationChecks } = require('./utils/expirationHandler');
 
 // ------------------- Scripts -------------------
 const {
@@ -129,6 +130,7 @@ async function initializeClient() {
           logBloodMoonStatus();
           initializeScheduler(client);
           initializeRandomEncounterBot(client);
+          startExpirationChecks(client);
 
           // Log initialization status
           console.log("----------------------------------------------------------");
@@ -137,6 +139,7 @@ async function initializeClient() {
           console.log("  • Blood Moon Tracker");
           console.log("  • Scheduler");
           console.log("  • Random Encounters");
+          console.log("  • Request Expiration Handler");
           console.log("==========================================================");
           console.log("Tinglebot 2.0 is fully operational!");
           console.log("==========================================================");
