@@ -96,7 +96,8 @@ async function storeEncounter(encounterId, encounterData) {
     await TempData.create({
       key: encounterId,
       type: 'encounter',
-      data: encounter
+      data: encounter,
+      expiresAt: new Date(Date.now() + 12 * 60 * 60 * 1000) // 12 hours expiration for encounters
     });
   } catch (error) {
     handleError(error, 'mountModule.js');
