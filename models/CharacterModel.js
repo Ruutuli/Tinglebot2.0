@@ -92,7 +92,7 @@ const characterSchema = new Schema({
   },
 
   // ------------------- Additional features -------------------
-  jobVoucher: { type: Boolean, default: true },          // Job voucher status
+  jobVoucher: { type: Boolean, default: false },          // Job voucher status
   jobVoucherJob: { type: String, default: null },        // Job selected for the voucher
   mount: { type: Boolean, default: false },              // Mount status
 

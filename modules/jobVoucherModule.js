@@ -30,14 +30,16 @@ function getJobVoucherErrorMessage(errorType, data = {}) {
 
 // ------------------- Validate Job Voucher -------------------
 async function validateJobVoucher(character, jobName) {
-    // ------------------- NEW: If character already has the job, voucher is not needed -------------------
+    // First check if character actually has a job voucher
+    if (!character.jobVoucher) {
+        console.error(`[Job Voucher Validation]: Character ${character.name} has no active job voucher.`);
+        return getJobVoucherErrorMessage('NO_VOUCHER');
+    }
+
+    // If character already has the job, voucher is not needed
     if (character.job?.trim().toLowerCase() === jobName?.trim().toLowerCase()) {
         console.error(`[Job Voucher Validation]: Character already has job "${jobName}". Voucher not required.`);
         return getJobVoucherErrorMessage('ALREADY_HAS_JOB', { jobName });
-    }
-
-    if (!character.jobVoucher) {
-        return getJobVoucherErrorMessage('NO_VOUCHER');
     }
 
     // Allow unrestricted job vouchers
