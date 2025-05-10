@@ -4,6 +4,7 @@ const { v4: uuidv4 } = require('uuid');
 
 
 const { handleError } = require('../utils/globalErrorHandler');
+const { checkInventorySync } = require('../utils/characterUtils');
 // ------------------- Discord.js Components -------------------
 // Components from discord.js used for building UI elements.
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
@@ -190,11 +191,14 @@ async function proceedWithRoll(interaction, characterName, encounterId) {
   }
 
   // Check if the character's inventory has been synced
-  if (!character.inventorySynced) {
-    return interaction.reply({
-      content: `❌ **You cannot use the mount command because "${character.name}"'s inventory is not set up yet. Please use the </testinventorysetup:1306176790095728732> and then </syncinventory:1306176789894266898> commands to initialize the inventory.**`,
-      ephemeral: true,
+  try {
+    await checkInventorySync(character);
+  } catch (error) {
+    await interaction.editReply({
+      content: error.message,
+      ephemeral: true
     });
+    return;
   }
 
   // Check if the user's token tracker is set up
@@ -1479,11 +1483,14 @@ async function handleViewMount(interaction) {
     }
 
     // Check if the character's inventory has been synced
-    if (!character.inventorySynced) {
-      return interaction.reply({
-        content: `❌ **You cannot use the mount command because "${character.name}"'s inventory is not set up yet. Please use the </testinventorysetup:1306176790095728732> and then </syncinventory:1306176789894266898> commands to initialize the inventory.**`,
-        ephemeral: true,
+    try {
+      await checkInventorySync(character);
+    } catch (error) {
+      await interaction.reply({
+        content: error.message,
+        ephemeral: true
       });
+      return;
     }
 
     // Check if the user's token tracker is set up
