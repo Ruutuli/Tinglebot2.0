@@ -4,6 +4,11 @@ const { handleError } = require('../utils/globalErrorHandler');
 const TempData = require('../models/TempDataModel');
 
 // ============================================================================
+// ------------------- In-Memory Storage -------------------
+// Map to store submission data in memory
+const submissionStore = new Map();
+
+// ============================================================================
 // ------------------- Submission Storage Functions -------------------
 // Functions for saving, retrieving, and deleting submissions from persistent storage.
 
@@ -241,6 +246,7 @@ module.exports = {
   saveSubmissionToStorage,
   retrieveSubmissionFromStorage,
   deleteSubmissionFromStorage,
+  submissionStore,
   
   saveHealingRequestToStorage,
   retrieveHealingRequestFromStorage,

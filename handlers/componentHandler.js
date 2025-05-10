@@ -111,7 +111,6 @@ async function handleButtonInteraction(interaction) {
 
   const [action, characterId, extra] = interaction.customId.split('|');
   const userId = interaction.user.id;
-  const submissionData = submissionStore.get(userId);
 
   try {
     switch (action) {
@@ -120,9 +119,11 @@ async function handleButtonInteraction(interaction) {
       case 'sync-no':
         return await handleSyncNo(interaction);
       case 'confirm':
+        const submissionData = submissionStore.get(userId);
         return await handleConfirmation(interaction, userId, submissionData);
       case 'cancel':
-        return await handleCancel(interaction, userId, submissionData);
+        const cancelData = submissionStore.get(userId);
+        return await handleCancel(interaction, userId, cancelData);
       case 'view':
         return await handleViewCharacter(interaction, characterId);
       case 'job-select':
