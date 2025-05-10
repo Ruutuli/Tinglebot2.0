@@ -77,7 +77,6 @@ module.exports = {
 
                 // ------------------- Reply with sync embed and buttons -------------------
                 await interaction.reply({ embeds: [syncEmbed], components: [row], ephemeral: true });
-                console.log('Reached here')
             } catch (error) {
     handleError(error, 'syncInventory.js');
 

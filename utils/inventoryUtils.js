@@ -73,6 +73,24 @@ function escapeRegExp(string) {
  return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+// ============================================================================
+// Error Tracking
+// ============================================================================
+
+const loggedErrors = new Set();
+const ERROR_COOLDOWN = 5000; // 5 seconds cooldown between identical errors
+
+function shouldLogError(error) {
+    const errorKey = error.message || error.toString();
+    if (loggedErrors.has(errorKey)) {
+        return false;
+    }
+    loggedErrors.add(errorKey);
+    // Clean up old errors after cooldown
+    setTimeout(() => loggedErrors.delete(errorKey), ERROR_COOLDOWN);
+    return true;
+}
+
 async function syncToInventoryDatabase(character, item, interaction) {
  try {
   if (!dbFunctions.connectToInventories) {
@@ -130,11 +148,13 @@ async function syncToInventoryDatabase(character, item, interaction) {
    ]);
   }
  } catch (error) {
-  handleError(error, "inventoryUtils.js");
-  console.error(
-   "[inventoryUtils.js]: logs Error syncing to inventory database:",
-   error
-  );
+  if (!error.message?.includes('Could not write to sheet') && shouldLogError(error)) {
+    handleError(error, "inventoryUtils.js");
+    console.error(
+     "[inventoryUtils.js]: Error syncing to inventory database:",
+     error
+    );
+  }
   throw error;
  }
 }

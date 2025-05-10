@@ -43,6 +43,24 @@ const SERVICE_ACCOUNT_PATH = './service-account.json';
 const MAX_RETRIES = 3;
 
 // ============================================================================
+// Error Tracking
+// ============================================================================
+
+const loggedErrors = new Set();
+const ERROR_COOLDOWN = 5000; // 5 seconds cooldown between identical errors
+
+function shouldLogError(error) {
+    const errorKey = error.message || error.toString();
+    if (loggedErrors.has(errorKey)) {
+        return false;
+    }
+    loggedErrors.add(errorKey);
+    // Clean up old errors after cooldown
+    setTimeout(() => loggedErrors.delete(errorKey), ERROR_COOLDOWN);
+    return true;
+}
+
+// ============================================================================
 // Helper Functions
 // ============================================================================
 
@@ -179,8 +197,22 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
         // Authorize and check permissions
         const auth = await authorizeSheets();
         const spreadsheetId = extractSpreadsheetId(inventoryUrl);
-        if (!await checkGoogleSheetsPermissions(auth, spreadsheetId, interaction)) {
-            return;
+        
+        // Check permissions first and fail fast if there's an issue
+        try {
+            await google.sheets({ version: 'v4', auth }).spreadsheets.get({ spreadsheetId });
+        } catch (error) {
+            if (error.status === 403 || error.message.includes('does not have permission')) {
+                const serviceAccountEmail = JSON.parse(fs.readFileSync(SERVICE_ACCOUNT_PATH)).client_email;
+                console.error(`[syncHandler.js]: ⚠️ Permission error when accessing Google Sheet: ${error.message}`);
+                await editSyncErrorMessage(interaction, 
+                    `⚠️ **Permission Error:**\n` +
+                    `The service account (${serviceAccountEmail}) does not have access to this spreadsheet.\n\n` +
+                    `To fix this:\n1. Open the Google Spreadsheet\n2. Click "Share" in the top right\n3. Add ${serviceAccountEmail} as an Editor\n4. Make sure to give it at least "Editor" access`
+                );
+                return;
+            }
+            throw error;
         }
 
         // Get sheet ID and read data
@@ -237,15 +269,33 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
                         sheetId
                     });
                 } catch (error) {
-                    handleError(error, 'syncHandler.js');
-                    console.error(`[syncHandler.js]: ❌ Error processing row ${originalRowIndex}: ${error.message}`);
+                    // If it's a permission error, throw it immediately to stop processing
+                    if (error.message.includes('does not have permission') || error.status === 403) {
+                        throw error;
+                    }
+                    // Only handle the error if it hasn't been handled by other modules
+                    if (!error.message?.includes('Could not write to sheet') && shouldLogError(error)) {
+                        handleError(error, 'syncHandler.js');
+                        console.error(`[syncHandler.js]: ❌ Error processing row ${originalRowIndex}: ${error.message}`);
+                    }
                     errors.push(`Row ${originalRowIndex}: ${error.message}`);
                     skippedLinesCount++;
                 }
             }
 
             if (batchRequests.length) {
-                await writeBatchData(auth, spreadsheetId, batchRequests);
+                try {
+                    await writeBatchData(auth, spreadsheetId, batchRequests);
+                } catch (error) {
+                    if (error.message.includes('does not have permission') || error.status === 403) {
+                        throw error;
+                    }
+                    // Only handle the error if it hasn't been handled by other modules
+                    if (!error.message?.includes('Could not write to sheet') && shouldLogError(error)) {
+                        handleError(error, 'syncHandler.js');
+                        console.error(`[syncHandler.js]: ❌ Error writing batch data: ${error.message}`);
+                    }
+                }
                 batchRequests = [];
             }
 
@@ -276,7 +326,18 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
     } catch (error) {
         handleError(error, 'syncHandler.js');
         console.error(`[syncHandler.js]: ❌ Sync failed: ${error.message}`);
-        await editSyncErrorMessage(interaction, `❌ **An error occurred during sync:** ${error.message}`);
+        
+        // Check if it's a permission error and show the appropriate message
+        if (error.message.includes('does not have permission') || error.status === 403) {
+            const serviceAccountEmail = JSON.parse(fs.readFileSync(SERVICE_ACCOUNT_PATH)).client_email;
+            await editSyncErrorMessage(interaction, 
+                `⚠️ **Permission Error:**\n` +
+                `The service account (${serviceAccountEmail}) does not have access to this spreadsheet.\n\n` +
+                `To fix this:\n1. Open the Google Spreadsheet\n2. Click "Share" in the top right\n3. Add ${serviceAccountEmail} as an Editor\n4. Make sure to give it at least "Editor" access`
+            );
+        } else {
+            await editSyncErrorMessage(interaction, `❌ **An error occurred during sync:** ${error.message}`);
+        }
     }
 }
 
