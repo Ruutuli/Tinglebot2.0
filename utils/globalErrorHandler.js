@@ -78,34 +78,34 @@ ${message}
     try {
       trelloLink = await trelloLogger(trelloContent, source);
     } catch (err) {
-      console.error("[globalErrorHandler.js]: Failed to create Trello card:", err.message);
+      console.error(`[globalErrorHandler.js]: ❌ Failed to create Trello card: ${err.message}`);
     }
   }
 
-// ------------------- Discord Error Channel Logging -------------------
-if (client && client.channels?.cache.has(ERROR_LOG_CHANNEL_ID)) {
-  const errorChannel = client.channels.cache.get(ERROR_LOG_CHANNEL_ID);
+  // ------------------- Discord Error Channel Logging -------------------
+  if (client && client.channels?.cache.has(ERROR_LOG_CHANNEL_ID)) {
+    const errorChannel = client.channels.cache.get(ERROR_LOG_CHANNEL_ID);
 
-  if (errorChannel) {
-    const { EmbedBuilder } = require("discord.js");
+    if (errorChannel) {
+      const errorEmbed = new EmbedBuilder()
+        .setColor(0xFF0000)
+        .setTitle(`❌ Error Detected in ${source}`)
+        .addFields(
+          { name: "🧠 Command", value: context.commandName || "Unknown", inline: false },
+          { name: "🙋 User", value: context.userTag ? `${context.userTag} (${context.userId})` : "Unknown", inline: false },
+          { name: "📦 Options", value: context.options ? `\`\`\`json\n${JSON.stringify(context.options, null, 2)}\n\`\`\`` : "None" },
+          { name: "📝 Error Message", value: `\`\`\`\n${message.slice(0, 1000)}\n\`\`\`` },
+          ...(extraInfo ? [{ name: "🌐 Network/DB Context", value: extraInfo }] : []),
+          { name: "🔗 Trello Link", value: trelloLink ? trelloLink : "No Trello card available." }
+        )
+        .setTimestamp();
 
-    const errorEmbed = new EmbedBuilder()
-      .setColor(0xFF0000)
-      .setTitle(`❌ Error Detected in ${source}`)
-      .addFields(
-        { name: "🧠 Command", value: context.commandName || "Unknown", inline: false },
-        { name: "🙋 User", value: context.userTag ? `${context.userTag} (${context.userId})` : "Unknown", inline: false },
-        { name: "📦 Options", value: context.options ? `\`\`\`json\n${JSON.stringify(context.options, null, 2)}\n\`\`\`` : "None" },
-        { name: "📝 Error Message", value: `\`\`\`\n${message.slice(0, 1000)}\n\`\`\`` },
-        ...(extraInfo ? [{ name: "🌐 Network/DB Context", value: extraInfo }] : []),
-        { name: "🔗 Trello Link", value: trelloLink ? trelloLink : "No Trello card available." }
-      )
-      .setTimestamp();
-
-    errorChannel.send({ embeds: [errorEmbed] }).catch(console.error);
+      errorChannel.send({ embeds: [errorEmbed] }).catch(console.error);
+    }
   }
 }
-}
 
-// ------------------- Exports -------------------
-module.exports = { handleError, initializeErrorHandler };
+module.exports = {
+  initializeErrorHandler,
+  handleError
+};
