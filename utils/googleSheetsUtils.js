@@ -57,27 +57,31 @@ async function authorizeSheets() {
 // API Request Helpers
 // ------------------- Throttle API requests -------------------
 async function makeApiRequest(fn) {
-    return limiter.schedule(() => fn());
-}
-
-// ------------------- API Request Helper -------------------
-// Makes API requests without retries
-async function makeApiRequest(fn) {
     try {
-        return await limiter.schedule(() => fn());
-    } catch (error) {
-        // Check for permission errors first
-        if (error.message.includes('does not have permission') || error.message.includes('Editor access')) {
-            const serviceAccountEmail = JSON.parse(fs.readFileSync(SERVICE_ACCOUNT_PATH)).client_email;
-            const errorMessage = `⚠️ Permission Error: The service account (${serviceAccountEmail}) does not have access to this spreadsheet.\n\nTo fix this:\n1. Open the Google Spreadsheet\n2. Click "Share" in the top right\n3. Add ${serviceAccountEmail} as an Editor\n4. Make sure to give it at least "Editor" access`;
-            console.error(`[googleSheetsUtils.js]: ${errorMessage}`);
-            throw new Error(errorMessage);
+        // First check if we have permission to access the spreadsheet
+        const auth = await authorizeSheets();
+        const serviceAccountEmail = JSON.parse(fs.readFileSync(SERVICE_ACCOUNT_PATH)).client_email;
+        
+        // Try to make a simple read request first to check permissions
+        try {
+            await google.sheets({ version: 'v4', auth }).spreadsheets.get({
+                spreadsheetId: fn.toString().match(/spreadsheetId: '([^']+)'/)?.[1]
+            });
+        } catch (error) {
+            if (error.status === 403 || error.message.includes('does not have permission')) {
+                const errorMessage = `⚠️ Permission Error: The service account (${serviceAccountEmail}) does not have access to this spreadsheet.\n\nTo fix this:\n1. Open the Google Spreadsheet\n2. Click "Share" in the top right\n3. Add ${serviceAccountEmail} as an Editor\n4. Make sure to give it at least "Editor" access`;
+                console.error(`[googleSheetsUtils.js]: ${errorMessage}`);
+                throw new Error(errorMessage);
+            }
         }
 
+        // If we have permission, proceed with the actual request
+        return await limiter.schedule(() => fn());
+    } catch (error) {
         // For other errors, just throw them
         if (error.message.includes('Requested entity was not found')) {
             console.warn(`[googleSheetsUtils.js]: Warning: Requested Google Sheet entity was not found.`);
-        } else {
+        } else if (!error.message.includes('Permission Error')) {
             handleError(error, 'googleSheetsUtils.js');
         }
         throw error;
