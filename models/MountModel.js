@@ -48,6 +48,20 @@ const MountSchema = new mongoose.Schema({
     required: false,
     enum: ['Rudania', 'Inariko', 'Vhintl', 'Global'] // Example regions
   },
+
+  // ============================================================================
+  // Mount Stamina Tracking
+  // Tracks current stamina and last travel date for recovery logic.
+  // ============================================================================
+  currentStamina: {
+    type: Number,
+    default: null // Will be set to stamina value on mount creation/registration
+  },
+  lastMountTravel: {
+    type: Date,
+    default: null
+  },
+
   isStored: { // Tracks if the mount is in storage
     type: Boolean,
     default: false
