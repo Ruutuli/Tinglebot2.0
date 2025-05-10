@@ -25,6 +25,7 @@ const { capitalizeWords, formatDateTime } = require('../../modules/formattingMod
 
 // ------------------- Utility Functions -------------------
 const { addItemInventoryDatabase, processMaterials } = require('../../utils/inventoryUtils');
+const { checkInventorySync } = require('../../utils/characterUtils');
 const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../../utils/validation');
 const { safeAppendDataToSheet } = require('../../utils/googleSheetsUtils');
 const { handleError } = require('../../utils/globalErrorHandler');
