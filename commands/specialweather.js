@@ -65,8 +65,9 @@ module.exports = {
       }
 
       // Get current weather for the village
-      const currentVillage = character.currentVillage;
+      const currentVillage = character.currentVillage.charAt(0).toUpperCase() + character.currentVillage.slice(1).toLowerCase();
       const weather = await getCurrentWeather(currentVillage);
+      console.log('[specialweather.js]: Weather fetched:', weather);
       
       if (!weather || !weather.special) {
         await interaction.editReply({
