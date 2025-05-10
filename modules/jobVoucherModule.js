@@ -61,8 +61,14 @@ async function validateJobVoucher(character, jobName) {
 // ------------------- Activate Job Voucher -------------------
 async function activateJobVoucher(character, jobName, item, quantity = 1, interaction) {
     try {
-        // Update character to activate the voucher
-        await updateCharacterById(character._id, { jobVoucher: Boolean(true), jobVoucherJob: jobName });
+        // First ensure any existing voucher is deactivated
+        await deactivateJobVoucher(character._id);
+
+        // Then activate the new voucher
+        await updateCharacterById(character._id, { 
+            jobVoucher: true, 
+            jobVoucherJob: jobName 
+        });
 
         // Deduct the voucher from inventory
         const inventoryCollection = await getCharacterInventoryCollection(character.name);
@@ -131,8 +137,12 @@ async function fetchJobVoucherItem() {
 // ------------------- Deactivate Job Voucher -------------------
 async function deactivateJobVoucher(characterId) {
     try {
-        await updateCharacterById(characterId, { jobVoucher: Boolean(false), jobVoucherJob: null });
-        console.error(`[Job Voucher Module]: Job voucher deactivated for character ID: ${characterId}`);
+        // Always set jobVoucher to false and clear the job
+        await updateCharacterById(characterId, { 
+            jobVoucher: false, 
+            jobVoucherJob: null 
+        });
+        console.log(`[Job Voucher Module]: Job voucher deactivated for character ID: ${characterId}`);
         return {
             success: true,
             message: `🎫 **Job voucher successfully deactivated.**`

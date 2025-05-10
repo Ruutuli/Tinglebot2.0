@@ -92,8 +92,15 @@ const characterSchema = new Schema({
   },
 
   // ------------------- Additional features -------------------
-  jobVoucher: { type: Boolean, default: false },          // Job voucher status
-  jobVoucherJob: { type: String, default: null },        // Job selected for the voucher
+  jobVoucher: { 
+    type: Boolean, 
+    default: false,
+    required: true 
+  },
+  jobVoucherJob: { 
+    type: String, 
+    default: null 
+  },
   mount: { type: Boolean, default: false },              // Mount status
 
   // ------------------- Pet References -------------------
@@ -101,6 +108,14 @@ const characterSchema = new Schema({
 
   spiritOrbs: { type: Number, default: 0 }               // Number of spirit orbs
 }, { collection: 'characters' });
+
+// Add pre-save hook to ensure jobVoucher is always false by default
+characterSchema.pre('save', function(next) {
+  if (this.isNew || this.isModified('jobVoucher')) {
+    this.jobVoucher = false;
+  }
+  next();
+});
 
 // ------------------- Define the Character model -------------------
 const Character = mongoose.model('Character', characterSchema);
