@@ -1634,7 +1634,7 @@ async function handleChangeJob(interaction) {
   const character = await fetchCharacterByNameAndUserId(characterName, userId);
   if (!character) {
    return interaction.followUp({
-    content: `❌ **Character "${characterName}"** not found or does not belong to you.`,
+    content: `❌ **Character \"${characterName}\"** not found or does not belong to you.`,
     ephemeral: true,
    });
   }
@@ -1664,6 +1664,13 @@ async function handleChangeJob(interaction) {
   }
 
   const userTokens = await getOrCreateToken(userId);
+  // Check for valid/synced Token Tracker before checking token balance
+  if (!userTokens.tokenTracker || !isValidGoogleSheetsUrl(userTokens.tokenTracker)) {
+    return interaction.followUp({
+      content: "❌ You do not have a Token Tracker set up. Please use `/tokens setup` first.",
+      ephemeral: true,
+    });
+  }
   if (userTokens.tokens < 500) {
    return interaction.followUp({
     content: `❌ You need **500 tokens** to change your character's job. Current balance: **${userTokens.tokens} tokens**.`,
@@ -1728,7 +1735,7 @@ async function handleChangeJob(interaction) {
   await character.save();
 
   const villageColor = getVillageColorByName(character.homeVillage) || "#4CAF50";
-  const villageEmoji = getVillageEmojiByName(character.homeVillage) || "🏡";
+  const villageEmoji = getVillageEmojiByName(character.homeVillage) || "\ud83c\udfe1";
   const nextJobChangeDate = new Date(currentTime + oneMonth).toLocaleDateString(
    "en-US",
    {
@@ -1749,16 +1756,16 @@ async function handleChangeJob(interaction) {
    )
   
    .addFields(
-    { name: "👤 __Name__", value: character.name, inline: true },
-    { name: "🏡 __Home Village__", value: character.homeVillage, inline: true },
+    { name: "\ud83d\udc64 __Name__", value: character.name, inline: true },
+    { name: "\ud83c\udfe1 __Home Village__", value: character.homeVillage, inline: true },
     { name: "​", value: "​", inline: true },
     {
-     name: "📅 __Last Job Change__",
+     name: "\ud83d\udcc5 __Last Job Change__",
      value: new Date(character.jobDateChanged).toLocaleDateString(),
      inline: true,
     },
     {
-     name: "🔄 __Next Change Available__",
+     name: "\ud83d\udd04 __Next Change Available__",
      value: nextJobChangeDate,
      inline: true,
     }
