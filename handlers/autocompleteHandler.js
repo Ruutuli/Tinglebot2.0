@@ -117,6 +117,18 @@ async function handleAutocomplete(interaction) {
     switch (commandName) {
       // ... existing code ...
 
+      // ------------------- Mod Command -------------------
+      case "mod":
+        const modSubcommand = interaction.options.getSubcommand();
+        if (modSubcommand === "give") {
+          if (focusedName === "character") {
+            await handleModGiveCharacterAutocomplete(interaction, focusedOption);
+          } else if (focusedName === "item") {
+            await handleModGiveItemAutocomplete(interaction, focusedOption);
+          }
+        }
+        break;
+
       // ------------------- Crafting Command -------------------
       case "crafting":
         if (focusedName === "charactername") {
@@ -1007,18 +1019,21 @@ async function handleGiftAutocomplete(interaction, focusedOption, focusedValue) 
 
 // ------------------- Function: handleGiftFromCharacterAutocomplete -------------------
 // Provides autocomplete for selecting the source character in a gift
-async function handleGiftFromCharacterAutocomplete(interaction, focusedValue) {
+async function handleGiftFromCharacterAutocomplete(interaction, focusedOption) {
   try {
     const userId = interaction.user.id;
     const characters = await fetchCharactersByUserId(userId);
+    
+    // Ensure focusedValue is a string and has a default value
+    const focusedValue = focusedOption?.value?.toString() || '';
+    
     const choices = characters
       .filter(char => char.name.toLowerCase().includes(focusedValue.toLowerCase()))
       .map(char => ({
         name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
-        value: char.name  // Changed: Just return the character name as the value
-        value: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`
+        value: char.name
       }));
-    return await respondWithFilteredChoices(interaction, focusedValue, choices);
+    return await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
     console.error('[handleGiftFromCharacterAutocomplete]: Error:', error);
     return await safeRespondWithError(interaction);
@@ -1027,17 +1042,21 @@ async function handleGiftFromCharacterAutocomplete(interaction, focusedValue) {
 
 // ------------------- Function: handleGiftToCharacterAutocomplete -------------------
 // Provides autocomplete for selecting the target character in a gift
-async function handleGiftToCharacterAutocomplete(interaction, focusedValue) {
+async function handleGiftToCharacterAutocomplete(interaction, focusedOption) {
   try {
     const userId = interaction.user.id;
     const characters = await fetchAllCharactersExceptUser(userId);
+    
+    // Ensure focusedValue is a string and has a default value
+    const focusedValue = focusedOption?.value?.toString() || '';
+    
     const choices = characters
-      .filter(char => char.name.toLowerCase().includes(focusedValue))
+      .filter(char => char.name.toLowerCase().includes(focusedValue.toLowerCase()))
       .map(char => ({
         name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
-        value: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`
+        value: char.name
       }));
-    return await respondWithFilteredChoices(interaction, focusedValue, choices);
+    return await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
     console.error('[handleGiftToCharacterAutocomplete]: Error:', error);
     return await safeRespondWithError(interaction);
@@ -1148,17 +1167,21 @@ async function handleTransferAutocomplete(interaction, focusedOption, focusedVal
 
 // ------------------- Function: handleTransferFromCharacterAutocomplete -------------------
 // Provides autocomplete for selecting the source character in a transfer
-async function handleTransferFromCharacterAutocomplete(interaction, focusedValue) {
+async function handleTransferFromCharacterAutocomplete(interaction, focusedOption) {
   try {
     const userId = interaction.user.id;
     const characters = await fetchCharactersByUserId(userId);
+    
+    // Ensure focusedValue is a string and has a default value
+    const focusedValue = focusedOption?.value?.toString() || '';
+    
     const choices = characters
-      .filter(char => char.name.toLowerCase().includes(focusedValue))
+      .filter(char => char.name.toLowerCase().includes(focusedValue.toLowerCase()))
       .map(char => ({
         name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
         value: char.name
       }));
-    return await respondWithFilteredChoices(interaction, focusedValue, choices);
+    return await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
     console.error('[handleTransferFromCharacterAutocomplete]: Error:', error);
     return await safeRespondWithError(interaction);
@@ -1167,17 +1190,21 @@ async function handleTransferFromCharacterAutocomplete(interaction, focusedValue
 
 // ------------------- Function: handleTransferToCharacterAutocomplete -------------------
 // Provides autocomplete for selecting the target character in a transfer
-async function handleTransferToCharacterAutocomplete(interaction, focusedValue) {
+async function handleTransferToCharacterAutocomplete(interaction, focusedOption) {
   try {
     const userId = interaction.user.id;
-    const characters = await fetchAllCharactersExceptUser(userId);
+    const characters = await fetchCharactersByUserId(userId);
+    
+    // Ensure focusedValue is a string and has a default value
+    const focusedValue = focusedOption?.value?.toString() || '';
+    
     const choices = characters
-      .filter(char => char.name.toLowerCase().includes(focusedValue))
+      .filter(char => char.name.toLowerCase().includes(focusedValue.toLowerCase()))
       .map(char => ({
         name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
         value: char.name
       }));
-    return await respondWithFilteredChoices(interaction, focusedValue, choices);
+    return await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
     console.error('[handleTransferToCharacterAutocomplete]: Error:', error);
     return await safeRespondWithError(interaction);
@@ -2026,29 +2053,28 @@ async function handleLookupIngredientAutocomplete(interaction, focusedValue) {
 
 // ------------------- /mod give: Character Autocomplete -------------------
 async function handleModGiveCharacterAutocomplete(interaction, focusedOption) {
- try {
-  // Fetch all characters from the database
-  const characters = await fetchAllCharacters();
-  
-  // Map characters to autocomplete choices
-  const choices = characters.map((character) => ({
-   name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
-   value: character.name
-  }));
+  try {
+    // Fetch all characters from the database
+    const characters = await fetchAllCharacters();
+    
+    // Ensure focusedValue is a string and has a default value
+    const focusedValue = focusedOption?.value?.toString() || '';
+    
+    // Map characters to autocomplete choices
+    const choices = characters
+      .filter(char => char.name.toLowerCase().includes(focusedValue.toLowerCase()))
+      .map(char => ({
+        name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
+        value: char.name
+      }));
 
-  // Filter based on user input
-  const searchQuery = focusedOption.value?.toLowerCase() || "";
-  const filteredChoices = choices.filter(choice => 
-   choice.name.toLowerCase().includes(searchQuery)
-  );
-
-  // Respond with filtered choices (limit to 25)
-  await interaction.respond(filteredChoices.slice(0, 25));
- } catch (error) {
-  handleError(error, "autocompleteHandler.js");
-  console.error("[handleModGiveCharacterAutocomplete]: Error:", error);
-  await safeRespondWithError(interaction);
- }
+    // Respond with filtered choices (limit to 25)
+    await interaction.respond(choices.slice(0, 25));
+  } catch (error) {
+    handleError(error, "autocompleteHandler.js");
+    console.error("[handleModGiveCharacterAutocomplete]: Error:", error);
+    await safeRespondWithError(interaction);
+  }
 }
 
 // ------------------- /mod give: Item Autocomplete -------------------
