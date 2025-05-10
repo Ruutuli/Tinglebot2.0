@@ -661,6 +661,7 @@ module.exports = {
           );
         } else if (focusedOption.name === "updatedinfo") {
           const selectedCategory = interaction.options.getString('category');
+          const characterName = interaction.options.getString('charactername')?.split(' | ')[0];
       
           if (selectedCategory === "job") {
             const allJobs = getAllJobs();
@@ -670,6 +671,14 @@ module.exports = {
               .map(job => ({ name: job, value: job }));
       
             await interaction.respond(filteredJobs);
+          } else if (selectedCategory === "Village" || selectedCategory === "homeVillage") {
+            const villages = ["inariko", "rudania", "vhintl"];
+            const filteredVillages = villages
+              .filter(village => village.toLowerCase().includes(focusedOption.value.toLowerCase()))
+              .slice(0, 25)
+              .map(village => ({ name: village, value: village }));
+      
+            await interaction.respond(filteredVillages);
           } else {
             await interaction.respond([]);
           }
@@ -927,7 +936,8 @@ async function handleEditCharacter(interaction) {
  await interaction.deferReply({ ephemeral: true });
 
  try {
-  const characterName = interaction.options.getString("charactername");
+  const fullCharacterName = interaction.options.getString("charactername");
+  const characterName = fullCharacterName?.split(' | ')[0];
   const category = interaction.options.getString("category");
   const updatedInfo = interaction.options.getString("updatedinfo");
   const userId = interaction.user.id;
