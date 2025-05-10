@@ -95,28 +95,18 @@ if (subcommand === 'request') {
           return;
       }
 
-      // Check inventory sync for character being healed
+      // Check inventory sync for all involved characters
       try {
         await checkInventorySync(characterToHeal);
+        if (healerCharacter) {
+          await checkInventorySync(healerCharacter);
+        }
       } catch (error) {
         await interaction.editReply({
           content: error.message,
           ephemeral: true
         });
         return;
-      }
-
-      // Check inventory sync for healer if specified
-      if (healerCharacter) {
-        try {
-          await checkInventorySync(healerCharacter);
-        } catch (error) {
-          await interaction.editReply({
-            content: `❌ **Error:** ${error.message}`,
-            ephemeral: true
-          });
-          return;
-        }
       }
 
       // Check if requested hearts exceed the character's max hearts
@@ -234,7 +224,7 @@ if (subcommand === 'fulfill') {
             return;
         }
 
-        // Check inventory sync for healer
+        // Check inventory sync for all involved characters
         try {
           await checkInventorySync(healerCharacter);
         } catch (error) {
@@ -322,12 +312,13 @@ if (subcommand === 'fulfill') {
             return;
         }
 
-        // Check inventory sync for character being healed
+        // Check inventory sync for all involved characters
         try {
+          await checkInventorySync(healerCharacter);
           await checkInventorySync(characterToHeal);
         } catch (error) {
           await interaction.editReply({
-            content: `❌ **Error:** ${error.message}`,
+            content: error.message,
             ephemeral: true
           });
           return;
