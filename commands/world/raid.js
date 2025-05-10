@@ -4,6 +4,7 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 
 const { handleError } = require('../../utils/globalErrorHandler.js');
+const { checkInventorySync } = require('../../utils/characterUtils.js');
 // Local service and module imports
 const { fetchCharacterByNameAndUserId, fetchMonsterByName } = require('../../database/db.js');
 const { processBattle } = require('../../modules/encounterModule.js');
@@ -49,13 +50,14 @@ async execute(interaction) {
           return;
       }
 
-      if (!character.inventorySynced) {
-          console.log("[ERROR] Inventory not synced.");
-          await interaction.editReply({
-              content: `❌ **You cannot use the raid command because "${character.name}"'s inventory is not set up yet. Please use the </testinventorysetup> and then </syncinventory> commands to initialize the inventory.**`,
-              ephemeral: true,
-          });
-          return;
+      try {
+        await checkInventorySync(character);
+      } catch (error) {
+        await interaction.editReply({
+          content: error.message,
+          ephemeral: true
+        });
+        return;
       }
 
       if (character.currentHearts <= 0 || character.ko) {

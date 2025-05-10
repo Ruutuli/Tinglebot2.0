@@ -58,6 +58,7 @@ const {
 } = require('../utils/storage.js');
 const { generateUniqueId } = require('../utils/uniqueIdUtils');
 const { syncInventory } = require('./syncHandler');
+const { checkInventorySync } = require('../utils/characterUtils');
 
 // ============================================================================
 // ------------------- Blight Submission Persistence -------------------
@@ -283,18 +284,14 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
     }
 
     // ------------------- Force Inventory Sync Before Healing -------------------
-    if (!character.inventorySynced) {
+    try {
+      await checkInventorySync(character);
+    } catch (error) {
       await interaction.editReply({
-        content: '🔄 **Syncing inventory before healing attempt...**'
+        content: error.message,
+        ephemeral: true
       });
-      await syncInventory(character.name, interaction.user.id, interaction);
-      // Refresh character data after sync
-      character = await Character.findOne({ name: submission.characterName });
-      if (!character.inventorySynced) {
-        return void await interaction.editReply({
-          content: '❌ **Inventory sync failed. Please try again or contact support.**'
-        });
-      }
+      return;
     }
 
     // Token forfeit option
