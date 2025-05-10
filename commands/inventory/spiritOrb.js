@@ -70,7 +70,15 @@ async function execute(interaction) {
     }
 
     // Check inventory sync before proceeding
-    await checkInventorySync(character);
+    try {
+      await checkInventorySync(character);
+    } catch (error) {
+      await interaction.reply({
+        content: error.message,
+        ephemeral: true
+      });
+      return;
+    }
 
     // ------------------- Load Inventory Collection -------------------
     const inventoryCollection = await getCharacterInventoryCollection(character.name);
