@@ -30,7 +30,7 @@ const ItemModel = require('../models/ItemModel');
 const { handleError } = require('../utils/globalErrorHandler');
 const { editCharacterNotFoundMessage, editSyncErrorMessage, editSyncMessage } = require('../embeds/embeds');
 const { removeInitialItemIfSynced, syncToInventoryDatabase } = require('../utils/inventoryUtils');
-const { authorizeSheets, getSheetIdByTitle, readSheetData, writeBatchData } = require('../utils/googleSheetsUtils');
+const { authorizeSheets, getSheetIdByTitle, readSheetData, writeBatchData, validateInventorySheet } = require('../utils/googleSheetsUtils');
 const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../utils/validation');
 
 // ============================================================================
@@ -198,21 +198,14 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
         const auth = await authorizeSheets();
         const spreadsheetId = extractSpreadsheetId(inventoryUrl);
         
-        // Check permissions first and fail fast if there's an issue
-        try {
-            await google.sheets({ version: 'v4', auth }).spreadsheets.get({ spreadsheetId });
-        } catch (error) {
-            if (error.status === 403 || error.message.includes('does not have permission')) {
-                const serviceAccountEmail = JSON.parse(fs.readFileSync(SERVICE_ACCOUNT_PATH)).client_email;
-                console.error(`[syncHandler.js]: ⚠️ Permission error when accessing Google Sheet: ${error.message}`);
-                await editSyncErrorMessage(interaction, 
-                    `⚠️ **Permission Error:**\n` +
-                    `The service account (${serviceAccountEmail}) does not have access to this spreadsheet.\n\n` +
-                    `To fix this:\n1. Open the Google Spreadsheet\n2. Click "Share" in the top right\n3. Add ${serviceAccountEmail} as an Editor\n4. Make sure to give it at least "Editor" access`
-                );
-                return;
-            }
-            throw error;
+        // Validate the inventory sheet before proceeding
+        console.log(`[syncHandler.js]: 🔍 Validating inventory sheet for ${characterName}...`);
+        const validationResult = await validateInventorySheet(inventoryUrl, characterName);
+        
+        if (!validationResult.success) {
+            console.log(`[syncHandler.js]: ❌ Validation failed: ${validationResult.message}`);
+            await editSyncErrorMessage(interaction, validationResult.message);
+            return;
         }
 
         // Get sheet ID and read data
@@ -242,6 +235,9 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
             await editSyncErrorMessage(interaction, `❌ **No matching data found for ${character.name} in the Google Sheet.**\n\nYou must have at least 1 item! If this is a new character, please add their starter gear.`);
             return;
         }
+
+        console.log(`[syncHandler.js]: ✅ All validation checks passed for ${characterName}`);
+        console.log(`[syncHandler.js]: 📦 Starting batch processing...`);
 
         // Process items in batches
         let batchRequests = [];
