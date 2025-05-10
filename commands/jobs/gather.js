@@ -55,21 +55,48 @@ const villageChannels = {
 // ------------------- Helper Functions -------------------
 // Check if a daily roll is available for a specific activity
 function canUseDailyRoll(character, activity) {
+  // If character has an active job voucher, they can always use the command
+  if (character.jobVoucher) {
+    console.log(`[gather.js]: Job voucher active for ${character.name}, bypassing daily limit`);
+    return true;
+  }
+
   const now = new Date();
   const rollover = new Date();
   rollover.setUTCHours(13, 0, 0, 0); // 8AM EST = 1PM UTC
 
+  // If we're before rollover time, use yesterday's rollover
+  if (now < rollover) {
+    rollover.setDate(rollover.getDate() - 1);
+  }
+
   const lastRoll = character.dailyRoll.get(activity);
-  if (!lastRoll) return true;
+  if (!lastRoll) {
+    console.log(`[gather.js]: No previous roll found for ${character.name}`);
+    return true;
+  }
 
   const lastRollDate = new Date(lastRoll);
-  return lastRollDate < rollover || now < rollover;
+  const canUse = lastRollDate < rollover;
+  
+  console.log(`[gather.js]: Daily roll check for ${character.name}:`, {
+    lastRoll: lastRollDate.toISOString(),
+    rollover: rollover.toISOString(),
+    canUse: canUse
+  });
+  
+  return canUse;
 }
 
 // Update the daily roll timestamp for an activity
 async function updateDailyRoll(character, activity) {
-  character.dailyRoll.set(activity, new Date().toISOString());
+  if (!character.dailyRoll) {
+    character.dailyRoll = new Map();
+  }
+  const now = new Date().toISOString();
+  character.dailyRoll.set(activity, now);
   await character.save();
+  console.log(`[gather.js]: Updated daily roll for ${character.name} - ${activity} at ${now}`);
 }
 
 // ------------------- Command Definition -------------------
@@ -87,10 +114,8 @@ module.exports = {
   // ------------------- Command Execution Logic -------------------
   async execute(interaction) {
     try {
-      // ------------------- Acknowledge Interaction -------------------
       await interaction.deferReply();
 
-      // ------------------- Step 1: Validate Character -------------------
       const characterName = interaction.options.getString('charactername');
       const character = await fetchCharacterByNameAndUserId(characterName, interaction.user.id);
       if (!character) {
@@ -100,16 +125,21 @@ module.exports = {
         return;
       }
 
-      // ------------------- Daily Gather Limit -------------------
-      if (!canUseDailyRoll(character, 'gather')) {
-        await interaction.editReply({
-          content: `⏳ **${character.name} has already gathered today!**\n🌅 **Daily gather limit resets at 8AM EST (1PM UTC).**`,
-          ephemeral: true,
-        });
-        return;
+      // Check for job voucher and daily roll at the start
+      if (character.jobVoucher) {
+        console.log(`[gather.js]: Active job voucher found for ${character.name}`);
+      } else {
+        console.log(`[gather.js]: No active job voucher for ${character.name}`);
+        if (!canUseDailyRoll(character, 'gather')) {
+          await interaction.editReply({
+            content: `*${character.name} looks tired from their earlier gathering...*\n\n**Daily gathering limit reached.**\nThe next opportunity to gather will be available at 8AM EST.\n\n*Tip: A job voucher would allow you to gather again today.*`,
+            ephemeral: true,
+          });
+          return;
+        }
       }
 
-       // Check if the character is KOed.
+      // Check if the character is KOed.
       if (character.isKO) {
         await interaction.editReply({
           content: `❌ **${character.name} is currently KOed and cannot gather.**\n💤 **Let them rest and recover before gathering again.**`,
@@ -491,8 +521,9 @@ await character.save();
         }
       }
 
-      // After successful gathering, update the daily roll
+      // At the end of successful gathering, update the daily roll
       await updateDailyRoll(character, 'gather');
+      console.log(`[gather.js]: Successfully updated daily roll for ${character.name}`);
 
     } catch (error) {
     handleError(error, 'gather.js');
@@ -507,7 +538,7 @@ await character.save();
         },
       });
       await interaction.editReply({
-        content: `⚠️ **An error occurred during the gathering process. Debug info: ${error.message}.**`,
+        content: `⚠️ **An error occurred during the gathering process.**`,
       });
     }
   },
