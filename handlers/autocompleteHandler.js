@@ -112,85 +112,58 @@ async function handleAutocomplete(interaction) {
   try {
     const commandName = interaction.commandName;
     const focusedOption = interaction.options.getFocused(true);
-    
-    if (!focusedOption) {
-      await interaction.respond([]);
-      return;
-    }
-
-    const focusedValue = focusedOption.value;
     const focusedName = focusedOption.name;
 
-    // Handle vending command autocomplete
-    if (commandName === 'vending') {
-      const subcommand = interaction.options.getSubcommand();
-      
-      switch (subcommand) {
-        case 'view':
-          return await handleVendingViewAutocomplete(interaction, focusedOption);
-        case 'barter':
-          return await handleVendingBarterAutocomplete(interaction, focusedOption);
-        case 'add':
-          return await handleVendingAddAutocomplete(interaction, focusedOption);
-        case 'edit':
-          return await handleVendingBarterAutocomplete(interaction, focusedOption);
-        default:
-          return await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, commandName);
-      }
-    }
-
     switch (commandName) {
-      // ------------------- Lookup Command -------------------
-      case "lookup":
-        await handleLookupAutocomplete(interaction, focusedOption);
+      // ... existing code ...
+
+      // ------------------- Crafting Command -------------------
+      case "crafting":
+        if (focusedName === "charactername") {
+          await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "crafting");
+        } else if (focusedName === "itemname") {
+          await handleCraftingAutocomplete(interaction, focusedOption);
+        }
         break;
 
-      // ------------------- Economy Commands -------------------
+      // ------------------- Character Command -------------------
+      case "character":
+        const subcommandGroup = interaction.options.getSubcommandGroup(false);
+        const subcommand = interaction.options.getSubcommand();
+        
+        if (subcommandGroup === "create") {
+          if (focusedName === "race") {
+            await handleCreateCharacterRaceAutocomplete(interaction, focusedOption);
+          } else if (focusedName === "village") {
+            await handleCreateCharacterVillageAutocomplete(interaction, focusedOption);
+          }
+        }
+        break;
+
+      // ------------------- Economy Command -------------------
       case "economy":
-        await handleEconomyAutocomplete(interaction, focusedOption);
-        break;
-
-      // ------------------- View Inventory Command -------------------
-      case "viewinventory":
-        if (focusedName === "charactername") {
-          await handleViewInventoryAutocomplete(interaction, focusedOption);
+        const economySubcommand = interaction.options.getSubcommand();
+        
+        if (economySubcommand === "gift") {
+          if (focusedName === "fromcharacter") {
+            await handleGiftFromCharacterAutocomplete(interaction, focusedOption);
+          } else if (focusedName === "tocharacter") {
+            await handleGiftToCharacterAutocomplete(interaction, focusedOption);
+          } else if (["itema", "itemb", "itemc"].includes(focusedName)) {
+            await handleGiftItemAutocomplete(interaction, focusedOption);
+          }
+        } else if (economySubcommand === "transfer") {
+          if (focusedName === "fromcharacter") {
+            await handleTransferFromCharacterAutocomplete(interaction, focusedOption);
+          } else if (focusedName === "tocharacter") {
+            await handleTransferToCharacterAutocomplete(interaction, focusedOption);
+          } else if (["itema", "itemb", "itemc"].includes(focusedName)) {
+            await handleTransferItemAutocomplete(interaction, focusedOption);
+          }
         }
         break;
 
-      // ------------------- Resource Gathering Commands -------------------
-      case "gather":
-        if (focusedName === "charactername") {
-          await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "gather");
-        }
-        break;
-
-      case "loot":
-        if (focusedName === "charactername") {
-          await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "loot");
-        }
-        break;
-
-      // ------------------- Special Weather Command -------------------
-      case "specialweather":
-        if (focusedName === "charactername") {
-          await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "specialweather");
-        }
-        break;
-
-      // ------------------- Pet Management Commands -------------------
-      case "pet":
-        if (focusedName === "charactername") {
-          await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "pet");
-        } else if (focusedName === "petname") {
-          await handlePetNameAutocomplete(interaction, focusedOption);
-        } else if (focusedName === "species") {
-          await handlePetSpeciesAutocomplete(interaction, focusedOption);
-        } else if (focusedName === "rolltype") {
-          await handlePetRollTypeAutocomplete(interaction, focusedOption);
-        }
-        break;
-
-      // ------------------- Item Management Commands -------------------
+      // ------------------- Item Command -------------------
       case "item":
         if (focusedName === "charactername") {
           await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "item");
@@ -201,118 +174,12 @@ async function handleAutocomplete(interaction) {
         }
         break;
 
-      // ------------------- Equipment Commands -------------------
-      case "gear":
-        if (focusedName === "charactername") {
-          await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "gear");
-        } else if (focusedName === "itemname") {
-          await handleGearAutocomplete(interaction, focusedOption);
-        }
-        break;
-
-      case "customweapon":
-        if (focusedName === "charactername") {
-          await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "customweapon");
-        } else if (focusedName === "baseweapon") {
-          await handleBaseWeaponAutocomplete(interaction);
-        }
-        break;
-
-      // ------------------- Mount Commands -------------------
-      case "mount":
-        if (focusedName === "charactername") {
-          await handleMountAutocomplete(interaction, focusedOption);
-        } else if (focusedName === "mountname") {
-          await handleMountNameAutocomplete(interaction, focusedOption);
-        }
-        break;
-
-      // ------------------- Exploration Commands -------------------
-      case "explore":
-        if (focusedName === "charactername") {
-          await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "explore");
-        } else if (focusedName === "item1" || focusedName === "item2" || focusedName === "item3") {
-          await handleExploreItemAutocomplete(interaction, focusedOption);
-        }
-        break;
-
-      case "raid":
-        if (focusedName === "charactername") {
-          await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "raid");
-        }
-        break;
-
-      // ------------------- Stealth Commands -------------------
-      case "steal":
-        if (focusedName === "charactername") {
-          await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "steal");
-        } else if (focusedName === "target") {
-          await handleStealTargetAutocomplete(interaction, focusedOption);
-        } else if (focusedName === "rarity") {
-          await handleStealRarityAutocomplete(interaction, focusedOption);
-        }
-        break;
-
-      // ------------------- Village Commands -------------------
-      case "village":
-        if (focusedName === "charactername") {
-          await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "village");
-        } else if (focusedName === "itemname") {
-          await handleVillageMaterialsAutocomplete(interaction);
-        }
-        break;
-
-      // ------------------- Character Management Commands -------------------
-      case "character":
-        if (focusedName === "charactername") {
-          await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "character");
-        } else if (focusedName === "race") {
-          await handleCreateCharacterRaceAutocomplete(interaction, focusedOption);
-        } else if (focusedName === "village") {
-          await handleCreateCharacterVillageAutocomplete(interaction, focusedOption);
-        }
-        break;
-
-      case "syncinventory":
-        if (focusedName === "charactername") {
-          await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "syncinventory");
-        }
-        break;
-
-      // ------------------- Travel Commands -------------------
-      case "travel":
-        if (focusedName === "charactername") {
-          await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "travel");
-        } else if (focusedName === "destination") {
-          await handleVillageBasedCommandsAutocomplete(interaction, focusedOption);
-        }
-        break;
-
-      // ------------------- Mod Commands -------------------
-      case "mod":
-        if (focusedName === "character" && interaction.options.getSubcommand() === "vendingreset") {
-          // Fetch all characters for vendingreset
-          const characters = await fetchAllCharacters();
-          const filtered = characters
-            .filter(c => c.name.toLowerCase().includes(focusedValue.toLowerCase()))
-            .slice(0, 25)
-            .map(c => ({ name: c.name, value: c.name }));
-          await interaction.respond(filtered);
-        } else if (focusedName === "character" && interaction.options.getSubcommand() === "give") {
-          await handleModGiveCharacterAutocomplete(interaction, focusedOption);
-        } else if (focusedName === "item" && interaction.options.getSubcommand() === "give") {
-          await handleModGiveItemAutocomplete(interaction, focusedOption);
-        } else if (focusedName === "character" && interaction.options.getSubcommand() === "petlevel") {
-          await handleModCharacterAutocomplete(interaction, focusedOption);
-        }
-        break;
-
-      default:
-        await interaction.respond([]);
+      // ... rest of existing code ...
     }
   } catch (error) {
-    console.error('[handleAutocomplete]: Error:', error);
-    await interaction.respond([]);
+    handleError(error, "autocompleteHandler.js");
+    console.error(`[handleAutocomplete]: Error:`, error);
+    await safeRespondWithError(interaction);
   }
 }
 
@@ -1145,9 +1012,10 @@ async function handleGiftFromCharacterAutocomplete(interaction, focusedValue) {
     const userId = interaction.user.id;
     const characters = await fetchCharactersByUserId(userId);
     const choices = characters
-      .filter(char => char.name.toLowerCase().includes(focusedValue))
+      .filter(char => char.name.toLowerCase().includes(focusedValue.toLowerCase()))
       .map(char => ({
         name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
+        value: char.name  // Changed: Just return the character name as the value
         value: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`
       }));
     return await respondWithFilteredChoices(interaction, focusedValue, choices);
