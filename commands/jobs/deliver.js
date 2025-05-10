@@ -20,6 +20,7 @@ const { generateUniqueId } = require('../../utils/uniqueIdUtils');
 const { deleteSubmissionFromStorage, retrieveSubmissionFromStorage, saveSubmissionToStorage } = require('../../utils/storage');
 const { validateJobVoucher, activateJobVoucher, fetchJobVoucherItem, deactivateJobVoucher, getJobVoucherErrorMessage } = require('../../modules/jobVoucherModule');
 const { getJobPerk } = require('../../modules/jobsModule');
+const { checkInventorySync } = require('../../utils/characterUtils');
 
 // ------------------- Database Models -------------------
 const ItemModel = require('../../models/ItemModel');
@@ -178,6 +179,15 @@ const command = {
         const senderName = interaction.options.getString('sender');
         const courierName = interaction.options.getString('courier');
         const recipientName = interaction.options.getString('recipient');
+
+        // Check inventory sync for all involved characters
+        const sender = await fetchCharacterByName(senderName);
+        const courier = await fetchCharacterByName(courierName);
+        const recipient = await fetchCharacterByName(recipientName);
+
+        if (sender) await checkInventorySync(sender);
+        if (courier) await checkInventorySync(courier);
+        if (recipient) await checkInventorySync(recipient);
 
         // ------------------- Validate: Sender cannot be Recipient -------------------
         if (senderName === recipientName) {

@@ -27,6 +27,7 @@ const {
 } = require("../../utils/validation.js");
 const { addItemInventoryDatabase } = require("../../utils/inventoryUtils.js");
 const { isBloodMoonActive } = require("../../scripts/bloodmoon.js");
+const { checkInventorySync } = require('../../utils/characterUtils');
 
 // Modules - Job, Location, Damage, and Formatting Logic
 const { getJobPerk, isValidJob } = require("../../modules/jobsModule.js");
@@ -160,6 +161,17 @@ module.exports = {
     return;
    }
 
+   // Check inventory sync before proceeding
+   try {
+     await checkInventorySync(character);
+   } catch (error) {
+     await interaction.editReply({
+       content: error.message,
+       ephemeral: true
+     });
+     return;
+   }
+
    // Check for job voucher and daily roll at the start
    if (character.jobVoucher) {
      console.log(`[Loot Command]: Active job voucher found for ${character.name}`);
@@ -196,15 +208,15 @@ module.exports = {
     return;
    }
 
-   // ------------------- New: Ensure inventory is initialized -------------------
-   if (!character.inventorySynced) {
-    await interaction.editReply({
-     content:
-      `❌ **${character.name}’s inventory is not set up yet.**\n` +
-      `Please run \`/testinventorysetup\` and then \`/syncinventory\` to initialize your inventory.`,
-     ephemeral: true,
-    });
-    return;
+   // Check inventory sync before proceeding
+   try {
+     await checkInventorySync(character);
+   } catch (error) {
+     await interaction.editReply({
+       content: error.message,
+       ephemeral: true
+     });
+     return;
    }
 
    // ------------------- Step 3: Check Hearts and Job Validity -------------------

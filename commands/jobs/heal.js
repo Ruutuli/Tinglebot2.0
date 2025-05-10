@@ -13,6 +13,7 @@ const {
 const { createHealEmbed, createHealingEmbed } = require('../../embeds/embeds.js');
 const { validateJobVoucher, activateJobVoucher, fetchJobVoucherItem, deactivateJobVoucher, getJobVoucherErrorMessage } = require('../../modules/jobVoucherModule.js');
 const { handleTradeItemAutocomplete } = require('../../handlers/autocompleteHandler.js');
+const { checkInventorySync } = require('../../utils/characterUtils');
 
 
 module.exports = {
@@ -92,6 +93,30 @@ if (subcommand === 'request') {
       if (!characterToHeal) {
           await interaction.editReply('❌ **Error:** This character does not belong to you!');
           return;
+      }
+
+      // Check inventory sync for character being healed
+      try {
+        await checkInventorySync(characterToHeal);
+      } catch (error) {
+        await interaction.editReply({
+          content: error.message,
+          ephemeral: true
+        });
+        return;
+      }
+
+      // Check inventory sync for healer if specified
+      if (healerCharacter) {
+        try {
+          await checkInventorySync(healerCharacter);
+        } catch (error) {
+          await interaction.editReply({
+            content: `❌ **Error:** ${error.message}`,
+            ephemeral: true
+          });
+          return;
+        }
       }
 
       // Check if requested hearts exceed the character's max hearts
@@ -209,6 +234,17 @@ if (subcommand === 'fulfill') {
             return;
         }
 
+        // Check inventory sync for healer
+        try {
+          await checkInventorySync(healerCharacter);
+        } catch (error) {
+          await interaction.editReply({
+            content: error.message,
+            ephemeral: true
+          });
+          return;
+        }
+
         // Determine the healer's job
         const job = healerCharacter.jobVoucher && healerCharacter.jobVoucherJob
             ? healerCharacter.jobVoucherJob
@@ -284,6 +320,17 @@ if (subcommand === 'fulfill') {
                 `❌ **Error:** The character to be healed, **${healingRequest.characterRequesting}**, could not be found.`
             );
             return;
+        }
+
+        // Check inventory sync for character being healed
+        try {
+          await checkInventorySync(characterToHeal);
+        } catch (error) {
+          await interaction.editReply({
+            content: `❌ **Error:** ${error.message}`,
+            ephemeral: true
+          });
+          return;
         }
 
         // Check if the character has a debuff preventing healing

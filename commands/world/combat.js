@@ -17,6 +17,7 @@ const { fetchCharacterByName, fetchCharacterByNameAndUserId } = require('../../d
 // Combat module functions (alphabetized within this group).
 const { getBattleProgressById, startPvPBattle, takePvPTurn, getTotalDefense  } = require('../../modules/pvpCombatModule');
 const { getGearModLevel } = require('../../modules/gearModule');
+const { checkInventorySync } = require('../../utils/characterUtils');
 
 // ============================================================================
 // /combat Command Definition and Execution
@@ -75,6 +76,17 @@ module.exports = {
 
       if (attacker.ko || attacker.currentHearts <= 0) {
         return await interaction.editReply(`💤 **${attacker.name}** is KO'd and cannot fight.`);
+      }
+
+      // Check inventory sync before proceeding
+      try {
+        await checkInventorySync(attacker);
+      } catch (error) {
+        await interaction.editReply({
+          content: error.message,
+          ephemeral: true
+        });
+        return;
       }
 
       // ------------------- PvP Challenge Subcommand -------------------

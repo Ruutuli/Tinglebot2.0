@@ -28,6 +28,7 @@ const { getVillageRegionByName } = require('../../modules/locationsModule.js');
 const { useHearts, handleKO, updateCurrentHearts } = require('../../modules/characterStatsModule.js');
 const { capitalizeWords } = require('../../modules/formattingModule.js');
 const { validateJobVoucher, activateJobVoucher, fetchJobVoucherItem, deactivateJobVoucher, getJobVoucherErrorMessage } = require('../../modules/jobVoucherModule.js');
+const { checkInventorySync } = require('../../utils/characterUtils');
 
 
 // ------------------- Utilities -------------------
@@ -125,6 +126,9 @@ module.exports = {
         return;
       }
 
+      // Check inventory sync before proceeding
+      await checkInventorySync(character);
+
       // Check for job voucher and daily roll at the start
       if (character.jobVoucher) {
         console.log(`[gather.js]: Active job voucher found for ${character.name}`);
@@ -171,16 +175,7 @@ module.exports = {
         return;
       }
 
-      // ------------------- Step 3: Validate Inventory -------------------
-      if (!character.inventorySynced) {
-        await interaction.editReply({
-          content: `❌ **Inventory not set up.**\n🛠️ **Please use the required commands to initialize your inventory before gathering.**`,
-          ephemeral: true,
-        });
-        return;
-      }
-
-      // ------------------- Step 4: Validate Job -------------------
+      // ------------------- Step 3: Validate Job -------------------
       let job = (character.jobVoucher && character.jobVoucherJob) ? character.jobVoucherJob : character.job;
       if (!job || typeof job !== 'string' || !job.trim() || !isValidJob(job)) {
         console.error(`[gather.js]: Job validation failed for ${character.name}. Invalid Job: ${job}`);
