@@ -215,47 +215,47 @@ module.exports = {
 
    // Validate job voucher (without consuming it)
    if (character.jobVoucher) {
-    console.error(
-     `[Loot Command]: Job voucher detected for ${character.name}. Validating voucher.`
-    );
-    const voucherValidation = await validateJobVoucher(character, job);
-    if (voucherValidation.skipVoucher) {
-      console.error(
-       `[Loot Command]: ${character.name} already has job "${job}". Skipping voucher use.`
-      );
-      // No activation needed
-    }
-      if (character.jobVoucherJob === null) {
-        console.error(
-         `[Loot Command]: Job voucher is unrestricted. Proceeding with job: "${job}".`
-        );
-      } else {
-        await interaction.editReply({
-         content: voucherValidation.message,
+     console.error(
+       `[Loot Command]: Job voucher detected for ${character.name}. Validating voucher.`
+     );
+     const voucherValidation = await validateJobVoucher(character, job);
+     if (voucherValidation.skipVoucher) {
+       console.error(
+         `[Loot Command]: ${character.name} already has job "${job}". Skipping voucher use.`
+       );
+       // No activation needed
+     } else {
+       if (character.jobVoucherJob === null) {
+         console.error(
+           `[Loot Command]: Job voucher is unrestricted. Proceeding with job: "${job}".`
+         );
+       } else {
+         await interaction.editReply({
+           content: voucherValidation.message,
+           ephemeral: true,
+         });
+         return;
+       }
+     }
+   } else {
+     console.error(`[Loot Command]: Activating job voucher for ${character.name}.`);
+     const { success: itemSuccess, item: jobVoucherItem, message: itemError } = await fetchJobVoucherItem();
+     if (!itemSuccess) {
+       await interaction.editReply({ content: itemError, ephemeral: true });
+       return;
+     }
+     const activationResult = await activateJobVoucher(character, job, jobVoucherItem, 1, interaction);
+     if (!activationResult.success) {
+       await interaction.editReply({
+         content: activationResult.message,
          ephemeral: true,
-        });
-        return;
-      }
-    } else {
-      console.error(`[Loot Command]: Activating job voucher for ${character.name}.`);
-      const { success: itemSuccess, item: jobVoucherItem, message: itemError } = await fetchJobVoucherItem();
-      if (!itemSuccess) {
-        await interaction.editReply({ content: itemError, ephemeral: true });
-        return;
-      }
-      const activationResult = await activateJobVoucher(character, job, jobVoucherItem, 1, interaction);
-      if (!activationResult.success) {
-        await interaction.editReply({
-          content: activationResult.message,
-          ephemeral: true,
-        });
-        return;
-      }
-      await interaction.followUp({
-        content: activationResult.message,
-        ephemeral: true,
-      });
-    }
+       });
+       return;
+     }
+     await interaction.followUp({
+       content: activationResult.message,
+       ephemeral: true,
+     });
    }
 
    // Validate job perks
