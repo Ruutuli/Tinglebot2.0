@@ -124,21 +124,19 @@ async function initializeClient() {
         console.log("[index.js]: 🤖 Bot is online");
 
         try {
+          // Initialize core systems
           initializeReactionHandler(client);
-          console.log("[index.js]: ✅ Reaction handler initialized");
-
           logBloodMoonStatus();
-          console.log("[index.js]: 🌕 Blood Moon status checked");
-
-          // Initialize all schedulers
           initializeScheduler(client);
-          console.log("[index.js]: ⏰ All schedulers initialized");
-
           initializeRandomEncounterBot(client);
-          console.log(
-            "[index.js]: ⚔️ Random encounter functionality initialized"
-          );
 
+          // Log initialization status
+          console.log("----------------------------------------------------------");
+          console.log("✅ Core Systems Initialized:");
+          console.log("  • Reaction Handler");
+          console.log("  • Blood Moon Tracker");
+          console.log("  • Scheduler");
+          console.log("  • Random Encounters");
           console.log("==========================================================");
           console.log("Tinglebot 2.0 is fully operational!");
           console.log("==========================================================");
@@ -437,17 +435,13 @@ function logBloodMoonStatus() {
     isBloodMoon = isBloodMoonDay();
   } catch (error) {
     handleError(error, "index.js");
-    console.error(
-      "[index.js]: Error checking Blood Moon status:",
-      error.message
-    );
+    console.error("[index.js]: ❌ Blood Moon check failed:", error.message);
   }
 
-  console.log(
-    `[index.js]: 🌕 Blood Moon Today (Real Date: ${today
-      .toISOString()
-      .slice(0, 10)}, Hyrulean Date: ${hyruleanDate}): ${isBloodMoon}`
-  );
+  // Only log if it's a blood moon day
+  if (isBloodMoon) {
+    console.log(`[index.js]: 🌕 Blood Moon Active (${hyruleanDate})`);
+  }
 }
 
 initializeClient();

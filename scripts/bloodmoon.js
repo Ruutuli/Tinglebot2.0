@@ -36,7 +36,7 @@ async function sendBloodMoonAnnouncement(client, channelId, message) {
       .setColor('#8B0000')
       .setAuthor({ name: 'Blood Moon Rising', iconURL: 'https://static.wikia.nocookie.net/zelda_gamepedia_en/images/d/dc/HWAoC_Blood_Moon_Icon.png/revision/latest/scale-to-width-down/250?cb=20210328041409' })
       .setDescription(
-        `**${message}**\n\n**Beware the monsters, as they are drawn to the moon’s red glow.**\n\n🌕 **Real-World Date:** ${realWorldDate}\n🌕 **Hyrulean Date:** ${hyruleanDate}`
+        `**${message}**\n\n**Beware the monsters, as they are drawn to the moon's red glow.**\n\n🌕 **Real-World Date:** ${realWorldDate}\n🌕 **Hyrulean Date:** ${hyruleanDate}`
       )
       .setImage('https://oyster.ignimgs.com/mediawiki/apis.ign.com/the-legend-of-zelda-hd/e/e7/The_Legend_of_Zelda._Breath_of_the_Wild_Screen_Shot_3-16-17%2C_1.22_PM.png?width=1280')
       .setTimestamp();
@@ -112,11 +112,11 @@ function isBloodMoonDay() {
 // Checks Blood Moon status and updates channel names and announcements accordingly.
 async function trackBloodMoon(client, channelId) {
   if (isBloodMoonDay()) {
-    console.log('[bloodmoon.js]: logs 🌕 Blood Moon is ACTIVE.');
+    console.log('[bloodmoon.js]: 🌕 Blood Moon Active');
     await renameChannels(client);
     await sendBloodMoonAnnouncement(client, channelId, 'The Blood Moon is upon us! Beware!');
   } else {
-    console.log('[bloodmoon.js]: logs 🌑 No Blood Moon today.');
+    console.log('[bloodmoon.js]: 🌑 Blood Moon Inactive');
     await revertChannelNames(client);
   }
 }
@@ -181,13 +181,12 @@ async function revertChannelNames(client) {
 // Immediately triggers the Blood Moon event by sending announcements and renaming channels.
 async function triggerBloodMoonNow(client, channelId) {
   try {
-    console.log(`[bloodmoon.js]: logs Triggering Blood Moon for channel ${channelId}`);
+    console.log(`[bloodmoon.js]: 🌕 Triggering Blood Moon`);
     await sendBloodMoonAnnouncement(client, channelId, 'The Blood Moon is upon us! Beware!');
     await renameChannels(client);
   } catch (error) {
     handleError(error, 'bloodmoon.js');
-
-    console.error(`[bloodmoon.js]: logs [triggerBloodMoonNow] Error: ${error.message}`);
+    console.error(`[bloodmoon.js]: ❌ Blood Moon trigger failed: ${error.message}`);
   }
 }
 
