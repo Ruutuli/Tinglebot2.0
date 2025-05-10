@@ -5,7 +5,6 @@
 // Standard Libraries
 // ------------------- Importing Node.js core modules -------------------
 const fs = require('fs');
-const { handleError } = require('../utils/globalErrorHandler');
 const path = require('path');
 const Character = require('../models/CharacterModel');
 
@@ -35,7 +34,6 @@ async function authorizeSheets() {
     return new Promise((resolve, reject) => {
         fs.readFile(SERVICE_ACCOUNT_PATH, (err, content) => {
             if (err) {
-                logErrorDetails(`Error loading service account file: ${err}`);
                 return reject(`Error loading service account file: ${err}`);
             }
             const credentials = JSON.parse(content);
@@ -43,7 +41,6 @@ async function authorizeSheets() {
             const auth = new google.auth.JWT(client_email, null, private_key, SCOPES);
             auth.authorize((err, tokens) => {
                 if (err) {
-                    logErrorDetails(`Error authorizing service account: ${err}`);
                     return reject(`Error authorizing service account: ${err}`);
                 } else {
                     resolve(auth);
@@ -69,21 +66,13 @@ async function makeApiRequest(fn) {
             });
         } catch (error) {
             if (error.status === 403 || error.message.includes('does not have permission')) {
-                const errorMessage = `⚠️ Permission Error: The service account (${serviceAccountEmail}) does not have access to this spreadsheet.\n\nTo fix this:\n1. Open the Google Spreadsheet\n2. Click "Share" in the top right\n3. Add ${serviceAccountEmail} as an Editor\n4. Make sure to give it at least "Editor" access`;
-                console.error(`[googleSheetsUtils.js]: ${errorMessage}`);
-                throw new Error(errorMessage);
+                throw new Error(`⚠️ Permission Error: The service account (${serviceAccountEmail}) does not have access to this spreadsheet.\n\nTo fix this:\n1. Open the Google Spreadsheet\n2. Click "Share" in the top right\n3. Add ${serviceAccountEmail} as an Editor\n4. Make sure to give it at least "Editor" access`);
             }
         }
 
         // If we have permission, proceed with the actual request
         return await limiter.schedule(() => fn());
     } catch (error) {
-        // For other errors, just throw them
-        if (error.message.includes('Requested entity was not found')) {
-            console.warn(`[googleSheetsUtils.js]: Warning: Requested Google Sheet entity was not found.`);
-        } else if (!error.message.includes('Permission Error')) {
-            handleError(error, 'googleSheetsUtils.js');
-        }
         throw error;
     }
 }
@@ -158,7 +147,6 @@ async function appendSheetData(auth, spreadsheetId, range, values) {
                     resource
                 });
         } catch (err) {
-            logErrorDetails(err);
             throw new Error(
                 `Could not append data to sheet "${range.split('!')[0]}". ` +
                 `Please verify the spreadsheet ID, the sheet tab name, ` +
@@ -189,42 +177,51 @@ async function writeSheetData(auth, spreadsheetId, range, values) {
                     resource
                 });
         } catch (err) {
-            logErrorDetails(err);
-            throw new Error(
-                `Could not write to sheet "${range.split('!')[0]}". ` +
-                `Make sure the spreadsheet ID and range are correct ` +
-                `and that the service-account has Editor access.`
-            );
+            throw new Error(`Could not write to sheet "${range.split('!')[0]}". Make sure the spreadsheet ID and range are correct and that the service-account has Editor access.`);
         }
     });
 }
 
 // ------------------- Batch Write Data to Google Sheets -------------------
-// Writes a batch of updates to multiple ranges in Google Sheets.
+// Writes a batch of data to the Google Sheet.
 async function writeBatchData(auth, spreadsheetId, batchRequests) {
-    const requests = batchRequests.map(batch => ({
-        updateCells: {
-            range: {
-                sheetId: batch.sheetId,
-                startRowIndex: parseInt(batch.range.split('!A')[1].split(':')[0], 10) - 1,
-                endRowIndex: parseInt(batch.range.split('!A')[1].split(':')[0], 10),
-                startColumnIndex: 0,
-                endColumnIndex: 13
-            },
-            rows: batch.values.map(row => ({
-                values: row.map(cell => ({
-                    userEnteredValue: typeof cell === 'number' ? { numberValue: cell } : { stringValue: cell.toString() }
-                }))
-            })),
-            fields: 'userEnteredValue'
+    try {
+        const sheets = google.sheets({ version: 'v4', auth });
+        
+        // Check permissions first
+        try {
+            await sheets.spreadsheets.get({ spreadsheetId });
+        } catch (error) {
+            if (error.status === 403 || error.message.includes('does not have permission')) {
+                throw new Error('Permission Error: The service account does not have access to this spreadsheet.');
+            }
+            throw error;
         }
-    }));
-    return makeApiRequest(async () => {
-        await google.sheets({ version: 'v4', auth }).spreadsheets.batchUpdate({
-            spreadsheetId,
-            resource: { requests }
-        });
-    });
+
+        // Process each request in the batch
+        for (const request of batchRequests) {
+            try {
+                await sheets.spreadsheets.values.update({
+                    spreadsheetId,
+                    range: request.range,
+                    valueInputOption: 'USER_ENTERED',
+                    requestBody: {
+                        values: request.values
+                    }
+                });
+            } catch (error) {
+                if (error.status === 403 || error.message.includes('does not have permission')) {
+                    throw new Error('Permission Error: The service account does not have access to this spreadsheet.');
+                }
+                throw error;
+            }
+        }
+    } catch (error) {
+        if (error.message.includes('Permission Error')) {
+            throw error;
+        }
+        throw new Error(`Could not write to sheet. Error: ${error.message}`);
+    }
 }
 
 // ------------------- Update and Append Data for External Use -------------------
@@ -252,7 +249,6 @@ async function getSheetIdByName(auth, spreadsheetId, sheetName) {
         const response = await google.sheets({ version: 'v4', auth }).spreadsheets.get({ spreadsheetId });
         const sheet = response.data.sheets.find(s => s.properties.title === sheetName);
         if (!sheet) {
-            logErrorDetails(`Sheet with name "${sheetName}" not found`);
             throw new Error(`Sheet with name "${sheetName}" not found`);
         }
         return sheet.properties.sheetId;
@@ -330,9 +326,6 @@ async function deleteInventorySheetData(spreadsheetId, characterName) {
         );
         return `✅ **Specific inventory data for character ${characterName} deleted from Google Sheets.**`;
     } catch (error) {
-    handleError(error, 'googleSheetsUtils.js');
-
-        logErrorDetails(error);
         throw error;
     }
 }
@@ -354,7 +347,6 @@ function extractSpreadsheetId(url) {
     const match = url.match(regex);
     return match ? match[1] : null;
 }
-
 
 // ------------------- validateInventorySheet------------------- 
 async function validateInventorySheet(spreadsheetUrl, characterName) {
@@ -412,8 +404,6 @@ async function validateInventorySheet(spreadsheetUrl, characterName) {
           message: `No inventory items found for character **${characterName}**.||Please make sure your inventory sheet contains at least one item entry for your character.`
         };
       }
-
-      
   
       return { success: true, message: "✅ Inventory sheet is set up correctly!" };
   
@@ -513,34 +503,21 @@ async function validateVendingSheet(sheetUrl, characterName) {
 
         return { success: true };
     } catch (error) {
-        console.error('[validateVendingSheet]:', error);
         return {
             success: false,
             message: '❌ An error occurred while validating your sheet. Please try again later.'
         };
     }
 }
-  
-// ============================================================================
-// Error Logging
-// ------------------- Log Error Details -------------------
-// Logs error details to the console with a consistent format.
-function logErrorDetails(error) {
-  console.error(`[googleSheetsUtils.js]: logs`, error);
-}
 
-// ============================================================================
-// Safe Append Data To Sheet
-// ------------------- Validate and Safely Append Inventory Data -------------------
+// ------------------- Safe Append Data To Sheet -------------------
 async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, client) {
   try {
     if (!spreadsheetUrl || typeof spreadsheetUrl !== 'string') {
-      console.warn(`[googleSheetsUtils.js]: No spreadsheet URL provided for character. Skipping sync.`);
       return;
     }
 
     if (!character || typeof character !== 'object' || !character.name) {
-      console.error(`[googleSheetsUtils.js]: Invalid character object provided. Skipping sync.`);
       return;
     }
 
@@ -550,20 +527,7 @@ async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, c
     // 🛡️ Validate the inventory sheet first
     const validationResult = await validateInventorySheet(spreadsheetUrl, character.name);
     if (!validationResult.success) {
-      // 🛠️ Only log the error part, no "Fix" text
-      const errorOnly = validationResult.message.split('**Fix:**')[0].trim();
-      console.error(`[googleSheetsUtils.js]: Validation failed for ${character.name}: ${errorOnly}`);
-
-      // 🌐 Log which URL failed validation
-      console.log(`[googleSheetsUtils.js]: Attempted inventory URL for ${character.name}: ${character.shopLink}`);
-
-      // ✉️ DM the user about the broken link
-      if (character.userId) {
-        if (!client) {
-          console.warn(`[googleSheetsUtils.js]: Cannot DM user ${character.userId} — client not available.`);
-          return;
-        }
-
+      if (character.userId && client) {
         try {
           const user = await client.users.fetch(character.userId);
           if (user) {
@@ -571,26 +535,19 @@ async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, c
               `⚠️ Heads up! Your inventory sync for **${character.name}** failed.\n\n` +
               `Your linked Google Sheet may be missing, renamed, or set up incorrectly. Please update your inventory link or re-setup your sheet when you have a chance!`
             );
-            console.log(`[googleSheetsUtils.js]: Sent DM to user ${character.userId} about broken inventory.`);
           }
         } catch (dmError) {
-          console.error(`[googleSheetsUtils.js]: Failed to send DM to ${character.userId}: ${dmError.message}`);
+          // Silently fail if we can't send DM
         }
-      } else {
-        console.warn(`[googleSheetsUtils.js]: No userId found for character ${character.name}. Could not send DM.`);
       }
-
-
-
-      return; // Stop trying to sync
+      return;
     }
 
     // ✅ If validation passed, proceed to append
     await appendSheetData(auth, spreadsheetId, range, values);
 
   } catch (error) {
-    console.error(`[googleSheetsUtils.js]: Failed to safely append data for ${character?.name || 'Unknown Character'}: ${error.message}`);
-    handleError(error, 'googleSheetsUtils.js');
+    throw error;
   }
 }
 
@@ -612,7 +569,6 @@ async function parseSheetData(sheetUrl) {
 
       // Validate that column L contains "Old Stock"
       if (!row[11] || row[11].trim() !== 'Old Stock') {
-        console.warn(`Skipping item "${row[2]}" - missing "Old Stock" in date column`);
         continue;
       }
 
@@ -634,7 +590,6 @@ async function parseSheetData(sheetUrl) {
 
     return parsedRows;
   } catch (error) {
-    console.error('Error parsing sheet data:', error);
     throw error;
   }
 }
@@ -670,8 +625,5 @@ module.exports = {
     validateInventorySheet,
     validateVendingSheet,
     safeAppendDataToSheet,
-    parseSheetData,
-    
-    // Error logging
-    logErrorDetails
+    parseSheetData
 };
