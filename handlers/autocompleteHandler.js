@@ -170,6 +170,13 @@ async function handleAutocomplete(interaction) {
         }
         break;
 
+      // ------------------- Special Weather Command -------------------
+      case "specialweather":
+        if (focusedName === "charactername") {
+          await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "specialweather");
+        }
+        break;
+
       // ------------------- Pet Management Commands -------------------
       case "pet":
         if (focusedName === "charactername") {
