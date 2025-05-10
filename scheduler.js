@@ -189,64 +189,34 @@ cron.schedule('0 2 1 * *', async () => {
 }, { timezone: 'America/New_York' });
 
   // ------------------- Daily Blight Roll Call, Missed Rolls, and Death Check -------------------
-cron.schedule('0 20 * * *', async () => { 
-  try {
-    console.log('[scheduler]⏰ Running Blight Roll Call, Missed Rolls Check, and Death Check...');
-
-    // Step 1: Post Blight Roll Call once
+function setupBlightScheduler(client) {
+  cron.schedule('0 20 * * *', async () => { 
     try {
-      await postBlightRollCall(client);
-      console.log('[scheduler]✅ Blight roll call posted.');
-    } catch (error) {
-    handleError(error, 'scheduler.js');
+      console.log('[scheduler]⏰ Running Blight Roll Call, Missed Rolls Check, and Death Check...');
 
-      console.error('[scheduler]❌ Failed to post Blight roll call:', error.message);
-    }
-
-    // Step 2: Run Missed Rolls Check
-    await checkMissedRolls(client);
-    console.log('[scheduler]✅ Missed roll check completed.');
-
-    // Step 3: Run Death Check (Retain Notify Logic)
-    console.log('[scheduler]☠ Checking for characters who have died due to blight...');
-
-    const now = new Date();
-    const doomedCharacters = await Character.find({ 
-      blightStage: 5, 
-      deathDeadline: { $lte: now }
-    });
-
-    for (const character of doomedCharacters) {
-      // Mark the character as dead
-      character.blighted = false;
-      character.blightStage = 0;
-      character.deathDeadline = null;
-      await character.save();
-
-      console.log(`[scheduler]☠ Character ${character.name} has died due to blight.`);
-
-      // Notify the user
+      // Step 1: Post Blight Roll Call once
       try {
-        const user = await client.users.fetch(character.userId);
-        if (user) {
-          await user.send(`☠ **Your character ${character.name} has succumbed to the blight and has died.**`);
-          console.log(`[scheduler]✅ User ${user.username} notified about ${character.name}'s death.`);
-        }
+        await postBlightRollCall(client);
+        console.log('[scheduler]✅ Blight roll call posted.');
       } catch (error) {
-    handleError(error, 'scheduler.js');
-
-        console.error(`[scheduler]❌ Failed to notify user about ${character.name}'s death:`, error.message);
+        console.error('[scheduler]❌ Failed to post Blight roll call:', error.message);
+        handleError(error, 'scheduler.js');
       }
+
+      // Step 2: Check for missed rolls
+      try {
+        await checkMissedRolls(client);
+        console.log('[scheduler]✅ Missed rolls check completed.');
+      } catch (error) {
+        console.error('[scheduler]❌ Error during missed rolls check:', error.message);
+        handleError(error, 'scheduler.js');
+      }
+    } catch (error) {
+      console.error('[scheduler]❌ Error during blight roll call sequence:', error.message);
+      handleError(error, 'scheduler.js');
     }
-
-    console.log('[scheduler]✅ Blight death check completed.');
-
-  } catch (error) {
-    handleError(error, 'scheduler.js');
-
-    console.error('❌ [Scheduler.js] Error during blight roll call sequence:', error);
-  }
-}, { timezone: 'America/New_York' });
+  }, { timezone: 'America/New_York' });
+}
 
    // ------------------- Daily Blood Moon Tracking and Announcement -------------------
    cron.schedule(
@@ -542,7 +512,7 @@ cron.schedule('0 20 * * *', async () => {
 module.exports = {
   setupWeatherScheduler,
   postWeatherUpdate,
-  // ...add any other exports as needed
+  setupBlightScheduler
 };
 
 

@@ -28,7 +28,7 @@ const {
 } = require("./scripts/trello");
 const { isBloodMoonDay } = require("./scripts/bloodmoon");
 const { initializeRandomEncounterBot } = require("./scripts/randomEncounters");
-const { setupWeatherScheduler } = require('./scheduler');
+const { setupWeatherScheduler, setupBlightScheduler } = require('./scheduler');
 const { convertToHyruleanDate } = require("./modules/calendarModule");
 
 // ------------------- Weather -------------------
@@ -128,6 +128,9 @@ async function initializeClient() {
 
           setupWeatherScheduler(client);
           console.log("[index.js]: 🌤️ Weather scheduler initialized");
+
+          setupBlightScheduler(client);
+          console.log("[index.js]: 🦠 Blight scheduler initialized");
 
           initializeRandomEncounterBot(client);
           console.log(
