@@ -38,6 +38,7 @@ const {
  validateJobVoucher,
  fetchJobVoucherItem,
  deactivateJobVoucher,
+ getJobVoucherErrorMessage
 } = require("../../modules/jobVoucherModule.js"); // Importing jobVoucherModule
 
 // Modules - RNG Logic
@@ -203,23 +204,23 @@ module.exports = {
      `[Loot Command]: Invalid or unsupported job detected for ${character.name}. Job: "${job}"`
     );
     await interaction.editReply({
-     content: `❌ **Oh no! ${
-      character.name
-     } can't loot as an invalid or unsupported job (${
-      job || "None"
-     }).**\n✨ **Why not try a Job Voucher to explore exciting new roles?**`,
+     content: getJobVoucherErrorMessage('MISSING_SKILLS', {
+       characterName: character.name,
+       jobName: job || "None"
+     }).message,
      ephemeral: true,
     });
     return;
    }
 
    // Validate job voucher (without consuming it)
+   let voucherCheck;
    if (character.jobVoucher) {
      console.error(
        `[Loot Command]: Job voucher detected for ${character.name}. Validating voucher.`
      );
-     const voucherValidation = await validateJobVoucher(character, job);
-     if (voucherValidation.skipVoucher) {
+     voucherCheck = await validateJobVoucher(character, job);
+     if (voucherCheck.skipVoucher) {
        console.error(
          `[Loot Command]: ${character.name} already has job "${job}". Skipping voucher use.`
        );
@@ -231,7 +232,7 @@ module.exports = {
          );
        } else {
          await interaction.editReply({
-           content: voucherValidation.message,
+           content: voucherCheck.message,
            ephemeral: true,
          });
          return;
@@ -267,7 +268,10 @@ module.exports = {
      `[Loot Command]: ${character.name} lacks looting skills for job: "${job}"`
     );
     await interaction.editReply({
-     content: `❌ **Hmm, ${character.name} can't loot as a ${job} because they lack the necessary looting skills.**`,
+     content: getJobVoucherErrorMessage('MISSING_SKILLS', {
+       characterName: character.name,
+       jobName: job
+     }).message,
      ephemeral: true,
     });
     return;
@@ -385,7 +389,7 @@ module.exports = {
    );
 
    // ------------------- Deactivate Job Voucher -------------------
-   if (character.jobVoucher) {
+   if (character.jobVoucher && !voucherCheck?.skipVoucher) {
      const deactivationResult = await deactivateJobVoucher(character._id);
      if (!deactivationResult.success) {
        console.error(`[Loot Command]: Failed to deactivate job voucher for ${character.name}`);

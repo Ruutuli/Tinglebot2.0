@@ -8,23 +8,36 @@ const { authorizeSheets, appendSheetData, safeAppendDataToSheet } = require('../
 const { getCharacterInventoryCollection, updateCharacterById, fetchItemByName } = require('../database/db'); 
 const { v4: uuidv4 } = require('uuid');
 
+// ------------------- Get Job Voucher Error Message -------------------
+function getJobVoucherErrorMessage(errorType, data = {}) {
+    const messages = {
+        ALREADY_HAS_JOB: `✅ Character already has the job "${data.jobName}". No job voucher needed.`,
+        NO_VOUCHER: '❌ No active job voucher found.',
+        WRONG_JOB: `❌ The job voucher is locked to **${data.voucherJob}**, not **${data.requestedJob}**. Please use the correct job.`,
+        ALREADY_ACTIVE: `❌ ${data.characterName} already has an active Job Voucher for ${data.jobName}. Please complete the current job before using another voucher.`,
+        MISSING_SKILLS: `❌ ${data.characterName} can't loot as a ${data.jobName} because they lack the necessary looting skills.`,
+        ACTIVATION_ERROR: '❌ An error occurred while activating the job voucher.',
+        DEACTIVATION_ERROR: '❌ An error occurred while deactivating the job voucher.',
+        ITEM_NOT_FOUND: '❌ Job Voucher item not found.'
+    };
+
+    return {
+        success: false,
+        message: messages[errorType] || '❌ An unknown error occurred with the job voucher.',
+        skipVoucher: errorType === 'ALREADY_HAS_JOB'
+    };
+}
+
 // ------------------- Validate Job Voucher -------------------
 async function validateJobVoucher(character, jobName) {
     // ------------------- NEW: If character already has the job, voucher is not needed -------------------
     if (character.job?.trim().toLowerCase() === jobName?.trim().toLowerCase()) {
         console.error(`[Job Voucher Validation]: Character already has job "${jobName}". Voucher not required.`);
-        return {
-            success: false,
-            message: `✅ Character already has the job "${jobName}". No job voucher needed.`,
-            skipVoucher: true
-        };
+        return getJobVoucherErrorMessage('ALREADY_HAS_JOB', { jobName });
     }
 
     if (!character.jobVoucher) {
-        return {
-            success: false,
-            message: '❌ No active job voucher found.',
-        };
+        return getJobVoucherErrorMessage('NO_VOUCHER');
     }
 
     // Allow unrestricted job vouchers
@@ -34,10 +47,10 @@ async function validateJobVoucher(character, jobName) {
     }
 
     if (character.jobVoucherJob !== jobName) {
-        return {
-            success: false,
-            message: `❌ The job voucher is locked to **${character.jobVoucherJob}**, not **${jobName}**. Please use the correct job.`,
-        };
+        return getJobVoucherErrorMessage('WRONG_JOB', { 
+            voucherJob: character.jobVoucherJob, 
+            requestedJob: jobName 
+        });
     }
 
     return { success: true };
@@ -81,11 +94,10 @@ async function activateJobVoucher(character, jobName, item, quantity = 1, intera
             ];
 
             if (character?.name && character?.inventory && character?.userId) {
-    await safeAppendDataToSheet(character.inventory, character, range, values);
-} else {
-    console.error('[safeAppendDataToSheet]: Invalid character object detected before syncing.');
-}
-
+                await safeAppendDataToSheet(character.inventory, character, range, values);
+            } else {
+                console.error('[safeAppendDataToSheet]: Invalid character object detected before syncing.');
+            }
         }
 
         return {
@@ -93,13 +105,9 @@ async function activateJobVoucher(character, jobName, item, quantity = 1, intera
             message: `🎫 **Job Voucher activated for ${character.name} to perform the job ${jobName}.**`
         };
     } catch (error) {
-    handleError(error, 'jobVoucherModule.js');
-
+        handleError(error, 'jobVoucherModule.js');
         console.error(`[jobVoucherModule.js]: Error activating job voucher: ${error.message}`);
-        return {
-            success: false,
-            message: `❌ An error occurred while activating the job voucher.`
-        };
+        return getJobVoucherErrorMessage('ACTIVATION_ERROR');
     }
 }
 
@@ -112,13 +120,9 @@ async function fetchJobVoucherItem() {
         }
         return { success: true, item };
     } catch (error) {
-    handleError(error, 'jobVoucherModule.js');
-
+        handleError(error, 'jobVoucherModule.js');
         console.error(`[jobVoucherModule.js]: Error fetching job voucher item: ${error.message}`);
-        return {
-            success: false,
-            message: `❌ Job Voucher item not found.`
-        };
+        return getJobVoucherErrorMessage('ITEM_NOT_FOUND');
     }
 }
 
@@ -134,10 +138,7 @@ async function deactivateJobVoucher(characterId) {
     } catch (error) {
         handleError(error, 'jobVoucherModule.js');
         console.error(`[Job Voucher Module]: Error deactivating job voucher: ${error.message}`);
-        return {
-            success: false,
-            message: `❌ **An error occurred while deactivating the job voucher.**`
-        };
+        return getJobVoucherErrorMessage('DEACTIVATION_ERROR');
     }
 }
 
@@ -146,5 +147,6 @@ module.exports = {
     validateJobVoucher,
     activateJobVoucher,
     fetchJobVoucherItem,
-    deactivateJobVoucher
+    deactivateJobVoucher,
+    getJobVoucherErrorMessage
 };

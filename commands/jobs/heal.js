@@ -11,7 +11,7 @@ const {
   deleteHealingRequestFromStorage 
 } = require('../../utils/storage.js');
 const { createHealEmbed, createHealingEmbed } = require('../../embeds/embeds.js');
-const { validateJobVoucher, activateJobVoucher, fetchJobVoucherItem } = require('../../modules/jobVoucherModule.js');
+const { validateJobVoucher, activateJobVoucher, fetchJobVoucherItem, deactivateJobVoucher, getJobVoucherErrorMessage } = require('../../modules/jobVoucherModule.js');
 const { handleTradeItemAutocomplete } = require('../../handlers/autocompleteHandler.js');
 
 
@@ -218,15 +218,19 @@ if (subcommand === 'fulfill') {
         console.log(`[heal.js]: Determined Job: ${job}`);
 
         // ------------------- Validate Job Voucher -------------------
+        let voucherCheck;
         if (healerCharacter.jobVoucher) {
             console.error(`[heal.js]: Job voucher detected for ${healerCharacter.name}. Validating voucher.`);
-            const voucherValidation = await validateJobVoucher(healerCharacter, job);
-            console.error(`[heal.js]: Job voucher validation result for ${healerCharacter.name}:`, voucherValidation);
+            voucherCheck = await validateJobVoucher(healerCharacter, job);
+            console.error(`[heal.js]: Job voucher validation result for ${healerCharacter.name}:`, voucherCheck);
 
-            if (!voucherValidation.success) {
+            if (voucherCheck.skipVoucher) {
+                console.error(`[heal.js]: ${healerCharacter.name} already has job "${job}". Skipping voucher use.`);
+                // No activation needed
+            } else if (!voucherCheck.success) {
                 console.error(`[heal.js]: Job voucher validation failed for ${healerCharacter.name}.`);
                 await interaction.editReply({
-                    content: voucherValidation.message,
+                    content: voucherCheck.message,
                     ephemeral: true,
                 });
                 return;
@@ -237,7 +241,10 @@ if (subcommand === 'fulfill') {
         if (job.toLowerCase() !== 'healer') {
             console.error(`[heal.js]: Invalid job "${job}" for healer "${healerCharacter.name}". Only "Healer" is allowed.`);
             await interaction.editReply(
-                `❌ **Error:** Only characters with the **Healer** job can fulfill healing requests.`
+                getJobVoucherErrorMessage('MISSING_SKILLS', {
+                    characterName: healerCharacter.name,
+                    jobName: job
+                }).message
             );
             return;
         }
@@ -316,14 +323,14 @@ if (subcommand === 'fulfill') {
         await recoverHearts(characterToHeal._id, healingRequest.heartsToHeal, healerCharacter._id);
 
         // ------------------- Deactivate Job Voucher -------------------
-            if (healerCharacter.jobVoucher) {
-                const deactivationResult = await deactivateJobVoucher(healerCharacter._id);
-                if (!deactivationResult.success) {
+        if (healerCharacter.jobVoucher && !voucherCheck?.skipVoucher) {
+            const deactivationResult = await deactivateJobVoucher(healerCharacter._id);
+            if (!deactivationResult.success) {
                 console.error(`[heal.js]: Failed to deactivate job voucher for ${healerCharacter.name}`);
-                } else {
+            } else {
                 console.error(`[heal.js]: Job voucher deactivated for ${healerCharacter.name}`);
-                }
             }
+        }
   
 
         // Mark the request as fulfilled and save its updated status

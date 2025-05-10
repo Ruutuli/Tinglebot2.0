@@ -27,7 +27,7 @@ const { getJobPerk, normalizeJobName, isValidJob } = require('../../modules/jobs
 const { getVillageRegionByName } = require('../../modules/locationsModule.js');
 const { useHearts, handleKO, updateCurrentHearts } = require('../../modules/characterStatsModule.js');
 const { capitalizeWords } = require('../../modules/formattingModule.js');
-const { validateJobVoucher, activateJobVoucher, fetchJobVoucherItem, deactivateJobVoucher } = require('../../modules/jobVoucherModule.js');
+const { validateJobVoucher, activateJobVoucher, fetchJobVoucherItem, deactivateJobVoucher, getJobVoucherErrorMessage } = require('../../modules/jobVoucherModule.js');
 
 
 // ------------------- Utilities -------------------
@@ -155,7 +155,10 @@ module.exports = {
       if (!job || typeof job !== 'string' || !job.trim() || !isValidJob(job)) {
         console.error(`[gather.js]: Job validation failed for ${character.name}. Invalid Job: ${job}`);
         await interaction.editReply({
-          content: `❌ **Oh no! ${character.name} can't gather as an invalid or unsupported job (${job || "None"}).**\n✨ **Why not try a Job Voucher to explore exciting new roles?**`,
+          content: getJobVoucherErrorMessage('MISSING_SKILLS', {
+            characterName: character.name,
+            jobName: job || "None"
+          }).message,
           ephemeral: true,
         });
         return;
@@ -204,7 +207,10 @@ module.exports = {
       if (!jobPerk || !jobPerk.perks.includes('GATHERING')) {
         console.error(`[gather.js]: ${character.name} lacks gathering skills for job: "${job}"`);
         await interaction.editReply({
-          content: `❌ **Hmm, ${character.name} can't gather as a ${job} because they lack the necessary gathering skills.**\n🔄 **Consider switching to a role better suited for gathering, or use a Job Voucher to try something fresh!**`,
+          content: getJobVoucherErrorMessage('MISSING_SKILLS', {
+            characterName: character.name,
+            jobName: job
+          }).message,
           ephemeral: true,
         });
         return;
@@ -476,7 +482,7 @@ await character.save();
       }
 
       // ------------------- Deactivate Job Voucher -------------------
-      if (character.jobVoucher) {
+      if (character.jobVoucher && !voucherCheck?.skipVoucher) {
         const deactivationResult = await deactivateJobVoucher(character._id);
         if (!deactivationResult.success) {
           console.error(`[gather.js]: Failed to deactivate job voucher for ${character.name}`);
