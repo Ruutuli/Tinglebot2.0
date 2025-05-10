@@ -219,9 +219,9 @@ if (subcommand === 'fulfill') {
 
         // ------------------- Validate Job Voucher -------------------
         if (healerCharacter.jobVoucher) {
-            console.log(`[heal.js]: Job voucher detected for ${healerCharacter.name}. Validating voucher.`);
+            console.error(`[heal.js]: Job voucher detected for ${healerCharacter.name}. Validating voucher.`);
             const voucherValidation = await validateJobVoucher(healerCharacter, job);
-            console.log(`[heal.js]: Job voucher validation result for ${healerCharacter.name}:`, voucherValidation);
+            console.error(`[heal.js]: Job voucher validation result for ${healerCharacter.name}:`, voucherValidation);
 
             if (!voucherValidation.success) {
                 console.error(`[heal.js]: Job voucher validation failed for ${healerCharacter.name}.`);
@@ -244,7 +244,7 @@ if (subcommand === 'fulfill') {
 
         // ------------------- Activate Job Voucher -------------------
         if (healerCharacter.jobVoucher) {
-            console.log(`[heal.js]: Activating job voucher for ${healerCharacter.name}.`);
+            console.error(`[heal.js]: Activating job voucher for ${healerCharacter.name}.`);
             const { success: itemSuccess, item: jobVoucherItem, message: itemError } = await fetchJobVoucherItem();
 
             if (!itemSuccess) {
@@ -321,7 +321,7 @@ if (subcommand === 'fulfill') {
                 if (!deactivationResult.success) {
                 console.error(`[heal.js]: Failed to deactivate job voucher for ${healerCharacter.name}`);
                 } else {
-                console.log(`[heal.js]: Job voucher deactivated for ${healerCharacter.name}`);
+                console.error(`[heal.js]: Job voucher deactivated for ${healerCharacter.name}`);
                 }
             }
   

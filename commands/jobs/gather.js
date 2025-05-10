@@ -153,7 +153,7 @@ module.exports = {
       // ------------------- Step 4: Validate Job -------------------
       let job = (character.jobVoucher && character.jobVoucherJob) ? character.jobVoucherJob : character.job;
       if (!job || typeof job !== 'string' || !job.trim() || !isValidJob(job)) {
-        console.log(`[gather.js]: Job validation failed for ${character.name}. Invalid Job: ${job}`);
+        console.error(`[gather.js]: Job validation failed for ${character.name}. Invalid Job: ${job}`);
         await interaction.editReply({
           content: `❌ **Oh no! ${character.name} can't gather as an invalid or unsupported job (${job || "None"}).**\n✨ **Why not try a Job Voucher to explore exciting new roles?**`,
           ephemeral: true,
@@ -163,21 +163,21 @@ module.exports = {
 
       // ------------------- Validate or Activate Job Voucher -------------------
       if (character.jobVoucher) {
-        console.log(`[gather.js]: Job voucher detected for ${character.name}. Validating...`);
+        console.error(`[gather.js]: Job voucher detected for ${character.name}. Validating...`);
         const voucherCheck = await validateJobVoucher(character, job);
 
         if (voucherCheck.skipVoucher) {
-          console.log(`[gather.js]: ${character.name} already has job "${job}". Skipping voucher use.`);
+          console.error(`[gather.js]: ${character.name} already has job "${job}". Skipping voucher use.`);
           // No activation needed
         } else if (!voucherCheck.success) {
-          console.log(`[gather.js]: Voucher validation failed. Message: ${voucherCheck.message}`);
+          console.error(`[gather.js]: Voucher validation failed. Message: ${voucherCheck.message}`);
           await interaction.editReply({
             content: voucherCheck.message,
             ephemeral: true,
           });
           return;
         } else {
-          console.log(`[gather.js]: Activating job voucher for ${character.name}.`);
+          console.error(`[gather.js]: Activating job voucher for ${character.name}.`);
           const { success: itemSuccess, item: jobVoucherItem, message: itemError } = await fetchJobVoucherItem();
           if (!itemSuccess) {
             await interaction.editReply({ content: itemError, ephemeral: true });
@@ -200,9 +200,9 @@ module.exports = {
 
       // Check for gathering perk.
       const jobPerk = getJobPerk(job);
-      console.log(`[gather.js]: Job Perk for "${job}":`, jobPerk);
+      console.error(`[gather.js]: Job Perk for "${job}":`, jobPerk);
       if (!jobPerk || !jobPerk.perks.includes('GATHERING')) {
-        console.log(`[gather.js]: ${character.name} lacks gathering skills for job: "${job}"`);
+        console.error(`[gather.js]: ${character.name} lacks gathering skills for job: "${job}"`);
         await interaction.editReply({
           content: `❌ **Hmm, ${character.name} can't gather as a ${job} because they lack the necessary gathering skills.**\n🔄 **Consider switching to a role better suited for gathering, or use a Job Voucher to try something fresh!**`,
           ephemeral: true,

@@ -12,7 +12,7 @@ const { v4: uuidv4 } = require('uuid');
 async function validateJobVoucher(character, jobName) {
     // ------------------- NEW: If character already has the job, voucher is not needed -------------------
     if (character.job?.trim().toLowerCase() === jobName?.trim().toLowerCase()) {
-        console.log(`[Job Voucher Validation]: Character already has job "${jobName}". Voucher not required.`);
+        console.error(`[Job Voucher Validation]: Character already has job "${jobName}". Voucher not required.`);
         return {
             success: false,
             message: `✅ Character already has the job "${jobName}". No job voucher needed.`,
@@ -29,7 +29,7 @@ async function validateJobVoucher(character, jobName) {
 
     // Allow unrestricted job vouchers
     if (!character.jobVoucherJob) {
-        console.log(`[Job Voucher Validation]: Voucher is not locked to any specific job. Proceeding with job: ${jobName}`);
+        console.error(`[Job Voucher Validation]: Voucher is not locked to any specific job. Proceeding with job: ${jobName}`);
         return { success: true };
     }
 
@@ -126,14 +126,13 @@ async function fetchJobVoucherItem() {
 async function deactivateJobVoucher(characterId) {
     try {
         await updateCharacterById(characterId, { jobVoucher: Boolean(false), jobVoucherJob: null });
-        console.log(`[Job Voucher Module]: Job voucher deactivated for character ID: ${characterId}`);
+        console.error(`[Job Voucher Module]: Job voucher deactivated for character ID: ${characterId}`);
         return {
             success: true,
             message: `🎫 **Job voucher successfully deactivated.**`
         };
     } catch (error) {
-    handleError(error, 'jobVoucherModule.js');
-
+        handleError(error, 'jobVoucherModule.js');
         console.error(`[Job Voucher Module]: Error deactivating job voucher: ${error.message}`);
         return {
             success: false,
