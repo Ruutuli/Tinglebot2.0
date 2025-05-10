@@ -137,7 +137,7 @@ module.exports = {
         if (!canUseDailyRoll(character, 'gather')) {
           await interaction.editReply({
             content: `*${character.name} looks tired from their earlier gathering...*\n\n**Daily gathering limit reached.**\nThe next opportunity to gather will be available at 8AM EST.\n\n*Tip: A job voucher would allow you to gather again today.*`,
-            ephemeral: true,
+            ephemeral: true
           });
           return;
         }
