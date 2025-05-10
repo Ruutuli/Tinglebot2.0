@@ -197,13 +197,12 @@ const useStamina = async (characterId, stamina) => {
 // Handles a KO state by setting the character's KO flag and current hearts to 0.
 const handleKO = async (characterId) => {
   try {
-    console.log(`[characterStatsModule.js]: logs Handling KO for Character ID ${characterId}`);
+    console.log(`[characterStatsModule.js]: 💀 Handling KO for Character ID ${characterId}`);
     await Character.updateOne({ _id: characterId }, { $set: { ko: true, currentHearts: 0 } });
-    console.log(`[characterStatsModule.js]: logs Character ID ${characterId} is KO'd.`);
+    console.log(`[characterStatsModule.js]: ✅ Character ID ${characterId} is KO'd.`);
   } catch (error) {
     handleError(error, 'characterStatsModule.js');
-
-    console.error(`[characterStatsModule.js]: logs Error in handleKO: ${error.message}`);
+    console.error(`[characterStatsModule.js]: ❌ Error in handleKO: ${error.message}`);
     throw error;
   }
 };

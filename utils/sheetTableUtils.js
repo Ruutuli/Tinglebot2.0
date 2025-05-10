@@ -67,28 +67,27 @@ async function fetchTableFromDatabase(sheetName) {
     try {
         // If sheetName is provided as an array, extract the first element.
         if (Array.isArray(sheetName)) {
-            console.error(`[sheetTableUtils.js]: logs Invalid table name format: Expected a string but got an array. Fixing it.`);
+            console.error(`[sheetTableUtils.js]: ❌ Invalid table name format: Expected a string but got an array. Fixing it.`);
             sheetName = sheetName[0];
         }
 
         if (typeof sheetName !== 'string') {
-            console.error(`[sheetTableUtils.js]: logs Table name must be a string. Received:`, sheetName);
+            console.error(`[sheetTableUtils.js]: ❌ Table name must be a string. Received:`, sheetName);
             return null;
         }
 
         sheetName = sheetName.trim(); // Remove extra spaces.
-        console.log(`[sheetTableUtils.js]: logs Fetching table with name: ${sheetName}`);
+        console.log(`[sheetTableUtils.js]: 📊 Fetching table with name: ${sheetName}`);
 
         const table = await TableModel.findOne({ tableName: sheetName });
         if (!table) {
-            console.error(`[sheetTableUtils.js]: logs No table found in database for: ${sheetName}`);
+            console.error(`[sheetTableUtils.js]: ❌ No table found in database for: ${sheetName}`);
             return null;
         }
         return table.data;
     } catch (error) {
     handleError(error, 'sheetTableUtils.js');
-
-        console.error(`[sheetTableUtils.js]: logs Error fetching table from database:`, error);
+        console.error(`[sheetTableUtils.js]: ❌ Error fetching table from database:`, error);
         return null;
     }
 }

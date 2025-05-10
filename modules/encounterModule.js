@@ -26,9 +26,9 @@ const { handleError } = require('../utils/globalErrorHandler');
 // ---- Function: logBattleDetails ----
 // Logs battle details for tracking and debugging purposes
 const logBattleDetails = (tier, characterName, monsterName, adjustedRandomValue, characterDamage, heartsLostForMonster) => {
-    console.log(`[encounterModule.js]: Battle Details - Tier ${tier}`);
-    console.log(`Character: ${characterName} | Monster: ${monsterName}`);
-    console.log(`Roll: ${adjustedRandomValue} | Character Damage: ${characterDamage} | Monster Hearts Lost: ${heartsLostForMonster}`);
+    console.log(`[encounterModule.js]: ⚔️ Battle Details - Tier ${tier}`);
+    console.log(`👤 ${characterName} vs 🐉 ${monsterName}`);
+    console.log(`🎲 Roll: ${adjustedRandomValue} | 💥 Damage: ${characterDamage} | ❤️ Hearts Lost: ${heartsLostForMonster}`);
 };
 
 // ============================================================================

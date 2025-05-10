@@ -116,7 +116,7 @@ async function initializeClient() {
       },
       async (err, data) => {
         if (err) {
-          console.error("[index.js]: Figlet error", err);
+          console.error("[index.js]: ❌ Figlet error:", err);
           return;
         }
 
@@ -141,7 +141,7 @@ async function initializeClient() {
           console.log("  • Random Encounters");
           console.log("  • Request Expiration Handler");
           console.log("==========================================================");
-          console.log("Tinglebot 2.0 is fully operational!");
+          console.log("🚀 Tinglebot 2.0 is fully operational!");
           console.log("==========================================================");
         } catch (error) {
           handleError(error, "index.js");
