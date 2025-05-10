@@ -20,6 +20,7 @@ const { fetchCharacterByNameAndUserId, getCharacterInventoryCollection } = requi
 const { handleAutocomplete } = require('../../handlers/autocompleteHandler.js');
 const { handleError } = require('../../utils/globalErrorHandler.js');
 const { typeColors } = require('../../modules/formattingModule.js');
+const { checkInventorySync } = require('../../utils/characterUtils.js');
 
 // ------------------- Database Models -------------------
 const ItemModel = require('../../models/ItemModel.js');
@@ -67,9 +68,12 @@ module.exports = {
         return;
       }
 
-      if (!character.inventorySynced) {
+      try {
+        await checkInventorySync(character);
+      } catch (error) {
         await interaction.editReply({
-          content: `❌ **Cannot view inventory because inventory for **${character.name}** is not set up yet. Use </testinventorysetup:1306176790095728732> then </syncinventory:1306176789894266898> to initialize.**`
+          content: error.message,
+          ephemeral: true
         });
         return;
       }
