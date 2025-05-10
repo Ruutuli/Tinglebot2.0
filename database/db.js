@@ -262,7 +262,9 @@ const fetchCharactersByUserId = async (userId) => {
 const fetchCharacterByNameAndUserId = async (characterName, userId) => {
  try {
   await connectToTinglebot();
+  console.log(`[db.js]: Searching for character with name: "${characterName}" and userId: "${userId}"`);
   const character = await Character.findOne({ name: characterName, userId });
+  console.log(`[db.js]: Query result:`, character ? 'Found' : 'Not found');
   return character;
  } catch (error) {
   handleError(error, "db.js");

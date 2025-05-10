@@ -16,7 +16,7 @@ const {
 } = require('discord.js');
 
 // ------------------- Project Utilities -------------------
-const { fetchCharacterByNameAndUserId, getCharacterInventoryCollection } = require('../../database/db.js');
+const { fetchCharacterByName, getCharacterInventoryCollection } = require('../../database/db.js');
 const { handleAutocomplete } = require('../../handlers/autocompleteHandler.js');
 const { handleError } = require('../../utils/globalErrorHandler.js');
 const { typeColors } = require('../../modules/formattingModule.js');
@@ -56,13 +56,16 @@ module.exports = {
     try {
       await interaction.deferReply({ ephemeral: true });
 
-      const characterName = interaction.options.getString('charactername');
+      const fullCharacterName = interaction.options.getString('charactername');
+      const characterName = fullCharacterName?.split(' | ')[0];
+      
       if (!characterName) {
         await interaction.editReply({ content: '❌ **Character name is required.**' });
         return;
       }
 
-      const character = await fetchCharacterByNameAndUserId(characterName, interaction.user.id);
+      const character = await fetchCharacterByName(characterName);
+      
       if (!character) {
         await interaction.editReply({ content: `❌ **Character \`${characterName}\` not found.**` });
         return;
