@@ -185,9 +185,18 @@ const command = {
         const courier = await fetchCharacterByName(courierName);
         const recipient = await fetchCharacterByName(recipientName);
 
-        if (sender) await checkInventorySync(sender);
-        if (courier) await checkInventorySync(courier);
-        if (recipient) await checkInventorySync(recipient);
+        // Check inventory sync for all involved characters
+        try {
+          if (sender) await checkInventorySync(sender);
+          if (courier) await checkInventorySync(courier);
+          if (recipient) await checkInventorySync(recipient);
+        } catch (error) {
+          await interaction.reply({
+            content: error.message,
+            ephemeral: true
+          });
+          return;
+        }
 
         // ------------------- Validate: Sender cannot be Recipient -------------------
         if (senderName === recipientName) {
@@ -302,19 +311,6 @@ const command = {
               jobName: job
             }).message,
             ephemeral: true,
-          });
-        }
-
-        // ------------------- Ensure inventories are synced -------------------
-        const unsynced = [];
-        if (!senderCharacter.inventorySynced)
-          unsynced.push(`📤 **Sender**: ${senderCharacter.name} ${senderCharacter.userId ? `(<@${senderCharacter.userId}>)` : ''}`);
-        if (!recipientCharacter.inventorySynced)
-          unsynced.push(`📥 **Recipient**: ${recipientCharacter.name} ${recipientCharacter.userId ? `(<@${recipientCharacter.userId}>)` : ''}`);
-        if (unsynced.length > 0) {
-          return interaction.reply({
-            content: `❌ The following characters' inventories are not synced:\n\n${unsynced.join('\n')}\n\nPlease use \`/testinventorysetup\` and \`/syncinventory\` to complete setup.`,
-            ephemeral: false,
           });
         }
 
