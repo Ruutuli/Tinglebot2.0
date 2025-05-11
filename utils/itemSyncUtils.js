@@ -4,7 +4,7 @@
 
 const { v4: uuidv4 } = require('uuid');
 const { safeAppendDataToSheet } = require('./googleSheetsUtils');
-const { addItemInventoryDatabase } = require('./databaseUtils');
+const { addItemInventoryDatabase } = require('../utils/inventoryUtils.js');
 
 // Source types for item sync
 const SOURCE_TYPES = {

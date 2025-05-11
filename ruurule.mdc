@@ -256,3 +256,9 @@ perf: Optimized [logic area]
 - 1 edge case + 1 normal case  
 - Use basic mocks  
 - Keep tests simple and readable
+
+---
+
+## Coding Standards
+
+- Do NOT add references or imports to files, modules, or functions unless you have confirmed they exist in the codebase. Always verify the existence and correct path before adding any import or require statement.
