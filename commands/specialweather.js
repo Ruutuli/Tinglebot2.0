@@ -129,16 +129,29 @@ async function generateBanner(village, weather) {
     }
     const overlayPath = getOverlayPath(weather.special.label);
     
-    const bannerImg = await Jimp.read(bannerUrl);
+    // Add timeout to prevent infinite loops
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Image processing timeout')), 10000);
+    });
+
+    const bannerPromise = Jimp.read(bannerUrl);
+    const bannerImg = await Promise.race([bannerPromise, timeoutPromise]);
     
     if (overlayPath) {
-      const overlayImg = await Jimp.read(overlayPath);
-      overlayImg.resize(bannerImg.bitmap.width, bannerImg.bitmap.height);
-      bannerImg.composite(overlayImg, 0, 0, {
-        mode: Jimp.BLEND_SOURCE_OVER,
-        opacitySource: 1,
-        opacityDest: 1
-      });
+      const overlayPromise = Jimp.read(overlayPath);
+      const overlayImg = await Promise.race([overlayPromise, timeoutPromise]);
+      
+      // Validate image dimensions before processing
+      if (bannerImg.bitmap.width > 0 && bannerImg.bitmap.height > 0) {
+        overlayImg.resize(bannerImg.bitmap.width, bannerImg.bitmap.height);
+        bannerImg.composite(overlayImg, 0, 0, {
+          mode: Jimp.BLEND_SOURCE_OVER,
+          opacitySource: 1,
+          opacityDest: 1
+        });
+      } else {
+        throw new Error('Invalid image dimensions');
+      }
     }
     
     const outName = `banner-${village.toLowerCase()}.png`;
