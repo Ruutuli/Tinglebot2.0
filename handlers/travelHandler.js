@@ -159,7 +159,9 @@ async function handleGather(interaction, character, currentPath, encounterMessag
       console.log(`[travelHandler.js]: 🔍 Sample item structure:`, JSON.stringify(items[0], null, 2));
     }
 
-    const available = items.filter(i => i[currentPath] === true);
+    // Convert currentPath to match database field format
+    const dbPathField = currentPath.replace(/-/g, '');
+    const available = items.filter(i => i[dbPathField] === true);
     console.log(`[travelHandler.js]: 🎯 Items available for ${currentPath}: ${available.length}`);
     
     if (available.length > 0) {
@@ -279,26 +281,36 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
       console.log(`[travelHandler.js]: 🎲 Rolling for loot from ${monster.name}`);
       const drops = await fetchItemsByMonster(monster.name);
       console.log(`[travelHandler.js]: 📦 Available drops: ${drops.length} items`);
-      const weighted = createWeightedItemList(drops, adjustedRandomValue);
-      item = weighted[Math.floor(Math.random() * weighted.length)];
-      console.log(`[travelHandler.js]: 🎯 Selected item: ${item.itemName}`);
 
-      // Chuchu Special Case
-      if (/Chuchu/.test(monster.name)) {
-        const qty = /Large/.test(monster.name) ? 3 : /Medium/.test(monster.name) ? 2 : 1;
-        item.itemName = `${monster.name.includes('Ice') ? 'White' : monster.name.includes('Fire') ? 'Red' : 'Yellow'} Chuchu Jelly`;
-        item.quantity = qty;
-        console.log(`[travelHandler.js]: 🧊 Chuchu special case - ${item.quantity}x ${item.itemName}`);
+      if (drops.length > 0) {
+        const weighted = createWeightedItemList(drops, adjustedRandomValue);
+        item = weighted[Math.floor(Math.random() * weighted.length)];
+        console.log(`[travelHandler.js]: 🎯 Selected item: ${item?.itemName || 'Unknown'}`);
+
+        // Chuchu Special Case
+        if (item && /Chuchu/.test(monster.name)) {
+          const qty = /Large/.test(monster.name) ? 3 : /Medium/.test(monster.name) ? 2 : 1;
+          item.itemName = `${monster.name.includes('Ice') ? 'White' : monster.name.includes('Fire') ? 'Red' : 'Yellow'} Chuchu Jelly`;
+          item.quantity = qty;
+          console.log(`[travelHandler.js]: 🧊 Chuchu special case - ${item.quantity}x ${item.itemName}`);
+        } else if (item) {
+          item.quantity = 1;
+        }
+
+        if (item) {
+          // Use syncItem utility for travel loot
+          await syncItem(character, item, interaction, SOURCE_TYPES.TRAVEL_LOOT);
+          lootLine = `\n> Looted ${item.quantity}× ${item.itemName}`;
+          outcomeMessage = `${generateVictoryMessage(item)}${lootLine}`;
+          travelLog.push(`fight: win & loot (${item.quantity}× ${item.itemName})`);
+        } else {
+          outcomeMessage = generateVictoryMessage({ itemName: 'nothing' });
+          travelLog.push('fight: win but no loot');
+        }
       } else {
-        item.quantity = 1;
+        outcomeMessage = generateVictoryMessage({ itemName: 'nothing' });
+        travelLog.push('fight: win but no loot');
       }
-
-      // Use syncItem utility for travel loot
-      await syncItem(character, item, interaction, SOURCE_TYPES.TRAVEL_LOOT);
-
-      lootLine = `\n> Looted ${item.quantity}× ${item.itemName}`;
-      outcomeMessage = `${generateVictoryMessage(item)}${lootLine}`;
-      travelLog.push(`fight: win & loot (${item.quantity}× ${item.itemName})`);
     } else {
       outcomeMessage = generateDamageMessage(outcome.hearts);
     }
