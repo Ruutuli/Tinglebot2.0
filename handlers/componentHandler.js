@@ -131,11 +131,11 @@ async function handleButtonInteraction(interaction) {
       case 'job-page':
         return await handleJobPage(interaction, characterId, extra);
       default:
-        console.warn(`[componentHandler.js]: Unhandled button action: ${action}`);
+        console.warn(`[componentHandler.js]: ⚠️ Unhandled component interaction: ${action}`);
     }
   } catch (error) {
     handleError(error, 'componentHandler.js');
-    console.error(`[componentHandler.js]: Error handling button (${action})`, error);
+    console.error(`[componentHandler.js]: ❌ Error handling button (${action}): ${error.message}`);
 
     if (!interaction.replied) {
       await interaction.reply({

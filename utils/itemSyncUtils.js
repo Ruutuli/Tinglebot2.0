@@ -5,6 +5,7 @@
 const { v4: uuidv4 } = require('uuid');
 const { safeAppendDataToSheet } = require('./googleSheetsUtils');
 const { addItemInventoryDatabase } = require('../utils/inventoryUtils.js');
+const { isValidGoogleSheetsUrl } = require('./validation');
 
 // Source types for item sync
 const SOURCE_TYPES = {
@@ -26,6 +27,9 @@ const SOURCE_TYPES = {
 const validateSyncData = (character, item, inventoryLink) => {
     if (!character || !item || !inventoryLink) {
         console.error('[itemSyncUtils.js]: ❌ Missing required data for sync');
+        console.error('[itemSyncUtils.js]: Character:', character?.name);
+        console.error('[itemSyncUtils.js]: Item:', item?.itemName);
+        console.error('[itemSyncUtils.js]: Inventory Link:', inventoryLink);
         return false;
     }
 
@@ -34,8 +38,29 @@ const validateSyncData = (character, item, inventoryLink) => {
         return false;
     }
 
-    if (!item.itemName || !item.quantity || !item.category || !item.type) {
-        console.error('[itemSyncUtils.js]: ❌ Item missing required fields');
+    if (!isValidGoogleSheetsUrl(inventoryLink)) {
+        console.error('[itemSyncUtils.js]: ❌ Invalid Google Sheets URL');
+        return false;
+    }
+
+    // Validate item fields
+    if (!item.itemName) {
+        console.error('[itemSyncUtils.js]: ❌ Item missing itemName');
+        return false;
+    }
+
+    if (typeof item.quantity === 'undefined' || item.quantity === null) {
+        console.error('[itemSyncUtils.js]: ❌ Item missing quantity');
+        return false;
+    }
+
+    if (!Array.isArray(item.category)) {
+        console.error('[itemSyncUtils.js]: ❌ Item category must be an array');
+        return false;
+    }
+
+    if (!Array.isArray(item.type)) {
+        console.error('[itemSyncUtils.js]: ❌ Item type must be an array');
         return false;
     }
 
@@ -47,22 +72,31 @@ const validateSyncData = (character, item, inventoryLink) => {
  * @param {Object} character - The character object
  * @param {Object} item - The item object
  * @param {Object} interaction - The Discord interaction object
+ * @param {string} source - The source of the item (from SOURCE_TYPES)
  * @returns {Array} - The formatted values array
  */
-const prepareSyncValues = (character, item, interaction) => {
+const prepareSyncValues = (character, item, interaction, source = SOURCE_TYPES.LOOTED) => {
     const uniqueSyncId = uuidv4();
     const formattedDateTime = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
     const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
 
+    // Ensure quantity is a number and convert to string
+    const quantity = (item.quantity || 1).toString();
+
+    // Ensure arrays are properly joined
+    const category = Array.isArray(item.category) ? item.category.join(', ') : 'N/A';
+    const type = Array.isArray(item.type) ? item.type.join(', ') : 'N/A';
+    const subtype = Array.isArray(item.subtype) ? item.subtype.join(', ') : 'N/A';
+
     return [[
         character.name,           // Character Name
         item.itemName,           // Item Name
-        item.quantity.toString(), // Quantity
-        item.category.join(', '), // Category
-        item.type.join(', '),    // Type
-        item.subtype ? item.subtype.join(', ') : 'N/A', // Subtype
-        item.source || 'N/A',    // Source
-        character.job,           // Job
+        quantity,                // Quantity
+        category,                // Category
+        type,                    // Type
+        subtype,                 // Subtype
+        source,                  // Source
+        character.job || '',     // Job
         '',                      // Perk (empty if none)
         character.currentVillage,// Location
         interactionUrl,          // Link to interaction
@@ -83,8 +117,10 @@ const syncItem = async (character, item, interaction, source = SOURCE_TYPES.LOOT
     console.log(`[itemSyncUtils.js]: 🔄 Starting item sync for ${item.itemName}`);
 
     try {
+        const inventoryLink = character.inventory || character.inventoryLink;
+        
         // Validate data
-        if (!validateSyncData(character, item, character.inventory || character.inventoryLink)) {
+        if (!validateSyncData(character, item, inventoryLink)) {
             throw new Error('Invalid sync data');
         }
 
@@ -92,19 +128,19 @@ const syncItem = async (character, item, interaction, source = SOURCE_TYPES.LOOT
         await addItemInventoryDatabase(
             character._id,
             item.itemName,
-            item.quantity,
-            item.category.join(', '),
-            item.type.join(', '),
+            item.quantity || 1,
+            Array.isArray(item.category) ? item.category.join(', ') : 'N/A',
+            Array.isArray(item.type) ? item.type.join(', ') : 'N/A',
             interaction
         );
 
         // Prepare values for Google Sheets
-        const values = prepareSyncValues(character, item, interaction);
+        const values = prepareSyncValues(character, item, interaction, source);
         console.log(`[itemSyncUtils.js]: 📝 Values to append:`, values);
 
         // Sync to Google Sheets
         await safeAppendDataToSheet(
-            character.inventory || character.inventoryLink,
+            inventoryLink,
             character,
             'loggedInventory!A2:M',
             values,

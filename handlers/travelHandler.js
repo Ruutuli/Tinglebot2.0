@@ -141,7 +141,7 @@ async function handleRecover(interaction, character, encounterMessage, travelLog
 // syncs sheet, and edits encounter embed.
 async function handleGather(interaction, character, currentPath, encounterMessage, travelLog) {
   if (typeof currentPath !== 'string') {
-    console.error(`[handleGather]: Invalid currentPath type: ${typeof currentPath} (${currentPath})`);
+    console.error(`[travelHandler.js]: ❌ Invalid currentPath type: ${typeof currentPath} (${currentPath})`);
     throw new Error(`Invalid currentPath value: "${currentPath}" — expected a string like "leafDewWay".`);
   }
   
@@ -181,10 +181,19 @@ async function handleGather(interaction, character, currentPath, encounterMessag
       const chosen = weighted[Math.floor(Math.random() * weighted.length)];
       console.log(`[travelHandler.js]: 🎲 Selected item: ${chosen.itemName}`);
       
+      // Format the item data properly
+      const formattedItem = {
+        ...chosen,
+        quantity: chosen.quantity || 1,
+        category: Array.isArray(chosen.category) ? chosen.category : [chosen.category],
+        type: Array.isArray(chosen.type) ? chosen.type : [chosen.type],
+        subtype: Array.isArray(chosen.subtype) ? chosen.subtype : chosen.subtype ? [chosen.subtype] : []
+      };
+
       // Use syncItem utility for gathering
-      await syncItem(character, chosen, interaction, SOURCE_TYPES.GATHERING);
+      await syncItem(character, formattedItem, interaction, SOURCE_TYPES.GATHERING);
       
-      outcomeMessage = `Gathered ${chosen.quantity||1}× ${chosen.itemName||chosen.type.join(', ')}.`;
+      outcomeMessage = `Gathered ${formattedItem.quantity}× ${formattedItem.itemName}.`;
 
       // Deduct stamina
       if (!hasPerk(character, 'DELIVERING')) {
@@ -467,7 +476,7 @@ async function handleDoNothing(interaction, character, encounterMessage, travelL
 
     // Update embed
     const description = 
-      `🌸 It's a nice and safe day of traveling. What do you want to do next?\n> ✨ ${randomFlavor}\n\n` +
+      `🌸 It's a nice and safe day of traveling. What do you want to do next?\n> ${decision}\n\n` +
       `**❤️ Hearts:** ${character.currentHearts}/${character.maxHearts}\n` +
       `**🟩 Stamina:** ${character.currentStamina}/${character.maxStamina}`;
 
@@ -475,22 +484,22 @@ async function handleDoNothing(interaction, character, encounterMessage, travelL
       encounterMessage,
       character,
       description,
-      fields: [{ name: '🔹 __Outcome__', value: randomFlavor, inline: false }],
+      fields: [{ name: '🔹 __Outcome__', value: outcomeMessage || 'No resources found', inline: false }],
     });
-
+    
     if (typeof encounterMessage?.edit === 'function') {
       await encounterMessage.edit({ embeds: [embed], components: [] });
     }
 
-    return randomFlavor;
+    return decision;
 
   } catch (error) {
-    handleError(error, 'travelHandler.js (handleDoNothing)');
+    handleError(error, 'travelHandler.js (handleGather)');
     throw error;
   }
 }
-  
-  // ============================================================================
+
+// ============================================================================
 // ------------------- Primary Handler -------------------
 // ============================================================================
 
@@ -559,4 +568,3 @@ async function handleTravelInteraction(
   
   // Exports the primary handler for use in the command module.
   module.exports = { handleTravelInteraction };
-  
