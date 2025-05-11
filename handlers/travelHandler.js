@@ -473,6 +473,8 @@ async function handleDoNothing(interaction, character, encounterMessage, travelL
     const randomFlavor = flavorTexts[Math.floor(Math.random() * flavorTexts.length)];
 
     // No stamina should be used when truly doing nothing
+    const decision = `😴 ${randomFlavor}`;
+    const outcomeMessage = `${character.name} took some time to rest.`;
 
     // Update embed
     const description = 

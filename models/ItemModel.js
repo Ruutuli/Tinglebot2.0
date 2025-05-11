@@ -33,7 +33,19 @@ const ItemSchema = new Schema({
   looting: { type: Boolean, default: false }, // Can this item be looted
   vending: { type: Boolean, default: false }, // Can this item be vended
   traveling: { type: Boolean, default: false }, // Can this item be found while traveling
-  specialWeather: { type: Boolean, default: false }, // Requires special weather
+  // ============================================================================
+  // Special Weather
+  // Stores weather requirements for the item as booleans for each weather type.
+  // ============================================================================
+  specialWeather: {
+    muggy: { type: Boolean, default: false }, // Muggy weather
+    flowerbloom: { type: Boolean, default: false }, // Flowerbloom weather
+    fairycircle: { type: Boolean, default: false }, // Fairycircle weather
+    jubilee: { type: Boolean, default: false }, // Jubilee weather
+    meteorShower: { type: Boolean, default: false }, // Meteor Shower weather
+    rockslide: { type: Boolean, default: false }, // Rockslide weather
+    avalanche: { type: Boolean, default: false } // Avalanche weather
+  },
   petPerk: { type: Boolean, default: false }, // Has pet perks
   exploring: { type: Boolean, default: false }, // Used for exploring
   craftingJobs: { type: [String], default: [] }, // Jobs that can craft the item
