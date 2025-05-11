@@ -33,6 +33,7 @@ const {
 
 // ------------------- Utility Functions -------------------
 const { addItemInventoryDatabase } = require('../utils/inventoryUtils');
+const { syncItem, SOURCE_TYPES } = require('../utils/itemSyncUtils');
 const {
   appendSheetData,
   authorizeSheets,
@@ -164,31 +165,11 @@ async function handleGather(interaction, character, currentPath, encounterMessag
     } else {
       const weighted = createWeightedItemList(available);
       const chosen = weighted[Math.floor(Math.random() * weighted.length)];
-      await addItemInventoryDatabase(
-        character._id,
-        chosen.itemName || chosen.type.join(', '),
-        chosen.quantity || 1,
-        chosen.category.join(', '),
-        chosen.type.join(', '),
-        interaction
-      );
+      
+      // Use syncItem utility for gathering
+      await syncItem(character, chosen, interaction, SOURCE_TYPES.GATHERING);
+      
       outcomeMessage = `Gathered ${chosen.quantity||1}× ${chosen.itemName||chosen.type.join(', ')}.`;
-
-      // Sheet sync
-      if (character.inventoryLink && isValidGoogleSheetsUrl(character.inventoryLink)) {
-        const sheetId = extractSpreadsheetId(character.inventoryLink);
-        const auth = await authorizeSheets();
-        const range = 'loggedInventory!A2:M';
-        const values = [[
-          character.name,
-          chosen.category.join(', '),
-          chosen.type.join(', '),
-          `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`,
-          new Date().toLocaleString('en-US',{timeZone:'America/New_York'}),
-          uuidv4()
-        ]];
-        await safeAppendDataToSheet(sheetId, auth, range, values);
-      }
 
       // Deduct stamina
       if (!hasPerk(character, 'DELIVERING')) {
@@ -212,7 +193,6 @@ async function handleGather(interaction, character, currentPath, encounterMessag
       fields: [{ name: '🔹 __Outcome__', value: outcomeMessage || 'No resources found', inline: false }],
     });
     
-
     if (typeof encounterMessage?.edit === 'function') {
       await encounterMessage.edit({ embeds: [embed], components: [] });
     }
@@ -300,71 +280,8 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
         item.quantity = 1;
       }
 
-      console.log(`[travelHandler.js]: 📝 Adding item to database: ${item.quantity}x ${item.itemName}`);
-      await addItemInventoryDatabase(
-        character._id,
-        item.itemName,
-        item.quantity,
-        item.category.join(', '),
-        item.type.join(', '),
-        interaction
-      );
-      console.log(`[travelHandler.js]: ✅ Item added to database successfully`);
-
-      // Optional: Sheet Sync
-      console.log(`[travelHandler.js]: 🔄 Starting Google Sheets sync`);
-      console.log(`[travelHandler.js]: 📊 Character inventory link: ${character.inventory || character.inventoryLink}`);
-      
-      // Check if character has a valid inventory link
-      if (!character.inventory && !character.inventoryLink) {
-        console.error(`[travelHandler.js]: ❌ No inventory link found for character ${character.name}`);
-        return;
-      }
-
-      const inventoryLink = character.inventory || character.inventoryLink;
-      console.log(`[travelHandler.js]: 📊 Character inventory link: ${inventoryLink}`);
-
-      if (!isValidGoogleSheetsUrl(inventoryLink)) {
-        console.error(`[travelHandler.js]: ❌ Invalid inventory link format: ${inventoryLink}`);
-        return;
-      }
-
-      const sheetId = extractSpreadsheetId(inventoryLink);
-      const auth = await authorizeSheets();
-      const range = 'loggedInventory!A2:M';
-      const uniqueSyncId = uuidv4();
-      const formattedDateTime = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
-      const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
-
-      const values = [[
-        character.name,
-        item.itemName,
-        item.quantity.toString(),
-        item.category.join(', '),
-        item.type.join(', '),
-        item.subtype ? item.subtype.join(', ') : 'N/A',
-        'Travel Loot',
-        character.job,
-        '',
-        character.currentVillage,
-        interactionUrl,
-        formattedDateTime,
-        uniqueSyncId
-      ]];
-
-      // Log the sync attempt
-      console.log(`[travelHandler.js]: 🔄 Attempting to sync loot to Google Sheets`);
-      console.log(`[travelHandler.js]: 📝 Values to append:`, values);
-
-      try {
-        await safeAppendDataToSheet(inventoryLink, character, range, values, interaction.client);
-        console.log(`[travelHandler.js]: ✅ Successfully synced loot to Google Sheets`);
-      } catch (error) {
-        console.error(`[travelHandler.js]: ❌ Failed to sync loot to Google Sheets:`, error);
-        console.error(`[travelHandler.js]: ❌ Character: ${character.name}`);
-        console.error(`[travelHandler.js]: ❌ Item: ${item.itemName}`);
-        console.error(`[travelHandler.js]: ❌ Inventory link: ${inventoryLink}`);
-      }
+      // Use syncItem utility for travel loot
+      await syncItem(character, item, interaction, SOURCE_TYPES.TRAVEL_LOOT);
 
       lootLine = `\n> Looted ${item.quantity}× ${item.itemName}`;
       outcomeMessage = `${generateVictoryMessage(item)}${lootLine}`;
