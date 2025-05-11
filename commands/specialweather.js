@@ -46,6 +46,20 @@ const OVERLAY_MAPPING = {
   'Rock Slide': 'rockslide'
 };
 
+// Mapping special weather to regular weather overlays
+const SPECIAL_TO_REGULAR_OVERLAY = {
+  'Avalanche': 'blizzard',
+  'Blight Rain': 'blightrain',
+  'Drought': 'sunny',
+  'Fairy Circle': 'fog',
+  'Flood': 'heavyrain',
+  'Flower Bloom': 'rainbow',
+  'Jubilee': 'sunny',
+  'Meteor Shower': 'thunderstorm',
+  'Muggy': 'cloudy',
+  'Rock Slide': 'sunny'
+};
+
 // ------------------- Helper Functions -------------------
 function capitalizeWords(str) {
   return str.split(' ')
@@ -63,22 +77,42 @@ function isValidImageUrl(url) {
   return url && typeof url === 'string' && url.startsWith('http');
 }
 
-function generateGatherFlavorText(itemType) {
+function generateGatherFlavorText(weatherLabel) {
   const flavorTexts = {
-    'Creature': 'A rare creature appears during this special weather!',
-    'Material': 'A special material has been revealed by the weather!',
-    'Plant': 'The weather has caused a unique plant to bloom!',
-    'Fish': 'The weather has attracted a special fish!',
-    'Insect': 'A rare insect has been drawn out by the weather!',
-    'Default': 'Something special has appeared due to the weather!'
+    'Avalanche': 'Heavy snow crashes down the mountainside in a roaring slide.',
+    'Blight Rain': 'Dark clouds pour with unnatural rain that stings the earth.',
+    'Drought': 'The air is dry and cracked earth stretches as far as the eye can see.',
+    'Fairy Circle': 'Whimsical patterns of mushrooms dot the ground under a strange stillness.',
+    'Flood': 'Waters swell past their banks, rushing across the land in waves.',
+    'Flower Bloom': 'Every field is bursting with vibrant petals under the warm breeze.',
+    'Jubilee': 'The weather is calm and festive, carrying a sense of celebration.',
+    'Meteor Shower': 'Streaks of light race across the night sky, burning trails into the dark.',
+    'Muggy': 'Thick, humid air clings to everything, dense with moisture.',
+    'Rock Slide': 'Loose rock and debris tumble down the slopes with thunderous force.',
+    'Default': 'The weather shifts unpredictably, creating a strange atmosphere.'
   };
-  return flavorTexts[itemType] || flavorTexts.Default;
+
+  return flavorTexts[weatherLabel] || flavorTexts.Default;
 }
 
 function getOverlayPath(condition) {
   const overlayName = OVERLAY_MAPPING[condition];
   if (!overlayName) {
-    console.log(`[specialweather.js]: No overlay mapping found for condition: ${condition}`);
+    console.log(`[specialweather.js]: No direct overlay mapping found for condition: ${condition}`);
+    
+    // Try to get a fallback overlay based on the special weather type
+    const fallbackOverlay = SPECIAL_TO_REGULAR_OVERLAY[condition];
+    if (fallbackOverlay) {
+      const fallbackPath = path.join(__dirname, '..', 'assets', 'overlays', `ROOTS-${fallbackOverlay}.png`);
+      console.log(`[specialweather.js]: Using fallback overlay: ${fallbackOverlay}`);
+      
+      if (fs.existsSync(fallbackPath)) {
+        console.log(`[specialweather.js]: Found fallback PNG overlay`);
+        return fallbackPath;
+      }
+    }
+    
+    console.log(`[specialweather.js]: No overlay found for ${condition}`);
     return null;
   }
   
@@ -152,7 +186,7 @@ const createSpecialWeatherEmbed = async (character, item, weather) => {
   }
 
   const article = getArticleForItem(item.itemName);
-  const flavorText = generateGatherFlavorText(item.type[0]);
+  const flavorText = generateGatherFlavorText(weather.special.label);
 
   const embed = new EmbedBuilder()
     .setTitle(`${locationPrefix}: ${character.name} found ${article} ${item.itemName} during ${weather.special.label}!`)
