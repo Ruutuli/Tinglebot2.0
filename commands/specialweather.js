@@ -4,7 +4,10 @@
 // ============================================================================
 
 // ------------------- Discord.js Components -------------------
-const { SlashCommandBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, AttachmentBuilder } = require('discord.js');
+const path = require('path');
+const fs = require('fs');
+const Jimp = require('jimp');
 
 // ------------------- Database Services -------------------
 const { fetchCharacterByNameAndUserId, fetchAllItems } = require('../database/db.js');
@@ -12,11 +15,166 @@ const { fetchCharacterByNameAndUserId, fetchAllItems } = require('../database/db
 // ------------------- Modules -------------------
 const { createWeightedItemList } = require('../modules/rngModule.js');
 const { handleError } = require('../utils/globalErrorHandler.js');
-const { addItemInventoryDatabase } = require('../utils/inventoryUtils.js');
-const { authorizeSheets, safeAppendDataToSheet } = require('../utils/googleSheetsUtils.js');
-const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../utils/validation.js');
+const { syncItem, SOURCE_TYPES } = require('../utils/itemSyncUtils.js');
 const { getCurrentWeather } = require('../modules/weatherModule.js');
-const { v4: uuidv4 } = require('uuid');
+
+// ------------------- Constants -------------------
+const DEFAULT_IMAGE_URL = 'https://storage.googleapis.com/tinglebot/Graphics/Default-Footer.png';
+
+const VILLAGE_COLORS = {
+  Rudania: 0xd7342a,
+  Inariko: 0x277ecd,
+  Vhintl: 0x25c059
+};
+
+const VILLAGE_IMAGES = {
+  Inariko: "https://storage.googleapis.com/tinglebot/Graphics/Inariko-Footer.png",
+  Rudania: "https://storage.googleapis.com/tinglebot/Graphics/Rudania-Footer.png",
+  Vhintl: "https://storage.googleapis.com/tinglebot/Graphics/Vhintl-Footer.png"
+};
+
+const OVERLAY_MAPPING = {
+  'Flower Bloom': 'flowerbloom',
+  'Fairy Circle': 'fairycircle',
+  'Meteor Shower': 'meteorshower',
+  'Jubilee': 'jubilee',
+  'Drought': 'drought',
+  'Flood': 'flood',
+  'Avalanche': 'avalanche',
+  'Blight Rain': 'blightrain',
+  'Muggy': 'muggy',
+  'Rock Slide': 'rockslide'
+};
+
+// ------------------- Helper Functions -------------------
+function capitalizeWords(str) {
+  return str.split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+}
+
+function getArticleForItem(itemName) {
+  const vowels = ['a', 'e', 'i', 'o', 'u'];
+  const firstLetter = itemName.charAt(0).toLowerCase();
+  return vowels.includes(firstLetter) ? 'an' : 'a';
+}
+
+function isValidImageUrl(url) {
+  return url && typeof url === 'string' && url.startsWith('http');
+}
+
+function generateGatherFlavorText(itemType) {
+  const flavorTexts = {
+    'Creature': 'A rare creature appears during this special weather!',
+    'Material': 'A special material has been revealed by the weather!',
+    'Plant': 'The weather has caused a unique plant to bloom!',
+    'Fish': 'The weather has attracted a special fish!',
+    'Insect': 'A rare insect has been drawn out by the weather!',
+    'Default': 'Something special has appeared due to the weather!'
+  };
+  return flavorTexts[itemType] || flavorTexts.Default;
+}
+
+function getOverlayPath(condition) {
+  const overlayName = OVERLAY_MAPPING[condition];
+  if (!overlayName) {
+    console.log(`[specialweather.js]: No overlay mapping found for condition: ${condition}`);
+    return null;
+  }
+  
+  const overlayPath = path.join(__dirname, '..', 'assets', 'overlays', `ROOTS-${overlayName}.png`);
+  console.log(`[specialweather.js]: Looking for overlay at: ${overlayPath}`);
+  
+  if (fs.existsSync(overlayPath)) {
+    console.log(`[specialweather.js]: Found PNG overlay`);
+    return overlayPath;
+  }
+  
+  console.log(`[specialweather.js]: No overlay found for ${condition}`);
+  return null;
+}
+
+async function generateBanner(village, weather) {
+  try {
+    const bannerUrl = VILLAGE_IMAGES[village];
+    if (!bannerUrl) {
+      console.error(`[specialweather.js]: No banner URL found for village: ${village}`);
+      return null;
+    }
+    const overlayPath = getOverlayPath(weather.special.label);
+    console.log('[specialweather.js]: Banner URL:', bannerUrl);
+    console.log('[specialweather.js]: Overlay path:', overlayPath);
+    
+    const bannerImg = await Jimp.read(bannerUrl);
+    
+    if (overlayPath) {
+      const overlayImg = await Jimp.read(overlayPath);
+      overlayImg.resize(bannerImg.bitmap.width, bannerImg.bitmap.height);
+      bannerImg.composite(overlayImg, 0, 0, {
+        mode: Jimp.BLEND_SOURCE_OVER,
+        opacitySource: 1,
+        opacityDest: 1
+      });
+    }
+    
+    const outName = `banner-${village.toLowerCase()}.png`;
+    const buffer = await bannerImg.getBufferAsync(Jimp.MIME_PNG);
+    return new AttachmentBuilder(buffer, { name: outName });
+  } catch (error) {
+    console.error('[specialweather.js]: Error generating banner:', error);
+    return null;
+  }
+}
+
+// ------------------- Embed Creation -------------------
+const createSpecialWeatherEmbed = async (character, item, weather) => {
+  const currentVillage = capitalizeWords(character.currentVillage);
+  const isVisiting = character.homeVillage.toLowerCase() !== character.currentVillage.toLowerCase();
+  const locationPrefix = isVisiting
+    ? `${capitalizeWords(character.homeVillage)} ${capitalizeWords(character.job)} is visiting ${currentVillage}`
+    : `${currentVillage} ${capitalizeWords(character.job)}`;
+
+  const embedColor = VILLAGE_COLORS[currentVillage] || 0x000000;
+  
+  // Generate banner with overlay
+  const banner = await generateBanner(currentVillage, weather);
+  
+  // Get the best available image URL for the thumbnail
+  let thumbnailUrl = DEFAULT_IMAGE_URL;
+  if (item.image && isValidImageUrl(item.image)) {
+    thumbnailUrl = item.image;
+  } else if (item.inarikoImg && isValidImageUrl(item.inarikoImg)) {
+    thumbnailUrl = item.inarikoImg;
+  } else if (item.rudaniaImg && isValidImageUrl(item.rudaniaImg)) {
+    thumbnailUrl = item.rudaniaImg;
+  } else if (item.vhintlImg && isValidImageUrl(item.vhintlImg)) {
+    thumbnailUrl = item.vhintlImg;
+  }
+
+  const article = getArticleForItem(item.itemName);
+  const flavorText = generateGatherFlavorText(item.type[0]);
+
+  const embed = new EmbedBuilder()
+    .setTitle(`${locationPrefix}: ${character.name} found ${article} ${item.itemName} during ${weather.special.label}!`)
+    .setDescription(flavorText)
+    .setColor(embedColor)
+    .setAuthor({
+      name: `${character.name} 🔗`,
+      iconURL: character.icon || DEFAULT_IMAGE_URL,
+      url: character.inventory || ''
+    })
+    .setThumbnail(thumbnailUrl)
+    .addFields(
+      { name: 'Special Weather', value: `${weather.special.emoji} ${weather.special.label}`, inline: true },
+      { name: 'Location', value: currentVillage, inline: true }
+    );
+
+  if (banner) {
+    embed.setImage(`attachment://${banner.name}`);
+  }
+
+  return { embed, files: banner ? [banner] : [] };
+};
 
 // ------------------- Command Definition -------------------
 module.exports = {
@@ -78,9 +236,16 @@ module.exports = {
 
       // Get special weather items
       const items = await fetchAllItems();
+      
+      // Convert special weather label to the corresponding field name
+      const specialWeatherField = weather.special.label.toLowerCase()
+        .replace(/\s+/g, '') // Remove spaces
+        .replace(/[^a-z0-9]/g, ''); // Remove special characters
+
+      // Filter items that are available for this special weather (ignoring location)
       const specialWeatherItems = items.filter(item => 
         item.specialWeather && 
-        item[currentVillage.toLowerCase()]
+        item.specialWeather[specialWeatherField] === true
       );
 
       if (specialWeatherItems.length === 0) {
@@ -93,55 +258,22 @@ module.exports = {
       // Select and gather item
       const weightedItems = createWeightedItemList(specialWeatherItems);
       const randomItem = weightedItems[Math.floor(Math.random() * weightedItems.length)];
-      const quantity = 1;
+      
+      // Format item for syncing
+      const itemToSync = {
+        itemName: randomItem.itemName,
+        quantity: 1,
+        category: randomItem.category,
+        type: randomItem.type,
+        subtype: randomItem.subtype || ['None']
+      };
 
-      // Add item to inventory
-      await addItemInventoryDatabase(
-        character._id,
-        randomItem.itemName,
-        quantity,
-        randomItem.category.join(', '),
-        randomItem.type.join(', '),
-        interaction
-      );
+      // Sync item using itemSyncUtils
+      await syncItem(character, itemToSync, interaction, SOURCE_TYPES.GATHERING);
 
-      // Sync with Google Sheets if available
-      const inventoryLink = character.inventory || character.inventoryLink;
-      if (typeof inventoryLink === 'string' && isValidGoogleSheetsUrl(inventoryLink)) {
-        const spreadsheetId = extractSpreadsheetId(inventoryLink);
-        const auth = await authorizeSheets();
-        const range = 'loggedInventory!A2:M';
-        const uniqueSyncId = uuidv4();
-        const formattedDateTime = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
-        const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
-        const values = [[
-          character.name,
-          randomItem.itemName,
-          quantity.toString(),
-          randomItem.category.join(', '),
-          randomItem.type.join(', '),
-          randomItem.subtype.join(', '),
-          'Special Weather Gathering',
-          character.job,
-          '',
-          character.currentVillage,
-          interactionUrl,
-          formattedDateTime,
-          uniqueSyncId,
-        ]];
-        await safeAppendDataToSheet(inventoryLink, character, range, values);
-      }
-
-      // Create success message
-      const successMessage = `✨ **${character.name} found something special during ${weather.special.label}!**\n\n` +
-        `**Item Gathered:** ${randomItem.itemName}\n` +
-        `**Quantity:** ${quantity}\n` +
-        `**Special Weather:** ${weather.special.emoji} ${weather.special.label}\n` +
-        `**Location:** ${currentVillage}`;
-
-      await interaction.editReply({
-        content: successMessage,
-      });
+      // Create and send embed
+      const { embed, files } = await createSpecialWeatherEmbed(character, randomItem, weather);
+      await interaction.editReply({ embeds: [embed], files });
 
     } catch (error) {
       handleError(error, 'specialweather.js');
