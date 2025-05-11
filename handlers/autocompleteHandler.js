@@ -186,6 +186,11 @@ async function handleAutocomplete(interaction) {
         }
         break;
 
+      // ------------------- Travel Command -------------------
+      case "travel":
+        await handleTravelAutocomplete(interaction);
+        break;
+
       // ... rest of existing code ...
     }
   } catch (error) {
@@ -2448,7 +2453,7 @@ async function handleTravelAutocomplete(interaction) {
     char.name.toLowerCase().includes(focusedOption.value.toLowerCase())
    )
    .map((char) => ({
-    name: char.name,
+    name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
     value: char.name,
    }));
   await interaction.respond(filtered.slice(0, 25));

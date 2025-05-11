@@ -156,197 +156,204 @@ module.exports = {
   data: CommandData,
 
   // ------------------- Execute Travel Command -------------------
-async execute(interaction) {
-  try {
-    await interaction.deferReply();
+  async execute(interaction) {
+    try {
+      await interaction.deferReply();
 
-    // ------------------- Extract Options from Interaction -------------------
-    const characterName = interaction.options.getString('charactername');
-    const destination = interaction.options.getString('destination').toLowerCase();
-    const mode = interaction.options.getString('mode');
-    const userId = interaction.user.id;
+      // ------------------- Extract Options from Interaction -------------------
+      const characterName = interaction.options.getString('charactername');
+      const destination = interaction.options.getString('destination').toLowerCase();
+      const mode = interaction.options.getString('mode');
+      const userId = interaction.user.id;
 
-    // ------------------- Fetch Character from Database -------------------
-    const character = await fetchCharacterByNameAndUserId(characterName, userId);
-    if (!character) {
-      return interaction.editReply({
-        content: `❌ **Character "${characterName}"** not found or does not belong to you.`
-      });
-    }
-
-    // ------------------- Mount Travel Logic -------------------
-    let mount = null;
-    if (mode === 'on mount') {
-      mount = await Mount.findOne({ characterId: character._id });
-      if (!mount) {
+      // ------------------- Fetch Character from Database -------------------
+      const character = await fetchCharacterByNameAndUserId(characterName, userId);
+      if (!character) {
         return interaction.editReply({
-          content: `❌ **${character.name}** does not have a registered mount. You must register a mount before traveling on mount.`
+          content: `❌ **Character "${characterName}"** not found or does not belong to you.`
         });
       }
-      // Recover mount stamina if a day has passed since lastMountTravel
-      const now = new Date();
-      if (mount.lastMountTravel) {
-        const last = new Date(mount.lastMountTravel);
-        const msInDay = 24 * 60 * 60 * 1000;
-        const daysPassed = Math.floor((now - last) / msInDay);
-        if (daysPassed > 0) {
-          const maxStamina = mount.level === 'Basic' ? 2 : mount.level === 'Mid' ? 4 : mount.level === 'High' ? 6 : mount.stamina;
-          mount.currentStamina = Math.min(maxStamina, (mount.currentStamina || maxStamina) + daysPassed);
-          await mount.save();
-        }
-        // Enforce 1 day cooldown
-        if ((now - last) < msInDay) {
+
+      // ------------------- Mount Travel Logic -------------------
+      let mount = null;
+      if (mode === 'on mount') {
+        mount = await Mount.findOne({ characterId: character._id });
+        if (!mount) {
           return interaction.editReply({
-            content: `❌ **${mount.name}** must rest for 1 day before traveling again. Please wait before using your mount for travel.`
+            content: `❌ **${character.name}** does not have a registered mount. You must register a mount before traveling on mount.`
           });
         }
-      } else {
-        // If never traveled, initialize currentStamina
-        if (mount.currentStamina == null) {
-          const maxStamina = mount.level === 'Basic' ? 2 : mount.level === 'Mid' ? 4 : mount.level === 'High' ? 6 : mount.stamina;
-          mount.currentStamina = maxStamina;
-          await mount.save();
+        // Recover mount stamina if a day has passed since lastMountTravel
+        const now = new Date();
+        if (mount.lastMountTravel) {
+          const last = new Date(mount.lastMountTravel);
+          const msInDay = 24 * 60 * 60 * 1000;
+          const daysPassed = Math.floor((now - last) / msInDay);
+          if (daysPassed > 0) {
+            const maxStamina = mount.level === 'Basic' ? 2 : mount.level === 'Mid' ? 4 : mount.level === 'High' ? 6 : mount.stamina;
+            mount.currentStamina = Math.min(maxStamina, (mount.currentStamina || maxStamina) + daysPassed);
+            await mount.save();
+          }
+          // Enforce 1 day cooldown
+          if ((now - last) < msInDay) {
+            return interaction.editReply({
+              content: `❌ **${mount.name}** must rest for 1 day before traveling again. Please wait before using your mount for travel.`
+            });
+          }
+        } else {
+          // If never traveled, initialize currentStamina
+          if (mount.currentStamina == null) {
+            const maxStamina = mount.level === 'Basic' ? 2 : mount.level === 'Mid' ? 4 : mount.level === 'High' ? 6 : mount.stamina;
+            mount.currentStamina = maxStamina;
+            await mount.save();
+          }
         }
       }
-    }
 
-    // ------------------- Check for Debuff -------------------
-    if (character.debuff?.active) {
-      const remainingDays = Math.ceil((new Date(character.debuff.endDate) - new Date()) / (1000 * 60 * 60 * 24));
-      return interaction.editReply({
-        content: `❌ **${character.name}** is recovering and cannot travel for ${remainingDays} more day(s).`
-      });
-    }
+      // ------------------- Check for Debuff -------------------
+      if (character.debuff?.active) {
+        const remainingDays = Math.ceil((new Date(character.debuff.endDate) - new Date()) / (1000 * 60 * 60 * 24));
+        return interaction.editReply({
+          content: `❌ **${character.name}** is recovering and cannot travel for ${remainingDays} more day(s).`
+        });
+      }
 
-    // ------------------- Check Inventory Sync -------------------
-    try {
-      await checkInventorySync(character);
-    } catch (error) {
-      await interaction.editReply({
-        content: error.message,
-        ephemeral: true
-      });
-      return;
-    }
+      // ------------------- Check Inventory Sync -------------------
+      try {
+        await checkInventorySync(character);
+      } catch (error) {
+        await interaction.editReply({
+          content: error.message,
+          ephemeral: true
+        });
+        return;
+      }
 
-    // ------------------- Check if KO'd -------------------
-    if (character.currentHearts <= 0 || character.ko) {
-      return interaction.editReply({
-        content: `❌ **${character.name}** is KO'd and cannot travel.`
-      });
-    }
+      // ------------------- Check if KO'd -------------------
+      if (character.currentHearts <= 0 || character.ko) {
+        return interaction.editReply({
+          content: `❌ **${character.name}** is KO'd and cannot travel.`
+        });
+      }
 
-    // ------------------- Validate Destination -------------------
-    const startingVillage = character.currentVillage.toLowerCase();
-    if (startingVillage === destination) {
-      return interaction.editReply({
-        content: `❌ **${character.name}** is already in **${capitalizeFirstLetter(destination)}**.`
-      });
-    }
-    if (!isValidVillage(destination)) {
-      return interaction.editReply({
-        content: `❌ Invalid destination: **${capitalizeFirstLetter(destination)}**.`
-      });
-    }
+      // ------------------- Validate Destination -------------------
+      const startingVillage = character.currentVillage.toLowerCase();
+      if (startingVillage === destination) {
+        return interaction.editReply({
+          content: `❌ **${character.name}** is already in **${capitalizeFirstLetter(destination)}**.`
+        });
+      }
+      if (!isValidVillage(destination)) {
+        return interaction.editReply({
+          content: `❌ Invalid destination: **${capitalizeFirstLetter(destination)}**.`
+        });
+      }
 
-    // ------------------- Calculate Travel Duration -------------------
-const totalTravelDuration = calculateTravelDuration(startingVillage, destination, mode, character);
+      // ------------------- Calculate Travel Duration -------------------
+      const totalTravelDuration = calculateTravelDuration(startingVillage, destination, mode, character);
 
-if (mode === 'on mount') {
-  if (!mount) {
-    return interaction.editReply({
-      content: `❌ **${character.name}** does not have a registered mount. You must register a mount before traveling on mount.`
-    });
-  }
-  if (mount.currentStamina < totalTravelDuration) {
-    return interaction.editReply({
-      content: `❌ **${mount.name}** does not have enough stamina to complete this journey. Required: ${totalTravelDuration}, Available: ${mount.currentStamina}`
-    });
-  }
-  // Deduct mount stamina and update lastMountTravel
-  mount.currentStamina -= totalTravelDuration;
-  mount.lastMountTravel = new Date();
-  await mount.save();
-}
+      if (mode === 'on mount') {
+        if (!mount) {
+          return interaction.editReply({
+            content: `❌ **${character.name}** does not have a registered mount. You must register a mount before traveling on mount.`
+          });
+        }
+        if (mount.currentStamina < totalTravelDuration) {
+          return interaction.editReply({
+            content: `❌ **${mount.name}** does not have enough stamina to complete this journey. Required: ${totalTravelDuration}, Available: ${mount.currentStamina}`
+          });
+        }
+        // Deduct mount stamina and update lastMountTravel
+        mount.currentStamina -= totalTravelDuration;
+        mount.lastMountTravel = new Date();
+        await mount.save();
+      }
 
-if (
-  (startingVillage === 'rudania' && destination === 'vhintl') ||
-  (startingVillage === 'vhintl' && destination === 'rudania')
-) {
-  const requiredPath = startingVillage === 'rudania'
-    ? `<#${PATH_CHANNELS.pathOfScarletLeaves}>`
-    : `<#${PATH_CHANNELS.leafDewWay}>`;
-
-  return interaction.editReply({
-    content: `❌ You cannot travel directly between **Rudania** and **Vhintl**.\n` +
-             `You must first travel to **Inariko**, starting with the correct path: ${requiredPath}.`
-  });
-}
-
-if (totalTravelDuration === -1) {
-  return interaction.editReply({
-    content: `❌ Travel path between **${capitalizeFirstLetter(startingVillage)}** and **${capitalizeFirstLetter(destination)}** is not valid.`
-  });
-}
-    // ------------------- Validate Correct Channel -------------------
-    const isChannelValid = await validateCorrectTravelChannel(
-      interaction,
-      character,
-      startingVillage,
-      destination,
-      totalTravelDuration
-    );
-    if (!isChannelValid) return;
-
-    // ------------------- Determine Paths & Stops -------------------
-    let paths = [];
-
- if (totalTravelDuration === 2) {
       if (
-        (startingVillage === 'rudania' && destination === 'inariko') ||
-        (startingVillage === 'inariko' && destination === 'rudania')
+        (startingVillage === 'rudania' && destination === 'vhintl') ||
+        (startingVillage === 'vhintl' && destination === 'rudania')
       ) {
-        paths = ['pathOfScarletLeaves'];
-      } else if (
-        (startingVillage === 'vhintl' && destination === 'inariko') ||
-        (startingVillage === 'inariko' && destination === 'vhintl')
-      ) {
-        paths = ['leafDewWay'];
-      } 
-    } else if (totalTravelDuration === 1) {
-      paths = startingVillage === 'rudania' || destination === 'rudania'
-        ? ['pathOfScarletLeaves']
-        : ['leafDewWay'];
-    }
+        const requiredPath = startingVillage === 'rudania'
+          ? `<#${PATH_CHANNELS.pathOfScarletLeaves}>`
+          : `<#${PATH_CHANNELS.leafDewWay}>`;
 
-    // ------------------- Send Initial Travel Embed -------------------
-    const initialEmbed = createInitialTravelEmbed(character, startingVillage, destination, paths, totalTravelDuration, mount, mode);
-    await interaction.followUp({ embeds: [initialEmbed] });
+        return interaction.editReply({
+          content: `❌ You cannot travel directly between **Rudania** and **Vhintl**.\n` +
+                   `You must first travel to **Inariko**, starting with the correct path: ${requiredPath}.`
+        });
+      }
 
-    // ------------------- Start Travel Processing -------------------
-    await processTravelDay(1, {
-      character,
-      startingVillage,
-      destination,
-      paths,
-      totalTravelDuration,
-      interaction,
-      travelingMessages: [],
-      currentChannel: interaction.channelId,
-      travelLog: [],
-      mount,
-      mode
-    });
-    
-  } catch (error) {
-    handleError(error, 'travel.js (execute)');
-    console.error(`[travel.js]: Error during execution: ${error.message}`, error);
-    await interaction.followUp({
-      content: `❌ **Error during travel command execution:** ${error.message}`,
-      ephemeral: true
+      if (totalTravelDuration === -1) {
+        return interaction.editReply({
+          content: `❌ Travel path between **${capitalizeFirstLetter(startingVillage)}** and **${capitalizeFirstLetter(destination)}** is not valid.`
+        });
+      }
+      // ------------------- Validate Correct Channel -------------------
+      const isChannelValid = await validateCorrectTravelChannel(
+        interaction,
+        character,
+        startingVillage,
+        destination,
+        totalTravelDuration
+      );
+      if (!isChannelValid) return;
+
+      // ------------------- Determine Paths & Stops -------------------
+      let paths = [];
+
+      if (totalTravelDuration === 2) {
+        if (
+          (startingVillage === 'rudania' && destination === 'inariko') ||
+          (startingVillage === 'inariko' && destination === 'rudania')
+        ) {
+          paths = ['pathOfScarletLeaves'];
+        } else if (
+          (startingVillage === 'vhintl' && destination === 'inariko') ||
+          (startingVillage === 'inariko' && destination === 'vhintl')
+        ) {
+          paths = ['leafDewWay'];
+        } 
+      } else if (totalTravelDuration === 1) {
+        paths = startingVillage === 'rudania' || destination === 'rudania'
+          ? ['pathOfScarletLeaves']
+          : ['leafDewWay'];
+      }
+
+      // ------------------- Send Initial Travel Embed -------------------
+      const initialEmbed = createInitialTravelEmbed(character, startingVillage, destination, paths, totalTravelDuration, mount, mode);
+      await interaction.followUp({ embeds: [initialEmbed] });
+
+      // ------------------- Start Travel Processing -------------------
+      await processTravelDay(1, {
+        character,
+        startingVillage,
+        destination,
+        paths,
+        totalTravelDuration,
+        interaction,
+        travelingMessages: [],
+        currentChannel: interaction.channelId,
+        travelLog: [],
+        mount,
+        mode
       });
+      
+    } catch (error) {
+      handleError(error, 'travel.js (execute)');
+      console.error(`[travel.js]: Error during execution: ${error.message}`, error);
+      await interaction.followUp({
+        content: `❌ **Error during travel command execution:** ${error.message}`,
+        ephemeral: true
+        });
+      }
+    },
+
+    // ------------------- Autocomplete Handler -------------------
+    // Routes autocomplete to the central handler in autocompleteHandler.js
+    async autocomplete(interaction) {
+      const { handleAutocomplete } = require('../../handlers/autocompleteHandler.js');
+      await handleAutocomplete(interaction);
     }
-  }
 }
 
 // ============================================================================
@@ -481,9 +488,9 @@ ${pathEmoji || ''} No monsters or gathering today!`)
       console.warn(`[travel.js]: Could not find role "${roleName}" to assign.`);
     }
   
-// Filter out "fight: win & loot" logs from final summary
-const filteredLog = travelLog.filter(entry => !entry.startsWith('fight: win & loot'));
-const finalEmbed = createFinalTravelEmbed(character, destination, paths, totalTravelDuration, filteredLog);
+  // Filter out "fight: win & loot" logs from final summary
+  const filteredLog = travelLog.filter(entry => !entry.startsWith('fight: win & loot'));
+  const finalEmbed = createFinalTravelEmbed(character, destination, paths, totalTravelDuration, filteredLog);
 
     const imageEmbed = new EmbedBuilder()
       .setImage('https://storage.googleapis.com/tinglebot/Graphics/travel.png')
