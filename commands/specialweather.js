@@ -101,29 +101,22 @@ function getOverlayPath(condition) {
   
   if (overlayName) {
     overlayPath = path.join(__dirname, '..', 'assets', 'overlays', `ROOTS-${overlayName}.png`);
-    console.log(`[specialweather.js]: Looking for overlay at: ${overlayPath}`);
-    
     if (fs.existsSync(overlayPath)) {
-      console.log(`[specialweather.js]: Found PNG overlay`);
       return overlayPath;
     }
   }
   
   // If no direct overlay found or file doesn't exist, try fallback
-  console.log(`[specialweather.js]: No direct overlay found for condition: ${condition}`);
   const fallbackOverlay = SPECIAL_TO_REGULAR_OVERLAY[condition];
   
   if (fallbackOverlay) {
     const fallbackPath = path.join(__dirname, '..', 'assets', 'overlays', `ROOTS-${fallbackOverlay}.png`);
-    console.log(`[specialweather.js]: Using fallback overlay: ${fallbackOverlay}`);
-    
     if (fs.existsSync(fallbackPath)) {
-      console.log(`[specialweather.js]: Found fallback PNG overlay`);
       return fallbackPath;
     }
   }
   
-  console.log(`[specialweather.js]: No overlay found for ${condition}`);
+  console.warn(`[specialweather.js]: ⚠️ No overlay found for ${condition}`);
   return null;
 }
 
@@ -131,12 +124,10 @@ async function generateBanner(village, weather) {
   try {
     const bannerUrl = VILLAGE_IMAGES[village];
     if (!bannerUrl) {
-      console.error(`[specialweather.js]: No banner URL found for village: ${village}`);
+      console.error(`[specialweather.js]: ❌ No banner URL found for village: ${village}`);
       return null;
     }
     const overlayPath = getOverlayPath(weather.special.label);
-    console.log('[specialweather.js]: Banner URL:', bannerUrl);
-    console.log('[specialweather.js]: Overlay path:', overlayPath);
     
     const bannerImg = await Jimp.read(bannerUrl);
     
@@ -154,7 +145,7 @@ async function generateBanner(village, weather) {
     const buffer = await bannerImg.getBufferAsync(Jimp.MIME_PNG);
     return new AttachmentBuilder(buffer, { name: outName });
   } catch (error) {
-    console.error('[specialweather.js]: Error generating banner:', error);
+    console.error(`[specialweather.js]: ❌ Error generating banner: ${error.message}`);
     return null;
   }
 }
@@ -258,7 +249,7 @@ module.exports = {
       // Get current weather for the village
       const currentVillage = character.currentVillage.charAt(0).toUpperCase() + character.currentVillage.slice(1).toLowerCase();
       const weather = await getCurrentWeather(currentVillage);
-      console.log('[specialweather.js]: Weather fetched:', weather);
+      console.log(`[specialweather.js]: 🔄 Weather fetched for ${currentVillage}`);
       
       if (!weather || !weather.special) {
         await interaction.editReply({
@@ -272,23 +263,18 @@ module.exports = {
       
       // Convert special weather label to the corresponding field name
       const specialWeatherField = weather.special.label
-        .split(' ')
-        .map((word, index) => 
-          index === 0 
-            ? word.toLowerCase() 
-            : word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
-        )
-        .join('');
+        .toLowerCase()
+        .replace(/\s+/g, '') // Remove spaces
+        .replace(/[^a-z0-9]/g, ''); // Remove special characters
 
-      console.log(`[specialweather.js]: Looking for items with special weather field: ${specialWeatherField}`);
+      // Special case for meteorShower
+      const fieldName = specialWeatherField === 'meteorshower' ? 'meteorShower' : specialWeatherField;
 
       // Filter items that are available for this special weather (ignoring location)
       const specialWeatherItems = items.filter(item => 
         item.specialWeather && 
-        item.specialWeather[specialWeatherField] === true
+        item.specialWeather[fieldName] === true
       );
-
-      console.log(`[specialweather.js]: Found ${specialWeatherItems.length} items for ${weather.special.label}`);
 
       if (specialWeatherItems.length === 0) {
         await interaction.editReply({
@@ -319,7 +305,7 @@ module.exports = {
 
     } catch (error) {
       handleError(error, 'specialweather.js');
-      console.error(`[specialweather.js]: Error during special weather gathering:`, error);
+      console.error(`[specialweather.js]: ❌ Error during special weather gathering: ${error.message}`);
       await interaction.editReply({
         content: error.message || `⚠️ **An error occurred during special weather gathering.**`,
       });

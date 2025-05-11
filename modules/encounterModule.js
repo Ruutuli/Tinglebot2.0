@@ -23,13 +23,17 @@ const { handleError } = require('../utils/globalErrorHandler');
 // Utility Functions
 // ============================================================================
 
-// ---- Function: logBattleDetails ----
-// Logs battle details for tracking and debugging purposes
-const logBattleDetails = (tier, characterName, monsterName, adjustedRandomValue, characterDamage, heartsLostForMonster) => {
-    console.log(`[encounterModule.js]: ⚔️ Battle Details - Tier ${tier}`);
-    console.log(`👤 ${characterName} vs 🐉 ${monsterName}`);
-    console.log(`🎲 Roll: ${adjustedRandomValue} | 💥 Damage: ${characterDamage} | ❤️ Hearts Lost: ${heartsLostForMonster}`);
-};
+// ------------------- Battle Logging Function -------------------
+function logBattleDetails(tier, characterName, monsterName, roll, damage, monsterDamage) {
+    console.log(`[encounterModule.js]: ⚔️ Battle: ${characterName} vs ${monsterName} (Tier ${tier})`);
+    console.log(`[encounterModule.js]: 🎲 Roll: ${roll}/100`);
+    if (damage > 0) {
+        console.log(`[encounterModule.js]: 💥 ${characterName} took ${damage} damage`);
+    }
+    if (monsterDamage > 0) {
+        console.log(`[encounterModule.js]: ⚔️ ${monsterName} took ${monsterDamage} damage`);
+    }
+}
 
 // ============================================================================
 // Low Tier Encounter Logic (Tiers 1-4)
