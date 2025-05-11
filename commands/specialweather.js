@@ -51,12 +51,12 @@ const SPECIAL_TO_REGULAR_OVERLAY = {
   'Avalanche': 'blizzard',
   'Blight Rain': 'blightrain',
   'Drought': 'sunny',
-  'Fairy Circle': 'fog',
+  'Fairy Circle': 'sunny',
   'Flood': 'heavyrain',
   'Flower Bloom': 'rainbow',
   'Jubilee': 'sunny',
-  'Meteor Shower': 'thunderstorm',
-  'Muggy': 'cloudy',
+  'Meteor Shower': 'sunny',
+  'Muggy': 'fog',
   'Rock Slide': 'sunny'
 };
 
@@ -97,31 +97,30 @@ function generateGatherFlavorText(weatherLabel) {
 
 function getOverlayPath(condition) {
   const overlayName = OVERLAY_MAPPING[condition];
-  if (!overlayName) {
-    console.log(`[specialweather.js]: No direct overlay mapping found for condition: ${condition}`);
+  let overlayPath = null;
+  
+  if (overlayName) {
+    overlayPath = path.join(__dirname, '..', 'assets', 'overlays', `ROOTS-${overlayName}.png`);
+    console.log(`[specialweather.js]: Looking for overlay at: ${overlayPath}`);
     
-    // Try to get a fallback overlay based on the special weather type
-    const fallbackOverlay = SPECIAL_TO_REGULAR_OVERLAY[condition];
-    if (fallbackOverlay) {
-      const fallbackPath = path.join(__dirname, '..', 'assets', 'overlays', `ROOTS-${fallbackOverlay}.png`);
-      console.log(`[specialweather.js]: Using fallback overlay: ${fallbackOverlay}`);
-      
-      if (fs.existsSync(fallbackPath)) {
-        console.log(`[specialweather.js]: Found fallback PNG overlay`);
-        return fallbackPath;
-      }
+    if (fs.existsSync(overlayPath)) {
+      console.log(`[specialweather.js]: Found PNG overlay`);
+      return overlayPath;
     }
-    
-    console.log(`[specialweather.js]: No overlay found for ${condition}`);
-    return null;
   }
   
-  const overlayPath = path.join(__dirname, '..', 'assets', 'overlays', `ROOTS-${overlayName}.png`);
-  console.log(`[specialweather.js]: Looking for overlay at: ${overlayPath}`);
+  // If no direct overlay found or file doesn't exist, try fallback
+  console.log(`[specialweather.js]: No direct overlay found for condition: ${condition}`);
+  const fallbackOverlay = SPECIAL_TO_REGULAR_OVERLAY[condition];
   
-  if (fs.existsSync(overlayPath)) {
-    console.log(`[specialweather.js]: Found PNG overlay`);
-    return overlayPath;
+  if (fallbackOverlay) {
+    const fallbackPath = path.join(__dirname, '..', 'assets', 'overlays', `ROOTS-${fallbackOverlay}.png`);
+    console.log(`[specialweather.js]: Using fallback overlay: ${fallbackOverlay}`);
+    
+    if (fs.existsSync(fallbackPath)) {
+      console.log(`[specialweather.js]: Found fallback PNG overlay`);
+      return fallbackPath;
+    }
   }
   
   console.log(`[specialweather.js]: No overlay found for ${condition}`);
@@ -272,15 +271,24 @@ module.exports = {
       const items = await fetchAllItems();
       
       // Convert special weather label to the corresponding field name
-      const specialWeatherField = weather.special.label.toLowerCase()
-        .replace(/\s+/g, '') // Remove spaces
-        .replace(/[^a-z0-9]/g, ''); // Remove special characters
+      const specialWeatherField = weather.special.label
+        .split(' ')
+        .map((word, index) => 
+          index === 0 
+            ? word.toLowerCase() 
+            : word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+        )
+        .join('');
+
+      console.log(`[specialweather.js]: Looking for items with special weather field: ${specialWeatherField}`);
 
       // Filter items that are available for this special weather (ignoring location)
       const specialWeatherItems = items.filter(item => 
         item.specialWeather && 
         item.specialWeather[specialWeatherField] === true
       );
+
+      console.log(`[specialweather.js]: Found ${specialWeatherItems.length} items for ${weather.special.label}`);
 
       if (specialWeatherItems.length === 0) {
         await interaction.editReply({
