@@ -571,7 +571,7 @@ module.exports = {
                     }
 
                     const selectedMonster = monsters[Math.floor(Math.random() * monsters.length)];
-                    console.log(`[explore.js]: ⚔️ Encounter: ${selectedMonster.name} (Tier ${selectedMonster.tier})`);
+                    console.log(`[explore.js]: 🐉 Encounter: ${selectedMonster.name} (Tier ${selectedMonster.tier})`);
 
                     // Handle high-tier monsters with raid system
                     if (selectedMonster.tier > 4) {
@@ -708,11 +708,11 @@ module.exports = {
                         }
                     } else {
                         // Handle normal encounter logic for Tier 4 and below
-                        console.log(`[ENCOUNTER] Normal encounter with ${selectedMonster.name} (Tier ${selectedMonster.tier}).`);
+                        console.log(`[explore.js]: 🐉 Encounter: ${selectedMonster.name} (Tier ${selectedMonster.tier})`);
 
                         // Calculate the outcome using RNG and character stats
                         const { damageValue, adjustedRandomValue, attackSuccess, defenseSuccess } = calculateFinalValue(character);
-                        console.log(`[ENCOUNTER] Damage: ${damageValue}, Adjusted Random Value: ${adjustedRandomValue}`);
+                        console.log(`[explore.js]: 📊 Battle Stats - Damage: ${damageValue}, Roll: ${adjustedRandomValue}/100`);
 
                         // Get the encounter outcome based on the calculations
                         const outcome = await getEncounterOutcome(
@@ -734,8 +734,8 @@ module.exports = {
                             
                             // Check if character is KO'd
                             if (character.currentHearts === 0) {
+                                console.log(`[explore.js]: 💀 ${character.name} has been defeated by ${selectedMonster.name}!`);
                                 await handleKO(character._id);
-                                console.log(`[ENCOUNTER] ${character.name} is KO'd.`);
                             }
                             
                             // Save the updated character

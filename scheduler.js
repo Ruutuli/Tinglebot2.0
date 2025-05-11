@@ -304,9 +304,8 @@ function initializeScheduler(client) {
     }
   });
 
-  // Initialize weather and blight schedulers
+  // Initialize weather scheduler
   setupWeatherScheduler(client);
-  setupBlightScheduler(client);
 
   console.log('[scheduler.js]: ✅ All schedulers initialized');
 }
