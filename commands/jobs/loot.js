@@ -231,14 +231,12 @@ module.exports = {
     character.jobVoucher && character.jobVoucherJob
      ? character.jobVoucherJob
      : character.job;
-   console.log(
-    `[Loot Command]: Determined job for ${character.name} is "${job}"`
-   );
+   console.log(`[loot.js]: 🔄 Job determined for ${character.name}: "${job}"`);
 
    // Validate job
    if (!job || typeof job !== "string" || !job.trim() || !isValidJob(job)) {
     console.error(
-     `[Loot Command]: Invalid or unsupported job detected for ${character.name}. Job: "${job}"`
+     `[loot.js]: ❌ Invalid job "${job}" for ${character.name}`
     );
     await interaction.editReply({
      content: getJobVoucherErrorMessage('MISSING_SKILLS', {
@@ -253,14 +251,10 @@ module.exports = {
    // Validate job voucher (without consuming it)
    let voucherCheck;
    if (character.jobVoucher) {
-     console.error(
-       `[Loot Command]: Job voucher detected for ${character.name}. Validating voucher.`
-     );
+     console.log(`[loot.js]: 🎫 Validating job voucher for ${character.name}`);
      voucherCheck = await validateJobVoucher(character, job);
      if (voucherCheck.skipVoucher) {
-       console.error(
-         `[Loot Command]: ${character.name} already has job "${job}". Skipping voucher use.`
-       );
+       console.log(`[loot.js]: ✅ ${character.name} already has job "${job}" - skipping voucher`);
        // No activation needed, but check if job is valid for looting
        const jobPerk = getJobPerk(job);
        if (!jobPerk || !jobPerk.perks.includes("LOOTING")) {
@@ -276,9 +270,7 @@ module.exports = {
        }
      } else {
        if (character.jobVoucherJob === null) {
-         console.error(
-           `[Loot Command]: Job voucher is unrestricted. Proceeding with job: "${job}".`
-         );
+         console.log(`[loot.js]: 🔄 Unrestricted job voucher - proceeding with "${job}"`);
          // No reply needed, continue
        } else {
          await interaction.editReply({
@@ -289,7 +281,7 @@ module.exports = {
        }
      }
    } else {
-     console.error(`[Loot Command]: Activating job voucher for ${character.name}.`);
+     console.log(`[loot.js]: 🎫 Activating job voucher for ${character.name}`);
      const { success: itemSuccess, item: jobVoucherItem, message: itemError } = await fetchJobVoucherItem();
      if (!itemSuccess) {
        await interaction.editReply({ content: itemError || '❌ Could not fetch job voucher item.', ephemeral: true });
