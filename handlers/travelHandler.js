@@ -283,19 +283,24 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
     let item = null;
 
     if (outcome.result === 'Win!/Loot') {
+      console.log(`[travelHandler.js]: 🎲 Rolling for loot from ${monster.name}`);
       const drops = await fetchItemsByMonster(monster.name);
+      console.log(`[travelHandler.js]: 📦 Available drops: ${drops.length} items`);
       const weighted = createWeightedItemList(drops, adjustedRandomValue);
       item = weighted[Math.floor(Math.random() * weighted.length)];
+      console.log(`[travelHandler.js]: 🎯 Selected item: ${item.itemName}`);
 
       // Chuchu Special Case
       if (/Chuchu/.test(monster.name)) {
         const qty = /Large/.test(monster.name) ? 3 : /Medium/.test(monster.name) ? 2 : 1;
         item.itemName = `${monster.name.includes('Ice') ? 'White' : monster.name.includes('Fire') ? 'Red' : 'Yellow'} Chuchu Jelly`;
         item.quantity = qty;
+        console.log(`[travelHandler.js]: 🧊 Chuchu special case - ${item.quantity}x ${item.itemName}`);
       } else {
         item.quantity = 1;
       }
 
+      console.log(`[travelHandler.js]: 📝 Adding item to database: ${item.quantity}x ${item.itemName}`);
       await addItemInventoryDatabase(
         character._id,
         item.itemName,
@@ -304,31 +309,61 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
         item.type.join(', '),
         interaction
       );
+      console.log(`[travelHandler.js]: ✅ Item added to database successfully`);
 
       // Optional: Sheet Sync
-      if (character.inventoryLink && isValidGoogleSheetsUrl(character.inventoryLink)) {
-        const range = 'loggedInventory!A2:M';
-        const values = [[
-          character.name,
-          item.itemName,
-          item.quantity.toString(),
-          item.category.join(', '),
-          item.type.join(', '),
-          item.subtype ? item.subtype.join(', ') : 'N/A',
-          'Looted',
-          character.job,
-          '',
-          character.currentVillage,
-          `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`,
-          new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }),
-          uuidv4()
-        ]];
+      console.log(`[travelHandler.js]: 🔄 Starting Google Sheets sync`);
+      console.log(`[travelHandler.js]: 📊 Character inventory link: ${character.inventory || character.inventoryLink}`);
+      
+      // Check if character has a valid inventory link
+      if (!character.inventory && !character.inventoryLink) {
+        console.error(`[travelHandler.js]: ❌ No inventory link found for character ${character.name}`);
+        return;
+      }
 
-        if (character?.name && character?.inventoryLink && character?.userId) {
-          await safeAppendDataToSheet(character.inventoryLink, character, range, values, interaction.client);
-        } else {
-          console.error('[safeAppendDataToSheet]: Invalid character object detected before syncing.');
-        }
+      const inventoryLink = character.inventory || character.inventoryLink;
+      console.log(`[travelHandler.js]: 📊 Character inventory link: ${inventoryLink}`);
+
+      if (!isValidGoogleSheetsUrl(inventoryLink)) {
+        console.error(`[travelHandler.js]: ❌ Invalid inventory link format: ${inventoryLink}`);
+        return;
+      }
+
+      const sheetId = extractSpreadsheetId(inventoryLink);
+      const auth = await authorizeSheets();
+      const range = 'loggedInventory!A2:M';
+      const uniqueSyncId = uuidv4();
+      const formattedDateTime = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
+      const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
+
+      const values = [[
+        character.name,
+        item.itemName,
+        item.quantity.toString(),
+        item.category.join(', '),
+        item.type.join(', '),
+        item.subtype ? item.subtype.join(', ') : 'N/A',
+        'Travel Loot',
+        character.job,
+        '',
+        character.currentVillage,
+        interactionUrl,
+        formattedDateTime,
+        uniqueSyncId
+      ]];
+
+      // Log the sync attempt
+      console.log(`[travelHandler.js]: 🔄 Attempting to sync loot to Google Sheets`);
+      console.log(`[travelHandler.js]: 📝 Values to append:`, values);
+
+      try {
+        await safeAppendDataToSheet(inventoryLink, character, range, values, interaction.client);
+        console.log(`[travelHandler.js]: ✅ Successfully synced loot to Google Sheets`);
+      } catch (error) {
+        console.error(`[travelHandler.js]: ❌ Failed to sync loot to Google Sheets:`, error);
+        console.error(`[travelHandler.js]: ❌ Character: ${character.name}`);
+        console.error(`[travelHandler.js]: ❌ Item: ${item.itemName}`);
+        console.error(`[travelHandler.js]: ❌ Inventory link: ${inventoryLink}`);
       }
 
       lootLine = `\n> Looted ${item.quantity}× ${item.itemName}`;
