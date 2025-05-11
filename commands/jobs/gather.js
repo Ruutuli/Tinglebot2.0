@@ -177,21 +177,21 @@ module.exports = {
 
       // ------------------- Validate or Activate Job Voucher -------------------
       if (character.jobVoucher) {
-        console.error(`[gather.js]: Job voucher detected for ${character.name}. Validating...`);
+        console.log(`[gather.js]: 🎫 Validating job voucher for ${character.name}`);
         const voucherCheck = await validateJobVoucher(character, job);
 
         if (voucherCheck.skipVoucher) {
-          console.error(`[gather.js]: ${character.name} already has job "${job}". Skipping voucher use.`);
+          console.log(`[gather.js]: ✅ ${character.name} already has job "${job}" - skipping voucher`);
           // No activation needed
         } else if (!voucherCheck.success) {
-          console.error(`[gather.js]: Voucher validation failed. Message: ${voucherCheck.message}`);
+          console.error(`[gather.js]: ❌ Voucher validation failed: ${voucherCheck.message}`);
           await interaction.editReply({
             content: voucherCheck.message,
             ephemeral: true,
           });
           return;
         } else {
-          console.error(`[gather.js]: Activating job voucher for ${character.name}.`);
+          console.log(`[gather.js]: 🎫 Activating job voucher for ${character.name}`);
           const { success: itemSuccess, item: jobVoucherItem, message: itemError } = await fetchJobVoucherItem();
           if (!itemSuccess) {
             await interaction.editReply({ content: itemError, ephemeral: true });

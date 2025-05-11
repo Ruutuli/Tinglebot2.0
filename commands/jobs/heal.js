@@ -240,21 +240,19 @@ if (subcommand === 'fulfill') {
             ? healerCharacter.jobVoucherJob
             : healerCharacter.job;
 
-        console.log(`[heal.js]: Healer Character: ${JSON.stringify(healerCharacter, null, 2)}`);
-        console.log(`[heal.js]: Determined Job: ${job}`);
+        console.log(`[heal.js]: 🔄 Job determined for ${healerCharacter.name}: "${job}"`);
 
         // ------------------- Validate Job Voucher -------------------
         let voucherCheck;
         if (healerCharacter.jobVoucher) {
-            console.error(`[heal.js]: Job voucher detected for ${healerCharacter.name}. Validating voucher.`);
+            console.log(`[heal.js]: 🎫 Validating job voucher for ${healerCharacter.name}`);
             voucherCheck = await validateJobVoucher(healerCharacter, job);
-            console.error(`[heal.js]: Job voucher validation result for ${healerCharacter.name}:`, voucherCheck);
 
             if (voucherCheck.skipVoucher) {
-                console.error(`[heal.js]: ${healerCharacter.name} already has job "${job}". Skipping voucher use.`);
+                console.log(`[heal.js]: ✅ ${healerCharacter.name} already has job "${job}" - skipping voucher`);
                 // No activation needed
             } else if (!voucherCheck.success) {
-                console.error(`[heal.js]: Job voucher validation failed for ${healerCharacter.name}.`);
+                console.error(`[heal.js]: ❌ Voucher validation failed: ${voucherCheck.message}`);
                 await interaction.editReply({
                     content: voucherCheck.message,
                     ephemeral: true,
@@ -265,7 +263,7 @@ if (subcommand === 'fulfill') {
 
         // ------------------- Validate Healer's Job -------------------
         if (job.toLowerCase() !== 'healer') {
-            console.error(`[heal.js]: Invalid job "${job}" for healer "${healerCharacter.name}". Only "Healer" is allowed.`);
+            console.error(`[heal.js]: ❌ Invalid job "${job}" for ${healerCharacter.name} - only "Healer" allowed`);
             await interaction.editReply(
                 getJobVoucherErrorMessage('MISSING_SKILLS', {
                     characterName: healerCharacter.name,
@@ -277,7 +275,7 @@ if (subcommand === 'fulfill') {
 
         // ------------------- Activate Job Voucher -------------------
         if (healerCharacter.jobVoucher) {
-            console.error(`[heal.js]: Activating job voucher for ${healerCharacter.name}.`);
+            console.log(`[heal.js]: 🎫 Activating job voucher for ${healerCharacter.name}`);
             const { success: itemSuccess, item: jobVoucherItem, message: itemError } = await fetchJobVoucherItem();
 
             if (!itemSuccess) {

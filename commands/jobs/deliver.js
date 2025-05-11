@@ -262,18 +262,18 @@ const command = {
 
         // ------------------- Validate Courier's Job -------------------
         let job = (courierCharacter.jobVoucher && courierCharacter.jobVoucherJob) ? courierCharacter.jobVoucherJob : courierCharacter.job;
-        console.log(`[deliver.js]: Determined job for ${courierCharacter.name} is "${job}"`);
+        console.log(`[deliver.js]: 🔄 Job determined for ${courierCharacter.name}: "${job}"`);
 
         let voucherCheck;
         if (courierCharacter.jobVoucher) {
-          console.error(`[deliver.js]: Job voucher detected for ${courierCharacter.name}. Validating voucher.`);
+          console.log(`[deliver.js]: 🎫 Validating job voucher for ${courierCharacter.name}`);
           voucherCheck = await validateJobVoucher(courierCharacter, job);
           if (voucherCheck.skipVoucher) {
-            console.error(`[deliver.js]: ${courierCharacter.name} already has job "${job}". Skipping voucher use.`);
+            console.log(`[deliver.js]: ✅ ${courierCharacter.name} already has job "${job}" - skipping voucher`);
             // No activation needed
           } else if (!voucherCheck.success) {
             if (courierCharacter.jobVoucherJob === null) {
-              console.error(`[deliver.js]: Job voucher is unrestricted. Proceeding with job: "${job}".`);
+              console.log(`[deliver.js]: 🔄 Unrestricted job voucher - proceeding with "${job}"`);
             } else {
               return interaction.editReply({
                 content: voucherCheck.message,
@@ -281,7 +281,7 @@ const command = {
               });
             }
           } else {
-            console.error(`[deliver.js]: Activating job voucher for ${courierCharacter.name}.`);
+            console.log(`[deliver.js]: 🎫 Activating job voucher for ${courierCharacter.name}`);
             const { success: itemSuccess, item: jobVoucherItem, message: itemError } = await fetchJobVoucherItem();
             if (!itemSuccess) {
               await interaction.editReply({ content: itemError, ephemeral: true });
