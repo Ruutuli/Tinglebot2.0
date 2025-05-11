@@ -36,19 +36,14 @@ async function validateJobVoucher(character, jobName) {
         return getJobVoucherErrorMessage('NO_VOUCHER');
     }
 
-    // If character already has the job, voucher is not needed
-    if (character.job?.trim().toLowerCase() === jobName?.trim().toLowerCase()) {
-        console.error(`[Job Voucher Validation]: Character already has job "${jobName}". Voucher not required.`);
-        return getJobVoucherErrorMessage('ALREADY_HAS_JOB', { jobName });
-    }
-
     // Allow unrestricted job vouchers
     if (!character.jobVoucherJob) {
         console.error(`[Job Voucher Validation]: Voucher is not locked to any specific job. Proceeding with job: ${jobName}`);
         return { success: true };
     }
 
-    if (character.jobVoucherJob !== jobName) {
+    // Check if the job voucher matches the requested job
+    if (character.jobVoucherJob.toLowerCase() !== jobName.toLowerCase()) {
         return getJobVoucherErrorMessage('WRONG_JOB', { 
             voucherJob: character.jobVoucherJob, 
             requestedJob: jobName 
