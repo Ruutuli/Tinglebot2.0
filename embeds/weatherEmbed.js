@@ -65,7 +65,14 @@ const OVERLAY_MAPPING = {
   'Cinder Storm': 'cinderstorm',
   'Blight Rain': 'blightrain',
   'Heat Lightning': 'heatlightning',
-  'Rainbow': 'rainbow'
+  'Rainbow': 'rainbow',
+  'Flower Bloom': 'flowerbloom',
+  'Fairy Circle': 'fairycircle',
+  'Meteor Shower': 'meteorshower',
+  'Jubilee': 'jubilee',
+  'Drought': 'drought',
+  'Flood': 'flood',
+
 };
 
 // ---- Helper: Normalize Season ----
