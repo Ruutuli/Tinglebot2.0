@@ -1718,11 +1718,11 @@ const connectToInventoriesForItems = async () => {
                 family: 4
             });
             await inventoriesClient.connect();
-            inventoriesDb = inventoriesClient.db('inventories');
+            inventoriesDb = inventoriesClient.db('tinglebot');
         } else {
             // Try to ping the server to check connection
             try {
-                await inventoriesClient.db('inventories').command({ ping: 1 });
+                await inventoriesClient.db('tinglebot').command({ ping: 1 });
             } catch (error) {
                 // If ping fails, reconnect
                 await inventoriesClient.close();
@@ -1741,7 +1741,7 @@ const connectToInventoriesForItems = async () => {
                     family: 4
                 });
                 await inventoriesClient.connect();
-                inventoriesDb = inventoriesClient.db('inventories');
+                inventoriesDb = inventoriesClient.db('tinglebot');
             }
         }
         return inventoriesDb;

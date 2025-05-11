@@ -82,7 +82,7 @@ const recoverHearts = async (characterId, hearts, healerId = null) => {
     if (!character) throw new Error('Character not found');
 
     if (character.ko) {
-      console.log(`[characterStatsModule.js]: logs Character ${character.name} is KO'd. Validating healer...`);
+      console.log(`[characterStatsModule.js]: 💀 Character ${character.name} is KO'd. Validating healer...`);
       if (!healerId) {
         throw new Error(`${character.name} is KO'd and cannot heal without a healer.`);
       }
@@ -94,7 +94,7 @@ const recoverHearts = async (characterId, hearts, healerId = null) => {
         throw new Error(`Invalid healer or ${healer.name} is not a healer.`);
       }
 
-      console.log(`[characterStatsModule.js]: logs Reviving character ${character.name} with healer ${healer.name}.`);
+      console.log(`[characterStatsModule.js]: 🔄 Reviving character ${character.name} with healer ${healer.name}.`);
       character.ko = false; // Revive the character
       character.currentHearts = Math.min(hearts, character.maxHearts);
     } else {
@@ -141,19 +141,19 @@ const useHearts = async (characterId, hearts) => {
     if (!character) throw new Error('Character not found');
 
     if (character.ko) {
-      console.log(`[characterStatsModule.js]: logs Skipping heart deduction. Character ${character.name} is already KO'd.`);
+      console.log(`[characterStatsModule.js]: 💀 Skipping heart deduction. Character ${character.name} is already KO'd.`);
       return; // Prevent redundant deduction if already KO
     }
 
     const currentHearts = character.currentHearts;
     const newHearts = Math.max(currentHearts - hearts, 0);
 
-    console.log(`[characterStatsModule.js]: logs Deducting hearts for ${character.name}. Current: ${currentHearts}, Deducting: ${hearts}, Result: ${newHearts}`);
+    console.log(`[characterStatsModule.js]: ❤️ Deducting hearts for ${character.name}. Current: ${currentHearts}, Deducting: ${hearts}, Result: ${newHearts}`);
 
     await updateCurrentHearts(characterId, newHearts);
 
     if (newHearts === 0) {
-      console.log(`[characterStatsModule.js]: logs Triggering KO for ${character.name}`);
+      console.log(`[characterStatsModule.js]: 💀 Triggering KO for ${character.name}`);
       await handleKO(characterId);
     }
 
@@ -178,8 +178,8 @@ const useStamina = async (characterId, stamina) => {
 
     // Check if stamina is exhausted.
     if (newStamina === 0) {
-      console.log(`[characterStatsModule.js]: logs ${character.name} is exhausted! The mount runs off.`);
-      return { message: `**${character.name}** is exhausted! The mount runs off. Better luck next time!`, exhausted: true };
+      console.log(`[characterStatsModule.js]: ⚠️ ${character.name} has run out of stamina!`);
+      return { message: `⚠️ ${character.name} has no stamina left!`, exhausted: true };
     }
 
     return { message: `🟩 -${stamina} stamina used`, exhausted: false };
@@ -378,7 +378,7 @@ const handleZeroStamina = async (characterId) => {
     if (!character) throw new Error('Character not found');
 
     if (character.currentStamina === 0) {
-      console.log(`[characterStatsModule.js]: logs ⚠️ ${character.name} has run out of stamina!`);
+      console.log(`[characterStatsModule.js]: ⚠️ ${character.name} has run out of stamina!`);
       return `⚠️ ${character.name} has no stamina left!`;
     }
     return `${character.name} has ${character.currentStamina} stamina remaining.`;

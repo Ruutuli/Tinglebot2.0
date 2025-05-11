@@ -97,7 +97,7 @@ async function initializeClient() {
   // Ready Event: Attach global error handler to send errors to Trello
   // --------------------------------------------------------------------------
   client.once("ready", async () => {
-    console.log(`Logged in as ${client.user.tag}!`);
+    console.log(`[index.js]: 🤖 Logged in as ${client.user.tag}!`);
     initializeErrorHandler(logErrorToTrello, client);
   });
 
@@ -134,14 +134,14 @@ async function initializeClient() {
 
           // Log initialization status
           console.log("----------------------------------------------------------");
-          console.log("✅ Core Systems Initialized:");
+          console.log("[index.js]: ✅ Core Systems Initialized:");
           console.log("  • Reaction Handler");
           console.log("  • Blood Moon Tracker");
           console.log("  • Scheduler");
           console.log("  • Random Encounters");
           console.log("  • Request Expiration Handler");
           console.log("==========================================================");
-          console.log("🚀 Tinglebot 2.0 is fully operational!");
+          console.log("[index.js]: 🚀 Tinglebot 2.0 is fully operational!");
           console.log("==========================================================");
         } catch (error) {
           handleError(error, "index.js");
@@ -172,9 +172,7 @@ async function initializeClient() {
           }
         }
       } else if (interaction.isButton()) {
-        console.log('[index.js]: Button interaction received:', {
-          customId: interaction.customId
-        });
+        console.log(`[index.js]: 🔄 Button interaction received: { customId: '${interaction.customId}' }`);
         
         await handleComponentInteraction(interaction);
       } else if (interaction.isStringSelectMenu()) {

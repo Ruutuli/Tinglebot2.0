@@ -151,7 +151,7 @@ async function syncToInventoryDatabase(character, item, interaction) {
   if (!error.message?.includes('Could not write to sheet') && shouldLogError(error)) {
     handleError(error, "inventoryUtils.js");
     console.error(
-     "[inventoryUtils.js]: Error syncing to inventory database:",
+     "[inventoryUtils.js]: ❌ Error syncing to inventory database:",
      error
     );
   }
