@@ -191,6 +191,19 @@ async function handleAutocomplete(interaction) {
         await handleTravelAutocomplete(interaction);
         break;
 
+      // ------------------- Pet Command -------------------
+      case "pet":
+        if (focusedName === "charactername") {
+          await handlePetCharacterAutocomplete(interaction, focusedOption);
+        } else if (focusedName === "petname") {
+          await handlePetNameAutocomplete(interaction, focusedOption);
+        } else if (focusedName === "species") {
+          await handlePetSpeciesAutocomplete(interaction, focusedOption);
+        } else if (focusedName === "rolltype") {
+          await handlePetRollTypeAutocomplete(interaction, focusedOption);
+        }
+        break;
+
       // ... rest of existing code ...
     }
   } catch (error) {
@@ -2219,6 +2232,28 @@ async function handleMountNameAutocomplete(interaction, focusedOption) {
 // - Available Pet Species
 // - Roll Types specific to a selected pet
 
+// ------------------- Pet Character Name Autocomplete -------------------
+async function handlePetCharacterAutocomplete(interaction, focusedOption) {
+  try {
+    const userId = interaction.user.id;
+    const characters = await fetchCharactersByUserId(userId);
+    
+    // Ensure focusedValue is a string and has a default value
+    const focusedValue = focusedOption?.value?.toString() || '';
+    
+    const choices = characters
+      .filter(char => char.name.toLowerCase().includes(focusedValue.toLowerCase()))
+      .map(char => ({
+        name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
+        value: char.name
+      }));
+    return await respondWithFilteredChoices(interaction, focusedOption, choices);
+  } catch (error) {
+    console.error('[handlePetCharacterAutocomplete]: Error:', error);
+    return await safeRespondWithError(interaction);
+  }
+}
+
 // ------------------- Pet Name Autocomplete -------------------
 async function handlePetNameAutocomplete(interaction, focusedOption) {
  const userId = interaction.user.id;
@@ -2961,6 +2996,8 @@ async function handleViewInventoryAutocomplete(interaction, focusedOption) {
   await safeRespondWithError(interaction);
  }
 }
+
+
 // ============================================================================
 // EXPORT FUNCTIONS
 // ============================================================================
@@ -3078,5 +3115,6 @@ module.exports = {
 
  // ------------------- View Inventory Functions -------------------
  handleViewInventoryAutocomplete,
+ handlePetCharacterAutocomplete,
 };
 
