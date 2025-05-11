@@ -22,6 +22,8 @@ const handleInteraction = async (interaction, client) => {
       const { customId } = interaction;
       const [command] = customId.split('|');
 
+      console.log(`[interactionHandler.js]: 🔄 Processing button interaction: ${customId}`);
+
       if (command === 'lookup') {
         await handleItemLookupInteraction(interaction);
       } else {
@@ -31,13 +33,16 @@ const handleInteraction = async (interaction, client) => {
       const command = client.commands.get(interaction.commandName);
 
       if (!command) {
+        console.warn(`[interactionHandler.js]: ⚠️ Unknown command: ${interaction.commandName}`);
         return;
       }
 
       if (interaction.isAutocomplete()) {
+        console.log(`[interactionHandler.js]: 🔄 Processing autocomplete for: ${interaction.commandName}`);
         await connectToTinglebot();
         await handleAutocomplete(interaction);
       } else {
+        console.log(`[interactionHandler.js]: 🔄 Processing command: ${interaction.commandName}`);
         await connectToTinglebot();
         await connectToInventories();
         await command.execute(interaction);
@@ -45,7 +50,7 @@ const handleInteraction = async (interaction, client) => {
     }
   } catch (error) {
     handleError(error, 'interactionHandler.js');
-    console.error('[interactionHandler.js]: ❌ Error during interaction handling', error);
+    console.error(`[interactionHandler.js]: ❌ Error during interaction handling: ${error.message}`);
 
     try {
       if (interaction.isAutocomplete()) {
@@ -63,7 +68,7 @@ const handleInteraction = async (interaction, client) => {
       }
     } catch (err) {
       handleError(err, 'interactionHandler.js');
-      console.error('[interactionHandler.js]: ❌ Error responding to interaction', err);
+      console.error(`[interactionHandler.js]: ❌ Error responding to interaction: ${err.message}`);
     }
   }
 };
