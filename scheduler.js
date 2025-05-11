@@ -153,7 +153,7 @@ async function executeBirthdayAnnouncements(client) {
     if (!announcementChannel) continue;
 
     const characters = await Character.find({ birthday: today });
-    console.log(`[scheduler] Found ${characters.length} characters with birthdays today in guild ${guild.name}.`);
+    console.log(`[scheduler.js]: 🎂 Found ${characters.length} characters with birthdays today in guild ${guild.name}`);
 
     for (const character of characters) {
       try {
@@ -174,10 +174,10 @@ async function executeBirthdayAnnouncements(client) {
           .setTimestamp();
 
         await announcementChannel.send({ embeds: [embed] });
-        console.log(`[scheduler] Announced ${character.name}'s birthday in ${guild.name}.`);
+        console.log(`[scheduler.js]: 🎉 Announced ${character.name}'s birthday in ${guild.name}`);
       } catch (error) {
         handleError(error, 'scheduler.js');
-        console.error(`[scheduler] Failed to announce for character ${character.name}:`, error.message);
+        console.error(`[scheduler.js]: ❌ Failed to announce birthday for ${character.name}: ${error.message}`);
       }
     }
   }
@@ -192,7 +192,7 @@ async function handleJailRelease() {
   const charactersToRelease = await Character.find({ inJail: true, jailReleaseTime: { $lte: now } });
   
   if (charactersToRelease.length === 0) {
-    console.log('[scheduler] No characters to release from jail at this time.');
+    console.log('[scheduler.js]: 🔄 No characters to release from jail at this time');
     return;
   }
 
@@ -218,6 +218,7 @@ async function handleJailRelease() {
         content: `<@${character.userId}>, your character **${character.name}** has been released from jail.`,
         embeds: [releaseEmbed]
       });
+      console.log(`[scheduler.js]: 🏛️ Released ${character.name} from jail`);
     }
 
     await sendUserDM(character.userId, `🏛️ **Town Hall Notice**\n\nYour character **${character.name}** has been released from jail. Remember, a fresh start awaits you!`);

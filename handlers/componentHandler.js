@@ -131,7 +131,7 @@ async function handleButtonInteraction(interaction) {
       case 'job-page':
         return await handleJobPage(interaction, characterId, extra);
       default:
-        console.warn(`[componentHandler.js]: ⚠️ Unhandled component interaction: ${action}`);
+        console.warn(`[componentHandler.js]: ⚠️ Unhandled button action: ${action}`);
     }
   } catch (error) {
     handleError(error, 'componentHandler.js');
@@ -547,10 +547,10 @@ async function handleComponentInteraction(interaction) {
       return await handleSyncButton(interaction);
     }
 
-    console.warn(`[componentHandler.js]: Unhandled component interaction: ${interaction.customId}`);
+    console.warn(`[componentHandler.js]: ⚠️ Unhandled component interaction: ${interaction.customId}`);
   } catch (error) {
     handleError(error, 'componentHandler.js');
-    console.error(`[componentHandler.js]: Failed to handle component`, error);
+    console.error(`[componentHandler.js]: ❌ Failed to handle component: ${error.message}`);
   }
 }
 
