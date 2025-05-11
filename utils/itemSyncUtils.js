@@ -136,7 +136,6 @@ const syncItem = async (character, item, interaction, source = SOURCE_TYPES.LOOT
 
         // Prepare values for Google Sheets
         const values = prepareSyncValues(character, item, interaction, source);
-        console.log(`[itemSyncUtils.js]: 📝 Values to append:`, values);
 
         // Sync to Google Sheets
         await safeAppendDataToSheet(
