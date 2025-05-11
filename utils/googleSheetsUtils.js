@@ -423,24 +423,24 @@ async function validateInventorySheet(spreadsheetUrl, characterName) {
 
       // ✅ Headers confirmed, now validate inventory content
       const inventoryData = await readSheetData(auth, spreadsheetId, 'loggedInventory!A2:M100');
-      const hasAtLeastOneItem = inventoryData && inventoryData.some(row => {
-        const sheetCharacterName = (row[0] || '').trim().toLowerCase();
-        const itemName = (row[1] || '').trim();
-        const quantity = Number(row[2] || 0);
       
-        return (
-          sheetCharacterName === characterName.trim().toLowerCase() &&
-          itemName.length > 0 &&
-          quantity > 0
-        );
-      });
-      
-      if (!hasAtLeastOneItem && spreadsheetUrl.includes("loggedInventory")) {
-        console.error(`[googleSheetsUtils.js]: ❌ No inventory items found for ${characterName}`);
-        return {
-          success: false,
-          message: `No inventory items found for character **${characterName}**.||Please make sure your inventory sheet contains at least one item entry for your character.`
-        };
+      // Only check for existing items if this is not a new sheet
+      if (inventoryData && inventoryData.length > 0) {
+        const hasAtLeastOneItem = inventoryData.some(row => {
+          const sheetCharacterName = (row[0] || '').trim().toLowerCase();
+          const itemName = (row[1] || '').trim();
+          const quantity = Number(row[2] || 0);
+        
+          return (
+            sheetCharacterName === characterName.trim().toLowerCase() &&
+            itemName.length > 0 &&
+            quantity > 0
+          );
+        });
+        
+        if (!hasAtLeastOneItem && spreadsheetUrl.includes("loggedInventory")) {
+          console.log(`[googleSheetsUtils.js]: ℹ️ No existing inventory items found for ${characterName}, but sheet is valid`);
+        }
       }
   
       return { success: true, message: "✅ Inventory sheet is set up correctly!" };
