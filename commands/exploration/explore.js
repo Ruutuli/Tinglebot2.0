@@ -571,7 +571,7 @@ module.exports = {
                     }
 
                     const selectedMonster = monsters[Math.floor(Math.random() * monsters.length)];
-                    console.log(`[ENCOUNTER] Monster Encountered: ${selectedMonster.name}, Tier: ${selectedMonster.tier}`);
+                    console.log(`[explore.js]: ⚔️ Encounter: ${selectedMonster.name} (Tier ${selectedMonster.tier})`);
 
                     // Handle high-tier monsters with raid system
                     if (selectedMonster.tier > 4) {
