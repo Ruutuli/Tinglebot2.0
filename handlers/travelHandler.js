@@ -152,7 +152,19 @@ async function handleGather(interaction, character, currentPath, encounterMessag
     console.log(`[travelHandler.js]: 📦 ${character.name} gathering on ${currentPath}`);
 
     const items = await fetchAllItems();
+    console.log(`[travelHandler.js]: 📊 Total items in database: ${items.length}`);
+    
+    // Log a sample of items to see their structure
+    if (items.length > 0) {
+      console.log(`[travelHandler.js]: 🔍 Sample item structure:`, JSON.stringify(items[0], null, 2));
+    }
+
     const available = items.filter(i => i[currentPath] === true);
+    console.log(`[travelHandler.js]: 🎯 Items available for ${currentPath}: ${available.length}`);
+    
+    if (available.length > 0) {
+      console.log(`[travelHandler.js]: 📝 Available items:`, available.map(i => i.itemName).join(', '));
+    }
     
     if (!available.length) {
       console.warn(`[travelHandler.js]: ⚠️ No items available for path "${currentPath}"`);
@@ -165,6 +177,7 @@ async function handleGather(interaction, character, currentPath, encounterMessag
     } else {
       const weighted = createWeightedItemList(available);
       const chosen = weighted[Math.floor(Math.random() * weighted.length)];
+      console.log(`[travelHandler.js]: 🎲 Selected item: ${chosen.itemName}`);
       
       // Use syncItem utility for gathering
       await syncItem(character, chosen, interaction, SOURCE_TYPES.GATHERING);
