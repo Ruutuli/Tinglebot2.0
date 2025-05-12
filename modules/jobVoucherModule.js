@@ -29,7 +29,7 @@ function getJobVoucherErrorMessage(errorType, data = {}) {
 }
 
 // ------------------- Validate Job Voucher -------------------
-async function validateJobVoucher(character, jobName) {
+async function validateJobVoucher(character, jobName, requiredPerk = null) {
     // First check if character actually has a job voucher
     if (!character.jobVoucher) {
         console.error(`[Job Voucher Validation]: Character ${character.name} has no active job voucher.`);
@@ -38,7 +38,7 @@ async function validateJobVoucher(character, jobName) {
 
     // Allow unrestricted job vouchers
     if (!character.jobVoucherJob) {
-        console.error(`[Job Voucher Validation]: Voucher is not locked to any specific job. Proceeding with job: ${jobName}`);
+        console.log(`[Job Voucher Validation]: Voucher is not locked to any specific job. Proceeding with job: ${jobName}`);
         return { success: true };
     }
 
@@ -50,6 +50,19 @@ async function validateJobVoucher(character, jobName) {
         });
     }
 
+    // If a specific perk is required, validate it
+    if (requiredPerk) {
+        const jobPerk = getJobPerk(jobName);
+        if (!jobPerk || !jobPerk.perks.includes(requiredPerk.toUpperCase())) {
+            console.error(`[Job Voucher Validation]: ${character.name} lacks ${requiredPerk} skills for job: "${jobName}"`);
+            return getJobVoucherErrorMessage('MISSING_SKILLS', {
+                characterName: character.name,
+                jobName: jobName
+            });
+        }
+    }
+
+    console.log(`[Job Voucher Validation]: ✅ Validation successful for ${character.name} with job ${jobName}`);
     return { success: true };
 }
 
