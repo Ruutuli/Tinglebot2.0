@@ -278,25 +278,6 @@ module.exports = {
        return;
      }
      console.log(`[loot.js]: ✅ Job voucher validation successful for ${character.name}`);
-   } else {
-     console.log(`[loot.js]: 🎫 Activating job voucher for ${character.name}`);
-     const { success: itemSuccess, item: jobVoucherItem, message: itemError } = await fetchJobVoucherItem();
-     if (!itemSuccess) {
-       await interaction.editReply({ content: itemError || '❌ Could not fetch job voucher item.', ephemeral: true });
-       return;
-     }
-     const activationResult = await activateJobVoucher(character, job, jobVoucherItem, 1, interaction);
-     if (!activationResult.success) {
-       await interaction.editReply({
-         content: activationResult.message || '❌ Failed to activate job voucher.',
-         ephemeral: true,
-       });
-       return;
-     }
-     await interaction.followUp({
-       content: activationResult.message,
-       ephemeral: true,
-     });
    }
 
    // Validate job perks
