@@ -233,6 +233,17 @@ module.exports = {
         return void await interaction.editReply({ embeds: [embed] });
       }
 
+      // ------------------- Validate Item Can Be Used -------------------
+      // Check if the item is a Recipe item (for healing) or has other valid uses
+      if (item.itemName.toLowerCase() !== 'fairy' && item.category !== 'Recipe') {
+        const embed = new EmbedBuilder()
+          .setTitle('❓ Hmm...')
+          .setDescription(`**${character.name}** tried to use **${item.itemName}** for healing, but it's not a healing item.\n\nThis item might be used for something else, but it won't help with healing!`)
+          .setColor('#FF6347')
+          .setThumbnail(item.image)
+          .setFooter({ text: 'Try using a Recipe item or Fairy for healing!' });
+        return void await interaction.editReply({ embeds: [embed] });
+      }
 
       // ------------------- KO Revival Logic -------------------
       // Allow fairies to revive KO'd characters.
