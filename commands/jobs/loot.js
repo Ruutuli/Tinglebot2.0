@@ -87,7 +87,7 @@ const villageChannels = {
 function canUseDailyRoll(character, activity) {
   // If character has an active job voucher, they can always use the command
   if (character.jobVoucher) {
-    console.log(`[loot.js]: Job voucher active for ${character.name}, bypassing daily limit`);
+    console.log(`[loot.js]: 🔄 Job voucher active for ${character.name}, bypassing daily limit`);
     return true;
   }
 
@@ -102,17 +102,18 @@ function canUseDailyRoll(character, activity) {
 
   const lastRoll = character.dailyRoll.get(activity);
   if (!lastRoll) {
-    console.log(`[loot.js]: No previous roll found for ${character.name}`);
+    console.log(`[loot.js]: ✅ No previous roll found for ${character.name}`);
     return true;
   }
 
   const lastRollDate = new Date(lastRoll);
   const canUse = lastRollDate < rollover;
   
-  console.log(`[loot.js]: Daily roll check for ${character.name}:`, {
+  console.log(`[loot.js]: 🔄 Daily roll check for ${character.name}:`, {
     lastRoll: lastRollDate.toISOString(),
     rollover: rollover.toISOString(),
-    canUse: canUse
+    canUse: canUse,
+    currentTime: now.toISOString()
   });
   
   return canUse;
@@ -120,13 +121,18 @@ function canUseDailyRoll(character, activity) {
 
 // Update the daily roll timestamp for an activity
 async function updateDailyRoll(character, activity) {
-  if (!character.dailyRoll) {
-    character.dailyRoll = new Map();
+  try {
+    if (!character.dailyRoll) {
+      character.dailyRoll = new Map();
+    }
+    const now = new Date().toISOString();
+    character.dailyRoll.set(activity, now);
+    await character.save();
+    console.log(`[loot.js]: ✅ Updated daily roll for ${character.name} - ${activity} at ${now}`);
+  } catch (error) {
+    console.error(`[loot.js]: ❌ Failed to update daily roll for ${character.name}:`, error);
+    throw error; // Re-throw to handle in the main execution
   }
-  const now = new Date().toISOString();
-  character.dailyRoll.set(activity, now);
-  await character.save();
-  console.log(`[loot.js]: Updated daily roll for ${character.name} - ${activity} at ${now}`);
 }
 
 // ------------------- Command Definition -------------------
@@ -174,12 +180,23 @@ module.exports = {
 
    // Check for job voucher and daily roll at the start
    if (character.jobVoucher) {
-     console.log(`[Loot Command]: Active job voucher found for ${character.name}`);
+     console.log(`[Loot Command]: 🔄 Active job voucher found for ${character.name}`);
    } else {
-     console.log(`[Loot Command]: No active job voucher for ${character.name}`);
+     console.log(`[Loot Command]: 🔄 No active job voucher for ${character.name}`);
      if (!canUseDailyRoll(character, 'loot')) {
        await interaction.editReply({
          content: `*${character.name} seems exhausted from their earlier looting...*\n\n**Daily looting limit reached.**\nThe next opportunity to loot will be available at 8AM EST.\n\n*Tip: A job voucher would allow you to loot again today.*`,
+         ephemeral: true,
+       });
+       return;
+     }
+     // Update daily roll BEFORE proceeding with looting
+     try {
+       await updateDailyRoll(character, 'loot');
+     } catch (error) {
+       console.error(`[Loot Command]: ❌ Failed to update daily roll:`, error);
+       await interaction.editReply({
+         content: `❌ **An error occurred while updating your daily roll. Please try again.**`,
          ephemeral: true,
        });
        return;
@@ -252,34 +269,15 @@ module.exports = {
    let voucherCheck;
    if (character.jobVoucher) {
      console.log(`[loot.js]: 🎫 Validating job voucher for ${character.name}`);
-     voucherCheck = await validateJobVoucher(character, job);
-     if (voucherCheck.skipVoucher) {
-       console.log(`[loot.js]: ✅ ${character.name} already has job "${job}" - skipping voucher`);
-       // No activation needed, but check if job is valid for looting
-       const jobPerk = getJobPerk(job);
-       if (!jobPerk || !jobPerk.perks.includes("LOOTING")) {
-         const msg = getJobVoucherErrorMessage('MISSING_SKILLS', {
-           characterName: character.name,
-           jobName: job
-         }).message;
-         await interaction.editReply({
-           content: msg,
-           ephemeral: true,
-         });
-         return;
-       }
-     } else {
-       if (character.jobVoucherJob === null) {
-         console.log(`[loot.js]: 🔄 Unrestricted job voucher - proceeding with "${job}"`);
-         // No reply needed, continue
-       } else {
-         await interaction.editReply({
-           content: voucherCheck.message || '❌ Invalid job voucher.',
-           ephemeral: true,
-         });
-         return;
-       }
+     voucherCheck = await validateJobVoucher(character, job, 'LOOTING');
+     if (!voucherCheck.success) {
+       await interaction.editReply({
+         content: voucherCheck.message,
+         ephemeral: true,
+       });
+       return;
      }
+     console.log(`[loot.js]: ✅ Job voucher validation successful for ${character.name}`);
    } else {
      console.log(`[loot.js]: 🎫 Activating job voucher for ${character.name}`);
      const { success: itemSuccess, item: jobVoucherItem, message: itemError } = await fetchJobVoucherItem();
@@ -434,15 +432,14 @@ module.exports = {
    if (character.jobVoucher && !voucherCheck?.skipVoucher) {
      const deactivationResult = await deactivateJobVoucher(character._id);
      if (!deactivationResult.success) {
-       console.error(`[Loot Command]: Failed to deactivate job voucher for ${character.name}`);
+       console.error(`[Loot Command]: ❌ Failed to deactivate job voucher for ${character.name}`);
      } else {
-       console.error(`[Loot Command]: Job voucher deactivated for ${character.name}`);
+       console.log(`[Loot Command]: ✅ Job voucher deactivated for ${character.name}`);
      }
    }
 
-   // After successful looting, update the daily roll
-   await updateDailyRoll(character, 'loot');
-   console.log(`[loot.js]: Successfully updated daily roll for ${character.name}`);
+   // Remove duplicate daily roll update since we now do it at the start
+   console.log(`[loot.js]: ✅ Loot command completed successfully for ${character.name}`);
 
   } catch (error) {
    handleError(error, "loot.js");
