@@ -7,6 +7,7 @@ const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../utils/valid
 const { authorizeSheets, appendSheetData, safeAppendDataToSheet } = require('../utils/googleSheetsUtils');
 const { getCharacterInventoryCollection, updateCharacterById, fetchItemByName } = require('../database/db'); 
 const { v4: uuidv4 } = require('uuid');
+const { getJobPerk } = require('./jobsModule');
 
 // ------------------- Get Job Voucher Error Message -------------------
 function getJobVoucherErrorMessage(errorType, data = {}) {
