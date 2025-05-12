@@ -178,7 +178,7 @@ module.exports = {
       // ------------------- Validate or Activate Job Voucher -------------------
       if (character.jobVoucher) {
         console.log(`[gather.js]: 🎫 Validating job voucher for ${character.name}`);
-        const voucherCheck = await validateJobVoucher(character, job);
+        const voucherCheck = await validateJobVoucher(character, job, 'GATHERING');
 
         if (voucherCheck.skipVoucher) {
           console.log(`[gather.js]: ✅ ${character.name} already has job "${job}" - skipping voucher`);
@@ -214,9 +214,9 @@ module.exports = {
 
       // Check for gathering perk.
       const jobPerk = getJobPerk(job);
-      console.error(`[gather.js]: Job Perk for "${job}":`, jobPerk);
+      console.log(`[gather.js]: 🔄 Job Perk for "${job}":`, jobPerk);
       if (!jobPerk || !jobPerk.perks.includes('GATHERING')) {
-        console.error(`[gather.js]: ${character.name} lacks gathering skills for job: "${job}"`);
+        console.error(`[gather.js]: ❌ ${character.name} lacks gathering skills for job: "${job}"`);
         await interaction.editReply({
           content: getJobVoucherErrorMessage('MISSING_SKILLS', {
             characterName: character.name,
@@ -496,9 +496,9 @@ await character.save();
       if (character.jobVoucher && !voucherCheck?.skipVoucher) {
         const deactivationResult = await deactivateJobVoucher(character._id);
         if (!deactivationResult.success) {
-          console.error(`[gather.js]: Failed to deactivate job voucher for ${character.name}`);
+          console.error(`[gather.js]: ❌ Failed to deactivate job voucher for ${character.name}`);
         } else {
-          console.log(`[gather.js]: Job voucher deactivated for ${character.name}`);
+          console.log(`[gather.js]: ✅ Job voucher deactivated for ${character.name}`);
         }
       }
 
