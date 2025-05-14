@@ -34,9 +34,7 @@ for (const file of commandFiles) {
                 const commandJson = command.data.toJSON();
                 
                 const hasAutocompleteOption = checkForAutocompleteOptions(commandJson);
-                if (hasAutocompleteOption && typeof command.autocomplete !== 'function') {
-                    console.warn(`⚠️ Command ${commandJson.name} has autocomplete options but no autocomplete handler!`);
-                }
+                if (hasAutocompleteOption && typeof command.autocomplete !== 'function') 
                 
                 commands.push(commandJson);
                 commandNames.add(command.data.name);

@@ -44,8 +44,14 @@ const { generateUniqueId } = require('../../utils/uniqueIdUtils');
 const DEFAULT_EMOJI = "🔹";
 
 async function getItemEmoji(itemName) {
- const item = await ItemModel.findOne({ itemName }).select("emoji").exec();
- return item && item.emoji ? item.emoji : DEFAULT_EMOJI;
+  console.log(`[trade.js]: 🔍 Looking up emoji for item: ${itemName}`);
+  const item = await ItemModel.findOne({ 
+    itemName: { $regex: new RegExp(`^${itemName}$`, "i") }
+  }).select("emoji").exec();
+  console.log(`[trade.js]: 📊 Found item:`, item);
+  const emoji = item && item.emoji ? item.emoji : DEFAULT_EMOJI;
+  console.log(`[trade.js]: 🎯 Returning emoji: ${emoji}`);
+  return emoji;
 }
 
 function removeCircularReferences(obj, seen = new WeakSet()) {
@@ -1393,12 +1399,18 @@ for (const { name } of items) {
 // ------------------- Trade Session Management -------------------
 // Handles creation, updates, and execution of trade sessions
 async function createTradeSession(initiator, target, items) {
+  console.log(`[trade.js]: 🔄 Creating trade session with items:`, items);
   const tradeId = generateUniqueId('T');
-  const formattedInitiatorItems = await Promise.all(items.map(async item => ({
-    name: item.name,
-    quantity: item.quantity,
-    emoji: await getItemEmoji(item.name)
-  })));
+  const formattedInitiatorItems = await Promise.all(items.map(async item => {
+    console.log(`[trade.js]: 📦 Formatting item:`, item);
+    const formattedItem = {
+      name: item.name,
+      quantity: item.quantity,
+      emoji: await getItemEmoji(item.name)
+    };
+    console.log(`[trade.js]: ✅ Formatted item:`, formattedItem);
+    return formattedItem;
+  }));
 
   const tradeData = {
     initiator: {
@@ -1416,12 +1428,14 @@ async function createTradeSession(initiator, target, items) {
     initiatorConfirmed: false,
     targetConfirmed: false,
     messageId: null,
-    channelId: null
+    channelId: null,
+    confirmMessageId: null,
+    confirmChannelId: null
   };
 
+  console.log(`[trade.js]: 📊 Created trade data:`, tradeData);
   const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
   await TempData.create({ key: tradeId, type: 'trade', data: tradeData, expiresAt });
-  console.log(`[trade.js]: ✅ Trade session created: ${tradeId}`);
   return tradeId;
 }
 
@@ -1437,7 +1451,6 @@ async function updateTradeSession(tradeId, targetItems) {
     { key: tradeId, type: 'trade' },
     { $set: { 'data.target.items': formattedTargetItems } }
   );
-  console.log(`[trade.js]: 🔄 Trade session updated: ${tradeId}`);
   return (await TempData.findByTypeAndKey('trade', tradeId)).data;
 }
 
@@ -1479,7 +1492,6 @@ async function executeTrade(tradeData) {
     processTradeItems(targetChar, initiatorChar, target.items, uniqueSyncId)
   ]);
 
-  console.log(`[trade.js]: ✅ Trade completed between ${initiator.characterName} and ${target.characterName}`);
   return true;
 }
 
@@ -1538,14 +1550,19 @@ async function updateTradeMessage(message, tradeData, fromCharacter, toCharacter
     toCharacter.icon || ""
   );
 
-  const statusDescription = 
-    `🔃 Trade Status:\n` +
-    `${tradeData.initiatorConfirmed ? '✅' : '⏳'} ${tradeData.initiator.characterName} confirmed\n` +
-    `${tradeData.targetConfirmed ? '✅' : '⏳'} ${tradeData.target.characterName} confirmed\n\n` +
-    `<@${tradeData.initiator.userId}>, please react with ✅ to confirm the trade!`;
+  if (tradeData.initiatorConfirmed && tradeData.targetConfirmed) {
+    tradeEmbed.setDescription(`✅ Trade completed successfully!`);
+    await message.edit({ content: null, embeds: [tradeEmbed], components: [] });
+  } else {
+    const statusDescription = 
+      `🔃 Trade Status:\n` +
+      `${tradeData.initiatorConfirmed ? '✅' : '⏳'} ${tradeData.initiator.characterName} confirmed\n` +
+      `${tradeData.targetConfirmed ? '✅' : '⏳'} ${tradeData.target.characterName} confirmed\n\n` +
+      `<@${tradeData.initiator.userId}>, please react with ✅ to confirm the trade!`;
 
-  tradeEmbed.setDescription(statusDescription);
-  await message.edit({ embeds: [tradeEmbed] });
+    tradeEmbed.setDescription(statusDescription);
+    await message.edit({ embeds: [tradeEmbed] });
+  }
 }
 
 // ------------------- Trade Validation -------------------
@@ -1629,7 +1646,6 @@ async function handleTrade(interaction) {
     if (tradeId) {
       // ------------------- Handle Trade Completion -------------------
       try {
-        console.log(`[trade.js]: 🔄 Processing trade ${tradeId}`);
         const trade = await TempData.findByTypeAndKey('trade', tradeId);
         if (!trade) {
           console.error(`[trade.js]: ❌ Trade ${tradeId} not found`);
@@ -1642,7 +1658,6 @@ async function handleTrade(interaction) {
 
         // Check if trade has expired
         if (new Date() > trade.expiresAt) {
-          console.log(`[trade.js]: ⚠️ Trade ${tradeId} expired`);
           await interaction.editReply({
             content: `❌ This trade has expired. Please initiate a new trade.`,
             ephemeral: true,
@@ -1652,6 +1667,13 @@ async function handleTrade(interaction) {
         }
 
         const tradeData = trade.data;
+        console.log(`[trade.js]: 🔄 Processing trade ${tradeId} for user ${userId}`);
+        console.log(`[trade.js]: 📊 Current trade state:`, {
+          initiatorConfirmed: tradeData.initiatorConfirmed,
+          targetConfirmed: tradeData.targetConfirmed,
+          confirmMessageId: tradeData.confirmMessageId,
+          confirmChannelId: tradeData.confirmChannelId
+        });
 
         // Verify user is part of the trade
         if (tradeData.initiator.userId !== userId && tradeData.target.userId !== userId) {
@@ -1681,45 +1703,43 @@ async function handleTrade(interaction) {
 
         // Confirm trade for this user
         const updatedTradeData = await confirmTrade(tradeId, userId);
-        console.log(`[trade.js]: 📦 Updated trade data after confirmation:`, JSON.stringify(updatedTradeData, null, 2));
+        console.log(`[trade.js]: ✅ Trade confirmed by user ${userId}`);
+        console.log(`[trade.js]: 📊 Updated trade state:`, {
+          initiatorConfirmed: updatedTradeData.initiatorConfirmed,
+          targetConfirmed: updatedTradeData.targetConfirmed,
+          confirmMessageId: updatedTradeData.confirmMessageId,
+          confirmChannelId: updatedTradeData.confirmChannelId
+        });
 
         // If both users have confirmed, execute the trade
         if (updatedTradeData.initiatorConfirmed && updatedTradeData.targetConfirmed) {
-          console.log(`[trade.js]: ✅ Both parties confirmed, executing trade`);
+          console.log(`[trade.js]: 🔄 Both parties confirmed, executing trade ${tradeId}`);
           
-          // Send confirmation message
-          const tradeConfirmMessage = await interaction.channel.send({
-            content: `**Trade confirmed!** <@${updatedTradeData.initiator.userId}>, please react to the trade post with ✅ to finalize the trade.`
-          });
-          console.log(`[trade.js]: ✅ Trade confirmation message sent with ID: ${tradeConfirmMessage.id}`);
-          
-          // Update trade data with confirmation message
-          await TempData.findOneAndUpdate(
-            { key: tradeId, type: 'trade' },
-            { 
-              $set: { 
-                'data.confirmMessageId': tradeConfirmMessage.id,
-                'data.confirmChannelId': interaction.channelId 
-              } 
-            }
-          );
-
           // Execute trade
           await executeTrade(updatedTradeData);
           
-          // Clean up confirmation message
-          try {
-            await tradeConfirmMessage.delete();
-            console.log(`[trade.js]: ✅ Confirmation message deleted successfully`);
-          } catch (error) {
-            console.error(`[trade.js]: ❌ Error deleting confirmation message:`, error);
+          // Clean up confirmation message if it exists
+          if (updatedTradeData.confirmMessageId && updatedTradeData.confirmChannelId) {
+            try {
+              console.log(`[trade.js]: 🔄 Attempting to delete confirmation message ${updatedTradeData.confirmMessageId}`);
+              const channel = await interaction.client.channels.fetch(updatedTradeData.confirmChannelId);
+              const confirmMsg = await channel.messages.fetch(updatedTradeData.confirmMessageId);
+              await confirmMsg.delete();
+              console.log(`[trade.js]: ✅ Trade confirmation message deleted successfully`);
+            } catch (error) {
+              console.error(`[trade.js]: ❌ Error deleting trade confirm message:`, error);
+            }
+          } else {
+            console.log(`[trade.js]: ⚠️ No confirmation message to delete`);
           }
 
           await TempData.deleteOne({ _id: trade._id });
+          console.log(`[trade.js]: ✅ Trade data deleted from database`);
           
           // Update original trade message
           if (updatedTradeData.messageId && updatedTradeData.channelId) {
             try {
+              console.log(`[trade.js]: 🔄 Updating final trade message ${updatedTradeData.messageId}`);
               const channel = await interaction.client.channels.fetch(updatedTradeData.channelId);
               const message = await channel.messages.fetch(updatedTradeData.messageId);
               await updateTradeMessage(message, updatedTradeData, fromCharacter, toCharacter);
@@ -1734,9 +1754,33 @@ async function handleTrade(interaction) {
             ephemeral: true,
           });
         } else {
+          // Only send confirmation message if one doesn't already exist
+          if (!updatedTradeData.confirmMessageId) {
+            console.log(`[trade.js]: 🔄 Sending new confirmation message`);
+            const tradeConfirmMessage = await interaction.channel.send({
+              content: `**Trade confirmed!** <@${updatedTradeData.initiator.userId}>, please react to the trade post with ✅ to finalize the trade.`
+            });
+            console.log(`[trade.js]: ✅ Confirmation message sent with ID: ${tradeConfirmMessage.id}`);
+            
+            // Update trade data with confirmation message
+            await TempData.findOneAndUpdate(
+              { key: tradeId, type: 'trade' },
+              { 
+                $set: { 
+                  'data.confirmMessageId': tradeConfirmMessage.id,
+                  'data.confirmChannelId': interaction.channelId 
+                } 
+              }
+            );
+            console.log(`[trade.js]: ✅ Trade data updated with confirmation message info`);
+          } else {
+            console.log(`[trade.js]: ⚠️ Confirmation message already exists, skipping creation`);
+          }
+
           // Update trade status message
           if (updatedTradeData.messageId && updatedTradeData.channelId) {
             try {
+              console.log(`[trade.js]: 🔄 Updating trade status message ${updatedTradeData.messageId}`);
               const channel = await interaction.client.channels.fetch(updatedTradeData.channelId);
               const message = await channel.messages.fetch(updatedTradeData.messageId);
               await updateTradeMessage(message, updatedTradeData, fromCharacter, toCharacter);
@@ -1747,21 +1791,9 @@ async function handleTrade(interaction) {
           }
           
           await interaction.editReply({
-            content: `**Trade confirmed!** <@${updatedTradeData.initiator.userId}>, please react to the trade post with ✅ to finalize the trade.`,
+            content: `✅ Trade confirmed.`,
             ephemeral: true,
           });
-        }
-
-        // Clean up confirmation message if it exists
-        if (updatedTradeData.confirmMessageId && updatedTradeData.channelId) {
-          try {
-            const channel = await interaction.client.channels.fetch(updatedTradeData.channelId);
-            const confirmMsg = await channel.messages.fetch(updatedTradeData.confirmMessageId);
-            await confirmMsg.delete();
-            console.log(`[trade.js]: ✅ Trade confirmation message deleted successfully`);
-          } catch (error) {
-            console.error(`[trade.js]: ❌ Error deleting trade confirm message:`, error);
-          }
         }
       } catch (error) {
         console.error(`[trade.js]: ❌ Error handling trade completion:`, error);
@@ -1844,10 +1876,11 @@ async function handleTrade(interaction) {
                 await tradeMessage.edit({ content: null, embeds: [finalEmbed], components: [] });
                 console.log(`[trade.js]: ✅ Trade completed: ${tradeId}`);
 
-                // Clean up confirmation message
-                if (updatedTradeData.confirmMessageId && updatedTradeData.channelId) {
+                // Clean up confirmation message if it exists
+                if (updatedTradeData.confirmMessageId && updatedTradeData.confirmChannelId) {
                   try {
-                    const channel = await interaction.client.channels.fetch(updatedTradeData.channelId);
+                    console.log(`[trade.js]: 🔄 Attempting to delete confirmation message ${updatedTradeData.confirmMessageId}`);
+                    const channel = await interaction.client.channels.fetch(updatedTradeData.confirmChannelId);
                     const confirmMsg = await channel.messages.fetch(updatedTradeData.confirmMessageId);
                     await confirmMsg.delete();
                     console.log(`[trade.js]: ✅ Trade confirmation message deleted successfully`);

@@ -98,9 +98,6 @@ async function syncToInventoryDatabase(character, item, interaction) {
    throw new Error("Database functions not initialized in inventoryUtils");
   }
 
-  // Log sync attempt with minimal info
-  console.log(`[inventoryUtils.js]: 🔄 Syncing ${item.itemName} (${item.quantity}) for ${character.name}`);
-
   const inventoriesConnection = await dbFunctions.connectToInventories();
   const db = inventoriesConnection.useDb("inventories");
   const inventoryCollection = db.collection(character.name.toLowerCase());
@@ -155,13 +152,11 @@ async function syncToInventoryDatabase(character, item, interaction) {
         characterId: dbDoc.characterId,
         itemName: dbDoc.itemName,
       });
-      console.log(`[inventoryUtils.js]: 🗑️ Removed ${dbDoc.itemName} from ${character.name}`);
     } else {
       await inventoryCollection.updateOne(
         { characterId: dbDoc.characterId, itemName: dbDoc.itemName },
         { $set: { ...dbDoc, quantity: newQty } }
       );
-      console.log(`[inventoryUtils.js]: ➖ ${dbDoc.itemName}: ${newQty} for ${character.name}`);
     }
   } else if (item.quantity > 0) {
     // Add item logic
@@ -171,10 +166,8 @@ async function syncToInventoryDatabase(character, item, interaction) {
         { characterId: dbDoc.characterId, itemName: dbDoc.itemName },
         { $set: { ...dbDoc, quantity: newQty } }
       );
-      console.log(`[inventoryUtils.js]: ➕ ${dbDoc.itemName}: ${newQty} for ${character.name}`);
     } else {
       await inventoryCollection.insertOne({ ...dbDoc });
-      console.log(`[inventoryUtils.js]: 🆕 Added ${dbDoc.itemName} (${dbDoc.quantity}) for ${character.name}`);
     }
   } else {
     console.warn(`[inventoryUtils.js]: ⚠️ Zero quantity transaction for ${character.name} | ${dbDoc.itemName}`);
@@ -202,8 +195,6 @@ async function syncToInventoryDatabase(character, item, interaction) {
   } catch (sheetError) {
     console.error(`[inventoryUtils.js]: ❌ Sheet sync error for ${character.name}: ${sheetError.message}`);
   }
-
-  console.log(`[inventoryUtils.js]: ✅ Sync complete for ${character.name} | ${dbDoc.itemName}`);
  } catch (error) {
   if (!error.message?.includes('Could not write to sheet') && shouldLogError(error)) {
     handleError(error, "inventoryUtils.js");
