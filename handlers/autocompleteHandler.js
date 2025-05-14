@@ -154,25 +154,7 @@ async function handleAutocomplete(interaction) {
 
       // ------------------- Economy Command -------------------
       case "economy":
-        const economySubcommand = interaction.options.getSubcommand();
-        
-        if (economySubcommand === "gift") {
-          if (focusedName === "fromcharacter") {
-            await handleGiftFromCharacterAutocomplete(interaction, focusedOption);
-          } else if (focusedName === "tocharacter") {
-            await handleGiftToCharacterAutocomplete(interaction, focusedOption);
-          } else if (["itema", "itemb", "itemc"].includes(focusedName)) {
-            await handleGiftItemAutocomplete(interaction, focusedOption);
-          }
-        } else if (economySubcommand === "transfer") {
-          if (focusedName === "fromcharacter") {
-            await handleTransferFromCharacterAutocomplete(interaction, focusedOption);
-          } else if (focusedName === "tocharacter") {
-            await handleTransferToCharacterAutocomplete(interaction, focusedOption);
-          } else if (["itema", "itemb", "itemc"].includes(focusedName)) {
-            await handleTransferItemAutocomplete(interaction, focusedOption);
-          }
-        }
+        await handleEconomyAutocomplete(interaction, focusedOption);
         break;
 
       // ------------------- Item Command -------------------
