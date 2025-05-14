@@ -167,7 +167,8 @@ async function addItemInventoryDatabase(
  obtain = ""
 ) {
  try {
-  if (!interaction) {
+  // Only require interaction for non-trade operations
+  if (!interaction && obtain !== 'Trade') {
    throw new Error("Interaction object is undefined.");
   }
 
@@ -239,7 +240,8 @@ async function removeItemInventoryDatabase(
  characterId,
  itemName,
  quantity,
- interaction
+ interaction,
+ obtain = "Trade"
 ) {
  try {
   if (!dbFunctions.fetchCharacterById || !dbFunctions.connectToInventories) {

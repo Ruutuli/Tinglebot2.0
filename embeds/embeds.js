@@ -1117,25 +1117,30 @@ const createTradeEmbed = async (
  fromCharacter,
  toCharacter,
  fromItems,
- toItems
+ toItems,
+ messageUrl,
+ fromCharacterIcon,
+ toCharacterIcon
 ) => {
  const settingsFrom = getCommonEmbedSettings(fromCharacter);
  const fromItemsDescription = fromItems
-  .map((item) => `**${item.emoji} ${item.name} x ${item.quantity}**`)
+  .map((item) => `${item.emoji} **${item.name}** x ${item.quantity}`)
   .join("\n");
  const toItemsDescription =
   toItems.length > 0
    ? toItems
-      .map((item) => `**${item.emoji} ${item.name} x ${item.quantity}**`)
+      .map((item) => `${item.emoji} **${item.name}** x ${item.quantity}`)
       .join("\n")
    : "No items offered";
 
+ // Fix iconURL for footer: only set if non-empty and looks like a URL
+ let safeFooterIcon = toCharacterIcon && /^https?:\/\//.test(toCharacterIcon) ? toCharacterIcon : undefined;
  return new EmbedBuilder()
   .setColor(settingsFrom.color)
   .setTitle("✬ Trade ✬")
   .setAuthor({
-   name: `${fromCharacter.name} 🔗`,
-   iconURL: settingsFrom.author.iconURL,
+   name: `${fromCharacter} 🔗`,
+   iconURL: fromCharacterIcon || settingsFrom.author.iconURL,
    url: settingsFrom.author.url,
   })
   .setDescription(
@@ -1143,17 +1148,17 @@ const createTradeEmbed = async (
   )
   .addFields(
    {
-    name: `__${fromCharacter.name} offers__`,
+    name: `__${fromCharacter} offers__`,
     value: fromItemsDescription || "No items offered",
     inline: true,
    },
    {
-    name: `__${toCharacter.name} offers__`,
+    name: `__${toCharacter} offers__`,
     value: toItemsDescription || "No items offered",
     inline: true,
    }
   )
-  .setFooter({ text: toCharacter.name, iconURL: toCharacter.icon })
+  .setFooter({ text: toCharacter, iconURL: safeFooterIcon })
   .setImage(settingsFrom.image.url);
 };
 

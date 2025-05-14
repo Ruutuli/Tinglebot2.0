@@ -23,7 +23,8 @@ const tempDataSchema = new mongoose.Schema({
       'travel',       // Travel cooldowns
       'gather',       // Gathering cooldowns
       'monthly',      // Monthly encounter tracking
-      'delivery'      // Delivery requests
+      'delivery',      // Delivery requests
+      'trade'         // Trade requests
     ],
     index: true
   },
@@ -58,6 +59,9 @@ tempDataSchema.pre('save', function(next) {
       break;
     case 'delivery':
       this.expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours
+      break;
+    case 'trade':
+      this.expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000); // 24 hours
       break;
     default:
       this.expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours
