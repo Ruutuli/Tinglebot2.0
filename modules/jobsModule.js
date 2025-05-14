@@ -1,7 +1,12 @@
 // ------------------- Import necessary modules and functions -------------------
 const { fetchCharacterById, updateCharacterById } = require('../database/db');
 const { handleError } = require('../utils/globalErrorHandler');
-const { capitalize } = require('../modules/formattingModule');
+
+// Helper function for capitalization
+const capitalize = (str) => {
+  if (!str) return '';
+  return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+};
 
 // ------------------- Define job data and configurations -------------------
 // Job categories with associated jobs
