@@ -1290,6 +1290,24 @@ async function handleTrade(interaction) {
  try {
   await interaction.deferReply({ ephemeral: false });
 
+  // ------------------- Validate Trade Quantities -------------------
+  const itemArray = [
+   { name: item1, quantity: quantity1 },
+   { name: item2, quantity: quantity2 },
+   { name: item3, quantity: quantity3 },
+  ].filter((item) => item.name);
+
+  // Ensure all traded item quantities are positive integers
+  for (const { quantity } of itemArray) {
+   if (quantity <= 0) {
+    await interaction.editReply({
+     content: `❌ You must trade a **positive quantity** of items. Negative numbers are not allowed.`,
+     ephemeral: true,
+    });
+    return;
+   }
+  }
+
   const fromCharacter = await fetchCharacterByNameAndUserId(
    characterName,
    userId
@@ -1328,6 +1346,7 @@ async function handleTrade(interaction) {
     return;
    }
 
+   // ------------------- Validate Trade Session -------------------
    if (tradeSession.tradingWithCharacterName !== characterName) {
     await interaction.editReply({
      content: `❌ Character mismatch. Trade ID was initiated with ${tradeSession.tradingWithCharacterName}.`,
@@ -1335,12 +1354,25 @@ async function handleTrade(interaction) {
     return;
    }
 
-   const itemArray = [
-    { name: item1, quantity: quantity1 },
-    { name: item2, quantity: quantity2 },
-    { name: item3, quantity: quantity3 },
-   ].filter((item) => item.name);
+   // Verify the trade is being completed by the correct user
+   if (tradeSession.character.userId !== userId) {
+    await interaction.editReply({
+     content: `❌ This trade can only be completed by the original trade initiator.`,
+     ephemeral: true,
+    });
+    return;
+   }
 
+   // Verify the trade is being completed with the correct character
+   if (toCharacter.name !== tradeSession.tradingWithCharacterName) {
+    await interaction.editReply({
+     content: `❌ This trade can only be completed with ${tradeSession.tradingWithCharacterName}.`,
+     ephemeral: true,
+    });
+    return;
+   }
+
+   // ------------------- Validate Trade Items -------------------
    const characterInventoryCollection = await getCharacterInventoryCollection(
     fromCharacter.name
    );
@@ -1358,6 +1390,7 @@ async function handleTrade(interaction) {
     }
    }
 
+   // ------------------- Process Trade -------------------
    for (let item of itemArray) {
     await removeItemInventoryDatabase(
      fromCharacter._id,
@@ -1374,7 +1407,7 @@ async function handleTrade(interaction) {
    }
 
    const fromItems = await Promise.all(
-    tradeSession.items.map(async (item) => ({
+    itemArray.map(async (item) => ({
      name: item.name,
      quantity: item.quantity,
      emoji: await getItemEmoji(item.name),
@@ -1389,7 +1422,7 @@ async function handleTrade(interaction) {
    );
 
    const fromCharacterIcon = fromCharacter.gearWeapon?.iconURL || "";
-   const toCharacterIcon = tradeSession.character.gearWeapon?.iconURL || "";
+   const toCharacterIcon = toCharacter.gearWeapon?.iconURL || "";
 
    const updatedEmbedData = await createTradeEmbed(
     tradeSession.character,
@@ -1493,7 +1526,7 @@ async function handleTrade(interaction) {
 
    };
 
-   for (let item of tradeSession.items) {
+   for (let item of itemArray) {
     await appendData(
      tradeSession.character,
      item.name,
@@ -1530,67 +1563,6 @@ async function handleTrade(interaction) {
    delete tradeSessions[tradeId];
    await interaction.editReply({ content: `✅ Trade Complete ✅` });
   } else {
-   const itemArray = [
-    { name: item1, quantity: quantity1 },
-    { name: item2, quantity: quantity2 },
-    { name: item3, quantity: quantity3 },
-   ].filter((item) => item.name);
-
-   // ------------------- Validate Trade Quantities -------------------
-// Ensure all traded item quantities are positive integers
-for (const { quantity } of itemArray) {
-  if (quantity <= 0) {
-    await interaction.editReply({
-      content: `❌ You must trade a **positive quantity** of items. Negative numbers are not allowed.`,
-      ephemeral: true,
-    });
-    return;
-  }
-}
-
-   for (let item of itemArray) {
-    const equippedItems = [
-     fromCharacter.gearWeapon?.name,
-     fromCharacter.gearShield?.name,
-     fromCharacter.gearArmor?.head?.name,
-     fromCharacter.gearArmor?.chest?.name,
-     fromCharacter.gearArmor?.legs?.name,
-    ];
-    if (equippedItems.includes(item.name)) {
-     await interaction.editReply({
-      content: `❌ You cannot trade an item that is currently equipped. Unequip \`${item.name}\` first.`,
-     });
-     return;
-    }
-   }
-
-   if (
-    fromCharacter.currentVillage.trim().toLowerCase() !==
-    toCharacter.currentVillage.trim().toLowerCase()
-   ) {
-    await interaction.editReply({
-     content: `❌ Both characters must be in the same village to perform the trade. ${fromCharacter.name} is currently in ${fromCharacter.currentVillage} and ${toCharacter.name} is currently in ${toCharacter.currentVillage}.`,
-    });
-    return;
-   }
-
-   const characterInventoryCollection = await getCharacterInventoryCollection(
-    fromCharacter.name
-   );
-   for (let item of itemArray) {
-    const itemInventory = await characterInventoryCollection.findOne({
-     itemName: { $regex: new RegExp(`^${item.name}$`, "i") },
-    });
-    if (!itemInventory || itemInventory.quantity < item.quantity) {
-     await interaction.editReply({
-      content: `❌ \`${characterName}\` does not have enough \`${
-       item.name
-      } - QTY:${itemInventory ? itemInventory.quantity : 0}\` to trade.`,
-     });
-     return;
-    }
-   }
-
    const shortTradeId = uuidv4().split("-")[0];
    const fromItems = await Promise.all(
     itemArray.map(async (item) => ({
