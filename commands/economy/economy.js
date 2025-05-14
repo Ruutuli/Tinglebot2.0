@@ -45,13 +45,18 @@ const DEFAULT_EMOJI = "🔹";
 
 async function getItemEmoji(itemName) {
   console.log(`[trade.js]: 🔍 Looking up emoji for item: ${itemName}`);
-  const item = await ItemModel.findOne({ 
-    itemName: { $regex: new RegExp(`^${itemName}$`, "i") }
-  }).select("emoji").exec();
-  console.log(`[trade.js]: 📊 Found item:`, item);
-  const emoji = item && item.emoji ? item.emoji : DEFAULT_EMOJI;
-  console.log(`[trade.js]: 🎯 Returning emoji: ${emoji}`);
-  return emoji;
+  try {
+    const item = await ItemModel.findOne({ 
+      itemName: { $regex: new RegExp(`^${itemName}$`, "i") }
+    }).select("emoji").exec();
+    console.log(`[trade.js]: 📊 Found item in database:`, item);
+    const emoji = item && item.emoji ? item.emoji : DEFAULT_EMOJI;
+    console.log(`[trade.js]: 🎯 Returning emoji: ${emoji}`);
+    return emoji;
+  } catch (error) {
+    console.error(`[trade.js]: ❌ Error fetching emoji for ${itemName}:`, error);
+    return DEFAULT_EMOJI;
+  }
 }
 
 function removeCircularReferences(obj, seen = new WeakSet()) {
@@ -1404,12 +1409,13 @@ async function createTradeSession(initiator, target, items) {
   const formattedInitiatorItems = await Promise.all(items.map(async item => {
     console.log(`[trade.js]: 📦 Formatting item:`, item);
     const emoji = await getItemEmoji(item.name);
+    console.log(`[trade.js]: 🎯 Retrieved emoji for ${item.name}: ${emoji}`);
     const formattedItem = {
       name: item.name,
       quantity: item.quantity,
       emoji: emoji,
     };
-    console.log(`[trade.js]: ✅ Formatted item:`, formattedItem);
+    console.log(`[trade.js]: ✅ Formatted item with emoji:`, formattedItem);
     return formattedItem;
   }));
 
@@ -1434,7 +1440,7 @@ async function createTradeSession(initiator, target, items) {
     confirmChannelId: null,
   };
 
-  console.log(`[trade.js]: 📊 Created trade data:`, tradeData);
+  console.log(`[trade.js]: 📊 Created trade data with items:`, tradeData.initiator.items);
   const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
   await TempData.create({ key: tradeId, type: 'trade', data: tradeData, expiresAt });
   return tradeId;
@@ -1815,11 +1821,21 @@ async function handleTrade(interaction) {
         // Create trade session
         const tradeId = await createTradeSession(fromCharacter, toCharacter, itemArray);
 
+        // Get formatted items with emojis
+        const formattedItems = await Promise.all(itemArray.map(async item => {
+          const emoji = await getItemEmoji(item.name);
+          return {
+            name: item.name,
+            quantity: item.quantity,
+            emoji: emoji,
+          };
+        }));
+
         // Create and send initial trade message
         const tradeEmbed = await createTradeEmbed(
           fromCharacter.name,
           toCharacter.name,
-          itemArray,
+          formattedItems,
           [],
           interaction.url,
           fromCharacter.icon || "",
