@@ -20,6 +20,7 @@ const {
 const {
  addItemInventoryDatabase,
  removeItemInventoryDatabase,
+ syncToInventoryDatabase,
 } = require("../../utils/inventoryUtils.js");
 const {
  authorizeSheets,
@@ -1542,50 +1543,93 @@ async function executeTrade(tradeData) {
       throw new Error('Character not found for trade execution');
     }
 
+    const uniqueSyncId = uuidv4();
+    const formattedDateTime = new Date().toLocaleString("en-US", {
+      timeZone: "America/New_York",
+    });
+
     // Process initiator's items
     for (const item of initiator.items) {
-      // Remove from initiator
-      const removed = await removeItemInventoryDatabase(
-        initiatorChar._id,
-        item.name,
-        item.quantity,
-        null,
-        'Trade'
-      );
-      if (!removed) {
-        throw new Error(`Failed to remove ${item.name} from ${initiator.characterName}'s inventory`);
-      }
-      // Add to target
-      await addItemInventoryDatabase(
-        targetChar._id,
-        item.name,
-        item.quantity,
-        null,
-        'Trade'
-      );
+      const itemDetails = await ItemModel.findOne({
+        itemName: new RegExp(`^${item.name}$`, "i"),
+      }).exec();
+      const category = itemDetails?.category.join(", ") || "";
+      const type = itemDetails?.type.join(", ") || "";
+      const subtype = itemDetails?.subtype.join(", ") || "";
+
+      // Create trade data for logging
+      const tradeData = {
+        characterId: initiatorChar._id,
+        itemName: item.name,
+        quantity: -item.quantity,
+        category,
+        type,
+        subtype,
+        obtain: `Trade to ${target.characterName}`,
+        date: new Date(),
+        synced: uniqueSyncId
+      };
+
+      // Remove from initiator and log
+      await syncToInventoryDatabase(initiatorChar, tradeData);
+
+      // Create trade data for target
+      const targetTradeData = {
+        characterId: targetChar._id,
+        itemName: item.name,
+        quantity: item.quantity,
+        category,
+        type,
+        subtype,
+        obtain: `Trade from ${initiator.characterName}`,
+        date: new Date(),
+        synced: uniqueSyncId
+      };
+
+      // Add to target and log
+      await syncToInventoryDatabase(targetChar, targetTradeData);
     }
 
     // Process target's items
     for (const item of target.items) {
-      // Remove from target
-      const removed = await removeItemInventoryDatabase(
-        targetChar._id,
-        item.name,
-        item.quantity,
-        null,
-        'Trade'
-      );
-      if (!removed) {
-        throw new Error(`Failed to remove ${item.name} from ${target.characterName}'s inventory`);
-      }
-      // Add to initiator
-      await addItemInventoryDatabase(
-        initiatorChar._id,
-        item.name,
-        item.quantity,
-        null,
-        'Trade'
-      );
+      const itemDetails = await ItemModel.findOne({
+        itemName: new RegExp(`^${item.name}$`, "i"),
+      }).exec();
+      const category = itemDetails?.category.join(", ") || "";
+      const type = itemDetails?.type.join(", ") || "";
+      const subtype = itemDetails?.subtype.join(", ") || "";
+
+      // Create trade data for logging
+      const tradeData = {
+        characterId: targetChar._id,
+        itemName: item.name,
+        quantity: -item.quantity,
+        category,
+        type,
+        subtype,
+        obtain: `Trade to ${initiator.characterName}`,
+        date: new Date(),
+        synced: uniqueSyncId
+      };
+
+      // Remove from target and log
+      await syncToInventoryDatabase(targetChar, tradeData);
+
+      // Create trade data for initiator
+      const initiatorTradeData = {
+        characterId: initiatorChar._id,
+        itemName: item.name,
+        quantity: item.quantity,
+        category,
+        type,
+        subtype,
+        obtain: `Trade from ${target.characterName}`,
+        date: new Date(),
+        synced: uniqueSyncId
+      };
+
+      // Add to initiator and log
+      await syncToInventoryDatabase(initiatorChar, initiatorTradeData);
     }
 
     console.log(`[trade.js]: ✅ Trade executed successfully between ${initiator.characterName} and ${target.characterName}`);
@@ -1720,13 +1764,13 @@ for (const { name } of items) {
   }
 
   if (!allItemsAvailable) {
-    console.log(
-      `[transfer.js:logs] Items unavailable for transfer: ${unavailableItems.join(", ")}`
-    );
-    await interaction.editReply(
-      `❌ \`${fromCharacterName}\` does not have enough of the following items to transfer: ${unavailableItems.join(", ")}`
-    );
-    return;
+   await interaction.editReply({
+    content: `❌ \`${fromCharacterName}\` does not have enough of the following items to transfer: ${unavailableItems.join(
+     ", "
+    )}`,
+    ephemeral: true,
+   });
+   return;
   }
 
   const fromInventoryLink =
@@ -1765,102 +1809,70 @@ for (const { name } of items) {
   const formattedItems = [];
 
   for (const { name, quantity } of items) {
-   await removeItemInventoryDatabase(
-    fromCharacter._id,
-    name,
-    quantity,
-    interaction
-   );
-   await addItemInventoryDatabase(toCharacter._id, name, quantity, interaction);
+    const itemDetails = await ItemModel.findOne({
+      itemName: new RegExp(`^${name}$`, "i"),
+    }).exec();
+    const category = itemDetails?.category.join(", ") || "";
+    const type = itemDetails?.type.join(", ") || "";
+    const subtype = itemDetails?.subtype.join(", ") || "";
 
-   const itemDetails = await ItemModel.findOne({
-    itemName: new RegExp(`^${name}$`, "i"),
-   }).exec();
-   const category = itemDetails?.category.join(", ") || "";
-   const type = itemDetails?.type.join(", ") || "";
-   const subtype = itemDetails?.subtype.join(", ") || "";
+    // Remove from source (fromCharacter)
+    const removeData = {
+      characterId: fromCharacter._id,
+      itemName: name,
+      quantity: -quantity,
+      category,
+      type,
+      subtype,
+      obtain: `Transfer to ${toCharacterName}`,
+      date: new Date(),
+      synced: uniqueSyncId
+    };
+    await syncToInventoryDatabase(fromCharacter, removeData);
 
-   const fromValues = [
-    [
-     fromCharacter.name,
-     name,
-     (-quantity).toString(),
-     category,
-     type,
-     subtype,
-     `Gift to ${toCharacterName}`,
-     fromCharacter.job,
-     "",
-     fromCharacter.currentVillage,
-     interactionUrl,
-     formattedDateTime,
-     uniqueSyncId,
-    ],
-   ];
+    // Add to target (toCharacter)
+    const addData = {
+      characterId: toCharacter._id,
+      itemName: name,
+      quantity: quantity,
+      category,
+      type,
+      subtype,
+      obtain: `Transfer from ${fromCharacterName}`,
+      date: new Date(),
+      synced: uniqueSyncId
+    };
+    await syncToInventoryDatabase(toCharacter, addData);
 
-   const toValues = [
-    [
-     toCharacter.name,
-     name,
-     quantity.toString(),
-     category,
-     type,
-     subtype,
-     `Gift from ${fromCharacterName}`,
-     toCharacter.job,
-     "",
-     toCharacter.currentVillage,
-     interactionUrl,
-     formattedDateTime,
-     uniqueSyncId,
-    ],
-   ];
-
-   if (fromCharacter?.name && fromCharacter?.inventory && fromCharacter?.userId) {
-    await safeAppendDataToSheet(fromCharacter.inventory, fromCharacter, range, fromValues);
-} else {
-    console.error('[safeAppendDataToSheet]: Invalid fromCharacter object detected.');
-}
-
-if (toCharacter?.name && toCharacter?.inventory && toCharacter?.userId) {
-    await safeAppendDataToSheet(toCharacter.inventory, toCharacter, range, toValues);
-} else {
-    console.error('[safeAppendDataToSheet]: Invalid toCharacter object detected.');
-}
-
-   
-   const itemIcon = itemDetails?.emoji || "🎁";
-   formattedItems.push({ itemName: name, quantity, itemIcon });
+    const itemIcon = itemDetails?.emoji || "🎁";
+    formattedItems.push({ itemName: name, quantity, itemIcon });
   }
 
   const fromCharacterIcon = fromCharacter.icon || "🧙";
   const toCharacterIcon = toCharacter.icon || "🧙";
-  const giftEmbed = createGiftEmbed(
-   fromCharacter,
-   toCharacter,
-   formattedItems,
-   fromInventoryLink,
-   toInventoryLink,
-   fromCharacterIcon,
-   toCharacterIcon
+  const transferEmbed = createTransferEmbed(
+    fromCharacter,
+    toCharacter,
+    formattedItems,
+    fromInventoryLink,
+    toInventoryLink,
+    fromCharacterIcon,
+    toCharacterIcon
   );
 
   await interaction.channel.send({
-    content: `🎁 <@${toCharacter.userId}>, you received a gift!`,
+    content: `🎁 <@${toCharacter.userId}>, you received a transfer!`,
     allowedMentions: { users: [toCharacter.userId] },
-    embeds: [giftEmbed],
+    embeds: [transferEmbed],
   });
   await interaction.editReply({
-    content: `✅ Gift sent successfully!`,
-  }); 
-  
-  
+    content: `✅ Transfer completed successfully!`,
+  });
  } catch (error) {
-  handleError(error, "gift.js");
-  console.error("❌ Error during gift execution:", error);
+  handleError(error, "transfer.js");
+  console.error("❌ Error during transfer execution:", error);
   await interaction.editReply(
-   "❌ An error occurred while trying to gift the items."
+   "❌ An error occurred while trying to transfer the items."
   );
  }
 }
-  
