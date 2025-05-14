@@ -706,17 +706,15 @@ function generateLootedItem(encounteredMonster, weightedItems) {
  const lootedItem = weightedItems[randomIndex];
 
  if (encounteredMonster.name.includes("Chuchu")) {
-  const jellyMapping = {
-   Ice: "White Chuchu Jelly",
-   Fire: "Red Chuchu Jelly",
-   Electric: "Yellow Chuchu Jelly",
-  };
-  let jellyType = "Chuchu Jelly";
-  for (const key in jellyMapping) {
-   if (encounteredMonster.name.includes(key)) {
-    jellyType = jellyMapping[key];
-    break;
-   }
+  let jellyType;
+  if (encounteredMonster.name.includes('Ice')) {
+    jellyType = 'White Chuchu Jelly';
+  } else if (encounteredMonster.name.includes('Fire')) {
+    jellyType = 'Red Chuchu Jelly';
+  } else if (encounteredMonster.name.includes('Electric')) {
+    jellyType = 'Yellow Chuchu Jelly';
+  } else {
+    jellyType = 'Chuchu Jelly';
   }
   const quantity = encounteredMonster.name.includes("Large")
    ? 3
