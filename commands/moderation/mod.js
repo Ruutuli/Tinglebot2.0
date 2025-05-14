@@ -460,8 +460,10 @@ async function handleGive(interaction) {
       'Admin Give'
     );
   
-    return interaction.editReply(
-      `✅ Successfully gave **${quantity}× ${itemName}** to **${character.name}**.`
+    // Send error messages as ephemeral but success message as public
+    await interaction.editReply({ content: '✅ Processing...', ephemeral: true });
+    return interaction.followUp(
+      `✨ The Gods have blessed you! **${character.name}** now has **${itemName} × ${quantity}**!`
     );
   }
 
@@ -1025,9 +1027,7 @@ async function handleVendingReset(interaction) {
     console.error('[mod.js]: Error resetting vending fields:', error);
     return interaction.editReply('❌ Failed to reset vending fields.');
   }
-}
-
-  
+}  
 // ============================================================================
 // ------------------- Export Command -------------------
 // ============================================================================
@@ -1036,3 +1036,5 @@ module.exports = {
   data: modCommand,
   execute
 };
+
+
