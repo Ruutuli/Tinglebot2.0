@@ -1403,10 +1403,11 @@ async function createTradeSession(initiator, target, items) {
   const tradeId = generateUniqueId('T');
   const formattedInitiatorItems = await Promise.all(items.map(async item => {
     console.log(`[trade.js]: 📦 Formatting item:`, item);
+    const emoji = await getItemEmoji(item.name);
     const formattedItem = {
       name: item.name,
       quantity: item.quantity,
-      emoji: await getItemEmoji(item.name)
+      emoji: emoji,
     };
     console.log(`[trade.js]: ✅ Formatted item:`, formattedItem);
     return formattedItem;
@@ -1416,12 +1417,12 @@ async function createTradeSession(initiator, target, items) {
     initiator: {
       userId: initiator.userId,
       characterName: initiator.name,
-      items: formattedInitiatorItems
+      items: formattedInitiatorItems,
     },
     target: {
       userId: target.userId,
       characterName: target.name,
-      items: []
+      items: [],
     },
     status: 'pending',
     createdAt: new Date(),
@@ -1430,7 +1431,7 @@ async function createTradeSession(initiator, target, items) {
     messageId: null,
     channelId: null,
     confirmMessageId: null,
-    confirmChannelId: null
+    confirmChannelId: null,
   };
 
   console.log(`[trade.js]: 📊 Created trade data:`, tradeData);
@@ -1441,15 +1442,18 @@ async function createTradeSession(initiator, target, items) {
 
 // ------------------- Trade Session Update -------------------
 async function updateTradeSession(tradeId, targetItems) {
-  const formattedTargetItems = await Promise.all(targetItems.map(async item => ({
-    name: item.name,
-    quantity: item.quantity,
-    emoji: await getItemEmoji(item.name)
-  })));
+  const formattedTargetItems = await Promise.all(targetItems.map(async item => {
+    const emoji = await getItemEmoji(item.name);
+    return {
+      name: item.name,
+      quantity: item.quantity,
+      emoji: emoji,
+    };
+  }));
 
   await TempData.findOneAndUpdate(
     { key: tradeId, type: 'trade' },
-    { $set: { 'data.target.items': formattedTargetItems } }
+    { $set: { 'data.target.items': formattedTargetItems } },
   );
   return (await TempData.findByTypeAndKey('trade', tradeId)).data;
 }
