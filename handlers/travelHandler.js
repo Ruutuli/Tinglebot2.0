@@ -232,7 +232,7 @@ async function handleGather(interaction, character, currentPath, encounterMessag
 // ------------------- Fight Helper -------------------
 // Resolves combat, handles KO relocation, loot (incl. Chuchu logic),
 // sheet sync, stamina, updates embed fields & footer, logs outcomes.
-async function handleFight(interaction, character, encounterMessage, monster, travelLog) {
+async function handleFight(interaction, character, encounterMessage, monster, travelLog, startingVillage) {
   try {
     travelLog = Array.isArray(travelLog) ? travelLog : [];
     const jobPerk = getJobPerk(character.job);
@@ -257,7 +257,7 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
       character.currentHearts = 0;
       character.currentStamina = 0;
       character.debuff = { active: true, endDate: new Date(Date.now() + 7 * 86400000) };
-      character.currentVillage = character.homeVillage;
+      character.currentVillage = startingVillage;
       character.ko = true;
 
       await updateCurrentHearts(character._id, 0);
@@ -527,7 +527,8 @@ async function handleTravelInteraction(
     currentPath,
     encounterMessage,
     monster,
-    travelLog
+    travelLog,
+    startingVillage
   ) {
     try {
       if (interaction?.isButton?.()) {
@@ -557,14 +558,14 @@ async function handleTravelInteraction(
             result = '❌ Could not resolve monster for this encounter.';
             break;
           }
-          result = await handleFight(interaction, character, encounterMessage, monster, travelLog);
+          result = await handleFight(interaction, character, encounterMessage, monster, travelLog, startingVillage);
           break;
         case 'flee':
           result = await handleFlee(interaction, character, encounterMessage, monster, travelLog);
           break;
         default:
           if (monster) {
-            result = await handleFight(interaction, character, encounterMessage, monster, travelLog);
+            result = await handleFight(interaction, character, encounterMessage, monster, travelLog, startingVillage);
           } else {
             result = await handleDoNothing(interaction, character, encounterMessage, travelLog);
           }
