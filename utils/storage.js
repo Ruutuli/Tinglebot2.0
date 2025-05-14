@@ -2,6 +2,7 @@
 // Import core Node.js modules.
 const { handleError } = require('../utils/globalErrorHandler');
 const TempData = require('../models/TempDataModel');
+const mongoose = require('mongoose');
 
 // ============================================================================
 // ------------------- In-Memory Storage -------------------
@@ -254,6 +255,28 @@ async function cleanupExpiredEntries(maxAgeInMs = 86400000) {
   }
 }
 
+// ============================================================================
+// ---- Transaction Helper ----
+// Runs a function within a mongoose transaction session.
+// ============================================================================
+
+// ---- Function: runWithTransaction ----
+// Runs the given async function within a mongoose transaction session.
+async function runWithTransaction(fn) {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  try {
+    const result = await fn(session);
+    await session.commitTransaction();
+    return result;
+  } catch (error) {
+    await session.abortTransaction();
+    handleError(error, 'storage.js');
+    throw error;
+  } finally {
+    session.endSession();
+  }
+}
 
 // ============================================================================
 // ------------------- Module Exports -------------------
@@ -297,5 +320,6 @@ module.exports = {
   retrieveTradeFromStorage,
   deleteTradeFromStorage,
   
-  cleanupExpiredEntries
+  cleanupExpiredEntries,
+  runWithTransaction
 };
