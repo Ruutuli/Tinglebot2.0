@@ -1124,12 +1124,12 @@ const createTradeEmbed = async (
 ) => {
  const settingsFrom = getCommonEmbedSettings(fromCharacter);
  const fromItemsDescription = fromItems
-  .map((item) => `${item.emoji} **${item.name}** x ${item.quantity}`)
+  .map((item) => `${item.emoji || '🔹'} **${item.name}** x ${item.quantity}`)
   .join("\n");
  const toItemsDescription =
   toItems.length > 0
    ? toItems
-      .map((item) => `${item.emoji} **${item.name}** x ${item.quantity}`)
+      .map((item) => `${item.emoji || '🔹'} **${item.name}** x ${item.quantity}`)
       .join("\n")
    : "No items offered";
 
