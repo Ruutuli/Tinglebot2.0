@@ -176,9 +176,10 @@ module.exports = {
       }
 
       // ------------------- Validate or Activate Job Voucher -------------------
+      let voucherCheck = { success: true, skipVoucher: false }; // Initialize with default values
       if (character.jobVoucher) {
         console.log(`[gather.js]: 🎫 Validating job voucher for ${character.name}`);
-        const voucherCheck = await validateJobVoucher(character, job, 'GATHERING');
+        voucherCheck = await validateJobVoucher(character, job, 'GATHERING');
 
         if (voucherCheck.skipVoucher) {
           console.log(`[gather.js]: ✅ ${character.name} already has job "${job}" - skipping voucher`);
