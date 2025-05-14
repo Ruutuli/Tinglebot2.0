@@ -42,6 +42,7 @@ const {
  getSheetIdByTitle,
  readSheetData,
  writeSheetData,
+ safeAppendDataToSheet,
 } = require("../utils/googleSheetsUtils");
 
 const generalCategories = require("../models/GeneralItemCategories");

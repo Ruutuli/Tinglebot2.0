@@ -1147,525 +1147,6 @@ if (quantity <= 0) {
  }
 }
 
-// ------------------- Trade Session Management -------------------
-async function createTradeSession(initiator, target, items) {
-  const tradeId = generateUniqueId('T');
-  const formattedInitiatorItems = await Promise.all(items.map(async item => {
-    const emoji = await getItemEmoji(item.name);
-    return {
-      name: item.name,
-      quantity: item.quantity,
-      emoji: emoji
-    };
-  }));
-  const tradeData = {
-    initiator: {
-      userId: initiator.userId,
-      characterName: initiator.name,
-      items: formattedInitiatorItems
-    },
-    target: {
-      userId: target.userId,
-      characterName: target.name,
-      items: []
-    },
-    status: 'pending',
-    createdAt: new Date(),
-    initiatorConfirmed: false,
-    targetConfirmed: false,
-    messageId: null,
-    channelId: null
-  };
-  const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
-  await TempData.create({ key: tradeId, type: 'trade', data: tradeData, expiresAt });
-  console.log(`[trade.js]: ✅ Trade session created: ${tradeId}`);
-  return tradeId;
-}
-
-async function updateTradeSession(tradeId, targetItems) {
-  const formattedTargetItems = await Promise.all(targetItems.map(async item => {
-    const emoji = await getItemEmoji(item.name);
-    return {
-      name: item.name,
-      quantity: item.quantity,
-      emoji: emoji
-    };
-  }));
-  await TempData.findOneAndUpdate(
-    { key: tradeId, type: 'trade' },
-    { $set: { 'data.target.items': formattedTargetItems } }
-  );
-  console.log(`[trade.js]: 🔄 Trade session updated: ${tradeId}`);
-  const tradeAfter = await TempData.findByTypeAndKey('trade', tradeId);
-  return tradeAfter.data;
-}
-
-async function handleTrade(interaction) {
-  const characterName = interaction.options.getString("fromcharacter");
-  const item1 = interaction.options.getString("item1");
-  const quantity1 = interaction.options.getInteger("quantity1");
-  const item2 = interaction.options.getString("item2");
-  const quantity2 = interaction.options.getInteger("quantity2") || 0;
-  const item3 = interaction.options.getString("item3");
-  const quantity3 = interaction.options.getInteger("quantity3") || 0;
-  const tradingWithName = interaction.options.getString("tocharacter");
-  const tradeId = interaction.options.getString("tradeid");
-  const userId = interaction.user.id;
-
-  try {
-    await interaction.deferReply({ ephemeral: false });
-
-    // ------------------- Validate Trade Quantities -------------------
-    const itemArray = [
-      { name: item1, quantity: quantity1 },
-      { name: item2, quantity: quantity2 },
-      { name: item3, quantity: quantity3 },
-    ].filter((item) => item.name);
-
-    // Ensure all traded item quantities are positive integers
-    for (const { quantity } of itemArray) {
-      if (quantity <= 0) {
-        await interaction.editReply({
-          content: `❌ You must trade a **positive quantity** of items. Negative numbers are not allowed.`,
-          ephemeral: true,
-        });
-        return;
-      }
-    }
-
-    const fromCharacter = await fetchCharacterByNameAndUserId(
-      characterName,
-      userId
-    );
-    if (!fromCharacter) {
-      await interaction.editReply({
-        content: `❌ Character \`${characterName}\` not found or does not belong to you.`,
-      });
-      return;
-    }
-
-    const toCharacter = await fetchCharacterByName(tradingWithName);
-    if (!toCharacter || toCharacter.userId === userId) {
-      await interaction.editReply({
-        content: `❌ Character \`${tradingWithName}\` not found or belongs to you.`,
-      });
-      return;
-    }
-
-    // ------------------- Check Inventory Sync for Both Characters -------------------
-    try {
-      await checkInventorySync(fromCharacter);
-      await checkInventorySync(toCharacter);
-    } catch (error) {
-      await interaction.editReply({
-        content: error.message,
-        ephemeral: true
-      });
-      return;
-    }
-
-    if (tradeId) {
-      // ------------------- Handle Trade Completion -------------------
-      try {
-        console.log(`[trade.js]: 🔄 Processing trade ${tradeId}`);
-        const trade = await TempData.findByTypeAndKey('trade', tradeId);
-        if (!trade) {
-          console.error(`[trade.js]: ❌ Trade ${tradeId} not found`);
-          await interaction.editReply({
-            content: `❌ Invalid or expired trade ID.`,
-            ephemeral: true,
-          });
-          return;
-        }
-
-        // Check if trade has expired
-        if (new Date() > trade.expiresAt) {
-          console.log(`[trade.js]: ⚠️ Trade ${tradeId} expired`);
-          await interaction.editReply({
-            content: `❌ This trade has expired. Please initiate a new trade.`,
-            ephemeral: true,
-          });
-          await TempData.deleteOne({ _id: trade._id });
-          return;
-        }
-
-        const tradeData = trade.data;
-
-        // Verify user is part of the trade
-        if (tradeData.initiator.userId !== userId && tradeData.target.userId !== userId) {
-          console.error(`[trade.js]: ❌ User ${userId} not part of trade ${tradeId}`);
-          await interaction.editReply({
-            content: `❌ You are not part of this trade.`,
-            ephemeral: true,
-          });
-          return;
-        }
-
-        // Check if user has already confirmed
-        if ((tradeData.initiator.userId === userId && tradeData.initiatorConfirmed) || 
-            (tradeData.target.userId === userId && tradeData.targetConfirmed)) {
-          console.error(`[trade.js]: ❌ User ${userId} already confirmed trade ${tradeId}`);
-          await interaction.editReply({
-            content: `❌ You have already confirmed this trade.`,
-            ephemeral: true,
-          });
-          return;
-        }
-
-        // Update trade with target's items
-        if (tradeData.target.userId === userId) {
-          await updateTradeSession(tradeId, itemArray);
-        }
-        // After updateTradeSession, fetch the latest trade document
-        let latestTrade = await TempData.findByTypeAndKey('trade', tradeId);
-        let latestTradeData = latestTrade.data;
-        // Set the confirmation flag for this user
-        if (latestTradeData.initiator.userId === userId) {
-          latestTradeData.initiatorConfirmed = true;
-        } else if (latestTradeData.target.userId === userId) {
-          latestTradeData.targetConfirmed = true;
-        }
-        latestTrade.data = latestTradeData;
-        latestTrade.markModified('data');
-        await latestTrade.save();
-        // Always re-fetch the latest trade data after confirmation
-        const updatedTrade = await TempData.findByTypeAndKey('trade', tradeId);
-        console.log(`[trade.js]: 📦 Updated trade data after confirmation:`, JSON.stringify(updatedTrade.data, null, 2));
-
-        // If both users have confirmed, execute the trade
-        if (updatedTrade.data.initiatorConfirmed && updatedTrade.data.targetConfirmed) {
-          console.log(`[trade.js]: ✅ Both parties confirmed, executing trade`);
-          // Execute trade
-          await executeTrade(updatedTrade.data);
-          await TempData.deleteOne({ _id: updatedTrade._id });
-          
-          // Update the original trade message if it exists
-          if (updatedTrade.data.messageId && updatedTrade.data.channelId) {
-            try {
-              const channel = await interaction.client.channels.fetch(updatedTrade.data.channelId);
-              const message = await channel.messages.fetch(updatedTrade.data.messageId);
-              const tradeEmbed = await createTradeEmbed(
-                updatedTrade.data.initiator.characterName,
-                updatedTrade.data.target.characterName,
-                updatedTrade.data.initiator.items,
-                updatedTrade.data.target.items,
-                message.url,
-                fromCharacter.icon || "",
-                toCharacter.icon || ""
-              );
-              tradeEmbed.setDescription(`✅ Trade between **${updatedTrade.data.initiator.characterName}** and **${updatedTrade.data.target.characterName}** has been completed!`);
-              await message.edit({ embeds: [tradeEmbed], components: [] });
-              console.log(`[trade.js]: ✅ Final trade message updated successfully`);
-            } catch (error) {
-              console.error(`[trade.js]: ❌ Error updating final trade message:`, error);
-            }
-          }
-          
-          await interaction.editReply({
-            content: `✅ Trade completed successfully.`,
-            ephemeral: true,
-          });
-        } else {
-          // Update the original trade message if it exists
-          if (updatedTrade.data.messageId && updatedTrade.data.channelId) {
-            try {
-              const channel = await interaction.client.channels.fetch(updatedTrade.data.channelId);
-              const message = await channel.messages.fetch(updatedTrade.data.messageId);
-              const tradeEmbed = await createTradeEmbed(
-                updatedTrade.data.initiator.characterName,
-                updatedTrade.data.target.characterName,
-                updatedTrade.data.initiator.items,
-                updatedTrade.data.target.items,
-                message.url,
-                fromCharacter.icon || "",
-                toCharacter.icon || ""
-              );
-              tradeEmbed.setDescription(
-                `🔃 Trade Status:\n` +
-                `${updatedTrade.data.initiatorConfirmed ? '✅' : '⏳'} ${updatedTrade.data.initiator.characterName} confirmed\n` +
-                `${updatedTrade.data.targetConfirmed ? '✅' : '⏳'} ${updatedTrade.data.target.characterName} confirmed\n\n` +
-                `<@${updatedTrade.data.initiator.userId}>, please react with ✅ to confirm the trade!`
-              );
-              await message.edit({ embeds: [tradeEmbed] });
-              console.log(`[trade.js]: ✅ Trade status message updated successfully`);
-            } catch (error) {
-              console.error(`[trade.js]: ❌ Error updating trade status message:`, error);
-            }
-          }
-          
-          await interaction.editReply({
-            content: `**Trade confirmed!** <@${updatedTrade.data.initiator.userId}>, please react to the trade post with ✅ to finalize the trade.`,
-            ephemeral: true,
-          });
-        }
-      } catch (error) {
-        console.error(`[trade.js]: ❌ Error handling trade completion:`, error);
-        await interaction.editReply({
-          content: `❌ An error occurred while processing the trade.`,
-          ephemeral: true,
-        });
-      }
-    } else {
-      // ------------------- Handle Trade Initiation -------------------
-      try {
-        // Validate items and quantities
-        const characterInventoryCollection = await getCharacterInventoryCollection(
-          fromCharacter.name
-        );
-        for (let item of itemArray) {
-          const itemInventory = await characterInventoryCollection.findOne({
-            itemName: { $regex: new RegExp(`^${item.name}$`, "i") },
-          });
-          if (!itemInventory || itemInventory.quantity < item.quantity) {
-            await interaction.editReply({
-              content: `❌ \`${characterName}\` does not have enough \`${
-                item.name
-              } - QTY:${itemInventory ? itemInventory.quantity : 0}\` to trade.`,
-            });
-            return;
-          }
-        }
-
-        // Create trade session
-        const tradeId = await createTradeSession(fromCharacter, toCharacter, itemArray);
-
-        // Create initial trade embed
-        const formattedItems = await Promise.all(itemArray.map(async item => ({
-          name: item.name,
-          quantity: item.quantity,
-          emoji: await getItemEmoji(item.name)
-        })));
-
-        const tradeEmbed = await createTradeEmbed(
-          fromCharacter.name,
-          toCharacter.name,
-          formattedItems,
-          [],
-          interaction.url,
-          fromCharacter.icon || "",
-          toCharacter.icon || ""
-        );
-
-        // Send the initial trade message and capture the response
-        const tradeMessage = await interaction.editReply({
-          content: `🔃 <@${toCharacter.userId}>, use the /economy trade command with the following trade ID to complete the trade:\n\n\`\`\`${tradeId}\`\`\``,
-          embeds: [tradeEmbed],
-        });
-        console.log(`[trade.js]: ✅ Trade message sent: ${tradeMessage.id}`);
-        // Update the trade session with the message ID and channel ID
-        await TempData.findOneAndUpdate(
-          { key: tradeId, type: 'trade' },
-          { $set: { 'data.messageId': tradeMessage.id, 'data.channelId': interaction.channelId } }
-        );
-        // Add ✅ reaction and set up collector
-        try {
-          await tradeMessage.react('✅');
-          const filter = (reaction, user) => {
-            return reaction.emoji.name === '✅' &&
-              [fromCharacter.userId, toCharacter.userId].includes(user.id);
-          };
-          const collector = tradeMessage.createReactionCollector({ filter, time: 15 * 60 * 1000 });
-          const confirmed = new Set();
-          collector.on('collect', async (reaction, user) => {
-            try {
-              // Check if user has already confirmed
-              let latestTrade = await TempData.findByTypeAndKey('trade', tradeId);
-              if ((latestTrade.data.initiator.userId === user.id && latestTrade.data.initiatorConfirmed) || 
-                  (latestTrade.data.target.userId === user.id && latestTrade.data.targetConfirmed)) {
-                console.log(`[trade.js]: ⚠️ User ${user.id} already confirmed trade ${tradeId}`);
-                return;
-              }
-
-              confirmed.add(user.id);
-              // Mark confirmation in DB
-              if (String(latestTrade.data.initiator.userId) === String(user.id)) {
-                latestTrade.data.initiatorConfirmed = true;
-              } else if (String(latestTrade.data.target.userId) === String(user.id)) {
-                latestTrade.data.targetConfirmed = true;
-              }
-              latestTrade.markModified('data');
-              await latestTrade.save();
-
-              // Always re-fetch the latest trade data after saving
-              latestTrade = await TempData.findByTypeAndKey('trade', tradeId);
-              console.log(`[trade.js]: ✅ ${user.tag} (${user.id}) reacted to trade ${tradeId}`);
-              console.log(`[trade.js]: 🔄 Trade confirmation status: Initiator: ${latestTrade.data.initiatorConfirmed ? '✅' : '❌'}, Target: ${latestTrade.data.targetConfirmed ? '✅' : '❌'}`);
-
-              // Update embed with current confirmation status
-              const statusEmbed = await createTradeEmbed(
-                latestTrade.data.initiator.characterName,
-                latestTrade.data.target.characterName,
-                latestTrade.data.initiator.items,
-                latestTrade.data.target.items,
-                tradeMessage.url,
-                fromCharacter.icon || "",
-                toCharacter.icon || ""
-              );
-              statusEmbed.setDescription(
-                `🔃 Trade Status:\n` +
-                `${latestTrade.data.initiatorConfirmed ? '✅' : '⏳'} ${latestTrade.data.initiator.characterName} confirmed\n` +
-                `${latestTrade.data.targetConfirmed ? '✅' : '⏳'} ${latestTrade.data.target.characterName} confirmed\n\n` +
-                `<@${latestTrade.data.initiator.userId}>, please react with ✅ to confirm the trade!`
-              );
-              await tradeMessage.edit({ embeds: [statusEmbed] });
-
-              // If both confirmed, complete trade
-              if (latestTrade.data.initiatorConfirmed && latestTrade.data.targetConfirmed) {
-                collector.stop('both_confirmed');
-                await executeTrade(latestTrade.data);
-                await TempData.deleteOne({ _id: latestTrade._id });
-                const finalEmbed = await createTradeEmbed(
-                  latestTrade.data.initiator.characterName,
-                  latestTrade.data.target.characterName,
-                  latestTrade.data.initiator.items,
-                  latestTrade.data.target.items,
-                  tradeMessage.url,
-                  fromCharacter.icon || "",
-                  toCharacter.icon || ""
-                );
-                finalEmbed.setDescription(`✅ Trade completed successfully!`);
-                await tradeMessage.edit({ content: null, embeds: [finalEmbed], components: [] });
-                console.log(`[trade.js]: ✅ Trade completed: ${tradeId}`);
-              }
-            } catch (error) {
-              console.error(`[trade.js]: ❌ Error processing reaction:`, error);
-            }
-          });
-
-          collector.on('end', (collected, reason) => {
-            if (reason !== 'both_confirmed') {
-              tradeMessage.reactions.removeAll().catch(() => {});
-            }
-          });
-        } catch (err) {
-          console.error(`[trade.js]: ❌ Error setting up reaction collector: ${err.message}`);
-        }
-      } catch (error) {
-        console.error(`[trade.js]: ❌ Error initiating trade:`, error);
-        await interaction.editReply({
-          content: `❌ An error occurred while initiating the trade.`,
-          ephemeral: true,
-        });
-      }
-    }
-  } catch (error) {
-    handleError(error, "trade.js");
-    console.error(`[trade.js]: ❌ Error executing trade command:`, error);
-    await interaction.editReply({
-      content: "❌ An error occurred while trying to execute the trade.",
-    });
-  }
-}
-
-// ------------------- Execute Trade -------------------
-async function executeTrade(tradeData) {
-  try {
-    const { initiator, target } = tradeData;
-    // Fetch full character docs
-    const initiatorChar = await fetchCharacterByNameAndUserId(initiator.characterName, initiator.userId);
-    const targetChar = await fetchCharacterByNameAndUserId(target.characterName, target.userId);
-    if (!initiatorChar || !targetChar) {
-      console.error('[trade.js]: ❌ Character not found for trade');
-      throw new Error('Character not found for trade execution');
-    }
-
-    const uniqueSyncId = uuidv4();
-
-    // Process initiator's items
-    for (const item of initiator.items) {
-      const itemDetails = await ItemModel.findOne({
-        itemName: new RegExp(`^${item.name}$`, "i"),
-      }).exec();
-      const category = itemDetails?.category.join(", ") || "";
-      const type = itemDetails?.type.join(", ") || "";
-      const subtype = itemDetails?.subtype.join(", ") || "";
-
-      // Create trade data for logging
-      const tradeData = {
-        characterId: initiatorChar._id,
-        itemName: item.name,
-        quantity: -item.quantity,
-        category,
-        type,
-        subtype,
-        obtain: `Trade to ${target.characterName}`,
-        date: new Date(),
-        synced: uniqueSyncId,
-        characterName: initiatorChar.name
-      };
-
-      // Remove from initiator and log
-      await syncToInventoryDatabase(initiatorChar, tradeData);
-
-      // Create trade data for target
-      const targetTradeData = {
-        characterId: targetChar._id,
-        itemName: item.name,
-        quantity: item.quantity,
-        category,
-        type,
-        subtype,
-        obtain: `Trade from ${initiator.characterName}`,
-        date: new Date(),
-        synced: uniqueSyncId,
-        characterName: targetChar.name
-      };
-
-      // Add to target and log
-      await syncToInventoryDatabase(targetChar, targetTradeData);
-    }
-
-    // Process target's items
-    for (const item of target.items) {
-      const itemDetails = await ItemModel.findOne({
-        itemName: new RegExp(`^${item.name}$`, "i"),
-      }).exec();
-      const category = itemDetails?.category.join(", ") || "";
-      const type = itemDetails?.type.join(", ") || "";
-      const subtype = itemDetails?.subtype.join(", ") || "";
-
-      // Create trade data for logging
-      const tradeData = {
-        characterId: targetChar._id,
-        itemName: item.name,
-        quantity: -item.quantity,
-        category,
-        type,
-        subtype,
-        obtain: `Trade to ${initiator.characterName}`,
-        date: new Date(),
-        synced: uniqueSyncId,
-        characterName: targetChar.name
-      };
-
-      // Remove from target and log
-      await syncToInventoryDatabase(targetChar, tradeData);
-
-      // Create trade data for initiator
-      const initiatorTradeData = {
-        characterId: initiatorChar._id,
-        itemName: item.name,
-        quantity: item.quantity,
-        category,
-        type,
-        subtype,
-        obtain: `Trade from ${target.characterName}`,
-        date: new Date(),
-        synced: uniqueSyncId,
-        characterName: initiatorChar.name
-      };
-
-      // Add to initiator and log
-      await syncToInventoryDatabase(initiatorChar, initiatorTradeData);
-    }
-
-    console.log(`[trade.js]: ✅ Trade completed between ${initiator.characterName} and ${target.characterName}`);
-    return true;
-  } catch (error) {
-    console.error(`[trade.js]: ❌ Trade failed: ${error.message}`);
-    throw error;
-  }
-}
 
 async function handleTransfer(interaction) {
  await interaction.deferReply();
@@ -1902,4 +1383,505 @@ for (const { name } of items) {
    "❌ An error occurred while trying to transfer the items."
   );
  }
+}
+
+// ============================================================================
+// ------------------- Trade Interaction Handler -------------------
+// Handles parsing of interaction options, item validation, and character verification.
+// ============================================================================
+
+// ------------------- Trade Session Management -------------------
+// Handles creation, updates, and execution of trade sessions
+async function createTradeSession(initiator, target, items) {
+  const tradeId = generateUniqueId('T');
+  const formattedInitiatorItems = await Promise.all(items.map(async item => ({
+    name: item.name,
+    quantity: item.quantity,
+    emoji: await getItemEmoji(item.name)
+  })));
+
+  const tradeData = {
+    initiator: {
+      userId: initiator.userId,
+      characterName: initiator.name,
+      items: formattedInitiatorItems
+    },
+    target: {
+      userId: target.userId,
+      characterName: target.name,
+      items: []
+    },
+    status: 'pending',
+    createdAt: new Date(),
+    initiatorConfirmed: false,
+    targetConfirmed: false,
+    messageId: null,
+    channelId: null
+  };
+
+  const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+  await TempData.create({ key: tradeId, type: 'trade', data: tradeData, expiresAt });
+  console.log(`[trade.js]: ✅ Trade session created: ${tradeId}`);
+  return tradeId;
+}
+
+// ------------------- Trade Session Update -------------------
+async function updateTradeSession(tradeId, targetItems) {
+  const formattedTargetItems = await Promise.all(targetItems.map(async item => ({
+    name: item.name,
+    quantity: item.quantity,
+    emoji: await getItemEmoji(item.name)
+  })));
+
+  await TempData.findOneAndUpdate(
+    { key: tradeId, type: 'trade' },
+    { $set: { 'data.target.items': formattedTargetItems } }
+  );
+  console.log(`[trade.js]: 🔄 Trade session updated: ${tradeId}`);
+  return (await TempData.findByTypeAndKey('trade', tradeId)).data;
+}
+
+// ------------------- Trade Confirmation -------------------
+async function confirmTrade(tradeId, userId) {
+  const trade = await TempData.findByTypeAndKey('trade', tradeId);
+  if (!trade) {
+    throw new Error('Trade not found');
+  }
+
+  const tradeData = trade.data;
+  if (tradeData.initiator.userId === userId) {
+    tradeData.initiatorConfirmed = true;
+  } else if (tradeData.target.userId === userId) {
+    tradeData.targetConfirmed = true;
+  }
+
+  trade.data = tradeData;
+  trade.markModified('data');
+  await trade.save();
+  return tradeData;
+}
+
+// ------------------- Trade Execution -------------------
+async function executeTrade(tradeData) {
+  const { initiator, target } = tradeData;
+  const initiatorChar = await fetchCharacterByNameAndUserId(initiator.characterName, initiator.userId);
+  const targetChar = await fetchCharacterByNameAndUserId(target.characterName, target.userId);
+
+  if (!initiatorChar || !targetChar) {
+    throw new Error('Character not found for trade execution');
+  }
+
+  const uniqueSyncId = uuidv4();
+
+  // Process items for both parties
+  await Promise.all([
+    processTradeItems(initiatorChar, targetChar, initiator.items, uniqueSyncId),
+    processTradeItems(targetChar, initiatorChar, target.items, uniqueSyncId)
+  ]);
+
+  console.log(`[trade.js]: ✅ Trade completed between ${initiator.characterName} and ${target.characterName}`);
+  return true;
+}
+
+// ------------------- Trade Item Processing -------------------
+async function processTradeItems(fromChar, toChar, items, uniqueSyncId) {
+  for (const item of items) {
+    const itemDetails = await ItemModel.findOne({
+      itemName: new RegExp(`^${item.name}$`, "i"),
+    }).exec();
+
+    const category = itemDetails?.category.join(", ") || "";
+    const type = itemDetails?.type.join(", ") || "";
+    const subtype = itemDetails?.subtype.join(", ") || "";
+
+    // Remove from sender
+    const removeData = {
+      characterId: fromChar._id,
+      itemName: item.name,
+      quantity: -item.quantity,
+      category,
+      type,
+      subtype,
+      obtain: `Trade to ${toChar.name}`,
+      date: new Date(),
+      synced: uniqueSyncId,
+      characterName: fromChar.name
+    };
+    await syncToInventoryDatabase(fromChar, removeData);
+
+    // Add to receiver
+    const addData = {
+      characterId: toChar._id,
+      itemName: item.name,
+      quantity: item.quantity,
+      category,
+      type,
+      subtype,
+      obtain: `Trade from ${fromChar.name}`,
+      date: new Date(),
+      synced: uniqueSyncId,
+      characterName: toChar.name
+    };
+    await syncToInventoryDatabase(toChar, addData);
+  }
+}
+
+// ------------------- Trade Message Management -------------------
+async function updateTradeMessage(message, tradeData, fromCharacter, toCharacter) {
+  const tradeEmbed = await createTradeEmbed(
+    tradeData.initiator.characterName,
+    tradeData.target.characterName,
+    tradeData.initiator.items,
+    tradeData.target.items,
+    message.url,
+    fromCharacter.icon || "",
+    toCharacter.icon || ""
+  );
+
+  const statusDescription = 
+    `🔃 Trade Status:\n` +
+    `${tradeData.initiatorConfirmed ? '✅' : '⏳'} ${tradeData.initiator.characterName} confirmed\n` +
+    `${tradeData.targetConfirmed ? '✅' : '⏳'} ${tradeData.target.characterName} confirmed\n\n` +
+    `<@${tradeData.initiator.userId}>, please react with ✅ to confirm the trade!`;
+
+  tradeEmbed.setDescription(statusDescription);
+  await message.edit({ embeds: [tradeEmbed] });
+}
+
+// ------------------- Trade Validation -------------------
+async function validateTradeItems(character, items) {
+  const characterInventoryCollection = await getCharacterInventoryCollection(character.name);
+  for (const item of items) {
+    const itemInventory = await characterInventoryCollection.findOne({
+      itemName: { $regex: new RegExp(`^${item.name}$`, "i") },
+    });
+    if (!itemInventory || itemInventory.quantity < item.quantity) {
+      throw new Error(`❌ \`${character.name}\` does not have enough \`${item.name} - QTY:${itemInventory ? itemInventory.quantity : 0}\` to trade.`);
+    }
+  }
+}
+
+// ------------------- Function: handleTrade -------------------
+// Main handler for initiating or completing a trade session.
+async function handleTrade(interaction) {
+  const characterName = interaction.options.getString("fromcharacter");
+  const item1 = interaction.options.getString("item1");
+  const quantity1 = interaction.options.getInteger("quantity1");
+  const item2 = interaction.options.getString("item2");
+  const quantity2 = interaction.options.getInteger("quantity2") || 0;
+  const item3 = interaction.options.getString("item3");
+  const quantity3 = interaction.options.getInteger("quantity3") || 0;
+  const tradingWithName = interaction.options.getString("tocharacter");
+  const tradeId = interaction.options.getString("tradeid");
+  const userId = interaction.user.id;
+
+  try {
+    await interaction.deferReply({ ephemeral: false });
+
+    // ------------------- Validate Trade Quantities -------------------
+    const itemArray = [
+      { name: item1, quantity: quantity1 },
+      { name: item2, quantity: quantity2 },
+      { name: item3, quantity: quantity3 },
+    ].filter((item) => item.name);
+
+    for (const { quantity } of itemArray) {
+      if (quantity <= 0) {
+        await interaction.editReply({
+          content: "❌ You must trade a **positive quantity** of items. Negative numbers are not allowed.",
+          ephemeral: true,
+        });
+        return;
+      }
+    }
+
+    // ------------------- Validate Characters -------------------
+    const fromCharacter = await fetchCharacterByNameAndUserId(characterName, userId);
+    if (!fromCharacter) {
+      await interaction.editReply({
+        content: `❌ Character \`${characterName}\` not found or does not belong to you.`,
+        ephemeral: true,
+      });
+      return;
+    }
+
+    const toCharacter = await fetchCharacterByName(tradingWithName);
+    if (!toCharacter || toCharacter.userId === userId) {
+      await interaction.editReply({
+        content: `❌ Character \`${tradingWithName}\` not found or belongs to you.`,
+        ephemeral: true,
+      });
+      return;
+    }
+
+    // ------------------- Check Inventory Sync -------------------
+    try {
+      await checkInventorySync(fromCharacter);
+      await checkInventorySync(toCharacter);
+    } catch (error) {
+      await interaction.editReply({
+        content: error.message,
+        ephemeral: true,
+      });
+      return;
+    }
+
+    if (tradeId) {
+      // ------------------- Handle Trade Completion -------------------
+      try {
+        console.log(`[trade.js]: 🔄 Processing trade ${tradeId}`);
+        const trade = await TempData.findByTypeAndKey('trade', tradeId);
+        if (!trade) {
+          console.error(`[trade.js]: ❌ Trade ${tradeId} not found`);
+          await interaction.editReply({
+            content: `❌ Invalid or expired trade ID.`,
+            ephemeral: true,
+          });
+          return;
+        }
+
+        // Check if trade has expired
+        if (new Date() > trade.expiresAt) {
+          console.log(`[trade.js]: ⚠️ Trade ${tradeId} expired`);
+          await interaction.editReply({
+            content: `❌ This trade has expired. Please initiate a new trade.`,
+            ephemeral: true,
+          });
+          await TempData.deleteOne({ _id: trade._id });
+          return;
+        }
+
+        const tradeData = trade.data;
+
+        // Verify user is part of the trade
+        if (tradeData.initiator.userId !== userId && tradeData.target.userId !== userId) {
+          console.error(`[trade.js]: ❌ User ${userId} not part of trade ${tradeId}`);
+          await interaction.editReply({
+            content: `❌ You are not part of this trade.`,
+            ephemeral: true,
+          });
+          return;
+        }
+
+        // Check if user has already confirmed
+        if ((tradeData.initiator.userId === userId && tradeData.initiatorConfirmed) || 
+            (tradeData.target.userId === userId && tradeData.targetConfirmed)) {
+          console.error(`[trade.js]: ❌ User ${userId} already confirmed trade ${tradeId}`);
+          await interaction.editReply({
+            content: `❌ You have already confirmed this trade.`,
+            ephemeral: true,
+          });
+          return;
+        }
+
+        // Update trade with target's items if target is confirming
+        if (tradeData.target.userId === userId) {
+          await updateTradeSession(tradeId, itemArray);
+        }
+
+        // Confirm trade for this user
+        const updatedTradeData = await confirmTrade(tradeId, userId);
+        console.log(`[trade.js]: 📦 Updated trade data after confirmation:`, JSON.stringify(updatedTradeData, null, 2));
+
+        // If both users have confirmed, execute the trade
+        if (updatedTradeData.initiatorConfirmed && updatedTradeData.targetConfirmed) {
+          console.log(`[trade.js]: ✅ Both parties confirmed, executing trade`);
+          
+          // Send confirmation message
+          const tradeConfirmMessage = await interaction.channel.send({
+            content: `**Trade confirmed!** <@${updatedTradeData.initiator.userId}>, please react to the trade post with ✅ to finalize the trade.`
+          });
+          console.log(`[trade.js]: ✅ Trade confirmation message sent with ID: ${tradeConfirmMessage.id}`);
+          
+          // Update trade data with confirmation message
+          await TempData.findOneAndUpdate(
+            { key: tradeId, type: 'trade' },
+            { 
+              $set: { 
+                'data.confirmMessageId': tradeConfirmMessage.id,
+                'data.confirmChannelId': interaction.channelId 
+              } 
+            }
+          );
+
+          // Execute trade
+          await executeTrade(updatedTradeData);
+          
+          // Clean up confirmation message
+          try {
+            await tradeConfirmMessage.delete();
+            console.log(`[trade.js]: ✅ Confirmation message deleted successfully`);
+          } catch (error) {
+            console.error(`[trade.js]: ❌ Error deleting confirmation message:`, error);
+          }
+
+          await TempData.deleteOne({ _id: trade._id });
+          
+          // Update original trade message
+          if (updatedTradeData.messageId && updatedTradeData.channelId) {
+            try {
+              const channel = await interaction.client.channels.fetch(updatedTradeData.channelId);
+              const message = await channel.messages.fetch(updatedTradeData.messageId);
+              await updateTradeMessage(message, updatedTradeData, fromCharacter, toCharacter);
+              console.log(`[trade.js]: ✅ Final trade message updated successfully`);
+            } catch (error) {
+              console.error(`[trade.js]: ❌ Error updating final trade message:`, error);
+            }
+          }
+          
+          await interaction.editReply({
+            content: `✅ Trade completed successfully.`,
+            ephemeral: true,
+          });
+        } else {
+          // Update trade status message
+          if (updatedTradeData.messageId && updatedTradeData.channelId) {
+            try {
+              const channel = await interaction.client.channels.fetch(updatedTradeData.channelId);
+              const message = await channel.messages.fetch(updatedTradeData.messageId);
+              await updateTradeMessage(message, updatedTradeData, fromCharacter, toCharacter);
+              console.log(`[trade.js]: ✅ Trade status message updated successfully`);
+            } catch (error) {
+              console.error(`[trade.js]: ❌ Error updating trade status message:`, error);
+            }
+          }
+          
+          await interaction.editReply({
+            content: `**Trade confirmed!** <@${updatedTradeData.initiator.userId}>, please react to the trade post with ✅ to finalize the trade.`,
+            ephemeral: true,
+          });
+        }
+
+        // Clean up confirmation message if it exists
+        if (updatedTradeData.confirmMessageId && updatedTradeData.channelId) {
+          try {
+            const channel = await interaction.client.channels.fetch(updatedTradeData.channelId);
+            const confirmMsg = await channel.messages.fetch(updatedTradeData.confirmMessageId);
+            await confirmMsg.delete();
+            console.log(`[trade.js]: ✅ Trade confirmation message deleted successfully`);
+          } catch (error) {
+            console.error(`[trade.js]: ❌ Error deleting trade confirm message:`, error);
+          }
+        }
+      } catch (error) {
+        console.error(`[trade.js]: ❌ Error handling trade completion:`, error);
+        await interaction.editReply({
+          content: `❌ An error occurred while processing the trade.`,
+          ephemeral: true,
+        });
+      }
+    } else {
+      // ------------------- Handle Trade Initiation -------------------
+      try {
+        // Validate items and quantities
+        await validateTradeItems(fromCharacter, itemArray);
+
+        // Create trade session
+        const tradeId = await createTradeSession(fromCharacter, toCharacter, itemArray);
+
+        // Create and send initial trade message
+        const tradeEmbed = await createTradeEmbed(
+          fromCharacter.name,
+          toCharacter.name,
+          itemArray,
+          [],
+          interaction.url,
+          fromCharacter.icon || "",
+          toCharacter.icon || ""
+        );
+
+        const tradeMessage = await interaction.editReply({
+          content: `🔃 <@${toCharacter.userId}>, use the </economy trade:1372262090450141196> command with the following trade ID to complete the trade:\n\n\`\`\`${tradeId}\`\`\``,
+          embeds: [tradeEmbed],
+        });
+
+        // Update trade session with message info
+        await TempData.findOneAndUpdate(
+          { key: tradeId, type: 'trade' },
+          { $set: { 'data.messageId': tradeMessage.id, 'data.channelId': interaction.channelId } }
+        );
+
+        // Set up reaction collector
+        try {
+          await tradeMessage.react('✅');
+          const filter = (reaction, user) => {
+            return reaction.emoji.name === '✅' &&
+              [fromCharacter.userId, toCharacter.userId].includes(user.id);
+          };
+
+          const collector = tradeMessage.createReactionCollector({ filter, time: 15 * 60 * 1000 });
+          collector.on('collect', async (reaction, user) => {
+            try {
+              const latestTrade = await TempData.findByTypeAndKey('trade', tradeId);
+              if ((latestTrade.data.initiator.userId === user.id && latestTrade.data.initiatorConfirmed) || 
+                  (latestTrade.data.target.userId === user.id && latestTrade.data.targetConfirmed)) {
+                console.log(`[trade.js]: ⚠️ User ${user.id} already confirmed trade ${tradeId}`);
+                return;
+              }
+
+              const updatedTradeData = await confirmTrade(tradeId, user.id);
+              console.log(`[trade.js]: ✅ ${user.tag} (${user.id}) reacted to trade ${tradeId}`);
+
+              // Update trade message
+              await updateTradeMessage(tradeMessage, updatedTradeData, fromCharacter, toCharacter);
+
+              // If both confirmed, complete trade
+              if (updatedTradeData.initiatorConfirmed && updatedTradeData.targetConfirmed) {
+                collector.stop('both_confirmed');
+                await executeTrade(updatedTradeData);
+                await TempData.deleteOne({ _id: latestTrade._id });
+                
+                const finalEmbed = await createTradeEmbed(
+                  updatedTradeData.initiator.characterName,
+                  updatedTradeData.target.characterName,
+                  updatedTradeData.initiator.items,
+                  updatedTradeData.target.items,
+                  tradeMessage.url,
+                  fromCharacter.icon || "",
+                  toCharacter.icon || ""
+                );
+                finalEmbed.setDescription(`✅ Trade completed successfully!`);
+                await tradeMessage.edit({ content: null, embeds: [finalEmbed], components: [] });
+                console.log(`[trade.js]: ✅ Trade completed: ${tradeId}`);
+
+                // Clean up confirmation message
+                if (updatedTradeData.confirmMessageId && updatedTradeData.channelId) {
+                  try {
+                    const channel = await interaction.client.channels.fetch(updatedTradeData.channelId);
+                    const confirmMsg = await channel.messages.fetch(updatedTradeData.confirmMessageId);
+                    await confirmMsg.delete();
+                    console.log(`[trade.js]: ✅ Trade confirmation message deleted successfully`);
+                  } catch (error) {
+                    console.error(`[trade.js]: ❌ Error deleting trade confirm message:`, error);
+                  }
+                }
+              }
+            } catch (error) {
+              console.error(`[trade.js]: ❌ Error processing reaction:`, error);
+            }
+          });
+
+          collector.on('end', (collected, reason) => {
+            if (reason !== 'both_confirmed') {
+              tradeMessage.reactions.removeAll().catch(() => {});
+            }
+          });
+        } catch (err) {
+          console.error(`[trade.js]: ❌ Error setting up reaction collector: ${err.message}`);
+        }
+      } catch (error) {
+        console.error(`[trade.js]: ❌ Error initiating trade:`, error);
+        await interaction.editReply({
+          content: `❌ An error occurred while initiating the trade.`,
+          ephemeral: true,
+        });
+      }
+    }
+  } catch (error) {
+    handleError(error, "trade.js");
+    console.error(`[trade.js]: ❌ Error executing trade command:`, error);
+    await interaction.editReply({
+      content: "❌ An error occurred while trying to execute the trade.",
+    });
+  }
 }
