@@ -193,6 +193,18 @@ async function handleAutocomplete(interaction) {
         }
         break;
 
+      // ------------------- Vending Command -------------------
+      case "vending":
+        const vendingSubcommand = interaction.options.getSubcommand();
+        if (vendingSubcommand === "add") {
+          await handleVendingAddAutocomplete(interaction, focusedOption);
+        } else if (vendingSubcommand === "barter") {
+          await handleVendingBarterAutocomplete(interaction, focusedOption);
+        } else if (vendingSubcommand === "view") {
+          await handleVendingViewAutocomplete(interaction, focusedOption);
+        }
+        break;
+
       // ... rest of existing code ...
     }
   } catch (error) {
@@ -2569,7 +2581,21 @@ async function handleVendingAddAutocomplete(interaction, focusedOption) {
     const focusedName = focusedOption.name;
     switch (focusedName) {
       case 'charactername':
-        await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, 'vending');
+        const userId = interaction.user.id;
+        const characters = await fetchCharactersByUserId(userId);
+        
+        // Filter for characters with vending jobs
+        const vendorCharacters = characters.filter(char => {
+          const job = char.job?.toLowerCase();
+          return job === 'shopkeeper' || job === 'merchant';
+        });
+        
+        const choices = vendorCharacters.map(char => ({
+          name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
+          value: char.name
+        }));
+        
+        await respondWithFilteredChoices(interaction, focusedOption, choices);
         break;
       case 'itemname':
         await handleVendorItemAutocomplete(interaction, focusedOption);
@@ -2662,10 +2688,6 @@ async function handleSlotAutocomplete(interaction, focusedOption) {
     const vendCollection = vendingClient.db('vendingInventories').collection(characterName.toLowerCase());
     const items = await vendCollection.find({}).toArray();
     await vendingClient.close();
-
-    // Import Item model for stackable info
-    const { default: mongoose } = await import('mongoose');
-    const ItemModel = mongoose.models.Item || (await import('../models/ItemModel')).default || require('../models/ItemModel');
 
     // Create a map of slot => item info
     const slotMap = new Map();
