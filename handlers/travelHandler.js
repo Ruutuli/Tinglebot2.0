@@ -299,7 +299,17 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
         // Chuchu Special Case
         if (item && /Chuchu/.test(monster.name)) {
           const qty = /Large/.test(monster.name) ? 3 : /Medium/.test(monster.name) ? 2 : 1;
-          item.itemName = `${monster.name.includes('Ice') ? 'White' : monster.name.includes('Fire') ? 'Red' : 'Yellow'} Chuchu Jelly`;
+          let jellyType;
+          if (monster.name.includes('Ice')) {
+            jellyType = 'White Chuchu Jelly';
+          } else if (monster.name.includes('Fire')) {
+            jellyType = 'Red Chuchu Jelly';
+          } else if (monster.name.includes('Electric')) {
+            jellyType = 'Yellow Chuchu Jelly';
+          } else {
+            jellyType = 'Chuchu Jelly';
+          }
+          item.itemName = jellyType;
           item.quantity = qty;
           console.log(`[travelHandler.js]: 🧊 Chuchu special case - ${item.quantity}x ${item.itemName}`);
         } else if (item) {
