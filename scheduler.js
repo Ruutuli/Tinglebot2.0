@@ -6,7 +6,7 @@ const { recoverDailyStamina } = require('./modules/characterStatsModule');
 const { generateVendingStockList, getCurrentVendingStockList, resetPetRollsForAllCharacters } = require('./database/db');
 const { checkMissedRolls, postBlightRollCall } = require('./handlers/blightHandler');
 const {sendBloodMoonAnnouncement, isBloodMoonDay, renameChannels, revertChannelNames} = require('./scripts/bloodmoon');
-const { cleanupExpiredVendingRequests, cleanupExpiredHealingRequests } = require('./utils/storage');
+const { cleanupExpiredEntries, cleanupExpiredHealingRequests } = require('./utils/storage');
 const { authorizeSheets, clearSheetFormatting, writeSheetData } = require('./utils/googleSheetsUtils');
 const { convertToHyruleanDate } = require('./modules/calendarModule');
 const Character = require('./models/CharacterModel');
@@ -268,7 +268,7 @@ function initializeScheduler(client) {
   createCronJob('0 0 * * 0', 'weekly pet rolls reset', resetPetRollsForAllCharacters);
   createCronJob('0 8 * * *', 'request expiration and cleanup', async () => {
     await Promise.all([
-      cleanupExpiredVendingRequests(),
+      cleanupExpiredEntries(),
       cleanupExpiredHealingRequests(),
       checkExpiredRequests(client)
     ]);
