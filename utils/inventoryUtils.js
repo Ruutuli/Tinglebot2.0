@@ -97,9 +97,8 @@ async function syncToInventoryDatabase(character, item, interaction) {
    throw new Error("Database functions not initialized in inventoryUtils");
   }
 
-  // Log sync attempt
-  console.log(`[inventoryUtils.js]: 🔄 Attempting sync for ${character.name} | Item: ${item.itemName} | Qty: ${item.quantity} | Obtain: ${item.obtain}`);
-  console.log(`[inventoryUtils.js]: 📊 Using Google Sheet: ${character.inventory || 'NO INVENTORY LINK'}`);
+  // Log sync attempt with minimal info
+  console.log(`[inventoryUtils.js]: 🔄 Syncing ${item.itemName} (${item.quantity}) for ${character.name}`);
 
   const inventoriesConnection = await dbFunctions.connectToInventories();
   const db = inventoriesConnection.useDb("inventories");
@@ -124,7 +123,6 @@ async function syncToInventoryDatabase(character, item, interaction) {
   const dbDoc = {
     characterId: item.characterId,
     itemId,
-    characterName,
     itemName: item.itemName,
     quantity: item.quantity,
     category,
@@ -147,7 +145,7 @@ async function syncToInventoryDatabase(character, item, interaction) {
   if (item.quantity < 0) {
     // Remove item logic
     if (!existingItem || existingItem.quantity < Math.abs(item.quantity)) {
-      console.error(`[inventoryUtils.js]: ❌ Not enough '${dbDoc.itemName}' to remove from ${character.name}. Have: ${existingItem ? existingItem.quantity : 0}, Tried to remove: ${Math.abs(item.quantity)}`);
+      console.error(`[inventoryUtils.js]: ❌ Not enough ${dbDoc.itemName} for ${character.name}`);
       throw new Error(`Not enough '${dbDoc.itemName}' to remove from inventory.`);
     }
     const newQty = existingItem.quantity + item.quantity; // item.quantity is negative
@@ -156,13 +154,13 @@ async function syncToInventoryDatabase(character, item, interaction) {
         characterId: dbDoc.characterId,
         itemName: dbDoc.itemName,
       });
-      console.log(`[inventoryUtils.js]: 🗑️ Removed '${dbDoc.itemName}' from ${character.name} (quantity is now zero).`);
+      console.log(`[inventoryUtils.js]: 🗑️ Removed ${dbDoc.itemName} from ${character.name}`);
     } else {
       await inventoryCollection.updateOne(
         { characterId: dbDoc.characterId, itemName: dbDoc.itemName },
         { $set: { ...dbDoc, quantity: newQty } }
       );
-      console.log(`[inventoryUtils.js]: ➖ Decremented '${dbDoc.itemName}' for ${character.name}. New quantity: ${newQty}`);
+      console.log(`[inventoryUtils.js]: ➖ ${dbDoc.itemName}: ${newQty} for ${character.name}`);
     }
   } else if (item.quantity > 0) {
     // Add item logic
@@ -172,20 +170,17 @@ async function syncToInventoryDatabase(character, item, interaction) {
         { characterId: dbDoc.characterId, itemName: dbDoc.itemName },
         { $set: { ...dbDoc, quantity: newQty } }
       );
-      console.log(`[inventoryUtils.js]: ➕ Incremented '${dbDoc.itemName}' for ${character.name}. New quantity: ${newQty}`);
+      console.log(`[inventoryUtils.js]: ➕ ${dbDoc.itemName}: ${newQty} for ${character.name}`);
     } else {
       await inventoryCollection.insertOne({ ...dbDoc });
-      console.log(`[inventoryUtils.js]: 🆕 Inserted '${dbDoc.itemName}' for ${character.name}. Quantity: ${dbDoc.quantity}`);
+      console.log(`[inventoryUtils.js]: 🆕 Added ${dbDoc.itemName} (${dbDoc.quantity}) for ${character.name}`);
     }
   } else {
-    console.warn(`[inventoryUtils.js]: ⚠️ Zero quantity transaction for ${character.name} | Item: ${dbDoc.itemName}`);
+    console.warn(`[inventoryUtils.js]: ⚠️ Zero quantity transaction for ${character.name} | ${dbDoc.itemName}`);
   }
 
   // --- Google Sheets Sync: Always append a new row ---
   try {
-    const auth = await authorizeSheets();
-    const spreadsheetId = extractSpreadsheetId(character.inventory);
-    const range = "loggedInventory!A2:M";
     const values = [[
       characterName,
       dbDoc.itemName,
@@ -201,29 +196,17 @@ async function syncToInventoryDatabase(character, item, interaction) {
       formatDateTime(dbDoc.date),
       dbDoc.synced,
     ]];
-    console.log(`[inventoryUtils.js]: 📝 Appending to Google Sheet. Range: ${range}, Values:`, values[0]);
-    const appendResult = await appendSheetData(auth, spreadsheetId, range, values);
-    if (!appendResult) {
-      console.warn(`[inventoryUtils.js]: ⚠️ Google Sheets append returned falsy result for ${character.name} | Range: ${range}`);
-    } else {
-      console.log(`[inventoryUtils.js]: ✅ Google Sheets append result:`, appendResult);
-    }
+    
+    await safeAppendDataToSheet(character.inventory, character, "loggedInventory!A2:M", values);
   } catch (sheetError) {
-    console.error(`[inventoryUtils.js]: ❌ Exception during Google Sheets append for ${character.name}`);
-    console.error(sheetError);
+    console.error(`[inventoryUtils.js]: ❌ Sheet sync error for ${character.name}: ${sheetError.message}`);
   }
 
-  // Log sync success
-  console.log(`[inventoryUtils.js]: ✅ Sync successful for ${character.name} | Item: ${dbDoc.itemName} | Qty: ${dbDoc.quantity} | Obtain: ${dbDoc.obtain}`);
+  console.log(`[inventoryUtils.js]: ✅ Sync complete for ${character.name} | ${dbDoc.itemName}`);
  } catch (error) {
   if (!error.message?.includes('Could not write to sheet') && shouldLogError(error)) {
     handleError(error, "inventoryUtils.js");
-    console.error(
-     "[inventoryUtils.js]: ❌ Error syncing to inventory database:",
-     error
-    );
-    // Log sync failure
-    console.error(`[inventoryUtils.js]: ❌ Sync failed for ${character?.name || 'Unknown'} | Item: ${item?.itemName || 'Unknown'} | Qty: ${item?.quantity || 'Unknown'} | Obtain: ${item?.obtain || 'Unknown'} | Error: ${error.message}`);
+    console.error(`[inventoryUtils.js]: ❌ Sync failed for ${character?.name || 'Unknown'} | ${item?.itemName || 'Unknown'}`);
   }
   throw error;
  }

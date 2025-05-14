@@ -1144,7 +1144,7 @@ const createTradeEmbed = async (
    url: settingsFrom.author.url,
   })
   .setDescription(
-   `Both users must confirm the trade by using the **/trade** command with the provided trade ID.`
+   `Both users must confirm the trade by using the **/economy trade** command with the provided trade ID.`
   )
   .addFields(
    {
