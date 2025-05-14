@@ -14,6 +14,8 @@ const weatherHandler = require('./handlers/weatherHandler');
 const { sendUserDM } = require('./utils/messageUtils');
 const { generateWeatherEmbed } = require('./embeds/weatherEmbed');
 const { checkExpiredRequests } = require('./utils/expirationHandler');
+const { isValidImageUrl } = require('./utils/validation');
+const DEFAULT_IMAGE_URL = "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png";
 
 // ============================================================================
 // ---- Utility Functions ----
@@ -35,14 +37,28 @@ function createCronJob(schedule, jobName, jobFunction, timezone = 'America/New_Y
 // ---- Function: createAnnouncementEmbed ----
 // Creates a standardized embed for announcements
 function createAnnouncementEmbed(title, description, thumbnail, image, footer) {
-  return new EmbedBuilder()
+  const embed = new EmbedBuilder()
     .setColor('#88cc88')
     .setTitle(title)
     .setDescription(description)
-    .setThumbnail(thumbnail)
-    .setImage(image)
     .setTimestamp()
     .setFooter({ text: footer });
+
+  // Only set thumbnail if valid, else use default
+  if (isValidImageUrl(thumbnail)) {
+    embed.setThumbnail(thumbnail);
+  } else {
+    embed.setThumbnail(DEFAULT_IMAGE_URL);
+  }
+
+  // Only set image if valid, else use default
+  if (isValidImageUrl(image)) {
+    embed.setImage(image);
+  } else {
+    embed.setImage(DEFAULT_IMAGE_URL);
+  }
+
+  return embed;
 }
 
 // ============================================================================
