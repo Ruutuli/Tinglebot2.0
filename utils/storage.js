@@ -87,6 +87,9 @@ async function saveToStorage(key, type, data) {
       case 'gather':
         expiresAt = new Date(now.getTime() + 2 * 60 * 60 * 1000); // 2 hours
         break;
+      case 'trade':
+        expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000); // 24 hours
+        break;
       case 'monthly':
         // Set to end of current month
         expiresAt = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
@@ -227,6 +230,19 @@ async function deleteMonthlyEncounterFromStorage(encounterId) {
   await deleteFromStorage(encounterId, 'monthly');
 }
 
+// Trade functions
+async function saveTradeToStorage(tradeId, tradeData) {
+  await saveToStorage(tradeId, 'trade', tradeData);
+}
+
+async function retrieveTradeFromStorage(tradeId) {
+  return retrieveFromStorage(tradeId, 'trade');
+}
+
+async function deleteTradeFromStorage(tradeId) {
+  await deleteFromStorage(tradeId, 'trade');
+}
+
 // Cleanup function
 async function cleanupExpiredEntries(maxAgeInMs = 86400000) {
   try {
@@ -276,6 +292,10 @@ module.exports = {
   saveMonthlyEncounterToStorage,
   retrieveMonthlyEncounterFromStorage,
   deleteMonthlyEncounterFromStorage,
+  
+  saveTradeToStorage,
+  retrieveTradeFromStorage,
+  deleteTradeFromStorage,
   
   cleanupExpiredEntries
 };
