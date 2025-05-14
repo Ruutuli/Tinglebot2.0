@@ -320,8 +320,11 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
         outcomeMessage = generateVictoryMessage({ itemName: 'nothing' });
         travelLog.push('fight: win but no loot');
       }
+    } else if (outcome.result === 'KO') {
+      // ... existing KO logic ...
     } else {
       outcomeMessage = generateDamageMessage(outcome.hearts);
+      travelLog.push(`fight: loss (lost ${outcome.hearts} heart${outcome.hearts === 1 ? '' : 's'}, no loot)`);
     }
 
     // ------------------- Embed Update -------------------
