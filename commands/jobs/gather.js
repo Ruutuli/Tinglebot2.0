@@ -218,10 +218,7 @@ module.exports = {
       if (!jobPerk || !jobPerk.perks.includes('GATHERING')) {
         console.error(`[gather.js]: ❌ ${character.name} lacks gathering skills for job: "${job}"`);
         await interaction.editReply({
-          content: getJobVoucherErrorMessage('MISSING_SKILLS', {
-            characterName: character.name,
-            jobName: job
-          }).message,
+          content: `❌ ${character.name} can't gather as a ${job.toUpperCase()} because they lack the necessary gathering skills.`,
           ephemeral: true,
         });
         return;

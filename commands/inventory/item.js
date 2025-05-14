@@ -25,7 +25,7 @@ const { getVillageEmojiByName } = require('../../modules/locationsModule');
 
 // ------------------- Utility Functions -------------------
 // General-purpose utilities: Google Sheets integration, URL validation, error handling, inventory utils.
-const { authorizeSheets, appendSheetData } = require('../../utils/googleSheetsUtils');
+const { authorizeSheets, appendSheetData, safeAppendDataToSheet } = require('../../utils/googleSheetsUtils');
 const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../../utils/validation');
 const { handleError } = require('../../utils/globalErrorHandler');
 const { removeItemInventoryDatabase } = require('../../utils/inventoryUtils');
@@ -116,6 +116,12 @@ module.exports = {
           });
         }
 
+        if (quantity > 1) {
+          return void await interaction.editReply({
+            content: `❌ You can only use one Job Voucher at a time. Please use a quantity of 1.`
+          });
+        }
+
         const jobName = interaction.options.getString('jobname');
         if (!jobName) {
           return void await interaction.editReply({
@@ -133,6 +139,30 @@ module.exports = {
         // Activate voucher and remove one from inventory.
         await updateCharacterById(character._id, { jobVoucher: true, jobVoucherJob: jobName });
         await removeItemInventoryDatabase(character._id, 'Job Voucher', 1, interaction);
+
+        // Log job voucher usage to Google Sheets
+        const inventoryLink = character.inventory || character.inventoryLink;
+        if (typeof inventoryLink === 'string') {
+          const { category = [], type = [], subtype = [] } = item;
+          const formattedDateTime = new Date().toISOString();
+          const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
+          const values = [[
+            character.name,
+            'Job Voucher',
+            '-1',
+            Array.isArray(category) ? category.join(', ') : category,
+            Array.isArray(type) ? type.join(', ') : type,
+            Array.isArray(subtype) ? subtype.join(', ') : subtype,
+            `Used for job voucher: ${jobName}`,
+            character.job,
+            '',
+            character.currentVillage,
+            interactionUrl,
+            formattedDateTime,
+            ''
+          ]];
+          await safeAppendDataToSheet(inventoryLink, character, 'loggedInventory!A2:M', values, interaction.client);
+        }
 
         // ------------------- Build and Send Voucher Embed -------------------
         const currentVillage = capitalizeWords(character.currentVillage || 'Unknown');
@@ -226,7 +256,7 @@ module.exports = {
       if (restricted.includes(item.itemName.toLowerCase())) {
         const embed = new EmbedBuilder()
           .setTitle('⚠️ Woah there! ⚠️')
-          .setDescription(`**${character.name}** tried to use **${item.itemName}**. Not a suitable choice!`)
+          .setDescription(`**${character.name}** tried to use **${item.itemName}** for healing, but it's not a suitable choice!`)
           .setColor('#FF6347')
           .setThumbnail(item.image)
           .setFooter({ text: 'Stick to proper healing items!' });
