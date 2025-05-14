@@ -210,6 +210,34 @@ async function proceedWithRoll(interaction, characterName, encounterId) {
     });
   }
 
+  // ============================================================================
+  // ---- Mount Stamina Consumption and Travel Restriction ----
+  // Block travel if currentStamina is 0, decrement by 1 and update lastMountTravel on use
+  // ============================================================================
+  const mount = await Mount.findOne({ characterId: character._id });
+  if (!mount) {
+    await interaction.editReply({
+      embeds: [{ title: '❌ No Mount Registered', description: `The character **${character.name}** does not have a registered mount.`, color: 0xFF0000 }],
+      ephemeral: true,
+    });
+    return;
+  }
+  if (mount.currentStamina === null || typeof mount.currentStamina !== 'number') {
+    mount.currentStamina = mount.stamina;
+    await mount.save();
+  }
+  if (mount.currentStamina <= 0) {
+    await interaction.editReply({
+      embeds: [{ title: '❌ Mount Too Tired', description: `**${mount.name}** is too exhausted to travel. Stamina must recover before traveling again.`, color: 0xFF0000 }],
+      ephemeral: true,
+    });
+    return;
+  }
+  // Decrement stamina and update lastMountTravel
+  mount.currentStamina = Math.max(0, mount.currentStamina - 1);
+  mount.lastMountTravel = new Date();
+  await mount.save();
+
   const roll = Math.floor(Math.random() * 20) + 1;
   const encounter = getEncounterById(encounterId);
   if (!encounter) {
@@ -1513,19 +1541,48 @@ async function handleViewMount(interaction) {
         ephemeral: true,
       });
     }
-  
+
+    // ============================================================================
+    // ---- Mount Stamina Recovery Logic ----
+    // Recovers 1 stamina per day if not used today (regardless of storage status)
+    // ============================================================================
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    let recovered = false;
+    if (mount.currentStamina === null || typeof mount.currentStamina !== 'number') {
+      mount.currentStamina = mount.stamina;
+      recovered = true;
+    } else if (!mount.lastMountTravel || new Date(mount.lastMountTravel).setHours(0,0,0,0) < today.getTime()) {
+      // Not used today, recover 1 stamina (up to max)
+      if (mount.currentStamina < mount.stamina) {
+        mount.currentStamina = Math.min(mount.stamina, mount.currentStamina + 1);
+        recovered = true;
+      }
+      // Update lastMountTravel to today to prevent multiple recoveries in one day
+      mount.lastMountTravel = today;
+    }
+    if (recovered) await mount.save();
+
+    // ============================================================================
+    // ---- Mount Stamina Display and Warning ----
+    // ============================================================================
     const speciesEmoji = getMountEmoji(mount.species);
     const formattedTraits = mount.traits && mount.traits.length
       ? mount.traits.map(trait => `> ${trait}`).join('\n')
       : 'No traits available';
-  
+    let staminaField = `> ${mount.currentStamina} / ${mount.stamina}`;
+    let staminaWarning = '';
+    if (mount.currentStamina <= 1) {
+      staminaWarning = '\n⚠️ **Warning:** Stamina is low! Mount will not be able to travel if stamina reaches 0.';
+    }
+
     const mountEmbed = new EmbedBuilder()
       .setTitle(`${speciesEmoji} **${mount.name}** - Mount Details`)
-      .setDescription(`✨ **Mount Stats for**: **${character.name}**`)
+      .setDescription(`✨ **Mount Stats for**: **${character.name}**${staminaWarning}`)
       .addFields(
         { name: '🌟 **__Species__**', value: `> ${mount.species || 'Unknown'}`, inline: true },
         { name: '#️⃣ **__Level__**', value: `> ${mount.level || 'Unknown'}`, inline: true },
-        { name: '🥕 **__Stamina__**', value: `> ${mount.stamina || 'Unknown'}`, inline: true },
+        { name: '🥕 **__Stamina__**', value: staminaField, inline: true },
         { name: '👤 **__Owner__**', value: `> ${mount.owner || 'Unknown'}`, inline: true },
         { name: '🌍 **__Region__**', value: `> ${mount.region || 'Unknown'}`, inline: true },
         { name: '✨ **__Traits__**', value: `${formattedTraits}`, inline: false }
@@ -1535,7 +1592,7 @@ async function handleViewMount(interaction) {
       .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
       .setFooter({ text: `${character.name}'s Mount Stats`, iconURL: character.icon })
       .setTimestamp();
-  
+
     await interaction.reply({
       embeds: [mountEmbed],
       ephemeral: false,
