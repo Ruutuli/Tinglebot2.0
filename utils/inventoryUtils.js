@@ -14,6 +14,7 @@ const {
   safeAppendDataToSheet,
 } = require("../utils/googleSheetsUtils");
 const generalCategories = require("../models/GeneralItemCategories");
+const { v4: uuidv4 } = require('uuid');
 
 // ============================================================================
 // ---- Database Functions ----
@@ -211,7 +212,7 @@ async function syncToInventoryDatabase(character, item, interaction) {
         dbDoc.location,
         dbDoc.link,
         formatDateTime(dbDoc.date),
-        dbDoc.synced,
+        uuidv4()
       ]];
       
       await safeAppendDataToSheet(character.inventory, character, "loggedInventory!A2:M", values);
