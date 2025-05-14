@@ -24,11 +24,9 @@ const { capitalizeWords } = require('../../modules/formattingModule');
 const { getVillageEmojiByName } = require('../../modules/locationsModule');
 
 // ------------------- Utility Functions -------------------
-// General-purpose utilities: Google Sheets integration, URL validation, error handling, inventory utils.
-const { authorizeSheets, appendSheetData, safeAppendDataToSheet } = require('../../utils/googleSheetsUtils');
-const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../../utils/validation');
+// General-purpose utilities: error handling, inventory utils.
 const { handleError } = require('../../utils/globalErrorHandler');
-const { removeItemInventoryDatabase } = require('../../utils/inventoryUtils');
+const { removeItemInventoryDatabase, syncToInventoryDatabase } = require('../../utils/inventoryUtils');
 const { checkInventorySync } = require('../../utils/characterUtils');
 
 
@@ -265,7 +263,10 @@ module.exports = {
 
       // ------------------- Validate Item Can Be Used -------------------
       // Check if the item is a Recipe item (for healing) or has other valid uses
-      if (item.itemName.toLowerCase() !== 'fairy' && item.category !== 'Recipe') {
+      console.log(`[item.js]: 🔍 Validating item "${item.itemName}" - Category: ${item.category}, ModifierHearts: ${item.modifierHearts}, StaminaRecovered: ${item.staminaRecovered}`);
+      
+      if (item.itemName.toLowerCase() !== 'fairy' && (!Array.isArray(item.category) || !item.category.includes('Recipe'))) {
+        console.log(`[item.js]: ❌ Item validation failed - Not a fairy and category does not include Recipe`);
         const embed = new EmbedBuilder()
           .setTitle('❓ Hmm...')
           .setDescription(`**${character.name}** tried to use **${item.itemName}** for healing, but it's not a healing item.\n\nThis item might be used for something else, but it won't help with healing!`)
@@ -309,63 +310,35 @@ module.exports = {
       await removeItemInventoryDatabase(character._id, item.itemName, quantity, inventoryCollection);
 
       // ------------------- Log Healing to Google Sheets -------------------
-      if (isValidGoogleSheetsUrl(character.inventory || character.inventoryLink)) {
-        const spreadsheetId = extractSpreadsheetId(character.inventory || character.inventoryLink);
-        const auth = await authorizeSheets();
-        const range = 'loggedInventory!A2:M';
-        const uniqueSyncId = uuidv4();
-        const timestamp = new Date().toISOString();
-        const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
+      await syncToInventoryDatabase(character, {
+        itemName: item.itemName,
+        quantity: -quantity,
+        obtain: `Used for healing`
+      }, interaction);
 
-        const values = [[
-          character.name,
-          item.itemName,
-          `${quantity}x ${item.itemName} used by ${character.name} for ${healAmount} hearts and ${staminaRecovered} stamina`,
-          uniqueSyncId,
-          timestamp,
-          interactionUrl
-        ]];
+      const successEmbed = new EmbedBuilder()
+        .setColor('#59A914')
+        .setTitle('✅ Healing Successful!')
+        .setDescription(
+          `**${character.name}** has been successfully healed using **${item.itemName}**${quantity > 1 ? ` x${quantity}` : ''}!` +
+          ` ❤️ +${item.modifierHearts * quantity} / 🟩 +${item.staminaRecovered * quantity}\n`
+        )
+        .addFields(
+          { 
+            name: '💚 Hearts', 
+            value: `> **${character.currentHearts - healAmount}/${character.maxHearts}** → **${character.currentHearts}/${character.maxHearts}**`, 
+            inline: true 
+          },
+          { 
+            name: '🟩 Stamina', 
+            value: `> **${character.currentStamina - staminaRecovered}/${character.maxStamina}** → **${character.currentStamina}/${character.maxStamina}**`, 
+            inline: true 
+          }
+        )
+        .setThumbnail(item.image || character.icon)
+        .setFooter({ text: 'Healing successful! 🌿' });
 
-        await appendSheetData(auth, spreadsheetId, range, values);
-
-        const successEmbed = new EmbedBuilder()
-          .setColor('#59A914')
-          .setTitle('✅ Healing Successful!')
-          .setDescription(`**${character.name}** has been successfully healed using **${item.itemName}**!`)
-          .addFields(
-            { name: '💚 Hearts', value: `> **${character.currentHearts}/${character.maxHearts}**`, inline: true },
-            { name: '🟩 Stamina', value: `> **${character.currentStamina}/${character.maxStamina}**`, inline: true }
-          )
-          .setThumbnail(item.image || character.icon)
-          .setFooter({ text: 'Healing successful! 🌿' });
-
-        return void await interaction.editReply({ embeds: [successEmbed] });
-      }
-
-      // Token forfeit option
-      if (tokens) {
-        const userId = interaction.user.id;
-        const userData = await getTokenBalance(userId);
-        const currentTokenBalance = userData.tokens;
-        const tokenTrackerLink = userData.tokenTracker;
-
-        if (!tokenTrackerLink) {
-          return void await interaction.editReply({
-            content: '❌ **You need to set up your token tracker first!**\n\n' +
-              'Please use `/tokens tokentrackerlink` to link your Google Sheets token tracker.\n\n' +
-              '*(Yes, I know this is a bit messy and confusing - I\'m working on making it better! 😅)*',
-            ephemeral: true
-          });
-        }
-
-        if (currentTokenBalance <= 0) {
-          return void await interaction.editReply({
-            content: '❌ **You need to have tokens to use this item.**\n\n' +
-              'Please use `/tokens buy` to purchase tokens.',
-            ephemeral: true
-          });
-        }
-      }
+      return void await interaction.editReply({ embeds: [successEmbed] });
     } catch (error) {
       handleError(error, interaction);
     }
