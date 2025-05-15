@@ -228,6 +228,13 @@ async function handleAutocomplete(interaction) {
         }
         break;
 
+      // ------------------- Inventory Command -------------------
+      case "inventory":
+        if (focusedName === "charactername") {
+          await handleViewInventoryAutocomplete(interaction, focusedOption);
+        }
+        break;
+
       // ... rest of existing code ...
     }
   } catch (error) {
