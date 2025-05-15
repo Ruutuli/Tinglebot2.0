@@ -1681,17 +1681,25 @@ async function handleChangeJob(interaction) {
   await updateTokenBalance(userId, -500);
 
   if (userTokens.tokenTracker) {
-   const spreadsheetId = extractSpreadsheetId(userTokens.tokenTracker);
-   const auth = await authorizeSheets();
-   const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
-   const tokenRow = [
-    `${character.name} - Job Change`,
-    interactionUrl,
-    "job change",
-    "spent",
-    `-500`,
-   ];
-   await safeAppendDataToSheet(character.inventory, character, "loggedTracker!B7:F", [tokenRow]);
+   try {
+     const spreadsheetId = extractSpreadsheetId(userTokens.tokenTracker);
+     const auth = await authorizeSheets();
+     const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
+     const tokenRow = [
+       `${character.name} - Job Change`,
+       interactionUrl,
+       "job change",
+       "spent",
+       `-500`,
+     ];
+     await safeAppendDataToSheet(character.inventory, character, "loggedTracker!B7:F", [tokenRow]);
+   } catch (error) {
+     console.error(`[googleSheetsUtils.js]: ❌ Failed to append data to sheet "loggedTracker": ${error.message}`);
+     return interaction.followUp({
+       content: "❌ Failed to log token transaction. Please make sure your token tracker sheet is properly set up and shared with the bot. You can use `/tokens setup` to fix this.",
+       ephemeral: true
+     });
+   }
   }
 
   character.job = newJob;
