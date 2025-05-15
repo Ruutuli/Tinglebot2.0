@@ -2162,9 +2162,7 @@ async function handleModCharacterAutocomplete(interaction, focusedOption) {
 async function handleMountAutocomplete(interaction, focusedOption) {
  try {
   const userId = interaction.user.id;
-
   const characters = await fetchCharactersByUserId(userId);
-
   const subcommand = interaction.options.getSubcommand();
 
   const choices = characters
@@ -2179,7 +2177,7 @@ async function handleMountAutocomplete(interaction, focusedOption) {
     return false;
    })
    .map((character) => ({
-    name: character.name,
+    name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
     value: character.name,
    }));
 

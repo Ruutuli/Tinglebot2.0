@@ -13,6 +13,7 @@ const {
 const axios = require("axios");
 const { v4: uuidv4 } = require("uuid");
 const path = require("path");
+const { google } = require("googleapis");
 
 const { handleError } = require("../../utils/globalErrorHandler");
 const {
@@ -1622,7 +1623,7 @@ async function handleDeleteCharacter(interaction) {
 
 
 async function handleChangeJob(interaction) {
- await interaction.deferReply({ ephemeral: true });
+ await interaction.deferReply({ ephemeral: false });
 
  try {
   const userId = interaction.user.id;
@@ -1644,7 +1645,7 @@ async function handleChangeJob(interaction) {
   if (!jobValidation.valid) {
    return interaction.followUp({
     content: jobValidation.message,
-    ephemeral: true,
+    ephemeral: false,
    });
   }
 
@@ -1681,25 +1682,91 @@ async function handleChangeJob(interaction) {
   await updateTokenBalance(userId, -500);
 
   if (userTokens.tokenTracker) {
-   try {
-     const spreadsheetId = extractSpreadsheetId(userTokens.tokenTracker);
-     const auth = await authorizeSheets();
-     const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
-     const tokenRow = [
-       `${character.name} - Job Change`,
-       interactionUrl,
-       "job change",
-       "spent",
-       `-500`,
-     ];
-     await safeAppendDataToSheet(character.inventory, character, "loggedTracker!B7:F", [tokenRow]);
-   } catch (error) {
-     console.error(`[googleSheetsUtils.js]: ❌ Failed to append data to sheet "loggedTracker": ${error.message}`);
-     return interaction.followUp({
-       content: "❌ Failed to log token transaction. Please make sure your token tracker sheet is properly set up and shared with the bot. You can use `/tokens setup` to fix this.",
-       ephemeral: true
-     });
-   }
+    try {
+      const spreadsheetId = extractSpreadsheetId(userTokens.tokenTracker);
+      const auth = await authorizeSheets();
+      
+      // Pre-validate the sheet before attempting to write
+      try {
+        const sheets = google.sheets({ version: 'v4', auth });
+        const response = await sheets.spreadsheets.get({
+          spreadsheetId,
+          ranges: ['loggedTracker!A1:Z1'] // Check if tab exists
+        });
+        
+        // Check if loggedTracker tab exists
+        const hasLoggedTrackerTab = response.data.sheets.some(sheet => 
+          sheet.properties.title.toLowerCase() === 'loggedtracker'
+        );
+        
+        if (!hasLoggedTrackerTab) {
+          return interaction.followUp({
+            content: "❌ Token tracker sheet is missing the required tab.\n\n" +
+              "The tab must be named exactly `loggedTracker` (case sensitive).\n" +
+              "Current tabs found: " + response.data.sheets.map(s => s.properties.title).join(', ') + "\n\n" +
+              "Please use `/tokens setup` to get a fresh template with the correct tab structure.",
+            ephemeral: true
+          });
+        }
+      } catch (validationError) {
+        if (validationError.message.includes('does not have permission')) {
+          return interaction.followUp({
+            content: "❌ Permission denied for token tracker sheet.\n\n" +
+              "The bot cannot access your token tracker sheet. Please:\n" +
+              "1. Open your token tracker sheet\n" +
+              "2. Click 'Share' in the top right\n" +
+              "3. Add this email as an Editor: `tinglebot@rotw-tinglebot.iam.gserviceaccount.com`\n" +
+              "4. Make sure to give it Editor access (not just Viewer)\n\n" +
+              "You can use `/tokens setup` to get a fresh template with proper permissions.",
+            ephemeral: true
+          });
+        }
+        throw validationError;
+      }
+
+      const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
+      const tokenRow = [
+        `${character.name} - Job Change`,
+        interactionUrl,
+        "Other",
+        "spent",
+        `-500`,
+      ];
+      await safeAppendDataToSheet(userTokens.tokenTracker, character, "loggedTracker!B7:F", [tokenRow]);
+    } catch (error) {
+      // Log the specific error for debugging
+      console.error(`[Token Tracker Error] Details:`, {
+        error: error.message,
+        spreadsheetId: extractSpreadsheetId(userTokens.tokenTracker),
+        characterName: character.name,
+        userId: userId,
+        stack: error.stack,
+        code: error.code,
+        status: error.status,
+        details: error.errors
+      });
+
+      // Check if the error is related to range parsing
+      if (error.message.includes('Unable to parse range')) {
+        return interaction.followUp({
+          content: "❌ Token tracker sheet has incorrect tab name.\n\n" +
+            "The tab must be named exactly `loggedTracker` (case sensitive).\n" +
+            "Please check for any extra spaces or different capitalization.\n\n" +
+            "You can use `/tokens setup` to get a fresh template with the correct tab structure.",
+          ephemeral: true
+        });
+      }
+
+      // Generic error message for other cases
+      return interaction.followUp({
+        content: "❌ Failed to log token transaction. Please check:\n\n" +
+          "1. Your token tracker sheet exists and is accessible\n" +
+          "2. The sheet has a tab named exactly `loggedTracker` (case sensitive)\n" +
+          "3. The sheet is shared with editor access to: `tinglebot@rotw-tinglebot.iam.gserviceaccount.com`\n\n" +
+          "You can use `/tokens setup` to reconfigure your token tracker sheet.",
+        ephemeral: true
+      });
+    }
   }
 
   character.job = newJob;
@@ -1762,7 +1829,6 @@ async function handleChangeJob(interaction) {
     `Resident **${character.name}** has formally submitted their notice of job change from **${previousJob}** to **${newJob}**.\n\n` +
      `The **${formattedHomeVillage} Town Hall** wishes you the best in your new endeavors!`
    )
-  
    .addFields(
     { name: "\ud83d\udc64 __Name__", value: character.name, inline: true },
     { name: "\ud83c\udfe1 __Home Village__", value: character.homeVillage, inline: true },
@@ -1790,7 +1856,7 @@ async function handleChangeJob(interaction) {
   return interaction.followUp({
    content:
     "❌ An error occurred while processing your request. Please try again later.",
-   ephemeral: true,
+   ephemeral: false,
   });
  }
 }
