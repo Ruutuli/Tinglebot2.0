@@ -125,9 +125,10 @@ module.exports = {
         return interaction.editReply({ 
           content: getJobVoucherErrorMessage('MISSING_SKILLS', {
             characterName: character.name,
-            jobName: job
+            jobName: job,
+            activity: 'crafting'
           }).message,
-          ephemeral: true 
+          ephemeral: false 
         });
       }
 
@@ -225,10 +226,6 @@ module.exports = {
             });
             return;
           }
-          await interaction.followUp({
-            content: activationResult.message,
-            ephemeral: true,
-          });
         }
       }
 

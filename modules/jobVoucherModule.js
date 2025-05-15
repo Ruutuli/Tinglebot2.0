@@ -17,7 +17,7 @@ function getJobVoucherErrorMessage(errorType, data = {}) {
         NO_VOUCHER: '❌ No active job voucher found.',
         WRONG_JOB: `❌ The job voucher is locked to **${data.voucherJob}**, not **${data.requestedJob}**. Please use the correct job.`,
         ALREADY_ACTIVE: `❌ ${data.characterName} already has an active Job Voucher for ${data.jobName}. Please complete the current job before using another voucher.`,
-        MISSING_SKILLS: `❌ ${data.characterName} can't loot as a ${data.jobName} because they lack the necessary looting skills.`,
+        MISSING_SKILLS: `❌ ${data.characterName} cannot use the ${data.activity || 'looting'} perk as a ${data.jobName}.`,
         ACTIVATION_ERROR: '❌ An error occurred while activating the job voucher.',
         DEACTIVATION_ERROR: '❌ An error occurred while deactivating the job voucher.',
         ITEM_NOT_FOUND: '❌ Job Voucher item not found.'
@@ -34,13 +34,13 @@ function getJobVoucherErrorMessage(errorType, data = {}) {
 async function validateJobVoucher(character, jobName, requiredPerk = null) {
     // First check if character actually has a job voucher
     if (!character.jobVoucher) {
-        console.error(`[Job Voucher Validation]: Character ${character.name} has no active job voucher.`);
+        console.error(`[jobVoucherModule.js]: ❌ No active job voucher found for ${character.name}`);
         return getJobVoucherErrorMessage('NO_VOUCHER');
     }
 
     // Allow unrestricted job vouchers
     if (!character.jobVoucherJob) {
-        console.log(`[Job Voucher Validation]: Voucher is not locked to any specific job. Proceeding with job: ${jobName}`);
+        console.log(`[jobVoucherModule.js]: 🔄 Unrestricted voucher - proceeding with job: ${jobName}`);
         return { success: true };
     }
 
@@ -56,15 +56,17 @@ async function validateJobVoucher(character, jobName, requiredPerk = null) {
     if (requiredPerk) {
         const jobPerk = getJobPerk(jobName);
         if (!jobPerk || !jobPerk.perks.includes(requiredPerk.toUpperCase())) {
-            console.error(`[Job Voucher Validation]: ${character.name} lacks ${requiredPerk} skills for job: "${jobName}"`);
+            const activity = requiredPerk.toLowerCase();
+            console.error(`[jobVoucherModule.js]: ❌ ${character.name} lacks ${activity} perk for job: "${jobName}"`);
             return getJobVoucherErrorMessage('MISSING_SKILLS', {
                 characterName: character.name,
-                jobName: jobName
+                jobName: jobName,
+                activity: activity
             });
         }
     }
 
-    console.log(`[Job Voucher Validation]: ✅ Validation successful for ${character.name} with job ${jobName}`);
+    console.log(`[jobVoucherModule.js]: ✅ Job voucher validated for ${character.name} as ${jobName}`);
     return { success: true };
 }
 
