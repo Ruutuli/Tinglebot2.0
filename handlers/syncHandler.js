@@ -103,63 +103,74 @@ async function checkGoogleSheetsPermissions(auth, spreadsheetId, interaction) {
 
 // ------------------- processInventoryItem -------------------
 // Processes a single inventory item and prepares it for database sync.
-async function processInventoryItem(row, originalRowIndex, character, interaction) {
-    const [sheetCharacterName, itemName, qty, , , , obtain, , , , , , confirmedSync] = row;
+async function processInventoryItem(row, character, userId) {
+    try {
+        const [characterName, itemName, quantity, category, type, subtype, obtain, job, perk, location, link, date, synced] = row;
+        
+        // Skip if not for this character
+        if (characterName.toLowerCase() !== character.name.toLowerCase()) {
+            return null;
+        }
 
-    if (confirmedSync) {
+        // Skip if no item name or quantity
+        if (!itemName || !quantity) {
+            return null;
+        }
+
+        // Parse quantity as number
+        const itemQuantity = parseInt(quantity);
+        if (isNaN(itemQuantity) || itemQuantity <= 0) {
+            return null;
+        }
+
+        // Preserve original obtain method if it contains "crafting"
+        const originalObtain = obtain?.trim() || '';
+        const obtainMethod = originalObtain.toLowerCase().includes('crafting') ? originalObtain : 'Manual Sync';
+
+        // Format date for database
+        const formattedDate = date ? new Date(date) : new Date();
+
+        const inventoryItem = {
+            characterId: character._id,
+            itemName: itemName.trim(),
+            quantity: itemQuantity,
+            category: category || '',
+            type: type || '',
+            subtype: subtype || '',
+            job: job || '',
+            perk: perk || '',
+            location: location || '',
+            link: link || '',
+            date: formattedDate,
+            obtain: obtainMethod,
+            synced: synced || ''
+        };
+
+        // Format date for Google Sheets (use existing date if valid, otherwise use current date)
+        const sheetDate = date ? date : formatDateTime(new Date());
+
+        // Update the row data with the preserved obtain method and formatted date
+        const updatedRowData = [
+            characterName,
+            itemName,
+            quantity,
+            category,
+            type,
+            subtype,
+            obtainMethod,
+            job,
+            perk,
+            location,
+            link,
+            sheetDate,
+            synced
+        ];
+
+        return { inventoryItem, updatedRowData };
+    } catch (error) {
+        console.error(`[syncHandler.js]: ❌ Error processing inventory item: ${error.message}`);
         return null;
     }
-
-    const item = await ItemModel.findOne({ itemName });
-    if (!item) {
-        console.warn(`[syncHandler.js]: ⚠️ Skipping unknown item: ${itemName} (row ${originalRowIndex})`);
-        return { error: `Row ${originalRowIndex}: Item not found - ${itemName}` };
-    }
-
-    const cleanedQty = String(qty).replace(/,/g, '');
-    const quantity = parseInt(cleanedQty, 10);
-    if (isNaN(quantity)) {
-        throw new Error(`Invalid quantity for item ${itemName}: ${qty}`);
-    }
-
-    // Preserve original obtain method if it contains "crafting" (case-insensitive)
-    const originalObtain = obtain ? obtain.toString().trim() : '';
-    const obtainMethod = originalObtain.toLowerCase().includes('crafting') ? originalObtain : 'Manual Sync';
-
-    return {
-        inventoryItem: {
-            characterId: character._id,
-            itemId: item._id,
-            characterName: character.name,
-            itemName,
-            quantity,
-            category: item.category.join(', ') || 'Uncategorized',
-            type: item.type.join(', ') || 'Unknown',
-            subtype: item.subtype || '',
-            job: character.job || '',
-            perk: character.perk || '',
-            location: character.currentVillage || character.homeVillage || '',
-            link: `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`,
-            date: new Date(),
-            obtain: obtainMethod,
-            synced: uuidv4()
-        },
-        updatedRowData: [
-            sheetCharacterName,
-            itemName,
-            quantity,
-            item.category.join(', ') || 'Uncategorized',
-            item.type.join(', ') || 'Unknown',
-            item.subtype || '',
-            obtainMethod,
-            character.job || '',
-            character.perk || '',
-            character.currentVillage || character.homeVillage || '',
-            `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`,
-            formatDateTime(new Date()),
-            uuidv4()
-        ]
-    };
 }
 
 // ============================================================================
@@ -276,7 +287,7 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
                         }
 
                         try {
-                            const result = await processInventoryItem(row, originalRowIndex, character, interaction);
+                            const result = await processInventoryItem(row, character, userId);
                             if (!result) continue;
                             if (result.error) {
                                 errors.push(result.error);

@@ -149,22 +149,28 @@ async function handleButtonInteraction(interaction) {
 // ------------------- Function: handleSyncYes -------------------
 // Begins character inventory sync.
 async function handleSyncYes(interaction, characterId) {
-  await interaction.deferReply({ ephemeral: true });
-  await interaction.editReply({ content: '🔄 **Sync has initiated. Please wait...**' });
-
   const character = await fetchCharacterById(characterId);
   if (!character) {
-    return interaction.editReply({ content: '❌ **Character not found.**' });
+    return interaction.reply({ content: '❌ **Character not found.**', ephemeral: true });
   }
 
   // Check if inventory is already synced
   if (character.inventorySynced) {
-    return interaction.editReply({ 
+    return interaction.update({ 
       content: `❌ **Inventory for ${character.name} has already been synced and cannot be synced again.**`,
+      embeds: [],
       components: [] // Remove the buttons
     });
   }
 
+  // Update the message to remove buttons and show starting message
+  await interaction.update({
+    content: `🔄 Starting inventory sync for ${character.name}...`,
+    embeds: [],
+    components: [] // Remove the buttons
+  });
+
+  // Start the sync process
   await syncInventory(character.name, interaction.user.id, interaction);
 }
 
