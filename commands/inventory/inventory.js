@@ -116,57 +116,6 @@ module.exports = {
   },
 
   // ============================================================================
-  // Button Interaction Handler
-  // ============================================================================
-  async handleButtonInteraction(interaction) {
-    try {
-      if (!interaction.isButton()) return;
-
-      const [action, characterId] = interaction.customId.split('|');
-      if (action !== 'sync-yes' && action !== 'sync-no') return;
-
-      const character = await fetchCharacterById(characterId);
-      if (!character) {
-        await interaction.reply({ 
-          content: '❌ Character not found.',
-          ephemeral: true 
-        });
-        return;
-      }
-
-      if (action === 'sync-yes') {
-        // Update the message to remove buttons and show starting message
-        await interaction.update({
-          content: `🔄 Starting inventory sync for ${character.name}...`,
-          embeds: [],
-          components: []
-        });
-        
-        // Start the sync process
-        await syncInventory(character.name, interaction.user.id, interaction);
-      } else {
-        // Handle no response
-        await interaction.update({ 
-          content: `❌ Inventory sync cancelled for ${character.name}.`,
-          embeds: [],
-          components: []
-        });
-      }
-    } catch (error) {
-      handleError(error, 'inventory.js');
-      console.error('[inventory.js]: Error handling button interaction:', error);
-      try {
-        await interaction.reply({ 
-          content: '❌ An error occurred while processing your request.',
-          ephemeral: true 
-        });
-      } catch (replyError) {
-        console.error('[inventory.js]: Error sending error message:', replyError);
-      }
-    }
-  },
-
-  // ============================================================================
   // Subcommand Handlers
   // ============================================================================
 
@@ -305,10 +254,10 @@ module.exports = {
 
   // ------------------- Sync Handler -------------------
   async handleSync(interaction) {
-    const characterName = interaction.options.getString('charactername');
-    const userId = interaction.user.id;
-
     try {
+      const characterName = interaction.options.getString('charactername');
+      const userId = interaction.user.id;
+
       await connectToTinglebot();
 
       const character = await fetchCharacterByNameAndUserId(characterName, userId);
