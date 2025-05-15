@@ -552,34 +552,157 @@ async function validateVendingSheet(sheetUrl, characterName) {
     }
 }
 
+// ------------------- validateTokenTrackerSheet------------------- 
+async function validateTokenTrackerSheet(spreadsheetUrl) {
+  const spreadsheetId = extractSpreadsheetId(spreadsheetUrl);
+
+  if (!spreadsheetId) {
+    return {
+      success: false,
+      message: "**Error:** Invalid Google Sheets URL.\n\n**Fix:** Please double-check you pasted a full valid URL like:\n> https://docs.google.com/spreadsheets/d/your-spreadsheet-id/edit"
+    };
+  }
+
+  const auth = await authorizeSheets();
+  try {
+    // Check service account access first
+    try {
+      const sheets = google.sheets({ version: 'v4', auth });
+      // Try to read a specific range to verify write access
+      await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: 'loggedTracker!B7:F7'  // Updated to check B7:F7 range
+      });
+    } catch (error) {
+      if (error.status === 403 || error.message.includes('does not have permission')) {
+        const serviceAccountEmail = JSON.parse(fs.readFileSync(SERVICE_ACCOUNT_PATH)).client_email;
+        console.error(`[googleSheetsUtils.js]: ❌ Permission denied: ${serviceAccountEmail}`);
+        return {
+          success: false,
+          message: "**Error:** Permission denied.\n\n**Fix:** Make sure the Google Sheet is shared with editor access to:\n📧 `tinglebot@rotw-tinglebot.iam.gserviceaccount.com`"
+        };
+      }
+      throw error;
+    }
+
+    const headerRow = await readSheetData(auth, spreadsheetId, 'loggedTracker!B7:F7');  // Updated to read B7:F7
+    const expectedHeaders = [
+      'SUBMISSION',
+      'LINK',
+      'CATEGORIES',
+      'TYPE',
+      'TOKEN AMOUNT'
+    ];
+
+    if (!headerRow || headerRow.length === 0) {
+      console.error(`[googleSheetsUtils.js]: ❌ No headers found in sheet`);
+      return {
+        success: false,
+        message: "**Error:** The `loggedTracker` tab exists but has no header data.\n\n**Fix:** Please copy these headers into B7:F7:\n" +
+          expectedHeaders.join(', ') + "\n\nNote: The headers must be in this exact order."
+      };
+    }
+
+    const headers = headerRow[0].map(h => h?.toString().trim());
+    const missingHeaders = expectedHeaders.filter((header, index) => 
+      !headers[index] || headers[index].toLowerCase() !== header.toLowerCase()
+    );
+
+    if (missingHeaders.length > 0) {
+      console.error(`[googleSheetsUtils.js]: ❌ Invalid headers in sheet. Missing or incorrect: ${missingHeaders.join(', ')}`);
+      return {
+        success: false,
+        message: "**Error:** The headers in your sheet don't match the required format.\n\n" +
+          "**Fix:** Please update your headers in B7:F7 to exactly match:\n" +
+          expectedHeaders.join(', ') + "\n\n" +
+          "Current headers found: " + headers.join(', ') + "\n\n" +
+          "Note: The headers must be in this exact order and spelling."
+      };
+    }
+
+    return { success: true, message: "✅ Token tracker sheet is set up correctly!" };
+
+  } catch (error) {
+    if (error.message.includes('Requested entity was not found')) {
+      console.error(`[googleSheetsUtils.js]: ❌ Sheet not found`);
+      return {
+        success: false,
+        message: "**Error:** The Google Sheet was not found.\n\n**Fix:** Please double-check your URL and that the sheet is shared publicly (or with the bot)."
+      };
+    }
+    if (error.message.includes('Unable to parse range')) {
+      console.error(`[googleSheetsUtils.js]: ❌ Invalid range: B7:F7`);
+      return {
+        success: false,
+        message: "**Error:** Cannot find the correct cells B7:F7.\n\n**Fix:** Double-check your tab name is exactly `loggedTracker` and that there is data starting at row 7."
+      };
+    }
+    if (error.code === 403) {
+      console.error(`[googleSheetsUtils.js]: ❌ Permission denied`);
+      return {
+        success: false,
+        message: "**Error:** Permission denied.\n\n**Fix:** Make sure the Google Sheet is shared with editor access to:\n📧 `tinglebot@rotw-tinglebot.iam.gserviceaccount.com`"
+      };
+    }
+    console.error(`[googleSheetsUtils.js]: ❌ ${error.message}`);
+    return {
+      success: false,
+      message: `Unknown error accessing sheet: ${error.message}`
+    };
+  }
+}
+
 // ------------------- Safe Append Data To Sheet -------------------
 async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, client) {
   try {
     if (!spreadsheetUrl || typeof spreadsheetUrl !== 'string') {
+      console.error(`[safeAppendDataToSheet] ❌ Invalid spreadsheet URL:`, spreadsheetUrl);
       return;
     }
 
     if (!character || typeof character !== 'object' || !character.name) {
+      console.error(`[safeAppendDataToSheet] ❌ Invalid character object:`, character);
       return;
     }
 
     const spreadsheetId = extractSpreadsheetId(spreadsheetUrl);
     const auth = await authorizeSheets();
 
-    // 🛡️ Validate the inventory sheet first
-    const validationResult = await validateInventorySheet(spreadsheetUrl, character.name);
+    // Validate the range format
+    const rangeParts = range.split('!');
+    if (rangeParts.length !== 2) {
+      throw new Error(`Invalid range format. Expected format: SheetName!A1:Z1`);
+    }
+
+    const [sheetName, cellRange] = rangeParts;
+
+    // Validate the cell range format - now accepts ranges like B7:F
+    if (!cellRange.match(/^[A-Z]+\d*:[A-Z]+\d*$/)) {
+      throw new Error(`Invalid cell range format. Expected format: A1:Z1 or A1:Z`);
+    }
+
+    // 🛡️ Validate the appropriate sheet based on the sheet name
+    let validationResult;
+    if (sheetName.toLowerCase() === 'loggedtracker') {
+      validationResult = await validateTokenTrackerSheet(spreadsheetUrl);
+    } else if (sheetName.toLowerCase() === 'loggedinventory') {
+      validationResult = await validateInventorySheet(spreadsheetUrl, character.name);
+    } else {
+      throw new Error(`Unknown sheet type: ${sheetName}. Expected 'loggedTracker' or 'loggedInventory'`);
+    }
+    
     if (!validationResult.success) {
       if (character.userId && client) {
         try {
           const user = await client.users.fetch(character.userId);
           if (user) {
             await user.send(
-              `⚠️ Heads up! Your inventory sync for **${character.name}** failed.\n\n` +
-              `Your linked Google Sheet may be missing, renamed, or set up incorrectly. Please update your inventory link or re-setup your sheet when you have a chance!`
+              `⚠️ Heads up! Your ${sheetName} sync for **${character.name}** failed.\n\n` +
+              `Your linked Google Sheet may be missing, renamed, or set up incorrectly. Please update your sheet link or re-setup your sheet when you have a chance!`
             );
           }
         } catch (dmError) {
-          // Silently fail if we can't send DM
+          console.error(`[safeAppendDataToSheet] Failed to send DM:`, dmError);
         }
       }
       return;
@@ -589,6 +712,12 @@ async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, c
     await appendSheetData(auth, spreadsheetId, range, values);
 
   } catch (error) {
+    console.error(`[safeAppendDataToSheet] ❌ Error:`, {
+      error: error.message,
+      spreadsheetUrl,
+      characterName: character?.name,
+      range
+    });
     throw error;
   }
 }
@@ -666,6 +795,7 @@ module.exports = {
     deleteInventorySheetData,
     validateInventorySheet,
     validateVendingSheet,
+    validateTokenTrackerSheet,
     safeAppendDataToSheet,
     parseSheetData
 };
