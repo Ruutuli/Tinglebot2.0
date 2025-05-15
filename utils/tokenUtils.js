@@ -160,8 +160,6 @@ function generateTokenBreakdown({
   return breakdown;
 }
 
-
-
 // ------------------- Calculate Writing Tokens -------------------
 // Calculates tokens for writing submissions based on word count
 function calculateWritingTokens(wordCount) {
@@ -226,6 +224,15 @@ function handleTokenError(error, interaction) {
     };
 }
 
+// ------------------- Log Token Balance Change -------------------
+function logTokenBalanceChange(user, amount, action) {
+    const oldBalance = user.tokens;
+    const newBalance = oldBalance + amount;
+    console.log(`[tokenUtils.js]: 💰 Initial token balance: ${oldBalance}`);
+    console.log(`[tokenUtils.js]: 💸 ${action} ${Math.abs(amount)} tokens from user's balance`);
+    console.log(`[tokenUtils.js]: 💰 New token balance: ${newBalance}`);
+}
+
 // ------------------- Exported Functions -------------------
 // Exporting the unified `calculateTokens` and other utility functions.
 module.exports = {
@@ -234,4 +241,5 @@ module.exports = {
   calculateWritingTokens,
   generateTokenBreakdown,
   handleTokenError,
+  logTokenBalanceChange,
 };
