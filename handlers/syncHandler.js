@@ -37,10 +37,11 @@ const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../utils/valid
 // Constants
 // ============================================================================
 
-const BATCH_SIZE = 25;
-const BATCH_DELAY = 15000; // 15 seconds
+const BATCH_SIZE = 10;
+const BATCH_DELAY = 2000;
 const SERVICE_ACCOUNT_PATH = './service-account.json';
 const MAX_RETRIES = 3;
+const RETRY_DELAY = 5000;
 
 // ============================================================================
 // Error Tracking
@@ -103,7 +104,7 @@ async function checkGoogleSheetsPermissions(auth, spreadsheetId, interaction) {
 // ------------------- processInventoryItem -------------------
 // Processes a single inventory item and prepares it for database sync.
 async function processInventoryItem(row, originalRowIndex, character, interaction) {
-    const [sheetCharacterName, itemName, qty, , , , , , , , , , confirmedSync] = row;
+    const [sheetCharacterName, itemName, qty, , , , obtain, , , , , , confirmedSync] = row;
 
     if (confirmedSync) {
         return null;
@@ -121,6 +122,9 @@ async function processInventoryItem(row, originalRowIndex, character, interactio
         throw new Error(`Invalid quantity for item ${itemName}: ${qty}`);
     }
 
+    // Preserve "Crafting" obtain method if it exists (case-insensitive)
+    const obtainMethod = obtain && obtain.toString().trim().toLowerCase().includes('crafting') ? obtain.trim() : 'Manual Sync';
+
     return {
         inventoryItem: {
             characterId: character._id,
@@ -136,7 +140,7 @@ async function processInventoryItem(row, originalRowIndex, character, interactio
             location: character.currentVillage || character.homeVillage || '',
             link: `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`,
             date: new Date(),
-            obtain: 'Manual Sync',
+            obtain: obtainMethod,
             synced: uuidv4()
         },
         updatedRowData: [
@@ -146,7 +150,7 @@ async function processInventoryItem(row, originalRowIndex, character, interactio
             item.category.join(', ') || 'Uncategorized',
             item.type.join(', ') || 'Unknown',
             item.subtype || '',
-            'Manual Sync',
+            obtainMethod,
             character.job || '',
             character.perk || '',
             character.currentVillage || character.homeVillage || '',
@@ -229,7 +233,12 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
             originalRowIndex: index + 2
         }));
 
-        const filteredData = mappedData.filter(data => data.row[0] === character.name && data.row[1]);
+        // Only process rows that exist in the sheet and belong to this character
+        const filteredData = mappedData.filter(data => {
+            const [sheetCharacterName, itemName, qty] = data.row;
+            return sheetCharacterName === character.name && itemName && qty;
+        });
+
         if (!filteredData.length) {
             console.log(`[syncHandler.js]: ⚠️ No matching data for ${character.name}`);
             await editSyncErrorMessage(interaction, `❌ **No matching data found for ${character.name} in the Google Sheet.**\n\nYou must have at least 1 item! If this is a new character, please add their starter gear.`);
@@ -241,61 +250,96 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
 
         // Process items in batches
         let batchRequests = [];
+        let skippedItems = [];
+        let processedItems = new Set(); // Track which items have been processed
+
         for (let i = 0; i < filteredData.length; i += BATCH_SIZE) {
             const batch = filteredData.slice(i, i + BATCH_SIZE);
-            console.log(`[syncHandler.js]: 📦 Processing batch ${Math.floor(i / BATCH_SIZE) + 1}`);
+            console.log(`[syncHandler.js]: 📦 Processing batch ${Math.floor(i / BATCH_SIZE) + 1} of ${Math.ceil(filteredData.length / BATCH_SIZE)}`);
 
-            for (const { row, originalRowIndex } of batch) {
+            // Process batch with retry logic
+            let batchSuccess = false;
+            let batchRetries = 0;
+            let currentBatchRequests = []; // Track requests for current batch only
+
+            while (!batchSuccess && batchRetries < MAX_RETRIES) {
                 try {
-                    const result = await processInventoryItem(row, originalRowIndex, character, interaction);
-                    if (!result) continue;
-                    if (result.error) {
-                        errors.push(result.error);
-                        skippedLinesCount++;
-                        continue;
+                    for (const { row, originalRowIndex } of batch) {
+                        const [sheetCharacterName, itemName] = row;
+                        const itemKey = `${sheetCharacterName}:${itemName}`;
+
+                        // Skip if already processed
+                        if (processedItems.has(itemKey)) {
+                            console.log(`[syncHandler.js]: ⏭️ Skipping already processed item: ${itemName}`);
+                            continue;
+                        }
+
+                        try {
+                            const result = await processInventoryItem(row, originalRowIndex, character, interaction);
+                            if (!result) continue;
+                            if (result.error) {
+                                errors.push(result.error);
+                                skippedLinesCount++;
+                                continue;
+                            }
+
+                            const { inventoryItem, updatedRowData } = result;
+                            
+                            // Only update existing items in the database
+                            const existingItem = await ItemModel.findOne({ itemName: inventoryItem.itemName });
+                            if (!existingItem) {
+                                skippedItems.push(inventoryItem.itemName);
+                                continue;
+                            }
+
+                            await syncToInventoryDatabase(character, inventoryItem, interaction);
+                            syncedItemsCount++;
+
+                            // Add to current batch requests
+                            currentBatchRequests.push({
+                                range: `loggedInventory!A${originalRowIndex}:M${originalRowIndex}`,
+                                values: [updatedRowData]
+                            });
+
+                            // Mark as processed
+                            processedItems.add(itemKey);
+                        } catch (error) {
+                            if (error.message.includes('does not have permission') || error.status === 403) {
+                                throw error;
+                            }
+                            if (!error.message?.includes('Could not write to sheet') && shouldLogError(error)) {
+                                handleError(error, 'syncHandler.js');
+                                console.error(`[syncHandler.js]: ❌ Error processing row ${originalRowIndex}: ${error.message}`);
+                            }
+                            errors.push(`Row ${originalRowIndex}: ${error.message}`);
+                            skippedLinesCount++;
+                        }
                     }
 
-                    const { inventoryItem, updatedRowData } = result;
-                    await syncToInventoryDatabase(character, inventoryItem, interaction);
-                    syncedItemsCount++;
-
-                    batchRequests.push({
-                        range: `loggedInventory!A${originalRowIndex}:M${originalRowIndex}`,
-                        values: [updatedRowData],
-                        sheetId
-                    });
+                    // Update the sheet with all changes in this batch
+                    if (currentBatchRequests.length > 0) {
+                        await writeBatchData(auth, spreadsheetId, currentBatchRequests);
+                        batchRequests = batchRequests.concat(currentBatchRequests); // Add to total batch requests
+                        currentBatchRequests = []; // Clear the current batch requests
+                    }
+                    
+                    batchSuccess = true;
                 } catch (error) {
-                    // If it's a permission error, throw it immediately to stop processing
-                    if (error.message.includes('does not have permission') || error.status === 403) {
+                    batchRetries++;
+                    if (batchRetries < MAX_RETRIES) {
+                        console.log(`[syncHandler.js]: ⚠️ Batch failed, retrying in ${RETRY_DELAY}ms (attempt ${batchRetries + 1})`);
+                        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+                    } else {
                         throw error;
                     }
-                    // Only handle the error if it hasn't been handled by other modules
-                    if (!error.message?.includes('Could not write to sheet') && shouldLogError(error)) {
-                        handleError(error, 'syncHandler.js');
-                        console.error(`[syncHandler.js]: ❌ Error processing row ${originalRowIndex}: ${error.message}`);
-                    }
-                    errors.push(`Row ${originalRowIndex}: ${error.message}`);
-                    skippedLinesCount++;
                 }
             }
 
-            if (batchRequests.length) {
-                try {
-                    await writeBatchData(auth, spreadsheetId, batchRequests);
-                } catch (error) {
-                    if (error.message.includes('does not have permission') || error.status === 403) {
-                        throw error;
-                    }
-                    // Only handle the error if it hasn't been handled by other modules
-                    if (!error.message?.includes('Could not write to sheet') && shouldLogError(error)) {
-                        handleError(error, 'syncHandler.js');
-                        console.error(`[syncHandler.js]: ❌ Error writing batch data: ${error.message}`);
-                    }
-                }
-                batchRequests = [];
+            // Add delay between batches
+            if (i + BATCH_SIZE < filteredData.length) {
+                console.log(`[syncHandler.js]: ⏰ Waiting ${BATCH_DELAY}ms before next batch`);
+                await new Promise(resolve => setTimeout(resolve, BATCH_DELAY));
             }
-
-            await new Promise(resolve => setTimeout(resolve, BATCH_DELAY));
         }
 
         // Update character sync status
@@ -303,22 +347,21 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
         await character.save();
         await removeInitialItemIfSynced(character._id);
 
-        // Send completion message
+        // Send completion message with skipped items
         totalSyncedItemsCount += syncedItemsCount;
         const now = formatDateTime(new Date());
-        await editSyncMessage(
-            interaction,
-            character.name,
-            totalSyncedItemsCount,
-            errors.map(error => ({
-                reason: error.split(': ')[1],
-                itemName: error.includes('Item with name') ? error.split('Item with name ')[1].split(' not found')[0] : 'Unknown'
-            })),
-            now,
-            character.inventory
-        );
-
-        console.log(`[syncHandler.js]: ✅ Sync completed for ${character.name} at ${now}`);
+        let message = `✅ **Sync completed for ${character.name}!**\n\n`;
+        message += `📦 **Synced Items:** ${totalSyncedItemsCount}\n`;
+        if (skippedItems.length > 0) {
+            message += `⚠️ **Skipped Items (not in database):** ${skippedItems.join(', ')}\n`;
+        }
+        if (errors.length > 0) {
+            message += `❌ **Errors:** ${errors.length}\n`;
+            errors.forEach(error => message += `- ${error}\n`);
+        }
+        message += `\n🕒 **Last Updated:** ${now}`;
+        
+        await interaction.editReply({ content: message });
     } catch (error) {
         handleError(error, 'syncHandler.js');
         console.error(`[syncHandler.js]: ❌ Sync failed: ${error.message}`);

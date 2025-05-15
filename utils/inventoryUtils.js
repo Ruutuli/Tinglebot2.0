@@ -226,7 +226,29 @@ async function syncToInventoryDatabase(character, item, interaction) {
         uuidv4()
       ]];
       
-      await safeAppendDataToSheet(character.inventory, character, "loggedInventory!A2:M", values);
+      // First, try to find if this item already exists in the sheet
+      const auth = await authorizeSheets();
+      const spreadsheetId = extractSpreadsheetId(character.inventory);
+      const sheetData = await readSheetData(auth, spreadsheetId, 'loggedInventory!A2:M');
+      
+      // Find the row index of the existing item
+      const existingRowIndex = sheetData.findIndex(row => 
+        row[0] === characterName && 
+        row[1] === dbDoc.itemName
+      );
+
+      if (existingRowIndex !== -1) {
+        // Update existing row
+        await writeSheetData(
+          auth,
+          spreadsheetId,
+          `loggedInventory!A${existingRowIndex + 2}:M${existingRowIndex + 2}`,
+          values
+        );
+        console.log(`[inventoryUtils.js]: ✅ Updated existing row for ${dbDoc.itemName} in sheet`);
+      } else {
+        console.log(`[inventoryUtils.js]: ⚠️ Skipping new item ${dbDoc.itemName} - only updating existing items`);
+      }
     } catch (sheetError) {
       console.error(`[inventoryUtils.js]: ❌ Sheet sync error for ${character.name}: ${sheetError.message}`);
     }
