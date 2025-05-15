@@ -6,8 +6,6 @@
     "scripts/",
     "scripts/deploy-commands.js",
     "index.js",
-    "commands/",
-    "handlers/",
     "database/",
     "models/",
     "modules/",
@@ -15,6 +13,6 @@
   ],
   "ignore": ["node_modules/"],
   "ext": "js,json",
-  "exec": "node scripts/deploy-commands.js global && node scripts/deploy-commands.js guild > nodemon.log 2>&1",
+  "exec": "node scripts/deploy-commands.js guild > nodemon.log 2>&1",
   "legacy-watch": true
 }
