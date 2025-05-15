@@ -171,51 +171,59 @@ function calculateWritingTokens(wordCount) {
 // ------------------- Handle Token Errors -------------------
 // Provides consistent error handling and user guidance for token-related issues
 function handleTokenError(error, interaction) {
-  // Only log actual system errors, not user-facing errors
-  if (!error.message.includes('Invalid URL') && 
-      !error.message.includes('permission') && 
-      !error.message.includes('404') && 
-      !error.message.includes('headers')) {
-    console.error('[tokenUtils.js]: System error:', error);
-  }
+    console.log(`[tokenUtils.js]: 🔍 Processing token error:`, error.message);
 
-  let errorMessage = '';
-  let guideMessage = '';
+    // Only log actual system errors, not user-facing errors
+    if (!error.message.includes('Invalid URL') && 
+        !error.message.includes('permission') && 
+        !error.message.includes('404') && 
+        !error.message.includes('headers')) {
+        console.error('[tokenUtils.js]: ❌ System error:', error);
+    }
 
-  if (error.message.includes('Invalid URL')) {
-    errorMessage = '❌ Your token tracker link is not set up correctly.';
-    guideMessage = '📝 **Quick Guide:**\n1. Use `/tokens setup` to set up your tracker\n2. Make sure to use a valid Google Sheets URL';
-  } else if (error.message.includes('permission')) {
-    errorMessage = '❌ The bot cannot access your token tracker.';
-    guideMessage = '📝 **Quick Guide:**\n1. Share your sheet with: `tinglebot@rotw-tinglebot.iam.gserviceaccount.com`\n2. Make sure to give **edit** permissions';
-  } else if (error.message.includes('404')) {
-    errorMessage = '❌ Your token tracker sheet or tab is missing.';
-    guideMessage = '📝 **Quick Guide:**\n1. Make sure you have a tab named `loggedTracker`\n2. Check that your sheet URL is correct';
-  } else if (error.message.includes('headers')) {
-    errorMessage = '❌ Your token tracker is missing required headers.';
-    guideMessage = '📝 **Quick Guide:**\n1. Add these headers in cells B7:F7:\n`SUBMISSION | LINK | CATEGORIES | TYPE | TOKEN AMOUNT`';
-  } else {
-    errorMessage = '❌ **An error occurred with your token tracker!**';
-    guideMessage = '📝 **Quick Guide:**\n\n' +
-      '1. Make sure your sheet has these headers in row 7 (B7:F7):\n' +
-      '```\n' +
-      'SUBMISSION | LINK | CATEGORIES | TYPE | TOKEN AMOUNT\n' +
-      '```\n\n' +
-      '2. Add at least one entry with type "earned" in column E:\n' +
-      '```\n' +
-      'SUBMISSION | LINK | CATEGORIES | TYPE   | TOKEN AMOUNT\n' +
-      'Artwork   | URL  | Art        | earned | 100\n' +
-      '```\n\n' +
-      '3. Share your sheet with: `tinglebot@rotw-tinglebot.iam.gserviceaccount.com`\n' +
-      '4. Make sure you have a tab named exactly `loggedTracker`\n' +
-      '5. Use `/tokens setup` to verify your setup';
-  }
+    let errorMessage = '';
+    let guideMessage = '';
 
-  return {
-    errorMessage,
-    guideMessage,
-    fullMessage: `${errorMessage}\n\n${guideMessage}\n\n💡 Need more help? Use \`/tokens setup\` to verify your setup.`
-  };
+    if (error.message.includes('Invalid URL')) {
+        console.log(`[tokenUtils.js]: ⚠️ Invalid URL error detected`);
+        errorMessage = '❌ Your token tracker link is not set up correctly.';
+        guideMessage = '📝 **Quick Guide:**\n1. Use `/tokens setup` to set up your tracker\n2. Make sure to use a valid Google Sheets URL';
+    } else if (error.message.includes('permission')) {
+        console.log(`[tokenUtils.js]: ⚠️ Permission error detected`);
+        errorMessage = '❌ The bot cannot access your token tracker.';
+        guideMessage = '📝 **Quick Guide:**\n1. Share your sheet with: `tinglebot@rotw-tinglebot.iam.gserviceaccount.com`\n2. Make sure to give **edit** permissions';
+    } else if (error.message.includes('404')) {
+        console.log(`[tokenUtils.js]: ⚠️ 404 error detected - sheet or tab missing`);
+        errorMessage = '❌ Your token tracker sheet or tab is missing.';
+        guideMessage = '📝 **Quick Guide:**\n1. Make sure you have a tab named `loggedTracker`\n2. Check that your sheet URL is correct';
+    } else if (error.message.includes('headers')) {
+        console.log(`[tokenUtils.js]: ⚠️ Missing headers error detected`);
+        errorMessage = '❌ Your token tracker is missing required headers.';
+        guideMessage = '📝 **Quick Guide:**\n1. Add these headers in cells B7:F7:\n`SUBMISSION | LINK | CATEGORIES | TYPE | TOKEN AMOUNT`';
+    } else {
+        console.log(`[tokenUtils.js]: ⚠️ Unknown error type detected`);
+        errorMessage = '❌ **An error occurred with your token tracker!**';
+        guideMessage = '📝 **Quick Guide:**\n\n' +
+            '1. Make sure your sheet has these headers in row 7 (B7:F7):\n' +
+            '```\n' +
+            'SUBMISSION | LINK | CATEGORIES | TYPE | TOKEN AMOUNT\n' +
+            '```\n\n' +
+            '2. Add at least one entry with type "earned" in column E:\n' +
+            '```\n' +
+            'SUBMISSION | LINK | CATEGORIES | TYPE   | TOKEN AMOUNT\n' +
+            'Artwork   | URL  | Art        | earned | 100\n' +
+            '```\n\n' +
+            '3. Share your sheet with: `tinglebot@rotw-tinglebot.iam.gserviceaccount.com`\n' +
+            '4. Make sure you have a tab named exactly `loggedTracker`\n' +
+            '5. Use `/tokens setup` to verify your setup';
+    }
+
+    console.log(`[tokenUtils.js]: ✅ Error handling complete - returning formatted message`);
+    return {
+        errorMessage,
+        guideMessage,
+        fullMessage: `${errorMessage}\n\n${guideMessage}\n\n💡 Need more help? Use \`/tokens setup\` to verify your setup.`
+    };
 }
 
 // ------------------- Exported Functions -------------------
