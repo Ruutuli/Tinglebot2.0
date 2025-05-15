@@ -305,6 +305,7 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
     if (!character) {
       throw new Error(`Character with ID ${characterId} not found`);
     }
+    console.log(`[inventoryUtils.js]: 📦 Processing inventory for ${character.name}`);
     const collectionName = character.name.toLowerCase();
     const inventoriesConnection = await dbFunctions.connectToInventories();
     const db = inventoriesConnection.useDb("inventories");
@@ -321,6 +322,8 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
       return false;
     }
     const newQuantity = inventoryItem.quantity - quantity;
+    console.log(`[inventoryUtils.js]: ➖ Removing ${quantity} ${itemName}`);
+    console.log(`[inventoryUtils.js]: 🔄 Updated ${itemName} quantity to ${newQuantity}`);
     if (newQuantity === 0) {
       await inventoryCollection.deleteOne({
         characterId: character._id,
