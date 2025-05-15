@@ -149,35 +149,50 @@ async function handleButtonInteraction(interaction) {
 // ------------------- Function: handleSyncYes -------------------
 // Begins character inventory sync.
 async function handleSyncYes(interaction, characterId) {
-  const character = await fetchCharacterById(characterId);
-  if (!character) {
-    return interaction.reply({ content: '❌ **Character not found.**', ephemeral: true });
-  }
+  try {
+    const character = await fetchCharacterById(characterId);
+    if (!character) {
+      return interaction.reply({ content: '❌ **Character not found.**', ephemeral: true });
+    }
 
-  // Check if inventory is already synced
-  if (character.inventorySynced) {
-    return interaction.update({ 
-      content: `❌ **Inventory for ${character.name} has already been synced and cannot be synced again.**`,
+    // Check if inventory is already synced
+    if (character.inventorySynced) {
+      return interaction.update({ 
+        content: `❌ **Inventory for ${character.name} has already been synced and cannot be synced again.**`,
+        embeds: [],
+        components: [] // Remove the buttons
+      });
+    }
+
+    // Update the message to remove buttons and show starting message
+    await interaction.update({
+      content: `🔄 Sync has initiated. Please wait...`,
       embeds: [],
       components: [] // Remove the buttons
     });
+
+    // Start the sync process
+    await syncInventory(character.name, interaction.user.id, interaction);
+  } catch (error) {
+    handleError(error, 'componentHandler.js');
+    console.error(`[componentHandler.js]: ❌ Error in handleSyncYes: ${error.message}`);
+    if (!interaction.replied && !interaction.deferred) {
+      await interaction.reply({ 
+        content: '❌ **An error occurred while starting the sync process.**',
+        ephemeral: true 
+      });
+    }
   }
-
-  // Update the message to remove buttons and show starting message
-  await interaction.update({
-    content: `🔄 Starting inventory sync for ${character.name}...`,
-    embeds: [],
-    components: [] // Remove the buttons
-  });
-
-  // Start the sync process
-  await syncInventory(character.name, interaction.user.id, interaction);
 }
 
 // ------------------- Function: handleSyncNo -------------------
 // Cancels sync.
 async function handleSyncNo(interaction) {
-  await interaction.reply({ content: '❌ **Sync canceled.**', ephemeral: true });
+  await interaction.update({ 
+    content: '❌ **Sync canceled.**',
+    embeds: [],
+    components: [] // Remove the buttons
+  });
 }
 
 // ------------------- Function: handleConfirmation -------------------
