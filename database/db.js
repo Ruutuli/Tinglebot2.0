@@ -264,15 +264,28 @@ const fetchCharactersByUserId = async (userId) => {
 const fetchCharacterByNameAndUserId = async (characterName, userId) => {
  try {
   await connectToTinglebot();
+  console.log(`[characterService]: Searching for character with name "${characterName}" and userId "${userId}"`);
+  
   const character = await Character.findOne({
     name: new RegExp(`^${characterName.trim()}$`, "i"),
     userId
   });
+
+  if (!character) {
+    console.error(`[characterService]: No character found with name "${characterName}" and userId "${userId}"`);
+    return null;
+  }
+
+  console.log(`[characterService]: Found character "${character.name}" (ID: ${character._id})`);
+  console.log(`[characterService]: Character inventory URL: ${character.inventory || 'undefined'}`);
+  
   return character;
  } catch (error) {
   handleError(error, "db.js");
   console.error(
-   `[characterService]: logs - Error in fetchCharacterByNameAndUserId: ${error.message}`
+   `[characterService]: Error in fetchCharacterByNameAndUserId: ${error.message}\n` +
+   `Search parameters - name: "${characterName}", userId: "${userId}"\n` +
+   `Stack trace: ${error.stack}`
   );
   throw error;
  }
