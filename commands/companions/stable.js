@@ -423,7 +423,17 @@ async function handleRetrieveMount(interaction, userId, characterName, mountName
       });
       return;
     }
+
+    // Log initial token balance
+    console.log(`[stable.js]: 🔄 Processing mount retrieval for ${character.name}`);
+    console.log(`[stable.js]: 💰 Initial token balance: ${user.tokens}`);
+
     user.tokens -= 100;
+    await user.save();
+
+    // Log token deduction from database
+    console.log(`[stable.js]: 💸 Deducted 100 tokens from user's balance`);
+    console.log(`[stable.js]: 💰 New token balance: ${user.tokens}`);
 
     if (isValidGoogleSheetsUrl(user.tokenTracker)) {
       const spreadsheetId = extractSpreadsheetId(user.tokenTracker);
@@ -436,7 +446,21 @@ async function handleRetrieveMount(interaction, userId, characterName, mountName
         'spent',                           // TYPE
         '-100'                             // TOKEN AMOUNT
       ]];
+
+      // Log Google Sheets update attempt
+      console.log(`[stable.js]: 📝 Attempting to log token transaction to Google Sheets`);
+      console.log(`[stable.js]: 📊 Transaction details:`, {
+        submission: `Retrieved Mount: ${mountName}`,
+        link: interactionUrl,
+        category: 'Other',
+        type: 'spent',
+        amount: '-100'
+      });
+
       await safeAppendDataToSheet(user.tokenTracker, character, 'loggedTracker!A:F', values);
+      console.log(`[stable.js]: ✅ Successfully logged token transaction to Google Sheets`);
+    } else {
+      console.log(`[stable.js]: ⚠️ No valid token tracker URL found for user`);
     }
 
     const mount = await Mount.findOne({ owner: character.name, name: mountName, isStored: true });
@@ -453,7 +477,6 @@ async function handleRetrieveMount(interaction, userId, characterName, mountName
 
     character.mount = true;
     await character.save();
-    await user.save();
 
     await interaction.reply({
       embeds: [{
