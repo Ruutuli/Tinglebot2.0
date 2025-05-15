@@ -30,9 +30,28 @@ const SCOPES = ['https://www.googleapis.com/auth/spreadsheets'];
 
 // API Rate Limiting
 const limiter = new Bottleneck({
-    minTime: 200,    // Minimum time (ms) between API requests
-    maxConcurrent: 5 // Maximum concurrent API requests
+    minTime: 1000,    // Increased to 1 second between requests
+    maxConcurrent: 3, // Reduced concurrent requests
+    reservoir: 60,    // Maximum requests per minute
+    reservoirRefreshAmount: 60,
+    reservoirRefreshInterval: 60 * 1000, // Refresh every minute
+    trackDoneStatus: true
 });
+
+// Add exponential backoff for failed requests
+limiter.on('failed', async (error, jobInfo) => {
+    const retryCount = jobInfo.retryCount || 0;
+    if (retryCount < 3) {
+        const delay = Math.min(1000 * Math.pow(2, retryCount), 10000);
+        console.log(`[googleSheetsUtils.js]: ⚠️ Rate limit hit, retrying in ${delay}ms (attempt ${retryCount + 1})`);
+        return delay;
+    }
+    throw error;
+});
+
+// Cache Configuration
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache TTL
+const sheetCache = new Map();
 
 // ============================================================================
 // ------------------- Authorization -------------------
@@ -148,11 +167,47 @@ async function clearSheetFormatting(auth, spreadsheetId, range) {
     });
 }
 
+// ------------------- Function: getCachedSheetData -------------------
+// Gets data from cache or fetches from API if cache is invalid
+async function getCachedSheetData(spreadsheetId, range) {
+    const cacheKey = `${spreadsheetId}:${range}`;
+    const cached = sheetCache.get(cacheKey);
+    
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+        console.log(`[googleSheetsUtils.js]: 🔍 Using cached data for ${range}`);
+        return cached.data;
+    }
+    
+    const auth = await authorizeSheets();
+    const data = await fetchSheetData(auth, spreadsheetId, range);
+    
+    sheetCache.set(cacheKey, {
+        data,
+        timestamp: Date.now()
+    });
+    
+    return data;
+}
+
+// ------------------- Function: invalidateCache -------------------
+// Invalidates cache for a specific spreadsheet or all cache
+function invalidateCache(spreadsheetId = null) {
+    if (spreadsheetId) {
+        for (const key of sheetCache.keys()) {
+            if (key.startsWith(spreadsheetId)) {
+                sheetCache.delete(key);
+            }
+        }
+    } else {
+        sheetCache.clear();
+    }
+    console.log(`[googleSheetsUtils.js]: 🔄 Cache invalidated for ${spreadsheetId || 'all sheets'}`);
+}
+
 // ------------------- Function: fetchDataFromSheet -------------------
 // Fetches data from Google Sheets for external use
 const fetchDataFromSheet = async (spreadsheetId, range) => {
-    const auth = await authorizeSheets();
-    return fetchSheetData(auth, spreadsheetId, range);
+    return getCachedSheetData(spreadsheetId, range);
 };
 
 // ============================================================================
