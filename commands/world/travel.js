@@ -624,6 +624,21 @@ ${pathEmoji || ''} No monsters or gathering today!`)
     }
   } else {
     // ------------------- Safe Day of Travel -------------------
+    // Generate Do Nothing flavor ONCE for this day
+    const doNothingFlavorTexts = [
+      `${character.name} lay under a blanket of stars. 🌌`,
+      `${character.name} built a small campfire and enjoyed the crackling warmth. 🔥`,
+      `${character.name} stumbled upon ancient ruins and marveled at their carvings. 🏛️`,
+      `${character.name} heard a nearby stream and drifted to sleep. 💧`,
+      `${character.name} found a quiet grove where fireflies danced. ✨`,
+      `${character.name} roasted foraged mushrooms and thought of home. 🍄`,
+      `${character.name} wrapped themselves in their cloak against the chill. 🧥`,
+      `${character.name} caught a glimpse of a shooting star and made a wish. 🌠`,
+      `${character.name} discovered a meadow of moonlit wildflowers. 🌺`,
+      `${character.name} gazed at constellations and felt at peace. 🌟`
+    ];
+    const doNothingFlavor = doNothingFlavorTexts[Math.floor(Math.random() * doNothingFlavorTexts.length)];
+    console.log(`[travel.js]: 🔄 Generated Do Nothing flavor for Day ${day}: ${doNothingFlavor}`);
     const safeEmbed = createSafeTravelDayEmbed(character, day, totalTravelDuration, pathEmoji, currentPath);
     const safeMessage = await channel.send({ embeds: [safeEmbed] });
     const buttons = new ActionRowBuilder().addComponents(
@@ -651,7 +666,9 @@ ${pathEmoji || ''} No monsters or gathering today!`)
         currentPath,
         safeMessage,
         null,
-        travelLog
+        travelLog,
+        undefined,
+        i.customId === 'do_nothing' ? doNothingFlavor : undefined
       );    
       dailyLogEntry += `> ${decision}\n`;
       const updated = new EmbedBuilder(safeMessage.embeds[0].toJSON()).setDescription(
@@ -672,9 +689,10 @@ ${pathEmoji || ''} No monsters or gathering today!`)
           currentPath,
           safeMessage,
           null,
-          travelLog
+          travelLog,
+          undefined,
+          doNothingFlavor
         );
-        
         dailyLogEntry += `> ${decision}\n`;
       }
     

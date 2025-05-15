@@ -441,50 +441,37 @@ return decision;
   
   // ------------------- Do Nothing Helper -------------------
 // Presents extended flavor pool (10+ lines), logs event, and edits embed (NO stamina cost).
-async function handleDoNothing(interaction, character, encounterMessage, travelLog) {
+async function handleDoNothing(interaction, character, encounterMessage, travelLog, preGeneratedFlavor = null) {
   try {
     travelLog = Array.isArray(travelLog) ? travelLog : [];
     const jobPerk = getJobPerk(character.job);
     character.perk = jobPerk?.perks[0];
-    console.log(`[travelHandler.js]: 🔄 ${character.name} resting`);
-
-    const flavorTexts = [
-      `${character.name} lay under a blanket of stars. 🌌`,
-      `${character.name} built a small campfire and enjoyed the crackling warmth. 🔥`,
-      `${character.name} stumbled upon ancient ruins and marveled at their carvings. 🏛️`,
-      `${character.name} heard a nearby stream and drifted to sleep. 💧`,
-      `${character.name} found a quiet grove where fireflies danced. ✨`,
-      `${character.name} roasted foraged mushrooms and thought of home. 🍄`,
-      `${character.name} wrapped themselves in their cloak against the chill. 🧥`,
-      `${character.name} caught a glimpse of a shooting star and made a wish. 🌠`,
-      `${character.name} discovered a meadow of moonlit wildflowers. 🌺`,
-      `${character.name} gazed at constellations and felt at peace. 🌟`
-    ];
-    const randomFlavor = flavorTexts[Math.floor(Math.random() * flavorTexts.length)];
-
+    let randomFlavor;
+    if (preGeneratedFlavor) {
+      randomFlavor = preGeneratedFlavor;
+      console.log(`[travelHandler.js]: 🔄 Using pre-generated flavor for Do Nothing: ${randomFlavor}`);
+    } else {
+      randomFlavor = `${character.name} rested quietly.`;
+      console.error(`[travelHandler.js]: ❌ No preGeneratedFlavor provided to handleDoNothing. Using fallback.`);
+    }
     // No stamina should be used when truly doing nothing
     const decision = `😴 ${randomFlavor}`;
     const outcomeMessage = `${character.name} took some time to rest.`;
-
     // Update embed
     const description = 
       `🌸 It's a nice and safe day of traveling. What do you want to do next?\n> ${decision}\n\n` +
       `**❤️ Hearts:** ${character.currentHearts}/${character.maxHearts}\n` +
       `**🟩 Stamina:** ${character.currentStamina}/${character.maxStamina}`;
-
     const embed = createUpdatedTravelEmbed({
       encounterMessage,
       character,
       description,
       fields: [{ name: '🔹 __Outcome__', value: outcomeMessage || 'No resources found', inline: false }],
     });
-    
     if (typeof encounterMessage?.edit === 'function') {
       await encounterMessage.edit({ embeds: [embed], components: [] });
     }
-
     return decision;
-
   } catch (error) {
     handleError(error, 'travelHandler.js (handleGather)');
     throw error;
@@ -505,7 +492,8 @@ async function handleTravelInteraction(
     encounterMessage,
     monster,
     travelLog,
-    startingVillage
+    startingVillage,
+    preGeneratedFlavor
   ) {
     try {
       if (interaction?.isButton?.()) {
@@ -544,7 +532,7 @@ async function handleTravelInteraction(
           if (monster) {
             result = await handleFight(interaction, character, encounterMessage, monster, travelLog, startingVillage);
           } else {
-            result = await handleDoNothing(interaction, character, encounterMessage, travelLog);
+            result = await handleDoNothing(interaction, character, encounterMessage, travelLog, preGeneratedFlavor);
           }
       }
   
