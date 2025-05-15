@@ -1248,7 +1248,7 @@ const createMonsterEncounterEmbed = (
   .setFooter({
    text: `Tier: ${monster.tier}${
     isBloodMoon ? " 🔴 Blood Moon Encounter" : ""
-   }`,
+   }${character.jobVoucher && character.jobVoucherJob ? ` | 🎫 Job Voucher in use: ${character.jobVoucherJob}` : ""}`,
    iconURL: authorIconURL,
   })
   .setImage(villageImage);

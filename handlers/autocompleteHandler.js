@@ -180,6 +180,13 @@ async function handleAutocomplete(interaction) {
         }
         break;
 
+      // ------------------- Loot Command -------------------
+      case "loot":
+        if (focusedName === "charactername") {
+          await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "loot");
+        }
+        break;
+
       // ------------------- Mount Command -------------------
       case "mount":
         if (focusedName === "charactername") {
