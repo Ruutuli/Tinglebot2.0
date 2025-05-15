@@ -263,7 +263,6 @@ module.exports = {
 
       // ------------------- Validate Item Can Be Used -------------------
       // Check if the item is a Recipe item (for healing) or has other valid uses
-      console.log(`[item.js]: 🔍 Validating item "${item.itemName}" - Category: ${item.category}, ModifierHearts: ${item.modifierHearts}, StaminaRecovered: ${item.staminaRecovered}`);
       
       if (item.itemName.toLowerCase() !== 'fairy' && (!Array.isArray(item.category) || !item.category.includes('Recipe'))) {
         console.log(`[item.js]: ❌ Item validation failed - Not a fairy and category does not include Recipe`);

@@ -322,6 +322,7 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
       return false;
     }
     const newQuantity = inventoryItem.quantity - quantity;
+    console.log(`[inventoryUtils.js]: 📊 Found ${inventoryItem.quantity} ${itemName} in ${character.name}'s inventory`);
     console.log(`[inventoryUtils.js]: ➖ Removing ${quantity} ${itemName}`);
     console.log(`[inventoryUtils.js]: 🔄 Updated ${itemName} quantity to ${newQuantity}`);
     if (newQuantity === 0) {
