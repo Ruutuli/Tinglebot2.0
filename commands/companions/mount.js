@@ -1,19 +1,25 @@
+// ============================================================================
+// ---- Imports ----
+// ============================================================================
+
+// ---- Discord.js Components ----
+const { SlashCommandBuilder } = require('@discordjs/builders');
+
+// ---- Database Services ----
+const { fetchCharacterByNameAndUserId } = require('../../database/db');
+
+// ---- Custom Modules ----
 const { handleError } = require('../../utils/globalErrorHandler');
 const { capitalizeVillageName } = require('../../utils/stringUtils');
-
-// ------------------- Import standard libraries and external modules -------------------
-const { SlashCommandBuilder } = require('@discordjs/builders'); // Slash command builder for Discord commands
-
-// ------------------- Import custom modules and handlers -------------------
-const { getEncounterById } = require('../../modules/mountModule'); // Module to retrieve encounter details by ID
-const { proceedWithRoll,handleViewMount  } = require('../../handlers/mountComponentHandler'); // Handler to proceed with rolling logic
-const { handleMountAutocomplete } = require('../../handlers/autocompleteHandler'); // Handler for character name autocomplete
-const { fetchCharacterByNameAndUserId } = require('../../database/db'); // Import fetchCharacterByNameAndUserId
 const { checkInventorySync } = require('../../utils/characterUtils');
+const { getEncounterById } = require('../../modules/mountModule');
+const { proceedWithRoll, handleViewMount } = require('../../handlers/mountComponentHandler');
+const { handleMountAutocomplete } = require('../../handlers/autocompleteHandler');
 
+// ============================================================================
+// ---- Command Definition ----
+// ============================================================================
 
-
-// ------------------- Define and export the mount command -------------------
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('mount')
@@ -25,13 +31,13 @@ module.exports = {
                 .addStringOption(option =>
                     option.setName('encounterid')
                         .setDescription('Enter the Encounter ID')
-                        .setRequired(true) // Required field for Encounter ID
+                        .setRequired(true)
                 )
                 .addStringOption(option =>
                     option.setName('charactername')
                         .setDescription('Enter the Character Name')
-                        .setRequired(true) // Required field for Character Name
-                        .setAutocomplete(true) // Enables autocomplete for character name
+                        .setRequired(true)
+                        .setAutocomplete(true)
                 )
         )
         .addSubcommand(subcommand =>
@@ -46,94 +52,100 @@ module.exports = {
                 )
         ),
 
-    // ------------------- Main execute function triggered by the mount command -------------------
+    // ============================================================================
+    // ---- Command Handlers ----
+    // ============================================================================
+
+    // ---- Function: execute ----
+    // Main command handler that routes to appropriate subcommand
     async execute(interaction) {
         const subcommand = interaction.options.getSubcommand();
 
-        if (subcommand === 'encounter') {
-            await handleEncounter(interaction);
-        } else if (subcommand === 'view') {
-            await handleViewMount(interaction); // Call handleViewMount from mountComponentHandler
-        } else {
+        try {
+            switch (subcommand) {
+                case 'encounter':
+                    await handleEncounter(interaction);
+                    break;
+                case 'view':
+                    await handleViewMount(interaction);
+                    break;
+                default:
+                    await interaction.reply({
+                        content: '❌ **Invalid subcommand. Please use `/mount encounter` or `/mount view`.**',
+                        ephemeral: true,
+                    });
+            }
+        } catch (error) {
+            console.error('[mount.js]: ❌ Error in execute:', error);
+            handleError(error, 'mount.js');
             await interaction.reply({
-                content: '❌ **Invalid subcommand. Please use `/mount encounter` or `/mount view`.**',
+                content: '❌ **An error occurred while processing your request. Please try again later.**',
                 ephemeral: true,
             });
         }
-    },
-
-    // ------------------- Autocomplete handler for character name input -------------------
-    async autocomplete(interaction) {
-        const focusedOption = interaction.options.getFocused(true);
-
-        // Handle autocomplete when the user is focused on the 'charactername' option
-        if (focusedOption.name === 'charactername') {
-            await handleMountAutocomplete(interaction); // Function to handle character name suggestions
-        }
     }
-};
+}
+// ============================================================================
+// ---- Helper Functions ----
+// ============================================================================
 
-// ------------------- Handle Encounter Subcommand -------------------
+// ---- Function: handleEncounter ----
+// Processes mount encounter requests and validates character eligibility
 async function handleEncounter(interaction) {
     const encounterId = interaction.options.getString('encounterid');
     const characterName = interaction.options.getString('charactername');
 
-    // Retrieve encounter by ID
-    const encounter = getEncounterById(encounterId);
-
-    // Handle case when the encounter is not found
-    if (!encounter) {
-        await interaction.reply({
-            content: '❌ **Encounter not found. Please check the Encounter ID and try again.**',
-            ephemeral: true,
-        });
-        return; // Exit if encounter is not found
-    }
-
-    // Fetch character information
     try {
+        // Validate encounter exists
+        const encounter = getEncounterById(encounterId);
+        if (!encounter) {
+            return await interaction.reply({
+                content: '❌ **Encounter not found. Please check the Encounter ID and try again.**',
+                ephemeral: true,
+            });
+        }
+
+        // Fetch and validate character
         const character = await fetchCharacterByNameAndUserId(characterName, interaction.user.id);
         if (!character) {
-            return interaction.reply({
+            return await interaction.reply({
                 content: `❌ **Character "${characterName}" not found or doesn't belong to you.**`,
                 ephemeral: true,
             });
         }
 
-        // Check if the character already has a registered mount
+        // Check mount status
         if (character.mount) {
-            return interaction.reply({
+            return await interaction.reply({
                 content: `❌ **Your character "${character.name}" already has a registered mount and cannot participate in another mount encounter.**`,
                 ephemeral: true,
             });
         }
 
-        // Check inventory sync
+        // Validate inventory sync
         try {
             await checkInventorySync(character);
         } catch (error) {
-            await interaction.reply({
+            return await interaction.reply({
                 content: error.message,
                 ephemeral: true
             });
-            return;
         }
 
-        // ------------------- NEW: Validate village match -------------------
+        // Validate village location
         if (character.currentVillage?.toLowerCase() !== encounter.village?.toLowerCase()) {
-            return interaction.reply({
+            return await interaction.reply({
                 content: `❌ **${character.name} is currently located in ${capitalizeVillageName(character.currentVillage) || 'an unknown location'}, but this encounter is in ${capitalizeVillageName(encounter.village)}. Characters must be in the correct village to roll!**`,
                 ephemeral: true,
             });
         }
 
-        // Proceed with rolling logic for the character in the encounter
+        // Proceed with mount encounter
         await proceedWithRoll(interaction, characterName, encounterId);
 
     } catch (error) {
-    handleError(error, 'mount.js');
-
-        console.error('[mount.js]: ❌ Error fetching character or proceeding with roll:', error);
+        console.error('[mount.js]: ❌ Error in handleEncounter:', error);
+        handleError(error, 'mount.js');
         await interaction.reply({
             content: '❌ **An error occurred while processing your request. Please try again later.**',
             ephemeral: true,
