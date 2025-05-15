@@ -212,6 +212,15 @@ async function handleAutocomplete(interaction) {
         }
         break;
 
+      // ------------------- Stable Command -------------------
+      case "stable":
+        if (focusedName === "charactername") {
+          await handleStableCharacterAutocomplete(interaction, focusedOption);
+        } else if (focusedName === "mountname") {
+          await handleMountNameAutocomplete(interaction, focusedOption);
+        }
+        break;
+
       // ... rest of existing code ...
     }
   } catch (error) {
@@ -2229,6 +2238,39 @@ async function handleMountNameAutocomplete(interaction, focusedOption) {
  }
 }
 
+// ------------------- Stable Character Autocomplete -------------------
+// Provides autocomplete suggestions for user-owned characters with mounts for stable commands
+async function handleStableCharacterAutocomplete(interaction, focusedOption) {
+  try {
+    const userId = interaction.user.id;
+    const characters = await fetchCharactersByUserId(userId);
+    const subcommand = interaction.options.getSubcommand();
+
+    // For sell command, only show characters that have mounts
+    let filteredCharacters = characters;
+    if (subcommand === "sell") {
+      const charactersWithMounts = await Promise.all(
+        characters.map(async (character) => {
+          const mounts = await Mount.find({ owner: character.name });
+          return mounts.length > 0 ? character : null;
+        })
+      );
+      filteredCharacters = charactersWithMounts.filter(Boolean);
+    }
+
+    const choices = filteredCharacters.map((character) => ({
+      name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
+      value: character.name,
+    }));
+
+    await respondWithFilteredChoices(interaction, focusedOption, choices);
+  } catch (error) {
+    handleError(error, "autocompleteHandler.js");
+    console.error("[handleStableCharacterAutocomplete]: Error:", error);
+    await safeRespondWithError(interaction);
+  }
+}
+
 // ============================================================================
 // PET COMMANDS
 // ============================================================================
@@ -3092,6 +3134,7 @@ module.exports = {
  // ------------------- Mount/Stable Functions -------------------
  handleMountAutocomplete,
  handleMountNameAutocomplete,
+ handleStableCharacterAutocomplete,
 
  // ------------------- Pet Functions -------------------
  handlePetNameAutocomplete,
