@@ -172,10 +172,10 @@ module.exports = {
           description = `**${character.name}** has used a Job Voucher to perform the **${jobName}** job with the following perk(s): **${jobPerkInfo.perks.join(', ')}**.`;
         }
         const commands = [
-          jobPerkInfo.perks.includes('GATHERING') && '> </gather:1306176789755858974>',
-          jobPerkInfo.perks.includes('CRAFTING') && '> </crafting:1306176789634355242>',
-          jobPerkInfo.perks.includes('LOOTING') && '> </loot:1316682863143424121>',
-          jobPerkInfo.perks.includes('HEALING') && '> </heal fufill:1306176789755858977>'
+          jobPerkInfo.perks.includes('GATHERING') && '> </gather:1372378304773881885>',
+          jobPerkInfo.perks.includes('CRAFTING') && '> </crafting:1372378304773881883>',
+          jobPerkInfo.perks.includes('LOOTING') && '> </loot:1372378304773881887>',
+          jobPerkInfo.perks.includes('HEALING') && '> </heal fufill:1372378304773881886>'
         ].filter(Boolean);
         if (commands.length) {
           description += `\n\nUse the following commands to make the most of this role:\n${commands.join('\n')}`;
