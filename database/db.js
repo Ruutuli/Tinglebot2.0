@@ -177,15 +177,17 @@ async function getCharactersInVillage(userId, village) {
 const fetchCharacterByName = async (characterName) => {
  try {
   await connectToTinglebot();
+  // Escape special regex characters in the character name
+  const escapedName = characterName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const character = await Character.findOne({
-   name: new RegExp(`^${characterName.trim()}$`, "i"),
+   name: new RegExp(`^${escapedName}$`, "i"),
   });
 
   if (!character) {
    console.error(
     `[characterService]: logs - Character "${characterName}" not found in database.`
    );
-   throw new Error("Character not found");
+   throw new Error(`Character "${characterName}" not found. Please check the spelling and make sure the character exists.`);
   }
   return character;
  } catch (error) {

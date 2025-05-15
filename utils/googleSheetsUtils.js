@@ -619,83 +619,84 @@ async function validateTokenTrackerSheet(spreadsheetUrl) {
 
     const auth = await authorizeSheets();
     try {
-        // Check service account access
+        // First check if the sheet exists and we have access
+        const sheets = google.sheets({ version: 'v4', auth });
+        const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId });
+        
+        // Check if loggedTracker tab exists
+        const hasLoggedTrackerTab = spreadsheet.data.sheets.some(sheet => 
+            sheet.properties.title.toLowerCase() === 'loggedtracker'
+        );
+
+        if (!hasLoggedTrackerTab) {
+            return {
+                success: false,
+                message: "**Error:** Missing required tab.\n\n**Fix:** Please create a tab named exactly `loggedTracker` (case sensitive) in your sheet."
+            };
+        }
+
+        // Now try to read the headers
         try {
-            const sheets = google.sheets({ version: 'v4', auth });
-            await sheets.spreadsheets.values.get({
-                spreadsheetId,
-                range: 'loggedTracker!B7:F7'
-            });
-        } catch (error) {
-            if (error.status === 403 || error.message.includes('does not have permission')) {
-                const serviceAccountEmail = JSON.parse(fs.readFileSync(SERVICE_ACCOUNT_PATH)).client_email;
-                console.error(`[googleSheetsUtils.js]: ❌ Permission denied for token tracker: ${serviceAccountEmail}`);
+            const headerRow = await readSheetData(auth, spreadsheetId, 'loggedTracker!B7:F7');
+            const expectedHeaders = [
+                'SUBMISSION',
+                'LINK',
+                'CATEGORIES',
+                'TYPE',
+                'TOKEN AMOUNT'
+            ];
+
+            if (!headerRow || headerRow.length === 0) {
                 return {
                     success: false,
-                    message: "**Error:** Permission denied.\n\n**Fix:** Make sure the Google Sheet is shared with editor access to:\n📧 `tinglebot@rotw-tinglebot.iam.gserviceaccount.com`"
+                    message: "**Error:** No headers found in token tracker sheet.\n\n**Fix:** Please add these headers in cells B7:F7:\n" +
+                        expectedHeaders.join(' | ') + "\n\nNote: The headers must be in this exact order."
+                };
+            }
+
+            const headers = headerRow[0].map(h => h?.toString().trim());
+            const missingHeaders = expectedHeaders.filter((header, index) => 
+                !headers[index] || headers[index].toLowerCase() !== header.toLowerCase()
+            );
+
+            if (missingHeaders.length > 0) {
+                return {
+                    success: false,
+                    message: "**Error:** Invalid headers in token tracker sheet.\n\n" +
+                        "**Fix:** Please update your headers in B7:F7 to exactly match:\n" +
+                        expectedHeaders.join(' | ') + "\n\n" +
+                        "Current headers found: " + headers.join(' | ') + "\n\n" +
+                        "Note: The headers must be in this exact order and spelling."
+                };
+            }
+
+            return { success: true, message: "✅ Token tracker sheet is set up correctly!" };
+
+        } catch (error) {
+            if (error.message.includes('Unable to parse range')) {
+                return {
+                    success: false,
+                    message: "**Error:** Cannot find the correct cells B7:F7.\n\n**Fix:** Please ensure:\n" +
+                        "1. The tab is named exactly `loggedTracker` (case sensitive)\n" +
+                        "2. The headers are in row 7 (B7:F7)\n" +
+                        "3. There are no extra spaces in the tab name"
                 };
             }
             throw error;
         }
 
-        // Validate headers
-        const headerRow = await readSheetData(auth, spreadsheetId, 'loggedTracker!B7:F7');
-        const expectedHeaders = [
-            'SUBMISSION',
-            'LINK',
-            'CATEGORIES',
-            'TYPE',
-            'TOKEN AMOUNT'
-        ];
-
-        if (!headerRow || headerRow.length === 0) {
-            console.error(`[googleSheetsUtils.js]: ❌ No headers found in token tracker sheet`);
-            return {
-                success: false,
-                message: "**Error:** The `loggedTracker` tab exists but has no header data.\n\n**Fix:** Please copy these headers into B7:F7:\n" +
-                    expectedHeaders.join(', ') + "\n\nNote: The headers must be in this exact order."
-            };
-        }
-
-        const headers = headerRow[0].map(h => h?.toString().trim());
-        const missingHeaders = expectedHeaders.filter((header, index) => 
-            !headers[index] || headers[index].toLowerCase() !== header.toLowerCase()
-        );
-
-        if (missingHeaders.length > 0) {
-            console.error(`[googleSheetsUtils.js]: ❌ Invalid headers in token tracker sheet. Missing or incorrect: ${missingHeaders.join(', ')}`);
-            return {
-                success: false,
-                message: "**Error:** The headers in your token tracker sheet don't match the required format.\n\n" +
-                    "**Fix:** Please update your headers in B7:F7 to exactly match:\n" +
-                    expectedHeaders.join(', ') + "\n\n" +
-                    "Current headers found: " + headers.join(', ') + "\n\n" +
-                    "Note: The headers must be in this exact order and spelling."
-            };
-        }
-
-        return { success: true, message: "✅ Token tracker sheet is set up correctly!" };
-
     } catch (error) {
-        if (error.message.includes('Requested entity was not found')) {
-            console.error(`[googleSheetsUtils.js]: ❌ Token tracker sheet not found`);
-            return {
-                success: false,
-                message: "**Error:** The Google Sheet was not found.\n\n**Fix:** Please double-check your URL and that the sheet is shared publicly (or with the bot)."
-            };
-        }
-        if (error.message.includes('Unable to parse range')) {
-            console.error(`[googleSheetsUtils.js]: ❌ Invalid range for token tracker: B7:F7`);
-            return {
-                success: false,
-                message: "**Error:** Cannot find the correct cells B7:F7.\n\n**Fix:** Double-check your tab name is exactly `loggedTracker` and that there is data starting at row 7."
-            };
-        }
-        if (error.code === 403) {
-            console.error(`[googleSheetsUtils.js]: ❌ Permission denied for token tracker`);
+        if (error.status === 403 || error.message.includes('does not have permission')) {
+            const serviceAccountEmail = JSON.parse(fs.readFileSync(SERVICE_ACCOUNT_PATH)).client_email;
             return {
                 success: false,
                 message: "**Error:** Permission denied.\n\n**Fix:** Make sure the Google Sheet is shared with editor access to:\n📧 `tinglebot@rotw-tinglebot.iam.gserviceaccount.com`"
+            };
+        }
+        if (error.message.includes('Requested entity was not found')) {
+            return {
+                success: false,
+                message: "**Error:** The Google Sheet was not found.\n\n**Fix:** Please double-check your URL and that the sheet is shared publicly (or with the bot)."
             };
         }
         console.error(`[googleSheetsUtils.js]: ❌ Token tracker sheet error: ${error.message}`);
@@ -808,23 +809,12 @@ async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, c
                         );
                     }
                 } catch (dmError) {
-                    console.error(`[safeAppendDataToSheet] Failed to send DM:`, dmError);
+                    console.error(`[googleSheetsUtils.js]: ❌ Error sending DM to user: ${dmError.message}`);
                 }
             }
-            return;
         }
-
-        // Append data if validation passed
-        await appendSheetData(auth, spreadsheetId, range, values);
-
     } catch (error) {
-        console.error(`[safeAppendDataToSheet] ❌ Error:`, {
-            error: error.message,
-            spreadsheetUrl,
-            characterName: character?.name,
-            range
-        });
-        throw error;
+        console.error(`[safeAppendDataToSheet] ❌ Error: ${error.message}`);
     }
 }
 
@@ -868,6 +858,7 @@ async function parseSheetData(sheetUrl) {
 
         return parsedRows;
     } catch (error) {
+        console.error(`[googleSheetsUtils.js]: ❌ Error parsing sheet data: ${error.message}`);
         throw error;
     }
 }

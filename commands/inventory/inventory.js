@@ -187,7 +187,7 @@ module.exports = {
 
       // Group items by type
       const itemsByType = combinedItems.reduce((acc, item) => {
-        let types = item.type.split(',').map(t => t.trim());
+        let types = Array.isArray(item.type) ? item.type : [item.type || 'Unknown'];
         if (item.itemName.toLowerCase() === 'job voucher') types = ['Job Voucher'];
         types.forEach(type => {
           acc[type] = acc[type] || [];
