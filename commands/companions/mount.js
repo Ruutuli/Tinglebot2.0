@@ -83,6 +83,14 @@ module.exports = {
                 ephemeral: true,
             });
         }
+    },
+
+    // ============================================================================
+    // ---- Autocomplete Handler ----
+    // ============================================================================
+    async autocomplete(interaction) {
+        const { handleAutocomplete } = require('../../handlers/autocompleteHandler');
+        await handleAutocomplete(interaction);
     }
 }
 // ============================================================================

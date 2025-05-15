@@ -48,16 +48,11 @@ async function handleError(error, source = "Unknown Source", context = {}) {
   }
 
   const logBlock = `
-=================== [ERROR LOG - ${source}] ===================
-🕒 Time: ${timestamp}
-📄 File: ${source}
-${context.commandName ? `💻 Command: ${context.commandName}` : ""}
-${context.userTag ? `🙋 User: ${context.userTag} (${context.userId})` : ""}
-${context.options ? `📦 Options: ${JSON.stringify(context.options)}` : ""}
-${extraInfo}
-❌ Error:
-${message}
-===============================================================
+[ERROR] ${source} - ${timestamp}
+${context.commandName ? `Command: ${context.commandName}` : ""}
+${context.userTag ? `User: ${context.userTag}` : ""}
+${extraInfo ? `Context: ${extraInfo}` : ""}
+Error: ${message}
 `;
 
   console.error(logBlock);

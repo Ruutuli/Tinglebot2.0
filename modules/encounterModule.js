@@ -25,13 +25,9 @@ const { handleError } = require('../utils/globalErrorHandler');
 
 // ------------------- Battle Logging Function -------------------
 function logBattleDetails(tier, characterName, monsterName, roll, damage, monsterDamage) {
-    console.log(`[encounterModule.js]: ⚔️ Battle: ${characterName} vs ${monsterName} (Tier ${tier})`);
-    console.log(`[encounterModule.js]: 🎲 Roll: ${roll}/100`);
-    if (damage > 0) {
-        console.log(`[encounterModule.js]: 💥 ${characterName} took ${damage} damage`);
-    }
-    if (monsterDamage > 0) {
-        console.log(`[encounterModule.js]: ⚔️ ${monsterName} took ${monsterDamage} damage`);
+    console.log(`[encounterModule.js]: ⚔️ ${characterName} vs ${monsterName} (T${tier}) - Roll: ${roll}/100`);
+    if (damage > 0 || monsterDamage > 0) {
+        console.log(`[encounterModule.js]: 💥 Damage - ${characterName}: ${damage}, ${monsterName}: ${monsterDamage}`);
     }
 }
 
@@ -468,7 +464,7 @@ const getTier10EncounterOutcome = async (character, monster, damageValue, adjust
 async function processBattle(character, monster, battleId, originalRoll, interaction) {
     const battleProgress = await getBattleProgressById(battleId);
     if (!battleProgress) {
-        console.error(`[encounterModule.js]: Error: No battle progress found for Battle ID: ${battleId}`);
+        console.error(`[encounterModule.js]: ❌ No battle progress for ID: ${battleId}`);
         await interaction.editReply('❌ **An error occurred during the battle: Battle progress not found.**');
         return;
     }
@@ -507,7 +503,7 @@ async function processBattle(character, monster, battleId, originalRoll, interac
                 case 10:
                     outcome = await getTier10EncounterOutcome(character, monster, character.attack, adjustedRandomValue, attackSuccess, defenseSuccess);
                     if (outcome.result.includes('KO')) {
-                        console.log('[encounterModule.js]: KO Detected. Handling...');
+                        console.log(`[encounterModule.js]: 💀 ${character.name} KO'd by ${monster.name}`);
                         await handleKO(character._id);
                     }
                     break;
@@ -517,7 +513,7 @@ async function processBattle(character, monster, battleId, originalRoll, interac
         }
 
         if (!outcome) {
-            console.error('[encounterModule.js]: Error: Failed to calculate encounter outcome.');
+            console.error('[encounterModule.js]: ❌ Failed to calculate encounter outcome');
             return null;
         }
 
@@ -527,7 +523,7 @@ async function processBattle(character, monster, battleId, originalRoll, interac
         return { ...outcome, originalRoll, adjustedRandomValue, attackSuccess, defenseSuccess };
     } catch (error) {
         handleError(error, 'encounterModule.js');
-        console.error('[encounterModule.js]: Error during battle processing:', error);
+        console.error('[encounterModule.js]: ❌ Battle processing error:', error.message);
         return null;
     }
 }

@@ -173,6 +173,13 @@ async function handleAutocomplete(interaction) {
         await handleTravelAutocomplete(interaction);
         break;
 
+      // ------------------- Mount Command -------------------
+      case "mount":
+        if (focusedName === "charactername") {
+          await handleMountAutocomplete(interaction, focusedOption);
+        }
+        break;
+
       // ------------------- Special Weather Command -------------------
       case "specialweather":
         if (focusedName === "charactername") {

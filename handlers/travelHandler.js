@@ -141,7 +141,7 @@ async function handleRecover(interaction, character, encounterMessage, travelLog
 // syncs sheet, and edits encounter embed.
 async function handleGather(interaction, character, currentPath, encounterMessage, travelLog) {
   if (typeof currentPath !== 'string') {
-    console.error(`[travelHandler.js]: ❌ Invalid currentPath type: ${typeof currentPath} (${currentPath})`);
+    console.error(`[travelHandler.js]: ❌ Invalid currentPath type: ${typeof currentPath}`);
     throw new Error(`Invalid currentPath value: "${currentPath}" — expected a string like "leafDewWay".`);
   }
   
@@ -152,21 +152,8 @@ async function handleGather(interaction, character, currentPath, encounterMessag
     console.log(`[travelHandler.js]: 📦 ${character.name} gathering on ${currentPath}`);
 
     const items = await fetchAllItems();
-    console.log(`[travelHandler.js]: 📊 Total items in database: ${items.length}`);
-    
-    // Log a sample of items to see their structure
-    if (items.length > 0) {
-      console.log(`[travelHandler.js]: 🔍 Sample item structure:`, JSON.stringify(items[0], null, 2));
-    }
-
-    // Convert currentPath to match database field format
     const dbPathField = currentPath.replace(/-/g, '');
     const available = items.filter(i => i[dbPathField] === true);
-    console.log(`[travelHandler.js]: 🎯 Items available for ${currentPath}: ${available.length}`);
-    
-    if (available.length > 0) {
-      console.log(`[travelHandler.js]: 📝 Available items:`, available.map(i => i.itemName).join(', '));
-    }
     
     if (!available.length) {
       console.warn(`[travelHandler.js]: ⚠️ No items available for path "${currentPath}"`);
@@ -179,7 +166,7 @@ async function handleGather(interaction, character, currentPath, encounterMessag
     } else {
       const weighted = createWeightedItemList(available);
       const chosen = weighted[Math.floor(Math.random() * weighted.length)];
-      console.log(`[travelHandler.js]: 🎲 Selected item: ${chosen.itemName}`);
+      console.log(`[travelHandler.js]: 🎲 Selected: ${chosen.itemName}`);
       
       // Format the item data properly
       const formattedItem = {
@@ -190,12 +177,10 @@ async function handleGather(interaction, character, currentPath, encounterMessag
         subtype: Array.isArray(chosen.subtype) ? chosen.subtype : chosen.subtype ? [chosen.subtype] : []
       };
 
-      // Use syncItem utility for gathering
       await syncItem(character, formattedItem, interaction, SOURCE_TYPES.GATHERING);
       
       outcomeMessage = `Gathered ${formattedItem.quantity}× ${formattedItem.itemName}.`;
 
-      // Deduct stamina
       if (!hasPerk(character, 'DELIVERING')) {
         await useStamina(character._id, 1);
         character.currentStamina = Math.max(0, character.currentStamina - 1);
@@ -237,7 +222,7 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
     travelLog = Array.isArray(travelLog) ? travelLog : [];
     const jobPerk = getJobPerk(character.job);
     character.perk = jobPerk?.perks[0];
-    console.log(`[travelHandler.js]: ⚔️ ${character.name} fighting ${monster.name}`);
+    console.log(`[travelHandler.js]: ⚔️ ${character.name} vs ${monster.name}`);
 
     if (!monster || typeof monster.tier === 'undefined') {
       throw new Error(`Invalid monster passed to handleFight: ${JSON.stringify(monster)}`);
@@ -287,14 +272,10 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
     let item = null;
 
     if (outcome.result === 'Win!/Loot') {
-      console.log(`[travelHandler.js]: 🎲 Rolling for loot from ${monster.name}`);
       const drops = await fetchItemsByMonster(monster.name);
-      console.log(`[travelHandler.js]: 📦 Available drops: ${drops.length} items`);
-
       if (drops.length > 0) {
         const weighted = createWeightedItemList(drops, adjustedRandomValue);
         item = weighted[Math.floor(Math.random() * weighted.length)];
-        console.log(`[travelHandler.js]: 🎯 Selected item: ${item?.itemName || 'Unknown'}`);
 
         // Chuchu Special Case
         if (item && /Chuchu/.test(monster.name)) {
@@ -311,13 +292,11 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
           }
           item.itemName = jellyType;
           item.quantity = qty;
-          console.log(`[travelHandler.js]: 🧊 Chuchu special case - ${item.quantity}x ${item.itemName}`);
         } else if (item) {
           item.quantity = 1;
         }
 
         if (item) {
-          // Use syncItem utility for travel loot
           await syncItem(character, item, interaction, SOURCE_TYPES.TRAVEL_LOOT);
           lootLine = `\n> Looted ${item.quantity}× ${item.itemName}`;
           outcomeMessage = `${generateVictoryMessage(item)}${lootLine}`;
@@ -373,8 +352,6 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
   
       const jobPerk = getJobPerk(character.job);
       character.perk = jobPerk?.perks[0];
-      console.log(`[travelHandler.js]: 🏃 ${character.name} attempting to flee from ${monster.name}`);
-  
   
       const result = await attemptFlee(character, monster);
       let decision, outcomeMessage;
