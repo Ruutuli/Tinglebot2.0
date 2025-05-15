@@ -1337,7 +1337,9 @@ const createNoEncounterEmbed = (character, isBloodMoon = false) => {
   .setFooter({
    text: isBloodMoon
     ? "🔴 The Blood Moon rises... but nothing stirs in the shadows."
-    : "Better luck next time!",
+    : character.jobVoucher && character.jobVoucherJob 
+    ? `🎫 No monsters encountered, job voucher for ${character.jobVoucherJob} remains active!`
+    : "A quiet day in the village.",
   });
 };
 

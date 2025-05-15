@@ -8,6 +8,7 @@ const { authorizeSheets, appendSheetData, safeAppendDataToSheet } = require('../
 const { getCharacterInventoryCollection, updateCharacterById, fetchItemByName } = require('../database/db'); 
 const { v4: uuidv4 } = require('uuid');
 const { getJobPerk } = require('./jobsModule');
+const Character = require('../models/CharacterModel');
 
 // ------------------- Get Job Voucher Error Message -------------------
 function getJobVoucherErrorMessage(errorType, data = {}) {
@@ -116,19 +117,25 @@ async function fetchJobVoucherItem() {
 // ------------------- Deactivate Job Voucher -------------------
 async function deactivateJobVoucher(characterId) {
     try {
+        // Fetch character to get name
+        const character = await Character.findById(characterId);
+        if (!character) {
+            throw new Error(`Character not found with ID: ${characterId}`);
+        }
+
         // Always set jobVoucher to false and clear the job
         await updateCharacterById(characterId, { 
             jobVoucher: false, 
             jobVoucherJob: null 
         });
-        console.log(`[Job Voucher Module]: Job voucher deactivated for character ID: ${characterId}`);
+        console.log(`[Job Voucher Module]: 🎫 Job voucher deactivated for ${character.name}`);
         return {
             success: true,
             message: `🎫 **Job voucher successfully deactivated.**`
         };
     } catch (error) {
         handleError(error, 'jobVoucherModule.js');
-        console.error(`[Job Voucher Module]: Error deactivating job voucher: ${error.message}`);
+        console.error(`[Job Voucher Module]: ❌ Error deactivating job voucher: ${error.message}`);
         return getJobVoucherErrorMessage('DEACTIVATION_ERROR');
     }
 }
