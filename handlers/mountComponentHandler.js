@@ -1568,7 +1568,11 @@ async function handleViewMount(interaction) {
     // ============================================================================
     const speciesEmoji = getMountEmoji(mount.species);
     const formattedTraits = mount.traits && mount.traits.length
-      ? mount.traits.map(trait => `> ${trait}`).join('\n')
+      ? mount.traits.map(trait => {
+          const [key, value] = trait.split(': ');
+          const formattedKey = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+          return `> **${formattedKey}:** ${value}`;
+        }).join('\n')
       : 'No traits available';
     let staminaField = `> ${mount.currentStamina} / ${mount.stamina}`;
     let staminaWarning = '';
@@ -1585,7 +1589,7 @@ async function handleViewMount(interaction) {
         { name: '🥕 **__Stamina__**', value: staminaField, inline: true },
         { name: '👤 **__Owner__**', value: `> ${mount.owner || 'Unknown'}`, inline: true },
         { name: '🌍 **__Region__**', value: `> ${mount.region || 'Unknown'}`, inline: true },
-        { name: '✨ **__Traits__**', value: `${formattedTraits}`, inline: false }
+        { name: '✨ **__Traits__**', value: formattedTraits, inline: false }
       )
       .setColor(0xAA926A)
       .setThumbnail(getMountThumbnail(mount.species))

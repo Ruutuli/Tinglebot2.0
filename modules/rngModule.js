@@ -308,15 +308,13 @@ function calculateWeightedDamage(tier) {
 // and updates character state accordingly.
 async function attemptFlee(character, monster) {
   try {
-    console.log(`[rngModule.js]: 🎲 Flee attempt for ${character.name}`);
-    
     const baseFleeChance = 0.5;
     const bonusFleeChance = character.failedFleeAttempts * 0.05;
     const fleeChance = Math.min(baseFleeChance + bonusFleeChance, 0.95);
     const fleeRoll = Math.random();
 
     if (fleeRoll < fleeChance) {
-      console.log(`[rngModule.js]: ✅ ${character.name} successfully fled`);
+      console.log(`[rngModule.js]: 🏃 ${character.name} fled from ${monster.name}`);
       character.failedFleeAttempts = 0;
       await character.save();
       return { success: true, message: "You successfully fled!" };
@@ -330,7 +328,7 @@ async function attemptFlee(character, monster) {
     character.currentHearts -= monsterDamage;
     
     if (character.currentHearts <= 0) {
-      console.log(`[rngModule.js]: 💀 ${character.name} KO'd during flee attempt`);
+      console.log(`[rngModule.js]: 💀 ${character.name} KO'd by ${monster.name} during flee`);
       await handleKO(character._id);
       return {
         success: false,
