@@ -173,6 +173,13 @@ async function handleAutocomplete(interaction) {
         await handleTravelAutocomplete(interaction);
         break;
 
+      // ------------------- Gather Command -------------------
+      case "gather":
+        if (focusedName === "charactername") {
+          await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "gather");
+        }
+        break;
+
       // ------------------- Mount Command -------------------
       case "mount":
         if (focusedName === "charactername") {
@@ -1014,7 +1021,7 @@ async function handleTradeItemAutocomplete(interaction, focusedValue) {
 
     const inventoryCollection = await getCharacterInventoryCollection(fromCharacter);
     const items = await inventoryCollection
-      .find({ itemName: { $regex: focusedValue, $options: 'i' } })
+      .find({ itemName: { $regex: (focusedOption?.value?.toString() || ''), $options: 'i' } })
       .toArray();
 
     const choices = items.map(item => ({
@@ -1258,7 +1265,7 @@ async function handleTransferItemAutocomplete(interaction, focusedOption) {
 
     const inventoryCollection = await getCharacterInventoryCollection(fromCharacter);
     const items = await inventoryCollection
-      .find({ itemName: { $regex: focusedValue, $options: 'i' } })
+      .find({ itemName: { $regex: (focusedOption?.value?.toString() || ''), $options: 'i' } })
       .toArray();
 
     const choices = items.map(item => ({
@@ -1564,7 +1571,7 @@ async function handleTransferCharacterAutocomplete(interaction, focusedOption) {
  
    const inventoryCollection = await getCharacterInventoryCollection(fromCharacter);
    const items = await inventoryCollection
-     .find({ itemName: { $regex: focusedOption.value, $options: 'i' } })
+     .find({ itemName: { $regex: (focusedOption?.value?.toString() || ''), $options: 'i' } })
      .toArray();
  
    const choices = items.map(item => ({
