@@ -263,13 +263,16 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
     });
 
     if (inventoryItem) {
+      console.log(`[inventoryUtils.js]: 📊 Found ${inventoryItem.quantity} ${itemName} in ${character.name}'s inventory`);
       const newQuantity = inventoryItem.quantity + quantity;
-      console.log(`[inventoryUtils.js]: 🔄 Updated ${itemName} quantity to ${newQuantity}`);
+      console.log(`[inventoryUtils.js]: ➕ Adding ${quantity} ${itemName}`);
+      console.log(`[inventoryUtils.js]: 🔄 Updated ${itemName} quantity: ${inventoryItem.quantity} → ${newQuantity}`);
       await inventoryCollection.updateOne(
         { characterId, itemName: inventoryItem.itemName, obtain },
         { $set: { quantity: newQuantity } }
       );
     } else {
+      console.log(`[inventoryUtils.js]: ➕ Adding new item ${itemName} (${quantity}) to ${character.name}'s inventory`);
       const newItem = {
         characterId,
         itemName: item.itemName,
@@ -282,7 +285,6 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
         date: new Date(),
         obtain,
       };
-      console.log(`[inventoryUtils.js]: ➕ Added new item ${itemName} to inventory`);
       await inventoryCollection.insertOne(newItem);
     }
     return true;
@@ -321,10 +323,10 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
     if (inventoryItem.quantity < quantity) {
       return false;
     }
-    const newQuantity = inventoryItem.quantity - quantity;
     console.log(`[inventoryUtils.js]: 📊 Found ${inventoryItem.quantity} ${itemName} in ${character.name}'s inventory`);
     console.log(`[inventoryUtils.js]: ➖ Removing ${quantity} ${itemName}`);
-    console.log(`[inventoryUtils.js]: 🔄 Updated ${itemName} quantity to ${newQuantity}`);
+    const newQuantity = inventoryItem.quantity - quantity;
+    console.log(`[inventoryUtils.js]: 🔄 Updated ${itemName} quantity: ${inventoryItem.quantity} → ${newQuantity}`);
     if (newQuantity === 0) {
       await inventoryCollection.deleteOne({
         characterId: character._id,
