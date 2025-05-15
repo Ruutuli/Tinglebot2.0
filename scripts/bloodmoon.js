@@ -195,12 +195,11 @@ async function triggerBloodMoonNow(client, channelId) {
 function isBloodMoonActive() {
   try {
     const active = isBloodMoonDay();
-    console.log(`[bloodmoon.js]: logs Blood Moon active status: ${active}`);
+    console.log(`[bloodmoon.js]: 🌙 Blood Moon status: ${active ? 'Active' : 'Inactive'}`);
     return active;
   } catch (error) {
     handleError(error, 'bloodmoon.js');
-
-    console.error(`[bloodmoon.js]: logs [isBloodMoonActive] Error: ${error.message}`);
+    console.error(`[bloodmoon.js]: ❌ Blood Moon status check failed: ${error.message}`);
     return false;
   }
 }
