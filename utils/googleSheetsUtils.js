@@ -762,9 +762,6 @@ async function deleteInventorySheetData(spreadsheetId, characterName) {
 // Safely appends data to a sheet with validation
 async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, client) {
     try {
-        console.log(`[googleSheetsUtils.js]: 📝 Starting safeAppendDataToSheet for character ${character.name}`);
-        console.log(`[googleSheetsUtils.js]: 📊 Values to append:`, values);
-
         if (!spreadsheetUrl || typeof spreadsheetUrl !== 'string') {
             console.error(`[googleSheetsUtils.js]: ❌ Invalid spreadsheet URL:`, spreadsheetUrl);
             return;
@@ -776,10 +773,7 @@ async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, c
         }
 
         const spreadsheetId = extractSpreadsheetId(spreadsheetUrl);
-        console.log(`[googleSheetsUtils.js]: 🔑 Extracted spreadsheet ID: ${spreadsheetId}`);
-        
         const auth = await authorizeSheets();
-        console.log(`[googleSheetsUtils.js]: ✅ Successfully authorized with Google Sheets API`);
 
         // Validate the range format
         const rangeParts = range.split('!');
@@ -788,7 +782,6 @@ async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, c
         }
 
         const [sheetName, cellRange] = rangeParts;
-        console.log(`[googleSheetsUtils.js]: 📋 Sheet: ${sheetName}, Range: ${cellRange}`);
 
         // Validate the cell range format
         if (!cellRange.match(/^[A-Z]+\d*:[A-Z]+\d*$/)) {
@@ -798,10 +791,8 @@ async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, c
         // Validate the appropriate sheet
         let validationResult;
         if (sheetName.toLowerCase() === 'loggedtracker') {
-            console.log(`[googleSheetsUtils.js]: 🔍 Validating token tracker sheet...`);
             validationResult = await validateTokenTrackerSheet(spreadsheetUrl);
         } else if (sheetName.toLowerCase() === 'loggedinventory') {
-            console.log(`[googleSheetsUtils.js]: 🔍 Validating inventory sheet...`);
             validationResult = await validateInventorySheet(spreadsheetUrl, character.name);
         } else {
             throw new Error(`Unknown sheet type: ${sheetName}. Expected 'loggedTracker' or 'loggedInventory'`);
@@ -825,8 +816,6 @@ async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, c
             return;
         }
 
-        console.log(`[googleSheetsUtils.js]: ✅ Sheet validation passed`);
-
         // If validation passed, append the data
         const resource = {
             values: values.map(row =>
@@ -836,7 +825,6 @@ async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, c
             )
         };
 
-        console.log(`[googleSheetsUtils.js]: 📤 Attempting to append data to sheet...`);
         await google.sheets({ version: 'v4', auth })
             .spreadsheets.values.append({
                 spreadsheetId,
@@ -844,7 +832,7 @@ async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, c
                 valueInputOption: 'USER_ENTERED',
                 resource
             });
-        console.log(`[googleSheetsUtils.js]: ✅ Successfully appended data to sheet`);
+        console.log(`[googleSheetsUtils.js]: ✅ Token transaction logged to sheet for ${character.name}`);
 
     } catch (error) {
         console.error(`[googleSheetsUtils.js]: ❌ Error in safeAppendDataToSheet:`, error.message);
