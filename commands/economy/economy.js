@@ -779,14 +779,18 @@ if (quantity <= 0) {
   return;
 }
 
-
   console.log(
-   `[shops]: Initiating purchase for character: ${characterName}, item: ${itemName}, quantity: ${quantity}`
+   `[shops]: 🔄 Initiating purchase for character: ${characterName}, item: ${itemName}, quantity: ${quantity}`
   );
 
-  const character = await fetchCharacterByName(characterName);
+  // ------------------- Character Ownership Validation -------------------
+  const character = await fetchCharacterByNameAndUserId(characterName, interaction.user.id);
   if (!character) {
-   return interaction.editReply("❌ Character not found.");
+    console.error(`[shops]: ❌ Character ${characterName} not found or does not belong to user ${interaction.user.id}`);
+    return interaction.editReply({
+      content: "❌ Character not found or does not belong to you.",
+      ephemeral: true
+    });
   }
 
   // ------------------- Check Inventory Sync -------------------

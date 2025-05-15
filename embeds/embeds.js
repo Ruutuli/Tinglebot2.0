@@ -720,10 +720,6 @@ const createTokenTrackerSetupEmbed = (
    value:
     "📧 Share the sheet with this email address with **edit permissions**:\n`tinglebot@rotw-tinglebot.iam.gserviceaccount.com`",
   },
-  {
-   name: `6. Test Your Setup`,
-   value: `✅ Use the command \`/tokens test\` to check if your token tracker is set up correctly for **${username}**.`,
-  },
  ];
 
  if (errorMessage) {
