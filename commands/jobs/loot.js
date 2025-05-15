@@ -87,7 +87,6 @@ const villageChannels = {
 function canUseDailyRoll(character, activity) {
   // If character has an active job voucher, they can always use the command
   if (character.jobVoucher) {
-    console.log(`[loot.js]: 🔄 Job voucher active for ${character.name}, bypassing daily limit`);
     return true;
   }
 
@@ -102,21 +101,11 @@ function canUseDailyRoll(character, activity) {
 
   const lastRoll = character.dailyRoll.get(activity);
   if (!lastRoll) {
-    console.log(`[loot.js]: ✅ No previous roll found for ${character.name}`);
     return true;
   }
 
   const lastRollDate = new Date(lastRoll);
-  const canUse = lastRollDate < rollover;
-  
-  console.log(`[loot.js]: 🔄 Daily roll check for ${character.name}:`, {
-    lastRoll: lastRollDate.toISOString(),
-    rollover: rollover.toISOString(),
-    canUse: canUse,
-    currentTime: now.toISOString()
-  });
-  
-  return canUse;
+  return lastRollDate < rollover;
 }
 
 // Update the daily roll timestamp for an activity
@@ -128,7 +117,6 @@ async function updateDailyRoll(character, activity) {
     const now = new Date().toISOString();
     character.dailyRoll.set(activity, now);
     await character.save();
-    console.log(`[loot.js]: ✅ Updated daily roll for ${character.name} - ${activity} at ${now}`);
   } catch (error) {
     console.error(`[loot.js]: ❌ Failed to update daily roll for ${character.name}:`, error);
     throw error; // Re-throw to handle in the main execution
@@ -414,8 +402,6 @@ module.exports = {
      const deactivationResult = await deactivateJobVoucher(character._id);
      if (!deactivationResult.success) {
        console.error(`[Loot Command]: ❌ Failed to deactivate job voucher for ${character.name}`);
-     } else {
-       console.log(`[Loot Command]: ✅ Job voucher deactivated for ${character.name}`);
      }
    }
 

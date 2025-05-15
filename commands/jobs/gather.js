@@ -118,17 +118,6 @@ module.exports = {
       // Check inventory sync before proceeding
       await checkInventorySync(character);
 
-      // Check for job voucher and daily roll at the start
-      if (character.jobVoucher) {
-        // Skip daily roll check if job voucher is active
-      } else if (!canUseDailyRoll(character, 'gather')) {
-        await interaction.editReply({
-          content: `*${character.name} looks tired from their earlier gathering...*\n\n**Daily gathering limit reached.**\nThe next opportunity to gather will be available at 8AM EST.\n\n*Tip: A job voucher would allow you to gather again today.*`,
-          ephemeral: true
-        });
-        return;
-      }
-
       // Check if the character is KOed.
       if (character.isKO) {
         await interaction.editReply({
@@ -495,10 +484,6 @@ await character.save();
           console.log(`[gather.js]: ✅ Job voucher deactivated for ${character.name}`);
         }
       }
-
-      // At the end of successful gathering, update the daily roll
-      await updateDailyRoll(character, 'gather');
-      console.log(`[gather.js]: ✅ Updated daily roll for ${character.name}`);
 
     } catch (error) {
       handleError(error, 'gather.js');

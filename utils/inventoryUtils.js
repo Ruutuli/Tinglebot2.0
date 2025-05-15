@@ -171,6 +171,10 @@ async function syncToInventoryDatabase(character, item, interaction) {
         throw new Error(`Not enough '${dbDoc.itemName}' to remove from inventory.`);
       }
       const newQty = existingItem.quantity + item.quantity; // item.quantity is negative
+      console.log(`[inventoryUtils.js]: 📦 Transaction for ${character.name}:`);
+      console.log(`[inventoryUtils.js]: ➖ Removing ${Math.abs(item.quantity)} ${dbDoc.itemName}`);
+      console.log(`[inventoryUtils.js]: 🔄 Quantity: ${existingItem.quantity} → ${newQty}`);
+      console.log(`[inventoryUtils.js]: 📝 Reason: ${dbDoc.obtain}`);
       if (newQty <= 0) {
         await inventoryCollection.deleteOne({
           characterId: dbDoc.characterId,
@@ -186,11 +190,18 @@ async function syncToInventoryDatabase(character, item, interaction) {
       // Add item logic
       if (existingItem) {
         const newQty = existingItem.quantity + item.quantity;
+        console.log(`[inventoryUtils.js]: 📦 Transaction for ${character.name}:`);
+        console.log(`[inventoryUtils.js]: ➕ Adding ${item.quantity} ${dbDoc.itemName}`);
+        console.log(`[inventoryUtils.js]: 🔄 Quantity: ${existingItem.quantity} → ${newQty}`);
+        console.log(`[inventoryUtils.js]: 📝 Reason: ${dbDoc.obtain}`);
         await inventoryCollection.updateOne(
           { characterId: dbDoc.characterId, itemName: dbDoc.itemName },
           { $set: { ...dbDoc, quantity: newQty } }
         );
       } else {
+        console.log(`[inventoryUtils.js]: 📦 Transaction for ${character.name}:`);
+        console.log(`[inventoryUtils.js]: ➕ Adding new item ${dbDoc.itemName} (${item.quantity})`);
+        console.log(`[inventoryUtils.js]: 📝 Reason: ${dbDoc.obtain}`);
         await inventoryCollection.insertOne({ ...dbDoc });
       }
     } else {
