@@ -122,8 +122,9 @@ async function processInventoryItem(row, originalRowIndex, character, interactio
         throw new Error(`Invalid quantity for item ${itemName}: ${qty}`);
     }
 
-    // Preserve "Crafting" obtain method if it exists (case-insensitive)
-    const obtainMethod = obtain && obtain.toString().trim().toLowerCase().includes('crafting') ? obtain.trim() : 'Manual Sync';
+    // Preserve original obtain method if it contains "crafting" (case-insensitive)
+    const originalObtain = obtain ? obtain.toString().trim() : '';
+    const obtainMethod = originalObtain.toLowerCase().includes('crafting') ? originalObtain : 'Manual Sync';
 
     return {
         inventoryItem: {

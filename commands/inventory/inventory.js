@@ -298,7 +298,55 @@ module.exports = {
           .setStyle(ButtonStyle.Danger)
       );
 
-      await interaction.reply({ embeds: [syncEmbed], components: [row], ephemeral: true });
+      const message = await interaction.reply({ 
+        embeds: [syncEmbed], 
+        components: [row], 
+        ephemeral: true 
+      });
+
+      // Create a collector for the buttons
+      const collector = message.createMessageComponentCollector({ 
+        time: 300000, // 5 minutes
+        filter: i => i.user.id === interaction.user.id 
+      });
+
+      collector.on('collect', async i => {
+        if (i.customId === `sync-yes|${character._id}`) {
+          // Remove the embed and buttons immediately
+          await i.update({ 
+            content: `🔄 Starting inventory sync for ${character.name}...`,
+            embeds: [],
+            components: []
+          });
+          
+          // Start the sync process
+          await syncInventory(character.name, userId, i);
+        } else if (i.customId === `sync-no|${character._id}`) {
+          await i.update({ 
+            content: `❌ Inventory sync cancelled for ${character.name}.`,
+            embeds: [],
+            components: []
+          });
+        }
+        collector.stop();
+      });
+
+      collector.on('end', async () => {
+        try {
+          // If the message still has components, remove them
+          const message = await interaction.fetchReply();
+          if (message.components?.length > 0) {
+            await interaction.editReply({ 
+              content: `⏱️ Sync request timed out for ${character.name}. Please try again.`,
+              embeds: [],
+              components: []
+            });
+          }
+        } catch (err) {
+          handleError(err, 'inventory.js');
+          console.error('[inventory.js]: Error clearing components on collector end', err);
+        }
+      });
 
     } catch (error) {
       handleError(error, 'inventory.js');

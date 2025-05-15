@@ -50,8 +50,7 @@ async function resetCharacterFields() {
                     failedFleeAttempts: 0,
                     canBeStolenFrom: true,
                     lastRollDate: null,
-                    deathDeadline: null,
-                    blightPaused: false
+
                 }
             }
         );
