@@ -832,7 +832,15 @@ async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, c
                 valueInputOption: 'USER_ENTERED',
                 resource
             });
-        console.log(`[googleSheetsUtils.js]: ✅ Token transaction logged to sheet for ${character.name}`);
+        
+        // More specific logging based on sheet type
+        if (sheetName.toLowerCase() === 'loggedtracker') {
+            console.log(`[googleSheetsUtils.js]: ✅ Token transaction logged to sheet for ${character.name}`);
+        } else if (sheetName.toLowerCase() === 'loggedinventory') {
+            console.log(`[googleSheetsUtils.js]: ✅ Inventory update logged to sheet for ${character.name}`);
+        } else {
+            console.log(`[googleSheetsUtils.js]: ✅ Data logged to ${sheetName} sheet for ${character.name}`);
+        }
 
     } catch (error) {
         console.error(`[googleSheetsUtils.js]: ❌ Error in safeAppendDataToSheet:`, error.message);
