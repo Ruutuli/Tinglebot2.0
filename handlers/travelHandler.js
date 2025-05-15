@@ -456,7 +456,6 @@ async function handleDoNothing(interaction, character, encounterMessage, travelL
     }
     // No stamina should be used when truly doing nothing
     const decision = `😴 ${randomFlavor}`;
-    const outcomeMessage = `${character.name} took some time to rest.`;
     // Update embed
     const description = 
       `🌸 It's a nice and safe day of traveling. What do you want to do next?\n> ${decision}\n\n` +
@@ -466,7 +465,7 @@ async function handleDoNothing(interaction, character, encounterMessage, travelL
       encounterMessage,
       character,
       description,
-      fields: [{ name: '🔹 __Outcome__', value: outcomeMessage || 'No resources found', inline: false }],
+      fields: [], // No outcome field
     });
     if (typeof encounterMessage?.edit === 'function') {
       await encounterMessage.edit({ embeds: [embed], components: [] });
