@@ -597,7 +597,11 @@ ${pathEmoji || ''} No monsters or gathering today!`)
           monster, // ← the actual monster object, not a string
           travelLog
         );
-        dailyLogEntry += decision.split('\n').map(line => `> ${line}`).join('\n') + '\n';
+        // Only append the loot line if present, skip flavor/victory message
+        const lootMatch = decision.match(/Looted [^\n]+/);
+        if (lootMatch) {
+          dailyLogEntry += ` ${lootMatch[0]}\n`;
+        }
         collector.stop();
       });
       
