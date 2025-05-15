@@ -373,22 +373,22 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
         }
         message += `\n🕒 **Last Updated:** ${now}`;
         
-        await interaction.editReply({ content: message });
+        await interaction.editReply({
+            content: message,
+            embeds: [],
+            components: []
+        });
+
+        // After successful sync
+        console.log(`[syncHandler.js]: ✅ Sync completed for ${characterName}!`);
     } catch (error) {
         handleError(error, 'syncHandler.js');
-        console.error(`[syncHandler.js]: ❌ Sync failed: ${error.message}`);
-        
-        // Check if it's a permission error and show the appropriate message
-        if (error.message.includes('does not have permission') || error.status === 403) {
-            const serviceAccountEmail = JSON.parse(fs.readFileSync(SERVICE_ACCOUNT_PATH)).client_email;
-            await editSyncErrorMessage(interaction, 
-                `⚠️ **Permission Error:**\n` +
-                `The service account (${serviceAccountEmail}) does not have access to this spreadsheet.\n\n` +
-                `To fix this:\n1. Open the Google Spreadsheet\n2. Click "Share" in the top right\n3. Add ${serviceAccountEmail} as an Editor\n4. Make sure to give it at least "Editor" access`
-            );
-        } else {
-            await editSyncErrorMessage(interaction, `❌ **An error occurred during sync:** ${error.message}`);
-        }
+        console.error(`[syncHandler.js]: ❌ Error syncing inventory for ${characterName}:`, error);
+        await interaction.editReply({
+            content: `❌ **An error occurred while syncing inventory for ${characterName}.**`,
+            embeds: [],
+            components: []
+        });
     }
 }
 
