@@ -88,40 +88,6 @@ async function activateJobVoucher(character, jobName, item, quantity = 1, intera
 
         console.log(`[jobVoucherModule.js]: ✅ Job Voucher activated successfully for ${character.name} as ${jobName}`);
 
-        // Log usage to Google Sheets if applicable
-        if (isValidGoogleSheetsUrl(character.inventory || character.inventoryLink)) {
-            const spreadsheetId = extractSpreadsheetId(character.inventory || character.inventoryLink);
-            const auth = await authorizeSheets();
-            const range = 'loggedInventory!A2:M';
-            const uniqueSyncId = uuidv4();
-            const formattedDateTime = new Date().toISOString();
-            const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
-
-            const values = [
-                [
-                    character.name,
-                    item.itemName,
-                    `-${quantity}`,
-                    item.category.join(', '),
-                    item.type.join(', '),
-                    item.subtype.join(', '),
-                    `Activated job voucher for ${jobName}`,
-                    character.job,
-                    '',
-                    character.currentVillage,
-                    interactionUrl,
-                    formattedDateTime,
-                    uniqueSyncId
-                ]
-            ];
-
-            if (character?.name && character?.inventory && character?.userId) {
-                await safeAppendDataToSheet(character.inventory, character, range, values);
-            } else {
-                console.error('[safeAppendDataToSheet]: Invalid character object detected before syncing.');
-            }
-        }
-
         return {
             success: true,
             message: `🎫 **Job Voucher activated for ${character.name} to perform the job ${jobName}.**`
