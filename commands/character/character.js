@@ -1630,6 +1630,15 @@ async function handleChangeJob(interaction) {
   const characterName = interaction.options.getString("charactername");
   const newJob = interaction.options.getString("newjob");
 
+  // ------------------- Job Validation -------------------
+  if (!isValidJob(newJob)) {
+    console.warn(`[character.js]: ❌ Invalid job change attempt: '${newJob}' by user ${userId}`);
+    return interaction.followUp({
+      content: `❌ **${newJob}** is not a valid job. Please select a valid job from the list.`,
+      ephemeral: true,
+    });
+  }
+
   await connectToTinglebot();
 
   const character = await fetchCharacterByNameAndUserId(characterName, userId);
