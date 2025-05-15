@@ -5,7 +5,7 @@ const { fetchCharacterByNameAndUserId } = require('../../database/db');
 const Mount = require('../../models/MountModel');
 const { appendSheetData, authorizeSheets, extractSpreadsheetId, isValidGoogleSheetsUrl, safeAppendDataToSheet, } = require('../../utils/googleSheetsUtils');
 const User = require('../../models/UserModel');
-const { calculateMountPrice } = require('../../modules/mountModule');
+const { calculateMountPrice, getMountThumbnail } = require('../../modules/mountModule');
 
 // ------------------- Define Stable Command -------------------
 module.exports = {
@@ -136,7 +136,7 @@ async function handleViewStable(interaction, userId, characterName) {
       title: `${character.name}'s Stable`,
       description: mounts.length > 0
         ? mounts.map(mount => `- **${mount.name}** (${mount.species}, Level: ${mount.level})`).join('\n')
-        : 'You don’t have any mounts stored in the stable!',
+        : "You don't have any mounts stored in the stable!",
       color: 0x0099ff,
       timestamp: new Date(),
     };
@@ -311,15 +311,51 @@ async function handleSellMount(interaction, userId, characterName, mountName) {
           `Listed Mount: ${mount.name}`,    // SUBMISSION
           interactionUrl,                  // LINK
           'Other',                         // CATEGORIES
-          'sale',                          // TYPE
+          'earned',                          // TYPE
           `${sellPrice}`                   // PRICE
         ]];
         await safeAppendDataToSheet(character.inventory, character, 'loggedTracker!A:F', values);
       }
   
       await interaction.reply({
-        content: `✅ Mount **${mountName}** has been listed for sale at **${sellPrice} tokens**. You will receive **${basePrice} tokens** upon sale.`,
-        ephemeral: true,
+        embeds: [{
+          title: '🐴 Mount Listed for Sale',
+          description: `✅ Mount **${mountName}** has been listed for sale!`,
+          color: 0xAA926A,
+          fields: [
+            {
+              name: '💰 Listing Price',
+              value: `**${sellPrice} tokens**`,
+              inline: true
+            },
+            {
+              name: '💵 Owner Payout',
+              value: `**${basePrice} tokens**`,
+              inline: true
+            },
+            {
+              name: '🐾 Mount Details',
+              value: `**Species**: ${mount.species}\n**Level**: ${mount.level}\n**Stamina**: ${mount.stamina} 🥕`,
+              inline: false
+            },
+            {
+              name: '🏘️ Location',
+              value: `**Village**: ${mount.region || 'Unknown'}\n**Original Owner**: ${character.name}`,
+              inline: false
+            },
+            {
+              name: '✨ Traits',
+              value: mount.traits && mount.traits.length > 0 
+                ? mount.traits.map(trait => `• ${trait}`).join('\n')
+                : 'No special traits',
+              inline: false
+            }
+          ],
+          thumbnail: { url: getMountThumbnail(mount.species) },
+          image: { url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png' },
+          footer: { text: 'The mount will be available for purchase in the stable.' }
+        }],
+        ephemeral: false
       });
     } catch (error) {
     handleError(error, 'stable.js');
@@ -515,6 +551,7 @@ async function handleBrowseStable(interaction) {
         ).join('\n\n'),
         color: 0x0099ff,
         timestamp: new Date(),
+        image: { url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png' },
         footer: {
           text: 'Browse the stable to find your perfect mount!',
         },

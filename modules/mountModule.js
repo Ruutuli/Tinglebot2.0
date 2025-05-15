@@ -1029,9 +1029,9 @@ function rollDie(sides) {
 // ------------------- Calculate Mount Price -------------------
 function calculateMountPrice(mount) {
   const basePrices = {
-    Basic: 50,  // Base price for Basic level mounts
-    Mid: 100,   // Base price for Mid level mounts
-    High: 250,  // Base price for High level mounts
+    Basic: 150,  // Base price for Basic level mounts (tripled from 50)
+    Mid: 300,   // Base price for Mid level mounts (tripled from 100)
+    High: 750,  // Base price for High level mounts (tripled from 250)
   };
 
   const regionalMounts = {
@@ -1048,10 +1048,10 @@ function calculateMountPrice(mount) {
     'Donkey': 'All Villages',
   };
 
-  const basePrice = basePrices[mount.level] || 50; // Default to Basic price if level is undefined
+  const basePrice = basePrices[mount.level] || 150; // Default to Basic price if level is undefined
   const rarityMultiplier = mount.isRare ? 2 : 1;   // Rare mounts double the price
   const mountRegion = regionalMounts[mount.species];
-  const regionalBonus = mountRegion && mountRegion !== 'All Villages' && mount.region === mountRegion ? 50 : 0; // Regional bonus only if matches
+  const regionalBonus = mountRegion && mountRegion !== 'All Villages' && mount.region === mountRegion ? 150 : 0; // Regional bonus tripled from 50
 
   // Log details of the calculation
   console.log('[mountModule.js]: Calculating base price for mount:', mount.name);
