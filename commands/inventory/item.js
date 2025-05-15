@@ -28,6 +28,7 @@ const { getVillageEmojiByName } = require('../../modules/locationsModule');
 const { handleError } = require('../../utils/globalErrorHandler');
 const { removeItemInventoryDatabase, syncToInventoryDatabase } = require('../../utils/inventoryUtils');
 const { checkInventorySync } = require('../../utils/characterUtils');
+const { safeAppendDataToSheet } = require('../../utils/googleSheetsUtils');
 
 
 // ------------------- Command Definition -------------------
@@ -108,15 +109,16 @@ module.exports = {
       // ------------------- Job Voucher Handling -------------------
       // Specialized logic for 'Job Voucher' item: job assignment, perk display, Google Sheets logging.
       if (item.itemName.toLowerCase() === 'job voucher') {
-        if (character.jobVoucher) {
+        // Force quantity to 1 for job vouchers
+        if (quantity !== 1) {
           return void await interaction.editReply({
-            content: `❌ **${character.name}** already has an active Job Voucher for **${character.jobVoucherJob}**.\nPlease complete the current job before using another voucher.`
+            content: `❌ **Job Vouchers can only be used one at a time.**\nPlease use a quantity of 1.`
           });
         }
 
-        if (quantity > 1) {
+        if (character.jobVoucher) {
           return void await interaction.editReply({
-            content: `❌ You can only use one Job Voucher at a time. Please use a quantity of 1.`
+            content: `❌ **${character.name}** already has an active Job Voucher for **${character.jobVoucherJob}**.\nPlease complete the current job before using another voucher.`
           });
         }
 

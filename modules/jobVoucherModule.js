@@ -70,6 +70,13 @@ async function validateJobVoucher(character, jobName, requiredPerk = null) {
 // ------------------- Activate Job Voucher -------------------
 async function activateJobVoucher(character, jobName, item, quantity = 1, interaction) {
     try {
+        // Log job voucher activation
+        console.log(`[jobVoucherModule.js]: 🎫 Job Voucher Activation:`);
+        console.log(`[jobVoucherModule.js]: 👤 Character: ${character.name}`);
+        console.log(`[jobVoucherModule.js]: 💼 Job: ${jobName}`);
+        console.log(`[jobVoucherModule.js]: 🏠 Village: ${character.currentVillage}`);
+        console.log(`[jobVoucherModule.js]: 🔄 Current Job: ${character.job || 'None'}`);
+
         // First ensure any existing voucher is deactivated
         await deactivateJobVoucher(character._id);
 
@@ -79,9 +86,7 @@ async function activateJobVoucher(character, jobName, item, quantity = 1, intera
             jobVoucherJob: jobName 
         });
 
-        // Deduct the voucher from inventory
-        const inventoryCollection = await getCharacterInventoryCollection(character.name);
-        await removeItemInventoryDatabase(character._id, item.itemName, quantity, inventoryCollection);
+        console.log(`[jobVoucherModule.js]: ✅ Job Voucher activated successfully for ${character.name} as ${jobName}`);
 
         // Log usage to Google Sheets if applicable
         if (isValidGoogleSheetsUrl(character.inventory || character.inventoryLink)) {
