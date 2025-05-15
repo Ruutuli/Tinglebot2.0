@@ -89,8 +89,7 @@ async function activateJobVoucher(character, jobName, item, quantity = 1, intera
         console.log(`[jobVoucherModule.js]: ✅ Job Voucher activated successfully for ${character.name} as ${jobName}`);
 
         return {
-            success: true,
-            message: `🎫 **Job Voucher activated for ${character.name} to perform the job ${jobName}.**`
+            success: true
         };
     } catch (error) {
         handleError(error, 'jobVoucherModule.js');

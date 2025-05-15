@@ -1029,7 +1029,7 @@ const createGatherEmbed = (character, randomItem) => {
   ? randomItem.image
   : DEFAULT_IMAGE_URL;
 
- return new EmbedBuilder()
+ const embed = new EmbedBuilder()
   .setTitle(
    `${locationPrefix}: ${character.name} ${action} ${article} ${randomItem.itemName}!`
   )
@@ -1042,6 +1042,13 @@ const createGatherEmbed = (character, randomItem) => {
   })
   .setThumbnail(thumbnailUrl)
   .setImage(villageImage); // Use the village-specific image
+
+ // Add voucher info to footer if active
+ if (character.jobVoucher && character.jobVoucherJob) {
+  embed.setFooter({ text: `🎫 Job Voucher in use: ${character.jobVoucherJob}` });
+ }
+
+ return embed;
 };
 
 // ------------------- Subsection Title ------------------- 

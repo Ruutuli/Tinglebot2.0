@@ -206,10 +206,6 @@ module.exports = {
             });
             return;
           }
-          await interaction.followUp({
-            content: activationResult.message,
-            ephemeral: true,
-          });
         }
       }
 
