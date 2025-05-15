@@ -786,13 +786,9 @@ const craftingFlavorText = generateCraftingFlavorText(
   typeof jobForFlavorText === 'string' ? jobForFlavorText.trim() : ''
 );
 
-const jobVoucherMessage = character.jobVoucher
-  ? `🎫 **Job Voucher activated for ${character.name} to perform the job ${jobForFlavorText}.**\n\n`
-  : "";
-
 const combinedFlavorText = flavorText?.trim()
-  ? `${jobVoucherMessage}${craftingFlavorText}\n\n🌟 **Custom Flavor Text:** ${flavorText.trim()}`
-  : `${jobVoucherMessage}${craftingFlavorText}`;
+  ? `${craftingFlavorText}\n\n🌟 **Custom Flavor Text:** ${flavorText.trim()}`
+  : craftingFlavorText;
 
  const DEFAULT_EMOJI = ":small_blue_diamond:";
  let craftingMaterialText = "No materials used or invalid data format.";
@@ -862,11 +858,10 @@ const combinedFlavorText = flavorText?.trim()
   );
 
  embed
-  .setThumbnail(item.image || DEFAULT_IMAGE_URL)
-  .setImage(DEFAULT_IMAGE_URL)
-  .setFooter({
-   text: `${character.name} successfully ${action} this item!`,
-   iconURL: character.icon || DEFAULT_IMAGE_URL,
+  .setThumbnail(item.image || 'https://via.placeholder.com/150')
+  .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+  .setFooter({ 
+    text: jobForFlavorText ? `🎫 Job Voucher activated for ${character.name} to perform the job ${jobForFlavorText}` : '✨ Good luck in your new role! Make the most of this opportunity!' 
   });
 
  return embed;
