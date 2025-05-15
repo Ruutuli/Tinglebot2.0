@@ -502,7 +502,7 @@ await character.save();
 
       // At the end of successful gathering, update the daily roll
       await updateDailyRoll(character, 'gather');
-      console.log(`[gather.js]: Successfully updated daily roll for ${character.name}`);
+      console.log(`[gather.js]: ✅ Updated daily roll for ${character.name}`);
 
     } catch (error) {
       handleError(error, 'gather.js');
