@@ -965,6 +965,12 @@ if (quantity <= 0) {
    return interaction.editReply("❌ Character not found.");
   }
 
+  // Add ownership check
+  if (character.userId !== interaction.user.id) {
+    console.error(`[shops]: User ${interaction.user.id} attempted to sell items for character ${characterName} which belongs to ${character.userId}`);
+    return interaction.editReply("❌ You can only sell items for characters that belong to you.");
+  }
+
   const inventoryCollection = await getCharacterInventoryCollection(
    characterName
   );

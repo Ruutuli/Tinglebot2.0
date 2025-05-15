@@ -215,7 +215,44 @@ async function handleStoreMount(interaction, userId, characterName, mountName) {
     await character.save();
     await user.save();
 
-    await interaction.reply({ content: `✅ Mount **${mountName}** has been stored in the stable.`, ephemeral: true });
+    await interaction.reply({
+      embeds: [{
+        title: '🏠 Mount Stored in Stable',
+        description: `✅ Mount **${mountName}** has been safely stored in the stable!`,
+        color: 0xAA926A,
+        fields: [
+          {
+            name: '🐾 Mount Details',
+            value: `> **Species**: ${mount.species}\n> **Level**: ${mount.level}\n> **Stamina**: ${mount.stamina} 🥕`,
+            inline: false
+          },
+          {
+            name: '🏘️ Location',
+            value: `> **Village**: ${mount.storageLocation || 'Unknown'}\n> **Owner**: ${character.name}`,
+            inline: false
+          },
+          {
+            name: '✨ Traits',
+            value: mount.traits && mount.traits.length > 0 
+              ? mount.traits.map(trait => {
+                  const [key, value] = trait.split(': ');
+                  return `> **${key}**: ${value}`;
+                }).join('\n')
+              : '> No special traits',
+            inline: false
+          },
+          {
+            name: '💰 Storage Fee',
+            value: '> 100 tokens',
+            inline: true
+          }
+        ],
+        thumbnail: { url: getMountThumbnail(mount.species) },
+        image: { url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png' },
+        footer: { text: 'Your mount is safe and sound in the stable!' }
+      }],
+      ephemeral: false
+    });
   } catch (error) {
     handleError(error, 'stable.js');
 
@@ -346,7 +383,10 @@ async function handleSellMount(interaction, userId, characterName, mountName) {
             {
               name: '✨ Traits',
               value: mount.traits && mount.traits.length > 0 
-                ? mount.traits.map(trait => `• ${trait}`).join('\n')
+                ? mount.traits.map(trait => {
+                    const [key, value] = trait.split(': ');
+                    return `**${key}**: ${value}`;
+                  }).join('\n')
                 : 'No special traits',
               inline: false
             }
@@ -415,7 +455,44 @@ async function handleRetrieveMount(interaction, userId, characterName, mountName
     await character.save();
     await user.save();
 
-    await interaction.reply({ content: `✅ Mount **${mountName}** has been retrieved from the stable.`, ephemeral: true });
+    await interaction.reply({
+      embeds: [{
+        title: '🐴 Mount Retrieved from Stable',
+        description: `✅ Mount **${mountName}** has been successfully retrieved from the stable!`,
+        color: 0xAA926A,
+        fields: [
+          {
+            name: '🐾 Mount Details',
+            value: `> **Species**: ${mount.species}\n> **Level**: ${mount.level}\n> **Stamina**: ${mount.stamina} 🥕`,
+            inline: false
+          },
+          {
+            name: '🏘️ Location',
+            value: `> **Village**: ${mount.storageLocation || 'Unknown'}\n> **Owner**: ${character.name}`,
+            inline: false
+          },
+          {
+            name: '✨ Traits',
+            value: mount.traits && mount.traits.length > 0 
+              ? mount.traits.map(trait => {
+                  const [key, value] = trait.split(': ');
+                  return `> **${key}**: ${value}`;
+                }).join('\n')
+              : '> No special traits',
+            inline: false
+          },
+          {
+            name: '💰 Retrieval Fee',
+            value: '> 100 tokens',
+            inline: true
+          }
+        ],
+        thumbnail: { url: getMountThumbnail(mount.species) },
+        image: { url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png' },
+        footer: { text: 'Your mount is ready for adventure!' }
+      }],
+      ephemeral: false
+    });
   } catch (error) {
     handleError(error, 'stable.js');
 
