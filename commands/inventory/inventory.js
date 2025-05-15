@@ -28,7 +28,7 @@ const {
 const { handleError } = require('../../utils/globalErrorHandler.js');
 const { isValidGoogleSheetsUrl, extractSpreadsheetId } = require('../../utils/validation.js');
 const { authorizeSheets, appendSheetData, getSheetIdByTitle, readSheetData, validateInventorySheet } = require('../../utils/googleSheetsUtils.js');
-const { typeColors } = require('../../modules/formattingModule.js');
+const { typeColors, capitalize } = require('../../modules/formattingModule.js');
 const { checkInventorySync } = require('../../utils/characterUtils.js');
 
 // ------------------- Database Models -------------------
@@ -477,35 +477,4 @@ module.exports = {
     await interaction.reply({ embeds: [embed], ephemeral: true });
     console.log(`🔄 Setup instructions sent to the user: ${errorMessage}`);
   },
-
-  // ============================================================================
-  // Autocomplete Handler
-  // ============================================================================
-  async autocomplete(interaction) {
-    try {
-      const focusedOption = interaction.options.getFocused(true);
-      if (focusedOption.name === 'charactername') {
-        const userId = interaction.user.id;
-        await connectToTinglebot();
-        const characters = await fetchCharactersByUserId(userId);
-
-        const choices = characters
-          .filter(character => !character.inventorySynced)
-          .map(character => ({
-            name: character.name,
-            value: character.name
-          }));
-
-        const filteredChoices = choices
-          .filter(choice => choice.name.toLowerCase().includes(focusedOption.value.toLowerCase()))
-          .slice(0, 25);
-
-        await interaction.respond(filteredChoices);
-      }
-    } catch (error) {
-      handleError(error, 'inventory.js');
-      console.error('[inventory.js]: Autocomplete error', error);
-      await interaction.respond([]);
-    }
-  }
 }; 
