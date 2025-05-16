@@ -94,17 +94,21 @@ function canUseDailyRoll(character, activity) {
   const rollover = new Date();
   rollover.setUTCHours(13, 0, 0, 0); // 8AM EST = 1PM UTC
 
-  // If we're before rollover time, use yesterday's rollover
-  if (now < rollover) {
-    rollover.setDate(rollover.getDate() - 1);
-  }
-
   const lastRoll = character.dailyRoll.get(activity);
   if (!lastRoll) {
     return true;
   }
 
   const lastRollDate = new Date(lastRoll);
+  
+  // If current time is before rollover, compare with yesterday's rollover
+  if (now < rollover) {
+    const yesterdayRollover = new Date(rollover);
+    yesterdayRollover.setDate(yesterdayRollover.getDate() - 1);
+    return lastRollDate < yesterdayRollover;
+  }
+  
+  // If current time is after rollover, compare with today's rollover
   return lastRollDate < rollover;
 }
 

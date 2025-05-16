@@ -228,6 +228,29 @@ async function triggerRaid(character, monster, interaction, threadId, isBloodMoo
     }
 }
 
+// ---- Function: checkExpiredRaids ----
+// Checks for any raid timers that have expired during downtime
+async function checkExpiredRaids(client) {
+  try {
+    const now = Date.now();
+    const raids = await RaidProgress.find({
+      status: 'active',
+      endTime: { $lte: now }
+    });
+
+    for (const raid of raids) {
+      await applyVillageDamage(raid.villageName, raid.monster, raid.threadId);
+      raid.status = 'completed';
+      await raid.save();
+    }
+
+    console.log(`[raidModule.js]: ✅ Checked ${raids.length} expired raids`);
+  } catch (error) {
+    handleError(error, 'raidModule.js');
+    console.error('[raidModule.js]: ❌ Error checking expired raids:', error.message);
+  }
+}
+
 module.exports = {
     // Raid Battle Progress Functions
     storeRaidProgress,
@@ -242,5 +265,6 @@ module.exports = {
     triggerRaid,
 
     // Constants
-    RAID_DURATION
+    RAID_DURATION,
+    checkExpiredRaids
 }; 

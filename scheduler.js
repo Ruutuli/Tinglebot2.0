@@ -260,6 +260,26 @@ async function handleDebuffExpiry() {
   }
 }
 
+async function resetDailyRolls() {
+  try {
+    const characters = await Character.find({});
+    let resetCount = 0;
+
+    for (const character of characters) {
+      if (character.dailyRoll && character.dailyRoll.size > 0) {
+        character.dailyRoll = new Map();
+        await character.save();
+        resetCount++;
+      }
+    }
+
+    console.log(`[scheduler.js]: 🔄 Reset daily rolls for ${resetCount} characters`);
+  } catch (error) {
+    handleError(error, 'scheduler.js');
+    console.error(`[scheduler.js]: ❌ Failed to reset daily rolls: ${error.message}`);
+  }
+}
+
 // ============================================================================
 // ---- Blight Functions ----
 // ============================================================================
@@ -273,19 +293,270 @@ function setupBlightScheduler(client) {
 }
 
 // ============================================================================
+// ---- Death Deadline Functions ----
+// ============================================================================
+
+async function checkDeathDeadlines(client) {
+  try {
+    console.log('[scheduler.js]: 🔍 Checking for expired death deadlines...');
+    const now = new Date();
+    const characters = await Character.find({
+      blighted: true,
+      blightStage: 5,
+      deathDeadline: { $lte: now }
+    });
+
+    if (characters.length === 0) {
+      console.log('[scheduler.js]: ✅ No expired death deadlines found');
+      return;
+    }
+
+    const channelId = process.env.BLIGHT_NOTIFICATIONS_CHANNEL_ID;
+    const channel = client.channels.cache.get(channelId);
+    if (!channel) {
+      console.error('[scheduler.js]: ❌ Channel not found for death notifications');
+      return;
+    }
+
+    for (const character of characters) {
+      character.blighted = false;
+      character.blightStage = 0;
+      character.deathDeadline = null;
+
+      // Delete any active blight submissions for this character
+      try {
+        const blightSubmissions = loadBlightSubmissions();
+        const submissionIds = Object.keys(blightSubmissions).filter(id => {
+          const submission = blightSubmissions[id];
+          return submission.characterName === character.name && submission.status === 'pending';
+        });
+        
+        // Delete each pending submission
+        for (const submissionId of submissionIds) {
+          delete blightSubmissions[submissionId];
+          deleteSubmissionFromStorage(submissionId);
+        }
+        saveBlightSubmissions(blightSubmissions);
+      } catch (error) {
+        handleError(error, 'scheduler.js');
+        console.error('[scheduler.js]: ❌ Error cleaning up blight submissions:', error);
+      }
+
+      // Wipe character's inventory from database only
+      try {
+        const inventoriesConnection = await dbFunctions.connectToInventories();
+        const db = inventoriesConnection.useDb("inventories");
+        const collectionName = character.name.toLowerCase();
+        const inventoryCollection = db.collection(collectionName);
+        
+        // Delete all items from the character's inventory in database
+        await inventoryCollection.deleteMany({ characterId: character._id });
+      } catch (error) {
+        handleError(error, 'scheduler.js');
+        console.error('[scheduler.js]: ❌ Error wiping inventory:', error);
+      }
+
+      await character.save();
+
+      const embed = new EmbedBuilder()
+        .setColor('#D32F2F')
+        .setTitle(`<:blight_eye:805576955725611058> **Blight Death Alert** <:blight_eye:805576955725611058>`)
+        .setDescription(`**${character.name}** has succumbed to Stage 5 Blight.\n\n *This character's inventory has been cleared from the database, but their inventory sheet remains for record-keeping purposes.*`)
+        .setThumbnail(character.icon || 'https://example.com/default-icon.png')
+        .setFooter({ text: 'Blight Death Announcement', iconURL: 'https://example.com/blight-icon.png' })
+        .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png')
+        .setTimestamp();
+
+      if (character.userId) {
+        await channel.send({ content: `<@${character.userId}>`, embeds: [embed] });
+      } else {
+        console.error(`[scheduler.js]: ❌ Missing userId for ${character.name}`);
+        await channel.send({ embeds: [embed] });
+      }
+
+      // Send death notification to mod-log channel
+      try {
+        const modLogChannel = client.channels.cache.get(process.env.MOD_LOG_CHANNEL_ID);
+        if (modLogChannel) {
+          const modLogEmbed = new EmbedBuilder()
+            .setColor('#FF0000')
+            .setTitle('☠️ Character Death from Blight')
+            .setDescription(`**Character**: ${character.name}\n**Owner**: <@${character.userId}>\n**Death Time**: <t:${Math.floor(Date.now() / 1000)}:F>`)
+            .setThumbnail(character.icon || 'https://example.com/default-icon.png')
+            .setFooter({ text: 'Blight Death Log', iconURL: 'https://example.com/blight-icon.png' })
+            .setTimestamp();
+
+          await modLogChannel.send({ embeds: [modLogEmbed] });
+          console.log(`[scheduler.js]: ✅ Sent death notification to mod-log for ${character.name}`);
+        } else {
+          console.error('[scheduler.js]: ❌ Mod log channel not found');
+        }
+      } catch (error) {
+        handleError(error, 'scheduler.js');
+        console.error('[scheduler.js]: ❌ Error sending death notification to mod-log:', error);
+      }
+    }
+  } catch (error) {
+    handleError(error, 'scheduler.js');
+    console.error('[scheduler.js]: ❌ Error checking death deadlines:', error);
+  }
+}
+
+// ============================================================================
+// ---- Startup Check Functions ----
+// ============================================================================
+
+async function checkAndRunMissedTasks(client) {
+  try {
+    console.log('[scheduler.js]: 🔍 Checking for missed scheduled tasks...');
+    const now = new Date();
+    const estNow = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+    const currentHour = estNow.getHours();
+    const currentMinute = estNow.getMinutes();
+    const currentDay = estNow.getDay();
+    const currentDate = estNow.getDate();
+
+    // Check if we missed the 8 AM tasks
+    if (currentHour >= 8) {
+      console.log('[scheduler.js]: 🔄 Running missed 8 AM tasks...');
+      
+      // Check if today's reset has already happened
+      const today = estNow.toISOString().split('T')[0];
+      const characters = await Character.find({});
+      const needsReset = characters.some(char => {
+        if (!char.dailyRoll) return true;
+        const lastReset = char.dailyRoll.get('lastReset');
+        return !lastReset || !lastReset.startsWith(today);
+      });
+
+      if (needsReset) {
+        console.log('[scheduler.js]: 🔄 Daily reset was missed, running now...');
+        await Promise.all([
+          recoverDailyStamina(),
+          resetDailyRolls(),
+          cleanupExpiredEntries(),
+          checkExpiredRequests(client),
+          postWeatherUpdate(client)
+        ]);
+      } else {
+        console.log('[scheduler.js]: ✅ Daily reset already ran today, skipping...');
+        await Promise.all([
+          cleanupExpiredEntries(),
+          checkExpiredRequests(client),
+          postWeatherUpdate(client)
+        ]);
+      }
+    }
+
+    // Check if we missed the midnight tasks
+    if (currentHour >= 0) {
+      console.log('[scheduler.js]: 🔄 Running missed midnight tasks...');
+      await Promise.all([
+        handleJailRelease(),
+        handleDebuffExpiry(),
+        executeBirthdayAnnouncements(client)
+      ]);
+    }
+
+    // Check if we missed the 8 PM tasks
+    if (currentHour >= 20) {
+      console.log('[scheduler.js]: 🔄 Running missed 8 PM tasks...');
+      await Promise.all([
+        postBlightRollCall(client),
+        checkMissedRolls(client)
+      ]);
+    }
+
+    // Check if we missed the 12:24 PM blood moon check
+    if (currentHour >= 12 && currentMinute >= 24) {
+      console.log('[scheduler.js]: 🔄 Running missed blood moon check...');
+      const channels = [
+        process.env.RUDANIA_TOWN_HALL,
+        process.env.INARIKO_TOWN_HALL,
+        process.env.VHINTL_TOWN_HALL,
+      ];
+
+      for (const channelId of channels) {
+        if (isBloodMoonDay()) {
+          await renameChannels(client);
+          await sendBloodMoonAnnouncement(client, channelId, 'The Blood Moon is upon us! Beware!');
+        } else {
+          await revertChannelNames(client);
+        }
+      }
+    }
+
+    // Check for monthly tasks (vending stock)
+    if (currentDate === 1) {
+      console.log('[scheduler.js]: 🔄 Running missed monthly tasks...');
+      await generateVendingStockList();
+    }
+
+    // Check for weekly tasks (pet rolls)
+    if (currentDay === 0) {
+      console.log('[scheduler.js]: 🔄 Running missed weekly tasks...');
+      await resetPetRollsForAllCharacters();
+    }
+
+    // Check for every 6-hour blight roll checks
+    const hoursSinceLastCheck = currentHour % 6;
+    if (hoursSinceLastCheck > 0) {
+      console.log('[scheduler.js]: 🔄 Running missed blight roll checks...');
+      await checkMissedRolls(client);
+    }
+
+    // Check for any pending delivery tasks that might have expired
+    console.log('[scheduler.js]: 🔄 Checking for expired delivery tasks...');
+    await cleanupExpiredEntries();
+
+    // Check for any pending requests that might have expired
+    console.log('[scheduler.js]: 🔄 Checking for expired requests...');
+    await checkExpiredRequests(client);
+
+    // Check for expired raid timers
+    console.log('[scheduler.js]: 🔄 Checking for expired raid timers...');
+    const { checkExpiredRaids } = require('./modules/raidModule');
+    await checkExpiredRaids(client);
+
+    // Check for expired relic appraisals
+    console.log('[scheduler.js]: 🔄 Checking for expired relic appraisals...');
+    const { checkExpiredRelics } = require('./utils/relicUtils');
+    await checkExpiredRelics(client);
+
+    // Check for expired random encounters
+    console.log('[scheduler.js]: 🔄 Checking for expired random encounters...');
+    const { checkExpiredEncounters } = require('./modules/randomMountEncounterModule');
+    await checkExpiredEncounters(client);
+
+    // Check for expired village cooldowns
+    console.log('[scheduler.js]: 🔄 Checking for expired village cooldowns...');
+    const { checkExpiredVillageCooldowns } = require('./commands/world/village');
+    await checkExpiredVillageCooldowns();
+
+    console.log('[scheduler.js]: ✅ Finished checking for missed tasks');
+  } catch (error) {
+    handleError(error, 'scheduler.js');
+    console.error('[scheduler.js]: ❌ Error checking missed tasks:', error.message);
+  }
+}
+
+// ============================================================================
 // ---- Scheduler Initialization ----
 // ============================================================================
 
 function initializeScheduler(client) {
+  // Run missed tasks check on startup
+  checkAndRunMissedTasks(client);
+
   // Initialize all schedulers
   createCronJob('0 0 * * *', 'jail release check', handleJailRelease);
   createCronJob('0 8 * * *', 'daily stamina recovery', recoverDailyStamina);
+  createCronJob('0 8 * * *', 'daily roll reset', resetDailyRolls);
   createCronJob('0 0 1 * *', 'monthly vending stock generation', generateVendingStockList);
   createCronJob('0 0 * * 0', 'weekly pet rolls reset', resetPetRollsForAllCharacters);
   createCronJob('0 8 * * *', 'request expiration and cleanup', async () => {
     await Promise.all([
       cleanupExpiredEntries(),
-      cleanupExpiredHealingRequests(),
       checkExpiredRequests(client)
     ]);
   });
@@ -319,6 +590,9 @@ function initializeScheduler(client) {
       }
     }
   });
+
+  // Add death deadline check - runs every hour
+  createCronJob('0 * * * *', 'death deadline check', () => checkDeathDeadlines(client));
 
   // Initialize weather scheduler
   setupWeatherScheduler(client);
