@@ -178,6 +178,8 @@ async function syncToInventoryDatabase(character, item, interaction) {
       console.log(`[inventoryUtils.js]: ➖ Removing ${Math.abs(item.quantity)} ${dbDoc.itemName}`);
       console.log(`[inventoryUtils.js]: 🔄 Quantity: ${existingItem.quantity} → ${newQty}`);
       console.log(`[inventoryUtils.js]: 📝 Reason: ${dbDoc.obtain}`);
+      
+      // Update or delete based on new quantity
       if (newQty <= 0) {
         await inventoryCollection.deleteOne({
           characterId: dbDoc.characterId,
