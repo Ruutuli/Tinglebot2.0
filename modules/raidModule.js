@@ -9,6 +9,7 @@ const { monsterMapping } = require('../models/MonsterModel');
 const { applyVillageDamage } = require('./villageModule');
 const { capitalizeVillageName } = require('../utils/stringUtils');
 const { generateUniqueId } = require('../utils/uniqueIdUtils');
+const mongoose = require('mongoose');
 
 // ------------------- Storage Functions -------------------
 const { 
@@ -19,6 +20,27 @@ const {
 
 // ------------------- Constants -------------------
 const RAID_DURATION = 15 * 60 * 1000; // 15 minutes in milliseconds
+
+// Define RaidProgress Schema
+const raidProgressSchema = new mongoose.Schema({
+  villageId: String,
+  startTime: Date,
+  endTime: Date,
+  status: {
+    type: String,
+    enum: ['active', 'completed', 'failed'],
+    default: 'active'
+  },
+  damage: Number,
+  participants: [{
+    userId: String,
+    characterName: String,
+    damage: Number
+  }]
+});
+
+// Create RaidProgress model
+const RaidProgress = mongoose.model('RaidProgress', raidProgressSchema);
 
 // ============================================================================
 // Raid Battle Progress Functions
@@ -232,22 +254,43 @@ async function triggerRaid(character, monster, interaction, threadId, isBloodMoo
 // Checks for any raid timers that have expired during downtime
 async function checkExpiredRaids(client) {
   try {
-    const now = Date.now();
-    const raids = await RaidProgress.find({
+    const now = new Date();
+    const expiredRaids = await RaidProgress.find({
       status: 'active',
       endTime: { $lte: now }
     });
 
-    for (const raid of raids) {
-      await applyVillageDamage(raid.villageName, raid.monster, raid.threadId);
-      raid.status = 'completed';
-      await raid.save();
-    }
+    for (const raid of expiredRaids) {
+      try {
+        // Apply village damage
+        const village = await Village.findOne({ _id: raid.villageId });
+        if (village) {
+          village.health = Math.max(0, village.health - raid.damage);
+          await village.save();
+        }
 
-    console.log(`[raidModule.js]: ✅ Checked ${raids.length} expired raids`);
+        // Update raid status
+        raid.status = 'completed';
+        await raid.save();
+
+        // Send notification
+        const channelId = process.env.RAID_NOTIFICATIONS_CHANNEL_ID;
+        const channel = client.channels.cache.get(channelId);
+        if (channel) {
+          const embed = new EmbedBuilder()
+            .setColor('#FF0000')
+            .setTitle('🏰 Raid Completed')
+            .setDescription(`A raid on ${village.name} has completed.\nDamage dealt: ${raid.damage}`)
+            .setTimestamp();
+
+          await channel.send({ embeds: [embed] });
+        }
+      } catch (error) {
+        console.error('[raidModule]: Error processing expired raid:', error);
+      }
+    }
   } catch (error) {
-    handleError(error, 'raidModule.js');
-    console.error('[raidModule.js]: ❌ Error checking expired raids:', error.message);
+    console.error('[raidModule]: Error checking expired raids:', error);
   }
 }
 
@@ -266,5 +309,6 @@ module.exports = {
 
     // Constants
     RAID_DURATION,
-    checkExpiredRaids
+    checkExpiredRaids,
+    RaidProgress
 }; 

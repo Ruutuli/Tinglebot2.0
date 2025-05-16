@@ -16,6 +16,7 @@ const { generateWeatherEmbed } = require('./embeds/weatherEmbed');
 const { checkExpiredRequests } = require('./utils/expirationHandler');
 const { isValidImageUrl } = require('./utils/validation');
 const DEFAULT_IMAGE_URL = "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png";
+const TempData = require('./models/TempDataModel');
 
 // ============================================================================
 // ---- Utility Functions ----
@@ -408,130 +409,49 @@ async function checkDeathDeadlines(client) {
 
 async function checkAndRunMissedTasks(client) {
   try {
-    console.log('[scheduler.js]: 🔍 Checking for missed scheduled tasks...');
+    console.log('[scheduler.js]: 🔍 Starting missed tasks check...');
     const now = new Date();
     const estNow = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
     const currentHour = estNow.getHours();
-    const currentMinute = estNow.getMinutes();
-    const currentDay = estNow.getDay();
-    const currentDate = estNow.getDate();
+    const today = estNow.toISOString().split('T')[0];
 
-    // Check if we missed the 8 AM tasks
-    if (currentHour >= 8) {
-      console.log('[scheduler.js]: 🔄 Running missed 8 AM tasks...');
-      
-      // Check if today's reset has already happened
-      const today = estNow.toISOString().split('T')[0];
-      const characters = await Character.find({});
-      const needsReset = characters.some(char => {
-        if (!char.dailyRoll) return true;
-        const lastReset = char.dailyRoll.get('lastReset');
-        return !lastReset || !lastReset.startsWith(today);
-      });
-
-      if (needsReset) {
-        console.log('[scheduler.js]: 🔄 Daily reset was missed, running now...');
-        await Promise.all([
-          recoverDailyStamina(),
-          resetDailyRolls(),
-          cleanupExpiredEntries(),
-          checkExpiredRequests(client),
-          postWeatherUpdate(client)
-        ]);
-      } else {
-        console.log('[scheduler.js]: ✅ Daily reset already ran today, skipping...');
-        await Promise.all([
-          cleanupExpiredEntries(),
-          checkExpiredRequests(client),
-          postWeatherUpdate(client)
-        ]);
-      }
-    }
-
-    // Check if we missed the midnight tasks
-    if (currentHour >= 0) {
-      console.log('[scheduler.js]: 🔄 Running missed midnight tasks...');
-      await Promise.all([
-        handleJailRelease(),
-        handleDebuffExpiry(),
-        executeBirthdayAnnouncements(client)
-      ]);
+    // Always check for expired death deadlines, regardless of time
+    console.log('[scheduler.js]: 🔄 Checking for expired death deadlines...');
+    try {
+      await checkMissedRolls(client);
+      console.log('[scheduler.js]: ✅ Death deadline check completed');
+    } catch (error) {
+      console.error('[scheduler.js]: ❌ Error checking death deadlines:', error);
     }
 
     // Check if we missed the 8 PM tasks
     if (currentHour >= 20) {
-      console.log('[scheduler.js]: 🔄 Running missed 8 PM tasks...');
-      await Promise.all([
-        postBlightRollCall(client),
-        checkMissedRolls(client)
-      ]);
-    }
+      console.log('[scheduler.js]: 🔄 Checking if 8 PM blight tasks were missed...');
+      const lastEveningTasks = await TempData.findOne({ type: 'evening_tasks', key: today });
+      
+      if (!lastEveningTasks) {
+        console.log('[scheduler.js]: ⚠️ 8 PM blight tasks were missed, running now...');
+        try {
+          console.log('[scheduler.js]: 🔄 Running blight roll call...');
+          await postBlightRollCall(client);
+          console.log('[scheduler.js]: ✅ Blight roll call completed');
 
-    // Check if we missed the 12:24 PM blood moon check
-    if (currentHour >= 12 && currentMinute >= 24) {
-      console.log('[scheduler.js]: 🔄 Running missed blood moon check...');
-      const channels = [
-        process.env.RUDANIA_TOWN_HALL,
-        process.env.INARIKO_TOWN_HALL,
-        process.env.VHINTL_TOWN_HALL,
-      ];
-
-      for (const channelId of channels) {
-        if (isBloodMoonDay()) {
-          await renameChannels(client);
-          await sendBloodMoonAnnouncement(client, channelId, 'The Blood Moon is upon us! Beware!');
-        } else {
-          await revertChannelNames(client);
+          // Mark evening tasks as completed
+          await TempData.findOneAndUpdate(
+            { type: 'evening_tasks', key: today },
+            { data: { timestamp: now }, expiresAt: new Date(now.getTime() + 24 * 60 * 60 * 1000) },
+            { upsert: true }
+          );
+          console.log('[scheduler.js]: ✅ Marked evening tasks as completed');
+        } catch (error) {
+          console.error('[scheduler.js]: ❌ Error running missed blight tasks:', error);
         }
+      } else {
+        console.log('[scheduler.js]: ✅ 8 PM blight tasks already ran today');
       }
+    } else {
+      console.log('[scheduler.js]: ℹ️ Not yet 8 PM, skipping blight roll call');
     }
-
-    // Check for monthly tasks (vending stock)
-    if (currentDate === 1) {
-      console.log('[scheduler.js]: 🔄 Running missed monthly tasks...');
-      await generateVendingStockList();
-    }
-
-    // Check for weekly tasks (pet rolls)
-    if (currentDay === 0) {
-      console.log('[scheduler.js]: 🔄 Running missed weekly tasks...');
-      await resetPetRollsForAllCharacters();
-    }
-
-    // Check for every 6-hour blight roll checks
-    const hoursSinceLastCheck = currentHour % 6;
-    if (hoursSinceLastCheck > 0) {
-      console.log('[scheduler.js]: 🔄 Running missed blight roll checks...');
-      await checkMissedRolls(client);
-    }
-
-    // Check for any pending delivery tasks that might have expired
-    console.log('[scheduler.js]: 🔄 Checking for expired delivery tasks...');
-    await cleanupExpiredEntries();
-
-    // Check for any pending requests that might have expired
-    console.log('[scheduler.js]: 🔄 Checking for expired requests...');
-    await checkExpiredRequests(client);
-
-    // Check for expired raid timers
-    console.log('[scheduler.js]: 🔄 Checking for expired raid timers...');
-    const { checkExpiredRaids } = require('./modules/raidModule');
-    await checkExpiredRaids(client);
-
-    // Check for expired relic appraisals
-    console.log('[scheduler.js]: 🔄 Checking for expired relic appraisals...');
-    const { checkExpiredRelics } = require('./utils/relicUtils');
-    await checkExpiredRelics(client);
-
-    // Check for expired random encounters
-    console.log('[scheduler.js]: 🔄 Checking for expired random encounters...');
-    const { checkExpiredEncounters } = require('./modules/randomMountEncounterModule');
-    await checkExpiredEncounters(client);
-
-    // Check for expired village cooldowns
-    console.log('[scheduler.js]: 🔄 Checking for expired village cooldowns...');
-    const { checkExpiredVillageCooldowns } = require('./commands/world/village');
-    await checkExpiredVillageCooldowns();
 
     console.log('[scheduler.js]: ✅ Finished checking for missed tasks');
   } catch (error) {
@@ -545,66 +465,40 @@ async function checkAndRunMissedTasks(client) {
 // ============================================================================
 
 function initializeScheduler(client) {
+  console.log('[scheduler.js]: 🚀 Initializing scheduler...');
+  
   // Run missed tasks check on startup
+  console.log('[scheduler.js]: 🔄 Running initial missed tasks check...');
   checkAndRunMissedTasks(client);
 
-  // Initialize all schedulers
-  createCronJob('0 0 * * *', 'jail release check', handleJailRelease);
-  createCronJob('0 8 * * *', 'daily stamina recovery', recoverDailyStamina);
-  createCronJob('0 8 * * *', 'daily roll reset', resetDailyRolls);
-  createCronJob('0 0 1 * *', 'monthly vending stock generation', generateVendingStockList);
-  createCronJob('0 0 * * 0', 'weekly pet rolls reset', resetPetRollsForAllCharacters);
-  createCronJob('0 8 * * *', 'request expiration and cleanup', async () => {
-    await Promise.all([
-      cleanupExpiredEntries(),
-      checkExpiredRequests(client)
-    ]);
-  });
-  createCronJob('0 0 * * *', 'debuff expiry check', handleDebuffExpiry);
-  createCronJob('0 8 * * *', 'daily weather update', () => postWeatherUpdate(client));
-  createCronJob('0 0 * * *', 'birthday announcements', () => executeBirthdayAnnouncements(client));
+  // Initialize blight scheduler
+  console.log('[scheduler.js]: ⏰ Setting up blight management cron job (8 PM EST)...');
   createCronJob('0 20 * * *', 'blight management', async () => {
-    await Promise.all([
-      postBlightRollCall(client),
-      checkMissedRolls(client)
-    ]);
-  });
-  createCronJob('24 12 * * *', 'blood moon tracking', async () => {
-    const channels = [
-      process.env.RUDANIA_TOWN_HALL,
-      process.env.INARIKO_TOWN_HALL,
-      process.env.VHINTL_TOWN_HALL,
-    ];
-
-    for (const channelId of channels) {
-      try {
-        if (isBloodMoonDay()) {
-          await renameChannels(client);
-          await sendBloodMoonAnnouncement(client, channelId, 'The Blood Moon is upon us! Beware!');
-        } else {
-          await revertChannelNames(client);
-        }
-      } catch (error) {
-        handleError(error, 'scheduler.js');
-        console.error(`[scheduler.js]: ❌ Blood Moon tracking failed: ${error.message}`);
-      }
+    console.log('[scheduler.js]: 🔄 Running scheduled blight management tasks...');
+    try {
+      await Promise.all([
+        postBlightRollCall(client).then(() => {
+          console.log('[scheduler.js]: ✅ Blight roll call completed');
+        }).catch(e => {
+          console.error('[scheduler.js]: ❌ Blight roll call failed:', e.message);
+        }),
+        checkMissedRolls(client).then(() => {
+          console.log('[scheduler.js]: ✅ Missed rolls check completed');
+        }).catch(e => {
+          console.error('[scheduler.js]: ❌ Missed rolls check failed:', e.message);
+        })
+      ]);
+      console.log('[scheduler.js]: ✅ All blight management tasks completed');
+    } catch (error) {
+      console.error('[scheduler.js]: ❌ Error in blight management tasks:', error);
     }
   });
 
-  // Add death deadline check - runs every hour
-  createCronJob('0 * * * *', 'death deadline check', () => checkDeathDeadlines(client));
-
-  // Initialize weather scheduler
-  setupWeatherScheduler(client);
-
-  console.log('[scheduler.js]: ✅ All schedulers initialized');
+  console.log('[scheduler.js]: ✅ Scheduler initialization complete');
 }
 
 module.exports = {
-  initializeScheduler,
-  setupWeatherScheduler,
-  postWeatherUpdate,
-  setupBlightScheduler
+  initializeScheduler
 };
 
 

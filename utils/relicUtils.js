@@ -8,8 +8,8 @@ const Character = require('../models/CharacterModel');
 const Relic = require('../models/RelicModel');
 const { addTokensToCharacter } = require('../database/db');
 const { EmbedBuilder } = require('discord.js');
-const { sendUserDM } = require('../services/dmService');
-const { handleError } = require('../utils/errorHandler');
+const { sendUserDM } = require('./messageUtils');
+const { handleError } = require('./globalErrorHandler');
 
 // ------------------- Constants -------------------
 // Constants defining game mechanics for relic appraisal and art submission.
@@ -114,22 +114,28 @@ function validateRelicArt(artUrl, width, height, format) {
 // Checks for any relic appraisals that have expired during downtime
 async function checkExpiredRelics(client) {
   try {
+    const now = new Date();
     const relics = await Relic.find({
       status: 'pending_appraisal',
       discoveredDate: { $exists: true }
     });
 
     for (const relic of relics) {
-      if (isAppraisalExpired(relic)) {
+      const appraisalDeadline = new Date(relic.discoveredDate);
+      appraisalDeadline.setDate(appraisalDeadline.getDate() + 7); // 7 days from discovery
+
+      if (now > appraisalDeadline) {
+        // Update relic status
         relic.status = 'expired';
         await relic.save();
 
-        // Notify the discoverer
-        if (relic.discoveredBy) {
-          await sendUserDM(
-            relic.discoveredBy,
-            `⏰ Your relic discovery has expired without appraisal. The relic has been returned to the wild.`
-          );
+        // Notify discoverer
+        if (relic.discovererId) {
+          try {
+            await sendUserDM(relic.discovererId, `Your relic discovery "${relic.name}" has expired and will be removed from the system.`);
+          } catch (error) {
+            console.error('[relicUtils]: Error sending DM:', error);
+          }
         }
 
         // Log to mod channel
@@ -137,19 +143,17 @@ async function checkExpiredRelics(client) {
         if (modLogChannel) {
           const embed = new EmbedBuilder()
             .setColor('#FF0000')
-            .setTitle('⏰ Expired Relic Appraisal')
-            .setDescription(`**Relic ID**: ${relic._id}\n**Discovered By**: <@${relic.discoveredBy}>\n**Discovery Date**: <t:${Math.floor(new Date(relic.discoveredDate).getTime() / 1000)}:F>`)
+            .setTitle('⏰ Relic Appraisal Expired')
+            .setDescription(`**Relic**: ${relic.name}\n**Discoverer**: <@${relic.discovererId}>\n**Discovery Date**: <t:${Math.floor(relic.discoveredDate.getTime() / 1000)}:F>`)
             .setTimestamp();
 
           await modLogChannel.send({ embeds: [embed] });
         }
       }
     }
-
-    console.log(`[relicUtils.js]: ✅ Checked ${relics.length} relic appraisals`);
   } catch (error) {
     handleError(error, 'relicUtils.js');
-    console.error('[relicUtils.js]: ❌ Error checking expired relics:', error.message);
+    console.error('[relicUtils]: Error checking expired relics:', error);
   }
 }
 
