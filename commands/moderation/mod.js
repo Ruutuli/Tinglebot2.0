@@ -14,25 +14,65 @@ const {
 
 const { handleError } = require('../../utils/globalErrorHandler');
 const {
+  connectToTinglebot,
+  connectToInventories,
   fetchCharacterByName,
-  fetchCharacterByNameAndUserId,
-  updatePetToCharacter,
+  fetchCharacterById,
+  fetchAllCharacters,
+  fetchAllItems,
   fetchItemByName,
+  fetchItemsByCategory,
+  fetchItemRarityByName,
+  fetchItemsByIds,
+  fetchValidWeaponSubtypes,
+  getSpecificItems,
+  getIngredientItems,
+  getCharacterInventoryCollection,
+  deleteCharacterInventoryCollection,
+  createCharacterInventory,
+  updatePetToCharacter,
   getOrCreateToken,
   updateTokenBalance,
   appendEarnedTokens
 } = require('../../database/db');
 
+const {
+  getVillageColorByName,
+  getVillageEmojiByName,
+} = require("../../modules/locationsModule");
+
+const {
+  handleAutocomplete,
+  handleModGiveCharacterAutocomplete,
+  handleModGiveItemAutocomplete,
+  handleModCharacterAutocomplete,
+} = require("../../handlers/autocompleteHandler");
+
+const {
+  capitalizeFirstLetter,
+  capitalizeWords,
+  capitalize,
+  getRandomColor,
+} = require("../../modules/formattingModule");
+
+const {
+  createCharacterEmbed,
+  createVendorEmbed,
+  createCharacterGearEmbed,
+  getCommonEmbedSettings,
+} = require("../../embeds/embeds");
+
+const bucket = require("../../config/gcsService");
+
 const Pet = require('../../models/PetModel');
 const User = require('../../models/UserModel');
-
+const Character = require('../../models/CharacterModel');
+const ItemModel = require("../../models/ItemModel");
+const TempData = require('../../models/TempDataModel');
 const {
-  addItemInventoryDatabase
-} = require('../../utils/inventoryUtils');
-
-const {
-  deleteSubmissionFromStorage,
-  retrieveSubmissionFromStorage
+  savePendingEditToStorage,
+  retrievePendingEditFromStorage,
+  deletePendingEditFromStorage
 } = require('../../utils/storage');
 
 const {
@@ -64,6 +104,7 @@ const villageEmojis = {
 };
 
 const allVillageMounts = ['Horse', 'Donkey'];
+const EDIT_NOTIFICATION_CHANNEL_ID = '1319524801408274434';
 
 // ============================================================================
 // ------------------- Command Definition -------------------
@@ -203,6 +244,25 @@ const modCommand = new SlashCommandBuilder()
         .setName('reason')
         .setDescription('Provide a reason for denying the submission (optional).')
         .setRequired(false)
+    )
+)
+
+// ------------------- Subcommand: approveedit -------------------
+.addSubcommand(subcommand =>
+  subcommand
+    .setName('approveedit')
+    .setDescription('Approve or reject a pending character edit')
+    .addStringOption(option =>
+      option
+        .setName('requestid')
+        .setDescription('The ID of the pending edit request')
+        .setRequired(true)
+    )
+    .addBooleanOption(option =>
+      option
+        .setName('approve')
+        .setDescription('Whether to approve (true) or reject (false) the edit')
+        .setRequired(true)
     )
 )
 
@@ -365,6 +425,8 @@ async function execute(interaction) {
         return await handleMount(interaction);      
     } else if (subcommand === 'approve') {
         return await handleApprove(interaction);      
+    } else if (subcommand === 'approveedit') {
+        return await handleApproveEdit(interaction);
     } else if (subcommand === 'inactivityreport') {
         return await handleInactivityReport(interaction);      
       } else if (subcommand === 'table') {
@@ -682,7 +744,194 @@ async function handleApprove(interaction) {
     }
   }
 
-  // ------------------- Function: handleInactivityReport -------------------
+  // ------------------- Function: handleApproveEdit -------------------
+// Approves or rejects a pending character edit and applies the changes
+async function handleApproveEdit(interaction) {
+  try {
+    const requestId = interaction.options.getString('requestid');
+    const shouldApprove = interaction.options.getBoolean('approve');
+
+    const pendingEdit = await retrievePendingEditFromStorage(requestId);
+    if (!pendingEdit) {
+      return interaction.editReply({
+        content: '❌ No pending edit request found with that ID.',
+        ephemeral: true
+      });
+    }
+
+    if (pendingEdit.status !== 'pending') {
+      return interaction.editReply({
+        content: '❌ This edit request has already been processed.',
+        ephemeral: true
+      });
+    }
+
+    const character = await Character.findById(pendingEdit.characterId);
+    if (!character) {
+      return interaction.editReply({
+        content: '❌ The character associated with this edit request no longer exists.',
+        ephemeral: true
+      });
+    }
+
+    // Try to update the original notification message
+    try {
+      const notificationChannel = await interaction.client.channels.fetch(EDIT_NOTIFICATION_CHANNEL_ID);
+      if (notificationChannel && notificationChannel.isTextBased() && pendingEdit.notificationMessageId) {
+        const originalMessage = await notificationChannel.messages.fetch(pendingEdit.notificationMessageId);
+        if (originalMessage) {
+          const updatedContent = `📢 **${shouldApprove ? 'APPROVED' : 'REJECTED'} CHARACTER EDIT REQUEST**\n\n` +
+            `🌱 **User:** \`${pendingEdit.userId}\`\n` +
+            `👤 **Character Name:** \`${character.name}\`\n` +
+            `🛠️ **Edited Category:** \`${pendingEdit.category}\`\n` +
+            `🔄 **Previous Value:** \`${pendingEdit.previousValue}\`\n` +
+            `✅ **Requested Value:** \`${pendingEdit.updatedValue}\`\n` +
+            `⏳ **Status:** ${shouldApprove ? 'APPROVED' : 'REJECTED'} by ${interaction.user.tag}\n` +
+            `🔗 **Request ID:** \`${requestId}\``;
+
+          await originalMessage.edit(updatedContent);
+        }
+      }
+    } catch (err) {
+      handleError(err, "mod.js");
+      console.error(`[mod.js]: Error updating notification message: ${err.message}`);
+    }
+
+    if (shouldApprove) {
+      // Apply the edit
+      const category = pendingEdit.category;
+      const updatedValue = pendingEdit.updatedValue;
+
+      if (category === 'job') {
+        character.job = updatedValue;
+      } else if (category === 'race') {
+        character.race = updatedValue;
+      } else if (category === 'hearts') {
+        character.currentHearts = updatedValue;
+        character.maxHearts = updatedValue;
+        await updateHearts(character._id, updatedValue);
+      } else if (category === 'stamina') {
+        character.currentStamina = updatedValue;
+        character.maxStamina = updatedValue;
+        await updateStamina(character._id, updatedValue);
+      } else if (category === 'age') {
+        character.age = updatedValue;
+      } else if (category === 'height') {
+        character.height = updatedValue;
+      } else if (category === 'pronouns') {
+        character.pronouns = updatedValue;
+      } else if (category === 'homeVillage') {
+        character.homeVillage = updatedValue;
+        character.currentVillage = updatedValue;
+      } else if (category === 'name') {
+        character.name = updatedValue;
+        await deleteCharacterInventoryCollection(pendingEdit.previousValue);
+        await createCharacterInventory(character.name, character._id, character.job);
+      } else if (category === 'app_link') {
+        character.appLink = updatedValue;
+      } else if (category === 'inventory') {
+        character.inventory = updatedValue;
+      }
+
+      await character.save();
+
+      // Update roles if needed
+      if (['race', 'homeVillage'].includes(category)) {
+        const member = await interaction.guild.members.fetch(pendingEdit.userId);
+        const roleCategory = {
+          race: 'Races',
+          homeVillage: 'Villages'
+        }[category];
+
+        const roleToRemove = roles[roleCategory]?.find(r =>
+          r.name === (category === 'homeVillage' 
+            ? `${pendingEdit.previousValue} Resident`
+            : `Race: ${pendingEdit.previousValue}`)
+        );
+        const roleToAdd = roles[roleCategory]?.find(r =>
+          r.name === (category === 'homeVillage'
+            ? `${updatedValue} Resident`
+            : `Race: ${updatedValue}`)
+        );
+
+        if (roleToRemove) {
+          const role = interaction.guild.roles.cache.find(r => r.name === roleToRemove.name);
+          if (role) await member.roles.remove(role);
+        }
+        if (roleToAdd) {
+          const role = interaction.guild.roles.cache.find(r => r.name === roleToAdd.name);
+          if (role) await member.roles.add(role);
+        }
+      }
+
+      // Update pending edit status and save
+      pendingEdit.status = 'approved';
+      pendingEdit.reviewedBy = interaction.user.id;
+      pendingEdit.reviewDate = new Date();
+      await savePendingEditToStorage(requestId, pendingEdit);
+
+      // Notify the user
+      try {
+        const user = await interaction.client.users.fetch(pendingEdit.userId);
+        await user.send(`🎉 **Character Edit Approved!**
+
+👤 **Character:** \`${character.name}\`
+🛠️ **Category:** \`${category}\`
+🔄 **Previous Value:** \`${pendingEdit.previousValue}\`
+✅ **New Value:** \`${updatedValue}\`
+
+Your changes have been successfully applied!`);
+      } catch (err) {
+        console.error(`[mod.js]: Error sending DM to user: ${err.message}`);
+      }
+
+      // Delete the pending edit after successful approval
+      await deletePendingEditFromStorage(requestId);
+
+      return interaction.editReply({
+        content: `✅ Character edit request approved and applied successfully.`,
+        ephemeral: true
+      });
+    } else {
+      // Reject the edit
+      pendingEdit.status = 'rejected';
+      pendingEdit.reviewedBy = interaction.user.id;
+      pendingEdit.reviewDate = new Date();
+      await savePendingEditToStorage(requestId, pendingEdit);
+
+      // Notify the user
+      try {
+        const user = await interaction.client.users.fetch(pendingEdit.userId);
+        await user.send(`❌ **Character Edit Rejected**
+
+👤 **Character:** \`${character.name}\`
+🛠️ **Category:** \`${pendingEdit.category}\`
+❌ **Requested Value:** \`${pendingEdit.updatedValue}\`
+
+Your edit request has been rejected. Please contact a moderator if you have questions.`);
+      } catch (err) {
+        console.error(`[mod.js]: Error sending DM to user: ${err.message}`);
+      }
+
+      // Delete the pending edit after rejection
+      await deletePendingEditFromStorage(requestId);
+
+      return interaction.editReply({
+        content: `✅ Character edit request rejected.`,
+        ephemeral: true
+      });
+    }
+  } catch (error) {
+    handleError(error, 'mod.js');
+    console.error('[mod.js]: Error in handleApproveEdit:', error);
+    return interaction.editReply({
+      content: '❌ An error occurred while processing the edit request.',
+      ephemeral: true
+    });
+  }
+}
+
+// ------------------- Function: handleInactivityReport -------------------
 // Generates a report of users inactive for 3+ months, including message counts and last activity.
 async function handleInactivityReport(interaction) {
     if (!interaction.member.permissions.has(PermissionsBitField.Flags.ManageGuild)) {

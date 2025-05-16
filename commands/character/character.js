@@ -14,6 +14,7 @@ const axios = require("axios");
 const { v4: uuidv4 } = require("uuid");
 const path = require("path");
 const { google } = require("googleapis");
+const mongoose = require("mongoose");
 
 const { handleError } = require("../../utils/globalErrorHandler");
 const {
@@ -96,6 +97,12 @@ const User = require("../../models/UserModel");
 const ItemModel = require("../../models/ItemModel");
 const Mount = require("../../models/MountModel");
 const { capitalizeVillageName } = require('../../utils/stringUtils');
+const TempData = require('../../models/TempDataModel');
+const {
+  savePendingEditToStorage,
+  retrievePendingEditFromStorage,
+  deletePendingEditFromStorage
+} = require('../../utils/storage');
 
 // ============================================================================
 // ------------------- Constants and Configuration -------------------
@@ -940,362 +947,143 @@ async function handleCreateCharacter(interaction, subcommand) {
 
 
 async function handleEditCharacter(interaction) {
- await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ ephemeral: true });
 
- try {
-  const fullCharacterName = interaction.options.getString("charactername");
-  const characterName = fullCharacterName?.split(' | ')[0];
-  const category = interaction.options.getString("category");
-  const updatedInfo = interaction.options.getString("updatedinfo");
-  const userId = interaction.user.id;
-  const newIcon = interaction.options.getAttachment("newicon");
+  try {
+    const fullCharacterName = interaction.options.getString("charactername");
+    const characterName = fullCharacterName?.split(' | ')[0];
+    const category = interaction.options.getString("category");
+    const updatedInfo = interaction.options.getString("updatedinfo");
+    const userId = interaction.user.id;
+    const newIcon = interaction.options.getAttachment("newicon");
 
-  await connectToTinglebot();
+    await connectToTinglebot();
 
-  const character = await fetchCharacterByNameAndUserId(characterName, userId);
-  if (!character) {
-   await interaction.followUp({
-    content: `❌ **Character ${characterName} not found or does not belong to you.**`,
-    ephemeral: true,
-   });
-   return;
-  }
-
-  let updateMessage = "";
-  let previousValue =
-   character[category] !== undefined ? character[category] : "N/A";
-  let updatedValue;
-
-  if (["race", "homeVillage"].includes(category)) {
-   const member = interaction.member;
-
-   console.log(`[Roles]: Updating roles for user "${member.user.tag}".`);
-   console.log(
-    `[Roles]: Category to update: "${category}", Previous Value: "${previousValue}", Updated Value: "${updatedInfo}".`
-   );
-
-   const roleCategory = {
-    race: "Races",
-    homeVillage: "Villages",
-   }[category];
-
-   const roleToRemove = roles[roleCategory]?.find(
-    (r) =>
-     r.name ===
-     (category === "homeVillage"
-      ? `${previousValue} Resident`
-      : `Race: ${previousValue}`)
-   );
-   const roleToAdd = roles[roleCategory]?.find(
-    (r) =>
-     r.name ===
-     (category === "homeVillage"
-      ? `${updatedInfo} Resident`
-      : `Race: ${updatedInfo}`)
-   );
-
-   if (roleToRemove) {
-    const role = interaction.guild.roles.cache.find(
-     (r) => r.name === roleToRemove.name
-    );
-    if (role) {
-     await member.roles.remove(role);
-     console.log(
-      `[Roles]: Removed role "${role.name}" from user "${member.user.tag}".`
-     );
-    } else {
-     console.warn(
-      `[Roles]: Role "${roleToRemove.name}" not found in the guild.`
-     );
-    }
-   } else {
-    console.log(`[Roles]: No role to remove for "${previousValue}".`);
-   }
-
-   if (roleToAdd) {
-    const role = interaction.guild.roles.cache.find(
-     (r) => r.name === roleToAdd.name
-    );
-    if (role) {
-     await member.roles.add(role);
-     console.log(
-      `[Roles]: Assigned role "${role.name}" to user "${member.user.tag}".`
-     );
-    } else {
-     console.warn(`[Roles]: Role "${roleToAdd.name}" not found in the guild.`);
-    }
-   } else {
-    console.log(`[Roles]: No role to add for "${updatedInfo}".`);
-   }
-  }
-
-  if (category === "job") {
-   try {
-    // Validate job exists
-    if (!isValidJob(updatedInfo)) {
+    const character = await fetchCharacterByNameAndUserId(characterName, userId);
+    if (!character) {
       await interaction.followUp({
-        content: `❌ **${updatedInfo}** is not a valid job. Please select a valid job from the list.`,
+        content: `❌ **Character ${characterName} not found or does not belong to you.**`,
         ephemeral: true,
       });
       return;
     }
-    const validationResult = await canChangeJob(character, updatedInfo);
 
-    if (!validationResult.valid) {
-     console.warn(
-      `[WARNING] Job validation failed: ${validationResult.message}`
-     );
-     await interaction.followUp({
-      content: validationResult.message,
-      ephemeral: true,
-     });
-     return;
+    let previousValue = character[category] !== undefined ? character[category] : "N/A";
+    let updatedValue = updatedInfo;
+
+    // Validate the edit based on category
+    if (category === "job") {
+      if (!isValidJob(updatedInfo)) {
+        await interaction.followUp({
+          content: `❌ **${updatedInfo}** is not a valid job. Please select a valid job from the list.`,
+          ephemeral: true,
+        });
+        return;
+      }
+      const validationResult = await canChangeJob(character, updatedInfo);
+      if (!validationResult.valid) {
+        await interaction.followUp({
+          content: validationResult.message,
+          ephemeral: true,
+        });
+        return;
+      }
+    } else if (category === "race") {
+      if (!isValidRace(updatedInfo)) {
+        await interaction.followUp({
+          content: `⚠️ **${updatedInfo}** is not a valid race.`,
+          ephemeral: true,
+        });
+        return;
+      }
+    } else if (category === "hearts") {
+      const hearts = parseInt(updatedInfo, 10);
+      if (isNaN(hearts) || hearts < 0) {
+        await interaction.followUp({
+          content: `⚠️ **${updatedInfo}** is not valid for hearts. Please provide a non-negative number.`,
+          ephemeral: true,
+        });
+        return;
+      }
+    } else if (category === "stamina") {
+      const stamina = parseInt(updatedInfo, 10);
+      if (isNaN(stamina) || stamina < 0) {
+        await interaction.followUp({
+          content: `⚠️ **${updatedInfo}** is not valid for stamina. Please provide a non-negative number.`,
+          ephemeral: true,
+        });
+        return;
+      }
+    } else if (category === "age") {
+      const age = parseInt(updatedInfo, 10);
+      if (isNaN(age) || age < 0) {
+        await interaction.followUp({
+          content: `⚠️ **${updatedInfo}** is not a valid age. Please provide a non-negative number.`,
+          ephemeral: true,
+        });
+        return;
+      }
+    } else if (category === "height") {
+      const heightInCm = parseFloat(updatedInfo);
+      if (isNaN(heightInCm) || heightInCm < 0) {
+        await interaction.followUp({
+          content: `⚠️ **${updatedInfo}** is not valid for height. Please provide a non-negative number in centimeters.`,
+          ephemeral: true,
+        });
+        return;
+      }
     }
 
-    if (
-     [
-      "General Jobs",
-      "Inariko Exclusive Jobs",
-      "Rudania Exclusive Jobs",
-      "Vhintl Exclusive Jobs",
-     ].includes(updatedInfo)
-    ) {
-     await handleJobCategorySelection(interaction, character, updatedInfo);
-     return;
-    }
-
-    character.job = updatedInfo;
-    console.log(
-     `[INFO] Job successfully updated for character ${character.name} from ${previousValue} to ${updatedInfo}`
-    );
-    updateMessage = `✅ **${character.name}'s job has been updated from ${previousValue} to ${updatedInfo}.**`;
-   } catch (error) {
-    handleError(error, "character.js");
-    console.error(
-     `[ERROR] An error occurred while processing job update: ${error.message}`
-    );
-    console.error(error.stack);
-    await interaction.followUp({
-     content:
-      "⚠️ An unexpected error occurred while updating the job. Please try again later.",
-     ephemeral: true,
-    });
-   }
-  } else if (category === "homeVillage") {
-   const validationResult = await canChangeVillage(character, updatedInfo);
-   if (!validationResult.valid) {
-    await interaction.followUp({
-     content: validationResult.message,
-     ephemeral: true,
-    });
-    return;
-   }
-   character.homeVillage = updatedInfo;
-   character.currentVillage = updatedInfo;
-   updateMessage = `✅ **${character.name}'s village has been updated from ${capitalizeVillageName(previousValue)} to ${capitalizeVillageName(updatedInfo)}.**`;
-  } else if (category === "name") {
-   const uniqueNameCheck = await isUniqueCharacterName(
-    character.userId,
-    updatedInfo
-   );
-   if (!uniqueNameCheck) {
-    await interaction.followUp({
-     content: `⚠️ **${updatedInfo}** is already in use by another character. Please choose a different name.`,
-     ephemeral: true,
-    });
-    return;
-   }
-
-   const previousName = character.name;
-   character.name = updatedInfo;
-   const { updatedValue } = capturePreviousAndUpdatedValues(
-    character,
-    category,
-    updatedInfo
-   );
-
-   updateMessage = `✅ **${character.name}'s name has been updated from ${previousName} to ${updatedValue}.**`;
-
-   await deleteCharacterInventoryCollection(previousName);
-   await createCharacterInventory(character.name, character._id, character.job);
-  } else if (category === "hearts") {
-   const hearts = parseInt(updatedInfo, 10);
-
-   if (isNaN(hearts) || hearts < 0) {
-    await interaction.followUp({
-     content: `⚠️ **${updatedInfo}** is not valid for hearts. Please provide a non-negative number.`,
-     ephemeral: true,
-    });
-    return;
-   }
-
-   previousValue = character.currentHearts;
-   await updateHearts(character._id, hearts);
-
-   character.currentHearts = hearts;
-   character.maxHearts = hearts;
-
-   updatedValue = hearts;
-   updateMessage = `✅ **${character.name}'s hearts have been updated from ${previousValue} to ${hearts}.**`;
-  } else if (category === "stamina") {
-   const stamina = parseInt(updatedInfo, 10);
-
-   if (isNaN(stamina) || stamina < 0) {
-    await interaction.followUp({
-     content: `⚠️ **${updatedInfo}** is not valid for stamina. Please provide a non-negative number.`,
-     ephemeral: true,
-    });
-    return;
-   }
-
-   previousValue = character.currentStamina;
-   await updateStamina(character._id, stamina);
-
-   character.currentStamina = stamina;
-   character.maxStamina = stamina;
-
-   updatedValue = stamina;
-   updateMessage = `✅ **${character.name}'s stamina have been updated from ${previousValue} to ${stamina}.**`;
-  } else if (category === "pronouns") {
-   character.pronouns = updatedInfo;
-   updateMessage = `✅ **${character.name}'s pronouns have been updated from ${previousValue} to ${updatedInfo}.**`;
-  } else if (category === "race") {
-   if (!isValidRace(updatedInfo)) {
-    await interaction.followUp({
-     content: `⚠️ **${updatedInfo}** is not a valid race.`,
-     ephemeral: true,
-    });
-    return;
-   }
-   character.race = updatedInfo;
-   updateMessage = `✅ **${character.name}'s race has been updated from ${previousValue} to ${updatedInfo}.**`;
-  } else if (category === "icon") {
-   if (newIcon) {
+    // Create pending edit request
+    const editId = new mongoose.Types.ObjectId().toString();
+    
+    // Notify mods about pending edit
     try {
-     const response = await axios.get(newIcon.url, {
-      responseType: "arraybuffer",
-     });
-     const iconData = Buffer.from(response.data, "binary");
-     const blob = bucket.file(uuidv4() + path.extname(newIcon.name));
-     const blobStream = blob.createWriteStream({ resumable: false });
-     blobStream.end(iconData);
+      const notificationChannel = await interaction.client.channels.fetch(EDIT_NOTIFICATION_CHANNEL_ID);
+      if (notificationChannel && notificationChannel.isTextBased()) {
+        const notificationMessage = `📢 **PENDING CHARACTER EDIT REQUEST**\n
+🌱 **User:** \`${interaction.user.tag}\` 
+👤 **Character Name:** \`${character.name}\`
+🛠️ **Edited Category:** \`${category}\`
+🔄 **Previous Value:** \`${previousValue || "N/A"}\`
+✅ **Requested Value:** \`${updatedValue || "N/A"}\`
+⏳ **Status:** Pending Approval
+🔗 **Request ID:** \`${editId}\``;
 
-     await new Promise((resolve, reject) => {
-      blobStream.on("finish", resolve);
-      blobStream.on("error", reject);
-     });
+        const sentMessage = await notificationChannel.send(notificationMessage);
+        
+        // Create the pending edit with the message ID included
+        const pendingEdit = {
+          characterId: character._id,
+          userId: userId,
+          category: category,
+          previousValue: previousValue,
+          updatedValue: updatedValue,
+          status: 'pending',
+          createdAt: new Date(),
+          notificationMessageId: sentMessage.id
+        };
 
-     const publicIconUrl = `https://storage.googleapis.com/${bucket.name}/${blob.name}`;
-     character.icon = publicIconUrl;
-     updateMessage = `✅ **${character.name}'s icon has been updated.**`;
-    } catch (error) {
-     handleError(error, "character.js");
-     await interaction.followUp({
-      content: `⚠️ **There was an error uploading the icon: ${error.message}**`,
-      ephemeral: true,
-     });
-     return;
+        // Save the pending edit with the message ID
+        await savePendingEditToStorage(editId, pendingEdit);
+      }
+    } catch (err) {
+      handleError(err, "character.js");
+      console.error(`[character.js]: Error sending update notification: ${err.message}`);
     }
-   } else {
+
     await interaction.followUp({
-     content: "⚠️ **Please provide a valid icon attachment.**",
-     ephemeral: true,
+      content: `✅ Your edit request for **${character.name}** has been submitted and is pending mod approval.`,
+      ephemeral: true,
     });
-    return;
-   }
-  } else if (category === "app_link") {
-   previousValue = character.appLink || "N/A";
-   updatedValue = updatedInfo || "N/A";
 
-   character.appLink = updatedInfo;
-   updateMessage = `✅ **${character.name}'s application link has been updated from ${previousValue} to ${updatedValue}.**`;
-  } else if (category === "inventory") {
-   const { previousValue, updatedValue } = capturePreviousAndUpdatedValues(
-    character,
-    category,
-    updatedInfo
-   );
-
-   character.inventory = updatedValue;
-   updateMessage = `✅ **${character.name}'s inventory link has been updated from ${previousValue} to ${updatedValue}.**`;
-  } else if (category === "age") {
-   const age = parseInt(updatedInfo, 10);
-
-   if (isNaN(age) || age < 0) {
+  } catch (error) {
+    handleError(error, "character.js");
     await interaction.followUp({
-     content: `⚠️ **${updatedInfo}** is not a valid age. Please provide a non-negative number.`,
-     ephemeral: true,
+      content: `⚠️ **There was an error processing your edit request: ${error.message}**`,
+      ephemeral: true,
     });
-    return;
-   }
-
-   const { previousValue, updatedValue } = capturePreviousAndUpdatedValues(
-    character,
-    category,
-    updatedInfo
-   );
-
-   character.age = updatedValue;
-   updateMessage = `✅ **${character.name}'s age has been updated from ${previousValue} to ${updatedValue}.**`;
-  } else if (category === "height") {
-    const heightInCm = parseFloat(updatedInfo);
-   if (isNaN(heightInCm) || heightInCm < 0) {
-    await interaction.followUp({
-     content: `⚠️ **${updatedInfo}** is not valid for height. Please provide a non-negative number in centimeters.`,
-     ephemeral: true,
-    });
-    return;
-   }
-   character.height = heightInCm;
-   const heightInFeetInches = convertCmToFeetInches(heightInCm);
-   updateMessage = `✅ **${character.name}'s height has been updated from ${previousValue} to ${heightInCm} cm (${heightInFeetInches}).**`;
   }
-
-  await character.save();
-
-  const updatedCharacter = await fetchCharacterById(character._id);
-
-  const embed = createCharacterEmbed(updatedCharacter);
-
-  try {
-   const notificationChannel = await interaction.client.channels.fetch(
-    EDIT_NOTIFICATION_CHANNEL_ID
-   );
-   if (notificationChannel && notificationChannel.isTextBased()) {
-    const notificationMessage = `📢 **USER EDITED THEIR CHARACTER**\n
-  🌱 **User:** \`${interaction.user.tag}\` 
-  👤 **Character Name:** \`${character.name}\`
-  🛠️ **Edited Category:** \`${category}\`
-  🔄 **Previous Value:** \`${previousValue || "N/A"}\`
-  ✅ **Updated Value:** \`${
-   updatedValue || updatedCharacter[category] || "N/A"
-  }\``;
-
-    await notificationChannel.send(notificationMessage);
-   } else {
-    console.error(
-     `[character.js]: Notification channel is not text-based or unavailable.`
-    );
-   }
-  } catch (err) {
-   handleError(err, "character.js");
-   console.error(
-    `[character.js]: Error sending update notification: ${err.message}`
-   );
-  }
-
-  await interaction.followUp({
-   content: updateMessage,
-   embeds: [embed],
-   ephemeral: true,
-  });
- } catch (error) {
-  handleError(error, "character.js");
-  await interaction.followUp({
-   content: `⚠️ **There was an error updating the character: ${error.message}**`,
-   ephemeral: true,
-  });
- }
 }
 
 // ============================================================================
