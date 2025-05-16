@@ -231,11 +231,16 @@ async function syncToInventoryDatabase(character, item, interaction) {
       const spreadsheetId = extractSpreadsheetId(character.inventory);
       const sheetData = await readSheetData(auth, spreadsheetId, 'loggedInventory!A2:M');
       
-      // Find the row index of the existing item
-      const existingRowIndex = sheetData.findIndex(row => 
-        row[0] === characterName && 
-        row[1] === dbDoc.itemName
-      );
+      // Enhanced matching: trim and lowercase both sides
+      const existingRowIndex = sheetData.findIndex(row => {
+        const sheetChar = (row[0] || '').trim().toLowerCase();
+        const sheetItem = (row[1] || '').trim().toLowerCase();
+        const dbChar = characterName.trim().toLowerCase();
+        const dbItem = dbDoc.itemName.trim().toLowerCase();
+        const match = sheetChar === dbChar && sheetItem === dbItem;
+        console.log(`[inventoryUtils.js]: 🔍 Comparing sheet row: "${sheetChar}", "${sheetItem}" with "${dbChar}", "${dbItem}" => ${match ? 'MATCH' : 'NO MATCH'}`);
+        return match;
+      });
 
       if (existingRowIndex !== -1) {
         // Update existing row
@@ -247,7 +252,8 @@ async function syncToInventoryDatabase(character, item, interaction) {
         );
         console.log(`[inventoryUtils.js]: ✅ Updated existing row for ${dbDoc.itemName} in sheet`);
       } else {
-        console.log(`[inventoryUtils.js]: ⚠️ Skipping new item ${dbDoc.itemName} - only updating existing items`);
+        // Do not append new items during sync; just log and skip
+        console.warn(`[inventoryUtils.js]: ⚠️ No matching row found for ${dbDoc.itemName} in sheet. Skipping sheet update for this item.`);
       }
     } catch (sheetError) {
       console.error(`[inventoryUtils.js]: ❌ Sheet sync error for ${character.name}: ${sheetError.message}`);
