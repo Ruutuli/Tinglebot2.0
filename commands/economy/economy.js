@@ -830,10 +830,15 @@ if (quantity <= 0) {
   const currentTokens = user.tokens;
 
   if (currentTokens < totalPrice) {
-   return interaction.editReply(
-    `❌ You do not have enough tokens. Current Balance: 🪙 ${currentTokens}. Required: 🪙 ${totalPrice}.`
-   );
+    return interaction.editReply(
+      `❌ You do not have enough tokens. Current Balance: 🪙 ${currentTokens}. Required: 🪙 ${totalPrice}.`
+    );
   }
+
+  console.log(`[shops]: 💰 Token balance for ${interaction.user.tag}:`);
+  console.log(`[shops]: 📊 Previous balance: 🪙 ${currentTokens}`);
+  console.log(`[shops]: ➖ Spent: 🪙 ${totalPrice}`);
+  console.log(`[shops]: 📊 New balance: 🪙 ${currentTokens - totalPrice}`);
 
   const inventoryCollection = await getCharacterInventoryCollection(
    characterName
@@ -1082,7 +1087,10 @@ if (quantity <= 0) {
 
   await updateTokenBalance(interaction.user.id, totalPrice);
 
-  console.log(`[shops]: Updated user's token balance by ${totalPrice}.`);
+  console.log(`[shops]: 💰 Token balance for ${interaction.user.tag}:`);
+  console.log(`[shops]: 📊 Previous balance: 🪙 ${user.tokens}`);
+  console.log(`[shops]: ➕ Earned: 🪙 ${totalPrice}`);
+  console.log(`[shops]: 📊 New balance: 🪙 ${user.tokens + totalPrice}`);
 
   if (user.tokenTracker) {
    const spreadsheetId = extractSpreadsheetId(user.tokenTracker);
