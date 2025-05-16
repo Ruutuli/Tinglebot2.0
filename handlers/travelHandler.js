@@ -298,7 +298,7 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
 
         if (item) {
           await syncItem(character, item, interaction, SOURCE_TYPES.TRAVEL_LOOT);
-          lootLine = `\n> Looted ${item.itemName} × ${item.quantity}\n`;
+          lootLine = `\n Looted ${item.itemName} × ${item.quantity}\n`;
           outcomeMessage = `${generateVictoryMessage(item)}${lootLine}`;
           travelLog.push(`fight: win & loot (${item.quantity}× ${item.itemName})`);
         } else {

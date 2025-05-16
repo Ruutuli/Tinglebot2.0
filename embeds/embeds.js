@@ -1685,7 +1685,13 @@ const createFinalTravelEmbed = (
 
  const cleanedLog = travelLog
   .filter((entry) => entry && !entry.match(/^Lost \d+ (Stamina|Heart)/i))
-  .map((entry) => entry.trim())
+  .map((entry) => {
+    // Format encounter lines with quote blocks
+    if (entry.includes('Encountered a')) {
+      return entry.replace(/⚔️ Encountered a.*/, (match) => `> ${match}`);
+    }
+    return entry.trim();
+  })
   .join("\n\n");
 
  return new EmbedBuilder()
