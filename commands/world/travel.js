@@ -561,7 +561,6 @@ ${pathEmoji || ''} No monsters or gathering today!`)
       const tier = parseInt(getRandomTravelEncounter().split(' ')[1], 10);
       const options = monsters.filter(m => m.tier <= tier);
       const monster = options[Math.floor(Math.random() * options.length)];
-      dailyLogEntry += `> ⚔️ Encountered a ${monster.name}!\n`;
 
       // Before creating the encounter embed, check if Blood Moon is active
       const isBloodMoon = isBloodMoonActive();
@@ -599,17 +598,20 @@ ${pathEmoji || ''} No monsters or gathering today!`)
           monster, // ← the actual monster object, not a string
           travelLog
         );
-        // Always include the encounter line (already added above)
-        // If hearts are lost, include that line
-        const heartLossMatch = decision.match(/Lose ❤️ \d+ heart/);
+        // Build the encounter line with heart loss if present
+        let encounterLine = `⚔️ Encountered a ${monster.name}!`;
+        const heartLossMatch = decision.match(/Lose ❤️ (\d+) heart/);
         if (heartLossMatch) {
-          dailyLogEntry += `> ${heartLossMatch[0]}\n`;
+          const num = heartLossMatch[1];
+          encounterLine += ` Lost ${num} ❤️`;
         }
+        dailyLogEntry += `${encounterLine}\n`;
         // If loot is gained, include that line
         const lootMatch = decision.match(/Looted [^\n]+/);
         if (lootMatch) {
-          dailyLogEntry += `> ${lootMatch[0]}\n`;
+          dailyLogEntry += `Looted ${lootMatch[0].split('Looted ')[1]}\n`;
         }
+        // Only push the formatted dailyLogEntry
         collector.stop();
       });
       
@@ -625,13 +627,12 @@ ${pathEmoji || ''} No monsters or gathering today!`)
             monster,
             travelLog
           );
-      
-          dailyLogEntry += decision.split('\n').map(line => `> ${line}`).join('\n') + '\n';
+          dailyLogEntry += `${decision}\n`;
         }
         if (await checkAndHandleKO(character, channel, startingVillage)) return;
+        // Only push the formatted dailyLogEntry
         travelLog.push(dailyLogEntry);
         await processTravelDay(day + 1, { ...context, channel });
-
       });
     }
   } else {
