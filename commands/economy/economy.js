@@ -1424,13 +1424,9 @@ for (const { name } of items) {
     toCharacterIcon
   );
 
-  await interaction.channel.send({
-    content: `🎁 <@${toCharacter.userId}>, you received a transfer!`,
+  await interaction.editReply({
     allowedMentions: { users: [toCharacter.userId] },
     embeds: [transferEmbed],
-  });
-  await interaction.editReply({
-    content: `✅ Transfer completed successfully!`,
   });
  } catch (error) {
   handleError(error, "transfer.js");
