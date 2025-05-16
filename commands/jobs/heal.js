@@ -162,6 +162,17 @@ if (subcommand === 'request') {
 
       // Create and save the healing request
       const healingRequestId = Math.random().toString(36).substr(2, 6).toUpperCase();
+      
+      const embed = createHealEmbed(null, characterToHeal, heartsToHeal, paymentOffered, healingRequestId);
+
+      // Send the embed and save the message ID
+      const sentMessage = await interaction.followUp({
+          content: healerName
+              ? `🔔 <@${interaction.user.id}>, **${characterToHeal.name}** is requesting healing from **${healerName}**!`
+              : `🔔 @Job Perk: Healing, Healing request for any eligible healer in **${capitalizeFirstLetter(characterToHeal.currentVillage)}**!`,
+          embeds: [embed],
+      });
+
       const healingRequestData = {
           healingRequestId,
           characterRequesting: characterToHeal.name,
@@ -174,16 +185,6 @@ if (subcommand === 'request') {
           timestamp: Date.now(),
           messageId: sentMessage.id
       };
-
-      const embed = createHealEmbed(null, characterToHeal, heartsToHeal, paymentOffered, healingRequestId);
-
-      // Send the embed and save the message ID
-      const sentMessage = await interaction.followUp({
-          content: healerName
-              ? `🔔 <@${interaction.user.id}>, **${characterToHeal.name}** is requesting healing from **${healerName}**!`
-              : `🔔 @Job Perk: Healing, Healing request for any eligible healer in **${capitalizeFirstLetter(characterToHeal.currentVillage)}**!`,
-          embeds: [embed],
-      });
 
       await saveHealingRequestToStorage(healingRequestId, healingRequestData);
   } catch (error) {
@@ -414,8 +415,4 @@ if (subcommand === 'fulfill') {
 
   },
 
-  // ------------------- Autocomplete Handler -------------------
-  async autocomplete(interaction) {
-    await handleTradeItemAutocomplete(interaction);
-  },
-};
+}
