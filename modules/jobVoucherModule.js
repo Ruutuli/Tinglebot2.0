@@ -13,13 +13,13 @@ const Character = require('../models/CharacterModel');
 // ------------------- Get Job Voucher Error Message -------------------
 function getJobVoucherErrorMessage(errorType, data = {}) {
     const messages = {
-        ALREADY_HAS_JOB: `✅ Character already has the job "${data.jobName}". No job voucher needed.`,
+        ALREADY_HAS_JOB: `✅ Character already has the job "${capitalizeWords(data.jobName)}". No job voucher needed.`,
         NO_VOUCHER: '❌ No active job voucher found.',
-        WRONG_JOB: `❌ The job voucher is locked to **${data.voucherJob}**, not **${data.requestedJob}**. Please use the correct job.`,
-        ALREADY_ACTIVE: `❌ ${data.characterName} already has an active Job Voucher for ${data.jobName}. Please complete the current job before using another voucher.`,
+        WRONG_JOB: `❌ The job voucher is locked to **${capitalizeWords(data.voucherJob)}**, not **${capitalizeWords(data.requestedJob)}**. Please use the correct job.`,
+        ALREADY_ACTIVE: `❌ ${data.characterName} already has an active Job Voucher for ${capitalizeWords(data.jobName)}. Please complete the current job before using another voucher.`,
         MISSING_SKILLS: data.activity === 'village-specific job' 
-            ? `❌ ${data.characterName} must be in **${data.requiredVillage}** to use the ${data.jobName} job voucher. Currently in: **${data.currentVillage}**`
-            : `❌ ${data.characterName} cannot use the ${data.activity || 'looting'} perk as a ${data.jobName}.`,
+            ? `❌ ${data.characterName} must be in **${capitalizeWords(data.requiredVillage)}** to use the ${capitalizeWords(data.jobName)} job voucher. Currently in: **${capitalizeWords(data.currentVillage)}**`
+            : `❌ ${data.characterName} cannot use the ${data.activity || 'looting'} perk as a ${capitalizeWords(data.jobName)}.`,
         ACTIVATION_ERROR: '❌ An error occurred while activating the job voucher.',
         DEACTIVATION_ERROR: '❌ An error occurred while deactivating the job voucher.',
         ITEM_NOT_FOUND: '❌ Job Voucher item not found.'

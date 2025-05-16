@@ -446,30 +446,23 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
         decision = `💨 Successfully fled${!hasPerk(character,'DELIVERING')?' (-1 🟩 stamina)':''}.`;
         outcomeMessage = `${character.name} escaped the ${monster.name}!`;
       } else if (result.attacked) {
-        
-        if (typeof result.damage !== 'number' || isNaN(result.damage)) {
-          throw new Error(`Flee damage is invalid or missing: ${result.damage}`);
-        }        
-        
+        // attacked while fleeing
+        await useHearts(character._id, result.damage);
+        const latestCharacter = await Character.findById(character._id);
+        character.currentStamina = latestCharacter.currentStamina;
+        character.currentHearts = latestCharacter.currentHearts;
+        console.log(`[travelHandler.js]: Tracked ${result.damage} heart(s) damage (deducted by characterStatsModule).`);
 
-// attacked while fleeing
-await useHearts(character._id, result.damage);
-const latestCharacter = await Character.findById(character._id);
-character.currentStamina = latestCharacter.currentStamina;
-character.currentHearts = latestCharacter.currentHearts;
-console.log(`[travelHandler.js]: Tracked ${result.damage} heart(s) damage (deducted by characterStatsModule).`);
+        if (!hasPerk(character, 'DELIVERING')) {
+          await useStamina(character._id, 1);
+          character.currentStamina = Math.max(0, character.currentStamina - 1);
+        }
 
-if (!hasPerk(character, 'DELIVERING')) {
-  await useStamina(character._id, 1);
-  character.currentStamina = Math.max(0, character.currentStamina - 1);
-}
+        outcomeMessage = `${character.name} failed to flee and took ${result.damage} hearts${!hasPerk(character, 'DELIVERING') ? ' (-1 🟩 stamina)' : ''}.`;
+        decision = result.damage >= character.maxHearts
+          ? `💔 KO'd while fleeing!`
+          : `⚠️ Flee failed and took ${result.damage} ❤️ hearts.`;
 
-outcomeMessage = `${character.name} failed to flee and took ${result.damage} hearts${!hasPerk(character, 'DELIVERING') ? ' (-1 🟩 stamina)' : ''}.`;
-decision = result.damage >= character.maxHearts
-  ? `💔 KO'd while fleeing!`
-  : `⚠️ Flee failed and took ${result.damage} ❤️ hearts.`;
-
-  
         // KO on flee
         if (character.currentHearts <= 0) {
           character.currentStamina = 0;
@@ -479,7 +472,6 @@ decision = result.damage >= character.maxHearts
           await updateCurrentHearts(character._id,0);
           await useStamina(character._id,0);
           await character.save();
-        } else {
         }
       } else {
         // no attack
@@ -492,26 +484,24 @@ decision = result.damage >= character.maxHearts
         outcomeMessage = `${character.name} tried to flee but wasn't attacked.`;
       }
   
-// Update embed
-const description = 
-  `🌸 It's a nice and safe day of traveling. What do you want to do next?\n> ${decision}\n\n` +
-  `**❤️ Hearts:** ${character.currentHearts}/${character.maxHearts}\n` +
-  `**🟩 Stamina:** ${character.currentStamina}/${character.maxStamina}`;
+      // Update embed with flee-specific flavor text
+      const description = 
+        `⚔️ ${outcomeMessage}\n\n` +
+        `**❤️ Hearts:** ${character.currentHearts}/${character.maxHearts}\n` +
+        `**🟩 Stamina:** ${character.currentStamina}/${character.maxStamina}`;
 
-  const embed = createUpdatedTravelEmbed({
-    encounterMessage,
-    character,
-    description,
-    fields: [], // or just omit `fields` entirely if you're not adding anything else
-  });
-  
+      const embed = createUpdatedTravelEmbed({
+        encounterMessage,
+        character,
+        description,
+        fields: [],
+      });
 
-if (typeof encounterMessage?.edit === 'function') {
-  await encounterMessage.edit({ embeds: [embed], components: [] });
-}
+      if (typeof encounterMessage?.edit === 'function') {
+        await encounterMessage.edit({ embeds: [embed], components: [] });
+      }
 
-return decision;
-
+      return decision;
   
     } catch (error) {
       handleError(error, 'travelHandler.js (handleFlee)');

@@ -167,9 +167,9 @@ module.exports = {
         // ------------------- Build and Send Voucher Embed -------------------
         const currentVillage = capitalizeWords(character.currentVillage || 'Unknown');
         const villageEmoji = getVillageEmojiByName(currentVillage) || '🌍';
-        let description = `**${character.name}** has used a Job Voucher to perform the **${jobName}** job.`;
+        let description = `**${character.name}** has used a Job Voucher to perform the **${capitalizeWords(jobName)}** job.`;
         if (jobPerkInfo.perks?.length) {
-          description = `**${character.name}** has used a Job Voucher to perform the **${jobName}** job with the following perk(s): **${jobPerkInfo.perks.join(', ')}**.`;
+          description = `**${character.name}** has used a Job Voucher to perform the **${capitalizeWords(jobName)}** job with the following perk(s): **${jobPerkInfo.perks.join(', ')}**.`;
         }
         const commands = [
           jobPerkInfo.perks.includes('GATHERING') && '> </gather:1372378304773881885>',
