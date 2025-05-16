@@ -8,7 +8,8 @@ const { useStamina, recoverHearts } = require('../../modules/characterStatsModul
 const { 
   saveHealingRequestToStorage, 
   retrieveHealingRequestFromStorage, 
-  deleteHealingRequestFromStorage 
+  deleteHealingRequestFromStorage,
+  cleanupExpiredEntries
 } = require('../../utils/storage.js');
 const { createHealEmbed, createHealingEmbed } = require('../../embeds/embeds.js');
 const { validateJobVoucher, activateJobVoucher, fetchJobVoucherItem, deactivateJobVoucher, getJobVoucherErrorMessage } = require('../../modules/jobVoucherModule.js');
@@ -102,6 +103,12 @@ if (subcommand === 'request') {
           return;
       }
 
+      // Verify healer has userId
+      if (healerName && (!healerCharacter.userId || healerCharacter.userId === 'undefined')) {
+          await interaction.editReply(`❌ **Error:** Unable to find the owner of "${healerName}". Please try again later.`);
+          return;
+      }
+
       // Check inventory sync for all involved characters
       try {
         await checkInventorySync(characterToHeal);
@@ -175,7 +182,7 @@ if (subcommand === 'request') {
       // Send the embed and save the message ID
       const sentMessage = await interaction.followUp({
           content: healerName
-              ? `🔔 <@${healerCharacter.ownerId}>, **${characterToHeal.name}** is requesting healing from **${healerName}**!`
+              ? `🔔 <@${healerCharacter.userId}>, **${characterToHeal.name}** is requesting healing from **${healerName}**!`
               : `🔔 @Job Perk: Healing, Healing request for any eligible healer in **${capitalizeFirstLetter(characterToHeal.currentVillage)}**!`,
           embeds: [embed],
       });
@@ -223,10 +230,21 @@ if (subcommand === 'fulfill') {
     try {
         await interaction.deferReply();
 
+        // Cleanup any expired healing requests
+        await cleanupExpiredEntries();
+
         // ------------------- Retrieve Healing Request -------------------
         const healingRequest = await retrieveHealingRequestFromStorage(requestId);
         if (!healingRequest) {
             await interaction.editReply(`❌ **Error:** No healing request found with ID **${requestId}**.`);
+            return;
+        }
+
+        // Check if request has expired
+        const requestAge = Date.now() - healingRequest.timestamp;
+        if (requestAge > 24 * 60 * 60 * 1000) { // 24 hours in milliseconds
+            await interaction.editReply(`❌ **Error:** Healing request **${requestId}** has expired. Please request healing again.`);
+            await deleteHealingRequestFromStorage(requestId);
             return;
         }
 
@@ -393,6 +411,14 @@ if (subcommand === 'fulfill') {
         // Mark the request as fulfilled and save its updated status
         healingRequest.status = 'fulfilled';
         await saveHealingRequestToStorage(requestId, healingRequest);
+
+        // Delete the healing request from storage
+        try {
+            await deleteHealingRequestFromStorage(requestId);
+            console.log(`[heal.js]: ✅ Deleted fulfilled healing request ${requestId}`);
+        } catch (error) {
+            console.error(`[heal.js]: ❌ Failed to delete healing request ${requestId}:`, error);
+        }
 
         // ------------------- Edit Original Request Message -------------------
         const channel = interaction.channel;

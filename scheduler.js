@@ -452,6 +452,21 @@ function setupBlightScheduler(client) {
 // Main initialization function for all scheduled tasks
 // ============================================================================
 
+// ---- Function: cleanupExpiredHealingRequests ----
+// Cleans up expired healing requests from the database
+async function cleanupExpiredHealingRequests() {
+  try {
+    const result = await TempData.deleteMany({
+      type: 'healing',
+      expiresAt: { $lt: new Date() }
+    });
+    console.log(`[scheduler.js]: ✅ Cleaned up ${result.deletedCount} expired healing requests`);
+  } catch (error) {
+    handleError(error, 'scheduler.js');
+    console.error('[scheduler.js]: ❌ Error cleaning up expired healing requests:', error.message);
+  }
+}
+
 // ---- Function: initializeScheduler ----
 // Initializes all scheduled tasks and cron jobs
 function initializeScheduler(client) {
@@ -461,7 +476,7 @@ function initializeScheduler(client) {
   createCronJob('0 8 * * *', 'daily stamina recovery', recoverDailyStamina);
   createCronJob('0 0 1 * *', 'monthly vending stock generation', generateVendingStockList);
   createCronJob('0 0 * * 0', 'weekly pet rolls reset', resetPetRollsForAllCharacters);
-  createCronJob('0 8 * * *', 'request expiration and cleanup', async () => {
+  createCronJob('0 0 * * *', 'request expiration and cleanup', async () => {
     await Promise.all([
       cleanupExpiredEntries(),
       cleanupExpiredHealingRequests(),
@@ -507,7 +522,8 @@ module.exports = {
   initializeScheduler,
   setupWeatherScheduler,
   postWeatherUpdate,
-  setupBlightScheduler
+  setupBlightScheduler,
+  cleanupExpiredHealingRequests
 };
 
 
