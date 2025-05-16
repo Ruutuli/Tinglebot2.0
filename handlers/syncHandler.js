@@ -123,9 +123,16 @@ async function processInventoryItem(row, character, userId) {
             return null;
         }
 
-        // Preserve original obtain method if it contains "crafting"
+        // Preserve original obtain method if it contains "crafting" or "crafted"
         const originalObtain = obtain?.trim() || '';
-        const obtainMethod = originalObtain.toLowerCase().includes('crafting') ? originalObtain : 'Manual Sync';
+        const obtainLower = originalObtain.toLowerCase();
+        let obtainMethod;
+        if (obtainLower.includes('crafting') || obtainLower.includes('crafted')) {
+            obtainMethod = originalObtain;
+            console.log(`[syncHandler.js]: 📝 Preserved obtain method for crafted/crafting item: '${originalObtain}'`);
+        } else {
+            obtainMethod = 'Manual Sync';
+        }
 
         // Format date for database
         const formattedDate = date ? new Date(date) : new Date();
