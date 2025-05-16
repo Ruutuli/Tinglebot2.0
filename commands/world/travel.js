@@ -42,6 +42,9 @@ const { checkInventorySync } = require('../../utils/characterUtils');
 // ------------------- Database Models -------------------
 const Mount = require('../../models/MountModel');
 
+// ------------------- Blood Moon Module -------------------
+const { isBloodMoonActive } = require('../../scripts/bloodmoon.js');
+
 // ============================================================================
 // ------------------- Constants -------------------
 // ============================================================================
@@ -560,16 +563,15 @@ ${pathEmoji || ''} No monsters or gathering today!`)
       const monster = options[Math.floor(Math.random() * options.length)];
       dailyLogEntry += `> ⚔️ Encountered a ${monster.name}!\n`;
 
+      // Before creating the encounter embed, check if Blood Moon is active
+      const isBloodMoon = isBloodMoonActive();
       const encounterEmbed = createMonsterEncounterEmbed(
         character,
         monster,
         `You encountered a ${monster.name}! What do you want to do? Fleeing costs 1 🟩 stamina!`,
         character.currentHearts,
         null,
-        day,
-        totalTravelDuration,
-        pathEmoji,
-        currentPath
+        isBloodMoon // Only pass the correct 6th argument
       );
       const buttons = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('fight').setLabel('⚔️ Fight').setStyle(ButtonStyle.Primary),
@@ -597,10 +599,16 @@ ${pathEmoji || ''} No monsters or gathering today!`)
           monster, // ← the actual monster object, not a string
           travelLog
         );
-        // Only append the loot line if present, skip flavor/victory message
+        // Always include the encounter line (already added above)
+        // If hearts are lost, include that line
+        const heartLossMatch = decision.match(/Lose ❤️ \d+ heart/);
+        if (heartLossMatch) {
+          dailyLogEntry += `> ${heartLossMatch[0]}\n`;
+        }
+        // If loot is gained, include that line
         const lootMatch = decision.match(/Looted [^\n]+/);
         if (lootMatch) {
-          dailyLogEntry += ` ${lootMatch[0]}\n`;
+          dailyLogEntry += `> ${lootMatch[0]}\n`;
         }
         collector.stop();
       });
