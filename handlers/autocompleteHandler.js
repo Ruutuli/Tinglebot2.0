@@ -2933,11 +2933,7 @@ async function handleVendingBarterAutocomplete(interaction, focusedOption) {
         choice.name.toLowerCase().includes(searchQuery)
       );
 
-      // Race between the response and timeout
-      await Promise.race([
-        interaction.respond(filteredChoices.slice(0, 25)),
-        timeoutPromise
-      ]);
+      await interaction.respond(filteredChoices.slice(0, 25));
       return;
     }
 
@@ -2962,11 +2958,7 @@ async function handleVendingBarterAutocomplete(interaction, focusedOption) {
         choice.name.toLowerCase().includes(searchQuery)
       );
 
-      // Race between the response and timeout
-      await Promise.race([
-        interaction.respond(filteredChoices.slice(0, 25)),
-        timeoutPromise
-      ]);
+      await interaction.respond(filteredChoices.slice(0, 25));
       return;
     }
 
@@ -2983,20 +2975,14 @@ async function handleVendingBarterAutocomplete(interaction, focusedOption) {
       }
 
       if (!targetCharacter) {
-        await Promise.race([
-          interaction.respond([]),
-          timeoutPromise
-        ]);
+        await interaction.respond([]);
         return;
       }
 
       // Get character
       const character = await fetchCharacterByName(targetCharacter);
       if (!character) {
-        await Promise.race([
-          interaction.respond([]),
-          timeoutPromise
-        ]);
+        await interaction.respond([]);
         return;
       }
 
@@ -3029,19 +3015,12 @@ async function handleVendingBarterAutocomplete(interaction, focusedOption) {
         }
       });
 
-      // Race between the response and timeout
-      await Promise.race([
-        interaction.respond(choices.slice(0, 25)),
-        timeoutPromise
-      ]);
+      await interaction.respond(choices.slice(0, 25));
       return;
     }
 
-    // Default empty response with timeout
-    await Promise.race([
-      interaction.respond([]),
-      timeoutPromise
-    ]);
+    // Default empty response
+    await interaction.respond([]);
   } catch (error) {
     // Handle specific error types
     if (error.code === 10062) {
