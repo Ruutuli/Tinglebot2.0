@@ -96,6 +96,12 @@ if (subcommand === 'request') {
           return;
       }
 
+      // Check if healer exists if specified
+      if (healerName && !healerCharacter) {
+          await interaction.editReply(`❌ **Error:** The healer character "${healerName}" does not exist!`);
+          return;
+      }
+
       // Check inventory sync for all involved characters
       try {
         await checkInventorySync(characterToHeal);
@@ -169,7 +175,7 @@ if (subcommand === 'request') {
       // Send the embed and save the message ID
       const sentMessage = await interaction.followUp({
           content: healerName
-              ? `🔔 <@${healerCharacter?.ownerId || 'Job Perk: Healing'}>, **${characterToHeal.name}** is requesting healing from **${healerName}**!`
+              ? `🔔 <@${healerCharacter.ownerId}>, **${characterToHeal.name}** is requesting healing from **${healerName}**!`
               : `🔔 @Job Perk: Healing, Healing request for any eligible healer in **${capitalizeFirstLetter(characterToHeal.currentVillage)}**!`,
           embeds: [embed],
       });
