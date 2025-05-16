@@ -17,7 +17,9 @@ function getJobVoucherErrorMessage(errorType, data = {}) {
         NO_VOUCHER: '❌ No active job voucher found.',
         WRONG_JOB: `❌ The job voucher is locked to **${data.voucherJob}**, not **${data.requestedJob}**. Please use the correct job.`,
         ALREADY_ACTIVE: `❌ ${data.characterName} already has an active Job Voucher for ${data.jobName}. Please complete the current job before using another voucher.`,
-        MISSING_SKILLS: `❌ ${data.characterName} cannot use the ${data.activity || 'looting'} perk as a ${data.jobName}.`,
+        MISSING_SKILLS: data.activity === 'village-specific job' 
+            ? `❌ ${data.characterName} must be in **${data.requiredVillage}** to use the ${data.jobName} job voucher. Currently in: **${data.currentVillage}**`
+            : `❌ ${data.characterName} cannot use the ${data.activity || 'looting'} perk as a ${data.jobName}.`,
         ACTIVATION_ERROR: '❌ An error occurred while activating the job voucher.',
         DEACTIVATION_ERROR: '❌ An error occurred while deactivating the job voucher.',
         ITEM_NOT_FOUND: '❌ Job Voucher item not found.'
@@ -50,6 +52,24 @@ async function validateJobVoucher(character, jobName, requiredPerk = null) {
             voucherJob: character.jobVoucherJob, 
             requestedJob: jobName 
         });
+    }
+
+    // Check if the job is village-specific and if the character is in the correct village
+    const jobPerk = getJobPerk(jobName);
+    if (jobPerk && jobPerk.village) {
+        const characterVillage = character.currentVillage?.toLowerCase();
+        const requiredVillage = jobPerk.village.toLowerCase();
+        
+        if (characterVillage !== requiredVillage) {
+            console.error(`[jobVoucherModule.js]: ❌ ${character.name} must be in ${jobPerk.village} to use ${jobName} voucher`);
+            return getJobVoucherErrorMessage('MISSING_SKILLS', {
+                characterName: character.name,
+                jobName: jobName,
+                activity: 'village-specific job',
+                requiredVillage: jobPerk.village,
+                currentVillage: character.currentVillage
+            });
+        }
     }
 
     // If a specific perk is required, validate it
