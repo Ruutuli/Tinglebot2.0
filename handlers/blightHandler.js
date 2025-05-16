@@ -4,19 +4,13 @@
 
 // ------------------- Standard Libraries -------------------
 // Built-in Node.js modules
-const fs = require('fs');
+const { EmbedBuilder } = require('discord.js');
+const { v4: uuidv4 } = require('uuid');
+const mongoose = require('mongoose');
 
 // ------------------- Environment Variables -------------------
 // Load environment variables from .env file
 require('dotenv').config();
-
-// ------------------- Discord.js Components -------------------
-// Discord embed builder for message formatting
-const { EmbedBuilder } = require('discord.js');
-
-// ------------------- Third-Party Libraries -------------------
-// UUID generator for unique IDs
-const { v4: uuidv4 } = require('uuid');
 
 // ------------------- Database Services -------------------
 // Services for token and inventory management, and character fetching
@@ -32,6 +26,7 @@ const {
 // ------------------- Database Models -------------------
 // Character model representing a user's character document
 const Character = require('../models/CharacterModel');
+const TempData = require('../models/TempDataModel');
 
 // ------------------- Custom Modules -------------------
 // Module for retrieving moderator character data
@@ -59,18 +54,40 @@ const {
 const { generateUniqueId } = require('../utils/uniqueIdUtils');
 const { syncInventory } = require('./syncHandler');
 const { checkInventorySync } = require('../utils/characterUtils');
+const { sendUserDM } = require('../utils/messageUtils');
+
+// ============================================================================
+// ------------------- Database Connection -------------------
+// ============================================================================
+
+async function connectToInventories() {
+  try {
+    if (mongoose.connection.readyState === 0) {
+      await mongoose.connect(process.env.MONGODB_INVENTORIES_URI, {
+        useNewUrlParser: true,
+        useUnifiedTopology: true
+      });
+    }
+    return mongoose.connection;
+  } catch (error) {
+    console.error('[blightHandler]: ❌ Error connecting to inventories database:', error);
+    throw error;
+  }
+}
 
 // ============================================================================
 // ------------------- Blight Submission Persistence -------------------
-// Functions to load and save blight submissions to file.
+// Functions to load and save blight submissions using TempData model.
 // ============================================================================
 
 // ------------------- Load Blight Submissions -------------------
-// Synchronously reads blight submissions from JSON file.
-function loadBlightSubmissions() {
+async function loadBlightSubmissions() {
   try {
-    const data = fs.readFileSync('./data/blight.json', 'utf8');
-    return data ? JSON.parse(data) : {};
+    const submissions = await TempData.find({ type: 'blight' });
+    return submissions.reduce((acc, submission) => {
+      acc[submission.key] = submission.data;
+      return acc;
+    }, {});
   } catch (error) {
     handleError(error, 'blightHandler.js');
     console.error('[blightHandler]: Error loading blight submissions', error);
@@ -79,10 +96,22 @@ function loadBlightSubmissions() {
 }
 
 // ------------------- Save Blight Submissions -------------------
-// Synchronously writes blight submissions to JSON file.
-function saveBlightSubmissions(submissions) {
+async function saveBlightSubmissions(data) {
   try {
-    fs.writeFileSync('./data/blight.json', JSON.stringify(submissions, null, 2));
+    // Delete all existing blight submissions
+    await TempData.deleteMany({ type: 'blight' });
+    
+    // Save new submissions
+    const submissions = Object.entries(data).map(([key, value]) => ({
+      type: 'blight',
+      key,
+      data: value,
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days
+    }));
+    
+    if (submissions.length > 0) {
+      await TempData.insertMany(submissions);
+    }
   } catch (error) {
     handleError(error, 'blightHandler.js');
     console.error('[blightHandler]: Error saving blight submissions', error);
@@ -683,202 +712,124 @@ async function postBlightRollCall(client) {
 }
 
 // ------------------- Check Missed Rolls -------------------
-// Automatically progresses the blight stage if a character misses a roll for 24 hours.
 async function checkMissedRolls(client) {
   try {
-    if (!client || !client.channels) {
-      console.error('[blightHandler]: Invalid Discord client.');
-      return;
-    }
-
-    const channelId = process.env.BLIGHT_NOTIFICATIONS_CHANNEL_ID;
-    const channel = client.channels.cache.get(channelId);
-    if (!channel) {
-      console.error('[blightHandler]: Channel not found for missed roll notifications.');
-      return;
-    }
-
-    const blightedCharacters = await Character.find({ blighted: true });
-    const blightStages = {
-      1: { description: `Infected areas appear like blight-colored bruises on the body. Side effects include fatigue, nausea, and feverish symptoms.\n\nAt this stage it can be cured by **sages, oracles, or dragons**.` },
-      2: { description: `Infected areas spread inside and out, and the blight begins traveling towards vital organs. Fatigue fades but nausea typically persists. Infected now experience an increase in physical strength.\n\nThis can still be healed by **sages, oracles, and dragons**.` },
-      3: { description: `Visible infected areas and feverish symptoms fade. Frequent nosebleeds and sputum have a malice-like appearance and can infect others. The infected experiences hallucinations, further increased strength, and aggressive mood swings. Monsters no longer attack.\n\nYou can only be healed by **oracles or dragons**.` },
-      4: { description: `All outward signs of infection have subsided - except the eyes. Infected individual's eyes now look like the eyes of Malice.\n\nAt this stage vital organs begin to fail, and all sense of self is replaced by an uncontrollable desire to destroy. Any contact with bodily fluids risks infecting others.\n\nYou can only be healed by **dragons** at this stage.` },
-      5: { description: `The final stage...` }
-    };
-
-    for (const character of blightedCharacters) {
-      const lastRollDate = character.lastRollDate || new Date(0);
-      const timeSinceLastRoll = Date.now() - lastRollDate.getTime();
-
-      // Handle Stage 5 death or warning
-      if (character.blightStage === 5 && character.deathDeadline) {
-        const now = new Date();
-        const timeUntilDeath = character.deathDeadline - now;
-        const oneDayInMs = 24 * 60 * 60 * 1000;
-
-        // Send 24-hour warning DM
-        if (timeUntilDeath <= oneDayInMs && timeUntilDeath > 0) {
+    const blightSubmissions = await loadBlightSubmissions();
+    const now = new Date();
+    
+    // Check for expired submissions
+    for (const [id, submission] of Object.entries(blightSubmissions)) {
+      if (submission.status === 'pending' && submission.timestamp && new Date(submission.timestamp) < now) {
+        submission.status = 'expired';
+        await saveBlightSubmissions(blightSubmissions);
+        
+        if (submission.userId) {
           try {
-            const user = await client.users.fetch(character.userId);
-            if (user) {
-              const warningEmbed = new EmbedBuilder()
-                .setColor('#FF0000')
-                .setTitle('⚠️ FINAL WARNING: 24 Hours Until Blight Death ⚠️')
-                .setDescription(
-                  `**${character.name}** has only **24 hours** remaining before succumbing to Stage 5 Blight.\n\n` +
-                  `🕒 **Time Remaining**: <t:${Math.floor(character.deathDeadline.getTime() / 1000)}:R>\n\n` +
-                  `⚠️ **This is your final warning**. You must be healed by a **Dragon** before the deadline to avoid death.\n\n` +
-                  `To request blight healing, please use </blight heal:1306176789634355241>`
-                )
-                .setThumbnail(character.icon || 'https://example.com/default-icon.png')
-                .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png')
-                .setTimestamp();
-
-              await user.send({ embeds: [warningEmbed] });
-              console.log(`[blightHandler]: Sent 24-hour warning DM to user ${character.userId} for ${character.name}`);
-            }
+            await sendUserDM(client, submission.userId, `Your blight submission for ${submission.characterName} has expired.`);
           } catch (error) {
-            handleError(error, 'blightHandler.js');
-            console.error(`[blightHandler]: Failed to send 24-hour warning DM to user ${character.userId} for ${character.name}:`, error);
+            console.error('[blightHandler]: ❌ Error sending DM:', error);
           }
         }
+      }
+    }
 
-        if (new Date() > character.deathDeadline) {
-          character.blighted = false;
-          character.blightStage = 0;
-          character.deathDeadline = null;
+    // Check for characters that need to be deleted
+    const characters = await Character.find({
+      blighted: true,
+      blightStage: 5,
+      deathDeadline: { $exists: true, $ne: null }
+    });
+    
+    for (const character of characters) {
+      if (character.deathDeadline <= now) {
+        try {
+          // Store character info for notifications before deletion
+          const characterInfo = {
+            name: character.name,
+            userId: character.userId,
+            icon: character.icon,
+            inventory: character.inventory
+          };
 
-          // Delete any active blight submissions for this character
+          // Delete character's inventory from inventories database
           try {
-            const blightSubmissions = loadBlightSubmissions();
-            const submissionIds = Object.keys(blightSubmissions).filter(id => {
-              const submission = blightSubmissions[id];
-              return submission.characterName === character.name && submission.status === 'pending';
-            });
-            
-            // Delete each pending submission
-            for (const submissionId of submissionIds) {
-              delete blightSubmissions[submissionId];
-              deleteSubmissionFromStorage(submissionId);
-            }
-            saveBlightSubmissions(blightSubmissions);
-          } catch (error) {
-            handleError(error, 'blightHandler.js');
-            console.error('[blightHandler]: Error cleaning up blight submissions:', error);
-          }
-
-          // Wipe character's inventory from database only
-          try {
-            const inventoriesConnection = await dbFunctions.connectToInventories();
+            const inventoriesConnection = await connectToInventories();
             const db = inventoriesConnection.useDb("inventories");
             const collectionName = character.name.toLowerCase();
             const inventoryCollection = db.collection(collectionName);
-            
-            // Delete all items from the character's inventory in database
-            await inventoryCollection.deleteMany({ characterId: character._id });
+            await inventoryCollection.deleteMany({});
           } catch (error) {
-            handleError(error, 'blightHandler.js');
-            console.error('[blightHandler]: Error wiping inventory:', error);
+            console.error(`[blightHandler]: ❌ Error deleting inventory for ${character.name}:`, error);
           }
 
-          await character.save();
+          // Delete character from database
+          await Character.deleteOne({ _id: character._id });
 
-          const embed = new EmbedBuilder()
-            .setColor('#D32F2F')
-            .setTitle(`<:blight_eye:805576955725611058> **Blight Death Alert** <:blight_eye:805576955725611058>`)
-            .setDescription(`**${character.name}** has succumbed to Stage 5 Blight.\n\n *This character's inventory has been cleared from the database, but their inventory sheet remains for record-keeping purposes.*`)
-            .setThumbnail(character.icon || 'https://example.com/default-icon.png')
-            .setFooter({ text: 'Blight Death Announcement', iconURL: 'https://example.com/blight-icon.png' })
-            .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png')
-            .setTimestamp();
-
-          if (character.userId) {
-            await channel.send({ content: `<@${character.userId}>`, embeds: [embed] });
-          } else {
-            console.error(`[blightHandler]: Missing userId for ${character.name}`);
-            await channel.send({ embeds: [embed] });
+          // Delete any active blight submissions
+          const submissionIds = Object.keys(blightSubmissions).filter(id => {
+            const submission = blightSubmissions[id];
+            return submission.characterName === character.name && submission.status === 'pending';
+          });
+          
+          for (const submissionId of submissionIds) {
+            delete blightSubmissions[submissionId];
           }
+          await saveBlightSubmissions(blightSubmissions);
 
-          // Send death notification to mod-log channel
-          try {
-            const modLogChannel = client.channels.cache.get(process.env.MOD_LOG_CHANNEL_ID);
-            if (modLogChannel) {
-              const modLogEmbed = new EmbedBuilder()
-                .setColor('#FF0000')
-                .setTitle('☠️ Character Death from Blight')
-                .setDescription(`**Character**: ${character.name}\n**Owner**: <@${character.userId}>\n**Death Time**: <t:${Math.floor(Date.now() / 1000)}:F>`)
-                .setThumbnail(character.icon || 'https://example.com/default-icon.png')
-                .setFooter({ text: 'Blight Death Log', iconURL: 'https://example.com/blight-icon.png' })
-                .setTimestamp();
+          // Send notifications
+          const channelId = process.env.BLIGHT_NOTIFICATIONS_CHANNEL_ID;
+          const channel = client.channels.cache.get(channelId);
+          if (channel) {
+            const embed = new EmbedBuilder()
+              .setColor('#D32F2F')
+              .setTitle(`<:blight_eye:805576955725611058> **Blight Death Alert** <:blight_eye:805576955725611058>`)
+              .setDescription(`**${characterInfo.name}** has succumbed to Stage 5 Blight.\n\n*This character has been permanently removed from the database.*`)
+              .setThumbnail(characterInfo.icon || 'https://example.com/default-icon.png')
+              .setFooter({ text: 'Blight Death Announcement', iconURL: 'https://example.com/blight-icon.png' })
+              .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png')
+              .setTimestamp();
 
-              await modLogChannel.send({ embeds: [modLogEmbed] });
-              console.log(`[blightHandler]: Sent death notification to mod-log for ${character.name}`);
+            if (characterInfo.userId) {
+              await channel.send({ content: `<@${characterInfo.userId}>`, embeds: [embed] });
             } else {
-              console.error('[blightHandler]: Mod log channel not found');
+              await channel.send({ embeds: [embed] });
             }
-          } catch (error) {
-            handleError(error, 'blightHandler.js');
-            console.error('[blightHandler]: Error sending death notification to mod-log:', error);
           }
 
-          continue;
+          // Send to mod-log
+          const modLogChannel = client.channels.cache.get(process.env.MOD_LOG_CHANNEL_ID);
+          if (modLogChannel) {
+            const modLogEmbed = new EmbedBuilder()
+              .setColor('#FF0000')
+              .setTitle('☠️ Character Death from Blight')
+              .setDescription(`**Character**: ${characterInfo.name}\n**Owner**: <@${characterInfo.userId}>\n**Death Time**: <t:${Math.floor(Date.now() / 1000)}:F>\n**Inventory Sheet**: ${characterInfo.inventory || 'None'}`)
+              .setThumbnail(characterInfo.icon || 'https://example.com/default-icon.png')
+              .setFooter({ text: 'Blight Death Log', iconURL: 'https://example.com/blight-icon.png' })
+              .setTimestamp();
+
+            await modLogChannel.send({ embeds: [modLogEmbed] });
+          }
+
+          // Try to send DM to user
+          if (characterInfo.userId) {
+            try {
+              await sendUserDM(client, characterInfo.userId, 
+                `⚠️ **Blight Death Notice**\n\nYour character **${characterInfo.name}** has succumbed to Stage 5 Blight and has been permanently removed from the database.`
+              );
+            } catch (error) {
+              console.error(`[blightHandler]: ❌ Error sending death notification DM:`, error);
+            }
+          }
+
+          console.log(`[blightHandler]: ✅ Character ${character.name} has been deleted`);
+        } catch (error) {
+          console.error(`[blightHandler]: ❌ Error processing death for ${character.name}:`, error);
         }
-
-        // Stage 5 warning
-        const embed = new EmbedBuilder()
-          .setColor('#AD1457')
-          .setTitle(`⚠️ ${character.name} is at Blight Stage 5`)
-          .setDescription(
-            `❗ **Missed Roll**: Your blight is at the final stage and you are on the edge of death.\n\n` +
-            `🕒 **Deadline**: <t:${Math.floor(character.deathDeadline.getTime() / 1000)}:F>\n\n` +
-            `⚠️ **You must be healed before the deadline to avoid certain death.**`
-          )
-          .setFooter({ text: 'Blight Stage 5 Alert' })
-          .setThumbnail(character.icon || 'https://example.com/default-icon.png')
-          .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png')
-          .setTimestamp();
-
-        await channel.send({ content: `<@${character.userId}>`, embeds: [embed] });
-        continue;
-      }
-
-      // Missed roll progression
-      if (timeSinceLastRoll > 24 * 60 * 60 * 1000 && character.blightStage < 5) {
-        character.blightStage += 1;
-        if (character.blightStage === 5) {
-          character.deathDeadline = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-        }
-        await character.save();
-
-        const stageInfo = blightStages[character.blightStage] || { description: 'Unknown stage.' };
-        const embed = new EmbedBuilder()
-          .setColor('#AD1457')
-          .setTitle(`⚠️ ${character.name} has progressed to Blight Stage ${character.blightStage}`)
-          .setDescription(
-            `${stageInfo.description}\n\n` +
-            (character.blightStage === 5
-              ? `❗ **Missed Roll**: Your blight has progressed because you missed your daily roll.\n\n` +
-                `The blight has reached its final stage—a death sentence. Perhaps a last-ditch effort can bring you salvation...\n\nYou can only be saved by a **Dragon**\n` +
-                `🕒 **Deadline**: <t:${Math.floor(character.deathDeadline.getTime() / 1000)}:F>\n\n⚠️ **You must be healed before the deadline to avoid certain death.**`
-              : '❗ **Missed Roll**: The blight has progressed because you missed your daily roll. Missing further rolls will cause additional progression.')
-          )
-          .setFooter({ text: 'Missed roll - Blight progressed!' })
-          .setAuthor({
-            name: 'Blight Progression Alert',
-            iconURL: 'https://static.wixstatic.com/media/7573f4_a510c95090fd43f5ae17e20d80c1289e~mv2.png'
-          })
-          .setThumbnail(character.icon)
-          .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png')
-          .setTimestamp();
-
-        await channel.send({ content: `<@${character.userId}>`, embeds: [embed] });
-        console.log(`[blightHandler]: ${character.name} progressed to Stage ${character.blightStage}.`);
       }
     }
   } catch (error) {
     handleError(error, 'blightHandler.js');
-    console.error('[blightHandler]: Error checking missed rolls:', error);
+    console.error('[blightHandler]: ❌ Error checking missed rolls:', error);
   }
 }
 
