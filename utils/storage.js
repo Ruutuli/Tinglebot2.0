@@ -270,6 +270,21 @@ async function cleanupExpiredEntries(maxAgeInMs = 86400000) {
   }
 }
 
+// ---- Function: cleanupExpiredHealingRequests ----
+// Cleans up expired healing requests from the database
+async function cleanupExpiredHealingRequests() {
+  try {
+    const result = await TempData.deleteMany({
+      type: 'healing',
+      expiresAt: { $lt: new Date() }
+    });
+    console.log(`[storage.js]: ✅ Cleaned up ${result.deletedCount} expired healing requests`);
+  } catch (error) {
+    handleError(error, 'storage.js');
+    console.error('[storage.js]: ❌ Error cleaning up expired healing requests:', error.message);
+  }
+}
+
 // ============================================================================
 // ---- Transaction Helper ----
 // Runs a function within a mongoose transaction session.
@@ -340,5 +355,6 @@ module.exports = {
   deletePendingEditFromStorage,
   
   cleanupExpiredEntries,
-  runWithTransaction
+  runWithTransaction,
+  cleanupExpiredHealingRequests
 };

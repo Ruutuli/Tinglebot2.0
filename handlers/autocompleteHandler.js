@@ -49,13 +49,7 @@ const Pet = require("../models/PetModel");
 const ShopStock = require("../models/VillageShopsModel");
 const { Village } = require("../models/VillageModel");
 
-// Add at the top of the file after imports
-const AUTOCOMPLETE_TIMEOUT = 2500; // 2.5 seconds
 
-// Add timeout utility
-const createTimeoutPromise = (ms = AUTOCOMPLETE_TIMEOUT) => new Promise((_, reject) => {
-  setTimeout(() => reject(new Error('Autocomplete timeout')), ms);
-});
 
 // Add safe response utility
 async function safeAutocompleteResponse(interaction, choices) {
@@ -70,10 +64,7 @@ async function safeAutocompleteResponse(interaction, choices) {
       console.log('[autocomplete]: Interaction already expired');
       return;
     }
-    if (error.message === 'Autocomplete timeout') {
-      console.log('[autocomplete]: Response timed out');
-      return;
-    }
+
     console.error('[autocomplete]: Error:', error);
     try {
       await interaction.respond([]).catch(() => {});
@@ -2920,10 +2911,6 @@ async function handleVendorCharacterAutocomplete(interaction) {
 // Provides autocomplete suggestions for items in a vendor's shop during barter
 async function handleVendingBarterAutocomplete(interaction, focusedOption) {
   try {
-    // Create a timeout promise
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Autocomplete timeout')), 2500);
-    });
 
     const subcommand = interaction.options.getSubcommand();
     const focusedName = focusedOption.name;
@@ -3061,10 +3048,7 @@ async function handleVendingBarterAutocomplete(interaction, focusedOption) {
       console.log('[handleVendingBarterAutocomplete]: Interaction already expired');
       return;
     }
-    if (error.message === 'Autocomplete timeout') {
-      console.log('[handleVendingBarterAutocomplete]: Autocomplete response timed out');
-      return;
-    }
+
     console.error("[handleVendingBarterAutocomplete]: Error:", error);
     try {
       await interaction.respond([]).catch(() => {});
