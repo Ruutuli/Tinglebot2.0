@@ -861,16 +861,16 @@ if (quantity <= 0) {
   const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
 
   if (user.tokenTracker) {
-   const spreadsheetId = extractSpreadsheetId(user.tokenTracker);
-   const auth = await authorizeSheets();
-   const tokenRow = [
-    `${characterName} - ${itemName} x${quantity} - Shop Purchase`,
-    interactionUrl,
-    "purchase",
-    "spent",
-    `-${totalPrice}`,
-   ];
-   await safeAppendDataToSheet(character.inventory, character, "loggedTracker!B7:F", [tokenRow]);
+    const spreadsheetId = extractSpreadsheetId(user.tokenTracker);
+    const auth = await authorizeSheets();
+    const tokenRow = [
+      `${characterName} - ${itemName} x${quantity} - Shop Purchase`,
+      interactionUrl,
+      "purchase",
+      "spent",
+      `-${totalPrice}`,
+    ];
+    await safeAppendDataToSheet(user.tokenTracker, character, "loggedTracker!B7:F", [tokenRow]);
   }
 
   if (character.inventory) {
@@ -1095,7 +1095,7 @@ if (quantity <= 0) {
     "earned",
     `+${totalPrice}`,
    ];
-   await safeAppendDataToSheet(character.inventory, character, "loggedTracker!B7:F", [tokenRow]);
+   await safeAppendDataToSheet(user.tokenTracker, character, "loggedTracker!B7:F", [tokenRow]);
    console.log(`[shops]: Logged sale in token tracker.`);
   }
 
