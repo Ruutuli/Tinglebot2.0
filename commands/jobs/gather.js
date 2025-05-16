@@ -118,6 +118,47 @@ module.exports = {
       // Check inventory sync before proceeding
       await checkInventorySync(character);
 
+      // Check for job voucher and daily roll at the start
+      if (character.jobVoucher) {
+        console.log(`[Gather Command]: 🔄 Active job voucher found for ${character.name}`);
+      } else {
+        console.log(`[Gather Command]: 🔄 No active job voucher for ${character.name}`);
+        
+        // For jobs with both GATHERING and LOOTING perks, check both activities
+        const jobPerk = getJobPerk(job);
+        const hasBothPerks = jobPerk && jobPerk.perks.includes('GATHERING') && jobPerk.perks.includes('LOOTING');
+        
+        // Check if either gather or loot has been used today
+        const canGather = canUseDailyRoll(character, 'gather');
+        const canLoot = canUseDailyRoll(character, 'loot');
+        
+        if (hasBothPerks && (!canGather || !canLoot)) {
+          await interaction.editReply({
+            content: `*${character.name} seems exhausted from their earlier activities...*\n\n**Daily activity limit reached.**\nThe next opportunity to gather or loot will be available at 8AM EST.\n\n*Tip: A job voucher would allow you to gather again today.*`,
+            ephemeral: true,
+          });
+          return;
+        } else if (!hasBothPerks && !canGather) {
+          await interaction.editReply({
+            content: `*${character.name} seems exhausted from their earlier gathering...*\n\n**Daily gathering limit reached.**\nThe next opportunity to gather will be available at 8AM EST.\n\n*Tip: A job voucher would allow you to gather again today.*`,
+            ephemeral: true,
+          });
+          return;
+        }
+
+        // Update daily roll BEFORE proceeding with gathering
+        try {
+          await updateDailyRoll(character, 'gather');
+        } catch (error) {
+          console.error(`[Gather Command]: ❌ Failed to update daily roll:`, error);
+          await interaction.editReply({
+            content: `❌ **An error occurred while updating your daily roll. Please try again.**`,
+            ephemeral: true,
+          });
+          return;
+        }
+      }
+
       // Check if the character is KOed.
       if (character.isKO) {
         await interaction.editReply({
