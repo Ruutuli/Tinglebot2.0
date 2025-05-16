@@ -3,8 +3,14 @@
 const { SlashCommandBuilder } = require('@discordjs/builders');
 
 // Local modules (blight handlers)
-const { rollForBlightProgression, healBlight, submitHealingTask } = require('../../handlers/blightHandler');
-const { fetchCharacterByNameAndUserId } = require('../../database/db.js');
+const { 
+  rollForBlightProgression, 
+  healBlight, 
+  submitHealingTask, 
+  viewBlightHistory,
+  validateCharacterOwnership 
+} = require('../../handlers/blightHandler');
+const { fetchCharacterByNameAndUserId, getCharacterBlightHistory } = require('../../database/db.js');
 
 // ------------------- Define the Blight Command -------------------
 // This command manages blight progression, healing, and submission of healing tasks.
@@ -23,7 +29,7 @@ module.exports = {
           option.setName('character_name')
             .setDescription('The name of the character to roll for blight progression')
             .setRequired(true)
-            .setAutocomplete(true)) // Enable autocomplete for this option
+            .setAutocomplete(true))
     )
     // ------------------- Subcommand: Heal a character from blight -------------------
     .addSubcommand(subcommand =>
@@ -35,22 +41,22 @@ module.exports = {
             .setDescription('The name of the character to heal from blight')
             .setRequired(true)
             .setAutocomplete(true))
-            .addStringOption(option =>
-              option.setName('healer_name')
-                .setDescription('Select the healer performing the healing')
-                .setRequired(true)
-                .addChoices(
-                  { name: 'Aemu - Rudania', value: 'Aemu' },
-                  { name: 'Darune - Rudania', value: 'Darune' },
-                  { name: 'Elde - Vhintl', value: 'Elde' },
-                  { name: 'Foras - Vhintl', value: 'Foras' },
-                  { name: 'Ginger - Vhintl', value: 'Ginger-Sage' },
-                  { name: 'Korelii - Inariko', value: 'Korelii' },
-                  { name: 'Nihme - Inariko', value: 'Nihme' },
-                  { name: 'Sahira - Rudania', value: 'Sahira' },
-                  { name: 'Sanskar - Inariko', value: 'Sanskar' },
-                  { name: 'Sigrid - Inariko', value: 'Sigrid' }
-                )))
+        .addStringOption(option =>
+          option.setName('healer_name')
+            .setDescription('Select the healer performing the healing')
+            .setRequired(true)
+            .addChoices(
+              { name: 'Aemu - Rudania', value: 'Aemu' },
+              { name: 'Darune - Rudania', value: 'Darune' },
+              { name: 'Elde - Vhintl', value: 'Elde' },
+              { name: 'Foras - Vhintl', value: 'Foras' },
+              { name: 'Ginger - Vhintl', value: 'Ginger-Sage' },
+              { name: 'Korelii - Inariko', value: 'Korelii' },
+              { name: 'Nihme - Inariko', value: 'Nihme' },
+              { name: 'Sahira - Rudania', value: 'Sahira' },
+              { name: 'Sanskar - Inariko', value: 'Sanskar' },
+              { name: 'Sigrid - Inariko', value: 'Sigrid' }
+            )))
 
     // ------------------- Subcommand: Submit a completed task for blight healing -------------------
     .addSubcommand(subcommand =>
@@ -64,7 +70,7 @@ module.exports = {
         .addStringOption(option =>
           option.setName('item')
             .setDescription('The item you are offering for healing (if required)')
-            .setAutocomplete(true) // Enable autocomplete here
+            .setAutocomplete(true)
             .setRequired(false))
         .addStringOption(option =>
           option.setName('link')
@@ -73,18 +79,34 @@ module.exports = {
         .addBooleanOption(option =>
           option.setName('tokens')
             .setDescription('Forfeit all tokens in exchange for healing')
-            .setRequired(false))
-    ),
+            .setRequired(false)))
+
+    // ------------------- Subcommand: View blight history -------------------
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('history')
+        .setDescription('View the blight history for a character')
+        .addStringOption(option =>
+          option.setName('character_name')
+            .setDescription('The name of the character to view blight history for')
+            .setRequired(true)
+            .setAutocomplete(true))
+        .addIntegerOption(option =>
+          option.setName('limit')
+            .setDescription('Number of history entries to show (default: 10)')
+            .setRequired(false)
+            .setMinValue(1)
+            .setMaxValue(25))),
 
   // ------------------- Command Execution Logic -------------------
   async execute(interaction) {
-    const communityBoardChannelId = process.env.COMMUNITY_BOARD; // Fetch the Community Board ID from the environment variables
+    const communityBoardChannelId = process.env.COMMUNITY_BOARD;
 
     // Check if the command is executed in the Community Board channel
     if (interaction.channelId !== communityBoardChannelId) {
       await interaction.reply({
         content: `❌ This command can only be used in the Community Board channel. Please go to <#${communityBoardChannelId}> to use this command.`,
-        ephemeral: true, // Show the message only to the user who attempted the command
+        ephemeral: true,
       });
       return;
     }
@@ -93,46 +115,33 @@ module.exports = {
     
     if (subcommand === 'roll') {
       const characterName = interaction.options.getString('character_name');
-    
-      // Validate character belongs to the user
-      const userId = interaction.user.id;
-      const character = await fetchCharacterByNameAndUserId(characterName, userId);
-    
-      if (!character) {
-        await interaction.reply({
-          content: `❌ You can only roll for blight progression for your **own** characters!`,
-          ephemeral: true,
-        });
-        return;
-      }
-    
+      const character = await validateCharacterOwnership(interaction, characterName);
+      if (!character) return;
+      
       await rollForBlightProgression(interaction, characterName);
     
     } else if (subcommand === 'heal') {
       const characterName = interaction.options.getString('character_name');
+      const character = await validateCharacterOwnership(interaction, characterName);
+      if (!character) return;
+      
       const healerName = interaction.options.getString('healer_name');
-    
-      // Validate character belongs to the user
-      const userId = interaction.user.id;
-      const character = await fetchCharacterByNameAndUserId(characterName, userId);
-    
-      if (!character) {
-        await interaction.reply({
-          content: `❌ You can only request blight healing for your **own** characters!`,
-          ephemeral: true,
-        });
-        return;
-      }
-    
       await healBlight(interaction, characterName, healerName);
         
-
     } else if (subcommand === 'submit') {
       const submissionId = interaction.options.getString('submission_id');
-      const item = interaction.options.getString('item'); // Get the item, if submitted
-      const link = interaction.options.getString('link'); // Get the writing or art link, if submitted
-      const tokens = interaction.options.getBoolean('tokens'); // Check if tokens forfeit option was selected
-      await submitHealingTask(interaction, submissionId, item, link, tokens); // Pass all the inputs to the submit function
+      const item = interaction.options.getString('item');
+      const link = interaction.options.getString('link');
+      const tokens = interaction.options.getBoolean('tokens');
+      await submitHealingTask(interaction, submissionId, item, link, tokens);
+      
+    } else if (subcommand === 'history') {
+      const characterName = interaction.options.getString('character_name');
+      const character = await validateCharacterOwnership(interaction, characterName);
+      if (!character) return;
+      
+      const limit = interaction.options.getInteger('limit') || 10;
+      await viewBlightHistory(interaction, characterName, limit);
     }
   }
 };

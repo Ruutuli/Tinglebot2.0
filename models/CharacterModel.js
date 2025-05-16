@@ -73,6 +73,11 @@ const characterSchema = new Schema({
   blightPaused: { type: Boolean, default: false },
   lastRollDate: { type: Date, default: null },           // Date of last roll for blighted characters
   deathDeadline: { type: Date, default: null },
+  blightEffects: {                                       // Stage-specific blight effects
+    rollMultiplier: { type: Number, default: 1.0 },     // Multiplier for rolls (Stage 2: 1.5)
+    noMonsters: { type: Boolean, default: false },       // No monster encounters (Stage 3+)
+    noGathering: { type: Boolean, default: false },      // Cannot gather items (Stage 4)
+  },
   ko: { type: Boolean, default: false },                 // KO status
   debuff: {                                            // Debuff status for KO recovery
     active: { type: Boolean, default: false },

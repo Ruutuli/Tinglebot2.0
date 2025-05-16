@@ -45,6 +45,12 @@ async function processLoot(battleProgress, currentMonster, interaction, battleId
 
     // Process loot for each character
     for (const character of characters) {
+      // Check for blight stage 4 effect (no gathering)
+      if (character.blightEffects?.noGathering) {
+        lootMessage += `\n${character.name} cannot gather items due to advanced blight stage.`;
+        continue;
+      }
+
       const { adjustedRandomValue } = calculateFinalValue(character);  // Calculate adjusted roll value
       const weightedItems = createWeightedItemList(items, adjustedRandomValue);  // Create weighted list of loot items
 

@@ -121,6 +121,22 @@ module.exports = {
       // Initialize job variable early
       let job = (character.jobVoucher && character.jobVoucherJob) ? character.jobVoucherJob : character.job;
 
+      // Check for KO status
+      if (character.currentHearts === 0) {
+        const embed = createKOEmbed(character);
+        await interaction.editReply({ embeds: [embed] });
+        return;
+      }
+
+      // Check for blight stage 4 effect (no gathering)
+      if (character.blightEffects?.noGathering) {
+        await interaction.editReply({
+          content: `❌ **${character.name}** cannot gather items due to advanced blight stage.`,
+          ephemeral: true
+        });
+        return;
+      }
+
       // Check for job voucher and daily roll at the start
       if (character.jobVoucher) {
         console.log(`[Gather Command]: 🔄 Active job voucher found for ${character.name}`);
