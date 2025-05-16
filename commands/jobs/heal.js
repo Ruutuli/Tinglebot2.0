@@ -14,6 +14,7 @@ const { createHealEmbed, createHealingEmbed } = require('../../embeds/embeds.js'
 const { validateJobVoucher, activateJobVoucher, fetchJobVoucherItem, deactivateJobVoucher, getJobVoucherErrorMessage } = require('../../modules/jobVoucherModule.js');
 const { handleTradeItemAutocomplete } = require('../../handlers/autocompleteHandler.js');
 const { checkInventorySync } = require('../../utils/characterUtils');
+const { generateUniqueId } = require('../../utils/uniqueIdUtils.js');
 
 
 module.exports = {
@@ -161,14 +162,14 @@ if (subcommand === 'request') {
       }
 
       // Create and save the healing request
-      const healingRequestId = Math.random().toString(36).substr(2, 6).toUpperCase();
+      const healingRequestId = generateUniqueId('H');
       
       const embed = createHealEmbed(null, characterToHeal, heartsToHeal, paymentOffered, healingRequestId);
 
       // Send the embed and save the message ID
       const sentMessage = await interaction.followUp({
           content: healerName
-              ? `🔔 <@${interaction.user.id}>, **${characterToHeal.name}** is requesting healing from **${healerName}**!`
+              ? `🔔 <@${healerCharacter?.ownerId || 'Job Perk: Healing'}>, **${characterToHeal.name}** is requesting healing from **${healerName}**!`
               : `🔔 @Job Perk: Healing, Healing request for any eligible healer in **${capitalizeFirstLetter(characterToHeal.currentVillage)}**!`,
           embeds: [embed],
       });
@@ -176,17 +177,30 @@ if (subcommand === 'request') {
       const healingRequestData = {
           healingRequestId,
           characterRequesting: characterToHeal.name,
+          characterRequestingId: characterToHeal._id,
           village: characterToHeal.currentVillage,
           heartsToHeal,
           paymentOffered,
           healerName: healerName || null,
+          healerId: healerCharacter?._id || null,
           requesterUserId: interaction.user.id,
           status: 'pending',
           timestamp: Date.now(),
-          messageId: sentMessage.id
+          messageId: sentMessage.id,
+          channelId: interaction.channelId
       };
 
-      await saveHealingRequestToStorage(healingRequestId, healingRequestData);
+      try {
+          await saveHealingRequestToStorage(healingRequestId, healingRequestData);
+          console.log(`[heal.js]: ✅ Healing request saved successfully with ID: ${healingRequestId}`);
+      } catch (error) {
+          console.error(`[heal.js]: ❌ Failed to save healing request: ${error.message}`);
+          await interaction.followUp({
+              content: '❌ **Error:** Failed to save healing request. Please try again.',
+              ephemeral: true
+          });
+          return;
+      }
   } catch (error) {
     handleError(error, 'heal.js');
 
