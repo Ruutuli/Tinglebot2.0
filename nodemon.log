@@ -1,28 +1,199 @@
-(node:6748) Warning: Accessing non-existent property 'connectToInventories' of module exports inside circular dependency
+  - Option "race" has autocomplete enabled
+  - Option "race" has autocomplete enabled
+  - Option "race" has autocomplete enabled
+  - Option "race" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+  - Option "updatedinfo" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+  - Option "newjob" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+✅ Loaded command: character from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\character\character.js
+  - Option "charactername" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+✅ Loaded command: mount from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\companions\mount.js
+  - Option "charactername" has autocomplete enabled
+  - Option "petname" has autocomplete enabled
+  - Option "rolltype" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+  - Option "petname" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+  - Option "species" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+  - Option "petname" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+  - Option "petname" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+  - Option "petname" has autocomplete enabled
+.
+✅ Loaded command: pet from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\companions\pet.js
+  - Option "charactername" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+  - Option "mountname" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+  - Option "mountname" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+  - Option "mountname" has autocomplete enabled
+.
+✅ Loaded command: stable from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\companions\stable.js
+  - Option "fromcharacter" has autocomplete enabled
+  - Option "tocharacter" has autocomplete enabled
+  - Option "itema" has autocomplete enabled
+  - Option "itemb" has autocomplete enabled
+  - Option "itemc" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+  - Option "itemname" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+  - Option "itemname" has autocomplete enabled
+  - Option "fromcharacter" has autocomplete enabled
+  - Option "tocharacter" has autocomplete enabled
+  - Option "item1" has autocomplete enabled
+  - Option "item2" has autocomplete enabled
+  - Option "item3" has autocomplete enabled
+  - Option "fromcharacter" has autocomplete enabled
+  - Option "tocharacter" has autocomplete enabled
+  - Option "itema" has autocomplete enabled
+  - Option "itemb" has autocomplete enabled
+  - Option "itemc" has autocomplete enabled
+.
+✅ Loaded command: economy from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\economy\economy.js
+  - Option "charactername" has autocomplete enabled
+  - Option "item1" has autocomplete enabled
+  - Option "item2" has autocomplete enabled
+  - Option "item3" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+.
+✅ Loaded command: explore from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\exploration\explore.js
+✅ Loaded command: viewmap from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\exploration\viewMap.js
+  - Option "charactername" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+  - Option "baseweapon" has autocomplete enabled
+  - Option "subtype" has autocomplete enabled
+.
+✅ Loaded command: customweapon from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\inventory\customWeapon.js
+  - Option "charactername" has autocomplete enabled
+  - Option "itemname" has autocomplete enabled
+.
+✅ Loaded command: gear from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\inventory\gear.js
+  - Option "charactername" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+.
+✅ Loaded command: inventory from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\inventory\inventory.js
+  - Option "charactername" has autocomplete enabled
+  - Option "itemname" has autocomplete enabled
+  - Option "jobname" has autocomplete enabled
+.
+✅ Loaded command: item from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\inventory\item.js
+  - Option "character" has autocomplete enabled
+  - Option "appraiser" has autocomplete enabled
+  - Option "appraiser" has autocomplete enabled
+.
+✅ Loaded command: relic from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\inventory\relic.js
+  - Option "character" has autocomplete enabled
+  - Option "character" has autocomplete enabled
+.
+✅ Loaded command: spiritorbs from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\inventory\spiritOrb.js
+  - Option "character" has autocomplete enabled
+  - Option "booster" has autocomplete enabled
+  - Option "character" has autocomplete enabled
+.
+✅ Loaded command: boosting from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\jobs\boosting.js
+  - Option "charactername" has autocomplete enabled
+  - Option "itemname" has autocomplete enabled
+.
+✅ Loaded command: crafting from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\jobs\crafting.js
+  - Option "sender" has autocomplete enabled
+  - Option "courier" has autocomplete enabled
+  - Option "recipient" has autocomplete enabled
+  - Option "item" has autocomplete enabled
+  - Option "courier" has autocomplete enabled
+  - Option "courier" has autocomplete enabled
+  - Option "character" has autocomplete enabled
+  - Option "recipient" has autocomplete enabled
+  - Option "courier" has autocomplete enabled
+  - Option "vendoritem" has autocomplete enabled
+.
+✅ Loaded command: deliver from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\jobs\deliver.js
+  - Option "charactername" has autocomplete enabled
+.
+✅ Loaded command: gather from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\jobs\gather.js
+  - Option "charactername" has autocomplete enabled
+  - Option "healer" has autocomplete enabled
+  - Option "healername" has autocomplete enabled
+✅ Loaded command: heal from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\jobs\heal.js
+  - Option "charactername" has autocomplete enabled
+.
+✅ Loaded command: loot from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\jobs\loot.js
+  - Option "charactername" has autocomplete enabled
+  - Option "target" has autocomplete enabled
+  - Option "rarity" has autocomplete enabled
+✅ Loaded command: steal from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\jobs\steal.js
+  - Option "charactername" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+  - Option "itemname" has autocomplete enabled
+  - Option "slot" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+  - Option "itemname" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+  - Option "vendorcharacter" has autocomplete enabled
+  - Option "itemname" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+.
+✅ Loaded command: vending from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\jobs\vending.js
+✅ Loaded command: updateparties from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\moderation\fixparties.js
+  - Option "character" has autocomplete enabled
+  - Option "item" has autocomplete enabled
+  - Option "character" has autocomplete enabled
+  - Option "petname" has autocomplete enabled
+  - Option "character" has autocomplete enabled
+  - Option "character" has autocomplete enabled
+.
+✅ Loaded command: mod from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\moderation\mod.js
+  - Option "charactername" has autocomplete enabled
+.
+✅ Loaded command: specialweather from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\specialweather.js
+  - Option "item" has autocomplete enabled
+  - Option "ingredient" has autocomplete enabled
+✅ Loaded command: lookup from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\utility\lookup.js
+✅ Loaded command: roll from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\utility\roll.js
+✅ Loaded command: submit from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\utility\submit.js
+✅ Loaded command: tokens from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\utility\tokens.js
+  - Option "character_name" has autocomplete enabled
+  - Option "character_name" has autocomplete enabled
+  - Option "item" has autocomplete enabled
+.
+✅ Loaded command: blight from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\world\blight.js
+  - Option "attacker" has autocomplete enabled
+  - Option "defender" has autocomplete enabled
+  - Option "attacker" has autocomplete enabled
+.
+✅ Loaded command: combat from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\world\combat.js
+  - Option "charactername" has autocomplete enabled
+  - Option "questid" has autocomplete enabled
+.
+✅ Loaded command: quest from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\world\quest.js
+  - Option "charactername" has autocomplete enabled
+.
+✅ Loaded command: raid from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\world\raid.js
+  - Option "charactername" has autocomplete enabled
+  - Option "destination" has autocomplete enabled
+✅ Loaded command: travel from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\world\travel.js
+  - Option "charactername" has autocomplete enabled
+  - Option "itemname" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
+  - Option "itemname" has autocomplete enabled
+.
+✅ Loaded command: village from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\world\village.js
+🔄 Started refreshing 34 guild (/) commands for guild ID: 1305484048063529002
+(node:16420) Warning: Accessing non-existent property 'connectToInventories' of module exports inside circular dependency
 (Use `node --trace-warnings ...` to show where the warning was created)
-(node:6748) Warning: Accessing non-existent property 'fetchCharacterById' of module exports inside circular dependency
-(node:6748) Warning: Accessing non-existent property 'updateCharacterById' of module exports inside circular dependency
-(node:6748) [MONGODB DRIVER] Warning: useNewUrlParser is a deprecated option: useNewUrlParser has no effect since Node.js Driver version 4.0.0 and will be removed in the next major version
-(node:6748) [MONGODB DRIVER] Warning: useUnifiedTopology is a deprecated option: useUnifiedTopology has no effect since Node.js Driver version 4.0.0 and will be removed in the next major version
-[index.js]: ✅ Databases connected
-[commandHandler.js]: ✅ Successfully loaded all 34 commands.
-[index.js]: 🤖 Logged in as RuuBot#4718!
-  _______             __     __          __     ___    ____ 
- /_  __(_)___  ____ _/ /__  / /_  ____  / /_   |__ \  / __ \
-  / / / / __ \/ __ `/ / _ \/ __ \/ __ \/ __/   __/ / / / / /
- / / / / / / / /_/ / /  __/ /_/ / /_/ / /_    / __/_/ /_/ / 
-/_/ /_/_/ /_/\__, /_/\___/_.___/\____/\__/   /____(_)____/  
-            /____/                                          
-==========================================================
-[index.js]: 🤖 Bot is online
-[scheduler.js]: ✅ All schedulers initialized
-----------------------------------------------------------
-[index.js]: ✅ Core Systems Initialized:
-  • Reaction Handler
-  • Blood Moon Tracker
-  • Scheduler
-  • Random Encounters
-  • Request Expiration Handler
-==========================================================
-[index.js]: 🚀 Tinglebot 2.0 is fully operational!
-==========================================================
+(node:16420) Warning: Accessing non-existent property 'fetchCharacterById' of module exports inside circular dependency
+(node:16420) Warning: Accessing non-existent property 'updateCharacterById' of module exports inside circular dependency
+✅ Successfully reloaded application (/) commands for guild ID: 1305484048063529002.
+🔄 Started refreshing 34 guild (/) commands for guild ID: 603960955839447050
+✅ Successfully reloaded application (/) commands for guild ID: 603960955839447050.
+✅ Successfully reloaded all guild (/) commands.

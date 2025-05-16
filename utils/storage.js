@@ -244,6 +244,19 @@ async function deleteTradeFromStorage(tradeId) {
   await deleteFromStorage(tradeId, 'trade');
 }
 
+// Pending Edit functions
+async function savePendingEditToStorage(editId, editData) {
+  await saveToStorage(editId, 'pendingEdit', editData);
+}
+
+async function retrievePendingEditFromStorage(editId) {
+  return retrieveFromStorage(editId, 'pendingEdit');
+}
+
+async function deletePendingEditFromStorage(editId) {
+  await deleteFromStorage(editId, 'pendingEdit');
+}
+
 // Cleanup function
 async function cleanupExpiredEntries(maxAgeInMs = 86400000) {
   try {
@@ -319,6 +332,10 @@ module.exports = {
   saveTradeToStorage,
   retrieveTradeFromStorage,
   deleteTradeFromStorage,
+  
+  savePendingEditToStorage,
+  retrievePendingEditFromStorage,
+  deletePendingEditFromStorage,
   
   cleanupExpiredEntries,
   runWithTransaction
