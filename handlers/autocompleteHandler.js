@@ -1476,39 +1476,35 @@ async function handleItemAutocomplete(interaction, focusedOption) {
  
  async function handleItemJobNameAutocomplete(interaction, focusedOption) {
   try {
-   // Fetch general jobs
-   const generalJobs = getGeneralJobsPage(1).concat(getGeneralJobsPage(2));
- 
-   // Fetch village-specific jobs based on character's home village
-   const characterName = interaction.options.getString("charactername");
-   const userId = interaction.user.id;
-   if (!characterName) return await interaction.respond([]);
- 
-   const character = await fetchCharacterByNameAndUserId(characterName, userId);
-   if (!character) return await interaction.respond([]);
- 
-   const villageJobs = getVillageExclusiveJobs(character.homeVillage);
- 
-   // Combine all jobs
-   const allJobs = [...generalJobs, ...villageJobs];
- 
-   // Filter jobs based on user's typing
-   const searchQuery = focusedOption.value?.toLowerCase() || "";
-   const filteredJobs = allJobs.filter((job) =>
-    job.toLowerCase().includes(searchQuery)
-   );
- 
-   // Format autocomplete choices
-   const formattedChoices = filteredJobs.map((job) => ({
-    name: capitalizeWords(job),
-    value: job,
-   }));
- 
-   await interaction.respond(formattedChoices.slice(0, 25));
+    // Get all jobs from all categories
+    const allJobs = [
+      ...getGeneralJobsPage(1),
+      ...getGeneralJobsPage(2),
+      ...getVillageExclusiveJobs('inariko'),
+      ...getVillageExclusiveJobs('rudania'),
+      ...getVillageExclusiveJobs('vhintl')
+    ];
+
+    // Remove duplicates and sort
+    const uniqueJobs = [...new Set(allJobs)].sort();
+
+    // Filter jobs based on user's typing
+    const searchQuery = focusedOption.value?.toLowerCase() || "";
+    const filteredJobs = uniqueJobs.filter((job) =>
+      job.toLowerCase().includes(searchQuery)
+    );
+
+    // Format autocomplete choices
+    const formattedChoices = filteredJobs.map((job) => ({
+      name: capitalizeWords(job),
+      value: job,
+    }));
+
+    await interaction.respond(formattedChoices.slice(0, 25));
   } catch (error) {
-   handleError(error, "autocompleteHandler.js");
-   console.error("[handleItemJobNameAutocomplete]: Error:", error);
-   await safeRespondWithError(interaction);
+    handleError(error, "autocompleteHandler.js");
+    console.error("[handleItemJobNameAutocomplete]: Error:", error);
+    await safeRespondWithError(interaction);
   }
  }
 
