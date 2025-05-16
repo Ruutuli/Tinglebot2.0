@@ -171,13 +171,29 @@ module.exports = {
      console.log(`[Loot Command]: 🔄 Active job voucher found for ${character.name}`);
    } else {
      console.log(`[Loot Command]: 🔄 No active job voucher for ${character.name}`);
-     if (!canUseDailyRoll(character, 'loot')) {
+     
+     // For jobs with both GATHERING and LOOTING perks, check both activities
+     const jobPerk = getJobPerk(character.jobVoucher && character.jobVoucherJob ? character.jobVoucherJob : character.job);
+     const hasBothPerks = jobPerk && jobPerk.perks.includes('GATHERING') && jobPerk.perks.includes('LOOTING');
+     
+     // Check if either gather or loot has been used today
+     const canGather = canUseDailyRoll(character, 'gather');
+     const canLoot = canUseDailyRoll(character, 'loot');
+     
+     if (hasBothPerks && (!canGather || !canLoot)) {
+       await interaction.editReply({
+         content: `*${character.name} seems exhausted from their earlier activities...*\n\n**Daily activity limit reached.**\nThe next opportunity to gather or loot will be available at 8AM EST.\n\n*Tip: A job voucher would allow you to loot again today.*`,
+         ephemeral: true,
+       });
+       return;
+     } else if (!hasBothPerks && !canLoot) {
        await interaction.editReply({
          content: `*${character.name} seems exhausted from their earlier looting...*\n\n**Daily looting limit reached.**\nThe next opportunity to loot will be available at 8AM EST.\n\n*Tip: A job voucher would allow you to loot again today.*`,
          ephemeral: true,
        });
        return;
      }
+
      // Update daily roll BEFORE proceeding with looting
      try {
        await updateDailyRoll(character, 'loot');
