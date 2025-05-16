@@ -172,7 +172,7 @@ async function initializeClient() {
           }
         }
       } else if (interaction.isButton()) {
-        console.log(`[index.js]: 🔄 Button interaction received: { customId: '${interaction.customId}' }`);
+        console.log(`[index.js]: 🔄 Processing button interaction: ${interaction.customId}`);
         
         await handleComponentInteraction(interaction);
       } else if (interaction.isStringSelectMenu()) {

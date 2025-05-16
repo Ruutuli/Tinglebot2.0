@@ -290,7 +290,6 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
     travelLog = Array.isArray(travelLog) ? travelLog : [];
     const jobPerk = getJobPerk(character.job);
     character.perk = jobPerk?.perks[0];
-    console.log(`[travelHandler.js]: ⚔️ ${character.name} vs ${monster.name}`);
 
     if (!monster || typeof monster.tier === 'undefined') {
       throw new Error(`Invalid monster passed to handleFight: ${JSON.stringify(monster)}`);
