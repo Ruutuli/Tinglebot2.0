@@ -7,6 +7,9 @@
 const Character = require('../models/CharacterModel');
 const Relic = require('../models/RelicModel');
 const { addTokensToCharacter } = require('../database/db');
+const { EmbedBuilder } = require('discord.js');
+const { sendUserDM } = require('../services/dmService');
+const { handleError } = require('../utils/errorHandler');
 
 // ------------------- Constants -------------------
 // Constants defining game mechanics for relic appraisal and art submission.
@@ -107,6 +110,49 @@ function validateRelicArt(artUrl, width, height, format) {
   );
 }
 
+// ---- Function: checkExpiredRelics ----
+// Checks for any relic appraisals that have expired during downtime
+async function checkExpiredRelics(client) {
+  try {
+    const relics = await Relic.find({
+      status: 'pending_appraisal',
+      discoveredDate: { $exists: true }
+    });
+
+    for (const relic of relics) {
+      if (isAppraisalExpired(relic)) {
+        relic.status = 'expired';
+        await relic.save();
+
+        // Notify the discoverer
+        if (relic.discoveredBy) {
+          await sendUserDM(
+            relic.discoveredBy,
+            `⏰ Your relic discovery has expired without appraisal. The relic has been returned to the wild.`
+          );
+        }
+
+        // Log to mod channel
+        const modLogChannel = client.channels.cache.get(process.env.MOD_LOG_CHANNEL_ID);
+        if (modLogChannel) {
+          const embed = new EmbedBuilder()
+            .setColor('#FF0000')
+            .setTitle('⏰ Expired Relic Appraisal')
+            .setDescription(`**Relic ID**: ${relic._id}\n**Discovered By**: <@${relic.discoveredBy}>\n**Discovery Date**: <t:${Math.floor(new Date(relic.discoveredDate).getTime() / 1000)}:F>`)
+            .setTimestamp();
+
+          await modLogChannel.send({ embeds: [embed] });
+        }
+      }
+    }
+
+    console.log(`[relicUtils.js]: ✅ Checked ${relics.length} relic appraisals`);
+  } catch (error) {
+    handleError(error, 'relicUtils.js');
+    console.error('[relicUtils.js]: ❌ Error checking expired relics:', error.message);
+  }
+}
+
 // ------------------- Module Exports -------------------
 // Export all utility functions and constants for external use.
 module.exports = {
@@ -120,6 +166,7 @@ module.exports = {
   isDuplicateRelic,
   lockCharacterExpeditions,
   validateRelicArt,
+  checkExpiredRelics,
 
   // Constants for external reference
   APPRAISAL_STAMINA_COST,

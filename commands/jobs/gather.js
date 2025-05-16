@@ -118,6 +118,9 @@ module.exports = {
       // Check inventory sync before proceeding
       await checkInventorySync(character);
 
+      // Initialize job variable early
+      let job = (character.jobVoucher && character.jobVoucherJob) ? character.jobVoucherJob : character.job;
+
       // Check for job voucher and daily roll at the start
       if (character.jobVoucher) {
         console.log(`[Gather Command]: 🔄 Active job voucher found for ${character.name}`);
@@ -192,7 +195,6 @@ module.exports = {
       }
 
       // ------------------- Step 3: Validate Job -------------------
-      let job = (character.jobVoucher && character.jobVoucherJob) ? character.jobVoucherJob : character.job;
       if (!job || typeof job !== 'string' || !job.trim() || !isValidJob(job)) {
         console.error(`[gather.js]: Job validation failed for ${character.name}. Invalid Job: ${job}`);
         await interaction.editReply({

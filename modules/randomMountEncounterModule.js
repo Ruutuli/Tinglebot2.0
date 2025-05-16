@@ -224,9 +224,51 @@ async function checkAndCreateEncounter(channelId) {
     }
 }
 
+// ---- Function: checkExpiredEncounters ----
+// Checks for any random encounters that have expired during downtime
+async function checkExpiredEncounters(client) {
+  try {
+    const now = Date.now();
+    const encounters = await TempData.findAllByType('mount_encounter');
+
+    for (const encounter of encounters) {
+      const encounterTime = new Date(encounter.data.timestamp).getTime();
+      if (now - encounterTime > ENCOUNTER_COOLDOWN) {
+        // Delete expired encounter
+        await TempData.deleteById(encounter._id);
+        
+        // Reset message count for the channel
+        const channelId = encounter.data.channelId;
+        messageActivityMap.set(channelId, 0);
+        lastEncounterMap.delete(channelId);
+      }
+    }
+
+    // Check monthly encounter tracking
+    const monthlyData = await TempData.findAllByType('monthly');
+    const currentMonth = new Date().getMonth();
+    const currentYear = new Date().getFullYear();
+
+    for (const data of monthlyData) {
+      const lastReset = new Date(data.data.lastReset);
+      if (lastReset.getMonth() !== currentMonth || lastReset.getFullYear() !== currentYear) {
+        // Reset monthly tracking
+        data.data = { lastReset: new Date() };
+        await data.save();
+      }
+    }
+
+    console.log(`[randomMountEncounterModule.js]: ✅ Checked ${encounters.length} random encounters`);
+  } catch (error) {
+    handleError(error, 'randomMountEncounterModule.js');
+    console.error('[randomMountEncounterModule.js]: ❌ Error checking expired encounters:', error.message);
+  }
+}
+
 module.exports = {
     checkAndCreateEncounter,
     trackMessageActivity,
     needsMonthlyEncounter,
-    createRandomMountEncounter
+    createRandomMountEncounter,
+    checkExpiredEncounters
 }; 

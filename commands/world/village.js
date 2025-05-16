@@ -498,6 +498,37 @@ async function checkAndHandleVillageLevelUp(village) {
     return false;
 }
 
+// ---- Function: checkExpiredVillageCooldowns ----
+// Checks for any village cooldowns that have expired during downtime
+async function checkExpiredVillageCooldowns() {
+    try {
+        const villages = await Village.find({});
+        const now = new Date();
+
+        for (const village of villages) {
+            const expiredCooldowns = [];
+            for (const [key, time] of village.cooldowns) {
+                if (time <= now) {
+                    expiredCooldowns.push(key);
+                }
+            }
+
+            // Remove expired cooldowns
+            for (const key of expiredCooldowns) {
+                village.cooldowns.delete(key);
+            }
+
+            if (expiredCooldowns.length > 0) {
+                await village.save();
+                console.log(`[village.js]: ✅ Cleared ${expiredCooldowns.length} expired cooldowns for ${village.name}`);
+            }
+        }
+    } catch (error) {
+        handleError(error, 'village.js');
+        console.error('[village.js]: ❌ Error checking expired village cooldowns:', error.message);
+    }
+}
+
 // ============================================================================
 // ---- Command Definition ----
 // ============================================================================
@@ -796,4 +827,5 @@ module.exports = {
             return interaction.reply({ content: '❌ **An error occurred while processing your request.**', ephemeral: true });
         }
     },
+    checkExpiredVillageCooldowns
 };
