@@ -1157,13 +1157,63 @@ async function handleGiftItemAutocomplete(interaction, focusedValue) {
   }
 }
 
+// ------------------- Function: handleShopBuyItemAutocomplete -------------------
+// Provides autocomplete for selecting items to buy from the shop
+async function handleShopBuyItemAutocomplete(interaction, focusedValue) {
+  try {
+    const characterName = interaction.options.getString('charactername');
+    if (!characterName) {
+      console.log('[handleShopBuyItemAutocomplete]: No character name provided');
+      return await interaction.respond([]);
+    }
+
+    const userId = interaction.user.id;
+    const character = await fetchCharacterByNameAndUserId(characterName, userId);
+    if (!character) {
+      console.log(`[handleShopBuyItemAutocomplete]: Character ${characterName} not found or doesn't belong to user ${userId}`);
+      return await interaction.respond([]);
+    }
+
+    // Get items from the village's shop using ShopStock model
+    const villageShopItems = await ShopStock.find({
+      stock: { $gt: 0 },
+      itemName: { $regex: new RegExp(focusedValue, 'i') }
+    }).sort({ itemName: 1 }).limit(25);
+
+    console.log(`[handleShopBuyItemAutocomplete]: Found ${villageShopItems.length} items in shop for ${characterName}`);
+
+    if (villageShopItems.length === 0) {
+      console.log(`[handleShopBuyItemAutocomplete]: No items found matching "${focusedValue}"`);
+      return await interaction.respond([{
+        name: 'No items found in shop',
+        value: 'no_items_found'
+      }]);
+    }
+
+    const choices = villageShopItems.map(item => ({
+      name: `${item.itemName} - ${item.buyPrice} tokens${item.stock ? ` (Stock: ${item.stock})` : ''}`,
+      value: item.itemName
+    }));
+
+    await interaction.respond(choices);
+  } catch (error) {
+    console.error('[handleShopBuyItemAutocomplete]: Error:', error);
+    await safeRespondWithError(interaction);
+  }
+}
+
 // ------------------- Function: handleShopAutocomplete -------------------
 // Routes shop command autocomplete to appropriate handlers
 async function handleShopAutocomplete(interaction, focusedOption, focusedValue) {
   if (focusedOption.name === 'charactername') {
     return await handleShopCharacterAutocomplete(interaction, focusedValue);
   } else if (focusedOption.name === 'itemname') {
-    return await handleShopItemAutocomplete(interaction, focusedValue);
+    const subcommand = interaction.options.getSubcommand();
+    if (subcommand === 'shop-buy') {
+      return await handleShopBuyItemAutocomplete(interaction, focusedValue);
+    } else {
+      return await handleShopItemAutocomplete(interaction, focusedValue);
+    }
   }
 }
 
@@ -3197,6 +3247,9 @@ module.exports = {
  // ------------------- View Inventory Functions -------------------
  handleViewInventoryAutocomplete,
  handlePetCharacterAutocomplete,
+
+ // ------------------- Shop Buy Functions -------------------
+ handleShopBuyItemAutocomplete,
 };
 
 
