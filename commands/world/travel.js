@@ -20,19 +20,20 @@ const { fetchCharacterByNameAndUserId } = require('../../database/db.js');
 // ------------------- Embeds -------------------
 // Import functions for creating travel-related embed messages and path emojis
 const {
-  createFinalTravelEmbed,
   createInitialTravelEmbed,
   createMonsterEncounterEmbed,
   createSafeTravelDayEmbed,
   createTravelingEmbed,
-  pathEmojis
+  pathEmojis,
+  villageEmojis,
+  DEFAULT_IMAGE_URL
 } = require('../../embeds/embeds.js');
 
 // ------------------- Handlers -------------------
-const { handleTravelInteraction } = require('../../handlers/travelHandler.js');
+const { handleTravelInteraction, createFinalTravelEmbed } = require('../../handlers/travelHandler.js');
 
 // ------------------- Utility Functions -------------------
-const { capitalizeFirstLetter } = require('../../modules/formattingModule.js');
+const { capitalizeFirstLetter, capitalizeWords } = require('../../modules/formattingModule.js');
 const { getMonstersByPath, getRandomTravelEncounter } = require('../../modules/rngModule.js');
 const { handleError } = require('../../utils/globalErrorHandler.js');
 const { hasPerk } = require('../../modules/jobsModule.js');
@@ -491,9 +492,9 @@ ${pathEmoji || ''} No monsters or gathering today!`)
       console.warn(`[travel.js]: Could not find role "${roleName}" to assign.`);
     }
   
-  // Filter out "fight: win & loot" logs from final summary
-  const filteredLog = travelLog.filter(entry => !entry.startsWith('fight: win & loot'));
-  const finalEmbed = createFinalTravelEmbed(character, destination, paths, totalTravelDuration, filteredLog);
+    // Filter out "fight: win & loot" logs from final summary
+    const filteredLog = travelLog.filter(entry => !entry.startsWith('fight: win & loot'));
+    const finalEmbed = createFinalTravelEmbed(character, destination, paths, totalTravelDuration, filteredLog);
 
     const imageEmbed = new EmbedBuilder()
       .setImage('https://storage.googleapis.com/tinglebot/Graphics/travel.png')
@@ -551,7 +552,7 @@ ${pathEmoji || ''} No monsters or gathering today!`)
   await new Promise(resolve => setTimeout(resolve, DELAY_MS));
 
   // ------------------- Determine Encounter Type -------------------
-  const isSafe = Math.random() < 0.5;
+  const isSafe = Math.random() < 0.1; // put back to 0.5 after testing
   let dailyLogEntry = `**Day ${day}:**\n`;
 
   if (!isSafe) {
@@ -561,7 +562,7 @@ ${pathEmoji || ''} No monsters or gathering today!`)
       const tier = parseInt(getRandomTravelEncounter().split(' ')[1], 10);
       const options = monsters.filter(m => m.tier <= tier);
       const monster = options[Math.floor(Math.random() * options.length)];
-      dailyLogEntry += `> ⚔️ Encountered a ${monster.name}!\n`;
+      dailyLogEntry += `⚔️ Encountered a ${monster.name}!\n`;
 
       // Before creating the encounter embed, check if Blood Moon is active
       const isBloodMoon = isBloodMoonActive();
@@ -571,7 +572,7 @@ ${pathEmoji || ''} No monsters or gathering today!`)
         `You encountered a ${monster.name}! What do you want to do? Fleeing costs 1 🟩 stamina!`,
         character.currentHearts,
         null,
-        isBloodMoon // Only pass the correct 6th argument
+        isBloodMoon
       );
       const buttons = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('fight').setLabel('⚔️ Fight').setStyle(ButtonStyle.Primary),
@@ -596,18 +597,18 @@ ${pathEmoji || ''} No monsters or gathering today!`)
           pathEmoji,
           currentPath,
           encounterMessage,
-          monster, // ← the actual monster object, not a string
+          monster,
           travelLog
         );
-        // Only append the loot line if present, skip flavor/victory message
-        const lootMatch = decision.match(/Looted [^\n]+/);
-        if (lootMatch) {
-          dailyLogEntry += ` ${lootMatch[0]}\n`;
+        // Append both the loot line and the damage message to the daily log
+        if (decision.includes('Looted')) {
+          dailyLogEntry += `${decision}\n`;
+        } else if (decision.includes('heart')) {
+          dailyLogEntry += `${decision}\n`;
         }
         collector.stop();
       });
       
-
       collector.on('end', async (collected, reason) => {
         if (reason === 'time') {
           const decision = await handleTravelInteraction(
@@ -620,12 +621,11 @@ ${pathEmoji || ''} No monsters or gathering today!`)
             travelLog
           );
       
-          dailyLogEntry += decision.split('\n').map(line => `> ${line}`).join('\n') + '\n';
+          dailyLogEntry += decision.split('\n').map(line => `${line}`).join('\n') + '\n';
         }
         if (await checkAndHandleKO(character, channel, startingVillage)) return;
         travelLog.push(dailyLogEntry);
         await processTravelDay(day + 1, { ...context, channel });
-
       });
     }
   } else {
@@ -676,7 +676,7 @@ ${pathEmoji || ''} No monsters or gathering today!`)
         undefined,
         i.customId === 'do_nothing' ? doNothingFlavor : undefined
       );    
-      dailyLogEntry += `> ${decision}\n`;
+      dailyLogEntry += `${decision}\n`;
       const updated = new EmbedBuilder(safeMessage.embeds[0].toJSON()).setDescription(
         `🌸 It's a safe day of travel. What do you want to do next?\n> ${decision}\n\n` +
         `**❤️ __Hearts:__** ${character.currentHearts}/${character.maxHearts}\n` +
@@ -699,7 +699,7 @@ ${pathEmoji || ''} No monsters or gathering today!`)
           undefined,
           doNothingFlavor
         );
-        dailyLogEntry += `> ${decision}\n`;
+        dailyLogEntry += `${decision}\n`;
       }
     
       if (await checkAndHandleKO(character, channel)) return;

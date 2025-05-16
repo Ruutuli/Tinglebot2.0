@@ -1674,56 +1674,6 @@ const createSafeTravelDayEmbed = (
 
 
 // ------------------- Subsection Title ------------------- 
-const createFinalTravelEmbed = (
- character,
- destination,
- paths,
- totalTravelDuration,
- travelLog
-) => {
- const destEmoji = villageEmojis[destination.toLowerCase()] || "";
-
- const cleanedLog = travelLog
-  .filter((entry) => entry && !entry.match(/^Lost \d+ (Stamina|Heart)/i))
-  .map((entry) => {
-    // Format encounter lines with quote blocks
-    if (entry.includes('Encountered a')) {
-      return entry.replace(/⚔️ Encountered a.*/, (match) => `> ${match}`);
-    }
-    return entry.trim();
-  })
-  .join("\n\n");
-
- return new EmbedBuilder()
-  .setTitle(
-   `✅ ${character.name} has arrived at ${destEmoji} ${capitalizeFirstLetter(
-    destination
-   )}!`
-  )
-  .setDescription(
-   `**Travel Path:** ${paths
-    .map(
-     (path) =>
-      `${pathEmojis[path]} ${capitalizeWords(
-       path.replace(/([a-z])([A-Z])/g, "$1 $2")
-      )}`
-    )
-    .join(", ")}\n` +
-    `**Total Travel Duration:** ${totalTravelDuration} days\n` +
-    `**❤️ __Hearts:__** ${character.currentHearts}/${character.maxHearts}\n` +
-    `**🟩 __Stamina:__** ${character.currentStamina}/${character.maxStamina}`
-  )
-  .addFields({
-   name: "📖 Travel Log",
-   value: cleanedLog || "No significant events occurred during the journey.",
-  })
-  .setColor("#AA926A")
-  .setAuthor({ name: "Travel Summary", iconURL: character.icon })
-  .setImage(DEFAULT_IMAGE_URL)
-  .setTimestamp();
-};
-
-// ------------------- Subsection Title ------------------- 
 function createUpdatedTravelEmbed({ encounterMessage, character, description, fields = [], footer = null, titleFallback = null }) {
   const baseEmbed = (encounterMessage?.embeds?.[0])
     ? new EmbedBuilder(encounterMessage.embeds[0].toJSON())
@@ -1813,7 +1763,6 @@ module.exports = {
  createInitialTravelEmbed,
  createTravelingEmbed,
  createSafeTravelDayEmbed,
- createFinalTravelEmbed,
  createUpdatedTravelEmbed,
  createMountEncounterEmbed,
 };

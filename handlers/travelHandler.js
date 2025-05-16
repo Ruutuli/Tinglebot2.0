@@ -10,7 +10,13 @@ const { EmbedBuilder } = require('discord.js');
 const { fetchAllItems, fetchItemsByMonster } = require('../database/db');
 
 // ------------------- Embeds -------------------
-const { createKOEmbed,createUpdatedTravelEmbed } = require('../embeds/embeds');
+const { 
+  createKOEmbed,
+  createUpdatedTravelEmbed,
+  pathEmojis,
+  villageEmojis,
+  DEFAULT_IMAGE_URL
+} = require('../embeds/embeds');
 
 // ------------------- Modules -------------------
 const {
@@ -30,6 +36,7 @@ const {
   calculateFinalValue,
   createWeightedItemList
 } = require('../modules/rngModule');
+const { capitalizeFirstLetter, capitalizeWords } = require('../modules/formattingModule');
 
 // ------------------- Utility Functions -------------------
 const { addItemInventoryDatabase } = require('../utils/inventoryUtils');
@@ -46,6 +53,67 @@ const {
 const { handleError } = require('../utils/globalErrorHandler');
 
 const Character = require('../models/CharacterModel');
+
+// ============================================================================
+// ------------------- Travel Embeds -------------------
+// ============================================================================
+
+// ------------------- Final Travel Summary Embed -------------------
+// Creates a formatted embed summarizing the character's journey
+function createFinalTravelEmbed(character, destination, paths, totalTravelDuration, travelLog) {
+  const destEmoji = villageEmojis[destination.toLowerCase()] || "";
+
+  console.log(`[travelHandler.js]: 📖 Processing travel log for ${character.name}`);
+
+  // Process and format travel log entries
+  const processedLog = Object.entries(
+    travelLog.reduce((acc, entry) => {
+      const dayMatch = entry.match(/Day (\d+):/);
+      if (!dayMatch) return acc;
+
+      const day = dayMatch[1];
+      const content = entry.replace(/^\*\*Day \d+:\*\*\n/, '').trim();
+      if (!content) return acc;
+
+      // Split content into lines and format each line
+      const lines = content.split('\n').filter(line => line.trim());
+      const formattedLines = lines.map(line => {
+        // Skip formatting if it's already a loot message
+        if (line.startsWith('Looted')) {
+          return line;
+        }
+        // Add quote block to all other lines
+        return `> ${line}`;
+      });
+
+      if (!acc[day]) acc[day] = [];
+      acc[day].push(formattedLines.join('\n'));
+      return acc;
+    }, {})
+  )
+    .sort(([dayA], [dayB]) => parseInt(dayA) - parseInt(dayB))
+    .map(([day, entries]) => `**Day ${day}:**\n${entries.join('\n')}`)
+    .join('\n\n');
+
+  return new EmbedBuilder()
+    .setTitle(`✅ ${character.name} has arrived at ${destEmoji} ${capitalizeFirstLetter(destination)}!`)
+    .setDescription(
+      `**Travel Path:** ${paths.map(path => 
+        `${pathEmojis[path]} ${capitalizeWords(path.replace(/([a-z])([A-Z])/g, "$1 $2"))}`
+      ).join(", ")}\n` +
+      `**Total Travel Duration:** ${totalTravelDuration} days\n` +
+      `**❤️ __Hearts:__** ${character.currentHearts}/${character.maxHearts}\n` +
+      `**🟩 __Stamina:__** ${character.currentStamina}/${character.maxStamina}`
+    )
+    .addFields({
+      name: "📖 Travel Log",
+      value: processedLog || "No significant events occurred during the journey."
+    })
+    .setColor("#AA926A")
+    .setAuthor({ name: "Travel Summary", iconURL: character.icon })
+    .setImage(DEFAULT_IMAGE_URL)
+    .setTimestamp();
+}
 
 // ============================================================================
 // ------------------- Private Helpers -------------------
@@ -298,7 +366,7 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
 
         if (item) {
           await syncItem(character, item, interaction, SOURCE_TYPES.TRAVEL_LOOT);
-          lootLine = `\n Looted ${item.itemName} × ${item.quantity}\n`;
+          lootLine = `\nLooted ${item.itemName} × ${item.quantity}\n`;
           outcomeMessage = `${generateVictoryMessage(item)}${lootLine}`;
           travelLog.push(`fight: win & loot (${item.quantity}× ${item.itemName})`);
         } else {
@@ -313,7 +381,20 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
       // ... existing KO logic ...
     } else {
       outcomeMessage = generateDamageMessage(outcome.hearts);
-      travelLog.push(`fight: loss (lost ${outcome.hearts} heart${outcome.hearts === 1 ? '' : 's'}, no loot)`);
+      // Find the last day entry and append the damage message to it
+      const lastDayEntry = travelLog.findLast(entry => entry.startsWith('**Day'));
+      if (lastDayEntry) {
+        const dayMatch = lastDayEntry.match(/Day (\d+):/);
+        if (dayMatch) {
+          const day = dayMatch[1];
+          const updatedEntry = lastDayEntry + `\n${outcomeMessage}`;
+          const entryIndex = travelLog.indexOf(lastDayEntry);
+          travelLog[entryIndex] = updatedEntry;
+          console.log(`[travelHandler.js]: 📝 Appended damage message to Day ${day}: ${outcomeMessage}`);
+        }
+      } else {
+        console.warn(`[travelHandler.js]: ⚠️ Could not find a day entry to append damage message to`);
+      }
     }
 
     // ------------------- Embed Update -------------------
@@ -547,4 +628,7 @@ async function handleTravelInteraction(
   // ============================================================================
   
   // Exports the primary handler for use in the command module.
-  module.exports = { handleTravelInteraction };
+  module.exports = { 
+    handleTravelInteraction,
+    createFinalTravelEmbed 
+  };
