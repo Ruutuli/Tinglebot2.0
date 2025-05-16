@@ -177,23 +177,25 @@ async function getCharactersInVillage(userId, village) {
 const fetchCharacterByName = async (characterName) => {
  try {
   await connectToTinglebot();
+  // Get the actual name part before the "|" if it exists
+  const actualName = characterName.split('|')[0].trim();
   // Escape special regex characters in the character name
-  const escapedName = characterName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const escapedName = actualName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const character = await Character.findOne({
    name: new RegExp(`^${escapedName}$`, "i"),
   });
 
   if (!character) {
    console.error(
-    `[characterService]: logs - Character "${characterName}" not found in database.`
+    `[characterService]: logs - Character "${actualName}" not found in database.`
    );
-   throw new Error(`Character "${characterName}" not found. Please check the spelling and make sure the character exists.`);
+   throw new Error(`Character "${actualName}" not found. Please check the spelling and make sure the character exists.`);
   }
   return character;
  } catch (error) {
   handleError(error, "db.js");
   console.error(
-   `❌ Error fetching character "${characterName}": ${error.message}`
+   `❌ Error fetching character "${actualName}": ${error.message}`
   );
   throw error;
  }
@@ -264,27 +266,29 @@ const fetchCharactersByUserId = async (userId) => {
 const fetchCharacterByNameAndUserId = async (characterName, userId) => {
  try {
   await connectToTinglebot();
-  console.log(`[characterService]: Searching for character with name "${characterName}" and userId "${userId}"`);
+  // Get the actual name part before the "|" if it exists
+  const actualName = characterName.split('|')[0].trim();
+  console.log(`[characterService]: 🔍 Searching for character "${actualName}" (userId: ${userId})`);
   
   const character = await Character.findOne({
-    name: new RegExp(`^${characterName.trim()}$`, "i"),
+    name: new RegExp(`^${actualName}$`, "i"),
     userId
   });
 
   if (!character) {
-    console.error(`[characterService]: No character found with name "${characterName}" and userId "${userId}"`);
+    console.error(`[characterService]: ❌ No character found with name "${actualName}" and userId "${userId}"`);
     return null;
   }
 
-  console.log(`[characterService]: Found character "${character.name}" (ID: ${character._id})`);
-  console.log(`[characterService]: Character inventory URL: ${character.inventory || 'undefined'}`);
+  console.log(`[characterService]: ✅ Found character "${character.name}" (ID: ${character._id})`);
+  console.log(`[characterService]: 📊 Character inventory URL: ${character.inventory || 'undefined'}`);
   
   return character;
  } catch (error) {
   handleError(error, "db.js");
   console.error(
    `[characterService]: Error in fetchCharacterByNameAndUserId: ${error.message}\n` +
-   `Search parameters - name: "${characterName}", userId: "${userId}"\n` +
+   `Search parameters - name: "${actualName}", userId: "${userId}"\n` +
    `Stack trace: ${error.stack}`
   );
   throw error;

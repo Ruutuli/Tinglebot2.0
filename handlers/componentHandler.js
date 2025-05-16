@@ -568,7 +568,6 @@ async function handleComponentInteraction(interaction) {
       return await handleSyncButton(interaction);
     }
 
-    console.warn(`[componentHandler.js]: ⚠️ Unhandled component interaction: ${interaction.customId}`);
   } catch (error) {
     handleError(error, 'componentHandler.js');
     console.error(`[componentHandler.js]: ❌ Failed to handle component: ${error.message}`);
