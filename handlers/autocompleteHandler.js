@@ -129,6 +129,16 @@ async function handleAutocomplete(interaction) {
         }
         break;
 
+      // ------------------- Blight Command -------------------
+      case "blight":
+        const blightSubcommand = interaction.options.getSubcommand();
+        if (blightSubcommand === "roll") {
+          if (focusedName === "character_name") {
+            await handleBlightCharacterAutocomplete(interaction, focusedOption);
+          }
+        }
+        break;
+
       // ------------------- Crafting Command -------------------
       case "crafting":
         if (focusedName === "charactername") {
