@@ -13,8 +13,11 @@ const {
   writeSheetData,
   safeAppendDataToSheet,
 } = require("../utils/googleSheetsUtils");
+const { isValidGoogleSheetsUrl } = require('../utils/validation');
 const generalCategories = require("../models/GeneralItemCategories");
 const { v4: uuidv4 } = require('uuid');
+const mongoose = require('mongoose');
+const ItemModel = require('../models/ItemModel');
 
 // ============================================================================
 // ---- Database Functions ----
@@ -503,6 +506,92 @@ const addItemsToDatabase = async (character, items, interaction) => {
 // Functions for handling item crafting and material processing
 // ============================================================================
 
+// ---- Function: combineMaterials ----
+// Combines duplicate materials from the crafting process to avoid redundancy in logging.
+function combineMaterials(materialsUsed) {
+  const materialMap = new Map();
+
+  for (const material of materialsUsed) {
+    if (materialMap.has(material.itemName)) {
+      materialMap.get(material.itemName).quantity += material.quantity;
+    } else {
+      materialMap.set(material.itemName, { ...material });
+    }
+  }
+
+  return Array.from(materialMap.values());
+}
+
+// ---- Function: logMaterialsToGoogleSheets ----
+// Logs materials used in crafting to Google Sheets
+async function logMaterialsToGoogleSheets(auth, spreadsheetId, range, character, materialsUsed, craftedItem, interactionUrl, formattedDateTime) {
+  try {
+    const combinedMaterials = combineMaterials(materialsUsed);
+    const usedMaterialsValues = await Promise.all(combinedMaterials.map(async material => {
+      try {
+        const materialObjectId = new mongoose.Types.ObjectId(material._id);
+        let materialItem = await ItemModel.findById(materialObjectId);
+        if (!materialItem) {
+          materialItem = await ItemModel.findOne({ itemName: material.itemName });
+        }
+        if (!materialItem) {
+          return [
+            character.name,
+            material.itemName,
+            `-${material.quantity}`,
+            'Unknown',
+            'Unknown',
+            'Unknown',
+            `Used for ${craftedItem.itemName}`,
+            character.job,
+            '',
+            character.currentVillage,
+            interactionUrl,
+            formattedDateTime,
+            uuidv4()
+          ];
+        }
+        return [
+          character.name,
+          material.itemName,
+          `-${material.quantity}`,
+          materialItem.category.join(', '),
+          materialItem.type.join(', '),
+          materialItem.subtype.join(', '),
+          `Used for ${craftedItem.itemName}`,
+          character.job,
+          '',
+          character.currentVillage,
+          interactionUrl,
+          formattedDateTime,
+          uuidv4()
+        ];
+      } catch (error) {
+        handleError(error, 'inventoryUtils.js');
+        return [
+          character.name,
+          material.itemName,
+          `-${material.quantity}`,
+          'Unknown',
+          'Unknown',
+          'Unknown',
+          `Used for ${craftedItem.itemName}`,
+          character.job,
+          '',
+          character.currentVillage,
+          interactionUrl,
+          formattedDateTime,
+          uuidv4()
+        ];
+      }
+    }));
+    await safeAppendDataToSheet(character.inventory, character, range, usedMaterialsValues);
+  } catch (error) {
+    handleError(error, 'inventoryUtils.js');
+    console.error(`[inventoryUtils.js]: Error logging materials to Google Sheets: ${error.message}`);
+  }
+}
+
 // ---- Function: processMaterials ----
 // Processes materials needed for crafting an item
 const processMaterials = async (interaction, character, inventory, craftableItem, quantity) => {
@@ -562,6 +651,32 @@ const processMaterials = async (interaction, character, inventory, craftableItem
       requiredQuantity -= removeQuantity;
     }
   }
+
+  // Log materials to Google Sheets if character has an inventory sheet
+  if (character?.inventory && typeof character.inventory === 'string' && isValidGoogleSheetsUrl(character.inventory)) {
+    try {
+      const auth = await authorizeSheets();
+      const spreadsheetId = extractSpreadsheetId(character.inventory);
+      const range = 'loggedInventory!A2:M';
+      const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
+      const formattedDateTime = formatDateTime(new Date());
+
+      await logMaterialsToGoogleSheets(
+        auth,
+        spreadsheetId,
+        range,
+        character,
+        materialsUsed,
+        craftableItem,
+        interactionUrl,
+        formattedDateTime
+      );
+    } catch (error) {
+      handleError(error, 'inventoryUtils.js');
+      console.error(`[inventoryUtils.js]: Error logging materials to sheet: ${error.message}`);
+    }
+  }
+
   return materialsUsed;
 };
 
@@ -653,4 +768,5 @@ module.exports = {
   removeInitialItemIfSynced,
   addItemToVendingInventory,
   extractSpreadsheetId,
+  logMaterialsToGoogleSheets,
 };

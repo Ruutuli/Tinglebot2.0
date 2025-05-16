@@ -861,7 +861,7 @@ const combinedFlavorText = flavorText?.trim()
   .setThumbnail(item.image || 'https://via.placeholder.com/150')
   .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
   .setFooter({ 
-    text: jobForFlavorText ? `🎫 Job Voucher activated for ${character.name} to perform the job ${jobForFlavorText}` : '✨ Good luck in your new role! Make the most of this opportunity!' 
+    text: character.jobVoucher ? `🎫 Job Voucher activated for ${character.name} to perform the job ${jobForFlavorText}` : '✨ Successfully crafted!' 
   });
 
  return embed;

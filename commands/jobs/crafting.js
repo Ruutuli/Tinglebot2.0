@@ -262,6 +262,8 @@ module.exports = {
         const auth = await authorizeSheets();
         const range = 'loggedInventory!A2:M';
         const uniqueSyncId = uuidv4();
+        const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
+        const formattedDateTime = formatDateTime(new Date());
 
         const values = [
           [
@@ -275,18 +277,17 @@ module.exports = {
             character.job,
             '',
             character.currentVillage,
-            `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`,
-            formatDateTime(new Date()),
+            interactionUrl,
+            formattedDateTime,
             uniqueSyncId
           ]
         ];
 
         if (character?.name && character?.inventory && character?.userId) {
-    await safeAppendDataToSheet(character.inventory, character, range, values);
-} else {
-    console.error('[safeAppendDataToSheet]: Invalid character object detected before syncing.');
-}
-
+          await safeAppendDataToSheet(character.inventory, character, range, values);
+        } else {
+          console.error('[safeAppendDataToSheet]: Invalid character object detected before syncing.');
+        }
       }
 
       await addItemInventoryDatabase(character._id, item.itemName, quantity, interaction, 'Crafting');
@@ -306,91 +307,3 @@ module.exports = {
     }
   }
 };
-
-// ------------------- Log Materials to Google Sheets -------------------
-// Logs the materials used in crafting to a Google Sheets document.
-async function logMaterialsToGoogleSheets(auth, spreadsheetId, range, character, materialsUsed, craftedItem, interactionUrl, formattedDateTime) {
-  try {
-    const combinedMaterials = combineMaterials(materialsUsed);
-    const usedMaterialsValues = await Promise.all(combinedMaterials.map(async material => {
-      try {
-        const materialObjectId = new mongoose.Types.ObjectId(material._id);
-        let materialItem = await ItemModel.findById(materialObjectId);
-        if (!materialItem) {
-          materialItem = await ItemModel.findOne({ itemName: material.itemName });
-        }
-        if (!materialItem) {
-          return [
-            character.name,
-            material.itemName,
-            `-${material.quantity}`,
-            'Unknown',
-            'Unknown',
-            'Unknown',
-            `Used for ${craftedItem.itemName}`,
-            character.job,
-            '',
-            character.currentVillage,
-            interactionUrl,
-            formattedDateTime,
-            uuidv4()
-          ];
-        }
-        return [
-          character.name,
-          material.itemName,
-          `-${material.quantity}`,
-          materialItem.category.join(', '),
-          materialItem.type.join(', '),
-          materialItem.subtype.join(', '),
-          `Used for ${craftedItem.itemName}`,
-          character.job,
-          '',
-          character.currentVillage,
-          interactionUrl,
-          formattedDateTime,
-          uuidv4()
-        ];
-      } catch (error) {
-    handleError(error, 'crafting.js');
-
-        return [
-          character.name,
-          material.itemName,
-          `-${material.quantity}`,
-          'Unknown',
-          'Unknown',
-          'Unknown',
-          `Used for ${craftedItem.itemName}`,
-          character.job,
-          '',
-          character.currentVillage,
-          interactionUrl,
-          formattedDateTime,
-          uuidv4()
-        ];
-      }
-    }));
-    await safeAppendDataToSheet(character.inventory, character, range, usedMaterialsValues);
-  } catch (error) {
-    handleError(error, 'crafting.js');
-
-    console.error(`[crafting.js]: Error logging materials to Google Sheets: ${error.message}`);
-  }
-}
-
-// ------------------- Combine Materials -------------------
-// Combines duplicate materials from the crafting process to avoid redundancy in logging.
-function combineMaterials(materialsUsed) {
-  const materialMap = new Map();
-
-  for (const material of materialsUsed) {
-    if (materialMap.has(material.itemName)) {
-      materialMap.get(material.itemName).quantity += material.quantity;
-    } else {
-      materialMap.set(material.itemName, { ...material });
-    }
-  }
-
-  return Array.from(materialMap.values());
-}
