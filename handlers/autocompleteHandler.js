@@ -117,6 +117,11 @@ async function handleAutocomplete(interaction) {
     switch (commandName) {
       // ... existing code ...
 
+      // ------------------- Heal Command -------------------
+      case "heal":
+        await handleHealAutocomplete(interaction, focusedOption);
+        break;
+
       // ------------------- Mod Command -------------------
       case "mod":
         const modSubcommand = interaction.options.getSubcommand();
@@ -1990,54 +1995,63 @@ async function handleQuestIdAutocomplete(interaction, focusedOption) {
 async function handleHealAutocomplete(interaction, focusedOption) {
  try {
   const userId = interaction.user.id;
+  const subcommand = interaction.options.getSubcommand();
 
-  if (focusedOption.name === "charactername") {
-   // Autocomplete for characters owned by the user
-   const userCharacters = await fetchCharactersByUserId(userId);
-   const choices = userCharacters.map((character) => ({
-    name: `${character.name} - ${capitalizeFirstLetter(
-     character.currentVillage
-    )}`,
-    value: character.name,
-   }));
+  if (subcommand === 'request') {
+    if (focusedOption.name === "charactername") {
+      // Autocomplete for characters owned by the user
+      const userCharacters = await fetchCharactersByUserId(userId);
+      const choices = userCharacters.map((character) => ({
+        name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
+        value: character.name,
+      }));
 
-   await respondWithFilteredChoices(interaction, focusedOption, choices);
-  } else if (focusedOption.name === "healer") {
-   // Autocomplete for all characters with Healer job
-   const allCharacters = await fetchAllCharacters();
-   const healerCharacters = allCharacters.filter(
-    (character) =>
-     character.job.toLowerCase() === "healer" ||
-     (character.jobVoucher === true &&
-      character.jobVoucherJob.toLowerCase() === "healer")
-   );
+      await respondWithFilteredChoices(interaction, focusedOption, choices);
+    } else if (focusedOption.name === "hearts") {
+      // For hearts, we'll show common healing amounts
+      const choices = [
+        { name: "1 Heart", value: 1 },
+        { name: "2 Hearts", value: 2 },
+        { name: "3 Hearts", value: 3 },
+        { name: "4 Hearts", value: 4 },
+        { name: "5 Hearts", value: 5 }
+      ];
+      await interaction.respond(choices);
+    } else if (focusedOption.name === "healer") {
+      // Autocomplete for all characters with Healer job
+      const allCharacters = await fetchAllCharacters();
+      const healerCharacters = allCharacters.filter(
+        (character) =>
+          character.job.toLowerCase() === "healer" ||
+          (character.jobVoucher === true &&
+            character.jobVoucherJob.toLowerCase() === "healer")
+      );
 
-   const choices = healerCharacters.map((character) => ({
-    name: `${character.name} - ${capitalizeFirstLetter(
-     character.currentVillage
-    )}`,
-    value: character.name,
-   }));
+      const choices = healerCharacters.map((character) => ({
+        name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
+        value: character.name,
+      }));
 
-   await respondWithFilteredChoices(interaction, focusedOption, choices);
-  } else if (focusedOption.name === "healername") {
-   // Autocomplete for user's own healers
-   const userCharacters = await fetchCharactersByUserId(userId);
-   const healerCharacters = userCharacters.filter(
-    (character) =>
-     character.job.toLowerCase() === "healer" ||
-     (character.jobVoucher === true &&
-      character.jobVoucherJob.toLowerCase() === "healer")
-   );
+      await respondWithFilteredChoices(interaction, focusedOption, choices);
+    }
+  } else if (subcommand === 'fulfill') {
+    if (focusedOption.name === "healername") {
+      // Autocomplete for user's own healers
+      const userCharacters = await fetchCharactersByUserId(userId);
+      const healerCharacters = userCharacters.filter(
+        (character) =>
+          character.job.toLowerCase() === "healer" ||
+          (character.jobVoucher === true &&
+            character.jobVoucherJob.toLowerCase() === "healer")
+      );
 
-   const choices = healerCharacters.map((character) => ({
-    name: `${character.name} - ${capitalizeFirstLetter(
-     character.currentVillage
-    )}`,
-    value: character.name,
-   }));
+      const choices = healerCharacters.map((character) => ({
+        name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
+        value: character.name,
+      }));
 
-   await respondWithFilteredChoices(interaction, focusedOption, choices);
+      await respondWithFilteredChoices(interaction, focusedOption, choices);
+    }
   }
  } catch (error) {
   handleError(error, "autocompleteHandler.js");

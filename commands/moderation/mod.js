@@ -883,8 +883,27 @@ async function handleApproveEdit(interaction) {
 
       // Notify the user
       try {
+        console.log(`[mod.js]: 🔍 Attempting to fetch user ${pendingEdit.userId} for DM notification`);
         const user = await interaction.client.users.fetch(pendingEdit.userId);
-        await user.send(`🎉 **Character Edit Approved!**
+        
+        if (!user) {
+          console.error(`[mod.js]: ❌ User ${pendingEdit.userId} not found`);
+          return interaction.editReply({
+            content: `✅ Character edit request approved and applied successfully, but could not send DM to user.`,
+            ephemeral: true
+          });
+        }
+        console.log(`[mod.js]: ✅ Successfully fetched user ${pendingEdit.userId}`);
+
+        // Try to send DM with retry logic
+        let dmSent = false;
+        let retryCount = 0;
+        const maxRetries = 3;
+
+        while (!dmSent && retryCount < maxRetries) {
+          try {
+            console.log(`[mod.js]: 🔄 Attempt ${retryCount + 1}/${maxRetries} to send DM to user ${pendingEdit.userId}`);
+            await user.send(`🎉 **Character Edit Approved!**
 
 👤 **Character:** \`${character.name}\`
 🛠️ **Category:** \`${category}\`
@@ -892,8 +911,38 @@ async function handleApproveEdit(interaction) {
 ✅ **New Value:** \`${updatedValue}\`
 
 Your changes have been successfully applied!`);
+            console.log(`[mod.js]: ✅ Successfully sent DM to user ${pendingEdit.userId}`);
+            dmSent = true;
+          } catch (dmError) {
+            retryCount++;
+            console.error(`[mod.js]: ❌ DM attempt ${retryCount}/${maxRetries} failed for user ${pendingEdit.userId}:`, {
+              error: dmError.message,
+              code: dmError.code,
+              stack: dmError.stack
+            });
+            
+            if (retryCount === maxRetries) {
+              console.error(`[mod.js]: ❌ All ${maxRetries} DM attempts failed for user ${pendingEdit.userId}`);
+              return interaction.editReply({
+                content: `✅ Character edit request approved and applied successfully, but could not send DM to user after ${maxRetries} attempts.`,
+                ephemeral: true
+              });
+            }
+            console.log(`[mod.js]: ⏳ Waiting 1 second before retry ${retryCount + 1}/${maxRetries}`);
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+        }
       } catch (err) {
-        console.error(`[mod.js]: Error sending DM to user: ${err.message}`);
+        console.error(`[mod.js]: ❌ Critical error in DM notification process:`, {
+          error: err.message,
+          code: err.code,
+          stack: err.stack,
+          userId: pendingEdit.userId
+        });
+        return interaction.editReply({
+          content: `✅ Character edit request approved and applied successfully, but could not send DM to user.`,
+          ephemeral: true
+        });
       }
 
       // Delete the pending edit after successful approval
