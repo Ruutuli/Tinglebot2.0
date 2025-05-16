@@ -4,7 +4,7 @@ const { handleError } = require('./utils/globalErrorHandler');
 const { EmbedBuilder } = require('discord.js');
 const { recoverDailyStamina } = require('./modules/characterStatsModule');
 const { generateVendingStockList, getCurrentVendingStockList, resetPetRollsForAllCharacters } = require('./database/db');
-const { postBlightRollCall } = require('./handlers/blightHandler');
+const { postBlightRollCall, cleanupExpiredBlightRequests } = require('./handlers/blightHandler');
 const { sendBloodMoonAnnouncement, isBloodMoonDay, renameChannels, revertChannelNames } = require('./scripts/bloodmoon');
 const { cleanupExpiredEntries, cleanupExpiredHealingRequests } = require('./utils/storage');
 const { authorizeSheets, clearSheetFormatting, writeSheetData } = require('./utils/googleSheetsUtils');
@@ -465,7 +465,8 @@ function initializeScheduler(client) {
     await Promise.all([
       cleanupExpiredEntries(),
       cleanupExpiredHealingRequests(),
-      checkExpiredRequests(client)
+      checkExpiredRequests(client),
+      cleanupExpiredBlightRequests()
     ]);
   });
   createCronJob('0 0 * * *', 'debuff expiry check', handleDebuffExpiry);

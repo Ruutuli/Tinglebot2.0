@@ -251,6 +251,15 @@ module.exports = {
     return;
    }
 
+   // Check for blight stage 4 effect (no gathering)
+   if (character.blightEffects?.noGathering) {
+    await interaction.editReply({
+     content: `❌ **${character.name}** cannot gather items due to advanced blight stage.`,
+     ephemeral: true
+    });
+    return;
+   }
+
    // Determine job based on jobVoucher or default job
    let job =
     character.jobVoucher && character.jobVoucherJob
