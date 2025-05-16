@@ -30,6 +30,8 @@ const {
  petTypeData,
  canSpeciesPerformPetType,
  speciesRollPermissions,
+ getRollsDisplay,
+ findPetByIdentifier,
 } = require("../../modules/petModule");
 
 // ------------------- Utility Functions -------------------
@@ -387,7 +389,7 @@ if (!canSpeciesPerformPetType(normalizedSpeciesKey, petType)) {
 
     await Character.findByIdAndUpdate(character._id, { currentActivePet: newPet._id });
 
-    const rollsDisplay = "🔔".repeat(newPet.rollsRemaining) + "🔕".repeat(newPet.level - newPet.rollsRemaining);
+    const rollsDisplay = getRollsDisplay(newPet.rollsRemaining, newPet.level);
     const successEmbed = new EmbedBuilder()
       .setAuthor({ name: character.name, iconURL: character.icon })
       .setTitle("🎉 Pet Added Successfully")
@@ -469,19 +471,8 @@ if (!canSpeciesPerformPetType(normalizedSpeciesKey, petType)) {
    }
 
    // ------------------- Verify Pet Existence for Roll, Upgrade, and Retire -------------------
-   // Determine if the pet exists in the Pet collection by checking its ID or name.
-   let pet;
-   if (petName.match(/^[0-9a-fA-F]{24}$/)) {
-    console.log(
-     `[pet.js]: logs - petName "${petName}" looks like an ObjectId. Searching by _id.`
-    );
-    pet = await Pet.findOne({ _id: petName, owner: character._id });
-   } else {
-    console.log(
-     `[pet.js]: logs - petName "${petName}" does not look like an ObjectId. Searching by name.`
-    );
-    pet = await Pet.findOne({ name: petName, owner: character._id });
-   }
+   // Find pet by identifier (ID or name)
+   const pet = await findPetByIdentifier(petName, character._id);
 
    if (!pet) {
     console.error(
@@ -625,9 +616,7 @@ if (!canSpeciesPerformPetType(normalizedSpeciesKey, petType)) {
     // ------------------- Calculate Roll Display -------------------
     const maxRolls = pet.level;
     const petEmoji = getPetEmoji(pet.species);
-    const usedRollsDisplay = maxRolls - pet.rollsRemaining;
-    const rollsIcon =
-     "🔔".repeat(pet.rollsRemaining) + "🔕".repeat(usedRollsDisplay);
+    const rollsDisplay = getRollsDisplay(pet.rollsRemaining, pet.level);
 
     // ------------------- Create and Send Roll Result Embed -------------------
     const rollEmbed = new EmbedBuilder()
@@ -651,7 +640,7 @@ if (!canSpeciesPerformPetType(normalizedSpeciesKey, petType)) {
       { name: "__Pet Type__", value: `> ${pet.petType}`, inline: true },
       {
        name: "__Rolls & Level__",
-       value: `> ${rollsIcon} | ${pet.level}`,
+       value: `> ${rollsDisplay} | ${pet.level}`,
        inline: true,
       },
       {
@@ -759,8 +748,8 @@ if (targetLevel !== pet.level + 1) {
 
    // ------------------- Subcommand: View Pet -------------------
    if (subcommand === "view") {
-    // Fetch the pet document
-    const petDoc = await Pet.findOne({ name: petName, owner: character._id });
+    // Find pet by identifier
+    const petDoc = await findPetByIdentifier(petName, character._id);
     if (!petDoc) {
      return interaction.reply(
       `❌ **Pet \`${petName}\` not found. Please add it first with \`/pet add\`.**`
@@ -768,9 +757,7 @@ if (targetLevel !== pet.level + 1) {
     }
 
     // Prepare rolls display
-    const rollsDisplay =
-     "🔔".repeat(petDoc.rollsRemaining) +
-     "🔕".repeat(petDoc.level - petDoc.rollsRemaining);
+    const rollsDisplay = getRollsDisplay(petDoc.rollsRemaining, petDoc.level);
 
     // Get pet type data for combination & description
     const petTypeData = getPetTypeData(petDoc.petType);

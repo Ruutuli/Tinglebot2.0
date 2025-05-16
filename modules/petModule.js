@@ -220,6 +220,22 @@ const getPerkField = (perk) => perkFieldMap[perk] || null;
 
 const getPetEmoji = (species) => petEmojiMap[species.toLowerCase()] || '🐾';
 
+const getRollsDisplay = (rollsRemaining, level) => {
+  const usedRolls = level - rollsRemaining;
+  return "🔔".repeat(rollsRemaining) + "🔕".repeat(usedRolls);
+};
+
+// ---- Function: findPetByIdentifier ----
+// Finds a pet by either ID or name, returns null if not found
+const findPetByIdentifier = async (petIdentifier, characterId) => {
+  // Check if identifier looks like an ObjectId
+  if (petIdentifier.match(/^[0-9a-fA-F]{24}$/)) {
+    return await Pet.findOne({ _id: petIdentifier, owner: characterId });
+  }
+  // Otherwise search by name
+  return await Pet.findOne({ name: petIdentifier, owner: characterId });
+};
+
 const getPetTableRollDescription = (perk) => petTableRollDescriptions[perk] || 'Unknown perk';
 
 const getFlavorText = (tableType, petName, petSpecies, itemName) => {
@@ -254,6 +270,8 @@ const canSpeciesPerformPetType = (speciesKey, petType) => {
 module.exports = {
   getPerkField,
   getPetEmoji,
+  getRollsDisplay,
+  findPetByIdentifier,
   getPetTableRollDescription,
   getFlavorText,
   getPetTypeRollCombination,
