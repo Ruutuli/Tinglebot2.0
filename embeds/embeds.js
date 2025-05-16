@@ -1051,6 +1051,9 @@ const createTransferEmbed = (
  fromCharacter,
  toCharacter,
  items,
+ fromInventoryLink,
+ toInventoryLink,
+ fromCharacterIcon,
  toCharacterIcon
 ) => {
  const fromSettings = getCommonEmbedSettings(fromCharacter);
@@ -1062,6 +1065,9 @@ const createTransferEmbed = (
   )
   .join("\n");
 
+ // Fix iconURL for footer: only set if non-empty and looks like a URL
+ let safeFooterIcon = toCharacterIcon && /^https?:\/\//.test(toCharacterIcon) ? toCharacterIcon : undefined;
+
  return new EmbedBuilder()
   .setColor(fromSettings.color)
   .setAuthor({
@@ -1070,9 +1076,9 @@ const createTransferEmbed = (
    url: fromSettings.author.url,
   })
   .setTitle("✬ Item Transfer ✬")
-  .setDescription(`**${fromCharacter.name}** ➡️ **${toCharacter.name}**`)
+  .setDescription(`**${fromCharacter.name}** ➡️ **[${toCharacter.name}](${toInventoryLink})🔗**`)
   .addFields({ name: "__Items__", value: formattedItems, inline: false })
-  .setFooter({ text: toCharacter.name, iconURL: toCharacterIcon })
+  .setFooter({ text: toCharacter.name, iconURL: safeFooterIcon })
   .setImage(fromSettings.image.url);
 };
 

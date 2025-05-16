@@ -229,34 +229,39 @@ async function syncToInventoryDatabase(character, item, interaction) {
         uuidv4()
       ]];
       
-      // First, try to find if this item already exists in the sheet
       const auth = await authorizeSheets();
       const spreadsheetId = extractSpreadsheetId(character.inventory);
-      const sheetData = await readSheetData(auth, spreadsheetId, 'loggedInventory!A2:M');
       
-      // Enhanced matching: trim and lowercase both sides
-      const existingRowIndex = sheetData.findIndex(row => {
-        const sheetChar = (row[0] || '').trim().toLowerCase();
-        const sheetItem = (row[1] || '').trim().toLowerCase();
-        const dbChar = characterName.trim().toLowerCase();
-        const dbItem = dbDoc.itemName.trim().toLowerCase();
-        const match = sheetChar === dbChar && sheetItem === dbItem;
-        console.log(`[inventoryUtils.js]: 🔍 Comparing sheet row: "${sheetChar}", "${sheetItem}" with "${dbChar}", "${dbItem}" => ${match ? 'MATCH' : 'NO MATCH'}`);
-        return match;
-      });
+      // Check if this is a sync operation
+      if (obtain === "Manual Sync") {
+        // For sync, find and update existing row
+        const sheetData = await readSheetData(auth, spreadsheetId, 'loggedInventory!A2:M');
+        const existingRowIndex = sheetData.findIndex(row => {
+          const sheetChar = (row[0] || '').trim().toLowerCase();
+          const sheetItem = (row[1] || '').trim().toLowerCase();
+          const dbChar = characterName.trim().toLowerCase();
+          const dbItem = dbDoc.itemName.trim().toLowerCase();
+          return sheetChar === dbChar && sheetItem === dbItem;
+        });
 
-      if (existingRowIndex !== -1) {
-        // Update existing row
-        await writeSheetData(
-          auth,
-          spreadsheetId,
-          `loggedInventory!A${existingRowIndex + 2}:M${existingRowIndex + 2}`,
-          values
-        );
-        console.log(`[inventoryUtils.js]: ✅ Updated existing row for ${dbDoc.itemName} in sheet`);
+        if (existingRowIndex !== -1) {
+          // Update existing row
+          await writeSheetData(
+            auth,
+            spreadsheetId,
+            `loggedInventory!A${existingRowIndex + 2}:M${existingRowIndex + 2}`,
+            values
+          );
+          console.log(`[inventoryUtils.js]: ✅ Updated existing row for ${dbDoc.itemName} in sheet`);
+        } else {
+          // If no existing row found during sync, append new row
+          await appendSheetData(auth, spreadsheetId, 'loggedInventory!A2:M', values);
+          console.log(`[inventoryUtils.js]: ✅ Appended new row for ${dbDoc.itemName} in sheet (no existing row found)`);
+        }
       } else {
-        // Do not append new items during sync; just log and skip
-        console.warn(`[inventoryUtils.js]: ⚠️ No matching row found for ${dbDoc.itemName} in sheet. Skipping sheet update for this item.`);
+        // For all other operations, always append new row
+        await appendSheetData(auth, spreadsheetId, 'loggedInventory!A2:M', values);
+        console.log(`[inventoryUtils.js]: ✅ Appended new row for ${dbDoc.itemName} in sheet`);
       }
     } catch (sheetError) {
       console.error(`[inventoryUtils.js]: ❌ Sheet sync error for ${character.name}: ${sheetError.message}`);
