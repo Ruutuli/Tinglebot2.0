@@ -748,10 +748,21 @@ async function handleApprove(interaction) {
 // Approves or rejects a pending character edit and applies the changes
 async function handleApproveEdit(interaction) {
   try {
-    const requestId = interaction.options.getString('requestid');
+    let requestId = interaction.options.getString('requestid');
     const shouldApprove = interaction.options.getBoolean('approve');
 
+    // Sanitize requestId to extract only the raw ID
+    if (requestId.includes(':')) {
+      requestId = requestId.split(':').pop().trim();
+    } else {
+      requestId = requestId.trim();
+    }
+
+    console.log(`[mod.js]: 🔍 handleApproveEdit called with requestId=${requestId}, approve=${shouldApprove}`);
+
     const pendingEdit = await retrievePendingEditFromStorage(requestId);
+    console.log(`[mod.js]: 🔍 retrievePendingEditFromStorage result: ${pendingEdit ? 'FOUND' : 'NOT FOUND'}`);
+
     if (!pendingEdit) {
       return interaction.editReply({
         content: '❌ No pending edit request found with that ID.',

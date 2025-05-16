@@ -246,6 +246,7 @@ async function deleteTradeFromStorage(tradeId) {
 
 // Pending Edit functions
 async function savePendingEditToStorage(editId, editData) {
+  console.log(`[storage.js]: 🔄 savePendingEditToStorage called with editId=${editId}`);
   await saveToStorage(editId, 'pendingEdit', editData);
 }
 
@@ -254,6 +255,7 @@ async function retrievePendingEditFromStorage(editId) {
 }
 
 async function deletePendingEditFromStorage(editId) {
+  console.log(`[storage.js]: 🔄 deletePendingEditFromStorage called with editId=${editId}`);
   await deleteFromStorage(editId, 'pendingEdit');
 }
 
