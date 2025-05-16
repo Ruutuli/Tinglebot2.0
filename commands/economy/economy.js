@@ -757,185 +757,215 @@ async function handleShopView(interaction) {
 }
 
 async function handleShopBuy(interaction) {
- try {
-  await interaction.deferReply();
-
-  const user = await getOrCreateToken(interaction.user.id);
-  if (!user.tokensSynced) {
-   return interaction.editReply(
-    "❌ Your tokens are not synced. Please sync your tokens to use this command."
-   );
-  }
-
-  const characterName = interaction.options.getString("charactername");
-  const itemName = interaction.options.getString("itemname");
-  const quantity = interaction.options.getInteger("quantity");
-  // ------------------- Validate Buy Quantity -------------------
-if (quantity <= 0) {
-  await interaction.editReply({
-    content: `❌ You must buy a **positive quantity** of items. Negative numbers are not allowed.`,
-    ephemeral: true,
-  });
-  return;
-}
-
-  console.log(
-   `[shops]: 🔄 Initiating purchase for character: ${characterName}, item: ${itemName}, quantity: ${quantity}`
-  );
-
-  // ------------------- Character Ownership Validation -------------------
-  const character = await fetchCharacterByNameAndUserId(characterName, interaction.user.id);
-  if (!character) {
-    console.error(`[shops]: ❌ Character ${characterName} not found or does not belong to user ${interaction.user.id}`);
-    return interaction.editReply({
-      content: "❌ Character not found or does not belong to you.",
-      ephemeral: true
-    });
-  }
-
-  // ------------------- Check Inventory Sync -------------------
   try {
-    await checkInventorySync(character);
+    await interaction.deferReply();
+
+    const user = await getOrCreateToken(interaction.user.id);
+    if (!user.tokensSynced) {
+      return interaction.editReply({
+        content: "❌ Your tokens are not synced. Please sync your tokens to use this command.",
+        ephemeral: true
+      });
+    }
+
+    const characterName = interaction.options.getString("charactername");
+    const itemName = interaction.options.getString("itemname");
+    const quantity = interaction.options.getInteger("quantity");
+
+    // ------------------- Validate Buy Quantity -------------------
+    if (quantity <= 0) {
+      await interaction.editReply({
+        content: `❌ You must buy a **positive quantity** of items. Negative numbers are not allowed.`,
+        ephemeral: true,
+      });
+      return;
+    }
+
+    console.log(
+      `[shops]: 🔄 Initiating purchase for character: ${characterName}, item: ${itemName}, quantity: ${quantity}`
+    );
+
+    // ------------------- Character Ownership Validation -------------------
+    const character = await fetchCharacterByNameAndUserId(characterName, interaction.user.id);
+    if (!character) {
+      console.error(`[shops]: ❌ Character ${characterName} not found or does not belong to user ${interaction.user.id}`);
+      return interaction.editReply({
+        content: "❌ Character not found or does not belong to you.",
+        ephemeral: true
+      });
+    }
+
+    // ------------------- Check Inventory Sync -------------------
+    try {
+      await checkInventorySync(character);
+    } catch (error) {
+      await interaction.editReply({
+        content: error.message,
+        ephemeral: true
+      });
+      return;
+    }
+
+    // ------------------- Validate Shop Item -------------------
+    const shopItem = await ShopStock.findOne({ 
+      itemName: { $regex: new RegExp(`^${itemName}$`, 'i') }
+    }).lean();
+    
+    if (!shopItem) {
+      return interaction.editReply({
+        content: `❌ Item "${itemName}" is not available in the shop.`,
+        ephemeral: true
+      });
+    }
+
+    const shopQuantity = parseInt(shopItem.stock, 10);
+    if (isNaN(shopQuantity)) {
+      console.error(`[shops]: ❌ Invalid stock quantity for item ${itemName}: ${shopItem.stock}`);
+      return interaction.editReply({
+        content: "❌ Shop item quantity is invalid. Please try again later.",
+        ephemeral: true
+      });
+    }
+
+    if (shopQuantity < quantity) {
+      return interaction.editReply({
+        content: `❌ Not enough stock available. Only ${shopQuantity} ${itemName} remaining in the shop.`,
+        ephemeral: true
+      });
+    }
+
+    // ------------------- Validate Item Details -------------------
+    const itemDetails = await ItemModel.findOne({ 
+      itemName: { $regex: new RegExp(`^${itemName}$`, 'i') }
+    }).select("buyPrice image category type subtype").lean();
+    
+    if (!itemDetails) {
+      console.error(`[shops]: ❌ Item details not found for ${itemName}`);
+      return interaction.editReply({
+        content: "❌ Unable to retrieve item details. Please try again later.",
+        ephemeral: true
+      });
+    }
+
+    if (!itemDetails.buyPrice || itemDetails.buyPrice <= 0) {
+      console.error(`[shops]: ❌ Invalid buy price for item ${itemName}: ${itemDetails.buyPrice}`);
+      return interaction.editReply({
+        content: "❌ This item cannot be purchased from the shop.",
+        ephemeral: true
+      });
+    }
+
+    const totalPrice = itemDetails.buyPrice * quantity;
+    const currentTokens = user.tokens;
+
+    if (currentTokens < totalPrice) {
+      return interaction.editReply({
+        content: `❌ You do not have enough tokens.\n\n**Current Balance:** 🪙 ${currentTokens}\n**Required:** 🪙 ${totalPrice}\n**Missing:** 🪙 ${totalPrice - currentTokens}`,
+        ephemeral: true
+      });
+    }
+
+    // ------------------- Process Purchase -------------------
+    console.log(`[shops]: 💰 Token balance for ${interaction.user.tag}:`);
+    console.log(`[shops]: 📊 Previous balance: 🪙 ${currentTokens}`);
+    console.log(`[shops]: ➖ Spent: 🪙 ${totalPrice}`);
+    console.log(`[shops]: 📊 New balance: 🪙 ${currentTokens - totalPrice}`);
+
+    // Update inventory
+    const inventoryCollection = await getCharacterInventoryCollection(characterName);
+    await inventoryCollection.updateOne(
+      { itemName: { $regex: new RegExp(`^${itemName}$`, 'i') } },
+      { $inc: { quantity: quantity } },
+      { upsert: true }
+    );
+
+    // Update shop stock
+    await ShopStock.updateOne(
+      { itemName: { $regex: new RegExp(`^${itemName}$`, 'i') } },
+      { $set: { stock: shopQuantity - quantity } }
+    );
+
+    // ------------------- Log Transaction -------------------
+    const inventoryLink = character.inventory || "https://example.com/inventory/default";
+    const tokenTrackerLink = user.tokenTracker || "https://example.com/tokens/default";
+    const formattedDateTime = new Date().toLocaleString("en-US", {
+      timeZone: "America/New_York",
+    });
+    const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
+
+    // Log to token tracker
+    if (user.tokenTracker) {
+      const tokenRow = [
+        `${characterName} - ${itemName} x${quantity} - Shop Purchase`,
+        interactionUrl,
+        "purchase",
+        "spent",
+        `-${totalPrice}`,
+      ];
+      await safeAppendDataToSheet(user.tokenTracker, character, "loggedTracker!B7:F", [tokenRow]);
+    }
+
+    // Log to inventory
+    if (character.inventory) {
+      const spreadsheetId = extractSpreadsheetId(character.inventory);
+      const auth = await authorizeSheets();
+      const inventoryRow = [
+        character.name,
+        itemName,
+        quantity.toString(),
+        itemDetails.category.join(", "),
+        itemDetails.type.join(", "),
+        itemDetails.subtype?.join(", ") || "",
+        "Purchase from shop",
+        character.job,
+        "",
+        character.currentVillage,
+        interactionUrl,
+        formattedDateTime,
+        uuidv4(),
+      ];
+      await appendSheetData(auth, spreadsheetId, "loggedInventory!A2:M", [inventoryRow]);
+    }
+
+    // Update token balance
+    await updateTokenBalance(interaction.user.id, -totalPrice);
+
+    // ------------------- Send Success Message -------------------
+    const purchaseEmbed = new EmbedBuilder()
+      .setTitle("✅ Purchase Successful!")
+      .setDescription(
+        `**${characterName}** successfully bought **${itemName} x ${quantity}** for 🪙 ${totalPrice} tokens`
+      )
+      .setThumbnail(itemDetails.image || "https://via.placeholder.com/150")
+      .setAuthor({ name: characterName, iconURL: character.icon || "" })
+      .setColor("#A48D68")
+      .setImage(
+        "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
+      )
+      .addFields(
+        {
+          name: "📦 Inventory Link",
+          value: `[View Inventory](${inventoryLink})`,
+          inline: true,
+        },
+        {
+          name: "🪙 Token Tracker",
+          value: `[View Tracker](${tokenTrackerLink})`,
+          inline: true,
+        }
+      )
+      .setFooter({ text: `The village bazaars thank you for your purchase!` });
+
+    await interaction.editReply({ embeds: [purchaseEmbed] });
   } catch (error) {
+    handleError(error, "shops.js");
+    console.error("[shops]: Error buying item:", error);
     await interaction.editReply({
-      content: error.message,
+      content: "❌ An error occurred while trying to buy the item. Please try again later.",
       ephemeral: true
     });
-    return;
   }
-  
-
-  const shopItem = await ShopStock.findOne({ itemName }).lean();
-  if (!shopItem) {
-   return interaction.editReply("❌ Item not found in the shop.");
-  }
-
-  const shopQuantity = parseInt(shopItem.stock, 10);
-  if (isNaN(shopQuantity)) {
-   return interaction.editReply("❌ Shop item quantity is invalid.");
-  }
-
-  if (shopQuantity < quantity) {
-   return interaction.editReply("❌ Not enough stock available.");
-  }
-
-  const itemDetails = await ItemModel.findOne({ itemName })
-   .select("buyPrice image category type subtype")
-   .lean();
-  if (!itemDetails) {
-   return interaction.editReply("❌ Unable to retrieve item details.");
-  }
-
-  const totalPrice = itemDetails.buyPrice * quantity;
-  const currentTokens = user.tokens;
-
-  if (currentTokens < totalPrice) {
-    return interaction.editReply(
-      `❌ You do not have enough tokens. Current Balance: 🪙 ${currentTokens}. Required: 🪙 ${totalPrice}.`
-    );
-  }
-
-  console.log(`[shops]: 💰 Token balance for ${interaction.user.tag}:`);
-  console.log(`[shops]: 📊 Previous balance: 🪙 ${currentTokens}`);
-  console.log(`[shops]: ➖ Spent: 🪙 ${totalPrice}`);
-  console.log(`[shops]: 📊 New balance: 🪙 ${currentTokens - totalPrice}`);
-
-  const inventoryCollection = await getCharacterInventoryCollection(
-   characterName
-  );
-  await inventoryCollection.updateOne(
-   { itemName },
-   { $inc: { quantity: quantity } },
-   { upsert: true }
-  );
-
-  await ShopStock.updateOne(
-   { itemName },
-   {
-    $set: { stock: parseInt(shopQuantity, 10) - quantity },
-   }
-  );
-
-  const inventoryLink =
-   character.inventory || "https://example.com/inventory/default";
-  const tokenTrackerLink =
-   user.tokenTracker || "https://example.com/tokens/default";
-  const formattedDateTime = new Date().toLocaleString("en-US", {
-   timeZone: "America/New_York",
-  });
-  const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
-
-  if (user.tokenTracker) {
-    const spreadsheetId = extractSpreadsheetId(user.tokenTracker);
-    const auth = await authorizeSheets();
-    const tokenRow = [
-      `${characterName} - ${itemName} x${quantity} - Shop Purchase`,
-      interactionUrl,
-      "purchase",
-      "spent",
-      `-${totalPrice}`,
-    ];
-    await safeAppendDataToSheet(user.tokenTracker, character, "loggedTracker!B7:F", [tokenRow]);
-  }
-
-  if (character.inventory) {
-   const spreadsheetId = extractSpreadsheetId(character.inventory);
-   const auth = await authorizeSheets();
-   const inventoryRow = [
-    character.name,
-    itemName,
-    quantity.toString(),
-    itemDetails.category.join(", "),
-    itemDetails.type.join(", "),
-    itemDetails.subtype?.join(", ") || "",
-    "Purchase from shop",
-    character.job,
-    "",
-    character.currentVillage,
-    interactionUrl,
-    formattedDateTime,
-    uuidv4(),
-   ];
-   await appendSheetData(auth, spreadsheetId, "loggedInventory!A2:M", [
-    inventoryRow,
-   ]);
-  }
-
-  await updateTokenBalance(interaction.user.id, -totalPrice);
-
-  const purchaseEmbed = new EmbedBuilder()
-   .setTitle("✅ Purchase Successful!")
-   .setDescription(
-    `**${characterName}** successfully bought **${itemName} x ${quantity}** for 🪙 ${totalPrice} tokens`
-   )
-   .setThumbnail(itemDetails.image || "https://via.placeholder.com/150")
-   .setAuthor({ name: characterName, iconURL: character.icon || "" })
-   .setColor("#A48D68")
-   .setImage(
-    "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
-   )
-   .addFields(
-    {
-     name: "📦 Inventory Link",
-     value: `[View Inventory](${inventoryLink})`,
-     inline: true,
-    },
-    {
-     name: "🪙 Token Tracker",
-     value: `[View Tracker](${tokenTrackerLink})`,
-     inline: true,
-    }
-   )
-   .setFooter({ text: `The village bazaars thank you for your purchase!` });
-
-  interaction.editReply({ embeds: [purchaseEmbed] });
- } catch (error) {
-  handleError(error, "shops.js");
-  console.error("[shops]: Error buying item:", error);
-  interaction.editReply("❌ An error occurred while trying to buy the item.");
- }
 }
-
 
 async function handleShopSell(interaction) {
  try {
