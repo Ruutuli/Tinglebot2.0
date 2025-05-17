@@ -41,7 +41,7 @@ const { isBloodMoonActive } = require('../../scripts/bloodmoon.js');
 
 // ------------------- Embeds -------------------
 // Import embed utilities for gathering and monster encounter messages.
-const { createGatherEmbed, createMonsterEncounterEmbed } = require('../../embeds/embeds.js');
+const { createGatherEmbed, createMonsterEncounterEmbed, createKOEmbed } = require('../../embeds/embeds.js');
 
 
 // ------------------- Village Channels -------------------

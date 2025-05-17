@@ -175,10 +175,10 @@ async function getCharactersInVillage(userId, village) {
 
 // ------------------- fetchCharacterByName -------------------
 const fetchCharacterByName = async (characterName) => {
+ // Get the actual name part before the "|" if it exists
+ const actualName = characterName.split('|')[0].trim();
  try {
   await connectToTinglebot();
-  // Get the actual name part before the "|" if it exists
-  const actualName = characterName.split('|')[0].trim();
   // Escape special regex characters in the character name
   const escapedName = actualName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const character = await Character.findOne({
