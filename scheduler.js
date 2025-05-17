@@ -310,10 +310,10 @@ async function resetDailyRolls() {
 // Sets up the blight roll call and missed rolls check
 function setupBlightScheduler(client) {
   // Daily Blight Roll Call (8 PM)
-  createCronJob('39 20 * * *', 'blight roll call', () => postBlightRollCall(client));
+  createCronJob('00 20 * * *', 'blight roll call', () => postBlightRollCall(client));
 
   // Check for Missed Rolls and Death Deadlines (7:59 PM)
-  createCronJob('42 20 * * *', 'check missed blight rolls and death deadlines', async () => {
+  createCronJob('01 20 * * *', 'check missed blight rolls and death deadlines', async () => {
     try {
       await checkMissedRolls(client);
       console.log('[scheduler.js]: ✅ Completed blight checks for missed rolls and death deadlines');

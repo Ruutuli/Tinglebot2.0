@@ -729,50 +729,58 @@ async function rollForBlightProgression(interaction, characterName) {
     // ------------------- Roll & Stage Determination -------------------
     character.lastRollDate = estNow;
     const roll = Math.floor(Math.random() * 1000) + 1;
-    let stage = character.blightStage || 1;
-    let embedTitle = '';
-    let embedDescription = '';
+    let stage;
+    let embedTitle;
+    let embedDescription;
     const blightEmoji = '<:blight_eye:805576955725611058>';
 
-    if (roll <= 25) stage = 2;
-    else if (roll <= 40) stage = 3;
-    else if (roll <= 67) stage = 4;
-    else if (roll <= 100) {
+    if (roll <= 25) {
+      stage = 2;
+      embedTitle = `${blightEmoji} Your Blight Sickness ADVANCES to STAGE 2 ${blightEmoji}`;
+      embedDescription = `⚠️ Infected areas spread inside and out, and the blight begins traveling toward vital organs. Fatigue fades but nausea typically persists.\n\nInfected now experience an **increase in physical strength**.\n\n🎯 **Stage 2 Effect**: Your rolls are now multiplied by 1.5x.\n\nYou can still be healed by **sages, oracles, or dragons**.`
+    } else if (roll <= 40) {
+      stage = 3;
+      embedTitle = `${blightEmoji} Your Blight Sickness ADVANCES to STAGE 3 ${blightEmoji}`;
+      embedDescription = `⚠️ Visible infected areas and feverish symptoms fade. You experience **frequent nosebleeds** and **malice-like sputum**, which can now **infect others**.\n\nHallucinations, **further strength increases**, and **aggressive mood swings** occur.\n\n👻 **Stage 3 Effect**: Monsters no longer attack you.\n\nAt this stage, healing is only possible by **oracles or dragons**.`
+    } else if (roll <= 67) {
+      stage = 4;
+      embedTitle = `${blightEmoji} Your Blight Sickness ADVANCES to STAGE 4 ${blightEmoji}`;
+      embedDescription = `⚠️ All outward signs of infection vanish—**except your eyes**, which now resemble those of Malice.\n\nVital organs begin to **fail**, and the infected is driven by an **uncontrollable desire to destroy**.\n\nAny contact with bodily fluids poses a **severe infection risk to others**.\n\n💀 **Stage 4 Effect**: No monsters. No gathering.\n\nYou can only be healed by **dragons** at this stage.`
+    } else if (roll <= 100) {
       stage = 5;
       character.deathDeadline = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-    }
-
-    // ------------------- Embed Content Builder -------------------
-    const stageDescriptions = {
-      1: {
-        title: `Your Blight Sickness DOES NOT advance to the next stage.`,
-        desc: `You remain at **Stage 1**.\nInfected areas appear like blight-colored bruises...`
-      },
-      2: {
-        title: `${blightEmoji} Your Blight Sickness ADVANCES to STAGE 2 ${blightEmoji}`,
-        desc: `⚠️ Infected areas spread... Increased physical strength...`
-      },
-      3: {
-        title: `${blightEmoji} Your Blight Sickness ADVANCES to STAGE 3 ${blightEmoji}`,
-        desc: `⚠️ Visible infected areas fade... Hallucinations...`
-      },
-      4: {
-        title: `${blightEmoji} Your Blight Sickness ADVANCES to STAGE 4 ${blightEmoji}`,
-        desc: `⚠️ All outward signs fade except eyes... uncontrollable desire to destroy...`
-      },
-      5: {
-        title: `☠ Your Blight Sickness IS ON THE EDGE of STAGE 5 ☠`,
-        desc: `⚠️ You are close to death. You have **7 days** to complete your healing prompt...`
+      await character.save();
+      embedTitle = `☠ Your Blight Sickness IS ON THE EDGE of STAGE 5 ☠`;
+      embedDescription = `⚠️ You are dangerously close to death.\n\nYou have **7 days** to complete your **healing prompt** or find **miraculous intervention**. Stage 5 is irreversible.\n\n💀 **Stage 5 Effect**: No monsters. No gathering. No healing except by Dragons.\n\nThis is your **final warning**.`
+    } else {
+      stage = character.blightStage || 1;
+      switch (stage) {
+        case 1:
+          embedTitle = `Your Blight Sickness DOES NOT advance to the next stage.`;
+          embedDescription = `You remain at **Stage 1**.\nInfected areas appear like blight-colored bruises on the body. Side effects include fatigue, nausea, and feverish symptoms.\n\nAt this stage, it can be cured by having one of the **Sages, Oracles, or Dragons** heal you.\n\n To request blight healing, please use </blight heal:1306176789634355241>`;
+          break;
+        case 2:
+          embedTitle = `Your Blight Sickness DOES NOT advance to the next stage.`;
+          embedDescription = `You remain at **Stage 2**.\nInfected areas spread inside and out, and the blight begins traveling towards vital organs. Fatigue fades but nausea typically persists. Infected now experience an increase in physical strength.\n\n**🎯 Stage 2 Effect**: Your rolls are now multiplied by 1.5x.\n\nThis can still be healed by **Sages, Oracles, and Dragons**.\n\n To request blight healing, please use </blight heal:1306176789634355241>`;
+          break;
+        case 3:
+          embedTitle = `Your Blight Sickness DOES NOT advance to the next stage.`;
+          embedDescription = `You remain at **Stage 3**.\nVisible infected areas and feverish symptoms fade. Frequent nosebleeds and sputum have a malice-like appearance and can infect others.\n\nThe infected experiences hallucinations, further increased strength, and aggressive mood swings.\n\n**👻 Stage 3 Effect**: Monsters no longer attack you.\n\nYou can only be healed by **Oracles or Dragons**.\n\n To request blight healing, please use </blight heal:1306176789634355241>`;
+          break;
+        case 4:
+          embedTitle = `Your Blight Sickness DOES NOT advance to the next stage.`;
+          embedDescription = `You remain at **Stage 4**.\nAll outward signs of infection have subsided - except the eyes. Infected individual's eyes now look like the eyes of Malice.\n\nAt this stage vital organs begin to fail, and all sense of self is replaced by an uncontrollable desire to destroy. Any contact with bodily fluids risks infecting others.\n\n**💀 Stage 4 Effect**: No monsters. No gathering.\n\nYou can only be healed by **Dragons** at this stage.\n\n To request blight healing, please use </blight heal:1306176789634355241>`;
+          break;
+        case 5:
+          embedTitle = `Your Blight Sickness DOES NOT advance to the next stage.`;
+          embedDescription = `You remain at **Stage 5**.\n\n⚠️ The blight has reached its final stage. **You must be healed before the deadline to avoid death.**\n\n**💀 Stage 5 Effect**: No monsters. No gathering. No healing except by Dragons.\n\n To request blight healing, please use </blight heal:1306176789634355241>\n\n🕒 **Deadline**: ${character.deathDeadline?.toLocaleString('en-US', { timeZone: 'America/New_York' })}`;
+          break;
+        default:
+          console.error(`[blightHandler]: Unknown stage ${stage} for ${characterName}`);
+          embedTitle = `Unknown Stage`;
+          embedDescription = `An unknown error occurred. Please contact support.`;
       }
-    };
-
-    const defaultDesc = `An unknown error occurred. Please contact support.`;
-    const stageData = stageDescriptions[stage] || { title: 'Unknown Stage', desc: defaultDesc };
-    embedTitle = stageData.title;
-    embedDescription = stageData.desc.replace(
-      '🕒 **Deadline**:',
-      `🕒 **Deadline**: <t:${Math.floor(character.deathDeadline?.getTime() / 1000)}:F>`
-    );
+    }
 
     // ------------------- Update Character -------------------
     character.blightStage = stage;
@@ -793,10 +801,6 @@ async function rollForBlightProgression(interaction, characterName) {
       .setAuthor({ name: `${characterName}'s Blight Progression`, iconURL: interaction.user.displayAvatarURL() })
       .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png')
       .setTimestamp();
-
-    if (stage === 2) embed.addFields({ name: '🎯 Stage 2 Effect', value: 'Your rolls are now multiplied by 1.5x.' });
-    if (stage === 3) embed.addFields({ name: '👻 Stage 3 Effect', value: 'Monsters no longer attack you.' });
-    if (stage === 4) embed.addFields({ name: '💀 Stage 4 Effect', value: 'No monsters. No gathering.' });
 
     await interaction.reply({ content: `<@${interaction.user.id}> rolled for ${characterName}`, embeds: [embed] });
   } catch (error) {
@@ -964,25 +968,21 @@ async function checkMissedRolls(client) {
 
     const blightEmoji = '<:blight_eye:805576955725611058>';
     const stageDescriptions = {
-      1: {
-        title: `Your Blight Sickness DOES NOT advance to the next stage.`,
-        desc: `You remain at **Stage 1**.\nInfected areas appear like blight-colored bruises...`
-      },
       2: {
         title: `${blightEmoji} Your Blight Sickness ADVANCES to STAGE 2 ${blightEmoji}`,
-        desc: `⚠️ Infected areas spread... Increased physical strength...`
+        desc: `⚠️ Infected areas spread inside and out, and the blight begins traveling toward vital organs. Fatigue fades but nausea typically persists.\n\nInfected now experience an **increase in physical strength**.\n\n🎯 **Stage 2 Effect**: Your rolls are now multiplied by 1.5x.\n\nYou can still be healed by **sages, oracles, or dragons**.`
       },
       3: {
         title: `${blightEmoji} Your Blight Sickness ADVANCES to STAGE 3 ${blightEmoji}`,
-        desc: `⚠️ Visible infected areas fade... Hallucinations...`
+        desc: `⚠️ Visible infected areas and feverish symptoms fade. You experience **frequent nosebleeds** and **malice-like sputum**, which can now **infect others**.\n\nHallucinations, **further strength increases**, and **aggressive mood swings** occur.\n\n👻 **Stage 3 Effect**: Monsters no longer attack you.\n\nAt this stage, healing is only possible by **oracles or dragons**.`
       },
       4: {
         title: `${blightEmoji} Your Blight Sickness ADVANCES to STAGE 4 ${blightEmoji}`,
-        desc: `⚠️ All outward signs fade except eyes... uncontrollable desire to destroy...`
+        desc: `⚠️ All outward signs of infection vanish—**except your eyes**, which now resemble those of Malice.\n\nVital organs begin to **fail**, and the infected is driven by an **uncontrollable desire to destroy**.\n\nAny contact with bodily fluids poses a **severe infection risk to others**.\n\n💀 **Stage 4 Effect**: No monsters. No gathering.\n\nYou can only be healed by **dragons** at this stage.`
       },
       5: {
         title: `☠ Your Blight Sickness IS ON THE EDGE of STAGE 5 ☠`,
-        desc: `⚠️ You are close to death. You have **7 days** to complete your healing prompt...`
+        desc: `⚠️ You are dangerously close to death.\n\nYou have **7 days** to complete your **healing prompt** or find **miraculous intervention**. Stage 5 is irreversible.\n\n💀 **Stage 5 Effect**: No monsters. No gathering. No healing except by Dragons.\n\nThis is your **final warning**.`
       }
     };
 
@@ -1166,14 +1166,17 @@ async function checkMissedRolls(client) {
         await character.save();
         console.log(`[blightHandler]: Saved progression for ${character.name} to Stage ${character.blightStage}`);
 
-        const stageInfo = stageDescriptions[character.blightStage] || { title: 'Unknown Stage', desc: 'An unknown error occurred. Please contact support.' };
+        const stageInfo = stageDescriptions[character.blightStage] || { 
+          title: 'Unknown Stage', 
+          desc: 'An unknown error occurred. Please contact support.' 
+        };
         const embed = new EmbedBuilder()
           .setColor('#AD1457')
           .setTitle(stageInfo.title)
           .setDescription(
             `${stageInfo.desc}\n\n` +
             (character.blightStage === 5
-              ? `❗ **Missed Roll**: Your blight has progressed to Stage 5.\n\n` +
+              ? `❗ **Missed Roll**: Your blight is at the final stage and you are on the edge of death.\n\n` +
                 `🕒 **Deadline**: <t:${Math.floor(character.deathDeadline.getTime() / 1000)}:F>\n\n` +
                 `⚠️ You must be healed by a **Dragon** before the deadline to avoid death.`
               : `❗ **Missed Roll**: Your blight has progressed. Further missed rolls will increase its severity.`)
