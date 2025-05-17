@@ -9,6 +9,7 @@ const { getCharacterInventoryCollection, updateCharacterById, fetchItemByName } 
 const { v4: uuidv4 } = require('uuid');
 const { getJobPerk } = require('./jobsModule');
 const Character = require('../models/CharacterModel');
+const { capitalizeWords } = require('./formattingModule');
 
 // ------------------- Get Job Voucher Error Message -------------------
 function getJobVoucherErrorMessage(errorType, data = {}) {

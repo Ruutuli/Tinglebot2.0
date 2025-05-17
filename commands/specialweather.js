@@ -202,7 +202,7 @@ const createSpecialWeatherEmbed = async (character, item, weather) => {
     })
     .setThumbnail(thumbnailUrl)
     .addFields(
-      { name: 'Special Weather', value: `${weather.special.emoji} ${weather.special.label}`, inline: true },
+      { name: 'Special Weather', value: `${weather.special.emoji || '✨'} ${weather.special.label}`, inline: true },
       { name: 'Location', value: currentVillage, inline: true }
     );
 
@@ -264,7 +264,7 @@ module.exports = {
       const weather = await getCurrentWeather(currentVillage);
       console.log(`[specialweather.js]: 🔄 Weather fetched for ${currentVillage}`);
       
-      if (!weather || !weather.special) {
+      if (!weather || !weather.special || !weather.special.label) {
         await interaction.editReply({
           content: `❌ **There is no special weather in ${currentVillage} right now.**\n✨ **Special weather is required to use this command.**`,
         });
