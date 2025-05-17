@@ -15,29 +15,55 @@ const submissionStore = new Map();
 
 // Save a submission to storage.
 async function saveSubmissionToStorage(submissionId, submissionData) {
-  if (!submissionId || !submissionData) {
-    return;
-  }
   try {
-    await TempData.findOneAndUpdate(
+    if (!submissionId || !submissionData) {
+      console.error(`[storage.js]: ❌ Missing submissionId or data for save operation`);
+      throw new Error('Missing submissionId or data');
+    }
+
+    console.log(`[storage.js]: 🔄 Saving submission ${submissionId}`);
+    
+    // Merge with existing data if it exists
+    const existingSubmission = await TempData.findOne({ type: 'submission', key: submissionId });
+    if (existingSubmission) {
+      submissionData = {
+        ...existingSubmission.data,
+        ...submissionData,
+        createdAt: existingSubmission.createdAt // Preserve original creation date
+      };
+    }
+
+    const result = await TempData.findOneAndUpdate(
       { type: 'submission', key: submissionId },
-      { data: submissionData },
+      submissionData,
       { upsert: true, new: true }
     );
+
+    console.log(`[storage.js]: ✅ Successfully saved submission ${submissionId}`);
+    return result;
   } catch (error) {
     handleError(error, 'storage.js');
-    throw new Error('Failed to save submission');
+    console.error(`[storage.js]: ❌ Error saving submission ${submissionId}:`, error);
+    throw error;
   }
 }
 
 // Retrieve a submission by its ID.
 async function retrieveSubmissionFromStorage(submissionId) {
   try {
-    const result = await TempData.findByTypeAndKey('submission', submissionId);
-    return result?.data || null;
+    console.log(`[storage.js]: 🔍 Retrieving submission ${submissionId}`);
+    const submission = await TempData.findByTypeAndKey('submission', submissionId);
+    if (submission) {
+      console.log(`[storage.js]: ✅ Found submission ${submissionId} (${submission.data?.status || 'unknown status'})`);
+      return submission.data;
+    } else {
+      console.log(`[storage.js]: ❌ No submission found for ${submissionId}`);
+      return null;
+    }
   } catch (error) {
     handleError(error, 'storage.js');
-    throw new Error('Failed to retrieve submission');
+    console.error(`[storage.js]: ❌ Error retrieving submission ${submissionId}:`, error);
+    throw error;
   }
 }
 

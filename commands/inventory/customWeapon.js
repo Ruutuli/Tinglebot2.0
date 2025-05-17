@@ -5,7 +5,7 @@ const { handleError } = require('../../utils/globalErrorHandler');
 const { v4: uuidv4 } = require('uuid'); // For generating unique IDs
 
 // ------------------- Database Connections -------------------
-const { fetchCharacterByNameAndUserId, updateCharacterById, getCharacterInventoryCollection, fetchItemByName, fetchValidWeaponSubtypes } = require('../../database/db');
+const { fetchCharacterByNameAndUserId, updateCharacterById, getCharacterInventoryCollection, fetchItemByName, fetchValidWeaponSubtypes, fetchAllWeapons } = require('../../database/db');
 
 // ------------------- Utility Functions -------------------
 const { addItemInventoryDatabase, processMaterials, removeItemInventoryDatabase } = require('../../utils/inventoryUtils');
@@ -177,10 +177,11 @@ if (subcommand === 'create') {
     }
 
 // Retrieve Submission
-const weaponSubmission = retrieveSubmissionFromStorage(weaponId);
+console.log(`[customweapon create]: 🔍 Retrieving submission ${weaponId}`);
+const weaponSubmission = await retrieveSubmissionFromStorage(weaponId);
 
-if (!weaponSubmission || weaponSubmission.status !== 'approved') {
-    console.error(`[customweapon create]: Submission not found or not approved. Status: ${weaponSubmission?.status}`);
+if (!weaponSubmission) {
+    console.error(`[customweapon create]: ❌ No submission found for ID: ${weaponId}`);
     await interaction.editReply({
         content: `❌ Approved custom weapon not found.`,
         ephemeral: true,
@@ -188,16 +189,24 @@ if (!weaponSubmission || weaponSubmission.status !== 'approved') {
     return;
 }
 
+if (weaponSubmission.status !== 'approved') {
+    console.error(`[customweapon create]: ❌ Submission status is ${weaponSubmission.status} for ID: ${weaponId}`);
+    await interaction.editReply({
+        content: `❌ This weapon has not been approved yet. Current status: ${weaponSubmission.status}`,
+        ephemeral: true,
+    });
+    return;
+}
 
 // ✅ Prevent reuse of crafted weapons
 if (weaponSubmission.crafted === true) {
+    console.error(`[customweapon create]: ❌ Weapon already crafted for ID: ${weaponId}`);
     await interaction.editReply({
         content: `❌ This weapon has already been crafted and cannot be crafted again.`,
         ephemeral: true,
     });
     return;
 }
-
 
     // ------------------- Ensure Only the Submitting Character Can Craft -------------------
     if (weaponSubmission.characterName !== characterName) {
@@ -276,133 +285,130 @@ if (weaponSubmission.crafted === true) {
     }
 
     // ------------------- Process Materials & Remove Inventory -------------------
-// ✅ Begin Transaction-safe Crafting
-let materialsRemoved = false;
-let staminaDeducted = false;
+    // ✅ Begin Transaction-safe Crafting
+    let materialsRemoved = false;
+    let staminaDeducted = false;
 
-try {
-    // ------------------- Process Materials & Remove Inventory -------------------
-    await processMaterials(interaction, character, inventoryItems, { craftingMaterial: weaponSubmission.craftingMaterials }, 1);
-    await removeItemInventoryDatabase(character._id, 'Star Fragment', 1, interaction);
-    await removeItemInventoryDatabase(character._id, 'Blueprint Voucher', 1, interaction);
+    try {
+        // Process all materials at once using inventoryUtils
+        const materialsToProcess = [
+            ...weaponSubmission.craftingMaterials,
+            { itemName: 'Star Fragment', quantity: 1 },
+            { itemName: 'Blueprint Voucher', quantity: 1 }
+        ];
 
-    materialsRemoved = true;
+        const processedMaterials = await processMaterials(interaction, character, inventoryItems, { craftingMaterial: materialsToProcess }, 1);
+        if (processedMaterials === "canceled") {
+            await interaction.editReply({
+                content: `❌ Crafting canceled due to insufficient materials.`,
+                ephemeral: true,
+            });
+            return;
+        }
+        materialsRemoved = true;
 
-    // Log stamina before and after deduction
-    await checkAndUseStamina(character, weaponSubmission.staminaToCraft);
-    staminaDeducted = true;
+        // Log stamina before and after deduction
+        await checkAndUseStamina(character, weaponSubmission.staminaToCraft);
+        staminaDeducted = true;
 
-} catch (error) {
-    handleError(error, 'customWeapon.js');
+    } catch (error) {
+        handleError(error, 'customWeapon.js');
 
-    console.error(`[customweapon create]: Transaction error:`, error);
+        console.error(`[customweapon create]: Transaction error:`, error);
 
-    if (materialsRemoved) {
-        await addItemInventoryDatabase(character._id, weaponSubmission.craftingMaterials, 1);
-        await addItemInventoryDatabase(character._id, [{ itemName: 'Star Fragment', quantity: 1 }], 1);
-        await addItemInventoryDatabase(character._id, [{ itemName: 'Blueprint Voucher', quantity: 1 }], 1);
-    }
+        if (materialsRemoved) {
+            await addItemInventoryDatabase(character._id, weaponSubmission.craftingMaterials, 1);
+            await addItemInventoryDatabase(character._id, [{ itemName: 'Star Fragment', quantity: 1 }], 1);
+            await addItemInventoryDatabase(character._id, [{ itemName: 'Blueprint Voucher', quantity: 1 }], 1);
+        }
 
-    if (staminaDeducted) {
-        await updateCharacterById(character._id, {
-            $inc: { currentStamina: weaponSubmission.staminaToCraft }
+        if (staminaDeducted) {
+            await updateCharacterById(character._id, {
+                $inc: { currentStamina: weaponSubmission.staminaToCraft }
+            });
+            console.log(`[customweapon create]: Rolled back ${weaponSubmission.staminaToCraft} stamina for ${character.name}.`);
+        }
+
+        await interaction.editReply({
+            content: `❌ Crafting failed. Materials and stamina have been restored. Error: ${error.message}`,
+            ephemeral: true,
         });
-        console.log(`[customweapon create]: Rolled back ${weaponSubmission.staminaToCraft} stamina for ${character.name}.`);
+        return;
     }
-
-    await interaction.editReply({
-        content: `❌ Crafting failed. Materials and stamina have been restored. Error: ${error.message}`,
-        ephemeral: true,
-    });
-    return;
-}
-
 
     // ------------------- Add Custom Weapon to Inventory -------------------
     try {
-        const inventoryCollection = await getCharacterInventoryCollection(character.name);
-        const newInventoryItem = {
-            characterId: character._id,
-            itemName: weaponSubmission.weaponName,
-            itemId: weaponSubmission.itemId,
-            quantity: 1,
-            category: 'Custom Weapon',
-            type: weaponSubmission.type,
-            subtype: weaponSubmission.subtype,
-            location: character.currentVillage || 'Unknown',
-            date: new Date(),
-            obtain: 'Custom Weapon',
-            synced: uuidv4(),
-        };
+        // Add the new weapon to inventory using inventoryUtils
+        await addItemInventoryDatabase(
+            character._id,
+            weaponSubmission.weaponName,
+            1,
+            interaction,
+            'Custom Weapon'
+        );
 
-// ✅ Mark weaponSubmission as crafted
-weaponSubmission.crafted = true;
-saveSubmissionToStorage(weaponId, weaponSubmission);
+        // Mark weaponSubmission as crafted
+        weaponSubmission.crafted = true;
+        await saveSubmissionToStorage(weaponId, weaponSubmission);
 
-await inventoryCollection.insertOne(newInventoryItem);
-
-// ✅ Delete submission from storage after crafting is finalized
-deleteSubmissionFromStorage(weaponId);
+        // Delete submission from storage after crafting is finalized
+        await deleteSubmissionFromStorage(weaponId);
 
         // ------------------- Log Crafted Weapon to Google Sheets -------------------
-try {
-    const auth = await authorizeSheets();
-    const spreadsheetId = extractSpreadsheetId(character.inventory || character.inventoryLink);
-    const range = 'loggedInventory!A2:M';
-    const uniqueSyncId = uuidv4();
-    const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
-    const formattedDateTime = formatDateTime(new Date());
+        try {
+            const auth = await authorizeSheets();
+            const spreadsheetId = extractSpreadsheetId(character.inventory || character.inventoryLink);
+            const range = 'loggedInventory!A2:M';
+            const uniqueSyncId = uuidv4();
+            const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
+            const formattedDateTime = formatDateTime(new Date());
 
-// 🛠️ Fetch actual item details from DB for accurate category/type/subtype
-const item = await fetchItemByName(weaponSubmission.weaponName);
+            // 🛠️ Fetch actual item details from DB for accurate category/type/subtype
+            const item = await fetchItemByName(weaponSubmission.weaponName);
 
-const values = [
-  [
-    character.name,
-    weaponSubmission.weaponName,
-    '1',
-    item?.category?.join(', ') || 'Unknown',
-    item?.type?.join(', ') || 'Unknown',
-    item?.subtype?.join(', ') || 'Unknown',
-    'Custom Weapon',
-    character.job || '',
-    '',
-    character.currentVillage,
-    interactionUrl,
-    formattedDateTime,
-    uniqueSyncId
-  ]
-];
+            const values = [
+                [
+                    character.name,
+                    weaponSubmission.weaponName,
+                    '1',
+                    item?.category?.join(', ') || 'Unknown',
+                    item?.type?.join(', ') || 'Unknown',
+                    item?.subtype?.join(', ') || 'Unknown',
+                    'Custom Weapon',
+                    character.job || '',
+                    '',
+                    character.currentVillage,
+                    interactionUrl,
+                    formattedDateTime,
+                    uniqueSyncId
+                ]
+            ];
 
-    if (character?.name && character?.inventory && character?.userId) {
-    await safeAppendDataToSheet(character.inventory, character, range, values);
-} else {
-    console.error('[safeAppendDataToSheet]: Invalid character object detected before syncing.');
-}
+            if (character?.name && character?.inventory && character?.userId) {
+                await safeAppendDataToSheet(character.inventory, character, range, values);
+            } else {
+                console.error('[safeAppendDataToSheet]: Invalid character object detected before syncing.');
+            }
 
+            // Log materials used
+            await logMaterialsToGoogleSheets(
+                auth,
+                spreadsheetId,
+                range,
+                character,
+                weaponSubmission.craftingMaterials,
+                { itemName: weaponSubmission.weaponName },
+                interactionUrl,
+                formattedDateTime
+            );
 
-
-
-await logMaterialsToGoogleSheets(
-    auth,
-    spreadsheetId,
-    range,
-    character,
-    [...weaponSubmission.craftingMaterials, { itemName: 'Blueprint Voucher', quantity: 1 }],
-    newInventoryItem,
-    interactionUrl,
-    formattedDateTime
-  );
-  
-} catch (error) {
-    handleError(error, 'customWeapon.js');
-
-    console.error(`[customweapon create]: Failed to log Google Sheets crafting entry:`, error);
-}
+        } catch (error) {
+            handleError(error, 'customWeapon.js');
+            console.error(`[customweapon create]: Failed to log Google Sheets crafting entry:`, error);
+        }
 
     } catch (error) {
-    handleError(error, 'customWeapon.js');
-
+        handleError(error, 'customWeapon.js');
         console.error(`[customweapon create]: Failed to add ${weaponSubmission.weaponName} to inventory:`, error);
         await interaction.editReply({
             content: `❌ Failed to add the custom weapon **${weaponSubmission.weaponName}** to the inventory.`,
@@ -455,7 +461,7 @@ const embed = {
             inline: false,
         },
         {
-            name: `What’s next?`,
+            name: `What's next?`,
             value: `🛡️ Use the </gear:1306176789755858975> command to equip it and enjoy your new weapon.`,
             inline: false,
         },
@@ -647,7 +653,12 @@ saveSubmissionToStorage(weaponId, {
     userId: interaction.user.id,
     itemId: weaponId,
     status: 'pending',
-    submissionMessageId: submissionMessage?.id
+    submissionMessageId: submissionMessage?.id,
+    notificationMessageId: null, // Will be updated after notification is sent
+    submittedAt: new Date(),
+    crafted: false,
+    craftingMaterials: [], // Will be populated during approval
+    staminaToCraft: 0 // Will be set during approval
 });
 
       
@@ -664,15 +675,14 @@ try {
         });
 
         // ✅ Safely update submission with notificationMessageId now
-        const updatedSubmission = retrieveSubmissionFromStorage(weaponId);
-        if (updatedSubmission) {
-            updatedSubmission.notificationMessageId = notificationMessage.id;
-            saveSubmissionToStorage(weaponId, updatedSubmission);
+        const currentSubmission = await retrieveSubmissionFromStorage(weaponId);
+        if (currentSubmission) {
+            currentSubmission.notificationMessageId = notificationMessage.id;
+            await saveSubmissionToStorage(weaponId, currentSubmission);
         }
     }
 } catch (error) {
     handleError(error, 'customWeapon.js');
-
     console.error(`[customweapon submit]: Error sending notification to channel:`, error);
 }
 
@@ -713,50 +723,98 @@ try {
     const materialsToCraft = interaction.options.getString('materialstocraft');
 
     try {
-// Retrieve Submission
-const weaponSubmission = retrieveSubmissionFromStorage(weaponId);
+        // Retrieve Submission
+        console.log(`[customweapon approve]: 🔍 Retrieving submission ${weaponId}`);
+        const weaponSubmission = await retrieveSubmissionFromStorage(weaponId);
+        console.log(`[customweapon approve]: 📊 Found submission for ${weaponSubmission.weaponName} (${weaponSubmission.status})`);
 
-// ✅ FIXED CONDITION — Expecting to approve a 'pending' weapon, not already approved
-if (!weaponSubmission || weaponSubmission.status !== 'pending') {
-    console.error(`[customweapon approve]: Submission not found or already approved. Status: ${weaponSubmission?.status}`);
-    await interaction.editReply({
-        content: `❌ Pending custom weapon not found or this weapon has already been approved.`,
-        ephemeral: true,
-    });
-    return;
-}
+        // ✅ FIXED CONDITION — Expecting to approve a 'pending' weapon, not already approved
+        if (!weaponSubmission) {
+            console.error(`[customweapon approve]: ❌ Submission not found for ID: ${weaponId}`);
+            await interaction.editReply({
+                content: `❌ Custom weapon submission not found. Please verify the Weapon ID is correct.`,
+                ephemeral: true,
+            });
+            return;
+        }
 
+        if (weaponSubmission.status !== 'pending') {
+            console.error(`[customweapon approve]: ❌ Submission status is ${weaponSubmission.status} for ID: ${weaponId}`);
+            await interaction.editReply({
+                content: `❌ This weapon has already been ${weaponSubmission.status}.`,
+                ephemeral: true,
+            });
+            return;
+        }
 
+        // ✅ Prevent reuse of crafted weapons
+        if (weaponSubmission.crafted === true) {
+            await interaction.editReply({
+                content: `❌ This weapon has already been crafted and cannot be crafted again.`,
+                ephemeral: true,
+            });
+            return;
+        }
 
+        // Validate Weapon Submission Fields
+        console.log(`[customweapon approve]: 🔍 Validating weapon fields:
+            Base Weapon: ${weaponSubmission.baseWeapon}
+            Type: ${weaponSubmission.type}
+            Subtype: ${weaponSubmission.subtype}
+            Modifiers: ${weaponSubmission.modifiers}`);
 
-// ✅ Prevent reuse of crafted weapons
-if (weaponSubmission.crafted === true) {
-    await interaction.editReply({
-        content: `❌ This weapon has already been crafted and cannot be crafted again.`,
-        ephemeral: true,
-    });
-    return;
-}
+        const validModifiers = ['1', '2', '3', '4'];
+        const validTypes = ['1h', '2h'];
 
-// ------------------- Validate Weapon Submission Fields -------------------
-const validModifiers = ['1', '2', '3', '4'];
-const validTypes = ['1h', '2h'];
+        const validSubtypes = await fetchValidWeaponSubtypes();
 
-const validSubtypes = await fetchValidWeaponSubtypes();
+        // Fetch the base weapon from database to validate
+        const baseWeapon = await ItemModel.findOne({ itemName: weaponSubmission.baseWeapon });
+        if (!baseWeapon) {
+            console.error(`[customweapon approve]: ❌ Base weapon not found in database: ${weaponSubmission.baseWeapon}`);
+            await interaction.editReply({
+                content: `❌ Base weapon "${weaponSubmission.baseWeapon}" not found in the database.`,
+                ephemeral: true,
+            });
+            return;
+        }
 
-if (
-    !validModifiers.includes(weaponSubmission.modifiers) ||
-    !validTypes.includes(weaponSubmission.type) ||
-    !validSubtypes.includes(weaponSubmission.subtype.toLowerCase())
-) {
-    await interaction.editReply({
-        content: `❌ Weapon submission contains **invalid modifiers, type, or subtype**.\nPlease contact a moderator to review this submission.`,
-        ephemeral: true,
-    });
-    return;
-}
+        // Check if base weapon type matches the selected type
+        if (!baseWeapon.type.includes(weaponSubmission.type)) {
+            console.error(`[customweapon approve]: ❌ Base weapon type (${baseWeapon.type}) does not match selected type (${weaponSubmission.type})`);
+            await interaction.editReply({
+                content: `❌ The base weapon "${weaponSubmission.baseWeapon}" is a ${baseWeapon.type.join('/')} weapon, but you selected ${weaponSubmission.type}.`,
+                ephemeral: true,
+            });
+            return;
+        }
 
+        if (!validModifiers.includes(weaponSubmission.modifiers)) {
+            console.error(`[customweapon approve]: ❌ Invalid modifier: ${weaponSubmission.modifiers}`);
+            await interaction.editReply({
+                content: `❌ Invalid modifier value: ${weaponSubmission.modifiers}. Must be one of: ${validModifiers.join(', ')}`,
+                ephemeral: true,
+            });
+            return;
+        }
 
+        if (!validTypes.includes(weaponSubmission.type)) {
+            console.error(`[customweapon approve]: ❌ Invalid type: ${weaponSubmission.type}`);
+            await interaction.editReply({
+                content: `❌ Invalid weapon type: ${weaponSubmission.type}. Must be one of: ${validTypes.join(', ')}`,
+                ephemeral: true,
+            });
+            return;
+        }
+
+        if (!validSubtypes.includes(weaponSubmission.subtype.toLowerCase())) {
+            console.error(`[customweapon approve]: ❌ Invalid subtype: ${weaponSubmission.subtype}`);
+            await interaction.editReply({
+                content: `❌ Invalid weapon subtype: ${weaponSubmission.subtype}. Please check the available subtypes.`,
+                ephemeral: true,
+            });
+            return;
+        }
 
         // Validate Submitter User
         const userId = weaponSubmission.userId;
@@ -786,6 +844,7 @@ if (
         // Parse Crafting Materials
         let craftingMaterials;
         try {
+            console.log(`[customweapon approve]: ��️ Parsing materials: ${materialsToCraft}`);
             craftingMaterials = await Promise.all(
                 materialsToCraft.split(',').map(async (material) => {
                     const [itemName, quantity] = material.trim().split('x');
@@ -795,14 +854,17 @@ if (
                         );
                     }
 
-                    // Fetch the item from the database
-                    const item = await ItemModel.findOne({ itemName: itemName.trim() });
+                    // Fetch the item from the database using case-insensitive search
+                    const item = await ItemModel.findOne({ 
+                        itemName: { $regex: new RegExp(`^${itemName.trim()}$`, 'i') }
+                    });
                     if (!item) {
                         throw new Error(
                             `Item "${itemName.trim()}" does not exist in the database. Please ensure the item name is correct.`
                         );
                     }
 
+                    console.log(`[customweapon approve]: ✅ Found material: ${item.itemName} x${quantity}`);
                     return {
                         _id: item._id,
                         itemName: item.itemName,
@@ -812,7 +874,9 @@ if (
             );
 
             // Add Star Fragment x1 automatically
-            const starFragment = await ItemModel.findOne({ itemName: 'Star Fragment' });
+            const starFragment = await ItemModel.findOne({ 
+                itemName: { $regex: /^Star Fragment$/i }
+            });
             if (!starFragment) {
                 throw new Error(`"Star Fragment" does not exist in the database.`);
             }
@@ -821,10 +885,11 @@ if (
                 itemName: 'Star Fragment',
                 quantity: 1,
             });
+            console.log(`[customweapon approve]: ✅ Added Star Fragment x1`);
+
         } catch (error) {
     handleError(error, 'customWeapon.js');
-
-            console.error(`[customweapon approve]: Error parsing materials: ${error.message}`);
+            console.error(`[customweapon approve]: ❌ Error parsing materials: ${error.message}`);
             await interaction.editReply({
                 content: `❌ Failed to parse materials: ${error.message}`,
                 ephemeral: true,
@@ -874,7 +939,7 @@ if (
         try {
             const dmEmbed = {
                 title: `Custom Weapon Approved: ${weaponSubmission.weaponName}`,
-                description: 'The item has been added to the database! Use </customweapon create:1330719656905801770> to craft it. This will consume the required stamina and materials from your character’s inventory.',
+                description: "The item has been added to the database! Use </customweapon create:1330719656905801770> to craft it. This will consume the required stamina and materials from your character's inventory.",
                 color: 0xAA926A,
                 thumbnail: { url: weaponSubmission.image },
                 fields: [
@@ -926,7 +991,7 @@ if (
             embeds: [
                 {
                     title: `Approved Weapon: ${weaponSubmission.weaponName}`,
-                    description: 'The item has been added to the database! Use </customweapon create:1330719656905801770> to craft it. This will consume the required stamina and materials from your character’s inventory.',
+                    description: "The item has been added to the database! Use </customweapon create:1330719656905801770> to craft it. This will consume the required stamina and materials from your character's inventory.",
                     color: 0xAA926A,
                     thumbnail: { url: weaponSubmission.image },
                     fields: [
