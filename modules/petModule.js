@@ -236,6 +236,66 @@ const findPetByIdentifier = async (petIdentifier, characterId) => {
   return await Pet.findOne({ name: petIdentifier, owner: characterId });
 };
 
+// ---- Function: handlePetImageUpload ----
+// Handles pet image upload with fallback and error handling
+const handlePetImageUpload = async (imageAttachment, petName) => {
+  if (!imageAttachment) return "";
+  
+  try {
+    const petImageUrl = await uploadPetImage(imageAttachment.url, petName);
+    console.log(`[pet.js]: logs - Image uploaded successfully. Public URL: ${petImageUrl}`);
+    return petImageUrl;
+  } catch (error) {
+    handleError(error, "pet.js");
+    console.error(`[pet.js]: logs - Error uploading image for pet "${petName}": ${error.message}`);
+    throw new Error("Failed to upload image. Please try again later.");
+  }
+};
+
+// ---- Function: validatePetSpeciesCompatibility ----
+// Validates species and pet type compatibility, returns formatted error if invalid
+const validatePetSpeciesCompatibility = (species, petType) => {
+  // Normalize species for lookup
+  const normalizedSpeciesKey = species.toLowerCase().replace(/\s+/g, '').replace(/'/g, '');
+  const allowedRolls = speciesRollPermissions[normalizedSpeciesKey];
+
+  // Check if species exists
+  if (!allowedRolls) {
+    return {
+      isValid: false,
+      error: `❌ **Unknown or unsupported species \`${species}\`. Please select a valid species.**`
+    };
+  }
+
+  // Validate petTypeData existence
+  const selectedPetTypeData = getPetTypeData(petType);
+  if (!selectedPetTypeData) {
+    return {
+      isValid: false,
+      error: `❌ **Unknown or unsupported pet type \`${petType}\`.**`
+    };
+  }
+
+  // Validate Species Compatibility with Pet Type
+  if (!canSpeciesPerformPetType(normalizedSpeciesKey, petType)) {
+    const allowedRollsFormatted = allowedRolls.map((roll) => `\`${roll}\``).join(", ");
+    const validPetTypes = Object.keys(petTypeData).filter((type) =>
+      canSpeciesPerformPetType(normalizedSpeciesKey, type)
+    );
+    const validPetTypesFormatted = validPetTypes.length > 0 ? validPetTypes.map((type) => `\`${type}\``).join(", ") : "None";
+
+    return {
+      isValid: false,
+      error: `❌ **The selected species \`${species}\` cannot be assigned to the pet type \`${petType}\`.**\n\n` +
+        `__Allowed Rolls__: ${allowedRollsFormatted}\n` +
+        `__Compatible Pet Types__: ${validPetTypesFormatted}\n\n` +
+        `👉 **Please choose a compatible pet type based on your species' available rolls.**`
+    };
+  }
+
+  return { isValid: true };
+};
+
 const getPetTableRollDescription = (perk) => petTableRollDescriptions[perk] || 'Unknown perk';
 
 const getFlavorText = (tableType, petName, petSpecies, itemName) => {
@@ -272,6 +332,8 @@ module.exports = {
   getPetEmoji,
   getRollsDisplay,
   findPetByIdentifier,
+  handlePetImageUpload,
+  validatePetSpeciesCompatibility,
   getPetTableRollDescription,
   getFlavorText,
   getPetTypeRollCombination,
