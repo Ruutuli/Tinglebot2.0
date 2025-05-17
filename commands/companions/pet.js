@@ -32,6 +32,8 @@ const {
  speciesRollPermissions,
  getRollsDisplay,
  findPetByIdentifier,
+ handlePetImageUpload,
+ validatePetSpeciesCompatibility,
 } = require("../../modules/petModule");
 
 // ------------------- Utility Functions -------------------
@@ -313,49 +315,18 @@ if (subcommand === "add") {
   const petType = interaction.options.getString("pettype");
   const imageAttachment = interaction.options.getAttachment("image");
 
-  // Normalize species for lookup
-  const normalizedSpeciesKey = species.toLowerCase().replace(/\s+/g, '').replace(/'/g, '');
-  const allowedRolls = speciesRollPermissions[normalizedSpeciesKey];
-
-  // ------------------- Validate Species -------------------
-  
-  if (!allowedRolls) {
-    return interaction.reply(`❌ **Unknown or unsupported species \`${species}\`. Please select a valid species.**`);
+  // Validate species and pet type compatibility
+  const validationResult = validatePetSpeciesCompatibility(species, petType);
+  if (!validationResult.isValid) {
+    return interaction.reply(validationResult.error);
   }
-
-// Validate petTypeData existence
-const selectedPetTypeData = getPetTypeData(petType);
-if (!selectedPetTypeData) {
-  return interaction.reply(`❌ **Unknown or unsupported pet type \`${petType}\`.**`);
-}
-
-// Validate Species Compatibility with Pet Type
-if (!canSpeciesPerformPetType(normalizedSpeciesKey, petType)) {
-  const allowedRollsFormatted = allowedRolls.map((roll) => `\`${roll}\``).join(", ");
-  const validPetTypes = Object.keys(petTypeData).filter((type) =>
-    canSpeciesPerformPetType(normalizedSpeciesKey, type)
-  );
-  const validPetTypesFormatted = validPetTypes.length > 0 ? validPetTypes.map((type) => `\`${type}\``).join(", ") : "None";
-
-  return interaction.reply(
-    `❌ **The selected species \`${species}\` cannot be assigned to the pet type \`${petType}\`.**\n\n` +
-    `__Allowed Rolls__: ${allowedRollsFormatted}\n` +
-    `__Compatible Pet Types__: ${validPetTypesFormatted}\n\n` +
-    `👉 **Please choose a compatible pet type based on your species' available rolls.**`
-  );
-}
 
   // ------------------- Upload Pet Image (If Provided) -------------------
   let petImageUrl = "";
-  if (imageAttachment) {
-    try {
-      petImageUrl = await uploadPetImage(imageAttachment.url, petName);
-      console.log(`[pet.js]: logs - Image uploaded successfully. Public URL: ${petImageUrl}`);
-    } catch (error) {
-      handleError(error, "pet.js");
-      console.error(`[pet.js]: logs - Error uploading image for pet "${petName}": ${error.message}`);
-      return interaction.reply("❌ **Failed to upload image. Please try again later.**");
-    }
+  try {
+    petImageUrl = await handlePetImageUpload(imageAttachment, petName);
+  } catch (error) {
+    return interaction.reply(error.message);
   }
 
   // ------------------- Update Existing Pet or Add New Pet -------------------
@@ -386,7 +357,6 @@ if (!canSpeciesPerformPetType(normalizedSpeciesKey, petType)) {
       tableDescription: selectedPetTypeData.description,
     });
     
-
     await Character.findByIdAndUpdate(character._id, { currentActivePet: newPet._id });
 
     const rollsDisplay = getRollsDisplay(newPet.rollsRemaining, newPet.level);
@@ -401,7 +371,7 @@ if (!canSpeciesPerformPetType(normalizedSpeciesKey, petType)) {
         { name: "__Pet Species__", value: `> ${getPetEmoji(species)} ${species}`, inline: true },
         { name: "__Pet Type__", value: `> ${petType}`, inline: true },
         { name: "Roll Combination", value: selectedPetTypeData.rollCombination.join(", "), inline: false },
-        { name: "Description",      value: selectedPetTypeData.description,               inline: false }
+        { name: "Description", value: selectedPetTypeData.description, inline: false }
       )
       .setImage(petImageUrl || "https://via.placeholder.com/150")
       .setColor("#00FF00");
@@ -411,63 +381,52 @@ if (!canSpeciesPerformPetType(normalizedSpeciesKey, petType)) {
 }
 
    // ------------------- Subcommand: Edit Pet Image -------------------
-   // This branch handles updating the image of an existing pet.
    if (subcommand === "edit") {
     // Retrieve the image attachment.
     const imageAttachment = interaction.options.getAttachment("image");
     if (!imageAttachment) {
-     return interaction.reply(
-      "❌ **Please upload an image to update your pet.**"
-     );
+      return interaction.reply(
+        "❌ **Please upload an image to update your pet.**"
+      );
     }
 
     // Verify pet exists in the database
-    const petDoc = await Pet.findOne({ name: petName, owner: character._id });
+    const petDoc = await findPetByIdentifier(petName, character._id);
     if (!petDoc) {
-     return interaction.reply(
-      `❌ **Pet \`${petName}\` not found. Please add it first with \`/pet add\`.**`
-     );
+      return interaction.reply(
+        `❌ **Pet \`${petName}\` not found. Please add it first with \`/pet add\`.**`
+      );
     }
 
     // Attempt to upload the new image
-    let petImageUrl = "";
     try {
-     petImageUrl = await uploadPetImage(imageAttachment.url, petName);
-     console.log(
-      `[pet.js]: logs - Image uploaded successfully. URL: ${petImageUrl}`
-     );
+      const petImageUrl = await handlePetImageUpload(imageAttachment, petName);
+      petDoc.imageUrl = petImageUrl;
+      await updatePetToCharacter(character._id, petName, petDoc);
+
+      // Build and send embed showing updated pet
+      const editEmbed = new EmbedBuilder()
+        .setAuthor({ name: character.name, iconURL: character.icon })
+        .setTitle(`Pet Image Updated — ${petDoc.name}`)
+        .setThumbnail(petDoc.imageUrl)
+        .addFields(
+          { name: "Name", value: `\`${petDoc.name}\``, inline: true },
+          { name: "Species", value: petDoc.species, inline: true },
+          { name: "Type", value: petDoc.petType, inline: true },
+          { name: "Level", value: `${petDoc.level}`, inline: true },
+          {
+            name: "Rolls Remaining",
+            value: `${petDoc.rollsRemaining}`,
+            inline: true,
+          }
+        )
+        .setImage(petDoc.imageUrl)
+        .setColor("#00FF00");
+
+      return interaction.reply({ embeds: [editEmbed] });
     } catch (error) {
-     handleError(error, "pet.js");
-     console.error(`[pet.js]: logs - Error uploading image: ${error.message}`);
-     return interaction.reply(
-      "❌ **Failed to upload image. Please try again later.**"
-     );
+      return interaction.reply(error.message);
     }
-
-    // Update the pet's image and save changes
-    petDoc.imageUrl = petImageUrl;
-    await updatePetToCharacter(character._id, petName, petDoc);
-
-    // Build and send embed showing updated pet
-    const editEmbed = new EmbedBuilder()
-     .setAuthor({ name: character.name, iconURL: character.icon })
-     .setTitle(`Pet Image Updated — ${petDoc.name}`)
-     .setThumbnail(petDoc.imageUrl)
-     .addFields(
-      { name: "Name", value: `\`${petDoc.name}\``, inline: true },
-      { name: "Species", value: petDoc.species, inline: true },
-      { name: "Type", value: petDoc.petType, inline: true },
-      { name: "Level", value: `${petDoc.level}`, inline: true },
-      {
-       name: "Rolls Remaining",
-       value: `${petDoc.rollsRemaining}`,
-       inline: true,
-      }
-     )
-     .setImage(petDoc.imageUrl)
-     .setColor("#00FF00");
-
-    return interaction.reply({ embeds: [editEmbed] });
    }
 
    // ------------------- Verify Pet Existence for Roll, Upgrade, and Retire -------------------
