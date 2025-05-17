@@ -93,6 +93,8 @@ const { v4: uuidv4 } = require('uuid');
 const { createMountEncounterEmbed } = require('../../embeds/embeds');
 const { generateWeatherEmbed } = require('../../embeds/weatherEmbed.js');
 
+const { addItemInventoryDatabase } = require('../../utils/inventoryUtils');
+
 // ============================================================================
 // ------------------- Constants -------------------
 // ============================================================================

@@ -108,6 +108,26 @@ async function handleAutocomplete(interaction) {
     switch (commandName) {
       // ... existing code ...
 
+      // ------------------- Custom Weapon Command -------------------
+      case "customweapon":
+        const customWeaponSubcommand = interaction.options.getSubcommand();
+        if (customWeaponSubcommand === "create") {
+          if (focusedName === "charactername") {
+            await handleCustomWeaponCharacterAutocomplete(interaction, focusedOption);
+          } else if (focusedName === "weaponid") {
+            await handleCustomWeaponIdAutocomplete(interaction, focusedOption);
+          }
+        } else if (customWeaponSubcommand === "submit") {
+          if (focusedName === "charactername") {
+            await handleCustomWeaponCharacterAutocomplete(interaction, focusedOption);
+          } else if (focusedName === "baseweapon") {
+            await handleBaseWeaponAutocomplete(interaction, focusedOption);
+          } else if (focusedName === "subtype") {
+            await handleSubtypeAutocomplete(interaction, focusedOption);
+          }
+        }
+        break;
+
       // ------------------- Heal Command -------------------
       case "heal":
         await handleHealAutocomplete(interaction, focusedOption);
@@ -673,58 +693,120 @@ async function handleCreateCharacterRaceAutocomplete(
 // It provides suggestions for base weapon types and weapon subtypes during the
 // weapon creation process.
 
+// ------------------- Custom Weapon Character Autocomplete -------------------
+// Provides autocomplete suggestions for selecting a character when creating a custom weapon.
+async function handleCustomWeaponCharacterAutocomplete(interaction, focusedOption) {
+  try {
+    const userId = interaction.user.id;
+    const characters = await fetchCharactersByUserId(userId);
+    
+    // Ensure focusedValue is a string and has a default value
+    const focusedValue = focusedOption?.value?.toString() || '';
+    
+    const choices = characters
+      .filter(char => char.name.toLowerCase().includes(focusedValue.toLowerCase()))
+      .map(char => ({
+        name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
+        value: char.name
+      }));
+    return await respondWithFilteredChoices(interaction, focusedOption, choices);
+  } catch (error) {
+    console.error('[handleCustomWeaponCharacterAutocomplete]: Error:', error);
+    return await safeRespondWithError(interaction);
+  }
+}
+
+// ------------------- Custom Weapon ID Autocomplete -------------------
+// Provides autocomplete suggestions for selecting an approved weapon ID.
+async function handleCustomWeaponIdAutocomplete(interaction, focusedOption) {
+  try {
+    const userId = interaction.user.id;
+    const characterName = interaction.options.getString('charactername');
+    if (!characterName) return await interaction.respond([]);
+
+    // Get all submissions from storage
+    const allSubmissions = getAllSubmissions();
+    
+    // Filter for approved weapons that haven't been crafted yet
+    const approvedWeapons = allSubmissions.filter(sub => 
+      sub.status === 'approved' && 
+      !sub.crafted &&
+      sub.characterName === characterName
+    );
+
+    const choices = approvedWeapons.map(weapon => ({
+      name: `${weapon.weaponName} (ID: ${weapon.itemId})`,
+      value: weapon.itemId
+    }));
+
+    await respondWithFilteredChoices(interaction, focusedOption, choices);
+  } catch (error) {
+    console.error('[handleCustomWeaponIdAutocomplete]: Error:', error);
+    return await safeRespondWithError(interaction);
+  }
+}
+
 // ------------------- Base Weapon Autocomplete -------------------
 // Provides autocomplete suggestions for selecting a base weapon when creating a custom weapon.
-async function handleBaseWeaponAutocomplete(interaction) {
+async function handleBaseWeaponAutocomplete(interaction, focusedOption) {
  try {
-  // List of available base weapon types
-  const choices = ["1h", "2h", "Bow"].map((choice) => ({
-   name: choice,
-   value: choice,
+  // Fetch all weapons from the database
+  const weapons = await Item.find({
+    categoryGear: 'Weapon',
+    itemName: { $regex: focusedOption.value, $options: 'i' }
+  })
+  .sort({ itemName: 1 })
+  .limit(25)
+  .lean();
+
+  // Map weapons to autocomplete choices
+  const choices = weapons.map(weapon => ({
+    name: `${weapon.itemName} (${weapon.type?.join('/') || 'Unknown'})`,
+    value: weapon.itemName
   }));
 
-  // Respond to the interaction with the base weapon choices
+  // Respond with the filtered weapon choices
   await interaction.respond(choices);
  } catch (error) {
   handleError(error, "autocompleteHandler.js");
-
   console.error("[handleBaseWeaponAutocomplete]: Error occurred:", error);
   await safeRespondWithError(interaction);
  }
 }
 
 // ------------------- Subtype Autocomplete -------------------
-// Provides autocomplete suggestions for weapon subtypes based on user input.
-async function handleSubtypeAutocomplete(interaction) {
+// Provides autocomplete suggestions for selecting a weapon subtype when creating a custom weapon.
+async function handleSubtypeAutocomplete(interaction, focusedOption) {
  try {
-  // List of available weapon subtypes
-  const choices = [
-   "Sword",
-   "Dagger",
-   "Axe",
-   "Spear",
-   "Hammer",
-   "Whip",
-   "Gauntlet",
-   "Katana",
-   "Chakram",
-   "Scythe",
-  ]
-   .filter((choice) =>
-    choice
-     .toLowerCase()
-     .includes(interaction.options.getFocused().toLowerCase())
-   )
-   .map((choice) => ({
-    name: choice,
-    value: choice,
-   }));
+  // Fetch all weapons from the database
+  const weapons = await Item.find({
+    categoryGear: 'Weapon'
+  })
+  .select('subtype')
+  .lean();
+
+  // Extract and deduplicate subtypes
+  const uniqueSubtypes = [...new Set(
+    weapons
+      .flatMap(weapon => weapon.subtype || [])
+      .filter(subtype => 
+        subtype && 
+        subtype.toLowerCase().includes(focusedOption.value.toLowerCase())
+      )
+  )]
+  .sort()
+  .slice(0, 25); // Discord has a limit of 25 choices
+
+  // Map subtypes to autocomplete choices
+  const choices = uniqueSubtypes.map(subtype => ({
+    name: subtype,
+    value: subtype
+  }));
 
   // Respond with the filtered subtype choices
   await interaction.respond(choices);
  } catch (error) {
   handleError(error, "autocompleteHandler.js");
-
   console.error("[handleSubtypeAutocomplete]: Error occurred:", error);
   await safeRespondWithError(interaction);
  }
@@ -3146,6 +3228,8 @@ module.exports = {
  // ------------------- Custom Weapon Functions -------------------
  handleBaseWeaponAutocomplete,
  handleSubtypeAutocomplete,
+ handleCustomWeaponCharacterAutocomplete,
+ handleCustomWeaponIdAutocomplete,
 
  // ------------------- Deliver Functions -------------------
  handleCourierSenderAutocomplete,
