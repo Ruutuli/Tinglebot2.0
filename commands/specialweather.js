@@ -60,6 +60,17 @@ const SPECIAL_TO_REGULAR_OVERLAY = {
   'Rock Slide': 'sunny'
 };
 
+// Add banner cache
+const bannerCache = new Map();
+const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
+
+// Add channel mapping
+const VILLAGE_CHANNELS = {
+  Rudania: process.env.RUDANIA_TOWN_HALL,
+  Inariko: process.env.INARIKO_TOWN_HALL,
+  Vhintl: process.env.VHINTL_TOWN_HALL
+};
+
 // ------------------- Helper Functions -------------------
 function capitalizeWords(str) {
   return str.split(' ')
@@ -122,41 +133,58 @@ function getOverlayPath(condition) {
 
 async function generateBanner(village, weather) {
   try {
+    // Check cache first
+    const cacheKey = `${village}-${weather.special.label}`;
+    const cachedBanner = bannerCache.get(cacheKey);
+    if (cachedBanner && Date.now() - cachedBanner.timestamp < CACHE_DURATION) {
+      return cachedBanner.banner;
+    }
+
     const bannerUrl = VILLAGE_IMAGES[village];
     if (!bannerUrl) {
       console.error(`[specialweather.js]: ❌ No banner URL found for village: ${village}`);
       return null;
     }
+
     const overlayPath = getOverlayPath(weather.special.label);
-    
+    if (!overlayPath) {
+      return null;
+    }
+
     // Add timeout to prevent infinite loops
     const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Image processing timeout')), 10000);
+      setTimeout(() => reject(new Error('Image processing timeout')), 3000); // Reduced timeout further
     });
 
-    const bannerPromise = Jimp.read(bannerUrl);
-    const bannerImg = await Promise.race([bannerPromise, timeoutPromise]);
-    
-    if (overlayPath) {
-      const overlayPromise = Jimp.read(overlayPath);
-      const overlayImg = await Promise.race([overlayPromise, timeoutPromise]);
-      
-      // Validate image dimensions before processing
-      if (bannerImg.bitmap.width > 0 && bannerImg.bitmap.height > 0) {
-        overlayImg.resize(bannerImg.bitmap.width, bannerImg.bitmap.height);
-        bannerImg.composite(overlayImg, 0, 0, {
-          mode: Jimp.BLEND_SOURCE_OVER,
-          opacitySource: 1,
-          opacityDest: 1
-        });
-      } else {
-        throw new Error('Invalid image dimensions');
-      }
+    // Process images in parallel
+    const [bannerImg, overlayImg] = await Promise.all([
+      Promise.race([Jimp.read(bannerUrl), timeoutPromise]),
+      Promise.race([Jimp.read(overlayPath), timeoutPromise])
+    ]);
+
+    // Validate image dimensions before processing
+    if (bannerImg.bitmap.width > 0 && bannerImg.bitmap.height > 0) {
+      overlayImg.resize(bannerImg.bitmap.width, bannerImg.bitmap.height);
+      bannerImg.composite(overlayImg, 0, 0, {
+        mode: Jimp.BLEND_SOURCE_OVER,
+        opacitySource: 1,
+        opacityDest: 1
+      });
+    } else {
+      throw new Error('Invalid image dimensions');
     }
-    
+
     const outName = `banner-${village.toLowerCase()}.png`;
     const buffer = await bannerImg.getBufferAsync(Jimp.MIME_PNG);
-    return new AttachmentBuilder(buffer, { name: outName });
+    const banner = new AttachmentBuilder(buffer, { name: outName });
+
+    // Cache the banner
+    bannerCache.set(cacheKey, {
+      banner,
+      timestamp: Date.now()
+    });
+
+    return banner;
   } catch (error) {
     console.error(`[specialweather.js]: ❌ Error generating banner: ${error.message}`);
     return null;
@@ -172,9 +200,6 @@ const createSpecialWeatherEmbed = async (character, item, weather) => {
     : `${currentVillage} ${capitalizeWords(character.job)}`;
 
   const embedColor = VILLAGE_COLORS[currentVillage] || 0x000000;
-  
-  // Generate banner with overlay
-  const banner = await generateBanner(currentVillage, weather);
   
   // Get the best available image URL for the thumbnail
   let thumbnailUrl = DEFAULT_IMAGE_URL;
@@ -206,11 +231,7 @@ const createSpecialWeatherEmbed = async (character, item, weather) => {
       { name: 'Location', value: currentVillage, inline: true }
     );
 
-  if (banner) {
-    embed.setImage(`attachment://${banner.name}`);
-  }
-
-  return { embed, files: banner ? [banner] : [] };
+  return { embed, files: [] };
 };
 
 // ------------------- Command Definition -------------------
@@ -228,6 +249,27 @@ module.exports = {
   async execute(interaction) {
     try {
       await interaction.deferReply();
+
+      // Check if command is used in a valid town hall channel
+      const channelId = interaction.channelId;
+      const validChannels = Object.values(VILLAGE_CHANNELS);
+      if (!validChannels.includes(channelId)) {
+        await interaction.editReply({
+          content: `❌ **This command can only be used in a village's town hall channel.**\n🏛️ **Valid channels:**\n- <#${VILLAGE_CHANNELS.Rudania}> (Rudania)\n- <#${VILLAGE_CHANNELS.Inariko}> (Inariko)\n- <#${VILLAGE_CHANNELS.Vhintl}> (Vhintl)`,
+          ephemeral: true
+        });
+        return;
+      }
+
+      // Get the village from the channel ID
+      const channelVillage = Object.entries(VILLAGE_CHANNELS).find(([_, id]) => id === channelId)?.[0];
+      if (!channelVillage) {
+        await interaction.editReply({
+          content: `❌ **Invalid town hall channel.**`,
+          ephemeral: true
+        });
+        return;
+      }
 
       const characterName = interaction.options.getString('charactername');
       const character = await fetchCharacterByNameAndUserId(characterName, interaction.user.id);
@@ -259,14 +301,47 @@ module.exports = {
         return;
       }
 
+      // Check if character has already gathered during special weather today
+      const now = new Date();
+      const rollover = new Date();
+      rollover.setUTCHours(13, 0, 0, 0); // 8AM EST = 1PM UTC
+
+      // If we're before rollover time, use yesterday's rollover
+      if (now < rollover) {
+        rollover.setDate(rollover.getDate() - 1);
+      }
+
+      // Convert lastSpecialWeatherGather to Date object if it's a string
+      const lastGather = character.lastSpecialWeatherGather ? new Date(character.lastSpecialWeatherGather) : null;
+      
+      if (lastGather && lastGather > rollover) {
+        const nextGather = new Date(rollover);
+        nextGather.setDate(nextGather.getDate() + 1);
+        const unixTimestamp = Math.floor(nextGather.getTime() / 1000);
+        
+        await interaction.editReply({
+          content: `❌ **${character.name} has already gathered during special weather today.**`,
+          ephemeral: true,
+        });
+        return;
+      }
+
       // Get current weather for the village
-      const currentVillage = character.currentVillage.charAt(0).toUpperCase() + character.currentVillage.slice(1).toLowerCase();
+      const currentVillage = channelVillage; // Use the village from the channel
       const weather = await getCurrentWeather(currentVillage);
       console.log(`[specialweather.js]: 🔄 Weather fetched for ${currentVillage}`);
       
       if (!weather || !weather.special || !weather.special.label) {
         await interaction.editReply({
           content: `❌ **There is no special weather in ${currentVillage} right now.**\n✨ **Special weather is required to use this command.**`,
+        });
+        return;
+      }
+
+      // Check if character is in the correct village
+      if (character.currentVillage.toLowerCase() !== currentVillage.toLowerCase()) {
+        await interaction.editReply({
+          content: `❌ **${character.name} must be in ${currentVillage} to gather during its special weather.**\n🗺️ **Current Location:** ${character.currentVillage}`,
         });
         return;
       }
@@ -312,9 +387,32 @@ module.exports = {
       // Sync item using itemSyncUtils
       await syncItem(character, itemToSync, interaction, SOURCE_TYPES.GATHERING);
 
+      // Update last special weather gather time
+      character.lastSpecialWeatherGather = new Date();
+      await character.save();
+
       // Create and send embed
       const { embed, files } = await createSpecialWeatherEmbed(character, randomItem, weather);
-      await interaction.editReply({ embeds: [embed], files });
+      
+      // Send initial response without banner
+      await interaction.editReply({ 
+        embeds: [embed], 
+        files: [] 
+      });
+
+      // Generate and send banner in a separate message
+      try {
+        const banner = await generateBanner(currentVillage, weather);
+        if (banner) {
+          await interaction.followUp({ 
+            files: [banner],
+            ephemeral: false 
+          });
+        }
+      } catch (error) {
+        console.error(`[specialweather.js]: ❌ Error generating banner: ${error.message}`);
+        // Don't send error to user since this is non-critical
+      }
 
     } catch (error) {
       handleError(error, 'specialweather.js');

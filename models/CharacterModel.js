@@ -35,6 +35,7 @@ const characterSchema = new Schema({
   maxStamina: { type: Number, required: true },          // Maximum stamina
   currentStamina: { type: Number, required: true },      // Current stamina
   lastStaminaUsage: { type: Date, default: null },       // Last usage of stamina
+  lastSpecialWeatherGather: { type: Date, default: null }, // Last special weather gathering
 
   // ------------------- Gear and stats -------------------
   gearArmor: {                                           // Armor gear (head, chest, legs)
