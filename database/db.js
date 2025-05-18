@@ -657,7 +657,7 @@ const getIngredientItems = async (ingredientName) => {
   const craftingItems = items.filter((item) => item.crafting);
   const directMatches = craftingItems.filter((item) =>
    item.craftingMaterial.some(
-    (material) => material.itemName === ingredientName
+    (material) => material.itemName.toLowerCase() === ingredientName.toLowerCase()
    )
   );
   const formattedResults = directMatches.map((item) => ({
