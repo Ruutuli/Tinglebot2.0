@@ -514,7 +514,7 @@ for (const { quantity } of items) {
     quantity,
     interaction
    );
-   await addItemInventoryDatabase(toCharacter._id, name, quantity, interaction);
+   await addItemInventoryDatabase(toCharacter._id, name, quantity, interaction, 'Gift from ' + fromCharacterName);
 
    const itemDetails = await ItemModel.findOne({
     itemName: new RegExp(`^${name}$`, "i"),
@@ -872,12 +872,14 @@ async function handleShopBuy(interaction) {
     console.log(`[shops]: 📊 New balance: 🪙 ${currentTokens - totalPrice}`);
 
     // Update inventory
-    const inventoryCollection = await getCharacterInventoryCollection(characterName);
-    await inventoryCollection.updateOne(
-      { itemName: { $regex: new RegExp(`^${itemName}$`, 'i') } },
-      { $inc: { quantity: quantity } },
-      { upsert: true }
+    await addItemInventoryDatabase(
+      character._id,
+      itemName,
+      quantity,
+      interaction,
+      'Purchase from shop'
     );
+    console.log(`[economy.js]: 📦 Updated inventory for characterId: ${character._id}, item: ${itemName}, quantity: +${quantity}`);
 
     // Update shop stock
     await ShopStock.updateOne(
