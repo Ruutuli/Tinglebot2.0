@@ -816,7 +816,6 @@ async function deleteInventorySheetData(spreadsheetId, characterName) {
 // ------------------- Function: safeAppendDataToSheet -------------------
 // Safely appends data to a sheet with validation
 async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, client, { skipValidation = false } = {}) {
-    console.log(`[googleSheetsUtils.js]: 📊 safeAppendDataToSheet range: ${range}`);
     try {
         if (!spreadsheetUrl || typeof spreadsheetUrl !== 'string') {
             console.error(`[googleSheetsUtils.js]: ❌ Invalid spreadsheet URL:`, spreadsheetUrl);

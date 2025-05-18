@@ -385,7 +385,7 @@ if (weaponSubmission.crafted === true) {
             ];
 
             if (character?.name && character?.inventory && character?.userId) {
-                await safeAppendDataToSheet(character.inventory, character, range, values);
+                await safeAppendDataToSheet(character.inventory, character, range, values, undefined, { skipValidation: true });
             } else {
                 console.error('[safeAppendDataToSheet]: Invalid character object detected before syncing.');
             }
@@ -1157,7 +1157,7 @@ async function logMaterialsToGoogleSheets(auth, spreadsheetId, range, character,
             }
         }));
 
-        await safeAppendDataToSheet(character.inventory, character, range, usedMaterialsValues);
+        await safeAppendDataToSheet(character.inventory, character, range, usedMaterialsValues, undefined, { skipValidation: true });
     } catch (error) {
     handleError(error, 'customWeapon.js');
 

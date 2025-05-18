@@ -161,7 +161,7 @@ module.exports = {
             formattedDateTime,
             ''
           ]];
-          await safeAppendDataToSheet(inventoryLink, character, 'loggedInventory!A2:M', values, interaction.client);
+          await safeAppendDataToSheet(inventoryLink, character, 'loggedInventory!A2:M', values, interaction.client, { skipValidation: true });
         }
 
         // ------------------- Build and Send Voucher Embed -------------------

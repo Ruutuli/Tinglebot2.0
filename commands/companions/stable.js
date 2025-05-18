@@ -184,7 +184,7 @@ async function handleStoreMount(interaction, userId, characterName, mountName) {
         'spent',                           // TYPE
         '-100'                             // TOKEN AMOUNT
       ]];
-      await safeAppendDataToSheet(user.tokenTracker, character, 'loggedTracker!A:F', values);
+      await safeAppendDataToSheet(user.tokenTracker, character, 'loggedTracker!A:F', values, undefined, { skipValidation: true });
     }
 
     const mountsInStable = await Mount.find({ owner: character.name, isStored: true });
@@ -351,7 +351,7 @@ async function handleSellMount(interaction, userId, characterName, mountName) {
           'earned',                          // TYPE
           `${sellPrice}`                   // PRICE
         ]];
-        await safeAppendDataToSheet(user.tokenTracker, character, 'loggedTracker!A:F', values);
+        await safeAppendDataToSheet(user.tokenTracker, character, 'loggedTracker!A:F', values, undefined, { skipValidation: true });
       }
   
       await interaction.reply({
@@ -442,7 +442,7 @@ async function handleRetrieveMount(interaction, userId, characterName, mountName
         '-100'                             // TOKEN AMOUNT
       ]];
 
-      await safeAppendDataToSheet(user.tokenTracker, character, 'loggedTracker!A:F', values);
+      await safeAppendDataToSheet(user.tokenTracker, character, 'loggedTracker!A:F', values, undefined, { skipValidation: true });
     }
 
     const mount = await Mount.findOne({ owner: character.name, name: mountName, isStored: true });
@@ -554,7 +554,7 @@ async function handleBuyCharacter(interaction, userId, characterName, mountName)
           'spent',                         // TYPE
           `-${stableEntry.price}`          // TOKEN AMOUNT
         ]];
-        await safeAppendDataToSheet(user.tokenTracker, character, 'loggedTracker!A:F', values);
+        await safeAppendDataToSheet(user.tokenTracker, character, 'loggedTracker!A:F', values, undefined, { skipValidation: true });
       }
   
       // Remove mount from the database

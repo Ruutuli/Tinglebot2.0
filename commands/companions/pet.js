@@ -574,7 +574,7 @@ if (subcommand === "add") {
        uuidv4(),
       ],
      ];
-     await safeAppendDataToSheet(character.inventory, character, "loggedInventory!A2:M", values);
+     await safeAppendDataToSheet(character.inventory, character, "loggedInventory!A2:M", values, undefined, { skipValidation: true });
     }
 
     // ------------------- Build Roll Result Embed -------------------

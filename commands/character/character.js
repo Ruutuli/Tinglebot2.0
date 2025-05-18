@@ -1531,7 +1531,7 @@ async function handleChangeJob(interaction) {
         "spent",
         `-500`,
       ];
-      await safeAppendDataToSheet(userTokens.tokenTracker, character, "loggedTracker!B7:F", [tokenRow]);
+      await safeAppendDataToSheet(userTokens.tokenTracker, character, "loggedTracker!B7:F", [tokenRow], undefined, { skipValidation: true });
     } catch (error) {
       // Log the specific error for debugging
       console.error(`[Token Tracker Error] Details:`, {

@@ -560,13 +560,13 @@ for (const { quantity } of items) {
    ];
 
    if (fromCharacter?.name && fromCharacter?.inventory && fromCharacter?.userId) {
-    await safeAppendDataToSheet(fromCharacter.inventory, fromCharacter, range, fromValues);
+    await safeAppendDataToSheet(fromCharacter.inventory, fromCharacter, range, fromValues, undefined, { skipValidation: true });
 } else {
     console.error('[safeAppendDataToSheet]: Invalid fromCharacter object detected.');
 }
 
 if (toCharacter?.name && toCharacter?.inventory && toCharacter?.userId) {
-    await safeAppendDataToSheet(toCharacter.inventory, toCharacter, range, toValues);
+    await safeAppendDataToSheet(toCharacter.inventory, toCharacter, range, toValues, undefined, { skipValidation: true });
 } else {
     console.error('[safeAppendDataToSheet]: Invalid toCharacter object detected.');
 }
@@ -902,7 +902,7 @@ async function handleShopBuy(interaction) {
         "spent",
         `-${totalPrice}`,
       ];
-      await safeAppendDataToSheet(user.tokenTracker, character, "loggedTracker!B7:F", [tokenRow]);
+      await safeAppendDataToSheet(user.tokenTracker, character, "loggedTracker!B7:F", [tokenRow], undefined, { skipValidation: true });
     }
 
     // Log to inventory
@@ -1133,7 +1133,7 @@ if (quantity <= 0) {
     "earned",
     `+${totalPrice}`,
    ];
-   await safeAppendDataToSheet(user.tokenTracker, character, "loggedTracker!B7:F", [tokenRow]);
+   await safeAppendDataToSheet(user.tokenTracker, character, "loggedTracker!B7:F", [tokenRow], undefined, { skipValidation: true });
    console.log(`[shops]: Logged sale in token tracker.`);
   }
 
