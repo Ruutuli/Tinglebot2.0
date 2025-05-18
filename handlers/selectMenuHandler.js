@@ -23,8 +23,8 @@ const { capitalizeFirstLetter } = require('../modules/formattingModule');
 // Token calculation and breakdown utilities
 const { calculateTokens, generateTokenBreakdown } = require('../utils/tokenUtils');
 
-// Storage utilities for saving and retrieving submission data
-const { submissionStore } = require('../utils/storage');
+// Database model for temporary data storage
+const TempData = require('../models/TempDataModel');
 
 // Menu utilities to generate select menus for the submission process
 const {
@@ -60,8 +60,9 @@ async function handleSelectMenuInteraction(interaction) {
     const userId = interaction.user.id;
     const customId = interaction.customId;
 
-    // Initialize or retrieve user-specific submission data
-    let submissionData = submissionStore.get(userId) || {
+    // Get or create submission data from TempData
+    let tempData = await TempData.findByTypeAndKey('submission', userId);
+    let submissionData = tempData?.data || {
       baseSelections: [],
       typeMultiplierSelections: [],
       productMultiplierValue: 1,
@@ -78,7 +79,11 @@ async function handleSelectMenuInteraction(interaction) {
 
       if (selectedBase !== 'complete') {
         submissionData.baseSelections.push(selectedBase);
-        submissionStore.set(userId, submissionData);
+        await TempData.findOneAndUpdate(
+          { type: 'submission', key: userId },
+          { $set: { data: submissionData } },
+          { upsert: true, new: true }
+        );
 
         await triggerBaseCountModal(interaction, selectedBase);
         // Stop further updates after showing modal
@@ -98,7 +103,11 @@ async function handleSelectMenuInteraction(interaction) {
 
       if (selectedMultiplier !== 'complete') {
         submissionData.typeMultiplierSelections.push(selectedMultiplier);
-        submissionStore.set(userId, submissionData);
+        await TempData.findOneAndUpdate(
+          { type: 'submission', key: userId },
+          { $set: { data: submissionData } },
+          { upsert: true, new: true }
+        );
 
         await triggerMultiplierCountModal(interaction, selectedMultiplier);
         // Stop further updates after showing modal
@@ -115,7 +124,11 @@ async function handleSelectMenuInteraction(interaction) {
     // Handles the product multiplier selection and updates the submission data.
     else if (customId === 'productMultiplierSelect') {
       submissionData.productMultiplierValue = interaction.values[0];
-      submissionStore.set(userId, submissionData);
+      await TempData.findOneAndUpdate(
+        { type: 'submission', key: userId },
+        { $set: { data: submissionData } },
+        { upsert: true, new: true }
+      );
 
       await interaction.update({
         content: `🎨 **Product Multiplier Selected:** ${capitalizeFirstLetter(submissionData.productMultiplierValue)}.`,
@@ -136,7 +149,12 @@ async function handleSelectMenuInteraction(interaction) {
         );
         submissionData.addOnsApplied.push(selectedAddOn);
 
-        submissionStore.set(userId, submissionData);
+        await TempData.findOneAndUpdate(
+          { type: 'submission', key: userId },
+          { $set: { data: submissionData } },
+          { upsert: true, new: true }
+        );
+
         await triggerAddOnCountModal(interaction, selectedAddOn);
         return;
       }
@@ -158,7 +176,11 @@ async function handleSelectMenuInteraction(interaction) {
         // Ensure specialWorksApplied is initialized
         submissionData.specialWorksApplied = submissionData.specialWorksApplied || [];
         submissionData.specialWorksApplied.push(selectedWork);
-        submissionStore.set(userId, submissionData);
+        await TempData.findOneAndUpdate(
+          { type: 'submission', key: userId },
+          { $set: { data: submissionData } },
+          { upsert: true, new: true }
+        );
 
         await triggerSpecialWorksCountModal(interaction, selectedWork);
         return;
@@ -191,7 +213,8 @@ async function handleSelectMenuInteraction(interaction) {
 async function confirmSubmission(interaction) {
   try {
     const userId = interaction.user.id;
-    const submissionData = submissionStore.get(userId);
+    const tempData = await TempData.findByTypeAndKey('submission', userId);
+    const submissionData = tempData?.data;
 
     if (!submissionData) {
       await interaction.reply({
@@ -239,7 +262,11 @@ async function confirmSubmission(interaction) {
     });
 
     submissionData.finalTokenAmount = totalTokens;
-    submissionStore.set(userId, submissionData);
+    await TempData.findOneAndUpdate(
+      { type: 'submission', key: userId },
+      { $set: { data: submissionData } },
+      { upsert: true, new: true }
+    );
 
     // ------------------- Display Confirmation -------------------
     // Update the interaction with the final token breakdown and confirm/cancel buttons.

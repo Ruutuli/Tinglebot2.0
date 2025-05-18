@@ -1163,6 +1163,13 @@ async function checkMissedRolls(client) {
           console.log(`[blightHandler]: ${character.name} reached Stage 5 - Death deadline set to ${character.deathDeadline.toISOString()}`);
         }
 
+        // Update blight effects based on new stage
+        character.blightEffects = {
+          rollMultiplier: character.blightStage === 2 ? 1.5 : 1.0,
+          noMonsters: character.blightStage >= 3,
+          noGathering: character.blightStage >= 4
+        };
+
         await character.save();
         console.log(`[blightHandler]: Saved progression for ${character.name} to Stage ${character.blightStage}`);
 
