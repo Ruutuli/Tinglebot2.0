@@ -815,7 +815,8 @@ async function deleteInventorySheetData(spreadsheetId, characterName) {
 
 // ------------------- Function: safeAppendDataToSheet -------------------
 // Safely appends data to a sheet with validation
-async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, client) {
+async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, client, { skipValidation = false } = {}) {
+    console.log(`[googleSheetsUtils.js]: 📊 safeAppendDataToSheet range: ${range}`);
     try {
         if (!spreadsheetUrl || typeof spreadsheetUrl !== 'string') {
             console.error(`[googleSheetsUtils.js]: ❌ Invalid spreadsheet URL:`, spreadsheetUrl);
@@ -830,48 +831,50 @@ async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, c
         const spreadsheetId = extractSpreadsheetId(spreadsheetUrl);
         const auth = await authorizeSheets();
 
-        // Validate the range format
-        const rangeParts = range.split('!');
-        if (rangeParts.length !== 2) {
-            throw new Error(`Invalid range format. Expected format: SheetName!A1:Z1`);
-        }
-
-        const [sheetName, cellRange] = rangeParts;
-
-        // Validate the cell range format
-        if (!cellRange.match(/^[A-Z]+\d*:[A-Z]+\d*$/)) {
-            throw new Error(`Invalid cell range format. Expected format: A1:Z1 or A1:Z`);
-        }
-
-        // Validate the appropriate sheet
-        let validationResult;
-        if (sheetName.toLowerCase() === 'loggedtracker') {
-            validationResult = await validateTokenTrackerSheet(spreadsheetUrl);
-        } else if (sheetName.toLowerCase() === 'loggedinventory') {
-            validationResult = await validateInventorySheet(spreadsheetUrl, character.name);
-        } else {
-            throw new Error(`Unknown sheet type: ${sheetName}. Expected 'loggedTracker' or 'loggedInventory'`);
-        }
-        
-        if (!validationResult.success) {
-            console.error(`[googleSheetsUtils.js]: ❌ Sheet validation failed:`, validationResult.message);
-            if (character.userId && client) {
-                try {
-                    const user = await client.users.fetch(character.userId);
-                    if (user) {
-                        await user.send(
-                            `⚠️ Heads up! Your ${sheetName} sync for **${character.name}** failed.\n\n` +
-                            `Your linked Google Sheet may be missing, renamed, or set up incorrectly. Please update your sheet link or re-setup your sheet when you have a chance!`
-                        );
-                    }
-                } catch (dmError) {
-                    console.error(`[googleSheetsUtils.js]: ❌ Error sending DM to user: ${dmError.message}`);
-                }
+        if (!skipValidation) {
+            // Validate the range format
+            const rangeParts = range.split('!');
+            if (rangeParts.length !== 2) {
+                throw new Error(`Invalid range format. Expected format: SheetName!A1:Z1`);
             }
-            return;
+
+            const [sheetName, cellRange] = rangeParts;
+
+            // Validate the cell range format
+            if (!cellRange.match(/^[A-Z]+\d*:[A-Z]+\d*$/)) {
+                throw new Error(`Invalid cell range format. Expected format: A1:Z1 or A1:Z`);
+            }
+
+            // Validate the appropriate sheet
+            let validationResult;
+            if (sheetName.toLowerCase() === 'loggedtracker') {
+                validationResult = await validateTokenTrackerSheet(spreadsheetUrl);
+            } else if (sheetName.toLowerCase() === 'loggedinventory') {
+                validationResult = await validateInventorySheet(spreadsheetUrl, character.name);
+            } else {
+                throw new Error(`Unknown sheet type: ${sheetName}. Expected 'loggedTracker' or 'loggedInventory'`);
+            }
+            
+            if (!validationResult.success) {
+                console.error(`[googleSheetsUtils.js]: ❌ Sheet validation failed:`, validationResult.message);
+                if (character.userId && client) {
+                    try {
+                        const user = await client.users.fetch(character.userId);
+                        if (user) {
+                            await user.send(
+                                `⚠️ Heads up! Your ${sheetName} sync for **${character.name}** failed.\n\n` +
+                                `Your linked Google Sheet may be missing, renamed, or set up incorrectly. Please update your sheet link or re-setup your sheet when you have a chance!`
+                            );
+                        }
+                    } catch (dmError) {
+                        console.error(`[googleSheetsUtils.js]: ❌ Error sending DM to user: ${dmError.message}`);
+                    }
+                }
+                return;
+            }
         }
 
-        // If validation passed, append the data
+        // If validation passed or skipped, append the data
         const resource = {
             values: values.map(row =>
                 Array.isArray(row)
@@ -889,6 +892,7 @@ async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, c
             });
         
         // More specific logging based on sheet type
+        const sheetName = range.split('!')[0];
         if (sheetName.toLowerCase() === 'loggedtracker') {
             console.log(`[googleSheetsUtils.js]: ✅ Token transaction logged to sheet for ${character.name}`);
         } else if (sheetName.toLowerCase() === 'loggedinventory') {
