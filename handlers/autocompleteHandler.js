@@ -1434,14 +1434,31 @@ async function handleTransferItemAutocomplete(interaction, focusedOption) {
 
     const inventoryCollection = await getCharacterInventoryCollection(fromCharacter);
     const items = await inventoryCollection
-      .find({ itemName: { $regex: (focusedOption?.value?.toString() || ''), $options: 'i' } })
+      .find({ 
+        itemName: { $regex: focusedValue, $options: 'i' },
+        itemName: { $ne: 'Initial Item' }
+      })
       .toArray();
 
-    const choices = items.map(item => ({
-      name: `${item.itemName} (Qty: ${item.quantity})`,
-      value: item.itemName
-    }));
-    return await respondWithFilteredChoices(interaction, focusedOption, choices);
+    // Aggregate quantities for items with the same name
+    const itemMap = new Map();
+    for (const item of items) {
+      if (item.itemName) {
+        itemMap.set(
+          item.itemName,
+          (itemMap.get(item.itemName) || 0) + item.quantity
+        );
+      }
+    }
+
+    const choices = Array.from(itemMap.entries())
+      .map(([itemName, quantity]) => ({
+        name: `${capitalizeWords(itemName)} (Qty: ${quantity})`,
+        value: itemName
+      }))
+      .slice(0, 25); // Limit to 25 choices as per Discord's limit
+
+    await interaction.respond(choices);
   } catch (error) {
     console.error('[handleTransferItemAutocomplete]: Error:', error);
     return await safeRespondWithError(interaction);
