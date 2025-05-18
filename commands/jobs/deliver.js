@@ -252,7 +252,8 @@ const command = {
         await TempData.create({
           key: deliveryId,
           type: 'delivery',
-          data: deliveryTask
+          data: deliveryTask,
+          expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000) // 48 hours expiration
         });
 
         // ------------------- Fetch character profiles -------------------

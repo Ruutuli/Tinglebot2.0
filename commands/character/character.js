@@ -15,6 +15,7 @@ const { v4: uuidv4 } = require("uuid");
 const path = require("path");
 const { google } = require("googleapis");
 const mongoose = require("mongoose");
+const { MongoClient } = require("mongodb");
 
 const { handleError } = require("../../utils/globalErrorHandler");
 const {
@@ -1644,7 +1645,7 @@ async function handleChangeJob(interaction) {
     }
    )
    .setColor(villageColor)
-   .setThumbnail(character.icon)
+   .setThumbnail(character.icon && character.icon.startsWith('http') ? character.icon : DEFAULT_IMAGE_URL)
    .setImage(DEFAULT_IMAGE_URL)
    .setTimestamp();
 
