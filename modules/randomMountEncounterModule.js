@@ -117,8 +117,14 @@ async function needsMonthlyEncounter(channelId) {
     const lastEncounterDate = new Date(lastMonthlyEncounter);
     const isDifferentMonth = lastEncounterDate.getMonth() !== now.getMonth() || 
                             lastEncounterDate.getFullYear() !== now.getFullYear();
+    
+    // Check if at least a week has passed since the last encounter
+    const oneWeekInMs = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
+    const timeSinceLastEncounter = now.getTime() - lastEncounterDate.getTime();
+    const hasWeekPassed = timeSinceLastEncounter >= oneWeekInMs;
 
-    return isDifferentMonth;
+    // Only return true if it's a different month AND at least a week has passed
+    return isDifferentMonth && hasWeekPassed;
 }
 
 // Create a random mount encounter
