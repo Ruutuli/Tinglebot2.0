@@ -184,7 +184,7 @@ async onAutocomplete(interaction) {
         
         console.log('Storing submission data:', submissionData);
         submissionStore.set(user.id, submissionData);
-        saveSubmissionToStorage(submissionId, submissionData);
+        await saveSubmissionToStorage(submissionId, submissionData);
         
         
 
@@ -198,8 +198,7 @@ async onAutocomplete(interaction) {
           ephemeral: true,
         });
 
-        // Save the submission to persistent storage
-        saveSubmissionToStorage(submissionId, submissionStore.get(submissionId));
+        // Reset submission state
         resetSubmissionState();
 
       } catch (error) {
