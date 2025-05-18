@@ -58,8 +58,8 @@ async function validateJobVoucher(character, jobName, requiredPerk = null) {
     // Check if the job is village-specific and if the character is in the correct village
     const jobPerk = getJobPerk(jobName);
     if (jobPerk && jobPerk.village) {
-        const characterVillage = character.currentVillage?.toLowerCase();
-        const requiredVillage = jobPerk.village.toLowerCase();
+        const characterVillage = character.currentVillage?.toLowerCase().trim();
+        const requiredVillage = jobPerk.village.toLowerCase().trim();
         
         if (characterVillage !== requiredVillage) {
             console.error(`[jobVoucherModule.js]: ❌ ${character.name} must be in ${jobPerk.village} to use ${jobName} voucher`);

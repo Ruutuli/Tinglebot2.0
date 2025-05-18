@@ -131,7 +131,8 @@ const getJobPerk = (job) => {
       console.error(`[jobsModule.js]: Invalid job provided: ${job}`);
       return null;
   }
-  const perkInfo = jobPerks.find(perk => perk.job.toLowerCase().trim() === job.toLowerCase().trim());
+  const normalizedJob = job.toLowerCase().trim();
+  const perkInfo = jobPerks.find(perk => perk.job.toLowerCase().trim() === normalizedJob);
   return perkInfo ? { perks: perkInfo.perk.split(' / ').map(perk => perk.trim()), village: perkInfo.village } : null;
 };
 
