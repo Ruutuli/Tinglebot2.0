@@ -1394,6 +1394,15 @@ async function handleDeleteCharacter(interaction) {
   );
 
   await deleteCharacterById(character._id);
+
+  // Increment character slot count
+  const user = await User.findOne({ discordId: userId });
+  if (user) {
+    user.characterSlot += 1;
+    await user.save();
+    console.log(`[character.js]: ✅ Incremented character slot for user ${userId}. New slot count: ${user.characterSlot}`);
+  }
+
   await interaction.editReply({
    content: `✅ **Character deleted**: **${characterName}** has been successfully removed.`,
    ephemeral: true,
