@@ -1202,6 +1202,22 @@ async function checkMissedRolls(client) {
   }
 }
 
+// ------------------- Function: getCharacterBlightHistory -------------------
+// Retrieves the blight progression history for a character
+async function getCharacterBlightHistory(characterId, limit = 10) {
+  try {
+    const BlightRollHistory = require('../models/BlightRollHistoryModel');
+    const history = await BlightRollHistory.find({ characterId })
+      .sort({ timestamp: -1 })
+      .limit(limit);
+    return history;
+  } catch (error) {
+    handleError(error, 'blightHandler.js');
+    console.error('[blightHandler]: Error fetching blight history:', error);
+    throw error;
+  }
+}
+
 // ============================================================================
 // ------------------- Module Exports -------------------
 // Exported functions for use in other parts of the app
@@ -1217,5 +1233,6 @@ module.exports = {
   viewBlightHistory,
   cleanupExpiredBlightRequests,
   validateCharacterOwnership,
-  checkMissedRolls
+  checkMissedRolls,
+  getCharacterBlightHistory
 };
