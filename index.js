@@ -7,6 +7,7 @@ const { Client, GatewayIntentBits } = require("discord.js");
 
 // ------------------- Database Connections -------------------
 const { connectToTinglebot, connectToInventories } = require("./database/db");
+const TempData = require("./models/TempDataModel");
 
 // ------------------- Handlers -------------------
 
@@ -58,6 +59,11 @@ async function initializeDatabases() {
   try {
     await connectToTinglebot();
     await connectToInventories();
+    
+    // Clean up expired temp data
+    const result = await TempData.cleanup();
+    console.log(`[index.js]: 🧹 Cleaned up ${result.deletedCount} expired temp data entries`);
+    
     console.log("[index.js]: ✅ Databases connected");
   } catch (err) {
     handleError(err, "index.js");
