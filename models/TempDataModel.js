@@ -25,7 +25,8 @@ const tempDataSchema = new mongoose.Schema({
       'monthly',      // Monthly encounter tracking
       'delivery',     // Delivery requests
       'trade',        // Trade requests
-      'pendingEdit'   // Pending character edit requests
+      'pendingEdit',  // Pending character edit requests
+      'submission'    // Art/writing submissions
     ],
     index: true
   },

@@ -17,7 +17,7 @@ const { getCancelButtonRow, handleButtonInteraction } = require('../../handlers/
 // Utility Imports
 const { resetSubmissionState, calculateWritingTokens } = require('../../utils/tokenUtils.js');
 const { getBaseSelectMenu } = require('../../utils/menuUtils.js');
-const { submissionStore, saveSubmissionToStorage } = require('../../utils/storage.js');
+const { saveSubmissionToStorage, retrieveSubmissionFromStorage } = require('../../utils/storage.js');
 const { uploadSubmissionImage } = require('../../utils/uploadUtils.js');
 const { createWritingSubmissionEmbed } = require('../../embeds/embeds.js');
 const User = require('../../models/UserModel.js'); 
@@ -183,7 +183,6 @@ async onAutocomplete(interaction) {
       };      
         
         console.log('Storing submission data:', submissionData);
-        submissionStore.set(user.id, submissionData);
         await saveSubmissionToStorage(submissionId, submissionData);
         
         

@@ -552,7 +552,7 @@ ${pathEmoji || ''} No monsters or gathering today!`)
   await new Promise(resolve => setTimeout(resolve, DELAY_MS));
 
   // ------------------- Determine Encounter Type -------------------
-  const isSafe = Math.random() < 0.1; // put back to 0.5 after testing
+  const isSafe = Math.random() < 0.5 || (character.blightEffects && character.blightEffects.noMonsters); 
   let dailyLogEntry = `**Day ${day}:**\n`;
 
   if (!isSafe) {
