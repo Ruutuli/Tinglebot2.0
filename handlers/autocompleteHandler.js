@@ -55,12 +55,13 @@ const { Village } = require("../models/VillageModel");
 async function safeAutocompleteResponse(interaction, choices) {
   try {
     if (interaction.responded) {
-      console.log('[autocomplete]: Interaction already responded to');
+      console.log('[autocompleteHandler.js]: 🔄 Interaction already responded to');
       return;
     }
 
+    // Set a shorter timeout for autocomplete responses
     const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('Response timeout')), 3000)
+      setTimeout(() => reject(new Error('Response timeout')), 2000)
     );
 
     await Promise.race([
@@ -69,11 +70,11 @@ async function safeAutocompleteResponse(interaction, choices) {
     ]);
   } catch (error) {
     if (error.code === 10062) {
-      console.log('[autocomplete]: Interaction already expired');
+      console.log('[autocompleteHandler.js]: ⚠️ Interaction already expired');
       return;
     }
 
-    console.error('[autocomplete]: Error:', error);
+    console.error('[autocompleteHandler.js]: ❌ Error:', error);
     try {
       if (!interaction.responded) {
         await interaction.respond([]).catch(() => {});
@@ -91,13 +92,15 @@ async function safeAutocompleteResponse(interaction, choices) {
 async function safeRespondWithError(interaction, error) {
   try {
     if (error.code === 10062) {
-      console.warn("[autocomplete]: Interaction expired or already responded to");
+      console.warn("[autocompleteHandler.js]: ⚠️ Interaction expired or already responded to");
       return;
     }
-    console.error("[autocomplete]: Error handling autocomplete:", error);
-    await interaction.respond([]).catch(() => {});
+    console.error("[autocompleteHandler.js]: ❌ Error handling autocomplete:", error);
+    if (!interaction.responded) {
+      await interaction.respond([]).catch(() => {});
+    }
   } catch (replyError) {
-    console.error("[autocomplete]: Error sending error response:", replyError);
+    console.error("[autocompleteHandler.js]: ❌ Error sending error response:", replyError);
   }
 }
 
@@ -114,6 +117,12 @@ async function handleAutocomplete(interaction) {
     const commandName = interaction.commandName;
     const focusedOption = interaction.options.getFocused(true);
     const focusedName = focusedOption.name;
+
+    // Add a check for interaction validity
+    if (!interaction.isAutocomplete()) {
+      console.warn('[autocompleteHandler.js]: ⚠️ Received non-autocomplete interaction');
+      return;
+    }
 
     switch (commandName) {
       // ... existing code ...
