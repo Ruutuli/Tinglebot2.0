@@ -72,6 +72,10 @@ function capitalizeWords(str) {
  return str.replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
+function isSpiritOrb(itemName) {
+  return itemName.toLowerCase() === 'spirit orb';
+}
+
 module.exports = {
  data: new SlashCommandBuilder()
   .setName("economy")
@@ -364,6 +368,17 @@ for (const { quantity } of items) {
   if (quantity <= 0) {
     await interaction.editReply({
       content: `❌ You must gift a **positive quantity** of items. Negative numbers are not allowed.`,
+      ephemeral: true,
+    });
+    return;
+  }
+}
+
+// ------------------- NEW: Prevent gifting Spirit Orbs -------------------
+for (const { name } of items) {
+  if (isSpiritOrb(name)) {
+    await interaction.editReply({
+      content: `❌ Spirit Orbs cannot be gifted. They are sacred items that can only be used by their original owner.`,
       ephemeral: true,
     });
     return;
@@ -1657,6 +1672,17 @@ async function handleTrade(interaction) {
       if (quantity <= 0) {
         await interaction.editReply({
           content: "❌ You must trade a **positive quantity** of items. Negative numbers are not allowed.",
+          ephemeral: true,
+        });
+        return;
+      }
+    }
+
+    // ------------------- NEW: Prevent trading Spirit Orbs -------------------
+    for (const { name } of itemArray) {
+      if (isSpiritOrb(name)) {
+        await interaction.editReply({
+          content: `❌ Spirit Orbs cannot be traded. They are sacred items that can only be used by their original owner.`,
           ephemeral: true,
         });
         return;
