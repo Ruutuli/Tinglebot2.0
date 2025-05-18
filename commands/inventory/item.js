@@ -288,9 +288,29 @@ module.exports = {
           quantity: -quantity,
           obtain: `Used for healing`
         }, interaction);
-        return void await interaction.editReply({
-          content: `💫 **${character.name}** has been revived and fully healed using a **${item.itemName}**!`
-        });
+
+        const successEmbed = new EmbedBuilder()
+          .setColor('#59A914')
+          .setTitle('💫 Revival Successful!')
+          .setDescription(
+            `**${character.name}** has been revived and fully healed using a **${item.itemName}**!`
+          )
+          .addFields(
+            { 
+              name: '💚 Hearts', 
+              value: `> **0/${character.maxHearts}** → **${character.currentHearts}/${character.maxHearts}**`, 
+              inline: true 
+            },
+            { 
+              name: '🟩 Stamina', 
+              value: `> **${character.currentStamina}/${character.maxStamina}**`, 
+              inline: true 
+            }
+          )
+          .setThumbnail(item.image || character.icon)
+          .setFooter({ text: 'Revival successful! 🌿' });
+
+        return void await interaction.editReply({ embeds: [successEmbed] });
       }
       
 
