@@ -85,6 +85,17 @@ function handlePetError(error, interaction, context = {}) {
   }
 }
 
+// Add this helper function at the top of the file, after the imports
+function isValidUrl(string) {
+  if (!string || typeof string !== 'string') return false;
+  try {
+    const url = new URL(string);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch (_) {
+    return false;
+  }
+}
+
 // ============================================================================
 // ------------------- Slash Command Definition for Pets -------------------
 // This object defines the pet slash command and its subcommands (roll, upgrade, add, edit, retire).
@@ -750,10 +761,28 @@ if (targetLevel !== pet.level + 1) {
     const petTypeData = getPetTypeData(petDoc.petType);
 
     // Build the embed
+    const DEFAULT_PLACEHOLDER = "https://i.imgur.com/placeholder.png";
+    
+    // Ensure we have valid URLs for both image and thumbnail
+    const sanitizeUrl = (url) => {
+      if (!url) return DEFAULT_PLACEHOLDER;
+      try {
+        // Encode the URL to handle spaces and special characters
+        const encodedUrl = encodeURI(url);
+        const urlObj = new URL(encodedUrl);
+        return urlObj.protocol === 'http:' || urlObj.protocol === 'https:' ? encodedUrl : DEFAULT_PLACEHOLDER;
+      } catch (_) {
+        return DEFAULT_PLACEHOLDER;
+      }
+    };
+
+    const imageUrl = sanitizeUrl(petDoc.imageUrl);
+    const thumbnailUrl = sanitizeUrl(petDoc.imageUrl);
+
     const viewEmbed = new EmbedBuilder()
      .setAuthor({ name: character.name, iconURL: character.icon })
      .setTitle(`🐾 ${petDoc.name} — Details`)
-     .setThumbnail(petDoc.imageUrl || "https://via.placeholder.com/150")
+     .setThumbnail(thumbnailUrl)
      .addFields(
       { name: "__Pet Name__", value: `> ${petDoc.name}`, inline: true },
       { name: "__Owner__", value: `> ${character.name}`, inline: true },
@@ -775,7 +804,7 @@ if (targetLevel !== pet.level + 1) {
       },
       { name: "Description", value: petTypeData.description, inline: false }
      )
-     .setImage(petDoc.imageUrl || "https://via.placeholder.com/150")
+     .setImage(imageUrl)
      .setColor("#00FF00");
 
     return interaction.reply({ embeds: [viewEmbed] });
