@@ -320,7 +320,8 @@ function validateHealerPermission(healer, blightStage) {
     1: ['Sage', 'Oracle', 'Dragon'],
     2: ['Sage', 'Oracle', 'Dragon'],
     3: ['Oracle', 'Dragon'],
-    4: ['Dragon']
+    4: ['Dragon'],
+    5: ['Dragon'] // Stage 5: Only Dragons can heal
   };
 
   // Get allowed healer categories for the current stage
