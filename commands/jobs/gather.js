@@ -200,12 +200,23 @@ module.exports = {
 
 
       // ------------------- Step 2: Validate Interaction Channel -------------------
-      const currentVillage = capitalizeWords(character.currentVillage);
-      const allowedChannel = villageChannels[currentVillage];
+      let currentVillage = capitalizeWords(character.currentVillage);
+      let allowedChannel = villageChannels[currentVillage];
+
+      // If using a job voucher for a village-exclusive job, override to required village
+      if (character.jobVoucher && character.jobVoucherJob) {
+        const voucherPerk = getJobPerk(character.jobVoucherJob);
+        if (voucherPerk && voucherPerk.village) {
+          const requiredVillage = capitalizeWords(voucherPerk.village);
+          currentVillage = requiredVillage;
+          allowedChannel = villageChannels[requiredVillage];
+        }
+      }
+
       if (!allowedChannel || interaction.channelId !== allowedChannel) {
         const channelMention = `<#${allowedChannel}>`;
         await interaction.editReply({
-          content: `❌ **You can only use this command in the ${currentVillage} Town Hall channel!**\n📍 **Current Location:** ${currentVillage}\n💬 **Command Allowed In:** ${channelMention}`,
+          content: `❌ **You can only use this command in the ${currentVillage} Town Hall channel!**\n📍 **Current Location:** ${capitalizeWords(character.currentVillage)}\n💬 **Command Allowed In:** ${channelMention}`,
         });
         return;
       }

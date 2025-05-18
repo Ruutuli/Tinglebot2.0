@@ -101,8 +101,17 @@ module.exports = {
       }
 
       // ------------------- Validate Village Channel -------------------
-      const currentVillage = capitalizeWords(character.currentVillage);
-      const allowedChannel = villageChannels[currentVillage];
+      let currentVillage = capitalizeWords(character.currentVillage);
+      let allowedChannel = villageChannels[currentVillage];
+      // If using a job voucher for a village-exclusive job, override to required village
+      if (character.jobVoucher && character.jobVoucherJob) {
+        const voucherPerk = getJobPerk(character.jobVoucherJob);
+        if (voucherPerk && voucherPerk.village) {
+          const requiredVillage = capitalizeWords(voucherPerk.village);
+          currentVillage = requiredVillage;
+          allowedChannel = villageChannels[requiredVillage];
+        }
+      }
       if (!allowedChannel || interaction.channelId !== allowedChannel) {
         return interaction.editReply({ content: `❌ **Command must be used in ${currentVillage} Town Hall (<#${allowedChannel}>).**`, ephemeral: true });
       }
