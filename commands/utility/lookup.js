@@ -63,11 +63,13 @@ module.exports = {
 
 // ------------------- Handle item lookup -------------------
 async function handleItemLookup(interaction, itemName) {
-  const item = await ItemModel.findOne({ itemName }).exec();
+  const item = await ItemModel.findOne({ 
+    itemName: { $regex: new RegExp(`^${itemName}$`, "i") }
+  }).exec();
+  
   if (!item) {
       return interaction.editReply({ content: '❌ No item found with this name.', ephemeral: true });
   }
-
 
   // Prepare image and emoji
   let imageUrl = item.image && item.image.startsWith('wix:image://')
