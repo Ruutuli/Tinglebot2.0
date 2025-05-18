@@ -726,11 +726,10 @@ try {
         // Retrieve Submission
         console.log(`[customweapon approve]: 🔍 Retrieving submission ${weaponId}`);
         const weaponSubmission = await retrieveSubmissionFromStorage(weaponId);
-        console.log(`[customweapon approve]: 📊 Found submission for ${weaponSubmission.weaponName} (${weaponSubmission.status})`);
-
-        // ✅ FIXED CONDITION — Expecting to approve a 'pending' weapon, not already approved
+        
+        // Add proper null check
         if (!weaponSubmission) {
-            console.error(`[customweapon approve]: ❌ Submission not found for ID: ${weaponId}`);
+            console.error(`[customweapon approve]: ❌ No submission found for ID: ${weaponId}`);
             await interaction.editReply({
                 content: `❌ Custom weapon submission not found. Please verify the Weapon ID is correct.`,
                 ephemeral: true,
@@ -738,6 +737,19 @@ try {
             return;
         }
 
+        // Validate required fields
+        if (!weaponSubmission.weaponName || !weaponSubmission.characterName || !weaponSubmission.baseWeapon) {
+            console.error(`[customweapon approve]: ❌ Invalid submission data for ID: ${weaponId}`);
+            await interaction.editReply({
+                content: `❌ The submission data is incomplete or invalid. Please contact an administrator.`,
+                ephemeral: true,
+            });
+            return;
+        }
+
+        console.log(`[customweapon approve]: 📊 Found submission for ${weaponSubmission.weaponName} (${weaponSubmission.status})`);
+
+        // ✅ FIXED CONDITION — Expecting to approve a 'pending' weapon, not already approved
         if (weaponSubmission.status !== 'pending') {
             console.error(`[customweapon approve]: ❌ Submission status is ${weaponSubmission.status} for ID: ${weaponId}`);
             await interaction.editReply({
@@ -1211,6 +1223,91 @@ async function logMaterialsToGoogleSheets(auth, spreadsheetId, range, character,
 
         console.error(`[customweapon helper]: Error retrieving all submissions:`, error);
         return [];
+    }
+}
+
+// Update the saveSubmissionToStorage function to ensure proper data structure
+async function saveSubmissionToStorage(weaponId, submissionData) {
+    try {
+        const fs = require('fs');
+        const path = require('path');
+        const submissionsPath = path.join(__dirname, '../data/submissions.json');
+
+        // Ensure the data directory exists
+        const dataDir = path.dirname(submissionsPath);
+        if (!fs.existsSync(dataDir)) {
+            fs.mkdirSync(dataDir, { recursive: true });
+        }
+
+        // Read existing submissions
+        let submissions = {};
+        if (fs.existsSync(submissionsPath)) {
+            const rawData = fs.readFileSync(submissionsPath, 'utf-8').trim();
+            if (rawData) {
+                try {
+                    submissions = JSON.parse(rawData);
+                } catch (parseError) {
+                    console.error(`[storage.js]: Failed to parse submissions.json:`, parseError);
+                    submissions = {};
+                }
+            }
+        }
+
+        // Ensure all required fields are present
+        const completeSubmission = {
+            ...submissionData,
+            key: weaponId,
+            status: submissionData.status || 'pending',
+            createdAt: submissionData.createdAt || new Date(),
+            updatedAt: new Date(),
+            crafted: submissionData.crafted || false,
+            craftingMaterials: submissionData.craftingMaterials || [],
+            staminaToCraft: submissionData.staminaToCraft || 0
+        };
+
+        // Save the submission
+        submissions[weaponId] = completeSubmission;
+        fs.writeFileSync(submissionsPath, JSON.stringify(submissions, null, 2));
+        
+        console.log(`[storage.js]: ✅ Saved submission ${weaponId}`);
+        return true;
+    } catch (error) {
+        console.error(`[storage.js]: ❌ Error saving submission ${weaponId}:`, error);
+        return false;
+    }
+}
+
+// Update the retrieveSubmissionFromStorage function to handle errors better
+async function retrieveSubmissionFromStorage(weaponId) {
+    try {
+        const fs = require('fs');
+        const path = require('path');
+        const submissionsPath = path.join(__dirname, '../data/submissions.json');
+
+        if (!fs.existsSync(submissionsPath)) {
+            console.log(`[storage.js]: 🔍 No submissions file found`);
+            return null;
+        }
+
+        const rawData = fs.readFileSync(submissionsPath, 'utf-8').trim();
+        if (!rawData) {
+            console.log(`[storage.js]: 🔍 Empty submissions file`);
+            return null;
+        }
+
+        const submissions = JSON.parse(rawData);
+        const submission = submissions[weaponId];
+
+        if (!submission) {
+            console.log(`[storage.js]: ❌ No submission found for ${weaponId}`);
+            return null;
+        }
+
+        console.log(`[storage.js]: ✅ Retrieved submission ${weaponId}`);
+        return submission;
+    } catch (error) {
+        console.error(`[storage.js]: ❌ Error retrieving submission ${weaponId}:`, error);
+        return null;
     }
 }
 
