@@ -96,6 +96,19 @@ function isValidUrl(string) {
   }
 }
 
+// ------------------- URL Sanitization Helper -------------------
+const sanitizeUrl = (url) => {
+  if (!url) return "https://i.imgur.com/placeholder.png";
+  try {
+    const encodedUrl = encodeURI(url).replace(/!/g, '%21');
+    const urlObj = new URL(encodedUrl);
+    return urlObj.protocol === 'http:' || urlObj.protocol === 'https:' ? encodedUrl : "https://i.imgur.com/placeholder.png";
+  } catch (_) {
+    console.error(`[pet.js]: ❌ Error sanitizing URL: ${url}`);
+    return "https://i.imgur.com/placeholder.png";
+  }
+};
+
 // ============================================================================
 // ------------------- Slash Command Definition for Pets -------------------
 // This object defines the pet slash command and its subcommands (roll, upgrade, add, edit, retire).
@@ -412,7 +425,7 @@ if (subcommand === "add") {
         { name: "Roll Combination", value: petTypeData.rollCombination.join(", "), inline: false },
         { name: "Description", value: petTypeData.description, inline: false }
       )
-      .setImage(petImageUrl || "https://via.placeholder.com/150")
+      .setImage(sanitizeUrl(petImageUrl))
       .setColor("#00FF00");
 
     return interaction.reply({ embeds: [successEmbed] });
@@ -443,11 +456,14 @@ if (subcommand === "add") {
       petDoc.imageUrl = petImageUrl;
       await updatePetToCharacter(character._id, petName, petDoc);
 
+      // Sanitize the URL before using it in the embed
+      const sanitizedImageUrl = sanitizeUrl(petDoc.imageUrl);
+
       // Build and send embed showing updated pet
       const editEmbed = new EmbedBuilder()
         .setAuthor({ name: character.name, iconURL: character.icon })
         .setTitle(`Pet Image Updated — ${petDoc.name}`)
-        .setThumbnail(petDoc.imageUrl)
+        .setThumbnail(sanitizedImageUrl)
         .addFields(
           { name: "Name", value: `\`${petDoc.name}\``, inline: true },
           { name: "Species", value: petDoc.species, inline: true },
@@ -459,7 +475,7 @@ if (subcommand === "add") {
             inline: true,
           }
         )
-        .setImage(petDoc.imageUrl)
+        .setImage(sanitizedImageUrl)
         .setColor("#00FF00");
 
       return interaction.reply({ embeds: [editEmbed] });
@@ -619,15 +635,13 @@ if (subcommand === "add") {
     // ------------------- Create and Send Roll Result Embed -------------------
     const rollEmbed = new EmbedBuilder()
      .setAuthor({ name: character.name, iconURL: character.icon })
-     .setThumbnail(pet.imageUrl || "https://via.placeholder.com/150")
+     .setThumbnail(sanitizeUrl(pet.imageUrl))
      .setTitle(
       `${character.name}'s Pet Roll - ${pet.name} | Level ${pet.level}`
      )
      .setColor(embedColor)
      .setDescription(flavorTextMessage)
-     .setImage(
-      "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
-     )
+     .setImage(sanitizeUrl("https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"))
      .addFields(
       { name: "__Pet Name__", value: `> ${pet.name}`, inline: false },
       {
@@ -739,7 +753,7 @@ if (targetLevel !== pet.level + 1) {
     .setDescription(
      `Your pet **${pet.name}** has been retired.\nYou can now add a new pet to your character.`
     )
-    .setImage(pet.imageUrl || "https://via.placeholder.com/150")
+    .setImage(sanitizeUrl(pet.imageUrl))
     .setFooter({ text: "Pet retired successfully." });   
     return interaction.editReply({ embeds: [retireEmbed] });
    }
@@ -764,25 +778,12 @@ if (targetLevel !== pet.level + 1) {
     const DEFAULT_PLACEHOLDER = "https://i.imgur.com/placeholder.png";
     
     // Ensure we have valid URLs for both image and thumbnail
-    const sanitizeUrl = (url) => {
-      if (!url) return DEFAULT_PLACEHOLDER;
-      try {
-        // Encode the URL to handle spaces and special characters
-        const encodedUrl = encodeURI(url);
-        const urlObj = new URL(encodedUrl);
-        return urlObj.protocol === 'http:' || urlObj.protocol === 'https:' ? encodedUrl : DEFAULT_PLACEHOLDER;
-      } catch (_) {
-        return DEFAULT_PLACEHOLDER;
-      }
-    };
-
-    const imageUrl = sanitizeUrl(petDoc.imageUrl);
-    const thumbnailUrl = sanitizeUrl(petDoc.imageUrl);
+    const sanitizedImageUrl = sanitizeUrl(petDoc.imageUrl);
 
     const viewEmbed = new EmbedBuilder()
      .setAuthor({ name: character.name, iconURL: character.icon })
      .setTitle(`🐾 ${petDoc.name} — Details`)
-     .setThumbnail(thumbnailUrl)
+     .setThumbnail(sanitizedImageUrl)
      .addFields(
       { name: "__Pet Name__", value: `> ${petDoc.name}`, inline: true },
       { name: "__Owner__", value: `> ${character.name}`, inline: true },
@@ -804,7 +805,7 @@ if (targetLevel !== pet.level + 1) {
       },
       { name: "Description", value: petTypeData.description, inline: false }
      )
-     .setImage(imageUrl)
+     .setImage(sanitizedImageUrl)
      .setColor("#00FF00");
 
     return interaction.reply({ embeds: [viewEmbed] });
