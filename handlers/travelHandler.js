@@ -40,7 +40,7 @@ const { capitalizeFirstLetter, capitalizeWords } = require('../modules/formattin
 
 // ------------------- Utility Functions -------------------
 const { addItemInventoryDatabase } = require('../utils/inventoryUtils');
-const { syncItem, SOURCE_TYPES } = require('../utils/inventoryUtils');
+const { syncToInventoryDatabase, SOURCE_TYPES } = require('../utils/inventoryUtils');
 const {
   appendSheetData,
   authorizeSheets,
@@ -245,7 +245,7 @@ async function handleGather(interaction, character, currentPath, encounterMessag
         subtype: Array.isArray(chosen.subtype) ? chosen.subtype : chosen.subtype ? [chosen.subtype] : []
       };
 
-      await syncItem(character, formattedItem, interaction, SOURCE_TYPES.GATHERING);
+      await syncToInventoryDatabase(character, formattedItem, interaction);
       
       outcomeMessage = `Gathered ${formattedItem.quantity}× ${formattedItem.itemName}.`;
 
@@ -364,7 +364,7 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
         }
 
         if (item) {
-          await syncItem(character, item, interaction, SOURCE_TYPES.TRAVEL_LOOT);
+          await syncToInventoryDatabase(character, item, interaction);
           lootLine = `\nLooted ${item.itemName} × ${item.quantity}\n`;
           outcomeMessage = `${generateVictoryMessage(item)}${lootLine}`;
           travelLog.push(`fight: win & loot (${item.quantity}× ${item.itemName})`);
