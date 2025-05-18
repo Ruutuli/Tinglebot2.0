@@ -293,7 +293,7 @@ module.exports = {
         ];
 
         if (character?.name && character?.inventory && character?.userId) {
-          await safeAppendDataToSheet(character.inventory, character, range, values);
+          await safeAppendDataToSheet(character.inventory, character, range, values, undefined, { skipValidation: true });
         } else {
           console.error('[safeAppendDataToSheet]: Invalid character object detected before syncing.');
         }

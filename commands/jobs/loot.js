@@ -637,7 +637,7 @@ async function processLootingLogic(
    // —— Wrap the Sheets append in its own try/catch ——
    try {
     if (character?.name && character?.inventory && character?.userId) {
-    await safeAppendDataToSheet(character.inventory, character, range, values);
+    await safeAppendDataToSheet(character.inventory, character, range, values, undefined, { skipValidation: true });
 } else {
     console.error('[safeAppendDataToSheet]: Invalid character object detected before syncing.');
 }

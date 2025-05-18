@@ -203,7 +203,7 @@ module.exports = {
                             formattedDateTime,
                             uniqueSyncId
                         ]];                        
-                        await safeAppendDataToSheet(character.inventory, character, range, logValues);
+                        await safeAppendDataToSheet(character.inventory, character, range, logValues, undefined, { skipValidation: true });
                     }
 
                     // ------------------- Send NPC Success Embed -------------------
@@ -410,8 +410,8 @@ async function handleSuccessfulSteal(interaction, thiefCharacter, targetCharacte
             formattedDateTime,
             uniqueSyncId
         ]];
-        await safeAppendDataToSheet(character.inventory, character, range, thiefValues);
-        await safeAppendDataToSheet(character.inventory, character, range, targetValues);
+        await safeAppendDataToSheet(character.inventory, character, range, thiefValues, undefined, { skipValidation: true });
+        await safeAppendDataToSheet(character.inventory, character, range, targetValues, undefined, { skipValidation: true });
     }
 
     // ------------------- Create Enhanced Success Embed for Player -------------------

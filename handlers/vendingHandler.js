@@ -781,7 +781,7 @@ async function handleFulfill(interaction) {
           ];
           
           if (buyer?.name && buyer?.inventory && buyer?.userId) {
-            await safeAppendDataToSheet(buyer.inventory, buyer, range, purchaseRow);
+            await safeAppendDataToSheet(buyer.inventory, buyer, range, purchaseRow, undefined, { skipValidation: true });
           } else {
             console.error('[handleFulfill]: Invalid buyer object:', {
               buyer: buyer.name,

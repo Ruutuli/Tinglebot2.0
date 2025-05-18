@@ -777,7 +777,7 @@ async function handleUseItemInteraction(interaction) {
       ]];
   
       if (character?.name && character?.inventory && character?.userId) {
-    await safeAppendDataToSheet(character.inventory, character, range, values);
+    await safeAppendDataToSheet(character.inventory, character, range, values, undefined, { skipValidation: true });
 } else {
     console.error('[safeAppendDataToSheet]: Invalid character object detected before syncing.');
 }
@@ -951,7 +951,7 @@ if (character.currentVillage?.toLowerCase() !== encounter.village?.toLowerCase()
           `-${cost}`
         ]];
         if (character?.name && character?.inventory && character?.userId) {
-    await safeAppendDataToSheet(character.inventory, character, range, values);
+    await safeAppendDataToSheet(character.inventory, character, range, values, undefined, { skipValidation: true });
 } else {
     console.error('[safeAppendDataToSheet]: Invalid character object detected before syncing.');
 }
@@ -1212,7 +1212,7 @@ async function handleTraitSelection(interaction) {
         const auth = await authorizeSheets();
         const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
         const values = [[`${mountType} Customization - ${traitKey}`, interactionUrl, 'Other', 'spent', `-${cost}`]];
-        await safeAppendDataToSheet(character.inventory, character, 'loggedTracker!B7:F', values);
+        await safeAppendDataToSheet(character.inventory, character, 'loggedTracker!B7:F', values, undefined, { skipValidation: true });
         console.log(`[mountComponentHandler]: Logged token usage to Google Sheets for user ${interaction.user.id}.`);
       }
     }
@@ -1438,7 +1438,7 @@ async function handleMountNameSubmission(interaction) {
       ]];
   
       if (character?.name && character?.inventory && character?.userId) {
-    await safeAppendDataToSheet(character.inventory, character, range, values);
+    await safeAppendDataToSheet(character.inventory, character, range, values, undefined, { skipValidation: true });
 } else {
     console.error('[safeAppendDataToSheet]: Invalid character object detected before syncing.');
 }
