@@ -2,7 +2,9 @@
 // These are used to build and send embeds and slash commands.
 const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
 
+// ------------------- Error Handling -------------------
 const { handleError } = require("../../utils/globalErrorHandler");
+
 // ------------------- Third-party Libraries -------------------
 // Used for generating unique identifiers.
 const { v4: uuidv4 } = require("uuid");
@@ -753,14 +755,26 @@ if (targetLevel !== pet.level + 1) {
     return interaction.reply({ embeds: [viewEmbed] });
    }
   } catch (error) {
-   handleError(error, "pet.js");
+   // ------------------- Error Handling -------------------
+   const context = {
+     commandName: 'pet',
+     userTag: interaction.user.tag,
+     userId: interaction.user.id,
+     options: {
+       subcommand: interaction.options.getSubcommand(),
+       characterName: interaction.options.getString("charactername"),
+       petName: interaction.options.getString("petname"),
+       // Add other options based on subcommand
+       ...(interaction.options.getString("species") && { species: interaction.options.getString("species") }),
+       ...(interaction.options.getString("category") && { category: interaction.options.getString("category") }),
+       ...(interaction.options.getString("pettype") && { petType: interaction.options.getString("pettype") }),
+       ...(interaction.options.getInteger("level") && { level: interaction.options.getInteger("level") }),
+     }
+   };
 
-   // ------------------- Global Error Handling -------------------
-   // Log detailed error information and return a user-friendly error message.
-   console.error(
-    `[pet.js]: logs - Error executing pet command: ${error.message}`
-   );
+   handleError(error, "pet.js", context);
    console.error(`[pet.js]: logs - Stack trace: ${error.stack}`);
+   
    return interaction.reply(
     "❌ **An unexpected error occurred. Please try again later.**"
    );
