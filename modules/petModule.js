@@ -3,6 +3,23 @@
 // Handles pet-related data, roll permissions, flavor texts, and emoji mapping.
 // ============================================================================
 
+// ------------------- Error Handling -------------------
+let handleError;
+try {
+  const errorHandler = require('../utils/globalErrorHandler');
+  handleError = errorHandler.handleError;
+} catch (e) {
+  console.error("[petModule.js]: ❌ Failed to load global error handler:", e.message);
+  handleError = (error, source, context) => {
+    console.error(`[${source}]: ❌ Error: ${error.message}`);
+    console.error(`[${source}]: Stack trace: ${error.stack}`);
+  };
+}
+
+// ------------------- Required Imports -------------------
+const { uploadPetImage } = require('../utils/uploadUtils');
+const Pet = require('../models/PetModel');
+
 // ------------------- Pet Perk Field Mapping -------------------
 const perkFieldMap = {
   petprey: 'petprey',
@@ -243,12 +260,22 @@ const handlePetImageUpload = async (imageAttachment, petName) => {
   
   try {
     const petImageUrl = await uploadPetImage(imageAttachment.url, petName);
-    console.log(`[pet.js]: logs - Image uploaded successfully. Public URL: ${petImageUrl}`);
+    console.log(`[petModule.js]: ✅ Image uploaded successfully. Public URL: ${petImageUrl}`);
     return petImageUrl;
   } catch (error) {
-    handleError(error, "pet.js");
-    console.error(`[pet.js]: logs - Error uploading image for pet "${petName}": ${error.message}`);
-    throw new Error("Failed to upload image. Please try again later.");
+    console.error(`[petModule.js]: ❌ Error uploading image for pet "${petName}": ${error.message}`);
+    console.error(`[petModule.js]: Stack trace: ${error.stack}`);
+    
+    // Try to use error handler if available
+    if (handleError) {
+      try {
+        handleError(error, "petModule.js", { petName });
+      } catch (e) {
+        console.error(`[petModule.js]: ❌ Failed to use error handler: ${e.message}`);
+      }
+    }
+    
+    throw new Error(`Failed to upload pet image: ${error.message}`);
   }
 };
 

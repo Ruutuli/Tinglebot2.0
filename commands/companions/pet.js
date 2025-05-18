@@ -2,9 +2,6 @@
 // These are used to build and send embeds and slash commands.
 const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
 
-// ------------------- Error Handling -------------------
-const { handleError } = require("../../utils/globalErrorHandler");
-
 // ------------------- Third-party Libraries -------------------
 // Used for generating unique identifiers.
 const { v4: uuidv4 } = require("uuid");
@@ -21,6 +18,7 @@ const {
  getTokenBalance,
  updateTokenBalance,
 } = require("../../database/db");
+
 // ------------------- Modules -------------------
 // Modules used for random item rolls, pet formatting, and retrieving pet-related data.
 const { createWeightedItemList } = require("../../modules/rngModule");
@@ -63,6 +61,28 @@ function getUpgradeCost(newLevel) {
  if (newLevel === 2) return 10000; // Cost to upgrade from level 1 to level 2
  if (newLevel === 3) return 20000; // Cost to upgrade from level 2 to level 3
  return Infinity;
+}
+
+// ------------------- Helper function for error handling -------------------
+function handlePetError(error, interaction, context = {}) {
+  // Log error to console with full context
+  console.error("==========================================");
+  console.error(`[pet.js]: ❌ Error in ${context.commandName || 'pet'} command`);
+  console.error(`[pet.js]: User: ${context.userTag || 'Unknown'} (${context.userId || 'Unknown'})`);
+  console.error(`[pet.js]: Error Message: ${error.message}`);
+  console.error(`[pet.js]: Stack Trace: ${error.stack}`);
+  if (context.options) {
+    console.error(`[pet.js]: Command Options:`, context.options);
+  }
+  console.error("==========================================");
+
+  // Send error message to user
+  const errorMessage = "❌ **An unexpected error occurred. Please try again later.**";
+  if (interaction.replied || interaction.deferred) {
+    return interaction.followUp({ content: errorMessage, ephemeral: true });
+  } else {
+    return interaction.reply({ content: errorMessage, ephemeral: true });
+  }
 }
 
 // ============================================================================
@@ -344,6 +364,12 @@ if (subcommand === "add") {
 
     return interaction.reply(`✅ **Updated pet \`${petName}\` with new details.**`);
   } else {
+    // Get pet type data before creating the pet
+    const petTypeData = getPetTypeData(petType);
+    if (!petTypeData) {
+      return interaction.reply("❌ **Invalid pet type selected.**");
+    }
+
     await addPetToCharacter(character._id, petName, species, 0, petType, petImageUrl);
 
     const newPet = await Pet.create({
@@ -355,8 +381,8 @@ if (subcommand === "add") {
       level: 0,
       rollsRemaining: 0,
       imageUrl: petImageUrl || "",
-      rollCombination: selectedPetTypeData.rollCombination,
-      tableDescription: selectedPetTypeData.description,
+      rollCombination: petTypeData.rollCombination,
+      tableDescription: petTypeData.description,
     });
     
     await Character.findByIdAndUpdate(character._id, { currentActivePet: newPet._id });
@@ -372,8 +398,8 @@ if (subcommand === "add") {
         { name: "__Pet Level & Rolls__", value: `> Level ${newPet.level} | ${rollsDisplay}`, inline: true },
         { name: "__Pet Species__", value: `> ${getPetEmoji(species)} ${species}`, inline: true },
         { name: "__Pet Type__", value: `> ${petType}`, inline: true },
-        { name: "Roll Combination", value: selectedPetTypeData.rollCombination.join(", "), inline: false },
-        { name: "Description", value: selectedPetTypeData.description, inline: false }
+        { name: "Roll Combination", value: petTypeData.rollCombination.join(", "), inline: false },
+        { name: "Description", value: petTypeData.description, inline: false }
       )
       .setImage(petImageUrl || "https://via.placeholder.com/150")
       .setColor("#00FF00");
@@ -764,20 +790,16 @@ if (targetLevel !== pet.level + 1) {
        subcommand: interaction.options.getSubcommand(),
        characterName: interaction.options.getString("charactername"),
        petName: interaction.options.getString("petname"),
-       // Add other options based on subcommand
-       ...(interaction.options.getString("species") && { species: interaction.options.getString("species") }),
-       ...(interaction.options.getString("category") && { category: interaction.options.getString("category") }),
-       ...(interaction.options.getString("pettype") && { petType: interaction.options.getString("pettype") }),
-       ...(interaction.options.getInteger("level") && { level: interaction.options.getInteger("level") }),
+       species: interaction.options.getString("species"),
+       category: interaction.options.getString("category"),
+       petType: interaction.options.getString("pettype"),
+       level: interaction.options.getInteger("level"),
+       rollType: interaction.options.getString("rolltype"),
+       image: interaction.options.getAttachment("image")
      }
    };
 
-   handleError(error, "pet.js", context);
-   console.error(`[pet.js]: logs - Stack trace: ${error.stack}`);
-   
-   return interaction.reply(
-    "❌ **An unexpected error occurred. Please try again later.**"
-   );
+   return handlePetError(error, interaction, context);
   }
  },
 };
