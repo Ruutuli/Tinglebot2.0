@@ -63,8 +63,6 @@ const Character = require('../models/CharacterModel');
 function createFinalTravelEmbed(character, destination, paths, totalTravelDuration, travelLog) {
   const destEmoji = villageEmojis[destination.toLowerCase()] || "";
 
-  console.log(`[travelHandler.js]: 📖 Processing travel log for ${character.name}`);
-
   // Process and format travel log entries
   const processedLog = Object.entries(
     travelLog.reduce((acc, entry) => {
@@ -127,7 +125,6 @@ async function handleRecover(interaction, character, encounterMessage, travelLog
     travelLog = Array.isArray(travelLog) ? travelLog : [];
     const jobPerk = getJobPerk(character.job);
     character.perk = jobPerk?.perks[0];
-    console.log(`[travelHandler.js]: 💖 ${character.name} attempting recovery`);
   
     // KO check
     if (character.ko) {
@@ -189,7 +186,7 @@ async function handleRecover(interaction, character, encounterMessage, travelLog
       encounterMessage,
       character,
       description,
-      fields: [], // or just omit `fields` entirely if you're not adding anything else
+      fields: [],
     });
 
     if (typeof encounterMessage?.edit === 'function') {
@@ -209,7 +206,6 @@ async function handleRecover(interaction, character, encounterMessage, travelLog
 // syncs sheet, and edits encounter embed.
 async function handleGather(interaction, character, currentPath, encounterMessage, travelLog) {
   if (typeof currentPath !== 'string') {
-    console.error(`[travelHandler.js]: ❌ Invalid currentPath type: ${typeof currentPath}`);
     throw new Error(`Invalid currentPath value: "${currentPath}" — expected a string like "leafDewWay".`);
   }
   
@@ -217,15 +213,10 @@ async function handleGather(interaction, character, currentPath, encounterMessag
     travelLog = Array.isArray(travelLog) ? travelLog : [];
     const jobPerk = getJobPerk(character.job);
     character.perk = jobPerk?.perks[0];
-    console.log(`[travelHandler.js]: 📦 ${character.name} gathering on ${currentPath}`);
 
     const items = await fetchAllItems();
     const dbPathField = currentPath.replace(/-/g, '');
     const available = items.filter(i => i[dbPathField] === true);
-    
-    if (!available.length) {
-      console.warn(`[travelHandler.js]: ⚠️ No items available for path "${currentPath}"`);
-    }
     
     let decision, outcomeMessage;
 
@@ -234,7 +225,6 @@ async function handleGather(interaction, character, currentPath, encounterMessag
     } else {
       const weighted = createWeightedItemList(available);
       const chosen = weighted[Math.floor(Math.random() * weighted.length)];
-      console.log(`[travelHandler.js]: 🎲 Selected: ${chosen.itemName}`);
       
       // Format the item data properly
       const formattedItem = {
@@ -389,10 +379,7 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
           const updatedEntry = lastDayEntry + `\n${outcomeMessage}`;
           const entryIndex = travelLog.indexOf(lastDayEntry);
           travelLog[entryIndex] = updatedEntry;
-          console.log(`[travelHandler.js]: 📝 Appended damage message to Day ${day}: ${outcomeMessage}`);
         }
-      } else {
-        console.warn(`[travelHandler.js]: ⚠️ Could not find a day entry to append damage message to`);
       }
     }
 
@@ -451,7 +438,6 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
         const latestCharacter = await Character.findById(character._id);
         character.currentStamina = latestCharacter.currentStamina;
         character.currentHearts = latestCharacter.currentHearts;
-        console.log(`[travelHandler.js]: Tracked ${result.damage} heart(s) damage (deducted by characterStatsModule).`);
 
         if (!hasPerk(character, 'DELIVERING')) {
           await useStamina(character._id, 1);
@@ -519,10 +505,8 @@ async function handleDoNothing(interaction, character, encounterMessage, travelL
     let randomFlavor;
     if (preGeneratedFlavor) {
       randomFlavor = preGeneratedFlavor;
-      console.log(`[travelHandler.js]: 🔄 Using pre-generated flavor for Do Nothing: ${randomFlavor}`);
     } else {
       randomFlavor = `${character.name} rested quietly.`;
-      console.error(`[travelHandler.js]: ❌ No preGeneratedFlavor provided to handleDoNothing. Using fallback.`);
     }
     // No stamina should be used when truly doing nothing
     const decision = `😴 ${randomFlavor}`;
@@ -535,7 +519,7 @@ async function handleDoNothing(interaction, character, encounterMessage, travelL
       encounterMessage,
       character,
       description,
-      fields: [], // No outcome field
+      fields: [],
     });
     if (typeof encounterMessage?.edit === 'function') {
       await encounterMessage.edit({ embeds: [embed], components: [] });
