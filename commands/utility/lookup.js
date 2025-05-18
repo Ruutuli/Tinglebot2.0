@@ -97,6 +97,21 @@ const sourceFormatted = sourceText.map(source => `${source}`).join('\n');
 const jobFormatted = jobText.join('\n'); // Join array elements with a newline
 
   // Create item embed
+  // Only show Modifier/Hearts, Stamina to Craft, and Stamina Recovered if not a pure Material
+  let modifierHeartsLine = '';
+  let staminaToCraftLine = '';
+  let staminaRecoveredLine = '';
+  const isMaterial = Array.isArray(item.category)
+    ? item.category.includes('Material')
+    : item.category === 'Material';
+  if (!isMaterial) {
+    modifierHeartsLine = `**__❤️ Modifier/Hearts:__** ${item.modifierHearts?.toString() || 'N/A'}\n`;
+    staminaToCraftLine = `**__🟩 Stamina to Craft:__** ${item.staminaToCraft?.toString() || 'N/A'}\n`;
+    staminaRecoveredLine = `**__💚 Stamina Recovered:__** ${item.staminaRecovered?.toString() || 'N/A'}`;
+  } else {
+    console.log(`[lookup.js]: 🔄 Skipping Modifier/Hearts, Stamina to Craft, and Stamina Recovered for Material item: ${item.itemName}`);
+  }
+
   const embed = new EmbedBuilder()
     .setColor(getCategoryColor(item.category))
     .setAuthor({ name: `${item.itemName}`, iconURL: item.imageType })
@@ -105,9 +120,7 @@ const jobFormatted = jobText.join('\n'); // Join array elements with a newline
     **__✨ Subtype:__** ${item.subtype.join(', ') || 'None'}
     **__🪙 Buy Price:__** ${item.buyPrice || 'N/A'}
     **__🪙 Sell Price:__** ${item.sellPrice || 'N/A'}
-    **__🟩 Stamina to Craft:__** ${item.staminaToCraft?.toString() || 'N/A'}
-    **__❤️ Modifier/Hearts:__** ${item.modifierHearts?.toString() || 'N/A'}
-    **__💚 Stamina Recovered:__** ${item.staminaRecovered?.toString() || 'N/A'}`)
+    ${staminaToCraftLine}${modifierHeartsLine}${staminaRecoveredLine}`)
     .setThumbnail(imageUrl !== 'No Image' ? imageUrl : null)
     .setFooter({ text: `Locations: ${locationsFormatted}` })
     .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')

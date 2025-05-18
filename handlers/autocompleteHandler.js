@@ -268,6 +268,11 @@ async function handleAutocomplete(interaction) {
         }
         break;
 
+      // ------------------- Lookup Command -------------------
+      case "lookup":
+        await handleLookupAutocomplete(interaction, focusedOption);
+        break;
+
       // ... rest of existing code ...
     }
   } catch (error) {
