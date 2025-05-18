@@ -552,7 +552,19 @@ ${pathEmoji || ''} No monsters or gathering today!`)
   await new Promise(resolve => setTimeout(resolve, DELAY_MS));
 
   // ------------------- Determine Encounter Type -------------------
-  const isSafe = Math.random() < 0.5 || (character.blightEffects && character.blightEffects.noMonsters); 
+  console.log(`[travel.js]: 🔍 Checking encounter for ${character.name}:`);
+  console.log(`[travel.js]: 📊 Blight Stage: ${character.blightStage}`);
+  console.log(`[travel.js]: 🎭 Blight Effects:`, JSON.stringify(character.blightEffects, null, 2));
+  
+  const randomRoll = Math.random();
+  const hasNoMonsters = character.blightEffects?.noMonsters === true;
+  console.log(`[travel.js]: 🎲 Random Roll: ${randomRoll.toFixed(3)}`);
+  console.log(`[travel.js]: 👻 Has No Monsters Effect: ${hasNoMonsters}`);
+  
+  // If character has noMonsters effect, they should never encounter monsters
+  const isSafe = hasNoMonsters ? true : randomRoll < 0.5;
+  console.log(`[travel.js]: ✅ Is Safe Day: ${isSafe} (${hasNoMonsters ? 'due to noMonsters effect' : 'due to random roll'})`);
+  
   let dailyLogEntry = `**Day ${day}:**\n`;
 
   if (!isSafe) {

@@ -211,37 +211,47 @@ module.exports = {
       });
 
       // Set up collector for interactions
-      const collector = message.createMessageComponentCollector({ time: 600000 });
+      const collector = message.createMessageComponentCollector({ time: 300000 });
       collector.on('collect', async i => {
         if (i.user.id !== interaction.user.id) {
           await i.reply({ content: '❌ You cannot use these controls.', ephemeral: true });
           return;
         }
 
-        if (i.customId === 'type-select') {
-          currentType = i.values[0];
-          currentPage = 0;
-        } else if (i.customId.startsWith('prev|')) {
-          currentPage--;
-        } else if (i.customId.startsWith('next|')) {
-          currentPage++;
-        }
+        try {
+          if (i.customId === 'type-select') {
+            currentType = i.values[0];
+            currentPage = 0;
+          } else if (i.customId.startsWith('prev|')) {
+            currentPage--;
+          } else if (i.customId.startsWith('next|')) {
+            currentPage++;
+          }
 
-        await i.update({
-          embeds: [this.generateEmbed(character, currentType, currentPage, itemsByType)],
-          components: [
-            this.generateTypeDropdown(types),
-            this.generatePagination(currentPage, itemsByType[currentType].length)
-          ]
-        });
+          await i.update({
+            embeds: [this.generateEmbed(character, currentType, currentPage, itemsByType)],
+            components: [
+              this.generateTypeDropdown(types),
+              this.generatePagination(currentPage, itemsByType[currentType].length)
+            ]
+          });
+        } catch (error) {
+          if (error.code === 10062) { // Unknown interaction error
+            console.log('[inventory.js]: 🔄 Interaction expired, removing components');
+            await interaction.editReply({ components: [] }).catch(() => {});
+          } else {
+            handleError(error, 'inventory.js');
+            console.error('[inventory.js]: ❌ Error updating interaction', error);
+          }
+        }
       });
 
       collector.on('end', async () => {
         try {
-          await interaction.editReply({ components: [] });
+          await interaction.editReply({ components: [] }).catch(() => {});
         } catch (err) {
           handleError(err, 'inventory.js');
-          console.error('[inventory.js]: Error clearing components on collector end', err);
+          console.error('[inventory.js]: ❌ Error clearing components on collector end', err);
         }
       });
 
