@@ -19,6 +19,146 @@ const { formatDateTime } = require('../../modules/formattingModule');
 // ------------------- Database Models -------------------
 const ItemModel = require('../../models/ItemModel');
 
+// ------------------- Helper Functions -------------------
+
+// ------------------- Logs materials used for crafting to Google Sheets -------------------
+async function logMaterialsToGoogleSheets(auth, spreadsheetId, range, character, materialsUsed, craftedItem, interactionUrl, formattedDateTime) {
+    try {
+        const combinedMaterials = combineMaterials(materialsUsed);
+
+        const usedMaterialsValues = await Promise.all(combinedMaterials.map(async (material) => {
+            try {
+                let materialItem = null;
+
+                // Attempt lookup by ID if available
+                if (material._id) {
+                    try {
+                        const materialObjectId = new mongoose.Types.ObjectId(material._id);
+                        materialItem = await ItemModel.findById(materialObjectId);
+                    } catch (_) {
+    handleError(_, 'customWeapon.js');
+
+                        // Silently fail invalid ObjectId — fallback handled below
+                    }
+                }
+
+                // Fallback to itemName lookup
+                if (!materialItem || !materialItem.category || !materialItem.type || !materialItem.subtype) {
+                    materialItem = await ItemModel.findOne({ itemName: material.itemName });
+                }
+
+                // Still not found = use 'Unknown'
+                if (!materialItem) {
+                    return [
+                        character.name,
+                        material.itemName || 'Unknown',
+                        `-${material.quantity || 1}`,
+                        'Unknown',
+                        'Unknown',
+                        'Unknown',
+                        `Used for ${craftedItem.itemName}`,
+                        character.job || '',
+                        '',
+                        character.currentVillage || '',
+                        interactionUrl,
+                        formattedDateTime,
+                        uuidv4()
+                    ];
+                }
+
+                return [
+                    character.name,
+                    material.itemName || 'Unknown',
+                    `-${material.quantity || 1}`,
+                    materialItem.category?.join(', ') || 'Unknown',
+                    materialItem.type?.join(', ') || 'Unknown',
+                    materialItem.subtype?.length ? materialItem.subtype.join(', ') : '',
+                    `Used for ${craftedItem.itemName}`,
+                    character.job || '',
+                    '',
+                    character.currentVillage || '',
+                    interactionUrl,
+                    formattedDateTime,
+                    uuidv4()
+                ];
+            } catch (error) {
+    handleError(error, 'customWeapon.js');
+
+                console.error('[logMaterialsToGoogleSheets]: Error processing material:', error.message);
+                return [
+                    character.name,
+                    material.itemName || 'Unknown',
+                    `-${material.quantity || 1}`,
+                    'Unknown',
+                    'Unknown',
+                    'Unknown',
+                    `Used for ${craftedItem.itemName}`,
+                    character.job || '',
+                    '',
+                    character.currentVillage || '',
+                    interactionUrl,
+                    formattedDateTime,
+                    uuidv4()
+                ];
+            }
+        }));
+
+        await safeAppendDataToSheet(character.inventory, character, range, usedMaterialsValues, undefined, { skipValidation: true });
+    } catch (error) {
+    handleError(error, 'customWeapon.js');
+
+        console.error(`[customweapon create]: Failed to log materials to sheet:`, error);
+    }
+}
+
+// Combines materials used for crafting to avoid duplicates
+function combineMaterials(materialsUsed) {
+    const materialMap = new Map();
+  
+    for (const material of materialsUsed) {
+      if (materialMap.has(material.itemName)) {
+        materialMap.get(material.itemName).quantity += material.quantity;
+      } else {
+        materialMap.set(material.itemName, { ...material });
+      }
+    }
+  
+    return Array.from(materialMap.values());
+  }
+
+// ------------------- Get All Submissions from Storage -------------------
+function getAllSubmissions() {
+    try {
+        const fs = require('fs');
+        const path = require('path');
+        const submissionsPath = path.join(__dirname, '../data/submissions.json');
+
+        if (!fs.existsSync(submissionsPath)) return [];
+
+        const rawData = fs.readFileSync(submissionsPath, 'utf-8').trim();
+
+        // Handle empty file safely
+        if (!rawData) return [];
+
+        let submissions = {};
+        try {
+            submissions = JSON.parse(rawData);
+        } catch (parseError) {
+    handleError(parseError, 'customWeapon.js');
+
+            console.error(`[customweapon helper]: Failed to parse submissions.json — it might be corrupt or empty. Returning empty list.`);
+            return [];
+        }
+
+        return Object.values(submissions);
+    } catch (error) {
+    handleError(error, 'customWeapon.js');
+
+        console.error(`[customweapon helper]: Error retrieving all submissions:`, error);
+        return [];
+    }
+}
+
 // ------------------- Export Command Module -------------------
 module.exports = {
     data: new SlashCommandBuilder()
@@ -1084,231 +1224,5 @@ try {
         }
     }
 };
-
-// ------------------- Helper Functions -------------------
-
-// ------------------- Logs materials used for crafting to Google Sheets -------------------
-async function logMaterialsToGoogleSheets(auth, spreadsheetId, range, character, materialsUsed, craftedItem, interactionUrl, formattedDateTime) {
-    try {
-        const combinedMaterials = combineMaterials(materialsUsed);
-
-        const usedMaterialsValues = await Promise.all(combinedMaterials.map(async (material) => {
-            try {
-                let materialItem = null;
-
-                // Attempt lookup by ID if available
-                if (material._id) {
-                    try {
-                        const materialObjectId = new mongoose.Types.ObjectId(material._id);
-                        materialItem = await ItemModel.findById(materialObjectId);
-                    } catch (_) {
-    handleError(_, 'customWeapon.js');
-
-                        // Silently fail invalid ObjectId — fallback handled below
-                    }
-                }
-
-                // Fallback to itemName lookup
-                if (!materialItem || !materialItem.category || !materialItem.type || !materialItem.subtype) {
-                    materialItem = await ItemModel.findOne({ itemName: material.itemName });
-                }
-
-                // Still not found = use 'Unknown'
-                if (!materialItem) {
-                    return [
-                        character.name,
-                        material.itemName || 'Unknown',
-                        `-${material.quantity || 1}`,
-                        'Unknown',
-                        'Unknown',
-                        'Unknown',
-                        `Used for ${craftedItem.itemName}`,
-                        character.job || '',
-                        '',
-                        character.currentVillage || '',
-                        interactionUrl,
-                        formattedDateTime,
-                        uuidv4()
-                    ];
-                }
-
-                return [
-                    character.name,
-                    material.itemName || 'Unknown',
-                    `-${material.quantity || 1}`,
-                    materialItem.category?.join(', ') || 'Unknown',
-                    materialItem.type?.join(', ') || 'Unknown',
-                    materialItem.subtype?.length ? materialItem.subtype.join(', ') : '',
-                    `Used for ${craftedItem.itemName}`,
-                    character.job || '',
-                    '',
-                    character.currentVillage || '',
-                    interactionUrl,
-                    formattedDateTime,
-                    uuidv4()
-                ];
-            } catch (error) {
-    handleError(error, 'customWeapon.js');
-
-                console.error('[logMaterialsToGoogleSheets]: Error processing material:', error.message);
-                return [
-                    character.name,
-                    material.itemName || 'Unknown',
-                    `-${material.quantity || 1}`,
-                    'Unknown',
-                    'Unknown',
-                    'Unknown',
-                    `Used for ${craftedItem.itemName}`,
-                    character.job || '',
-                    '',
-                    character.currentVillage || '',
-                    interactionUrl,
-                    formattedDateTime,
-                    uuidv4()
-                ];
-            }
-        }));
-
-        await safeAppendDataToSheet(character.inventory, character, range, usedMaterialsValues, undefined, { skipValidation: true });
-    } catch (error) {
-    handleError(error, 'customWeapon.js');
-
-        console.error(`[customweapon create]: Failed to log materials to sheet:`, error);
-    }
-}
-
-  
-  // Combines materials used for crafting to avoid duplicates
-  function combineMaterials(materialsUsed) {
-    const materialMap = new Map();
-  
-    for (const material of materialsUsed) {
-      if (materialMap.has(material.itemName)) {
-        materialMap.get(material.itemName).quantity += material.quantity;
-      } else {
-        materialMap.set(material.itemName, { ...material });
-      }
-    }
-  
-    return Array.from(materialMap.values());
-  }
-  
-  // ------------------- Get All Submissions from Storage -------------------
-  function getAllSubmissions() {
-    try {
-        const fs = require('fs');
-        const path = require('path');
-        const submissionsPath = path.join(__dirname, '../data/submissions.json');
-
-        if (!fs.existsSync(submissionsPath)) return [];
-
-        const rawData = fs.readFileSync(submissionsPath, 'utf-8').trim();
-
-        // Handle empty file safely
-        if (!rawData) return [];
-
-        let submissions = {};
-        try {
-            submissions = JSON.parse(rawData);
-        } catch (parseError) {
-    handleError(parseError, 'customWeapon.js');
-
-            console.error(`[customweapon helper]: Failed to parse submissions.json — it might be corrupt or empty. Returning empty list.`);
-            return [];
-        }
-
-        return Object.values(submissions);
-    } catch (error) {
-    handleError(error, 'customWeapon.js');
-
-        console.error(`[customweapon helper]: Error retrieving all submissions:`, error);
-        return [];
-    }
-}
-
-// Update the saveSubmissionToStorage function to ensure proper data structure
-async function saveSubmissionToStorage(weaponId, submissionData) {
-    try {
-        const fs = require('fs');
-        const path = require('path');
-        const submissionsPath = path.join(__dirname, '../data/submissions.json');
-
-        // Ensure the data directory exists
-        const dataDir = path.dirname(submissionsPath);
-        if (!fs.existsSync(dataDir)) {
-            fs.mkdirSync(dataDir, { recursive: true });
-        }
-
-        // Read existing submissions
-        let submissions = {};
-        if (fs.existsSync(submissionsPath)) {
-            const rawData = fs.readFileSync(submissionsPath, 'utf-8').trim();
-            if (rawData) {
-                try {
-                    submissions = JSON.parse(rawData);
-                } catch (parseError) {
-                    console.error(`[storage.js]: Failed to parse submissions.json:`, parseError);
-                    submissions = {};
-                }
-            }
-        }
-
-        // Ensure all required fields are present
-        const completeSubmission = {
-            ...submissionData,
-            key: weaponId,
-            status: submissionData.status || 'pending',
-            createdAt: submissionData.createdAt || new Date(),
-            updatedAt: new Date(),
-            crafted: submissionData.crafted || false,
-            craftingMaterials: submissionData.craftingMaterials || [],
-            staminaToCraft: submissionData.staminaToCraft || 0
-        };
-
-        // Save the submission
-        submissions[weaponId] = completeSubmission;
-        fs.writeFileSync(submissionsPath, JSON.stringify(submissions, null, 2));
-        
-        console.log(`[storage.js]: ✅ Saved submission ${weaponId}`);
-        return true;
-    } catch (error) {
-        console.error(`[storage.js]: ❌ Error saving submission ${weaponId}:`, error);
-        return false;
-    }
-}
-
-// Update the retrieveSubmissionFromStorage function to handle errors better
-async function retrieveSubmissionFromStorage(weaponId) {
-    try {
-        const fs = require('fs');
-        const path = require('path');
-        const submissionsPath = path.join(__dirname, '../data/submissions.json');
-
-        if (!fs.existsSync(submissionsPath)) {
-            console.log(`[storage.js]: 🔍 No submissions file found`);
-            return null;
-        }
-
-        const rawData = fs.readFileSync(submissionsPath, 'utf-8').trim();
-        if (!rawData) {
-            console.log(`[storage.js]: 🔍 Empty submissions file`);
-            return null;
-        }
-
-        const submissions = JSON.parse(rawData);
-        const submission = submissions[weaponId];
-
-        if (!submission) {
-            console.log(`[storage.js]: ❌ No submission found for ${weaponId}`);
-            return null;
-        }
-
-        console.log(`[storage.js]: ✅ Retrieved submission ${weaponId}`);
-        return submission;
-    } catch (error) {
-        console.error(`[storage.js]: ❌ Error retrieving submission ${weaponId}:`, error);
-        return null;
-    }
-}
 
 

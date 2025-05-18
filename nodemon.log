@@ -122,6 +122,7 @@
   - Option "charactername" has autocomplete enabled
   - Option "healer" has autocomplete enabled
   - Option "healername" has autocomplete enabled
+.
 ✅ Loaded command: heal from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\jobs\heal.js
   - Option "charactername" has autocomplete enabled
 .
@@ -159,41 +160,3 @@
   - Option "item" has autocomplete enabled
   - Option "ingredient" has autocomplete enabled
 ✅ Loaded command: lookup from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\utility\lookup.js
-✅ Loaded command: roll from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\utility\roll.js
-✅ Loaded command: submit from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\utility\submit.js
-✅ Loaded command: tokens from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\utility\tokens.js
-  - Option "character_name" has autocomplete enabled
-  - Option "character_name" has autocomplete enabled
-  - Option "item" has autocomplete enabled
-.
-✅ Loaded command: blight from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\world\blight.js
-  - Option "attacker" has autocomplete enabled
-  - Option "defender" has autocomplete enabled
-  - Option "attacker" has autocomplete enabled
-.
-✅ Loaded command: combat from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\world\combat.js
-  - Option "charactername" has autocomplete enabled
-  - Option "questid" has autocomplete enabled
-.
-✅ Loaded command: quest from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\world\quest.js
-  - Option "charactername" has autocomplete enabled
-.
-✅ Loaded command: raid from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\world\raid.js
-  - Option "charactername" has autocomplete enabled
-  - Option "destination" has autocomplete enabled
-✅ Loaded command: travel from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\world\travel.js
-  - Option "charactername" has autocomplete enabled
-  - Option "itemname" has autocomplete enabled
-  - Option "charactername" has autocomplete enabled
-  - Option "itemname" has autocomplete enabled
-.
-✅ Loaded command: village from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\world\village.js
-🔄 Started refreshing 34 guild (/) commands for guild ID: 1305484048063529002
-(node:16420) Warning: Accessing non-existent property 'connectToInventories' of module exports inside circular dependency
-(Use `node --trace-warnings ...` to show where the warning was created)
-(node:16420) Warning: Accessing non-existent property 'fetchCharacterById' of module exports inside circular dependency
-(node:16420) Warning: Accessing non-existent property 'updateCharacterById' of module exports inside circular dependency
-✅ Successfully reloaded application (/) commands for guild ID: 1305484048063529002.
-🔄 Started refreshing 34 guild (/) commands for guild ID: 603960955839447050
-✅ Successfully reloaded application (/) commands for guild ID: 603960955839447050.
-✅ Successfully reloaded all guild (/) commands.

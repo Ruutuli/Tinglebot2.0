@@ -23,19 +23,25 @@ async function saveSubmissionToStorage(submissionId, submissionData) {
 
     console.log(`[storage.js]: 🔄 Saving submission ${submissionId}`);
     
-    // Merge with existing data if it exists
-    const existingSubmission = await TempData.findOne({ type: 'submission', key: submissionId });
-    if (existingSubmission) {
-      submissionData = {
-        ...existingSubmission.data,
+    // Set expiration to 48 hours from now
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+
+    // Create the properly structured document
+    const submission = {
+      type: 'submission',
+      key: submissionId,
+      data: {
         ...submissionData,
-        createdAt: existingSubmission.createdAt // Preserve original creation date
-      };
-    }
+        createdAt: submissionData.createdAt || now,
+        updatedAt: now
+      },
+      expiresAt
+    };
 
     const result = await TempData.findOneAndUpdate(
       { type: 'submission', key: submissionId },
-      submissionData,
+      submission,
       { upsert: true, new: true }
     );
 
