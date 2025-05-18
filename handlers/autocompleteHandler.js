@@ -54,7 +54,15 @@ const { Village } = require("../models/VillageModel");
 // Add safe response utility
 async function safeAutocompleteResponse(interaction, choices) {
   try {
-    const timeoutPromise = createTimeoutPromise();
+    if (interaction.responded) {
+      console.log('[autocomplete]: Interaction already responded to');
+      return;
+    }
+
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Response timeout')), 3000)
+    );
+
     await Promise.race([
       interaction.respond(choices),
       timeoutPromise
@@ -67,7 +75,9 @@ async function safeAutocompleteResponse(interaction, choices) {
 
     console.error('[autocomplete]: Error:', error);
     try {
-      await interaction.respond([]).catch(() => {});
+      if (!interaction.responded) {
+        await interaction.respond([]).catch(() => {});
+      }
     } catch (e) {
       // Ignore any errors from the fallback response
     }
@@ -556,87 +566,80 @@ async function handleChangeJobCharacterAutocomplete(
 // job perks, fetches the character's inventory, determines which items can be
 // crafted, and then filters these items based on user input.
 
+// Add cache for job perks and craftable items with longer TTL
+const jobPerksCache = new Map();
+const craftableItemsCache = new Map();
+const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
+
 // ------------------- Crafting Autocomplete -------------------
 // Provides autocomplete suggestions for craftable items based on the character's
 // job and inventory.
 async function handleCraftingAutocomplete(interaction, focusedOption) {
- try {
-  // Extract user ID and character name from the interaction
-  const userId = interaction.user.id;
-  const characterName = interaction.options.getString("charactername");
+  try {
+    // Extract user ID and character name from the interaction
+    const userId = interaction.user.id;
+    const characterName = interaction.options.getString("charactername");
+    const searchQuery = focusedOption.value?.toLowerCase() || "";
 
-  // Fetch all characters belonging to the user
-  const characters = await fetchCharactersByUserId(userId);
+    // Check cache first for this character's craftable items
+    const cacheKey = `${characterName}_${userId}`;
+    let craftableItems = craftableItemsCache.get(cacheKey);
+    
+    if (!craftableItems) {
+      // Fetch character and check job perks in parallel
+      const [character, allCraftableItems] = await Promise.all([
+        fetchCharacterByNameAndUserId(characterName, userId),
+        Item.find({
+          craftingTags: { $exists: true }
+        })
+        .select('itemName craftingTags')
+        .lean()
+      ]);
 
-  // Find the specific character from the list
-  const character = characters.find((c) => c.name === characterName);
-  if (!character) {
-   // Respond with an empty array if the character is not found
-   return await interaction.respond([]);
+      if (!character) {
+        return await safeAutocompleteResponse(interaction, []);
+      }
+
+      // Determine the character's job
+      const job = character.jobVoucher ? character.jobVoucherJob : character.job;
+
+      // Check job perks cache
+      let jobPerk = jobPerksCache.get(job);
+      if (!jobPerk) {
+        jobPerk = getJobPerk(job);
+        if (jobPerk) {
+          jobPerksCache.set(job, jobPerk);
+          setTimeout(() => jobPerksCache.delete(job), CACHE_TTL);
+        }
+      }
+
+      if (!jobPerk || !jobPerk.perks.includes("CRAFTING")) {
+        return await safeAutocompleteResponse(interaction, []);
+      }
+
+      // Filter items by job and cache them
+      craftableItems = allCraftableItems.filter(item => 
+        item.craftingTags.some(tag => tag.toLowerCase() === job.toLowerCase())
+      );
+      
+      craftableItemsCache.set(cacheKey, craftableItems);
+      setTimeout(() => craftableItemsCache.delete(cacheKey), CACHE_TTL);
+    }
+
+    // Filter items by search query and limit to 25
+    const filteredItems = craftableItems
+      .filter(item => item.itemName.toLowerCase().includes(searchQuery))
+      .slice(0, 25)
+      .map(item => ({
+        name: item.itemName,
+        value: item.itemName
+      }));
+
+    await safeAutocompleteResponse(interaction, filteredItems);
+  } catch (error) {
+    handleError(error, "autocompleteHandler.js");
+    await safeAutocompleteResponse(interaction, []);
   }
-
-  // Determine the character's job based on the Job Voucher or default job
-  const job = character.jobVoucher ? character.jobVoucherJob : character.job;
-
-  // Check the character's job perks to ensure crafting eligibility
-  const jobPerk = getJobPerk(job);
-  if (!jobPerk || !jobPerk.perks.includes("CRAFTING")) {
-   // Respond with an empty array if the character cannot craft
-   return await interaction.respond([]);
-  }
-
-  // Fetch the character's inventory
-  const inventoryCollection = await getCharacterInventoryCollection(
-   character.name
-  );
-  const characterInventory = await inventoryCollection.find().toArray();
-
-  // Determine which items can be crafted based on the inventory
-  const craftableItems = await fetchCraftableItemsAndCheckMaterials(
-   characterInventory
-  );
-  if (craftableItems.length === 0) {
-   // Respond with an empty array if no craftable items are found
-   return await interaction.respond([]);
-  }
-
-  // Filter craftable items based on the character's job
-  const filteredItems = craftableItems.filter((item) =>
-   item.craftingTags.some((tag) => tag.toLowerCase() === job.toLowerCase())
-  );
-  if (filteredItems.length === 0) {
-   // Respond with an empty array if no items match the character's job
-   return await interaction.respond([]);
-  }
-
-  // Get the user's input value for dynamic filtering
-  const inputValue = focusedOption.value.toLowerCase();
-
-  // Filter items dynamically based on the user's input
-  const matchingItems = filteredItems.filter((item) =>
-   item.itemName.toLowerCase().includes(inputValue)
-  );
-
-  const MAX_CHOICES = 25; // Discord's maximum allowed autocomplete choices
-
-  // Map matching items to autocomplete choices and limit to the maximum allowed
-  const choices = matchingItems.slice(0, MAX_CHOICES).map((item) => ({
-   name: item.itemName, // Display item name
-   value: item.itemName, // Use item name as the value
-  }));
-
-  // Respond to the interaction with the filtered choices
-  if (!interaction.responded) {
-   await interaction.respond(choices);
-  }
- } catch (error) {
-  handleError(error, "autocompleteHandler.js");
-
-  // Handle errors gracefully by responding with an empty array
-  if (!interaction.responded) {
-   await interaction.respond([]);
-  }
- }
 }
 
 // ============================================================================
