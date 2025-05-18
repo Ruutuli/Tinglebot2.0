@@ -1671,12 +1671,82 @@ async function handleSetBirthday(interaction) {
   const birthday = interaction.options.getString("birthday");
   const userId = interaction.user.id;
 
+  // Validate format first
   if (!/^\d{2}-\d{2}$/.test(birthday)) {
    return interaction.reply({
     content:
-     "❌ Invalid date format. Please provide the birthday in **MM-DD** format.",
+     "❌ Invalid date format. Please provide the birthday in **MM-DD** format (e.g., 01-15 for January 15th).",
     ephemeral: true,
    });
+  }
+
+  // Parse the date components
+  const [month, day] = birthday.split('-').map(Number);
+  
+  // Validate month (1-12)
+  if (month < 1 || month > 12) {
+    const monthNames = [
+      "January", "February", "March", "April", "May", "June",
+      "July", "August", "September", "October", "November", "December"
+    ];
+    return interaction.reply({
+      content: `❌ Invalid month: ${month}. Month must be between 01 and 12.\n\nValid months are:\n${monthNames.map((name, i) => `${String(i + 1).padStart(2, '0')} - ${name}`).join('\n')}`,
+      ephemeral: true,
+    });
+  }
+
+  // Get month name for better error messages
+  const monthNames = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
+  const monthName = monthNames[month - 1];
+
+  // Validate day based on month and handle leap years
+  const isLeapYear = (year) => {
+    return (year % 4 === 0 && year % 100 !== 0) || (year % 400 === 0);
+  };
+
+  // Get days in month, accounting for leap years
+  const getDaysInMonth = (month, year) => {
+    const daysInMonth = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    if (month === 2 && isLeapYear(year)) {
+      return 29;
+    }
+    return daysInMonth[month - 1];
+  };
+
+  // Use current year for leap year calculation
+  const currentYear = new Date().getFullYear();
+  const daysInMonth = getDaysInMonth(month, currentYear);
+
+  if (day < 1 || day > daysInMonth) {
+    let errorMessage = `❌ Invalid day: ${day}. ${monthName} has ${daysInMonth} days`;
+    
+    // Add special message for February
+    if (month === 2) {
+      errorMessage += isLeapYear(currentYear) 
+        ? " (including February 29th this year)" 
+        : " (not a leap year)";
+    }
+    
+    // Add helpful examples
+    errorMessage += `\n\nValid days for ${monthName} are: 01-${String(daysInMonth).padStart(2, '0')}`;
+    
+    return interaction.reply({
+      content: errorMessage,
+      ephemeral: true,
+    });
+  }
+
+  // Additional validation: Check if the date is in the future
+  const today = new Date();
+  const birthdayDate = new Date(currentYear, month - 1, day);
+  if (birthdayDate > today) {
+    return interaction.reply({
+      content: `❌ Invalid date: ${monthName} ${day} is in the future. Please provide a past date.`,
+      ephemeral: true,
+    });
   }
 
   await connectToTinglebot();
@@ -1691,11 +1761,13 @@ async function handleSetBirthday(interaction) {
    return;
   }
 
-  character.birthday = birthday;
+  // Format the birthday with leading zeros
+  const formattedBirthday = `${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  character.birthday = formattedBirthday;
   await character.save();
 
   await interaction.reply({
-   content: `🎂 **${character.name}'s** birthday has been set to **${birthday}**.`,
+   content: `🎂 **${character.name}'s** birthday has been set to **${monthName} ${day}** (${formattedBirthday}).`,
    ephemeral: true,
   });
  } catch (error) {
