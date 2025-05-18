@@ -511,6 +511,13 @@ async function handleBloodMoonRerolls(
 
 // ------------------- Normal Encounter Logic -------------------
 async function handleNormalEncounter(interaction, currentVillage, job, character, bloodMoonActive) {
+  // Check for blight stage 3 effect (no monsters)
+  if (character.blightEffects?.noMonsters) {
+    const embed = createNoEncounterEmbed(character, bloodMoonActive);
+    await interaction.editReply({ embeds: [embed] });
+    return null;
+  }
+
   const monstersByCriteria = await getMonstersByCriteria(currentVillage, job);
   if (monstersByCriteria.length === 0) {
     const embed = createNoEncounterEmbed(character, bloodMoonActive); // Send "No Encounter" embed
