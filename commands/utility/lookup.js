@@ -159,7 +159,7 @@ const jobFormatted = jobText.join('\n'); // Join array elements with a newline
 
 // ------------------- Handle ingredient lookup -------------------
 async function handleIngredientLookup(interaction, ingredientName) {
-  const craftableItems = await getIngredientItems(ingredientName);
+  const craftableItems = await getIngredientItems(ingredientName.toLowerCase());
 
   if (craftableItems.length === 0) {
     return interaction.editReply({ content: `❌ No craftable items found using ${ingredientName}.`, ephemeral: true });
