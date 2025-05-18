@@ -1194,17 +1194,6 @@ const createMonsterEncounterEmbed = (
    ? "\n> 💥 **KO! You have been defeated and can't continue!**"
    : "";
 
- const isVisiting =
-  character.homeVillage.toLowerCase() !==
-  character.currentVillage.toLowerCase();
- const locationPrefix = isVisiting
-  ? `${capitalizeWords(character.homeVillage)} ${capitalizeWords(
-     character.job
-    )} is visiting ${capitalizeWords(character.currentVillage)}`
-  : `${capitalizeWords(character.currentVillage)} ${capitalizeWords(
-     character.job
-    )}`;
-
  const embedColor =
   getVillageColorByName(character.currentVillage) || "#000000";
 
@@ -1223,7 +1212,7 @@ const createMonsterEncounterEmbed = (
  const embed = new EmbedBuilder()
   .setColor(isBloodMoon ? "#FF4500" : embedColor)
   .setTitle(
-   `${locationPrefix}: ${character.name} encountered a ${
+   `${character.name} encountered a ${
     monsterDetails.name || monster.name
    }!`
   )
