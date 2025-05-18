@@ -15,7 +15,7 @@ const { fetchCharacterByNameAndUserId, fetchAllItems } = require('../database/db
 // ------------------- Modules -------------------
 const { createWeightedItemList } = require('../modules/rngModule.js');
 const { handleError } = require('../utils/globalErrorHandler.js');
-const { syncItem, SOURCE_TYPES } = require('../utils/itemSyncUtils.js');
+const { syncItem, SOURCE_TYPES } = require('../utils/inventoryUtils.js');
 const { getCurrentWeather } = require('../modules/weatherModule.js');
 
 // ------------------- Constants -------------------
@@ -394,25 +394,18 @@ module.exports = {
       // Create and send embed
       const { embed, files } = await createSpecialWeatherEmbed(character, randomItem, weather);
       
-      // Send initial response without banner
+      // Generate banner and add it to the embed
+      const banner = await generateBanner(currentVillage, weather);
+      if (banner) {
+        embed.setImage(`attachment://${banner.name}`);
+        files.push(banner);
+      }
+
+      // Send response with embed and banner
       await interaction.editReply({ 
         embeds: [embed], 
-        files: [] 
+        files: files 
       });
-
-      // Generate and send banner in a separate message
-      try {
-        const banner = await generateBanner(currentVillage, weather);
-        if (banner) {
-          await interaction.followUp({ 
-            files: [banner],
-            ephemeral: false 
-          });
-        }
-      } catch (error) {
-        console.error(`[specialweather.js]: ❌ Error generating banner: ${error.message}`);
-        // Don't send error to user since this is non-critical
-      }
 
     } catch (error) {
       handleError(error, 'specialweather.js');

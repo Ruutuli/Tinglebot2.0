@@ -40,7 +40,7 @@ const { capitalizeFirstLetter, capitalizeWords } = require('../modules/formattin
 
 // ------------------- Utility Functions -------------------
 const { addItemInventoryDatabase } = require('../utils/inventoryUtils');
-const { syncItem, SOURCE_TYPES } = require('../utils/itemSyncUtils');
+const { syncItem, SOURCE_TYPES } = require('../utils/inventoryUtils');
 const {
   appendSheetData,
   authorizeSheets,
