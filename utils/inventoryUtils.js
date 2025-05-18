@@ -20,6 +20,20 @@ const mongoose = require('mongoose');
 const ItemModel = require('../models/ItemModel');
 
 // ============================================================================
+// ---- Constants ----
+// ============================================================================
+
+const SOURCE_TYPES = {
+  TRAVEL_LOOT: 'Travel Loot',
+  GATHERING: 'Gathering',
+  CRAFTING: 'Crafting',
+  TRADING: 'Trading',
+  QUEST: 'Quest Reward',
+  SHOP: 'Shop Purchase',
+  MANUAL: 'Manual Entry'
+};
+
+// ============================================================================
 // ---- Database Functions ----
 // Core database connection and utility functions
 // ============================================================================
@@ -776,4 +790,5 @@ module.exports = {
   addItemToVendingInventory,
   extractSpreadsheetId,
   logMaterialsToGoogleSheets,
+  SOURCE_TYPES
 };
