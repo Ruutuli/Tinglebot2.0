@@ -718,9 +718,17 @@ async function rollForBlightProgression(interaction, characterName) {
     nextCallStart.setDate(currentCallStart.getDate() + 1);
 
     const lastRollDate = character.lastRollDate || new Date(0);
-    if (lastRollDate >= currentCallStart && lastRollDate < nextCallStart) {
+    const lastRollDateEST = new Date(lastRollDate.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+
+    // Check if the last roll was within the current window
+    if (lastRollDateEST >= currentCallStart && lastRollDateEST < nextCallStart) {
+      const timeUntilNextRoll = nextCallStart - estNow;
+      const hoursUntilNextRoll = Math.floor(timeUntilNextRoll / (1000 * 60 * 60));
+      const minutesUntilNextRoll = Math.floor((timeUntilNextRoll % (1000 * 60 * 60)) / (1000 * 60));
+
       await interaction.reply({
-        content: `**${characterName}** has already rolled during the current Blight Call window. You can roll again after **8 PM EST**.`,
+        content: `**${characterName}** has already rolled during the current Blight Call window.\n\n` +
+          `You can roll again after **8 PM EST** (in ${hoursUntilNextRoll} hours and ${minutesUntilNextRoll} minutes).`,
         ephemeral: true,
       });
       return;
