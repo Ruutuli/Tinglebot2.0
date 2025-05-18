@@ -334,7 +334,7 @@ function setupBlightScheduler(client) {
 function initializeScheduler(client) {
   // Initialize all schedulers
   createCronJob('0 0 * * *', 'jail release check', handleJailRelease);
-  createCronJob('0 0 * * *', 'reset daily rolls', resetDailyRolls);
+  createCronJob('0 8 * * *', 'reset daily rolls', resetDailyRolls);
   createCronJob('0 8 * * *', 'daily stamina recovery', recoverDailyStamina);
   createCronJob('0 0 1 * *', 'monthly vending stock generation', generateVendingStockList);
   createCronJob('0 0 * * 0', 'weekly pet rolls reset', resetPetRollsForAllCharacters);

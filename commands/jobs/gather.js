@@ -63,7 +63,7 @@ function canUseDailyRoll(character, activity) {
 
   const now = new Date();
   const rollover = new Date();
-  rollover.setUTCHours(13, 0, 0, 0); // 8AM EST = 1PM UTC
+  rollover.setUTCHours(12, 0, 0, 0); // 8AM EST = 12PM UTC
 
   // If we're before rollover time, use yesterday's rollover
   if (now < rollover) {
