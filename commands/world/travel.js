@@ -60,7 +60,7 @@ const {
 } = process.env;
 
 if (!PATH_OF_SCARLET_LEAVES_CHANNEL_ID || !LEAF_DEW_WAY_CHANNEL_ID) {
-  console.error(`[travel.js]: Error: Missing required path channel IDs in environment variables.`);
+  handleError(new Error('Missing required path channel IDs in environment variables.'), 'travel.js');
   throw new Error('Missing required path channel IDs in environment variables.');
 }
 
@@ -397,10 +397,8 @@ async function checkAndHandleKO(character, channel, startingVillage) {
       .setTimestamp();
 
     await channel.send({ embeds: [koEmbed] });
-
     return true;
   }
-
   return false;
 }
 
@@ -481,15 +479,13 @@ ${pathEmoji || ''} No monsters or gathering today!`)
       // Remove other "* Visiting" roles first
       const visitingRoles = member.roles.cache.filter(r => /Visiting$/.test(r.name) && r.id !== villageRole.id);
       for (const [roleId] of visitingRoles) {
-        await member.roles.remove(roleId).catch(console.warn);
+        await member.roles.remove(roleId).catch(error => handleError(error, 'travel.js'));
       }
   
       // Add destination visiting role
       if (!member.roles.cache.has(villageRole.id)) {
-        await member.roles.add(villageRole).catch(console.warn);
+        await member.roles.add(villageRole).catch(error => handleError(error, 'travel.js'));
       }
-    } else {
-      console.warn(`[travel.js]: Could not find role "${roleName}" to assign.`);
     }
   
     // Filter out "fight: win & loot" logs from final summary
@@ -504,7 +500,6 @@ ${pathEmoji || ''} No monsters or gathering today!`)
       await finalChannel.send({ embeds: [imageEmbed] });
     } catch (error) {
       handleError(error, 'travel.js');
-      console.error(`[travel.js]: Error sending arrival embeds: ${error.message}`, error);
       await finalChannel.send({ content: '⚠️ Unable to display the arrival embed.' });
     }
     for (const msg of travelingMessages) {
@@ -528,18 +523,15 @@ ${pathEmoji || ''} No monsters or gathering today!`)
   // ------------------- Determine Current Path -------------------
   const currentPath = paths[0];
   if (!currentPath) {
-    console.error(`[travel.js]: Error: Current path is undefined for day ${day}.`);
     throw new Error(`Current path is undefined for day ${day}.`);
   }
   const channelId = PATH_CHANNELS[currentPath];
   if (!channelId) {
-    console.error(`[travel.js]: Error: Channel ID for path "${currentPath}" is undefined.`);
     throw new Error(`Channel ID for path "${currentPath}" is undefined.`);
   }
   const channel = savedChannel || await interaction.client.channels.fetch(channelId);
   const pathEmoji = pathEmojis[currentPath];
   if (!pathEmoji) {
-    console.error(`[travel.js]: Error: Emoji for path "${currentPath}" is undefined.`);
     throw new Error(`Emoji for path "${currentPath}" is undefined.`);
   }
 
@@ -552,18 +544,9 @@ ${pathEmoji || ''} No monsters or gathering today!`)
   await new Promise(resolve => setTimeout(resolve, DELAY_MS));
 
   // ------------------- Determine Encounter Type -------------------
-  console.log(`[travel.js]: 🔍 Checking encounter for ${character.name}:`);
-  console.log(`[travel.js]: 📊 Blight Stage: ${character.blightStage}`);
-  console.log(`[travel.js]: 🎭 Blight Effects:`, JSON.stringify(character.blightEffects, null, 2));
-  
   const randomRoll = Math.random();
   const hasNoMonsters = character.blightEffects?.noMonsters === true;
-  console.log(`[travel.js]: 🎲 Random Roll: ${randomRoll.toFixed(3)}`);
-  console.log(`[travel.js]: 👻 Has No Monsters Effect: ${hasNoMonsters}`);
-  
-  // If character has noMonsters effect, they should never encounter monsters
   const isSafe = hasNoMonsters ? true : randomRoll < 0.5;
-  console.log(`[travel.js]: ✅ Is Safe Day: ${isSafe} (${hasNoMonsters ? 'due to noMonsters effect' : 'due to random roll'})`);
   
   let dailyLogEntry = `**Day ${day}:**\n`;
 
@@ -656,7 +639,6 @@ ${pathEmoji || ''} No monsters or gathering today!`)
       `${character.name} gazed at constellations and felt at peace. 🌟`
     ];
     const doNothingFlavor = doNothingFlavorTexts[Math.floor(Math.random() * doNothingFlavorTexts.length)];
-    console.log(`[travel.js]: 🔄 Generated Do Nothing flavor for Day ${day}: ${doNothingFlavor}`);
     const safeEmbed = createSafeTravelDayEmbed(character, day, totalTravelDuration, pathEmoji, currentPath);
     const safeMessage = await channel.send({ embeds: [safeEmbed] });
     const buttons = new ActionRowBuilder().addComponents(

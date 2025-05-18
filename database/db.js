@@ -268,7 +268,7 @@ const fetchCharacterByNameAndUserId = async (characterName, userId) => {
   await connectToTinglebot();
   // Get the actual name part before the "|" if it exists
   const actualName = characterName.split('|')[0].trim();
-  console.log(`[characterService]: 🔍 Searching for character "${actualName}" (userId: ${userId})`);
+  console.log(`[characterService]: 🔍 Searching for "${actualName}" (userId: ${userId})`);
   
   const character = await Character.findOne({
     name: new RegExp(`^${actualName}$`, "i"),
@@ -276,20 +276,15 @@ const fetchCharacterByNameAndUserId = async (characterName, userId) => {
   });
 
   if (!character) {
-    console.error(`[characterService]: ❌ No character found with name "${actualName}" and userId "${userId}"`);
+    console.error(`[characterService]: ❌ Character not found`);
     return null;
   }
 
-  console.log(`[characterService]: ✅ Found character "${character.name}" (ID: ${character._id})`);
-  console.log(`[characterService]: 📊 Character inventory URL: ${character.inventory || 'undefined'}`);
-  
   return character;
  } catch (error) {
   handleError(error, "db.js");
   console.error(
-   `[characterService]: Error in fetchCharacterByNameAndUserId: ${error.message}\n` +
-   `Search parameters - name: "${actualName}", userId: "${userId}"\n` +
-   `Stack trace: ${error.stack}`
+   `[characterService]: ❌ Error searching for "${actualName}": ${error.message}`
   );
   throw error;
  }
