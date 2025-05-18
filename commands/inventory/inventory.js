@@ -125,13 +125,14 @@ module.exports = {
       await interaction.deferReply({ ephemeral: true });
 
       const fullCharacterName = interaction.options.getString('charactername');
-      const characterName = fullCharacterName?.split(' | ')[0];
+      const characterName = fullCharacterName?.split(' | ')[0]?.trim();
       
       if (!characterName) {
         await interaction.editReply({ content: '❌ Character name is required.' });
         return;
       }
 
+      await connectToTinglebot();
       const character = await fetchCharacterByName(characterName);
       
       if (!character) {
@@ -211,13 +212,12 @@ module.exports = {
       });
 
       // Set up collector for interactions
-      const collector = message.createMessageComponentCollector({ time: 300000 });
-      collector.on('collect', async i => {
-        if (i.user.id !== interaction.user.id) {
-          await i.reply({ content: '❌ You cannot use these controls.', ephemeral: true });
-          return;
-        }
+      const collector = message.createMessageComponentCollector({ 
+        time: 300000,
+        filter: i => i.user.id === interaction.user.id
+      });
 
+      collector.on('collect', async i => {
         try {
           if (i.customId === 'type-select') {
             currentType = i.values[0];
@@ -236,12 +236,17 @@ module.exports = {
             ]
           });
         } catch (error) {
+          handleError(error, 'inventory.js');
+          console.error('[inventory.js]: ❌ Error updating interaction', error);
+          
           if (error.code === 10062) { // Unknown interaction error
             console.log('[inventory.js]: 🔄 Interaction expired, removing components');
-            await interaction.editReply({ components: [] }).catch(() => {});
+            collector.stop();
           } else {
-            handleError(error, 'inventory.js');
-            console.error('[inventory.js]: ❌ Error updating interaction', error);
+            await i.reply({ 
+              content: '❌ An error occurred while updating the inventory view.',
+              ephemeral: true 
+            }).catch(() => {});
           }
         }
       });
@@ -258,7 +263,21 @@ module.exports = {
     } catch (error) {
       handleError(error, 'inventory.js');
       console.error('[inventory.js]: Error in handleView', error);
-      await interaction.editReply({ content: '❌ An error occurred while viewing the inventory.' });
+      try {
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({ 
+            content: '❌ An error occurred while viewing the inventory.',
+            ephemeral: true 
+          });
+        } else {
+          await interaction.editReply({ 
+            content: '❌ An error occurred while viewing the inventory.',
+            ephemeral: true 
+          });
+        }
+      } catch (replyError) {
+        console.error('[inventory.js]: Error sending error message:', replyError);
+      }
     }
   },
 
@@ -323,10 +342,12 @@ module.exports = {
 
   // ------------------- Test Handler -------------------
   async handleTest(interaction) {
-    const characterName = interaction.options.getString('charactername');
-    const userId = interaction.user.id;
-
     try {
+      await interaction.deferReply({ ephemeral: true });
+      
+      const characterName = interaction.options.getString('charactername');
+      const userId = interaction.user.id;
+
       await connectToTinglebot();
       console.log('✅ Connected to Tinglebot database.');
 
@@ -378,7 +399,7 @@ module.exports = {
       }
       console.log('✅ Inventory sheet contains at least one valid item.');
 
-      await interaction.reply({
+      await interaction.editReply({
         content: `✅ **Success!**\n\n🛠️ **Inventory setup for** **${character.name}** **has been successfully tested.**\n\n📄 **See your inventory [here](<${inventoryUrl}>)**.\n\n🔄 **Once ready, use the** \`/inventory sync\` **command to sync your character's inventory.**`,
         ephemeral: true
       });
@@ -411,10 +432,21 @@ module.exports = {
           errorMessage = `❌ **Error:** An unexpected error occurred: ${error.message}`;
       }
 
-      await interaction.reply({
-        content: errorMessage,
-        ephemeral: true
-      });
+      try {
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({
+            content: errorMessage,
+            ephemeral: true
+          });
+        } else {
+          await interaction.editReply({
+            content: errorMessage,
+            ephemeral: true
+          });
+        }
+      } catch (replyError) {
+        console.error('[inventory.js]: Error sending error message:', replyError);
+      }
     }
   },
 
@@ -432,9 +464,11 @@ module.exports = {
     let description = slice
       .map(item => formatItemDetails(item.itemName, item.quantity, item.emoji))
       .join('\n');
+    
     if (description.length > MAX_DESCRIPTION_LENGTH) {
       description = `${description.substring(0, MAX_DESCRIPTION_LENGTH - 3)}...`;
     }
+    
     if (!description) description = 'No items to display.';
 
     const totalPages = Math.ceil(items.length / ITEMS_PER_PAGE);
@@ -442,8 +476,7 @@ module.exports = {
       .setColor(typeColors[type] || '#0099ff')
       .setAuthor({
         name: `${character.name}: Inventory`,
-        iconURL: character.icon,
-        url: `https://example.com/inventory/${character.name}`
+        iconURL: character.icon
       })
       .setDescription(description)
       .setFooter({ text: `${type} ▴ Page ${page + 1} of ${totalPages}` });
