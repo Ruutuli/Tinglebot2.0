@@ -5,11 +5,6 @@ const TempData = require('../models/TempDataModel');
 const mongoose = require('mongoose');
 
 // ============================================================================
-// ------------------- In-Memory Storage -------------------
-// Map to store submission data in memory
-const submissionStore = new Map();
-
-// ============================================================================
 // ------------------- Submission Storage Functions -------------------
 // Functions for saving, retrieving, and deleting submissions from persistent storage.
 
@@ -82,7 +77,6 @@ async function deleteSubmissionFromStorage(submissionId) {
     throw new Error('Failed to delete submission');
   }
 }
-
 
 // ============================================================================
 // ------------------- Temporary Data Storage Functions -------------------
@@ -347,7 +341,6 @@ module.exports = {
   saveSubmissionToStorage,
   retrieveSubmissionFromStorage,
   deleteSubmissionFromStorage,
-  submissionStore,
   
   saveHealingRequestToStorage,
   retrieveHealingRequestFromStorage,

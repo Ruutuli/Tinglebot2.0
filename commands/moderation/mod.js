@@ -72,7 +72,9 @@ const TempData = require('../../models/TempDataModel');
 const {
   savePendingEditToStorage,
   retrievePendingEditFromStorage,
-  deletePendingEditFromStorage
+  deletePendingEditFromStorage,
+  retrieveSubmissionFromStorage,
+  deleteSubmissionFromStorage
 } = require('../../utils/storage');
 
 const {
@@ -431,13 +433,13 @@ async function execute(interaction) {
         return await handleApproveEdit(interaction);
     } else if (subcommand === 'inactivityreport') {
         return await handleInactivityReport(interaction);      
-      } else if (subcommand === 'table') {
+    } else if (subcommand === 'table') {
         return await handleTable(interaction);      
-      } else if (subcommand === 'blightpause') {
+    } else if (subcommand === 'blightpause') {
         return await handleBlightPause(interaction);
-      } else if (subcommand === 'kick_travelers') {
+    } else if (subcommand === 'kick_travelers') {
         return await handleKickTravelers(interaction);      
-      } else if (subcommand === 'tokens') {
+    } else if (subcommand === 'tokens') {
         const user = interaction.options.getUser('user');
         const amount = interaction.options.getInteger('amount');
         const User = require('../../models/UserModel.js'); // ✅ adjust if needed
@@ -457,8 +459,7 @@ async function execute(interaction) {
           target.tokens = (target.tokens || 0) + amount;
           await target.save();
           
-      
-          await interaction.editReply({
+          return interaction.editReply({
             content: `💠 <@${user.id}> has been given **${amount} tokens**. They now have **${target.tokens} total**.`,
             ephemeral: true
           });
@@ -468,16 +469,15 @@ async function execute(interaction) {
             content: `❌ Failed to give tokens to <@${user.id}>.`,
             ephemeral: true
           });
-          
         }      
-      } else if (subcommand === 'slots') {
+    } else if (subcommand === 'slots') {
         return await handleSlots(interaction);
-      } else if (subcommand === 'weather') {
-        await handleWeather(interaction);
-      } else if (subcommand === 'vendingreset') {
+    } else if (subcommand === 'weather') {
+        return await handleWeather(interaction);
+    } else if (subcommand === 'vendingreset') {
         return await handleVendingReset(interaction);
-      } else {
-      return interaction.editReply('❌ Unknown subcommand.');
+    } else {
+        return interaction.editReply('❌ Unknown subcommand.');
     }
 
   } catch (error) {
@@ -663,16 +663,14 @@ async function handleApprove(interaction) {
     const action = interaction.options.getString('action');
     const reason = interaction.options.getString('reason') || null;
   
-    await interaction.deferReply({ ephemeral: true });
-  
     if (!submissionId || typeof submissionId !== 'string') {
-      return interaction.editReply('❌ Invalid submission ID provided.');
+      return interaction.editReply({ content: '❌ Invalid submission ID provided.', ephemeral: true });
     }
   
     try {
       const submission = await retrieveSubmissionFromStorage(submissionId);
       if (!submission) {
-        return interaction.editReply(`⚠️ Submission with ID \`${submissionId}\` not found.`);
+        return interaction.editReply({ content: `⚠️ Submission with ID \`${submissionId}\` not found.`, ephemeral: true });
       }
   
       const { userId, collab, category = 'art', finalTokenAmount: tokenAmount, title, messageUrl } = submission;
@@ -689,7 +687,7 @@ async function handleApprove(interaction) {
       if (action === 'approve') {
         const user = await getOrCreateToken(userId);
         if (!user) {
-          return interaction.editReply(`❌ User with ID \`${userId}\` not found.`);
+          return interaction.editReply({ content: `❌ User with ID \`${userId}\` not found.`, ephemeral: true });
         }
   
         await message.react('☑️');
@@ -723,7 +721,7 @@ async function handleApprove(interaction) {
         }
   
         await deleteSubmissionFromStorage(submissionId);
-        return interaction.editReply(`✅ Submission \`${submissionId}\` has been approved.`);
+        return interaction.editReply({ content: `✅ Submission \`${submissionId}\` has been approved.`, ephemeral: true });
       }
   
       if (action === 'deny') {
@@ -735,14 +733,14 @@ async function handleApprove(interaction) {
         );
   
         await deleteSubmissionFromStorage(submissionId);
-        return interaction.editReply(`❌ Submission \`${submissionId}\` has been denied.\n**Reason:** ${reason || 'No reason provided.'}`);
+        return interaction.editReply({ content: `❌ Submission \`${submissionId}\` has been denied.\n**Reason:** ${reason || 'No reason provided.'}`, ephemeral: true });
       }
   
-      return interaction.editReply('❌ Invalid action specified. Use `approve` or `deny`.');
+      return interaction.editReply({ content: '❌ Invalid action specified. Use `approve` or `deny`.', ephemeral: true });
     } catch (error) {
       handleError(error, 'mod.js');
       console.error('[mod.js]: Error during approve/deny logic', error);
-      return interaction.editReply('⚠️ An error occurred while processing the submission.');
+      return interaction.editReply({ content: '⚠️ An error occurred while processing the submission.', ephemeral: true });
     }
   }
 
