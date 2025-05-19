@@ -265,15 +265,48 @@ const recoverDailyStamina = async () => {
   try {
     const characters = await Character.find({});
     const now = new Date();
+    const estNow = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+    const today = estNow.toISOString().split('T')[0]; // Get YYYY-MM-DD format
+    
+    // Get yesterday's date in EST
+    const yesterday = new Date(estNow);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+    console.log(`[characterStatsModule.js]: 🔄 Starting daily stamina recovery for ${today}`);
+
     for (const character of characters) {
-      if ((!character.lastStaminaUsage || character.lastStaminaUsage.toDateString() !== now.toDateString()) && character.currentStamina < character.maxStamina) {
-        const newStamina = Math.min(character.currentStamina + 1, character.maxStamina);
-        await updateCurrentStamina(character._id, newStamina);
+      try {
+        if (!character.lastStaminaUsage) {
+          // If no last usage, they can recover
+          if (character.currentStamina < character.maxStamina) {
+            const newStamina = Math.min(character.currentStamina + 1, character.maxStamina);
+            await updateCurrentStamina(character._id, newStamina);
+            console.log(`[characterStatsModule.js]: ✅ Recovered stamina for ${character.name} (no previous usage)`);
+          }
+          continue;
+        }
+
+        // Convert lastStaminaUsage to EST for comparison
+        const lastUsage = new Date(character.lastStaminaUsage.toLocaleString("en-US", { timeZone: "America/New_York" }));
+        const lastUsageDate = lastUsage.toISOString().split('T')[0];
+
+        // Only recover if:
+        // 1. Last usage was NOT yesterday (must be before yesterday)
+        // 2. Current stamina is below max
+        if (lastUsageDate < yesterdayStr && character.currentStamina < character.maxStamina) {
+          const newStamina = Math.min(character.currentStamina + 1, character.maxStamina);
+          await updateCurrentStamina(character._id, newStamina);
+          console.log(`[characterStatsModule.js]: ✅ Recovered stamina for ${character.name} (last usage: ${lastUsageDate})`);
+        } else {
+          console.log(`[characterStatsModule.js]: ⏭️ Skipped stamina recovery for ${character.name} (last usage: ${lastUsageDate}, current: ${character.currentStamina}/${character.maxStamina})`);
+        }
+      } catch (error) {
+        console.error(`[characterStatsModule.js]: ❌ Error processing stamina recovery for ${character.name}:`, error.message);
       }
     }
   } catch (error) {
     handleError(error, 'characterStatsModule.js');
-
     throw error;
   }
 };
