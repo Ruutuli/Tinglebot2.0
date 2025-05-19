@@ -1,3 +1,4 @@
+// Auto-deployed via GitHub Actions
 // ------------------- Standard Libraries -------------------
 require("dotenv").config();
 const figlet = require("figlet");
