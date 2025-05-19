@@ -590,16 +590,48 @@ for (const { name } of items) {
    ];
 
    if (fromCharacter?.name && fromCharacter?.inventory && fromCharacter?.userId) {
-    await safeAppendDataToSheet(fromCharacter.inventory, fromCharacter, range, fromValues, undefined, { skipValidation: true });
-} else {
+    await safeAppendDataToSheet(fromCharacter.inventory, fromCharacter, range, fromValues, undefined, { 
+      skipValidation: true,
+      context: {
+        commandName: 'gift',
+        userTag: interaction.user.tag,
+        userId: interaction.user.id,
+        characterName: fromCharacter.name,
+        spreadsheetId: extractSpreadsheetId(fromCharacter.inventory),
+        range: range,
+        sheetType: 'inventory',
+        options: {
+          fromCharacter: fromCharacter.name,
+          toCharacter: toCharacter.name,
+          items: formattedItems
+        }
+      }
+    });
+   } else {
     console.error('[safeAppendDataToSheet]: Invalid fromCharacter object detected.');
-}
+   }
 
-if (toCharacter?.name && toCharacter?.inventory && toCharacter?.userId) {
-    await safeAppendDataToSheet(toCharacter.inventory, toCharacter, range, toValues, undefined, { skipValidation: true });
-} else {
+   if (toCharacter?.name && toCharacter?.inventory && toCharacter?.userId) {
+    await safeAppendDataToSheet(toCharacter.inventory, toCharacter, range, toValues, undefined, { 
+      skipValidation: true,
+      context: {
+        commandName: 'gift',
+        userTag: interaction.user.tag,
+        userId: interaction.user.id,
+        characterName: toCharacter.name,
+        spreadsheetId: extractSpreadsheetId(toCharacter.inventory),
+        range: range,
+        sheetType: 'inventory',
+        options: {
+          fromCharacter: fromCharacter.name,
+          toCharacter: toCharacter.name,
+          items: formattedItems
+        }
+      }
+    });
+   } else {
     console.error('[safeAppendDataToSheet]: Invalid toCharacter object detected.');
-}
+   }
 
    
    const itemIcon = itemDetails?.emoji || "🎁";

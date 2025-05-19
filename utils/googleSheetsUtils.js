@@ -112,7 +112,7 @@ async function authorizeSheets() {
 
 // ------------------- Function: makeApiRequest -------------------
 // Makes an API request with rate limiting and permission checking
-async function makeApiRequest(fn, { suppressLog = false } = {}) {
+async function makeApiRequest(fn, { suppressLog = false, context = {} } = {}) {
     try {
         const auth = await authorizeSheets();
         const credentials = getServiceAccountCredentials();
@@ -130,7 +130,12 @@ async function makeApiRequest(fn, { suppressLog = false } = {}) {
                 if (!suppressLog) {
                     console.error(`[googleSheetsUtils.js]: ❌ Permission Error: ${errorMessage}`);
                 }
-                throw new Error(errorMessage);
+                error.context = {
+                    ...context,
+                    serviceAccountEmail,
+                    errorType: 'permission_error'
+                };
+                throw error;
             }
         }
 
@@ -138,6 +143,12 @@ async function makeApiRequest(fn, { suppressLog = false } = {}) {
     } catch (error) {
         if (!suppressLog) {
             console.error(`[googleSheetsUtils.js]: ❌ API Request Error: ${error.message}`);
+            // Add context to the error
+            error.context = {
+                ...context,
+                errorType: error.message.includes('Unable to parse range') ? 'range_parse_error' : 'api_error',
+                serviceAccountEmail: getServiceAccountCredentials().client_email
+            };
         }
         throw error;
     }
@@ -150,7 +161,7 @@ async function makeApiRequest(fn, { suppressLog = false } = {}) {
 
 // ------------------- Function: fetchSheetData -------------------
 // Fetches and sanitizes data from Google Sheets
-async function fetchSheetData(auth, spreadsheetId, range) {
+async function fetchSheetData(auth, spreadsheetId, range, context = {}) {
     return makeApiRequest(async () => {
         const response = await google.sheets({ version: 'v4', auth }).spreadsheets.values.get({
             spreadsheetId,
@@ -165,35 +176,35 @@ async function fetchSheetData(auth, spreadsheetId, range) {
         return response.data.values.map(row =>
             row.map(cell => (typeof cell === 'string' && cell.includes(',')) ? cell.replace(/,/g, '') : cell)
         );
-    }, { suppressLog: true });
+    }, { suppressLog: true, context });
 }
 
 // ------------------- Function: readSheetData -------------------
 // Reads raw data from Google Sheets without sanitization
-async function readSheetData(auth, spreadsheetId, range) {
+async function readSheetData(auth, spreadsheetId, range, context = {}) {
     return makeApiRequest(async () => {
         const response = await google.sheets({ version: 'v4', auth }).spreadsheets.values.get({
             spreadsheetId,
             range
         });
         return response.data.values || [];
-    }, { suppressLog: true });
+    }, { suppressLog: true, context });
 }
 
 // ------------------- Function: clearSheetFormatting -------------------
 // Clears formatting in a specified range
-async function clearSheetFormatting(auth, spreadsheetId, range) {
+async function clearSheetFormatting(auth, spreadsheetId, range, context = {}) {
     return makeApiRequest(async () => {
         await google.sheets({ version: 'v4', auth }).spreadsheets.values.clear({
             spreadsheetId,
             range
         });
-    });
+    }, { context });
 }
 
 // ------------------- Function: getCachedSheetData -------------------
 // Gets data from cache or fetches from API if cache is invalid
-async function getCachedSheetData(spreadsheetId, range) {
+async function getCachedSheetData(spreadsheetId, range, context = {}) {
     const cacheKey = `${spreadsheetId}:${range}`;
     const cached = sheetCache.get(cacheKey);
     
@@ -202,14 +213,8 @@ async function getCachedSheetData(spreadsheetId, range) {
         return cached.data;
     }
     
-    const auth = await authorizeSheets();
-    const data = await fetchSheetData(auth, spreadsheetId, range);
-    
-    sheetCache.set(cacheKey, {
-        data,
-        timestamp: Date.now()
-    });
-    
+    const data = await fetchSheetData(null, spreadsheetId, range, context);
+    sheetCache.set(cacheKey, { data, timestamp: Date.now() });
     return data;
 }
 
@@ -793,7 +798,7 @@ async function validateTokenTrackerSheet(spreadsheetUrl) {
 
 // ------------------- Function: deleteInventorySheetData -------------------
 // Deletes inventory data for a character from Google Sheets
-async function deleteInventorySheetData(spreadsheetId, characterName) {
+async function deleteInventorySheetData(spreadsheetId, characterName, context = {}) {
     const auth = await authorizeSheets();
     const sheetsClient = google.sheets({ version: 'v4', auth });
     try {
@@ -803,7 +808,7 @@ async function deleteInventorySheetData(spreadsheetId, characterName) {
                 spreadsheetId,
                 range: 'loggedInventory!A2:M',
             })
-        );
+        , { context: { ...context, range: 'loggedInventory!A2:M', sheetType: 'inventory' } });
         const rows = sheet.data.values;
         if (!rows || rows.length === 0) {
             throw new Error('No data found.');
@@ -830,7 +835,7 @@ async function deleteInventorySheetData(spreadsheetId, characterName) {
                     valueInputOption: 'RAW'
                 }
             })
-        );
+        , { context: { ...context, range: 'loggedInventory!A2:M', sheetType: 'inventory' } });
         return `✅ **Specific inventory data for character ${characterName} deleted from Google Sheets.**`;
     } catch (error) {
         throw error;
@@ -926,6 +931,17 @@ async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, c
 
     } catch (error) {
         console.error(`[googleSheetsUtils.js]: ❌ Error in safeAppendDataToSheet:`, error.message);
+        // Add context to the error
+        error.context = {
+            characterName: character?.name,
+            spreadsheetId: extractSpreadsheetId(spreadsheetUrl),
+            range: range,
+            sheetType: range.split('!')[0].toLowerCase(),
+            commandName: client?.commandName,
+            userTag: client?.user?.tag,
+            userId: client?.user?.id,
+            options: client?.options?.data
+        };
         throw error;
     }
 }

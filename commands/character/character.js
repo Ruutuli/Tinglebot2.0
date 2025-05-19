@@ -1316,9 +1316,27 @@ async function handleDeleteCharacter(interaction) {
   if (character.inventory && isValidGoogleSheetsUrl(character.inventory)) {
    try {
     const spreadsheetId = extractSpreadsheetId(character.inventory);
-    await deleteInventorySheetData(spreadsheetId, characterName);
+    await deleteInventorySheetData(spreadsheetId, characterName, {
+      commandName: "delete",
+      userTag: interaction.user.tag,
+      userId: interaction.user.id,
+      characterName: character.name,
+      spreadsheetId: extractSpreadsheetId(character.inventory),
+      range: 'loggedInventory!A2:M',
+      sheetType: 'inventory',
+      options: interaction.options.data
+    });
    } catch (error) {
-    handleError(error, "character.js");
+    handleError(error, "character.js", {
+      commandName: "delete",
+      userTag: interaction.user.tag,
+      userId: interaction.user.id,
+      characterName: character.name,
+      spreadsheetId: extractSpreadsheetId(character.inventory),
+      range: 'loggedInventory!A2:M',
+      sheetType: 'inventory',
+      options: interaction.options.data
+    });
     console.error(
      `❌ Failed to delete inventory data for character ${characterName}:`,
      error
@@ -1408,7 +1426,13 @@ async function handleDeleteCharacter(interaction) {
    ephemeral: true,
   });
  } catch (error) {
-  handleError(error, "character.js");
+  handleError(error, "character.js", {
+    commandName: "delete",
+    userTag: interaction.user.tag,
+    userId: interaction.user.id,
+    characterName: character?.name,
+    options: interaction.options.data
+  });
   await interaction.editReply({
    content: `❌ **An error occurred while deleting the character**: ${error.message}`,
    ephemeral: true,

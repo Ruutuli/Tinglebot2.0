@@ -47,6 +47,16 @@ async function handleError(error, source = "Unknown Source", context = {}) {
     if (context.options) extraInfo += `• Command Options: ${JSON.stringify(context.options)}\n`;
   }
 
+  // ---- Extra context for Google Sheets errors ----
+  if (error?.message?.includes('Unable to parse range') || error?.message?.includes('Google Sheets API')) {
+    extraInfo += `\n📊 **Google Sheets Error Details:**\n`;
+    if (context.characterName) extraInfo += `• Character: ${context.characterName}\n`;
+    if (context.spreadsheetId) extraInfo += `• Spreadsheet ID: ${context.spreadsheetId}\n`;
+    if (context.range) extraInfo += `• Range: ${context.range}\n`;
+    if (context.sheetType) extraInfo += `• Sheet Type: ${context.sheetType}\n`;
+    if (context.options) extraInfo += `• Command Options: ${JSON.stringify(context.options)}\n`;
+  }
+
   const logBlock = `
 [ERROR] ${source} - ${timestamp}
 ${context.commandName ? `Command: ${context.commandName}` : ""}
@@ -64,7 +74,7 @@ Error: ${message}
     let trelloContent = `**Error Message:**\n\`\`\`${message}\`\`\`\n`;
     trelloContent += `**File:** ${source}\n`;
     trelloContent += `**Time:** ${timestamp}\n`;
-    if (extraInfo) trelloContent += `**Network/DB Context:**\n${extraInfo}\n`;
+    if (extraInfo) trelloContent += `**Context:**\n${extraInfo}\n`;
 
     if (context.commandName) trelloContent += `**Command:** ${context.commandName}\n`;
     if (context.userTag) trelloContent += `**User:** ${context.userTag} (${context.userId})\n`;
@@ -90,7 +100,7 @@ Error: ${message}
           { name: "🙋 User", value: context.userTag ? `${context.userTag} (${context.userId})` : "Unknown", inline: false },
           { name: "📦 Options", value: context.options ? `\`\`\`json\n${JSON.stringify(context.options, null, 2)}\n\`\`\`` : "None" },
           { name: "📝 Error Message", value: `\`\`\`\n${message.slice(0, 1000)}\n\`\`\`` },
-          ...(extraInfo ? [{ name: "🌐 Network/DB Context", value: extraInfo }] : []),
+          ...(extraInfo ? [{ name: "🌐 Context", value: extraInfo }] : []),
           { name: "🔗 Trello Link", value: trelloLink ? trelloLink : "No Trello card available." }
         )
         .setTimestamp();

@@ -641,7 +641,27 @@ module.exports = {
         uuidv4(),
        ],
       ];
-      await safeAppendDataToSheet(character.inventory, character, "loggedInventory!A2:M", values, undefined, { skipValidation: true });
+      await safeAppendDataToSheet(character.inventory, character, "loggedInventory!A2:M", values, undefined, { 
+        skipValidation: true,
+        context: {
+          commandName: 'pet',
+          userTag: interaction.user.tag,
+          userId: interaction.user.id,
+          characterName: character.name,
+          spreadsheetId: extractSpreadsheetId(character.inventory),
+          range: 'loggedInventory!A2:M',
+          sheetType: 'inventory',
+          options: {
+            petName: pet.name,
+            petSpecies: pet.species,
+            petType: pet.petType,
+            petLevel: pet.level,
+            chosenRoll: pet.chosenRoll,
+            itemName: randomItem.itemName,
+            quantity: quantity
+          }
+        }
+      });
      }
 
      // ------------------- Build Roll Result Embed -------------------
