@@ -9,6 +9,7 @@
 const { EmbedBuilder, SlashCommandBuilder } = require('discord.js');
 
 const { handleError } = require('../../utils/globalErrorHandler');
+const { enforceJail } = require('../../utils/jailCheck');
 // ------------------- Database Services -------------------
 // Services for retrieving character data.
 const { fetchCharacterByName, fetchCharacterByNameAndUserId } = require('../../database/db');
@@ -65,13 +66,22 @@ module.exports = {
   async execute(interaction) {
     try {
       await interaction.deferReply();
-      const subcommand = interaction.options.getSubcommand();
-      const userId = interaction.user.id;
-      const attackerName = interaction.options.getString('attacker');
-      const attacker = await fetchCharacterByNameAndUserId(attackerName, userId);
 
+      const subcommand = interaction.options.getSubcommand();
+      const attackerName = interaction.options.getString('attacker');
+
+      // Get attacker character
+      const attacker = await fetchCharacterByNameAndUserId(attackerName, interaction.user.id);
       if (!attacker) {
-        return await interaction.editReply(`❌ Character **${attackerName}** was not found or doesn't belong to you.`);
+        await interaction.editReply({
+          content: `❌ **Character ${attackerName} not found or does not belong to you.**`,
+        });
+        return;
+      }
+
+      // Check if attacker is in jail
+      if (await enforceJail(interaction, attacker)) {
+        return;
       }
 
       if (attacker.ko || attacker.currentHearts <= 0) {

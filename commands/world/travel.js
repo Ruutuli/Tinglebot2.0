@@ -39,6 +39,7 @@ const { handleError } = require('../../utils/globalErrorHandler.js');
 const { hasPerk } = require('../../modules/jobsModule.js');
 const { isValidVillage } = require('../../modules/locationsModule.js');
 const { checkInventorySync } = require('../../utils/characterUtils');
+const { enforceJail } = require('../../utils/jailCheck');
 
 // ------------------- Database Models -------------------
 const Mount = require('../../models/MountModel');
@@ -173,9 +174,15 @@ module.exports = {
       // ------------------- Fetch Character from Database -------------------
       const character = await fetchCharacterByNameAndUserId(characterName, userId);
       if (!character) {
-        return interaction.editReply({
-          content: `❌ **Character "${characterName}"** not found or does not belong to you.`
+        await interaction.editReply({
+          content: `❌ **Character ${characterName} not found or does not belong to you.**`,
         });
+        return;
+      }
+
+      // Check if character is in jail
+      if (await enforceJail(interaction, character)) {
+        return;
       }
 
       // ------------------- Mount Travel Logic -------------------
@@ -223,15 +230,7 @@ module.exports = {
       }
 
       // ------------------- Check Inventory Sync -------------------
-      try {
-        await checkInventorySync(character);
-      } catch (error) {
-        await interaction.editReply({
-          content: error.message,
-          ephemeral: true
-        });
-        return;
-      }
+      await checkInventorySync(character);
 
       // ------------------- Check if KO'd -------------------
       if (character.currentHearts <= 0 || character.ko) {
