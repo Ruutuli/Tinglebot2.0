@@ -859,9 +859,9 @@ const combinedFlavorText = flavorText?.trim()
 
  embed
   .setThumbnail(item.image || 'https://via.placeholder.com/150')
-  .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+  .setImage("https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png")
   .setFooter({ 
-    text: character.jobVoucher ? `🎫 Job Voucher activated for ${character.name} to perform the job ${jobForFlavorText}` : '✨ Successfully crafted!' 
+    text: character.jobVoucher ? `🎫 Job Voucher activated for ${character.name} to perform the job ${jobForFlavorText}` : '✨ Successfully crafted!'
   });
 
  return embed;
@@ -1122,11 +1122,9 @@ const createTradeEmbed = async (
  toCharacter,
  fromItems,
  toItems,
- messageUrl,
- fromCharacterIcon,
- toCharacterIcon
+ messageUrl
 ) => {
- const settingsFrom = getCommonEmbedSettings({ name: fromCharacter });
+ const settingsFrom = getCommonEmbedSettings(fromCharacter);
  const fromItemsDescription = fromItems
   .map((item) => {
     const emoji = item.emoji || DEFAULT_EMOJI;
@@ -1144,28 +1142,28 @@ const createTradeEmbed = async (
    : "No items offered";
 
  // Fix iconURL for footer: only set if non-empty and looks like a URL
- let safeFooterIcon = toCharacterIcon && /^https?:\/\//.test(toCharacterIcon) ? toCharacterIcon : undefined;
+ let safeFooterIcon = toCharacter.icon && /^https?:\/\//.test(toCharacter.icon) ? toCharacter.icon : undefined;
  return new EmbedBuilder()
   .setColor(settingsFrom.color)
   .setTitle("✬ Trade ✬")
   .setAuthor({
-   name: `${fromCharacter} 🔗`,
-   iconURL: fromCharacterIcon || settingsFrom.author.iconURL,
-   url: settingsFrom.author.url,
+   name: `${fromCharacter.name} 🔗`,
+   iconURL: fromCharacter.icon || settingsFrom.author.iconURL,
+   url: fromCharacter.inventory || settingsFrom.author.url,
   })
   .addFields(
    {
-    name: `__${fromCharacter} offers__`,
+    name: `__${fromCharacter.name} offers__`,
     value: fromItemsDescription || "No items offered",
     inline: true,
    },
    {
-    name: `__${toCharacter} offers__`,
+    name: `__${toCharacter.name} offers__`,
     value: toItemsDescription || "No items offered",
     inline: true,
    }
   )
-  .setFooter({ text: toCharacter, iconURL: safeFooterIcon })
+  .setFooter({ text: toCharacter.name, iconURL: safeFooterIcon })
   .setImage(settingsFrom.image.url);
 };
 
@@ -1648,7 +1646,8 @@ const createSafeTravelDayEmbed = (
  pathEmoji,
  currentPath
 ) => {
- const description = `🌸 **It's a nice and safe day of traveling.** What do you want to do next?\n- ❤️ Recover a heart (costs 1 🟩 stamina)\n- 🌿 Gather (costs 1 🟩 stamina)\n- 💤 Do nothing (move onto the next day)`;
+ const description = `🌸 **It's a nice and safe day of traveling.** What do you want to do next?\n- ❤️ Recover a heart (costs 1 🟩 stamina)\n- 🌿 Gather (costs 1 🟩 stamina)\n- 💤 Do 
+ nothing (move onto the next day)`;
 
  return new EmbedBuilder()
   .setAuthor({
@@ -1692,7 +1691,8 @@ function createMountEncounterEmbed(encounter) {
 
     return new EmbedBuilder()
         .setTitle(`${mountEmoji} 🌟 ${encounter.mountLevel} Level ${encounter.mountType} Encounter!`)
-        .setDescription(`🐾 A **${encounter.mountLevel} level ${encounter.mountType}** has been spotted in **${villageWithEmoji}**!\n\nTo join the encounter, use </mount:1306176789755858983>.`)
+        .setDescription(`🐾 A **${encounter.mountLevel} level ${encounter.mountType}** has been spotted in **${villageWithEmoji}**!\n\nTo join the encounter, use </
+        mount:1306176789755858983>.`)
         .addFields(
             {
                 name: '📜 Encounter Information',
