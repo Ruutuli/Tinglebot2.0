@@ -1284,7 +1284,7 @@ async function handleViewCharacterList(interaction) {
   handleError(error, "character.js");
   await interaction.reply({
    content: `❌ Error retrieving character list.`,
-   ephemeral: true,
+   flags: 64 // 64 is the flag for ephemeral messages
   });
  }
 }

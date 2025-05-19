@@ -395,7 +395,7 @@ async function handleMountComponentInteraction(interaction) {
               image: { url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png' },
             }],
             components: [],
-            ephemeral: false,
+            flags: 0,
           });
           return;
         }
@@ -422,7 +422,7 @@ async function handleMountComponentInteraction(interaction) {
             image: { url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png' },
           }],
           components: actionRows,
-          ephemeral: false,
+          flags: 0,
         });
       } catch (error) {
     handleError(error, 'mountComponentHandler.js');
@@ -496,7 +496,7 @@ async function handleMountComponentInteraction(interaction) {
           image: { url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png' }
         }],
         components: [actionRow],
-        ephemeral: false
+        flags: 0
       });
     } else {
       message += `\n\n🚫 The mount evaded! Would **${character.name}** like to try again for 1 🟩 stamina?\n\n**${character.name}** now has **${character.currentStamina}** 🟩 stamina remaining.`;
@@ -523,7 +523,7 @@ async function handleMountComponentInteraction(interaction) {
     if (!interaction.replied && !interaction.deferred) {
       await interaction.reply({
         embeds: [{ title: '❌ Error', description: 'Something went wrong. Please try again later.', color: 0xFF0000 }],
-        ephemeral: true
+        ephemeral: true,
       });
     }
   }
@@ -541,7 +541,7 @@ async function handleTameInteraction(interaction) {
     if (!encounter) {
       await interaction.editReply({
         embeds: [{ title: '❌ Encounter Not Found', description: 'We couldn\'t find the encounter you are trying to interact with.', color: 0xFF0000 }],
-        ephemeral: false
+        ephemeral: false,
       });
       return;
     }
@@ -550,7 +550,7 @@ async function handleTameInteraction(interaction) {
     if (!userInEncounter || userInEncounter.userId !== interaction.user.id) {
       await interaction.editReply({
         embeds: [{ title: '❌ Access Denied', description: 'Only the owner of the character can continue.', color: 0xFF0000 }],
-        ephemeral: false
+        ephemeral: false,
       });
       return;
     }
@@ -560,7 +560,7 @@ async function handleTameInteraction(interaction) {
     if (!character) {
       await interaction.editReply({
         embeds: [{ title: `❌ Character Not Found: ${characterName}`, description: 'Please ensure the character is valid and try again.', color: 0xFF0000 }],
-        ephemeral: false
+        ephemeral: false,
       });
       return;
     }
@@ -620,7 +620,7 @@ async function handleTameInteraction(interaction) {
           image: { url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png' }
         }],
         components: [actionRow],
-        ephemeral: false
+        flags: 0
       });
     } else {
       deleteEncounterById(encounterId); // ❗ Mount escaped, delete encounter

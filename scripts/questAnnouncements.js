@@ -14,15 +14,32 @@ const QUEST_CHANNEL_ID = '1305486549252706335';
 // ------------------- Google Sheets API Setup -------------------
 const SHEET_ID = '1M106nBghmgng9xigxkVpUXuKIF60QXXKiAERlG1a0Gs';
 
-// Load `service_account.json` for authentication
-const SERVICE_ACCOUNT_PATH = path.join(__dirname, '../config/service_account.json');
-
-if (!fs.existsSync(SERVICE_ACCOUNT_PATH)) {
-    console.error('[ERROR]: Service account file not found at', SERVICE_ACCOUNT_PATH);
-    process.exit(1);
+// Load service account credentials
+let serviceAccount;
+if (process.env.RAILWAY_ENVIRONMENT) {
+    // Create service account object from environment variables
+    serviceAccount = {
+        type: "service_account",
+        project_id: process.env.GOOGLE_PROJECT_ID,
+        private_key_id: process.env.GOOGLE_PRIVATE_KEY_ID,
+        private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+        client_email: process.env.GOOGLE_CLIENT_EMAIL,
+        client_id: process.env.GOOGLE_CLIENT_ID,
+        auth_uri: "https://accounts.google.com/o/oauth2/auth",
+        token_uri: "https://oauth2.googleapis.com/token",
+        auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
+        client_x509_cert_url: process.env.GOOGLE_CLIENT_X509_CERT_URL,
+        universe_domain: "googleapis.com"
+    };
+} else {
+    // Local environment - read from file
+    const SERVICE_ACCOUNT_PATH = path.join(__dirname, '../config/service_account.json');
+    if (!fs.existsSync(SERVICE_ACCOUNT_PATH)) {
+        console.error('[ERROR]: Service account file not found at', SERVICE_ACCOUNT_PATH);
+        process.exit(1);
+    }
+    serviceAccount = JSON.parse(fs.readFileSync(SERVICE_ACCOUNT_PATH, 'utf8'));
 }
-
-const serviceAccount = JSON.parse(fs.readFileSync(SERVICE_ACCOUNT_PATH, 'utf8'));
 
 const sheets = google.sheets({
     version: 'v4',
@@ -43,8 +60,7 @@ async function fetchQuestData() {
         });
         return response.data.values || [];
     } catch (error) {
-    handleError(error, 'questAnnouncements.js');
-
+        handleError(error, 'questAnnouncements.js');
         console.error('[QUESTS]: Error fetching data from Google Sheets:', error);
         return [];
     }
