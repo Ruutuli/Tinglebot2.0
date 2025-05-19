@@ -647,7 +647,24 @@ async function processLootingLogic(
    // —— Wrap the Sheets append in its own try/catch ——
    try {
     if (character?.name && character?.inventory && character?.userId) {
-    await safeAppendDataToSheet(character.inventory, character, range, values, undefined, { skipValidation: true });
+    await safeAppendDataToSheet(character.inventory, character, range, values, undefined, { 
+        skipValidation: true,
+        context: {
+            commandName: 'loot',
+            userTag: interaction.user.tag,
+            userId: interaction.user.id,
+            characterName: character.name,
+            spreadsheetId: extractSpreadsheetId(character.inventory),
+            range: range,
+            sheetType: 'inventory',
+            options: {
+                monsterName: encounteredMonster.name,
+                itemName: lootedItem.itemName,
+                quantity: lootedItem.quantity,
+                bloodMoonActive: bloodMoonActive
+            }
+        }
+    });
 } else {
     console.error('[safeAppendDataToSheet]: Invalid character object detected before syncing.');
 }

@@ -299,7 +299,23 @@ module.exports = {
         ];
 
         if (character?.name && character?.inventory && character?.userId) {
-          await safeAppendDataToSheet(character.inventory, character, range, values, undefined, { skipValidation: true });
+          await safeAppendDataToSheet(character.inventory, character, range, values, undefined, { 
+            skipValidation: true,
+            context: {
+              commandName: 'crafting',
+              userTag: interaction.user.tag,
+              userId: interaction.user.id,
+              characterName: character.name,
+              spreadsheetId: extractSpreadsheetId(character.inventory),
+              range: range,
+              sheetType: 'inventory',
+              options: {
+                itemName: item.itemName,
+                quantity: quantity,
+                flavorText: interaction.options.getString('flavortext')
+              }
+            }
+          });
         } else {
           console.error('[safeAppendDataToSheet]: Invalid character object detected before syncing.');
         }

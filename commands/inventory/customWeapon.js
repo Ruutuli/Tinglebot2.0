@@ -103,7 +103,22 @@ async function logMaterialsToGoogleSheets(auth, spreadsheetId, range, character,
             }
         }));
 
-        await safeAppendDataToSheet(character.inventory, character, range, usedMaterialsValues, undefined, { skipValidation: true });
+        await safeAppendDataToSheet(character.inventory, character, range, usedMaterialsValues, undefined, { 
+            skipValidation: true,
+            context: {
+                commandName: 'customWeapon',
+                userTag: interaction.user.tag,
+                userId: interaction.user.id,
+                characterName: character.name,
+                spreadsheetId: extractSpreadsheetId(character.inventory),
+                range: range,
+                sheetType: 'inventory',
+                options: {
+                    weaponName: craftedItem.itemName,
+                    materials: materialsUsed
+                }
+            }
+        });
     } catch (error) {
     handleError(error, 'customWeapon.js');
 
@@ -525,7 +540,22 @@ if (weaponSubmission.crafted === true) {
             ];
 
             if (character?.name && character?.inventory && character?.userId) {
-                await safeAppendDataToSheet(character.inventory, character, range, values, undefined, { skipValidation: true });
+                await safeAppendDataToSheet(character.inventory, character, range, values, undefined, { 
+                    skipValidation: true,
+                    context: {
+                        commandName: 'customWeapon',
+                        userTag: interaction.user.tag,
+                        userId: interaction.user.id,
+                        characterName: character.name,
+                        spreadsheetId: extractSpreadsheetId(character.inventory),
+                        range: range,
+                        sheetType: 'inventory',
+                        options: {
+                            weaponName: weaponSubmission.weaponName,
+                            materials: weaponSubmission.craftingMaterials
+                        }
+                    }
+                });
             } else {
                 console.error('[safeAppendDataToSheet]: Invalid character object detected before syncing.');
             }

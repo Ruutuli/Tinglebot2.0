@@ -234,7 +234,24 @@ if (!inventoryLink || !isValidGoogleSheetsUrl(inventoryLink)) {
       uniqueSyncId                             // Unique ID
     ];
 
-    await safeAppendDataToSheet(character.inventory, character, range, [sheetRow], undefined, { skipValidation: true });
+    await safeAppendDataToSheet(character.inventory, character, range, [sheetRow], undefined, { 
+        skipValidation: true,
+        context: {
+            commandName: 'spiritOrb',
+            userTag: interaction.user.tag,
+            userId: interaction.user.id,
+            characterName: character.name,
+            spreadsheetId: extractSpreadsheetId(character.inventory),
+            range: range,
+            sheetType: 'inventory',
+            options: {
+                type: type,
+                oldValue: oldValue,
+                newValue: newValue,
+                orbCount: orbCount
+            }
+        }
+    });
   } catch (err) {
     handleError(err, 'spiritOrb.js');
 

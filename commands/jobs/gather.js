@@ -445,7 +445,24 @@ module.exports = {
                 interaction
               );
               if (character?.name && character?.inventory && character?.userId) {
-    await safeAppendDataToSheet(character.inventory, character, range, values, undefined, { skipValidation: true });
+    await safeAppendDataToSheet(character.inventory, character, range, values, undefined, { 
+        skipValidation: true,
+        context: {
+            commandName: 'gather',
+            userTag: interaction.user.tag,
+            userId: interaction.user.id,
+            characterName: character.name,
+            spreadsheetId: extractSpreadsheetId(character.inventory),
+            range: range,
+            sheetType: 'inventory',
+            options: {
+                region: region,
+                itemName: lootedItem.itemName,
+                quantity: lootedItem.quantity,
+                monsterName: encounteredMonster?.name
+            }
+        }
+    });
 } else {
     console.error('[safeAppendDataToSheet]: Invalid character object detected before syncing.');
 }
@@ -539,7 +556,23 @@ module.exports = {
           uniqueSyncId,
         ]];
         if (character?.name && character?.inventory && character?.userId) {
-    await safeAppendDataToSheet(character.inventory, character, range, values, undefined, { skipValidation: true });
+    await safeAppendDataToSheet(character.inventory, character, range, values, undefined, { 
+        skipValidation: true,
+        context: {
+            commandName: 'gather',
+            userTag: interaction.user.tag,
+            userId: interaction.user.id,
+            characterName: character.name,
+            spreadsheetId: extractSpreadsheetId(character.inventory),
+            range: range,
+            sheetType: 'inventory',
+            options: {
+                region: region,
+                itemName: randomItem.itemName,
+                quantity: quantity
+            }
+        }
+    });
 } else {
     console.error('[safeAppendDataToSheet]: Invalid character object detected before syncing.');
 }

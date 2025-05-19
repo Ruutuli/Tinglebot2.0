@@ -184,7 +184,23 @@ async function handleStoreMount(interaction, userId, characterName, mountName) {
         'spent',                           // TYPE
         '-100'                             // TOKEN AMOUNT
       ]];
-      await safeAppendDataToSheet(user.tokenTracker, character, 'loggedTracker!A:F', values, undefined, { skipValidation: true });
+      await safeAppendDataToSheet(user.tokenTracker, character, 'loggedTracker!A:F', values, undefined, { 
+        skipValidation: true,
+        context: {
+            commandName: 'stable',
+            userTag: interaction.user.tag,
+            userId: interaction.user.id,
+            characterName: character.name,
+            spreadsheetId: extractSpreadsheetId(user.tokenTracker),
+            range: 'loggedTracker!A:F',
+            sheetType: 'tracker',
+            options: {
+                action: 'store',
+                mountName: mountName,
+                storageLocation: character.currentVillage
+            }
+        }
+    });
     }
 
     const mountsInStable = await Mount.find({ owner: character.name, isStored: true });
@@ -351,7 +367,23 @@ async function handleSellMount(interaction, userId, characterName, mountName) {
           'earned',                          // TYPE
           `${sellPrice}`                   // PRICE
         ]];
-        await safeAppendDataToSheet(user.tokenTracker, character, 'loggedTracker!A:F', values, undefined, { skipValidation: true });
+        await safeAppendDataToSheet(user.tokenTracker, character, 'loggedTracker!A:F', values, undefined, { 
+          skipValidation: true,
+          context: {
+              commandName: 'stable',
+              userTag: interaction.user.tag,
+              userId: interaction.user.id,
+              characterName: character.name,
+              spreadsheetId: extractSpreadsheetId(user.tokenTracker),
+              range: 'loggedTracker!A:F',
+              sheetType: 'tracker',
+              options: {
+                  action: 'sell',
+                  mountName: mount.name,
+                  sellPrice: sellPrice
+              }
+          }
+      });
       }
   
       await interaction.reply({
@@ -442,7 +474,22 @@ async function handleRetrieveMount(interaction, userId, characterName, mountName
         '-100'                             // TOKEN AMOUNT
       ]];
 
-      await safeAppendDataToSheet(user.tokenTracker, character, 'loggedTracker!A:F', values, undefined, { skipValidation: true });
+      await safeAppendDataToSheet(user.tokenTracker, character, 'loggedTracker!A:F', values, undefined, { 
+        skipValidation: true,
+        context: {
+            commandName: 'stable',
+            userTag: interaction.user.tag,
+            userId: interaction.user.id,
+            characterName: character.name,
+            spreadsheetId: extractSpreadsheetId(user.tokenTracker),
+            range: 'loggedTracker!A:F',
+            sheetType: 'tracker',
+            options: {
+                action: 'retrieve',
+                mountName: mountName
+            }
+        }
+    });
     }
 
     const mount = await Mount.findOne({ owner: character.name, name: mountName, isStored: true });
@@ -554,7 +601,23 @@ async function handleBuyCharacter(interaction, userId, characterName, mountName)
           'spent',                         // TYPE
           `-${stableEntry.price}`          // TOKEN AMOUNT
         ]];
-        await safeAppendDataToSheet(user.tokenTracker, character, 'loggedTracker!A:F', values, undefined, { skipValidation: true });
+        await safeAppendDataToSheet(user.tokenTracker, character, 'loggedTracker!A:F', values, undefined, { 
+          skipValidation: true,
+          context: {
+              commandName: 'stable',
+              userTag: interaction.user.tag,
+              userId: interaction.user.id,
+              characterName: character.name,
+              spreadsheetId: extractSpreadsheetId(user.tokenTracker),
+              range: 'loggedTracker!A:F',
+              sheetType: 'tracker',
+              options: {
+                  action: 'buy',
+                  mountName: mountName,
+                  price: stableEntry.price
+              }
+          }
+      });
       }
   
       // Remove mount from the database
