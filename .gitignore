@@ -11,6 +11,7 @@ node_modules
 nodemon.log
 testingCode/
 
-# Deployment
-scripts/deploy.js
-railway.json
+# Deployment scripts (no longer needed)
+# scripts/deploy.js
+# railway.json
+# scripts/deploy.template.js
