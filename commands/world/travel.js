@@ -40,6 +40,7 @@ const { hasPerk } = require('../../modules/jobsModule.js');
 const { isValidVillage } = require('../../modules/locationsModule.js');
 const { checkInventorySync } = require('../../utils/characterUtils');
 const { enforceJail } = require('../../utils/jailCheck');
+const { retrieveAllByType } = require('../../utils/storage.js');
 
 // ------------------- Database Models -------------------
 const Mount = require('../../models/MountModel');
@@ -106,7 +107,6 @@ const CommandData = new SlashCommandBuilder()
       .setRequired(true)
       .addChoices(...MODE_CHOICES));
 
-
 // ============================================================================
 // ------------------- Utilities -------------------
 // ============================================================================
@@ -160,8 +160,6 @@ async function validateCorrectTravelChannel(interaction, character, startingVill
   return true;
 }
 
-
-
 // ============================================================================
 // ------------------- Setup & Initialization -------------------
 // ============================================================================
@@ -192,6 +190,23 @@ module.exports = {
 
       // Check if character is in jail
       if (await enforceJail(interaction, character)) {
+        return;
+      }
+
+      // Check for active blight healing request
+      const activeBlightRequests = await retrieveAllByType('blight');
+      const characterBlightRequest = activeBlightRequests.find(req => 
+        req.characterName === characterName && 
+        req.status === 'pending' &&
+        new Date(req.expiresAt) > new Date()
+      );
+
+      if (characterBlightRequest) {
+        const timeLeft = Math.ceil((new Date(characterBlightRequest.expiresAt) - new Date()) / (1000 * 60 * 60 * 24));
+        await interaction.editReply({
+          content: `❌ **${characterName}** cannot travel while they have an active blight healing request from **${characterBlightRequest.healerName}**.\n\n` +
+            `The request will expire in ${timeLeft} days. Please complete or cancel the healing request before traveling.`
+        });
         return;
       }
 
@@ -426,7 +441,6 @@ async function checkAndHandleKO(character, channel, startingVillage) {
   }
   return false;
 }
-
 
 // ------------------- Process Travel Day -------------------
 // Recursively processes each day of travel: checks completion, validates path,
@@ -667,7 +681,8 @@ ${pathEmoji || ''} No monsters or gathering today!`)
     const safeEmbed = createSafeTravelDayEmbed(character, day, totalTravelDuration, pathEmoji, currentPath);
     const safeMessage = await channel.send({ embeds: [safeEmbed] });
     const buttons = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('recover').setLabel('💖 Recover a Heart').setStyle(ButtonStyle.Primary).setDisabled(character.currentHearts >= character.maxHearts || character.currentStamina === 0),
+      new ButtonBuilder().setCustomId('recover').setLabel('💖 Recover a Heart').setStyle(ButtonStyle.Primary).setDisabled(character.currentHearts >= character.maxHearts || character.
+      currentStamina === 0),
       new ButtonBuilder().setCustomId('gather').setLabel('🌿 Gather').setStyle(ButtonStyle.Success).setDisabled(character.currentStamina === 0),
       new ButtonBuilder().setCustomId('do_nothing').setLabel('✨ Do Nothing').setStyle(ButtonStyle.Secondary)
     );
