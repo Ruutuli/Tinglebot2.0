@@ -70,6 +70,12 @@ async function safeAutocompleteResponse(interaction, choices) {
       timeoutPromise
     ]);
   } catch (error) {
+    handleError(error, 'autocompleteHandler.js', {
+      operation: 'safeAutocompleteResponse',
+      interactionId: interaction.id,
+      choices: choices?.length || 0
+    });
+
     if (error.code === 10062) {
       console.log('[autocompleteHandler.js]: ⚠️ Interaction already expired');
       return;
@@ -96,11 +102,25 @@ async function safeRespondWithError(interaction, error) {
       console.warn("[autocompleteHandler.js]: ⚠️ Interaction expired or already responded to");
       return;
     }
+
+    handleError(error, 'autocompleteHandler.js', {
+      operation: 'safeRespondWithError',
+      interactionId: interaction.id,
+      errorCode: error.code,
+      errorMessage: error.message
+    });
+
     console.error("[autocompleteHandler.js]: ❌ Error handling autocomplete:", error);
     if (!interaction.responded) {
       await interaction.respond([]).catch(() => {});
     }
   } catch (replyError) {
+    handleError(replyError, 'autocompleteHandler.js', {
+      operation: 'safeRespondWithError',
+      interactionId: interaction.id,
+      originalError: error.message,
+      errorCode: replyError.code
+    });
     console.error("[autocompleteHandler.js]: ❌ Error sending error response:", replyError);
   }
 }
@@ -338,10 +358,15 @@ async function respondWithFilteredChoices(interaction, focusedOption, choices) {
       .filter(choice => choice.name.toLowerCase().includes(focusedValue))
       .slice(0, 25);
 
-    return await interaction.respond(filteredChoices);
+    return await safeAutocompleteResponse(interaction, filteredChoices);
   } catch (error) {
-    console.error('[respondWithFilteredChoices]: Error:', error);
-    return await safeRespondWithError(interaction);
+    handleError(error, 'autocompleteHandler.js', {
+      operation: 'respondWithFilteredChoices',
+      interactionId: interaction.id,
+      focusedOption: focusedOption?.name,
+      choicesCount: choices?.length || 0
+    });
+    return await safeRespondWithError(interaction, error);
   }
 }
 

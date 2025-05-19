@@ -532,23 +532,39 @@ async function updatePetToCharacter(characterId, petName, updatedPetData) {
 // ------------------- resetPetRollsForAllCharacters -------------------
 async function resetPetRollsForAllCharacters() {
  try {
+  console.log(`[db.js]: 🔄 Starting pet roll reset at ${new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })}`);
+  
   // First, get all active pets
   const activePets = await Pet.find({ status: 'active' });
+  console.log(`[db.js]: 📊 Found ${activePets.length} active pets to reset`);
   
   // Update each pet's rolls based on their level
+  let successCount = 0;
+  let failCount = 0;
+  
   for (const pet of activePets) {
-    const newRolls = Math.min(pet.level, 3);
-    await Pet.updateOne(
-      { _id: pet._id },
-      { $set: { rollsRemaining: newRolls } }
-    );
+    try {
+      const newRolls = Math.min(pet.level, 3);
+      const oldRolls = pet.rollsRemaining;
+      
+      await Pet.updateOne(
+        { _id: pet._id },
+        { $set: { rollsRemaining: newRolls } }
+      );
+      
+      console.log(`[db.js]: ✅ Reset pet "${pet.name}" (${pet.ownerName}) from ${oldRolls} to ${newRolls} rolls`);
+      successCount++;
+    } catch (petError) {
+      console.error(`[db.js]: ❌ Failed to reset pet "${pet.name}" (${pet.ownerName}): ${petError.message}`);
+      failCount++;
+    }
   }
   
-  console.log(`[db.js]: 🔄 Reset pet rolls for ${activePets.length} pets`);
+  console.log(`[db.js]: 📊 Pet roll reset complete. Success: ${successCount}, Failed: ${failCount}`);
  } catch (error) {
   handleError(error, "db.js");
   console.error(
-   `[characterService]: logs - Error in resetPetRollsForAllCharacters: ${error.message}`
+   `[db.js]: ❌ Error in resetPetRollsForAllCharacters: ${error.message}`
   );
   throw error;
  }

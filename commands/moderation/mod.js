@@ -404,6 +404,13 @@ const modCommand = new SlashCommandBuilder()
     )
 )
 
+// ------------------- Subcommand: resetpetrolls -------------------
+.addSubcommand(subcommand =>
+  subcommand
+    .setName('resetpetrolls')
+    .setDescription('Manually reset all pet rolls')
+)
+
   
 // ============================================================================
 // ------------------- Execute Command Handler -------------------
@@ -476,6 +483,8 @@ async function execute(interaction) {
         return await handleWeather(interaction);
     } else if (subcommand === 'vendingreset') {
         return await handleVendingReset(interaction);
+    } else if (subcommand === 'resetpetrolls') {
+        return await handlePetRollsReset(interaction);
     } else {
         return interaction.editReply('❌ Unknown subcommand.');
     }
@@ -1336,7 +1345,30 @@ async function handleVendingReset(interaction) {
     console.error('[mod.js]: Error resetting vending fields:', error);
     return interaction.editReply('❌ Failed to reset vending fields.');
   }
-}  
+}
+
+// ------------------- Function: handlePetRollsReset -------------------
+// Manually resets all pet rolls for all characters
+async function handlePetRollsReset(interaction) {
+  try {
+    await interaction.deferReply({ ephemeral: true });
+    
+    // Call the reset function
+    await resetPetRollsForAllCharacters();
+    
+    return interaction.editReply({
+      content: "✅ Pet rolls have been manually reset for all active pets.",
+      ephemeral: true
+    });
+  } catch (error) {
+    handleError(error, "mod.js");
+    return interaction.editReply({
+      content: `❌ Failed to reset pet rolls: ${error.message}`,
+      ephemeral: true
+    });
+  }
+}
+
 // ============================================================================
 // ------------------- Export Command -------------------
 // ============================================================================
