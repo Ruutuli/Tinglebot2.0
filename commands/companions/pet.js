@@ -320,431 +320,453 @@ module.exports = {
 
  async execute(interaction) {
   try {
-   await interaction.deferReply();
+    // Defer the reply at the start
+    await interaction.deferReply();
 
-   const userId = interaction.user.id;
-   const rawCharacter = interaction.options.getString("charactername");
-   const characterName = rawCharacter.split(" - ")[0];
-   const petName = interaction.options.getString("petname");
-   const subcommand = interaction.options.getSubcommand();
+    const userId = interaction.user.id;
+    const rawCharacter = interaction.options.getString("charactername");
+    const characterName = rawCharacter.split(" - ")[0];
+    const petName = interaction.options.getString("petname");
+    const subcommand = interaction.options.getSubcommand();
 
-   // Fetch character data
-   const character = await fetchCharacterByNameAndUserId(characterName, userId);
-   if (!character) {
-    return interaction.editReply(
-     "❌ **Character not found. Please ensure your character exists.**"
-    );
-   }
-
-   // Check if character is in jail
-   if (await enforceJail(interaction, character)) {
-    return;
-   }
-
-   // Initialize pets array
-   if (!character.pets) character.pets = [];
-
-   // ------------------- Check for Existing Pet -------------------
-   // Find the pet by name in the character's pets array.
-   const existingPet = character.pets.find((pet) => pet.name === petName);
-
-   // ------------------- Subcommand: Add Pet or Update Pet Details -------------------
-if (subcommand === "add") {
-  // If adding a new pet, prevent adding if an active pet already exists.
-  if (!existingPet && character.currentActivePet) {
-    return interaction.reply(
-      "❌ **You already have an active pet. Please update your current pet instead of adding a new one.**"
-    );
-  }
-
-  // ------------------- Retrieve Additional Options -------------------
-  const species = interaction.options.getString("species");
-  const category = interaction.options.getString("category");
-  const petType = interaction.options.getString("pettype");
-  const imageAttachment = interaction.options.getAttachment("image");
-
-  // Validate species and pet type compatibility
-  const validationResult = validatePetSpeciesCompatibility(species, petType);
-  if (!validationResult.isValid) {
-    return interaction.reply(validationResult.error);
-  }
-
-  // ------------------- Upload Pet Image (If Provided) -------------------
-  let petImageUrl = "";
-  try {
-    petImageUrl = await handlePetImageUpload(imageAttachment, petName);
-  } catch (error) {
-    return interaction.reply(error.message);
-  }
-
-  // ------------------- Update Existing Pet or Add New Pet -------------------
-  if (existingPet) {
-    existingPet.species = species;
-    existingPet.perks = [petType];
-    existingPet.imageUrl = petImageUrl || existingPet.imageUrl;
-    await updatePetToCharacter(character._id, petName, existingPet);
-
-    if (!character.currentActivePet) {
-      await Character.findByIdAndUpdate(character._id, { currentActivePet: existingPet._id });
-    }
-
-    return interaction.reply(`✅ **Updated pet \`${petName}\` with new details.**`);
-  } else {
-    // Get pet type data before creating the pet
-    const petTypeData = getPetTypeData(petType);
-    if (!petTypeData) {
-      return interaction.reply("❌ **Invalid pet type selected.**");
-    }
-
-    await addPetToCharacter(character._id, petName, species, 0, petType, petImageUrl);
-
-    const newPet = await Pet.create({
-      ownerName: character.name,
-      owner: character._id,
-      name: petName,
-      species,
-      petType,
-      level: 0,
-      rollsRemaining: 0,
-      imageUrl: petImageUrl || "",
-      rollCombination: petTypeData.rollCombination,
-      tableDescription: petTypeData.description,
-    });
-    
-    await Character.findByIdAndUpdate(character._id, { currentActivePet: newPet._id });
-
-    const rollsDisplay = getRollsDisplay(newPet.rollsRemaining, newPet.level);
-    const successEmbed = new EmbedBuilder()
-      .setAuthor({ name: character.name, iconURL: character.icon })
-      .setTitle("🎉 Pet Added Successfully")
-      .setDescription(`Pet \`${petName}\` the **${species}** has been added as type \`${petType}\`.`)
-      .addFields(
-        { name: "__Pet Name__", value: `> ${petName}`, inline: true },
-        { name: "__Owner__", value: `> ${character.name}`, inline: true },
-        { name: "__Pet Level & Rolls__", value: `> Level ${newPet.level} | ${rollsDisplay}`, inline: true },
-        { name: "__Pet Species__", value: `> ${getPetEmoji(species)} ${species}`, inline: true },
-        { name: "__Pet Type__", value: `> ${petType}`, inline: true },
-        { name: "Roll Combination", value: petTypeData.rollCombination.join(", "), inline: false },
-        { name: "Description", value: petTypeData.description, inline: false }
-      )
-      .setImage(sanitizeUrl(petImageUrl))
-      .setColor("#00FF00");
-
-    return interaction.reply({ embeds: [successEmbed] });
-  }
-}
-
-   // ------------------- Subcommand: Edit Pet Image -------------------
-   if (subcommand === "edit") {
-    // Retrieve the image attachment.
-    const imageAttachment = interaction.options.getAttachment("image");
-    if (!imageAttachment) {
-      return interaction.reply(
-        "❌ **Please upload an image to update your pet.**"
-      );
-    }
-
-    // Verify pet exists in the database
-    const petDoc = await findPetByIdentifier(petName, character._id);
-    if (!petDoc) {
-      return interaction.reply(
-        `❌ **Pet \`${petName}\` not found. Please add it first with \`/pet add\`.**`
-      );
-    }
-
-    // Attempt to upload the new image
-    try {
-      const petImageUrl = await handlePetImageUpload(imageAttachment, petName);
-      petDoc.imageUrl = petImageUrl;
-      await updatePetToCharacter(character._id, petName, petDoc);
-
-      // Sanitize the URL before using it in the embed
-      const sanitizedImageUrl = sanitizeUrl(petDoc.imageUrl);
-
-      // Build and send embed showing updated pet
-      const editEmbed = new EmbedBuilder()
-        .setAuthor({ name: character.name, iconURL: character.icon })
-        .setTitle(`Pet Image Updated — ${petDoc.name}`)
-        .setThumbnail(sanitizedImageUrl)
-        .addFields(
-          { name: "Name", value: `\`${petDoc.name}\``, inline: true },
-          { name: "Species", value: petDoc.species, inline: true },
-          { name: "Type", value: petDoc.petType, inline: true },
-          { name: "Level", value: `${petDoc.level}`, inline: true },
-          {
-            name: "Rolls Remaining",
-            value: `${petDoc.rollsRemaining}`,
-            inline: true,
-          }
-        )
-        .setImage(sanitizedImageUrl)
-        .setColor("#00FF00");
-
-      return interaction.reply({ embeds: [editEmbed] });
-    } catch (error) {
-      return interaction.reply(error.message);
-    }
-   }
-
-   // ------------------- Verify Pet Existence for Roll, Upgrade, and Retire -------------------
-   // Find pet by identifier (ID or name)
-   const pet = await findPetByIdentifier(petName, character._id);
-
-   if (!pet) {
-    console.error(
-     `[pet.js]: logs - Pet with identifier "${petName}" not found for character ${characterName}`
-    );
-    return interaction.reply(
-     `❌ **Pet \`${petName}\` not found. Please add the pet first using the \`/pet add\` command.**`
-    );
-   }
-
-   // ------------------- Subcommand: Roll -------------------
-   if (subcommand === "roll") {
-    // ------------------- Check Available Pet Rolls -------------------
-    if (pet.rollsRemaining <= 0) {
-      return interaction.editReply(
-        "❌ Your pet has no rolls left this week. Rolls reset every Sunday. You can increase your roll limit by training your pet! [Learn more](#)"
-      );
-    }
-
-    // ------------------- Check Inventory Sync -------------------
-    try {
-      await checkInventorySync(character);
-    } catch (error) {
-      await interaction.editReply({
-        content: error.message,
+    // Fetch character data
+    const character = await fetchCharacterByNameAndUserId(characterName, userId);
+    if (!character) {
+      return interaction.editReply({
+        content: `❌ **Character \`${characterName}\` not found.**`,
         ephemeral: true
       });
+    }
+
+    // Check if character is in jail
+    if (await enforceJail(interaction, character)) {
       return;
     }
 
-    // ------------------- Determine Roll Combination and Type -------------------
-    const petTypeData = getPetTypeData(pet.petType);
-    if (!petTypeData) {
-     console.error(
-      `[pet.js]: logs - Unknown pet type for pet with name ${petName}`
-     );
-     return interaction.editReply(
-      "❌ **Unknown pet type configured for this pet.**"
-     );
+    // Initialize pets array
+    if (!character.pets) character.pets = [];
+
+    // ------------------- Check for Existing Pet -------------------
+    // Find the pet by name in the character's pets array.
+    const existingPet = character.pets.find((pet) => pet.name === petName);
+
+    // ------------------- Subcommand: Add Pet or Update Pet Details -------------------
+    if (subcommand === "add") {
+      // If adding a new pet, prevent adding if an active pet already exists.
+      if (!existingPet && character.currentActivePet) {
+        return interaction.editReply({
+          content: "❌ **You already have an active pet. Please update your current pet instead of adding a new one.**",
+          ephemeral: true
+        });
+      }
+
+      // ------------------- Retrieve Additional Options -------------------
+      const species = interaction.options.getString("species");
+      const category = interaction.options.getString("category");
+      const petType = interaction.options.getString("pettype");
+      const imageAttachment = interaction.options.getAttachment("image");
+
+      // Validate species and pet type compatibility
+      const validationResult = validatePetSpeciesCompatibility(species, petType);
+      if (!validationResult.isValid) {
+        return interaction.reply(validationResult.error);
+      }
+
+      // ------------------- Upload Pet Image (If Provided) -------------------
+      let petImageUrl = "";
+      try {
+        petImageUrl = await handlePetImageUpload(imageAttachment, petName);
+      } catch (error) {
+        return interaction.editReply({
+          content: error.message,
+          ephemeral: true
+        });
+      }
+
+      // ------------------- Update Existing Pet or Add New Pet -------------------
+      if (existingPet) {
+        existingPet.species = species;
+        existingPet.perks = [petType];
+        existingPet.imageUrl = petImageUrl || existingPet.imageUrl;
+        await updatePetToCharacter(character._id, petName, existingPet);
+
+        if (!character.currentActivePet) {
+          await Character.findByIdAndUpdate(character._id, { currentActivePet: existingPet._id });
+        }
+
+        return interaction.editReply({
+          content: `✅ **Updated pet \`${petName}\` with new details.**`,
+          ephemeral: true
+        });
+      } else {
+        // Get pet type data before creating the pet
+        const petTypeData = getPetTypeData(petType);
+        if (!petTypeData) {
+          return interaction.editReply({
+            content: "❌ **Invalid pet type selected.**",
+            ephemeral: true
+          });
+        }
+
+        await addPetToCharacter(character._id, petName, species, 0, petType, petImageUrl);
+
+        const newPet = await Pet.create({
+          ownerName: character.name,
+          owner: character._id,
+          name: petName,
+          species,
+          petType,
+          level: 0,
+          rollsRemaining: 0,
+          imageUrl: petImageUrl || "",
+          rollCombination: petTypeData.rollCombination,
+          tableDescription: petTypeData.description,
+        });
+        
+        await Character.findByIdAndUpdate(character._id, { currentActivePet: newPet._id });
+
+        const rollsDisplay = getRollsDisplay(newPet.rollsRemaining, newPet.level);
+        const successEmbed = new EmbedBuilder()
+          .setAuthor({ name: character.name, iconURL: character.icon })
+          .setTitle("🎉 Pet Added Successfully")
+          .setDescription(`Pet \`${petName}\` the **${species}** has been added as type \`${petType}\`.`)
+          .addFields(
+            { name: "__Pet Name__", value: `> ${petName}`, inline: true },
+            { name: "__Owner__", value: `> ${character.name}`, inline: true },
+            { name: "__Pet Level & Rolls__", value: `> Level ${newPet.level} | ${rollsDisplay}`, inline: true },
+            { name: "__Pet Species__", value: `> ${getPetEmoji(species)} ${species}`, inline: true },
+            { name: "__Pet Type__", value: `> ${petType}`, inline: true },
+            { name: "Roll Combination", value: petTypeData.rollCombination.join(", "), inline: false },
+            { name: "Description", value: petTypeData.description, inline: false }
+          )
+          .setImage(sanitizeUrl(petImageUrl))
+          .setColor("#00FF00");
+
+        return interaction.editReply({ embeds: [successEmbed] });
+      }
     }
-    const rollCombination = petTypeData.rollCombination;
-    const userRollType = interaction.options.getString("rolltype");
-    let chosenRoll;
-    if (userRollType) {
-     if (!rollCombination.includes(userRollType)) {
+
+    // ------------------- Subcommand: Edit Pet Image -------------------
+    if (subcommand === "edit") {
+      // Retrieve the image attachment.
+      const imageAttachment = interaction.options.getAttachment("image");
+      if (!imageAttachment) {
+        return interaction.editReply({
+          content: "❌ **Please upload an image to update your pet.**",
+          ephemeral: true
+        });
+      }
+
+      // Verify pet exists in the database
+      const petDoc = await findPetByIdentifier(petName, character._id);
+      if (!petDoc) {
+        return interaction.editReply({
+          content: `❌ **Pet \`${petName}\` not found. Please add it first with \`/pet add\`.**`,
+          ephemeral: true
+        });
+      }
+
+      // Attempt to upload the new image
+      try {
+        const petImageUrl = await handlePetImageUpload(imageAttachment, petName);
+        petDoc.imageUrl = petImageUrl;
+        await updatePetToCharacter(character._id, petName, petDoc);
+
+        // Sanitize the URL before using it in the embed
+        const sanitizedImageUrl = sanitizeUrl(petDoc.imageUrl);
+
+        // Build and send embed showing updated pet
+        const editEmbed = new EmbedBuilder()
+          .setAuthor({ name: character.name, iconURL: character.icon })
+          .setTitle(`Pet Image Updated — ${petDoc.name}`)
+          .setThumbnail(sanitizedImageUrl)
+          .addFields(
+            { name: "Name", value: `\`${petDoc.name}\``, inline: true },
+            { name: "Species", value: petDoc.species, inline: true },
+            { name: "Type", value: petDoc.petType, inline: true },
+            { name: "Level", value: `${petDoc.level}`, inline: true },
+            {
+              name: "Rolls Remaining",
+              value: `${petDoc.rollsRemaining}`,
+              inline: true,
+            }
+          )
+          .setImage(sanitizedImageUrl)
+          .setColor("#00FF00");
+
+        return interaction.reply({ embeds: [editEmbed] });
+      } catch (error) {
+        return interaction.reply(error.message);
+      }
+    }
+
+    // ------------------- Verify Pet Existence for Roll, Upgrade, and Retire -------------------
+    // Find pet by identifier (ID or name)
+    const pet = await findPetByIdentifier(petName, character._id);
+
+    if (!pet) {
+     console.error(
+      `[pet.js]: logs - Pet with identifier "${petName}" not found for character ${characterName}`
+     );
+     if (!interaction.replied && !interaction.deferred) {
+       return interaction.reply({
+         content: `❌ **Pet \`${petName}\` not found. Please add the pet first using the \`/pet add\` command.**`,
+         ephemeral: true
+       });
+     } else {
+       return interaction.editReply({
+         content: `❌ **Pet \`${petName}\` not found. Please add the pet first using the \`/pet add\` command.**`,
+         ephemeral: true
+       });
+     }
+    }
+
+    // ------------------- Subcommand: Roll -------------------
+    if (subcommand === "roll") {
+     // ------------------- Check Available Pet Rolls -------------------
+     if (pet.rollsRemaining <= 0) {
+       return interaction.editReply(
+         "❌ Your pet has no rolls left this week. Rolls reset every Sunday. You can increase your roll limit by training your pet! [Learn more](#)"
+       );
+     }
+
+     // ------------------- Check Inventory Sync -------------------
+     try {
+       await checkInventorySync(character);
+     } catch (error) {
+       await interaction.editReply({
+         content: error.message,
+         ephemeral: true
+       });
+       return;
+     }
+
+     // ------------------- Determine Roll Combination and Type -------------------
+     const petTypeData = getPetTypeData(pet.petType);
+     if (!petTypeData) {
+      console.error(
+       `[pet.js]: logs - Unknown pet type for pet with name ${petName}`
+      );
       return interaction.editReply(
-       `❌ **Invalid roll type. Available roll types: ${rollCombination.join(
-        ", "
-       )}**`
+       "❌ **Unknown pet type configured for this pet.**"
       );
      }
-     chosenRoll = userRollType;
-    } else {
-     chosenRoll =
-      rollCombination[Math.floor(Math.random() * rollCombination.length)];
+     const rollCombination = petTypeData.rollCombination;
+     const userRollType = interaction.options.getString("rolltype");
+     let chosenRoll;
+     if (userRollType) {
+      if (!rollCombination.includes(userRollType)) {
+       return interaction.editReply(
+        `❌ **Invalid roll type. Available roll types: ${rollCombination.join(
+         ", "
+        )}**`
+       );
+      }
+      chosenRoll = userRollType;
+     } else {
+      chosenRoll =
+       rollCombination[Math.floor(Math.random() * rollCombination.length)];
+     }
+
+     // ------------------- Get Perk Field and Filter Items -------------------
+     const perkField = getPerkField(chosenRoll);
+     const availableItems = await fetchAllItems();
+     const itemsBasedOnPerk = availableItems.filter(
+      (item) => item[perkField] === true
+     );
+     if (itemsBasedOnPerk.length === 0) {
+      return interaction.editReply(
+       `⚠️ **No items available for the \`${chosenRoll}\` roll.**`
+      );
+     }
+
+     // ------------------- Determine Random Item -------------------
+     const weightedItems = createWeightedItemList(itemsBasedOnPerk);
+     const randomItem =
+      weightedItems[Math.floor(Math.random() * weightedItems.length)];
+
+     // ------------------- Deduct Pet Roll and Update Database -------------------
+     const newRollsRemaining = pet.rollsRemaining - 1;
+     console.log(
+      `[pet.js]: logs - Deducting pet roll. Old rollsRemaining: ${pet.rollsRemaining}, New rollsRemaining: ${newRollsRemaining}`
+     );
+     await updatePetRolls(character._id, petName, newRollsRemaining);
+     pet.rollsRemaining = newRollsRemaining;
+     const quantity = 1;
+     await addItemInventoryDatabase(
+      character._id,
+      randomItem.itemName,
+      quantity,
+      interaction
+     );
+
+     // ------------------- Log Roll Details to Google Sheets (if applicable) -------------------
+     const inventoryLink = character.inventory || character.inventoryLink;
+     if (isValidGoogleSheetsUrl(inventoryLink)) {
+      const spreadsheetId = extractSpreadsheetId(inventoryLink);
+      const auth = await authorizeSheets();
+      const values = [
+       [
+        character.name,
+        randomItem.itemName,
+        quantity.toString(),
+        randomItem.category.join(", "),
+        randomItem.type.join(", "),
+        randomItem.subtype.join(", "),
+        "Pet Roll",
+        character.job,
+        pet.chosenRoll,
+        character.currentVillage,
+        `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`,
+        new Date().toLocaleString("en-US", { timeZone: "America/New_York" }),
+        uuidv4(),
+       ],
+      ];
+      await safeAppendDataToSheet(character.inventory, character, "loggedInventory!A2:M", values, undefined, { skipValidation: true });
+     }
+
+     // ------------------- Build Roll Result Embed -------------------
+     const flavorTextMessage = getFlavorText(
+      chosenRoll,
+      pet.name,
+      pet.species,
+      randomItem.itemName
+     );
+
+     console.log(
+      `[pet.js]: logs - Building roll embed with ${newRollsRemaining} rolls remaining.`
+     );
+
+     // ------------------- Determine Embed Color Based on Village -------------------
+     const villageName =
+      character.currentVillage.charAt(0).toUpperCase() +
+      character.currentVillage.slice(1).toLowerCase();
+     const villageColors = {
+      Rudania: "#d7342a",
+      Inariko: "#277ecd",
+      Vhintl: "#25c059",
+     };
+     const embedColor = villageColors[villageName] || "#00FF00";
+
+     // ------------------- Calculate Roll Display -------------------
+     const maxRolls = pet.level;
+     const petEmoji = getPetEmoji(pet.species);
+     const rollsDisplay = getRollsDisplay(pet.rollsRemaining, pet.level);
+
+     // ------------------- Create and Send Roll Result Embed -------------------
+     const rollEmbed = new EmbedBuilder()
+      .setAuthor({ name: character.name, iconURL: character.icon })
+      .setThumbnail(sanitizeUrl(pet.imageUrl))
+      .setTitle(
+       `${character.name}'s Pet Roll - ${pet.name} | Level ${pet.level}`
+      )
+      .setColor(embedColor)
+      .setDescription(flavorTextMessage)
+      .setImage(sanitizeUrl("https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"))
+      .addFields(
+       { name: "__Pet Name__", value: `> ${pet.name}`, inline: false },
+       {
+        name: "__Pet Species__",
+        value: `> ${petEmoji} ${pet.species}`,
+        inline: true,
+       },
+       { name: "__Pet Type__", value: `> ${pet.petType}`, inline: true },
+       {
+        name: "__Rolls & Level__",
+        value: `> ${rollsDisplay} | ${pet.level}`,
+        inline: true,
+       },
+       {
+        name: "__Village__",
+        value: `> ${character.currentVillage}`,
+        inline: true,
+       },
+       { name: "__Table__", value: `> \`${chosenRoll}\``, inline: true },
+       {
+        name: "__Item Gathered__",
+        value: `> ${randomItem.emoji || ""} ${randomItem.itemName}`,
+        inline: true,
+       },
+       {
+        name: "__Character Inventory__",
+        value: `> [Inventory Link](${character.inventory})`,
+        inline: false,
+       }
+      )
+      .setFooter({
+       text: `${pet.rollsRemaining} rolls left this week | Pet Rolls reset every Sunday at midnight!`,
+      });
+     return interaction.editReply({ embeds: [rollEmbed] });
     }
 
-    // ------------------- Get Perk Field and Filter Items -------------------
-    const perkField = getPerkField(chosenRoll);
-    const availableItems = await fetchAllItems();
-    const itemsBasedOnPerk = availableItems.filter(
-     (item) => item[perkField] === true
-    );
-    if (itemsBasedOnPerk.length === 0) {
+    // ------------------- Subcommand: Upgrade -------------------
+    if (subcommand === "upgrade") {
+     const targetLevel = interaction.options.getInteger("level");
+
+     // only allow levels 1–3
+     // enforce +1 only
+     if (targetLevel !== pet.level + 1) {
+       if (pet.level === 3) {
+         return interaction.editReply(
+           `❌ **Your pet is already at the maximum level (Level 3). No further upgrades are possible.**`
+         );
+       }
+       return interaction.editReply(
+         `❌ **You can only upgrade from level ${pet.level} to level ${pet.level + 1}.**`
+       );
+     }
+
+     const userId = interaction.user.id;
+     const balance = await getTokenBalance(userId);
+     const cost = getUpgradeCost(targetLevel);
+
+     // check balance
+     if (balance < cost) {
+       return interaction.editReply(
+         `❌ **You only have ${balance} tokens, but upgrading to level ${targetLevel} costs ${cost}.**`
+       );
+     }
+
+     // deduct tokens
+     await updateTokenBalance(userId, -cost);
+
+     // perform the upgrade
+     await upgradePetLevel(character._id, petName, targetLevel);
+     await updatePetRolls(character._id, petName, targetLevel);
+
      return interaction.editReply(
-      `⚠️ **No items available for the \`${chosenRoll}\` roll.**`
+       `✅ **${pet.name} is now level ${targetLevel}!**\n` +
+       `💰 Spent ${cost} tokens — you have ${balance - cost} left.\n` +
+       `🎲 Rolls remaining set to ${targetLevel}.`
      );
     }
 
-    // ------------------- Determine Random Item -------------------
-    const weightedItems = createWeightedItemList(itemsBasedOnPerk);
-    const randomItem =
-     weightedItems[Math.floor(Math.random() * weightedItems.length)];
-
-    // ------------------- Deduct Pet Roll and Update Database -------------------
-    const newRollsRemaining = pet.rollsRemaining - 1;
-    console.log(
-     `[pet.js]: logs - Deducting pet roll. Old rollsRemaining: ${pet.rollsRemaining}, New rollsRemaining: ${newRollsRemaining}`
-    );
-    await updatePetRolls(character._id, petName, newRollsRemaining);
-    pet.rollsRemaining = newRollsRemaining;
-    const quantity = 1;
-    await addItemInventoryDatabase(
-     character._id,
-     randomItem.itemName,
-     quantity,
-     interaction
-    );
-
-    // ------------------- Log Roll Details to Google Sheets (if applicable) -------------------
-    const inventoryLink = character.inventory || character.inventoryLink;
-    if (isValidGoogleSheetsUrl(inventoryLink)) {
-     const spreadsheetId = extractSpreadsheetId(inventoryLink);
-     const auth = await authorizeSheets();
-     const values = [
-      [
-       character.name,
-       randomItem.itemName,
-       quantity.toString(),
-       randomItem.category.join(", "),
-       randomItem.type.join(", "),
-       randomItem.subtype.join(", "),
-       "Pet Roll",
-       character.job,
-       pet.chosenRoll,
-       character.currentVillage,
-       `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`,
-       new Date().toLocaleString("en-US", { timeZone: "America/New_York" }),
-       uuidv4(),
-      ],
-     ];
-     await safeAppendDataToSheet(character.inventory, character, "loggedInventory!A2:M", values, undefined, { skipValidation: true });
-    }
-
-    // ------------------- Build Roll Result Embed -------------------
-    const flavorTextMessage = getFlavorText(
-     chosenRoll,
-     pet.name,
-     pet.species,
-     randomItem.itemName
-    );
-
-    console.log(
-     `[pet.js]: logs - Building roll embed with ${newRollsRemaining} rolls remaining.`
-    );
-
-    // ------------------- Determine Embed Color Based on Village -------------------
-    const villageName =
-     character.currentVillage.charAt(0).toUpperCase() +
-     character.currentVillage.slice(1).toLowerCase();
-    const villageColors = {
-     Rudania: "#d7342a",
-     Inariko: "#277ecd",
-     Vhintl: "#25c059",
-    };
-    const embedColor = villageColors[villageName] || "#00FF00";
-
-    // ------------------- Calculate Roll Display -------------------
-    const maxRolls = pet.level;
-    const petEmoji = getPetEmoji(pet.species);
-    const rollsDisplay = getRollsDisplay(pet.rollsRemaining, pet.level);
-
-    // ------------------- Create and Send Roll Result Embed -------------------
-    const rollEmbed = new EmbedBuilder()
-     .setAuthor({ name: character.name, iconURL: character.icon })
-     .setThumbnail(sanitizeUrl(pet.imageUrl))
-     .setTitle(
-      `${character.name}'s Pet Roll - ${pet.name} | Level ${pet.level}`
-     )
-     .setColor(embedColor)
-     .setDescription(flavorTextMessage)
-     .setImage(sanitizeUrl("https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"))
-     .addFields(
-      { name: "__Pet Name__", value: `> ${pet.name}`, inline: false },
-      {
-       name: "__Pet Species__",
-       value: `> ${petEmoji} ${pet.species}`,
-       inline: true,
-      },
-      { name: "__Pet Type__", value: `> ${pet.petType}`, inline: true },
-      {
-       name: "__Rolls & Level__",
-       value: `> ${rollsDisplay} | ${pet.level}`,
-       inline: true,
-      },
-      {
-       name: "__Village__",
-       value: `> ${character.currentVillage}`,
-       inline: true,
-      },
-      { name: "__Table__", value: `> \`${chosenRoll}\``, inline: true },
-      {
-       name: "__Item Gathered__",
-       value: `> ${randomItem.emoji || ""} ${randomItem.itemName}`,
-       inline: true,
-      },
-      {
-       name: "__Character Inventory__",
-       value: `> [Inventory Link](${character.inventory})`,
-       inline: false,
-      }
-     )
-     .setFooter({
-      text: `${pet.rollsRemaining} rolls left this week | Pet Rolls reset every Sunday at midnight!`,
-     });
-    return interaction.editReply({ embeds: [rollEmbed] });
-   }
-
-   // ------------------- Subcommand: Upgrade -------------------
-   if (subcommand === "upgrade") {
-    const targetLevel = interaction.options.getInteger("level");
-
-    // only allow levels 1–3
-    // enforce +1 only
-    if (targetLevel !== pet.level + 1) {
-      if (pet.level === 3) {
-        return interaction.editReply(
-          `❌ **Your pet is already at the maximum level (Level 3). No further upgrades are possible.**`
-        );
-      }
-      return interaction.editReply(
-        `❌ **You can only upgrade from level ${pet.level} to level ${pet.level + 1}.**`
-      );
-    }
-
-    const userId = interaction.user.id;
-    const balance = await getTokenBalance(userId);
-    const cost = getUpgradeCost(targetLevel);
-
-    // check balance
-    if (balance < cost) {
-      return interaction.editReply(
-        `❌ **You only have ${balance} tokens, but upgrading to level ${targetLevel} costs ${cost}.**`
-      );
-    }
-
-    // deduct tokens
-    await updateTokenBalance(userId, -cost);
-
-    // perform the upgrade
-    await upgradePetLevel(character._id, petName, targetLevel);
-    await updatePetRolls(character._id, petName, targetLevel);
-
-    return interaction.editReply(
-      `✅ **${pet.name} is now level ${targetLevel}!**\n` +
-      `💰 Spent ${cost} tokens — you have ${balance - cost} left.\n` +
-      `🎲 Rolls remaining set to ${targetLevel}.`
-    );
-   }
-
-   // ------------------- Subcommand: Retire -------------------
-   if (subcommand === "retire") {
-    await interaction.deferReply();
-    if (pet.status === "retired") {
-     return interaction.editReply(`❌ **${pet.name} is already retired.**`);
-    }
-    const updateResult = await Pet.updateOne(
-     { _id: pet._id },
-     { $set: { status: "retired" } }
-    );
-    console.log(
-     `[pet.js]: logs - Retired pet ${pet.name}. Modified documents: ${
-      updateResult.modifiedCount || updateResult.nModified || 0
-     }`
-    );
-    if (
-     character.currentActivePet &&
-     character.currentActivePet.toString() === pet._id.toString()
-    ) {
-     await Character.findByIdAndUpdate(character._id, {
-      currentActivePet: null,
-     });
-    }
-    const updatedPetData = { ...pet.toObject(), status: "retired" };
-    await updatePetToCharacter(character._id, pet.name, updatedPetData);
-    const retireEmbed = new EmbedBuilder()
+    // ------------------- Subcommand: Retire -------------------
+    if (subcommand === "retire") {
+     await interaction.deferReply();
+     if (pet.status === "retired") {
+      return interaction.editReply(`❌ **${pet.name} is already retired.**`);
+     }
+     const updateResult = await Pet.updateOne(
+      { _id: pet._id },
+      { $set: { status: "retired" } }
+     );
+     console.log(
+      `[pet.js]: logs - Retired pet ${pet.name}. Modified documents: ${
+       updateResult.modifiedCount || updateResult.nModified || 0
+      }`
+     );
+     if (
+      character.currentActivePet &&
+      character.currentActivePet.toString() === pet._id.toString()
+     ) {
+      await Character.findByIdAndUpdate(character._id, {
+       currentActivePet: null,
+      });
+     }
+     const updatedPetData = { ...pet.toObject(), status: "retired" };
+     await updatePetToCharacter(character._id, pet.name, updatedPetData);
+     const retireEmbed = new EmbedBuilder()
     .setAuthor({ name: character.name, iconURL: character.icon })
     .setTitle(`Pet Retired - ${pet.name}`)
     .setColor("#FF0000")
@@ -753,81 +775,73 @@ if (subcommand === "add") {
     )
     .setImage(sanitizeUrl(pet.imageUrl))
     .setFooter({ text: "Pet retired successfully." });   
-    return interaction.editReply({ embeds: [retireEmbed] });
-   }
-
-   // ------------------- Subcommand: View Pet -------------------
-   if (subcommand === "view") {
-    // Find pet by identifier
-    const petDoc = await findPetByIdentifier(petName, character._id);
-    if (!petDoc) {
-     return interaction.editReply(
-      `❌ **Pet \`${petName}\` not found. Please add it first with \`/pet add\`.**`
-     );
+     return interaction.editReply({ embeds: [retireEmbed] });
     }
 
-    // Prepare rolls display
-    const rollsDisplay = getRollsDisplay(petDoc.rollsRemaining, petDoc.level);
-
-    // Get pet type data for combination & description
-    const petTypeData = getPetTypeData(petDoc.petType);
-
-    // Build the embed
-    const DEFAULT_PLACEHOLDER = "https://i.imgur.com/placeholder.png";
-    
-    // Ensure we have valid URLs for both image and thumbnail
-    const sanitizedImageUrl = sanitizeUrl(petDoc.imageUrl);
-
-    const viewEmbed = new EmbedBuilder()
-     .setAuthor({ name: character.name, iconURL: character.icon })
-     .setTitle(`🐾 ${petDoc.name} — Details`)
-     .setThumbnail(sanitizedImageUrl)
-     .addFields(
-      { name: "__Pet Name__", value: `> ${petDoc.name}`, inline: true },
-      { name: "__Owner__", value: `> ${character.name}`, inline: true },
-      {
-       name: "__Pet Level & Rolls__",
-       value: `> Level ${petDoc.level} | ${rollsDisplay}`,
-       inline: true,
-      },
-      {
-       name: "__Pet Species__",
-       value: `> ${getPetEmoji(petDoc.species)} ${petDoc.species}`,
-       inline: true,
-      },
-      { name: "__Pet Type__", value: `> ${petDoc.petType}`, inline: true },
-      {
-       name: "Roll Combination",
-       value: petTypeData.rollCombination.join(", "),
-       inline: false,
-      },
-      { name: "Description", value: petTypeData.description, inline: false }
-     )
-     .setImage(sanitizedImageUrl)
-     .setColor("#00FF00");
-
-    return interaction.editReply({ embeds: [viewEmbed] });
-   }
-  } catch (error) {
-   // ------------------- Error Handling -------------------
-   const context = {
-     commandName: 'pet',
-     userTag: interaction.user.tag,
-     userId: interaction.user.id,
-     options: {
-       subcommand: interaction.options.getSubcommand(),
-       characterName: interaction.options.getString("charactername"),
-       petName: interaction.options.getString("petname"),
-       species: interaction.options.getString("species"),
-       category: interaction.options.getString("category"),
-       petType: interaction.options.getString("pettype"),
-       level: interaction.options.getInteger("level"),
-       rollType: interaction.options.getString("rolltype"),
-       image: interaction.options.getAttachment("image")
+    // ------------------- Subcommand: View Pet -------------------
+    if (subcommand === "view") {
+     // Find pet by identifier
+     const petDoc = await findPetByIdentifier(petName, character._id);
+     if (!petDoc) {
+      return interaction.editReply(
+       `❌ **Pet \`${petName}\` not found. Please add it first with \`/pet add\`.**`
+      );
      }
-   };
 
-   return handlePetError(error, interaction, context);
+     // Prepare rolls display
+     const rollsDisplay = getRollsDisplay(petDoc.rollsRemaining, petDoc.level);
+
+     // Get pet type data for combination & description
+     const petTypeData = getPetTypeData(petDoc.petType);
+
+     // Build the embed
+     const DEFAULT_PLACEHOLDER = "https://i.imgur.com/placeholder.png";
+     
+     // Ensure we have valid URLs for both image and thumbnail
+     const sanitizedImageUrl = sanitizeUrl(petDoc.imageUrl);
+
+     const viewEmbed = new EmbedBuilder()
+      .setAuthor({ name: character.name, iconURL: character.icon })
+      .setTitle(`🐾 ${petDoc.name} — Details`)
+      .setThumbnail(sanitizedImageUrl)
+      .addFields(
+       { name: "__Pet Name__", value: `> ${petDoc.name}`, inline: true },
+       { name: "__Owner__", value: `> ${character.name}`, inline: true },
+       {
+        name: "__Pet Level & Rolls__",
+        value: `> Level ${petDoc.level} | ${rollsDisplay}`,
+        inline: true,
+       },
+       {
+        name: "__Pet Species__",
+        value: `> ${getPetEmoji(petDoc.species)} ${petDoc.species}`,
+        inline: true,
+       },
+       { name: "__Pet Type__", value: `> ${petDoc.petType}`, inline: true },
+       {
+        name: "Roll Combination",
+        value: petTypeData.rollCombination.join(", "),
+        inline: false,
+       },
+       { name: "Description", value: petTypeData.description, inline: false }
+      )
+      .setImage(sanitizedImageUrl)
+      .setColor("#00FF00");
+
+     return interaction.editReply({ embeds: [viewEmbed] });
+    }
+  } catch (error) {
+    handleError(error, 'pet.js');
+    console.error(`[pet.js]: ❌ Error during pet command execution:`, error);
+
+    try {
+      await interaction.editReply({
+        content: '❌ **An error occurred while processing your pet command. Please try again later.**',
+        ephemeral: true
+      });
+    } catch (replyError) {
+      console.error(`[pet.js]: ❌ Error sending error response:`, replyError);
+    }
   }
  },
 };
