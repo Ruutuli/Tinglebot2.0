@@ -297,8 +297,8 @@ module.exports = {
         .setDescription('Steal an item from another character or NPC.')
         .addSubcommand(subcommand =>
             subcommand
-                .setName('steal')
-                .setDescription('Steal an item from another character or NPC.')
+                .setName('commit')
+                .setDescription('Commit a theft from another character or NPC.')
                 .addStringOption(option =>
                     option.setName('targettype')
                         .setDescription('Choose NPC or Player as target')
@@ -354,8 +354,8 @@ module.exports = {
         try {
             const subcommand = interaction.options.getSubcommand();
 
-            // Handle steal subcommand
-            if (subcommand === 'steal') {
+            // Handle commit subcommand
+            if (subcommand === 'commit') {
                 const targetType = interaction.options.getString('targettype');
                 const targetName = interaction.options.getString('target');
                 const raritySelection = interaction.options.getString('rarity').toLowerCase();
