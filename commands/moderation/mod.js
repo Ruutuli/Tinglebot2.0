@@ -1351,8 +1351,6 @@ async function handleVendingReset(interaction) {
 // Manually resets all pet rolls for all characters
 async function handlePetRollsReset(interaction) {
   try {
-    await interaction.deferReply({ ephemeral: true });
-    
     // Call the reset function
     await resetPetRollsForAllCharacters();
     
@@ -1361,9 +1359,19 @@ async function handlePetRollsReset(interaction) {
       ephemeral: true
     });
   } catch (error) {
-    handleError(error, "mod.js");
+    handleError(error, "mod.js", {
+      commandName: 'resetpetrolls',
+      userTag: interaction.user.tag,
+      userId: interaction.user.id,
+      options: {
+        subcommand: 'resetpetrolls'
+      }
+    });
+    
+    console.error(`[mod.js]: Error resetting pet rolls:`, error);
+    
     return interaction.editReply({
-      content: `❌ Failed to reset pet rolls: ${error.message}`,
+      content: `❌ Failed to reset pet rolls: ${error.message || 'Unknown error'}`,
       ephemeral: true
     });
   }
