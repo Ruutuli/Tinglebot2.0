@@ -47,12 +47,22 @@ const Mount = require('../../models/MountModel');
 // ------------------- Blood Moon Module -------------------
 const { isBloodMoonActive } = require('../../scripts/bloodmoon.js');
 
+// ------------------- Weather Module -------------------
+const { getCurrentWeather } = require('../../modules/weatherModule.js');
+
 // ============================================================================
 // ------------------- Constants -------------------
 // ============================================================================
 
 const COMMAND_NAME = 'travel';
 const COMMAND_DESCRIPTION = 'Travel between villages';
+
+// Severe weather conditions that block travel
+const SEVERE_WEATHER_CONDITIONS = [
+  'Avalanche',
+  'Flood',
+  'Rock Slide'
+];
 
 const {
   PATH_OF_SCARLET_LEAVES_CHANNEL_ID,
@@ -185,6 +195,23 @@ module.exports = {
         return;
       }
 
+      // ------------------- Check Severe Weather -------------------
+      const startingVillage = character.currentVillage.toLowerCase();
+      const severeWeather = await checkSevereWeather(startingVillage);
+      if (severeWeather.blocked) {
+        return interaction.editReply({
+          content: `❌ **${character.name}** cannot travel due to severe weather conditions: ${severeWeather.emoji} **${severeWeather.condition}** in **${capitalizeFirstLetter(startingVillage)}**.\nPlease wait for the weather to improve.`
+        });
+      }
+
+      // Check destination weather as well
+      const destinationWeather = await checkSevereWeather(destination);
+      if (destinationWeather.blocked) {
+        return interaction.editReply({
+          content: `❌ **${character.name}** cannot travel to **${capitalizeFirstLetter(destination)}** due to severe weather conditions: ${destinationWeather.emoji} **${destinationWeather.condition}**.\nPlease wait for the weather to improve.`
+        });
+      }
+
       // ------------------- Mount Travel Logic -------------------
       let mount = null;
       if (mode === 'on mount') {
@@ -240,7 +267,6 @@ module.exports = {
       }
 
       // ------------------- Validate Destination -------------------
-      const startingVillage = character.currentVillage.toLowerCase();
       if (startingVillage === destination) {
         return interaction.editReply({
           content: `❌ **${character.name}** is already in **${capitalizeFirstLetter(destination)}**.`
@@ -701,5 +727,28 @@ ${pathEmoji || ''} No monsters or gathering today!`)
 
       await processTravelDay(day + 1, { ...context, channel });
     });    
+  }
+} 
+
+// ------------------- Check Severe Weather -------------------
+// Checks if the current weather conditions are too severe for travel
+async function checkSevereWeather(village) {
+  try {
+    const weather = await getCurrentWeather(village);
+    if (!weather) return false;
+
+    // Check special conditions
+    if (weather.special?.label && SEVERE_WEATHER_CONDITIONS.includes(weather.special.label)) {
+      return {
+        blocked: true,
+        condition: weather.special.label,
+        emoji: weather.special.emoji
+      };
+    }
+
+    return { blocked: false };
+  } catch (error) {
+    handleError(error, 'travel.js (checkSevereWeather)');
+    return { blocked: false };
   }
 } 
