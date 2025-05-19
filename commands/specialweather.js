@@ -17,6 +17,7 @@ const { createWeightedItemList } = require('../modules/rngModule.js');
 const { handleError } = require('../utils/globalErrorHandler.js');
 const { syncItem, SOURCE_TYPES } = require('../utils/inventoryUtils.js');
 const { getCurrentWeather } = require('../modules/weatherModule.js');
+const { enforceJail } = require('../utils/jailCheck.js');
 
 // ------------------- Constants -------------------
 const DEFAULT_IMAGE_URL = 'https://storage.googleapis.com/tinglebot/Graphics/Default-Footer.png';
@@ -278,6 +279,13 @@ module.exports = {
         await interaction.editReply({
           content: `❌ **Character ${characterName} not found or does not belong to you.**`,
         });
+        return;
+      }
+
+      // Check if character is in jail
+      const jailCheck = await enforceJail(character, 'gather during special weather');
+      if (jailCheck) {
+        await interaction.editReply({ content: jailCheck, ephemeral: true });
         return;
       }
 

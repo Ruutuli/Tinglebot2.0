@@ -35,11 +35,6 @@ async function enforceJail(interaction, character) {
                 value: `<t:${Math.floor(releaseTime / 1000)}:F>`,
                 inline: false
             },
-            {
-                name: '🚫 Restricted Actions',
-                value: '• Join raids\n• Use mounts\n• Travel\n• Special weather activities\n• Gather resources\n• Loot items\n• Pet interactions\n• Explore\n• Craft items\n• Job commands\n• Combat',
-                inline: false
-            }
         ],
         thumbnail: {
             url: character.icon
