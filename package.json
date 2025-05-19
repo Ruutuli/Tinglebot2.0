@@ -3,6 +3,9 @@
  "version": "1.0.0",
  "description": "For ocs stuff",
  "main": "index.js",
+ "engines": {
+   "node": ">=18.0.0"
+ },
  "scripts": {
   "start": "node index.js",
   "scheduler": "node scripts/scheduler.js",

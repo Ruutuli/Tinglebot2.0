@@ -434,6 +434,14 @@ async function handleBlightCharacterAutocomplete(interaction, focusedOption) {
 
       await respondWithFilteredChoices(interaction, focusedOption, choices);
     }
+  } else if (subcommand === 'submit') {
+    // For submit command, show characters with pending blight submissions
+    const blightedCharacters = await fetchBlightedCharactersByUserId(userId);
+    const choices = blightedCharacters.map((character) => ({
+      name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
+      value: character.name,
+    }));
+    await respondWithFilteredChoices(interaction, focusedOption, choices);
   } else {
     // For other blight commands, show blighted characters
     const blightedCharacters = await fetchBlightedCharactersByUserId(userId);
@@ -456,56 +464,117 @@ async function handleBlightCharacterAutocomplete(interaction, focusedOption) {
 async function handleBlightItemAutocomplete(interaction, focusedOption) {
  try {
   const userId = interaction.user.id;
-  const characterName = interaction.options.getString("character_name");
-  const healerName = interaction.options.getString("healer_name");
+  const subcommand = interaction.options.getSubcommand();
+  
+  if (subcommand === 'submit') {
+    const submissionId = interaction.options.getString('submission_id');
+    if (!submissionId) {
+      return await interaction.respond([]);
+    }
 
-  if (!characterName || !healerName) {
-    return await interaction.respond([]);
-  }
+    // Get the submission data
+    const submission = await retrieveBlightRequestFromStorage(submissionId);
+    if (!submission || submission.status !== 'pending') {
+      return await interaction.respond([]);
+    }
 
-  // Get the healer character
-  const healer = await fetchCharacterByName(healerName);
-  if (!healer) {
-    return await interaction.respond([]);
-  }
+    // Get the character's inventory
+    const character = await fetchCharacterByName(submission.characterName);
+    if (!character) {
+      return await interaction.respond([]);
+    }
 
-  // Get the healer's inventory
-  const inventoryCollection = await getCharacterInventoryCollection(healer.name);
-  const inventoryItems = await inventoryCollection.find().toArray();
+    const inventoryCollection = await getCharacterInventoryCollection(character.name);
+    const inventoryItems = await inventoryCollection.find().toArray();
 
-  // Initialize an array to store items that are relevant for healing requirements
-  const allItems = [];
+    // Get the healer's requirements
+    const healer = getModCharacterByName(submission.healerName);
+    if (!healer) {
+      return await interaction.respond([]);
+    }
 
-  // Loop over mod characters and add item requirements of type "item"
-  modCharacters.forEach((character) => {
-    character.getHealingRequirements().forEach((requirement) => {
-      if (requirement.type === "item") {
-        allItems.push(...requirement.items);
-      }
+    // Get the healing requirements for this specific character
+    const healingRequirements = healer.getHealingRequirements(submission.characterName);
+    const itemRequirements = healingRequirements.find(req => req.type === 'item');
+    
+    if (!itemRequirements) {
+      return await interaction.respond([]);
+    }
+
+    // Create a map of required items
+    const requiredItems = new Map(
+      itemRequirements.items.map(item => [item.name.toLowerCase(), item])
+    );
+
+    // Filter inventory items that match required items
+    const choices = inventoryItems
+      .filter(item => {
+        const itemName = item.itemName.toLowerCase();
+        return requiredItems.has(itemName) && 
+               item.itemName.toLowerCase().includes(focusedOption.value.toLowerCase());
+      })
+      .map(item => {
+        const requiredItem = requiredItems.get(item.itemName.toLowerCase());
+        return {
+          name: `${item.itemName} x${item.quantity} (Required: ${requiredItem.quantity})`,
+          value: `${item.itemName} x${requiredItem.quantity}`
+        };
+      });
+
+    await interaction.respond(choices.slice(0, 25));
+  } else {
+    // Handle other blight commands that need item autocomplete
+    const characterName = interaction.options.getString("character_name");
+    const healerName = interaction.options.getString("healer_name");
+
+    if (!characterName || !healerName) {
+      return await interaction.respond([]);
+    }
+
+    // Get the healer character
+    const healer = await fetchCharacterByName(healerName);
+    if (!healer) {
+      return await interaction.respond([]);
+    }
+
+    // Get the healer's inventory
+    const inventoryCollection = await getCharacterInventoryCollection(healer.name);
+    const inventoryItems = await inventoryCollection.find().toArray();
+
+    // Initialize an array to store items that are relevant for healing requirements
+    const allItems = [];
+
+    // Loop over mod characters and add item requirements of type "item"
+    modCharacters.forEach((character) => {
+      character.getHealingRequirements().forEach((requirement) => {
+        if (requirement.type === "item") {
+          allItems.push(...requirement.items);
+        }
+      });
     });
-  });
 
-  // Create a map of required items
-  const requiredItems = new Map(
-    allItems.map(item => [item.name.toLowerCase(), item])
-  );
+    // Create a map of required items
+    const requiredItems = new Map(
+      allItems.map(item => [item.name.toLowerCase(), item])
+    );
 
-  // Filter inventory items that match required items
-  const choices = inventoryItems
-    .filter(item => {
-      const itemName = item.itemName.toLowerCase();
-      return requiredItems.has(itemName) && 
-             item.itemName.toLowerCase().includes(focusedOption.value.toLowerCase());
-    })
-    .map(item => {
-      const requiredItem = requiredItems.get(item.itemName.toLowerCase());
-      return {
-        name: `${item.itemName} - Qty: ${item.quantity} (Required: ${requiredItem.quantity})`,
-        value: item.itemName
-      };
-    });
+    // Filter inventory items that match required items
+    const choices = inventoryItems
+      .filter(item => {
+        const itemName = item.itemName.toLowerCase();
+        return requiredItems.has(itemName) && 
+               item.itemName.toLowerCase().includes(focusedOption.value.toLowerCase());
+      })
+      .map(item => {
+        const requiredItem = requiredItems.get(item.itemName.toLowerCase());
+        return {
+          name: `${item.itemName} - Qty: ${item.quantity} (Required: ${requiredItem.quantity})`,
+          value: item.itemName
+        };
+      });
 
-  await interaction.respond(choices.slice(0, 25));
+    await interaction.respond(choices.slice(0, 25));
+  }
  } catch (error) {
   handleError(error, "autocompleteHandler.js");
   console.error("[handleBlightItemAutocomplete]: Error occurred:", error);
