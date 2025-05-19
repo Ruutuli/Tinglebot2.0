@@ -49,7 +49,8 @@ const Pet = require("../models/PetModel");
 const ShopStock = require("../models/VillageShopsModel");
 const { Village } = require("../models/VillageModel");
 
-
+// Add import at the top
+const { NPCs } = require('../modules/stealingNPCSModule');
 
 // Add safe response utility
 async function safeAutocompleteResponse(interaction, choices) {
@@ -294,14 +295,16 @@ async function handleAutocomplete(interaction) {
 
       // Steal command routing
       if (commandName === 'steal') {
-        if (focusedOption.name === 'target') {
-          return await handleStealTargetAutocomplete(interaction, focusedOption);
-        }
-        if (focusedOption.name === 'charactername') {
+        const subcommand = interaction.options.getSubcommand();
+        if (subcommand === 'commit') {
+          if (focusedOption.name === 'target') {
+            return await handleStealTargetAutocomplete(interaction, focusedOption);
+          }
+          if (focusedOption.name === 'rarity') {
+            return await handleStealRarityAutocomplete(interaction, focusedOption);
+          }
+        } else if (focusedOption.name === 'charactername') {
           return await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, commandName);
-        }
-        if (focusedOption.name === 'rarity') {
-          return await handleStealRarityAutocomplete(interaction, focusedOption);
         }
       }
 
@@ -2675,25 +2678,15 @@ async function handleStealTargetAutocomplete(interaction, focusedOption) {
         const targetType = interaction.options.getString('targettype');
 
         if (targetType === 'npc') {
-            const NPC_NAME_MAPPING = {
-                'Hank': 'Hank',
-                'Sue': 'Sue',
-                'Lukan': 'Lukan',
-                'Myti': 'Myti',
-                'Cree': 'Cree',
-                'Cece': 'Cece',
-                'Walton': 'Walton',
-                'Jengo': 'Jengo',
-                'Jasz': 'Jasz',
-                'Lecia': 'Lecia',
-                'Tye': 'Tye',
-                'Lil Tim': 'Lil Tim'
-            };
-
-            const filteredNPCs = Object.keys(NPC_NAME_MAPPING)
+            // Get NPCs from the module and filter based on input
+            const filteredNPCs = Object.keys(NPCs)
                 .filter(npc => npc.toLowerCase().includes(focusedValue))
                 .slice(0, 25);
-            return await interaction.respond(filteredNPCs.map(npc => ({ name: npc, value: npc })));
+            
+            return await interaction.respond(filteredNPCs.map(npc => ({ 
+                name: npc,
+                value: npc 
+            })));
         } else if (targetType === 'player') {
             const characters = await Character.find({ canBeStolenFrom: true });
             const filteredCharacters = characters
