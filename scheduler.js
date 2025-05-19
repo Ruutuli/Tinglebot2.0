@@ -131,18 +131,8 @@ async function postWeatherUpdate(client) {
 // ---- Function: setupWeatherScheduler ----
 // Initializes the weather update scheduler
 function setupWeatherScheduler(client) {
-  const now = new Date();
-  const nextRun = new Date(now);
-  nextRun.setHours(8, 0, 0, 0);
-  if (now >= nextRun) {
-    nextRun.setDate(nextRun.getDate() + 1);
-  }
-  const timeUntilNext = nextRun - now;
-  
-  setTimeout(() => {
-    postWeatherUpdate(client);
-    setInterval(() => postWeatherUpdate(client), 24 * 60 * 60 * 1000);
-  }, timeUntilNext);
+  // Schedule weather updates for 8am EST (12:00 UTC) daily
+  createCronJob('0 12 * * *', 'daily weather update', () => postWeatherUpdate(client));
 }
 
 // ============================================================================
@@ -347,7 +337,7 @@ function initializeScheduler(client) {
     ]);
   });
   createCronJob('0 0 * * *', 'debuff expiry check', handleDebuffExpiry);
-  createCronJob('0 8 * * *', 'daily weather update', () => postWeatherUpdate(client));
+  createCronJob('0 12 * * *', 'daily weather update', () => postWeatherUpdate(client));
   createCronJob('0 0 * * *', 'birthday announcements', () => executeBirthdayAnnouncements(client));
   
   // Initialize blight scheduler
