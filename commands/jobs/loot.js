@@ -92,24 +92,21 @@ function canUseDailyRoll(character, activity) {
   }
 
   const now = new Date();
-  const rollover = new Date();
-  rollover.setUTCHours(12, 0, 0, 0); // 8AM EST = 12PM UTC
+  // Compute the most recent 12:00 UTC (8am EST) rollover
+  const rollover = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 12, 0, 0, 0));
+  if (now < rollover) {
+    // If before today's 12:00 UTC, use yesterday's 12:00 UTC
+    rollover.setUTCDate(rollover.getUTCDate() - 1);
+  }
 
   const lastRoll = character.dailyRoll.get(activity);
   if (!lastRoll) {
+    console.log(`[loot.js]: 📅 No previous roll for ${activity}. Allowing action.`);
     return true;
   }
 
   const lastRollDate = new Date(lastRoll);
-  
-  // If current time is before rollover, compare with yesterday's rollover
-  if (now < rollover) {
-    const yesterdayRollover = new Date(rollover);
-    yesterdayRollover.setDate(yesterdayRollover.getDate() - 1);
-    return lastRollDate < yesterdayRollover;
-  }
-  
-  // If current time is after rollover, compare with today's rollover
+  console.log(`[loot.js]: 📅 now=${now.toISOString()} | lastRoll=${lastRollDate.toISOString()} | rollover=${rollover.toISOString()}`);
   return lastRollDate < rollover;
 }
 
