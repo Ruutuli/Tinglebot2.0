@@ -1662,13 +1662,17 @@ async function updateTradeMessage(message, tradeData, fromCharacter, toCharacter
 // ------------------- Trade Validation -------------------
 async function validateTradeItems(character, items) {
   const characterInventoryCollection = await getCharacterInventoryCollection(character.name);
+  const unavailableItems = [];
   for (const item of items) {
     const itemInventory = await characterInventoryCollection.findOne({
       itemName: { $regex: new RegExp(`^${item.name}$`, "i") },
     });
     if (!itemInventory || itemInventory.quantity < item.quantity) {
-      throw new Error(`❌ \`${character.name}\` does not have enough \`${item.name} - QTY:${itemInventory ? itemInventory.quantity : 0}\` to trade.`);
+      unavailableItems.push(`${item.name} - QTY:${itemInventory ? itemInventory.quantity : 0}`);
     }
+  }
+  if (unavailableItems.length > 0) {
+    throw new Error(`❌ \`${character.name}\` does not have enough of the following items to trade: ${unavailableItems.join(", ")}`);
   }
 }
 
@@ -1690,13 +1694,13 @@ async function handleTrade(interaction) {
     await interaction.deferReply({ ephemeral: false });
 
     // ------------------- Validate Trade Quantities -------------------
-    const itemArray = [
+    const itemArrayRaw = [
       { name: item1, quantity: quantity1 },
       { name: item2, quantity: quantity2 },
       { name: item3, quantity: quantity3 },
     ].filter((item) => item.name);
 
-    for (const { quantity } of itemArray) {
+    for (const { quantity } of itemArrayRaw) {
       if (quantity <= 0) {
         await interaction.editReply({
           content: "❌ You must trade a **positive quantity** of items. Negative numbers are not allowed.",
@@ -1705,6 +1709,18 @@ async function handleTrade(interaction) {
         return;
       }
     }
+
+    // ---- Aggregate duplicate items (case-insensitive) ----
+    const itemMap = new Map();
+    for (const { name, quantity } of itemArrayRaw) {
+      const key = name.trim().toLowerCase();
+      if (!itemMap.has(key)) {
+        itemMap.set(key, { name, quantity });
+      } else {
+        itemMap.get(key).quantity += quantity;
+      }
+    }
+    const itemArray = Array.from(itemMap.values());
 
     // ------------------- NEW: Prevent trading Spirit Orbs -------------------
     for (const { name } of itemArray) {
