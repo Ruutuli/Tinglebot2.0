@@ -338,6 +338,17 @@ module.exports = {
       });
     }
 
+    // Verify character ownership
+    if (character.userId !== userId) {
+      console.error(
+        `[pet.js]: logs - Character "${characterName}" exists but belongs to a different user`
+      );
+      return interaction.editReply({
+        content: `❌ **Character \`${characterName}\` belongs to a different user. You can only manage pets for your own characters.**`,
+        ephemeral: true
+      });
+    }
+
     // Check if character is in jail
     if (await enforceJail(interaction, character)) {
       return;
@@ -505,20 +516,24 @@ module.exports = {
     const pet = await findPetByIdentifier(petName, character._id);
 
     if (!pet) {
-     console.error(
-      `[pet.js]: logs - Pet with identifier "${petName}" not found for character ${characterName}`
-     );
-     if (!interaction.replied && !interaction.deferred) {
-       return interaction.reply({
-         content: `❌ **Pet \`${petName}\` not found. Please add the pet first using the \`/pet add\` command.**`,
-         ephemeral: true
-       });
-     } else {
-       return interaction.editReply({
-         content: `❌ **Pet \`${petName}\` not found. Please add the pet first using the \`/pet add\` command.**`,
-         ephemeral: true
-       });
-     }
+      console.error(
+        `[pet.js]: logs - Pet with identifier "${petName}" not found for character ${characterName}`
+      );
+      return interaction.editReply({
+        content: `❌ **Pet \`${petName}\` not found for character \`${characterName}\`. Please check the pet name and try again.**`,
+        ephemeral: true
+      });
+    }
+
+    // Verify pet ownership
+    if (pet.owner.toString() !== character._id.toString()) {
+      console.error(
+        `[pet.js]: logs - Pet "${petName}" exists but belongs to a different character`
+      );
+      return interaction.editReply({
+        content: `❌ **Pet \`${petName}\` belongs to a different character. Please check the pet name and try again.**`,
+        ephemeral: true
+      });
     }
 
     // ------------------- Subcommand: Roll -------------------
