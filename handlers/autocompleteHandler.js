@@ -117,12 +117,6 @@ async function handleAutocomplete(interaction) {
     try {
         const commandName = interaction.commandName;
         const focusedOption = interaction.options.getFocused(true);
-        
-        console.log('[autocompleteHandler.js]: 🔍 Starting autocomplete for command:', commandName);
-        console.log('[autocompleteHandler.js]: 📊 Focused option:', {
-            name: focusedOption.name,
-            value: focusedOption.value
-        });
 
         // Add a check for interaction validity
         if (!interaction.isAutocomplete()) {

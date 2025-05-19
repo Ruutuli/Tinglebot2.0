@@ -9,12 +9,16 @@ const { v4: uuidv4 } = require('uuid');
 // ------------------- Local Module Imports -------------------
 const { handleError } = require('../../utils/globalErrorHandler');
 const { fetchCharacterByName, getCharacterInventoryCollection, fetchItemRarityByName } = require('../../database/db');
-const { removeItemInventoryDatabase, addItemInventoryDatabase } = require('../../utils/inventoryUtils');
+const { removeItemInventoryDatabase, addItemInventoryDatabase, syncToInventoryDatabase } = require('../../utils/inventoryUtils');
 const { getNPCItems, NPCs } = require('../../modules/stealingNPCSModule');
 const { authorizeSheets, appendSheetData, isValidGoogleSheetsUrl, extractSpreadsheetId, safeAppendDataToSheet } = require('../../utils/googleSheetsUtils');
 const ItemModel = require('../../models/ItemModel');
 const { fetchActiveBoost } = require('../../utils/boostingUtils');
 const Character = require('../../models/CharacterModel');
+const { hasPerk } = require('../../modules/jobsModule');
+
+// Add StealStats model
+const StealStats = require('../../models/StealStatsModel');
 
 // ============================================================================
 // ---- Constants ----
@@ -78,7 +82,6 @@ const NPC_NAME_MAPPING = {
 const userCooldowns = new Map(); // Track user cooldowns
 const stealStreaks = new Map(); // Track successful steal streaks
 const stealProtection = new Map(); // Track protection after being stolen from
-const STEAL_STATS = new Map(); // Track steal statistics
 
 // ============================================================================
 // ---- Helper Functions ----
@@ -145,22 +148,34 @@ function createBaseEmbed(title, color = '#AA926A') {
 
 async function createStealResultEmbed(thiefCharacter, targetCharacter, item, quantity, roll, failureThreshold, isSuccess, isNPC = false) {
     const itemEmoji = item.emoji || await getItemEmoji(item.itemName);
-    const successField = `d99 => ${roll} = ${isSuccess ? 'Success!' : 'Failure!'}`;
+    const successField = `Roll: **${roll}** / 99 = ${isSuccess ? '✅ Success!' : '❌ Failure!'}`;
     
-    const embed = createBaseEmbed(isSuccess ? '💰 Item Stolen!' : '💢 Failed Steal Attempt!', isSuccess ? '#AA926A' : '#ff0000')
-        .setDescription(`[${thiefCharacter.name}](${thiefCharacter.inventory || thiefCharacter.inventoryLink}) ${isSuccess ? 'successfully stole from' : 'tried to steal from'} ${isNPC ? targetCharacter : `[${targetCharacter.name}](${targetCharacter.inventory || targetCharacter.inventoryLink})`}`)
+    const embed = createBaseEmbed(isSuccess ? '💰 Item Stolen!' : '💢 Failed Heist!', isSuccess ? '#AA926A' : '#ff0000')
+        .setDescription(`**${thiefCharacter.name}** ${isSuccess ? 'successfully stole from' : 'tried to steal from'} ${isNPC ? targetCharacter : `**${targetCharacter.name}**`}`)
         .addFields(
-            { name: '__Item__', value: `> **${itemEmoji} ${item.itemName}**${isSuccess ? ` x**${quantity}**` : ''}`, inline: false },
-            { name: '__Roll__', value: `> **${successField}**`, inline: false },
-            { name: '__Item Rarity__', value: `> **${item.tier.toUpperCase()}**`, inline: false }
+            { 
+                name: '🎯 Target', 
+                value: isNPC 
+                    ? `> ${NPCs[targetCharacter]?.flavorText || ''}` 
+                    : `> [${targetCharacter.name}](${targetCharacter.inventory || targetCharacter.inventoryLink})`, 
+                inline: false 
+            },
+            { name: '📦 Item', value: `> **${itemEmoji} ${item.itemName}**${isSuccess ? ` x**${quantity}**` : ''}`, inline: false },
+            { name: '🎲 Roll', value: `> ${successField}`, inline: false },
+            { name: '✨ Rarity', value: `> **${item.tier.toUpperCase()}**`, inline: false }
         )
         .setThumbnail(isNPC ? 'https://i.pinimg.com/736x/3b/fb/7b/3bfb7bd4ea33b017d58d289e130d487a.jpg' : targetCharacter.icon)
-        .setAuthor({ name: thiefCharacter.name, iconURL: thiefCharacter.icon })
-        .setFooter({ text: isSuccess ? 'Steal successful!' : 'Steal attempt failed!', iconURL: isNPC ? null : targetCharacter.icon })
-        .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png');
+        .setAuthor({ 
+            name: `${thiefCharacter.name} the ${thiefCharacter.job ? thiefCharacter.job.charAt(0).toUpperCase() + thiefCharacter.job.slice(1).toLowerCase() : 'No Job'}`, 
+            iconURL: thiefCharacter.icon 
+        })
+        .setFooter({ 
+            text: isSuccess ? 'Steal successful!' : 'Heist failed!', 
+            iconURL: isNPC ? null : targetCharacter.icon 
+        });
 
-    if (isSuccess && !isNPC) {
-        embed.addFields({ name: '__Flavor__', value: `> **${item.flavorText || 'Nothing impressive today.'}**`, inline: false });
+    if (isSuccess) {
+        embed.setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png');
     }
 
     return embed;
@@ -192,9 +207,41 @@ function setProtection(targetId) {
 }
 
 // ------------------- Statistics Functions -------------------
-function updateStealStats(userId, success, itemRarity) {
-    if (!STEAL_STATS.has(userId)) {
-        STEAL_STATS.set(userId, {
+async function updateStealStats(characterId, success, itemRarity) {
+    try {
+        let stats = await StealStats.findOne({ characterId });
+        
+        if (!stats) {
+            stats = new StealStats({
+                characterId,
+                totalAttempts: 0,
+                successfulSteals: 0,
+                failedSteals: 0,
+                itemsByRarity: {
+                    common: 0,
+                    uncommon: 0,
+                    rare: 0
+                }
+            });
+        }
+        
+        stats.totalAttempts++;
+        if (success) {
+            stats.successfulSteals++;
+            stats.itemsByRarity[itemRarity]++;
+        } else {
+            stats.failedSteals++;
+        }
+        
+        await stats.save();
+    } catch (error) {
+        console.error('[steal.js]: Error updating steal stats:', error);
+    }
+}
+
+async function getStealStats(characterId) {
+    try {
+        const stats = await StealStats.findOne({ characterId }) || {
             totalAttempts: 0,
             successfulSteals: 0,
             failedSteals: 0,
@@ -203,39 +250,30 @@ function updateStealStats(userId, success, itemRarity) {
                 uncommon: 0,
                 rare: 0
             }
-        });
-    }
-    
-    const stats = STEAL_STATS.get(userId);
-    stats.totalAttempts++;
-    if (success) {
-        stats.successfulSteals++;
-        stats.itemsByRarity[itemRarity]++;
-    } else {
-        stats.failedSteals++;
-    }
-}
-
-function getStealStats(userId) {
-    const stats = STEAL_STATS.get(userId) || {
-        totalAttempts: 0,
-        successfulSteals: 0,
-        failedSteals: 0,
-        itemsByRarity: {
-            common: 0,
-            uncommon: 0,
-            rare: 0
-        }
-    };
-    
-    const successRate = stats.totalAttempts > 0 
-        ? ((stats.successfulSteals / stats.totalAttempts) * 100).toFixed(1)
-        : 0;
+        };
         
-    return {
-        ...stats,
-        successRate
-    };
+        const successRate = stats.totalAttempts > 0 
+            ? ((stats.successfulSteals / stats.totalAttempts) * 100).toFixed(1)
+            : 0;
+            
+        return {
+            ...stats.toObject(),
+            successRate
+        };
+    } catch (error) {
+        console.error('[steal.js]: Error getting steal stats:', error);
+        return {
+            totalAttempts: 0,
+            successfulSteals: 0,
+            failedSteals: 0,
+            successRate: 0,
+            itemsByRarity: {
+                common: 0,
+                uncommon: 0,
+                rare: 0
+            }
+        };
+    }
 }
 
 // ------------------- Item Management Functions -------------------
@@ -364,25 +402,21 @@ module.exports = {
                 const targetType = interaction.options.getString('targettype');
                 const targetName = interaction.options.getString('target');
                 const raritySelection = interaction.options.getString('rarity').toLowerCase();
+                const characterName = interaction.options.getString('charactername');
 
-                // Get the user's active character
-                const activeCharacter = await Character.findOne({ 
-                    userId: interaction.user.id,
-                    isActive: true 
-                });
-
-                if (!activeCharacter) {
-                    return interaction.editReply({ 
-                        content: '❌ **You need to have an active character to steal!**', 
-                        ephemeral: true 
-                    });
-                }
-
-                // Validate thief character
+                // Validate thief character first
                 const { valid: thiefValid, error: thiefError, character: thiefCharacter } = 
-                    await validateCharacter(activeCharacter.name, interaction.user.id, true);
+                    await validateCharacter(characterName, interaction.user.id, true);
                 if (!thiefValid) {
                     return interaction.editReply({ content: thiefError, ephemeral: true });
+                }
+
+                // Check if character has stealing perk
+                if (!hasPerk(thiefCharacter, 'STEALING')) {
+                    return interaction.editReply({ 
+                        content: '❌ **Your character must have a job with the STEALING perk to steal!**', 
+                        ephemeral: true 
+                    });
                 }
 
                 // Check if thief is in jail
@@ -437,7 +471,7 @@ module.exports = {
                     if (isSuccess) {
                         const quantity = determineStealQuantity(selectedItem);
                         stealStreaks.set(interaction.user.id, currentStreak + 1);
-                        updateStealStats(interaction.user.id, true, selectedItem.tier);
+                        await updateStealStats(thiefCharacter._id, true, selectedItem.tier);
                         
                         const npcItemIndex = npcInventory.indexOf(selectedItem.itemName);
                         if (npcItemIndex > -1) npcInventory.splice(npcItemIndex, 1);
@@ -448,7 +482,7 @@ module.exports = {
                         return interaction.editReply({ embeds: [embed], ephemeral: false });
                     } else {
                         stealStreaks.set(interaction.user.id, 0);
-                        updateStealStats(interaction.user.id, false, selectedItem.tier);
+                        await updateStealStats(thiefCharacter._id, false, selectedItem.tier);
                         
                         const embed = await createStealResultEmbed(thiefCharacter, mappedNPCName, selectedItem, 0, roll, failureThreshold, false, true);
                         return interaction.editReply({ embeds: [embed], ephemeral: false });
@@ -471,6 +505,11 @@ module.exports = {
                         return interaction.editReply({ content: `⚠️ **${targetCharacter.name}** cannot be stolen from.`, ephemeral: true });
                     }
 
+                    // Get target's inventory
+                    const targetInventoryCollection = await getCharacterInventoryCollection(targetCharacter.name);
+                    const inventoryEntries = await targetInventoryCollection.find({ characterId: targetCharacter._id }).toArray();
+                    const rawItemNames = inventoryEntries.map(entry => entry.itemName);
+
                     // Exclude items that are currently equipped
                     const equippedItems = [
                         targetCharacter.gearWeapon?.name,
@@ -480,79 +519,103 @@ module.exports = {
                         targetCharacter.gearArmor?.legs?.name,
                     ].filter(Boolean);
 
-                    filteredItemsPlayer = filteredItemsPlayer.filter(item => !equippedItems.includes(item.itemName));
+                    // Get items with their rarities
+                    let itemsWithRarity = await Promise.all(
+                        rawItemNames
+                            .filter(itemName => !equippedItems.includes(itemName))
+                            .map(async itemName => {
+                                const itemRarity = await fetchItemRarityByName(itemName);
+                                return { itemName, itemRarity };
+                            })
+                    );
 
+                    // Filter items by selected rarity
+                    let filteredItemsPlayer = itemsWithRarity
+                        .filter(({ itemRarity }) => itemRarity)
+                        .map(({ itemName, itemRarity }) => {
+                            let tier = 'common';
+                            if (itemRarity >= 8) tier = 'rare';
+                            else if (itemRarity >= 5) tier = 'uncommon';
+                            return { itemName, itemRarity, tier, weight: RARITY_WEIGHTS[itemRarity] };
+                        })
+                        .filter(item => item.tier === raritySelection);
+
+                    // If no items of selected rarity, try fallback tiers
                     if (!filteredItemsPlayer.length) {
                         let fallbackTier = (raritySelection === 'rare') ? 'uncommon' : (raritySelection === 'uncommon') ? 'common' : null;
                         if (fallbackTier) {
-                            const targetInventoryCollection = await getCharacterInventoryCollection(targetCharacter.name);
-                            const inventoryEntries = await targetInventoryCollection.find({ characterId: targetCharacter._id }).toArray();
-                            const rawItemNames = inventoryEntries.map(entry => entry.itemName);
-                            let fallbackItems = await applyFallbackLogic(rawItemNames, fallbackTier, fetchItemRarityByName);
-                            if (fallbackItems.length > 0) {
-                                filteredItemsPlayer = fallbackItems;
-                            } else {
-                                let finalFallbackItems = await getFinalFallbackItems(rawItemNames, fetchItemRarityByName);
-                                if (finalFallbackItems.length > 0) {
-                                    filteredItemsPlayer = finalFallbackItems;
-                                } else {
-                                    return interaction.editReply({ content: `❌ **Looks like ${targetName || targetCharacter.name} didn't have any items to steal!**`, ephemeral: true });
-                                }
-                            }
-                        } else {
-                            const targetInventoryCollection = await getCharacterInventoryCollection(targetCharacter.name);
-                            const inventoryEntries = await targetInventoryCollection.find({ characterId: targetCharacter._id }).toArray();
-                            const rawItemNames = inventoryEntries.map(entry => entry.itemName);
-                            let finalFallbackItems = await getFinalFallbackItems(rawItemNames, fetchItemRarityByName);
-                            if (finalFallbackItems.length > 0) {
-                                filteredItemsPlayer = finalFallbackItems;
-                            } else {
-                                return interaction.editReply({ content: `❌ **Looks like ${targetName || targetCharacter.name} didn't have any items to steal!**`, ephemeral: true });
-                            }
+                            filteredItemsPlayer = itemsWithRarity
+                                .filter(({ itemRarity }) => itemRarity)
+                                .map(({ itemName, itemRarity }) => {
+                                    let tier = 'common';
+                                    if (itemRarity >= 8) tier = 'rare';
+                                    else if (itemRarity >= 5) tier = 'uncommon';
+                                    return { itemName, itemRarity, tier, weight: RARITY_WEIGHTS[itemRarity] };
+                                })
+                                .filter(item => item.tier === fallbackTier);
+                        }
+                        
+                        // If still no items, get any available items
+                        if (!filteredItemsPlayer.length) {
+                            filteredItemsPlayer = itemsWithRarity
+                                .filter(({ itemRarity }) => itemRarity)
+                                .map(({ itemName, itemRarity }) => {
+                                    let tier = 'common';
+                                    if (itemRarity >= 8) tier = 'rare';
+                                    else if (itemRarity >= 5) tier = 'uncommon';
+                                    return { itemName, itemRarity, tier, weight: RARITY_WEIGHTS[itemRarity] };
+                                });
                         }
                     }
+
+                    if (!filteredItemsPlayer.length) {
+                        return interaction.editReply({ content: `❌ **Looks like ${targetName || targetCharacter.name} didn't have any items to steal!**`, ephemeral: true });
+                    }
+
                     const selectedItemPlayer = getRandomItemByWeight(filteredItemsPlayer);
-                    const rollPlayer = Math.floor(Math.random() * 99) + 1; // d99 roll for player branch
+                    const rollPlayer = Math.floor(Math.random() * 99) + 1;
                     const failureThresholdPlayer = FAILURE_CHANCES[selectedItemPlayer.tier];
-                    const success = rollPlayer <= failureThresholdPlayer;
+                    const success = rollPlayer > failureThresholdPlayer;
 
                     // Update streak and stats on success/failure
                     if (success) {
                         stealStreaks.set(interaction.user.id, currentStreak + 1);
-                        updateStealStats(interaction.user.id, true, selectedItemPlayer.tier);
+                        await updateStealStats(thiefCharacter._id, true, selectedItemPlayer.tier);
                         setProtection(targetCharacter._id);
+
+                        // Remove item from target's inventory and add to thief's inventory
+                        await removeItemInventoryDatabase(targetCharacter._id, selectedItemPlayer.itemName, determineStealQuantity(selectedItemPlayer), interaction, `Item stolen by ${thiefCharacter.name}`);
+                        await addItemInventoryDatabase(thiefCharacter._id, selectedItemPlayer.itemName, determineStealQuantity(selectedItemPlayer), interaction, `Stolen from ${targetCharacter.name}`);
+
+                        // Sync to Google Sheets for both characters
+                        if (targetCharacter.inventorySynced) {
+                            await syncToInventoryDatabase(targetCharacter, {
+                                itemName: selectedItemPlayer.itemName,
+                                quantity: -determineStealQuantity(selectedItemPlayer),
+                                obtain: `Stolen by ${thiefCharacter.name}`,
+                                link: `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`
+                            }, interaction);
+                        }
+
+                        if (thiefCharacter.inventorySynced) {
+                            await syncToInventoryDatabase(thiefCharacter, {
+                                itemName: selectedItemPlayer.itemName,
+                                quantity: determineStealQuantity(selectedItemPlayer),
+                                obtain: `Stolen from ${targetCharacter.name}`,
+                                link: `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`
+                            }, interaction);
+                        }
                     } else {
                         stealStreaks.set(interaction.user.id, 0);
-                        updateStealStats(interaction.user.id, false, selectedItemPlayer.tier);
+                        await updateStealStats(thiefCharacter._id, false, selectedItemPlayer.tier);
                     }
 
-                    // Remove item from target's inventory and add to thief's inventory
-                    await removeItemInventoryDatabase(targetCharacter._id, selectedItemPlayer.itemName, determineStealQuantity(selectedItemPlayer), interaction, `Item stolen by ${thiefCharacter.name}`);
-                    await addItemInventoryDatabase(thiefCharacter._id, selectedItemPlayer.itemName, determineStealQuantity(selectedItemPlayer), interaction, `Stolen from ${targetCharacter.name}`);
-
                     // Create success embed
-                    const successField = `d99 => ${Math.floor(rollPlayer)} = Success!`;
-                    const itemEmoji = selectedItemPlayer.emoji || await getItemEmoji(selectedItemPlayer.itemName);
-                    
-                    const successEmbed = new EmbedBuilder()
-                        .setColor('#AA926A')
-                        .setTitle('💰 Item Stolen!')
-                        .setDescription(`[${thiefCharacter.name}](${thiefCharacter.inventory || thiefCharacter.inventoryLink}) successfully stole from [${targetCharacter.name}](${targetCharacter.inventory || targetCharacter.inventoryLink}).`)
-                        .addFields(
-                            { name: '__Stolen Item__', value: `> **${itemEmoji} ${selectedItemPlayer.itemName}** x**${determineStealQuantity(selectedItemPlayer)}**`, inline: false },
-                            { name: '__Roll__', value: `> **${successField}**`, inline: false },
-                            { name: '__Item Rarity__', value: `> **${selectedItemPlayer.tier.toUpperCase()}**`, inline: false },
-                            { name: '__Flavor__', value: `> **${selectedItemPlayer.flavorText || 'Nothing impressive today.'}**`, inline: false }
-                        )
-                        .setThumbnail(targetCharacter.icon)
-                        .setAuthor({ name: thiefCharacter.name, iconURL: thiefCharacter.icon })
-                        .setFooter({ text: 'Inventory theft successful!', iconURL: targetCharacter.icon })
-                        .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
-                        .setTimestamp();
+                    const embed = await createStealResultEmbed(thiefCharacter, targetCharacter, selectedItemPlayer, determineStealQuantity(selectedItemPlayer), rollPlayer, failureThresholdPlayer, success);
 
                     await interaction.editReply({
-                        content: `Hey! <@${targetCharacter.userId}>! Your character **${targetCharacter.name}** was stolen from!`,
-                        embeds: [successEmbed],
+                        content: success ? `Hey! <@${targetCharacter.userId}>! Your character **${targetCharacter.name}** was stolen from!` : null,
+                        embeds: [embed],
                         ephemeral: false
                     });
                 }
@@ -560,6 +623,16 @@ module.exports = {
                 // Calculate new cooldown based on rarity and streak
                 const newCooldown = calculateCooldown(raritySelection, currentStreak);
                 userCooldowns.set(interaction.user.id, Date.now() + newCooldown);
+
+                // Deactivate Job Voucher if present
+                if (thiefCharacter.jobVoucher) {
+                    const deactivationResult = await deactivateJobVoucher(thiefCharacter._id);
+                    if (!deactivationResult.success) {
+                        console.error(`[steal.js]: Failed to deactivate job voucher for ${thiefCharacter.name}`);
+                    } else {
+                        console.error(`[steal.js]: Job voucher deactivated for ${thiefCharacter.name}`);
+                    }
+                }
             }
 
             // Handle other subcommands
@@ -619,31 +692,27 @@ module.exports = {
             }
 
             if (subcommand === 'stats') {
-                const stats = getStealStats(interaction.user.id);
+                const characterName = interaction.options.getString('charactername');
+                const { valid, error, character } = await validateCharacter(characterName, interaction.user.id);
+                if (!valid) {
+                    return interaction.editReply({ content: error, ephemeral: true });
+                }
+
+                const stats = await getStealStats(character._id);
                 const embed = createBaseEmbed('📊 Steal Statistics')
-                    .setDescription(`Statistics for <@${interaction.user.id}>`)
+                    .setDescription(`Statistics for **${character.name}** the ${character.job ? character.job.charAt(0).toUpperCase() + character.job.slice(1).toLowerCase() : 'No Job'}`)
                     .addFields(
-                        { name: 'Total Attempts', value: stats.totalAttempts.toString(), inline: true },
-                        { name: 'Successful Steals', value: stats.successfulSteals.toString(), inline: true },
-                        { name: 'Failed Steals', value: stats.failedSteals.toString(), inline: true },
-                        { name: 'Success Rate', value: `${stats.successRate}%`, inline: true },
-                        { name: 'Items by Rarity', value: 
+                        { name: '🎯 Total Attempts', value: stats.totalAttempts.toString(), inline: true },
+                        { name: '✅ Successful Steals', value: stats.successfulSteals.toString(), inline: true },
+                        { name: '❌ Failed Steals', value: stats.failedSteals.toString(), inline: true },
+                        { name: '📈 Success Rate', value: `${stats.successRate}%`, inline: true },
+                        { name: '✨ Items by Rarity', value: 
                             `Common: ${stats.itemsByRarity.common}\n` +
                             `Uncommon: ${stats.itemsByRarity.uncommon}\n` +
                             `Rare: ${stats.itemsByRarity.rare}`, inline: false }
                     );
                 
                 return interaction.editReply({ embeds: [embed], ephemeral: true });
-            }
-
-            // ------------------- Deactivate Job Voucher -------------------
-            if (thiefCharacter.jobVoucher) {
-                const deactivationResult = await deactivateJobVoucher(thiefCharacter._id);
-                if (!deactivationResult.success) {
-                    console.error(`[steal.js]: Failed to deactivate job voucher for ${thiefCharacter.name}`);
-                } else {
-                    console.error(`[steal.js]: Job voucher deactivated for ${thiefCharacter.name}`);
-                }
             }
         } catch (error) {
             handleError(error, 'steal.js');
