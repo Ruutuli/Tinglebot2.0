@@ -238,8 +238,9 @@ const getPerkField = (perk) => perkFieldMap[perk] || null;
 const getPetEmoji = (species) => petEmojiMap[species.toLowerCase()] || '🐾';
 
 const getRollsDisplay = (rollsRemaining, level) => {
-  const usedRolls = level - rollsRemaining;
-  return "🔔".repeat(rollsRemaining) + "🔕".repeat(usedRolls);
+  const safeRollsRemaining = Math.max(0, rollsRemaining);
+  const usedRolls = Math.max(0, level - safeRollsRemaining);
+  return "🔔".repeat(safeRollsRemaining) + "🔕".repeat(usedRolls);
 };
 
 // ---- Function: findPetByIdentifier ----
