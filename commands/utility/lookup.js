@@ -77,13 +77,18 @@ async function handleItemLookup(interaction, itemName) {
     : item.image || 'No Image';
   const emoji = item.emoji || '🔹';
 
-
   // Format crafting materials
   const craftingMaterials = await Promise.all((item.craftingMaterial || []).map(async (material) => {
     if (!material._id) {
       return formatItemDetails(material.itemName, material.quantity, emoji);
     } else {
       const materialItem = await ItemModel.findById(material._id).select('itemName emoji');
+      
+      // Add null check and fallback to direct material info
+      if (!materialItem) {
+        return formatItemDetails(material.itemName, material.quantity, emoji);
+      }
+      
       return formatItemDetails(materialItem.itemName, material.quantity, materialItem.emoji || '✂️');
     }
   }));
