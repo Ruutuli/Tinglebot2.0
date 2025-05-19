@@ -294,6 +294,29 @@ module.exports = {
     data: new SlashCommandBuilder()
         .setName('steal')
         .setDescription('Steal an item from another character or NPC.')
+        .addStringOption(option =>
+            option.setName('charactername')
+                .setDescription('Your character name (thief)')
+                .setRequired(true)
+                .setAutocomplete(true))
+        .addStringOption(option =>
+            option.setName('targettype')
+                .setDescription('Choose NPC or Player as target')
+                .setRequired(true)
+                .addChoices(
+                    { name: 'NPC', value: 'npc' },
+                    { name: 'Player', value: 'player' }
+                ))
+        .addStringOption(option =>
+            option.setName('target')
+                .setDescription('Target character or NPC name')
+                .setRequired(true)
+                .setAutocomplete(true))
+        .addStringOption(option =>
+            option.setName('rarity')
+                .setDescription('Rarity of the item to steal')
+                .setRequired(true)
+                .setAutocomplete(true))
         .addSubcommand(subcommand =>
             subcommand
                 .setName('toggle')
@@ -319,34 +342,7 @@ module.exports = {
         .addSubcommand(subcommand =>
             subcommand
                 .setName('stats')
-                .setDescription('View your stealing statistics.'))
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('steal')
-                .setDescription('Steal an item from another character or NPC.')
-                .addStringOption(option =>
-                    option.setName('charactername')
-                        .setDescription('Your character name (thief)')
-                        .setRequired(true)
-                        .setAutocomplete(true))
-                .addStringOption(option =>
-                    option.setName('targettype')
-                        .setDescription('Choose NPC or Player as target')
-                        .setRequired(true)
-                        .addChoices(
-                            { name: 'NPC', value: 'npc' },
-                            { name: 'Player', value: 'player' }
-                        ))
-                .addStringOption(option =>
-                    option.setName('target')
-                        .setDescription('Target character or NPC name')
-                        .setRequired(true)
-                        .setAutocomplete(true))
-                .addStringOption(option =>
-                    option.setName('rarity')
-                        .setDescription('Rarity of the item to steal')
-                        .setRequired(true)
-                        .setAutocomplete(true))),
+                .setDescription('View your stealing statistics.')),
 
     // ============================================================================
     // ---- Command Handlers ----
@@ -374,86 +370,10 @@ module.exports = {
     async execute(interaction) {
         await interaction.deferReply({ ephemeral: false });
         try {
-            const subcommand = interaction.options.getSubcommand();
+            const subcommand = interaction.options.getSubcommand(false);
 
-            // Handle toggle subcommand
-            if (subcommand === 'toggle') {
-                const characterName = interaction.options.getString('charactername');
-                const enabled = interaction.options.getBoolean('enabled');
-
-                const { valid, error, character } = await validateCharacter(characterName, interaction.user.id);
-                if (!valid) {
-                    return interaction.editReply({ content: error, ephemeral: true });
-                }
-
-                character.canBeStolenFrom = enabled;
-                await character.save();
-
-                const embed = createBaseEmbed('🔒 Steal Permissions Updated', enabled ? '#00ff00' : '#ff0000')
-                    .setDescription(`Steal permissions for **${character.name}** have been ${enabled ? 'enabled' : 'disabled'}.`)
-                    .addFields(
-                        { name: 'Status', value: enabled ? '✅ Can be stolen from' : '❌ Cannot be stolen from', inline: false }
-                    )
-                    .setThumbnail(character.icon);
-
-                return interaction.editReply({ embeds: [embed], ephemeral: true });
-            }
-
-            // Handle jailtime subcommand
-            if (subcommand === 'jailtime') {
-                const characterName = interaction.options.getString('charactername');
-                const { valid, error, character } = await validateCharacter(characterName, interaction.user.id);
-                if (!valid) {
-                    return interaction.editReply({ content: error, ephemeral: true });
-                }
-
-                if (!character.inJail) {
-                    return interaction.editReply({ content: `✅ **${character.name}** is not in jail.`, ephemeral: true });
-                }
-
-                const now = Date.now();
-                const releaseTime = character.jailReleaseTime.getTime();
-                const timeLeft = releaseTime - now;
-
-                if (timeLeft <= 0) {
-                    character.inJail = false;
-                    character.jailReleaseTime = null;
-                    await character.save();
-                    return interaction.editReply({ content: `✅ **${character.name}** has been released from jail!`, ephemeral: true });
-                }
-
-                const embed = createBaseEmbed('⏰ Jail Time Remaining', '#ff0000')
-                    .setDescription(`**${character.name}** is currently in jail.`)
-                    .addFields(
-                        { name: 'Time Remaining', value: `<t:${Math.floor(releaseTime / 1000)}:R>`, inline: false },
-                        { name: 'Release Time', value: `<t:${Math.floor(releaseTime / 1000)}:F>`, inline: false }
-                    )
-                    .setThumbnail(character.icon);
-
-                return interaction.editReply({ embeds: [embed], ephemeral: true });
-            }
-
-            // Handle stats subcommand
-            if (subcommand === 'stats') {
-                const stats = getStealStats(interaction.user.id);
-                const embed = createBaseEmbed('📊 Steal Statistics')
-                    .setDescription(`Statistics for <@${interaction.user.id}>`)
-                    .addFields(
-                        { name: 'Total Attempts', value: stats.totalAttempts.toString(), inline: true },
-                        { name: 'Successful Steals', value: stats.successfulSteals.toString(), inline: true },
-                        { name: 'Failed Steals', value: stats.failedSteals.toString(), inline: true },
-                        { name: 'Success Rate', value: `${stats.successRate}%`, inline: true },
-                        { name: 'Items by Rarity', value: 
-                            `Common: ${stats.itemsByRarity.common}\n` +
-                            `Uncommon: ${stats.itemsByRarity.uncommon}\n` +
-                            `Rare: ${stats.itemsByRarity.rare}`, inline: false }
-                    );
-                
-                return interaction.editReply({ embeds: [embed], ephemeral: true });
-            }
-
-            // Handle steal subcommand
-            if (subcommand === 'steal') {
+            // If no subcommand, handle main steal command
+            if (!subcommand) {
                 const characterName = interaction.options.getString('charactername');
                 const targetType = interaction.options.getString('targettype');
                 const targetName = interaction.options.getString('target');
@@ -641,6 +561,80 @@ module.exports = {
                 // Calculate new cooldown based on rarity and streak
                 const newCooldown = calculateCooldown(raritySelection, currentStreak);
                 userCooldowns.set(interaction.user.id, Date.now() + newCooldown);
+            }
+
+            // Handle subcommands
+            if (subcommand === 'toggle') {
+                const characterName = interaction.options.getString('charactername');
+                const enabled = interaction.options.getBoolean('enabled');
+
+                const { valid, error, character } = await validateCharacter(characterName, interaction.user.id);
+                if (!valid) {
+                    return interaction.editReply({ content: error, ephemeral: true });
+                }
+
+                character.canBeStolenFrom = enabled;
+                await character.save();
+
+                const embed = createBaseEmbed('🔒 Steal Permissions Updated', enabled ? '#00ff00' : '#ff0000')
+                    .setDescription(`Steal permissions for **${character.name}** have been ${enabled ? 'enabled' : 'disabled'}.`)
+                    .addFields(
+                        { name: 'Status', value: enabled ? '✅ Can be stolen from' : '❌ Cannot be stolen from', inline: false }
+                    )
+                    .setThumbnail(character.icon);
+
+                return interaction.editReply({ embeds: [embed], ephemeral: true });
+            }
+
+            if (subcommand === 'jailtime') {
+                const characterName = interaction.options.getString('charactername');
+                const { valid, error, character } = await validateCharacter(characterName, interaction.user.id);
+                if (!valid) {
+                    return interaction.editReply({ content: error, ephemeral: true });
+                }
+
+                if (!character.inJail) {
+                    return interaction.editReply({ content: `✅ **${character.name}** is not in jail.`, ephemeral: true });
+                }
+
+                const now = Date.now();
+                const releaseTime = character.jailReleaseTime.getTime();
+                const timeLeft = releaseTime - now;
+
+                if (timeLeft <= 0) {
+                    character.inJail = false;
+                    character.jailReleaseTime = null;
+                    await character.save();
+                    return interaction.editReply({ content: `✅ **${character.name}** has been released from jail!`, ephemeral: true });
+                }
+
+                const embed = createBaseEmbed('⏰ Jail Time Remaining', '#ff0000')
+                    .setDescription(`**${character.name}** is currently in jail.`)
+                    .addFields(
+                        { name: 'Time Remaining', value: `<t:${Math.floor(releaseTime / 1000)}:R>`, inline: false },
+                        { name: 'Release Time', value: `<t:${Math.floor(releaseTime / 1000)}:F>`, inline: false }
+                    )
+                    .setThumbnail(character.icon);
+
+                return interaction.editReply({ embeds: [embed], ephemeral: true });
+            }
+
+            if (subcommand === 'stats') {
+                const stats = getStealStats(interaction.user.id);
+                const embed = createBaseEmbed('📊 Steal Statistics')
+                    .setDescription(`Statistics for <@${interaction.user.id}>`)
+                    .addFields(
+                        { name: 'Total Attempts', value: stats.totalAttempts.toString(), inline: true },
+                        { name: 'Successful Steals', value: stats.successfulSteals.toString(), inline: true },
+                        { name: 'Failed Steals', value: stats.failedSteals.toString(), inline: true },
+                        { name: 'Success Rate', value: `${stats.successRate}%`, inline: true },
+                        { name: 'Items by Rarity', value: 
+                            `Common: ${stats.itemsByRarity.common}\n` +
+                            `Uncommon: ${stats.itemsByRarity.uncommon}\n` +
+                            `Rare: ${stats.itemsByRarity.rare}`, inline: false }
+                    );
+                
+                return interaction.editReply({ embeds: [embed], ephemeral: true });
             }
 
             // ------------------- Deactivate Job Voucher -------------------
