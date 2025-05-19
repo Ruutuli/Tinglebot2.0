@@ -761,7 +761,7 @@ if (subcommand === "add") {
     // Find pet by identifier
     const petDoc = await findPetByIdentifier(petName, character._id);
     if (!petDoc) {
-     return interaction.reply(
+     return interaction.editReply(
       `❌ **Pet \`${petName}\` not found. Please add it first with \`/pet add\`.**`
      );
     }
@@ -806,7 +806,7 @@ if (subcommand === "add") {
      .setImage(sanitizedImageUrl)
      .setColor("#00FF00");
 
-    return interaction.reply({ embeds: [viewEmbed] });
+    return interaction.editReply({ embeds: [viewEmbed] });
    }
   } catch (error) {
    // ------------------- Error Handling -------------------
