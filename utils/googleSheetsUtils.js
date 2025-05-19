@@ -58,32 +58,55 @@ const sheetCache = new Map();
 // Handles Google Sheets API authentication and authorization
 // ============================================================================
 
+// Function to get service account credentials
+function getServiceAccountCredentials() {
+    // Check if we're in a deployed environment (Railway)
+    if (process.env.RAILWAY_ENVIRONMENT) {
+        // Create service account object from environment variables
+        return {
+            type: "service_account",
+            project_id: process.env.GOOGLE_PROJECT_ID,
+            private_key_id: process.env.GOOGLE_PRIVATE_KEY_ID,
+            private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+            client_email: process.env.GOOGLE_CLIENT_EMAIL,
+            client_id: process.env.GOOGLE_CLIENT_ID,
+            auth_uri: "https://accounts.google.com/o/oauth2/auth",
+            token_uri: "https://oauth2.googleapis.com/token",
+            auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
+            client_x509_cert_url: process.env.GOOGLE_CLIENT_X509_CERT_URL,
+            universe_domain: "googleapis.com"
+        };
+    } else {
+        // Local environment - read from file
+        try {
+            return JSON.parse(fs.readFileSync(SERVICE_ACCOUNT_PATH));
+        } catch (err) {
+            console.error(`[googleSheetsUtils.js]: ❌ Error loading service account file: ${err}`);
+            throw new Error(`Error loading service account file: ${err}`);
+        }
+    }
+}
+
 // ------------------- Function: authorizeSheets -------------------
 // Authorizes the Google Sheets API using service account credentials
 async function authorizeSheets() {
     return new Promise((resolve, reject) => {
-        fs.readFile(SERVICE_ACCOUNT_PATH, (err, content) => {
-            if (err) {
-                console.error(`[googleSheetsUtils.js]: ❌ Error loading service account file: ${err}`);
-                return reject(`Error loading service account file: ${err}`);
-            }
-            try {
-                const credentials = JSON.parse(content);
-                const { client_email, private_key } = credentials;
-                const auth = new google.auth.JWT(client_email, null, private_key, SCOPES);
-                
-                auth.authorize((err, tokens) => {
-                    if (err) {
-                        console.error(`[googleSheetsUtils.js]: ❌ Error authorizing service account: ${err}`);
-                        return reject(`Error authorizing service account: ${err}`);
-                    }
-                    resolve(auth);
-                });
-            } catch (error) {
-                console.error(`[googleSheetsUtils.js]: ❌ Error parsing service account credentials: ${error}`);
-                reject(`Error parsing service account credentials: ${error}`);
-            }
-        });
+        try {
+            const credentials = getServiceAccountCredentials();
+            const { client_email, private_key } = credentials;
+            const auth = new google.auth.JWT(client_email, null, private_key, SCOPES);
+            
+            auth.authorize((err, tokens) => {
+                if (err) {
+                    console.error(`[googleSheetsUtils.js]: ❌ Error authorizing service account: ${err}`);
+                    return reject(`Error authorizing service account: ${err}`);
+                }
+                resolve(auth);
+            });
+        } catch (error) {
+            console.error(`[googleSheetsUtils.js]: ❌ Error parsing service account credentials: ${error}`);
+            reject(`Error parsing service account credentials: ${error}`);
+        }
     });
 }
 

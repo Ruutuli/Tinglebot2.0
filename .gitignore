@@ -10,3 +10,7 @@ eslint.config.mjs
 node_modules
 nodemon.log
 testingCode/
+
+# Deployment
+scripts/deploy.js
+railway.json
