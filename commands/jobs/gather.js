@@ -29,6 +29,7 @@ const { useHearts, handleKO, updateCurrentHearts } = require('../../modules/char
 const { capitalizeWords } = require('../../modules/formattingModule.js');
 const { validateJobVoucher, activateJobVoucher, fetchJobVoucherItem, deactivateJobVoucher, getJobVoucherErrorMessage } = require('../../modules/jobVoucherModule.js');
 const { checkInventorySync } = require('../../utils/characterUtils');
+const { enforceJail } = require('../../utils/jailCheck');
 
 
 // ------------------- Utilities -------------------
@@ -176,6 +177,11 @@ module.exports = {
           });
           return;
         }
+      }
+
+      // Check if character is in jail
+      if (await enforceJail(interaction, character)) {
+        return;
       }
 
       // Check if the character is KOed.

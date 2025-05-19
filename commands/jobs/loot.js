@@ -28,6 +28,7 @@ const {
 const { addItemInventoryDatabase } = require("../../utils/inventoryUtils.js");
 const { isBloodMoonActive } = require("../../scripts/bloodmoon.js");
 const { checkInventorySync } = require('../../utils/characterUtils');
+const { enforceJail } = require('../../utils/jailCheck');
 
 // Modules - Job, Location, Damage, and Formatting Logic
 const { getJobPerk, isValidJob } = require("../../modules/jobsModule.js");
@@ -157,6 +158,11 @@ module.exports = {
      content: `❌ **Character "${characterName}" not found or doesn't belong to you!**`,
     });
     return;
+   }
+
+   // Check if character is in jail
+   if (await enforceJail(interaction, character)) {
+     return;
    }
 
    // Check inventory sync before proceeding

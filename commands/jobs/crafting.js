@@ -29,6 +29,7 @@ const { checkInventorySync } = require('../../utils/characterUtils');
 const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../../utils/validation');
 const { safeAppendDataToSheet } = require('../../utils/googleSheetsUtils');
 const { handleError } = require('../../utils/globalErrorHandler');
+const { enforceJail } = require('../../utils/jailCheck');
 
 
 // ------------------- Embed Imports -------------------
@@ -83,6 +84,11 @@ module.exports = {
       const character = await fetchCharacterByNameAndUserId(characterName, userId);
       if (!character) {
         return interaction.editReply({ content: `❌ **Character "${characterName}" not found or does not belong to you.**`, ephemeral: true });
+      }
+
+      // Check if character is in jail
+      if (await enforceJail(interaction, character)) {
+        return;
       }
 
       // ------------------- Validate Character Status -------------------

@@ -48,6 +48,8 @@ const {
 } = require("../../utils/googleSheetsUtils");
 const { uploadPetImage } = require("../../utils/uploadUtils");
 const { checkInventorySync } = require("../../utils/characterUtils");
+const { handleError } = require('../../utils/globalErrorHandler');
+const { enforceJail } = require('../../utils/jailCheck');
 
 // ------------------- Database Models -------------------
 // Data schemas for pet and character documents.
@@ -318,28 +320,28 @@ module.exports = {
 
  async execute(interaction) {
   try {
-   // ------------------- Retrieve Command Options -------------------
-   // Extract the user's ID, character name, pet name, and the subcommand.
-   const userId = interaction.user.id;
+   await interaction.deferReply();
 
-   // strip off any " – village – job" suffix if someone pastes the full label
+   const userId = interaction.user.id;
    const rawCharacter = interaction.options.getString("charactername");
    const characterName = rawCharacter.split(" - ")[0];
-
    const petName = interaction.options.getString("petname");
    const subcommand = interaction.options.getSubcommand();
 
-   // ------------------- Fetch Character Data -------------------
-   // Retrieve the character associated with the user.
+   // Fetch character data
    const character = await fetchCharacterByNameAndUserId(characterName, userId);
    if (!character) {
-    return interaction.reply(
+    return interaction.editReply(
      "❌ **Character not found. Please ensure your character exists.**"
     );
    }
 
-   // ------------------- Initialize Pets Array -------------------
-   // Ensure the character has a pets array.
+   // Check if character is in jail
+   if (await enforceJail(interaction, character)) {
+    return;
+   }
+
+   // Initialize pets array
    if (!character.pets) character.pets = [];
 
    // ------------------- Check for Existing Pet -------------------
@@ -499,9 +501,6 @@ if (subcommand === "add") {
 
    // ------------------- Subcommand: Roll -------------------
    if (subcommand === "roll") {
-    // ------------------- Defer Reply for Longer Operations -------------------
-    await interaction.deferReply();
-
     // ------------------- Check Available Pet Rolls -------------------
     if (pet.rollsRemaining <= 0) {
       return interaction.editReply(
