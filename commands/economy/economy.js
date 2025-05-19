@@ -1783,6 +1783,18 @@ async function handleTrade(interaction) {
           });
           return;
         }
+        // NEW: Verify character name matches the user's character in the trade
+        if (
+          (tradeData.initiator.userId === userId && tradeData.initiator.characterName !== characterName) ||
+          (tradeData.target.userId === userId && tradeData.target.characterName !== characterName)
+        ) {
+          console.error(`[trade.js]: ❌ Character name mismatch for user ${userId} in trade ${tradeId}`);
+          await interaction.editReply({
+            content: `❌ The character you provided does not match your character in this trade.`,
+            ephemeral: true,
+          });
+          return;
+        }
 
         // Check if user has already confirmed
         if ((tradeData.initiator.userId === userId && tradeData.initiatorConfirmed) || 
