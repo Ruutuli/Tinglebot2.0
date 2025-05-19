@@ -758,7 +758,6 @@ module.exports = {
 
     // ------------------- Subcommand: Retire -------------------
     if (subcommand === "retire") {
-     await interaction.deferReply();
      if (pet.status === "retired") {
       return interaction.editReply(`❌ **${pet.name} is already retired.**`);
      }
