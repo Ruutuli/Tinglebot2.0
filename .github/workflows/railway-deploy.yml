@@ -35,7 +35,7 @@ jobs:
         run: |
           mkdir -p ~/.railway
           echo "{\"token\": \"$RAILWAY_TOKEN\"}" > ~/.railway/config.json
-          railway link --no-git ${{ secrets.RAILWAY_PROJECT_ID }}
+          railway link ${{ secrets.RAILWAY_PROJECT_ID }}
 
       - name: Deploy to Railway
         env:
