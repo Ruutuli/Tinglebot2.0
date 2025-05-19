@@ -494,9 +494,15 @@ async function updatePetRolls(characterId, petIdentifier, newRolls) {
 // ------------------- upgradePetLevel -------------------
 async function upgradePetLevel(characterId, petName, newLevel) {
  try {
-  await Character.updateOne(
-   { _id: characterId, "pets.name": petName },
-   { $set: { "pets.$.level": newLevel } }
+  // Update the Pet model instead of Character model
+  await Pet.updateOne(
+   { name: petName, owner: characterId },
+   { 
+     $set: { 
+       level: newLevel,
+       rollsRemaining: Math.min(newLevel, 3) // Reset rolls based on new level
+     } 
+   }
   );
  } catch (error) {
   handleError(error, "db.js");
