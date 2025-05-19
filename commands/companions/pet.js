@@ -505,9 +505,13 @@ module.exports = {
           .setImage(sanitizedImageUrl)
           .setColor("#00FF00");
 
-        return interaction.reply({ embeds: [editEmbed] });
+        return interaction.editReply({ embeds: [editEmbed] });
       } catch (error) {
-        return interaction.reply(error.message);
+        console.error(`[pet.js]: ❌ Error updating pet image:`, error);
+        return interaction.editReply({
+          content: `❌ **An error occurred while updating the image for ${petDoc.name}. Please try again later.**`,
+          ephemeral: true
+        });
       }
     }
 
