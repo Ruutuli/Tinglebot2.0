@@ -127,8 +127,10 @@
   - Option "charactername" has autocomplete enabled
 .
 ✅ Loaded command: loot from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\jobs\loot.js
+  - Option "charactername" has autocomplete enabled
   - Option "target" has autocomplete enabled
   - Option "rarity" has autocomplete enabled
+  - Option "charactername" has autocomplete enabled
   - Option "charactername" has autocomplete enabled
   - Option "charactername" has autocomplete enabled
 .
@@ -193,10 +195,10 @@
 .
 ✅ Loaded command: village from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\world\village.js
 🔄 Started refreshing 34 guild (/) commands for guild ID: 1305484048063529002
-(node:32320) Warning: Accessing non-existent property 'connectToInventories' of module exports inside circular dependency
+(node:31504) Warning: Accessing non-existent property 'connectToInventories' of module exports inside circular dependency
 (Use `node --trace-warnings ...` to show where the warning was created)
-(node:32320) Warning: Accessing non-existent property 'fetchCharacterById' of module exports inside circular dependency
-(node:32320) Warning: Accessing non-existent property 'updateCharacterById' of module exports inside circular dependency
+(node:31504) Warning: Accessing non-existent property 'fetchCharacterById' of module exports inside circular dependency
+(node:31504) Warning: Accessing non-existent property 'updateCharacterById' of module exports inside circular dependency
 ✅ Successfully reloaded application (/) commands for guild ID: 1305484048063529002.
 🔄 Started refreshing 34 guild (/) commands for guild ID: 603960955839447050
 ✅ Successfully reloaded application (/) commands for guild ID: 603960955839447050.

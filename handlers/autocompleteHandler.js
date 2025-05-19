@@ -2707,7 +2707,7 @@ async function handleStealTargetAutocomplete(interaction, focusedOption) {
             );
 
             const choices = filteredCharacters.map(char => ({
-                name: char.name,
+                name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
                 value: char.name
             }));
 
