@@ -445,12 +445,9 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
         }
 
         outcomeMessage = `${character.name} failed to flee and took ${result.damage} hearts${!hasPerk(character, 'DELIVERING') ? ' (-1 🟩 stamina)' : ''}.`;
-        decision = result.damage >= character.maxHearts
-          ? `💔 KO'd while fleeing!`
-          : `⚠️ Flee failed and took ${result.damage} ❤️ hearts.`;
-
-        // KO on flee
         if (character.currentHearts <= 0) {
+          decision = `💔 KO'd while fleeing!`;
+          // KO on flee
           character.currentStamina = 0;
           character.debuff = { active: true, endDate: new Date(Date.now()+7*86400000) };
           character.currentVillage = ['rudania','vhintl'].includes(character.currentVillage)?'inariko':character.homeVillage;
@@ -458,6 +455,8 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
           await updateCurrentHearts(character._id,0);
           await useStamina(character._id,0);
           await character.save();
+        } else {
+          decision = `⚠️ Flee failed and took ${result.damage} ❤️ hearts.`;
         }
       } else {
         // no attack
