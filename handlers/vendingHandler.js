@@ -286,7 +286,7 @@ async function handleRestock(interaction) {
         itemName: { $ne: itemName } // Only check for different items
       });
       if (existingItem) {
-        return interaction.editReply(`❌ Slot ${manualSlot} is already occupied by ${existingItem.itemName}.`);
+        return interaction.editReply(`❌ Slot ${manualSlot} is already occupied by ${existingItem.itemName}. Please choose a different slot.`);
       }
       newSlot = manualSlot;
     } else {
@@ -302,6 +302,16 @@ async function handleRestock(interaction) {
       if (!newSlot) {
         return interaction.editReply(`❌ No available slots. You have used all ${totalSlots} slots.`);
       }
+    }
+
+    // Double check slot uniqueness before proceeding
+    const slotConflict = await vendCollection.findOne({
+      slot: newSlot,
+      itemName: { $ne: itemName }
+    });
+
+    if (slotConflict) {
+      return interaction.editReply(`❌ Slot conflict detected: Slot ${newSlot} is already occupied by ${slotConflict.itemName}. Please try again with a different slot.`);
     }
 
     // ------------------- Stack Size Validation -------------------
@@ -464,6 +474,17 @@ async function handleVendingBarter(interaction) {
       const shopOwner = await fetchCharacterByName(targetShopName);
       if (!shopOwner || !shopOwner.vendingSetup?.shopLink) {
         return interaction.editReply(`⚠️ No vending shop found under the name **${targetShopName}**.`);
+      }
+
+      // ------------------- Village Validation -------------------
+      if (buyer.currentVillage?.toLowerCase() !== shopOwner.currentVillage?.toLowerCase()) {
+        return interaction.editReply(
+          `❌ **Village Mismatch**\n\n` +
+          `You must be in the same village as the vendor to barter.\n\n` +
+          `Your location: **${buyer.currentVillage || 'Unknown'}**\n` +
+          `Vendor's location: **${shopOwner.currentVillage || 'Unknown'}**\n\n` +
+          `Please travel to ${shopOwner.currentVillage} to barter with ${shopOwner.name}.`
+        );
       }
 
       // ------------------- Token Tracker Sync Validation -------------------
@@ -1305,6 +1326,7 @@ async function handleVendingSync(interaction, characterName) {
 
     // Track used slots
     const usedSlots = new Set();
+    const slotConflicts = new Map(); // Track slot conflicts
 
     for (const row of parsedRows) {
       const item = await ItemModel.findOne({ itemName: row.itemName });
@@ -1352,7 +1374,16 @@ async function handleVendingSync(interaction, characterName) {
           errors.push(`Invalid slot number "${slot}" for ${row.itemName}. You have ${totalSlots} total slots available.`);
           continue;
         }
+        
+        // Check for slot conflicts
+        if (usedSlots.has(slot)) {
+          const conflictingItem = slotConflicts.get(slot);
+          errors.push(`Slot conflict: Slot ${slot} is already used by ${conflictingItem}. Cannot add ${row.itemName} to the same slot.`);
+          continue;
+        }
+        
         usedSlots.add(slot);
+        slotConflicts.set(slot, row.itemName);
       }
 
       vendingEntries.push({

@@ -682,18 +682,17 @@ if (subcommand === "add") {
     const targetLevel = interaction.options.getInteger("level");
 
     // only allow levels 1–3
-// enforce +1 only
-if (targetLevel !== pet.level + 1) {
-  if (pet.level === 3) {
-    return interaction.reply(
-      `❌ **Your pet is already at the maximum level (Level 3). No further upgrades are possible.**`
-    );
-  }
-  return interaction.reply(
-    `❌ **You can only upgrade from level ${pet.level} to level ${pet.level + 1}.**`
-  );
-}
-
+    // enforce +1 only
+    if (targetLevel !== pet.level + 1) {
+      if (pet.level === 3) {
+        return interaction.editReply(
+          `❌ **Your pet is already at the maximum level (Level 3). No further upgrades are possible.**`
+        );
+      }
+      return interaction.editReply(
+        `❌ **You can only upgrade from level ${pet.level} to level ${pet.level + 1}.**`
+      );
+    }
 
     const userId = interaction.user.id;
     const balance = await getTokenBalance(userId);
@@ -701,9 +700,9 @@ if (targetLevel !== pet.level + 1) {
 
     // check balance
     if (balance < cost) {
-     return interaction.reply(
-      `❌ **You only have ${balance} tokens, but upgrading to level ${targetLevel} costs ${cost}.**`
-     );
+      return interaction.editReply(
+        `❌ **You only have ${balance} tokens, but upgrading to level ${targetLevel} costs ${cost}.**`
+      );
     }
 
     // deduct tokens
@@ -713,8 +712,8 @@ if (targetLevel !== pet.level + 1) {
     await upgradePetLevel(character._id, petName, targetLevel);
     await updatePetRolls(character._id, petName, targetLevel);
 
-    return interaction.reply(
-     `✅ **${pet.name} is now level ${targetLevel}!**\n` +
+    return interaction.editReply(
+      `✅ **${pet.name} is now level ${targetLevel}!**\n` +
       `💰 Spent ${cost} tokens — you have ${balance - cost} left.\n` +
       `🎲 Rolls remaining set to ${targetLevel}.`
     );

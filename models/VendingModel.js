@@ -21,6 +21,9 @@ const vendingInventorySchema = new Schema({
   slotsUsed: { type: Number, default: 1 } // Number of slots this item takes up
 });
 
+// Add unique compound index for characterName + slot
+vendingInventorySchema.index({ characterName: 1, slot: 1 }, { unique: true });
+
 // Add pre-save hook to validate stack sizes
 vendingInventorySchema.pre('save', function(next) {
   if (this.stackable) {
