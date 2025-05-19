@@ -269,8 +269,11 @@ const fetchCharacterByNameAndUserId = async (characterName, userId) => {
   // Get the actual name part before the "|" if it exists
   const actualName = characterName.split('|')[0].trim();
   
+  // Escape special regex characters in the character name
+  const escapedName = actualName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  
   const character = await Character.findOne({
-    name: new RegExp(`^${actualName}$`, "i"),
+    name: new RegExp(`^${escapedName}$`, "i"),
     userId
   });
 
