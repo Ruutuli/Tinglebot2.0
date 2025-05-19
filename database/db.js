@@ -524,16 +524,19 @@ async function updatePetToCharacter(characterId, petName, updatedPetData) {
 // ------------------- resetPetRollsForAllCharacters -------------------
 async function resetPetRollsForAllCharacters() {
  try {
-  const characters = await fetchAllCharacters();
-  for (let character of characters) {
-   if (character.pets && Array.isArray(character.pets)) {
-    character.pets = character.pets.map((pet) => {
-     pet.rollsRemaining = Math.min(pet.level, 3);
-     return pet;
-    });
-    await Character.findByIdAndUpdate(character._id, { pets: character.pets });
-   }
+  // First, get all active pets
+  const activePets = await Pet.find({ status: 'active' });
+  
+  // Update each pet's rolls based on their level
+  for (const pet of activePets) {
+    const newRolls = Math.min(pet.level, 3);
+    await Pet.updateOne(
+      { _id: pet._id },
+      { $set: { rollsRemaining: newRolls } }
+    );
   }
+  
+  console.log(`[db.js]: 🔄 Reset pet rolls for ${activePets.length} pets`);
  } catch (error) {
   handleError(error, "db.js");
   console.error(
