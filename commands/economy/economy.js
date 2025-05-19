@@ -465,7 +465,22 @@ for (const { name } of items) {
   let allItemsAvailable = true;
   const unavailableItems = [];
 
+  // Aggregate quantities for duplicate items (case-insensitive)
+  const aggregatedItems = [];
+  const itemMap = new Map();
   for (const { name, quantity } of items) {
+    const key = name.trim().toLowerCase();
+    if (!itemMap.has(key)) {
+      itemMap.set(key, { name, quantity });
+    } else {
+      itemMap.get(key).quantity += quantity;
+    }
+  }
+  for (const entry of itemMap.values()) {
+    aggregatedItems.push(entry);
+  }
+
+  for (const { name, quantity } of aggregatedItems) {
    const fromInventory = await fromInventoryCollection.findOne({
     itemName: { $regex: new RegExp(`^${name}$`, "i") },
    });
@@ -522,7 +537,7 @@ for (const { name } of items) {
 
   const formattedItems = [];
 
-  for (const { name, quantity } of items) {
+  for (const { name, quantity } of aggregatedItems) {
    await removeItemInventoryDatabase(
     fromCharacter._id,
     name,
@@ -1315,7 +1330,22 @@ for (const { name } of items) {
    `[transfer.js:logs] Starting item availability check for character: ${fromCharacterName}`
   );
 
+  // Aggregate quantities for duplicate items (case-insensitive)
+  const aggregatedItems = [];
+  const itemMap = new Map();
   for (const { name, quantity } of items) {
+    const key = name.trim().toLowerCase();
+    if (!itemMap.has(key)) {
+      itemMap.set(key, { name, quantity });
+    } else {
+      itemMap.get(key).quantity += quantity;
+    }
+  }
+  for (const entry of itemMap.values()) {
+    aggregatedItems.push(entry);
+  }
+
+  for (const { name, quantity } of aggregatedItems) {
    console.log(
     `[transfer.js:logs] Checking availability for item: ${name} (Required: ${quantity})`
    );
@@ -1389,7 +1419,7 @@ for (const { name } of items) {
 
   const formattedItems = [];
 
-  for (const { name, quantity } of items) {
+  for (const { name, quantity } of aggregatedItems) {
     const itemDetails = await ItemModel.findOne({
       itemName: new RegExp(`^${name}$`, "i"),
     }).exec();
@@ -1606,13 +1636,11 @@ async function processTradeItems(fromChar, toChar, items, uniqueSyncId) {
 // ------------------- Trade Message Management -------------------
 async function updateTradeMessage(message, tradeData, fromCharacter, toCharacter) {
   const tradeEmbed = await createTradeEmbed(
-    tradeData.initiator.characterName,
-    tradeData.target.characterName,
+    fromCharacter,
+    toCharacter,
     tradeData.initiator.items,
     tradeData.target.items,
-    message.url,
-    fromCharacter.icon || "",
-    toCharacter.icon || ""
+    message.url
   );
   tradeEmbed.setColor("#FFD700");
 
@@ -1871,13 +1899,11 @@ async function handleTrade(interaction) {
 
         // Create and send initial trade message
         const tradeEmbed = await createTradeEmbed(
-          fromCharacter.name,
-          toCharacter.name,
+          fromCharacter,
+          toCharacter,
           formattedItems,
           [],
-          interaction.url,
-          fromCharacter.icon || "",
-          toCharacter.icon || ""
+          interaction.url
         );
         tradeEmbed.setColor("#FFD700");
 
@@ -1939,13 +1965,11 @@ async function handleTrade(interaction) {
                 await TempData.deleteOne({ _id: latestTrade._id });
                 
                 const finalEmbed = await createTradeEmbed(
-                  updatedTradeData.initiator.characterName,
-                  updatedTradeData.target.characterName,
+                  fromCharacter,
+                  toCharacter,
                   updatedTradeData.initiator.items,
                   updatedTradeData.target.items,
-                  tradeMessage.url,
-                  fromCharacter.icon || "",
-                  toCharacter.icon || ""
+                  tradeMessage.url
                 );
                 finalEmbed.setColor("#FFD700");
                 finalEmbed.setDescription(`✅ Trade completed successfully!`);
