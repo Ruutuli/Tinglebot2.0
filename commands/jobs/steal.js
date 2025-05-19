@@ -32,6 +32,13 @@ const StealStats = require('../../models/StealStatsModel');
 // const MAX_STREAK = 5; // Maximum streak bonus
 const PROTECTION_DURATION = 30 * 60 * 1000; // 30 minutes protection
 
+// ------------------- Village Channels -------------------
+const villageChannels = {
+  Rudania: process.env.RUDANIA_TOWN_HALL,
+  Inariko: process.env.INARIKO_TOWN_HALL,
+  Vhintl: process.env.VHINTL_TOWN_HALL,
+};
+
 // ------------------- Rarity Constants -------------------
 const RARITY_COOLDOWN_MULTIPLIERS = {
     common: 1,
@@ -443,6 +450,28 @@ module.exports = {
                     await validateCharacter(characterName, interaction.user.id, true);
                 if (!thiefValid) {
                     return interaction.editReply({ content: thiefError, ephemeral: true });
+                }
+
+                // ------------------- Validate Interaction Channel -------------------
+                let currentVillage = capitalizeWords(thiefCharacter.currentVillage);
+                let allowedChannel = villageChannels[currentVillage];
+
+                // If using a job voucher for a village-exclusive job, override to required village
+                if (thiefCharacter.jobVoucher && thiefCharacter.jobVoucherJob) {
+                    const voucherPerk = getJobPerk(thiefCharacter.jobVoucherJob);
+                    if (voucherPerk && voucherPerk.village) {
+                        const requiredVillage = capitalizeWords(voucherPerk.village);
+                        currentVillage = requiredVillage;
+                        allowedChannel = villageChannels[requiredVillage];
+                    }
+                }
+
+                if (!allowedChannel || interaction.channelId !== allowedChannel) {
+                    const channelMention = `<#${allowedChannel}>`;
+                    return interaction.editReply({
+                        content: `❌ **You can only use this command in the ${currentVillage} Town Hall channel!**\n${characterName} is currently in ${capitalizeWords(thiefCharacter.currentVillage)}! This command must be used in ${channelMention}.`,
+                        ephemeral: true
+                    });
                 }
 
                 // Initialize job variable early
