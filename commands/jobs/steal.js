@@ -300,6 +300,11 @@ module.exports = {
                 .setName('commit')
                 .setDescription('Commit a theft from another character or NPC.')
                 .addStringOption(option =>
+                    option.setName('charactername')
+                        .setDescription('Your character name')
+                        .setRequired(true)
+                        .setAutocomplete(true))
+                .addStringOption(option =>
                     option.setName('targettype')
                         .setDescription('Choose NPC or Player as target')
                         .setRequired(true)
