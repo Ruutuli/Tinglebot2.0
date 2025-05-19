@@ -292,6 +292,19 @@ async function handleAutocomplete(interaction) {
         await handleLookupAutocomplete(interaction, focusedOption);
         break;
 
+      // Steal command routing
+      if (commandName === 'steal') {
+        if (focusedOption.name === 'target') {
+          return await handleStealTargetAutocomplete(interaction, focusedOption);
+        }
+        if (focusedOption.name === 'charactername') {
+          return await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, commandName);
+        }
+        if (focusedOption.name === 'rarity') {
+          return await handleStealRarityAutocomplete(interaction, focusedOption);
+        }
+      }
+
       // ... rest of existing code ...
     }
   } catch (error) {
@@ -2657,38 +2670,46 @@ async function handleStealCharacterAutocomplete(interaction, focusedOption) {
 
 // ------------------- Steal Target NPC Autocomplete -------------------
 async function handleStealTargetAutocomplete(interaction, focusedOption) {
- try {
-  const npcChoices = [
-   "Hank",
-   "Sue",
-   "Lukan",
-   "Myti",
-   "Cree",
-   "Cece",
-   "Walton",
-   "Jengo",
-   "Jasz",
-   "Lecia",
-   "Tye",
-   "Lil Tim",
-  ];
+    try {
+        const focusedValue = interaction.options.getFocused().toLowerCase().trim();
+        const targetType = interaction.options.getString('targettype');
 
-  const filteredNPCs = npcChoices.filter((choice) =>
-   choice.toLowerCase().includes(focusedOption.value.toLowerCase())
-  );
+        if (targetType === 'npc') {
+            const NPC_NAME_MAPPING = {
+                'Hank': 'Hank',
+                'Sue': 'Sue',
+                'Lukan': 'Lukan',
+                'Myti': 'Myti',
+                'Cree': 'Cree',
+                'Cece': 'Cece',
+                'Walton': 'Walton',
+                'Jengo': 'Jengo',
+                'Jasz': 'Jasz',
+                'Lecia': 'Lecia',
+                'Tye': 'Tye',
+                'Lil Tim': 'Lil Tim'
+            };
 
-  await interaction.respond(
-   filteredNPCs.map((choice) => ({
-    name: choice,
-    value: choice,
-   }))
-  );
- } catch (error) {
-  handleError(error, "autocompleteHandler.js");
+            const filteredNPCs = Object.keys(NPC_NAME_MAPPING)
+                .filter(npc => npc.toLowerCase().includes(focusedValue))
+                .slice(0, 25);
+            return await interaction.respond(filteredNPCs.map(npc => ({ name: npc, value: npc })));
+        } else if (targetType === 'player') {
+            const characters = await Character.find({ canBeStolenFrom: true });
+            const filteredCharacters = characters
+                .filter(char => char.name.toLowerCase().includes(focusedValue))
+                .slice(0, 25);
+            return await interaction.respond(filteredCharacters.map(char => ({
+                name: `${char.name} | ${char.village || 'No Village'} | ${char.job || 'No Job'}`,
+                value: char.name
+            })));
+        }
 
-  console.error("[handleStealTargetAutocomplete]: Error:", error);
-  await safeRespondWithError(interaction);
- }
+        return await interaction.respond([]);
+    } catch (error) {
+        console.error('[autocompleteHandler.js]: Error in handleStealTargetAutocomplete:', error);
+        await interaction.respond([]);
+    }
 }
 
 // ------------------- Steal Rarity Autocomplete -------------------
