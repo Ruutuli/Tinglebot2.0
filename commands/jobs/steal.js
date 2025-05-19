@@ -295,24 +295,28 @@ module.exports = {
     data: new SlashCommandBuilder()
         .setName('steal')
         .setDescription('Steal an item from another character or NPC.')
-        .addStringOption(option =>
-            option.setName('targettype')
-                .setDescription('Choose NPC or Player as target')
-                .setRequired(true)
-                .addChoices(
-                    { name: 'NPC', value: 'npc' },
-                    { name: 'Player', value: 'player' }
-                ))
-        .addStringOption(option =>
-            option.setName('target')
-                .setDescription('Target character or NPC name')
-                .setRequired(true)
-                .setAutocomplete(true))
-        .addStringOption(option =>
-            option.setName('rarity')
-                .setDescription('Rarity of the item to steal')
-                .setRequired(true)
-                .setAutocomplete(true))
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('steal')
+                .setDescription('Steal an item from another character or NPC.')
+                .addStringOption(option =>
+                    option.setName('targettype')
+                        .setDescription('Choose NPC or Player as target')
+                        .setRequired(true)
+                        .addChoices(
+                            { name: 'NPC', value: 'npc' },
+                            { name: 'Player', value: 'player' }
+                        ))
+                .addStringOption(option =>
+                    option.setName('target')
+                        .setDescription('Target character or NPC name')
+                        .setRequired(true)
+                        .setAutocomplete(true))
+                .addStringOption(option =>
+                    option.setName('rarity')
+                        .setDescription('Rarity of the item to steal')
+                        .setRequired(true)
+                        .setAutocomplete(true)))
         .addSubcommand(subcommand =>
             subcommand
                 .setName('toggle')
@@ -344,43 +348,14 @@ module.exports = {
     // ---- Command Handlers ----
     // ============================================================================
 
-    // ------------------- Autocomplete Handler -------------------
-    async autocomplete(interaction) {
-        try {
-            const focusedValue = interaction.options.getFocused().toLowerCase().trim();
-            const targetType = interaction.options.getString('targettype');
-
-            if (targetType === 'npc') {
-                // Return filtered NPC list
-                const filteredNPCs = Object.keys(NPC_NAME_MAPPING)
-                    .filter(npc => npc.toLowerCase().includes(focusedValue))
-                    .slice(0, 25);
-                return await interaction.respond(filteredNPCs.map(npc => ({ name: npc, value: npc })));
-            } else if (targetType === 'player') {
-                // Return filtered list of players who can be stolen from
-                const characters = await Character.find({ canBeStolenFrom: true });
-                const filteredCharacters = characters
-                    .filter(char => char.name.toLowerCase().includes(focusedValue))
-                    .slice(0, 25);
-                return await interaction.respond(filteredCharacters.map(char => ({ name: char.name, value: char.name })));
-            }
-
-            return await interaction.respond([]);
-        } catch (error) {
-            handleError(error, 'steal.js');
-            console.error('[steal.js]: Error in autocomplete:', error);
-            await interaction.respond([]);
-        }
-    },
-
     // ------------------- Main Execute Handler -------------------
     async execute(interaction) {
         await interaction.deferReply({ ephemeral: false });
         try {
-            const subcommand = interaction.options.getSubcommand(false);
+            const subcommand = interaction.options.getSubcommand();
 
-            // If no subcommand, handle main steal command
-            if (!subcommand) {
+            // Handle steal subcommand
+            if (subcommand === 'steal') {
                 const targetType = interaction.options.getString('targettype');
                 const targetName = interaction.options.getString('target');
                 const raritySelection = interaction.options.getString('rarity').toLowerCase();
@@ -582,7 +557,7 @@ module.exports = {
                 userCooldowns.set(interaction.user.id, Date.now() + newCooldown);
             }
 
-            // Handle subcommands
+            // Handle other subcommands
             if (subcommand === 'toggle') {
                 const characterName = interaction.options.getString('charactername');
                 const enabled = interaction.options.getBoolean('enabled');
