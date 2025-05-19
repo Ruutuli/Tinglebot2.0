@@ -7,7 +7,8 @@
   "start": "node index.js",
   "scheduler": "node scripts/scheduler.js",
   "dev": "concurrently \"nodemon -L --config nodemon.json index.js\" \"nodemon -L --config nodemon.json birthdayScheduler.js\"",
-  "deploy-commands": "node scripts/deploy-commands.js"
+  "deploy-commands": "node scripts/deploy-commands.js",
+  "deploy": "node scripts/deploy.js"
  },
  "author": "Ruu",
  "license": "ISC",
