@@ -381,5 +381,7 @@ module.exports = {
   
   cleanupExpiredEntries,
   runWithTransaction,
-  cleanupExpiredHealingRequests
+  cleanupExpiredHealingRequests,
+  
+  retrieveAllByType
 };
