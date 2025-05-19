@@ -167,7 +167,13 @@ async function handleAutocomplete(interaction) {
           // ------------------- Blight Command -------------------
           case "blight":
             const blightSubcommand = interaction.options.getSubcommand();
-            if (blightSubcommand === "roll") {
+            if (blightSubcommand === "heal") {
+              if (focusedOption.name === "character_name" || focusedOption.name === "healer_name") {
+                await handleBlightCharacterAutocomplete(interaction, focusedOption);
+              } else if (focusedOption.name === "item") {
+                await handleBlightItemAutocomplete(interaction, focusedOption);
+              }
+            } else if (blightSubcommand === "roll") {
               if (focusedOption.name === "character_name") {
                 await handleBlightCharacterAutocomplete(interaction, focusedOption);
               }
@@ -399,12 +405,44 @@ async function handleCharacterBasedCommandsAutocomplete(
 async function handleBlightCharacterAutocomplete(interaction, focusedOption) {
  try {
   const userId = interaction.user.id;
-  const blightedCharacters = await fetchBlightedCharactersByUserId(userId);
-  const choices = blightedCharacters.map((character) => ({
-   name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
-   value: character.name,
-  }));
-  await respondWithFilteredChoices(interaction, focusedOption, choices);
+  const subcommand = interaction.options.getSubcommand();
+  const focusedName = focusedOption.name;
+
+  if (subcommand === 'heal') {
+    if (focusedName === 'character_name') {
+      // For character_name, show blighted characters
+      const blightedCharacters = await fetchBlightedCharactersByUserId(userId);
+      const choices = blightedCharacters.map((character) => ({
+        name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
+        value: character.name,
+      }));
+      await respondWithFilteredChoices(interaction, focusedOption, choices);
+    } else if (focusedName === 'healer_name') {
+      // For healer_name, show all characters with Healer job
+      const allCharacters = await fetchAllCharacters();
+      const healerCharacters = allCharacters.filter(
+        (character) =>
+          character.job.toLowerCase() === "healer" ||
+          (character.jobVoucher === true &&
+            character.jobVoucherJob.toLowerCase() === "healer")
+      );
+
+      const choices = healerCharacters.map((character) => ({
+        name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
+        value: character.name,
+      }));
+
+      await respondWithFilteredChoices(interaction, focusedOption, choices);
+    }
+  } else {
+    // For other blight commands, show blighted characters
+    const blightedCharacters = await fetchBlightedCharactersByUserId(userId);
+    const choices = blightedCharacters.map((character) => ({
+      name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
+      value: character.name,
+    }));
+    await respondWithFilteredChoices(interaction, focusedOption, choices);
+  }
  } catch (error) {
   handleError(error, "autocompleteHandler.js");
   console.error("[handleBlightCharacterAutocomplete]: Error occurred:", error);
@@ -417,45 +455,61 @@ async function handleBlightCharacterAutocomplete(interaction, focusedOption) {
 // requirements from mod characters and filtering them based on user input.
 async function handleBlightItemAutocomplete(interaction, focusedOption) {
  try {
+  const userId = interaction.user.id;
+  const characterName = interaction.options.getString("character_name");
+  const healerName = interaction.options.getString("healer_name");
+
+  if (!characterName || !healerName) {
+    return await interaction.respond([]);
+  }
+
+  // Get the healer character
+  const healer = await fetchCharacterByName(healerName);
+  if (!healer) {
+    return await interaction.respond([]);
+  }
+
+  // Get the healer's inventory
+  const inventoryCollection = await getCharacterInventoryCollection(healer.name);
+  const inventoryItems = await inventoryCollection.find().toArray();
+
   // Initialize an array to store items that are relevant for healing requirements
   const allItems = [];
 
   // Loop over mod characters and add item requirements of type "item"
   modCharacters.forEach((character) => {
-   character.getHealingRequirements().forEach((requirement) => {
-    if (requirement.type === "item") {
-     allItems.push(...requirement.items);
-    }
-   });
+    character.getHealingRequirements().forEach((requirement) => {
+      if (requirement.type === "item") {
+        allItems.push(...requirement.items);
+      }
+    });
   });
 
-  // Map items to a formatted string including quantity
-  const choices = allItems.map((item) => `${item.name} x${item.quantity}`);
-
-  // Filter the choices based on the user's current input
-  const filteredChoices = choices.filter((choice) =>
-   choice.toLowerCase().includes(focusedOption.value.toLowerCase())
+  // Create a map of required items
+  const requiredItems = new Map(
+    allItems.map(item => [item.name.toLowerCase(), item])
   );
 
-  // Limit the number of choices to meet Discord's maximum (up to 25)
-  const limitedChoices = filteredChoices.slice(0, 25);
+  // Filter inventory items that match required items
+  const choices = inventoryItems
+    .filter(item => {
+      const itemName = item.itemName.toLowerCase();
+      return requiredItems.has(itemName) && 
+             item.itemName.toLowerCase().includes(focusedOption.value.toLowerCase());
+    })
+    .map(item => {
+      const requiredItem = requiredItems.get(item.itemName.toLowerCase());
+      return {
+        name: `${item.itemName} - Qty: ${item.quantity} (Required: ${requiredItem.quantity})`,
+        value: item.itemName
+      };
+    });
 
-  // Respond with the final filtered list of item suggestions
-  await interaction.respond(
-   limitedChoices.map((choice) => ({
-    name: choice,
-    value: choice,
-   }))
-  );
+  await interaction.respond(choices.slice(0, 25));
  } catch (error) {
   handleError(error, "autocompleteHandler.js");
-
-  // Log any errors and respond with an empty array on failure
-  console.error(
-   "[handleBlightItemAutocomplete]: Error during blight item autocomplete:",
-   error
-  );
-  await interaction.respond([]);
+  console.error("[handleBlightItemAutocomplete]: Error occurred:", error);
+  await safeRespondWithError(interaction);
  }
 }
 
