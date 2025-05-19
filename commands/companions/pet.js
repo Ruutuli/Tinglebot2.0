@@ -380,7 +380,7 @@ module.exports = {
       // Validate species and pet type compatibility
       const validationResult = validatePetSpeciesCompatibility(species, petType);
       if (!validationResult.isValid) {
-        return interaction.reply(validationResult.error);
+        return interaction.editReply(validationResult.error);
       }
 
       // ------------------- Upload Pet Image (If Provided) -------------------
