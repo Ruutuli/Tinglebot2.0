@@ -1,0 +1,168 @@
+{
+  "P292514": {
+    "battleId": "P292514",
+    "characters": {
+      "attacker": {
+        "gearArmor": {
+          "head": {
+            "name": "Ruby Circlet",
+            "stats": {
+              "modifierHearts": 2
+            }
+          },
+          "chest": {
+            "name": "Desert Voe Spaulder",
+            "stats": {
+              "modifierHearts": 2
+            }
+          },
+          "legs": {
+            "name": "Desert Voe Trousers",
+            "stats": {
+              "modifierHearts": 2
+            }
+          }
+        },
+        "vendingSetup": false,
+        "blightEffects": {
+          "rollMultiplier": 1,
+          "noMonsters": true,
+          "noGathering": false
+        },
+        "debuff": {
+          "active": false,
+          "endDate": null
+        },
+        "_id": "681baa3646da2463c25cf06f",
+        "userId": "308795936530759680",
+        "name": "Sable",
+        "age": 24,
+        "height": 213.26,
+        "pronouns": "he/him",
+        "race": "gerudo",
+        "homeVillage": "rudania",
+        "currentVillage": "inariko",
+        "job": "Forager",
+        "jobDateChanged": null,
+        "icon": "https://storage.googleapis.com/tinglebot/c2eb8b1c-c43d-4daa-ac9a-876b8587d52c.gif",
+        "birthday": "",
+        "maxHearts": 3,
+        "currentHearts": 3,
+        "maxStamina": 6,
+        "currentStamina": 6,
+        "lastStaminaUsage": null,
+        "attack": 1,
+        "defense": 6,
+        "inventory": "https://docs.google.com/spreadsheets/d/1ygElU9hB2TgvDYm8-C-rgZMIa4fYNmiE0wtTMm1Skwk/edit?gid=2030861071#gid=2030861071",
+        "appLink": "https://docs.google.com/document/d/1JiY92NNV-7QQXJYTcj9xaQEVqkdmHhbSz3WIHmbPmX4/edit?tab=t.0",
+        "inventorySynced": true,
+        "vendingPoints": 0,
+        "vendorType": "",
+        "shopPouch": "",
+        "pouchSize": 0,
+        "shopLink": "",
+        "lastCollectedMonth": 0,
+        "vendingSync": false,
+        "shopImage": "",
+        "blighted": true,
+        "blightStage": 3,
+        "blightPaused": false,
+        "lastRollDate": "2025-05-17T18:18:20.735Z",
+        "deathDeadline": null,
+        "ko": false,
+        "failedStealAttempts": 0,
+        "failedFleeAttempts": 0,
+        "inJail": false,
+        "jailReleaseTime": null,
+        "canBeStolenFrom": true,
+        "lastGatherDate": null,
+        "lastLootDate": null,
+        "jobVoucher": false,
+        "jobVoucherJob": null,
+        "mount": false,
+        "currentActivePet": "68218a012c4198c51919f103",
+        "spiritOrbs": 0,
+        "__v": 0,
+        "gearWeapon": {
+          "name": "Traveler's Bow",
+          "stats": {
+            "modifierHearts": 1
+          }
+        },
+        "dailyRoll": {},
+        "lastSpecialWeatherGather": null
+      },
+      "defender": {
+        "vendingSetup": {
+          "shopLink": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=2105689771#gid=2105689771",
+          "pouchType": "bronze",
+          "shopImage": null,
+          "_id": "681d6605a914f5e4c01dc445"
+        },
+        "blightEffects": {
+          "rollMultiplier": 1.5,
+          "noMonsters": false,
+          "noGathering": false
+        },
+        "debuff": {
+          "active": false,
+          "endDate": null
+        },
+        "_id": "681b9e997c9055624ce507e7",
+        "userId": "211219306137124865",
+        "name": "Tingle",
+        "age": 44,
+        "height": 160,
+        "pronouns": "He/Him",
+        "race": "korok/kokiri",
+        "homeVillage": "rudania",
+        "currentVillage": "inariko",
+        "job": "bandit",
+        "jobDateChanged": null,
+        "icon": "https://storage.googleapis.com/tinglebot/c65f94fc-b287-4f7f-956b-dafea31fcdaa.jpg",
+        "birthday": "",
+        "maxHearts": 50,
+        "currentHearts": 50,
+        "maxStamina": 40,
+        "currentStamina": 40,
+        "lastStaminaUsage": null,
+        "attack": 0,
+        "defense": 0,
+        "inventory": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "appLink": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=1571005582#gid=1571005582",
+        "inventorySynced": true,
+        "vendingPoints": 998729,
+        "vendorType": "merchant",
+        "shopPouch": "bronze",
+        "pouchSize": 15,
+        "shopLink": "https://docs.google.com/spreadsheets/d/1pu6M0g7MRs5L2fkqoOrRNTKRmYB8d29j0EtDrQzw3zs/edit?gid=2105689771#gid=2105689771",
+        "lastCollectedMonth": 0,
+        "vendingSync": true,
+        "shopImage": "",
+        "blighted": true,
+        "blightStage": 2,
+        "blightPaused": false,
+        "lastRollDate": "2025-05-17T18:18:20.683Z",
+        "deathDeadline": null,
+        "ko": false,
+        "failedStealAttempts": 0,
+        "failedFleeAttempts": 0,
+        "inJail": false,
+        "jailReleaseTime": null,
+        "canBeStolenFrom": true,
+        "lastGatherDate": null,
+        "lastLootDate": null,
+        "jobVoucher": false,
+        "jobVoucherJob": null,
+        "mount": false,
+        "currentActivePet": "68293e6144d1c16450143482",
+        "spiritOrbs": 0,
+        "__v": 0,
+        "dailyRoll": {},
+        "lastSpecialWeatherGather": null
+      }
+    },
+    "progress": "PvP Battle initiated",
+    "turnCount": 0
+  }
+}

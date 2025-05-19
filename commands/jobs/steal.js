@@ -18,6 +18,7 @@ const { fetchActiveBoost } = require('../../utils/boostingUtils');
 const Character = require('../../models/CharacterModel');
 const { hasPerk, getJobPerk, normalizeJobName, isValidJob } = require('../../modules/jobsModule');
 const { validateJobVoucher, activateJobVoucher, fetchJobVoucherItem, deactivateJobVoucher, getJobVoucherErrorMessage } = require('../../modules/jobVoucherModule');
+const { capitalizeWords } = require('../../modules/formattingModule');
 
 // Add StealStats model
 const StealStats = require('../../models/StealStatsModel');
@@ -529,12 +530,10 @@ module.exports = {
                 if (thiefCharacter.inJail) {
                     // Check if jail time is up
                     if (thiefCharacter.jailReleaseTime && Date.now() >= thiefCharacter.jailReleaseTime.getTime()) {
-                        console.log('[steal.js]: 🔄 Jail time completed, releasing character');
                         thiefCharacter.inJail = false;
                         thiefCharacter.jailReleaseTime = null;
                         await thiefCharacter.save();
                     } else {
-                        console.log('[steal.js]: ⛔ Character is in jail');
                         const releaseTime = thiefCharacter.jailReleaseTime.getTime();
                         const jailEmbed = createBaseEmbed('⛔ In Jail!', '#ff0000')
                             .setDescription(`**${thiefCharacter.name}** is currently serving time in jail for failed steal attempts.`)
@@ -554,15 +553,12 @@ module.exports = {
                         });
                     }
                 }
-                console.log('[steal.js]: ✅ Character is not in jail');
 
                 // Get current streak
                 const currentStreak = stealStreaks.get(interaction.user.id) || 0;
-                console.log('[steal.js]: 📊 Current steal streak:', currentStreak);
 
                 // Handle NPC stealing
                 if (targetType === 'npc') {
-                    console.log('[steal.js]: 🎯 Processing NPC steal attempt');
                     const mappedNPCName = NPC_NAME_MAPPING[targetName];
                     if (!mappedNPCName) {
                         return interaction.editReply({ content: ERROR_MESSAGES.INVALID_TARGET, ephemeral: true });
@@ -585,10 +581,8 @@ module.exports = {
                         .filter(item => item.tier === raritySelection);
 
                     if (!filteredItems.length) {
-                        console.log('[steal.js]: ⚠️ No items of selected rarity, trying fallback tiers');
                         let fallbackTier = (raritySelection === 'rare') ? 'uncommon' : (raritySelection === 'uncommon') ? 'common' : null;
                         if (fallbackTier) {
-                            console.log('[steal.js]: 🔄 Using fallback tier:', fallbackTier);
                             filteredItems = itemsWithRarity
                                 .filter(({ itemRarity }) => itemRarity)
                                 .map(({ itemName, itemRarity }) => {
@@ -600,9 +594,7 @@ module.exports = {
                                 .filter(item => item.tier === fallbackTier);
                         }
                         
-                        // If still no items, get any available items
                         if (!filteredItems.length) {
-                            console.log('[steal.js]: ⚠️ No fallback items, getting any available items');
                             filteredItems = itemsWithRarity
                                 .filter(({ itemRarity }) => itemRarity)
                                 .map(({ itemName, itemRarity }) => {
@@ -615,13 +607,10 @@ module.exports = {
                     }
 
                     if (!filteredItems.length) {
-                        console.log('[steal.js]: ❌ No items available to steal');
                         return interaction.editReply({ content: ERROR_MESSAGES.NO_ITEMS, ephemeral: true });
                     }
 
-                    console.log('[steal.js]: 🎲 Selecting random item by weight');
                     const selectedItem = getRandomItemByWeight(filteredItems);
-
                     const roll = Math.floor(Math.random() * 99) + 1;
                     const failureThreshold = FAILURE_CHANCES[selectedItem.tier];
                     const isSuccess = roll > failureThreshold;
@@ -645,7 +634,6 @@ module.exports = {
                         
                         const embed = await createStealResultEmbed(thiefCharacter, mappedNPCName, selectedItem, quantity, roll, failureThreshold, true, true);
                         
-                        // Add fallback message if the selected item's tier is different from requested rarity
                         if (selectedItem.tier !== raritySelection) {
                             let fallbackMessage = '';
                             if (raritySelection === 'rare') {
@@ -656,13 +644,10 @@ module.exports = {
                             embed.addFields({ name: 'Note', value: fallbackMessage, inline: false });
                         }
                         
-                        // ------------------- Deactivate Job Voucher -------------------
                         if (thiefCharacter.jobVoucher && !voucherCheck?.skipVoucher) {
                             const deactivationResult = await deactivateJobVoucher(thiefCharacter._id);
                             if (!deactivationResult.success) {
                                 console.error(`[steal.js]: ❌ Failed to deactivate job voucher for ${thiefCharacter.name}`);
-                            } else {
-                                console.log(`[steal.js]: ✅ Job voucher deactivated for ${thiefCharacter.name}`);
                             }
                         }
                         
@@ -671,15 +656,13 @@ module.exports = {
                         stealStreaks.set(interaction.user.id, 0);
                         await updateStealStats(thiefCharacter._id, false, selectedItem.tier);
                         
-                        // Increment failed steal attempts
                         thiefCharacter.failedStealAttempts = (thiefCharacter.failedStealAttempts || 0) + 1;
                         
-                        // Check if character should go to jail (3 failed attempts)
                         if (thiefCharacter.failedStealAttempts >= 3) {
-                            console.log('[steal.js]: ⛔ Sending character to jail');
+                            console.log(`[steal.js]: ⛔ ${thiefCharacter.name} sent to jail for 30 minutes`);
                             thiefCharacter.inJail = true;
-                            thiefCharacter.jailReleaseTime = new Date(Date.now() + (30 * 60 * 1000)); // 30 minutes
-                            thiefCharacter.failedStealAttempts = 0; // Reset counter
+                            thiefCharacter.jailReleaseTime = new Date(Date.now() + (30 * 60 * 1000));
+                            thiefCharacter.failedStealAttempts = 0;
                             
                             await thiefCharacter.save();
                             
@@ -690,13 +673,10 @@ module.exports = {
                                 )
                                 .setThumbnail(thiefCharacter.icon);
                             
-                            // ------------------- Deactivate Job Voucher -------------------
                             if (thiefCharacter.jobVoucher && !voucherCheck?.skipVoucher) {
                                 const deactivationResult = await deactivateJobVoucher(thiefCharacter._id);
                                 if (!deactivationResult.success) {
                                     console.error(`[steal.js]: ❌ Failed to deactivate job voucher for ${thiefCharacter.name}`);
-                                } else {
-                                    console.log(`[steal.js]: ✅ Job voucher deactivated for ${thiefCharacter.name}`);
                                 }
                             }
                             
@@ -708,10 +688,8 @@ module.exports = {
                         
                         await thiefCharacter.save();
                         
-                        // Create failure embed
                         const embed = await createStealResultEmbed(thiefCharacter, mappedNPCName, selectedItem, 0, roll, failureThreshold, false, true);
                         
-                        // Add fallback message if the selected item's tier is different from requested rarity
                         if (selectedItem.tier !== raritySelection) {
                             let fallbackMessage = '';
                             if (raritySelection === 'rare') {
@@ -722,7 +700,6 @@ module.exports = {
                             embed.addFields({ name: 'Note', value: fallbackMessage, inline: false });
                         }
 
-                        // Add failed attempts warning
                         const attemptsLeft = 3 - thiefCharacter.failedStealAttempts;
                         let warningMessage = '';
                         if (attemptsLeft === 2) {
@@ -745,13 +722,10 @@ module.exports = {
                             });
                         }
                         
-                        // ------------------- Deactivate Job Voucher -------------------
                         if (thiefCharacter.jobVoucher && !voucherCheck?.skipVoucher) {
                             const deactivationResult = await deactivateJobVoucher(thiefCharacter._id);
                             if (!deactivationResult.success) {
                                 console.error(`[steal.js]: ❌ Failed to deactivate job voucher for ${thiefCharacter.name}`);
-                            } else {
-                                console.log(`[steal.js]: ✅ Job voucher deactivated for ${thiefCharacter.name}`);
                             }
                         }
                         
@@ -764,36 +738,28 @@ module.exports = {
 
                 // Handle player stealing
                 if (targetType === 'player') {
-                    console.log('[steal.js]: 🎯 Processing player steal attempt');
                     const { valid: targetValid, error: targetError, character: targetCharacter } = 
                         await validateCharacter(targetName, null);
                     if (!targetValid) {
-                        console.log('[steal.js]: ❌ Target validation failed:', targetError);
                         return interaction.editReply({ content: targetError, ephemeral: true });
                     }
 
-                    // Check if target's inventory is set up
                     if (!targetCharacter.inventorySynced) {
-                        console.log('[steal.js]: ❌ Target inventory not synced');
                         return interaction.editReply({ 
                             content: `❌ **${targetCharacter.name}'s inventory is not set up yet.** They need to use </testinventorysetup:ID> then </syncinventory:ID> to initialize.`, 
                             ephemeral: true 
                         });
                     }
 
-                    // Check if target has a valid inventory URL
                     const targetInventoryLink = targetCharacter.inventory || targetCharacter.inventoryLink;
                     if (typeof targetInventoryLink !== 'string' || !isValidGoogleSheetsUrl(targetInventoryLink)) {
-                        console.log('[steal.js]: ❌ Invalid target inventory URL');
                         return interaction.editReply({ 
                             content: `❌ **Invalid Google Sheets URL for "${targetCharacter.name}".**`, 
                             ephemeral: true 
                         });
                     }
 
-                    // Check if characters are in the same village
                     if (thiefCharacter.currentVillage !== targetCharacter.currentVillage) {
-                        console.log('[steal.js]: ❌ Characters in different villages');
                         return interaction.editReply({ 
                             content: `❌ **You can only steal from characters in the same village!**\n📍 **Your Location:** ${thiefCharacter.currentVillage}\n📍 **Target Location:** ${targetCharacter.currentVillage}`, 
                             ephemeral: true 
@@ -801,21 +767,17 @@ module.exports = {
                     }
 
                     if (checkAndUpdateProtection(targetCharacter._id)) {
-                        console.log('[steal.js]: ❌ Target is protected');
                         return interaction.editReply({ content: ERROR_MESSAGES.PROTECTED, ephemeral: true });
                     }
 
                     if (!targetCharacter.canBeStolenFrom) {
-                        console.log('[steal.js]: ❌ Target cannot be stolen from');
                         return interaction.editReply({ content: `⚠️ **${targetCharacter.name}** cannot be stolen from.`, ephemeral: true });
                     }
 
-                    // Get target's inventory
                     const targetInventoryCollection = await getCharacterInventoryCollection(targetCharacter.name);
                     const inventoryEntries = await targetInventoryCollection.find({ characterId: targetCharacter._id }).toArray();
                     const rawItemNames = inventoryEntries.map(entry => entry.itemName);
 
-                    // Exclude items that are currently equipped
                     const equippedItems = [
                         targetCharacter.gearWeapon?.name,
                         targetCharacter.gearShield?.name,
@@ -824,7 +786,6 @@ module.exports = {
                         targetCharacter.gearArmor?.legs?.name,
                     ].filter(Boolean);
 
-                    // Get items with their rarities
                     let itemsWithRarity = await Promise.all(
                         rawItemNames
                             .filter(itemName => !equippedItems.includes(itemName))
@@ -834,7 +795,6 @@ module.exports = {
                             })
                     );
 
-                    // Filter items by selected rarity
                     let filteredItemsPlayer = itemsWithRarity
                         .filter(({ itemRarity }) => itemRarity)
                         .map(({ itemName, itemRarity }) => {
@@ -845,12 +805,9 @@ module.exports = {
                         })
                         .filter(item => item.tier === raritySelection);
 
-                    // If no items of selected rarity, try fallback tiers
                     if (!filteredItemsPlayer.length) {
-                        console.log('[steal.js]: ⚠️ No items of selected rarity, trying fallback tiers');
                         let fallbackTier = (raritySelection === 'rare') ? 'uncommon' : (raritySelection === 'uncommon') ? 'common' : null;
                         if (fallbackTier) {
-                            console.log('[steal.js]: 🔄 Using fallback tier:', fallbackTier);
                             filteredItemsPlayer = itemsWithRarity
                                 .filter(({ itemRarity }) => itemRarity)
                                 .map(({ itemName, itemRarity }) => {
@@ -862,9 +819,7 @@ module.exports = {
                                 .filter(item => item.tier === fallbackTier);
                         }
                         
-                        // If still no items, get any available items
                         if (!filteredItemsPlayer.length) {
-                            console.log('[steal.js]: ⚠️ No fallback items, getting any available items');
                             filteredItemsPlayer = itemsWithRarity
                                 .filter(({ itemRarity }) => itemRarity)
                                 .map(({ itemName, itemRarity }) => {
@@ -877,28 +832,21 @@ module.exports = {
                     }
 
                     if (!filteredItemsPlayer.length) {
-                        console.log('[steal.js]: ❌ No items available to steal');
                         return interaction.editReply({ content: `❌ **Looks like ${targetName || targetCharacter.name} didn't have any items to steal!**`, ephemeral: true });
                     }
 
-                    console.log('[steal.js]: 🎲 Selecting random item by weight');
                     const selectedItemPlayer = getRandomItemByWeight(filteredItemsPlayer);
-
                     const rollPlayer = Math.floor(Math.random() * 99) + 1;
                     const failureThresholdPlayer = FAILURE_CHANCES[selectedItemPlayer.tier];
                     const success = rollPlayer > failureThresholdPlayer;
 
-                    // Update streak and stats on success/failure
                     if (success) {
-                        console.log('[steal.js]: ✅ Steal successful');
                         stealStreaks.set(interaction.user.id, currentStreak + 1);
                         await updateStealStats(thiefCharacter._id, true, selectedItemPlayer.tier, targetCharacter);
                         setProtection(targetCharacter._id);
 
-                        // Remove item from target's inventory and add to thief's inventory
                         const quantityToSteal = determineStealQuantity(selectedItemPlayer);
                         
-                        // Create items for sync
                         const stolenItem = {
                             itemName: selectedItemPlayer.itemName,
                             quantity: quantityToSteal,
@@ -913,14 +861,11 @@ module.exports = {
                             date: new Date()
                         };
 
-                        // Sync both changes
                         await syncToInventoryDatabase(targetCharacter, removedItem, interaction);
                         await syncToInventoryDatabase(thiefCharacter, stolenItem, interaction);
 
-                        // Create success embed
                         const embed = await createStealResultEmbed(thiefCharacter, targetCharacter, selectedItemPlayer, quantityToSteal, rollPlayer, failureThresholdPlayer, success);
                         
-                        // Add fallback message if the selected item's tier is different from requested rarity
                         if (selectedItemPlayer.tier !== raritySelection) {
                             let fallbackMessage = '';
                             if (raritySelection === 'rare') {
@@ -931,13 +876,10 @@ module.exports = {
                             embed.addFields({ name: 'Note', value: fallbackMessage, inline: false });
                         }
 
-                        // ------------------- Deactivate Job Voucher -------------------
                         if (thiefCharacter.jobVoucher && !voucherCheck?.skipVoucher) {
                             const deactivationResult = await deactivateJobVoucher(thiefCharacter._id);
                             if (!deactivationResult.success) {
                                 console.error(`[steal.js]: ❌ Failed to deactivate job voucher for ${thiefCharacter.name}`);
-                            } else {
-                                console.log(`[steal.js]: ✅ Job voucher deactivated for ${thiefCharacter.name}`);
                             }
                         }
 
@@ -947,19 +889,16 @@ module.exports = {
                             ephemeral: false
                         });
                     } else {
-                        console.log('[steal.js]: ❌ Steal failed');
                         stealStreaks.set(interaction.user.id, 0);
                         await updateStealStats(thiefCharacter._id, false, selectedItemPlayer.tier);
                         
-                        // Increment failed steal attempts
                         thiefCharacter.failedStealAttempts = (thiefCharacter.failedStealAttempts || 0) + 1;
                         
-                        // Check if character should go to jail (3 failed attempts)
                         if (thiefCharacter.failedStealAttempts >= 3) {
-                            console.log('[steal.js]: ⛔ Sending character to jail');
+                            console.log(`[steal.js]: ⛔ ${thiefCharacter.name} sent to jail for 30 minutes`);
                             thiefCharacter.inJail = true;
-                            thiefCharacter.jailReleaseTime = new Date(Date.now() + (30 * 60 * 1000)); // 30 minutes
-                            thiefCharacter.failedStealAttempts = 0; // Reset counter
+                            thiefCharacter.jailReleaseTime = new Date(Date.now() + (30 * 60 * 1000));
+                            thiefCharacter.failedStealAttempts = 0;
                             
                             await thiefCharacter.save();
                             
@@ -970,13 +909,10 @@ module.exports = {
                                 )
                                 .setThumbnail(thiefCharacter.icon);
                             
-                            // ------------------- Deactivate Job Voucher -------------------
                             if (thiefCharacter.jobVoucher && !voucherCheck?.skipVoucher) {
                                 const deactivationResult = await deactivateJobVoucher(thiefCharacter._id);
                                 if (!deactivationResult.success) {
                                     console.error(`[steal.js]: ❌ Failed to deactivate job voucher for ${thiefCharacter.name}`);
-                                } else {
-                                    console.log(`[steal.js]: ✅ Job voucher deactivated for ${thiefCharacter.name}`);
                                 }
                             }
                             
@@ -988,10 +924,8 @@ module.exports = {
                         
                         await thiefCharacter.save();
                         
-                        // Create failure embed
                         const embed = await createStealResultEmbed(thiefCharacter, targetCharacter, selectedItemPlayer, 0, rollPlayer, failureThresholdPlayer, false);
                         
-                        // Add fallback message if the selected item's tier is different from requested rarity
                         if (selectedItemPlayer.tier !== raritySelection) {
                             let fallbackMessage = '';
                             if (raritySelection === 'rare') {
@@ -1002,7 +936,6 @@ module.exports = {
                             embed.addFields({ name: 'Note', value: fallbackMessage, inline: false });
                         }
 
-                        // Add failed attempts warning
                         const attemptsLeft = 3 - thiefCharacter.failedStealAttempts;
                         let warningMessage = '';
                         if (attemptsLeft === 2) {
@@ -1025,13 +958,10 @@ module.exports = {
                             });
                         }
                         
-                        // ------------------- Deactivate Job Voucher -------------------
                         if (thiefCharacter.jobVoucher && !voucherCheck?.skipVoucher) {
                             const deactivationResult = await deactivateJobVoucher(thiefCharacter._id);
                             if (!deactivationResult.success) {
                                 console.error(`[steal.js]: ❌ Failed to deactivate job voucher for ${thiefCharacter.name}`);
-                            } else {
-                                console.log(`[steal.js]: ✅ Job voucher deactivated for ${thiefCharacter.name}`);
                             }
                         }
                         
