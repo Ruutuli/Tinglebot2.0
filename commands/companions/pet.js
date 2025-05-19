@@ -81,9 +81,9 @@ function handlePetError(error, interaction, context = {}) {
   // Send error message to user
   const errorMessage = "❌ **An unexpected error occurred. Please try again later.**";
   if (interaction.replied || interaction.deferred) {
-    return interaction.followUp({ content: errorMessage, ephemeral: true });
+    return interaction.followUp({ content: errorMessage, flags: 64 });
   } else {
-    return interaction.reply({ content: errorMessage, ephemeral: true });
+    return interaction.reply({ content: errorMessage, flags: 64 });
   }
 }
 

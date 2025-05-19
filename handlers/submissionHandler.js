@@ -115,7 +115,7 @@ async function handleSubmissionCompletion(interaction) {
     console.error(`[submissionHandler.js]: handleSubmissionCompletion: Error completing submission: ${error.message}`);
     await interaction.followUp({
       content: '⚠️ **Error completing submission. Please try again.**',
-      ephemeral: true,
+      flags: 64 // 64 is the flag for ephemeral messages
     });
   }
 }

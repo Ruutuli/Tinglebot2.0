@@ -140,7 +140,7 @@ async function handleButtonInteraction(interaction) {
     if (!interaction.replied) {
       await interaction.reply({
         content: '❌ **An error occurred while processing your action.**',
-        ephemeral: true,
+        flags: 64 // 64 is the flag for ephemeral messages
       });
     }
   }
@@ -152,7 +152,7 @@ async function handleSyncYes(interaction, characterId) {
   try {
     const character = await fetchCharacterById(characterId);
     if (!character) {
-      return interaction.reply({ content: '❌ **Character not found.**', ephemeral: true });
+      return interaction.reply({ content: '❌ **Character not found.**', flags: 64 });
     }
 
     // Check if inventory is already synced
@@ -179,7 +179,7 @@ async function handleSyncYes(interaction, characterId) {
     if (!interaction.replied && !interaction.deferred) {
       await interaction.reply({ 
         content: '❌ **An error occurred while starting the sync process.**',
-        ephemeral: true 
+        flags: 64 // 64 is the flag for ephemeral messages
       });
     }
   }
@@ -201,7 +201,7 @@ async function handleConfirmation(interaction, userId, submissionData) {
   if (!submissionData) {
     return interaction.reply({
       content: '❌ **Submission data not found. Please try again.**',
-      ephemeral: true,
+      flags: 64 // 64 is the flag for ephemeral messages
     });
   }
 
@@ -251,7 +251,7 @@ async function handleViewCharacter(interaction, characterId) {
       console.error(`[componentHandler.js]: Character with ID "${characterId}" not found.`);
       return interaction.reply({ 
         content: '❌ **This character no longer exists or has been deleted.**\nPlease try viewing a different character.', 
-        ephemeral: true 
+        flags: 64 // 64 is the flag for ephemeral messages
       });
     }
 
@@ -280,7 +280,7 @@ async function handleViewCharacter(interaction, characterId) {
     };
 
     const gearEmbed = createCharacterGearEmbed(character, gearMap, 'all');
-    await interaction.reply({ embeds: [embed, gearEmbed], ephemeral: true });
+    await interaction.reply({ embeds: [embed, gearEmbed], flags: 64 });
   } catch (error) {
     handleError(error, 'componentHandler.js');
     console.error(`[componentHandler.js]: Error in handleViewCharacter:`, error);
@@ -288,7 +288,7 @@ async function handleViewCharacter(interaction, characterId) {
     if (!interaction.replied) {
       await interaction.reply({
         content: '❌ **An error occurred while viewing the character.**\nPlease try again later.',
-        ephemeral: true
+        flags: 64 // 64 is the flag for ephemeral messages
       });
     }
   }
@@ -308,14 +308,14 @@ async function handleJobSelect(interaction, characterId, updatedJob) {
   
       if (!character) {
         console.error(`[componentHandler.js]: Character not found for ID: ${characterId}`);
-        return interaction.reply({ content: '❌ **Character not found.**', ephemeral: true });
+        return interaction.reply({ content: '❌ **Character not found.**', flags: 64 });
       }
   
       // Validate job change
       const validationResult = await canChangeJob(character, updatedJob);
       if (!validationResult.valid) {
         console.warn(`[componentHandler.js]: Job validation failed: ${validationResult.message}`);
-        return interaction.reply({ content: validationResult.message, ephemeral: true });
+        return interaction.reply({ content: validationResult.message, flags: 64 });
       }
   
       const previousJob = character.job;
@@ -389,7 +389,7 @@ async function handleJobSelect(interaction, characterId, updatedJob) {
         content: `✅ **${character.name}'s job has been updated from ${previousJob} to ${updatedJob}.**`,
         embeds: [embed],
         components: [], // Set components to empty array to remove all buttons
-        ephemeral: true,
+        flags: 64, // 64 is the flag for ephemeral messages
       });
 
       // If the new job is Shopkeeper or Merchant, show the shop setup guide
@@ -408,7 +408,7 @@ async function handleJobSelect(interaction, characterId, updatedJob) {
 
         await interaction.followUp({
           embeds: [shopGuideEmbed],
-          ephemeral: true
+          flags: 64 // 64 is the flag for ephemeral messages
         });
       }
   
@@ -441,7 +441,7 @@ async function handleJobSelect(interaction, characterId, updatedJob) {
       console.error(`[componentHandler.js]: Error in handleJobSelect`, error);
       await interaction.reply({
         content: '⚠️ **An error occurred while updating the job. Please try again.**',
-        ephemeral: true,
+        flags: 64 // 64 is the flag for ephemeral messages
       });
     }
   }
@@ -455,7 +455,7 @@ async function handleJobSelect(interaction, characterId, updatedJob) {
       if (isNaN(pageIndex) || pageIndex < 1 || pageIndex > 2) {
         return interaction.reply({
           content: '⚠️ **Invalid job page. Please try again.**',
-          ephemeral: true,
+          flags: 64 // 64 is the flag for ephemeral messages
         });
       }
   
@@ -463,7 +463,7 @@ async function handleJobSelect(interaction, characterId, updatedJob) {
       if (!jobs || !Array.isArray(jobs) || jobs.length === 0) {
         return interaction.reply({
           content: '⚠️ **No jobs available on this page.**',
-          ephemeral: true,
+          flags: 64 // 64 is the flag for ephemeral messages
         });
       }
   
@@ -501,7 +501,7 @@ async function handleJobSelect(interaction, characterId, updatedJob) {
       await interaction.update({
         embeds: [embed],
         components: [...rows, navigationRow],
-        ephemeral: true,
+        flags: 64, // 64 is the flag for ephemeral messages
       });
   
     } catch (error) {
@@ -509,7 +509,7 @@ async function handleJobSelect(interaction, characterId, updatedJob) {
       console.error(`[componentHandler.js]: Error in handleJobPage`, error);
       await interaction.reply({
         content: '⚠️ **An error occurred while navigating job pages. Please try again.**',
-        ephemeral: true,
+        flags: 64 // 64 is the flag for ephemeral messages
       });
     }
   }

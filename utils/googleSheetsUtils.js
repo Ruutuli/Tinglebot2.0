@@ -115,7 +115,8 @@ async function authorizeSheets() {
 async function makeApiRequest(fn, { suppressLog = false } = {}) {
     try {
         const auth = await authorizeSheets();
-        const serviceAccountEmail = JSON.parse(fs.readFileSync(SERVICE_ACCOUNT_PATH)).client_email;
+        const credentials = getServiceAccountCredentials();
+        const serviceAccountEmail = credentials.client_email;
         
         // Check permissions first
         try {

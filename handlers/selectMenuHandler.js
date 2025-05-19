@@ -196,12 +196,12 @@ async function handleSelectMenuInteraction(interaction) {
     if (interaction.replied || interaction.deferred) {
       await interaction.followUp({
         content: '❌ **An error occurred while processing your selection.**',
-        ephemeral: true,
+        flags: 64 // 64 is the flag for ephemeral messages
       });
     } else {
       await interaction.reply({
         content: '❌ **An error occurred while processing your selection.**',
-        ephemeral: true,
+        flags: 64 // 64 is the flag for ephemeral messages
       });
     }
   }
@@ -219,7 +219,7 @@ async function confirmSubmission(interaction) {
     if (!submissionData) {
       await interaction.reply({
         content: '❌ **Submission data not found. Please restart the submission process.**',
-        ephemeral: true,
+        flags: 64 // 64 is the flag for ephemeral messages
       });
       return;
     }
@@ -286,12 +286,12 @@ async function confirmSubmission(interaction) {
     if (interaction.replied || interaction.deferred) {
       await interaction.followUp({
         content: '❌ **An error occurred while finalizing your submission.**',
-        ephemeral: true,
+        flags: 64 // 64 is the flag for ephemeral messages
       });
     } else {
       await interaction.reply({
         content: '❌ **An error occurred while finalizing your submission.**',
-        ephemeral: true,
+        flags: 64 // 64 is the flag for ephemeral messages
       });
     }
   }

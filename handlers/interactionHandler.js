@@ -58,12 +58,12 @@ const handleInteraction = async (interaction, client) => {
       } else if (!interaction.replied && !interaction.deferred) {
         await interaction.reply({
           content: '❌ **There was an error while executing this command!**',
-          ephemeral: true
+          flags: 64 // 64 is the flag for ephemeral messages
         });
       } else if (!interaction.replied) {
         await interaction.followUp({
           content: '❌ **There was an error while executing this command!**',
-          ephemeral: true
+          flags: 64 // 64 is the flag for ephemeral messages
         });
       }
     } catch (err) {
