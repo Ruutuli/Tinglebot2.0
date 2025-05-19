@@ -29,6 +29,7 @@ const { handleError } = require('../../utils/globalErrorHandler');
 const { removeItemInventoryDatabase, syncToInventoryDatabase } = require('../../utils/inventoryUtils');
 const { checkInventorySync } = require('../../utils/characterUtils');
 const { safeAppendDataToSheet } = require('../../utils/googleSheetsUtils');
+const { enforceJail } = require('../../utils/jailCheck');
 
 
 // ------------------- Command Definition -------------------
@@ -76,7 +77,17 @@ module.exports = {
       // Retrieve character and item data; bail out if missing.
       const character = await fetchCharacterByNameAndUserId(characterName, interaction.user.id);
       if (!character) {
-        return void await interaction.editReply({ content: '❌ **Character not found.**' });
+        await interaction.editReply({
+          content: `❌ **Character ${characterName} not found or does not belong to you.**`,
+        });
+        return;
+      }
+
+      // Check if character is in jail
+      const jailCheck = await enforceJail(character, 'use items');
+      if (jailCheck) {
+        await interaction.editReply({ content: jailCheck, ephemeral: true });
+        return;
       }
 
       const item = await fetchItemByName(itemName);
