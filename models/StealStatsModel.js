@@ -32,7 +32,18 @@ const stealStatsSchema = new mongoose.Schema({
             type: Number,
             default: 0
         }
-    }
+    },
+    victims: [{
+        characterId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Character'
+        },
+        characterName: String,
+        count: {
+            type: Number,
+            default: 1
+        }
+    }]
 }, {
     timestamps: true
 });

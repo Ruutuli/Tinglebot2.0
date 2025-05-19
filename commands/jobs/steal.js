@@ -151,15 +151,8 @@ async function createStealResultEmbed(thiefCharacter, targetCharacter, item, qua
     const successField = `Roll: **${roll}** / 99 = ${isSuccess ? '✅ Success!' : '❌ Failure!'}`;
     
     const embed = createBaseEmbed(isSuccess ? '💰 Item Stolen!' : '💢 Failed Heist!', isSuccess ? '#AA926A' : '#ff0000')
-        .setDescription(`**${thiefCharacter.name}** ${isSuccess ? 'successfully stole from' : 'tried to steal from'} ${isNPC ? targetCharacter : `**${targetCharacter.name}**`}`)
+        .setDescription(`[**${thiefCharacter.name}**](${thiefCharacter.inventory || thiefCharacter.inventoryLink}) ${isSuccess ? 'successfully stole from' : 'tried to steal from'} ${isNPC ? targetCharacter : `[**${targetCharacter.name}**](${targetCharacter.inventory || targetCharacter.inventoryLink})`}`)
         .addFields(
-            { 
-                name: '🎯 Target', 
-                value: isNPC 
-                    ? `> ${NPCs[targetCharacter]?.flavorText || ''}` 
-                    : `> [${targetCharacter.name}](${targetCharacter.inventory || targetCharacter.inventoryLink})`, 
-                inline: false 
-            },
             { name: '📦 Item', value: `> **${itemEmoji} ${item.itemName}**${isSuccess ? ` x**${quantity}**` : ''}`, inline: false },
             { name: '🎲 Roll', value: `> ${successField}`, inline: false },
             { name: '✨ Rarity', value: `> **${item.tier.toUpperCase()}**`, inline: false }
@@ -207,7 +200,7 @@ function setProtection(targetId) {
 }
 
 // ------------------- Statistics Functions -------------------
-async function updateStealStats(characterId, success, itemRarity) {
+async function updateStealStats(characterId, success, itemRarity, victimCharacter = null) {
     try {
         let stats = await StealStats.findOne({ characterId });
         
@@ -221,7 +214,8 @@ async function updateStealStats(characterId, success, itemRarity) {
                     common: 0,
                     uncommon: 0,
                     rare: 0
-                }
+                },
+                victims: []
             });
         }
         
@@ -229,6 +223,25 @@ async function updateStealStats(characterId, success, itemRarity) {
         if (success) {
             stats.successfulSteals++;
             stats.itemsByRarity[itemRarity]++;
+            
+            // Update victim tracking if this was a successful steal
+            if (victimCharacter) {
+                const victimIndex = stats.victims.findIndex(v => 
+                    v.characterId.toString() === victimCharacter._id.toString()
+                );
+                
+                if (victimIndex === -1) {
+                    // Add new victim
+                    stats.victims.push({
+                        characterId: victimCharacter._id,
+                        characterName: victimCharacter.name,
+                        count: 1
+                    });
+                } else {
+                    // Increment existing victim count
+                    stats.victims[victimIndex].count++;
+                }
+            }
         } else {
             stats.failedSteals++;
         }
@@ -249,7 +262,8 @@ async function getStealStats(characterId) {
                 common: 0,
                 uncommon: 0,
                 rare: 0
-            }
+            },
+            victims: []
         };
         
         const successRate = stats.totalAttempts > 0 
@@ -271,7 +285,8 @@ async function getStealStats(characterId) {
                 common: 0,
                 uncommon: 0,
                 rare: 0
-            }
+            },
+            victims: []
         };
     }
 }
@@ -385,7 +400,12 @@ module.exports = {
         .addSubcommand(subcommand =>
             subcommand
                 .setName('stats')
-                .setDescription('View your stealing statistics.')),
+                .setDescription('View your stealing statistics.')
+                .addStringOption(option =>
+                    option.setName('charactername')
+                        .setDescription('Your character name')
+                        .setRequired(true)
+                        .setAutocomplete(true))),
 
     // ============================================================================
     // ---- Command Handlers ----
@@ -476,7 +496,14 @@ module.exports = {
                         const npcItemIndex = npcInventory.indexOf(selectedItem.itemName);
                         if (npcItemIndex > -1) npcInventory.splice(npcItemIndex, 1);
                         
-                        await addItemInventoryDatabase(thiefCharacter._id, selectedItem.itemName, quantity, interaction, `Stolen from NPC ${mappedNPCName}`);
+                        const stolenItem = {
+                            itemName: selectedItem.itemName,
+                            quantity: quantity,
+                            obtain: `Stolen from NPC ${mappedNPCName}`,
+                            date: new Date()
+                        };
+                        
+                        await syncToInventoryDatabase(thiefCharacter, stolenItem, interaction);
                         
                         const embed = await createStealResultEmbed(thiefCharacter, mappedNPCName, selectedItem, quantity, roll, failureThreshold, true, true);
                         return interaction.editReply({ embeds: [embed], ephemeral: false });
@@ -580,44 +607,43 @@ module.exports = {
                     // Update streak and stats on success/failure
                     if (success) {
                         stealStreaks.set(interaction.user.id, currentStreak + 1);
-                        await updateStealStats(thiefCharacter._id, true, selectedItemPlayer.tier);
+                        await updateStealStats(thiefCharacter._id, true, selectedItemPlayer.tier, targetCharacter);
                         setProtection(targetCharacter._id);
 
                         // Remove item from target's inventory and add to thief's inventory
-                        await removeItemInventoryDatabase(targetCharacter._id, selectedItemPlayer.itemName, determineStealQuantity(selectedItemPlayer), interaction, `Item stolen by ${thiefCharacter.name}`);
-                        await addItemInventoryDatabase(thiefCharacter._id, selectedItemPlayer.itemName, determineStealQuantity(selectedItemPlayer), interaction, `Stolen from ${targetCharacter.name}`);
+                        const quantityToSteal = determineStealQuantity(selectedItemPlayer);
+                        
+                        // Create items for sync
+                        const stolenItem = {
+                            itemName: selectedItemPlayer.itemName,
+                            quantity: quantityToSteal,
+                            obtain: `Stolen from ${targetCharacter.name}`,
+                            date: new Date()
+                        };
+                        
+                        const removedItem = {
+                            itemName: selectedItemPlayer.itemName,
+                            quantity: -quantityToSteal,
+                            obtain: `Item stolen by ${thiefCharacter.name}`,
+                            date: new Date()
+                        };
 
-                        // Sync to Google Sheets for both characters
-                        if (targetCharacter.inventorySynced) {
-                            await syncToInventoryDatabase(targetCharacter, {
-                                itemName: selectedItemPlayer.itemName,
-                                quantity: -determineStealQuantity(selectedItemPlayer),
-                                obtain: `Stolen by ${thiefCharacter.name}`,
-                                link: `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`
-                            }, interaction);
-                        }
+                        // Sync both changes
+                        await syncToInventoryDatabase(targetCharacter, removedItem, interaction);
+                        await syncToInventoryDatabase(thiefCharacter, stolenItem, interaction);
 
-                        if (thiefCharacter.inventorySynced) {
-                            await syncToInventoryDatabase(thiefCharacter, {
-                                itemName: selectedItemPlayer.itemName,
-                                quantity: determineStealQuantity(selectedItemPlayer),
-                                obtain: `Stolen from ${targetCharacter.name}`,
-                                link: `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`
-                            }, interaction);
-                        }
+                        // Create success embed
+                        const embed = await createStealResultEmbed(thiefCharacter, targetCharacter, selectedItemPlayer, quantityToSteal, rollPlayer, failureThresholdPlayer, success);
+
+                        await interaction.editReply({
+                            content: success ? `Hey! <@${targetCharacter.userId}>! Your character **${targetCharacter.name}** was stolen from!` : null,
+                            embeds: [embed],
+                            ephemeral: false
+                        });
                     } else {
                         stealStreaks.set(interaction.user.id, 0);
                         await updateStealStats(thiefCharacter._id, false, selectedItemPlayer.tier);
                     }
-
-                    // Create success embed
-                    const embed = await createStealResultEmbed(thiefCharacter, targetCharacter, selectedItemPlayer, determineStealQuantity(selectedItemPlayer), rollPlayer, failureThresholdPlayer, success);
-
-                    await interaction.editReply({
-                        content: success ? `Hey! <@${targetCharacter.userId}>! Your character **${targetCharacter.name}** was stolen from!` : null,
-                        embeds: [embed],
-                        ephemeral: false
-                    });
                 }
 
                 // Calculate new cooldown based on rarity and streak
@@ -699,6 +725,13 @@ module.exports = {
                 }
 
                 const stats = await getStealStats(character._id);
+                
+                // Sort victims by count
+                const sortedVictims = stats.victims.sort((a, b) => b.count - a.count);
+                const victimsList = sortedVictims.length > 0 
+                    ? sortedVictims.map(v => `**${v.characterName}**: ${v.count} time${v.count > 1 ? 's' : ''}`).join('\n')
+                    : 'No successful steals yet';
+                
                 const embed = createBaseEmbed('📊 Steal Statistics')
                     .setDescription(`Statistics for **${character.name}** the ${character.job ? character.job.charAt(0).toUpperCase() + character.job.slice(1).toLowerCase() : 'No Job'}`)
                     .addFields(
@@ -709,7 +742,8 @@ module.exports = {
                         { name: '✨ Items by Rarity', value: 
                             `Common: ${stats.itemsByRarity.common}\n` +
                             `Uncommon: ${stats.itemsByRarity.uncommon}\n` +
-                            `Rare: ${stats.itemsByRarity.rare}`, inline: false }
+                            `Rare: ${stats.itemsByRarity.rare}`, inline: false },
+                        { name: '👥 Victims', value: victimsList, inline: false }
                     );
                 
                 return interaction.editReply({ embeds: [embed], ephemeral: true });
