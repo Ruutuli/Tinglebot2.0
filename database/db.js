@@ -268,7 +268,6 @@ const fetchCharacterByNameAndUserId = async (characterName, userId) => {
   await connectToTinglebot();
   // Get the actual name part before the "|" if it exists
   const actualName = characterName.split('|')[0].trim();
-  console.log(`[characterService]: 🔍 Searching for "${actualName}" (userId: ${userId})`);
   
   const character = await Character.findOne({
     name: new RegExp(`^${actualName}$`, "i"),
@@ -276,16 +275,14 @@ const fetchCharacterByNameAndUserId = async (characterName, userId) => {
   });
 
   if (!character) {
-    console.error(`[characterService]: ❌ Character not found`);
+    console.log(`[characterService]: 🔍 Character "${actualName}" not found for userId: ${userId}`);
     return null;
   }
 
   return character;
  } catch (error) {
   handleError(error, "db.js");
-  console.error(
-   `[characterService]: ❌ Error searching for "${actualName}": ${error.message}`
-  );
+  console.error(`[characterService]: ❌ Error searching for "${actualName}": ${error.message}`);
   throw error;
  }
 };
