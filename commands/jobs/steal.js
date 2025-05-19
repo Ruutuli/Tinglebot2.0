@@ -14,6 +14,7 @@ const { getNPCItems, NPCs } = require('../../modules/stealingNPCSModule');
 const { authorizeSheets, appendSheetData, isValidGoogleSheetsUrl, extractSpreadsheetId, safeAppendDataToSheet } = require('../../utils/googleSheetsUtils');
 const ItemModel = require('../../models/ItemModel');
 const { fetchActiveBoost } = require('../../utils/boostingUtils');
+const Character = require('../../models/CharacterModel');
 
 // ============================================================================
 // ---- Constants ----
@@ -295,11 +296,6 @@ module.exports = {
         .setName('steal')
         .setDescription('Steal an item from another character or NPC.')
         .addStringOption(option =>
-            option.setName('charactername')
-                .setDescription('Your character name (thief)')
-                .setRequired(true)
-                .setAutocomplete(true))
-        .addStringOption(option =>
             option.setName('targettype')
                 .setDescription('Choose NPC or Player as target')
                 .setRequired(true)
@@ -352,13 +348,24 @@ module.exports = {
     async autocomplete(interaction) {
         try {
             const focusedValue = interaction.options.getFocused().toLowerCase().trim();
-            if (!NPC_NAME_MAPPING || Object.keys(NPC_NAME_MAPPING).length === 0) {
-                return await interaction.respond([]);
+            const targetType = interaction.options.getString('targettype');
+
+            if (targetType === 'npc') {
+                // Return filtered NPC list
+                const filteredNPCs = Object.keys(NPC_NAME_MAPPING)
+                    .filter(npc => npc.toLowerCase().includes(focusedValue))
+                    .slice(0, 25);
+                return await interaction.respond(filteredNPCs.map(npc => ({ name: npc, value: npc })));
+            } else if (targetType === 'player') {
+                // Return filtered list of players who can be stolen from
+                const characters = await Character.find({ canBeStolenFrom: true });
+                const filteredCharacters = characters
+                    .filter(char => char.name.toLowerCase().includes(focusedValue))
+                    .slice(0, 25);
+                return await interaction.respond(filteredCharacters.map(char => ({ name: char.name, value: char.name })));
             }
-            const filteredNPCs = Object.keys(NPC_NAME_MAPPING)
-                .filter(npc => npc.toLowerCase().includes(focusedValue))
-                .slice(0, 25);
-            await interaction.respond(filteredNPCs.map(npc => ({ name: npc, value: npc })));
+
+            return await interaction.respond([]);
         } catch (error) {
             handleError(error, 'steal.js');
             console.error('[steal.js]: Error in autocomplete:', error);
@@ -374,14 +381,26 @@ module.exports = {
 
             // If no subcommand, handle main steal command
             if (!subcommand) {
-                const characterName = interaction.options.getString('charactername');
                 const targetType = interaction.options.getString('targettype');
                 const targetName = interaction.options.getString('target');
                 const raritySelection = interaction.options.getString('rarity').toLowerCase();
 
+                // Get the user's active character
+                const activeCharacter = await Character.findOne({ 
+                    userId: interaction.user.id,
+                    isActive: true 
+                });
+
+                if (!activeCharacter) {
+                    return interaction.editReply({ 
+                        content: '❌ **You need to have an active character to steal!**', 
+                        ephemeral: true 
+                    });
+                }
+
                 // Validate thief character
                 const { valid: thiefValid, error: thiefError, character: thiefCharacter } = 
-                    await validateCharacter(characterName, interaction.user.id, true);
+                    await validateCharacter(activeCharacter.name, interaction.user.id, true);
                 if (!thiefValid) {
                     return interaction.editReply({ content: thiefError, ephemeral: true });
                 }
