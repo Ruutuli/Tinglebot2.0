@@ -3,7 +3,9 @@
 
 .cursor/rules/
 .dependency-cruiser.js
-config/
+config/token.json
+config/service_account.json
+config/credentials.json
 eslint.config.mjs
 node_modules
 nodemon.log
