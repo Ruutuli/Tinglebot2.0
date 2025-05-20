@@ -190,10 +190,6 @@ async function handleAutocomplete(interaction) {
           case "blight":
             if (interaction.options._subcommand) {
               const blightSubcommand = interaction.options.getSubcommand();
-              console.log('[handleAutocomplete]: 📝 Processing blight command', {
-                subcommand: blightSubcommand,
-                focusedOption: focusedOption.name
-              });
               
               if (blightSubcommand === "heal") {
                 if (focusedOption.name === "character_name" || focusedOption.name === "healer_name") {
@@ -202,9 +198,7 @@ async function handleAutocomplete(interaction) {
                   await handleBlightItemAutocomplete(interaction, focusedOption);
                 }
               } else if (blightSubcommand === "submit") {
-                console.log('[handleAutocomplete]: 📝 Processing blight submit', {
-                  focusedOption: focusedOption.name
-                });
+
                 if (focusedOption.name === "item") {
                   await handleBlightItemAutocomplete(interaction, focusedOption);
                 }
@@ -550,7 +544,7 @@ async function handleBlightCharacterAutocomplete(interaction, focusedOption) {
 // requirements from mod characters and filtering them based on user input.
 async function handleBlightItemAutocomplete(interaction, focusedOption) {
   try {
-                const userId = interaction.user.id;
+    const userId = interaction.user.id;
     const subcommand = interaction.options.getSubcommand();
 
     if (subcommand === 'submit') {
@@ -564,7 +558,10 @@ async function handleBlightItemAutocomplete(interaction, focusedOption) {
         requirements.forEach(req => {
           if (req.type === 'item' && req.items) {
             req.items.forEach(item => {
-              allHealingItems.add(`${item.name} x${item.quantity}`);
+              allHealingItems.add({
+                name: item.name,
+                quantity: item.quantity
+              });
             });
           }
         });
@@ -573,10 +570,10 @@ async function handleBlightItemAutocomplete(interaction, focusedOption) {
       // Convert to array and filter based on user input
       const input = focusedOption.value?.toLowerCase() || '';
       const choices = Array.from(allHealingItems)
-        .filter(choice => choice.toLowerCase().includes(input))
-        .map(choice => ({
-          name: choice,
-          value: choice
+        .filter(item => item.name.toLowerCase().includes(input))
+        .map(item => ({
+          name: `${item.name} | ${item.quantity} required`,
+          value: `${item.name} x${item.quantity}`
         }))
         .slice(0, 25);
 
@@ -627,7 +624,7 @@ async function handleBlightItemAutocomplete(interaction, focusedOption) {
         .map(item => {
           const requiredItem = requiredItems.get(item.itemName.toLowerCase());
           return {
-            name: `${item.itemName} - Qty: ${item.quantity} (Required: ${requiredItem.quantity})`,
+            name: `${item.itemName} | ${requiredItem.quantity} required`,
             value: item.itemName
           };
         });
