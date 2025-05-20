@@ -348,6 +348,14 @@ async function handleAutocomplete(interaction) {
               await handleVendorItemAutocomplete(interaction, focusedOption);
             } else if (focusedOption.name === "slot" && vendingSubcommand === "add") {
               await handleSlotAutocomplete(interaction, focusedOption);
+            } else if (focusedOption.name === "vendorcharacter" && vendingSubcommand === "barter") {
+              await handleVendingBarterAutocomplete(interaction, focusedOption);
+            } else if (focusedOption.name === "itemname" && vendingSubcommand === "barter") {
+              await handleVendingBarterAutocomplete(interaction, focusedOption);
+            } else if (focusedOption.name === "itemname" && vendingSubcommand === "add") {
+              await handleVendorItemAutocomplete(interaction, focusedOption);
+            } else if (focusedOption.name === "slot" && vendingSubcommand === "add") {
+              await handleSlotAutocomplete(interaction, focusedOption);
             }
             break;
 
@@ -448,18 +456,18 @@ async function handleCharacterBasedCommandsAutocomplete(
  commandName
 ) {
  try {
-  const userId = interaction.user.id;
+                const userId = interaction.user.id;
 
   // Fetch all characters owned by the user
-  const characters = await fetchCharactersByUserId(userId);
-
+                const characters = await fetchCharactersByUserId(userId);
+                
   // Map all characters to choices with their basic info
   const choices = characters.map((character) => ({
    name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
    value: character.name,
-  }));
-
-  await respondWithFilteredChoices(interaction, focusedOption, choices);
+                }));
+                
+                await respondWithFilteredChoices(interaction, focusedOption, choices);
  } catch (error) {
   handleError(error, "autocompleteHandler.js");
 
@@ -483,7 +491,7 @@ async function handleCharacterBasedCommandsAutocomplete(
 // in the "blight" command based on the user's input.
 async function handleBlightCharacterAutocomplete(interaction, focusedOption) {
  try {
-  const userId = interaction.user.id;
+                const userId = interaction.user.id;
   const subcommand = interaction.options.getSubcommand();
   const focusedName = focusedOption.name;
 
@@ -509,9 +517,9 @@ async function handleBlightCharacterAutocomplete(interaction, focusedOption) {
       const choices = healerCharacters.map((character) => ({
         name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
         value: character.name,
-      }));
-
-      await respondWithFilteredChoices(interaction, focusedOption, choices);
+                }));
+                
+                await respondWithFilteredChoices(interaction, focusedOption, choices);
     }
   } else if (subcommand === 'submit') {
     // For submit command, show characters with pending blight submissions
@@ -542,7 +550,7 @@ async function handleBlightCharacterAutocomplete(interaction, focusedOption) {
 // requirements from mod characters and filtering them based on user input.
 async function handleBlightItemAutocomplete(interaction, focusedOption) {
   try {
-    const userId = interaction.user.id;
+                const userId = interaction.user.id;
     const subcommand = interaction.options.getSubcommand();
 
     if (subcommand === 'submit') {
@@ -659,9 +667,9 @@ async function handleBoostingCharacterAutocomplete(interaction, focusedOption) {
     character.job
    }`,
    value: character.name,
-  }));
-
-  await respondWithFilteredChoices(interaction, focusedOption, choices);
+                }));
+                
+                await respondWithFilteredChoices(interaction, focusedOption, choices);
  } catch (error) {
   handleError(error, "autocompleteHandler.js");
 
@@ -681,7 +689,7 @@ async function handleBoostingCharacterAutocomplete(interaction, focusedOption) {
 
 async function handleChangeJobNewJobAutocomplete(interaction, focusedOption) {
  try {
-  const userId = interaction.user.id;
+                const userId = interaction.user.id;
 
   // Fix: fallback if characterName is empty
   const characterName = interaction.options.getString("charactername") || "";
@@ -778,7 +786,7 @@ const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 async function handleCraftingAutocomplete(interaction, focusedOption) {
   try {
     // Extract user ID and character name from the interaction
-    const userId = interaction.user.id;
+                const userId = interaction.user.id;
     const characterName = interaction.options.getString("charactername");
     const searchQuery = focusedOption.value?.toLowerCase() || "";
 
@@ -863,7 +871,7 @@ async function handleCreateCharacterVillageAutocomplete(
   }));
 
   // Respond to the interaction with filtered village choices
-  await respondWithFilteredChoices(interaction, focusedOption, choices);
+                await respondWithFilteredChoices(interaction, focusedOption, choices);
  } catch (error) {
   handleError(error, "autocompleteHandler.js");
 
@@ -886,7 +894,7 @@ async function handleCreateCharacterRaceAutocomplete(
   }));
 
   // Respond to the interaction with filtered race choices
-  await respondWithFilteredChoices(interaction, focusedOption, choices);
+                await respondWithFilteredChoices(interaction, focusedOption, choices);
  } catch (error) {
   handleError(error, "autocompleteHandler.js");
 
@@ -906,18 +914,18 @@ async function handleCreateCharacterRaceAutocomplete(
 // Provides autocomplete suggestions for selecting a character when creating a custom weapon.
 async function handleCustomWeaponCharacterAutocomplete(interaction, focusedOption) {
   try {
-    const userId = interaction.user.id;
-    const characters = await fetchCharactersByUserId(userId);
-    
+                const userId = interaction.user.id;
+                const characters = await fetchCharactersByUserId(userId);
+                
     // Ensure focusedValue is a string and has a default value
     const focusedValue = focusedOption?.value?.toString() || '';
     
     const choices = characters
       .filter(char => char.name.toLowerCase().includes(focusedValue.toLowerCase()))
       .map(char => ({
-        name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
-        value: char.name
-      }));
+                  name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
+                  value: char.name
+                }));
     return await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
     console.error('[handleCustomWeaponCharacterAutocomplete]: Error:', error);
@@ -929,7 +937,7 @@ async function handleCustomWeaponCharacterAutocomplete(interaction, focusedOptio
 // Provides autocomplete suggestions for selecting an approved weapon ID.
 async function handleCustomWeaponIdAutocomplete(interaction, focusedOption) {
   try {
-    const userId = interaction.user.id;
+                const userId = interaction.user.id;
     const characterName = interaction.options.getString('charactername');
     if (!characterName) return await interaction.respond([]);
 
@@ -946,9 +954,9 @@ async function handleCustomWeaponIdAutocomplete(interaction, focusedOption) {
     const choices = approvedWeapons.map(weapon => ({
       name: `${weapon.weaponName} (ID: ${weapon.itemId})`,
       value: weapon.itemId
-    }));
-
-    await respondWithFilteredChoices(interaction, focusedOption, choices);
+                }));
+                
+                await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
     console.error('[handleCustomWeaponIdAutocomplete]: Error:', error);
     return await safeRespondWithError(interaction);
@@ -1031,7 +1039,7 @@ async function handleSubtypeAutocomplete(interaction, focusedOption) {
 // ------------------- Deliver: Sender Autocomplete -------------------
 // Provides autocomplete suggestions for the user's own characters to act as senders.
 async function handleCourierSenderAutocomplete(interaction, focusedOption) {
- const userId = interaction.user.id;
+                const userId = interaction.user.id;
  await handleCharacterAutocomplete(
   interaction,
   focusedOption,
@@ -1078,7 +1086,7 @@ async function handleRecipientAutocomplete(interaction, focusedOption) {
 // ------------------- Deliver: Courier Accept Autocomplete -------------------
 // Provides autocomplete suggestions for user's characters with the "courier" job.
 async function handleCourierAcceptAutocomplete(interaction, focusedOption) {
- const userId = interaction.user.id;
+                const userId = interaction.user.id;
  await handleCharacterAutocomplete(
   interaction,
   focusedOption,
@@ -1137,7 +1145,7 @@ async function handleAllRecipientAutocomplete(interaction, focusedOption) {
 // Provides autocomplete suggestions for items in the sender's inventory.
 async function handleDeliverItemAutocomplete(interaction, focusedOption) {
  try {
-  const userId = interaction.user.id;
+                const userId = interaction.user.id;
   const senderName = interaction.options.getString("sender");
   if (!senderName) return await interaction.respond([]);
 
@@ -1163,9 +1171,9 @@ async function handleDeliverItemAutocomplete(interaction, focusedOption) {
   const choices = Array.from(itemMap.entries()).map(([name, qty]) => ({
    name: `${name} - QTY:${qty}`,
    value: name,
-  }));
-
-  await respondWithFilteredChoices(interaction, focusedOption, choices);
+                }));
+                
+                await respondWithFilteredChoices(interaction, focusedOption, choices);
  } catch (error) {
   handleError(error, "autocompleteHandler.js");
 
@@ -1184,7 +1192,7 @@ async function handleVendorItemAutocomplete(interaction, focusedOption) {
     const characterName = interaction.options.getString("charactername");
     if (!characterName) return await interaction.respond([]);
 
-    const userId = interaction.user.id;
+                const userId = interaction.user.id;
     const character = await fetchCharacterByNameAndUserId(characterName, userId);
     if (!character) return await interaction.respond([]);
 
@@ -1289,12 +1297,12 @@ async function handleTradeAutocomplete(interaction, focusedOption, focusedValue)
 // Provides autocomplete for selecting the source character in a trade
 async function handleTradeFromCharacterAutocomplete(interaction, focusedValue) {
   try {
-    const userId = interaction.user.id;
-    const characters = await fetchCharactersByUserId(userId);
+                const userId = interaction.user.id;
+                const characters = await fetchCharactersByUserId(userId);
     const choices = characters.map(char => ({
-      name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
-      value: char.name
-    }));
+                  name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
+                  value: char.name
+                }));
     const filtered = choices.filter(choice => choice.name.toLowerCase().includes(focusedValue));
     return await interaction.respond(filtered.slice(0, 25));
   } catch (error) {
@@ -1307,12 +1315,12 @@ async function handleTradeFromCharacterAutocomplete(interaction, focusedValue) {
 // Provides autocomplete for selecting the target character in a trade
 async function handleTradeToCharacterAutocomplete(interaction, focusedValue) {
   try {
-    const userId = interaction.user.id;
+                const userId = interaction.user.id;
     const characters = await fetchAllCharactersExceptUser(userId);
     const choices = characters.map(char => ({
-      name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
-      value: char.name
-    }));
+                  name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
+                  value: char.name
+                }));
     const filtered = choices.filter(choice => choice.name.toLowerCase().includes(focusedValue));
     return await interaction.respond(filtered.slice(0, 25));
   } catch (error) {
@@ -1380,12 +1388,12 @@ async function handleGiftAutocomplete(interaction, focusedOption, focusedValue) 
 // Provides autocomplete for selecting the source character in a gift
 async function handleGiftFromCharacterAutocomplete(interaction, focusedOption) {
   try {
-    const userId = interaction.user.id;
-    const characters = await fetchCharactersByUserId(userId);
+                const userId = interaction.user.id;
+                const characters = await fetchCharactersByUserId(userId);
     const choices = characters.map(char => ({
-      name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
-      value: char.name
-    }));
+                  name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
+                  value: char.name
+                }));
     const focusedValue = focusedOption?.value?.toString().toLowerCase() || '';
     const filtered = choices.filter(choice => choice.name.toLowerCase().includes(focusedValue));
     return await interaction.respond(filtered.slice(0, 25));
@@ -1399,12 +1407,12 @@ async function handleGiftFromCharacterAutocomplete(interaction, focusedOption) {
 // Provides autocomplete for selecting the target character in a gift
 async function handleGiftToCharacterAutocomplete(interaction, focusedOption) {
   try {
-    const userId = interaction.user.id;
+                const userId = interaction.user.id;
     const characters = await fetchAllCharactersExceptUser(userId);
     const choices = characters.map(char => ({
-      name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
-      value: char.name
-    }));
+                  name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
+                  value: char.name
+                }));
     const focusedValue = focusedOption?.value?.toString().toLowerCase() || '';
     const filtered = choices.filter(choice => choice.name.toLowerCase().includes(focusedValue));
     return await interaction.respond(filtered.slice(0, 25));
@@ -1455,7 +1463,7 @@ async function handleShopBuyItemAutocomplete(interaction, focusedValue) {
       return await interaction.respond([]);
     }
 
-    const userId = interaction.user.id;
+                const userId = interaction.user.id;
     const character = await fetchCharacterByNameAndUserId(characterName, userId);
     if (!character) {
       console.log(`[handleShopBuyItemAutocomplete]: Character ${characterName} not found or doesn't belong to user ${userId}`);
@@ -1509,14 +1517,14 @@ async function handleShopAutocomplete(interaction, focusedOption, focusedValue) 
 // Provides autocomplete for selecting character in shop commands
 async function handleShopCharacterAutocomplete(interaction, focusedValue) {
   try {
-    const userId = interaction.user.id;
-    const characters = await fetchCharactersByUserId(userId);
+                const userId = interaction.user.id;
+                const characters = await fetchCharactersByUserId(userId);
     const choices = characters
       .filter(char => char.name.toLowerCase().includes(focusedValue))
       .map(char => ({
-        name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
-        value: char.name
-      }));
+                  name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
+                  value: char.name
+                }));
     return await respondWithFilteredChoices(interaction, focusedValue, choices);
   } catch (error) {
     console.error('[handleShopCharacterAutocomplete]: Error:', error);
@@ -1563,12 +1571,12 @@ async function handleTransferAutocomplete(interaction, focusedOption, focusedVal
 // Provides autocomplete for selecting the source character in a transfer
 async function handleTransferFromCharacterAutocomplete(interaction, focusedValue) {
   try {
-    const userId = interaction.user.id;
-    const characters = await fetchCharactersByUserId(userId);
+                const userId = interaction.user.id;
+                const characters = await fetchCharactersByUserId(userId);
     const choices = characters.map(char => ({
-      name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
-      value: char.name
-    }));
+                  name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
+                  value: char.name
+                }));
     const filtered = choices.filter(choice => choice.name.toLowerCase().includes(focusedValue));
     return await interaction.respond(filtered.slice(0, 25));
   } catch (error) {
@@ -1581,12 +1589,12 @@ async function handleTransferFromCharacterAutocomplete(interaction, focusedValue
 // Provides autocomplete for selecting the target character in a transfer
 async function handleTransferToCharacterAutocomplete(interaction, focusedValue) {
   try {
-    const userId = interaction.user.id;
-    const characters = await fetchCharactersByUserId(userId);
+                const userId = interaction.user.id;
+                const characters = await fetchCharactersByUserId(userId);
     const choices = characters.map(char => ({
-      name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
-      value: char.name
-    }));
+                  name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
+                  value: char.name
+                }));
     const filtered = choices.filter(choice => choice.name.toLowerCase().includes(focusedValue));
     return await interaction.respond(filtered.slice(0, 25));
   } catch (error) {
@@ -1630,7 +1638,7 @@ async function handleTransferItemAutocomplete(interaction, focusedValue) {
 // Provides autocomplete suggestions for items in a character's inventory.
 async function handleItemAutocomplete(interaction, focusedOption) {
   try {
-   const userId = interaction.user.id;
+                const userId = interaction.user.id;
    const focusedName = focusedOption.name;
    const characterName = interaction.options.getString("charactername");
    const searchQuery = focusedOption.value?.toLowerCase() || "";
@@ -1744,9 +1752,9 @@ async function handleItemAutocomplete(interaction, focusedOption) {
    const choices = inventoryItems.map((item) => ({
     name: `${item.itemName} - Qty: ${item.quantity}`,
     value: item.itemName,
-   }));
- 
-   await respondWithFilteredChoices(interaction, focusedOption, choices);
+                }));
+                
+                await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
    handleError(error, "autocompleteHandler.js");
  
@@ -1839,16 +1847,16 @@ async function handleShopsAutocomplete(interaction, focusedOption) {
  // ------------------- Trade To Character Autocomplete -------------------
 async function handleTradeToCharacterAutocomplete(interaction, focusedOption) {
   try {
-   const userId = interaction.user.id;
+                const userId = interaction.user.id;
  
    const characters = await fetchAllCharactersExceptUser(userId);
  
    const choices = characters.map((character) => ({
     name: `${character.name} | ${capitalize(character.currentVillage)}`,
     value: character.name,
-   }));
- 
-   await respondWithFilteredChoices(interaction, focusedOption, choices);
+                }));
+                
+                await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
    handleError(error, "autocompleteHandler.js");
  
@@ -1860,7 +1868,7 @@ async function handleTradeToCharacterAutocomplete(interaction, focusedOption) {
  // ------------------- Trade Item Autocomplete -------------------
  async function handleTradeItemAutocomplete(interaction, focusedOption) {
   try {
-   const userId = interaction.user.id;
+                const userId = interaction.user.id;
    const characterName = interaction.options.getString("fromcharacter");
    if (!characterName) return await interaction.respond([]);
  
@@ -1875,9 +1883,9 @@ async function handleTradeToCharacterAutocomplete(interaction, focusedOption) {
    const choices = inventory.map((item) => ({
     name: `${item.itemName} - QTY:${item.quantity}`,
     value: item.itemName,
-   }));
- 
-   await respondWithFilteredChoices(interaction, focusedOption, choices);
+                }));
+                
+                await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
    handleError(error, "autocompleteHandler.js");
  
@@ -1889,15 +1897,15 @@ async function handleTradeToCharacterAutocomplete(interaction, focusedOption) {
  // ------------------- Transfer From/To Character Autocomplete -------------------
 async function handleTransferCharacterAutocomplete(interaction, focusedOption) {
   try {
-   const userId = interaction.user.id;
-   const characters = await fetchCharactersByUserId(userId);
- 
+                const userId = interaction.user.id;
+                const characters = await fetchCharactersByUserId(userId);
+                
    const choices = characters.map((character) => ({
     name: character.name,
     value: character.name,
-   }));
- 
-   await respondWithFilteredChoices(interaction, focusedOption, choices);
+                }));
+                
+                await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
    handleError(error, "autocompleteHandler.js");
  
@@ -1965,8 +1973,8 @@ async function handleEditCharacterAutocomplete(interaction, focusedOption) {
     { name: "Please upload a new icon", value: "Please upload a new icon" },
    ];
   }
-
-  await respondWithFilteredChoices(interaction, focusedOption, choices);
+                
+                await respondWithFilteredChoices(interaction, focusedOption, choices);
  } catch (error) {
   handleError(error, "autocompleteHandler.js");
 
@@ -1987,7 +1995,7 @@ async function handleExploreRollCharacterAutocomplete(
  focusedOption
 ) {
  try {
-  const userId = interaction.user.id;
+                const userId = interaction.user.id;
   const expeditionId = interaction.options.getString("id");
 
   if (!expeditionId) {
@@ -2042,7 +2050,7 @@ async function handleExploreRollCharacterAutocomplete(
 // Provides autocomplete suggestions for healing items from a character's inventory.
 async function handleExploreItemAutocomplete(interaction, focusedOption) {
  try {
-  const userId = interaction.user.id;
+                const userId = interaction.user.id;
   const characterName = interaction.options.getString("charactername");
 
   if (!characterName) return await interaction.respond([]);
@@ -2098,14 +2106,14 @@ async function handleExploreItemAutocomplete(interaction, focusedOption) {
 
 async function handleExploreCharacterAutocomplete(interaction, focusedOption) {
  try {
-  const userId = interaction.user.id;
+                const userId = interaction.user.id;
   const expeditionId = interaction.options.getString("id");
 
   const userCharacters = await fetchCharactersByUserId(userId);
 
   if (!expeditionId) {
    const choices = userCharacters.map((char) => ({
-    name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
+                  name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
     value: char.name,
    }));
 
@@ -2176,9 +2184,9 @@ async function handleGearAutocomplete(interaction, focusedOption) {
  try {
   const characterName = interaction.options.getString("charactername");
   const type = interaction.options.getString("type");
-  const userId = interaction.user.id;
+                const userId = interaction.user.id;
 
-  const characters = await fetchCharactersByUserId(userId);
+                const characters = await fetchCharactersByUserId(userId);
   const character = characters.find((c) => c.name === characterName);
   if (!character) return await interaction.respond([]);
 
@@ -2243,7 +2251,7 @@ async function handleQuestIdAutocomplete(interaction, focusedOption) {
       }));
       
       // Respond with filtered quest choices
-      await respondWithFilteredChoices(interaction, focusedOption, choices);
+                await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
       handleError(error, "autocompleteHandler.js");
       console.error("[handleQuestIdAutocomplete]: Error:", error);
@@ -2262,7 +2270,7 @@ async function handleQuestIdAutocomplete(interaction, focusedOption) {
 // Provides autocomplete suggestions for healing requests based on context.
 async function handleHealAutocomplete(interaction, focusedOption) {
  try {
-  const userId = interaction.user.id;
+                const userId = interaction.user.id;
   const subcommand = interaction.options.getSubcommand();
 
   if (subcommand === 'request') {
@@ -2272,9 +2280,9 @@ async function handleHealAutocomplete(interaction, focusedOption) {
       const choices = userCharacters.map((character) => ({
         name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
         value: character.name,
-      }));
-
-      await respondWithFilteredChoices(interaction, focusedOption, choices);
+                }));
+                
+                await respondWithFilteredChoices(interaction, focusedOption, choices);
     } else if (focusedOption.name === "hearts") {
       // For hearts, we'll show common healing amounts
       const choices = [
@@ -2298,9 +2306,9 @@ async function handleHealAutocomplete(interaction, focusedOption) {
       const choices = healerCharacters.map((character) => ({
         name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
         value: character.name,
-      }));
-
-      await respondWithFilteredChoices(interaction, focusedOption, choices);
+                }));
+                
+                await respondWithFilteredChoices(interaction, focusedOption, choices);
     }
   } else if (subcommand === 'fulfill') {
     if (focusedOption.name === "healername") {
@@ -2316,9 +2324,9 @@ async function handleHealAutocomplete(interaction, focusedOption) {
       const choices = healerCharacters.map((character) => ({
         name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
         value: character.name,
-      }));
-
-      await respondWithFilteredChoices(interaction, focusedOption, choices);
+                }));
+                
+                await respondWithFilteredChoices(interaction, focusedOption, choices);
     }
   }
  } catch (error) {
@@ -2458,10 +2466,10 @@ async function handleModGiveCharacterAutocomplete(interaction, focusedOption) {
     const choices = characters
       .filter(char => char.name.toLowerCase().includes(focusedValue.toLowerCase()))
       .map(char => ({
-        name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
-        value: char.name
-      }));
-
+                  name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
+                  value: char.name
+                }));
+                
     // Respond with filtered choices (limit to 25)
     await interaction.respond(choices.slice(0, 25));
   } catch (error) {
@@ -2529,8 +2537,8 @@ async function handleModCharacterAutocomplete(interaction, focusedOption) {
 // Provides autocomplete suggestions for user-owned characters for mount/stable commands.
 async function handleMountAutocomplete(interaction, focusedOption) {
  try {
-  const userId = interaction.user.id;
-  const characters = await fetchCharactersByUserId(userId);
+                const userId = interaction.user.id;
+                const characters = await fetchCharactersByUserId(userId);
   const subcommand = interaction.options.getSubcommand();
 
   const choices = characters
@@ -2547,9 +2555,9 @@ async function handleMountAutocomplete(interaction, focusedOption) {
    .map((character) => ({
     name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
     value: character.name,
-   }));
-
-  await respondWithFilteredChoices(interaction, focusedOption, choices);
+                }));
+                
+                await respondWithFilteredChoices(interaction, focusedOption, choices);
  } catch (error) {
   handleError(error, "autocompleteHandler.js");
 
@@ -2565,7 +2573,7 @@ async function handleMountAutocomplete(interaction, focusedOption) {
 // Provides autocomplete suggestions for mounts owned by a specific character.
 async function handleMountNameAutocomplete(interaction, focusedOption) {
  try {
-  const userId = interaction.user.id;
+                const userId = interaction.user.id;
   const characterName = interaction.options.getString("charactername");
 
   if (!characterName) {
@@ -2601,8 +2609,8 @@ async function handleMountNameAutocomplete(interaction, focusedOption) {
 // Provides autocomplete suggestions for user-owned characters with mounts for stable commands
 async function handleStableCharacterAutocomplete(interaction, focusedOption) {
   try {
-    const userId = interaction.user.id;
-    const characters = await fetchCharactersByUserId(userId);
+                const userId = interaction.user.id;
+                const characters = await fetchCharactersByUserId(userId);
     const subcommand = interaction.options.getSubcommand();
 
     // For sell command, only show characters that have mounts
@@ -2620,9 +2628,9 @@ async function handleStableCharacterAutocomplete(interaction, focusedOption) {
     const choices = filteredCharacters.map((character) => ({
       name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
       value: character.name,
-    }));
-
-    await respondWithFilteredChoices(interaction, focusedOption, choices);
+                }));
+                
+                await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
     handleError(error, "autocompleteHandler.js");
     console.error("[handleStableCharacterAutocomplete]: Error:", error);
@@ -2642,18 +2650,18 @@ async function handleStableCharacterAutocomplete(interaction, focusedOption) {
 // ------------------- Pet Character Name Autocomplete -------------------
 async function handlePetCharacterAutocomplete(interaction, focusedOption) {
   try {
-    const userId = interaction.user.id;
-    const characters = await fetchCharactersByUserId(userId);
-    
+                const userId = interaction.user.id;
+                const characters = await fetchCharactersByUserId(userId);
+                
     // Ensure focusedValue is a string and has a default value
     const focusedValue = focusedOption?.value?.toString() || '';
     
     const choices = characters
       .filter(char => char.name.toLowerCase().includes(focusedValue.toLowerCase()))
       .map(char => ({
-        name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
-        value: char.name
-      }));
+                  name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
+                  value: char.name
+                }));
     return await respondWithFilteredChoices(interaction, focusedOption, choices);
   } catch (error) {
     console.error('[handlePetCharacterAutocomplete]: Error:', error);
@@ -2663,7 +2671,7 @@ async function handlePetCharacterAutocomplete(interaction, focusedOption) {
 
 // ------------------- Pet Name Autocomplete -------------------
 async function handlePetNameAutocomplete(interaction, focusedOption) {
- const userId = interaction.user.id;
+                const userId = interaction.user.id;
 
  // 1. Accept either the 'charactername' (pet cmd) or 'character' (mod cmd) option
  const rawInput =
@@ -2724,7 +2732,7 @@ async function handlePetNameAutocomplete(interaction, focusedOption) {
   name: `${pet.name}${pet.status === "active" ? " (Active)" : " (Inactive)"}`,
   value: pet.name,
  }));
- await respondWithFilteredChoices(interaction, focusedOption, choices);
+                await respondWithFilteredChoices(interaction, focusedOption, choices);
 }
 
 // ------------------- Pet Species Autocomplete -------------------
@@ -2743,7 +2751,7 @@ async function handlePetSpeciesAutocomplete(interaction, focusedOption) {
  }));
 
  // let your helper filter & respond
- await respondWithFilteredChoices(interaction, focusedOption, choices);
+                await respondWithFilteredChoices(interaction, focusedOption, choices);
 }
 
 // ------------------- Pet Roll Type Autocomplete -------------------
@@ -2754,7 +2762,7 @@ async function handlePetRollTypeAutocomplete(interaction, focusedOption) {
   interaction.options.getString("character");
  if (!rawCharacter) return await interaction.respond([]);
  const characterName = rawCharacter.split(" - ")[0];
- const userId = interaction.user.id;
+                const userId = interaction.user.id;
 
  // 2. Fetch the character (only your own for /pet)
  const character = await fetchCharacterByNameAndUserId(characterName, userId);
@@ -2799,15 +2807,15 @@ async function handlePetRollTypeAutocomplete(interaction, focusedOption) {
 // ------------------- Steal Character Name Autocomplete -------------------
 async function handleStealCharacterAutocomplete(interaction, focusedOption) {
  try {
-  const userId = interaction.user.id;
-  const characters = await fetchCharactersByUserId(userId);
-
+                const userId = interaction.user.id;
+                const characters = await fetchCharactersByUserId(userId);
+                
   const choices = characters.map((character) => ({
    name: character.name,
    value: character.name,
-  }));
-
-  await respondWithFilteredChoices(interaction, focusedOption, choices);
+                }));
+                
+                await respondWithFilteredChoices(interaction, focusedOption, choices);
  } catch (error) {
   handleError(error, "autocompleteHandler.js");
 
@@ -2850,10 +2858,10 @@ async function handleStealTargetAutocomplete(interaction, focusedOption) {
             );
 
             const choices = filteredCharacters.map(char => ({
-                name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
-                value: char.name
-            }));
-
+                  name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
+                  value: char.name
+                }));
+                
             await safeAutocompleteResponse(interaction, choices);
         }
     } catch (error) {
@@ -2893,10 +2901,10 @@ async function handleStealRarityAutocomplete(interaction, focusedOption) {
 // ------------------- Travel Character Name Autocomplete -------------------
 async function handleTravelAutocomplete(interaction) {
  const focusedOption = interaction.options.getFocused(true);
- const userId = interaction.user.id;
+                const userId = interaction.user.id;
 
  if (focusedOption.name === "charactername") {
-  const characters = await fetchCharactersByUserId(userId);
+                const characters = await fetchCharactersByUserId(userId);
   const filtered = characters
    .filter((char) =>
     char.name.toLowerCase().includes(focusedOption.value.toLowerCase())
@@ -2931,9 +2939,9 @@ async function handleVillageBasedCommandsAutocomplete(
   const choices = getAllVillages().map((village) => ({
    name: village,
    value: village,
-  }));
-
-  await respondWithFilteredChoices(interaction, focusedOption, choices);
+                }));
+                
+                await respondWithFilteredChoices(interaction, focusedOption, choices);
  } catch (error) {
   handleError(error, "autocompleteHandler.js");
 
@@ -2994,21 +3002,21 @@ async function handleVendingAddAutocomplete(interaction, focusedOption) {
     const focusedName = focusedOption.name;
     switch (focusedName) {
       case 'charactername':
-        const userId = interaction.user.id;
-        const characters = await fetchCharactersByUserId(userId);
-        
-        // Filter for characters with vending jobs
-        const vendorCharacters = characters.filter(char => {
-          const job = char.job?.toLowerCase();
-          return job === 'shopkeeper' || job === 'merchant';
-        });
-        
-        const choices = vendorCharacters.map(char => ({
-          name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
-          value: char.name
-        }));
-        
-        await respondWithFilteredChoices(interaction, focusedOption, choices);
+                const userId = interaction.user.id;
+                const characters = await fetchCharactersByUserId(userId);
+                
+                // Filter for characters with vending jobs
+                const vendorCharacters = characters.filter(char => {
+                  const job = char.job?.toLowerCase();
+                  return job === 'shopkeeper' || job === 'merchant';
+                });
+                
+                const choices = vendorCharacters.map(char => ({
+                  name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
+                  value: char.name
+                }));
+                
+                await respondWithFilteredChoices(interaction, focusedOption, choices);
         break;
       case 'itemname':
         await handleVendorItemAutocomplete(interaction, focusedOption);
@@ -3032,7 +3040,7 @@ async function handleVendorItemAutocomplete(interaction, focusedOption) {
     const characterName = interaction.options.getString("charactername");
     if (!characterName) return await interaction.respond([]);
 
-    const userId = interaction.user.id;
+                const userId = interaction.user.id;
     const character = await fetchCharacterByNameAndUserId(characterName, userId);
     if (!character) return await interaction.respond([]);
 
@@ -3089,7 +3097,7 @@ async function handleSlotAutocomplete(interaction, focusedOption) {
     const characterName = interaction.options.getString('charactername');
     if (!characterName) return await interaction.respond([]);
 
-    const userId = interaction.user.id;
+                const userId = interaction.user.id;
     const character = await fetchCharacterByNameAndUserId(characterName, userId);
     if (!character) return await interaction.respond([]);
 
@@ -3180,10 +3188,10 @@ async function handleVendorCharacterAutocomplete(interaction) {
     }).limit(25);
 
     const results = matchingCharacters.map((char) => ({
-      name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
-      value: char.name
-    }));
-
+                  name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
+                  value: char.name
+                }));
+                
     return await interaction.respond(results);
   } catch (error) {
     console.error('[handleVendorCharacterAutocomplete]:', error);
@@ -3201,14 +3209,14 @@ async function handleVendingBarterAutocomplete(interaction, focusedOption) {
 
     // Handle character name autocomplete (user's characters)
     if (focusedName === 'charactername') {
-      const userId = interaction.user.id;
-      const characters = await fetchCharactersByUserId(userId);
-      
+                const userId = interaction.user.id;
+                const characters = await fetchCharactersByUserId(userId);
+                
       const choices = characters.map(char => ({
         name: `${char.name} | ${char.currentVillage || 'No Village'} | ${char.job || 'No Job'}`,
-        value: char.name
-      }));
-
+                  value: char.name
+                }));
+                
       const filteredChoices = choices.filter(choice => 
         choice.name.toLowerCase().includes(searchQuery)
       );
@@ -3227,13 +3235,13 @@ async function handleVendingBarterAutocomplete(interaction, focusedOption) {
         return (job === 'shopkeeper' || job === 'merchant') && 
                character.vendingSetup?.shopLink && 
                character.vendingSync;
-      });
-
-      const choices = vendorCharacters.map(char => ({
+                });
+                
+                const choices = vendorCharacters.map(char => ({
         name: `${char.name} | ${char.currentVillage || 'No Village'} | ${char.job}`,
-        value: char.name
-      }));
-
+                  value: char.name
+                }));
+                
       const filteredChoices = choices.filter(choice => 
         choice.name.toLowerCase().includes(searchQuery)
       );
@@ -3360,11 +3368,11 @@ async function handleVendingViewAutocomplete(interaction, focusedOption) {
 // ------------------- Autocomplete: View Character Inventory -------------------
 async function handleViewInventoryAutocomplete(interaction, focusedOption) {
  try {
-  const userId = interaction.user.id;
+                const userId = interaction.user.id;
 
   // Fetch only characters owned by the user
-  const characters = await fetchCharactersByUserId(userId);
-
+                const characters = await fetchCharactersByUserId(userId);
+                
   // Map characters to autocomplete choices with formatted display
   const choices = characters.map((character) => ({
    name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
