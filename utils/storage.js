@@ -29,7 +29,8 @@ async function saveSubmissionToStorage(submissionId, submissionData) {
         createdAt: submissionData.createdAt || now,
         updatedAt: now
       },
-      expiresAt
+      expiresAt,
+      createdAt: now // Ensure createdAt is set
     };
 
     const result = await TempData.findOneAndUpdate(
@@ -291,6 +292,20 @@ async function cleanupExpiredEntries(maxAgeInMs = 86400000) {
   }
 }
 
+// ---- Function: cleanupEntriesWithoutExpiration ----
+// Cleans up entries that don't have an expiration date
+async function cleanupEntriesWithoutExpiration() {
+  try {
+    const result = await TempData.deleteMany({
+      expiresAt: { $exists: false }
+    });
+    console.log(`[storage.js]: ✅ Cleaned up ${result.deletedCount} entries without expiration dates`);
+  } catch (error) {
+    handleError(error, 'storage.js');
+    console.error('[storage.js]: ❌ Error cleaning up entries without expiration dates:', error.message);
+  }
+}
+
 // ---- Function: cleanupExpiredHealingRequests ----
 // Cleans up expired healing requests from the database
 async function cleanupExpiredHealingRequests() {
@@ -377,6 +392,7 @@ module.exports = {
   cleanupExpiredEntries,
   runWithTransaction,
   cleanupExpiredHealingRequests,
+  cleanupEntriesWithoutExpiration,
   
   retrieveAllByType
 };

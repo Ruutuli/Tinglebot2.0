@@ -13,12 +13,12 @@ const MESSAGE_COOLDOWN = 5 * 60 * 1000; // 5 minutes cooldown between message co
 const lastMessageTimeMap = new Map(); // Map to store last message time per channel
 
 // Monthly encounter tracking
-const MONTHLY_RESET_KEY = 'monthly_reset'; // Key for monthly reset check
+const MONTHLY_RESET_KEY = 'monthly_mount_encounter_reset'; // Key for monthly mount encounter reset
 
 // Load monthly encounter data from MongoDB
 async function loadMonthlyEncounterData() {
     try {
-        const monthlyData = await TempData.findAllByType('monthly');
+        const monthlyData = await TempData.findAllByType('monthly_mount');
         const data = {};
         for (const entry of monthlyData) {
             data[entry.key] = entry.data;
@@ -37,7 +37,7 @@ async function saveMonthlyEncounterData(monthlyEncounterMap) {
         const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
         for (const [key, value] of monthlyEncounterMap.entries()) {
             await TempData.findOneAndUpdate(
-                { type: 'monthly', key },
+                { type: 'monthly_mount', key },
                 { data: value, expiresAt: endOfMonth },
                 { upsert: true, new: true }
             );
