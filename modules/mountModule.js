@@ -131,7 +131,7 @@ const mountEmojis = {
   'Mountain Goat': '🐐',
   'Deer': '🦌',
   'Bullbo': '🐗',
-  'Water Buffalo': '🐃',
+  'W.Buffalo': '🐃',
   'Wolfos': '🐺',
   'Dodongo': '🐉',
   'Moose': '🍁',
@@ -144,7 +144,7 @@ const regionalMounts = {
   'Bullbo': 'Rudania',
   'Dodongo': 'Rudania',
   'Mountain Goat': 'Inariko',
-  'Water Buffalo': 'Inariko',
+  'W.Buffalo': 'Inariko',
   'Moose': 'Inariko',
   'Deer': 'Vhintl',
   'Wolfos': 'Vhintl',
@@ -162,7 +162,7 @@ const mountThumbnails = {
   'Mountain Goat': 'https://storage.googleapis.com/tinglebot/Mounts/Mount-Icon-MGoat.png',
   'Deer': 'https://storage.googleapis.com/tinglebot/Mounts/Mount-Icon-Deer.png',
   'Bullbo': 'https://storage.googleapis.com/tinglebot/Mounts/Mount-Icon-Bullbo.png',
-  'Water Buffalo': 'https://storage.googleapis.com/tinglebot/Mounts/Mount-Icon-WBuffalo.png',
+  'W.Buffalo': 'https://storage.googleapis.com/tinglebot/Mounts/Mount-Icon-WBuffalo.png',
   'Wolfos': 'https://storage.googleapis.com/tinglebot/Mounts/Mount-Icon-Wolfos.png',
   'Dodongo': 'https://storage.googleapis.com/tinglebot/Mounts/Mount-Icon-Dodongo.png',
   'Moose': 'https://storage.googleapis.com/tinglebot/Mounts/Mount-Icon-Moose.png',
@@ -171,7 +171,8 @@ const mountThumbnails = {
 
 // Helper function to get the thumbnail URL for a mount
 function getMountThumbnail(mount) {
-  return mountThumbnails[mount] || '';
+  const normalizedMount = mount?.trim();
+  return mountThumbnails[normalizedMount] || 'https://graphicsfactory.com/clip-art/image_files/webp/0/1763480-centaur-game-character-vector-icon-clipart.webp';
 }
 
 // ------------------- Helper function to randomly pick a mount and its level based on the village -------------------
@@ -282,7 +283,8 @@ function getRandomEnvironment(village) {
 
 // ------------------- Helper function to get mount emoji -------------------
 function getMountEmoji(mount) {
-  return mountEmojis[mount] || '';
+  const normalizedMount = mount?.trim();
+  return mountEmojis[normalizedMount] || '';
 }
 
 // ------------------- Helper function to randomly select a village -------------------
@@ -1044,7 +1046,7 @@ function calculateMountPrice(mount) {
     'Bullbo': 'Rudania',
     'Dodongo': 'Rudania',
     'Mountain Goat': 'Inariko',
-    'Water Buffalo': 'Inariko',
+    'W.Buffalo': 'Inariko',
     'Moose': 'Inariko',
     'Deer': 'Vhintl',
     'Wolfos': 'Vhintl',
@@ -1072,7 +1074,26 @@ function calculateMountPrice(mount) {
   return finalPrice;
 }
 
+// ------------------- Mount Display Names -------------------
+const mountDisplayNames = {
+  'Horse': 'Horse',
+  'Donkey': 'Donkey',
+  'Ostrich': 'Ostrich',
+  'Mountain Goat': 'Mountain Goat',
+  'Deer': 'Deer',
+  'Bullbo': 'Bullbo',
+  'W.Buffalo': 'Water Buffalo',
+  'Wolfos': 'Wolfos',
+  'Dodongo': 'Dodongo',
+  'Moose': 'Moose',
+  'Bear': 'Bear'
+};
 
+// Helper function to get the display name for a mount
+function getMountDisplayName(mount) {
+  const normalizedMount = mount?.trim();
+  return mountDisplayNames[normalizedMount] || mount || 'Unknown';
+}
 
 // ------------------- Exports -------------------
 module.exports = {
@@ -1118,5 +1139,6 @@ module.exports = {
   bearTraits,
   mooseTraits,
   generateMooseTraits,
-  calculateMountPrice
+  calculateMountPrice,
+  getMountDisplayName
 };
