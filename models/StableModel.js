@@ -1,69 +1,118 @@
 const mongoose = require('mongoose');
 // ------------------- Define Stable Schema -------------------
 const StableSchema = new mongoose.Schema({
-  mountId: {
+  characterId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Mount', // Reference to the original mount in the MountModel
-    required: true,
+    ref: 'Character',
+    required: true
   },
-  price: {
-    type: Number, // Price of the mount
-    required: true,
-  },
-  isSold: {
-    type: Boolean,
-    default: false, // Tracks whether the mount has been purchased
-  },
-  listedAt: {
-    type: Date,
-    default: Date.now, // Timestamp when the mount was listed for sale
-  },
-  soldAt: {
-    type: Date, // Timestamp when the mount was sold
-  },
-  sellerId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User', // Reference to the user who listed the mount
-  },
-  buyerId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User', // Reference to the user who purchased the mount
-  },
-  originalOwner: {
-    type: String, // Track the original character that owned the mount
-    required: true,
-  },
-  // ------------------- Detailed Mount Info -------------------
-  species: {
+  discordId: {
     type: String,
-    required: true,
-    enum: ['Horse', 'Donkey', 'Ostrich', 'M.Goat', 'Deer', 'Bullbo', 'W.Buffalo', 'Wolfos', 'Dodongo', 'Moose', 'Bear', 'Unique'],
+    required: true
   },
-  level: {
-    type: String,
-    required: true,
-    enum: ['Basic', 'Mid', 'High', 'Legendary'],
-  },
-  name: {
-    type: String,
-    required: true,
-  },
-  stamina: {
+  // Storage slots for active mounts/pets
+  storedMounts: [{
+    mountId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Mount'
+    },
+    storedAt: {
+      type: Date,
+      default: Date.now
+    }
+  }],
+  storedPets: [{
+    petId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Pet'
+    },
+    storedAt: {
+      type: Date,
+      default: Date.now
+    }
+  }],
+  maxSlots: {
     type: Number,
-    required: true,
-    min: 1,
-    max: 6,
+    default: 3
   },
-  traits: {
-    type: [String],
-    default: [],
-  },
-  region: {
-    type: String,
-    required: false,
-    enum: ['Rudania', 'Inariko', 'Vhintl', 'Global'],
-  },
+  // Sales listings
+  listedMounts: [{
+    mountId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Mount',
+      required: true
+    },
+    price: {
+      type: Number,
+      required: true
+    },
+    isSold: {
+      type: Boolean,
+      default: false
+    },
+    listedAt: {
+      type: Date,
+      default: Date.now
+    },
+    soldAt: {
+      type: Date
+    },
+    sellerId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true
+    },
+    buyerId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    originalOwner: {
+      type: String,
+      required: true
+    }
+  }],
+  listedPets: [{
+    petId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Pet',
+      required: true
+    },
+    price: {
+      type: Number,
+      required: true
+    },
+    isSold: {
+      type: Boolean,
+      default: false
+    },
+    listedAt: {
+      type: Date,
+      default: Date.now
+    },
+    soldAt: {
+      type: Date
+    },
+    sellerId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true
+    },
+    buyerId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    originalOwner: {
+      type: String,
+      required: true
+    }
+  }]
 }, { timestamps: true });
+
+// Add indexes for faster queries
+StableSchema.index({ characterId: 1 });
+StableSchema.index({ discordId: 1 });
+StableSchema.index({ 'listedMounts.isSold': 1 });
+StableSchema.index({ 'listedPets.isSold': 1 });
 
 // ------------------- Export Stable Model -------------------
 module.exports = mongoose.model('Stable', StableSchema);

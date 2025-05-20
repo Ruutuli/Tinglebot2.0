@@ -206,7 +206,7 @@ roleplayResponseAfter: (characterName) => {
 },
 
 //---------------- Darune ----------------
-  {
+{
     name: 'Darune',
     village: 'Rudania',
     category: 'Dragon',
@@ -217,31 +217,40 @@ roleplayResponseAfter: (characterName) => {
       return [
         {
           type: 'art',
-          description: `**Darune, Dragon of Power** demands that you draw your OC surrounded by flames, invoking his fiery power to cleanse the blight. Minimum requirement: Full Body, Full Color.`
+          description: `“**${characterName}**, show me the strength of your will; show me that your time has not yet come.”\nDarune, Dragon of Power demands that you draw your OC surrounded by flames, invoking his fiery power to cleanse the blight. Does it burn them? Empower them?\nMinimum requirement: Full Body, Full Color.`
         },
         {
           type: 'writing',
-          description: `**Darune, Dragon of Power** asks you to write a tale of your OC harnessing their inner strength. Can they withstand the heat? 500 words.`
+          description: `"Regale me of your fire that blazes within, **${characterName}**.”\nDarune, Dragon of Power asks you to write a tale of your OC harnessing their inner strength. Is it shining bright like the sun, or is it a tiny spark still growing? Can they withstand their own flames?\nMinimum: 500 words.`
         },
         {
           type: 'item',
-          description: `**Darune, Dragon of Power** requires an offering of ONE of the following treasures to satisfy his appetite for power and help cleanse **${characterName}**:`,
+          description: `“Hey, **${characterName}**,” Darune says with a mischievous smile, “If you are pressed as to what you could offer, might I give some suggestions?”\n\n- "I would like to gaze at a fragment of a star; so bring me one would you?"\n- "A few of the fiery red gems should suffice. I would like five."\n- "Deep in the mines there is a golden rock most fair. I need it for my growing collection; three will suffice."\n- "The red wing of one of those traitors. Bring me fifty trophies as proof."\n- "I really like those.. What were they again? Peppers? It has a fiery kick. I’ll need ten, cooked nicely. I am quite large, as you can see."\n- "The red slimes are causing trouble again. Cull them. When finished, provide me with fifty of their blobs as proof."\n- "I hear those awful lizards making a ruckus across my mountain. Take their flaming tails as recompense. Thirty will be sufficient."\n- "Every so often the mountain leaves a drop of molten lava. Find two, then bring them to me."\n- "Monsters will sometimes carry necklaces that they do not deserve. They sparkle with red and blue gems; I must have them. Bring me three, and I will see to your troubles."`,
           items: [
             { name: 'Star Fragment', quantity: 1 },
+            { name: 'Lava Drop', quantity: 2 },
             { name: 'Ruby', quantity: 5 },
-            { name: 'Gold Nugget', quantity: 3 }
+            { name: 'Blin Bling', quantity: 3 },
+            { name: 'Gold Ore', quantity: 3 },
+            { name: 'Spicy Sauteed Peppers', quantity: 10 },
+            { name: 'Red Lizalfos Tail', quantity: 30 },
+            { name: 'Red ChuChu Jelly', quantity: 50 },
+            { name: 'Fire Keese Wing', quantity: 50 }
           ]
+        },
+        {
+          type: 'writing',
+          description: `Darune, Dragon of Power had avoided becoming close to the mortals in Rudania for some time, but would like to become familiar with the villagers again. It could be about the goings on in your everyday life. Or a story of an event that happened to you, large or small.\n\n"You have my gratitude, **${characterName}**. Your memory will live on in mine; I will keep it with me always."\nMaximum: 500 words.`
         }
       ];
     },
     roleplayResponseBefore: (characterName) => {
-        return `Darune huffs, his fiery gaze focused on you. "You dare to seek my help, **${characterName}**? Fine. But know this—you'll owe me. Blight or no blight, I don’t offer my strength freely."`;
+      return `Darune smiles devilishly, his fiery gaze focusing on you. "Ah– Have you come to seek my aid, **${characterName}**? How bold.~ But beware—a dragon’s power comes at a cost. Blight or no blight, I do not offer it freely."`;
     },
     roleplayResponseAfter: (characterName) => {
-        return `A soothing warmth washes over you, healing you of your blighted affliction. Darune's golden gaze observes you, making sure that everything seems alright. When they are sure you are now fine, their lips pull back into a smug grin, "Perfection, **${characterName}**, if I do say so myself.~ Do you not agree?" Before you can answer, he quiets you with a raised dragons claw, "Now, be a good human, and try not to become blighted again, hm?"`;
+      return `A soothing warmth washes over you, healing you of your blighted affliction. Darune's golden gaze lingers with amusement. Then, his lips curl into a smug grin. "Perfection, **${characterName}**, if I do say so myself.~ Do you not agree?" Before you can answer, he lifts a single dragon’s claw. "Now, be a good human, and try not to become blighted again, hm?"`;
     }
-    
-  },
+  },  
 
   //---------------- Foras ---------------- 
   {
