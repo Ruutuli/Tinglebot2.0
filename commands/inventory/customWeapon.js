@@ -8,6 +8,7 @@
 const { SlashCommandBuilder, PermissionsBitField } = require('discord.js');
 const { handleError } = require('../../utils/globalErrorHandler');
 const { v4: uuidv4 } = require('uuid'); // For generating unique IDs
+const mongoose = require('mongoose'); // Add mongoose import
 
 // ------------------- Database Connections -------------------
 const { fetchCharacterByNameAndUserId, updateCharacterById, getCharacterInventoryCollection, fetchItemByName, fetchValidWeaponSubtypes, fetchAllWeapons } = require('../../database/db');
@@ -28,7 +29,7 @@ const ItemModel = require('../../models/ItemModel');
 
 // ---- Function: logMaterialsToGoogleSheets ----
 // Logs materials used for crafting to Google Sheets
-async function logMaterialsToGoogleSheets(auth, spreadsheetId, range, character, materialsUsed, craftedItem, interactionUrl, formattedDateTime) {
+async function logMaterialsToGoogleSheets(auth, spreadsheetId, range, character, materialsUsed, craftedItem, interactionUrl, formattedDateTime, interaction) {
     try {
         const combinedMaterials = combineMaterials(materialsUsed);
 
@@ -41,9 +42,17 @@ async function logMaterialsToGoogleSheets(auth, spreadsheetId, range, character,
                     try {
                         const materialObjectId = new mongoose.Types.ObjectId(material._id);
                         materialItem = await ItemModel.findById(materialObjectId);
-                    } catch (_) {
-    handleError(_, 'customWeapon.js');
-
+                    } catch (error) {
+                        handleError(error, 'customWeapon.js', {
+                            commandName: 'customWeapon',
+                            userTag: interaction?.user?.tag,
+                            userId: interaction?.user?.id,
+                            characterName: character?.name,
+                            options: {
+                                materialId: material._id,
+                                operation: 'findById'
+                            }
+                        });
                         // Silently fail invalid ObjectId — fallback handled below
                     }
                 }
@@ -88,7 +97,16 @@ async function logMaterialsToGoogleSheets(auth, spreadsheetId, range, character,
                     uuidv4()
                 ];
             } catch (error) {
-    handleError(error, 'customWeapon.js');
+                handleError(error, 'customWeapon.js', {
+                    commandName: 'customWeapon',
+                    userTag: interaction?.user?.tag,
+                    userId: interaction?.user?.id,
+                    characterName: character?.name,
+                    options: {
+                        material: material,
+                        operation: 'processMaterial'
+                    }
+                });
 
                 console.error('[logMaterialsToGoogleSheets]: Error processing material:', error.message);
                 return [
@@ -113,8 +131,8 @@ async function logMaterialsToGoogleSheets(auth, spreadsheetId, range, character,
             skipValidation: true,
             context: {
                 commandName: 'customWeapon',
-                userTag: interaction.user.tag,
-                userId: interaction.user.id,
+                userTag: interaction?.user?.tag,
+                userId: interaction?.user?.id,
                 characterName: character.name,
                 spreadsheetId: extractSpreadsheetId(character.inventory),
                 range: range,
@@ -126,8 +144,18 @@ async function logMaterialsToGoogleSheets(auth, spreadsheetId, range, character,
             }
         });
     } catch (error) {
-    handleError(error, 'customWeapon.js');
-
+        handleError(error, 'customWeapon.js', {
+            commandName: 'customWeapon',
+            userTag: interaction?.user?.tag,
+            userId: interaction?.user?.id,
+            characterName: character?.name,
+            options: {
+                spreadsheetId,
+                range,
+                materialsUsed,
+                operation: 'logMaterialsToGoogleSheets'
+            }
+        });
         console.error(`[customweapon create]: Failed to log materials to sheet:`, error);
     }
 }
@@ -609,7 +637,8 @@ if (weaponSubmission.crafted === true) {
                 weaponSubmission.craftingMaterials,
                 { itemName: weaponSubmission.weaponName },
                 interactionUrl,
-                formattedDateTime
+                formattedDateTime,
+                interaction
             );
 
         } catch (error) {
@@ -1077,7 +1106,7 @@ try {
         // Parse Crafting Materials
         let craftingMaterials;
         try {
-            console.log(`[customweapon approve]: ��️ Parsing materials: ${materialsToCraft}`);
+            console.log(`[customweapon approve]: 🛠️ Parsing materials: ${materialsToCraft}`);
             craftingMaterials = await Promise.all(
                 materialsToCraft.split(',').map(async (material) => {
                     const [itemName, quantity] = material.trim().split('x');
@@ -1106,19 +1135,19 @@ try {
                 })
             );
 
-            // Add Star Fragment x1 automatically
-            const starFragment = await ItemModel.findOne({ 
-                itemName: { $regex: /^Star Fragment$/i }
+            // Add Blueprint Voucher x1 automatically
+            const blueprintItem = await ItemModel.findOne({ 
+                itemName: { $regex: /^Blueprint Voucher$/i }
             });
-            if (!starFragment) {
-                throw new Error(`"Star Fragment" does not exist in the database.`);
+            if (!blueprintItem) {
+                throw new Error(`"Blueprint Voucher" does not exist in the database.`);
             }
             craftingMaterials.push({
-                _id: starFragment._id,
-                itemName: 'Star Fragment',
+                _id: blueprintItem._id,
+                itemName: 'Blueprint Voucher',
                 quantity: 1,
             });
-            console.log(`[customweapon approve]: ✅ Added Star Fragment x1`);
+            console.log(`[customweapon approve]: ✅ Added Blueprint Voucher x1`);
 
         } catch (error) {
     handleError(error, 'customWeapon.js');
@@ -1194,13 +1223,11 @@ try {
                           (async () => {
                             const blueprintItem = await ItemModel.findOne({ itemName: 'Blueprint Voucher' });
                             const emoji = blueprintItem?.emoji && blueprintItem.emoji.trim() !== '' ? blueprintItem.emoji : ':small_blue_diamond:';
-                            return `> :small_blue_diamond: **Blueprint Voucher** x1`;
+                            return `> ${emoji} **Blueprint Voucher** x1`;
                           })()
                         ])).join('\n'),
                         inline: false,
-                      },
-                      
-                    
+                    },
                 ],
                 footer: { text: 'Your weapon has been added to the database!' },
                 image: {
@@ -1223,7 +1250,7 @@ try {
             content: `✅ Custom weapon **${weaponSubmission.weaponName}** has been approved and added to the database!`,
             embeds: [
                 {
-                    title: `Approved Weapon: ${weaponSubmission.weaponName}`,
+                    title: `Custom Weapon Approved: ${weaponSubmission.weaponName}`,
                     description: "The item has been added to the database! Use </customweapon create:1330719656905801770> to craft it. This will consume the required stamina and materials from your character's inventory.",
                     color: 0xAA926A,
                     thumbnail: { url: weaponSubmission.image },
@@ -1235,7 +1262,27 @@ try {
                         { name: 'Type', value: `> ${weaponSubmission.type}`, inline: true },
                         { name: 'Stamina to Craft', value: `> ${staminaToCraft}`, inline: true },
                         { name: 'Weapon ID', value: `\`\`\`${weaponId}\`\`\``, inline: false },
+                        {
+                            name: '__Materials to Craft__',
+                            value: (await Promise.all([
+                              ...craftingMaterials.map(async (mat) => {
+                                const item = await ItemModel.findOne({ itemName: mat.itemName });
+                                const emoji = item?.emoji && item.emoji.trim() !== '' ? item.emoji : ':small_blue_diamond:';
+                                return `> ${emoji} **${mat.itemName}** x${mat.quantity}`;
+                              }),
+                              (async () => {
+                                const blueprintItem = await ItemModel.findOne({ itemName: 'Blueprint Voucher' });
+                                const emoji = blueprintItem?.emoji && blueprintItem.emoji.trim() !== '' ? blueprintItem.emoji : ':small_blue_diamond:';
+                                return `> ${emoji} **Blueprint Voucher** x1`;
+                              })()
+                            ])).join('\n'),
+                            inline: false,
+                        }
                     ],
+                    footer: { text: 'Your weapon has been added to the database!' },
+                    image: {
+                        url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png',
+                    },
                 },
             ],
         });
