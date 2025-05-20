@@ -126,7 +126,12 @@ module.exports = {
           const name = interaction.options.getString('name');
           const characterName = interaction.options.getString('charactername');
           // Check if it's a mount or pet
-          const mount = await Mount.findOne({ owner: characterName, name: name });
+          const character = await fetchCharacterByNameAndUserId(characterName, userId);
+          if (!character) {
+            await interaction.reply({ content: '❌ Character not found or does not belong to you.', ephemeral: true });
+            return;
+          }
+          const mount = await Mount.findOne({ owner: character._id, name: name });
           if (mount) {
             await handleListMount(interaction, userId, characterName, name);
           } else {
@@ -203,7 +208,7 @@ async function handleStoreMount(interaction, userId, characterName, mountName) {
     return;
   }
 
-  const mount = await Mount.findOne({ owner: character.name, name: mountName });
+  const mount = await Mount.findOne({ owner: character._id, name: mountName });
   if (!mount) {
     await interaction.reply({ content: `❌ Mount **${mountName}** not found.`, ephemeral: true });
     return;
@@ -214,6 +219,27 @@ async function handleStoreMount(interaction, userId, characterName, mountName) {
     return;
   }
 
+  // Check if this is the active mount
+  if (character.mount && character.activeMount === mount._id) {
+    // Find another non-stored mount to set as active
+    const otherMount = await Mount.findOne({ 
+      owner: character._id, 
+      _id: { $ne: mount._id },
+      isStored: false 
+    });
+
+    if (otherMount) {
+      // Set the other mount as active
+      character.activeMount = otherMount._id;
+      character.mount = true;
+    } else {
+      // No other mounts available
+      character.mount = false;
+      character.activeMount = null;
+    }
+    await character.save();
+  }
+
   stable.storedMounts.push({ mountId: mount._id });
   await stable.save();
 
@@ -222,10 +248,11 @@ async function handleStoreMount(interaction, userId, characterName, mountName) {
   mount.storedAt = new Date();
   await mount.save();
 
-  character.mount = false;
-  await character.save();
+  const response = otherMount 
+    ? `✅ Successfully stored **${mountName}** in your stable. You are now riding **${otherMount.name}**.`
+    : `✅ Successfully stored **${mountName}** in your stable.`;
 
-  await interaction.reply({ content: `✅ Successfully stored **${mountName}** in your stable.` });
+  await interaction.reply({ content: response });
 }
 
 // ------------------- Handle Retrieving Mount -------------------
@@ -242,7 +269,7 @@ async function handleRetrieveMount(interaction, userId, characterName, mountName
     return;
   }
 
-  const mount = await Mount.findOne({ owner: character.name, name: mountName });
+  const mount = await Mount.findOne({ owner: character._id, name: mountName });
   if (!mount) {
     await interaction.reply({ content: `❌ Mount **${mountName}** not found.`, ephemeral: true });
     return;
@@ -267,6 +294,7 @@ async function handleRetrieveMount(interaction, userId, characterName, mountName
   await mount.save();
 
   character.mount = true;
+  character.activeMount = mount._id;
   await character.save();
 
   await interaction.reply({ content: `✅ Successfully retrieved **${mountName}** from your stable.` });
@@ -281,13 +309,13 @@ async function handleListMount(interaction, userId, characterName, mountName) {
       return;
     }
 
-    const stable = await Stable.findOne({ characterId: character._id });
+    let stable = await Stable.findOne({ characterId: character._id });
     if (!stable) {
-      await interaction.reply({ content: '❌ You do not have a stable.', ephemeral: true });
-      return;
+      stable = new Stable({ characterId: character._id, discordId: userId });
+      await stable.save();
     }
 
-    const mount = await Mount.findOne({ owner: character.name, name: mountName });
+    const mount = await Mount.findOne({ owner: character._id, name: mountName });
     if (!mount) {
       await interaction.reply({ content: `❌ Mount **${mountName}** not found.`, ephemeral: true });
       return;
@@ -324,8 +352,9 @@ async function handleListMount(interaction, userId, characterName, mountName) {
     await stable.save();
 
     // Update character's mount status if it was active
-    if (character.mount) {
+    if (character.mount && character.activeMount === mount._id) {
       character.mount = false;
+      character.activeMount = null;
       await character.save();
     }
 
@@ -365,10 +394,10 @@ async function handleListPet(interaction, userId, characterName, petName) {
       return;
     }
 
-    const stable = await Stable.findOne({ characterId: character._id });
+    let stable = await Stable.findOne({ characterId: character._id });
     if (!stable) {
-      await interaction.reply({ content: '❌ You do not have a stable.', ephemeral: true });
-      return;
+      stable = new Stable({ characterId: character._id, discordId: userId });
+      await stable.save();
     }
 
     const pet = await Pet.findOne({ owner: character._id, name: petName });
@@ -384,7 +413,8 @@ async function handleListPet(interaction, userId, characterName, petName) {
     }
 
     // Calculate price based on pet's level and traits
-    const price = Math.floor(pet.level * 100 + (pet.traits.length * 50));
+    const traits = Array.isArray(pet.traits) ? pet.traits : [];
+    const price = Math.floor(pet.level * 100 + (traits.length * 50));
 
     // Update pet status for listing
     pet.owner = 'For Sale'; // Set to 'For Sale' instead of null to satisfy validation
@@ -418,7 +448,7 @@ async function handleListPet(interaction, userId, characterName, petName) {
       .setColor(0xAA926A)
       .setDescription(`**${pet.name}** has been listed for sale!`)
       .addFields(
-        { name: '🐾 Pet Details', value: `> Species: ${pet.species}\n> Level: ${pet.level}\n> Traits: ${pet.traits.join(', ')}`, inline: false },
+        { name: '🐾 Pet Details', value: `> Species: ${pet.species}\n> Level: ${pet.level}\n> Traits: ${traits.join(', ')}`, inline: false },
         { name: '💰 Price', value: `> ${price} tokens`, inline: false },
         { name: '👤 Seller', value: `> ${character.name}`, inline: false }
       )
@@ -473,7 +503,7 @@ async function handleBrowseStable(interaction, type) {
   }
 
   const embed = new EmbedBuilder()
-    .setTitle(`🏪 ${type.charAt(0).toUpperCase() + type.slice(1)} for Sale`)
+  .setTitle(`🏪 ${type.charAt(0).toUpperCase() + type.slice(1)} for Sale`)
     .setColor(0xAA926A)
     .setDescription(listings.map(l => 
       `**${l.name}** (${l.species})\n` +
@@ -555,10 +585,6 @@ async function handleBuyMount(interaction, userId, characterName, mountName) {
 
   await interaction.reply({ content: `✅ Successfully purchased **${mountName}** for ${foundListing.price} tokens.` });
 }
-  
-  
-  
-  
   
   
   
