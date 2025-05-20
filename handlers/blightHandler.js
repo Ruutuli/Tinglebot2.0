@@ -351,20 +351,30 @@ async function completeBlightHealing(character) {
 // ------------------- Function: createBlightHealingFields -------------------
 // Creates fields for healing embed (requirement, ID, expiration).
 function createBlightHealingFields(healingRequirement, submissionId, expiresAt) {
+  let requirementValue;
+  if (healingRequirement.type === 'item' && Array.isArray(healingRequirement.items)) {
+    // Format item list
+    const itemList = healingRequirement.items
+      .map(i => `• **${i.name} x${i.quantity}**`)
+      .join('\n');
+    requirementValue = `> **Type**: 🍎 Item\n> ${healingRequirement.description}\n\n__Accepted Items:__\n${itemList}`;
+  } else {
+    requirementValue = `> **Type**: ${
+      healingRequirement.type === 'art'
+        ? '🎨 Art'
+        : healingRequirement.type === 'writing'
+        ? '✍️ Writing'
+        : '🍎 Item'
+    }\n> ${healingRequirement.description}`;
+  }
   return [
     {
       name: '<:bb0:854499720797618207> __Healing Requirement__',
-      value: `> **Type**: ${
-        healingRequirement.type === 'art'
-          ? '🎨 Art'
-          : healingRequirement.type === 'writing'
-          ? '✍️ Writing'
-          : '🍎 Item'
-      }\n> ${healingRequirement.description}`,
+      value: requirementValue,
     },
     {
       name: '<:bb0:854499720797618207> __Submission ID__',
-      value: `\`\`\`${submissionId}\`\`\``,
+      value: `\000${submissionId}\000`,
     },
     {
       name: '<:bb0:854499720797618207> __Alternative Option__',
@@ -468,6 +478,18 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
       return;
     }
 
+    // ---- NEW: Check healer eligibility for current stage ----
+    const permissionCheck = validateHealerPermission(healer, character.blightStage);
+    if (!permissionCheck.canHeal) {
+      const allowedHealers = permissionCheck.allowedCategories.map(c => c.toLowerCase()).join(' or ');
+      await interaction.editReply({
+        content: `❌ **${healer.name}** cannot heal **${character.name}** at Blight Stage ${character.blightStage}. Only ${allowedHealers} can heal this stage. Please request a new healing task from an eligible healer.`,
+        ephemeral: true
+      });
+      return;
+    }
+    // ---- END NEW ----
+
     // ------------------- Force Inventory Sync Before Healing -------------------
     try {
       await checkInventorySync(character);
@@ -493,16 +515,6 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
         return;
       }
 
-      if (!tokenTrackerLink) {
-        await interaction.editReply({
-          content: '❌ You cannot forfeit tokens because you do not have a token tracker set up.',
-          ephemeral: true
-        });
-        return;
-      }
-
-      await updateTokenBalance(userId, -currentTokenBalance);
-
       // Log token forfeiture
       try {
         const spreadsheetId = extractSpreadsheetId(tokenTrackerLink);
@@ -516,11 +528,13 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
           'spent',
           `-${currentTokenBalance}`
         ]];
-        await safeAppendDataToSheet(character.inventory, character, 'loggedTracker!B7:F', tokenRow, undefined, { skipValidation: true });
+        await safeAppendDataToSheet(tokenTrackerLink, character, 'loggedTracker!B7:F', tokenRow, undefined, { skipValidation: true });
       } catch (sheetError) {
         handleError(sheetError, 'blightHandler.js');
         console.error('[blightHandler]: Error logging token forfeiture', sheetError);
       }
+
+      await updateTokenBalance(userId, -currentTokenBalance);
 
       submission.status = 'completed';
       submission.submittedAt = new Date().toISOString();
@@ -544,22 +558,41 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
     // ------------------- Submission Type: Item -------------------
     // ========================================================================
     if (submission.taskType === 'item') {
-      if (!item) {
+      // ---- NEW: Robust item parsing and error messaging ----
+      if (!item || typeof item !== 'string' || !item.trim()) {
         await interaction.editReply({
-          content: `❌ You must provide an item to submit for healing by **${healer.name}**.`,
+          content: `❌ You must provide an item in the format: Item Name xQuantity (e.g., Bright-Eyed Crab x4).`,
           ephemeral: true
         });
         return;
       }
+      const itemMatch = item.match(/^(.*) x(\d+)$/i);
+      if (!itemMatch) {
+        await interaction.editReply({
+          content: `❌ Invalid item format. Please use: Item Name xQuantity (e.g., Bright-Eyed Crab x4).`,
+          ephemeral: true
+        });
+        return;
+      }
+      const itemName = itemMatch[1].trim();
+      const itemQuantityInt = parseInt(itemMatch[2], 10);
+      if (!itemName || isNaN(itemQuantityInt) || itemQuantityInt <= 0) {
+        await interaction.editReply({
+          content: `❌ Invalid item or quantity. Please use: Item Name xQuantity (e.g., Bright-Eyed Crab x4).`,
+          ephemeral: true
+        });
+        return;
+      }
+      // ---- END NEW ----
 
       const healingItems = healer.getHealingRequirements(submission.characterName)
         .find((req) => req.type === 'item').items;
 
-      const [itemName, itemQuantity] = item.split(' x');
-      const itemQuantityInt = parseInt(itemQuantity, 10);
+      // ---- NEW: Case-insensitive item matching ----
       const requiredItem = healingItems.find((i) =>
-        i.name === itemName && i.quantity === itemQuantityInt
+        i.name.toLowerCase() === itemName.toLowerCase() && i.quantity === itemQuantityInt
       );
+      // ---- END NEW ----
 
       if (!requiredItem) {
         await interaction.editReply({

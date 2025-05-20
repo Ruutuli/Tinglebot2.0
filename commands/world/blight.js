@@ -11,6 +11,8 @@ const {
   validateCharacterOwnership 
 } = require('../../handlers/blightHandler');
 const { fetchCharacterByNameAndUserId, getCharacterBlightHistory } = require('../../database/db.js');
+const { getModCharacterByName } = require('../../modules/modCharacters');
+const { retrieveBlightRequestFromStorage } = require('../../utils/storage');
 
 // ------------------- Define the Blight Command -------------------
 // This command manages blight progression, healing, and submission of healing tasks.
@@ -142,6 +144,36 @@ module.exports = {
       
       const limit = interaction.options.getInteger('limit') || 10;
       await viewBlightHistory(interaction, characterName, limit);
+    }
+  },
+
+  // ============================================================================
+  // ---- Autocomplete Handler for /blight submit item ----
+  // Suggests valid items for the healer and character for the current submission.
+  // ============================================================================
+
+  async autocomplete(interaction) {
+    try {
+      const focusedOption = interaction.options.getFocused(true);
+      if (interaction.options.getSubcommand() !== 'submit' || focusedOption.name !== 'item') return;
+      const submissionId = interaction.options.getString('submission_id');
+      if (!submissionId) return interaction.respond([]);
+      const submission = await retrieveBlightRequestFromStorage(submissionId);
+      if (!submission) return interaction.respond([]);
+      if (submission.taskType !== 'item') return interaction.respond([]);
+      const healer = getModCharacterByName(submission.healerName);
+      if (!healer) return interaction.respond([]);
+      const healingItems = healer.getHealingRequirements(submission.characterName)
+        .find((req) => req.type === 'item').items;
+      const input = focusedOption.value?.toLowerCase() || '';
+      const choices = healingItems
+        .map(i => `${i.name} x${i.quantity}`)
+        .filter(str => str.toLowerCase().includes(input))
+        .slice(0, 25)
+        .map(str => ({ name: str, value: str }));
+      await interaction.respond(choices);
+    } catch (err) {
+      await interaction.respond([]);
     }
   }
 };
