@@ -147,7 +147,7 @@ async function handleAutocomplete(interaction) {
         console.log('[handleAutocomplete]: 🔄 Processing command', {
           commandName,
           focusedOption: focusedOption.name,
-          subcommand: interaction.options.getSubcommand()
+          hasSubcommand: interaction.options._subcommand !== undefined
         });
 
         switch (commandName) {
@@ -155,20 +155,22 @@ async function handleAutocomplete(interaction) {
 
           // ------------------- Custom Weapon Command -------------------
           case "customweapon":
-            const customWeaponSubcommand = interaction.options.getSubcommand();
-            if (customWeaponSubcommand === "create") {
-              if (focusedOption.name === "charactername") {
-                await handleCustomWeaponCharacterAutocomplete(interaction, focusedOption);
-              } else if (focusedOption.name === "weaponid") {
-                await handleCustomWeaponIdAutocomplete(interaction, focusedOption);
-              }
-            } else if (customWeaponSubcommand === "submit") {
-              if (focusedOption.name === "charactername") {
-                await handleCustomWeaponCharacterAutocomplete(interaction, focusedOption);
-              } else if (focusedOption.name === "baseweapon") {
-                await handleBaseWeaponAutocomplete(interaction, focusedOption);
-              } else if (focusedOption.name === "subtype") {
-                await handleSubtypeAutocomplete(interaction, focusedOption);
+            if (interaction.options._subcommand) {
+              const customWeaponSubcommand = interaction.options.getSubcommand();
+              if (customWeaponSubcommand === "create") {
+                if (focusedOption.name === "charactername") {
+                  await handleCustomWeaponCharacterAutocomplete(interaction, focusedOption);
+                } else if (focusedOption.name === "weaponid") {
+                  await handleCustomWeaponIdAutocomplete(interaction, focusedOption);
+                }
+              } else if (customWeaponSubcommand === "submit") {
+                if (focusedOption.name === "charactername") {
+                  await handleCustomWeaponCharacterAutocomplete(interaction, focusedOption);
+                } else if (focusedOption.name === "baseweapon") {
+                  await handleBaseWeaponAutocomplete(interaction, focusedOption);
+                } else if (focusedOption.name === "subtype") {
+                  await handleSubtypeAutocomplete(interaction, focusedOption);
+                }
               }
             }
             break;
@@ -180,40 +182,44 @@ async function handleAutocomplete(interaction) {
 
           // ------------------- Mod Command -------------------
           case "mod":
-            const modSubcommand = interaction.options.getSubcommand();
-            if (modSubcommand === "give") {
-              if (focusedOption.name === "character") {
-                await handleModGiveCharacterAutocomplete(interaction, focusedOption);
-              } else if (focusedOption.name === "item") {
-                await handleModGiveItemAutocomplete(interaction, focusedOption);
+            if (interaction.options._subcommand) {
+              const modSubcommand = interaction.options.getSubcommand();
+              if (modSubcommand === "give") {
+                if (focusedOption.name === "character") {
+                  await handleModGiveCharacterAutocomplete(interaction, focusedOption);
+                } else if (focusedOption.name === "item") {
+                  await handleModGiveItemAutocomplete(interaction, focusedOption);
+                }
               }
             }
             break;
 
           // ------------------- Blight Command -------------------
           case "blight":
-            const blightSubcommand = interaction.options.getSubcommand();
-            console.log('[handleAutocomplete]: 📝 Processing blight command', {
-              subcommand: blightSubcommand,
-              focusedOption: focusedOption.name
-            });
-            
-            if (blightSubcommand === "heal") {
-              if (focusedOption.name === "character_name" || focusedOption.name === "healer_name") {
-                await handleBlightCharacterAutocomplete(interaction, focusedOption);
-              } else if (focusedOption.name === "item") {
-                await handleBlightItemAutocomplete(interaction, focusedOption);
-              }
-            } else if (blightSubcommand === "submit") {
-              console.log('[handleAutocomplete]: 📝 Processing blight submit', {
+            if (interaction.options._subcommand) {
+              const blightSubcommand = interaction.options.getSubcommand();
+              console.log('[handleAutocomplete]: 📝 Processing blight command', {
+                subcommand: blightSubcommand,
                 focusedOption: focusedOption.name
               });
-              if (focusedOption.name === "item") {
-                await handleBlightItemAutocomplete(interaction, focusedOption);
-              }
-            } else if (blightSubcommand === "roll") {
-              if (focusedOption.name === "character_name") {
-                await handleBlightCharacterAutocomplete(interaction, focusedOption);
+              
+              if (blightSubcommand === "heal") {
+                if (focusedOption.name === "character_name" || focusedOption.name === "healer_name") {
+                  await handleBlightCharacterAutocomplete(interaction, focusedOption);
+                } else if (focusedOption.name === "item") {
+                  await handleBlightItemAutocomplete(interaction, focusedOption);
+                }
+              } else if (blightSubcommand === "submit") {
+                console.log('[handleAutocomplete]: 📝 Processing blight submit', {
+                  focusedOption: focusedOption.name
+                });
+                if (focusedOption.name === "item") {
+                  await handleBlightItemAutocomplete(interaction, focusedOption);
+                }
+              } else if (blightSubcommand === "roll") {
+                if (focusedOption.name === "character_name") {
+                  await handleBlightCharacterAutocomplete(interaction, focusedOption);
+                }
               }
             }
             break;
@@ -229,14 +235,16 @@ async function handleAutocomplete(interaction) {
 
           // ------------------- Character Command -------------------
           case "character":
-            const subcommandGroup = interaction.options.getSubcommandGroup(false);
-            const subcommand = interaction.options.getSubcommand();
-            
-            if (subcommandGroup === "create") {
-              if (focusedOption.name === "race") {
-                await handleCreateCharacterRaceAutocomplete(interaction, focusedOption);
-              } else if (focusedOption.name === "village") {
-                await handleCreateCharacterVillageAutocomplete(interaction, focusedOption);
+            if (interaction.options._subcommandGroup) {
+              const subcommandGroup = interaction.options.getSubcommandGroup(false);
+              const subcommand = interaction.options.getSubcommand();
+              
+              if (subcommandGroup === "create") {
+                if (focusedOption.name === "race") {
+                  await handleCreateCharacterRaceAutocomplete(interaction, focusedOption);
+                } else if (focusedOption.name === "village") {
+                  await handleCreateCharacterVillageAutocomplete(interaction, focusedOption);
+                }
               }
             }
             break;
@@ -305,13 +313,15 @@ async function handleAutocomplete(interaction) {
 
           // ------------------- Vending Command -------------------
           case "vending":
-            const vendingSubcommand = interaction.options.getSubcommand();
-            if (vendingSubcommand === "add") {
-              await handleVendingAddAutocomplete(interaction, focusedOption);
-            } else if (vendingSubcommand === "barter") {
-              await handleVendingBarterAutocomplete(interaction, focusedOption);
-            } else if (vendingSubcommand === "view") {
-              await handleVendingViewAutocomplete(interaction, focusedOption);
+            if (interaction.options._subcommand) {
+              const vendingSubcommand = interaction.options.getSubcommand();
+              if (vendingSubcommand === "add") {
+                await handleVendingAddAutocomplete(interaction, focusedOption);
+              } else if (vendingSubcommand === "barter") {
+                await handleVendingBarterAutocomplete(interaction, focusedOption);
+              } else if (vendingSubcommand === "view") {
+                await handleVendingViewAutocomplete(interaction, focusedOption);
+              }
             }
             break;
 

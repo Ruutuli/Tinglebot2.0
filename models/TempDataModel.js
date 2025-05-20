@@ -26,7 +26,8 @@ const tempDataSchema = new mongoose.Schema({
       'delivery',     // Delivery requests
       'trade',        // Trade requests
       'pendingEdit',  // Pending character edit requests
-      'submission'    // Art/writing submissions
+      'submission',   // Art/writing submissions
+      'weather'       // Weather data caching
     ],
     index: true
   },
