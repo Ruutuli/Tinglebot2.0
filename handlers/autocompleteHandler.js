@@ -1,44 +1,53 @@
-// ------------------- Autocomplete Handler for Various Commands -------------------
+// ============================================================================
+// ------------------- Imports -------------------
+// This section handles all required imports organized by group and alphabetized.
+// ============================================================================
 
 // ------------------- Standard Libraries -------------------
 const { MongoClient } = require("mongodb");
 
-const { handleError } = require("../utils/globalErrorHandler");
 // ------------------- Database Connections -------------------
+const {
+ connectToInventories,
+ connectToTinglebot
+} = require("../database/db");
 
 // ------------------- Database Services -------------------
 const {
- connectToInventories,
- connectToTinglebot,
  fetchAllCharacters,
  fetchAllCharactersExceptUser,
  fetchBlightedCharactersByUserId,
  fetchCharacterByName,
  fetchCharacterByNameAndUserId,
  fetchCharactersByUserId,
- getCharacterInventoryCollection,
  fetchCraftableItemsAndCheckMaterials,
+ getCharacterInventoryCollection,
  getCurrentVendingStockList,
  getVendingModel
 } = require("../database/db");
-// ------------------- Modules -------------------
+
+// ------------------- Custom Modules -------------------
 const {
  capitalize,
  capitalizeFirstLetter,
- capitalizeWords,
+ capitalizeWords
 } = require("../modules/formattingModule");
 const {
  getGeneralJobsPage,
  getJobPerk,
- getVillageExclusiveJobs,
+ getVillageExclusiveJobs
 } = require("../modules/jobsModule");
 const { getAllVillages } = require("../modules/locationsModule");
 const {
- modCharacters,
  getModCharacterByName,
+ modCharacters
 } = require("../modules/modCharacters");
 const { normalPets, specialPets } = require("../modules/petModule");
 const { getAllRaces } = require("../modules/raceModule");
+const { NPCs } = require("../modules/stealingNPCSModule");
+
+// ------------------- Utility Functions -------------------
+const { handleError } = require("../utils/globalErrorHandler");
 
 // ------------------- Database Models -------------------
 const Character = require("../models/CharacterModel");
@@ -49,8 +58,6 @@ const Pet = require("../models/PetModel");
 const ShopStock = require("../models/VillageShopsModel");
 const { Village } = require("../models/VillageModel");
 
-// Add import at the top
-const { NPCs } = require('../modules/stealingNPCSModule');
 
 // Add safe response utility
 async function safeAutocompleteResponse(interaction, choices) {
