@@ -1597,7 +1597,7 @@ const createInitialTravelEmbed = (
  const destEmoji = villageEmojis[destination.toLowerCase()] || "";
  let staminaLine = `**🟩 __Stamina:__** ${character.currentStamina}/${character.maxStamina}`;
  if (mode === 'on mount' && mount) {
-   staminaLine = `**🥕 __${mount.name}'s Stamina:__** ${mount.currentStamina}/${mount.level === 'Basic' ? 2 : mount.level === 'Mid' ? 4 : mount.level === 'High' ? 6 : mount.stamina}`;
+   staminaLine = `**🥕 __${mount.name}'s Stamina:__** ${mount.currentStamina}/${mount.stamina}`;
  }
  return new EmbedBuilder()
   .setTitle(
