@@ -1,3 +1,8 @@
+// ============================================================================
+// ---- Custom Weapon Command ----
+// Handles creation, submission, and approval of custom weapons
+// ============================================================================
+
 // ------------------- /customweapon Command -------------------
 // ------------------- Standard Libraries -------------------
 const { SlashCommandBuilder, PermissionsBitField } = require('discord.js');
@@ -21,7 +26,8 @@ const ItemModel = require('../../models/ItemModel');
 
 // ------------------- Helper Functions -------------------
 
-// ------------------- Logs materials used for crafting to Google Sheets -------------------
+// ---- Function: logMaterialsToGoogleSheets ----
+// Logs materials used for crafting to Google Sheets
 async function logMaterialsToGoogleSheets(auth, spreadsheetId, range, character, materialsUsed, craftedItem, interactionUrl, formattedDateTime) {
     try {
         const combinedMaterials = combineMaterials(materialsUsed);
@@ -126,6 +132,7 @@ async function logMaterialsToGoogleSheets(auth, spreadsheetId, range, character,
     }
 }
 
+// ---- Function: combineMaterials ----
 // Combines materials used for crafting to avoid duplicates
 function combineMaterials(materialsUsed) {
     const materialMap = new Map();
@@ -141,7 +148,8 @@ function combineMaterials(materialsUsed) {
     return Array.from(materialMap.values());
   }
 
-// ------------------- Get All Submissions from Storage -------------------
+// ---- Function: getAllSubmissions ----
+// Retrieves all weapon submissions from storage
 function getAllSubmissions() {
     try {
         const fs = require('fs');
@@ -174,7 +182,78 @@ function getAllSubmissions() {
     }
 }
 
-// ------------------- Export Command Module -------------------
+// ---- Function: validateWeaponSubmission ----
+// Validates all aspects of a weapon submission
+async function validateWeaponSubmission(submission) {
+    const validModifiers = ['1', '2', '3', '4'];
+    const validTypes = ['1h', '2h'];
+    const validSubtypes = await fetchValidWeaponSubtypes();
+
+    if (!validModifiers.includes(submission.modifiers)) {
+        throw new Error(`Invalid modifier value: ${submission.modifiers}. Must be one of: ${validModifiers.join(', ')}`);
+    }
+
+    if (!validTypes.includes(submission.type)) {
+        throw new Error(`Invalid weapon type: ${submission.type}. Must be one of: ${validTypes.join(', ')}`);
+    }
+
+    if (!validSubtypes.includes(submission.subtype.toLowerCase())) {
+        throw new Error(`Invalid weapon subtype: ${submission.subtype}. Please check the available subtypes.`);
+    }
+
+    const baseWeapon = await ItemModel.findOne({ itemName: submission.baseWeapon });
+    if (!baseWeapon) {
+        throw new Error(`Base weapon "${submission.baseWeapon}" not found in the database.`);
+    }
+
+    if (!baseWeapon.type.includes(submission.type)) {
+        throw new Error(`The base weapon "${submission.baseWeapon}" is a ${baseWeapon.type.join('/')} weapon, but you selected ${submission.type}.`);
+    }
+}
+
+// ---- Function: validateCraftingRequirements ----
+// Validates all requirements for crafting a weapon
+async function validateCraftingRequirements(character, weaponSubmission, inventoryItems) {
+    // Check Blueprint Voucher
+    const hasBlueprintVoucher = inventoryItems.some(item => item.itemName === "Blueprint Voucher" && item.quantity > 0);
+    if (!hasBlueprintVoucher) {
+        throw new Error(`You need 1 Blueprint Voucher to craft this weapon.`);
+    }
+
+    // Check Star Fragments
+    const totalStarFragments = inventoryItems
+        .filter(item => item.itemName === 'Star Fragment')
+        .reduce((sum, item) => sum + item.quantity, 0);
+    if (totalStarFragments < 1) {
+        throw new Error(`You need 1 Star Fragment to craft this weapon.`);
+    }
+
+    // Check Stamina
+    if (character.currentStamina < weaponSubmission.staminaToCraft) {
+        throw new Error(`Insufficient stamina. You need ${weaponSubmission.staminaToCraft} stamina to craft this weapon.`);
+    }
+
+    // Check Materials
+    const missingMaterials = [];
+    for (const material of weaponSubmission.craftingMaterials) {
+        const totalAvailable = inventoryItems
+            .filter(item => item.itemName === material.itemName)
+            .reduce((sum, item) => sum + item.quantity, 0);
+
+        if (totalAvailable < material.quantity) {
+            missingMaterials.push(`${material.itemName} (Need: ${material.quantity}, Have: ${totalAvailable})`);
+        }
+    }
+
+    if (missingMaterials.length > 0) {
+        throw new Error(`You are missing required materials:\n${missingMaterials.join('\n')}`);
+    }
+}
+
+// ============================================================================
+// ---- Command Module Export ----
+// Exports the custom weapon command and its subcommands
+// ============================================================================
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('customweapon')
@@ -294,7 +373,7 @@ module.exports = {
 
 // ------------------- Command Execution Logic -------------------
 
-async execute(interaction) {
+execute: async (interaction) => {
     try {
         // Defer reply early for long-running commands
         if (!interaction.deferred && !interaction.replied) {
@@ -388,52 +467,13 @@ if (weaponSubmission.crafted === true) {
         return;
     }
 
-    // ------------------- Check for Blueprint Voucher -------------------
-    const hasBlueprintVoucher = inventoryItems.some(item => item.itemName === "Blueprint Voucher" && item.quantity > 0);
-    if (!hasBlueprintVoucher) {
+    // Validate crafting requirements using new function
+    try {
+        await validateCraftingRequirements(character, weaponSubmission, inventoryItems);
+    } catch (error) {
+        console.error(`[customweapon create]: ❌ Validation failed: ${error.message}`);
         await interaction.editReply({
-            content: `❌ You need **1 Blueprint Voucher** to craft this weapon.`,
-            ephemeral: true,
-        });
-        return;
-    }
-
-    // ------------------- Check Star Fragments -------------------
-    const totalStarFragments = inventoryItems
-        .filter(item => item.itemName === 'Star Fragment')
-        .reduce((sum, item) => sum + item.quantity, 0);
-    if (totalStarFragments < 1) {
-        await interaction.editReply({
-            content: `❌ You need **1 Star Fragment** to craft this weapon.`,
-            ephemeral: true,
-        });
-        return;
-    }
-
-    // ------------------- Check Stamina -------------------
-    if (character.currentStamina < weaponSubmission.staminaToCraft) {
-        await interaction.editReply({
-            content: `❌ Insufficient stamina. You need **${weaponSubmission.staminaToCraft}** stamina to craft this weapon.`,
-            ephemeral: true,
-        });
-        return;
-    }
-
-    // ------------------- Check Required Materials -------------------
-    const missingMaterials = [];
-    for (const material of weaponSubmission.craftingMaterials) {
-        const totalAvailable = inventoryItems
-            .filter(item => item.itemName === material.itemName)
-            .reduce((sum, item) => sum + item.quantity, 0);
-
-        if (totalAvailable < material.quantity) {
-            missingMaterials.push(`${material.itemName} (Need: ${material.quantity}, Have: ${totalAvailable})`);
-        }
-    }
-
-    if (missingMaterials.length > 0) {
-        await interaction.editReply({
-            content: `❌ You are missing required materials:\n${missingMaterials.join('\n')}`,
+            content: `❌ ${error.message}`,
             ephemeral: true,
         });
         return;
@@ -897,11 +937,22 @@ try {
         console.log(`[customweapon approve]: 🔍 Retrieving submission ${weaponId}`);
         const weaponSubmission = await retrieveSubmissionFromStorage(weaponId);
         
-        // Add proper null check
         if (!weaponSubmission) {
             console.error(`[customweapon approve]: ❌ No submission found for ID: ${weaponId}`);
             await interaction.editReply({
                 content: `❌ Custom weapon submission not found. Please verify the Weapon ID is correct.`,
+                ephemeral: true,
+            });
+            return;
+        }
+
+        // Validate submission using new function
+        try {
+            await validateWeaponSubmission(weaponSubmission);
+        } catch (error) {
+            console.error(`[customweapon approve]: ❌ Validation failed: ${error.message}`);
+            await interaction.editReply({
+                content: `❌ ${error.message}`,
                 ephemeral: true,
             });
             return;
@@ -1179,80 +1230,33 @@ try {
                     fields: [
                         { name: 'Character', value: `> ${weaponSubmission.characterName}`, inline: true },
                         { name: 'Weapon Name', value: `> ${weaponSubmission.weaponName}`, inline: true },
-                        { name: 'Stamina to Craft', value: `> ${staminaToCraft}`, inline: true },
+                        { name: 'Subtype', value: `> ${weaponSubmission.subtype}`, inline: true },
                         { name: 'Modifiers', value: `> ${weaponSubmission.modifiers}`, inline: true },
                         { name: 'Type', value: `> ${weaponSubmission.type}`, inline: true },
-                        { name: 'Subtype', value: `> ${weaponSubmission.subtype}`, inline: true },
+                        { name: 'Stamina to Craft', value: `> ${staminaToCraft}`, inline: true },
                         { name: 'Weapon ID', value: `\`\`\`${weaponId}\`\`\``, inline: false },
-                        {
-                            name: '__Materials to Craft__',
-                            value: (await Promise.all([
-                              ...craftingMaterials.map(async (mat) => {
-                                const item = await ItemModel.findOne({ itemName: mat.itemName });
-                                const emoji = item?.emoji && item.emoji.trim() !== '' ? item.emoji : ':small_blue_diamond:';
-                                return `> ${emoji} **${mat.itemName}** x${mat.quantity}`;
-                              }),
-                              (async () => {
-                                const blueprintItem = await ItemModel.findOne({ itemName: 'Blueprint Voucher' });
-                                const emoji = blueprintItem?.emoji && blueprintItem.emoji.trim() !== '' ? blueprintItem.emoji : ':small_blue_diamond:';
-                                return `> :small_blue_diamond: **Blueprint Voucher** x1`;
-                              })()
-                            ])).join('\n'),
-                            inline: false,
-                          },
-                          
-                        
                     ],
-                    image: {
-                        url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png',
-                    },
                 },
             ],
-            ephemeral: false,
         });
 
-// ✅ React with a checkmark on original submission message
-try {
-    if (weaponSubmission.notificationMessageId) {
-        const notificationChannel = await interaction.client.channels.fetch('1347628427993153637');
-        const originalMsg = await notificationChannel.messages.fetch(weaponSubmission.notificationMessageId);
-        if (originalMsg) {
-            await originalMsg.react('✅');
-        }
-    }
-} catch (err) {
-    handleError(err, 'customWeapon.js');
-
-    console.error(`[customweapon approve]: Failed to react to notification message:`, err.message);
-}
-
-
-
-
     } catch (error) {
-    handleError(error, 'customWeapon.js');
-
-        console.error(`[customweapon approve]: An unexpected error occurred:`, error);
-        if (!interaction.deferred && !interaction.replied) {
-            await interaction.reply({
-                content: '❌ An unexpected error occurred while approving the weapon. Please try again later.',
-                ephemeral: true,
-            });
-        } else {
-            await interaction.editReply({
-                content: '❌ An unexpected error occurred while approving the weapon. Please try again later.',
-            });
-        }
+        handleError(error, 'customWeapon.js');
+        console.error(`[customweapon approve]: Error approving weapon:`, error);
+        await interaction.editReply({
+            content: `❌ An error occurred while approving the weapon. Please try again later.`,
+            ephemeral: true,
+        });
     }
 }
 
-        } catch (error) {
+} catch (error) {
     handleError(error, 'customWeapon.js');
-
-            console.error('[customweapon command]:', error);
-            return interaction.reply({ content: '❌ An error occurred while processing the command.', ephemeral: true });
-        }
-    }
+    console.error(`[customweapon execute]: Error executing command:`, error);
+    await interaction.editReply({
+        content: `❌ An error occurred while processing your request. Please try again later.`,
+        ephemeral: true,
+    });
+}
+},
 };
-
-

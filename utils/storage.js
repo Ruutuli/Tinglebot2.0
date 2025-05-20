@@ -16,8 +16,6 @@ async function saveSubmissionToStorage(submissionId, submissionData) {
       throw new Error('Missing submissionId or data');
     }
 
-    console.log(`[storage.js]: 🔄 Saving submission ${submissionId}`);
-    
     // Set expiration to 48 hours from now
     const now = new Date();
     const expiresAt = new Date(now.getTime() + 48 * 60 * 60 * 1000);
@@ -40,7 +38,7 @@ async function saveSubmissionToStorage(submissionId, submissionData) {
       { upsert: true, new: true }
     );
 
-    console.log(`[storage.js]: ✅ Successfully saved submission ${submissionId}`);
+    console.log(`[storage.js]: ✅ Saved submission ${submissionId}`);
     return result;
   } catch (error) {
     handleError(error, 'storage.js');
@@ -52,15 +50,12 @@ async function saveSubmissionToStorage(submissionId, submissionData) {
 // Retrieve a submission by its ID.
 async function retrieveSubmissionFromStorage(submissionId) {
   try {
-    console.log(`[storage.js]: 🔍 Retrieving submission ${submissionId}`);
     const submission = await TempData.findByTypeAndKey('submission', submissionId);
     if (submission) {
       console.log(`[storage.js]: ✅ Found submission ${submissionId} (${submission.data?.status || 'unknown status'})`);
       return submission.data;
-    } else {
-      console.log(`[storage.js]: ❌ No submission found for ${submissionId}`);
-      return null;
     }
+    return null;
   } catch (error) {
     handleError(error, 'storage.js');
     console.error(`[storage.js]: ❌ Error retrieving submission ${submissionId}:`, error);
