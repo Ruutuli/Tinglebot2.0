@@ -491,14 +491,25 @@ async function processTravelDay(day, context) {
       await character.save();
       const finalChannelId = PATH_CHANNELS[paths[paths.length - 1]] || currentChannel;
       const finalChannel = await interaction.client.channels.fetch(finalChannelId);
-      const finalEmbed = new EmbedBuilder()
-        .setTitle(`🚀 Mount Travel Complete!`)
-        .setDescription(`✅ **${character.name}** has arrived at **${capitalizeFirstLetter(destination)}** by mount!
+      
+      // First embed with mount info
+      const mountEmbed = new EmbedBuilder()
+        .setTitle(`✅ Mount Travel Complete!`)
+        .setDescription(`**${character.name}** has arrived at **${capitalizeFirstLetter(destination)}** by mount!
 
 🥕 **${mount.name}**'s stamina remaining: ${mount.currentStamina}`)
         .setColor('#AA926A')
         .setTimestamp();
-      await finalChannel.send({ embeds: [finalEmbed] });
+      
+      // Second embed with arrival image
+      const imageEmbed = new EmbedBuilder()
+        .setImage('https://storage.googleapis.com/tinglebot/Graphics/travel.png')
+        .setDescription(`🎉 **${character.name}** has arrived safely at **${capitalizeFirstLetter(destination)}**!`);
+
+      // Send both embeds in sequence
+      await finalChannel.send({ embeds: [mountEmbed] });
+      await finalChannel.send({ embeds: [imageEmbed] });
+
       for (const msg of travelingMessages) {
         await msg.delete();
       }
