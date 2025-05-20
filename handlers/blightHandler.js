@@ -178,16 +178,29 @@ async function healBlight(interaction, characterName, healerName) {
 
     if (existingSubmissions.length > 0) {
       const existingSubmission = existingSubmissions[0];
-      const timeLeft = Math.ceil((existingSubmission.expiresAt - new Date()) / (1000 * 60 * 60 * 24));
-      
-      await interaction.reply({
-        content: `⚠️ **${characterName}** already has a pending healing request that expires in ${timeLeft} days.\n\n` +
-          `Submission ID: \`${existingSubmission.key}\`\n` +
-          `Healer: **${existingSubmission.data.healerName}**\n` +
-          `Task: ${existingSubmission.data.taskDescription}\n\n`,
-        ephemeral: true
-      });
-      return;
+      // Check if the pending healer is still eligible for the current stage
+      const pendingHealer = getModCharacterByName(existingSubmission.data.healerName);
+      const currentStage = character.blightStage || 1;
+      const pendingPermission = validateHealerPermission(pendingHealer, currentStage);
+      if (!pendingPermission.canHeal) {
+        // Expire/cancel the old request
+        await deleteBlightRequestFromStorage(existingSubmission.key);
+        await interaction.reply({
+          content: `⚠️ **${characterName}** had a pending healing request from **${pendingHealer.name}**, but they can no longer heal at Stage ${currentStage}.\n\nThe old request has been cancelled. You may now request a new healing prompt from an eligible healer.`,
+          ephemeral: true
+        });
+        // Continue to process the new request as normal (do not return)
+      } else {
+        const timeLeft = Math.ceil((existingSubmission.expiresAt - new Date()) / (1000 * 60 * 60 * 24));
+        await interaction.reply({
+          content: `⚠️ **${characterName}** already has a pending healing request that expires in ${timeLeft} days.\n\n` +
+            `Submission ID: \`${existingSubmission.key}\`\n` +
+            `Healer: **${existingSubmission.data.healerName}**\n` +
+            `Task: ${existingSubmission.data.taskDescription}\n\n`,
+          ephemeral: true
+        });
+        return;
+      }
     }
 
     const healer = getModCharacterByName(healerName);
