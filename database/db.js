@@ -544,9 +544,11 @@ async function resetPetRollsForAllCharacters() {
   
   for (const pet of activePets) {
     try {
+      // Only reset rollsRemaining to match the pet's current level
       const newRolls = Math.min(pet.level, 3);
       const oldRolls = pet.rollsRemaining;
       
+      // Only update rollsRemaining, preserving the level
       await Pet.updateOne(
         { _id: pet._id },
         { $set: { rollsRemaining: newRolls } }
@@ -565,6 +567,28 @@ async function resetPetRollsForAllCharacters() {
   handleError(error, "db.js");
   console.error(
    `[db.js]: ❌ Error in resetPetRollsForAllCharacters: ${error.message}`
+  );
+  throw error;
+ }
+}
+
+// ------------------- restorePetLevel -------------------
+async function restorePetLevel(characterId, petName, level) {
+ try {
+  // Update the Pet model to restore the level
+  await Pet.updateOne(
+   { name: petName, owner: characterId },
+   { 
+     $set: { 
+       level: level,
+       rollsRemaining: Math.min(level, 3) // Also update rolls to match level
+     } 
+   }
+  );
+ } catch (error) {
+  handleError(error, "db.js");
+  console.error(
+   `[db.js]: ❌ Error in restorePetLevel: ${error.message}`
   );
   throw error;
  }
@@ -1986,5 +2010,6 @@ module.exports = {
  getCharacterBlightHistory,
  getUserBlightHistory,
  connectToVending,
- addItemToInventory
+ addItemToInventory,
+ restorePetLevel
 };
