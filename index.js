@@ -39,13 +39,6 @@ const {
 const { convertToHyruleanDate } = require("./modules/calendarModule");
 
 // ------------------- Weather -------------------
-const { simulateWeightedWeather } = require("./handlers/weatherHandler");
-const {
-  precipitationWeights,
-  specialWeights,
-  temperatureWeights,
-  windWeights,
-} = require("./data/weatherData");
 
 
 // ============================================================================

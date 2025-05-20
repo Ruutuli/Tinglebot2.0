@@ -95,9 +95,12 @@ function getRandomBanner(village) {
 
 function getOverlayPath(condition) {
   const overlayName = OVERLAY_MAPPING[condition];
-  if (!overlayName) return null;
-  const overlayPath = path.join(__dirname, 'assets', 'overlays', `ROOTS-${overlayName}.png`);
-  return fs.existsSync(overlayPath) ? overlayPath : null;
+  if (!overlayName) {
+    return null;
+  }
+  const overlayPath = path.join(__dirname, '..', 'assets', 'overlays', `ROOTS-${overlayName}.png`);
+  const exists = fs.existsSync(overlayPath);
+  return exists ? overlayPath : null;
 }
 
 // ---- Function: generateBanner ----
@@ -109,7 +112,15 @@ async function generateBanner(village, weather) {
       console.error(`[weatherEmbed.js]: Failed to get banner for ${village}`);
       return null;
     }
-    const overlayPath = getOverlayPath(weather.precipitation.label);
+    // Special weather overlay takes priority
+    let overlayPath = null;
+    if (weather.special && weather.special.label) {
+      overlayPath = getOverlayPath(weather.special.label);
+    }
+    // Fallback to precipitation overlay if no special overlay
+    if (!overlayPath) {
+      overlayPath = getOverlayPath(weather.precipitation.label);
+    }
     
     // Add timeout to prevent infinite loops
     const timeoutPromise = new Promise((_, reject) => {
@@ -120,19 +131,22 @@ async function generateBanner(village, weather) {
     const bannerImg = await Promise.race([bannerPromise, timeoutPromise]);
     
     if (overlayPath) {
-      const overlayPromise = Jimp.read(overlayPath);
-      const overlayImg = await Promise.race([overlayPromise, timeoutPromise]);
-      
-      // Validate image dimensions before processing
-      if (bannerImg.bitmap.width > 0 && bannerImg.bitmap.height > 0) {
-        overlayImg.resize(bannerImg.bitmap.width, bannerImg.bitmap.height);
-        bannerImg.composite(overlayImg, 0, 0, {
-          mode: Jimp.BLEND_SOURCE_OVER,
-          opacitySource: 1,
-          opacityDest: 1
-        });
-      } else {
-        throw new Error('Invalid image dimensions');
+      try {
+        const overlayPromise = Jimp.read(overlayPath);
+        const overlayImg = await Promise.race([overlayPromise, timeoutPromise]);
+        // Validate image dimensions before processing
+        if (bannerImg.bitmap.width > 0 && bannerImg.bitmap.height > 0) {
+          overlayImg.resize(bannerImg.bitmap.width, bannerImg.bitmap.height);
+          bannerImg.composite(overlayImg, 0, 0, {
+            mode: Jimp.BLEND_SOURCE_OVER,
+            opacitySource: 1,
+            opacityDest: 1
+          });
+        } else {
+          throw new Error('Invalid image dimensions');
+        }
+      } catch (overlayError) {
+        console.error(`[weatherEmbed.js]: ❌ Error loading/compositing overlay: ${overlayError.message}`);
       }
     }
     
@@ -143,6 +157,24 @@ async function generateBanner(village, weather) {
     console.error('[weatherEmbed.js]: Error generating banner:', error);
     return null;
   }
+}
+
+// ------------------- Special Weather Flavor Text -------------------
+function specialWeatherFlavorText(weatherType) {
+    const weatherTextMap = {
+        "Avalanche": "There has been an avalanche and some roads are blocked! Travel to and from this village today is impossible.",
+        "Drought": "A drought has dried up the smaller vegetation surrounding the village... any plants or mushrooms rolled today are found dead and will not be gathered.",
+        "Fairy Circle": "Fairy circles have popped up all over Hyrule! All residents and visitors may use /specialweather to gather mushrooms today!",
+        "Flood": "There has been a flood! Traveling to and from this village is impossible today due to the danger.",
+        "Flower Bloom": "An overabundance of plants and flowers have been spotted growing in and around the village! All residents and visitors may use /specialweather to gather today!",
+        "Jubilee": "Fish are practically jumping out of the water! All residents and visitors may use /specialweather to catch some fish!",
+        "Meteor Shower": "Shooting stars have been spotted streaking through the sky! Quick, all residents and visitors make a wish and use /specialweather for a chance to find a star fragment!",
+        "Muggy": "Oof! Sure is humid today! Critters are out and about more than usual. All residents and visitors may use /specialweather to catch some critters!",
+        "Rock Slide": "Oh no, there's been a rock slide! Traveling to and from this village is impossible today. All residents and visitors may use /specialweather to help clear the road! You might just find something interesting while you work...",
+        "Blight Rain": "Blighted rain falls from the sky, staining the ground and creating sickly maroon-tinged puddles... if you roll for gathering today, you must also use /specialweather to see if you get infected! If you skip this roll, blighting will be automatic."
+    };
+
+    return weatherTextMap[weatherType] || "Unknown weather condition.";
 }
 
 // ---- Function: generateWeatherEmbed ----
@@ -176,9 +208,15 @@ async function generateWeatherEmbed(village, weather) {
       )
       .setThumbnail(`attachment://${seasonIconName}`)
       .setTimestamp();
+
     if (weather.special && weather.special.label) {
-      embed.addFields({ name: 'Special', value: `✨ ${weather.special.emoji || ''} ${weather.special.label}`.trim() });
+      const specialText = specialWeatherFlavorText(weather.special.label);
+      embed.addFields({ 
+        name: 'Special Weather', 
+        value: `✨ ${weather.special.emoji || ''} ${weather.special.label}\n\n${specialText}`.trim() 
+      });
     }
+
     const banner = await generateBanner(village, weather);
     if (banner) {
       embed.setImage(`attachment://${banner.name}`);
