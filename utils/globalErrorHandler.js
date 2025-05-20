@@ -59,7 +59,7 @@ async function handleError(error, source = "Unknown Source", context = {}) {
 
   const logBlock = `
 [ERROR] ${source} - ${timestamp}
-${context.commandName ? `Command: ${context.commandName}` : ""}
+${context.commandName ? `Command Used: ${context.commandName}` : ""}
 ${context.userTag ? `User: ${context.userTag}` : ""}
 ${extraInfo ? `Context: ${extraInfo}` : ""}
 Error: ${message}
@@ -76,7 +76,7 @@ Error: ${message}
     trelloContent += `**Time:** ${timestamp}\n`;
     if (extraInfo) trelloContent += `**Context:**\n${extraInfo}\n`;
 
-    if (context.commandName) trelloContent += `**Command:** ${context.commandName}\n`;
+    if (context.commandName) trelloContent += `**Command Used:** ${context.commandName}\n`;
     if (context.userTag) trelloContent += `**User:** ${context.userTag} (${context.userId})\n`;
     if (context.options) trelloContent += `**Options:**\n\`\`\`${JSON.stringify(context.options)}\`\`\`\n`;
 
@@ -96,7 +96,7 @@ Error: ${message}
         .setColor(0xFF0000)
         .setTitle(`❌ Error Detected in ${source}`)
         .addFields(
-          { name: "🧠 Command", value: context.commandName || "Unknown", inline: false },
+          { name: "🧠 Command Used", value: context.commandName || "Unknown", inline: false },
           { name: "🙋 User", value: context.userTag ? `${context.userTag} (${context.userId})` : "Unknown", inline: false },
           { name: "📦 Options", value: context.options ? `\`\`\`json\n${JSON.stringify(context.options, null, 2)}\n\`\`\`` : "None" },
           { name: "📝 Error Message", value: `\`\`\`\n${message.slice(0, 1000)}\n\`\`\`` },

@@ -33,7 +33,8 @@ const {
   updatePetToCharacter,
   getOrCreateToken,
   updateTokenBalance,
-  appendEarnedTokens
+  appendEarnedTokens,
+  resetPetRollsForAllCharacters
 } = require('../../database/db');
 
 const {
@@ -1360,7 +1361,7 @@ async function handlePetRollsReset(interaction) {
     });
   } catch (error) {
     handleError(error, "mod.js", {
-      commandName: 'resetpetrolls',
+      commandName: '/mod resetpetrolls',
       userTag: interaction.user.tag,
       userId: interaction.user.id,
       options: {
@@ -1368,7 +1369,7 @@ async function handlePetRollsReset(interaction) {
       }
     });
     
-    console.error(`[mod.js]: Error resetting pet rolls:`, error);
+    console.error(`[mod.js]: Error in /mod resetpetrolls:`, error);
     
     return interaction.editReply({
       content: `❌ Failed to reset pet rolls: ${error.message || 'Unknown error'}`,
