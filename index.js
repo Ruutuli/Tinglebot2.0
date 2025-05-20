@@ -61,9 +61,13 @@ async function initializeDatabases() {
     await connectToTinglebot();
     await connectToInventories();
     
-    // Clean up expired temp data
-    const result = await TempData.cleanup();
-    console.log(`[index.js]: 🧹 Cleaned up ${result.deletedCount} expired temp data entries`);
+    // Clean up expired temp data and entries without expiration dates
+    const [expiredResult, noExpirationResult] = await Promise.all([
+      TempData.cleanup(),
+      TempData.deleteMany({ expiresAt: { $exists: false } })
+    ]);
+    console.log(`[index.js]: 🧹 Cleaned up ${expiredResult.deletedCount} expired temp data entries`);
+    console.log(`[index.js]: 🧹 Cleaned up ${noExpirationResult.deletedCount} entries without expiration dates`);
     
     console.log("[index.js]: ✅ Databases connected");
   } catch (err) {

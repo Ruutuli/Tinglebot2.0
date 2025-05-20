@@ -22,7 +22,7 @@ const tempDataSchema = new mongoose.Schema({
       'blight',       // Blight healing requests
       'travel',       // Travel cooldowns
       'gather',       // Gathering cooldowns
-      'monthly',      // Monthly encounter tracking
+      'monthly_mount', // Monthly mount encounter tracking
       'delivery',     // Delivery requests
       'trade',        // Trade requests
       'pendingEdit',  // Pending character edit requests
@@ -68,6 +68,9 @@ tempDataSchema.pre('save', function(next) {
       break;
     case 'pendingEdit':
       this.expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+      break;
+    case 'submission':
+      this.expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours
       break;
     default:
       this.expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours

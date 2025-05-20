@@ -19,6 +19,7 @@ const DEFAULT_IMAGE_URL = "https://static.wixstatic.com/media/7573f4_9bdaa09c1bc
 const TempData = require('./models/TempDataModel');
 const { loadBlightSubmissions, saveBlightSubmissions } = require('./handlers/blightHandler');
 const { connectToInventories } = require('./handlers/blightHandler');
+const { getCurrentWeather, saveWeather } = require('./modules/weatherModule');
 
 // ============================================================================
 // ---- Utility Functions ----
@@ -107,7 +108,15 @@ async function postWeatherUpdate(client) {
     
     for (const village of villages) {
       try {
-        const weather = weatherHandler.simulateWeightedWeather(village, currentSeason);
+        // Try to get existing weather data first
+        let weather = await getCurrentWeather(village);
+        
+        // If no weather data exists for today, generate and save new weather
+        if (!weather) {
+          weather = weatherHandler.simulateWeightedWeather(village, currentSeason);
+          await saveWeather(village, weather);
+        }
+        
         const channelId = TOWNHALL_CHANNELS[village];
         const channel = client.channels.cache.get(channelId);
         
@@ -126,13 +135,6 @@ async function postWeatherUpdate(client) {
   } catch (error) {
     console.error('[scheduler.js]: ❌ Weather update process failed:', error.message);
   }
-}
-
-// ---- Function: setupWeatherScheduler ----
-// Initializes the weather update scheduler
-function setupWeatherScheduler(client) {
-  // Schedule weather updates for 8am EST daily
-  createCronJob('0 8 * * *', 'daily weather update', () => postWeatherUpdate(client), 'America/New_York');
 }
 
 // ============================================================================
@@ -365,16 +367,12 @@ function initializeScheduler(client) {
       }
     }
   });
-
-  // Initialize weather scheduler
-  setupWeatherScheduler(client);
 }
 
 module.exports = {
   initializeScheduler,
-  setupWeatherScheduler,
-  postWeatherUpdate,
   setupBlightScheduler,
+  postWeatherUpdate,
   cleanupExpiredHealingRequests
 };
 
