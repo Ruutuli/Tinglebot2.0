@@ -8,6 +8,7 @@ const { fetchCharacterByNameAndUserId } = require('../../database/db');
 // ------------------- Utility Functions -------------------
 const { deactivateJobVoucher, getJobVoucherErrorMessage } = require('../../modules/jobVoucherModule');
 const { capitalizeWords } = require('../../modules/formattingModule');
+const { refundJobVoucher } = require('../../utils/inventoryUtils');
 
 // ------------------- Command Definition -------------------
 module.exports = {
@@ -58,10 +59,21 @@ module.exports = {
                 });
             }
 
+            // Refund the job voucher using the utility function
+            try {
+                await refundJobVoucher(character, interaction);
+            } catch (inventoryError) {
+                console.error(`[cancelvoucher.js]: ❌ Failed to refund job voucher:`, inventoryError);
+                return interaction.editReply({
+                    content: '❌ Failed to refund the job voucher to your inventory. Please contact an administrator.',
+                    ephemeral: true
+                });
+            }
+
             // Success message
             console.log(`[cancelvoucher.js]: ✅ Successfully cancelled job voucher for ${character.name}`);
             return interaction.editReply({
-                content: `✅ **${character.name}**'s job voucher for **${capitalizeWords(character.jobVoucherJob)}** has been cancelled.`,
+                content: `✅ **${character.name}**'s job voucher for **${capitalizeWords(character.jobVoucherJob)}** has been cancelled and refunded to your inventory.`,
                 ephemeral: true
             });
 

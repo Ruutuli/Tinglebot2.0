@@ -52,7 +52,8 @@ const {
   storeEncounter, 
   useDistractionItem, 
   waterBuffaloTraits, 
-  wolfosTraits 
+  wolfosTraits,
+  getMountDisplayName 
 } = require('../modules/mountModule');
 
 const { useStamina } = require('../modules/characterStatsModule');
@@ -1584,7 +1585,7 @@ async function handleViewMount(interaction) {
       .setTitle(`${speciesEmoji} **${mount.name}** - Mount Details`)
       .setDescription(`✨ **Mount Stats for**: **${character.name}**${staminaWarning}`)
       .addFields(
-        { name: '🌟 **__Species__**', value: `> ${mount.species || 'Unknown'}`, inline: true },
+        { name: '🌟 **__Species__**', value: `> ${getMountDisplayName(mount.species) || 'Unknown'}`, inline: true },
         { name: '#️⃣ **__Level__**', value: `> ${mount.level || 'Unknown'}`, inline: true },
         { name: '🥕 **__Stamina__**', value: staminaField, inline: true },
         { name: '👤 **__Owner__**', value: `> ${mount.owner || 'Unknown'}`, inline: true },
