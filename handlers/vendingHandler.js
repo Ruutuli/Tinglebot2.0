@@ -632,7 +632,7 @@ async function handleVendingBarter(interaction) {
       // ------------------- Confirmation Embed -------------------
       const embed = new EmbedBuilder()
         .setTitle(`🔄 Barter Request Created`)
-        .setDescription(`**${buyer.name}** has requested to barter with **${shopOwner.name}**.`)
+        .setDescription(`**${buyer.name}** has requested to barter with **${shopOwner.name}**.\n\n**Vendor Instructions:**\nPlease use \`/vending accept\` with the fulfillment ID below to complete this trade.`)
         .addFields(
           { name: '📦 Requested Item', value: `\`${requestedItemName} x${quantity}\``, inline: true },
           { name: '💱 Payment Method', value: paymentType.charAt(0).toUpperCase() + paymentType.slice(1), inline: true }
@@ -645,7 +645,7 @@ async function handleVendingBarter(interaction) {
         embed.addFields({ name: '📝 Notes', value: notes, inline: false });
       }
       
-      embed.addFields({ name: '🪪 Fulfillment ID', value: fulfillmentId, inline: false })
+      embed.addFields({ name: '🪪 Fulfillment ID', value: `\`${fulfillmentId}\``, inline: false })
         .setFooter({ text: `Buyer: ${buyerName}` })
         .setColor('#3498db')
         .setTimestamp();
@@ -710,6 +710,43 @@ async function handleFulfill(interaction) {
   
       if (!buyer || !vendor) {
         return interaction.editReply("❌ Buyer or vendor character could not be found.");
+      }
+  
+      // ------------------- Handle Token Payment -------------------
+      if (paymentMethod === 'tokens') {
+        const totalCost = stockItem.tokenPrice * quantity;
+        const buyerTokens = await getTokenBalance(buyerId);
+        
+        if (buyerTokens < totalCost) {
+          return interaction.editReply(`❌ Buyer does not have enough tokens. Required: ${totalCost}, Available: ${buyerTokens}`);
+        }
+
+        // Transfer tokens from buyer to vendor
+        await updateTokenBalance(buyerId, -totalCost);
+        await updateTokenBalance(vendor.userId, totalCost);
+
+        // Log token transaction in vendor's sheet
+        if (vendorShopLink) {
+          try {
+            const spreadsheetId = extractSpreadsheetId(vendorShopLink);
+            const auth = await authorizeSheets();
+            const tokenTransactionRow = [
+              [
+                vendor.name, // Vendor
+                userCharacterName, // Buyer
+                'Tokens', // Item
+                totalCost, // Amount
+                'Token Payment', // Payment Method
+                itemName, // Item Purchased
+                `${quantity}x ${itemName}`, // Notes
+                new Date().toLocaleDateString('en-US') // Date
+              ]
+            ];
+            await appendSheetData(auth, spreadsheetId, 'vendingShop!A:L', tokenTransactionRow);
+          } catch (sheetError) {
+            console.error('[handleFulfill]: Error logging token transaction:', sheetError.message);
+          }
+        }
       }
   
       // ------------------- Validate Vendor Inventory -------------------
@@ -893,6 +930,10 @@ async function handleFulfill(interaction) {
           { name: '💱 Payment', value: paymentMethod.charAt(0).toUpperCase() + paymentMethod.slice(1), inline: true }
         );
 
+      if (paymentMethod === 'tokens') {
+        embed.addFields({ name: '💰 Tokens', value: `${stockItem.tokenPrice * quantity} tokens`, inline: true });
+      }
+
       if (paymentMethod === 'barter' && offeredItem) {
         embed.addFields({ name: '🔄 Offered', value: offeredItem, inline: true });
       }
@@ -901,8 +942,7 @@ async function handleFulfill(interaction) {
         embed.addFields({ name: '📝 Notes', value: notes, inline: false });
       }
 
-      embed.addFields({ name: '🔐 Fulfillment ID', value: fulfillmentId, inline: false })
-        .setColor(0x00cc99)
+      embed.setColor(0x00cc99)
         .setTimestamp();
   
       await interaction.editReply({ embeds: [embed] });

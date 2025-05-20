@@ -205,7 +205,7 @@ async function proceedWithRoll(interaction, characterName, encounterId) {
   const user = await User.findOne({ discordId: interaction.user.id });
   if (!user || !user.tokensSynced) {
     return interaction.reply({
-      content: `❌ **You cannot use the mount command because your token tracker is not set up yet. Please use the </tokens tokentrackerlink:1306176790095728732> and then </tokens sync:1306176789894266898> commands to set up your token tracker.**`,
+      content: `❌ **You cannot use the mount command because your token tracker is not set up yet. Please use the </tokens tokentrackerlink:1306176790095728732> and then </tokens setup:1306176789894266898> commands to set up your token tracker.**`,
       ephemeral: true,
     });
   }
@@ -1525,7 +1525,7 @@ async function handleViewMount(interaction) {
     const user = await User.findOne({ discordId: interaction.user.id });
     if (!user || !user.tokensSynced) {
       return interaction.reply({
-        content: `❌ **You cannot use the mount command because your token tracker is not set up yet. Please use the </tokens tokentrackerlink:1306176790095728732> and then </tokens sync:1306176789894266898> commands to set up your token tracker.**`,
+        content: `❌ **You cannot use the mount command because your token tracker is not set up yet. Please use the </tokens tokentrackerlink:1306176790095728732> and then </tokens setup:1306176789894266898> commands to set up your token tracker.**`,
         ephemeral: true,
       });
     }
