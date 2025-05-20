@@ -434,7 +434,6 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
         outcomeMessage = `${character.name} escaped the ${monster.name}!`;
       } else if (result.attacked) {
         // attacked while fleeing
-        await useHearts(character._id, result.damage);
         const latestCharacter = await Character.findById(character._id);
         character.currentStamina = latestCharacter.currentStamina;
         character.currentHearts = latestCharacter.currentHearts;
