@@ -1,7 +1,9 @@
 // ============================================================================
-// ------------------- Standard Libraries -------------------
-// Load environment variables from .env file
+// ------------------- Imports -------------------
+// Organizes all required modules in proper group order for clarity and maintainability.
 // ============================================================================
+
+// ------------------- Standard Libraries -------------------
 const dotenv = require('dotenv');
 dotenv.config();
 
@@ -15,40 +17,40 @@ const {
 } = require('discord.js');
 
 // ------------------- Database Services -------------------
-const { fetchCharacterByNameAndUserId, fetchCharactersByUserId } = require('../../database/db.js');
+const {
+  fetchCharacterByNameAndUserId,
+  fetchCharactersByUserId
+} = require('../../database/db.js');
+
+// ------------------- Database Models -------------------
+const Mount = require('../../models/MountModel');
 
 // ------------------- Embeds -------------------
-// Import functions for creating travel-related embed messages and path emojis
 const {
   createInitialTravelEmbed,
   createMonsterEncounterEmbed,
   createSafeTravelDayEmbed,
   createTravelingEmbed,
-  pathEmojis,
-  villageEmojis,
-  DEFAULT_IMAGE_URL
 } = require('../../embeds/embeds.js');
 
 // ------------------- Handlers -------------------
-const { handleTravelInteraction, createFinalTravelEmbed } = require('../../handlers/travelHandler.js');
+const {
+  createFinalTravelEmbed,
+  handleTravelInteraction
+} = require('../../handlers/travelHandler.js');
 
 // ------------------- Utility Functions -------------------
 const { capitalizeFirstLetter, capitalizeWords } = require('../../modules/formattingModule.js');
 const { getMonstersByPath, getRandomTravelEncounter } = require('../../modules/rngModule.js');
-const { handleError } = require('../../utils/globalErrorHandler.js');
 const { hasPerk } = require('../../modules/jobsModule.js');
 const { isValidVillage, getAllVillages } = require('../../modules/locationsModule.js');
 const { checkInventorySync } = require('../../utils/characterUtils');
 const { enforceJail } = require('../../utils/jailCheck');
+const { handleError } = require('../../utils/globalErrorHandler.js');
 const { retrieveAllByType } = require('../../utils/storage.js');
 
-// ------------------- Database Models -------------------
-const Mount = require('../../models/MountModel');
-
-// ------------------- Blood Moon Module -------------------
+// ------------------- External API Integrations -------------------
 const { isBloodMoonActive } = require('../../scripts/bloodmoon.js');
-
-// ------------------- Weather Module -------------------
 const { getCurrentWeather } = require('../../modules/weatherModule.js');
 
 // ============================================================================
