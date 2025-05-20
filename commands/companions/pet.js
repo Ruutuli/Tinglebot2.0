@@ -50,6 +50,7 @@ const { uploadPetImage } = require("../../utils/uploadUtils");
 const { checkInventorySync } = require("../../utils/characterUtils");
 const { handleError } = require('../../utils/globalErrorHandler');
 const { enforceJail } = require('../../utils/jailCheck');
+const { characterExistsNotOwned } = require('../../utils/validation');
 
 // ------------------- Database Models -------------------
 // Data schemas for pet and character documents.
@@ -852,55 +853,70 @@ module.exports = {
 
     // ------------------- Subcommand: View Pet -------------------
     if (subcommand === "view") {
-     // Find pet by identifier
-     const petDoc = await findPetByIdentifier(petName, character._id);
-     if (!petDoc) {
-      return interaction.editReply(
-       `❌ **Pet \`${petName}\` not found. Please add it first with \`/pet add\`.**`
-      );
-     }
+      // Validate character existence and ownership
+      const characterValidation = await characterExistsNotOwned(characterName, userId);
+      if (!characterValidation.exists) {
+        return interaction.editReply({
+          content: `❌ **Character \`${characterName}\` not found.**`,
+          ephemeral: true
+        });
+      }
+      if (characterValidation.owned) {
+        return interaction.editReply({
+          content: `❌ **Character \`${characterName}\` belongs to a different user. You can only view pets for your own characters.**`,
+          ephemeral: true
+        });
+      }
 
-     // Prepare rolls display
-     const rollsDisplay = getRollsDisplay(petDoc.rollsRemaining, petDoc.level);
+      // Find pet by identifier
+      const petDoc = await findPetByIdentifier(petName, character._id);
+      if (!petDoc) {
+        return interaction.editReply(
+          `❌ **Pet \`${petName}\` not found. Please add it first with \`/pet add\`.**`
+        );
+      }
 
-     // Get pet type data for combination & description
-     const petTypeData = getPetTypeData(petDoc.petType);
+      // Prepare rolls display
+      const rollsDisplay = getRollsDisplay(petDoc.rollsRemaining, petDoc.level);
 
-     // Build the embed
-     const DEFAULT_PLACEHOLDER = "https://i.imgur.com/placeholder.png";
-     
-     // Ensure we have valid URLs for both image and thumbnail
-     const sanitizedImageUrl = sanitizeUrl(petDoc.imageUrl);
+      // Get pet type data for combination & description
+      const petTypeData = getPetTypeData(petDoc.petType);
 
-     const viewEmbed = new EmbedBuilder()
-      .setAuthor({ name: character.name, iconURL: character.icon })
-      .setTitle(`🐾 ${petDoc.name} — Details`)
-      .setThumbnail(sanitizedImageUrl)
-      .addFields(
-       { name: "__Pet Name__", value: `> ${petDoc.name}`, inline: true },
-       { name: "__Owner__", value: `> ${character.name}`, inline: true },
-       {
-        name: "__Pet Level & Rolls__",
-        value: `> Level ${petDoc.level} | ${rollsDisplay}`,
-        inline: true,
-       },
-       {
-        name: "__Pet Species__",
-        value: `> ${getPetEmoji(petDoc.species)} ${petDoc.species}`,
-        inline: true,
-       },
-       { name: "__Pet Type__", value: `> ${petDoc.petType}`, inline: true },
-       {
-        name: "Roll Combination",
-        value: petTypeData.rollCombination.join(", "),
-        inline: false,
-       },
-       { name: "Description", value: petTypeData.description, inline: false }
-      )
-      .setImage(sanitizedImageUrl)
-      .setColor("#00FF00");
+      // Build the embed
+      const DEFAULT_PLACEHOLDER = "https://i.imgur.com/placeholder.png";
+      
+      // Ensure we have valid URLs for both image and thumbnail
+      const sanitizedImageUrl = sanitizeUrl(petDoc.imageUrl);
 
-     return interaction.editReply({ embeds: [viewEmbed] });
+      const viewEmbed = new EmbedBuilder()
+       .setAuthor({ name: character.name, iconURL: character.icon })
+       .setTitle(`🐾 ${petDoc.name} — Details`)
+       .setThumbnail(sanitizedImageUrl)
+       .addFields(
+        { name: "__Pet Name__", value: `> ${petDoc.name}`, inline: true },
+        { name: "__Owner__", value: `> ${character.name}`, inline: true },
+        {
+         name: "__Pet Level & Rolls__",
+         value: `> Level ${petDoc.level} | ${rollsDisplay}`,
+         inline: true,
+        },
+        {
+         name: "__Pet Species__",
+         value: `> ${getPetEmoji(petDoc.species)} ${petDoc.species}`,
+         inline: true,
+        },
+        { name: "__Pet Type__", value: `> ${petDoc.petType}`, inline: true },
+        {
+         name: "Roll Combination",
+         value: petTypeData.rollCombination.join(", "),
+         inline: false,
+        },
+        { name: "Description", value: petTypeData.description, inline: false }
+       )
+       .setImage(sanitizedImageUrl)
+       .setColor("#00FF00");
+
+      return interaction.editReply({ embeds: [viewEmbed] });
     }
   } catch (error) {
     handleError(error, 'pet.js');
