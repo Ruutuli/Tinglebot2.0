@@ -56,7 +56,6 @@ const { NPCs } = require('../modules/stealingNPCSModule');
 async function safeAutocompleteResponse(interaction, choices) {
   try {
     if (interaction.responded) {
-      console.log('[autocompleteHandler.js]: 🔄 Interaction already responded to');
       return;
     }
 
@@ -77,11 +76,9 @@ async function safeAutocompleteResponse(interaction, choices) {
     });
 
     if (error.code === 10062) {
-      console.log('[autocompleteHandler.js]: ⚠️ Interaction already expired');
       return;
     }
 
-    console.error('[autocompleteHandler.js]: ❌ Error:', error);
     try {
       if (!interaction.responded) {
         await interaction.respond([]).catch(() => {});
@@ -140,9 +137,9 @@ async function handleAutocomplete(interaction) {
 
         // Add a check for interaction validity
         if (!interaction.isAutocomplete()) {
-          console.warn('[autocompleteHandler.js]: ⚠️ Received non-autocomplete interaction');
           return;
         }
+
         switch (commandName) {
 
           // ------------------- Custom Weapon Command -------------------
@@ -253,7 +250,7 @@ async function handleAutocomplete(interaction) {
 
           // ------------------- Travel Command -------------------
           case "travel":
-            await handleTravelAutocomplete(interaction);
+            await handleTravelAutocomplete(interaction, focusedOption);
             break;
 
           // ------------------- Gather Command -------------------
@@ -1456,14 +1453,12 @@ async function handleShopBuyItemAutocomplete(interaction, focusedValue) {
   try {
     const characterName = interaction.options.getString('charactername');
     if (!characterName) {
-      console.log('[handleShopBuyItemAutocomplete]: No character name provided');
       return await interaction.respond([]);
     }
 
-                const userId = interaction.user.id;
+    const userId = interaction.user.id;
     const character = await fetchCharacterByNameAndUserId(characterName, userId);
     if (!character) {
-      console.log(`[handleShopBuyItemAutocomplete]: Character ${characterName} not found or doesn't belong to user ${userId}`);
       return await interaction.respond([]);
     }
 
@@ -1473,10 +1468,7 @@ async function handleShopBuyItemAutocomplete(interaction, focusedValue) {
       itemName: { $regex: new RegExp(focusedValue, 'i') }
     }).sort({ itemName: 1 }).limit(25);
 
-    console.log(`[handleShopBuyItemAutocomplete]: Found ${villageShopItems.length} items in shop for ${characterName}`);
-
     if (villageShopItems.length === 0) {
-      console.log(`[handleShopBuyItemAutocomplete]: No items found matching "${focusedValue}"`);
       return await interaction.respond([{
         name: 'No items found in shop',
         value: 'no_items_found'
@@ -1490,7 +1482,6 @@ async function handleShopBuyItemAutocomplete(interaction, focusedValue) {
 
     await interaction.respond(choices);
   } catch (error) {
-    console.error('[handleShopBuyItemAutocomplete]: Error:', error);
     await safeRespondWithError(interaction);
   }
 }
@@ -3005,35 +2996,54 @@ async function handleStealRarityAutocomplete(interaction, focusedOption) {
 // - Destination Villages
 
 // ------------------- Travel Character Name Autocomplete -------------------
-async function handleTravelAutocomplete(interaction) {
- const focusedOption = interaction.options.getFocused(true);
-                const userId = interaction.user.id;
+async function handleTravelAutocomplete(interaction, focusedOption) {
+  try {
+    const userId = interaction.user.id;
+    if (!userId) {
+      return await safeRespondWithError(interaction);
+    }
 
- if (focusedOption.name === "charactername") {
-                const characters = await fetchCharactersByUserId(userId);
-  const filtered = characters
-   .filter((char) =>
-    char.name.toLowerCase().includes(focusedOption.value.toLowerCase())
-   )
-   .map((char) => ({
-    name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
-    value: char.name,
-   }));
-  await interaction.respond(filtered.slice(0, 25));
- }
+    if (focusedOption.name === "charactername") {
+      try {
+        const characters = await fetchCharactersByUserId(userId);
+        
+        if (!characters || characters.length === 0) {
+          return await safeAutocompleteResponse(interaction, []);
+        }
 
- if (focusedOption.name === "destination") {
-  const villages = getAllVillages(); // CORRECTED to your function
-  const filtered = villages
-   .filter((village) =>
-    village.toLowerCase().includes(focusedOption.value.toLowerCase())
-   )
-   .map((village) => ({
-    name: village.charAt(0).toUpperCase() + village.slice(1),
-    value: village.toLowerCase(),
-   }));
-  await interaction.respond(filtered.slice(0, 25));
- }
+        const choices = characters.map(char => ({
+          name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
+          value: char.name
+        }));
+        
+        return await safeAutocompleteResponse(interaction, choices);
+      } catch (fetchError) {
+        return await safeRespondWithError(interaction);
+      }
+    } else if (focusedOption.name === "destination") {
+      try {
+        const villages = getAllVillages();
+        
+        if (!villages || villages.length === 0) {
+          return await safeAutocompleteResponse(interaction, []);
+        }
+
+        const choices = villages.map(village => ({
+          name: capitalize(village),
+          value: village.toLowerCase()
+        }));
+        
+        return await safeAutocompleteResponse(interaction, choices);
+      } catch (villageError) {
+        return await safeRespondWithError(interaction);
+      }
+    } else {
+      return await safeAutocompleteResponse(interaction, []);
+    }
+  } catch (error) {
+    handleError(error, "autocompleteHandler.js");
+    return await safeRespondWithError(interaction);
+  }
 }
 
 // ------------------- Travel Destination Village Autocomplete -------------------

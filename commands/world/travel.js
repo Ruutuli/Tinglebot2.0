@@ -15,7 +15,7 @@ const {
 } = require('discord.js');
 
 // ------------------- Database Services -------------------
-const { fetchCharacterByNameAndUserId } = require('../../database/db.js');
+const { fetchCharacterByNameAndUserId, fetchCharactersByUserId } = require('../../database/db.js');
 
 // ------------------- Embeds -------------------
 // Import functions for creating travel-related embed messages and path emojis
@@ -37,7 +37,7 @@ const { capitalizeFirstLetter, capitalizeWords } = require('../../modules/format
 const { getMonstersByPath, getRandomTravelEncounter } = require('../../modules/rngModule.js');
 const { handleError } = require('../../utils/globalErrorHandler.js');
 const { hasPerk } = require('../../modules/jobsModule.js');
-const { isValidVillage } = require('../../modules/locationsModule.js');
+const { isValidVillage, getAllVillages } = require('../../modules/locationsModule.js');
 const { checkInventorySync } = require('../../utils/characterUtils');
 const { enforceJail } = require('../../utils/jailCheck');
 const { retrieveAllByType } = require('../../utils/storage.js');
@@ -445,22 +445,66 @@ module.exports = {
 
     // ------------------- Autocomplete Handler -------------------
     async autocomplete(interaction) {
-      const focusedOption = interaction.options.getFocused(true);
-      
-      if (focusedOption.name === 'mode') {
-        const characterName = interaction.options.getString('charactername');
-        if (characterName) {
-          const character = await fetchCharacterByNameAndUserId(characterName, interaction.user.id);
-          if (character) {
-            const mount = await Mount.findOne({ characterId: character._id, isStored: false });
-            // Only show "on mount" option if character has a registered mount
-            const choices = mount ? MODE_CHOICES : [{ name: 'on foot', value: 'on foot' }];
-            await interaction.respond(choices);
+      try {
+        const focusedOption = interaction.options.getFocused(true);
+
+        if (focusedOption.name === 'charactername') {
+          const userId = interaction.user.id;
+          const characters = await fetchCharactersByUserId(userId);
+          
+          const choices = characters.map(char => ({
+            name: `${char.name} | ${capitalizeFirstLetter(char.currentVillage)} | ${capitalizeFirstLetter(char.job)}`,
+            value: char.name
+          }));
+          
+          await interaction.respond(choices);
+          return;
+        }
+
+        if (focusedOption.name === 'destination') {
+          const characterName = interaction.options.getString('charactername');
+          if (!characterName) {
+            await interaction.respond([]);
             return;
           }
+
+          const character = await fetchCharacterByNameAndUserId(characterName, interaction.user.id);
+          if (!character) {
+            await interaction.respond([]);
+            return;
+          }
+
+          const currentVillage = character.currentVillage.toLowerCase();
+          const villages = getAllVillages().filter(v => v.toLowerCase() !== currentVillage);
+
+          const choices = villages.map(village => ({
+            name: capitalizeFirstLetter(village),
+            value: village.toLowerCase()
+          }));
+
+          await interaction.respond(choices);
+          return;
         }
-        // Default to showing all choices if character not found
-        await interaction.respond(MODE_CHOICES);
+
+        if (focusedOption.name === 'mode') {
+          const characterName = interaction.options.getString('charactername');
+          if (characterName) {
+            const character = await fetchCharacterByNameAndUserId(characterName, interaction.user.id);
+            if (character) {
+              const mount = await Mount.findOne({ characterId: character._id, isStored: false });
+              const choices = mount ? MODE_CHOICES : [{ name: 'on foot', value: 'on foot' }];
+              await interaction.respond(choices);
+              return;
+            }
+          }
+          await interaction.respond(MODE_CHOICES);
+          return;
+        }
+
+        await interaction.respond([]);
+      } catch (error) {
+        console.error(`[travel.js]: ❌ Error in autocomplete handler:`, error);
+        await interaction.respond([]);
       }
     }
 }
