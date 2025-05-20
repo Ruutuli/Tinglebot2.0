@@ -373,7 +373,7 @@ function createBlightHealingFields(healingRequirement, submissionId, expiresAt) 
     },
     {
       name: '<:bb0:854499720797618207> __Submission ID__',
-      value: `\000${submissionId}\000`,
+      value: `\`${submissionId}\``,
     },
     {
       name: '<:bb0:854499720797618207> __Alternative Option__',
