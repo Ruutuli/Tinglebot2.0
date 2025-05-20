@@ -861,7 +861,7 @@ module.exports = {
           ephemeral: true
         });
       }
-      if (characterValidation.owned) {
+      if (!characterValidation.owned) {
         return interaction.editReply({
           content: `❌ **Character \`${characterName}\` belongs to a different user. You can only view pets for your own characters.**`,
           ephemeral: true
