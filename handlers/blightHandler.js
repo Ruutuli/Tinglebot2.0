@@ -73,6 +73,13 @@ async function connectToInventories() {
     }
     return mongoose.connection;
   } catch (error) {
+    handleError(error, 'blightHandler.js', {
+      operation: 'connectToInventories',
+      options: {
+        readyState: mongoose.connection.readyState,
+        uri: process.env.MONGODB_INVENTORIES_URI ? '[REDACTED]' : 'undefined'
+      }
+    });
     console.error('[blightHandler]: ❌ Error connecting to inventories database:', error);
     throw error;
   }
@@ -93,7 +100,12 @@ async function loadBlightSubmissions() {
       return acc;
     }, {});
   } catch (error) {
-    handleError(error, 'blightHandler.js');
+    handleError(error, 'blightHandler.js', {
+      operation: 'loadBlightSubmissions',
+      options: {
+        type: 'blight'
+      }
+    });
     console.error('[blightHandler]: Error loading blight submissions', error);
     return {};
   }
@@ -118,7 +130,13 @@ async function saveBlightSubmissions(data) {
       await TempData.insertMany(submissions);
     }
   } catch (error) {
-    handleError(error, 'blightHandler.js');
+    handleError(error, 'blightHandler.js', {
+      operation: 'saveBlightSubmissions',
+      options: {
+        submissionCount: Object.keys(data).length,
+        type: 'blight'
+      }
+    });
     console.error('[blightHandler]: Error saving blight submissions', error);
   }
 }
@@ -442,15 +460,16 @@ function createBlightHealingCompleteEmbed(character, healer, additionalFields = 
 // ------------------- Function: submitHealingTask -------------------
 // Processes a healing task submission based on submission ID and type.
 async function submitHealingTask(interaction, submissionId, item = null, link = null, tokens = false) {
-  // ------------------- Validate Submission ID -------------------
-  if (!submissionId || typeof submissionId !== 'string') {
-    await interaction.reply({ content: '❌ Invalid submission ID provided.', ephemeral: true });
-    return;
-  }
-
+  // Defer reply at the start to prevent interaction timeout
   await interaction.deferReply({ ephemeral: false });
 
   try {
+    // ------------------- Validate Submission ID -------------------
+    if (!submissionId || typeof submissionId !== 'string') {
+      await interaction.editReply({ content: '❌ Invalid submission ID provided.', ephemeral: true });
+      return;
+    }
+
     // ------------------- Fetch & Validate Submission -------------------
     const submission = await retrieveBlightRequestFromStorage(submissionId);
     if (!submission) {
