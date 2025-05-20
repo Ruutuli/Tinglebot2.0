@@ -484,27 +484,47 @@ module.exports = {
                 interaction
               );
               if (character?.name && character?.inventory && character?.userId) {
-    await safeAppendDataToSheet(character.inventory, character, range, values, undefined, { 
-        skipValidation: true,
-        context: {
-            commandName: 'gather',
-            userTag: interaction.user.tag,
-            userId: interaction.user.id,
-            characterName: character.name,
-            spreadsheetId: extractSpreadsheetId(character.inventory),
-            range: range,
-            sheetType: 'inventory',
-            options: {
-                region: region,
-                itemName: lootedItem.itemName,
-                quantity: lootedItem.quantity,
-                monsterName: encounteredMonster?.name
-            }
-        }
-    });
-} else {
-    console.error('[safeAppendDataToSheet]: Invalid character object detected before syncing.');
-}
+                try {
+                  await safeAppendDataToSheet(character.inventory, character, range, values, undefined, { 
+                    skipValidation: true,
+                    context: {
+                      commandName: 'gather',
+                      userTag: interaction.user.tag,
+                      userId: interaction.user.id,
+                      characterName: character.name,
+                      spreadsheetId: extractSpreadsheetId(character.inventory),
+                      range: range,
+                      sheetType: 'inventory',
+                      options: {
+                        region: region,
+                        itemName: lootedItem.itemName,
+                        quantity: lootedItem.quantity,
+                        monsterName: encounteredMonster?.name
+                      }
+                    }
+                  });
+                } catch (sheetError) {
+                  handleError(sheetError, 'gather.js', {
+                    commandName: '/gather',
+                    userTag: interaction.user.tag,
+                    userId: interaction.user.id,
+                    characterName: character.name,
+                    sheetType: 'inventory',
+                    spreadsheetId: extractSpreadsheetId(character.inventory),
+                    range: range,
+                    options: {
+                      region: region,
+                      itemName: lootedItem.itemName,
+                      quantity: lootedItem.quantity,
+                      monsterName: encounteredMonster?.name
+                    }
+                  });
+                  console.error(`[gather.js]: ❌ Failed to sync inventory sheet: ${sheetError.message}`);
+                  // Continue execution since the item was already added to the database
+                }
+              } else {
+                console.error('[safeAppendDataToSheet]: Invalid character object detected before syncing.');
+              }
 
               const embed = createMonsterEncounterEmbed(
                 character,
@@ -595,26 +615,45 @@ module.exports = {
           uniqueSyncId,
         ]];
         if (character?.name && character?.inventory && character?.userId) {
-    await safeAppendDataToSheet(character.inventory, character, range, values, undefined, { 
-        skipValidation: true,
-        context: {
-            commandName: 'gather',
-            userTag: interaction.user.tag,
-            userId: interaction.user.id,
-            characterName: character.name,
-            spreadsheetId: extractSpreadsheetId(character.inventory),
-            range: range,
-            sheetType: 'inventory',
-            options: {
+          try {
+            await safeAppendDataToSheet(character.inventory, character, range, values, undefined, { 
+              skipValidation: true,
+              context: {
+                commandName: 'gather',
+                userTag: interaction.user.tag,
+                userId: interaction.user.id,
+                characterName: character.name,
+                spreadsheetId: extractSpreadsheetId(character.inventory),
+                range: range,
+                sheetType: 'inventory',
+                options: {
+                  region: region,
+                  itemName: randomItem.itemName,
+                  quantity: quantity
+                }
+              }
+            });
+          } catch (sheetError) {
+            handleError(sheetError, 'gather.js', {
+              commandName: '/gather',
+              userTag: interaction.user.tag,
+              userId: interaction.user.id,
+              characterName: character.name,
+              sheetType: 'inventory',
+              spreadsheetId: extractSpreadsheetId(character.inventory),
+              range: range,
+              options: {
                 region: region,
                 itemName: randomItem.itemName,
                 quantity: quantity
-            }
+              }
+            });
+            console.error(`[gather.js]: ❌ Failed to sync inventory sheet: ${sheetError.message}`);
+            // Continue execution since the item was already added to the database
+          }
+        } else {
+          console.error('[safeAppendDataToSheet]: Invalid character object detected before syncing.');
         }
-    });
-} else {
-    console.error('[safeAppendDataToSheet]: Invalid character object detected before syncing.');
-}
 
         const embed = createGatherEmbed(character, randomItem);
         await interaction.editReply({ embeds: [embed] });
@@ -635,7 +674,18 @@ await character.save();
       }
 
     } catch (error) {
-      handleError(error, 'gather.js');
+      handleError(error, 'gather.js', {
+        commandName: '/gather',
+        userTag: interaction.user.tag,
+        userId: interaction.user.id,
+        characterName: interaction.options.getString('charactername'),
+        options: {
+          job: job,
+          region: region,
+          currentVillage: currentVillage,
+          bloodMoonActive: isBloodMoonActive()
+        }
+      });
 
       console.error(`[gather.js]: Error during gathering process: ${error.message}`, {
         stack: error.stack,
@@ -646,8 +696,20 @@ await character.save();
           channelId: interaction.channelId,
         },
       });
+
+      // Provide a more user-friendly error message
+      let errorMessage = '⚠️ **An error occurred during the gathering process.**';
+      if (error.message.includes('MongoDB')) {
+        errorMessage = '⚠️ **Database connection error.** Please try again in a few moments.';
+      } else if (error.message.includes('Google Sheets')) {
+        errorMessage = '⚠️ **Inventory sync error.** Your items were gathered but may not appear in your inventory sheet immediately.';
+      } else if (error.message.includes('ETIMEDOUT') || error.message.includes('Connect Timeout')) {
+        errorMessage = '⚠️ **Connection timeout.** Please try again in a few moments.';
+      }
+
       await interaction.editReply({
-        content: error.message || `⚠️ **An error occurred during the gathering process.**`,
+        content: errorMessage,
+        ephemeral: true
       });
     }
   },
