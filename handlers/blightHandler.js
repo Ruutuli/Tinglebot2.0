@@ -184,8 +184,7 @@ async function healBlight(interaction, characterName, healerName) {
         content: `⚠️ **${characterName}** already has a pending healing request that expires in ${timeLeft} days.\n\n` +
           `Submission ID: \`${existingSubmission.key}\`\n` +
           `Healer: **${existingSubmission.data.healerName}**\n` +
-          `Task: ${existingSubmission.data.taskDescription}\n\n` +
-          `Please complete or cancel the existing request before creating a new one.`,
+          `Task: ${existingSubmission.data.taskDescription}\n\n`,
         ephemeral: true
       });
       return;

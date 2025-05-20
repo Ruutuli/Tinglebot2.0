@@ -144,6 +144,12 @@ async function handleAutocomplete(interaction) {
           return;
         }
 
+        console.log('[handleAutocomplete]: 🔄 Processing command', {
+          commandName,
+          focusedOption: focusedOption.name,
+          subcommand: interaction.options.getSubcommand()
+        });
+
         switch (commandName) {
           // ... existing code ...
 
@@ -187,10 +193,22 @@ async function handleAutocomplete(interaction) {
           // ------------------- Blight Command -------------------
           case "blight":
             const blightSubcommand = interaction.options.getSubcommand();
+            console.log('[handleAutocomplete]: 📝 Processing blight command', {
+              subcommand: blightSubcommand,
+              focusedOption: focusedOption.name
+            });
+            
             if (blightSubcommand === "heal") {
               if (focusedOption.name === "character_name" || focusedOption.name === "healer_name") {
                 await handleBlightCharacterAutocomplete(interaction, focusedOption);
               } else if (focusedOption.name === "item") {
+                await handleBlightItemAutocomplete(interaction, focusedOption);
+              }
+            } else if (blightSubcommand === "submit") {
+              console.log('[handleAutocomplete]: 📝 Processing blight submit', {
+                focusedOption: focusedOption.name
+              });
+              if (focusedOption.name === "item") {
                 await handleBlightItemAutocomplete(interaction, focusedOption);
               }
             } else if (blightSubcommand === "roll") {
@@ -487,124 +505,96 @@ async function handleBlightCharacterAutocomplete(interaction, focusedOption) {
 // Provides item suggestions for the "blight" command by gathering item
 // requirements from mod characters and filtering them based on user input.
 async function handleBlightItemAutocomplete(interaction, focusedOption) {
- try {
-  const userId = interaction.user.id;
-  const subcommand = interaction.options.getSubcommand();
-  
-  if (subcommand === 'submit') {
-    const submissionId = interaction.options.getString('submission_id');
-    if (!submissionId) {
-      return await interaction.respond([]);
-    }
+  try {
+    const userId = interaction.user.id;
+    const subcommand = interaction.options.getSubcommand();
 
-    // Get the submission data
-    const submission = await retrieveBlightRequestFromStorage(submissionId);
-    if (!submission || submission.status !== 'pending') {
-      return await interaction.respond([]);
-    }
+    if (subcommand === 'submit') {
+      // Get all mod characters
+      const allModCharacters = modCharacters;
 
-    // Get the character's inventory
-    const character = await fetchCharacterByName(submission.characterName);
-    if (!character) {
-      return await interaction.respond([]);
-    }
-
-    const inventoryCollection = await getCharacterInventoryCollection(character.name);
-    const inventoryItems = await inventoryCollection.find().toArray();
-
-    // Get the healer's requirements
-    const healer = getModCharacterByName(submission.healerName);
-    if (!healer) {
-      return await interaction.respond([]);
-    }
-
-    // Get the healing requirements for this specific character
-    const healingRequirements = healer.getHealingRequirements(submission.characterName);
-    const itemRequirements = healingRequirements.find(req => req.type === 'item');
-    
-    if (!itemRequirements) {
-      return await interaction.respond([]);
-    }
-
-    // Create a map of required items
-    const requiredItems = new Map(
-      itemRequirements.items.map(item => [item.name.toLowerCase(), item])
-    );
-
-    // Filter inventory items that match required items
-    const choices = inventoryItems
-      .filter(item => {
-        const itemName = item.itemName.toLowerCase();
-        return requiredItems.has(itemName) && 
-               item.itemName.toLowerCase().includes(focusedOption.value.toLowerCase());
-      })
-      .map(item => {
-        const requiredItem = requiredItems.get(item.itemName.toLowerCase());
-        return {
-          name: `${item.itemName} x${item.quantity} (Required: ${requiredItem.quantity})`,
-          value: `${item.itemName} x${requiredItem.quantity}`
-        };
+      // Collect all possible healing items from all mod characters
+      const allHealingItems = new Set();
+      allModCharacters.forEach(character => {
+        const requirements = character.getHealingRequirements();
+        requirements.forEach(req => {
+          if (req.type === 'item' && req.items) {
+            req.items.forEach(item => {
+              allHealingItems.add(`${item.name} x${item.quantity}`);
+            });
+          }
+        });
       });
 
-    await interaction.respond(choices.slice(0, 25));
-  } else {
-    // Handle other blight commands that need item autocomplete
-    const characterName = interaction.options.getString("character_name");
-    const healerName = interaction.options.getString("healer_name");
+      // Convert to array and filter based on user input
+      const input = focusedOption.value?.toLowerCase() || '';
+      const choices = Array.from(allHealingItems)
+        .filter(choice => choice.toLowerCase().includes(input))
+        .map(choice => ({
+          name: choice,
+          value: choice
+        }))
+        .slice(0, 25);
 
-    if (!characterName || !healerName) {
-      return await interaction.respond([]);
-    }
+      return await interaction.respond(choices);
+    } else {
+      // Handle other blight commands that need item autocomplete
+      const characterName = interaction.options.getString("character_name");
+      const healerName = interaction.options.getString("healer_name");
 
-    // Get the healer character
-    const healer = await fetchCharacterByName(healerName);
-    if (!healer) {
-      return await interaction.respond([]);
-    }
+      if (!characterName || !healerName) {
+        return await interaction.respond([]);
+      }
 
-    // Get the healer's inventory
-    const inventoryCollection = await getCharacterInventoryCollection(healer.name);
-    const inventoryItems = await inventoryCollection.find().toArray();
+      // Get the healer character
+      const healer = await fetchCharacterByName(healerName);
+      if (!healer) {
+        return await interaction.respond([]);
+      }
 
-    // Initialize an array to store items that are relevant for healing requirements
-    const allItems = [];
+      // Get the healer's inventory
+      const inventoryCollection = await getCharacterInventoryCollection(healer.name);
+      const inventoryItems = await inventoryCollection.find().toArray();
 
-    // Loop over mod characters and add item requirements of type "item"
-    modCharacters.forEach((character) => {
-      character.getHealingRequirements().forEach((requirement) => {
-        if (requirement.type === "item") {
-          allItems.push(...requirement.items);
-        }
-      });
-    });
+      // Initialize an array to store items that are relevant for healing requirements
+      const allItems = [];
 
-    // Create a map of required items
-    const requiredItems = new Map(
-      allItems.map(item => [item.name.toLowerCase(), item])
-    );
-
-    // Filter inventory items that match required items
-    const choices = inventoryItems
-      .filter(item => {
-        const itemName = item.itemName.toLowerCase();
-        return requiredItems.has(itemName) && 
-               item.itemName.toLowerCase().includes(focusedOption.value.toLowerCase());
-      })
-      .map(item => {
-        const requiredItem = requiredItems.get(item.itemName.toLowerCase());
-        return {
-          name: `${item.itemName} - Qty: ${item.quantity} (Required: ${requiredItem.quantity})`,
-          value: item.itemName
-        };
+      // Loop over mod characters and add item requirements of type "item"
+      modCharacters.forEach((character) => {
+        character.getHealingRequirements().forEach((requirement) => {
+          if (requirement.type === "item") {
+            allItems.push(...requirement.items);
+          }
+        });
       });
 
-    await interaction.respond(choices.slice(0, 25));
+      // Create a map of required items
+      const requiredItems = new Map(
+        allItems.map(item => [item.name.toLowerCase(), item])
+      );
+
+      // Filter inventory items that match required items
+      const choices = inventoryItems
+        .filter(item => {
+          const itemName = item.itemName.toLowerCase();
+          return requiredItems.has(itemName) && 
+                 item.itemName.toLowerCase().includes(focusedOption.value.toLowerCase());
+        })
+        .map(item => {
+          const requiredItem = requiredItems.get(item.itemName.toLowerCase());
+          return {
+            name: `${item.itemName} - Qty: ${item.quantity} (Required: ${requiredItem.quantity})`,
+            value: item.itemName
+          };
+        });
+
+      await interaction.respond(choices.slice(0, 25));
+    }
+  } catch (error) {
+    handleError(error, "autocompleteHandler.js");
+    console.error("[handleBlightItemAutocomplete]: ❌ Error occurred:", error);
+    await safeRespondWithError(interaction);
   }
- } catch (error) {
-  handleError(error, "autocompleteHandler.js");
-  console.error("[handleBlightItemAutocomplete]: Error occurred:", error);
-  await safeRespondWithError(interaction);
- }
 }
 
 // ============================================================================
