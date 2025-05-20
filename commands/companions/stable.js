@@ -274,142 +274,170 @@ async function handleRetrieveMount(interaction, userId, characterName, mountName
 
 // ------------------- Handle Listing Mount -------------------
 async function handleListMount(interaction, userId, characterName, mountName) {
-  const character = await fetchCharacterByNameAndUserId(characterName, userId);
-  if (!character) {
-    await interaction.reply({ content: '❌ Character not found or does not belong to you.', ephemeral: true });
-    return;
+  try {
+    const character = await fetchCharacterByNameAndUserId(characterName, userId);
+    if (!character) {
+      await interaction.reply({ content: '❌ Character not found or does not belong to you.', ephemeral: true });
+      return;
+    }
+
+    const stable = await Stable.findOne({ characterId: character._id });
+    if (!stable) {
+      await interaction.reply({ content: '❌ You do not have a stable.', ephemeral: true });
+      return;
+    }
+
+    const mount = await Mount.findOne({ owner: character.name, name: mountName });
+    if (!mount) {
+      await interaction.reply({ content: `❌ Mount **${mountName}** not found.`, ephemeral: true });
+      return;
+    }
+
+    const user = await User.findOne({ discordId: userId });
+    if (!user) {
+      await interaction.reply({ content: '❌ User not found.', ephemeral: true });
+      return;
+    }
+
+    // Calculate price using the existing function
+    const price = calculateMountPrice(mount);
+
+    // Update mount status for listing
+    mount.owner = 'For Sale'; // Set to 'For Sale' instead of null to satisfy validation
+    mount.isStored = true;
+    mount.storageLocation = 'For Sale';
+    mount.storedAt = new Date();
+    await mount.save();
+
+    // Remove from stored mounts if it was stored
+    if (stable.storedMounts.some(m => m.mountId.toString() === mount._id.toString())) {
+      stable.storedMounts = stable.storedMounts.filter(m => m.mountId.toString() !== mount._id.toString());
+    }
+
+    // Add to listed mounts
+    stable.listedMounts.push({
+      mountId: mount._id,
+      price: price,
+      sellerId: user._id,
+      originalOwner: character.name
+    });
+    await stable.save();
+
+    // Update character's mount status if it was active
+    if (character.mount) {
+      character.mount = false;
+      await character.save();
+    }
+
+    const embed = new EmbedBuilder()
+      .setTitle(`🏪 Mount Listed for Sale`)
+      .setColor(0xAA926A)
+      .setDescription(`**${mount.name}** has been listed for sale!`)
+      .addFields(
+        { name: '🐎 Mount Details', value: `> Species: ${mount.species}\n> Level: ${mount.level}\n> Traits: ${mount.traits.join(', ')}`, inline: false },
+        { name: '💰 Price', value: `> ${price} tokens`, inline: false },
+        { name: '👤 Seller', value: `> ${character.name}`, inline: false }
+      )
+      .setFooter({ text: 'The mount will remain listed until purchased or removed.' });
+
+    await interaction.reply({ embeds: [embed] });
+  } catch (error) {
+    handleError(error, 'stable.js', {
+      commandName: 'list',
+      userTag: interaction.user.tag,
+      userId: interaction.user.id,
+      characterName: characterName,
+      options: {
+        mountName: mountName,
+        operation: 'listMount'
+      }
+    });
+    await interaction.reply({ content: '❌ An error occurred while listing your mount.', ephemeral: true });
   }
-
-  const stable = await Stable.findOne({ characterId: character._id });
-  if (!stable) {
-    await interaction.reply({ content: '❌ You do not have a stable.', ephemeral: true });
-    return;
-  }
-
-  const mount = await Mount.findOne({ owner: character.name, name: mountName });
-  if (!mount) {
-    await interaction.reply({ content: `❌ Mount **${mountName}** not found.`, ephemeral: true });
-    return;
-  }
-
-  const user = await User.findOne({ discordId: userId });
-  if (!user) {
-    await interaction.reply({ content: '❌ User not found.', ephemeral: true });
-    return;
-  }
-
-  // Calculate price using the existing function
-  const price = calculateMountPrice(mount);
-
-  // Remove mount from character's ownership
-  mount.owner = null;
-  mount.isStored = true;
-  mount.storageLocation = 'For Sale';
-  mount.storedAt = new Date();
-  await mount.save();
-
-  // Remove from stored mounts if it was stored
-  if (stable.storedMounts.some(m => m.mountId.toString() === mount._id.toString())) {
-    stable.storedMounts = stable.storedMounts.filter(m => m.mountId.toString() !== mount._id.toString());
-  }
-
-  // Add to listed mounts
-  stable.listedMounts.push({
-    mountId: mount._id,
-    price: price,
-    sellerId: user._id,
-    originalOwner: character.name
-  });
-  await stable.save();
-
-  // Update character's mount status if it was active
-  if (character.mount) {
-    character.mount = false;
-    await character.save();
-  }
-
-  const embed = new EmbedBuilder()
-    .setTitle(`🏪 Mount Listed for Sale`)
-    .setColor(0xAA926A)
-    .setDescription(`**${mount.name}** has been listed for sale!`)
-    .addFields(
-      { name: '🐎 Mount Details', value: `> Species: ${mount.species}\n> Level: ${mount.level}\n> Traits: ${mount.traits.join(', ')}`, inline: false },
-      { name: '💰 Price', value: `> ${price} tokens`, inline: false },
-      { name: '👤 Seller', value: `> ${character.name}`, inline: false }
-    )
-    .setFooter({ text: 'The mount will remain listed until purchased or removed.' });
-
-  await interaction.reply({ embeds: [embed] });
 }
 
 // ------------------- Handle Listing Pet -------------------
 async function handleListPet(interaction, userId, characterName, petName) {
-  const character = await fetchCharacterByNameAndUserId(characterName, userId);
-  if (!character) {
-    await interaction.reply({ content: '❌ Character not found or does not belong to you.', ephemeral: true });
-    return;
+  try {
+    const character = await fetchCharacterByNameAndUserId(characterName, userId);
+    if (!character) {
+      await interaction.reply({ content: '❌ Character not found or does not belong to you.', ephemeral: true });
+      return;
+    }
+
+    const stable = await Stable.findOne({ characterId: character._id });
+    if (!stable) {
+      await interaction.reply({ content: '❌ You do not have a stable.', ephemeral: true });
+      return;
+    }
+
+    const pet = await Pet.findOne({ owner: character._id, name: petName });
+    if (!pet) {
+      await interaction.reply({ content: `❌ Pet **${petName}** not found.`, ephemeral: true });
+      return;
+    }
+
+    const user = await User.findOne({ discordId: userId });
+    if (!user) {
+      await interaction.reply({ content: '❌ User not found.', ephemeral: true });
+      return;
+    }
+
+    // Calculate price based on pet's level and traits
+    const price = Math.floor(pet.level * 100 + (pet.traits.length * 50));
+
+    // Update pet status for listing
+    pet.owner = 'For Sale'; // Set to 'For Sale' instead of null to satisfy validation
+    pet.isStored = true;
+    pet.storageLocation = 'For Sale';
+    pet.storedAt = new Date();
+    await pet.save();
+
+    // Remove from stored pets if it was stored
+    if (stable.storedPets.some(p => p.petId.toString() === pet._id.toString())) {
+      stable.storedPets = stable.storedPets.filter(p => p.petId.toString() !== pet._id.toString());
+    }
+
+    // Add to listed pets
+    stable.listedPets.push({
+      petId: pet._id,
+      price: price,
+      sellerId: user._id,
+      originalOwner: character.name
+    });
+    await stable.save();
+
+    // Update character's pet status if it was active
+    if (character.pet) {
+      character.pet = false;
+      await character.save();
+    }
+
+    const embed = new EmbedBuilder()
+      .setTitle(`🏪 Pet Listed for Sale`)
+      .setColor(0xAA926A)
+      .setDescription(`**${pet.name}** has been listed for sale!`)
+      .addFields(
+        { name: '🐾 Pet Details', value: `> Species: ${pet.species}\n> Level: ${pet.level}\n> Traits: ${pet.traits.join(', ')}`, inline: false },
+        { name: '💰 Price', value: `> ${price} tokens`, inline: false },
+        { name: '👤 Seller', value: `> ${character.name}`, inline: false }
+      )
+      .setFooter({ text: 'The pet will remain listed until purchased or removed.' });
+
+    await interaction.reply({ embeds: [embed] });
+  } catch (error) {
+    handleError(error, 'stable.js', {
+      commandName: 'list',
+      userTag: interaction.user.tag,
+      userId: interaction.user.id,
+      characterName: characterName,
+      options: {
+        petName: petName,
+        operation: 'listPet'
+      }
+    });
+    await interaction.reply({ content: '❌ An error occurred while listing your pet.', ephemeral: true });
   }
-
-  const stable = await Stable.findOne({ characterId: character._id });
-  if (!stable) {
-    await interaction.reply({ content: '❌ You do not have a stable.', ephemeral: true });
-    return;
-  }
-
-  const pet = await Pet.findOne({ owner: character._id, name: petName });
-  if (!pet) {
-    await interaction.reply({ content: `❌ Pet **${petName}** not found.`, ephemeral: true });
-    return;
-  }
-
-  const user = await User.findOne({ discordId: userId });
-  if (!user) {
-    await interaction.reply({ content: '❌ User not found.', ephemeral: true });
-    return;
-  }
-
-  // Calculate price based on pet's level and traits
-  const price = Math.floor(pet.level * 100 + (pet.traits.length * 50));
-
-  // Remove pet from character's ownership
-  pet.owner = null;
-  pet.isStored = true;
-  pet.storageLocation = 'For Sale';
-  pet.storedAt = new Date();
-  await pet.save();
-
-  // Remove from stored pets if it was stored
-  if (stable.storedPets.some(p => p.petId.toString() === pet._id.toString())) {
-    stable.storedPets = stable.storedPets.filter(p => p.petId.toString() !== pet._id.toString());
-  }
-
-  // Add to listed pets
-  stable.listedPets.push({
-    petId: pet._id,
-    price: price,
-    sellerId: user._id,
-    originalOwner: character.name
-  });
-  await stable.save();
-
-  // Update character's pet status if it was active
-  if (character.pet) {
-    character.pet = false;
-    await character.save();
-  }
-
-  const embed = new EmbedBuilder()
-    .setTitle(`🏪 Pet Listed for Sale`)
-    .setColor(0xAA926A)
-    .setDescription(`**${pet.name}** has been listed for sale!`)
-    .addFields(
-      { name: '🐾 Pet Details', value: `> Species: ${pet.species}\n> Level: ${pet.level}\n> Traits: ${pet.traits.join(', ')}`, inline: false },
-      { name: '💰 Price', value: `> ${price} tokens`, inline: false },
-      { name: '👤 Seller', value: `> ${character.name}`, inline: false }
-    )
-    .setFooter({ text: 'The pet will remain listed until purchased or removed.' });
-
-  await interaction.reply({ embeds: [embed] });
 }
 
 // ------------------- Handle Browsing Stable -------------------
