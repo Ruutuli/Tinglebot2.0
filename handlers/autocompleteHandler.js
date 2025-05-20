@@ -2952,7 +2952,7 @@ async function handleStealTargetAutocomplete(interaction, focusedOption) {
                     name: `${npc} | ${role}`,
                     value: npc
                 };
-            });
+            }).slice(0, 25); // Limit to 25 choices
 
             await safeAutocompleteResponse(interaction, choices);
         } else if (targetType === 'player') {
@@ -2964,11 +2964,21 @@ async function handleStealTargetAutocomplete(interaction, focusedOption) {
             const choices = filteredCharacters.map(char => ({
                   name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
                   value: char.name
-                }));
+                })).slice(0, 25); // Limit to 25 choices
                 
             await safeAutocompleteResponse(interaction, choices);
         }
     } catch (error) {
+        handleError(error, "autocompleteHandler.js", {
+            commandName: "steal",
+            userTag: interaction.user.tag,
+            userId: interaction.user.id,
+            options: {
+                targetType: interaction.options.getString('targettype'),
+                focusedValue: focusedOption.value
+            }
+        });
+        console.error(`[autocompleteHandler.js]: ❌ Error in handleStealTargetAutocomplete:`, error);
         await safeRespondWithError(interaction);
     }
 }
@@ -2979,16 +2989,22 @@ async function handleStealRarityAutocomplete(interaction, focusedOption) {
         const choices = ['common', 'uncommon', 'rare'];
         const filtered = choices.filter((choice) =>
             choice.toLowerCase().startsWith(focusedOption.value.toLowerCase())
-        );
+        ).slice(0, 25); // Limit to 25 choices
 
         await interaction.respond(
-            filtered.map((choice) => ({
+            filtered.map(choice => ({
                 name: choice.charAt(0).toUpperCase() + choice.slice(1),
                 value: choice
             }))
         );
     } catch (error) {
-        handleError(error, "autocompleteHandler.js");
+        handleError(error, "autocompleteHandler.js", {
+            commandName: "steal",
+            userId: interaction.user.id,
+            options: {
+                focusedValue: focusedOption.value
+            }
+        });
         console.error("[handleStealRarityAutocomplete]: Error:", error);
         await safeRespondWithError(interaction);
     }
