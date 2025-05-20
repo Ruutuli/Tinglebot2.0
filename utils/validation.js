@@ -156,6 +156,25 @@ async function canChangeJob(character, newJob) {
     return { valid: true, message: '' };
 }
 
+// ------------------- Character Existence Check -------------------
+// Checks if a character exists but doesn't belong to the specified user.
+async function characterExistsNotOwned(characterName, userId) {
+    try {
+        const character = await Character.findOne({ name: characterName });
+        if (!character) {
+            return { exists: false, message: '❌ Character not found.' };
+        }
+        if (character.userId === userId) {
+            return { exists: true, owned: true, message: '' };
+        }
+        return { exists: true, owned: false, message: '' };
+    } catch (error) {
+        handleError(error, 'validation.js');
+        console.error('[validation.js]: Error checking character existence:', error);
+        throw error;
+    }
+}
+
 
 // ============================================================================
 // Inventory Validation Functions
@@ -224,5 +243,6 @@ module.exports = {
     isValidRace,
     getRaceValueByName,
     isValidImageUrl,
-    convertCmToFeetInches
+    convertCmToFeetInches,
+    characterExistsNotOwned
 };
