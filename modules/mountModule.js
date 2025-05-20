@@ -642,24 +642,29 @@ const mountainGoatTraits = {
 // ------------------- Water Buffalo Trait Options -------------------
 const waterBuffaloTraits = {
   commonColors: {
-    roll: [1, 6],
+    roll: [1, 10],
     traits: {
-      1: 'Brown Male',
-      2: 'Brown Female',
-      3: 'Grey Male',
-      4: 'Grey Female',
-      5: 'Light Brown Male',
-      6: 'Light Brown Female',
+      1: 'Blue with Horn Spots',
+      2: 'Blue with Solid Horn',
+      3: 'Brown with Horn Spots',
+      4: 'Brown with Solid Horn',
+      5: 'Black with Horn Spots',
+      6: 'Black with Solid Horn',
+      7: 'Grey with Horn Spots',
+      8: 'Grey with Solid Horn',
+      9: 'Ginger with Solid Horn',
+      10: 'Ginger with Horn Spots'
     },
   },
   rareColors: {
-    roll: [1, 5], // Only used for rare water buffalo
+    roll: [1, 6],
     traits: {
-      1: 'Piebald (M or F)',
-      2: 'Full White (M or F)',
-      3: 'Black (M or F)',
-      4: 'Teal (M or F)',
-      5: 'Golden (M or F)',
+      1: 'Full White with Horn Spots',
+      2: 'Full White with Solid Horn',
+      3: 'Piebald with Horn Spots',
+      4: 'Piebald with Solid Horn',
+      5: 'Golden',
+      6: 'Full Black'
     },
   },
 };
