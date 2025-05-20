@@ -365,7 +365,13 @@ async function handleAutocomplete(interaction) {
               await handleStableNameAutocomplete(interaction, focusedOption); // NEW unified handler
             }
             break;
-          
+
+          // ------------------- Cancel Voucher Command -------------------
+          case "cancelvoucher":
+            if (focusedOption.name === "charactername") {
+              await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "cancelvoucher");
+            }
+            break;
 
           // ------------------- Inventory Command -------------------
           case "inventory":

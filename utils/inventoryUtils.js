@@ -771,6 +771,56 @@ const addItemToVendingInventory = async (collectionName, item) => {
   }
 };
 
+// ---- Function: refundJobVoucher ----
+// Handles refunding a job voucher to a character's inventory and logs it to Google Sheets
+async function refundJobVoucher(character, interaction) {
+    try {
+        if (!character || !interaction) {
+            throw new Error("Character and interaction objects are required");
+        }
+
+        console.log(`[inventoryUtils.js]: 🎫 Processing job voucher refund for ${character.name}`);
+
+        // Add the job voucher to inventory
+        await addItemInventoryDatabase(character._id, "Job Voucher", 1, interaction, "Voucher Refund");
+        console.log(`[inventoryUtils.js]: ✅ Successfully refunded job voucher to ${character.name}'s inventory`);
+
+        // Log the refund to Google Sheets if character has an inventory sheet
+        if (character.inventory) {
+            const values = [[
+                character.name,
+                "Job Voucher",
+                1,
+                "Voucher",
+                "Job",
+                "Refund",
+                "Voucher Refund",
+                character.job || "",
+                character.perk || "",
+                character.currentLocation || character.homeVillage || "",
+                `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`,
+                new Date().toISOString(),
+                "Confirmed"
+            ]];
+
+            await safeAppendDataToSheet(
+                character.inventory,
+                character,
+                'loggedInventory!A2:M',
+                values,
+                interaction.client
+            );
+            console.log(`[inventoryUtils.js]: ✅ Successfully logged job voucher refund to Google Sheets for ${character.name}`);
+        }
+
+        return true;
+    } catch (error) {
+        handleError(error, "inventoryUtils.js");
+        console.error(`[inventoryUtils.js]: ❌ Error refunding job voucher:`, error.message);
+        throw error;
+    }
+}
+
 // ============================================================================
 // ---- Exports ----
 // Module exports
@@ -790,5 +840,6 @@ module.exports = {
   addItemToVendingInventory,
   extractSpreadsheetId,
   logMaterialsToGoogleSheets,
+  refundJobVoucher,
   SOURCE_TYPES
 };
