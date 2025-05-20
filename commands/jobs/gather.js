@@ -118,45 +118,6 @@ module.exports = {
         return;
       }
 
-      // ---- Blight Rain Infection Check ----
-      const weather = await getCurrentWeather(character.currentVillage);
-      if (weather?.special?.label === 'Blight Rain') {
-        if (character.blighted) {
-          const alreadyMsg =
-            "<:blight_eye:805576955725611058> **Blight Rain!**\n\n" +
-            `◈ Your character **${character.name}** braved the blight rain, but they're already blighted... guess it doesn't matter! ◈`;
-          await interaction.editReply({ content: alreadyMsg, ephemeral: false });
-        } else if (Math.random() < 0.75) {
-          const blightMsg =
-            "<:blight_eye:805576955725611058> **Blight Infection!**\n\n" +
-            `◈ Oh no... your character **${character.name}** has come into contact with the blight rain and has been **blighted**! ◈\n\n` +
-            "You can be healed by **Oracles, Sages & Dragons**  \n" +
-            "▹ [Blight Information](https://www.rootsofthewild.com/blight)  \n" +
-            "▹ [Currently Available Blight Healers](https://discord.com/channels/603960955839447050/651614266046152705/845481974671736842)\n\n" +
-            "**STAGE 1:**  \n" +
-            "Infected areas appear like blight-colored bruises on the body. Side effects include fatigue, nausea, and feverish symptoms. At this stage you can be helped by having one of the sages, oracles or dragons heal you.\n\n" +
-            "> **Starting tomorrow, you'll be prompted to roll in the Community Board each day to see if your blight gets worse!**\n" +
-            "> *You will not be penalized for missing today's blight roll if you were just infected.*";
-          await interaction.editReply({ content: blightMsg, ephemeral: false });
-          // Update character in DB
-          character.blighted = true;
-          character.blightStage = 1;
-          await character.save();
-          // Assign blighted role
-          const guild = interaction.guild;
-          if (guild) {
-            const member = await guild.members.fetch(interaction.user.id);
-            await member.roles.add('1314750575933653022');
-          }
-        } else {
-          const safeMsg =
-            "<:blight_eye:805576955725611058> **Blight Rain!**\n\n" +
-            `◈ Your character **${character.name}** braved the blight rain but managed to avoid infection this time! ◈\n` +
-            "You feel lucky... but be careful out there.";
-          await interaction.editReply({ content: safeMsg, ephemeral: false });
-        }
-      }
-
       // Check inventory sync before proceeding
       await checkInventorySync(character);
 
@@ -245,7 +206,6 @@ module.exports = {
         return;
       }
 
-
       // ------------------- Step 2: Validate Interaction Channel -------------------
       let currentVillage = capitalizeWords(character.currentVillage);
       let allowedChannel = villageChannels[currentVillage];
@@ -266,6 +226,45 @@ module.exports = {
           content: `❌ **You can only use this command in the ${currentVillage} Town Hall channel!**\n📍 **Current Location:** ${capitalizeWords(character.currentVillage)}\n💬 **Command Allowed In:** ${channelMention}`,
         });
         return;
+      }
+
+      // ---- Blight Rain Infection Check ----
+      const weather = await getCurrentWeather(character.currentVillage);
+      if (weather?.special?.label === 'Blight Rain') {
+        if (character.blighted) {
+          const alreadyMsg =
+            "<:blight_eye:805576955725611058> **Blight Rain!**\n\n" +
+            `◈ Your character **${character.name}** braved the blight rain, but they're already blighted... guess it doesn't matter! ◈`;
+          await interaction.editReply({ content: alreadyMsg, ephemeral: false });
+        } else if (Math.random() < 0.75) {
+          const blightMsg =
+            "<:blight_eye:805576955725611058> **Blight Infection!**\n\n" +
+            `◈ Oh no... your character **${character.name}** has come into contact with the blight rain and has been **blighted**! ◈\n\n` +
+            "You can be healed by **Oracles, Sages & Dragons**  \n" +
+            "▹ [Blight Information](https://www.rootsofthewild.com/blight)  \n" +
+            "▹ [Currently Available Blight Healers](https://discord.com/channels/603960955839447050/651614266046152705/845481974671736842)\n\n" +
+            "**STAGE 1:**  \n" +
+            "Infected areas appear like blight-colored bruises on the body. Side effects include fatigue, nausea, and feverish symptoms. At this stage you can be helped by having one of the sages, oracles or dragons heal you.\n\n" +
+            "> **Starting tomorrow, you'll be prompted to roll in the Community Board each day to see if your blight gets worse!**\n" +
+            "> *You will not be penalized for missing today's blight roll if you were just infected.*";
+          await interaction.editReply({ content: blightMsg, ephemeral: false });
+          // Update character in DB
+          character.blighted = true;
+          character.blightStage = 1;
+          await character.save();
+          // Assign blighted role
+          const guild = interaction.guild;
+          if (guild) {
+            const member = await guild.members.fetch(interaction.user.id);
+            await member.roles.add('1314750575933653022');
+          }
+        } else {
+          const safeMsg =
+            "<:blight_eye:805576955725611058> **Blight Rain!**\n\n" +
+            `◈ Your character **${character.name}** braved the blight rain but managed to avoid infection this time! ◈\n` +
+            "You feel lucky... but be careful out there.";
+          await interaction.editReply({ content: safeMsg, ephemeral: false });
+        }
       }
 
       // ------------------- Step 3: Validate Job -------------------
