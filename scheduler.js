@@ -85,20 +85,6 @@ function getCurrentSeason() {
   return 'Winter';
 }
 
-// ---- Function: formatWeatherMessage ----
-// Formats weather information into a readable message
-function formatWeatherMessage(village, weather) {
-  const { temperature, wind, precipitation, special } = weather;
-  let message = `## 🌤️ Daily Weather Report for ${village}\n\n`;
-  message += `**Temperature:** ${temperature.emoji} ${temperature.label}\n`;
-  message += `**Wind:** ${wind.emoji} ${wind.label}\n`;
-  message += `**Conditions:** ${precipitation.emoji} ${precipitation.label}\n`;
-  if (special) {
-    message += `**Special:** ${special.emoji} ${special.label}\n`;
-  }
-  return message;
-}
-
 // ---- Function: postWeatherUpdate ----
 // Posts weather updates to all village town halls
 async function postWeatherUpdate(client) {
@@ -339,7 +325,7 @@ function initializeScheduler(client) {
     ]);
   });
   createCronJob('0 0 * * *', 'debuff expiry check', handleDebuffExpiry);
-  createCronJob('0 8 * * *', 'daily weather update', () => postWeatherUpdate(client), 'America/New_York');
+  createCronJob('44 14  * * *', 'daily weather update', () => postWeatherUpdate(client), 'America/New_York'); //replace with 0 8 * * * for 8am EST
   createCronJob('0 0 * * *', 'birthday announcements', () => executeBirthdayAnnouncements(client));
   
   // Initialize blight scheduler

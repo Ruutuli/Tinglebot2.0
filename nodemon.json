@@ -9,7 +9,8 @@
     "modules/",
     "utils/",
     "dashboard/",
-    "scripts/"
+    "scripts/",
+    "scheduler.js"
   ],
   "ignore": ["node_modules/"],
   "ext": "js,json",
