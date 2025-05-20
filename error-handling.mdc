@@ -1,0 +1,174 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Error Handling Implementation Guide
+
+## Overview
+This guide explains how to properly implement error handling using the global error handler in the codebase.
+
+## Required Import
+```javascript
+const { handleError } = require('../../utils/globalErrorHandler');
+```
+
+## Implementation Guidelines
+
+### 1. Basic Error Handling
+Always wrap main command execution in try/catch blocks:
+
+```javascript
+async execute(interaction) {
+  try {
+    // Command logic here
+  } catch (error) {
+    handleError(error, 'filename.js');
+    console.error(`[filename.js]: Error executing command:`, error);
+    await interaction.reply({ 
+      content: '❌ An error occurred while processing your request.', 
+      ephemeral: true 
+    });
+  }
+}
+```
+
+### 2. Context-Rich Error Handling
+When handling errors in specific operations, include relevant context:
+
+```javascript
+try {
+  // Operation logic
+} catch (error) {
+  handleError(error, 'filename.js', {
+    commandName: '/command subcommand', // Use full command format with slash
+    userTag: interaction.user.tag,
+    userId: interaction.user.id,
+    options: {
+      // Add relevant operation-specific details
+      itemName: item?.name,
+      quantity: quantity,
+      // etc...
+    }
+  });
+}
+```
+
+### 3. Error Logging Best Practices
+
+#### Console Error Format
+```javascript
+console.error(`[filename.js]: Error in /command subcommand:`, error);
+```
+
+#### User Response Format
+```javascript
+await interaction.reply({ 
+  content: `❌ Operation failed: ${error.message || 'Unknown error'}`, 
+  ephemeral: true 
+});
+```
+
+### 4. Common Error Handling Patterns
+
+#### Database Operations
+```javascript
+try {
+  const result = await databaseOperation();
+} catch (error) {
+  handleError(error, 'filename.js', {
+    commandName: '/command subcommand',
+    operation: 'databaseOperation',
+    userId: interaction.user.id
+  });
+}
+```
+
+#### Google Sheets Operations
+```javascript
+try {
+  await safeAppendDataToSheet(/* params */);
+} catch (error) {
+  handleError(error, 'filename.js', {
+    commandName: '/command subcommand',
+    sheetType: 'inventory',
+    spreadsheetId: spreadsheetId,
+    range: range
+  });
+}
+```
+
+### 5. Error Recovery
+
+#### Transaction Rollback
+```javascript
+let operationStarted = false;
+try {
+  operationStarted = true;
+  // Operation logic
+} catch (error) {
+  if (operationStarted) {
+    // Rollback logic
+  }
+  handleError(error, 'filename.js', {
+    commandName: '/command subcommand'
+  });
+}
+```
+
+#### State Restoration
+```javascript
+const originalState = { /* capture state */ };
+try {
+  // Operation that might fail
+} catch (error) {
+  // Restore original state
+  Object.assign(currentState, originalState);
+  handleError(error, 'filename.js', {
+    commandName: '/command subcommand'
+  });
+}
+```
+
+## Best Practices
+
+1. Always use `handleError` for error logging
+2. Include relevant context in error objects
+3. Use descriptive error messages
+4. Implement proper error recovery where possible
+5. Keep user-facing error messages clear but not too technical
+6. Use ephemeral messages for error responses
+7. Log detailed error information to console
+8. Include stack traces in development
+9. Handle both expected and unexpected errors
+10. Maintain consistent error handling patterns across the codebase
+11. Always use full command format (e.g., '/command subcommand') in error context
+
+## Example Implementation
+
+```javascript
+const { handleError } = require('../../utils/globalErrorHandler');
+
+async function someOperation(interaction, character) {
+  try {
+    // Operation logic
+  } catch (error) {
+    handleError(error, 'filename.js', {
+      commandName: '/command subcommand',
+      userTag: interaction.user.tag,
+      userId: interaction.user.id,
+      characterName: character?.name,
+      options: {
+        // Operation-specific details
+      }
+    });
+    
+    console.error(`[filename.js]: Error in /command subcommand:`, error);
+    
+    await interaction.reply({
+      content: '❌ Operation failed. Please try again later.',
+      ephemeral: true
+    });
+  }
+}
+```
