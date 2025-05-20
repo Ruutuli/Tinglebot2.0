@@ -230,12 +230,16 @@ module.exports = {
       // ------------------- Mount Travel Logic -------------------
       let mount = null;
       if (mode === 'on mount') {
-        mount = await Mount.findOne({ characterId: character._id });
+        console.log(`[travel.js]: 🔍 Checking mount for character ${character.name} (${character._id})`);
+        mount = await Mount.findOne({ characterId: character._id, isStored: false });
+        console.log(`[travel.js]: 🐴 Mount found: ${mount ? 'Yes' : 'No'}`);
         if (!mount) {
+          console.log(`[travel.js]: ❌ No mount found for ${character.name}, blocking travel`);
           return interaction.editReply({
             content: `❌ **${character.name}** does not have a registered mount. You must register a mount before traveling on mount.`
           });
         }
+        console.log(`[travel.js]: ✅ Mount validation passed for ${character.name}`);
         // Recover mount stamina if a day has passed since lastMountTravel
         const now = new Date();
         if (mount.lastMountTravel) {
@@ -243,7 +247,7 @@ module.exports = {
           const msInDay = 24 * 60 * 60 * 1000;
           const daysPassed = Math.floor((now - last) / msInDay);
           if (daysPassed > 0) {
-            const maxStamina = mount.level === 'Basic' ? 2 : mount.level === 'Mid' ? 4 : mount.level === 'High' ? 6 : mount.stamina;
+            const maxStamina = mount.stamina;
             mount.currentStamina = Math.min(maxStamina, (mount.currentStamina || maxStamina) + daysPassed);
             await mount.save();
           }
@@ -256,8 +260,7 @@ module.exports = {
         } else {
           // If never traveled, initialize currentStamina
           if (mount.currentStamina == null) {
-            const maxStamina = mount.level === 'Basic' ? 2 : mount.level === 'Mid' ? 4 : mount.level === 'High' ? 6 : mount.stamina;
-            mount.currentStamina = maxStamina;
+            mount.currentStamina = mount.stamina;
             await mount.save();
           }
         }
@@ -307,10 +310,6 @@ module.exports = {
             content: `❌ **${mount.name}** does not have enough stamina to complete this journey. Required: ${totalTravelDuration}, Available: ${mount.currentStamina}`
           });
         }
-        // Deduct mount stamina and update lastMountTravel
-        mount.currentStamina -= totalTravelDuration;
-        mount.lastMountTravel = new Date();
-        await mount.save();
       }
 
       if (
@@ -332,6 +331,7 @@ module.exports = {
           content: `❌ Travel path between **${capitalizeFirstLetter(startingVillage)}** and **${capitalizeFirstLetter(destination)}** is not valid.`
         });
       }
+
       // ------------------- Validate Correct Channel -------------------
       const isChannelValid = await validateCorrectTravelChannel(
         interaction,
@@ -341,6 +341,14 @@ module.exports = {
         totalTravelDuration
       );
       if (!isChannelValid) return;
+
+      // ------------------- Update Mount After All Validations Pass -------------------
+      if (mode === 'on mount') {
+        // Deduct mount stamina and update lastMountTravel
+        mount.currentStamina -= totalTravelDuration;
+        mount.lastMountTravel = new Date();
+        await mount.save();
+      }
 
       // ------------------- Determine Paths & Stops -------------------
       let paths = [];
@@ -393,10 +401,24 @@ module.exports = {
     },
 
     // ------------------- Autocomplete Handler -------------------
-    // Routes autocomplete to the central handler in autocompleteHandler.js
     async autocomplete(interaction) {
-      const { handleAutocomplete } = require('../../handlers/autocompleteHandler.js');
-      await handleAutocomplete(interaction);
+      const focusedOption = interaction.options.getFocused(true);
+      
+      if (focusedOption.name === 'mode') {
+        const characterName = interaction.options.getString('charactername');
+        if (characterName) {
+          const character = await fetchCharacterByNameAndUserId(characterName, interaction.user.id);
+          if (character) {
+            const mount = await Mount.findOne({ characterId: character._id, isStored: false });
+            // Only show "on mount" option if character has a registered mount
+            const choices = mount ? MODE_CHOICES : [{ name: 'on foot', value: 'on foot' }];
+            await interaction.respond(choices);
+            return;
+          }
+        }
+        // Default to showing all choices if character not found
+        await interaction.respond(MODE_CHOICES);
+      }
     }
 }
 
