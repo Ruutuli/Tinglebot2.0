@@ -581,64 +581,67 @@ async function handleBlightItemAutocomplete(interaction, focusedOption) {
         }))
         .slice(0, 25);
 
-      return await interaction.respond(choices);
-    } else {
-      // Handle other blight commands that need item autocomplete
-      const characterName = interaction.options.getString("character_name");
-      const healerName = interaction.options.getString("healer_name");
+      await interaction.respond(choices);
+      return;
+    }
 
-      if (!characterName || !healerName) {
-        return await interaction.respond([]);
-      }
+    // Handle other blight commands that need item autocomplete
+    const characterName = interaction.options.getString("character_name");
+    const healerName = interaction.options.getString("healer_name");
 
-      // Get the healer character
-      const healer = await fetchCharacterByName(healerName);
-      if (!healer) {
-        return await interaction.respond([]);
-      }
+    if (!characterName || !healerName) {
+      await interaction.respond([]);
+      return;
+    }
 
-      // Get the healer's inventory
-      const inventoryCollection = await getCharacterInventoryCollection(healer.name);
-      const inventoryItems = await inventoryCollection.find().toArray();
+    // Get the healer character
+    const healer = await fetchCharacterByName(healerName);
+    if (!healer) {
+      await interaction.respond([]);
+      return;
+    }
 
-      // Initialize an array to store items that are relevant for healing requirements
-      const allItems = [];
+    // Get the healer's inventory
+    const inventoryCollection = await getCharacterInventoryCollection(healer.name);
+    const inventoryItems = await inventoryCollection.find().toArray();
 
-      // Loop over mod characters and add item requirements of type "item"
-      modCharacters.forEach((character) => {
-        character.getHealingRequirements().forEach((requirement) => {
-          if (requirement.type === "item") {
-            allItems.push(...requirement.items);
-          }
-        });
+    // Initialize an array to store items that are relevant for healing requirements
+    const allItems = [];
+
+    // Loop over mod characters and add item requirements of type "item"
+    modCharacters.forEach((character) => {
+      character.getHealingRequirements().forEach((requirement) => {
+        if (requirement.type === "item") {
+          allItems.push(...requirement.items);
+        }
+      });
+    });
+
+    // Create a map of required items
+    const requiredItems = new Map(
+      allItems.map(item => [item.name.toLowerCase(), item])
+    );
+
+    // Filter inventory items that match required items
+    const choices = inventoryItems
+      .filter(item => {
+        const itemName = item.itemName.toLowerCase();
+        return requiredItems.has(itemName) && 
+               item.itemName.toLowerCase().includes(focusedOption.value.toLowerCase());
+      })
+      .map(item => {
+        const requiredItem = requiredItems.get(item.itemName.toLowerCase());
+        return {
+          name: `${item.itemName} | ${requiredItem.quantity} required`,
+          value: item.itemName
+        };
       });
 
-      // Create a map of required items
-      const requiredItems = new Map(
-        allItems.map(item => [item.name.toLowerCase(), item])
-      );
-
-      // Filter inventory items that match required items
-      const choices = inventoryItems
-        .filter(item => {
-          const itemName = item.itemName.toLowerCase();
-          return requiredItems.has(itemName) && 
-                 item.itemName.toLowerCase().includes(focusedOption.value.toLowerCase());
-        })
-        .map(item => {
-          const requiredItem = requiredItems.get(item.itemName.toLowerCase());
-          return {
-            name: `${item.itemName} | ${requiredItem.quantity} required`,
-            value: item.itemName
-          };
-        });
-
-      await interaction.respond(choices.slice(0, 25));
-    }
+    await interaction.respond(choices.slice(0, 25));
   } catch (error) {
     handleError(error, "autocompleteHandler.js");
     console.error("[handleBlightItemAutocomplete]: ❌ Error occurred:", error);
-    await safeRespondWithError(interaction);
+    // Don't try to respond again if there was an error
   }
 }
 
