@@ -131,8 +131,8 @@ async function postWeatherUpdate(client) {
 // ---- Function: setupWeatherScheduler ----
 // Initializes the weather update scheduler
 function setupWeatherScheduler(client) {
-  // Schedule weather updates for 8am EST (12:00 UTC) daily
-  createCronJob('0 12 * * *', 'daily weather update', () => postWeatherUpdate(client));
+  // Schedule weather updates for 8am EST daily
+  createCronJob('0 8 * * *', 'daily weather update', () => postWeatherUpdate(client), 'America/New_York');
 }
 
 // ============================================================================
@@ -337,7 +337,7 @@ function initializeScheduler(client) {
     ]);
   });
   createCronJob('0 0 * * *', 'debuff expiry check', handleDebuffExpiry);
-  createCronJob('0 12 * * *', 'daily weather update', () => postWeatherUpdate(client));
+  createCronJob('0 8 * * *', 'daily weather update', () => postWeatherUpdate(client), 'America/New_York');
   createCronJob('0 0 * * *', 'birthday announcements', () => executeBirthdayAnnouncements(client));
   
   // Initialize blight scheduler
