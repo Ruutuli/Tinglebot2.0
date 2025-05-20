@@ -156,13 +156,25 @@ module.exports = {
         
         if (hasBothPerks && (!canGather || !canLoot)) {
           await interaction.editReply({
-            content: `*${character.name} seems exhausted from their earlier activities...*\n\n**Daily activity limit reached.**\nThe next opportunity to gather or loot will be available at 8AM EST.\n\n*Tip: A job voucher would allow you to gather again today.*`,
+            embeds: [{
+              color: 0x008B8B, // Dark cyan color
+              description: `*${character.name} seems exhausted from their earlier activities...*\n\n**Daily activity limit reached.**\nThe next opportunity to gather or loot will be available at 8AM EST.\n\n*Tip: A job voucher would allow you to gather again today.*`,
+              footer: {
+                text: 'Daily Activity Limit'
+              }
+            }],
             ephemeral: true,
           });
           return;
         } else if (!hasBothPerks && !canGather) {
           await interaction.editReply({
-            content: `*${character.name} seems exhausted from their earlier gathering...*\n\n**Daily gathering limit reached.**\nThe next opportunity to gather will be available at 8AM EST.\n\n*Tip: A job voucher would allow you to gather again today.*`,
+            embeds: [{
+              color: 0x008B8B, // Dark cyan color
+              description: `*${character.name} seems exhausted from their earlier gathering...*\n\n**Daily gathering limit reached.**\nThe next opportunity to gather will be available at 8AM EST.\n\n*Tip: A job voucher would allow you to gather again today.*`,
+              footer: {
+                text: 'Daily Activity Limit'
+              }
+            }],
             ephemeral: true,
           });
           return;
