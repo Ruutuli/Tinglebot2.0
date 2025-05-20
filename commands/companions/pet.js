@@ -481,6 +481,12 @@ module.exports = {
       try {
         const petImageUrl = await handlePetImageUpload(imageAttachment, petName);
         petDoc.imageUrl = petImageUrl;
+        
+        // Update both the Pet model and Character model
+        await Pet.updateOne(
+          { _id: petDoc._id },
+          { $set: { imageUrl: petImageUrl } }
+        );
         await updatePetToCharacter(character._id, petName, petDoc);
 
         // Sanitize the URL before using it in the embed
