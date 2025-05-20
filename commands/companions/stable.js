@@ -72,12 +72,7 @@ module.exports = {
           option.setName('name')
             .setDescription('Enter the mount/pet name')
             .setRequired(true)
-        )
-        .addIntegerOption(option =>
-          option.setName('price')
-            .setDescription('Enter the price in tokens')
-            .setRequired(true)
-            .setMinValue(1)
+            .setAutocomplete(true)
         )
     )
     .addSubcommand(subcommand =>
@@ -128,7 +123,7 @@ module.exports = {
           await handleRetrieveMount(interaction, userId, interaction.options.getString('charactername'), interaction.options.getString('name'));
           break;
         case 'list':
-          await handleListMount(interaction, userId, interaction.options.getString('charactername'), interaction.options.getString('name'), interaction.options.getInteger('price'));
+          await handleListMount(interaction, userId, interaction.options.getString('charactername'), interaction.options.getString('name'));
           break;
         case 'browse':
           await handleBrowseStable(interaction, interaction.options.getString('type'));
@@ -270,7 +265,7 @@ async function handleRetrieveMount(interaction, userId, characterName, mountName
 }
 
 // ------------------- Handle Listing Mount -------------------
-async function handleListMount(interaction, userId, characterName, mountName, price) {
+async function handleListMount(interaction, userId, characterName, mountName) {
   const character = await fetchCharacterByNameAndUserId(characterName, userId);
   if (!character) {
     await interaction.reply({ content: '❌ Character not found or does not belong to you.', ephemeral: true });
@@ -299,6 +294,9 @@ async function handleListMount(interaction, userId, characterName, mountName, pr
     await interaction.reply({ content: '❌ User not found.', ephemeral: true });
     return;
   }
+
+  // Calculate price using the existing function
+  const price = calculateMountPrice(mount);
 
   stable.listedMounts.push({
     mountId: mount._id,
