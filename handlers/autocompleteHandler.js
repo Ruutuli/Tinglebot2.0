@@ -143,15 +143,7 @@ async function handleAutocomplete(interaction) {
           console.warn('[autocompleteHandler.js]: ⚠️ Received non-autocomplete interaction');
           return;
         }
-
-        console.log('[handleAutocomplete]: 🔄 Processing command', {
-          commandName,
-          focusedOption: focusedOption.name,
-          hasSubcommand: interaction.options._subcommand !== undefined
-        });
-
         switch (commandName) {
-          // ... existing code ...
 
           // ------------------- Custom Weapon Command -------------------
           case "customweapon":
@@ -313,15 +305,49 @@ async function handleAutocomplete(interaction) {
 
           // ------------------- Vending Command -------------------
           case "vending":
-            if (interaction.options._subcommand) {
-              const vendingSubcommand = interaction.options.getSubcommand();
-              if (vendingSubcommand === "add") {
-                await handleVendingAddAutocomplete(interaction, focusedOption);
-              } else if (vendingSubcommand === "barter") {
+            const vendingSubcommand = interaction.options.getSubcommand(false);
+            if (focusedOption.name === "charactername") {
+              if (vendingSubcommand === "barter") {
                 await handleVendingBarterAutocomplete(interaction, focusedOption);
               } else if (vendingSubcommand === "view") {
                 await handleVendingViewAutocomplete(interaction, focusedOption);
+              } else if (vendingSubcommand === "collect_points") {
+                const userId = interaction.user.id;
+                const characters = await fetchCharactersByUserId(userId);
+                
+                // Filter for characters with vending jobs
+                const vendorCharacters = characters.filter(char => {
+                  const job = char.job?.toLowerCase();
+                  return job === 'shopkeeper' || job === 'merchant';
+                });
+                
+                const choices = vendorCharacters.map(char => ({
+                  name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
+                  value: char.name
+                }));
+                
+                await respondWithFilteredChoices(interaction, focusedOption, choices);
+              } else if (vendingSubcommand === "add") {
+                const userId = interaction.user.id;
+                const characters = await fetchCharactersByUserId(userId);
+                
+                // Filter for characters with vending jobs
+                const vendorCharacters = characters.filter(char => {
+                  const job = char.job?.toLowerCase();
+                  return job === 'shopkeeper' || job === 'merchant';
+                });
+                
+                const choices = vendorCharacters.map(char => ({
+                  name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
+                  value: char.name
+                }));
+                
+                await respondWithFilteredChoices(interaction, focusedOption, choices);
               }
+            } else if (focusedOption.name === "itemname" && vendingSubcommand === "add") {
+              await handleVendorItemAutocomplete(interaction, focusedOption);
+            } else if (focusedOption.name === "slot" && vendingSubcommand === "add") {
+              await handleSlotAutocomplete(interaction, focusedOption);
             }
             break;
 
@@ -3169,7 +3195,6 @@ async function handleVendorCharacterAutocomplete(interaction) {
 // Provides autocomplete suggestions for items in a vendor's shop during barter
 async function handleVendingBarterAutocomplete(interaction, focusedOption) {
   try {
-
     const subcommand = interaction.options.getSubcommand();
     const focusedName = focusedOption.name;
     const searchQuery = focusedOption.value?.toLowerCase() || "";
@@ -3177,12 +3202,9 @@ async function handleVendingBarterAutocomplete(interaction, focusedOption) {
     // Handle character name autocomplete (user's characters)
     if (focusedName === 'charactername') {
       const userId = interaction.user.id;
-      const characters = await fetchAllCharacters();
+      const characters = await fetchCharactersByUserId(userId);
       
-      // Filter for user's characters
-      const userCharacters = characters.filter(char => char.userId === userId);
-      
-      const choices = userCharacters.map(char => ({
+      const choices = characters.map(char => ({
         name: `${char.name} | ${char.currentVillage || 'No Village'} | ${char.job || 'No Job'}`,
         value: char.name
       }));

@@ -429,10 +429,22 @@ async function handleRestock(interaction) {
       .setColor('#00FF00')
       .setTitle('✅ Item Added to Shop')
       .setDescription(`Successfully added ${stockQty}x ${itemName} to your shop in ${newSlot}.`)
+      .setAuthor({ 
+        name: `${character.name} the ${character.job ? character.job.charAt(0).toUpperCase() + character.job.slice(1).toLowerCase() : 'No Job'}`, 
+        iconURL: character.icon 
+      })
+      .setThumbnail(itemDetails.image || 'https://via.placeholder.com/150')
       .addFields(
-        { name: 'Points Spent', value: `${totalCost} points`, inline: true },
-        { name: 'Remaining Points', value: `${character.vendingPoints - totalCost} points`, inline: true }
-      );
+        { name: '👤 Character', value: character.name, inline: true },
+        { name: '🏘️ Location', value: character.currentVillage, inline: true },
+        { name: '🛍️ Shop Type', value: character.job ? character.job.charAt(0).toUpperCase() + character.job.slice(1).toLowerCase() : 'N/A', inline: true },
+        { name: '📦 Item', value: `${itemDetails.emoji || '📦'} ${itemName}`, inline: true },
+        { name: '🎯 Slot', value: newSlot, inline: true },
+        { name: '💰 Prices', value: `Token: ${tokenPrice}\nArt: ${artPrice}\nOther: ${otherPrice}`, inline: true },
+        { name: '🪙 Points Spent', value: `${totalCost} points`, inline: true },
+        { name: '💎 Remaining Points', value: `${character.vendingPoints - totalCost} points`, inline: true }
+      )
+      .setFooter({ text: `Added to shop on ${new Date().toLocaleDateString()}` });
 
     await interaction.editReply({ embeds: [successEmbed] });
 
