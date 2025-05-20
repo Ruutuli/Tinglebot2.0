@@ -357,12 +357,11 @@ async function handleAutocomplete(interaction) {
           case "stable":
             if (focusedOption.name === "charactername") {
               await handleStableCharacterAutocomplete(interaction, focusedOption);
-            } else if (focusedOption.name === "mountname") {
-              await handleStableMountNameAutocomplete(interaction, focusedOption);
-            } else if (focusedOption.name === "petname") {
-              await handleStablePetNameAutocomplete(interaction, focusedOption);
+            } else if (focusedOption.name === "name") {
+              await handleStableNameAutocomplete(interaction, focusedOption); // NEW unified handler
             }
             break;
+          
 
           // ------------------- Inventory Command -------------------
           case "inventory":
@@ -395,7 +394,6 @@ async function handleAutocomplete(interaction) {
             }
             break;
 
-          // ... rest of existing code ...
         }
     } catch (error) {
         console.error('[autocompleteHandler.js]: ❌ Error in handleAutocomplete:', error);
@@ -2526,7 +2524,7 @@ async function handleModCharacterAutocomplete(interaction, focusedOption) {
 }
 
 // ============================================================================
-// MOUNT & STABLE COMMANDS
+// MOUNT COMMANDS
 // ============================================================================
 // This section handles autocomplete interactions for the "mount" and "stable" commands.
 // It provides suggestions for selecting characters who can interact with mounts,
@@ -2604,96 +2602,144 @@ async function handleMountNameAutocomplete(interaction, focusedOption) {
  }
 }
 
-// ------------------- Stable Character Autocomplete -------------------
-// Provides autocomplete suggestions for user-owned characters with mounts for stable commands
+// ============================================================================
+// ------------------- STABLE COMMANDS -------------------
+// Autocomplete handlers for /stable command:
+// Includes character, mount, pet, and unified name suggestion.
+// ============================================================================
+
+// ------------------- Shared Formatter Functions -------------------
+// Used to reduce redundancy when formatting autocomplete choices.
+
+function formatCharacterChoice(character) {
+  return {
+    name: `${character.name} | ${character.currentVillage || 'Unknown'} | ${character.job || 'Unknown'}`,
+    value: character.name
+  };
+}
+
+function formatMountChoice(mount) {
+  return {
+    name: `🟫 ${mount.name} | ${mount.species} | ${mount.level}`,
+    value: mount.name
+  };
+}
+
+function formatPetChoice(pet) {
+  return {
+    name: `🟪 ${pet.name} | ${pet.species} | ${pet.petType} | Lv.${pet.level}`,
+    value: pet.name
+  };
+}
+
+// ------------------- Function: handleStableCharacterAutocomplete -------------------
+// Suggests user-owned characters formatted as Name | Village | Job.
 async function handleStableCharacterAutocomplete(interaction, focusedOption) {
   try {
     const userId = interaction.user.id;
     const searchQuery = focusedOption.value.toLowerCase();
+    const characters = await Character.find({ userId });
 
-    // Get all characters owned by the user
-    const characters = await Character.find({ userId: userId });
+    const choices = characters
+      .map(formatCharacterChoice)
+      .filter(choice => choice.name.toLowerCase().includes(searchQuery));
 
-    // Format character names with village and job
-    const choices = characters.map(char => ({
-      name: `${char.name} | ${char.currentVillage || 'Unknown'} | ${char.job || 'Unknown'}`,
-      value: char.name
-    }));
-
-    // Filter based on search query
-    const filteredChoices = choices.filter(choice => 
-      choice.name.toLowerCase().includes(searchQuery)
-    );
-
-    await safeAutocompleteResponse(interaction, filteredChoices);
+    await safeAutocompleteResponse(interaction, choices);
   } catch (error) {
     console.error('[autocompleteHandler]: Error in handleStableCharacterAutocomplete:', error);
     await safeRespondWithError(interaction);
   }
 }
 
+// ------------------- Function: handleStableMountNameAutocomplete -------------------
+// Suggests mounts owned by selected character with species and level.
 async function handleStableMountNameAutocomplete(interaction, focusedOption) {
   try {
     const userId = interaction.user.id;
-    const characterName = interaction.options.getString('charactername');
-    const searchQuery = focusedOption.value.toLowerCase();
+    const characterName = interaction.options.getString("charactername");
+    if (!characterName) return await interaction.respond([]);
 
-    // Get the character
-    const character = await Character.findOne({ name: characterName, userId: userId });
-    if (!character) {
-      return await safeAutocompleteResponse(interaction, []);
-    }
+    const character = await fetchCharacterByNameAndUserId(characterName, userId);
+    if (!character) return await interaction.respond([]);
 
-    // Get all mounts owned by the character
-    const mounts = await Mount.find({ characterId: character._id });
+    const mounts = await Mount.find({ owner: character.name });
+    const query = focusedOption.value?.toLowerCase() || "";
 
-    // Format mount names with species and level
-    const choices = mounts.map(mount => ({
-      name: `${mount.name} (${mount.species} - ${mount.level})`,
-      value: mount.name
-    }));
+    const choices = mounts
+      .map(formatMountChoice)
+      .filter(choice => choice.name.toLowerCase().includes(query))
+      .slice(0, 25);
 
-    // Filter based on search query
-    const filteredChoices = choices.filter(choice => 
-      choice.name.toLowerCase().includes(searchQuery)
-    );
-
-    await safeAutocompleteResponse(interaction, filteredChoices);
+    await safeAutocompleteResponse(interaction, choices);
   } catch (error) {
-    console.error('[autocompleteHandler]: Error in handleStableMountNameAutocomplete:', error);
+    handleError(error, "autocompleteHandler.js", {
+      operation: "handleStableMountNameAutocomplete",
+      character: characterName,
+      userId: interaction.user.id
+    });
     await safeRespondWithError(interaction);
   }
 }
 
+// ------------------- Function: handleStablePetNameAutocomplete -------------------
+// Suggests pets owned by selected character with species and level.
 async function handleStablePetNameAutocomplete(interaction, focusedOption) {
   try {
     const userId = interaction.user.id;
-    const characterName = interaction.options.getString('charactername');
-    const searchQuery = focusedOption.value.toLowerCase();
+    const characterName = interaction.options.getString("charactername");
+    if (!characterName) return await interaction.respond([]);
 
-    // Get the character
-    const character = await Character.findOne({ name: characterName, userId: userId });
-    if (!character) {
-      return await safeAutocompleteResponse(interaction, []);
-    }
+    const character = await fetchCharacterByNameAndUserId(characterName, userId);
+    if (!character) return await interaction.respond([]);
 
-    // Get all pets owned by the character
-    const pets = await Pet.find({ characterId: character._id });
+    const pets = await Pet.find({ owner: character._id });
+    const query = focusedOption.value?.toLowerCase() || "";
 
-    // Format pet names with species and level
-    const choices = pets.map(pet => ({
-      name: `${pet.name} (${pet.species} - Level ${pet.level})`,
-      value: pet.name
-    }));
+    const choices = pets
+      .map(formatPetChoice)
+      .filter(choice => choice.name.toLowerCase().includes(query))
+      .slice(0, 25);
 
-    // Filter based on search query
-    const filteredChoices = choices.filter(choice => 
-      choice.name.toLowerCase().includes(searchQuery)
-    );
-
-    await safeAutocompleteResponse(interaction, filteredChoices);
+    await safeAutocompleteResponse(interaction, choices);
   } catch (error) {
-    console.error('[autocompleteHandler]: Error in handleStablePetNameAutocomplete:', error);
+    handleError(error, "autocompleteHandler.js", {
+      operation: "handleStablePetNameAutocomplete",
+      character: characterName,
+      userId: interaction.user.id
+    });
+    await safeRespondWithError(interaction);
+  }
+}
+
+// ------------------- Function: handleStableNameAutocomplete -------------------
+// Suggests both mounts and pets in a single dropdown for a given character.
+async function handleStableNameAutocomplete(interaction, focusedOption) {
+  try {
+    const userId = interaction.user.id;
+    const characterName = interaction.options.getString("charactername");
+    if (!characterName) return await interaction.respond([]);
+
+    const character = await fetchCharacterByNameAndUserId(characterName, userId);
+    if (!character) return await interaction.respond([]);
+
+    const [mounts, pets] = await Promise.all([
+      Mount.find({ owner: character.name }),
+      Pet.find({ owner: character._id })
+    ]);
+
+    const query = focusedOption.value?.toLowerCase() || "";
+
+    const choices = [...mounts.map(formatMountChoice), ...pets.map(formatPetChoice)]
+      .filter(choice => choice.name.toLowerCase().includes(query))
+      .slice(0, 25);
+
+    await safeAutocompleteResponse(interaction, choices);
+  } catch (error) {
+    handleError(error, "autocompleteHandler.js", {
+      operation: "handleStableNameAutocomplete",
+      character: characterName,
+      userId: interaction.user.id
+    });
     await safeRespondWithError(interaction);
   }
 }
@@ -3272,7 +3318,7 @@ async function handleVendingBarterAutocomplete(interaction, focusedOption) {
                 const userId = interaction.user.id;
                 const characters = await fetchCharactersByUserId(userId);
                 
-      const choices = characters.map(char => ({
+    const choices = characters.map(char => ({
         name: `${char.name} | ${char.currentVillage || 'No Village'} | ${char.job || 'No Job'}`,
                   value: char.name
                 }));
@@ -3362,8 +3408,8 @@ async function handleVendingBarterAutocomplete(interaction, focusedOption) {
           };
         }
       });
-
-      await interaction.respond(choices.slice(0, 25));
+ 
+   await interaction.respond(choices.slice(0, 25));
       return;
     }
 
@@ -3427,14 +3473,14 @@ async function handleVendingViewAutocomplete(interaction, focusedOption) {
 
 // ------------------- Autocomplete: View Character Inventory -------------------
 async function handleViewInventoryAutocomplete(interaction, focusedOption) {
- try {
+  try {
                 const userId = interaction.user.id;
-
+ 
   // Fetch only characters owned by the user
                 const characters = await fetchCharactersByUserId(userId);
-                
+ 
   // Map characters to autocomplete choices with formatted display
-  const choices = characters.map((character) => ({
+   const choices = characters.map((character) => ({
    name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
    value: character.name
   }));
