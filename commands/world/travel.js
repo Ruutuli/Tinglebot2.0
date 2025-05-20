@@ -31,6 +31,7 @@ const {
   createMonsterEncounterEmbed,
   createSafeTravelDayEmbed,
   createTravelingEmbed,
+  pathEmojis
 } = require('../../embeds/embeds.js');
 
 // ------------------- Handlers -------------------
@@ -180,10 +181,25 @@ module.exports = {
       const destination = interaction.options.getString('destination').toLowerCase();
       const mode = interaction.options.getString('mode');
       const userId = interaction.user.id;
+      const userTag = interaction.user.tag;
+
+      console.log(`[travel.js]: 🚀 Travel command initiated by ${userTag} (${userId})`, {
+        characterName,
+        destination,
+        mode,
+        channelId: interaction.channelId,
+        guildId: interaction.guildId
+      });
 
       // ------------------- Fetch Character from Database -------------------
       const character = await fetchCharacterByNameAndUserId(characterName, userId);
       if (!character) {
+        console.log(`[travel.js]: ❌ Character not found for ${userTag}`, {
+          characterName,
+          userId,
+          destination,
+          mode
+        });
         await interaction.editReply({
           content: `❌ **Character ${characterName} not found or does not belong to you.**`,
         });
@@ -436,79 +452,135 @@ module.exports = {
       });
       
     } catch (error) {
-      handleError(error, 'travel.js (execute)');
-      console.error(`[travel.js]: Error during execution: ${error.message}`, error);
+      handleError(error, 'travel.js (execute)', {
+        commandName: 'travel',
+        userTag: interaction.user.tag,
+        userId: interaction.user.id,
+        characterName: interaction.options.getString('charactername'),
+        options: {
+          destination: interaction.options.getString('destination'),
+          mode: interaction.options.getString('mode'),
+          channelId: interaction.channelId,
+          guildId: interaction.guildId
+        }
+      });
+      console.error(`[travel.js]: ❌ Error during travel command execution:`, {
+        error: error.message,
+        stack: error.stack,
+        user: {
+          tag: interaction.user.tag,
+          id: interaction.user.id
+        },
+        command: {
+          characterName: interaction.options.getString('charactername'),
+          destination: interaction.options.getString('destination'),
+          mode: interaction.options.getString('mode')
+        },
+        context: {
+          channelId: interaction.channelId,
+          guildId: interaction.guildId
+        }
+      });
       await interaction.followUp({
         content: `❌ **Error during travel command execution:** ${error.message}`,
         ephemeral: true
-        });
-      }
-    },
-
-    // ------------------- Autocomplete Handler -------------------
-    async autocomplete(interaction) {
-      try {
-        const focusedOption = interaction.options.getFocused(true);
-
-        if (focusedOption.name === 'charactername') {
-          const userId = interaction.user.id;
-          const characters = await fetchCharactersByUserId(userId);
-          
-          const choices = characters.map(char => ({
-            name: `${char.name} | ${capitalizeFirstLetter(char.currentVillage)} | ${capitalizeFirstLetter(char.job)}`,
-            value: char.name
-          }));
-          
-          await interaction.respond(choices);
-          return;
-        }
-
-        if (focusedOption.name === 'destination') {
-          const characterName = interaction.options.getString('charactername');
-          if (!characterName) {
-            await interaction.respond([]);
-            return;
-          }
-
-          const character = await fetchCharacterByNameAndUserId(characterName, interaction.user.id);
-          if (!character) {
-            await interaction.respond([]);
-            return;
-          }
-
-          const currentVillage = character.currentVillage.toLowerCase();
-          const villages = getAllVillages().filter(v => v.toLowerCase() !== currentVillage);
-
-          const choices = villages.map(village => ({
-            name: capitalizeFirstLetter(village),
-            value: village.toLowerCase()
-          }));
-
-          await interaction.respond(choices);
-          return;
-        }
-
-        if (focusedOption.name === 'mode') {
-          const characterName = interaction.options.getString('charactername');
-          if (characterName) {
-            const character = await fetchCharacterByNameAndUserId(characterName, interaction.user.id);
-            if (character) {
-              const mount = await Mount.findOne({ characterId: character._id, isStored: false });
-              const choices = mount ? MODE_CHOICES : [{ name: 'on foot', value: 'on foot' }];
-              await interaction.respond(choices);
-              return;
-            }
-          }
-          await interaction.respond(MODE_CHOICES);
-          return;
-        }
-
-        await interaction.respond([]);
-      } catch (error) {
-        console.error(`[travel.js]: ❌ Error in autocomplete handler:`, error);
-        await interaction.respond([]);
-      }
+      });
     }
+  },
+
+  // ------------------- Autocomplete Handler -------------------
+  async autocomplete(interaction) {
+    try {
+      const focusedOption = interaction.options.getFocused(true);
+      const userTag = interaction.user.tag;
+      const userId = interaction.user.id;
+
+      console.log(`[travel.js]: 🔍 Autocomplete request from ${userTag}`, {
+        focusedOption: focusedOption.name,
+        userId,
+        guildId: interaction.guildId
+      });
+
+      if (focusedOption.name === 'charactername') {
+        const characters = await fetchCharactersByUserId(userId);
+        
+        const choices = characters.map(char => ({
+          name: `${char.name} | ${capitalizeFirstLetter(char.currentVillage)} | ${capitalizeFirstLetter(char.job)}`,
+          value: char.name
+        }));
+        
+        await interaction.respond(choices);
+        return;
+      }
+
+      if (focusedOption.name === 'destination') {
+        const characterName = interaction.options.getString('charactername');
+        if (!characterName) {
+          await interaction.respond([]);
+          return;
+        }
+
+        const character = await fetchCharacterByNameAndUserId(characterName, interaction.user.id);
+        if (!character) {
+          await interaction.respond([]);
+          return;
+        }
+
+        const currentVillage = character.currentVillage.toLowerCase();
+        const villages = getAllVillages().filter(v => v.toLowerCase() !== currentVillage);
+
+        const choices = villages.map(village => ({
+          name: capitalizeFirstLetter(village),
+          value: village.toLowerCase()
+        }));
+
+        await interaction.respond(choices);
+        return;
+      }
+
+      if (focusedOption.name === 'mode') {
+        const characterName = interaction.options.getString('charactername');
+        if (characterName) {
+          const character = await fetchCharacterByNameAndUserId(characterName, interaction.user.id);
+          if (character) {
+            const mount = await Mount.findOne({ characterId: character._id, isStored: false });
+            const choices = mount ? MODE_CHOICES : [{ name: 'on foot', value: 'on foot' }];
+            await interaction.respond(choices);
+            return;
+          }
+        }
+        await interaction.respond(MODE_CHOICES);
+        return;
+      }
+
+      await interaction.respond([]);
+    } catch (error) {
+      handleError(error, 'travel.js (autocomplete)', {
+        commandName: 'travel',
+        userTag: interaction.user.tag,
+        userId: interaction.user.id,
+        focusedOption: interaction.options.getFocused(true)?.name,
+        options: {
+          characterName: interaction.options.getString('charactername'),
+          destination: interaction.options.getString('destination'),
+          mode: interaction.options.getString('mode')
+        }
+      });
+      console.error(`[travel.js]: ❌ Error in autocomplete handler:`, {
+        error: error.message,
+        stack: error.stack,
+        user: {
+          tag: interaction.user.tag,
+          id: interaction.user.id
+        },
+        context: {
+          focusedOption: interaction.options.getFocused(true)?.name,
+          guildId: interaction.guildId
+        }
+      });
+      await interaction.respond([]);
+    }
+  }
 }
 
 // ============================================================================
@@ -558,225 +630,311 @@ async function checkAndHandleKO(character, channel, startingVillage) {
 // posts travel messages, handles safe days or monster encounters, collects actions,
 // logs outcomes, stops in Inariko if needed, and recurses to the next day.
 async function processTravelDay(day, context) {
-  const {
-    character,
-    startingVillage,
-    destination,
-    paths,
-    totalTravelDuration,
-    interaction,
-    travelingMessages,
-    currentChannel,
-    travelLog,
-    channel: savedChannel,
-    mount,
-    mode
-  } = context;
+  try {
+    const {
+      character,
+      startingVillage,
+      destination,
+      paths,
+      totalTravelDuration,
+      interaction,
+      travelingMessages,
+      currentChannel,
+      travelLog,
+      channel: savedChannel,
+      mount,
+      mode
+    } = context;
 
-  // ------------------- Mount Travel: Skip Encounters & Gathering -------------------
-  if (mode === 'on mount') {
+    console.log(`[travel.js]: 🗺️ Processing travel day ${day} for ${character.name}`, {
+      userTag: interaction.user.tag,
+      userId: interaction.user.id,
+      characterName: character.name,
+      startingVillage,
+      destination,
+      mode,
+      currentPath: paths[0],
+      totalDays: totalTravelDuration
+    });
+
+    // ------------------- Mount Travel: Skip Encounters & Gathering -------------------
+    if (mode === 'on mount') {
+      if (day > totalTravelDuration) {
+        character.currentVillage = destination;
+        await character.save();
+        const finalChannelId = PATH_CHANNELS[paths[paths.length - 1]] || currentChannel;
+        const finalChannel = await interaction.client.channels.fetch(finalChannelId);
+        
+        // First embed with mount info
+        const mountEmbed = new EmbedBuilder()
+          .setTitle(`✅ Mount Travel Complete!`)
+          .setDescription(`**${character.name}** has arrived at **${capitalizeFirstLetter(destination)}** by mount!
+
+🥕 **${mount.name}**'s stamina remaining: ${mount.currentStamina}`)
+          .setColor('#AA926A')
+          .setTimestamp();
+        
+        // Second embed with arrival image
+        const imageEmbed = new EmbedBuilder()
+          .setImage('https://storage.googleapis.com/tinglebot/Graphics/travel.png')
+          .setDescription(`🎉 **${character.name}** has arrived safely at **${capitalizeFirstLetter(destination)}**!`);
+
+        // Send both embeds in sequence
+        await finalChannel.send({ embeds: [mountEmbed] });
+        await finalChannel.send({ embeds: [imageEmbed] });
+
+        for (const msg of travelingMessages) {
+          await msg.delete();
+        }
+        return;
+      }
+      // Send a simple embed for each travel day
+      const currentPath = paths[0];
+      const channelId = PATH_CHANNELS[currentPath];
+      const channel = savedChannel || await interaction.client.channels.fetch(channelId);
+      const pathEmoji = pathEmojis[currentPath];
+      const travelDayEmbed = new EmbedBuilder()
+        .setTitle(`🐴 Traveling by Mount: Day ${day}`)
+        .setDescription(`**${character.name}** is traveling safely by mount (${mount.name}) to **${capitalizeFirstLetter(destination)}**.
+
+${pathEmoji || ''} No monsters or gathering today!`)
+        .setColor('#AA926A')
+        .setTimestamp();
+      const travelMsg = await channel.send({ embeds: [travelDayEmbed] });
+      travelingMessages.push(travelMsg);
+      await new Promise(resolve => setTimeout(resolve, DELAY_MS));
+      await processTravelDay(day + 1, { ...context, channel });
+      return;
+    }
+
+    // ------------------- Check if Journey is Complete -------------------
     if (day > totalTravelDuration) {
       character.currentVillage = destination;
       await character.save();
       const finalChannelId = PATH_CHANNELS[paths[paths.length - 1]] || currentChannel;
       const finalChannel = await interaction.client.channels.fetch(finalChannelId);
-      
-      // First embed with mount info
-      const mountEmbed = new EmbedBuilder()
-        .setTitle(`✅ Mount Travel Complete!`)
-        .setDescription(`**${character.name}** has arrived at **${capitalizeFirstLetter(destination)}** by mount!
+    
+      // ------------------- Assign Village Role -------------------
+      const member = await interaction.guild.members.fetch(interaction.user.id);
+      const allRoles = await interaction.guild.roles.fetch();
+      const roleName = `${capitalizeFirstLetter(destination)} Visiting`;
+      const villageRole = allRoles.find(role => role.name === roleName);
+    
+      if (villageRole) {
+        // Remove other "* Visiting" roles first
+        const visitingRoles = member.roles.cache.filter(r => /Visiting$/.test(r.name) && r.id !== villageRole.id);
+        for (const [roleId] of visitingRoles) {
+          await member.roles.remove(roleId).catch(error => handleError(error, 'travel.js'));
+        }
+    
+        // Add destination visiting role
+        if (!member.roles.cache.has(villageRole.id)) {
+          await member.roles.add(villageRole).catch(error => handleError(error, 'travel.js'));
+        }
+      }
+    
+      // Check destination for blight rain after arrival
+      const destinationWeather = await getCurrentWeather(destination);
+      if (destinationWeather?.special?.label === 'Blight Rain') {
+        if (character.blighted) {
+          const alreadyMsg =
+            "<:blight_eye:805576955725611058> **Blight Rain!**\n\n" +
+            `◈ Your character **${character.name}** braved the blight rain, but they're already blighted... guess it doesn't matter! ◈`;
+          await finalChannel.send({ content: alreadyMsg });
+        } else if (Math.random() < 0.75) {
+          const blightMsg =
+            "<:blight_eye:805576955725611058> **Blight Infection!**\n\n" +
+            `◈ Oh no... your character **${character.name}** has come into contact with the blight rain and has been **blighted**! ◈\n\n` +
+            "You can be healed by **Oracles, Sages & Dragons**  \n" +
+            "▹ [Blight Information](https://www.rootsofthewild.com/blight)  \n" +
+            "▹ [Currently Available Blight Healers](https://discord.com/channels/603960955839447050/651614266046152705/845481974671736842)\n\n" +
+            "**STAGE 1:**  \n" +
+            "Infected areas appear like blight-colored bruises on the body. Side effects include fatigue, nausea, and feverish symptoms. At this stage you can be helped by having one of the sages, oracles or dragons heal you.\n\n" +
+            "> **Starting tomorrow, you'll be prompted to roll in the Community Board each day to see if your blight gets worse!**\n" +
+            "> *You will not be penalized for missing today's blight roll if you were just infected.*";
+          await finalChannel.send({ content: blightMsg });
+          // Update character in DB
+          character.blighted = true;
+          character.blightStage = 1;
+          await character.save();
+          // Assign blighted role
+          const guild = interaction.guild;
+          if (guild) {
+            const member = await guild.members.fetch(interaction.user.id);
+            await member.roles.add('1314750575933653022');
+          }
+          // Add to travel log
+          travelLog.push(`<:blight_eye:805576955725611058> **${character.name}** was infected with blight in **${capitalizeFirstLetter(destination)}**!`);
+        } else {
+          const safeMsg =
+            "<:blight_eye:805576955725611058> **Blight Rain!**\n\n" +
+            `◈ Your character **${character.name}** braved the blight rain but managed to avoid infection this time! ◈\n` +
+            "You feel lucky... but be careful out there.";
+          await finalChannel.send({ content: safeMsg });
+        }
+      }
+    
+      // Filter out "fight: win & loot" logs from final summary
+      const filteredLog = travelLog.filter(entry => !entry.startsWith('fight: win & loot'));
+      const finalEmbed = createFinalTravelEmbed(character, destination, paths, totalTravelDuration, filteredLog);
 
-🥕 **${mount.name}**'s stamina remaining: ${mount.currentStamina}`)
-        .setColor('#AA926A')
-        .setTimestamp();
-      
-      // Second embed with arrival image
       const imageEmbed = new EmbedBuilder()
         .setImage('https://storage.googleapis.com/tinglebot/Graphics/travel.png')
-        .setDescription(`🎉 **${character.name}** has arrived safely at **${capitalizeFirstLetter(destination)}**!`);
-
-      // Send both embeds in sequence
-      await finalChannel.send({ embeds: [mountEmbed] });
-      await finalChannel.send({ embeds: [imageEmbed] });
-
+        .setDescription(`🎉 **${character.name} has arrived safely at ${capitalizeFirstLetter(destination)}!**`);
+      try {
+        await finalChannel.send({ embeds: [finalEmbed] });
+        await finalChannel.send({ embeds: [imageEmbed] });
+      } catch (error) {
+        handleError(error, 'travel.js');
+        await finalChannel.send({ content: '⚠️ Unable to display the arrival embed.' });
+      }
       for (const msg of travelingMessages) {
         await msg.delete();
       }
       return;
     }
-    // Send a simple embed for each travel day
+
+    // ------------------- Wrong-Road Validation -------------------
+    if (totalTravelDuration === 2 && !hasPerk(character, 'DELIVERING')) {
+      if (
+        (startingVillage === 'inariko' && destination === 'vhintl' && currentChannel !== PATH_CHANNELS.leafDewWay) ||
+        (startingVillage === 'inariko' && destination === 'rudania' && currentChannel !== PATH_CHANNELS.pathOfScarletLeaves)
+      ) {
+        const correct = (destination === 'vhintl') ? PATH_CHANNELS.leafDewWay : PATH_CHANNELS.pathOfScarletLeaves;
+        await interaction.editReply({ content: `❌ Wrong road! Please travel on <#${correct}>.` });
+        return;
+      }
+    }
+
+    // ------------------- Determine Current Path -------------------
     const currentPath = paths[0];
+    if (!currentPath) {
+      throw new Error(`Current path is undefined for day ${day}.`);
+    }
     const channelId = PATH_CHANNELS[currentPath];
+    if (!channelId) {
+      throw new Error(`Channel ID for path "${currentPath}" is undefined.`);
+    }
     const channel = savedChannel || await interaction.client.channels.fetch(channelId);
     const pathEmoji = pathEmojis[currentPath];
-    const travelDayEmbed = new EmbedBuilder()
-      .setTitle(`🐴 Traveling by Mount: Day ${day}`)
-      .setDescription(`**${character.name}** is traveling safely by mount (${mount.name}) to **${capitalizeFirstLetter(destination)}**.
+    if (!pathEmoji) {
+      throw new Error(`Emoji for path "${currentPath}" is undefined.`);
+    }
 
-${pathEmoji || ''} No monsters or gathering today!`)
-      .setColor('#AA926A')
-      .setTimestamp();
-    const travelMsg = await channel.send({ embeds: [travelDayEmbed] });
-    travelingMessages.push(travelMsg);
+    // ------------------- Post Traveling Message -------------------
+    const travelingEmbed = createTravelingEmbed(character);
+    const travelingMessage = await channel.send({ embeds: [travelingEmbed] });
+    travelingMessages.push(travelingMessage);
+
+    // ------------------- Simulate Travel Delay -------------------
     await new Promise(resolve => setTimeout(resolve, DELAY_MS));
-    await processTravelDay(day + 1, { ...context, channel });
-    return;
-  }
 
-  // ------------------- Check if Journey is Complete -------------------
-  if (day > totalTravelDuration) {
-    character.currentVillage = destination;
-    await character.save();
-    const finalChannelId = PATH_CHANNELS[paths[paths.length - 1]] || currentChannel;
-    const finalChannel = await interaction.client.channels.fetch(finalChannelId);
-  
-    // ------------------- Assign Village Role -------------------
-    const member = await interaction.guild.members.fetch(interaction.user.id);
-    const allRoles = await interaction.guild.roles.fetch();
-    const roleName = `${capitalizeFirstLetter(destination)} Visiting`;
-    const villageRole = allRoles.find(role => role.name === roleName);
-  
-    if (villageRole) {
-      // Remove other "* Visiting" roles first
-      const visitingRoles = member.roles.cache.filter(r => /Visiting$/.test(r.name) && r.id !== villageRole.id);
-      for (const [roleId] of visitingRoles) {
-        await member.roles.remove(roleId).catch(error => handleError(error, 'travel.js'));
+    // ------------------- Determine Encounter Type -------------------
+    const randomRoll = Math.random();
+    const hasNoMonsters = character.blightEffects?.noMonsters === true;
+    const isSafe = hasNoMonsters ? true : randomRoll < 0.5;
+    
+    let dailyLogEntry = `**Day ${day}:**\n`;
+
+    if (!isSafe) {
+      // ------------------- Monster Encounter -------------------
+      const monsters = await getMonstersByPath(currentPath);
+      if (monsters.length) {
+        const tier = parseInt(getRandomTravelEncounter().split(' ')[1], 10);
+        const options = monsters.filter(m => m.tier <= tier);
+        const monster = options[Math.floor(Math.random() * options.length)];
+        dailyLogEntry += `⚔️ Encountered a ${monster.name}!\n`;
+
+        // Before creating the encounter embed, check if Blood Moon is active
+        const isBloodMoon = isBloodMoonActive();
+        const encounterEmbed = createMonsterEncounterEmbed(
+          character,
+          monster,
+          `You encountered a ${monster.name}! What do you want to do? Fleeing costs 1 🟩 stamina!`,
+          character.currentHearts,
+          null,
+          isBloodMoon
+        );
+        const buttons = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId('fight').setLabel('⚔️ Fight').setStyle(ButtonStyle.Primary),
+          new ButtonBuilder().setCustomId('flee').setLabel('💨 Flee').setStyle(ButtonStyle.Secondary).setDisabled(character.currentStamina === 0)
+        );
+        const encounterMessage = await channel.send({ embeds: [encounterEmbed], components: [buttons] });
+        const collector = encounterMessage.createMessageComponentCollector({ 
+          filter: i => {
+            if (i.user.id !== interaction.user.id) {
+              i.reply({ content: '❌ Only the traveler can interact with these buttons.', ephemeral: true });
+              return false;
+            }
+            return true;
+          }, 
+          time: 300000 
+        });
+
+        collector.on('collect', async i => {
+          const decision = await handleTravelInteraction(
+            i,
+            character,
+            pathEmoji,
+            currentPath,
+            encounterMessage,
+            monster,
+            travelLog
+          );
+          // Append both the loot line and the damage message to the daily log
+          if (decision.includes('Looted')) {
+            dailyLogEntry += `${decision}\n`;
+          } else if (decision.includes('heart')) {
+            dailyLogEntry += `${decision}\n`;
+          }
+          collector.stop();
+        });
+        
+        collector.on('end', async (collected, reason) => {
+          if (reason === 'time') {
+            const decision = await handleTravelInteraction(
+              { customId: 'do_nothing' },
+              character,
+              pathEmoji,
+              currentPath,
+              encounterMessage,
+              monster,
+              travelLog
+            );
+        
+            dailyLogEntry += decision.split('\n').map(line => `${line}`).join('\n') + '\n';
+          }
+          if (await checkAndHandleKO(character, channel, startingVillage)) return;
+          travelLog.push(dailyLogEntry);
+          await processTravelDay(day + 1, { ...context, channel });
+        });
       }
-  
-      // Add destination visiting role
-      if (!member.roles.cache.has(villageRole.id)) {
-        await member.roles.add(villageRole).catch(error => handleError(error, 'travel.js'));
-      }
-    }
-  
-    // Check destination for blight rain after arrival
-    const destinationWeather = await getCurrentWeather(destination);
-    if (destinationWeather?.special?.label === 'Blight Rain') {
-      if (character.blighted) {
-        const alreadyMsg =
-          "<:blight_eye:805576955725611058> **Blight Rain!**\n\n" +
-          `◈ Your character **${character.name}** braved the blight rain, but they're already blighted... guess it doesn't matter! ◈`;
-        await finalChannel.send({ content: alreadyMsg });
-      } else if (Math.random() < 0.75) {
-        const blightMsg =
-          "<:blight_eye:805576955725611058> **Blight Infection!**\n\n" +
-          `◈ Oh no... your character **${character.name}** has come into contact with the blight rain and has been **blighted**! ◈\n\n` +
-          "You can be healed by **Oracles, Sages & Dragons**  \n" +
-          "▹ [Blight Information](https://www.rootsofthewild.com/blight)  \n" +
-          "▹ [Currently Available Blight Healers](https://discord.com/channels/603960955839447050/651614266046152705/845481974671736842)\n\n" +
-          "**STAGE 1:**  \n" +
-          "Infected areas appear like blight-colored bruises on the body. Side effects include fatigue, nausea, and feverish symptoms. At this stage you can be helped by having one of the sages, oracles or dragons heal you.\n\n" +
-          "> **Starting tomorrow, you'll be prompted to roll in the Community Board each day to see if your blight gets worse!**\n" +
-          "> *You will not be penalized for missing today's blight roll if you were just infected.*";
-        await finalChannel.send({ content: blightMsg });
-        // Update character in DB
-        character.blighted = true;
-        character.blightStage = 1;
-        await character.save();
-        // Assign blighted role
-        const guild = interaction.guild;
-        if (guild) {
-          const member = await guild.members.fetch(interaction.user.id);
-          await member.roles.add('1314750575933653022');
-        }
-        // Add to travel log
-        travelLog.push(`<:blight_eye:805576955725611058> **${character.name}** was infected with blight in **${capitalizeFirstLetter(destination)}**!`);
-      } else {
-        const safeMsg =
-          "<:blight_eye:805576955725611058> **Blight Rain!**\n\n" +
-          `◈ Your character **${character.name}** braved the blight rain but managed to avoid infection this time! ◈\n` +
-          "You feel lucky... but be careful out there.";
-        await finalChannel.send({ content: safeMsg });
-      }
-    }
-  
-    // Filter out "fight: win & loot" logs from final summary
-    const filteredLog = travelLog.filter(entry => !entry.startsWith('fight: win & loot'));
-    const finalEmbed = createFinalTravelEmbed(character, destination, paths, totalTravelDuration, filteredLog);
-
-    const imageEmbed = new EmbedBuilder()
-      .setImage('https://storage.googleapis.com/tinglebot/Graphics/travel.png')
-      .setDescription(`🎉 **${character.name} has arrived safely at ${capitalizeFirstLetter(destination)}!**`);
-    try {
-      await finalChannel.send({ embeds: [finalEmbed] });
-      await finalChannel.send({ embeds: [imageEmbed] });
-    } catch (error) {
-      handleError(error, 'travel.js');
-      await finalChannel.send({ content: '⚠️ Unable to display the arrival embed.' });
-    }
-    for (const msg of travelingMessages) {
-      await msg.delete();
-    }
-    return;
-  }
-
-  // ------------------- Wrong-Road Validation -------------------
-  if (totalTravelDuration === 2 && !hasPerk(character, 'DELIVERING')) {
-    if (
-      (startingVillage === 'inariko' && destination === 'vhintl' && currentChannel !== PATH_CHANNELS.leafDewWay) ||
-      (startingVillage === 'inariko' && destination === 'rudania' && currentChannel !== PATH_CHANNELS.pathOfScarletLeaves)
-    ) {
-      const correct = (destination === 'vhintl') ? PATH_CHANNELS.leafDewWay : PATH_CHANNELS.pathOfScarletLeaves;
-      await interaction.editReply({ content: `❌ Wrong road! Please travel on <#${correct}>.` });
-      return;
-    }
-  }
-
-  // ------------------- Determine Current Path -------------------
-  const currentPath = paths[0];
-  if (!currentPath) {
-    throw new Error(`Current path is undefined for day ${day}.`);
-  }
-  const channelId = PATH_CHANNELS[currentPath];
-  if (!channelId) {
-    throw new Error(`Channel ID for path "${currentPath}" is undefined.`);
-  }
-  const channel = savedChannel || await interaction.client.channels.fetch(channelId);
-  const pathEmoji = pathEmojis[currentPath];
-  if (!pathEmoji) {
-    throw new Error(`Emoji for path "${currentPath}" is undefined.`);
-  }
-
-  // ------------------- Post Traveling Message -------------------
-  const travelingEmbed = createTravelingEmbed(character);
-  const travelingMessage = await channel.send({ embeds: [travelingEmbed] });
-  travelingMessages.push(travelingMessage);
-
-  // ------------------- Simulate Travel Delay -------------------
-  await new Promise(resolve => setTimeout(resolve, DELAY_MS));
-
-  // ------------------- Determine Encounter Type -------------------
-  const randomRoll = Math.random();
-  const hasNoMonsters = character.blightEffects?.noMonsters === true;
-  const isSafe = hasNoMonsters ? true : randomRoll < 0.5;
-  
-  let dailyLogEntry = `**Day ${day}:**\n`;
-
-  if (!isSafe) {
-    // ------------------- Monster Encounter -------------------
-    const monsters = await getMonstersByPath(currentPath);
-    if (monsters.length) {
-      const tier = parseInt(getRandomTravelEncounter().split(' ')[1], 10);
-      const options = monsters.filter(m => m.tier <= tier);
-      const monster = options[Math.floor(Math.random() * options.length)];
-      dailyLogEntry += `⚔️ Encountered a ${monster.name}!\n`;
-
-      // Before creating the encounter embed, check if Blood Moon is active
-      const isBloodMoon = isBloodMoonActive();
-      const encounterEmbed = createMonsterEncounterEmbed(
-        character,
-        monster,
-        `You encountered a ${monster.name}! What do you want to do? Fleeing costs 1 🟩 stamina!`,
-        character.currentHearts,
-        null,
-        isBloodMoon
-      );
+    } else {
+      // ------------------- Safe Day of Travel -------------------
+      // Generate Do Nothing flavor ONCE for this day
+      const doNothingFlavorTexts = [
+        `${character.name} lay under a blanket of stars. 🌌`,
+        `${character.name} built a small campfire and enjoyed the crackling warmth. 🔥`,
+        `${character.name} stumbled upon ancient ruins and marveled at their carvings. 🏛️`,
+        `${character.name} heard a nearby stream and drifted to sleep. 💧`,
+        `${character.name} found a quiet grove where fireflies danced. ✨`,
+        `${character.name} roasted foraged mushrooms and thought of home. 🍄`,
+        `${character.name} wrapped themselves in their cloak against the chill. 🧥`,
+        `${character.name} caught a glimpse of a shooting star and made a wish. 🌠`,
+        `${character.name} discovered a meadow of moonlit wildflowers. 🌺`,
+        `${character.name} gazed at constellations and felt at peace. 🌟`
+      ];
+      const doNothingFlavor = doNothingFlavorTexts[Math.floor(Math.random() * doNothingFlavorTexts.length)];
+      const safeEmbed = createSafeTravelDayEmbed(character, day, totalTravelDuration, pathEmoji, currentPath);
+      const safeMessage = await channel.send({ embeds: [safeEmbed] });
       const buttons = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('fight').setLabel('⚔️ Fight').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId('flee').setLabel('💨 Flee').setStyle(ButtonStyle.Secondary).setDisabled(character.currentStamina === 0)
+        new ButtonBuilder().setCustomId('recover').setLabel('💖 Recover a Heart').setStyle(ButtonStyle.Primary).setDisabled(character.currentHearts >= character.maxHearts || character.currentStamina === 0),
+        new ButtonBuilder().setCustomId('gather').setLabel('🌿 Gather').setStyle(ButtonStyle.Success).setDisabled(character.currentStamina === 0),
+        new ButtonBuilder().setCustomId('do_nothing').setLabel('✨ Do Nothing').setStyle(ButtonStyle.Secondary)
       );
-      const encounterMessage = await channel.send({ embeds: [encounterEmbed], components: [buttons] });
-      const collector = encounterMessage.createMessageComponentCollector({ 
+      await safeMessage.edit({ embeds: [safeEmbed], components: [buttons] });
+
+      const collector = safeMessage.createMessageComponentCollector({ 
         filter: i => {
           if (i.user.id !== interaction.user.id) {
             i.reply({ content: '❌ Only the traveler can interact with these buttons.', ephemeral: true });
@@ -786,107 +944,9 @@ ${pathEmoji || ''} No monsters or gathering today!`)
         }, 
         time: 300000 
       });
-
       collector.on('collect', async i => {
         const decision = await handleTravelInteraction(
           i,
-          character,
-          pathEmoji,
-          currentPath,
-          encounterMessage,
-          monster,
-          travelLog
-        );
-        // Append both the loot line and the damage message to the daily log
-        if (decision.includes('Looted')) {
-          dailyLogEntry += `${decision}\n`;
-        } else if (decision.includes('heart')) {
-          dailyLogEntry += `${decision}\n`;
-        }
-        collector.stop();
-      });
-      
-      collector.on('end', async (collected, reason) => {
-        if (reason === 'time') {
-          const decision = await handleTravelInteraction(
-            { customId: 'do_nothing' },
-            character,
-            pathEmoji,
-            currentPath,
-            encounterMessage,
-            monster,
-            travelLog
-          );
-      
-          dailyLogEntry += decision.split('\n').map(line => `${line}`).join('\n') + '\n';
-        }
-        if (await checkAndHandleKO(character, channel, startingVillage)) return;
-        travelLog.push(dailyLogEntry);
-        await processTravelDay(day + 1, { ...context, channel });
-      });
-    }
-  } else {
-    // ------------------- Safe Day of Travel -------------------
-    // Generate Do Nothing flavor ONCE for this day
-    const doNothingFlavorTexts = [
-      `${character.name} lay under a blanket of stars. 🌌`,
-      `${character.name} built a small campfire and enjoyed the crackling warmth. 🔥`,
-      `${character.name} stumbled upon ancient ruins and marveled at their carvings. 🏛️`,
-      `${character.name} heard a nearby stream and drifted to sleep. 💧`,
-      `${character.name} found a quiet grove where fireflies danced. ✨`,
-      `${character.name} roasted foraged mushrooms and thought of home. 🍄`,
-      `${character.name} wrapped themselves in their cloak against the chill. 🧥`,
-      `${character.name} caught a glimpse of a shooting star and made a wish. 🌠`,
-      `${character.name} discovered a meadow of moonlit wildflowers. 🌺`,
-      `${character.name} gazed at constellations and felt at peace. 🌟`
-    ];
-    const doNothingFlavor = doNothingFlavorTexts[Math.floor(Math.random() * doNothingFlavorTexts.length)];
-    const safeEmbed = createSafeTravelDayEmbed(character, day, totalTravelDuration, pathEmoji, currentPath);
-    const safeMessage = await channel.send({ embeds: [safeEmbed] });
-    const buttons = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('recover').setLabel('💖 Recover a Heart').setStyle(ButtonStyle.Primary).setDisabled(character.currentHearts >= character.maxHearts || character.
-      currentStamina === 0),
-      new ButtonBuilder().setCustomId('gather').setLabel('🌿 Gather').setStyle(ButtonStyle.Success).setDisabled(character.currentStamina === 0),
-      new ButtonBuilder().setCustomId('do_nothing').setLabel('✨ Do Nothing').setStyle(ButtonStyle.Secondary)
-    );
-    await safeMessage.edit({ embeds: [safeEmbed], components: [buttons] });
-
-    const collector = safeMessage.createMessageComponentCollector({ 
-      filter: i => {
-        if (i.user.id !== interaction.user.id) {
-          i.reply({ content: '❌ Only the traveler can interact with these buttons.', ephemeral: true });
-          return false;
-        }
-        return true;
-      }, 
-      time: 300000 
-    });
-    collector.on('collect', async i => {
-      const decision = await handleTravelInteraction(
-        i,
-        character,
-        pathEmoji,
-        currentPath,
-        safeMessage,
-        null,
-        travelLog,
-        undefined,
-        i.customId === 'do_nothing' ? doNothingFlavor : undefined
-      );    
-      dailyLogEntry += `${decision}\n`;
-      const updated = new EmbedBuilder(safeMessage.embeds[0].toJSON()).setDescription(
-        `🌸 It's a safe day of travel. What do you want to do next?\n> ${decision}\n\n` +
-        `**❤️ __Hearts:__** ${character.currentHearts}/${character.maxHearts}\n` +
-        `**🟩 __Stamina:__** ${character.currentStamina}/${character.maxStamina}`
-      );
-      await safeMessage.edit({ embeds: [updated], components: [] });
-      collector.stop();
-    });
-
-    collector.on('end', async (collected, reason) => {
-      if (reason === 'time') {
-        const decision = await handleTravelInteraction(
-          { customId: 'do_nothing' },
           character,
           pathEmoji,
           currentPath,
@@ -894,17 +954,71 @@ ${pathEmoji || ''} No monsters or gathering today!`)
           null,
           travelLog,
           undefined,
-          doNothingFlavor
-        );
+          i.customId === 'do_nothing' ? doNothingFlavor : undefined
+        );    
         dailyLogEntry += `${decision}\n`;
-      }
-    
-      if (await checkAndHandleKO(character, channel)) return;
-    
-      travelLog.push(dailyLogEntry);
+        const updated = new EmbedBuilder(safeMessage.embeds[0].toJSON()).setDescription(
+          `🌸 It's a safe day of travel. What do you want to do next?\n> ${decision}\n\n` +
+          `**❤️ __Hearts:__** ${character.currentHearts}/${character.maxHearts}\n` +
+          `**🟩 __Stamina:__** ${character.currentStamina}/${character.maxStamina}`
+        );
+        await safeMessage.edit({ embeds: [updated], components: [] });
+        collector.stop();
+      });
 
-      await processTravelDay(day + 1, { ...context, channel });
-    });    
+      collector.on('end', async (collected, reason) => {
+        if (reason === 'time') {
+          const decision = await handleTravelInteraction(
+            { customId: 'do_nothing' },
+            character,
+            pathEmoji,
+            currentPath,
+            safeMessage,
+            null,
+            travelLog,
+            undefined,
+            doNothingFlavor
+          );
+          dailyLogEntry += `${decision}\n`;
+        }
+      
+        if (await checkAndHandleKO(character, channel)) return;
+      
+        travelLog.push(dailyLogEntry);
+
+        await processTravelDay(day + 1, { ...context, channel });
+      });    
+    }
+  } catch (error) {
+    handleError(error, 'travel.js (processTravelDay)', {
+      commandName: 'travel',
+      userTag: context.interaction?.user?.tag,
+      userId: context.interaction?.user?.id,
+      characterName: context.character?.name,
+      options: {
+        day,
+        startingVillage: context.startingVillage,
+        destination: context.destination,
+        mode: context.mode,
+        currentPath: context.paths?.[0],
+        totalDays: context.totalTravelDuration
+      }
+    });
+    console.error(`[travel.js]: ❌ Error in processTravelDay:`, {
+      error: error.message,
+      stack: error.stack,
+      context: {
+        day,
+        characterName: context.character?.name,
+        userTag: context.interaction?.user?.tag,
+        userId: context.interaction?.user?.id,
+        startingVillage: context.startingVillage,
+        destination: context.destination,
+        mode: context.mode,
+        currentPath: context.paths?.[0]
+      }
+    });
+    throw error; // Re-throw to be caught by the execute function
   }
 } 
 
@@ -912,11 +1026,16 @@ ${pathEmoji || ''} No monsters or gathering today!`)
 // Checks if the current weather conditions are too severe for travel
 async function checkSevereWeather(village) {
   try {
+    console.log(`[travel.js]: 🌤️ Checking weather for ${village}`);
     const weather = await getCurrentWeather(village);
-    if (!weather) return false;
+    if (!weather) {
+      console.log(`[travel.js]: ⚠️ No weather data found for ${village}`);
+      return false;
+    }
 
     // Check special conditions
     if (weather.special?.label && SEVERE_WEATHER_CONDITIONS.includes(weather.special.label)) {
+      console.log(`[travel.js]: ⚠️ Severe weather detected in ${village}: ${weather.special.label}`);
       return {
         blocked: true,
         condition: weather.special.label,
@@ -926,7 +1045,21 @@ async function checkSevereWeather(village) {
 
     return { blocked: false };
   } catch (error) {
-    handleError(error, 'travel.js (checkSevereWeather)');
+    handleError(error, 'travel.js (checkSevereWeather)', {
+      commandName: 'travel',
+      options: {
+        village,
+        weather: weather?.special?.label
+      }
+    });
+    console.error(`[travel.js]: ❌ Error checking weather:`, {
+      error: error.message,
+      stack: error.stack,
+      context: {
+        village,
+        weather: weather?.special?.label
+      }
+    });
     return { blocked: false };
   }
 } 

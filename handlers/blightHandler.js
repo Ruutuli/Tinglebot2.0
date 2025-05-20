@@ -721,6 +721,16 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
         return;
       }
 
+      // Validate Discord message link
+      const linkValidation = validateDiscordMessageLink(link);
+      if (!linkValidation.valid) {
+        await interaction.editReply({ 
+          content: `❌ ${linkValidation.error}\n\nPlease submit your art/writing in the submissions channel and use the link from there.`,
+          ephemeral: true 
+        });
+        return;
+      }
+
       submission.status = 'completed';
       submission.submittedAt = new Date().toISOString();
       await deleteBlightRequestFromStorage(submissionId);
@@ -741,6 +751,46 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
     handleError(error, 'blightHandler.js');
     console.error('[blightHandler]: Error submitting healing task:', error);
     await interaction.editReply({ content: '❌ An error occurred while processing your request.', ephemeral: true });
+  }
+}
+
+// ------------------- Function: validateDiscordMessageLink -------------------
+// Validates if a link is a valid Discord message link and belongs to the correct channel
+function validateDiscordMessageLink(link) {
+  try {
+    // Discord message link format: https://discord.com/channels/guildId/channelId/messageId
+    const discordLinkRegex = /^https:\/\/discord\.com\/channels\/(\d+)\/(\d+)\/(\d+)$/;
+    const match = link.match(discordLinkRegex);
+    
+    if (!match) {
+      return {
+        valid: false,
+        error: 'Invalid Discord message link format. Please provide a valid Discord message link.'
+      };
+    }
+
+    const [, guildId, channelId, messageId] = match;
+    
+    // Check if the link is from the submissions channel
+    const submissionsChannelId = process.env.SUBMISSIONS_CHANNEL_ID;
+    if (submissionsChannelId && channelId !== submissionsChannelId) {
+      return {
+        valid: false,
+        error: 'The submission link must be from the submissions channel.'
+      };
+    }
+
+    return {
+      valid: true,
+      guildId,
+      channelId,
+      messageId
+    };
+  } catch (error) {
+    return {
+      valid: false,
+      error: 'Error validating Discord message link.'
+    };
   }
 }
 
