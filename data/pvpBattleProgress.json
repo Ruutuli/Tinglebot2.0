@@ -164,5 +164,165 @@
     },
     "progress": "PvP Battle initiated",
     "turnCount": 0
+  },
+  "P614609": {
+    "battleId": "P614609",
+    "characters": {
+      "attacker": {
+        "gearArmor": {
+          "chest": {
+            "name": "Old Shirt",
+            "stats": {
+              "modifierHearts": 0
+            }
+          },
+          "legs": {
+            "name": "Well-Worn Trousers",
+            "stats": {
+              "modifierHearts": 0
+            }
+          }
+        },
+        "vendingSetup": {
+          "shopLink": "https://docs.google.com/spreadsheets/d/1pHUP2XwUGzS6E2qn8oktLlsP5ye2Rp_dexdQfgW3WoU/edit?gid=451715072#gid=451715072",
+          "pouchType": "bronze",
+          "shopImage": null,
+          "_id": "681e4905a0730ab490e2552c"
+        },
+        "blightEffects": {
+          "rollMultiplier": 1,
+          "noMonsters": false,
+          "noGathering": false
+        },
+        "debuff": {
+          "active": false,
+          "endDate": null
+        },
+        "blightedAt": null,
+        "stable": [],
+        "_id": "681bbe501144c386c4ce9eb6",
+        "userId": "635948726686580747",
+        "name": "Mirabai",
+        "age": 24,
+        "height": 187,
+        "pronouns": "she/her",
+        "race": "Gerudo",
+        "homeVillage": "rudania",
+        "currentVillage": "rudania",
+        "job": "merchant",
+        "jobDateChanged": null,
+        "icon": "https://storage.googleapis.com/tinglebot/8bb2999b-c1c4-4727-ad31-c1597ed88abf.JPG",
+        "birthday": "",
+        "maxHearts": 3,
+        "currentHearts": 3,
+        "maxStamina": 5,
+        "currentStamina": 1,
+        "lastStaminaUsage": null,
+        "attack": 1,
+        "defense": 0,
+        "inventory": "https://docs.google.com/spreadsheets/d/1pHUP2XwUGzS6E2qn8oktLlsP5ye2Rp_dexdQfgW3WoU/edit?gid=2030861071#gid=2030861071",
+        "appLink": "https://docs.google.com/document/d/1-8JXjHE1eQE1CvncOuql6PHbQRrGa0lIEwwryzA7CEs/edit?usp=sharing",
+        "inventorySynced": true,
+        "vendingPoints": 225,
+        "vendorType": "merchant",
+        "shopPouch": "bronze",
+        "pouchSize": 15,
+        "shopLink": "https://docs.google.com/spreadsheets/d/1pHUP2XwUGzS6E2qn8oktLlsP5ye2Rp_dexdQfgW3WoU/edit?gid=451715072#gid=451715072",
+        "lastCollectedMonth": 0,
+        "vendingSync": true,
+        "shopImage": "",
+        "blighted": false,
+        "blightStage": 0,
+        "blightPaused": false,
+        "lastRollDate": "2025-05-20T00:14:54.000Z",
+        "deathDeadline": null,
+        "ko": false,
+        "failedStealAttempts": 0,
+        "failedFleeAttempts": 0,
+        "inJail": false,
+        "jailReleaseTime": null,
+        "canBeStolenFrom": true,
+        "lastGatherDate": null,
+        "lastLootDate": null,
+        "jobVoucher": false,
+        "jobVoucherJob": null,
+        "mount": false,
+        "currentActivePet": null,
+        "spiritOrbs": 0,
+        "__v": 0,
+        "gearWeapon": {
+          "name": "Traveler's Claymore",
+          "stats": {
+            "modifierHearts": 1
+          }
+        },
+        "dailyRoll": {},
+        "lastSpecialWeatherGather": null
+      },
+      "defender": {
+        "blightEffects": {
+          "rollMultiplier": 1.5,
+          "noMonsters": false,
+          "noGathering": false
+        },
+        "debuff": {
+          "active": false,
+          "endDate": null
+        },
+        "blightedAt": null,
+        "_id": "682a14a34b804f16344298c4",
+        "userId": "276183158863691776",
+        "name": "Sable But Balder",
+        "age": 25,
+        "height": 214.26,
+        "pronouns": "he/him",
+        "race": "Gerudo",
+        "homeVillage": "rudania",
+        "currentVillage": "rudania",
+        "job": "miner",
+        "jobDateChanged": null,
+        "icon": "https://storage.googleapis.com/tinglebot/4a83f3ff-eb25-4d63-a3d0-901eaa4f86a6.png",
+        "birthday": "",
+        "maxHearts": 5,
+        "currentHearts": 3,
+        "maxStamina": 7,
+        "currentStamina": 5,
+        "lastStaminaUsage": "2025-05-20T20:50:21.525Z",
+        "lastSpecialWeatherGather": null,
+        "attack": 0,
+        "defense": 0,
+        "inventory": "https://docs.google.com/spreadsheets/d/1R3D7D_h0Lgrfa50xwebrnwRQ02QhGcXyux0TmctYsvg/edit",
+        "appLink": "no",
+        "inventorySynced": true,
+        "vendingPoints": 0,
+        "vendorType": "",
+        "shopPouch": "",
+        "pouchSize": 0,
+        "shopLink": "",
+        "lastCollectedMonth": 0,
+        "vendingSync": false,
+        "blighted": true,
+        "blightStage": 2,
+        "blightPaused": false,
+        "lastRollDate": null,
+        "deathDeadline": null,
+        "ko": false,
+        "failedStealAttempts": 1,
+        "failedFleeAttempts": 3,
+        "inJail": false,
+        "jailReleaseTime": null,
+        "canBeStolenFrom": true,
+        "dailyRoll": {},
+        "jobVoucher": false,
+        "jobVoucherJob": null,
+        "mount": false,
+        "currentActivePet": "682e09cdc55de213eac40dd9",
+        "spiritOrbs": 0,
+        "__v": 1,
+        "stable": []
+      }
+    },
+    "progress": "PvP Battle initiated",
+    "turnCount": 0
   }
 }

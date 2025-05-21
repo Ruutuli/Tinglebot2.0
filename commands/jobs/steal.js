@@ -435,528 +435,229 @@ module.exports = {
 
     // ------------------- Main Execute Handler -------------------
     async execute(interaction) {
-        await interaction.deferReply({ ephemeral: false });
         try {
-            const subcommand = interaction.options.getSubcommand();
+            const characterName = interaction.options.getString('charactername');
+            const targetName = interaction.options.getString('target');
+            const targetType = interaction.options.getString('targettype');
+            const raritySelection = interaction.options.getString('rarity').toLowerCase();
 
-            // Handle commit subcommand
-            if (subcommand === 'commit') {
-                const targetType = interaction.options.getString('targettype');
-                const targetName = interaction.options.getString('target');
-                const raritySelection = interaction.options.getString('rarity').toLowerCase();
-                const characterName = interaction.options.getString('charactername');
+            // Validate the thief character
+            const validationResult = await validateCharacter(characterName, interaction.user.id, true);
+            if (!validationResult.valid) {
+                await interaction.reply({ content: validationResult.error, ephemeral: true });
+                return;
+            }
 
-                // Validate thief character first
-                const { valid: thiefValid, error: thiefError, character: thiefCharacter } = 
-                    await validateCharacter(characterName, interaction.user.id, true);
-                if (!thiefValid) {
-                    return interaction.editReply({ content: thiefError, ephemeral: true });
+            const thiefCharacter = validationResult.character;
+
+            // Check if character is in jail
+            if (thiefCharacter.inJail) {
+                await interaction.reply({ content: ERROR_MESSAGES.IN_JAIL, ephemeral: true });
+                return;
+            }
+
+            // Validate target character
+            const targetValidation = await validateCharacter(targetName, null);
+            if (!targetValidation.valid) {
+                await interaction.reply({ content: targetValidation.error, ephemeral: true });
+                return;
+            }
+
+            const targetCharacter = targetValidation.character;
+
+            // ------------------- Validate Interaction Channel -------------------
+            let currentVillage = capitalizeWords(thiefCharacter.currentVillage);
+            let allowedChannel = villageChannels[currentVillage];
+
+            // If using a job voucher for a village-exclusive job, override to required village
+            if (thiefCharacter.jobVoucher && thiefCharacter.jobVoucherJob) {
+                const voucherPerk = getJobPerk(thiefCharacter.jobVoucherJob);
+                if (voucherPerk && voucherPerk.village) {
+                    const requiredVillage = capitalizeWords(voucherPerk.village);
+                    currentVillage = requiredVillage;
+                    allowedChannel = villageChannels[requiredVillage];
                 }
+            }
 
-                // ------------------- Validate Interaction Channel -------------------
-                let currentVillage = capitalizeWords(thiefCharacter.currentVillage);
-                let allowedChannel = villageChannels[currentVillage];
+            if (!allowedChannel || interaction.channelId !== allowedChannel) {
+                const channelMention = `<#${allowedChannel}>`;
+                await interaction.reply({
+                    content: `❌ **You can only use this command in the ${currentVillage} Town Hall channel!**\n${characterName} is currently in ${capitalizeWords(thiefCharacter.currentVillage)}! This command must be used in ${channelMention}.`,
+                    ephemeral: true
+                });
+                return;
+            }
 
-                // If using a job voucher for a village-exclusive job, override to required village
-                if (thiefCharacter.jobVoucher && thiefCharacter.jobVoucherJob) {
-                    const voucherPerk = getJobPerk(thiefCharacter.jobVoucherJob);
-                    if (voucherPerk && voucherPerk.village) {
-                        const requiredVillage = capitalizeWords(voucherPerk.village);
-                        currentVillage = requiredVillage;
-                        allowedChannel = villageChannels[requiredVillage];
-                    }
-                }
+            // Initialize job variable early
+            let job = (thiefCharacter.jobVoucher && thiefCharacter.jobVoucherJob) ? thiefCharacter.jobVoucherJob : thiefCharacter.job;
 
-                if (!allowedChannel || interaction.channelId !== allowedChannel) {
-                    const channelMention = `<#${allowedChannel}>`;
-                    return interaction.editReply({
-                        content: `❌ **You can only use this command in the ${currentVillage} Town Hall channel!**\n${characterName} is currently in ${capitalizeWords(thiefCharacter.currentVillage)}! This command must be used in ${channelMention}.`,
-                        ephemeral: true
+            // Check for job voucher and validate it
+            let voucherCheck = { success: true, skipVoucher: false }; // Initialize with default values
+            if (thiefCharacter.jobVoucher) {
+                voucherCheck = await validateJobVoucher(thiefCharacter, job, 'STEALING');
+
+                if (voucherCheck.skipVoucher) {
+                    // No activation needed
+                } else if (!voucherCheck.success) {
+                    console.error(`[steal.js]: ❌ Voucher validation failed: ${voucherCheck.message}`);
+                    await interaction.reply({
+                        content: voucherCheck.message,
+                        ephemeral: true,
                     });
-                }
-
-                // Initialize job variable early
-                let job = (thiefCharacter.jobVoucher && thiefCharacter.jobVoucherJob) ? thiefCharacter.jobVoucherJob : thiefCharacter.job;
-
-                // Check for job voucher and validate it
-                let voucherCheck = { success: true, skipVoucher: false }; // Initialize with default values
-                if (thiefCharacter.jobVoucher) {
-                    voucherCheck = await validateJobVoucher(thiefCharacter, job, 'STEALING');
-
-                    if (voucherCheck.skipVoucher) {
-                        // No activation needed
-                    } else if (!voucherCheck.success) {
-                        console.error(`[steal.js]: ❌ Voucher validation failed: ${voucherCheck.message}`);
-                        await interaction.editReply({
-                            content: voucherCheck.message,
+                    return;
+                } else {
+                    const { success: itemSuccess, item: jobVoucherItem, message: itemError } = await fetchJobVoucherItem();
+                    if (!itemSuccess) {
+                        await interaction.reply({ content: itemError, ephemeral: true });
+                        return;
+                    }
+                    const activationResult = await activateJobVoucher(thiefCharacter, job, jobVoucherItem, 1, interaction);
+                    if (!activationResult.success) {
+                        await interaction.reply({
+                            content: activationResult.message,
                             ephemeral: true,
                         });
                         return;
-                    } else {
-                        const { success: itemSuccess, item: jobVoucherItem, message: itemError } = await fetchJobVoucherItem();
-                        if (!itemSuccess) {
-                            await interaction.editReply({ content: itemError, ephemeral: true });
-                            return;
-                        }
-                        const activationResult = await activateJobVoucher(thiefCharacter, job, jobVoucherItem, 1, interaction);
-                        if (!activationResult.success) {
-                            await interaction.editReply({
-                                content: activationResult.message,
-                                ephemeral: true,
-                            });
-                            return;
-                        }
                     }
                 }
+            }
 
-                // Check if thief's inventory is set up
-                if (!thiefCharacter.inventorySynced) {
-                    return interaction.editReply({ 
-                        content: '❌ **Your inventory is not set up yet.** Use `/inventory test charactername:NAME` then `/inventory sync charactername:NAME` to initialize.', 
-                        ephemeral: true 
-                    });
+            // Check if thief's inventory is set up
+            if (!thiefCharacter.inventorySynced) {
+                await interaction.reply({ 
+                    content: '❌ **Your inventory is not set up yet.** Use `/inventory test charactername:NAME` then `/inventory sync charactername:NAME` to initialize.', 
+                    ephemeral: true 
+                });
+                return;
+            }
+
+            // Check if thief has a valid inventory URL
+            const thiefInventoryLink = thiefCharacter.inventory || thiefCharacter.inventoryLink;
+            if (typeof thiefInventoryLink !== 'string' || !isValidGoogleSheetsUrl(thiefInventoryLink)) {
+                await interaction.reply({ 
+                    content: `❌ **Invalid Google Sheets URL for "${thiefCharacter.name}".**`, 
+                    ephemeral: true 
+                });
+                return;
+            }
+
+            // Handle NPC stealing
+            if (targetType === 'npc') {
+                const mappedNPCName = NPC_NAME_MAPPING[targetName];
+                if (!mappedNPCName) {
+                    await interaction.reply({ content: ERROR_MESSAGES.INVALID_TARGET, ephemeral: true });
+                    return;
                 }
 
-                // Check if thief has a valid inventory URL
-                const thiefInventoryLink = thiefCharacter.inventory || thiefCharacter.inventoryLink;
-                if (typeof thiefInventoryLink !== 'string' || !isValidGoogleSheetsUrl(thiefInventoryLink)) {
-                    return interaction.editReply({ 
-                        content: `❌ **Invalid Google Sheets URL for "${thiefCharacter.name}".**`, 
-                        ephemeral: true 
-                    });
-                }
+                const npcInventory = getNPCItems(mappedNPCName);
+                const itemsWithRarity = await Promise.all(npcInventory.map(async itemName => {
+                    const itemRarity = await fetchItemRarityByName(itemName);
+                    return { itemName, itemRarity };
+                }));
 
-                // Check if thief is in jail
-                if (thiefCharacter.inJail) {
-                    // Check if jail time is up
-                    if (thiefCharacter.jailReleaseTime && Date.now() >= thiefCharacter.jailReleaseTime.getTime()) {
-                        thiefCharacter.inJail = false;
-                        thiefCharacter.jailReleaseTime = null;
-                        await thiefCharacter.save();
-                    } else {
-                        const releaseTime = thiefCharacter.jailReleaseTime.getTime();
-                        const jailEmbed = createBaseEmbed('⛔ In Jail!', '#ff0000')
-                            .setDescription(`**${thiefCharacter.name}** is currently serving time in jail for failed steal attempts.`)
-                            .addFields(
-                                { name: '⏰ Time Remaining', value: `<t:${Math.floor(releaseTime / 1000)}:R>`, inline: false },
-                                { name: '🕒 Release Time', value: `<t:${Math.floor(releaseTime / 1000)}:F>`, inline: false }
-                            )
-                            .setThumbnail(thiefCharacter.icon)
-                            .setFooter({ 
-                                text: 'You will be automatically released when your time is up.', 
-                                iconURL: thiefCharacter.icon 
-                            });
-                        
-                        return interaction.editReply({ 
-                            embeds: [jailEmbed], 
-                            ephemeral: false 
-                        });
-                    }
-                }
+                let filteredItems = itemsWithRarity
+                    .filter(({ itemRarity }) => itemRarity)
+                    .map(({ itemName, itemRarity }) => {
+                        let tier = 'common';
+                        if (itemRarity >= 8) tier = 'rare';
+                        else if (itemRarity >= 5) tier = 'uncommon';
+                        return { itemName, itemRarity, tier, weight: RARITY_WEIGHTS[itemRarity] };
+                    })
+                    .filter(item => item.tier === raritySelection);
 
-                // Get current streak
-                const currentStreak = stealStreaks.get(interaction.user.id) || 0;
-
-                // Handle NPC stealing
-                if (targetType === 'npc') {
-                    const mappedNPCName = NPC_NAME_MAPPING[targetName];
-                    if (!mappedNPCName) {
-                        return interaction.editReply({ content: ERROR_MESSAGES.INVALID_TARGET, ephemeral: true });
-                    }
-
-                    const npcInventory = getNPCItems(mappedNPCName);
-                    const itemsWithRarity = await Promise.all(npcInventory.map(async itemName => {
-                        const itemRarity = await fetchItemRarityByName(itemName);
-                        return { itemName, itemRarity };
-                    }));
-
-                    let filteredItems = itemsWithRarity
-                        .filter(({ itemRarity }) => itemRarity)
-                        .map(({ itemName, itemRarity }) => {
-                            let tier = 'common';
-                            if (itemRarity >= 8) tier = 'rare';
-                            else if (itemRarity >= 5) tier = 'uncommon';
-                            return { itemName, itemRarity, tier, weight: RARITY_WEIGHTS[itemRarity] };
-                        })
-                        .filter(item => item.tier === raritySelection);
-
-                    if (!filteredItems.length) {
-                        let fallbackTier = (raritySelection === 'rare') ? 'uncommon' : (raritySelection === 'uncommon') ? 'common' : null;
-                        if (fallbackTier) {
-                            filteredItems = itemsWithRarity
-                                .filter(({ itemRarity }) => itemRarity)
-                                .map(({ itemName, itemRarity }) => {
-                                    let tier = 'common';
-                                    if (itemRarity >= 8) tier = 'rare';
-                                    else if (itemRarity >= 5) tier = 'uncommon';
-                                    return { itemName, itemRarity, tier, weight: RARITY_WEIGHTS[itemRarity] };
-                                })
-                                .filter(item => item.tier === fallbackTier);
-                        }
-                        
-                        if (!filteredItems.length) {
-                            filteredItems = itemsWithRarity
-                                .filter(({ itemRarity }) => itemRarity)
-                                .map(({ itemName, itemRarity }) => {
-                                    let tier = 'common';
-                                    if (itemRarity >= 8) tier = 'rare';
-                                    else if (itemRarity >= 5) tier = 'uncommon';
-                                    return { itemName, itemRarity, tier, weight: RARITY_WEIGHTS[itemRarity] };
-                                });
-                        }
-                    }
-
-                    if (!filteredItems.length) {
-                        return interaction.editReply({ content: ERROR_MESSAGES.NO_ITEMS, ephemeral: true });
-                    }
-
-                    const selectedItem = getRandomItemByWeight(filteredItems);
-                    const roll = Math.floor(Math.random() * 99) + 1;
-                    const failureThreshold = FAILURE_CHANCES[selectedItem.tier];
-                    const isSuccess = roll > failureThreshold;
-
-                    if (isSuccess) {
-                        const quantity = determineStealQuantity(selectedItem);
-                        stealStreaks.set(interaction.user.id, currentStreak + 1);
-                        await updateStealStats(thiefCharacter._id, true, selectedItem.tier);
-                        
-                        const npcItemIndex = npcInventory.indexOf(selectedItem.itemName);
-                        if (npcItemIndex > -1) npcInventory.splice(npcItemIndex, 1);
-                        
-                        const stolenItem = {
-                            itemName: selectedItem.itemName,
-                            quantity: quantity,
-                            obtain: `Stolen from NPC ${mappedNPCName}`,
-                            date: new Date()
-                        };
-                        
-                        await syncToInventoryDatabase(thiefCharacter, stolenItem, interaction);
-                        
-                        const embed = await createStealResultEmbed(thiefCharacter, mappedNPCName, selectedItem, quantity, roll, failureThreshold, true, true);
-                        
-                        if (selectedItem.tier !== raritySelection) {
-                            let fallbackMessage = '';
-                            if (raritySelection === 'rare') {
-                                fallbackMessage = '⚠️ No rare items found! But you did find something else...';
-                            } else if (raritySelection === 'uncommon') {
-                                fallbackMessage = '⚠️ No uncommon items found! But you did find something else...';
-                            }
-                            embed.addFields({ name: 'Note', value: fallbackMessage, inline: false });
-                        }
-                        
-                        if (thiefCharacter.jobVoucher && !voucherCheck?.skipVoucher) {
-                            const deactivationResult = await deactivateJobVoucher(thiefCharacter._id);
-                            if (!deactivationResult.success) {
-                                console.error(`[steal.js]: ❌ Failed to deactivate job voucher for ${thiefCharacter.name}`);
-                            }
-                        }
-                        
-                        return interaction.editReply({ embeds: [embed], ephemeral: false });
-                    } else {
-                        stealStreaks.set(interaction.user.id, 0);
-                        await updateStealStats(thiefCharacter._id, false, selectedItem.tier);
-                        
-                        thiefCharacter.failedStealAttempts = (thiefCharacter.failedStealAttempts || 0) + 1;
-                        
-                        if (thiefCharacter.failedStealAttempts >= 3) {
-                            console.log(`[steal.js]: ⛔ ${thiefCharacter.name} sent to jail for 30 minutes`);
-                            thiefCharacter.inJail = true;
-                            thiefCharacter.jailReleaseTime = new Date(Date.now() + (30 * 60 * 1000));
-                            thiefCharacter.failedStealAttempts = 0;
-                            
-                            await thiefCharacter.save();
-                            
-                            const jailEmbed = createBaseEmbed('⛔ Sent to Jail!', '#ff0000')
-                                .setDescription(`**${thiefCharacter.name}** has been sent to jail for 30 minutes due to 3 failed steal attempts!`)
-                                .addFields(
-                                    { name: 'Release Time', value: `<t:${Math.floor(thiefCharacter.jailReleaseTime.getTime() / 1000)}:R>`, inline: false }
-                                )
-                                .setThumbnail(thiefCharacter.icon);
-                            
-                            if (thiefCharacter.jobVoucher && !voucherCheck?.skipVoucher) {
-                                const deactivationResult = await deactivateJobVoucher(thiefCharacter._id);
-                                if (!deactivationResult.success) {
-                                    console.error(`[steal.js]: ❌ Failed to deactivate job voucher for ${thiefCharacter.name}`);
-                                }
-                            }
-                            
-                            return interaction.editReply({
-                                embeds: [jailEmbed],
-                                ephemeral: false
-                            });
-                        }
-                        
-                        await thiefCharacter.save();
-                        
-                        const embed = await createStealResultEmbed(thiefCharacter, mappedNPCName, selectedItem, 0, roll, failureThreshold, false, true);
-                        
-                        if (selectedItem.tier !== raritySelection) {
-                            let fallbackMessage = '';
-                            if (raritySelection === 'rare') {
-                                fallbackMessage = '⚠️ No rare items found! But you did find something else...';
-                            } else if (raritySelection === 'uncommon') {
-                                fallbackMessage = '⚠️ No uncommon items found! But you did find something else...';
-                            }
-                            embed.addFields({ name: 'Note', value: fallbackMessage, inline: false });
-                        }
-
-                        const attemptsLeft = 3 - thiefCharacter.failedStealAttempts;
-                        let warningMessage = '';
-                        if (attemptsLeft === 2) {
-                            warningMessage = '⚠️ **Warning:** One more failed attempt and you\'ll be sent to jail!';
-                        } else if (attemptsLeft === 1) {
-                            warningMessage = '⚠️ **Final Warning:** This is your last attempt before jail time!';
-                        }
-                        
-                        if (warningMessage) {
-                            embed.addFields({ 
-                                name: '⚠️ Failed Attempts', 
-                                value: `${warningMessage}\nYou have ${attemptsLeft} attempt${attemptsLeft !== 1 ? 's' : ''} remaining before jail time!`, 
-                                inline: false 
-                            });
-                        } else {
-                            embed.addFields({ 
-                                name: '⚠️ Failed Attempts', 
-                                value: `You have ${attemptsLeft} attempt${attemptsLeft !== 1 ? 's' : ''} remaining before jail time!`, 
-                                inline: false 
-                            });
-                        }
-                        
-                        if (thiefCharacter.jobVoucher && !voucherCheck?.skipVoucher) {
-                            const deactivationResult = await deactivateJobVoucher(thiefCharacter._id);
-                            if (!deactivationResult.success) {
-                                console.error(`[steal.js]: ❌ Failed to deactivate job voucher for ${thiefCharacter.name}`);
-                            }
-                        }
-                        
-                        await interaction.editReply({
-                            embeds: [embed],
-                            ephemeral: false
-                        });
-                    }
-                }
-
-                // Handle player stealing
-                if (targetType === 'player') {
-                    const { valid: targetValid, error: targetError, character: targetCharacter } = 
-                        await validateCharacter(targetName, null);
-                    if (!targetValid) {
-                        return interaction.editReply({ content: targetError, ephemeral: true });
-                    }
-
-                    if (!targetCharacter.inventorySynced) {
-                        return interaction.editReply({ 
-                            content: `❌ **${targetCharacter.name}'s inventory is not set up yet.** They need to use \`/inventory test charactername:NAME\` then \`/inventory sync charactername:NAME\` to initialize.`, 
-                            ephemeral: true 
-                        });
-                    }
-
-                    const targetInventoryLink = targetCharacter.inventory || targetCharacter.inventoryLink;
-                    if (typeof targetInventoryLink !== 'string' || !isValidGoogleSheetsUrl(targetInventoryLink)) {
-                        return interaction.editReply({ 
-                            content: `❌ **Invalid Google Sheets URL for "${targetCharacter.name}".**`, 
-                            ephemeral: true 
-                        });
-                    }
-
-                    if (thiefCharacter.currentVillage !== targetCharacter.currentVillage) {
-                        return interaction.editReply({ 
-                            content: `❌ **You can only steal from characters in the same village!**\n📍 **Your Location:** ${thiefCharacter.currentVillage}\n📍 **Target Location:** ${targetCharacter.currentVillage}`, 
-                            ephemeral: true 
-                        });
-                    }
-
-                    if (checkAndUpdateProtection(targetCharacter._id)) {
-                        return interaction.editReply({ content: ERROR_MESSAGES.PROTECTED, ephemeral: true });
-                    }
-
-                    if (!targetCharacter.canBeStolenFrom) {
-                        return interaction.editReply({ content: `⚠️ **${targetCharacter.name}** cannot be stolen from.`, ephemeral: true });
-                    }
-
-                    const targetInventoryCollection = await getCharacterInventoryCollection(targetCharacter.name);
-                    const inventoryEntries = await targetInventoryCollection.find({ characterId: targetCharacter._id }).toArray();
-                    const rawItemNames = inventoryEntries.map(entry => entry.itemName);
-
-                    const equippedItems = [
-                        targetCharacter.gearWeapon?.name,
-                        targetCharacter.gearShield?.name,
-                        targetCharacter.gearArmor?.head?.name,
-                        targetCharacter.gearArmor?.chest?.name,
-                        targetCharacter.gearArmor?.legs?.name,
-                    ].filter(Boolean);
-
-                    let itemsWithRarity = await Promise.all(
-                        rawItemNames
-                            .filter(itemName => !equippedItems.includes(itemName))
-                            .map(async itemName => {
-                                const itemRarity = await fetchItemRarityByName(itemName);
-                                return { itemName, itemRarity };
+                if (!filteredItems.length) {
+                    let fallbackTier = (raritySelection === 'rare') ? 'uncommon' : (raritySelection === 'uncommon') ? 'common' : null;
+                    if (fallbackTier) {
+                        filteredItems = itemsWithRarity
+                            .filter(({ itemRarity }) => itemRarity)
+                            .map(({ itemName, itemRarity }) => {
+                                let tier = 'common';
+                                if (itemRarity >= 8) tier = 'rare';
+                                else if (itemRarity >= 5) tier = 'uncommon';
+                                return { itemName, itemRarity, tier, weight: RARITY_WEIGHTS[itemRarity] };
                             })
-                    );
-
-                    let filteredItemsPlayer = itemsWithRarity
-                        .filter(({ itemRarity }) => itemRarity)
-                        .map(({ itemName, itemRarity }) => {
-                            let tier = 'common';
-                            if (itemRarity >= 8) tier = 'rare';
-                            else if (itemRarity >= 5) tier = 'uncommon';
-                            return { itemName, itemRarity, tier, weight: RARITY_WEIGHTS[itemRarity] };
-                        })
-                        .filter(item => item.tier === raritySelection);
-
-                    if (!filteredItemsPlayer.length) {
-                        let fallbackTier = (raritySelection === 'rare') ? 'uncommon' : (raritySelection === 'uncommon') ? 'common' : null;
-                        if (fallbackTier) {
-                            filteredItemsPlayer = itemsWithRarity
-                                .filter(({ itemRarity }) => itemRarity)
-                                .map(({ itemName, itemRarity }) => {
-                                    let tier = 'common';
-                                    if (itemRarity >= 8) tier = 'rare';
-                                    else if (itemRarity >= 5) tier = 'uncommon';
-                                    return { itemName, itemRarity, tier, weight: RARITY_WEIGHTS[itemRarity] };
-                                })
-                                .filter(item => item.tier === fallbackTier);
-                        }
-                        
-                        if (!filteredItemsPlayer.length) {
-                            filteredItemsPlayer = itemsWithRarity
-                                .filter(({ itemRarity }) => itemRarity)
-                                .map(({ itemName, itemRarity }) => {
-                                    let tier = 'common';
-                                    if (itemRarity >= 8) tier = 'rare';
-                                    else if (itemRarity >= 5) tier = 'uncommon';
-                                    return { itemName, itemRarity, tier, weight: RARITY_WEIGHTS[itemRarity] };
-                                });
-                        }
+                            .filter(item => item.tier === fallbackTier);
                     }
-
-                    if (!filteredItemsPlayer.length) {
-                        return interaction.editReply({ content: `❌ **Looks like ${targetName || targetCharacter.name} didn't have any items to steal!**`, ephemeral: true });
-                    }
-
-                    const selectedItemPlayer = getRandomItemByWeight(filteredItemsPlayer);
-                    const rollPlayer = Math.floor(Math.random() * 99) + 1;
-                    const failureThresholdPlayer = FAILURE_CHANCES[selectedItemPlayer.tier];
-                    const success = rollPlayer > failureThresholdPlayer;
-
-                    if (success) {
-                        stealStreaks.set(interaction.user.id, currentStreak + 1);
-                        await updateStealStats(thiefCharacter._id, true, selectedItemPlayer.tier, targetCharacter);
-                        setProtection(targetCharacter._id);
-
-                        const quantityToSteal = determineStealQuantity(selectedItemPlayer);
-                        
-                        const stolenItem = {
-                            itemName: selectedItemPlayer.itemName,
-                            quantity: quantityToSteal,
-                            obtain: `Stolen from ${targetCharacter.name}`,
-                            date: new Date()
-                        };
-                        
-                        const removedItem = {
-                            itemName: selectedItemPlayer.itemName,
-                            quantity: -quantityToSteal,
-                            obtain: `Item stolen by ${thiefCharacter.name}`,
-                            date: new Date()
-                        };
-
-                        await syncToInventoryDatabase(targetCharacter, removedItem, interaction);
-                        await syncToInventoryDatabase(thiefCharacter, stolenItem, interaction);
-
-                        const embed = await createStealResultEmbed(thiefCharacter, targetCharacter, selectedItemPlayer, quantityToSteal, rollPlayer, failureThresholdPlayer, success);
-                        
-                        if (selectedItemPlayer.tier !== raritySelection) {
-                            let fallbackMessage = '';
-                            if (raritySelection === 'rare') {
-                                fallbackMessage = '⚠️ No rare items found! But you did find something else...';
-                            } else if (raritySelection === 'uncommon') {
-                                fallbackMessage = '⚠️ No uncommon items found! But you did find something else...';
-                            }
-                            embed.addFields({ name: 'Note', value: fallbackMessage, inline: false });
-                        }
-
-                        if (thiefCharacter.jobVoucher && !voucherCheck?.skipVoucher) {
-                            const deactivationResult = await deactivateJobVoucher(thiefCharacter._id);
-                            if (!deactivationResult.success) {
-                                console.error(`[steal.js]: ❌ Failed to deactivate job voucher for ${thiefCharacter.name}`);
-                            }
-                        }
-
-                        await interaction.editReply({
-                            content: success ? `Hey! <@${targetCharacter.userId}>! Your character **${targetCharacter.name}** was stolen from!` : null,
-                            embeds: [embed],
-                            ephemeral: false
-                        });
-                    } else {
-                        stealStreaks.set(interaction.user.id, 0);
-                        await updateStealStats(thiefCharacter._id, false, selectedItemPlayer.tier);
-                        
-                        thiefCharacter.failedStealAttempts = (thiefCharacter.failedStealAttempts || 0) + 1;
-                        
-                        if (thiefCharacter.failedStealAttempts >= 3) {
-                            console.log(`[steal.js]: ⛔ ${thiefCharacter.name} sent to jail for 30 minutes`);
-                            thiefCharacter.inJail = true;
-                            thiefCharacter.jailReleaseTime = new Date(Date.now() + (30 * 60 * 1000));
-                            thiefCharacter.failedStealAttempts = 0;
-                            
-                            await thiefCharacter.save();
-                            
-                            const jailEmbed = createBaseEmbed('⛔ Sent to Jail!', '#ff0000')
-                                .setDescription(`**${thiefCharacter.name}** has been sent to jail for 30 minutes due to 3 failed steal attempts!`)
-                                .addFields(
-                                    { name: 'Release Time', value: `<t:${Math.floor(thiefCharacter.jailReleaseTime.getTime() / 1000)}:R>`, inline: false }
-                                )
-                                .setThumbnail(thiefCharacter.icon);
-                            
-                            if (thiefCharacter.jobVoucher && !voucherCheck?.skipVoucher) {
-                                const deactivationResult = await deactivateJobVoucher(thiefCharacter._id);
-                                if (!deactivationResult.success) {
-                                    console.error(`[steal.js]: ❌ Failed to deactivate job voucher for ${thiefCharacter.name}`);
-                                }
-                            }
-                            
-                            return interaction.editReply({
-                                embeds: [jailEmbed],
-                                ephemeral: false
+                    
+                    if (!filteredItems.length) {
+                        filteredItems = itemsWithRarity
+                            .filter(({ itemRarity }) => itemRarity)
+                            .map(({ itemName, itemRarity }) => {
+                                let tier = 'common';
+                                if (itemRarity >= 8) tier = 'rare';
+                                else if (itemRarity >= 5) tier = 'uncommon';
+                                return { itemName, itemRarity, tier, weight: RARITY_WEIGHTS[itemRarity] };
                             });
+                    }
+                }
+
+                if (!filteredItems.length) {
+                    await interaction.reply({ content: ERROR_MESSAGES.NO_ITEMS, ephemeral: true });
+                    return;
+                }
+
+                const selectedItem = getRandomItemByWeight(filteredItems);
+                const roll = Math.floor(Math.random() * 99) + 1;
+                const failureThreshold = FAILURE_CHANCES[selectedItem.tier];
+                const isSuccess = roll > failureThreshold;
+
+                if (isSuccess) {
+                    const quantity = determineStealQuantity(selectedItem);
+                    stealStreaks.set(interaction.user.id, stealStreaks.get(interaction.user.id) + 1);
+                    await updateStealStats(thiefCharacter._id, true, selectedItem.tier);
+                    
+                    const npcItemIndex = npcInventory.indexOf(selectedItem.itemName);
+                    if (npcItemIndex > -1) npcInventory.splice(npcItemIndex, 1);
+                    
+                    const stolenItem = {
+                        itemName: selectedItem.itemName,
+                        quantity: quantity,
+                        obtain: `Stolen from NPC ${mappedNPCName}`,
+                        date: new Date()
+                    };
+                    
+                    await syncToInventoryDatabase(thiefCharacter, stolenItem, interaction);
+                    
+                    const embed = await createStealResultEmbed(thiefCharacter, mappedNPCName, selectedItem, quantity, roll, failureThreshold, true, true);
+                    
+                    if (selectedItem.tier !== raritySelection) {
+                        let fallbackMessage = '';
+                        if (raritySelection === 'rare') {
+                            fallbackMessage = '⚠️ No rare items found! But you did find something else...';
+                        } else if (raritySelection === 'uncommon') {
+                            fallbackMessage = '⚠️ No uncommon items found! But you did find something else...';
                         }
+                        embed.addFields({ name: 'Note', value: fallbackMessage, inline: false });
+                    }
+                    
+                    if (thiefCharacter.jobVoucher && !voucherCheck?.skipVoucher) {
+                        const deactivationResult = await deactivateJobVoucher(thiefCharacter._id);
+                        if (!deactivationResult.success) {
+                            console.error(`[steal.js]: ❌ Failed to deactivate job voucher for ${thiefCharacter.name}`);
+                        }
+                    }
+                    
+                    await interaction.reply({ embeds: [embed], ephemeral: false });
+                } else {
+                    stealStreaks.set(interaction.user.id, 0);
+                    await updateStealStats(thiefCharacter._id, false, selectedItem.tier);
+                    
+                    thiefCharacter.failedStealAttempts = (thiefCharacter.failedStealAttempts || 0) + 1;
+                    
+                    if (thiefCharacter.failedStealAttempts >= 3) {
+                        console.log(`[steal.js]: ⛔ ${thiefCharacter.name} sent to jail for 30 minutes`);
+                        thiefCharacter.inJail = true;
+                        thiefCharacter.jailReleaseTime = new Date(Date.now() + (30 * 60 * 1000));
+                        thiefCharacter.failedStealAttempts = 0;
                         
                         await thiefCharacter.save();
                         
-                        const embed = await createStealResultEmbed(thiefCharacter, targetCharacter, selectedItemPlayer, 0, rollPlayer, failureThresholdPlayer, false);
-                        
-                        if (selectedItemPlayer.tier !== raritySelection) {
-                            let fallbackMessage = '';
-                            if (raritySelection === 'rare') {
-                                fallbackMessage = '⚠️ No rare items found! But you did find something else...';
-                            } else if (raritySelection === 'uncommon') {
-                                fallbackMessage = '⚠️ No uncommon items found! But you did find something else...';
-                            }
-                            embed.addFields({ name: 'Note', value: fallbackMessage, inline: false });
-                        }
-
-                        const attemptsLeft = 3 - thiefCharacter.failedStealAttempts;
-                        let warningMessage = '';
-                        if (attemptsLeft === 2) {
-                            warningMessage = '⚠️ **Warning:** One more failed attempt and you\'ll be sent to jail!';
-                        } else if (attemptsLeft === 1) {
-                            warningMessage = '⚠️ **Final Warning:** This is your last attempt before jail time!';
-                        }
-                        
-                        if (warningMessage) {
-                            embed.addFields({ 
-                                name: '⚠️ Failed Attempts', 
-                                value: `${warningMessage}\nYou have ${attemptsLeft} attempt${attemptsLeft !== 1 ? 's' : ''} remaining before jail time!`, 
-                                inline: false 
-                            });
-                        } else {
-                            embed.addFields({ 
-                                name: '⚠️ Failed Attempts', 
-                                value: `You have ${attemptsLeft} attempt${attemptsLeft !== 1 ? 's' : ''} remaining before jail time!`, 
-                                inline: false 
-                            });
-                        }
+                        const jailEmbed = createBaseEmbed('⛔ Sent to Jail!', '#ff0000')
+                            .setDescription(`**${thiefCharacter.name}** has been sent to jail for 30 minutes due to 3 failed steal attempts!`)
+                            .addFields(
+                                { name: 'Release Time', value: `<t:${Math.floor(thiefCharacter.jailReleaseTime.getTime() / 1000)}:R>`, inline: false }
+                            )
+                            .setThumbnail(thiefCharacter.icon);
                         
                         if (thiefCharacter.jobVoucher && !voucherCheck?.skipVoucher) {
                             const deactivationResult = await deactivateJobVoucher(thiefCharacter._id);
@@ -965,11 +666,278 @@ module.exports = {
                             }
                         }
                         
-                        await interaction.editReply({
-                            embeds: [embed],
+                        await interaction.reply({
+                            embeds: [jailEmbed],
                             ephemeral: false
                         });
                     }
+                    
+                    await thiefCharacter.save();
+                    
+                    const embed = await createStealResultEmbed(thiefCharacter, mappedNPCName, selectedItem, 0, roll, failureThreshold, false, true);
+                    
+                    if (selectedItem.tier !== raritySelection) {
+                        let fallbackMessage = '';
+                        if (raritySelection === 'rare') {
+                            fallbackMessage = '⚠️ No rare items found! But you did find something else...';
+                        } else if (raritySelection === 'uncommon') {
+                            fallbackMessage = '⚠️ No uncommon items found! But you did find something else...';
+                        }
+                        embed.addFields({ name: 'Note', value: fallbackMessage, inline: false });
+                    }
+
+                    const attemptsLeft = 3 - thiefCharacter.failedStealAttempts;
+                    let warningMessage = '';
+                    if (attemptsLeft === 2) {
+                        warningMessage = '⚠️ **Warning:** One more failed attempt and you\'ll be sent to jail!';
+                    } else if (attemptsLeft === 1) {
+                        warningMessage = '⚠️ **Final Warning:** This is your last attempt before jail time!';
+                    }
+                    
+                    if (warningMessage) {
+                        embed.addFields({ 
+                            name: '⚠️ Failed Attempts', 
+                            value: `${warningMessage}\nYou have ${attemptsLeft} attempt${attemptsLeft !== 1 ? 's' : ''} remaining before jail time!`, 
+                            inline: false 
+                        });
+                    } else {
+                        embed.addFields({ 
+                            name: '⚠️ Failed Attempts', 
+                            value: `You have ${attemptsLeft} attempt${attemptsLeft !== 1 ? 's' : ''} remaining before jail time!`, 
+                            inline: false 
+                        });
+                    }
+                    
+                    if (thiefCharacter.jobVoucher && !voucherCheck?.skipVoucher) {
+                        const deactivationResult = await deactivateJobVoucher(thiefCharacter._id);
+                        if (!deactivationResult.success) {
+                            console.error(`[steal.js]: ❌ Failed to deactivate job voucher for ${thiefCharacter.name}`);
+                        }
+                    }
+                    
+                    await interaction.reply({
+                        embeds: [embed],
+                        ephemeral: false
+                    });
+                }
+            }
+
+            // Handle player stealing
+            if (targetType === 'player') {
+                if (thiefCharacter.currentVillage !== targetCharacter.currentVillage) {
+                    await interaction.reply({ 
+                        content: `❌ **You can only steal from characters in the same village!**\n📍 **Your Location:** ${thiefCharacter.currentVillage}\n📍 **Target Location:** ${targetCharacter.currentVillage}`, 
+                        ephemeral: true 
+                    });
+                    return;
+                }
+
+                if (checkAndUpdateProtection(targetCharacter._id)) {
+                    await interaction.reply({ content: ERROR_MESSAGES.PROTECTED, ephemeral: true });
+                    return;
+                }
+
+                if (!targetCharacter.canBeStolenFrom) {
+                    await interaction.reply({ content: `⚠️ **${targetCharacter.name}** cannot be stolen from.`, ephemeral: true });
+                    return;
+                }
+
+                const targetInventoryCollection = await getCharacterInventoryCollection(targetCharacter.name);
+                const inventoryEntries = await targetInventoryCollection.find({ characterId: targetCharacter._id }).toArray();
+                const rawItemNames = inventoryEntries.map(entry => entry.itemName);
+
+                const equippedItems = [
+                    targetCharacter.gearWeapon?.name,
+                    targetCharacter.gearShield?.name,
+                    targetCharacter.gearArmor?.head?.name,
+                    targetCharacter.gearArmor?.chest?.name,
+                    targetCharacter.gearArmor?.legs?.name,
+                ].filter(Boolean);
+
+                let itemsWithRarity = await Promise.all(
+                    rawItemNames
+                        .filter(itemName => !equippedItems.includes(itemName))
+                        .map(async itemName => {
+                            const itemRarity = await fetchItemRarityByName(itemName);
+                            return { itemName, itemRarity };
+                        })
+                );
+
+                let filteredItemsPlayer = itemsWithRarity
+                    .filter(({ itemRarity }) => itemRarity)
+                    .map(({ itemName, itemRarity }) => {
+                        let tier = 'common';
+                        if (itemRarity >= 8) tier = 'rare';
+                        else if (itemRarity >= 5) tier = 'uncommon';
+                        return { itemName, itemRarity, tier, weight: RARITY_WEIGHTS[itemRarity] };
+                    })
+                    .filter(item => item.tier === raritySelection);
+
+                if (!filteredItemsPlayer.length) {
+                    let fallbackTier = (raritySelection === 'rare') ? 'uncommon' : (raritySelection === 'uncommon') ? 'common' : null;
+                    if (fallbackTier) {
+                        filteredItemsPlayer = itemsWithRarity
+                            .filter(({ itemRarity }) => itemRarity)
+                            .map(({ itemName, itemRarity }) => {
+                                let tier = 'common';
+                                if (itemRarity >= 8) tier = 'rare';
+                                else if (itemRarity >= 5) tier = 'uncommon';
+                                return { itemName, itemRarity, tier, weight: RARITY_WEIGHTS[itemRarity] };
+                            })
+                            .filter(item => item.tier === fallbackTier);
+                    }
+                    
+                    if (!filteredItemsPlayer.length) {
+                        filteredItemsPlayer = itemsWithRarity
+                            .filter(({ itemRarity }) => itemRarity)
+                            .map(({ itemName, itemRarity }) => {
+                                let tier = 'common';
+                                if (itemRarity >= 8) tier = 'rare';
+                                else if (itemRarity >= 5) tier = 'uncommon';
+                                return { itemName, itemRarity, tier, weight: RARITY_WEIGHTS[itemRarity] };
+                            });
+                    }
+                }
+
+                if (!filteredItemsPlayer.length) {
+                    await interaction.reply({ content: `❌ **Looks like ${targetName || targetCharacter.name} didn't have any items to steal!**`, ephemeral: true });
+                    return;
+                }
+
+                const selectedItemPlayer = getRandomItemByWeight(filteredItemsPlayer);
+                const rollPlayer = Math.floor(Math.random() * 99) + 1;
+                const failureThresholdPlayer = FAILURE_CHANCES[selectedItemPlayer.tier];
+                const success = rollPlayer > failureThresholdPlayer;
+
+                if (success) {
+                    stealStreaks.set(interaction.user.id, stealStreaks.get(interaction.user.id) + 1);
+                    await updateStealStats(thiefCharacter._id, true, selectedItemPlayer.tier, targetCharacter);
+                    setProtection(targetCharacter._id);
+
+                    const quantityToSteal = determineStealQuantity(selectedItemPlayer);
+                    
+                    const stolenItem = {
+                        itemName: selectedItemPlayer.itemName,
+                        quantity: quantityToSteal,
+                        obtain: `Stolen from ${targetCharacter.name}`,
+                        date: new Date()
+                    };
+                    
+                    const removedItem = {
+                        itemName: selectedItemPlayer.itemName,
+                        quantity: -quantityToSteal,
+                        obtain: `Item stolen by ${thiefCharacter.name}`,
+                        date: new Date()
+                    };
+
+                    await syncToInventoryDatabase(targetCharacter, removedItem, interaction);
+                    await syncToInventoryDatabase(thiefCharacter, stolenItem, interaction);
+
+                    const embed = await createStealResultEmbed(thiefCharacter, targetCharacter, selectedItemPlayer, quantityToSteal, rollPlayer, failureThresholdPlayer, success);
+                    
+                    if (selectedItemPlayer.tier !== raritySelection) {
+                        let fallbackMessage = '';
+                        if (raritySelection === 'rare') {
+                            fallbackMessage = '⚠️ No rare items found! But you did find something else...';
+                        } else if (raritySelection === 'uncommon') {
+                            fallbackMessage = '⚠️ No uncommon items found! But you did find something else...';
+                        }
+                        embed.addFields({ name: 'Note', value: fallbackMessage, inline: false });
+                    }
+
+                    if (thiefCharacter.jobVoucher && !voucherCheck?.skipVoucher) {
+                        const deactivationResult = await deactivateJobVoucher(thiefCharacter._id);
+                        if (!deactivationResult.success) {
+                            console.error(`[steal.js]: ❌ Failed to deactivate job voucher for ${thiefCharacter.name}`);
+                        }
+                    }
+
+                    await interaction.reply({
+                        content: success ? `Hey! <@${targetCharacter.userId}>! Your character **${targetCharacter.name}** was stolen from!` : null,
+                        embeds: [embed],
+                        ephemeral: false
+                    });
+                } else {
+                    stealStreaks.set(interaction.user.id, 0);
+                    await updateStealStats(thiefCharacter._id, false, selectedItemPlayer.tier);
+                    
+                    thiefCharacter.failedStealAttempts = (thiefCharacter.failedStealAttempts || 0) + 1;
+                    
+                    if (thiefCharacter.failedStealAttempts >= 3) {
+                        console.log(`[steal.js]: ⛔ ${thiefCharacter.name} sent to jail for 30 minutes`);
+                        thiefCharacter.inJail = true;
+                        thiefCharacter.jailReleaseTime = new Date(Date.now() + (30 * 60 * 1000));
+                        thiefCharacter.failedStealAttempts = 0;
+                        
+                        await thiefCharacter.save();
+                        
+                        const jailEmbed = createBaseEmbed('⛔ Sent to Jail!', '#ff0000')
+                            .setDescription(`**${thiefCharacter.name}** has been sent to jail for 30 minutes due to 3 failed steal attempts!`)
+                            .addFields(
+                                { name: 'Release Time', value: `<t:${Math.floor(thiefCharacter.jailReleaseTime.getTime() / 1000)}:R>`, inline: false }
+                            )
+                            .setThumbnail(thiefCharacter.icon);
+                        
+                        if (thiefCharacter.jobVoucher && !voucherCheck?.skipVoucher) {
+                            const deactivationResult = await deactivateJobVoucher(thiefCharacter._id);
+                            if (!deactivationResult.success) {
+                                console.error(`[steal.js]: ❌ Failed to deactivate job voucher for ${thiefCharacter.name}`);
+                            }
+                        }
+                        
+                        await interaction.reply({
+                            embeds: [jailEmbed],
+                            ephemeral: false
+                        });
+                    }
+                    
+                    await thiefCharacter.save();
+                    
+                    const embed = await createStealResultEmbed(thiefCharacter, targetCharacter, selectedItemPlayer, 0, rollPlayer, failureThresholdPlayer, false);
+                    
+                    if (selectedItemPlayer.tier !== raritySelection) {
+                        let fallbackMessage = '';
+                        if (raritySelection === 'rare') {
+                            fallbackMessage = '⚠️ No rare items found! But you did find something else...';
+                        } else if (raritySelection === 'uncommon') {
+                            fallbackMessage = '⚠️ No uncommon items found! But you did find something else...';
+                        }
+                        embed.addFields({ name: 'Note', value: fallbackMessage, inline: false });
+                    }
+
+                    const attemptsLeft = 3 - thiefCharacter.failedStealAttempts;
+                    let warningMessage = '';
+                    if (attemptsLeft === 2) {
+                        warningMessage = '⚠️ **Warning:** One more failed attempt and you\'ll be sent to jail!';
+                    } else if (attemptsLeft === 1) {
+                        warningMessage = '⚠️ **Final Warning:** This is your last attempt before jail time!';
+                    }
+                    
+                    if (warningMessage) {
+                        embed.addFields({ 
+                            name: '⚠️ Failed Attempts', 
+                            value: `${warningMessage}\nYou have ${attemptsLeft} attempt${attemptsLeft !== 1 ? 's' : ''} remaining before jail time!`, 
+                            inline: false 
+                        });
+                    } else {
+                        embed.addFields({ 
+                            name: '⚠️ Failed Attempts', 
+                            value: `You have ${attemptsLeft} attempt${attemptsLeft !== 1 ? 's' : ''} remaining before jail time!`, 
+                            inline: false 
+                        });
+                    }
+                    
+                    if (thiefCharacter.jobVoucher && !voucherCheck?.skipVoucher) {
+                        const deactivationResult = await deactivateJobVoucher(thiefCharacter._id);
+                        if (!deactivationResult.success) {
+                            console.error(`[steal.js]: ❌ Failed to deactivate job voucher for ${thiefCharacter.name}`);
+                        }
+                    }
+                    
+                    await interaction.reply({
+                        embeds: [embed],
+                        ephemeral: false
+                    });
                 }
             }
 
@@ -980,7 +948,8 @@ module.exports = {
 
                 const { valid, error, character } = await validateCharacter(characterName, interaction.user.id);
                 if (!valid) {
-                    return interaction.editReply({ content: error, ephemeral: true });
+                    await interaction.reply({ content: error, ephemeral: true });
+                    return;
                 }
 
                 character.canBeStolenFrom = enabled;
@@ -993,18 +962,20 @@ module.exports = {
                     )
                     .setThumbnail(character.icon);
 
-                return interaction.editReply({ embeds: [embed], ephemeral: true });
+                await interaction.reply({ embeds: [embed], ephemeral: true });
             }
 
             if (subcommand === 'jailtime') {
                 const characterName = interaction.options.getString('charactername');
                 const { valid, error, character } = await validateCharacter(characterName, interaction.user.id);
                 if (!valid) {
-                    return interaction.editReply({ content: error, ephemeral: true });
+                    await interaction.reply({ content: error, ephemeral: true });
+                    return;
                 }
 
                 if (!character.inJail) {
-                    return interaction.editReply({ content: `✅ **${character.name}** is not in jail.`, ephemeral: true });
+                    await interaction.reply({ content: `✅ **${character.name}** is not in jail.`, ephemeral: true });
+                    return;
                 }
 
                 const now = Date.now();
@@ -1015,7 +986,8 @@ module.exports = {
                     character.inJail = false;
                     character.jailReleaseTime = null;
                     await character.save();
-                    return interaction.editReply({ content: `✅ **${character.name}** has been released from jail!`, ephemeral: true });
+                    await interaction.reply({ content: `✅ **${character.name}** has been released from jail!`, ephemeral: true });
+                    return;
                 }
 
                 const embed = createBaseEmbed('⏰ Jail Time Remaining', '#ff0000')
@@ -1026,14 +998,15 @@ module.exports = {
                     )
                     .setThumbnail(character.icon);
 
-                return interaction.editReply({ embeds: [embed], ephemeral: true });
+                await interaction.reply({ embeds: [embed], ephemeral: true });
             }
 
             if (subcommand === 'stats') {
                 const characterName = interaction.options.getString('charactername');
                 const { valid, error, character } = await validateCharacter(characterName, interaction.user.id);
                 if (!valid) {
-                    return interaction.editReply({ content: error, ephemeral: true });
+                    await interaction.reply({ content: error, ephemeral: true });
+                    return;
                 }
 
                 const stats = await getStealStats(character._id);
@@ -1058,12 +1031,12 @@ module.exports = {
                         { name: '👥 Victims', value: victimsList, inline: false }
                     );
                 
-                return interaction.editReply({ embeds: [embed], ephemeral: true });
+                await interaction.reply({ embeds: [embed], ephemeral: true });
             }
         } catch (error) {
             handleError(error, 'steal.js');
             console.error('[steal.js]: Error executing command:', error);
-            await interaction.editReply({ content: '❌ **An error occurred while processing the command.**', ephemeral: true });
+            await interaction.reply({ content: '❌ **An error occurred while processing the command.**', ephemeral: true });
         }
     },
 };
