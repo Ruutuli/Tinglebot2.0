@@ -1,18 +1,693 @@
-// ------------------- Import necessary modules and services -------------------
-const { SlashCommandBuilder } = require('@discordjs/builders');
-const { EmbedBuilder } = require('discord.js');
-const { handleError } = require('../../utils/globalErrorHandler');
+// ============================================================================
+// ---- Imports ----
+// Core dependencies and module imports
+// ============================================================================
+
+// ------------------- Standard Libraries -------------------
+const mongoose = require('mongoose');
+
+// ------------------- Discord.js Components -------------------
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+
+// ------------------- Database Services -------------------
 const { fetchCharacterByNameAndUserId } = require('../../database/db');
-const Stable = require('../../models/StableModel');
+
+// ------------------- Custom Modules -------------------
+const { calculateMountPrice } = require('../../modules/mountModule');
+const { getPetTypeData, getPetEmoji, getRollsDisplay } = require('../../modules/petModule');
+
+// ------------------- Utils -------------------
+const { handleError } = require('../../utils/globalErrorHandler');
+
+// ------------------- Models -------------------
+const Character = require('../../models/CharacterModel');
 const Mount = require('../../models/MountModel');
 const Pet = require('../../models/PetModel');
+const { Stable, ListedMount, ListedPet } = require('../../models/StableModel');
 const User = require('../../models/UserModel');
-const { appendSheetData, authorizeSheets, extractSpreadsheetId, isValidGoogleSheetsUrl, safeAppendDataToSheet, } = require('../../utils/googleSheetsUtils');
-const { calculateMountPrice, getMountThumbnail } = require('../../modules/mountModule');
-const Character = require('../../models/CharacterModel');
 
-// ------------------- Define Stable Command -------------------
+// ============================================================================
+// ---- Constants & Configuration ----
+// System-wide constants and configuration values
+// ============================================================================
+
+const COMPANION_STATUS = {
+  ACTIVE: 'active',
+  STORED: 'stored',
+  LISTED: 'listed'
+};
+
+// ============================================================================
+// ---- Utility Functions ----
+// Helper functions for data validation and manipulation
+// ============================================================================
+
+// ---- Handler Utilities ----
+// Wraps handler functions with common validation and error handling
+async function withValidation(interaction, userId, characterName, handler) {
+  try {
+    console.log(`[stable.js]: 🚀 Starting handler for character "${characterName}"`);
+    
+    const character = await validateCharacterOwnership(interaction, userId, characterName);
+    if (!character) {
+      console.log(`[stable.js]: ❌ Character validation failed for "${characterName}"`);
+      return;
+    }
+    console.log(`[stable.js]: ✅ Character validated: ${character.name}`);
+
+    return await handler(character);
+  } catch (error) {
+    console.error(`[stable.js]: ❌ Error in handler:`, error);
+    await interaction.reply({ content: `❌ ${error.message}`, ephemeral: true });
+  }
+}
+
+// Validates user existence and returns user object
+async function validateUser(interaction, userId) {
+  const user = await User.findOne({ discordId: userId });
+  if (!user) {
+    console.log(`[stable.js]: ❌ User not found for Discord ID: ${userId}`);
+    await interaction.reply({ content: '❌ User not found.', ephemeral: true });
+    return null;
+  }
+  console.log(`[stable.js]: ✅ User found: ${user.username}`);
+  return user;
+}
+
+// Finds companion by name, trying mount first then pet
+async function findCompanionByType(characterId, companionName) {
+  let type = 'mount';
+  console.log(`[stable.js]: 🔍 Looking for ${type} "${companionName}"`);
+  let companion = await findCompanionByName(characterId, companionName, type);
+  
+  if (!companion) {
+    console.log(`[stable.js]: 🔄 Mount not found, trying as pet`);
+    type = 'pet';
+    companion = await findCompanionByName(characterId, companionName, type);
+  }
+
+  return { companion, type };
+}
+
+// ---- Response Utilities ----
+// Creates a standardized error response
+async function sendErrorResponse(interaction, message, ephemeral = true) {
+  await interaction.reply({ content: `❌ ${message}`, ephemeral });
+}
+
+// Creates a standardized success response
+async function sendSuccessResponse(interaction, message, ephemeral = false) {
+  await interaction.reply({ content: `✅ ${message}`, ephemeral });
+}
+
+// ---- Character Validation ----
+// Validates character ownership and existence
+async function validateCharacterOwnership(interaction, userId, characterName) {
+  const character = await fetchCharacterByNameAndUserId(characterName, userId);
+  if (!character) {
+    await interaction.reply({ content: '❌ Character not found or does not belong to you.', ephemeral: true });
+    return null;
+  }
+  return character;
+}
+
+// ---- Stable Management ----
+// Gets or creates a stable for a character
+async function getOrCreateStable(characterId, discordId) {
+  let stable = await Stable.findOne({ characterId });
+  if (!stable) {
+    stable = new Stable({ characterId, discordId });
+    await stable.save();
+  }
+  return stable;
+}
+
+// Validates stable capacity
+function validateStableCapacity(stable) {
+  const totalStored = stable.storedMounts.length + stable.storedPets.length;
+  if (totalStored >= stable.maxSlots) {
+    throw new Error('❌ Your stable is full! You can only store up to 3 mounts/pets.');
+  }
+}
+
+// ---- Companion Management ----
+// Updates companion status and storage location
+async function updateCompanionStatus(companion, newStatus, stableId = null) {
+  companion.status = newStatus;
+  companion.storageLocation = stableId;
+  companion.storedAt = newStatus === COMPANION_STATUS.ACTIVE ? null : new Date();
+  await companion.save();
+}
+
+// Updates character's active companion
+async function updateCharacterActiveCompanion(characterId, type, companionId = null) {
+  const update = type === 'mount' 
+    ? { currentActiveMount: companionId, mount: !!companionId }
+    : { currentActivePet: companionId, pet: !!companionId };
+  await Character.findByIdAndUpdate(characterId, update);
+}
+
+// Calculates companion price based on type and attributes
+function calculateCompanionPrice(companion, type) {
+  if (type === 'mount') {
+    return calculateMountPrice(companion);
+  }
+  const traits = Array.isArray(companion.traits) ? companion.traits : [];
+  return Math.floor(companion.level * 100 + (traits.length * 50));
+}
+
+// ---- Database Operations ----
+// Executes database operations within a transaction
+async function executeInTransaction(operations) {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  try {
+    const result = await operations(session);
+    await session.commitTransaction();
+    return result;
+  } catch (error) {
+    await session.abortTransaction();
+    throw error;
+  } finally {
+    session.endSession();
+  }
+}
+
+// ---- Companion Lookup ----
+// Finds companion by name and owner
+async function findCompanionByName(characterId, companionName, type, status = null) {
+  const Model = type === 'mount' ? Mount : Pet;
+  const character = await Character.findById(characterId);
+  
+  const query = type === 'mount'
+    ? { owner: character.name, name: companionName }
+    : { owner: characterId, name: companionName };
+  
+  if (status) {
+    query.status = Array.isArray(status) ? { $in: status } : status;
+  }
+  
+  console.log(`[stable.js]: 🔍 Query for ${type}:`, JSON.stringify(query, null, 2));
+  const result = await Model.findOne(query);
+  console.log(`[stable.js]: ${result ? '✅' : '❌'} ${type} search result:`, result ? 'Found' : 'Not found');
+  
+  return result;
+}
+
+// ---- URL Handling ----
+// Sanitizes and validates image URLs
+const sanitizeUrl = (url, type) => {
+  if (!url) {
+    if (type === 'mount') {
+      const { getMountThumbnail } = require('../../modules/mountModule');
+      return getMountThumbnail('Horse'); // Default to horse thumbnail
+    }
+    return "https://static.wikia.nocookie.net/cursed-images-inspiration/images/3/35/7a0c5231e5034fc4450867a7f2781eb0.jpg/revision/latest?cb=20210304180138";
+  }
+  try {
+    const encodedUrl = encodeURI(url).replace(/!/g, '%21');
+    const urlObj = new URL(encodedUrl);
+    if (urlObj.protocol === 'http:' || urlObj.protocol === 'https:') {
+      return encodedUrl;
+    }
+    if (type === 'mount') {
+      const { getMountThumbnail } = require('../../modules/mountModule');
+      return getMountThumbnail('Horse'); // Default to horse thumbnail
+    }
+    return "https://static.wikia.nocookie.net/cursed-images-inspiration/images/3/35/7a0c5231e5034fc4450867a7f2781eb0.jpg/revision/latest?cb=20210304180138";
+  } catch (_) {
+    console.error("[stable.js]: ❌ Error sanitizing URL:", url);
+    if (type === 'mount') {
+      const { getMountThumbnail } = require('../../modules/mountModule');
+      return getMountThumbnail('Horse'); // Default to horse thumbnail
+    }
+    return "https://static.wikia.nocookie.net/cursed-images-inspiration/images/3/35/7a0c5231e5034fc4450867a7f2781eb0.jpg/revision/latest?cb=20210304180138";
+  }
+};
+
+// ============================================================================
+// ---- Core Companion Operations ----
+// Main functions for managing companions in the stable system
+// ============================================================================
+
+// ---- Storage Operations ----
+// Stores a companion in the stable
+async function storeCompanion(characterId, type, companionName, discordId) {
+  return await executeInTransaction(async (session) => {
+    console.log(`[stable.js]: 🚀 Starting store process for ${type} "${companionName}"`);
+    
+    const foundCompanion = await findCompanionByName(characterId, companionName, type);
+    if (!foundCompanion) throw new Error(`${type === 'mount' ? 'Mount' : 'Pet'} not found`);
+    console.log(`[stable.js]: ✅ Found ${type} "${companionName}"`);
+
+    // For mounts, check if it's already stored
+    if (type === 'mount' && foundCompanion.isStored) {
+      throw new Error('❌ This mount is already stored');
+    }
+
+    const stable = await getOrCreateStable(characterId, discordId);
+    const storedArray = type === 'mount' ? stable.storedMounts : stable.storedPets;
+    if (storedArray.length >= stable.maxSlots) {
+      throw new Error('❌ Stable is full');
+    }
+
+    // Add companion data to stable
+    storedArray.push({
+      mountId: foundCompanion._id,
+      storedAt: new Date()
+    });
+    await stable.save({ session });
+    console.log(`[stable.js]: ✅ Added ${type} to stable storage`);
+
+    // Update the companion's stored status
+    if (type === 'mount') {
+      foundCompanion.isStored = true;
+      foundCompanion.storageLocation = stable._id;
+      foundCompanion.storedAt = new Date();
+      await foundCompanion.save({ session });
+    } else {
+      // For pets, update their stored status
+      foundCompanion.status = COMPANION_STATUS.STORED;
+      foundCompanion.storageLocation = stable._id;
+      foundCompanion.storedAt = new Date();
+      await foundCompanion.save({ session });
+    }
+    console.log(`[stable.js]: ✅ Updated ${type} storage status`);
+
+    await updateCharacterActiveCompanion(characterId, type, null);
+    console.log(`[stable.js]: ✅ Updated character's active ${type} status`);
+    
+    return foundCompanion;
+  });
+}
+
+// Retrieves a companion from the stable
+async function retrieveCompanion(characterId, type, companionName) {
+  return await executeInTransaction(async (session) => {
+    console.log(`[stable.js]: 🚀 Starting retrieve process for ${type} "${companionName}"`);
+    
+    const character = await Character.findById(characterId);
+    const hasActive = type === 'mount' ? character.mount : character.pet;
+    if (hasActive) {
+      throw new Error(`❌ Character already has an active ${type}`);
+    }
+
+    const stable = await getOrCreateStable(characterId, null);
+    const storedArray = type === 'mount' ? stable.storedMounts : stable.storedPets;
+    const storedCompanion = storedArray.find(p => p.name === companionName);
+    if (!storedCompanion) {
+      throw new Error(`❌ ${type === 'mount' ? 'Mount' : 'Pet'} not found in stable`);
+    }
+    console.log(`[stable.js]: ✅ Found ${type} in stable storage`);
+
+    // Update the companion's status to active
+    const Model = type === 'mount' ? Mount : Pet;
+    const companion = await Model.findOne({
+      name: companionName,
+      owner: type === 'mount' ? character.name : characterId
+    });
+
+    if (!companion) {
+      throw new Error(`❌ ${type === 'mount' ? 'Mount' : 'Pet'} not found in database`);
+    }
+
+    if (type === 'mount') {
+      companion.isStored = false;
+      companion.storageLocation = null;
+      companion.storedAt = null;
+    } else {
+      companion.status = COMPANION_STATUS.ACTIVE;
+      companion.storageLocation = null;
+      companion.storedAt = null;
+    }
+    await companion.save({ session });
+    console.log(`[stable.js]: ✅ Updated ${type} status to active`);
+
+    // Remove from stable
+    storedArray.splice(storedArray.indexOf(storedCompanion), 1);
+    await stable.save({ session });
+    console.log(`[stable.js]: ✅ Removed ${type} from stable storage`);
+
+    await updateCharacterActiveCompanion(characterId, type, companion._id);
+    console.log(`[stable.js]: ✅ Updated character's active ${type} status`);
+    
+    return companion;
+  });
+}
+
+// ---- Marketplace Operations ----
+// Lists a companion for sale
+async function listCompanion(characterId, type, companionName) {
+  return await executeInTransaction(async (session) => {
+    console.log(`[stable.js]: 🚀 Starting to list ${type} "${companionName}" for sale`);
+    
+    const companion = await findCompanionByName(characterId, companionName, type);
+    if (!companion) throw new Error(`❌ ${type === 'mount' ? 'Mount' : 'Pet'} not found`);
+    console.log(`[stable.js]: ✅ Found ${type} "${companionName}" owned by "${companion.owner}"`);
+
+    const character = await Character.findById(characterId);
+    const price = calculateCompanionPrice(companion, type);
+    
+    // Create new listing in appropriate collection
+    const ListingModel = type === 'mount' ? ListedMount : ListedPet;
+    const listingData = {
+      ...companion.toObject(),
+      price,
+      sellerId: characterId,
+      originalOwner: character.name,
+      listedAt: new Date(),
+      isSold: false
+    };
+    
+    const listing = new ListingModel(listingData);
+    await listing.save({ session });
+    console.log(`[stable.js]: ✅ Created new ${type} listing`);
+
+    // If the mount was stored in a stable, remove it from there
+    if (type === 'mount' && companion.storageLocation) {
+      const stable = await Stable.findById(companion.storageLocation);
+      if (stable) {
+        stable.storedMounts = stable.storedMounts.filter(m => m.mountId.toString() !== companion._id.toString());
+        await stable.save({ session });
+        console.log(`[stable.js]: ✅ Removed mount from stable storage`);
+      }
+    }
+
+    // Delete from original collection
+    const Model = type === 'mount' ? Mount : Pet;
+    await Model.findByIdAndDelete(companion._id, { session });
+    console.log(`[stable.js]: ✅ Deleted ${type} from original collection`);
+
+    // Update character's mount/pet status
+    if (type === 'mount') {
+      character.mount = false;
+      character.currentActiveMount = null;
+    } else {
+      character.currentActivePet = null;
+    }
+    await character.save({ session });
+    console.log(`[stable.js]: ✅ Updated character's ${type} status`);
+    
+    console.log(`[stable.js]: ✅ Successfully listed ${type} "${companionName}" for sale`);
+    return { companion: listingData, price };
+  });
+}
+
+// Buys a companion from the marketplace
+async function buyCompanion(buyerId, type, companionName) {
+  return await executeInTransaction(async (session) => {
+    console.log(`[stable.js]: 🚀 Starting purchase process for ${type} "${companionName}"`);
+    
+    const buyer = await Character.findById(buyerId);
+    const hasActive = type === 'mount' ? buyer.mount : buyer.pet;
+    if (hasActive) {
+      throw new Error(`❌ Buyer already has an active ${type}`);
+    }
+
+    // Find the listing
+    const ListingModel = type === 'mount' ? ListedMount : ListedPet;
+    const listing = await ListingModel.findOne({
+      name: companionName,
+      isSold: false
+    });
+    
+    if (!listing) {
+      throw new Error(`❌ ${type === 'mount' ? 'Mount' : 'Pet'} not found for sale`);
+    }
+    console.log(`[stable.js]: ✅ Found available ${type} listing`);
+
+    // Create new companion in original collection
+    const Model = type === 'mount' ? Mount : Pet;
+    const companion = new Model({
+      ...listing.toObject(),
+      owner: buyerId,
+      status: COMPANION_STATUS.ACTIVE,
+      storedAt: null,
+      storageLocation: null
+    });
+    await companion.save({ session });
+    console.log(`[stable.js]: ✅ Created new ${type} for buyer`);
+
+    // Update listing status
+    listing.isSold = true;
+    listing.soldAt = new Date();
+    listing.buyerId = buyerId;
+    await listing.save({ session });
+    console.log(`[stable.js]: ✅ Updated listing status to sold`);
+
+    await updateCharacterActiveCompanion(buyerId, type, companion._id);
+    console.log(`[stable.js]: ✅ Updated buyer's active ${type} status`);
+    
+    return { companion, price: listing.price };
+  });
+}
+
+// ---- View Operations ----
+// Views companion details
+async function viewCompanion(characterId, type, companionName) {
+  console.log(`[stable.js]: 🔍 Looking up ${type} "${companionName}"`);
+  
+  // First check active companions
+  let companion = await findCompanionByName(characterId, companionName, type);
+  
+  // If not found, check stable
+  if (!companion) {
+    const stable = await getOrCreateStable(characterId, null);
+    const storedArray = type === 'mount' ? stable.storedMounts : stable.storedPets;
+    const storedCompanion = storedArray.find(p => p.name === companionName);
+    if (storedCompanion) {
+      companion = storedCompanion;
+      console.log(`[stable.js]: ✅ Found ${type} in stable storage`);
+    }
+  }
+
+  if (!companion) {
+    throw new Error(`❌ ${type === 'mount' ? 'Mount' : 'Pet'} not found`);
+  }
+
+  const result = {
+    ...companion.toObject ? companion.toObject() : companion,
+    status: companion.status || COMPANION_STATUS.ACTIVE
+  };
+
+  if (type === 'pet') {
+    result.rollsDisplay = getRollsDisplay(companion.rollsRemaining || 0, companion.level || 0);
+    result.petTypeData = getPetTypeData(companion.petType);
+  }
+
+  console.log(`[stable.js]: ✅ Successfully retrieved ${type} details`);
+  return result;
+}
+
+// ---- Browse Handler ----
+// Handles browsing marketplace listings
+async function handleBrowseStable(interaction, type) {
+  try {
+    console.log(`[stable.js]: 🚀 Starting browse process for ${type}`);
+    
+    const ListingModel = type === 'mounts' ? ListedMount : ListedPet;
+    const listings = await ListingModel.find({ isSold: false });
+
+    if (listings.length === 0) {
+      console.log(`[stable.js]: ℹ️ No ${type} currently listed for sale`);
+      await sendErrorResponse(interaction, `No ${type} are currently listed for sale.`);
+      return;
+    }
+
+    const embed = new EmbedBuilder()
+      .setTitle(`🏪 ${type.charAt(0).toUpperCase() + type.slice(1)} for Sale`)
+      .setColor(0xAA926A)
+      .setDescription(listings.map(l => 
+        `**${l.name}** (${l.species})\n` +
+        `> Level: ${l.level}\n` +
+        `> Price: ${l.price} tokens\n` +
+        `> Seller: ${l.originalOwner}\n` +
+        `> Traits: ${l.traits.join(', ')}\n`
+      ).join('\n'));
+
+    console.log(`[stable.js]: ✅ Successfully generated browse view for ${type}`);
+    await interaction.reply({ embeds: [embed] });
+  } catch (error) {
+    console.error(`[stable.js]: ❌ Error in handleBrowseStable:`, error);
+    await sendErrorResponse(interaction, error.message);
+  }
+}
+
+// ============================================================================
+// ---- Command Handlers ----
+// Handlers for stable command subcommands
+// ============================================================================
+
+// ---- View Handler ----
+// Handles viewing stable contents
+async function handleViewStable(interaction, userId, characterName) {
+  await withValidation(interaction, userId, characterName, async (character) => {
+    const stable = await Stable.findOne({ characterId: character._id });
+    if (!stable) {
+      console.log(`[stable.js]: ❌ No stable found for character "${characterName}"`);
+      await sendErrorResponse(interaction, 'You do not have a stable yet.');
+      return;
+    }
+
+    const storedMounts = stable.storedMounts.map(m => 
+      `> ${m.name} (${m.species}) - Level ${m.level}`
+    );
+
+    const storedPets = stable.storedPets.map(p => 
+      `> ${p.name} (${p.species}) - Level ${p.level}`
+    );
+
+    const listedMounts = stable.listedMounts
+      .filter(m => !m.isSold)
+      .map(m => 
+        `> ${m.name} (${m.species}) - ${m.price} tokens`
+      );
+
+    const listedPets = stable.listedPets
+      .filter(p => !p.isSold)
+      .map(p => 
+        `> ${p.name} (${p.species}) - ${p.price} tokens`
+      );
+
+    const embed = new EmbedBuilder()
+      .setTitle(`${character.name}'s Stable`)
+      .setColor(0xAA926A)
+      .addFields(
+        { name: '🐴 Stored Mounts', value: storedMounts.join('\n') || '> No mounts stored', inline: false },
+        { name: '🐾 Stored Pets', value: storedPets.join('\n') || '> No pets stored', inline: false },
+        { name: '💰 Listed Mounts', value: listedMounts.join('\n') || '> No mounts listed', inline: false },
+        { name: '💰 Listed Pets', value: listedPets.join('\n') || '> No pets listed', inline: false },
+        { name: '📊 Storage', value: `> ${stable.storedMounts.length + stable.storedPets.length}/${stable.maxSlots} slots used`, inline: false }
+      );
+
+    console.log(`[stable.js]: ✅ Successfully generated stable view for "${characterName}"`);
+    await interaction.reply({ embeds: [embed] });
+  });
+}
+
+// ---- Store Handler ----
+// Handles storing companions in stable
+async function handleStorePet(interaction, userId, characterName, companionName) {
+  await withValidation(interaction, userId, characterName, async (character) => {
+    const { companion, type } = await findCompanionByType(character._id, companionName);
+    
+    if (!companion) {
+      console.log(`[stable.js]: ❌ No companion found with name "${companionName}"`);
+      await sendErrorResponse(interaction, `No mount or pet found with name "${companionName}". Please check the name and try again.`);
+      return;
+    }
+    console.log(`[stable.js]: ✅ Found ${type}:`, companion.name);
+
+    const storedCompanion = await storeCompanion(character._id, type, companionName, userId);
+    console.log(`[stable.js]: ✅ Successfully stored ${type} "${companionName}"`);
+    
+    const embed = new EmbedBuilder()
+      .setTitle(`${type === 'mount' ? '🐴' : '🐾'} ${type.charAt(0).toUpperCase() + type.slice(1)} Stored`)
+      .setColor("#FF0000")
+      .setDescription(
+        `Your ${type} **${storedCompanion.name}** has been stored in your stable.\n` +
+        `You can now add a new ${type} to your character or retrieve this one later.`
+      )
+      .addFields(
+        { name: "__Name__", value: `> ${storedCompanion.name}`, inline: true },
+        { name: "__Species__", value: `> ${storedCompanion.species}`, inline: true },
+        { name: "__Level__", value: `> ${storedCompanion.level}`, inline: true }
+      )
+      .setImage(sanitizeUrl(storedCompanion.imageUrl, type))
+      .setFooter({ text: `${type.charAt(0).toUpperCase() + type.slice(1)} stored successfully.` });
+
+    await interaction.reply({ embeds: [embed] });
+  });
+}
+
+// ---- Retrieve Handler ----
+// Handles retrieving companions from stable
+async function handleRetrievePet(interaction, userId, characterName, petName) {
+  await withValidation(interaction, userId, characterName, async (character) => {
+    const pet = await retrieveCompanion(character._id, 'pet', petName);
+    console.log(`[stable.js]: ✅ Successfully retrieved pet "${petName}"`);
+    
+    await sendSuccessResponse(interaction, `✅ Successfully retrieved **${petName}** from your stable.`);
+  });
+}
+
+// ---- List Handler ----
+// Handles listing companions for sale
+async function handleListCompanion(interaction, userId, characterName, companionName) {
+  await withValidation(interaction, userId, characterName, async (character) => {
+    const user = await validateUser(interaction, userId);
+    if (!user) return;
+
+    // Try to find the companion as a mount first
+    let type = 'mount';
+    console.log(`[stable.js]: 🔍 Attempting to find mount "${companionName}"`);
+    let companion = await findCompanionByName(character._id, companionName, type);
+    
+    // If not found as a mount, try as a pet
+    if (!companion) {
+      console.log(`[stable.js]: 🔄 Mount not found, trying as pet`);
+      type = 'pet';
+      companion = await findCompanionByName(character._id, companionName, type);
+    }
+
+    if (!companion) {
+      console.log(`[stable.js]: ❌ No companion found with name "${companionName}"`);
+      await sendErrorResponse(interaction, `❌ ${type === 'mount' ? 'Mount' : 'Pet'} not found.`, true);
+      return;
+    }
+    console.log(`[stable.js]: ✅ Found ${type}:`, companion.name);
+
+    const { companion: listedCompanion, price } = await listCompanion(character._id, type, companionName);
+    console.log(`[stable.js]: ✅ Listed ${type} for sale at ${price} tokens`);
+    
+    const embed = new EmbedBuilder()
+      .setTitle(`🏪 ${type === 'mount' ? 'Mount' : 'Pet'} Listed for Sale`)
+      .setColor(0xAA926A)
+      .setDescription(`**${listedCompanion.name}** has been listed for sale!`)
+      .addFields(
+        { name: `${type === 'mount' ? '🐴' : '🐾'} Details`, value: `> Species: ${listedCompanion.species}\n> Level: ${listedCompanion.level}\n> Traits: ${listedCompanion.traits.join(', ')}`, inline: false },
+        { name: '💰 Price', value: `> ${price} tokens`, inline: false },
+        { name: '👤 Seller', value: `> ${character.name}`, inline: false }
+      )
+      .setFooter({ text: `The ${type} will remain listed until purchased or removed.` });
+
+    await interaction.reply({ embeds: [embed] });
+    console.log(`[stable.js]: ✅ Successfully sent listing confirmation for ${type} "${companionName}"`);
+  });
+}
+
+// ---- Buy Handler ----
+// Handles buying companions from marketplace
+async function handleBuyPet(interaction, userId, characterName, petName) {
+  await withValidation(interaction, userId, characterName, async (character) => {
+    const user = await validateUser(interaction, userId);
+    if (!user) return;
+
+    const { companion: pet, price } = await buyCompanion(character._id, 'pet', petName);
+    console.log(`[stable.js]: ✅ Found pet listing for ${price} tokens`);
+    
+    if (user.tokens < price) {
+      console.log(`[stable.js]: ❌ Insufficient tokens: ${user.tokens} < ${price}`);
+      await sendErrorResponse(interaction, `❌ You don't have enough tokens. This pet costs ${price} tokens.`);
+      return;
+    }
+
+    user.tokens -= price;
+    await user.save();
+    console.log(`[stable.js]: ✅ Updated user tokens: ${user.tokens}`);
+
+    await sendSuccessResponse(interaction, `✅ Successfully purchased **${petName}** for ${price} tokens.`);
+  });
+}
+
+// ============================================================================
+// ---- Command Definition ----
+// Defines the stable command and its subcommands
+// ============================================================================
+
 module.exports = {
+  // ---- Command Data ----
+  // Defines the command structure and options
   data: new SlashCommandBuilder()
     .setName('stable')
     .setDescription('Manage your stable and view/buy/sell mounts and pets')
@@ -42,6 +717,15 @@ module.exports = {
             .setDescription('Enter the mount/pet name')
             .setRequired(true)
             .setAutocomplete(true)
+        )
+        .addStringOption(option =>
+          option.setName('type')
+            .setDescription('Type of companion to store')
+            .setRequired(true)
+            .addChoices(
+              { name: 'Mount', value: 'mount' },
+              { name: 'Pet', value: 'pet' }
+            )
         )
     )
     .addSubcommand(subcommand =>
@@ -109,8 +793,11 @@ module.exports = {
         )
     ),
 
-  // ------------------- Execute Stable Command -------------------
+  // ---- Command Execution ----
+  // Handles command execution and routes to appropriate handler
   async execute(interaction) {
+    console.log(`[stable.js]: 🚀 Executing stable command: ${interaction.options.getSubcommand()}`);
+    
     const subcommand = interaction.options.getSubcommand();
     const userId = interaction.user.id;
 
@@ -120,565 +807,28 @@ module.exports = {
           await handleViewStable(interaction, userId, interaction.options.getString('charactername'));
           break;
         case 'store':
-          await handleStoreMount(interaction, userId, interaction.options.getString('charactername'), interaction.options.getString('name'));
+          await handleStorePet(interaction, userId, interaction.options.getString('charactername'), interaction.options.getString('name'));
           break;
         case 'retrieve':
-          await handleRetrieveMount(interaction, userId, interaction.options.getString('charactername'), interaction.options.getString('name'));
+          await handleRetrievePet(interaction, userId, interaction.options.getString('charactername'), interaction.options.getString('name'));
           break;
         case 'list':
-          const name = interaction.options.getString('name');
-          const characterName = interaction.options.getString('charactername');
-          // Check if it's a mount or pet
-          const character = await fetchCharacterByNameAndUserId(characterName, userId);
-          if (!character) {
-            await interaction.reply({ content: '❌ Character not found or does not belong to you.', ephemeral: true });
-            return;
-          }
-          const mount = await Mount.findOne({ owner: character._id, name: name });
-          if (mount) {
-            await handleListMount(interaction, userId, characterName, name);
-          } else {
-            await handleListPet(interaction, userId, characterName, name);
-          }
+          await handleListCompanion(interaction, userId, interaction.options.getString('charactername'), interaction.options.getString('name'));
           break;
         case 'browse':
           await handleBrowseStable(interaction, interaction.options.getString('type'));
           break;
         case 'buy':
-          await handleBuyMount(interaction, userId, interaction.options.getString('charactername'), interaction.options.getString('name'));
+          await handleBuyPet(interaction, userId, interaction.options.getString('charactername'), interaction.options.getString('name'));
           break;
         default:
-          await interaction.reply({ content: '❌ Invalid subcommand.', ephemeral: true });
+          console.log(`[stable.js]: ❌ Invalid subcommand: ${subcommand}`);
+          await sendErrorResponse(interaction, 'Invalid subcommand.');
       }
     } catch (error) {
+      console.error(`[stable.js]: ❌ Error executing stable command:`, error);
       handleError(error, 'stable.js');
-      await interaction.reply({ content: '❌ An error occurred while processing your request.', ephemeral: true });
+      await sendErrorResponse(interaction, 'An error occurred while processing your request.');
     }
   },
-
-  async autocomplete(interaction) {
-    const { handleAutocomplete } = require('../../handlers/autocompleteHandler');
-    await handleAutocomplete(interaction);
-  }
-};
-
-// ------------------- Handle Viewing Stable -------------------
-async function handleViewStable(interaction, userId, characterName) {
-  const character = await fetchCharacterByNameAndUserId(characterName, userId);
-  if (!character) {
-    await interaction.reply({ content: '❌ Character not found or does not belong to you.', ephemeral: true });
-    return;
-  }
-
-  let stable = await Stable.findOne({ characterId: character._id });
-  if (!stable) {
-    stable = new Stable({ characterId: character._id, discordId: userId });
-    await stable.save();
-  }
-
-  const storedMounts = await Mount.find({ _id: { $in: stable.storedMounts.map(m => m.mountId) } });
-  const storedPets = await Pet.find({ _id: { $in: stable.storedPets.map(p => p.petId) } });
-
-  const embed = new EmbedBuilder()
-    .setTitle(`�� ${character.name}'s Stable`)
-    .setColor(0xAA926A)
-    .addFields(
-      { name: '📦 Stored Mounts', value: storedMounts.length ? storedMounts.map(m => `> ${m.name} (${m.species})`).join('\n') : '> No mounts stored', inline: false },
-      { name: '🐾 Stored Pets', value: storedPets.length ? storedPets.map(p => `> ${p.name} (${p.species})`).join('\n') : '> No pets stored', inline: false },
-      { name: '📊 Storage', value: `> ${storedMounts.length + storedPets.length}/${stable.maxSlots} slots used`, inline: false }
-    );
-
-  await interaction.reply({ embeds: [embed] });
 }
-
-// ------------------- Handle Storing Mount -------------------
-async function handleStoreMount(interaction, userId, characterName, mountName) {
-  const character = await fetchCharacterByNameAndUserId(characterName, userId);
-  if (!character) {
-    await interaction.reply({ content: '❌ Character not found or does not belong to you.', ephemeral: true });
-    return;
-  }
-
-  let stable = await Stable.findOne({ characterId: character._id });
-  if (!stable) {
-    stable = new Stable({ characterId: character._id, discordId: userId });
-    await stable.save();
-  }
-
-  const totalStored = stable.storedMounts.length + stable.storedPets.length;
-  if (totalStored >= stable.maxSlots) {
-    await interaction.reply({ content: '❌ Your stable is full! You can only store up to 3 mounts/pets.', ephemeral: true });
-    return;
-  }
-
-  const mount = await Mount.findOne({ owner: character._id, name: mountName });
-  if (!mount) {
-    await interaction.reply({ content: `❌ Mount **${mountName}** not found.`, ephemeral: true });
-    return;
-  }
-
-  if (mount.isStored) {
-    await interaction.reply({ content: `❌ Mount **${mountName}** is already stored in a stable.`, ephemeral: true });
-    return;
-  }
-
-  // Check if this is the active mount
-  if (character.mount && character.activeMount === mount._id) {
-    // Find another non-stored mount to set as active
-    const otherMount = await Mount.findOne({ 
-      owner: character._id, 
-      _id: { $ne: mount._id },
-      isStored: false 
-    });
-
-    if (otherMount) {
-      // Set the other mount as active
-      character.activeMount = otherMount._id;
-      character.mount = true;
-    } else {
-      // No other mounts available
-      character.mount = false;
-      character.activeMount = null;
-    }
-    await character.save();
-  }
-
-  stable.storedMounts.push({ mountId: mount._id });
-  await stable.save();
-
-  mount.isStored = true;
-  mount.storageLocation = character.currentVillage;
-  mount.storedAt = new Date();
-  await mount.save();
-
-  const response = otherMount 
-    ? `✅ Successfully stored **${mountName}** in your stable. You are now riding **${otherMount.name}**.`
-    : `✅ Successfully stored **${mountName}** in your stable.`;
-
-  await interaction.reply({ content: response });
-}
-
-// ------------------- Handle Retrieving Mount -------------------
-async function handleRetrieveMount(interaction, userId, characterName, mountName) {
-  const character = await fetchCharacterByNameAndUserId(characterName, userId);
-  if (!character) {
-    await interaction.reply({ content: '❌ Character not found or does not belong to you.', ephemeral: true });
-    return;
-  }
-
-  const stable = await Stable.findOne({ characterId: character._id });
-  if (!stable) {
-    await interaction.reply({ content: '❌ You do not have a stable.', ephemeral: true });
-    return;
-  }
-
-  const mount = await Mount.findOne({ owner: character._id, name: mountName });
-  if (!mount) {
-    await interaction.reply({ content: `❌ Mount **${mountName}** not found.`, ephemeral: true });
-    return;
-  }
-
-  if (!mount.isStored) {
-    await interaction.reply({ content: `❌ Mount **${mountName}** is not stored in a stable.`, ephemeral: true });
-    return;
-  }
-
-  if (character.mount) {
-    await interaction.reply({ content: '❌ You already have a mount active. Store your current mount first.', ephemeral: true });
-    return;
-  }
-
-  stable.storedMounts = stable.storedMounts.filter(m => m.mountId.toString() !== mount._id.toString());
-  await stable.save();
-
-  mount.isStored = false;
-  mount.storageLocation = null;
-  mount.storedAt = null;
-  await mount.save();
-
-  character.mount = true;
-  character.activeMount = mount._id;
-  await character.save();
-
-  await interaction.reply({ content: `✅ Successfully retrieved **${mountName}** from your stable.` });
-}
-
-// ------------------- Handle Listing Mount -------------------
-async function handleListMount(interaction, userId, characterName, mountName) {
-  try {
-    const character = await fetchCharacterByNameAndUserId(characterName, userId);
-    if (!character) {
-      await interaction.reply({ content: '❌ Character not found or does not belong to you.', ephemeral: true });
-      return;
-    }
-
-    let stable = await Stable.findOne({ characterId: character._id });
-    if (!stable) {
-      stable = new Stable({ characterId: character._id, discordId: userId });
-      await stable.save();
-    }
-
-    const mount = await Mount.findOne({ owner: character._id, name: mountName });
-    if (!mount) {
-      await interaction.reply({ content: `❌ Mount **${mountName}** not found.`, ephemeral: true });
-      return;
-    }
-
-    const user = await User.findOne({ discordId: userId });
-    if (!user) {
-      await interaction.reply({ content: '❌ User not found.', ephemeral: true });
-      return;
-    }
-
-    // Calculate price using the existing function
-    const price = calculateMountPrice(mount);
-
-    // Update mount status for listing
-    mount.owner = 'For Sale'; // Set to 'For Sale' instead of null to satisfy validation
-    mount.isStored = true;
-    mount.storageLocation = 'For Sale';
-    mount.storedAt = new Date();
-    await mount.save();
-
-    // Remove from stored mounts if it was stored
-    if (stable.storedMounts.some(m => m.mountId.toString() === mount._id.toString())) {
-      stable.storedMounts = stable.storedMounts.filter(m => m.mountId.toString() !== mount._id.toString());
-    }
-
-    // Add to listed mounts
-    stable.listedMounts.push({
-      mountId: mount._id,
-      price: price,
-      sellerId: user._id,
-      originalOwner: character.name
-    });
-    await stable.save();
-
-    // Update character's mount status if it was active
-    if (character.mount && character.activeMount === mount._id) {
-      character.mount = false;
-      character.activeMount = null;
-      await character.save();
-    }
-
-    const embed = new EmbedBuilder()
-      .setTitle(`🏪 Mount Listed for Sale`)
-      .setColor(0xAA926A)
-      .setDescription(`**${mount.name}** has been listed for sale!`)
-      .addFields(
-        { name: '🐎 Mount Details', value: `> Species: ${mount.species}\n> Level: ${mount.level}\n> Traits: ${mount.traits.join(', ')}`, inline: false },
-        { name: '💰 Price', value: `> ${price} tokens`, inline: false },
-        { name: '👤 Seller', value: `> ${character.name}`, inline: false }
-      )
-      .setFooter({ text: 'The mount will remain listed until purchased or removed.' });
-
-    await interaction.reply({ embeds: [embed] });
-  } catch (error) {
-    handleError(error, 'stable.js', {
-      commandName: 'list',
-      userTag: interaction.user.tag,
-      userId: interaction.user.id,
-      characterName: characterName,
-      options: {
-        mountName: mountName,
-        operation: 'listMount'
-      }
-    });
-    await interaction.reply({ content: '❌ An error occurred while listing your mount.', ephemeral: true });
-  }
-}
-
-// ------------------- Handle Listing Pet -------------------
-async function handleListPet(interaction, userId, characterName, petName) {
-  try {
-    const character = await fetchCharacterByNameAndUserId(characterName, userId);
-    if (!character) {
-      await interaction.reply({ content: '❌ Character not found or does not belong to you.', ephemeral: true });
-      return;
-    }
-
-    let stable = await Stable.findOne({ characterId: character._id });
-    if (!stable) {
-      stable = new Stable({ characterId: character._id, discordId: userId });
-      await stable.save();
-    }
-
-    const pet = await Pet.findOne({ owner: character._id, name: petName });
-    if (!pet) {
-      await interaction.reply({ content: `❌ Pet **${petName}** not found.`, ephemeral: true });
-      return;
-    }
-
-    const user = await User.findOne({ discordId: userId });
-    if (!user) {
-      await interaction.reply({ content: '❌ User not found.', ephemeral: true });
-      return;
-    }
-
-    // Calculate price based on pet's level and traits
-    const traits = Array.isArray(pet.traits) ? pet.traits : [];
-    const price = Math.floor(pet.level * 100 + (traits.length * 50));
-
-    // Find or create the system character for stable listings
-    let systemCharacter = await Character.findOne({ name: 'Stable System' });
-    if (!systemCharacter) {
-      systemCharacter = new Character({
-        userId: 'system',
-        name: 'Stable System',
-        pronouns: 'it/its',
-        race: 'System',
-        homeVillage: 'Global',
-        job: 'Stable Keeper',
-        maxHearts: 1,
-        currentHearts: 1,
-        maxStamina: 1,
-        currentStamina: 1,
-        icon: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
-      });
-      await systemCharacter.save();
-    }
-
-    // Update pet status for listing
-    pet.owner = systemCharacter._id; // Transfer ownership to the system character
-    pet.ownerName = 'Stable System';
-    pet.isStored = true;
-    pet.storageLocation = 'For Sale';
-    pet.storedAt = new Date();
-    await pet.save();
-
-    // Remove from stored pets if it was stored
-    if (stable.storedPets.some(p => p.petId.toString() === pet._id.toString())) {
-      stable.storedPets = stable.storedPets.filter(p => p.petId.toString() !== pet._id.toString());
-    }
-
-    // Add to listed pets
-    stable.listedPets.push({
-      petId: pet._id,
-      price: price,
-      sellerId: user._id,
-      originalOwner: character.name
-    });
-    await stable.save();
-
-    // Update character's pet status if it was active
-    if (character.pet) {
-      character.pet = false;
-      await character.save();
-    }
-
-    const embed = new EmbedBuilder()
-      .setTitle(`🏪 Pet Listed for Sale`)
-      .setColor(0xAA926A)
-      .setDescription(`**${pet.name}** has been listed for sale!`)
-      .addFields(
-        { name: '🐾 Pet Details', value: `> Species: ${pet.species}\n> Level: ${pet.level}\n> Traits: ${traits.join(', ')}`, inline: false },
-        { name: '💰 Price', value: `> ${price} tokens`, inline: false },
-        { name: '👤 Seller', value: `> ${character.name}`, inline: false }
-      )
-      .setFooter({ text: 'The pet will remain listed until purchased or removed.' });
-
-    await interaction.reply({ embeds: [embed] });
-  } catch (error) {
-    handleError(error, 'stable.js', {
-      commandName: 'list',
-      userTag: interaction.user.tag,
-      userId: interaction.user.id,
-      characterName: characterName,
-      options: {
-        petName: petName,
-        operation: 'listPet'
-      }
-    });
-    await interaction.reply({ content: '❌ An error occurred while listing your pet.', ephemeral: true });
-  }
-}
-
-// ------------------- Handle Browsing Stable -------------------
-async function handleBrowseStable(interaction, type) {
-  const stables = await Stable.find({});
-  const listings = [];
-
-  for (const stable of stables) {
-    const items = type === 'mounts' ? stable.listedMounts : stable.listedPets;
-    const unsoldItems = items.filter(item => !item.isSold);
-    
-    for (const item of unsoldItems) {
-      const companion = type === 'mounts' 
-        ? await Mount.findById(item.mountId)
-        : await Pet.findById(item.petId);
-      
-      if (companion) {
-        listings.push({
-          name: companion.name,
-          species: companion.species,
-          level: companion.level,
-          price: item.price,
-          seller: item.originalOwner,
-          traits: companion.traits
-        });
-      }
-    }
-  }
-
-  if (listings.length === 0) {
-    await interaction.reply({ content: `❌ No ${type} are currently listed for sale.`, ephemeral: true });
-    return;
-  }
-
-  const embed = new EmbedBuilder()
-  .setTitle(`🏪 ${type.charAt(0).toUpperCase() + type.slice(1)} for Sale`)
-    .setColor(0xAA926A)
-    .setDescription(listings.map(l => 
-      `**${l.name}** (${l.species})\n` +
-      `> Level: ${l.level}\n` +
-      `> Price: ${l.price} tokens\n` +
-      `> Seller: ${l.seller}\n` +
-      `> Traits: ${l.traits.join(', ')}\n`
-    ).join('\n'));
-
-  await interaction.reply({ embeds: [embed] });
-}
-
-// ------------------- Handle Buying Mount -------------------
-async function handleBuyMount(interaction, userId, characterName, mountName) {
-  const character = await fetchCharacterByNameAndUserId(characterName, userId);
-  if (!character) {
-    await interaction.reply({ content: '❌ Character not found or does not belong to you.', ephemeral: true });
-    return;
-  }
-
-  if (character.mount) {
-    await interaction.reply({ content: '❌ You already have a mount active. Store your current mount first.', ephemeral: true });
-    return;
-  }
-
-  const user = await User.findOne({ discordId: userId });
-  if (!user) {
-    await interaction.reply({ content: '❌ User not found.', ephemeral: true });
-    return;
-  }
-
-  const stables = await Stable.find({});
-  let foundListing = null;
-  let foundStable = null;
-
-  for (const stable of stables) {
-    const listing = stable.listedMounts.find(l => !l.isSold);
-    if (listing) {
-      const mount = await Mount.findById(listing.mountId);
-      if (mount && mount.name === mountName) {
-        foundListing = listing;
-        foundStable = stable;
-        break;
-      }
-    }
-  }
-
-  if (!foundListing) {
-    await interaction.reply({ content: `❌ Mount **${mountName}** is not available for purchase.`, ephemeral: true });
-    return;
-  }
-
-  if (user.tokens < foundListing.price) {
-    await interaction.reply({ content: `❌ You don't have enough tokens. This mount costs ${foundListing.price} tokens.`, ephemeral: true });
-    return;
-  }
-
-  const mount = await Mount.findById(foundListing.mountId);
-  mount.owner = character.name;
-  mount.isStored = false;
-  mount.storageLocation = null;
-  mount.storedAt = null;
-  await mount.save();
-
-  foundListing.isSold = true;
-  foundListing.soldAt = new Date();
-  foundListing.buyerId = user._id;
-  await foundStable.save();
-
-  const seller = await User.findById(foundListing.sellerId);
-  seller.tokens += foundListing.price;
-  await seller.save();
-
-  user.tokens -= foundListing.price;
-  await user.save();
-
-  character.mount = true;
-  await character.save();
-
-  await interaction.reply({ content: `✅ Successfully purchased **${mountName}** for ${foundListing.price} tokens.` });
-}
-
-// ------------------- Handle Buying Pet -------------------
-async function handleBuyPet(interaction, userId, characterName, petName) {
-  const character = await fetchCharacterByNameAndUserId(characterName, userId);
-  if (!character) {
-    await interaction.reply({ content: '❌ Character not found or does not belong to you.', ephemeral: true });
-    return;
-  }
-
-  if (character.pet) {
-    await interaction.reply({ content: '❌ You already have a pet active. Store your current pet first.', ephemeral: true });
-    return;
-  }
-
-  const user = await User.findOne({ discordId: userId });
-  if (!user) {
-    await interaction.reply({ content: '❌ User not found.', ephemeral: true });
-    return;
-  }
-
-  const stables = await Stable.find({});
-  let foundListing = null;
-  let foundStable = null;
-
-  for (const stable of stables) {
-    const listing = stable.listedPets.find(l => !l.isSold);
-    if (listing) {
-      const pet = await Pet.findById(listing.petId);
-      if (pet && pet.name === petName) {
-        foundListing = listing;
-        foundStable = stable;
-        break;
-      }
-    }
-  }
-
-  if (!foundListing) {
-    await interaction.reply({ content: `❌ Pet **${petName}** is not available for purchase.`, ephemeral: true });
-    return;
-  }
-
-  if (user.tokens < foundListing.price) {
-    await interaction.reply({ content: `❌ You don't have enough tokens. This pet costs ${foundListing.price} tokens.`, ephemeral: true });
-    return;
-  }
-
-  const pet = await Pet.findById(foundListing.petId);
-  pet.owner = character._id; // Set new owner
-  pet.ownerName = character.name; // Update owner name
-  pet.isStored = false;
-  pet.storageLocation = null;
-  pet.storedAt = null;
-  await pet.save();
-
-  foundListing.isSold = true;
-  foundListing.soldAt = new Date();
-  foundListing.buyerId = user._id;
-  await foundStable.save();
-
-  const seller = await User.findById(foundListing.sellerId);
-  seller.tokens += foundListing.price;
-  await seller.save();
-
-  user.tokens -= foundListing.price;
-  await user.save();
-
-  character.pet = true;
-  await character.save();
-
-  await interaction.reply({ content: `✅ Successfully purchased **${petName}** for ${foundListing.price} tokens.` });
-}
-  
-  
-  
