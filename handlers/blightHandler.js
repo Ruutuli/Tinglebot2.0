@@ -568,6 +568,12 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
       return;
     }
 
+    // ---- NEW: Only allow the owner to submit healing for their character ----
+    if (interaction.user.id !== character.userId) {
+      await interaction.editReply({ content: '❌ You can only submit healing for your own characters.', ephemeral: true });
+      return;
+    }
+
     if (typeof character.blightStage !== 'number' || character.blightStage < 0) {
       character.blightStage = 1;
       await character.save();
