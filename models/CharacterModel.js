@@ -70,6 +70,7 @@ const characterSchema = new Schema({
 
   // ------------------- Special status -------------------
   blighted: { type: Boolean, default: false },           // Blighted status
+  blightedAt: { type: Date, default: null },             // Date/time character was infected with blight
   blightStage: { type: Number, default: 0 },             // Stage of blight (0-5)
   blightPaused: { type: Boolean, default: false },
   lastRollDate: { type: Date, default: null },           // Date of last roll for blighted characters
