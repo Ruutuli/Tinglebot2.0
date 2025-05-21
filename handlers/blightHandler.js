@@ -316,7 +316,19 @@ async function healBlight(interaction, characterName, healerName) {
   } catch (error) {
     handleError(error, 'blightHandler.js');
     console.error('[blightHandler]: Error healing blight:', error);
-    await interaction.reply({ content: '❌ An error occurred while processing your request.', ephemeral: true });
+    
+    // Check if we've already replied
+    if (interaction.replied || interaction.deferred) {
+      await interaction.editReply({ 
+        content: '❌ An error occurred while processing your request. Please try again or contact support if the issue persists.', 
+        ephemeral: true 
+      });
+    } else {
+      await interaction.reply({ 
+        content: '❌ An error occurred while processing your request. Please try again or contact support if the issue persists.', 
+        ephemeral: true 
+      });
+    }
   }
 }
 
@@ -381,6 +393,23 @@ async function completeBlightHealing(character) {
 // ------------------- Function: createBlightHealingFields -------------------
 // Creates fields for healing embed (requirement, ID, expiration).
 function createBlightHealingFields(healingRequirement, submissionId, expiresAt) {
+  // Validate required parameters
+  if (!healingRequirement || typeof healingRequirement !== 'object') {
+    throw new Error('Invalid healing requirement provided');
+  }
+  if (!healingRequirement.type || typeof healingRequirement.type !== 'string') {
+    throw new Error('Invalid healing requirement type');
+  }
+  if (!healingRequirement.description || typeof healingRequirement.description !== 'string') {
+    throw new Error('Invalid healing requirement description');
+  }
+  if (!submissionId || typeof submissionId !== 'string') {
+    throw new Error('Invalid submission ID');
+  }
+  if (!(expiresAt instanceof Date)) {
+    throw new Error('Invalid expiration date');
+  }
+
   let requirementValue;
   if (healingRequirement.type === 'item' && Array.isArray(healingRequirement.items)) {
     // Format item list
@@ -397,7 +426,8 @@ function createBlightHealingFields(healingRequirement, submissionId, expiresAt) 
         : '🍎 Item'
     }\n> ${healingRequirement.description}`;
   }
-  return [
+
+  const fields = [
     {
       name: '<:bb0:854499720797618207> __Healing Requirement__',
       value: requirementValue,
@@ -415,6 +445,15 @@ function createBlightHealingFields(healingRequirement, submissionId, expiresAt) 
       value: `> This request will expire in 30 days (<t:${Math.floor(expiresAt.getTime() / 1000)}:R>).\n> ⚠️ You must complete the healing before expiration or your character will remain blighted.`,
     }
   ];
+
+  // Validate field values
+  for (const field of fields) {
+    if (!field.name || !field.value || typeof field.name !== 'string' || typeof field.value !== 'string') {
+      throw new Error('Invalid field format');
+    }
+  }
+
+  return fields;
 }
 
 // ------------------- Function: createBlightHealingEmbed -------------------
