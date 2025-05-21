@@ -11,7 +11,7 @@ const PetSchema = new Schema({
   petType: { type: String, required: true },
   level: { type: Number, default: 0 },
   rollsRemaining: { type: Number, default: 0 },
-  status: { type: String, enum: ['active', 'retired'], default: 'active' },
+  status: { type: String, enum: ['active', 'stored', 'listed'], default: 'active' },
   owner: { type: Schema.Types.ObjectId, ref: 'Character', required: true },
   imageUrl: { type: String, default: '' },
   rollCombination: { type: [String], default: [] },   

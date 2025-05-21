@@ -51,11 +51,13 @@ const { checkInventorySync } = require("../../utils/characterUtils");
 const { handleError } = require('../../utils/globalErrorHandler');
 const { enforceJail } = require('../../utils/jailCheck');
 const { characterExistsNotOwned } = require('../../utils/validation');
+const companionService = require('../../services/companionService');
 
 // ------------------- Database Models -------------------
 // Data schemas for pet and character documents.
 const Pet = require("../../models/PetModel");
 const Character = require("../../models/CharacterModel");
+const Stable = require("../../models/StableModel");
 
 // ------------------- Helper Functions -------------------
 // Calculates the upgrade cost based on the pet's new level.
@@ -114,7 +116,7 @@ const sanitizeUrl = (url) => {
 
 // ============================================================================
 // ------------------- Slash Command Definition for Pets -------------------
-// This object defines the pet slash command and its subcommands (roll, upgrade, add, edit, retire).
+// This object defines the pet slash command and its subcommands (roll, upgrade, add, edit,)
 // ============================================================================
 
 module.exports = {
@@ -273,27 +275,7 @@ module.exports = {
       .setRequired(true)
     )
   )
-  // ------------------- Subcommand: Retire -------------------
-  .addSubcommand((subcommand) =>
-   subcommand
-    .setName("retire")
-    .setDescription("Retire your active pet")
-    .addStringOption((option) =>
-     option
-      .setName("charactername")
-      .setDescription("Enter your character's name")
-      .setRequired(true)
-      .setAutocomplete(true)
-    )
-    .addStringOption((option) =>
-     option
-      .setName("petname")
-      .setDescription("Enter the pet's name to retire")
-      .setRequired(true)
-      .setAutocomplete(true)
-    )
-  )
-  // ------------------- Subcommand: View -------------------
+  // ------------------- Subcommand: View Pet -------------------
   .addSubcommand((subcommand) =>
    subcommand
     .setName("view")
@@ -367,7 +349,7 @@ module.exports = {
       // If adding a new pet, prevent adding if an active pet already exists.
       if (!existingPet && character.pets && character.pets.length > 0) {
         return interaction.editReply({
-          content: "❌ **You already have an active pet. Please retire your current pet before adding a new one.**",
+          content: "❌ **You already have an active pet. Please store your current pet before adding a new one.**",
           ephemeral: true
         });
       }
@@ -522,7 +504,7 @@ module.exports = {
       }
     }
 
-    // ------------------- Verify Pet Existence for Roll, Upgrade, and Retire -------------------
+    // ------------------- Verify Pet Existence for Roll, Upgrade,  -------------------
     // Find pet by identifier (ID or name)
     const pet = await findPetByIdentifier(petName, character._id, 'active');
 
@@ -547,16 +529,23 @@ module.exports = {
       });
     }
 
-    // Check if pet is retired
-    if (pet.status === 'retired') {
+    // Check if pet is stored
+    if (pet.status === 'stored') {
       return interaction.editReply({
-        content: `❌ **Pet \`${petName}\` is retired and cannot perform actions.**`,
+        content: `❌ **Pet \`${petName}\` is currently stored in the stables and cannot perform actions.**\nTo use this pet, please retrieve it from the stables first using the \`/stable retrieve\` command.`,
         ephemeral: true
       });
     }
 
     // ------------------- Subcommand: Roll -------------------
     if (subcommand === "roll") {
+     // ------------------- Check Pet Status -------------------
+     if (pet.status === "stored") {
+       return interaction.editReply(
+         `❌ **${pet.name}** is currently in the stables! You need to retrieve them first using \`/stable retrieve\` before they can roll.`
+       );
+     }
+
      // ------------------- Check Available Pet Rolls -------------------
      if (pet.rollsRemaining <= 0) {
        return interaction.editReply(
@@ -835,151 +824,47 @@ module.exports = {
      );
     }
 
-    // ------------------- Subcommand: Retire -------------------
-    if (subcommand === "retire") {
-      // Find the active pet to retire
-      const petToRetire = await findPetByIdentifier(petName, character._id, 'active');
-      
-      // Verify pet exists and is owned by the character
-      if (!petToRetire) {
-        return interaction.editReply({
-          content: `❌ **Active pet \`${petName}\` not found for character \`${characterName}\`.**`,
-          ephemeral: true
-        });
-      }
-
-      // Check if pet is already retired
-      if (petToRetire.status === "retired") {
-        return interaction.editReply({
-          content: `❌ **${petToRetire.name} is already retired.**`,
-          ephemeral: true
-        });
-      }
-
-      try {
-        // Update pet status to retired in Pet collection
-        const updateResult = await Pet.updateOne(
-          { _id: petToRetire._id },
-          { $set: { status: "retired" } }
-        );
-
-        if (updateResult.modifiedCount === 0) {
-          return interaction.editReply({
-            content: `❌ **Failed to retire ${petToRetire.name}. Please try again.**`,
-            ephemeral: true
-          });
-        }
-
-        // If this was the active pet, clear the active pet reference
-        if (character.currentActivePet && character.currentActivePet.toString() === petToRetire._id.toString()) {
-          await Character.findByIdAndUpdate(character._id, {
-            currentActivePet: null
-          });
-        }
-
-        // Remove pet from pets array and push to stable array
-        const charDoc = await Character.findById(character._id);
-        if (charDoc) {
-          // Remove from pets
-          charDoc.pets = charDoc.pets.filter(p => p.name !== petToRetire.name);
-          // Add to stable with status retired
-          charDoc.stable = charDoc.stable || [];
-          charDoc.stable.push({ ...petToRetire.toObject(), status: "retired" });
-          await charDoc.save();
-        }
-
-        // Create and send success embed
-        const retireEmbed = new EmbedBuilder()
-          .setAuthor({ name: character.name, iconURL: character.icon })
-          .setTitle(`Pet Retired - ${petToRetire.name}`)
-          .setColor("#FF0000")
-          .setDescription(
-            `Your pet **${petToRetire.name}** has been retired.\nYou can now add a new pet to your character.`
-          )
-          .setImage(sanitizeUrl(petToRetire.imageUrl))
-          .setFooter({ text: "Pet retired successfully." });
-
-        return interaction.editReply({ embeds: [retireEmbed] });
-      } catch (error) {
-        console.error(`[pet.js]: ❌ Error retiring pet:`, error);
-        return interaction.editReply({
-          content: `❌ **An error occurred while retiring ${petToRetire.name}. Please try again later.**`,
-          ephemeral: true
-        });
-      }
-    }
-
     // ------------------- Subcommand: View Pet -------------------
     if (subcommand === "view") {
-      // Validate character existence and ownership
-      const characterValidation = await characterExistsNotOwned(characterName, userId);
-      if (!characterValidation.exists) {
+      try {
+        const petData = await companionService.viewCompanion(character._id, 'pet', petName);
+        
+        const viewEmbed = new EmbedBuilder()
+          .setAuthor({ name: character.name, iconURL: character.icon })
+          .setTitle(`🐾 ${petData.name} — Details`)
+          .setThumbnail(sanitizeUrl(petData.imageUrl))
+          .addFields(
+            { name: "__Pet Name__", value: `> ${petData.name}`, inline: true },
+            { name: "__Owner__", value: `> ${character.name}`, inline: true },
+            {
+              name: "__Pet Level & Rolls__",
+              value: `> Level ${petData.level || 0} | ${petData.rollsDisplay}`,
+              inline: true,
+            },
+            {
+              name: "__Pet Species__",
+              value: `> ${getPetEmoji(petData.species)} ${petData.species}`,
+              inline: true,
+            },
+            { name: "__Pet Type__", value: `> ${petData.petType}`, inline: true },
+            { name: "__Status__", value: `> ${petData.status === 'stored' ? 'Stored' : 'Active'}`, inline: true },
+            {
+              name: "Roll Combination",
+              value: petData.petTypeData.rollCombination.join(", "),
+              inline: false,
+            },
+            { name: "Description", value: petData.petTypeData.description, inline: false }
+          )
+          .setImage(sanitizeUrl(petData.imageUrl))
+          .setColor(petData.status === 'stored' ? "#FF0000" : "#00FF00");
+
+        return interaction.editReply({ embeds: [viewEmbed] });
+      } catch (error) {
         return interaction.editReply({
-          content: `❌ **Character \`${characterName}\` not found.**`,
+          content: `❌ **${error.message}**`,
           ephemeral: true
         });
       }
-      if (!characterValidation.owned) {
-        return interaction.editReply({
-          content: `❌ **Character \`${characterName}\` belongs to a different user. You can only view pets for your own characters.**`,
-          ephemeral: true
-        });
-      }
-
-      // Find pet by identifier in both pets and stable arrays
-      const charDoc = await Character.findById(character._id);
-      let petDoc = charDoc.pets.find(p => p.name === petName);
-      if (!petDoc && charDoc.stable) {
-        petDoc = charDoc.stable.find(p => p.name === petName);
-      }
-      if (!petDoc) {
-        return interaction.editReply(
-          `❌ **Pet \`${petName}\` not found. Please add it first with \`/pet add\`.**`
-        );
-      }
-
-      // Prepare rolls display
-      const rollsDisplay = getRollsDisplay(petDoc.rollsRemaining, petDoc.level);
-
-      // Get pet type data for combination & description
-      const petTypeData = getPetTypeData(petDoc.petType);
-
-      // Build the embed
-      const DEFAULT_PLACEHOLDER = "https://i.imgur.com/placeholder.png";
-      
-      // Ensure we have valid URLs for both image and thumbnail
-      const sanitizedImageUrl = sanitizeUrl(petDoc.imageUrl);
-
-      const viewEmbed = new EmbedBuilder()
-       .setAuthor({ name: character.name, iconURL: character.icon })
-       .setTitle(`🐾 ${petDoc.name} — Details`)
-       .setThumbnail(sanitizedImageUrl)
-       .addFields(
-        { name: "__Pet Name__", value: `> ${petDoc.name}`, inline: true },
-        { name: "__Owner__", value: `> ${character.name}`, inline: true },
-        {
-         name: "__Pet Level & Rolls__",
-         value: `> Level ${petDoc.level} | ${rollsDisplay}`,
-         inline: true,
-        },
-        {
-         name: "__Pet Species__",
-         value: `> ${getPetEmoji(petDoc.species)} ${petDoc.species}`,
-         inline: true,
-        },
-        { name: "__Pet Type__", value: `> ${petDoc.petType}`, inline: true },
-        { name: "__Status__", value: `> ${petDoc.status === 'retired' ? 'Retired' : 'Active'}`, inline: true },
-        {
-         name: "Roll Combination",
-         value: petTypeData.rollCombination.join(", "),
-         inline: false,
-        },
-        { name: "Description", value: petTypeData.description, inline: false }
-       )
-       .setImage(sanitizedImageUrl)
-       .setColor(petDoc.status === 'retired' ? "#FF0000" : "#00FF00");
-
-      return interaction.editReply({ embeds: [viewEmbed] });
     }
   } catch (error) {
     handleError(error, 'pet.js');
@@ -996,3 +881,4 @@ module.exports = {
   }
  },
 };
+

@@ -2709,11 +2709,11 @@ async function handleStableMountNameAutocomplete(interaction, focusedOption) {
 
     // Format choices
     const mountChoices = mounts.map(mount => ({
-      name: `🟫 ${mount.name} | ${mount.species} | ${mount.level}`,
+      name: `🐴 ${mount.name} | ${mount.species} | ${mount.level}`,
       value: mount.name
     }));
     const petChoices = pets.map(pet => ({
-      name: `🟪 ${pet.name} | ${pet.species} | ${pet.petType} | Lv.${pet.level}`,
+      name: `🐾${pet.name} | ${pet.species} | ${pet.petType} | Lv.${pet.level}`,
       value: pet.name
     }));
 
@@ -2869,11 +2869,14 @@ async function handlePetNameAutocomplete(interaction, focusedOption) {
  if (subcommand === "add") {
   // For add command, show no pets since we're adding a new one
   return await interaction.respond([]);
- } else if (subcommand === "retire") {
-  // For retire command, only show active pets
+ } else if (subcommand === "store") {
+  // For store command, only show active pets
+  pets = await Pet.find({ owner: character._id, status: "active" }).lean();
+ } else if (subcommand === "roll") {
+  // For roll command, only show active pets (not stored)
   pets = await Pet.find({ owner: character._id, status: "active" }).lean();
  } else {
-  // For other commands (roll, upgrade, view, edit), show all pets
+  // For other commands (upgrade, view, edit), show all pets
   pets = await Pet.find({ owner: character._id }).lean();
  }
 
