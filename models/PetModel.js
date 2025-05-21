@@ -15,7 +15,8 @@ const PetSchema = new Schema({
   owner: { type: Schema.Types.ObjectId, ref: 'Character', required: true },
   imageUrl: { type: String, default: '' },
   rollCombination: { type: [String], default: [] },   
-  tableDescription: { type: String, default: '' }       
+  tableDescription: { type: String, default: '' },
+  lastRollDate: { type: Date, default: null }       
 }, {
   timestamps: true 
 });
