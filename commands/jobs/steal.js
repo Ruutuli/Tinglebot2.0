@@ -60,7 +60,7 @@ const FAILURE_CHANCES = {
 // ------------------- Error Messages -------------------
 const ERROR_MESSAGES = {
     CHARACTER_NOT_FOUND: '❌ **Character not found.**',
-    INVENTORY_NOT_SYNCED: '❌ **Inventory is not set up yet.** Use </testinventorysetup:ID> then </syncinventory:ID> to initialize.',
+    INVENTORY_NOT_SYNCED: '❌ **Inventory is not set up yet.** Use `/inventory test charactername:NAME` then `/inventory sync charactername:NAME` to initialize.',
     IN_JAIL: '⛔ **You are currently in jail and cannot steal!**',
     PROTECTED: '🛡️ **This character is currently protected from theft!**',
     COOLDOWN: '⏰ **Please wait {time} seconds before attempting to steal again.**',
@@ -512,7 +512,7 @@ module.exports = {
                 // Check if thief's inventory is set up
                 if (!thiefCharacter.inventorySynced) {
                     return interaction.editReply({ 
-                        content: '❌ **Your inventory is not set up yet.** Use </testinventorysetup:ID> then </syncinventory:ID> to initialize.', 
+                        content: '❌ **Your inventory is not set up yet.** Use `/inventory test charactername:NAME` then `/inventory sync charactername:NAME` to initialize.', 
                         ephemeral: true 
                     });
                 }
@@ -746,7 +746,7 @@ module.exports = {
 
                     if (!targetCharacter.inventorySynced) {
                         return interaction.editReply({ 
-                            content: `❌ **${targetCharacter.name}'s inventory is not set up yet.** They need to use </testinventorysetup:ID> then </syncinventory:ID> to initialize.`, 
+                            content: `❌ **${targetCharacter.name}'s inventory is not set up yet.** They need to use \`/inventory test charactername:NAME\` then \`/inventory sync charactername:NAME\` to initialize.`, 
                             ephemeral: true 
                         });
                     }
