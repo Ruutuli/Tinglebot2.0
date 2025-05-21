@@ -20,5 +20,8 @@ const PetSchema = new Schema({
   timestamps: true 
 });
 
+// Add compound unique index for name and owner
+PetSchema.index({ name: 1, owner: 1 }, { unique: true });
+
 // ------------------- Export the Pet Model -------------------
 module.exports = mongoose.model('Pet', PetSchema);

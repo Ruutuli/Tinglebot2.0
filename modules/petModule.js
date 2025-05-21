@@ -243,16 +243,30 @@ const getRollsDisplay = (rollsRemaining, level) => {
   return "🔔".repeat(safeRollsRemaining) + "🔕".repeat(usedRolls);
 };
 
-// ---- Function: findPetByIdentifier ----
-// Finds a pet by either ID or name, returns null if not found
-const findPetByIdentifier = async (petIdentifier, characterId) => {
-  // Check if identifier looks like an ObjectId
-  if (petIdentifier.match(/^[0-9a-fA-F]{24}$/)) {
-    return await Pet.findOne({ _id: petIdentifier, owner: characterId });
+// ------------------- Function: findPetByIdentifier -------------------
+// Finds a pet by its identifier (ID or name) and owner
+async function findPetByIdentifier(identifier, ownerId, status = null) {
+  try {
+    let query = { owner: ownerId };
+    
+    if (identifier.match(/^[0-9a-fA-F]{24}$/)) {
+      query._id = identifier;
+    } else {
+      query.name = identifier;
+    }
+
+    // If status is provided, add it to the query
+    if (status) {
+      query.status = status;
+    }
+
+    const pet = await Pet.findOne(query);
+    return pet;
+  } catch (error) {
+    console.error(`[petModule.js]: ❌ Error finding pet:`, error);
+    throw error;
   }
-  // Otherwise search by name
-  return await Pet.findOne({ name: petIdentifier, owner: characterId });
-};
+}
 
 // ---- Function: handlePetImageUpload ----
 // Handles pet image upload with fallback and error handling
