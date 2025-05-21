@@ -405,6 +405,7 @@ function validateHealerPermission(healer, blightStage) {
 // Applies healing effects and resets blight status.
 async function completeBlightHealing(character) {
   character.blighted = false;
+  character.blightedAt = null;
   character.blightStage = 0;
   character.blightEffects = {
     rollMultiplier: 1.0,
@@ -1199,6 +1200,19 @@ async function checkMissedRolls(client) {
       const timeSinceLastRoll = Date.now() - lastRollDate.getTime();
       console.log(`[blightHandler]: Checking ${character.name} - Last roll: ${lastRollDate.toISOString()}, Time since: ${Math.floor(timeSinceLastRoll / (1000 * 60 * 60))} hours`);
 
+      // ---- SKIP missed roll progression if newly blighted after last blight call ----
+      // Calculate last blight call (8 PM EST previous day)
+      const nowEST = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+      const lastBlightCall = new Date(nowEST);
+      if (nowEST.getHours() < 20) {
+        lastBlightCall.setDate(nowEST.getDate() - 1);
+      }
+      lastBlightCall.setHours(20, 0, 0, 0);
+      if (character.blightedAt && character.blightedAt > lastBlightCall) {
+        console.log(`[blightHandler]: Skipping missed roll for ${character.name} (blightedAt=${character.blightedAt.toISOString()}) - infected after last blight call.`);
+        continue;
+      }
+
       // ========================================================================
       // ------------------- STAGE 5: Death Watch -------------------
       // ========================================================================
@@ -1236,6 +1250,7 @@ async function checkMissedRolls(client) {
         // ------------------- Handle Death If Deadline Passed -------------------
         if (now > character.deathDeadline) {
           character.blighted = false;
+          character.blightedAt = null;
           character.blightStage = 0;
           character.deathDeadline = null;
 

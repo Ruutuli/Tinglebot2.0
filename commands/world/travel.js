@@ -231,6 +231,7 @@ module.exports = {
           await interaction.editReply({ content: blightMsg, ephemeral: false });
           // Update character in DB
           character.blighted = true;
+          character.blightedAt = new Date();
           character.blightStage = 1;
           await character.save();
           // Assign blighted role
@@ -755,6 +756,7 @@ ${pathEmoji || ''} No monsters or gathering today!`)
           await finalChannel.send({ content: blightMsg });
           // Update character in DB
           character.blighted = true;
+          character.blightedAt = new Date();
           character.blightStage = 1;
           await character.save();
           // Assign blighted role
