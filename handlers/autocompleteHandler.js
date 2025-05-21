@@ -62,7 +62,11 @@ const { Village } = require("../models/VillageModel");
 // Add safe response utility
 async function safeAutocompleteResponse(interaction, choices) {
   try {
+    console.log('[autocompleteHandler.js]: 🔄 Starting safeAutocompleteResponse');
+    console.log('[autocompleteHandler.js]: 📝 Choices:', choices);
+    
     if (interaction.responded) {
+      console.log('[autocompleteHandler.js]: ⚠️ Interaction already responded to');
       return;
     }
 
@@ -71,11 +75,14 @@ async function safeAutocompleteResponse(interaction, choices) {
       setTimeout(() => reject(new Error('Response timeout')), 2000)
     );
 
+    console.log('[autocompleteHandler.js]: 📤 Sending autocomplete response');
     await Promise.race([
       interaction.respond(choices),
       timeoutPromise
     ]);
+    console.log('[autocompleteHandler.js]: ✅ Successfully sent autocomplete response');
   } catch (error) {
+    console.error('[autocompleteHandler.js]: ❌ Error in safeAutocompleteResponse:', error);
     handleError(error, 'autocompleteHandler.js', {
       operation: 'safeAutocompleteResponse',
       interactionId: interaction.id,
@@ -83,15 +90,17 @@ async function safeAutocompleteResponse(interaction, choices) {
     });
 
     if (error.code === 10062) {
+      console.log('[autocompleteHandler.js]: ⚠️ Interaction expired');
       return;
     }
 
     try {
       if (!interaction.responded) {
+        console.log('[autocompleteHandler.js]: 📤 Sending empty response as fallback');
         await interaction.respond([]).catch(() => {});
       }
     } catch (e) {
-      // Ignore any errors from the fallback response
+      console.error('[autocompleteHandler.js]: ❌ Error sending fallback response:', e);
     }
   }
 }
@@ -139,12 +148,21 @@ async function safeRespondWithError(interaction, error) {
 // Routes autocomplete requests to appropriate handlers based on command and focused option
 async function handleAutocomplete(interaction) {
     try {
+        console.log('[autocompleteHandler.js]: 🔄 Starting handleAutocomplete');
+        console.log('[autocompleteHandler.js]: 📝 Raw interaction data:', {
+            commandName: interaction.commandName,
+            options: interaction.options.data,
+            focused: interaction.options.getFocused(true)
+        });
+        
         const commandName = interaction.commandName;
         const focusedOption = interaction.options.getFocused(true);
+        console.log(`[autocompleteHandler.js]: 📝 Command: ${commandName}, Focused Option: ${focusedOption.name}`);
 
         // Add a check for interaction validity
         if (!interaction.isAutocomplete()) {
-          return;
+            console.log('[autocompleteHandler.js]: ⚠️ Not an autocomplete interaction');
+            return;
         }
 
         switch (commandName) {
@@ -359,10 +377,33 @@ async function handleAutocomplete(interaction) {
 
           // ------------------- Stable Command -------------------
           case "stable":
+            console.log('[autocompleteHandler.js]: 🔍 Handling stable command autocomplete');
+            console.log('[autocompleteHandler.js]: 📝 Full interaction options:', JSON.stringify(interaction.options.data, null, 2));
+            console.log('[autocompleteHandler.js]: 📝 Focused option details:', {
+                name: focusedOption.name,
+                value: focusedOption.value,
+                type: focusedOption.type
+            });
+            
+            const subcommand = interaction.options.getSubcommand();
+            console.log('[autocompleteHandler.js]: 📝 Stable subcommand:', subcommand);
+            
             if (focusedOption.name === "charactername") {
-              await handleStableCharacterAutocomplete(interaction, focusedOption);
+                console.log('[autocompleteHandler.js]: 📝 Routing to handleStableCharacterAutocomplete');
+                await handleStableCharacterAutocomplete(interaction, focusedOption);
             } else if (focusedOption.name === "name") {
-              await handleStableNameAutocomplete(interaction, focusedOption); // NEW unified handler
+                console.log('[autocompleteHandler.js]: 📝 Routing to handleStableMountNameAutocomplete');
+                console.log('[autocompleteHandler.js]: 📝 Selected character name:', interaction.options.getString('charactername'));
+                
+                try {
+                    await handleStableMountNameAutocomplete(interaction, focusedOption);
+                    console.log('[autocompleteHandler.js]: ✅ Successfully completed handleStableMountNameAutocomplete');
+                } catch (error) {
+                    console.error('[autocompleteHandler.js]: ❌ Error in handleStableMountNameAutocomplete:', error);
+                    throw error;
+                }
+            } else {
+                console.log('[autocompleteHandler.js]: ⚠️ Unknown focused option for stable command:', focusedOption.name);
             }
             break;
 
@@ -2662,28 +2703,50 @@ async function handleStableCharacterAutocomplete(interaction, focusedOption) {
 // Suggests mounts owned by selected character with species and level.
 async function handleStableMountNameAutocomplete(interaction, focusedOption) {
   try {
+    console.log('[autocompleteHandler.js]: 🔄 Starting handleStableMountNameAutocomplete');
     const userId = interaction.user.id;
     const characterName = interaction.options.getString("charactername");
-    if (!characterName) return await interaction.respond([]);
+    console.log(`[autocompleteHandler.js]: 📝 Character name: ${characterName}`);
+    
+    if (!characterName) {
+      console.log('[autocompleteHandler.js]: ⚠️ No character name provided');
+      return await interaction.respond([]);
+    }
 
-    const character = await fetchCharacterByNameAndUserId(characterName, userId);
-    if (!character) return await interaction.respond([]);
+    // Extract just the name part if it includes village and job
+    const cleanCharacterName = characterName.split('|')[0].trim();
+    console.log(`[autocompleteHandler.js]: 📝 Cleaned character name: ${cleanCharacterName}`);
 
-    const mounts = await Mount.find({ owner: character.name });
+    const character = await fetchCharacterByNameAndUserId(cleanCharacterName, userId);
+    if (!character) {
+      console.log('[autocompleteHandler.js]: ⚠️ Character not found');
+      return await interaction.respond([]);
+    }
+
+    console.log('[autocompleteHandler.js]: 🔍 Fetching mounts and pets');
+    const [mounts, pets] = await Promise.all([
+      Mount.find({ owner: character.name }),
+      Pet.find({ owner: character.name })
+    ]);
+    console.log(`[autocompleteHandler.js]: 📊 Found ${mounts.length} mounts and ${pets.length} pets`);
+
     const query = focusedOption.value?.toLowerCase() || "";
+    console.log(`[autocompleteHandler.js]: 🔍 Search query: ${query}`);
 
-    const choices = mounts
-      .map(formatMountChoice)
+    const choices = [...mounts.map(formatMountChoice), ...pets.map(formatPetChoice)]
       .filter(choice => choice.name.toLowerCase().includes(query))
       .slice(0, 25);
+    console.log(`[autocompleteHandler.js]: 📊 Filtered to ${choices.length} choices`);
 
     await safeAutocompleteResponse(interaction, choices);
+    console.log('[autocompleteHandler.js]: ✅ Successfully sent autocomplete response');
   } catch (error) {
     handleError(error, "autocompleteHandler.js", {
       operation: "handleStableMountNameAutocomplete",
       character: characterName,
       userId: interaction.user.id
     });
+    console.error('[autocompleteHandler.js]: ❌ Error in handleStableMountNameAutocomplete:', error);
     await safeRespondWithError(interaction);
   }
 }
