@@ -524,7 +524,7 @@ module.exports = {
 
     // ------------------- Verify Pet Existence for Roll, Upgrade, and Retire -------------------
     // Find pet by identifier (ID or name)
-    const pet = await findPetByIdentifier(petName, character._id);
+    const pet = await findPetByIdentifier(petName, character._id, 'active');
 
     if (!pet) {
       console.error(
@@ -543,6 +543,14 @@ module.exports = {
       );
       return interaction.editReply({
         content: `❌ **Pet \`${petName}\` belongs to a different character. Please check the pet name and try again.**`,
+        ephemeral: true
+      });
+    }
+
+    // Check if pet is retired
+    if (pet.status === 'retired') {
+      return interaction.editReply({
+        content: `❌ **Pet \`${petName}\` is retired and cannot perform actions.**`,
         ephemeral: true
       });
     }
@@ -789,18 +797,21 @@ module.exports = {
 
     // ------------------- Subcommand: Retire -------------------
     if (subcommand === "retire") {
+      // Find the active pet to retire
+      const petToRetire = await findPetByIdentifier(petName, character._id, 'active');
+      
       // Verify pet exists and is owned by the character
-      if (!pet) {
+      if (!petToRetire) {
         return interaction.editReply({
-          content: `❌ **Pet \`${petName}\` not found for character \`${characterName}\`.**`,
+          content: `❌ **Active pet \`${petName}\` not found for character \`${characterName}\`.**`,
           ephemeral: true
         });
       }
 
       // Check if pet is already retired
-      if (pet.status === "retired") {
+      if (petToRetire.status === "retired") {
         return interaction.editReply({
-          content: `❌ **${pet.name} is already retired.**`,
+          content: `❌ **${petToRetire.name} is already retired.**`,
           ephemeral: true
         });
       }
@@ -808,44 +819,44 @@ module.exports = {
       try {
         // Update pet status to retired
         const updateResult = await Pet.updateOne(
-          { _id: pet._id },
+          { _id: petToRetire._id },
           { $set: { status: "retired" } }
         );
 
         if (updateResult.modifiedCount === 0) {
           return interaction.editReply({
-            content: `❌ **Failed to retire ${pet.name}. Please try again.**`,
+            content: `❌ **Failed to retire ${petToRetire.name}. Please try again.**`,
             ephemeral: true
           });
         }
 
         // If this was the active pet, clear the active pet reference
-        if (character.currentActivePet && character.currentActivePet.toString() === pet._id.toString()) {
+        if (character.currentActivePet && character.currentActivePet.toString() === petToRetire._id.toString()) {
           await Character.findByIdAndUpdate(character._id, {
             currentActivePet: null
           });
         }
 
         // Update the pet in character's pets array
-        const updatedPetData = { ...pet.toObject(), status: "retired" };
-        await updatePetToCharacter(character._id, pet.name, updatedPetData);
+        const updatedPetData = { ...petToRetire.toObject(), status: "retired" };
+        await updatePetToCharacter(character._id, petToRetire.name, updatedPetData);
 
         // Create and send success embed
         const retireEmbed = new EmbedBuilder()
           .setAuthor({ name: character.name, iconURL: character.icon })
-          .setTitle(`Pet Retired - ${pet.name}`)
+          .setTitle(`Pet Retired - ${petToRetire.name}`)
           .setColor("#FF0000")
           .setDescription(
-            `Your pet **${pet.name}** has been retired.\nYou can now add a new pet to your character.`
+            `Your pet **${petToRetire.name}** has been retired.\nYou can now add a new pet to your character.`
           )
-          .setImage(sanitizeUrl(pet.imageUrl))
+          .setImage(sanitizeUrl(petToRetire.imageUrl))
           .setFooter({ text: "Pet retired successfully." });
 
         return interaction.editReply({ embeds: [retireEmbed] });
       } catch (error) {
         console.error(`[pet.js]: ❌ Error retiring pet:`, error);
         return interaction.editReply({
-          content: `❌ **An error occurred while retiring ${pet.name}. Please try again later.**`,
+          content: `❌ **An error occurred while retiring ${petToRetire.name}. Please try again later.**`,
           ephemeral: true
         });
       }
