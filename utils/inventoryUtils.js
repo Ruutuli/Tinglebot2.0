@@ -311,7 +311,7 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
 
     const inventoriesConnection = await dbFunctions.connectToInventories();
     const db = inventoriesConnection.useDb("inventories");
-    const collectionName = character.name.toLowerCase().replace(/\s+/g, "_");
+    const collectionName = character.name.toLowerCase();
     const inventoryCollection = db.collection(collectionName);
 
     const item = await dbFunctions.fetchItemByName(itemName);
@@ -321,8 +321,7 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
 
     const inventoryItem = await inventoryCollection.findOne({
       characterId,
-      itemName: new RegExp(`^${escapeRegExp(itemName.trim().toLowerCase())}$`, "i"),
-      obtain,
+      itemName: new RegExp(`^${escapeRegExp(itemName.trim())}$`, "i"),
     });
 
     if (inventoryItem) {
