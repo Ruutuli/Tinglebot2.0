@@ -1773,16 +1773,6 @@ async function handleSetBirthday(interaction) {
     });
   }
 
-  // Additional validation: Check if the date is in the future
-  const today = new Date();
-  const birthdayDate = new Date(currentYear, month - 1, day);
-  if (birthdayDate > today) {
-    return interaction.reply({
-      content: `❌ Invalid date: ${monthName} ${day} is in the future. Please provide a past date.`,
-      ephemeral: true,
-    });
-  }
-
   await connectToTinglebot();
 
   const character = await fetchCharacterByNameAndUserId(characterName, userId);
