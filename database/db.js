@@ -481,7 +481,12 @@ async function updatePetRolls(characterId, petIdentifier, newRolls) {
   }
   // Ensure newRolls is never negative
   const safeRolls = Math.max(0, newRolls);
-  await Pet.updateOne(filter, { $set: { rollsRemaining: safeRolls } });
+  await Pet.updateOne(filter, { 
+    $set: { 
+      rollsRemaining: safeRolls,
+      lastRollDate: new Date()
+    } 
+  });
  } catch (error) {
   handleError(error, "db.js");
   console.error(

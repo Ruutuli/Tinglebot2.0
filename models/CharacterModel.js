@@ -111,6 +111,9 @@ const characterSchema = new Schema({
   // ------------------- Pet References -------------------
   currentActivePet: { type: Schema.Types.ObjectId, ref: 'Pet', default: null },
 
+  // ------------------- Stable for retired pets -------------------
+  stable: { type: [Object], default: [] },
+
   spiritOrbs: { type: Number, default: 0 }               // Number of spirit orbs
 }, { collection: 'characters' });
 

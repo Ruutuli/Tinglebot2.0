@@ -2846,9 +2846,6 @@ async function handlePetNameAutocomplete(interaction, focusedOption) {
 
  // 2. Strip off any " – village – job" suffix
  const characterName = rawInput.split(" - ")[0];
- console.log(
-  `[autocompleteHandler.js]: logs - Lookup pets for character "${characterName}".`
- );
 
  // 3. Fetch the character appropriately
  let character;

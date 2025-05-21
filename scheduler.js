@@ -20,6 +20,7 @@ const TempData = require('./models/TempDataModel');
 const { loadBlightSubmissions, saveBlightSubmissions } = require('./handlers/blightHandler');
 const { connectToInventories } = require('./handlers/blightHandler');
 const { getCurrentWeather, saveWeather } = require('./modules/weatherModule');
+const Pet = require('./models/PetModel');
 
 // ============================================================================
 // ---- Utility Functions ----
@@ -279,6 +280,21 @@ async function resetDailyRolls() {
   }
 }
 
+// ---- Function: resetPetLastRollDates ----
+// Resets lastRollDate for all pets to allow daily rolls
+async function resetPetLastRollDates() {
+  try {
+    const result = await Pet.updateMany(
+      { status: 'active' },
+      { $set: { lastRollDate: null } }
+    );
+    console.log(`[scheduler.js]: 🔄 Reset lastRollDate for ${result.modifiedCount} pets`);
+  } catch (error) {
+    handleError(error, 'scheduler.js');
+    console.error(`[scheduler.js]: ❌ Failed to reset pet lastRollDates: ${error.message}`);
+  }
+}
+
 // ============================================================================
 // ---- Blight Functions ----
 // Handles blight-related tasks and checks
@@ -316,6 +332,7 @@ function initializeScheduler(client) {
   createCronJob('0 8 * * *', 'daily stamina recovery', recoverDailyStamina);
   createCronJob('0 0 1 * *', 'monthly vending stock generation', generateVendingStockList);
   createCronJob('0 0 * * 0', 'weekly pet rolls reset', resetPetRollsForAllCharacters);
+  createCronJob('0 0 * * *', 'reset pet last roll dates', resetPetLastRollDates);
   createCronJob('0 0 * * *', 'request expiration and cleanup', async () => {
     await Promise.all([
       cleanupExpiredEntries(),

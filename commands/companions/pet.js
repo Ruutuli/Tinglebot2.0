@@ -365,9 +365,9 @@ module.exports = {
     // ------------------- Subcommand: Add Pet or Update Pet Details -------------------
     if (subcommand === "add") {
       // If adding a new pet, prevent adding if an active pet already exists.
-      if (!existingPet && character.currentActivePet) {
+      if (!existingPet && character.pets && character.pets.length > 0) {
         return interaction.editReply({
-          content: "❌ **You already have an active pet. Please update your current pet instead of adding a new one.**",
+          content: "❌ **You already have an active pet. Please retire your current pet before adding a new one.**",
           ephemeral: true
         });
       }
@@ -564,6 +564,20 @@ module.exports = {
        );
      }
 
+     // ------------------- Check Last Roll Date -------------------
+     const now = new Date();
+     const lastRoll = pet.lastRollDate ? new Date(pet.lastRollDate) : null;
+     const isSameDay = lastRoll && 
+       lastRoll.getFullYear() === now.getFullYear() &&
+       lastRoll.getMonth() === now.getMonth() &&
+       lastRoll.getDate() === now.getDate();
+
+     if (isSameDay) {
+       return interaction.editReply(
+         `❌ ${pet.name} is too tired to roll again today. Come back tomorrow for more adventures!`
+       );
+     }
+
      // ------------------- Check Inventory Sync -------------------
      try {
        await checkInventorySync(character);
@@ -626,6 +640,12 @@ module.exports = {
      );
      await updatePetRolls(character._id, petName, newRollsRemaining);
      pet.rollsRemaining = newRollsRemaining;
+     // Only set lastRollDate after a successful roll
+     pet.lastRollDate = now;
+     await Pet.updateOne(
+       { _id: pet._id },
+       { $set: { lastRollDate: now } }
+     );
      const quantity = 1;
      await addItemInventoryDatabase(
       character._id,
@@ -788,6 +808,26 @@ module.exports = {
      await upgradePetLevel(character._id, petName, targetLevel);
      await updatePetRolls(character._id, petName, targetLevel);
 
+     // Log to token tracker sheet if available
+     const User = require("../../models/UserModel");
+     const { safeAppendDataToSheet } = require("../../utils/googleSheetsUtils");
+     const user = await User.findOne({ discordId: userId });
+     if (user && user.tokenTracker) {
+       const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
+       const tokenRow = [
+         `${pet.name} - Pet Upgrade to Level ${targetLevel}`,
+         interactionUrl,
+         "pet upgrade",
+         "spent",
+         `-${cost}`
+       ];
+       try {
+         await safeAppendDataToSheet(user.tokenTracker, character, "loggedTracker!B7:F", [tokenRow], undefined, { skipValidation: true });
+       } catch (sheetError) {
+         console.error(`[pet.js]: ❌ Error logging pet upgrade to token tracker:`, sheetError);
+       }
+     }
+
      return interaction.editReply(
        `✅ **${pet.name} is now level ${targetLevel}!**\n` +
        `💰 Spent ${cost} tokens — you have ${balance - cost} left.\n` +
@@ -817,7 +857,7 @@ module.exports = {
       }
 
       try {
-        // Update pet status to retired
+        // Update pet status to retired in Pet collection
         const updateResult = await Pet.updateOne(
           { _id: petToRetire._id },
           { $set: { status: "retired" } }
@@ -837,9 +877,16 @@ module.exports = {
           });
         }
 
-        // Update the pet in character's pets array
-        const updatedPetData = { ...petToRetire.toObject(), status: "retired" };
-        await updatePetToCharacter(character._id, petToRetire.name, updatedPetData);
+        // Remove pet from pets array and push to stable array
+        const charDoc = await Character.findById(character._id);
+        if (charDoc) {
+          // Remove from pets
+          charDoc.pets = charDoc.pets.filter(p => p.name !== petToRetire.name);
+          // Add to stable with status retired
+          charDoc.stable = charDoc.stable || [];
+          charDoc.stable.push({ ...petToRetire.toObject(), status: "retired" });
+          await charDoc.save();
+        }
 
         // Create and send success embed
         const retireEmbed = new EmbedBuilder()
@@ -879,8 +926,12 @@ module.exports = {
         });
       }
 
-      // Find pet by identifier
-      const petDoc = await findPetByIdentifier(petName, character._id);
+      // Find pet by identifier in both pets and stable arrays
+      const charDoc = await Character.findById(character._id);
+      let petDoc = charDoc.pets.find(p => p.name === petName);
+      if (!petDoc && charDoc.stable) {
+        petDoc = charDoc.stable.find(p => p.name === petName);
+      }
       if (!petDoc) {
         return interaction.editReply(
           `❌ **Pet \`${petName}\` not found. Please add it first with \`/pet add\`.**`
@@ -917,6 +968,7 @@ module.exports = {
          inline: true,
         },
         { name: "__Pet Type__", value: `> ${petDoc.petType}`, inline: true },
+        { name: "__Status__", value: `> ${petDoc.status === 'retired' ? 'Retired' : 'Active'}`, inline: true },
         {
          name: "Roll Combination",
          value: petTypeData.rollCombination.join(", "),
@@ -925,7 +977,7 @@ module.exports = {
         { name: "Description", value: petTypeData.description, inline: false }
        )
        .setImage(sanitizedImageUrl)
-       .setColor("#00FF00");
+       .setColor(petDoc.status === 'retired' ? "#FF0000" : "#00FF00");
 
       return interaction.editReply({ embeds: [viewEmbed] });
     }
