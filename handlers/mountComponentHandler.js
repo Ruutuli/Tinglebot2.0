@@ -1577,7 +1577,7 @@ async function handleViewMount(interaction) {
       : 'No traits available';
     let staminaField = `> ${mount.currentStamina} / ${mount.stamina}`;
     let staminaWarning = '';
-    if (mount.currentStamina <= 1) {
+    if (mount.currentStamina <= 1 && mount.stamina > 1) {
       staminaWarning = '\n⚠️ **Warning:** Stamina is low! Mount will not be able to travel if stamina reaches 0.';
     }
 

@@ -40,6 +40,7 @@ module.exports = {
           option.setName('name')
             .setDescription('Enter the mount/pet name')
             .setRequired(true)
+            .setAutocomplete(true)
         )
     )
     .addSubcommand(subcommand =>
@@ -56,6 +57,7 @@ module.exports = {
           option.setName('name')
             .setDescription('Enter the mount/pet name')
             .setRequired(true)
+            .setAutocomplete(true)
         )
     )
     .addSubcommand(subcommand =>
