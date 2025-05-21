@@ -1704,10 +1704,19 @@ async function handleItemAutocomplete(interaction, focusedOption) {
    if (focusedName === "itemname") {
     const subcommand = interaction.options.getSubcommand(false); // Pass false to prevent crash
  
+    // --- Aggregate item quantities by item name (case-insensitive) ---
+    const itemTotals = {};
+    for (const item of inventoryItems) {
+      const name = item.itemName?.toLowerCase();
+      if (!name) continue;
+      if (!itemTotals[name]) itemTotals[name] = 0;
+      itemTotals[name] += item.quantity;
+    }
+
     if (subcommand !== "sell") {
      // --- Updated Healing Item + Voucher Filter ---
-     const itemNames = inventoryItems.map((item) => item.itemName);
- 
+     const itemNames = Object.keys(itemTotals).map((n) => n);
+
      const allowedItems = await Item.find({
       itemName: { $in: itemNames },
       $or: [
@@ -1718,56 +1727,57 @@ async function handleItemAutocomplete(interaction, focusedOption) {
      })
       .select("itemName")
       .lean();
- 
+
      const allowedNames = new Set(
       allowedItems.map((item) => item.itemName.toLowerCase())
      );
- 
-     choices = inventoryItems
+
+     choices = Object.entries(itemTotals)
       .filter(
-       (item) =>
-        item.itemName &&
-        allowedNames.has(item.itemName.toLowerCase()) &&
-        item.itemName.toLowerCase().includes(searchQuery)
+       ([name]) =>
+        allowedNames.has(name) &&
+        name.includes(searchQuery)
       )
-      .map((item) => ({
-       name: `${capitalizeWords(item.itemName)} - Qty: ${item.quantity}`,
-       value: item.itemName,
+      .map(([name, total]) => ({
+       name: `${capitalizeWords(name)} - Qty: ${total}`,
+       value: name,
       }));
     } else {
-     const itemNames = inventoryItems.map((item) => item.itemName);
+     const itemNames = Object.keys(itemTotals).map((n) => n);
      const itemsFromDB = await Item.find({ itemName: { $in: itemNames } })
       .select("itemName sellPrice")
       .lean();
      const itemsMap = new Map(
-      itemsFromDB.map((item) => [item.itemName, item.sellPrice])
+      itemsFromDB.map((item) => [item.itemName.toLowerCase(), item.sellPrice])
      );
- 
-     choices = inventoryItems
+
+     choices = Object.entries(itemTotals)
       .filter(
-       (item) =>
-        item.itemName &&
-        item.itemName.toLowerCase().includes(searchQuery) &&
-        item.itemName.toLowerCase() !== "initial item"
+       ([name]) =>
+        name.includes(searchQuery) &&
+        name !== "initial item"
       )
-      .sort((a, b) => a.itemName.localeCompare(b.itemName))
-      .map((item) => ({
-       name: `${capitalizeWords(item.itemName)} - Qty: ${
-        item.quantity
-       } - Sell: ${itemsMap.get(item.itemName) || "N/A"}`,
-       value: item.itemName,
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([name, total]) => ({
+       name: `${capitalizeWords(name)} - Qty: ${total} - Sell: ${itemsMap.get(name) || "N/A"}`,
+       value: name,
       }));
     }
    } else {
     // If we're not focusing itemname, don't do anything fancy
-    choices = inventoryItems
-     .filter(
-      (item) =>
-       item.itemName && item.itemName.toLowerCase().includes(searchQuery)
-     )
-     .map((item) => ({
-      name: `${capitalizeWords(item.itemName)} - Qty: ${item.quantity}`,
-      value: item.itemName,
+    // --- Aggregate item quantities by item name (case-insensitive) ---
+    const itemTotals = {};
+    for (const item of inventoryItems) {
+      const name = item.itemName?.toLowerCase();
+      if (!name) continue;
+      if (!itemTotals[name]) itemTotals[name] = 0;
+      itemTotals[name] += item.quantity;
+    }
+    choices = Object.entries(itemTotals)
+     .filter(([name]) => name.includes(searchQuery))
+     .map(([name, total]) => ({
+      name: `${capitalizeWords(name)} - Qty: ${total}`,
+      value: name,
      }));
    }
  
