@@ -573,9 +573,9 @@ module.exports = {
         // ------------------- Normal Gathering Logic -------------------
         const items = await fetchAllItems();
         const availableItems = items.filter(item => {
-          if (job === 'AB (Meat)') {
+          if (job.toLowerCase() === 'ab (meat)') {
             return item.abMeat && item[region.toLowerCase()];
-          } else if (job === 'AB (Live)') {
+          } else if (job.toLowerCase() === 'ab (live)') {
             return item.abLive && item[region.toLowerCase()];
           } else {
             const jobKey = normalizeJobName(job);

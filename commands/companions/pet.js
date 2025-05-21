@@ -51,7 +51,7 @@ const { checkInventorySync } = require("../../utils/characterUtils");
 const { handleError } = require('../../utils/globalErrorHandler');
 const { enforceJail } = require('../../utils/jailCheck');
 const { characterExistsNotOwned } = require('../../utils/validation');
-const companionService = require('../../services/companionService');
+
 
 // ------------------- Database Models -------------------
 // Data schemas for pet and character documents.
@@ -827,41 +827,56 @@ module.exports = {
     // ------------------- Subcommand: View Pet -------------------
     if (subcommand === "view") {
       try {
-        const petData = await companionService.viewCompanion(character._id, 'pet', petName);
+        // Find pet directly using Pet model
+        const pet = await Pet.findOne({
+          owner: character._id,
+          name: petName
+        });
+
+        if (!pet) {
+          return interaction.editReply({
+            content: `❌ **Pet \`${petName}\` not found for character \`${character.name}\`.**`,
+            ephemeral: true
+          });
+        }
+
+        const petTypeData = getPetTypeData(pet.petType);
+        const rollsDisplay = getRollsDisplay(pet.rollsRemaining || 0, pet.level || 0);
         
         const viewEmbed = new EmbedBuilder()
           .setAuthor({ name: character.name, iconURL: character.icon })
-          .setTitle(`🐾 ${petData.name} — Details`)
-          .setThumbnail(sanitizeUrl(petData.imageUrl))
+          .setTitle(`🐾 ${pet.name} — Details`)
+          .setThumbnail(sanitizeUrl(pet.imageUrl))
           .addFields(
-            { name: "__Pet Name__", value: `> ${petData.name}`, inline: true },
+            { name: "__Pet Name__", value: `> ${pet.name}`, inline: true },
             { name: "__Owner__", value: `> ${character.name}`, inline: true },
             {
               name: "__Pet Level & Rolls__",
-              value: `> Level ${petData.level || 0} | ${petData.rollsDisplay}`,
+              value: `> Level ${pet.level || 0} | ${rollsDisplay}`,
               inline: true,
             },
             {
               name: "__Pet Species__",
-              value: `> ${getPetEmoji(petData.species)} ${petData.species}`,
+              value: `> ${getPetEmoji(pet.species)} ${pet.species}`,
               inline: true,
             },
-            { name: "__Pet Type__", value: `> ${petData.petType}`, inline: true },
-            { name: "__Status__", value: `> ${petData.status === 'stored' ? 'Stored' : 'Active'}`, inline: true },
+            { name: "__Pet Type__", value: `> ${pet.petType}`, inline: true },
+            { name: "__Status__", value: `> ${pet.status === 'stored' ? 'Stored' : 'Active'}`, inline: true },
             {
               name: "Roll Combination",
-              value: petData.petTypeData.rollCombination.join(", "),
+              value: petTypeData.rollCombination.join(", "),
               inline: false,
             },
-            { name: "Description", value: petData.petTypeData.description, inline: false }
+            { name: "Description", value: petTypeData.description, inline: false }
           )
-          .setImage(sanitizeUrl(petData.imageUrl))
-          .setColor(petData.status === 'stored' ? "#FF0000" : "#00FF00");
+          .setImage(sanitizeUrl(pet.imageUrl))
+          .setColor(pet.status === 'stored' ? "#FF0000" : "#00FF00");
 
         return interaction.editReply({ embeds: [viewEmbed] });
       } catch (error) {
+        console.error(`[pet.js]: ❌ Error viewing pet:`, error);
         return interaction.editReply({
-          content: `❌ **${error.message}**`,
+          content: `❌ **An error occurred while viewing your pet. Please try again later.**`,
           ephemeral: true
         });
       }

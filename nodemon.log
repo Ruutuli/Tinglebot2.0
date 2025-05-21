@@ -1,20 +1,5 @@
   - Option "race" has autocomplete enabled
-Moose common color roll: 86
-[assignTestMounts.js]: ✅ Assigned mount "Oryn" (Moose, High, Rudania) and pet "Kaelis" (largereptile, Conqueror) to SethV
-Bear common color roll: 4
-[assignTestMounts.js]: ✅ Assigned mount "Hugo" (Bear, Mid, inariko) and pet "Ellie" (smallspecial, Forager) to Pommé
-Wolfos common color roll: 1
-[assignTestMounts.js]: ✅ Assigned mount "Nellie" (Wolfos, Basic, vhintl) and pet "Hazel" (largespecial, Conqueror) to Ayame
-Deer common color roll: 2
-[assignTestMounts.js]: ✅ Assigned mount "Ellie" (Deer, Mid, vhintl) and pet "Kairo" (largespecial, Roamer) to Euthalia
-Water Buffalo common color roll: 10
-[assignTestMounts.js]: ✅ Assigned mount "Tilly" (W.Buffalo, High, rudania) and pet "Luna" (smallfeline, Explorer) to Tingle
-Mountain Goat common color roll: 13
-[assignTestMounts.js]: ✅ Assigned mount "Gus" (M.Goat, Basic, rudania) and pet "Virel" (porcine, Scavenger) to Sable
-Dodongo common color roll: 8
-[assignTestMounts.js]: ✅ Assigned mount "Nina" (Dodongo, Basic, vhintl) and pet "Elira" (chainchomp, Hunter) to Fiddle
-Bullbo common color roll: 2
-[assignTestMounts.js]: ❌ Error: Pet validation failed: species: Path `species` is required.
+  - Option "race" has autocomplete enabled
   - Option "race" has autocomplete enabled
   - Option "race" has autocomplete enabled
   - Option "charactername" has autocomplete enabled
@@ -49,6 +34,7 @@ Bullbo common color roll: 2
   - Option "charactername" has autocomplete enabled
   - Option "name" has autocomplete enabled
   - Option "charactername" has autocomplete enabled
+.
 ✅ Loaded command: stable from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\companions\stable.js
   - Option "fromcharacter" has autocomplete enabled
   - Option "tocharacter" has autocomplete enabled
@@ -211,10 +197,10 @@ Bullbo common color roll: 2
 .
 ✅ Loaded command: village from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\world\village.js
 🔄 Started refreshing 35 guild (/) commands for guild ID: 1305484048063529002
-(node:36272) Warning: Accessing non-existent property 'connectToInventories' of module exports inside circular dependency
+(node:38956) Warning: Accessing non-existent property 'connectToInventories' of module exports inside circular dependency
 (Use `node --trace-warnings ...` to show where the warning was created)
-(node:36272) Warning: Accessing non-existent property 'fetchCharacterById' of module exports inside circular dependency
-(node:36272) Warning: Accessing non-existent property 'updateCharacterById' of module exports inside circular dependency
+(node:38956) Warning: Accessing non-existent property 'fetchCharacterById' of module exports inside circular dependency
+(node:38956) Warning: Accessing non-existent property 'updateCharacterById' of module exports inside circular dependency
 ✅ Successfully reloaded application (/) commands for guild ID: 1305484048063529002.
 🔄 Started refreshing 35 guild (/) commands for guild ID: 603960955839447050
 ✅ Successfully reloaded application (/) commands for guild ID: 603960955839447050.

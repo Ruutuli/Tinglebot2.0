@@ -1080,6 +1080,7 @@ const mountDisplayNames = {
   'Donkey': 'Donkey',
   'Ostrich': 'Ostrich',
   'Mountain Goat': 'Mountain Goat',
+  'M.Goat': 'Mountain Goat',
   'Deer': 'Deer',
   'Bullbo': 'Bullbo',
   'W.Buffalo': 'Water Buffalo',

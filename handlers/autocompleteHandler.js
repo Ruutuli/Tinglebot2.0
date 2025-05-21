@@ -2889,7 +2889,7 @@ async function handlePetNameAutocomplete(interaction, focusedOption) {
 
  // 5. Return pet names with status indicator
  const choices = pets.map((pet) => ({
-  name: `${pet.name}${pet.status === "active" ? " (Active)" : " (Inactive)"}`,
+  name: `${pet.name} | ${pet.petType}`,
   value: pet.name,
  }));
                 await respondWithFilteredChoices(interaction, focusedOption, choices);

@@ -831,4 +831,7 @@ module.exports = {
       await sendErrorResponse(interaction, 'An error occurred while processing your request.');
     }
   },
-}
+
+  // Export the viewCompanion function
+  viewCompanion
+};
