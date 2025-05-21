@@ -466,6 +466,25 @@ async function execute(interaction) {
           
           target.tokens = (target.tokens || 0) + amount;
           await target.save();
+
+          // Log to token tracker if user has one
+          if (target.tokenTracker && isValidGoogleSheetsUrl(target.tokenTracker)) {
+            try {
+              const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
+              const tokenRow = [
+                `Mod Token Grant by ${interaction.user.username}`,
+                interactionUrl,
+                'Mod Grant',
+                'earned',
+                `+${amount}`
+              ];
+              await safeAppendDataToSheet(target.tokenTracker, target, 'loggedTracker!B7:F', [tokenRow], undefined, { skipValidation: true });
+              console.log(`[mod.js]: ✅ Logged token grant to tracker for user ${user.id}`);
+            } catch (sheetError) {
+              console.error(`[mod.js]: ❌ Error logging to token tracker:`, sheetError);
+              // Don't throw here, just log the error since the tokens were already given
+            }
+          }
           
           return interaction.editReply({
             content: `💠 <@${user.id}> has been given **${amount} tokens**. They now have **${target.tokens} total**.`,
