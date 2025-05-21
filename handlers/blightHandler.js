@@ -210,6 +210,9 @@ async function healBlight(interaction, characterName, healerName) {
       return;
     }
 
+    let oldRequestCancelled = false;
+    let oldHealerName = null;
+    let oldStage = null;
     // Check for existing pending submission
     const existingSubmissions = await TempData.find({
       type: 'blight',
@@ -227,11 +230,10 @@ async function healBlight(interaction, characterName, healerName) {
       if (!pendingPermission.canHeal) {
         // Expire/cancel the old request
         await deleteBlightRequestFromStorage(existingSubmission.key);
-        await interaction.reply({
-          content: `⚠️ **${characterName}** had a pending healing request from **${pendingHealer.name}**, but they can no longer heal at Stage ${currentStage}.\n\nThe old request has been cancelled. You may now request a new healing prompt from an eligible healer.`,
-          ephemeral: true
-        });
-        // Continue to process the new request as normal (do not return)
+        oldRequestCancelled = true;
+        oldHealerName = pendingHealer.name;
+        oldStage = currentStage;
+        // Do NOT reply yet; continue to process new request
       } else {
         const timeLeft = Math.ceil((existingSubmission.expiresAt - new Date()) / (1000 * 60 * 60 * 24));
         await interaction.reply({
@@ -321,8 +323,12 @@ async function healBlight(interaction, characterName, healerName) {
     const embed = createBlightHealingEmbed(character, healer, healingRequirement, newSubmissionId, expiresAt);
 
     // Reply in-channel
+    let replyContent = `<@${interaction.user.id}>`;
+    if (oldRequestCancelled) {
+      replyContent = `⚠️ **${characterName}** had a pending healing request from **${oldHealerName}**, but they can no longer heal at Stage ${oldStage}.\n\nThe old request has been cancelled. Here is your new healing prompt:\n\n` + replyContent;
+    }
     await interaction.reply({
-      content: `<@${interaction.user.id}>`,
+      content: replyContent,
       embeds: [embed],
       ephemeral: false,
     });
