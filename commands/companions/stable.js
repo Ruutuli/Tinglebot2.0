@@ -9,6 +9,7 @@ const Pet = require('../../models/PetModel');
 const User = require('../../models/UserModel');
 const { appendSheetData, authorizeSheets, extractSpreadsheetId, isValidGoogleSheetsUrl, safeAppendDataToSheet, } = require('../../utils/googleSheetsUtils');
 const { calculateMountPrice, getMountThumbnail } = require('../../modules/mountModule');
+const Character = require('../../models/CharacterModel');
 
 // ------------------- Define Stable Command -------------------
 module.exports = {
@@ -418,8 +419,28 @@ async function handleListPet(interaction, userId, characterName, petName) {
     const traits = Array.isArray(pet.traits) ? pet.traits : [];
     const price = Math.floor(pet.level * 100 + (traits.length * 50));
 
+    // Find or create the system character for stable listings
+    let systemCharacter = await Character.findOne({ name: 'Stable System' });
+    if (!systemCharacter) {
+      systemCharacter = new Character({
+        userId: 'system',
+        name: 'Stable System',
+        pronouns: 'it/its',
+        race: 'System',
+        homeVillage: 'Global',
+        job: 'Stable Keeper',
+        maxHearts: 1,
+        currentHearts: 1,
+        maxStamina: 1,
+        currentStamina: 1,
+        icon: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+      });
+      await systemCharacter.save();
+    }
+
     // Update pet status for listing
-    pet.owner = 'For Sale'; // Set to 'For Sale' instead of null to satisfy validation
+    pet.owner = systemCharacter._id; // Transfer ownership to the system character
+    pet.ownerName = 'Stable System';
     pet.isStored = true;
     pet.storageLocation = 'For Sale';
     pet.storedAt = new Date();
@@ -586,6 +607,77 @@ async function handleBuyMount(interaction, userId, characterName, mountName) {
   await character.save();
 
   await interaction.reply({ content: `✅ Successfully purchased **${mountName}** for ${foundListing.price} tokens.` });
+}
+
+// ------------------- Handle Buying Pet -------------------
+async function handleBuyPet(interaction, userId, characterName, petName) {
+  const character = await fetchCharacterByNameAndUserId(characterName, userId);
+  if (!character) {
+    await interaction.reply({ content: '❌ Character not found or does not belong to you.', ephemeral: true });
+    return;
+  }
+
+  if (character.pet) {
+    await interaction.reply({ content: '❌ You already have a pet active. Store your current pet first.', ephemeral: true });
+    return;
+  }
+
+  const user = await User.findOne({ discordId: userId });
+  if (!user) {
+    await interaction.reply({ content: '❌ User not found.', ephemeral: true });
+    return;
+  }
+
+  const stables = await Stable.find({});
+  let foundListing = null;
+  let foundStable = null;
+
+  for (const stable of stables) {
+    const listing = stable.listedPets.find(l => !l.isSold);
+    if (listing) {
+      const pet = await Pet.findById(listing.petId);
+      if (pet && pet.name === petName) {
+        foundListing = listing;
+        foundStable = stable;
+        break;
+      }
+    }
+  }
+
+  if (!foundListing) {
+    await interaction.reply({ content: `❌ Pet **${petName}** is not available for purchase.`, ephemeral: true });
+    return;
+  }
+
+  if (user.tokens < foundListing.price) {
+    await interaction.reply({ content: `❌ You don't have enough tokens. This pet costs ${foundListing.price} tokens.`, ephemeral: true });
+    return;
+  }
+
+  const pet = await Pet.findById(foundListing.petId);
+  pet.owner = character._id; // Set new owner
+  pet.ownerName = character.name; // Update owner name
+  pet.isStored = false;
+  pet.storageLocation = null;
+  pet.storedAt = null;
+  await pet.save();
+
+  foundListing.isSold = true;
+  foundListing.soldAt = new Date();
+  foundListing.buyerId = user._id;
+  await foundStable.save();
+
+  const seller = await User.findById(foundListing.sellerId);
+  seller.tokens += foundListing.price;
+  await seller.save();
+
+  user.tokens -= foundListing.price;
+  await user.save();
+
+  character.pet = true;
+  await character.save();
+
+  await interaction.reply({ content: `✅ Successfully purchased **${petName}** for ${foundListing.price} tokens.` });
 }
   
   
