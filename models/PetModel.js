@@ -25,4 +25,6 @@ const PetSchema = new Schema({
 PetSchema.index({ name: 1, owner: 1 }, { unique: true });
 
 // ------------------- Export the Pet Model -------------------
-module.exports = mongoose.model('Pet', PetSchema);
+const Pet = mongoose.model('Pet', PetSchema);
+module.exports = Pet;
+module.exports.PetSchema = PetSchema;
