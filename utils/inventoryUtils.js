@@ -370,37 +370,65 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
     if (!character) {
       throw new Error(`Character with ID ${characterId} not found`);
     }
+
     console.log(`[inventoryUtils.js]: 📦 Processing inventory for ${character.name}`);
     const collectionName = character.name.toLowerCase();
     const inventoriesConnection = await dbFunctions.connectToInventories();
     const db = inventoriesConnection.useDb("inventories");
     const inventoryCollection = db.collection(collectionName);
 
-    const inventoryItem = await inventoryCollection.findOne({
+    // First try exact match
+    let inventoryItem = await inventoryCollection.findOne({
       characterId: character._id,
-      itemName: new RegExp(`^${escapeRegExp(String(itemName).trim().toLowerCase())}$`, "i"),
+      itemName: itemName
     });
+
+    // If no exact match, try case-insensitive match
     if (!inventoryItem) {
+      inventoryItem = await inventoryCollection.findOne({
+        characterId: character._id,
+        itemName: { $regex: new RegExp(`^${escapeRegExp(itemName.trim())}$`, 'i') }
+      });
+    }
+
+    if (!inventoryItem) {
+      console.log(`[inventoryUtils.js]: ❌ Item "${itemName}" not found in ${character.name}'s inventory`);
       return false;
     }
+
     if (inventoryItem.quantity < quantity) {
+      console.log(`[inventoryUtils.js]: ❌ Not enough ${itemName} in inventory. Have: ${inventoryItem.quantity}, Need: ${quantity}`);
       return false;
     }
+
     console.log(`[inventoryUtils.js]: 📊 Found ${inventoryItem.quantity} ${itemName} in ${character.name}'s inventory`);
     console.log(`[inventoryUtils.js]: ➖ Removing ${quantity} ${itemName}`);
+    
     const newQuantity = inventoryItem.quantity - quantity;
     console.log(`[inventoryUtils.js]: 🔄 Updated ${itemName} quantity: ${inventoryItem.quantity} → ${newQuantity}`);
+
     if (newQuantity === 0) {
-      await inventoryCollection.deleteOne({
+      const deleteResult = await inventoryCollection.deleteOne({
         characterId: character._id,
-        itemName: inventoryItem.itemName,
+        itemName: inventoryItem.itemName
       });
+      
+      if (deleteResult.deletedCount === 0) {
+        console.error(`[inventoryUtils.js]: ❌ Failed to delete item ${itemName} from inventory`);
+        return false;
+      }
     } else {
-      await inventoryCollection.updateOne(
+      const updateResult = await inventoryCollection.updateOne(
         { characterId: character._id, itemName: inventoryItem.itemName },
         { $set: { quantity: newQuantity } }
       );
+      
+      if (updateResult.modifiedCount === 0) {
+        console.error(`[inventoryUtils.js]: ❌ Failed to update quantity for item ${itemName}`);
+        return false;
+      }
     }
+
     return true;
   } catch (error) {
     handleError(error, "inventoryUtils.js");
