@@ -319,6 +319,15 @@ async function handleAutocomplete(interaction) {
             }
             break;
 
+          // ------------------- Gear Command -------------------
+          case "gear":
+            if (focusedOption.name === "charactername") {
+              await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "gear");
+            } else if (focusedOption.name === "itemname") {
+              await handleGearAutocomplete(interaction, focusedOption);
+            }
+            break;
+
           // ------------------- Vending Command -------------------
           case "vending":
             const vendingSubcommand = interaction.options.getSubcommand(false);
@@ -2251,31 +2260,26 @@ async function handleGearAutocomplete(interaction, focusedOption) {
   const characterInventory = await inventoryCollection.find().toArray();
 
   const filteredItems = characterInventory.filter((item) => {
-   const categories = item.category
-    ? item.category.split(",").map((cat) => cat.trim().toLowerCase())
-    : [];
+   // Handle category - could be string or array
+   const categories = Array.isArray(item.category) 
+     ? item.category 
+     : (typeof item.category === 'string' ? item.category.split(",").map(cat => cat.trim().toLowerCase()) : []);
+   
+   // Handle subtype - could be string or array
    const subtypes = Array.isArray(item.subtype)
-    ? item.subtype.map((st) => st.trim().toLowerCase())
-    : item.subtype
-    ? [item.subtype.trim().toLowerCase()]
-    : [];
+     ? item.subtype.map(st => st.trim().toLowerCase())
+     : (typeof item.subtype === 'string' ? [item.subtype.trim().toLowerCase()] : []);
 
    if (type === "weapon") {
     return categories.includes("weapon") && !subtypes.includes("shield");
    } else if (type === "shield") {
     return subtypes.includes("shield");
    } else if (type === "head") {
-    return (
-     categories.includes("armor") && item.type?.toLowerCase()?.includes("head")
-    );
+    return categories.includes("armor") && item.type?.toLowerCase()?.includes("head");
    } else if (type === "chest") {
-    return (
-     categories.includes("armor") && item.type?.toLowerCase()?.includes("chest")
-    );
+    return categories.includes("armor") && item.type?.toLowerCase()?.includes("chest");
    } else if (type === "legs") {
-    return (
-     categories.includes("armor") && item.type?.toLowerCase()?.includes("legs")
-    );
+    return categories.includes("armor") && item.type?.toLowerCase()?.includes("legs");
    }
    return false;
   });
@@ -2288,7 +2292,7 @@ async function handleGearAutocomplete(interaction, focusedOption) {
   await respondWithFilteredChoices(interaction, focusedOption, items);
  } catch (error) {
   handleError(error, "autocompleteHandler.js");
-
+  console.error("[handleGearAutocomplete]: Error:", error);
   await safeRespondWithError(interaction);
  }
 }
