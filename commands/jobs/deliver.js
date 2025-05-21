@@ -1,5 +1,5 @@
 // ------------------- Standard Libraries -------------------
-const { SlashCommandBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const { handleError } = require('../../utils/globalErrorHandler');
 
 // ------------------- Database Services -------------------
@@ -170,6 +170,9 @@ const command = {
       ),
 
   async execute(interaction) {
+    // Defer reply at the start to prevent interaction timeout
+    await interaction.deferReply({ ephemeral: false });
+
     const subcommand = interaction.options.getSubcommand();
 
     // ------------------- Delivery Request Handler -------------------
@@ -191,7 +194,7 @@ const command = {
           if (courier) await checkInventorySync(courier);
           if (recipient) await checkInventorySync(recipient);
         } catch (error) {
-          await interaction.reply({
+          await interaction.editReply({
             content: error.message,
             ephemeral: true
           });
@@ -200,7 +203,7 @@ const command = {
 
         // ------------------- Validate: Sender cannot be Recipient -------------------
         if (senderName === recipientName) {
-          return interaction.reply({
+          return interaction.editReply({
             content: `❌ You cannot send a delivery to yourself.`,
             ephemeral: true,
           });
@@ -208,7 +211,7 @@ const command = {
 
         // ------------------- Validate: Courier cannot be Sender or Recipient -------------------
         if (courierName === senderName || courierName === recipientName) {
-          return interaction.reply({
+          return interaction.editReply({
             content: `❌ Courier must be different from both the **sender** and **recipient**.`,
             ephemeral: true,
           });
@@ -221,7 +224,7 @@ const command = {
 
         // ------------------- Validate: Quantity must be at least 1 -------------------
         if (quantity < 1) {
-          return interaction.reply({
+          return interaction.editReply({
             content: `❌ Quantity must be at least **1**.`,
             ephemeral: true,
           });
@@ -389,7 +392,7 @@ const command = {
         }
 
         // ------------------- Final bot reply -------------------
-        await interaction.reply({
+        await interaction.editReply({
           content: mentionMessage,
           embeds: [deliveryEmbed],
         });
@@ -416,86 +419,154 @@ const command = {
         const courierName = interaction.options.getString('courier');
         const deliveryId = interaction.options.getString('deliveryid');
 
-        // Find the delivery request in TempData
+        // Check inventory sync for courier
+        const courier = await fetchCharacterByName(courierName);
+        try {
+          if (courier) await checkInventorySync(courier);
+        } catch (error) {
+          await interaction.editReply({
+            content: error.message,
+            ephemeral: true
+          });
+          return;
+        }
+
+        // ------------------- Validate: Courier must be the one who accepted -------------------
+        if (courierName !== interaction.user.username) {
+          return interaction.editReply({
+            content: `❌ You can only accept deliveries as yourself.`,
+            ephemeral: true,
+          });
+        }
+
+        // ------------------- Validate: Delivery request exists -------------------
         const deliveryRequest = await TempData.findOne({ 
           key: deliveryId,
           type: 'delivery'
         });
 
         if (!deliveryRequest) {
-          return interaction.reply({
-            content: `❌ No delivery request found with ID **${deliveryId}**.`,
+          return interaction.editReply({
+            content: `❌ Delivery request with ID **${deliveryId}** not found.`,
             ephemeral: true,
           });
         }
 
-        const { data: deliveryTask } = deliveryRequest;
-
-        // Validate courier matches
-        if (deliveryTask.courier !== courierName) {
-          return interaction.reply({
-            content: `❌ You can only accept delivery requests assigned to **${courierName}**.`,
+        // ------------------- Validate: Delivery not already accepted -------------------
+        if (deliveryRequest.data.status !== 'pending') {
+          return interaction.editReply({
+            content: `❌ This delivery has already been **${deliveryRequest.data.status}**.`,
             ephemeral: true,
           });
         }
 
-        // Update the delivery status
-        deliveryTask.status = 'accepted';
-        await TempData.findByIdAndUpdate(deliveryRequest._id, { data: deliveryTask });
+        // ------------------- Update delivery status -------------------
+        deliveryRequest.data.status = 'accepted';
+        deliveryRequest.data.acceptedAt = new Date();
+        await TempData.findByIdAndUpdate(deliveryRequest._id, { data: deliveryRequest.data });
 
-        // ... rest of accept handler code ...
+        // ------------------- Create delivery embed -------------------
+        const deliveryEmbed = new EmbedBuilder()
+          .setColor('#00ff00')
+          .setTitle('📦 Delivery Accepted')
+          .setDescription(`Delivery request **${deliveryId}** has been accepted by **${courierName}**.`)
+          .addFields(
+            { name: 'From', value: deliveryRequest.data.sender, inline: true },
+            { name: 'To', value: deliveryRequest.data.recipient, inline: true },
+            { name: 'Item', value: deliveryRequest.data.item, inline: true },
+            { name: 'Quantity', value: deliveryRequest.data.quantity.toString(), inline: true },
+            { name: 'Status', value: 'Accepted', inline: true }
+          )
+          .setTimestamp();
 
+        // ------------------- Final bot reply -------------------
+        await interaction.editReply({
+          content: `Delivery request **${deliveryId}** has been accepted by **${courierName}**.`,
+          embeds: [deliveryEmbed],
+        });
       } catch (error) {
-        handleError(error, 'deliver.js');
+        console.error('Error in deliver accept:', error);
+        await interaction.editReply({
+          content: `❌ An error occurred while accepting the delivery. Please try again.`,
+          ephemeral: true,
+        });
       }
     } else if (subcommand === 'fulfill') {
       try {
         const courierName = interaction.options.getString('courier');
         const deliveryId = interaction.options.getString('deliveryid');
 
-        // Find the delivery request in TempData
+        // Check inventory sync for courier
+        const courier = await fetchCharacterByName(courierName);
+        try {
+          if (courier) await checkInventorySync(courier);
+        } catch (error) {
+          await interaction.editReply({
+            content: error.message,
+            ephemeral: true
+          });
+          return;
+        }
+
+        // ------------------- Validate: Courier must be the one who accepted -------------------
+        if (courierName !== interaction.user.username) {
+          return interaction.editReply({
+            content: `❌ You can only fulfill deliveries as yourself.`,
+            ephemeral: true,
+          });
+        }
+
+        // ------------------- Validate: Delivery request exists -------------------
         const deliveryRequest = await TempData.findOne({ 
           key: deliveryId,
           type: 'delivery'
         });
 
         if (!deliveryRequest) {
-          return interaction.reply({
-            content: `❌ No delivery request found with ID **${deliveryId}**.`,
+          return interaction.editReply({
+            content: `❌ Delivery request with ID **${deliveryId}** not found.`,
             ephemeral: true,
           });
         }
 
-        const { data: deliveryTask } = deliveryRequest;
-
-        // Validate courier matches
-        if (deliveryTask.courier !== courierName) {
-          return interaction.reply({
-            content: `❌ You can only fulfill delivery requests assigned to **${courierName}**.`,
+        // ------------------- Validate: Delivery is accepted -------------------
+        if (deliveryRequest.data.status !== 'accepted') {
+          return interaction.editReply({
+            content: `❌ This delivery must be **accepted** before it can be fulfilled.`,
             ephemeral: true,
           });
         }
 
-        // Validate status is 'accepted'
-        if (deliveryTask.status !== 'accepted') {
-          return interaction.reply({
-            content: `❌ This delivery request has not been accepted yet.`,
-            ephemeral: true,
-          });
-        }
+        // ------------------- Update delivery status -------------------
+        deliveryRequest.data.status = 'fulfilled';
+        deliveryRequest.data.fulfilledAt = new Date();
+        await TempData.findByIdAndUpdate(deliveryRequest._id, { data: deliveryRequest.data });
 
-        // Update the delivery status
-        deliveryTask.status = 'fulfilled';
-        await TempData.findByIdAndUpdate(deliveryRequest._id, { data: deliveryTask });
+        // ------------------- Create delivery embed -------------------
+        const deliveryEmbed = new EmbedBuilder()
+          .setColor('#00ff00')
+          .setTitle('📦 Delivery Fulfilled')
+          .setDescription(`Delivery request **${deliveryId}** has been fulfilled by **${courierName}**.`)
+          .addFields(
+            { name: 'From', value: deliveryRequest.data.sender, inline: true },
+            { name: 'To', value: deliveryRequest.data.recipient, inline: true },
+            { name: 'Item', value: deliveryRequest.data.item, inline: true },
+            { name: 'Quantity', value: deliveryRequest.data.quantity.toString(), inline: true },
+            { name: 'Status', value: 'Fulfilled', inline: true }
+          )
+          .setTimestamp();
 
-        // ... rest of fulfill handler code ...
-
-        // Delete the delivery request after successful fulfillment
-        await TempData.findByIdAndDelete(deliveryRequest._id);
-        console.log(`[deliver.js]: Deleted fulfilled delivery request ${deliveryId}`);
-
+        // ------------------- Final bot reply -------------------
+        await interaction.editReply({
+          content: `Delivery request **${deliveryId}** has been fulfilled by **${courierName}**.`,
+          embeds: [deliveryEmbed],
+        });
       } catch (error) {
-        handleError(error, 'deliver.js');
+        console.error('Error in deliver fulfill:', error);
+        await interaction.editReply({
+          content: `❌ An error occurred while fulfilling the delivery. Please try again.`,
+          ephemeral: true,
+        });
       }
     } else if (subcommand === 'cancel') {
       try {
