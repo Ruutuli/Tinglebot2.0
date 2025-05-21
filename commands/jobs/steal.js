@@ -711,13 +711,13 @@ module.exports = {
                         if (warningMessage) {
                             embed.addFields({ 
                                 name: '⚠️ Failed Attempts', 
-                                value: `${warningMessage}\nYou have ${attemptsLeft}/3 attempts remaining before jail time!`, 
+                                value: `${warningMessage}\nYou have ${attemptsLeft} attempt${attemptsLeft !== 1 ? 's' : ''} remaining before jail time!`, 
                                 inline: false 
                             });
                         } else {
                             embed.addFields({ 
                                 name: '⚠️ Failed Attempts', 
-                                value: `You have ${attemptsLeft}/3 attempts remaining before jail time!`, 
+                                value: `You have ${attemptsLeft} attempt${attemptsLeft !== 1 ? 's' : ''} remaining before jail time!`, 
                                 inline: false 
                             });
                         }
@@ -947,13 +947,13 @@ module.exports = {
                         if (warningMessage) {
                             embed.addFields({ 
                                 name: '⚠️ Failed Attempts', 
-                                value: `${warningMessage}\nYou have ${attemptsLeft}/3 attempts remaining before jail time!`, 
+                                value: `${warningMessage}\nYou have ${attemptsLeft} attempt${attemptsLeft !== 1 ? 's' : ''} remaining before jail time!`, 
                                 inline: false 
                             });
                         } else {
                             embed.addFields({ 
                                 name: '⚠️ Failed Attempts', 
-                                value: `You have ${attemptsLeft}/3 attempts remaining before jail time!`, 
+                                value: `You have ${attemptsLeft} attempt${attemptsLeft !== 1 ? 's' : ''} remaining before jail time!`, 
                                 inline: false 
                             });
                         }
