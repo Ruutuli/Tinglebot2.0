@@ -1206,8 +1206,13 @@ async function syncTokenTracker(userId) {
 
   return user;
  } catch (error) {
-  handleError(error, "tokenService.js");
-  console.error("[tokenService.js]: ❌ Error syncing token tracker:", error);
+  // Only log non-validation errors
+  if (!error.message.includes('No \'earned\' entries found') && 
+      !error.message.includes('Invalid sheet format') && 
+      !error.message.includes('Invalid URL')) {
+    handleError(error, "tokenService.js");
+    console.error("[tokenService.js]: ❌ Error syncing token tracker:", error);
+  }
   throw error; // Pass the original error to maintain the specific error message
  }
 }
