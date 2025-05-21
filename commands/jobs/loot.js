@@ -165,80 +165,6 @@ module.exports = {
      return;
    }
 
-   // Check inventory sync before proceeding
-   try {
-     await checkInventorySync(character);
-   } catch (error) {
-     await interaction.editReply({
-       content: error.message,
-       ephemeral: true
-     });
-     return;
-   }
-
-   // Check for job voucher and daily roll at the start
-   if (character.jobVoucher) {
-     console.log(`[Loot Command]: 🔄 Active job voucher found for ${character.name}`);
-   } else {
-     console.log(`[Loot Command]: 🔄 No active job voucher for ${character.name}`);
-     
-     // For jobs with both GATHERING and LOOTING perks, check both activities
-     const jobPerk = getJobPerk(character.jobVoucher && character.jobVoucherJob ? character.jobVoucherJob : character.job);
-     const hasBothPerks = jobPerk && jobPerk.perks.includes('GATHERING') && jobPerk.perks.includes('LOOTING');
-     
-     // Check if either gather or loot has been used today
-     const canGather = canUseDailyRoll(character, 'gather');
-     const canLoot = canUseDailyRoll(character, 'loot');
-     
-     if (hasBothPerks && (!canGather || !canLoot)) {
-       await interaction.editReply({
-         embeds: [{
-           color: 0x008B8B, // Dark cyan color
-           description: `*${character.name} seems exhausted from their earlier activities...*\n\n**Daily activity limit reached.**\nThe next opportunity to gather or loot will be available at 8AM EST.\n\n*Tip: A job voucher would allow you to loot again today.*`,
-           footer: {
-             text: 'Daily Activity Limit'
-           }
-         }],
-         ephemeral: true,
-       });
-       return;
-     } else if (!hasBothPerks && !canLoot) {
-       await interaction.editReply({
-         embeds: [{
-           color: 0x008B8B, // Dark cyan color
-           description: `*${character.name} seems exhausted from their earlier looting...*\n\n**Daily looting limit reached.**\nThe next opportunity to loot will be available at 8AM EST.\n\n*Tip: A job voucher would allow you to loot again today.*`,
-           footer: {
-             text: 'Daily Activity Limit'
-           }
-         }],
-         ephemeral: true,
-       });
-       return;
-     }
-
-     // Update daily roll BEFORE proceeding with looting
-     try {
-       await updateDailyRoll(character, 'loot');
-     } catch (error) {
-       console.error(`[Loot Command]: ❌ Failed to update daily roll:`, error);
-       await interaction.editReply({
-         content: `❌ **An error occurred while updating your daily roll. Please try again.**`,
-         ephemeral: true,
-       });
-       return;
-     }
-   }
-
-   if (character.debuff?.active) {
-    const debuffEndDate = new Date(character.debuff.endDate);
-    const unixTimestamp = Math.floor(debuffEndDate.getTime() / 1000);
-    await interaction.editReply({
-     content: `❌ **${character.name} is currently debuffed and cannot loot. Please wait until the debuff expires.**\n🕒 **Debuff Expires:** <t:${unixTimestamp}:F>`,
-     ephemeral: true,
-    });
-    return;
-   }
-
    // ------------------- Step 2: Validate Interaction Channel -------------------
    let currentVillage = capitalizeWords(character.currentVillage); // Capitalize village name for consistency
    let allowedChannel = villageChannels[currentVillage]; // Get the allowed channel from environment variables
@@ -316,6 +242,69 @@ module.exports = {
    if (character.currentHearts === 0) {
     const embed = createKOEmbed(character); // Create embed for KO status
     await interaction.editReply({ embeds: [embed] });
+    return;
+   }
+
+   // Check for job voucher and daily roll AFTER all other validations
+   if (character.jobVoucher) {
+     console.log(`[Loot Command]: 🔄 Active job voucher found for ${character.name}`);
+   } else {
+     console.log(`[Loot Command]: 🔄 No active job voucher for ${character.name}`);
+     
+     // For jobs with both GATHERING and LOOTING perks, check both activities
+     const jobPerk = getJobPerk(character.jobVoucher && character.jobVoucherJob ? character.jobVoucherJob : character.job);
+     const hasBothPerks = jobPerk && jobPerk.perks.includes('GATHERING') && jobPerk.perks.includes('LOOTING');
+     
+     // Check if either gather or loot has been used today
+     const canGather = canUseDailyRoll(character, 'gather');
+     const canLoot = canUseDailyRoll(character, 'loot');
+     
+     if (hasBothPerks && (!canGather || !canLoot)) {
+       await interaction.editReply({
+         embeds: [{
+           color: 0x008B8B, // Dark cyan color
+           description: `*${character.name} seems exhausted from their earlier activities...*\n\n**Daily activity limit reached.**\nThe next opportunity to gather or loot will be available at 8AM EST.\n\n*Tip: A job voucher would allow you to loot again today.*`,
+           footer: {
+             text: 'Daily Activity Limit'
+           }
+         }],
+         ephemeral: true,
+       });
+       return;
+     } else if (!hasBothPerks && !canLoot) {
+       await interaction.editReply({
+         embeds: [{
+           color: 0x008B8B, // Dark cyan color
+           description: `*${character.name} seems exhausted from their earlier looting...*\n\n**Daily looting limit reached.**\nThe next opportunity to loot will be available at 8AM EST.\n\n*Tip: A job voucher would allow you to loot again today.*`,
+           footer: {
+             text: 'Daily Activity Limit'
+           }
+         }],
+         ephemeral: true,
+       });
+       return;
+     }
+
+     // Update daily roll AFTER all validations pass
+     try {
+       await updateDailyRoll(character, 'loot');
+     } catch (error) {
+       console.error(`[Loot Command]: ❌ Failed to update daily roll:`, error);
+       await interaction.editReply({
+         content: `❌ **An error occurred while updating your daily roll. Please try again.**`,
+         ephemeral: true,
+       });
+       return;
+     }
+   }
+
+   if (character.debuff?.active) {
+    const debuffEndDate = new Date(character.debuff.endDate);
+    const unixTimestamp = Math.floor(debuffEndDate.getTime() / 1000);
+    await interaction.editReply({
+     content: `❌ **${character.name} is currently debuffed and cannot loot. Please wait until the debuff expires.**\n🕒 **Debuff Expires:** <t:${unixTimestamp}:F>`,
+     ephemeral: true,
+    });
     return;
    }
 

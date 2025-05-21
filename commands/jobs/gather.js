@@ -140,59 +140,6 @@ module.exports = {
         return;
       }
 
-      // Check for job voucher and daily roll at the start
-      if (character.jobVoucher) {
-        console.log(`[Gather Command]: 🔄 Active job voucher found for ${character.name}`);
-      } else {
-        console.log(`[Gather Command]: 🔄 No active job voucher for ${character.name}`);
-        
-        // For jobs with both GATHERING and LOOTING perks, check both activities
-        const jobPerk = getJobPerk(job);
-        const hasBothPerks = jobPerk && jobPerk.perks.includes('GATHERING') && jobPerk.perks.includes('LOOTING');
-        
-        // Check if either gather or loot has been used today
-        const canGather = canUseDailyRoll(character, 'gather');
-        const canLoot = canUseDailyRoll(character, 'loot');
-        
-        if (hasBothPerks && (!canGather || !canLoot)) {
-          await interaction.editReply({
-            embeds: [{
-              color: 0x008B8B, // Dark cyan color
-              description: `*${character.name} seems exhausted from their earlier activities...*\n\n**Daily activity limit reached.**\nThe next opportunity to gather or loot will be available at 8AM EST.\n\n*Tip: A job voucher would allow you to gather again today.*`,
-              footer: {
-                text: 'Daily Activity Limit'
-              }
-            }],
-            ephemeral: true,
-          });
-          return;
-        } else if (!hasBothPerks && !canGather) {
-          await interaction.editReply({
-            embeds: [{
-              color: 0x008B8B, // Dark cyan color
-              description: `*${character.name} seems exhausted from their earlier gathering...*\n\n**Daily gathering limit reached.**\nThe next opportunity to gather will be available at 8AM EST.\n\n*Tip: A job voucher would allow you to gather again today.*`,
-              footer: {
-                text: 'Daily Activity Limit'
-              }
-            }],
-            ephemeral: true,
-          });
-          return;
-        }
-
-        // Update daily roll BEFORE proceeding with gathering
-        try {
-          await updateDailyRoll(character, 'gather');
-        } catch (error) {
-          console.error(`[Gather Command]: ❌ Failed to update daily roll:`, error);
-          await interaction.editReply({
-            content: `❌ **An error occurred while updating your daily roll. Please try again.**`,
-            ephemeral: true,
-          });
-          return;
-        }
-      }
-
       // Check if character is in jail
       if (await enforceJail(interaction, character)) {
         return;
@@ -201,7 +148,7 @@ module.exports = {
       // Check if the character is KOed.
       if (character.isKO) {
         await interaction.editReply({
-          content: `❌ **${character.name} is currently KOed and cannot gather.**\n💤 **Let them rest and recover before gathering again.**`,
+          content: `❌ **${character.name}** is currently KOed and cannot gather.**\n💤 **Let them rest and recover before gathering again.**`,
           ephemeral: true,
         });
         return;
@@ -212,7 +159,7 @@ module.exports = {
         const debuffEndDate = new Date(character.debuff.endDate);
         const unixTimestamp = Math.floor(debuffEndDate.getTime() / 1000);
         await interaction.editReply({
-          content: `❌ **${character.name} is currently debuffed and cannot gather.**\n🕒 **Debuff Expires:** <t:${unixTimestamp}:F>`,
+          content: `❌ **${character.name}** is currently debuffed and cannot gather.**\n🕒 **Debuff Expires:** <t:${unixTimestamp}:F>`,
           ephemeral: true,
         });
         return;
@@ -277,6 +224,59 @@ module.exports = {
             `◈ Your character **${character.name}** braved the blight rain but managed to avoid infection this time! ◈\n` +
             "You feel lucky... but be careful out there.";
           await interaction.editReply({ content: safeMsg, ephemeral: false });
+        }
+      }
+
+      // Check for job voucher and daily roll AFTER all other validations
+      if (character.jobVoucher) {
+        console.log(`[Gather Command]: 🔄 Active job voucher found for ${character.name}`);
+      } else {
+        console.log(`[Gather Command]: 🔄 No active job voucher for ${character.name}`);
+        
+        // For jobs with both GATHERING and LOOTING perks, check both activities
+        const jobPerk = getJobPerk(job);
+        const hasBothPerks = jobPerk && jobPerk.perks.includes('GATHERING') && jobPerk.perks.includes('LOOTING');
+        
+        // Check if either gather or loot has been used today
+        const canGather = canUseDailyRoll(character, 'gather');
+        const canLoot = canUseDailyRoll(character, 'loot');
+        
+        if (hasBothPerks && (!canGather || !canLoot)) {
+          await interaction.editReply({
+            embeds: [{
+              color: 0x008B8B, // Dark cyan color
+              description: `*${character.name} seems exhausted from their earlier activities...*\n\n**Daily activity limit reached.**\nThe next opportunity to gather or loot will be available at 8AM EST.\n\n*Tip: A job voucher would allow you to gather again today.*`,
+              footer: {
+                text: 'Daily Activity Limit'
+              }
+            }],
+            ephemeral: true,
+          });
+          return;
+        } else if (!hasBothPerks && !canGather) {
+          await interaction.editReply({
+            embeds: [{
+              color: 0x008B8B, // Dark cyan color
+              description: `*${character.name} seems exhausted from their earlier gathering...*\n\n**Daily gathering limit reached.**\nThe next opportunity to gather will be available at 8AM EST.\n\n*Tip: A job voucher would allow you to gather again today.*`,
+              footer: {
+                text: 'Daily Activity Limit'
+              }
+            }],
+            ephemeral: true,
+          });
+          return;
+        }
+
+        // Update daily roll AFTER all validations pass
+        try {
+          await updateDailyRoll(character, 'gather');
+        } catch (error) {
+          console.error(`[Gather Command]: ❌ Failed to update daily roll:`, error);
+          await interaction.editReply({
+            content: `❌ **An error occurred while updating your daily roll. Please try again.**`,
+            ephemeral: true,
+          });
+          return;
         }
       }
 
