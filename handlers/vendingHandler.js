@@ -68,6 +68,7 @@ const {
   retrieveAllVendingRequests
 } = require('../utils/storage.js');
 const { handleError } = require('../utils/globalErrorHandler.js');
+const { uploadSubmissionImage } = require('../utils/uploadUtils.js');
 
 const {
   capitalizeFirstLetter
@@ -1321,13 +1322,13 @@ async function handleVendingSetup(interaction) {
 
     // Create sync button
     const syncButton = new ButtonBuilder()
-        .setCustomId(`vending_sync_now_${characterName}`)
+        .setCustomId(`vending_sync_now_${characterName}_${userId}`)
         .setLabel('Sync Shop Now')
         .setStyle(ButtonStyle.Primary)
         .setEmoji('🔄');
 
     const laterButton = new ButtonBuilder()
-        .setCustomId('vending_sync_later')
+        .setCustomId(`vending_sync_later_${userId}`)
         .setLabel('Sync Later')
         .setStyle(ButtonStyle.Secondary)
         .setEmoji('⏰');
@@ -1979,9 +1980,21 @@ function generateFulfillEmbed(request) {
 // ------------------- handleSyncButton -------------------
 async function handleSyncButton(interaction) {
   try {
-    const [_, action, ...nameParts] = interaction.customId.split('_');
+    const [_, action, ...parts] = interaction.customId.split('_');
     
-    if (action === 'sync' && nameParts[0] === 'later') {
+    // Extract user ID from the custom ID
+    const userId = parts[parts.length - 1];
+    
+    // Check if the user is authorized to use these buttons
+    if (interaction.user.id !== userId) {
+      await interaction.reply({
+        content: '❌ Only the shop owner can use these buttons.',
+        ephemeral: true
+      });
+      return;
+    }
+    
+    if (action === 'sync' && parts[0] === 'later') {
       await interaction.update({
         content: '🔄 Syncing cancelled. Please use `/vending setup` again when you are ready to sync and set up your vending character.',
         embeds: [],
@@ -1990,8 +2003,8 @@ async function handleSyncButton(interaction) {
       return;
     }
 
-    // Extract character name correctly by removing 'now_' prefix if present
-    const characterName = nameParts[0] === 'now' ? nameParts.slice(1).join('_') : nameParts.join('_');
+    // Extract character name correctly by removing user ID
+    const characterName = parts.slice(0, -1).join('_');
     
     await interaction.update({
       content: '🔄 Syncing your shop inventory...',
