@@ -524,7 +524,7 @@ const createSetupInstructionsEmbed = async (characterName, googleSheetsUrl) => {
     },
     {
       name: "5️⃣ Test Your Inventory",
-      value: `> ✅ Use the command:\n> \`\`\`text\n> /testinventorysetup charactername:${characterName}\n> \`\`\`\n\n> ---`,
+      value: `> ✅ Use the command:\n> \u0060\u0060\u0060text\n> /inventory test charactername:${characterName}\n> \u0060\u0060\u0060\n\n> ---`,
     },
   ];
 
