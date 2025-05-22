@@ -76,27 +76,53 @@ async function connectToTinglebot() {
  try {
   if (!tinglebotDbConnection || mongoose.connection.readyState === 0) {
    mongoose.set("strictQuery", false);
-   tinglebotDbConnection = await mongoose.connect(tinglebotUri, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-    serverSelectionTimeoutMS: 30000, // 30 seconds
-    socketTimeoutMS: 45000, // 45 seconds
-    connectTimeoutMS: 30000, // 30 seconds
-    maxPoolSize: 10,
-    minPoolSize: 5,
-    retryWrites: true,
-    retryReads: true,
-    w: 'majority',
-    wtimeoutMS: 2500,
-    heartbeatFrequencyMS: 10000,
-    maxIdleTimeMS: 60000,
-    family: 4
-   });
+   try {
+    tinglebotDbConnection = await mongoose.connect(tinglebotUri, {
+     useNewUrlParser: true,
+     useUnifiedTopology: true,
+     serverSelectionTimeoutMS: 30000, // 30 seconds
+     socketTimeoutMS: 45000, // 45 seconds
+     connectTimeoutMS: 30000, // 30 seconds
+     maxPoolSize: 10,
+     minPoolSize: 5,
+     retryWrites: true,
+     retryReads: true,
+     w: 'majority',
+     wtimeoutMS: 2500,
+     heartbeatFrequencyMS: 10000,
+     maxIdleTimeMS: 60000,
+     family: 4
+    });
+   } catch (connectError) {
+    console.error("❌ Error connecting to Tinglebot database:", connectError);
+    // Try to reconnect once
+    try {
+     tinglebotDbConnection = await mongoose.connect(tinglebotUri, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+      serverSelectionTimeoutMS: 30000,
+      socketTimeoutMS: 45000,
+      connectTimeoutMS: 30000,
+      maxPoolSize: 10,
+      minPoolSize: 5,
+      retryWrites: true,
+      retryReads: true,
+      w: 'majority',
+      wtimeoutMS: 2500,
+      heartbeatFrequencyMS: 10000,
+      maxIdleTimeMS: 60000,
+      family: 4
+     });
+    } catch (retryError) {
+     console.error("❌ Failed to reconnect to Tinglebot database:", retryError);
+     throw retryError;
+    }
+   }
   }
   return tinglebotDbConnection;
  } catch (error) {
   handleError(error, "connection.js");
-  console.error("❌ Error connecting to Tinglebot database:", error);
+  console.error("❌ Error in connectToTinglebot:", error);
   throw error;
  }
 }
@@ -186,10 +212,10 @@ const fetchCharacterByName = async (characterName) => {
   });
 
   if (!character) {
-   console.error(
+   console.log(
     `[characterService]: logs - Character "${actualName}" not found in database.`
    );
-   throw new Error(`Character "${actualName}" not found. Please check the spelling and make sure the character exists.`);
+   return null;
   }
   return character;
  } catch (error) {

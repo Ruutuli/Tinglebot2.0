@@ -132,20 +132,25 @@ async function getFinalFallbackItems(inventoryList, fetchRarityFn) {
 
 // ------------------- Character Validation -------------------
 async function validateCharacter(characterName, userId, requireInventorySync = false) {
-    const character = await fetchCharacterByName(characterName);
-    if (!character) {
-        return { valid: false, error: ERROR_MESSAGES.CHARACTER_NOT_FOUND };
+    try {
+        const character = await fetchCharacterByName(characterName);
+        if (!character) {
+            return { valid: false, error: `❌ **Character "${characterName}" not found.** Please check the spelling and make sure the character exists.` };
+        }
+        
+        if (userId && character.userId !== userId) {
+            return { valid: false, error: '❌ **You can only perform this action with your own characters.**' };
+        }
+        
+        if (requireInventorySync && !character.inventorySynced) {
+            return { valid: false, error: ERROR_MESSAGES.INVENTORY_NOT_SYNCED };
+        }
+        
+        return { valid: true, character };
+    } catch (error) {
+        console.error(`[steal.js]: ❌ Error validating character "${characterName}":`, error);
+        return { valid: false, error: `❌ **An error occurred while validating character "${characterName}".** Please try again later.` };
     }
-    
-    if (userId && character.userId !== userId) {
-        return { valid: false, error: '❌ **You can only perform this action with your own characters.**' };
-    }
-    
-    if (requireInventorySync && !character.inventorySynced) {
-        return { valid: false, error: ERROR_MESSAGES.INVENTORY_NOT_SYNCED };
-    }
-    
-    return { valid: true, character };
 }
 
 // ------------------- Embed Creation -------------------
@@ -436,10 +441,123 @@ module.exports = {
     // ------------------- Main Execute Handler -------------------
     async execute(interaction) {
         try {
+            const subcommand = interaction.options.getSubcommand();
             const characterName = interaction.options.getString('charactername');
             const targetName = interaction.options.getString('target');
             const targetType = interaction.options.getString('targettype');
-            const raritySelection = interaction.options.getString('rarity').toLowerCase();
+            const raritySelection = interaction.options.getString('rarity')?.toLowerCase();
+
+            // Handle subcommands first
+            if (subcommand === 'toggle') {
+                const enabled = interaction.options.getBoolean('enabled');
+
+                const { valid, error, character } = await validateCharacter(characterName, interaction.user.id);
+                if (!valid) {
+                    await interaction.reply({ content: error, ephemeral: true });
+                    return;
+                }
+
+                character.canBeStolenFrom = enabled;
+                await character.save();
+
+                const embed = createBaseEmbed('🔒 Steal Permissions Updated', enabled ? '#00ff00' : '#ff0000')
+                    .setDescription(`Steal permissions for **${character.name}** have been ${enabled ? 'enabled' : 'disabled'}.`)
+                    .addFields(
+                        { name: 'Status', value: enabled ? '✅ Can be stolen from' : '❌ Cannot be stolen from', inline: false }
+                    )
+                    .setThumbnail(character.icon);
+
+                await interaction.reply({ embeds: [embed], ephemeral: true });
+                return;
+            }
+
+            if (subcommand === 'jailtime') {
+                const { valid, error, character } = await validateCharacter(characterName, interaction.user.id);
+                if (!valid) {
+                    await interaction.reply({ content: error, ephemeral: true });
+                    return;
+                }
+
+                if (!character.inJail) {
+                    await interaction.reply({ content: `✅ **${character.name}** is not in jail.`, ephemeral: true });
+                    return;
+                }
+
+                // ---- Patch: Handle missing or invalid jailReleaseTime ----
+                if (!character.jailReleaseTime || isNaN(new Date(character.jailReleaseTime).getTime())) {
+                    await interaction.reply({ content: `✅ **${character.name}** is not in jail.`, ephemeral: true });
+                    return;
+                }
+
+                const now = Date.now();
+                const releaseTime = new Date(character.jailReleaseTime).getTime();
+                const timeLeft = releaseTime - now;
+
+                if (timeLeft <= 0) {
+                    character.inJail = false;
+                    character.jailReleaseTime = null;
+                    await character.save();
+                    await interaction.reply({ content: `✅ **${character.name}** has been released from jail!`, ephemeral: true });
+                    return;
+                }
+
+                const embed = createBaseEmbed('⏰ Jail Time Remaining', '#ff0000')
+                    .setDescription(`**${character.name}** is currently in jail.`)
+                    .addFields(
+                        { name: 'Time Remaining', value: `<t:${Math.floor(releaseTime / 1000)}:R>`, inline: false },
+                        { name: 'Release Time', value: `<t:${Math.floor(releaseTime / 1000)}:F>`, inline: false }
+                    )
+                    .setThumbnail(character.icon);
+
+                await interaction.reply({ embeds: [embed], ephemeral: true });
+                return;
+            }
+
+            if (subcommand === 'stats') {
+                const { valid, error, character } = await validateCharacter(characterName, interaction.user.id);
+                if (!valid) {
+                    await interaction.reply({ content: error, ephemeral: true });
+                    return;
+                }
+
+                const stats = await getStealStats(character._id);
+                
+                // Sort victims by count
+                const sortedVictims = stats.victims.sort((a, b) => b.count - a.count);
+                const victimsList = sortedVictims.length > 0 
+                    ? sortedVictims.map(v => `**${v.characterName}**: ${v.count} time${v.count > 1 ? 's' : ''}`).join('\n')
+                    : 'No successful steals yet';
+                
+                const embed = createBaseEmbed('📊 Steal Statistics')
+                    .setDescription(`Statistics for **${character.name}** the ${character.job ? character.job.charAt(0).toUpperCase() + character.job.slice(1).toLowerCase() : 'No Job'}`)
+                    .addFields(
+                        { name: '🎯 Total Attempts', value: stats.totalAttempts.toString(), inline: true },
+                        { name: '✅ Successful Steals', value: stats.successfulSteals.toString(), inline: true },
+                        { name: '❌ Failed Steals', value: stats.failedSteals.toString(), inline: true },
+                        { name: '📈 Success Rate', value: `${stats.successRate}%`, inline: true },
+                        { name: '✨ Items by Rarity', value: 
+                            `Common: ${stats.itemsByRarity.common}\n` +
+                            `Uncommon: ${stats.itemsByRarity.uncommon}\n` +
+                            `Rare: ${stats.itemsByRarity.rare}`, inline: false },
+                        { name: '👥 Victims', value: victimsList, inline: false }
+                    );
+                
+                await interaction.reply({ embeds: [embed], ephemeral: true });
+                return;
+            }
+
+            // If we get here, we're handling the 'commit' subcommand
+            if (!targetName || !targetType || !raritySelection) {
+                await interaction.reply({ content: '❌ **Missing required options for steal command.**', ephemeral: true });
+                return;
+            }
+
+            // ---- Rarity Validation ----
+            const allowedRarities = ['common', 'uncommon', 'rare'];
+            if (!allowedRarities.includes(raritySelection)) {
+                await interaction.reply({ content: '❌ **Invalid rarity. Please select a rarity from the dropdown menu.**', ephemeral: true });
+                return;
+            }
 
             // Validate the thief character
             const validationResult = await validateCharacter(characterName, interaction.user.id, true);
@@ -464,6 +582,12 @@ module.exports = {
             }
 
             const targetCharacter = targetValidation.character;
+
+            // ---- Prevent Stealing from Self ----
+            if (thiefCharacter._id.toString() === targetCharacter._id.toString()) {
+                await interaction.reply({ content: '❌ **You cannot steal from yourself!**', ephemeral: true });
+                return;
+            }
 
             // ------------------- Validate Interaction Channel -------------------
             let currentVillage = capitalizeWords(thiefCharacter.currentVillage);
@@ -939,99 +1063,6 @@ module.exports = {
                         ephemeral: false
                     });
                 }
-            }
-
-            // Handle other subcommands
-            if (subcommand === 'toggle') {
-                const characterName = interaction.options.getString('charactername');
-                const enabled = interaction.options.getBoolean('enabled');
-
-                const { valid, error, character } = await validateCharacter(characterName, interaction.user.id);
-                if (!valid) {
-                    await interaction.reply({ content: error, ephemeral: true });
-                    return;
-                }
-
-                character.canBeStolenFrom = enabled;
-                await character.save();
-
-                const embed = createBaseEmbed('🔒 Steal Permissions Updated', enabled ? '#00ff00' : '#ff0000')
-                    .setDescription(`Steal permissions for **${character.name}** have been ${enabled ? 'enabled' : 'disabled'}.`)
-                    .addFields(
-                        { name: 'Status', value: enabled ? '✅ Can be stolen from' : '❌ Cannot be stolen from', inline: false }
-                    )
-                    .setThumbnail(character.icon);
-
-                await interaction.reply({ embeds: [embed], ephemeral: true });
-            }
-
-            if (subcommand === 'jailtime') {
-                const characterName = interaction.options.getString('charactername');
-                const { valid, error, character } = await validateCharacter(characterName, interaction.user.id);
-                if (!valid) {
-                    await interaction.reply({ content: error, ephemeral: true });
-                    return;
-                }
-
-                if (!character.inJail) {
-                    await interaction.reply({ content: `✅ **${character.name}** is not in jail.`, ephemeral: true });
-                    return;
-                }
-
-                const now = Date.now();
-                const releaseTime = character.jailReleaseTime.getTime();
-                const timeLeft = releaseTime - now;
-
-                if (timeLeft <= 0) {
-                    character.inJail = false;
-                    character.jailReleaseTime = null;
-                    await character.save();
-                    await interaction.reply({ content: `✅ **${character.name}** has been released from jail!`, ephemeral: true });
-                    return;
-                }
-
-                const embed = createBaseEmbed('⏰ Jail Time Remaining', '#ff0000')
-                    .setDescription(`**${character.name}** is currently in jail.`)
-                    .addFields(
-                        { name: 'Time Remaining', value: `<t:${Math.floor(releaseTime / 1000)}:R>`, inline: false },
-                        { name: 'Release Time', value: `<t:${Math.floor(releaseTime / 1000)}:F>`, inline: false }
-                    )
-                    .setThumbnail(character.icon);
-
-                await interaction.reply({ embeds: [embed], ephemeral: true });
-            }
-
-            if (subcommand === 'stats') {
-                const characterName = interaction.options.getString('charactername');
-                const { valid, error, character } = await validateCharacter(characterName, interaction.user.id);
-                if (!valid) {
-                    await interaction.reply({ content: error, ephemeral: true });
-                    return;
-                }
-
-                const stats = await getStealStats(character._id);
-                
-                // Sort victims by count
-                const sortedVictims = stats.victims.sort((a, b) => b.count - a.count);
-                const victimsList = sortedVictims.length > 0 
-                    ? sortedVictims.map(v => `**${v.characterName}**: ${v.count} time${v.count > 1 ? 's' : ''}`).join('\n')
-                    : 'No successful steals yet';
-                
-                const embed = createBaseEmbed('📊 Steal Statistics')
-                    .setDescription(`Statistics for **${character.name}** the ${character.job ? character.job.charAt(0).toUpperCase() + character.job.slice(1).toLowerCase() : 'No Job'}`)
-                    .addFields(
-                        { name: '🎯 Total Attempts', value: stats.totalAttempts.toString(), inline: true },
-                        { name: '✅ Successful Steals', value: stats.successfulSteals.toString(), inline: true },
-                        { name: '❌ Failed Steals', value: stats.failedSteals.toString(), inline: true },
-                        { name: '📈 Success Rate', value: `${stats.successRate}%`, inline: true },
-                        { name: '✨ Items by Rarity', value: 
-                            `Common: ${stats.itemsByRarity.common}\n` +
-                            `Uncommon: ${stats.itemsByRarity.uncommon}\n` +
-                            `Rare: ${stats.itemsByRarity.rare}`, inline: false },
-                        { name: '👥 Victims', value: victimsList, inline: false }
-                    );
-                
-                await interaction.reply({ embeds: [embed], ephemeral: true });
             }
         } catch (error) {
             handleError(error, 'steal.js');
