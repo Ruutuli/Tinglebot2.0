@@ -783,6 +783,23 @@ module.exports = {
                         
                         // Create and send the embed
                         const embed = await createStealResultEmbed(thiefCharacter, mappedNPCName, selectedItem, quantity, roll, failureThreshold, true, true);
+                        // Fallback flavor text for success
+                        if (selectedItem.tier !== raritySelection) {
+                            let fallbackMessage = '';
+                            if (raritySelection === 'rare') {
+                                fallbackMessage = '⚠️ No rare items found! But you did find something else...';
+                            } else if (raritySelection === 'uncommon') {
+                                fallbackMessage = '⚠️ No uncommon items found! But you did find something else...';
+                            }
+                            embed.addFields({ name: 'Note', value: fallbackMessage, inline: false });
+                        }
+                        // Always deactivate job voucher after any attempt
+                        if (thiefCharacter.jobVoucher && !voucherCheck?.skipVoucher) {
+                            const deactivationResult = await deactivateJobVoucher(thiefCharacter._id);
+                            if (!deactivationResult.success) {
+                                console.error(`[steal.js]: ❌ Failed to deactivate job voucher for ${thiefCharacter.name}`);
+                            }
+                        }
                         await interaction.editReply({ embeds: [embed] });
                     } catch (error) {
                         console.error('[steal.js]: ❌ Critical error during NPC steal success flow:', error);
@@ -842,6 +859,13 @@ module.exports = {
                             inline: false
                         });
                         
+                        // Always deactivate job voucher after any attempt
+                        if (thiefCharacter.jobVoucher && !voucherCheck?.skipVoucher) {
+                            const deactivationResult = await deactivateJobVoucher(thiefCharacter._id);
+                            if (!deactivationResult.success) {
+                                console.error(`[steal.js]: ❌ Failed to deactivate job voucher for ${thiefCharacter.name}`);
+                            }
+                        }
                         await interaction.editReply({ embeds: [embed] });
                     } catch (error) {
                         console.error('[steal.js]: ❌ Critical error during NPC steal failure flow:', error);
@@ -980,6 +1004,23 @@ module.exports = {
                         
                         // Create and send the embed
                         const embed = await createStealResultEmbed(thiefCharacter, targetCharacter, selectedItemPlayer, quantityToSteal, rollPlayer, failureThresholdPlayer, success);
+                        // Fallback flavor text for success
+                        if (selectedItemPlayer.tier !== raritySelection) {
+                            let fallbackMessage = '';
+                            if (raritySelection === 'rare') {
+                                fallbackMessage = '⚠️ No rare items found! But you did find something else...';
+                            } else if (raritySelection === 'uncommon') {
+                                fallbackMessage = '⚠️ No uncommon items found! But you did find something else...';
+                            }
+                            embed.addFields({ name: 'Note', value: fallbackMessage, inline: false });
+                        }
+                        // Always deactivate job voucher after any attempt
+                        if (thiefCharacter.jobVoucher && !voucherCheck?.skipVoucher) {
+                            const deactivationResult = await deactivateJobVoucher(thiefCharacter._id);
+                            if (!deactivationResult.success) {
+                                console.error(`[steal.js]: ❌ Failed to deactivate job voucher for ${thiefCharacter.name}`);
+                            }
+                        }
                         await interaction.editReply({
                             content: `Hey! <@${targetCharacter.userId}>! Your character **${targetCharacter.name}** was stolen from!`,
                             embeds: [embed]
@@ -1041,6 +1082,13 @@ module.exports = {
                             inline: false
                         });
                         
+                        // Always deactivate job voucher after any attempt
+                        if (thiefCharacter.jobVoucher && !voucherCheck?.skipVoucher) {
+                            const deactivationResult = await deactivateJobVoucher(thiefCharacter._id);
+                            if (!deactivationResult.success) {
+                                console.error(`[steal.js]: ❌ Failed to deactivate job voucher for ${thiefCharacter.name}`);
+                            }
+                        }
                         await interaction.editReply({ embeds: [embed] });
                     } catch (error) {
                         console.error('[steal.js]: ❌ Critical error during player steal failure flow:', error);
