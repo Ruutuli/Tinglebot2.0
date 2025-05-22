@@ -282,7 +282,7 @@ async function storeCompanion(characterId, type, companionName, discordId) {
 }
 
 // Retrieves a companion from the stable
-async function retrieveCompanion(characterId, type, companionName) {
+async function retrieveCompanion(characterId, type, companionName, discordId) {
   return await executeInTransaction(async (session) => {
     console.log(`[stable.js]: 🚀 Starting retrieve process for ${type} "${companionName}"`);
     
@@ -292,7 +292,7 @@ async function retrieveCompanion(characterId, type, companionName) {
       throw new Error(`❌ Character already has an active ${type}`);
     }
 
-    const stable = await getOrCreateStable(characterId, null);
+    const stable = await getOrCreateStable(characterId, discordId);
     const storedArray = type === 'mount' ? stable.storedMounts : stable.storedPets;
     const storedCompanion = storedArray.find(p => p.name === companionName);
     if (!storedCompanion) {
@@ -604,7 +604,7 @@ async function handleStorePet(interaction, userId, characterName, companionName)
 // Handles retrieving companions from stable
 async function handleRetrievePet(interaction, userId, characterName, petName) {
   await withValidation(interaction, userId, characterName, async (character) => {
-    const pet = await retrieveCompanion(character._id, 'pet', petName);
+    const pet = await retrieveCompanion(character._id, 'pet', petName, userId);
     console.log(`[stable.js]: ✅ Successfully retrieved pet "${petName}"`);
     
     await sendSuccessResponse(interaction, `✅ Successfully retrieved **${petName}** from your stable.`);
