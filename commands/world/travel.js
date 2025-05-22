@@ -183,14 +183,6 @@ module.exports = {
       const userId = interaction.user.id;
       const userTag = interaction.user.tag;
 
-      console.log(`[travel.js]: 🚀 Travel command initiated by ${userTag} (${userId})`, {
-        characterName,
-        destination,
-        mode,
-        channelId: interaction.channelId,
-        guildId: interaction.guildId
-      });
-
       // ------------------- Fetch Character from Database -------------------
       const character = await fetchCharacterByNameAndUserId(characterName, userId);
       if (!character) {
@@ -647,16 +639,6 @@ async function processTravelDay(day, context) {
       mode
     } = context;
 
-    console.log(`[travel.js]: 🗺️ Processing travel day ${day} for ${character.name}`, {
-      userTag: interaction.user.tag,
-      userId: interaction.user.id,
-      characterName: character.name,
-      startingVillage,
-      destination,
-      mode,
-      currentPath: paths[0],
-      totalDays: totalTravelDuration
-    });
 
     // ------------------- Mount Travel: Skip Encounters & Gathering -------------------
     if (mode === 'on mount') {
