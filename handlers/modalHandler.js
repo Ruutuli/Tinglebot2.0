@@ -10,7 +10,7 @@ const { handleError } = require('../utils/globalErrorHandler');
 // ------------------- Utility Functions -------------------
 // Generic helper utilities for menu creation and storage.
 const { getAddOnsMenu, getBaseSelectMenu, getSpecialWorksMenu, getTypeMultiplierMenu } = require('../utils/menuUtils');
-const { saveSubmissionToStorage, retrieveSubmissionFromStorage } = require('../utils/storage');
+const { saveSubmissionToStorage, retrieveSubmissionFromStorage, findLatestSubmissionIdForUser } = require('../utils/storage');
 const { getCancelButtonRow } = require('./buttonHelperHandler');
 const { calculateTokens, generateTokenBreakdown } = require('../utils/tokenUtils');
 
@@ -36,13 +36,23 @@ async function handleModalSubmission(interaction) {
 
   try {
     // Get existing submission data or create new
-    let submissionData = await retrieveSubmissionFromStorage(userId);
+    console.log(`[modalHandler.js]: 🔄 Checking for existing submission for user: ${userId}`);
+    let submissionId = await findLatestSubmissionIdForUser(userId);
+    if (submissionId) {
+      console.log(`[modalHandler.js]: 🔄 Found existing submissionId: ${submissionId}`);
+    }
+    let submissionData = submissionId ? await retrieveSubmissionFromStorage(submissionId) : null;
     let isNewSubmission = false;
-    
     // If no existing data or if this is a new base selection, create new submission
     if (!submissionData || customId === 'baseCountModal') {
       isNewSubmission = true;
-      const submissionId = generateSubmissionId();
+      submissionId = submissionData?.submissionId || submissionId || generateSubmissionId();
+      if (!submissionData?.submissionId && !submissionId) {
+        submissionId = generateSubmissionId();
+        console.log(`[modalHandler.js]: 🚀 Generating new submissionId: ${submissionId}`);
+      } else {
+        console.log(`[modalHandler.js]: 🔄 Reusing submissionId: ${submissionId}`);
+      }
       submissionData = {
         submissionId,
         userId,
@@ -62,6 +72,7 @@ async function handleModalSubmission(interaction) {
     }
 
     // Save the submission data using submissionId as the key
+    console.log(`[modalHandler.js]: 💾 Saving submission: ${submissionId} for user: ${userId}`);
     await saveSubmissionToStorage(submissionData.submissionId, submissionData);
 
     // Handle different modal types
@@ -85,10 +96,8 @@ async function handleModalSubmission(interaction) {
       submissionData.finalTokenAmount = 0;
       submissionData.tokenCalculation = null;
       
-      // Add the base selection if it's not already there
-      if (!submissionData.baseSelections.includes(baseSelection)) {
-        submissionData.baseSelections.push(baseSelection);
-      }
+      // Always replace with the latest base selection
+      submissionData.baseSelections = [baseSelection];
       
       // Save and update UI
       await saveSubmissionToStorage(submissionData.submissionId, submissionData);

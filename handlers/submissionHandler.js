@@ -32,91 +32,127 @@ const { saveSubmissionToStorage, submissionStore, retrieveSubmissionFromStorage,
 // sending a confirmation message to the user, saving updated submission data, and resetting in-memory state.
 async function handleSubmissionCompletion(interaction) {
   try {
-    // Retrieve submission data from the in-memory store
-    let submissionData = submissionStore.get(interaction.user.id);
-
-    if (!submissionData) {
-      console.error(`[submissionHandler.js]: handleSubmissionCompletion: No submission data found in memory for user: ${interaction.user.id}`);
-
-      const submissionId = interaction.message.embeds[0]?.fields?.find(field => field.name === 'Submission ID')?.value;
-      if (submissionId) {
-        console.error(`[submissionHandler.js]: handleSubmissionCompletion: Attempting to retrieve submission data from storage using ID: ${submissionId}`);
-        submissionData = retrieveSubmissionFromStorage(submissionId);
-      }
-
-      if (!submissionData) {
-        console.error(`[submissionHandler.js]: handleSubmissionCompletion: No submission data found in memory or storage for user: ${interaction.user.id}`);
-        await interaction.reply({
-          content: '❌ **Submission data not found. Please restart the submission process.**',
-          ephemeral: true,
-        });
-        return;
-      }
+    console.log(`[submissionHandler.js]: 🔄 Starting submission completion for user: ${interaction.user.id}`);
+    // Get submission ID from the embed
+    const messageEmbed = interaction.message.embeds[0];
+    console.log(`[submissionHandler.js]: 📝 Embed fields:`, messageEmbed?.fields?.map(f => `${f.name}: ${f.value}`));
+    
+    const submissionId = messageEmbed?.fields?.find(field => field.name === 'Submission ID')?.value;
+    console.log(`[submissionHandler.js]: 🔑 Found submission ID in embed: ${submissionId}`);
+    
+    if (!submissionId) {
+      console.error(`[submissionHandler.js]: ❌ No submission ID found in embed`);
+      await interaction.reply({
+        content: '❌ **Submission ID not found. Please restart the submission process.**',
+        ephemeral: true,
+      });
+      return;
     }
 
+    // Retrieve submission data from storage using submissionId
+    console.log(`[submissionHandler.js]: 🔍 Attempting to retrieve submission data for ID: ${submissionId}`);
+    const submissionData = await retrieveSubmissionFromStorage(submissionId);
+    console.log(`[submissionHandler.js]: 📊 Retrieved submission data:`, submissionData ? 'Found' : 'Not found');
+
+    if (!submissionData) {
+      console.error(`[submissionHandler.js]: ❌ No submission data found for ID: ${submissionId}`);
+      // Try to find the latest submission for this user as a fallback
+      const userId = interaction.user.id;
+      console.log(`[submissionHandler.js]: 🔄 Attempting fallback lookup for user: ${userId}`);
+      
+      const latestSubmissionId = await findLatestSubmissionIdForUser(userId);
+      console.log(`[submissionHandler.js]: 🔑 Found latest submission ID: ${latestSubmissionId}`);
+      
+      if (latestSubmissionId) {
+        const latestSubmission = await retrieveSubmissionFromStorage(latestSubmissionId);
+        console.log(`[submissionHandler.js]: 📊 Retrieved latest submission data:`, latestSubmission ? 'Found' : 'Not found');
+        
+        if (latestSubmission) {
+          console.log(`[submissionHandler.js]: ✅ Found fallback submission ${latestSubmissionId}`);
+          return await handleSubmissionCompletion(interaction, latestSubmission);
+        }
+      }
+      
+      console.error(`[submissionHandler.js]: ❌ No fallback submission found for user: ${userId}`);
+      await interaction.reply({
+        content: '❌ **Submission data not found. Please restart the submission process.**',
+        ephemeral: true,
+      });
+      return;
+    }
+
+    console.log(`[submissionHandler.js]: 📝 Processing submission data for ID: ${submissionId}`);
     const { fileUrl, fileName, baseSelections, typeMultiplierSelections, productMultiplierValue, addOnsApplied, characterCount } = submissionData;
     const user = interaction.user;
 
     if (!fileUrl || !fileName) {
+      console.error(`[submissionHandler.js]: ❌ Missing required fields - fileUrl: ${!!fileUrl}, fileName: ${!!fileName}`);
       throw new Error('File URL or File Name missing.');
     }
 
-    // ------------------- Recalculate Tokens -------------------
-    // Calculate the total tokens based on the submission selections.
-    const { totalTokens } = calculateTokens({
-      baseSelections: baseSelections || [],
-      typeMultiplierSelections: typeMultiplierSelections || [],
-      productMultiplierValue: productMultiplierValue || 1,
-      addOnsApplied: addOnsApplied || [],
-      characterCount: characterCount || 1,
-      collab: submissionData.collab || null, // Include collaboration if applicable
+    // Calculate final token amount
+    console.log(`[submissionHandler.js]: 🧮 Calculating tokens for submission:`, {
+      baseSelections,
+      typeMultiplierSelections,
+      productMultiplierValue,
+      addOnsApplied,
+      characterCount
     });
+    
+    const { totalTokens, breakdown } = calculateTokens({
+      baseSelections,
+      typeMultiplierSelections,
+      productMultiplierValue,
+      addOnsApplied,
+      characterCount
+    });
+    console.log(`[submissionHandler.js]: 💰 Calculated tokens: ${totalTokens}`);
 
-    // Update the final token amount in submission data
+    // Update submission data with final calculations
     submissionData.finalTokenAmount = totalTokens;
+    submissionData.tokenCalculation = breakdown;
+    submissionData.updatedAt = new Date();
 
-    // ------------------- Send Confirmation Message -------------------
-    // Sends an embed message confirming the submission and displaying token details.
-    const sentMessage = await interaction.followUp({
-      embeds: [
-        new EmbedBuilder()
-          .setTitle('Submission Complete!')
-          .setDescription(`Your submission has been confirmed. Your art has been uploaded successfully and your token count has been finalized.`)
-          .addFields([{ name: 'Final Token Total Amount', value: `${totalTokens} Tokens`, inline: true }])
-          .setImage(fileUrl)
-          .setColor(0x00ff00)
-      ],
-      components: [],
-    });
+    // Save updated submission data using submissionId
+    console.log(`[submissionHandler.js]: 💾 Saving final submission data for ID: ${submissionId}`);
+    await saveSubmissionToStorage(submissionId, submissionData);
+    console.log(`[submissionHandler.js]: ✅ Final submission data saved`);
 
-    // ------------------- Save Submission Data -------------------
-    // Save updated submission data to persistent storage.
-    await saveSubmissionToStorage(submissionData.submissionId, {
-      submissionId: submissionData.submissionId,
-      userId: user.id,
-      fileUrl,
-      fileName,
-      messageUrl: sentMessage.url || null, // Save message URL
-      characterCount,
-      tokenCalculation: submissionData.tokenCalculation || '',
-      finalTokenAmount: totalTokens,
-      submittedAt: new Date(),
-    });
+    // Create and send the embed
+    console.log(`[submissionHandler.js]: 🎨 Creating submission embed`);
+    const embed = createArtSubmissionEmbed(submissionData);
+    await interaction.reply({ embeds: [embed] });
+    console.log(`[submissionHandler.js]: ✅ Submission embed sent`);
 
-    // (Removed duplicate call to saveSubmissionToStorage to avoid redundancy)
+    // Update token count in database
+    console.log(`[submissionHandler.js]: 💰 Updating token count for user: ${user.id}`);
+    await appendEarnedTokens(user.id, totalTokens);
+    console.log(`[submissionHandler.js]: ✅ Token count updated`);
 
-    // ------------------- Reset Submission State -------------------
-    // Clear the in-memory submission data and reset any global state.
-    submissionStore.delete(user.id);
-    resetSubmissionState();
+    // Clean up storage
+    console.log(`[submissionHandler.js]: 🧹 Cleaning up submission data for ID: ${submissionId}`);
+    await deleteSubmissionFromStorage(submissionId);
+    console.log(`[submissionHandler.js]: ✅ Submission data cleaned up`);
+
   } catch (error) {
     handleError(error, 'submissionHandler.js');
-
-    console.error(`[submissionHandler.js]: handleSubmissionCompletion: Error completing submission: ${error.message}`);
-    await interaction.followUp({
-      content: '⚠️ **Error completing submission. Please try again.**',
-      flags: 64 // 64 is the flag for ephemeral messages
+    console.error(`[submissionHandler.js]: ❌ Error in handleSubmissionCompletion:`, error);
+    console.error(`[submissionHandler.js]: 📝 Error details:`, {
+      message: error.message,
+      stack: error.stack,
+      interaction: {
+        userId: interaction.user.id,
+        messageId: interaction.message?.id,
+        customId: interaction.customId
+      }
     });
+    
+    if (!interaction.replied) {
+      await interaction.reply({
+        content: '❌ **An error occurred while processing your submission.**',
+        ephemeral: true
+      });
+    }
   }
 }
 
@@ -129,22 +165,20 @@ async function handleSubmissionCompletion(interaction) {
 // resets the in-memory submission state, and notifies the user.
 async function handleCancelSubmission(interaction) {
   try {
-    const userId = interaction.user.id;
-
-    // Retrieve submission data from memory
-    const submissionData = submissionStore.get(userId);
-
-    if (submissionData && submissionData.submissionId) {
-      console.error(`[submissionHandler.js]: handleCancelSubmission: Deleting submission from storage: ${submissionData.submissionId}`);
-      // Remove submission from persistent storage
-      deleteSubmissionFromStorage(submissionData.submissionId);
-    } else {
-      console.error(`[submissionHandler.js]: handleCancelSubmission: No submission data found in memory for user: ${userId}`);
+    // Get submission ID from the embed
+    const submissionId = interaction.message.embeds[0]?.fields?.find(field => field.name === 'Submission ID')?.value;
+    
+    if (!submissionId) {
+      console.error(`[submissionHandler.js]: handleCancelSubmission: No submission ID found in embed`);
+      await interaction.reply({
+        content: '❌ **Submission ID not found. Please restart the submission process.**',
+        ephemeral: true,
+      });
+      return;
     }
 
-    // Reset and clear in-memory data
-    resetSubmissionState();
-    submissionStore.delete(userId);
+    // Delete submission from storage using submissionId
+    await deleteSubmissionFromStorage(submissionId);
 
     // Notify the user about cancellation
     await interaction.update({
@@ -153,12 +187,14 @@ async function handleCancelSubmission(interaction) {
     });
   } catch (error) {
     handleError(error, 'submissionHandler.js');
-
-    console.error(`[submissionHandler.js]: handleCancelSubmission: Error canceling submission: ${error.message}`);
-    await interaction.followUp({
-      content: '⚠️ **Error canceling submission. Please try again.**',
-      ephemeral: true,
-    });
+    console.error(`[submissionHandler.js]: handleCancelSubmission: ${error.message}`);
+    
+    if (!interaction.replied) {
+      await interaction.reply({
+        content: '❌ **An error occurred while canceling your submission.**',
+        ephemeral: true
+      });
+    }
   }
 }
 

@@ -909,152 +909,113 @@ const createWritingSubmissionEmbed = (submissionData) => {
 };
 
 // ------------------- Subsection Title ------------------- 
-const createArtSubmissionEmbed = (submissionData, user, tokenCalculation) => {
-  // Format token calculation into a nice breakdown with actual selections
-  let tokenCalculationText = '```\n';
-  if (tokenCalculation) {
-    // Base selections
-    if (submissionData.baseSelections && submissionData.baseSelections.length > 0) {
-      const baseSelections = submissionData.baseSelections.map(base => 
-        `${base} (${tokenCalculation.baseTotal})`
-      ).join(' + ');
-      tokenCalculationText += `Base: ${baseSelections}\n`;
-    }
+const createArtSubmissionEmbed = (submissionData) => {
+  const {
+    submissionId,
+    title,
+    fileName,
+    userId,
+    username,
+    userAvatar,
+    fileUrl,
+    questEvent,
+    questBonus,
+    finalTokenAmount,
+    tokenCalculation,
+    baseSelections,
+    typeMultiplierSelections,
+    productMultiplierValue,
+    addOnsApplied,
+    specialWorksApplied,
+    collab,
+    updatedAt
+  } = submissionData;
 
-    // Type multipliers
-    if (submissionData.typeMultiplierSelections && submissionData.typeMultiplierSelections.length > 0) {
-      const typeSelections = submissionData.typeMultiplierSelections.map(type => 
-        `${type} (${tokenCalculation.typeMultiplierTotal / submissionData.typeMultiplierSelections.length})`
-      ).join(' + ');
-      tokenCalculationText += `× Type Multiplier: ${typeSelections} = ${tokenCalculation.typeMultiplierTotal}\n`;
-    }
+  // Art title fallback
+  const artTitle = title || fileName || 'Untitled Art';
 
-    // Product multiplier
-    if (submissionData.productMultiplierValue) {
-      tokenCalculationText += `× Product Multiplier: ${submissionData.productMultiplierValue} (${tokenCalculation.productMultiplier})\n`;
-    }
+  // Member field (mention if possible)
+  const memberField = username ? `@${username}` : userId ? `<@${userId}>` : 'N/A';
 
-    // Add-ons
-    if (submissionData.addOnsApplied && submissionData.addOnsApplied.length > 0) {
-      tokenCalculationText += `+ Add-ons: ${submissionData.addOnsApplied.join(', ')} = ${tokenCalculation.addOnTotal}\n`;
-    }
+  // Upload link
+  const uploadLink = fileUrl ? `[View Uploaded Image](${fileUrl})` : 'N/A';
 
-    // Special works
-    if (submissionData.specialWorksApplied && submissionData.specialWorksApplied.length > 0) {
-      tokenCalculationText += `+ Special Works: ${submissionData.specialWorksApplied.join(', ')} = ${tokenCalculation.specialWorksTotal}\n`;
-    }
+  // Token tracker link (placeholder, replace with actual if available)
+  const tokenTrackerLink = '[Token Tracker](https://tracker.example.com)';
 
-    tokenCalculationText += `\n---------------------\n`;
-    tokenCalculationText += `= ${tokenCalculation.finalTotal} Tokens\n`;
-    if (submissionData.collab) {
-      tokenCalculationText += `\nCollab Total Each: ${Math.floor(tokenCalculation.finalTotal / 2)} Tokens\n`;
+  // Quest/Event and Bonus
+  const questEventField = questEvent || 'N/A';
+  const questBonusField = questBonus || 'N/A';
+
+  // Token calculation breakdown (no duplicate lines)
+  let breakdown = '';
+  if (tokenCalculation && typeof tokenCalculation === 'object') {
+    // Compose breakdown lines
+    if (baseSelections && baseSelections.length) {
+      breakdown += baseSelections.map(base => {
+        const baseVal = tokenCalculation.baseValues?.[base] || 0;
+        const charCount = submissionData.characterCount || 1;
+        return `${capitalizeFirst(base)} (${baseVal} × ${charCount}) = ${baseVal * charCount}`;
+      }).join(' \u00D7 ') + '\n';
     }
+    if (typeMultiplierSelections && typeMultiplierSelections.length) {
+      breakdown += typeMultiplierSelections.map(type => {
+        const typeVal = tokenCalculation.typeMultiplierValues?.[type] || 1;
+        const typeCount = (submissionData.typeMultiplierCounts && submissionData.typeMultiplierCounts[type]) || 1;
+        return `× ${capitalizeFirst(type)} (${typeVal} × ${typeCount}) = ${typeVal * typeCount}`;
+      }).join(' ') + '\n';
+    }
+    if (productMultiplierValue && productMultiplierValue !== 'default') {
+      breakdown += `× ${capitalizeFirst(productMultiplierValue)}\n`;
+    }
+    if (addOnsApplied && addOnsApplied.length) {
+      breakdown += addOnsApplied.map(a => `× ${capitalizeFirst(a.addOn)} (${a.count})`).join(' ') + '\n';
+    }
+    if (specialWorksApplied && specialWorksApplied.length) {
+      breakdown += specialWorksApplied.map(w => `× ${capitalizeFirst(w.work)} (${w.count})`).join(' ') + '\n';
+    }
+    breakdown += '\n-----------------------\n';
+    breakdown += `= ${finalTokenAmount} Tokens`;
+  } else if (typeof tokenCalculation === 'string') {
+    breakdown = tokenCalculation;
+  } else {
+    breakdown = 'N/A';
   }
-  tokenCalculationText += '```';
 
-  // Get the art title from the file name if title is not set
-  const artTitle = submissionData.title || submissionData.fileName?.split('.')[0] || "Untitled Art";
-
+  // Compose fields array
   const fields = [
-    {
-      name: "Submission ID",
-      value: `\`${submissionData.submissionId || "N/A"}\``,
-      inline: false,
-    },
-    {
-      name: "Art Title",
-      value: artTitle,
-      inline: false,
-    },
-    {
-      name: "Member",
-      value: `<@${submissionData.userId || "unknown"}>`,
-      inline: true,
-    },
-    {
-      name: "Collaboration",
-      value: submissionData.collab
-        ? `Tokens will be split equally with ${submissionData.collab}.`
-        : "No collaborator added.",
-      inline: false,
-    }
+    { name: 'Submission ID', value: submissionId || 'N/A', inline: false },
+    { name: 'Art Title', value: artTitle, inline: false },
+    { name: 'Member', value: memberField, inline: true },
+    { name: 'Upload Link', value: uploadLink, inline: true },
+    { name: 'Token Tracker Link', value: tokenTrackerLink, inline: true },
+    { name: 'Quest/Event', value: questEventField, inline: true },
+    { name: 'Quest/Event Bonus', value: questBonusField, inline: true },
+    { name: 'Token Total', value: `${finalTokenAmount || 0} Tokens`, inline: true },
+    { name: 'Token Calculation', value: `\n${breakdown}\n`, inline: false },
   ];
 
-  // Only add upload link if we have a file URL
-  if (submissionData.fileUrl) {
-    fields.push({
-      name: "Upload Link",
-      value: `[View Uploaded Image](${submissionData.fileUrl})`,
-      inline: true,
-    });
-  }
-
-  // Add token tracker if available
-  if (user?.tokenTracker) {
-    fields.push({
-      name: "Token Tracker Link",
-      value: `[Token Tracker](${user.tokenTracker})`,
-      inline: true,
-    });
-  }
-
-  // Add quest/event info if available
-  if (submissionData.questEvent && submissionData.questEvent !== "N/A") {
-    fields.push({
-      name: "Quest/Event",
-      value: submissionData.questEvent,
-      inline: true,
-    });
-  }
-
-  // Add quest bonus if available
-  if (submissionData.questBonus && submissionData.questBonus !== "N/A") {
-    fields.push({
-      name: "Quest/Event Bonus",
-      value: submissionData.questBonus,
-      inline: true,
-    });
-  }
-
-  // Add token totals
-  fields.push(
-    {
-      name: "Token Total",
-      value: `${submissionData.finalTokenAmount || 0} Tokens`,
-      inline: true,
-    },
-    {
-      name: "Collab Total Each",
-      value: submissionData.collab
-        ? `${Math.floor(submissionData.finalTokenAmount / 2) || 0} Tokens`
-        : "N/A",
-      inline: true,
-    },
-    {
-      name: "Token Calculation",
-      value: tokenCalculationText,
-      inline: false,
-    }
-  );
-
+  // Build the embed
   const embed = new EmbedBuilder()
-    .setColor("#AA926A")
+    .setColor(0x2ecc71)
+    .setAuthor({ name: `Submitted by: ${username || 'Unknown User'}`, iconURL: userAvatar || undefined })
     .setTitle(`🎨 ${artTitle}`)
-    .setAuthor({
-      name: `Submitted by: ${submissionData.username || "Unknown User"}`,
-      iconURL: submissionData.userAvatar || "https://via.placeholder.com/128",
-    })
     .addFields(fields)
-    .setTimestamp()
-    .setFooter({ text: "Art Submission System" });
+    .setFooter({ text: 'Art Submission System', iconURL: undefined })
+    .setTimestamp(updatedAt || new Date());
 
-  // Set the image if we have a file URL
-  if (submissionData.fileUrl) {
-    embed.setImage(submissionData.fileUrl);
+  if (fileUrl) {
+    embed.setImage(fileUrl);
   }
 
   return embed;
-};
+}
+
+// Helper to capitalize first letter
+function capitalizeFirst(str) {
+  if (!str) return '';
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
 
 // ------------------- Subsection Title ------------------- 
 const createGatherEmbed = (character, randomItem) => {

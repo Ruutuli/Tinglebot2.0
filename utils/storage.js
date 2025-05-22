@@ -51,9 +51,6 @@ async function saveSubmissionToStorage(key, submissionData) {
       expiresAt
     };
 
-    // Log the data being saved for debugging
-    console.log('Storing submission data:', submission.data);
-
     const result = await TempData.findOneAndUpdate(
       { type: 'submission', key },
       submission,
@@ -363,6 +360,16 @@ async function runWithTransaction(fn) {
   }
 }
 
+// Find the latest (not expired) submission for a userId
+async function findLatestSubmissionIdForUser(userId) {
+  const result = await TempData.findOne({
+    type: 'submission',
+    'data.userId': userId,
+    expiresAt: { $gt: new Date() }
+  }).sort({ updatedAt: -1 });
+  return result?.data?.submissionId || null;
+}
+
 // ============================================================================
 // ------------------- Module Exports -------------------
 // Export all storage-related functions for use in other modules.
@@ -413,5 +420,6 @@ module.exports = {
   cleanupExpiredHealingRequests,
   cleanupEntriesWithoutExpiration,
   
-  retrieveAllByType
+  retrieveAllByType,
+  findLatestSubmissionIdForUser
 };

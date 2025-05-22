@@ -18,6 +18,7 @@ const { getBattleProgressById, storeBattleProgress } = require('./raidCombatModu
 const Monster = require('../models/MonsterModel');
 const { calculateAttackBuff, calculateDefenseBuff, applyBuffs } = require('./buffModule');
 const { handleError } = require('../utils/globalErrorHandler');
+const { updateRaidProgress } = require('./raidModule');
 
 // ============================================================================
 // Utility Functions
@@ -518,7 +519,10 @@ async function processBattle(character, monster, battleId, originalRoll, interac
         }
 
         battleProgress.monsterHearts.current = Math.max(0, battleProgress.monsterHearts.current - outcome.hearts);
-        await storeBattleProgress(battleId, character, monster, monster.tier, battleProgress.monsterHearts, outcome.result);
+        await updateRaidProgress(battleId, outcome.result, {
+            hearts: outcome.hearts,
+            character: character
+        });
 
         return { ...outcome, originalRoll, adjustedRandomValue, attackSuccess, defenseSuccess };
     } catch (error) {

@@ -185,9 +185,7 @@ async onAutocomplete(interaction) {
           collab: collab || null, // Store collaborator
       };      
         
-        console.log('Storing submission data:', submissionData);
         await saveSubmissionToStorage(submissionId, submissionData);
-        
         
 
         // Generate the dropdown menu and cancel button for user options
