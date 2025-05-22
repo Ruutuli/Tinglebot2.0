@@ -457,6 +457,8 @@ module.exports = {
                     return;
                 }
 
+                await interaction.deferReply();
+
                 character.canBeStolenFrom = enabled;
                 await character.save();
 
@@ -467,7 +469,7 @@ module.exports = {
                     )
                     .setThumbnail(character.icon);
 
-                await interaction.reply({ embeds: [embed], ephemeral: true });
+                await interaction.editReply({ embeds: [embed] });
                 return;
             }
 
@@ -478,14 +480,16 @@ module.exports = {
                     return;
                 }
 
+                await interaction.deferReply();
+
                 if (!character.inJail) {
-                    await interaction.reply({ content: `✅ **${character.name}** is not in jail.`, ephemeral: true });
+                    await interaction.editReply({ content: `✅ **${character.name}** is not in jail.` });
                     return;
                 }
 
                 // ---- Patch: Handle missing or invalid jailReleaseTime ----
                 if (!character.jailReleaseTime || isNaN(new Date(character.jailReleaseTime).getTime())) {
-                    await interaction.reply({ content: `✅ **${character.name}** is not in jail.`, ephemeral: true });
+                    await interaction.editReply({ content: `✅ **${character.name}** is not in jail.` });
                     return;
                 }
 
@@ -497,7 +501,7 @@ module.exports = {
                     character.inJail = false;
                     character.jailReleaseTime = null;
                     await character.save();
-                    await interaction.reply({ content: `✅ **${character.name}** has been released from jail!`, ephemeral: true });
+                    await interaction.editReply({ content: `✅ **${character.name}** has been released from jail!` });
                     return;
                 }
 
@@ -509,7 +513,7 @@ module.exports = {
                     )
                     .setThumbnail(character.icon);
 
-                await interaction.reply({ embeds: [embed], ephemeral: true });
+                await interaction.editReply({ embeds: [embed] });
                 return;
             }
 
@@ -519,6 +523,8 @@ module.exports = {
                     await interaction.reply({ content: error, ephemeral: true });
                     return;
                 }
+
+                await interaction.deferReply();
 
                 const stats = await getStealStats(character._id);
                 
@@ -542,7 +548,7 @@ module.exports = {
                         { name: '👥 Victims', value: victimsList, inline: false }
                     );
                 
-                await interaction.reply({ embeds: [embed], ephemeral: true });
+                await interaction.editReply({ embeds: [embed] });
                 return;
             }
 
@@ -568,6 +574,9 @@ module.exports = {
 
             const thiefCharacter = validationResult.character;
 
+            // Defer the reply immediately to prevent timeout
+            await interaction.deferReply();
+
             // ---- Patch: Jail Release Check ----
             if (thiefCharacter.inJail && thiefCharacter.jailReleaseTime) {
                 const now = Date.now();
@@ -584,28 +593,28 @@ module.exports = {
             const isBanditJob = (thiefCharacter.job && thiefCharacter.job.toLowerCase() === 'bandit');
             const isBanditVoucher = (thiefCharacter.jobVoucher && thiefCharacter.jobVoucherJob && thiefCharacter.jobVoucherJob.toLowerCase() === 'bandit');
             if (!isBanditJob && !isBanditVoucher) {
-                await interaction.reply({ content: '❌ Only Bandits or those with a valid Bandit job voucher can steal!', ephemeral: true });
+                await interaction.editReply({ content: '❌ Only Bandits or those with a valid Bandit job voucher can steal!' });
                 return;
             }
 
             // Check if character is in jail
             if (thiefCharacter.inJail) {
-                await interaction.reply({ content: ERROR_MESSAGES.IN_JAIL, ephemeral: true });
+                await interaction.editReply({ content: ERROR_MESSAGES.IN_JAIL });
                 return;
             }
 
             // Validate target character
             const targetValidation = await validateCharacter(targetName, null);
-            if (!targetValidation.valid) {
-                await interaction.reply({ content: targetValidation.error, ephemeral: true });
+            if (!targetValidation.valid && targetType === 'player') {
+                await interaction.editReply({ content: targetValidation.error });
                 return;
             }
 
-            const targetCharacter = targetValidation.character;
+            const targetCharacter = targetType === 'player' ? targetValidation.character : null;
 
             // ---- Prevent Stealing from Self ----
-            if (thiefCharacter._id.toString() === targetCharacter._id.toString()) {
-                await interaction.reply({ content: '❌ **You cannot steal from yourself!**', ephemeral: true });
+            if (targetType === 'player' && thiefCharacter._id.toString() === targetCharacter._id.toString()) {
+                await interaction.editReply({ content: '❌ **You cannot steal from yourself!**' });
                 return;
             }
 
@@ -625,9 +634,8 @@ module.exports = {
 
             if (!allowedChannel || interaction.channelId !== allowedChannel) {
                 const channelMention = `<#${allowedChannel}>`;
-                await interaction.reply({
-                    content: `❌ **You can only use this command in the ${currentVillage} Town Hall channel!**\n${characterName} is currently in ${capitalizeWords(thiefCharacter.currentVillage)}! This command must be used in ${channelMention}.`,
-                    ephemeral: true
+                await interaction.editReply({
+                    content: `❌ **You can only use this command in the ${currentVillage} Town Hall channel!**\n${characterName} is currently in ${capitalizeWords(thiefCharacter.currentVillage)}! This command must be used in ${channelMention}.`
                 });
                 return;
             }
@@ -644,7 +652,7 @@ module.exports = {
                     // No activation needed
                 } else if (!voucherCheck.success) {
                     console.error(`[steal.js]: ❌ Voucher validation failed: ${voucherCheck.message}`);
-                    await interaction.reply({
+                    await interaction.editReply({
                         content: voucherCheck.message,
                         ephemeral: true,
                     });
@@ -652,12 +660,12 @@ module.exports = {
                 } else {
                     const { success: itemSuccess, item: jobVoucherItem, message: itemError } = await fetchJobVoucherItem();
                     if (!itemSuccess) {
-                        await interaction.reply({ content: itemError, ephemeral: true });
+                        await interaction.editReply({ content: itemError, ephemeral: true });
                         return;
                     }
                     const activationResult = await activateJobVoucher(thiefCharacter, job, jobVoucherItem, 1, interaction);
                     if (!activationResult.success) {
-                        await interaction.reply({
+                        await interaction.editReply({
                             content: activationResult.message,
                             ephemeral: true,
                         });
@@ -668,7 +676,7 @@ module.exports = {
 
             // Check if thief's inventory is set up
             if (!thiefCharacter.inventorySynced) {
-                await interaction.reply({ 
+                await interaction.editReply({ 
                     content: '❌ **Your inventory is not set up yet.** Use `/inventory test charactername:NAME` then `/inventory sync charactername:NAME` to initialize.', 
                     ephemeral: true 
                 });
@@ -678,7 +686,7 @@ module.exports = {
             // Check if thief has a valid inventory URL
             const thiefInventoryLink = thiefCharacter.inventory || thiefCharacter.inventoryLink;
             if (typeof thiefInventoryLink !== 'string' || !isValidGoogleSheetsUrl(thiefInventoryLink)) {
-                await interaction.reply({ 
+                await interaction.editReply({ 
                     content: `❌ **Invalid Google Sheets URL for "${thiefCharacter.name}".**`, 
                     ephemeral: true 
                 });
@@ -689,7 +697,7 @@ module.exports = {
             if (targetType === 'npc') {
                 const mappedNPCName = NPC_NAME_MAPPING[targetName];
                 if (!mappedNPCName) {
-                    await interaction.reply({ content: ERROR_MESSAGES.INVALID_TARGET, ephemeral: true });
+                    await interaction.editReply({ content: ERROR_MESSAGES.INVALID_TARGET });
                     return;
                 }
 
@@ -736,7 +744,7 @@ module.exports = {
                 }
 
                 if (!filteredItems.length) {
-                    await interaction.reply({ content: ERROR_MESSAGES.NO_ITEMS, ephemeral: true });
+                    await interaction.editReply({ content: ERROR_MESSAGES.NO_ITEMS });
                     return;
                 }
 
@@ -760,48 +768,58 @@ module.exports = {
                         date: new Date()
                     };
                     
-                    await syncToInventoryDatabase(thiefCharacter, stolenItem, interaction);
-                    
-                    const embed = await createStealResultEmbed(thiefCharacter, mappedNPCName, selectedItem, quantity, roll, failureThreshold, true, true);
-                    
-                    if (selectedItem.tier !== raritySelection) {
-                        let fallbackMessage = '';
-                        if (raritySelection === 'rare') {
-                            fallbackMessage = '⚠️ No rare items found! But you did find something else...';
-                        } else if (raritySelection === 'uncommon') {
-                            fallbackMessage = '⚠️ No uncommon items found! But you did find something else...';
+                    try {
+                        // Perform the inventory sync
+                        await syncToInventoryDatabase(thiefCharacter, stolenItem, interaction);
+                        
+                        // Create and send the embed
+                        const embed = await createStealResultEmbed(thiefCharacter, mappedNPCName, selectedItem, quantity, roll, failureThreshold, true, true);
+                        await interaction.editReply({ embeds: [embed] });
+                    } catch (error) {
+                        console.error('[steal.js]: ❌ Critical error during NPC steal success flow:', error);
+                        // Try to send a follow-up message if the interaction is still valid
+                        try {
+                            if (interaction.replied || interaction.deferred) {
+                                await interaction.editReply({ content: '❌ **An error occurred while processing the steal. If you see an item in your inventory that shouldn\'t be there, please contact staff.**' });
+                            } else {
+                                await interaction.reply({ content: '❌ **An error occurred while processing the steal. If you see an item in your inventory that shouldn\'t be there, please contact staff.**', ephemeral: true });
+                            }
+                        } catch (followUpError) {
+                            console.error('[steal.js]: ❌ Failed to send error message:', followUpError);
                         }
-                        embed.addFields({ name: 'Note', value: fallbackMessage, inline: false });
+                        return;
                     }
-                    
-                    if (thiefCharacter.jobVoucher && !voucherCheck?.skipVoucher) {
-                        const deactivationResult = await deactivateJobVoucher(thiefCharacter._id);
-                        if (!deactivationResult.success) {
-                            console.error(`[steal.js]: ❌ Failed to deactivate job voucher for ${thiefCharacter.name}`);
-                        }
-                    }
-                    
-                    await interaction.reply({ embeds: [embed], ephemeral: false });
                 } else {
                     stealStreaks.set(interaction.user.id, 0);
                     await updateStealStats(thiefCharacter._id, false, selectedItem.tier);
                     
-                    thiefCharacter.failedStealAttempts = (thiefCharacter.failedStealAttempts || 0) + 1;
-                    
-                    if (thiefCharacter.failedStealAttempts >= 3) {
-                        console.log(`[steal.js]: ⛔ ${thiefCharacter.name} sent to jail for 30 minutes`);
-                        thiefCharacter.inJail = true;
-                        thiefCharacter.jailReleaseTime = new Date(Date.now() + (30 * 60 * 1000));
-                        thiefCharacter.failedStealAttempts = 0;
+                    try {
+                        const embed = await createStealResultEmbed(thiefCharacter, mappedNPCName, selectedItem, 0, roll, failureThreshold, false, true);
                         
-                        await thiefCharacter.save();
-                        
-                        const jailEmbed = createBaseEmbed('⛔ Sent to Jail!', '#ff0000')
-                            .setDescription(`**${thiefCharacter.name}** has been sent to jail for 30 minutes due to 3 failed steal attempts!`)
-                            .addFields(
-                                { name: 'Release Time', value: `<t:${Math.floor(thiefCharacter.jailReleaseTime.getTime() / 1000)}:R>`, inline: false }
-                            )
-                            .setThumbnail(thiefCharacter.icon);
+                        if (selectedItem.tier !== raritySelection) {
+                            let fallbackMessage = '';
+                            if (raritySelection === 'rare') {
+                                fallbackMessage = '⚠️ No rare items found! But you did find something else...';
+                            } else if (raritySelection === 'uncommon') {
+                                fallbackMessage = '⚠️ No uncommon items found! But you did find something else...';
+                            }
+                            embed.addFields({ name: 'Note', value: fallbackMessage, inline: false });
+                        }
+
+                        const attemptsLeft = 3 - thiefCharacter.failedStealAttempts;
+                        let warningMessage = '';
+                        let attemptsText = '';
+                        if (attemptsLeft === 1) {
+                            warningMessage = '⚠️ **Final Warning:** One more failed attempt and you\'ll be sent to jail!';
+                            attemptsText = 'You have 1 attempt remaining before jail time!';
+                        } else {
+                            attemptsText = `You have ${attemptsLeft} attempt${attemptsLeft !== 1 ? 's' : ''} remaining before jail time!`;
+                        }
+                        embed.addFields({
+                            name: '⚠️ Failed Attempts',
+                            value: warningMessage ? `${warningMessage}\n${attemptsText}` : attemptsText,
+                            inline: false
+                        });
                         
                         if (thiefCharacter.jobVoucher && !voucherCheck?.skipVoucher) {
                             const deactivationResult = await deactivateJobVoucher(thiefCharacter._id);
@@ -810,66 +828,33 @@ module.exports = {
                             }
                         }
                         
-                        await interaction.reply({
-                            embeds: [jailEmbed],
-                            ephemeral: false
-                        });
-                    }
-                    
-                    await thiefCharacter.save();
-                    
-                    const embed = await createStealResultEmbed(thiefCharacter, mappedNPCName, selectedItem, 0, roll, failureThreshold, false, true);
-                    
-                    if (selectedItem.tier !== raritySelection) {
-                        let fallbackMessage = '';
-                        if (raritySelection === 'rare') {
-                            fallbackMessage = '⚠️ No rare items found! But you did find something else...';
-                        } else if (raritySelection === 'uncommon') {
-                            fallbackMessage = '⚠️ No uncommon items found! But you did find something else...';
+                        await interaction.editReply({ embeds: [embed] });
+                    } catch (error) {
+                        console.error('[steal.js]: ❌ Critical error during NPC steal failure flow:', error);
+                        try {
+                            if (interaction.replied || interaction.deferred) {
+                                await interaction.editReply({ content: '❌ **An error occurred while processing the steal. Please try again.**' });
+                            } else {
+                                await interaction.reply({ content: '❌ **An error occurred while processing the steal. Please try again.**', ephemeral: true });
+                            }
+                        } catch (followUpError) {
+                            console.error('[steal.js]: ❌ Failed to send error message:', followUpError);
                         }
-                        embed.addFields({ name: 'Note', value: fallbackMessage, inline: false });
+                        return;
                     }
-
-                    const attemptsLeft = 3 - thiefCharacter.failedStealAttempts;
-                    let warningMessage = '';
-                    if (attemptsLeft === 2) {
-                        warningMessage = '⚠️ **Warning:** One more failed attempt and you\'ll be sent to jail!';
-                    } else if (attemptsLeft === 1) {
-                        warningMessage = '⚠️ **Final Warning:** This is your last attempt before jail time!';
-                    }
-                    
-                    if (warningMessage) {
-                        embed.addFields({ 
-                            name: '⚠️ Failed Attempts', 
-                            value: `${warningMessage}\nYou have ${attemptsLeft} attempt${attemptsLeft !== 1 ? 's' : ''} remaining before jail time!`, 
-                            inline: false 
-                        });
-                    } else {
-                        embed.addFields({ 
-                            name: '⚠️ Failed Attempts', 
-                            value: `You have ${attemptsLeft} attempt${attemptsLeft !== 1 ? 's' : ''} remaining before jail time!`, 
-                            inline: false 
-                        });
-                    }
-                    
-                    if (thiefCharacter.jobVoucher && !voucherCheck?.skipVoucher) {
-                        const deactivationResult = await deactivateJobVoucher(thiefCharacter._id);
-                        if (!deactivationResult.success) {
-                            console.error(`[steal.js]: ❌ Failed to deactivate job voucher for ${thiefCharacter.name}`);
-                        }
-                    }
-                    
-                    await interaction.reply({
-                        embeds: [embed],
-                        ephemeral: false
-                    });
                 }
             }
 
             // Handle player stealing
             if (targetType === 'player') {
+                if (targetCharacter.inJail) {
+                    await interaction.editReply({ content: '❌ **You cannot steal from a character who is in jail!**' });
+                    console.log(`[steal.js]: ⚠️ Attempted to steal from jailed character: ${targetCharacter.name}`);
+                    return;
+                }
+
                 if (thiefCharacter.currentVillage !== targetCharacter.currentVillage) {
-                    await interaction.reply({ 
+                    await interaction.editReply({ 
                         content: `❌ **You can only steal from characters in the same village!**\n📍 **Your Location:** ${thiefCharacter.currentVillage}\n📍 **Target Location:** ${targetCharacter.currentVillage}`, 
                         ephemeral: true 
                     });
@@ -877,12 +862,12 @@ module.exports = {
                 }
 
                 if (checkAndUpdateProtection(targetCharacter._id)) {
-                    await interaction.reply({ content: ERROR_MESSAGES.PROTECTED, ephemeral: true });
+                    await interaction.editReply({ content: ERROR_MESSAGES.PROTECTED });
                     return;
                 }
 
                 if (!targetCharacter.canBeStolenFrom) {
-                    await interaction.reply({ content: `⚠️ **${targetCharacter.name}** cannot be stolen from.`, ephemeral: true });
+                    await interaction.editReply({ content: `⚠️ **${targetCharacter.name}** cannot be stolen from.` });
                     return;
                 }
 
@@ -944,7 +929,7 @@ module.exports = {
                 }
 
                 if (!filteredItemsPlayer.length) {
-                    await interaction.reply({ content: `❌ **Looks like ${targetName || targetCharacter.name} didn't have any items to steal!**`, ephemeral: true });
+                    await interaction.editReply({ content: `❌ **Looks like ${targetName || targetCharacter.name} didn't have any items to steal!**` });
                     return;
                 }
 
@@ -974,53 +959,61 @@ module.exports = {
                         date: new Date()
                     };
 
-                    await syncToInventoryDatabase(targetCharacter, removedItem, interaction);
-                    await syncToInventoryDatabase(thiefCharacter, stolenItem, interaction);
-
-                    const embed = await createStealResultEmbed(thiefCharacter, targetCharacter, selectedItemPlayer, quantityToSteal, rollPlayer, failureThresholdPlayer, success);
-                    
-                    if (selectedItemPlayer.tier !== raritySelection) {
-                        let fallbackMessage = '';
-                        if (raritySelection === 'rare') {
-                            fallbackMessage = '⚠️ No rare items found! But you did find something else...';
-                        } else if (raritySelection === 'uncommon') {
-                            fallbackMessage = '⚠️ No uncommon items found! But you did find something else...';
+                    try {
+                        // Perform the inventory syncs
+                        await syncToInventoryDatabase(targetCharacter, removedItem, interaction);
+                        await syncToInventoryDatabase(thiefCharacter, stolenItem, interaction);
+                        
+                        // Create and send the embed
+                        const embed = await createStealResultEmbed(thiefCharacter, targetCharacter, selectedItemPlayer, quantityToSteal, rollPlayer, failureThresholdPlayer, success);
+                        await interaction.editReply({
+                            content: `Hey! <@${targetCharacter.userId}>! Your character **${targetCharacter.name}** was stolen from!`,
+                            embeds: [embed]
+                        });
+                    } catch (error) {
+                        console.error('[steal.js]: ❌ Critical error during player steal success flow:', error);
+                        try {
+                            if (interaction.replied || interaction.deferred) {
+                                await interaction.editReply({ content: '❌ **An error occurred while processing the steal. If you see an item in your inventory that shouldn\'t be there, please contact staff.**' });
+                            } else {
+                                await interaction.reply({ content: '❌ **An error occurred while processing the steal. If you see an item in your inventory that shouldn\'t be there, please contact staff.**', ephemeral: true });
+                            }
+                        } catch (followUpError) {
+                            console.error('[steal.js]: ❌ Failed to send error message:', followUpError);
                         }
-                        embed.addFields({ name: 'Note', value: fallbackMessage, inline: false });
+                        return;
                     }
-
-                    if (thiefCharacter.jobVoucher && !voucherCheck?.skipVoucher) {
-                        const deactivationResult = await deactivateJobVoucher(thiefCharacter._id);
-                        if (!deactivationResult.success) {
-                            console.error(`[steal.js]: ❌ Failed to deactivate job voucher for ${thiefCharacter.name}`);
-                        }
-                    }
-
-                    await interaction.reply({
-                        content: success ? `Hey! <@${targetCharacter.userId}>! Your character **${targetCharacter.name}** was stolen from!` : null,
-                        embeds: [embed],
-                        ephemeral: false
-                    });
                 } else {
                     stealStreaks.set(interaction.user.id, 0);
                     await updateStealStats(thiefCharacter._id, false, selectedItemPlayer.tier);
                     
-                    thiefCharacter.failedStealAttempts = (thiefCharacter.failedStealAttempts || 0) + 1;
-                    
-                    if (thiefCharacter.failedStealAttempts >= 3) {
-                        console.log(`[steal.js]: ⛔ ${thiefCharacter.name} sent to jail for 30 minutes`);
-                        thiefCharacter.inJail = true;
-                        thiefCharacter.jailReleaseTime = new Date(Date.now() + (30 * 60 * 1000));
-                        thiefCharacter.failedStealAttempts = 0;
+                    try {
+                        const embed = await createStealResultEmbed(thiefCharacter, targetCharacter, selectedItemPlayer, 0, rollPlayer, failureThresholdPlayer, false);
                         
-                        await thiefCharacter.save();
-                        
-                        const jailEmbed = createBaseEmbed('⛔ Sent to Jail!', '#ff0000')
-                            .setDescription(`**${thiefCharacter.name}** has been sent to jail for 30 minutes due to 3 failed steal attempts!`)
-                            .addFields(
-                                { name: 'Release Time', value: `<t:${Math.floor(thiefCharacter.jailReleaseTime.getTime() / 1000)}:R>`, inline: false }
-                            )
-                            .setThumbnail(thiefCharacter.icon);
+                        if (selectedItemPlayer.tier !== raritySelection) {
+                            let fallbackMessage = '';
+                            if (raritySelection === 'rare') {
+                                fallbackMessage = '⚠️ No rare items found! But you did find something else...';
+                            } else if (raritySelection === 'uncommon') {
+                                fallbackMessage = '⚠️ No uncommon items found! But you did find something else...';
+                            }
+                            embed.addFields({ name: 'Note', value: fallbackMessage, inline: false });
+                        }
+
+                        const attemptsLeft = 3 - thiefCharacter.failedStealAttempts;
+                        let warningMessage = '';
+                        let attemptsText = '';
+                        if (attemptsLeft === 1) {
+                            warningMessage = '⚠️ **Final Warning:** One more failed attempt and you\'ll be sent to jail!';
+                            attemptsText = 'You have 1 attempt remaining before jail time!';
+                        } else {
+                            attemptsText = `You have ${attemptsLeft} attempt${attemptsLeft !== 1 ? 's' : ''} remaining before jail time!`;
+                        }
+                        embed.addFields({
+                            name: '⚠️ Failed Attempts',
+                            value: warningMessage ? `${warningMessage}\n${attemptsText}` : attemptsText,
+                            inline: false
+                        });
                         
                         if (thiefCharacter.jobVoucher && !voucherCheck?.skipVoucher) {
                             const deactivationResult = await deactivateJobVoucher(thiefCharacter._id);
@@ -1029,64 +1022,26 @@ module.exports = {
                             }
                         }
                         
-                        await interaction.reply({
-                            embeds: [jailEmbed],
-                            ephemeral: false
-                        });
-                    }
-                    
-                    await thiefCharacter.save();
-                    
-                    const embed = await createStealResultEmbed(thiefCharacter, targetCharacter, selectedItemPlayer, 0, rollPlayer, failureThresholdPlayer, false);
-                    
-                    if (selectedItemPlayer.tier !== raritySelection) {
-                        let fallbackMessage = '';
-                        if (raritySelection === 'rare') {
-                            fallbackMessage = '⚠️ No rare items found! But you did find something else...';
-                        } else if (raritySelection === 'uncommon') {
-                            fallbackMessage = '⚠️ No uncommon items found! But you did find something else...';
+                        await interaction.editReply({ embeds: [embed] });
+                    } catch (error) {
+                        console.error('[steal.js]: ❌ Critical error during player steal failure flow:', error);
+                        try {
+                            if (interaction.replied || interaction.deferred) {
+                                await interaction.editReply({ content: '❌ **An error occurred while processing the steal. Please try again.**' });
+                            } else {
+                                await interaction.reply({ content: '❌ **An error occurred while processing the steal. Please try again.**', ephemeral: true });
+                            }
+                        } catch (followUpError) {
+                            console.error('[steal.js]: ❌ Failed to send error message:', followUpError);
                         }
-                        embed.addFields({ name: 'Note', value: fallbackMessage, inline: false });
+                        return;
                     }
-
-                    const attemptsLeft = 3 - thiefCharacter.failedStealAttempts;
-                    let warningMessage = '';
-                    if (attemptsLeft === 2) {
-                        warningMessage = '⚠️ **Warning:** One more failed attempt and you\'ll be sent to jail!';
-                    } else if (attemptsLeft === 1) {
-                        warningMessage = '⚠️ **Final Warning:** This is your last attempt before jail time!';
-                    }
-                    
-                    if (warningMessage) {
-                        embed.addFields({ 
-                            name: '⚠️ Failed Attempts', 
-                            value: `${warningMessage}\nYou have ${attemptsLeft} attempt${attemptsLeft !== 1 ? 's' : ''} remaining before jail time!`, 
-                            inline: false 
-                        });
-                    } else {
-                        embed.addFields({ 
-                            name: '⚠️ Failed Attempts', 
-                            value: `You have ${attemptsLeft} attempt${attemptsLeft !== 1 ? 's' : ''} remaining before jail time!`, 
-                            inline: false 
-                        });
-                    }
-                    
-                    if (thiefCharacter.jobVoucher && !voucherCheck?.skipVoucher) {
-                        const deactivationResult = await deactivateJobVoucher(thiefCharacter._id);
-                        if (!deactivationResult.success) {
-                            console.error(`[steal.js]: ❌ Failed to deactivate job voucher for ${thiefCharacter.name}`);
-                        }
-                    }
-                    
-                    await interaction.reply({
-                        embeds: [embed],
-                        ephemeral: false
-                    });
                 }
             }
         } catch (error) {
             handleError(error, 'steal.js');
             console.error('[steal.js]: Error executing command:', error);
+            console.warn(`[steal.js]: ⚠️ Steal attempt not counted due to error or timeout for user ${interaction.user.id}`);
             await interaction.reply({ content: '❌ **An error occurred while processing the command.**', ephemeral: true });
         }
     },
