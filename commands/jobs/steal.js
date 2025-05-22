@@ -568,6 +568,26 @@ module.exports = {
 
             const thiefCharacter = validationResult.character;
 
+            // ---- Patch: Jail Release Check ----
+            if (thiefCharacter.inJail && thiefCharacter.jailReleaseTime) {
+                const now = Date.now();
+                const releaseTime = new Date(thiefCharacter.jailReleaseTime).getTime();
+                if (releaseTime <= now) {
+                    thiefCharacter.inJail = false;
+                    thiefCharacter.jailReleaseTime = null;
+                    await thiefCharacter.save();
+                }
+            }
+
+            // ---- Bandit Job or Voucher Restriction ----
+            console.log(`[steal.js]: job=${thiefCharacter.job}, voucher=${thiefCharacter.jobVoucher}, voucherJob=${thiefCharacter.jobVoucherJob}`);
+            const isBanditJob = (thiefCharacter.job && thiefCharacter.job.toLowerCase() === 'bandit');
+            const isBanditVoucher = (thiefCharacter.jobVoucher && thiefCharacter.jobVoucherJob && thiefCharacter.jobVoucherJob.toLowerCase() === 'bandit');
+            if (!isBanditJob && !isBanditVoucher) {
+                await interaction.reply({ content: '❌ Only Bandits or those with a valid Bandit job voucher can steal!', ephemeral: true });
+                return;
+            }
+
             // Check if character is in jail
             if (thiefCharacter.inJail) {
                 await interaction.reply({ content: ERROR_MESSAGES.IN_JAIL, ephemeral: true });
