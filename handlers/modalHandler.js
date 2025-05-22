@@ -9,8 +9,9 @@ const { capitalizeFirstLetter } = require('../modules/formattingModule');
 // ------------------- Utility Functions -------------------
 // Generic helper utilities for menu creation and storage.
 const { getAddOnsMenu, getBaseSelectMenu, getSpecialWorksMenu, getTypeMultiplierMenu } = require('../utils/menuUtils');
-const { submissionStore } = require('../utils/storage');
+const { saveSubmissionToStorage, retrieveSubmissionFromStorage } = require('../utils/storage');
 const { getCancelButtonRow } = require('./buttonHelperHandler');
+const { calculateTokens, generateTokenBreakdown } = require('../utils/tokenUtils');
 
 
 // ------------------- Handlers -------------------
@@ -29,83 +30,136 @@ async function handleModalSubmission(interaction) {
     }
 
     const customId = interaction.customId;
+    const userId = interaction.user.id;
+
+    // Get existing submission data or create new
+    let submissionData = await retrieveSubmissionFromStorage(userId) || {
+      userId,
+      baseSelections: [],
+      typeMultiplierSelections: [],
+      typeMultiplierCounts: {},
+      addOnsApplied: [],
+      specialWorksApplied: [],
+      characterCount: 1,
+      productMultiplierValue: 'default'
+    };
 
     // ------------------- Handle Mount Name Modal -------------------
-    // If the modal is for entering a mount name, delegate to the mount name submission handler.
     if (customId.startsWith('mount-name-modal')) {
       await handleMountNameSubmission(interaction);
       return;
     }
 
     // ------------------- Handle Base Count Modal -------------------
-    // Process the base count modal submission and update submission data.
     if (customId === 'baseCountModal') {
-      const baseCount = parseInt(interaction.fields.getTextInputValue('baseCountInput'), 10) || 1;
-
-      const userId = interaction.user.id;
-      const submissionData = submissionStore.get(userId) || {};
+      const baseCount = parseInt(interaction.components[0].components[0].value, 10) || 1;
       submissionData.characterCount = baseCount;
-      submissionStore.set(userId, submissionData);
+      
+      // Calculate tokens after updating character count
+      const { totalTokens, breakdown } = calculateTokens({
+        baseSelections: submissionData.baseSelections,
+        typeMultiplierSelections: submissionData.typeMultiplierSelections,
+        productMultiplierValue: submissionData.productMultiplierValue,
+        addOnsApplied: submissionData.addOnsApplied,
+        characterCount: baseCount,
+        typeMultiplierCounts: submissionData.typeMultiplierCounts,
+        specialWorksApplied: submissionData.specialWorksApplied,
+        collab: submissionData.collab
+      });
 
+      submissionData.finalTokenAmount = totalTokens;
+      submissionData.tokenCalculation = generateTokenBreakdown({
+        ...submissionData,
+        finalTokenAmount: totalTokens
+      });
+      
+      await saveSubmissionToStorage(userId, submissionData);
+      
       await interaction.update({
-        content: `☑️ **${baseCount} base(s)** selected. Select another base or click "Next Section ➡️" when you are done.`,
+        content: `☑️ **${baseCount} base(s)** selected. Select another base or click "Next Section ➡️" when you are done.\n\n${submissionData.tokenCalculation}`,
         components: [getBaseSelectMenu(true), getCancelButtonRow()]
       });
       return;
     }
 
     // ------------------- Handle Multiplier Count Modal -------------------
-    // Process the multiplier count modal submission, update the multiplier count for the specific type.
     if (customId.startsWith('multiplierCountModal_')) {
-      const multiplierName = customId.split('_')[1]; // Extract the multiplier name
-      const multiplierCount = parseInt(interaction.fields.getTextInputValue('multiplierCountInput'), 10) || 1;
+      const multiplierName = customId.split('_')[1];
+      const multiplierCount = parseInt(interaction.components[0].components[0].value, 10) || 1;
 
-      console.info(`[modalHandler]: Multiplier Count Modal - User: ${interaction.user.id}, Multiplier: ${multiplierName}, Count: ${multiplierCount}`);
+      console.info(`[modalHandler]: Multiplier Count Modal - User: ${userId}, Multiplier: ${multiplierName}, Count: ${multiplierCount}`);
 
-      const userId = interaction.user.id;
-      const submissionData = submissionStore.get(userId) || {};
-
-      // Ensure typeMultiplierCounts is initialized
-      submissionData.typeMultiplierCounts = submissionData.typeMultiplierCounts || {};
       submissionData.typeMultiplierCounts[multiplierName] = multiplierCount;
-      submissionStore.set(userId, submissionData);
+      
+      // Calculate tokens after updating multiplier count
+      const { totalTokens, breakdown } = calculateTokens({
+        baseSelections: submissionData.baseSelections,
+        typeMultiplierSelections: submissionData.typeMultiplierSelections,
+        productMultiplierValue: submissionData.productMultiplierValue,
+        addOnsApplied: submissionData.addOnsApplied,
+        characterCount: submissionData.characterCount,
+        typeMultiplierCounts: submissionData.typeMultiplierCounts,
+        specialWorksApplied: submissionData.specialWorksApplied,
+        collab: submissionData.collab
+      });
+
+      submissionData.finalTokenAmount = totalTokens;
+      submissionData.tokenCalculation = generateTokenBreakdown({
+        ...submissionData,
+        finalTokenAmount: totalTokens
+      });
+
+      await saveSubmissionToStorage(userId, submissionData);
 
       await interaction.update({
-        content: `☑️ **${multiplierCount}** selected for the multiplier **${capitalizeFirstLetter(multiplierName)}**. Select another Type Multiplier or click "Next Section ➡️" when you are done.`,
+        content: `☑️ **${multiplierCount}** selected for the multiplier **${capitalizeFirstLetter(multiplierName)}**. Select another Type Multiplier or click "Next Section ➡️" when you are done.\n\n${submissionData.tokenCalculation}`,
         components: [getTypeMultiplierMenu(true), getCancelButtonRow()]
       });
       return;
     }
 
     // ------------------- Handle Add-On Count Modal -------------------
-    // Process the add-on count modal submission, update or add the selected add-on count.
     if (customId.startsWith('addOnCountModal_')) {
       const selectedAddOn = customId.split('_')[1];
-      const addOnQuantity = parseInt(interaction.fields.getTextInputValue('addOnCountInput'), 10) || 1;
+      const addOnQuantity = parseInt(interaction.components[0].components[0].value, 10) || 1;
 
-      const userId = interaction.user.id;
-      const submissionData = submissionStore.get(userId) || {};
-
-      // Ensure addOnsApplied is initialized and filter out any invalid entries.
-      submissionData.addOnsApplied = submissionData.addOnsApplied || [];
+      // Ensure addOnsApplied is initialized and filter out any invalid entries
       submissionData.addOnsApplied = submissionData.addOnsApplied.filter(entry => typeof entry === 'object' && entry.addOn);
 
-      // Update or add the selected add-on.
+      // Update or add the selected add-on
       const existingAddOnIndex = submissionData.addOnsApplied.findIndex(entry => entry.addOn === selectedAddOn);
       if (existingAddOnIndex !== -1) {
         submissionData.addOnsApplied[existingAddOnIndex].count = addOnQuantity;
       } else {
         submissionData.addOnsApplied.push({ addOn: selectedAddOn, count: addOnQuantity });
       }
-      submissionStore.set(userId, submissionData);
+      
+      // Calculate tokens after updating add-ons
+      const { totalTokens, breakdown } = calculateTokens({
+        baseSelections: submissionData.baseSelections,
+        typeMultiplierSelections: submissionData.typeMultiplierSelections,
+        productMultiplierValue: submissionData.productMultiplierValue,
+        addOnsApplied: submissionData.addOnsApplied,
+        characterCount: submissionData.characterCount,
+        typeMultiplierCounts: submissionData.typeMultiplierCounts,
+        specialWorksApplied: submissionData.specialWorksApplied,
+        collab: submissionData.collab
+      });
+
+      submissionData.finalTokenAmount = totalTokens;
+      submissionData.tokenCalculation = generateTokenBreakdown({
+        ...submissionData,
+        finalTokenAmount: totalTokens
+      });
+      
+      await saveSubmissionToStorage(userId, submissionData);
 
       const addOnsMenu = getAddOnsMenu(true);
       await interaction.update({
-        content: `☑️ **${addOnQuantity} ${selectedAddOn}(s)** added. Select more add-ons or click "Next Section ➡️".`,
+        content: `☑️ **${addOnQuantity} ${selectedAddOn}(s)** added. Select more add-ons or click "Next Section ➡️".\n\n${submissionData.tokenCalculation}`,
         components: [addOnsMenu, getCancelButtonRow()]
       });
 
-      // Optional transition: If the user selects "complete", transition to the Special Works menu.
       if (interaction.values?.[0] === 'complete') {
         const specialWorksMenu = getSpecialWorksMenu(true);
         await interaction.editReply({
@@ -118,21 +172,34 @@ async function handleModalSubmission(interaction) {
     }
 
     // ------------------- Handle Special Works Count Modal -------------------
-    // Process the special works count modal submission and update submission data.
     if (customId.startsWith('specialWorksCountModal_')) {
       const specialWork = customId.split('_')[1];
-      const specialWorkCount = parseInt(interaction.fields.getTextInputValue('specialWorksCountInput'), 10) || 1;
+      const specialWorkCount = parseInt(interaction.components[0].components[0].value, 10) || 1;
 
-      const userId = interaction.user.id;
-      const submissionData = submissionStore.get(userId) || {};
-
-      // Ensure specialWorksApplied is initialized.
-      submissionData.specialWorksApplied = submissionData.specialWorksApplied || [];
       submissionData.specialWorksApplied.push({ work: specialWork, count: specialWorkCount });
-      submissionStore.set(userId, submissionData);
+      
+      // Calculate tokens after updating special works
+      const { totalTokens, breakdown } = calculateTokens({
+        baseSelections: submissionData.baseSelections,
+        typeMultiplierSelections: submissionData.typeMultiplierSelections,
+        productMultiplierValue: submissionData.productMultiplierValue,
+        addOnsApplied: submissionData.addOnsApplied,
+        characterCount: submissionData.characterCount,
+        typeMultiplierCounts: submissionData.typeMultiplierCounts,
+        specialWorksApplied: submissionData.specialWorksApplied,
+        collab: submissionData.collab
+      });
+
+      submissionData.finalTokenAmount = totalTokens;
+      submissionData.tokenCalculation = generateTokenBreakdown({
+        ...submissionData,
+        finalTokenAmount: totalTokens
+      });
+      
+      await saveSubmissionToStorage(userId, submissionData);
 
       await interaction.update({
-        content: `☑️ **${specialWorkCount} ${specialWork.replace(/([A-Z])/g, ' $1')}(s)** added. Select more or click "Complete ✅".`,
+        content: `☑️ **${specialWorkCount} ${specialWork.replace(/([A-Z])/g, ' $1')}(s)** added. Select more or click "Complete ✅".\n\n${submissionData.tokenCalculation}`,
         components: [getSpecialWorksMenu(true), getCancelButtonRow()]
       });
     }

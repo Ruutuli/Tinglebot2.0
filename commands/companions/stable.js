@@ -534,7 +534,7 @@ async function handleFixMount(interaction, characterName, mountName) {
     }
 
     // Reset mount storage status
-    mount.isStored = false;
+    mount.status = 'stored';
     mount.storageLocation = null;
     mount.storedAt = null;
     await mount.save();
@@ -568,7 +568,7 @@ async function handleStoreMount(interaction, characterName, mountName) {
       throw new Error('❌ Mount not found');
     }
     // Update mount storage status
-    mount.isStored = true;
+    mount.status = 'stored';
     await mount.save();
     console.info(`[stable.js]: ✅ Updated mount storage status for "${mountName}"`);
     // Update character's active mount status
