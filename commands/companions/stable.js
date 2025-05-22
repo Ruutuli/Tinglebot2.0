@@ -92,12 +92,12 @@ async function findCompanionByType(characterId, companionName) {
 // ---- Response Utilities ----
 // Creates a standardized error response
 async function sendErrorResponse(interaction, message, ephemeral = true) {
-  await interaction.reply({ content: `❌ ${message}`, ephemeral });
+  await interaction.reply({ content: message.startsWith('❌') ? message : `❌ ${message}`, ephemeral });
 }
 
 // Creates a standardized success response
 async function sendSuccessResponse(interaction, message, ephemeral = false) {
-  await interaction.reply({ content: `✅ ${message}`, ephemeral });
+  await interaction.reply({ content: message.startsWith('✅') ? message : `✅ ${message}`, ephemeral });
 }
 
 // ---- Character Validation ----
@@ -196,11 +196,11 @@ async function findCompanionByName(characterId, companionName, type, status = nu
 
 // ---- URL Handling ----
 // Sanitizes and validates image URLs
-const sanitizeUrl = (url, type) => {
+const sanitizeUrl = (url, type, species) => {
   if (!url) {
     if (type === 'mount') {
       const { getMountThumbnail } = require('../../modules/mountModule');
-      return getMountThumbnail('Horse'); // Default to horse thumbnail
+      return getMountThumbnail(species); // Use the mount's species for thumbnail
     }
     return "https://static.wikia.nocookie.net/cursed-images-inspiration/images/3/35/7a0c5231e5034fc4450867a7f2781eb0.jpg/revision/latest?cb=20210304180138";
   }
@@ -212,14 +212,14 @@ const sanitizeUrl = (url, type) => {
     }
     if (type === 'mount') {
       const { getMountThumbnail } = require('../../modules/mountModule');
-      return getMountThumbnail('Horse'); // Default to horse thumbnail
+      return getMountThumbnail(species); // Use the mount's species for thumbnail
     }
     return "https://static.wikia.nocookie.net/cursed-images-inspiration/images/3/35/7a0c5231e5034fc4450867a7f2781eb0.jpg/revision/latest?cb=20210304180138";
   } catch (_) {
     console.error("[stable.js]: ❌ Error sanitizing URL:", url);
     if (type === 'mount') {
       const { getMountThumbnail } = require('../../modules/mountModule');
-      return getMountThumbnail('Horse'); // Default to horse thumbnail
+      return getMountThumbnail(species); // Use the mount's species for thumbnail
     }
     return "https://static.wikia.nocookie.net/cursed-images-inspiration/images/3/35/7a0c5231e5034fc4450867a7f2781eb0.jpg/revision/latest?cb=20210304180138";
   }
@@ -462,7 +462,7 @@ async function viewCompanion(characterId, type, companionName) {
   }
 
   if (!companion) {
-    throw new Error(`❌ ${type === 'mount' ? 'Mount' : 'Pet'} not found`);
+    throw new Error(`${type === 'mount' ? 'Mount' : 'Pet'} not found`);
   }
 
   const result = {
@@ -473,6 +473,8 @@ async function viewCompanion(characterId, type, companionName) {
   if (type === 'pet') {
     result.rollsDisplay = getRollsDisplay(companion.rollsRemaining || 0, companion.level || 0);
     result.petTypeData = getPetTypeData(companion.petType);
+  } else if (type === 'mount') {
+    result.imageUrl = sanitizeUrl(companion.imageUrl, type, companion.species);
   }
 
   console.log(`[stable.js]: ✅ Successfully retrieved ${type} details`);
@@ -510,6 +512,47 @@ async function handleBrowseStable(interaction, type) {
   } catch (error) {
     console.error(`[stable.js]: ❌ Error in handleBrowseStable:`, error);
     await sendErrorResponse(interaction, error.message);
+  }
+}
+
+// ---- Fix Mount Handler ----
+// Handles fixing incorrectly stored mounts
+async function handleFixMount(interaction, characterName, mountName) {
+  try {
+    console.log(`[stable.js]: 🚀 Starting fix mount process for "${mountName}"`);
+    
+    // Find the mount
+    const mount = await Mount.findOne({ 
+      owner: characterName,
+      name: mountName
+    });
+
+    if (!mount) {
+      console.error(`[stable.js]: ❌ Mount "${mountName}" not found for character "${characterName}"`);
+      await sendErrorResponse(interaction, 'Mount not found. Please check the name and try again.');
+      return;
+    }
+
+    // Reset mount storage status
+    mount.isStored = false;
+    mount.storageLocation = null;
+    mount.storedAt = null;
+    await mount.save();
+    console.info(`[stable.js]: ✅ Reset mount storage status for "${mountName}"`);
+
+    // Update character's active mount status
+    const character = await Character.findOne({ name: characterName });
+    if (character) {
+      character.mount = false;
+      character.currentActiveMount = null;
+      await character.save();
+      console.info(`[stable.js]: ✅ Updated character's active mount status`);
+    }
+
+    await sendSuccessResponse(interaction, `✅ **${mountName}** has been fixed and is now available for **${characterName}**!`);
+  } catch (error) {
+    console.error(`[stable.js]: ❌ Error in fix mount handler:`, error);
+    await sendErrorResponse(interaction, 'An error occurred while fixing your mount. Please try again.');
   }
 }
 
@@ -888,6 +931,23 @@ module.exports = {
             .setDescription('Enter the mount/pet name')
             .setRequired(true)
         )
+    )
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('fixmount')
+        .setDescription('Fix an incorrectly stored mount')
+        .addStringOption(option =>
+          option.setName('charactername')
+            .setDescription('Enter the character name')
+            .setRequired(true)
+            .setAutocomplete(true)
+        )
+        .addStringOption(option =>
+          option.setName('name')
+            .setDescription('Enter the mount name')
+            .setRequired(true)
+            .setAutocomplete(true)
+        )
     ),
 
   // ---- Command Execution ----
@@ -926,12 +986,26 @@ module.exports = {
           break;
 
         case 'store':
-          // Check if it's a mount or pet
+          const type = interaction.options.getString('type');
+          // Validate the type matches the actual companion type
           const mountToStore = await Mount.findOne({ owner: characterName, name: name });
+          const petToStore = await Pet.findOne({ ownerName: characterName, name: name });
+          
+          if (type === 'mount' && !mountToStore) {
+            await sendErrorResponse(interaction, 'This companion is not a mount. Please select the correct type.');
+            return;
+          }
+          if (type === 'pet' && !petToStore) {
+            await sendErrorResponse(interaction, 'This companion is not a pet. Please select the correct type.');
+            return;
+          }
+          
           if (mountToStore) {
             await handleStoreMount(interaction, characterName, name);
-          } else {
+          } else if (petToStore) {
             await handleStorePet(interaction, characterName, name);
+          } else {
+            await sendErrorResponse(interaction, 'Companion not found. Please check the name and try again.');
           }
           break;
 
@@ -946,6 +1020,9 @@ module.exports = {
           break;
         case 'buy':
           await handleBuyPet(interaction, interaction.user.id, characterName, name);
+          break;
+        case 'fixmount':
+          await handleFixMount(interaction, characterName, name);
           break;
         default:
           console.log(`[stable.js]: ❌ Invalid subcommand: ${subcommand}`);
