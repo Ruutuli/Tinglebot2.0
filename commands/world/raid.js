@@ -79,7 +79,33 @@ async execute(interaction) {
           await interaction.editReply('❌ **An error occurred during the battle: Battle progress not found.**');
           return;
       }
+
+      // Check if raid has expired
+      const raidStartTime = battleProgress.startTime;
+      const raidDuration = 15 * 60 * 1000; // 15 minutes in milliseconds
+      const currentTime = Date.now();
       
+      if (currentTime - raidStartTime > raidDuration) {
+          console.log(`[raid.js]: ⚠️ Raid ${battleId} has expired. Start time: ${raidStartTime}, Current time: ${currentTime}`);
+          await interaction.editReply('❌ **This raid has ended. You cannot join or continue an expired raid.**');
+          return;
+      }
+
+      // Check if character is in the correct village
+      const monster = await fetchMonsterByName(battleProgress.monster);
+      if (!monster) {
+          console.log("[ERROR] Monster not found.");
+          await interaction.editReply('❌ **The monster in this raid could not be found.**');
+          return;
+      }
+
+      // Get the village where the raid is taking place
+      const raidVillage = battleProgress.villageId;
+      if (character.currentVillage !== raidVillage) {
+          console.log(`[raid.js]: ⚠️ Character ${character.name} is not in the raid's village. Current: ${character.currentVillage}, Required: ${raidVillage}`);
+          await interaction.editReply(`❌ **You must be in ${raidVillage} to participate in this raid.**`);
+          return;
+      }
 
       const currentMonster = await fetchMonsterByName(battleProgress.monster);
       if (!currentMonster) {

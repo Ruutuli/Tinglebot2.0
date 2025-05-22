@@ -61,7 +61,8 @@ async function storeRaidProgress(character, monster, tier, monsterHearts, progre
     },
     progress: progress ? `\n${progress}` : '',
     isBloodMoon: false,
-    startTime: Date.now()
+    startTime: Date.now(),
+    villageId: character.currentVillage // Add the village ID where the raid is taking place
   };
 
   try {
