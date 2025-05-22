@@ -37,12 +37,15 @@ async function handleModalSubmission(interaction) {
   try {
     // Get existing submission data or create new
     let submissionData = await retrieveSubmissionFromStorage(userId);
+    let isNewSubmission = false;
     
-    // If no existing data, create new submission
-    if (!submissionData) {
+    // If no existing data or if this is a new base selection, create new submission
+    if (!submissionData || customId === 'baseCountModal') {
+      isNewSubmission = true;
+      const submissionId = generateSubmissionId();
       submissionData = {
+        submissionId,
         userId,
-        submissionId: generateSubmissionId(),
         baseSelections: [],
         typeMultiplierSelections: [],
         productMultiplierValue: 'default',
@@ -58,95 +61,130 @@ async function handleModalSubmission(interaction) {
       };
     }
 
-    // Handle different modal types
-    switch (customId) {
-      case 'baseCountModal':
-        const baseCount = parseInt(interaction.components[0].components[0].value);
-        if (isNaN(baseCount) || baseCount < 1) {
-          return interaction.reply({
-            content: '❌ **Please enter a valid number greater than 0.**',
-            flags: 64
-          });
-        }
-        submissionData.characterCount = baseCount;
-        break;
-
-      case 'multiplierCountModal':
-        const [_, multiplierName] = customId.split('_');
-        const multiplierCount = parseInt(interaction.components[0].components[0].value);
-        if (isNaN(multiplierCount) || multiplierCount < 1) {
-          return interaction.reply({
-            content: '❌ **Please enter a valid number greater than 0.**',
-            flags: 64
-          });
-        }
-        submissionData.typeMultiplierCounts[multiplierName] = multiplierCount;
-        break;
-
-      case 'addOnCountModal':
-        const [__, addOnName] = customId.split('_');
-        const addOnCount = parseInt(interaction.components[0].components[0].value);
-        if (isNaN(addOnCount) || addOnCount < 1) {
-          return interaction.reply({
-            content: '❌ **Please enter a valid number greater than 0.**',
-            flags: 64
-          });
-        }
-        const existingAddOn = submissionData.addOnsApplied.find(a => a.addOn === addOnName);
-        if (existingAddOn) {
-          existingAddOn.count = addOnCount;
-        } else {
-          submissionData.addOnsApplied.push({ addOn: addOnName, count: addOnCount });
-        }
-        break;
-
-      case 'specialWorksCountModal':
-        const [___, specialWorkName] = customId.split('_');
-        const specialWorksCount = parseInt(interaction.components[0].components[0].value);
-        if (isNaN(specialWorksCount) || specialWorksCount < 1) {
-          return interaction.reply({
-            content: '❌ **Please enter a valid number greater than 0.**',
-            flags: 64
-          });
-        }
-        const existingWork = submissionData.specialWorksApplied.find(w => w.work === specialWorkName);
-        if (existingWork) {
-          existingWork.count = specialWorksCount;
-        } else {
-          submissionData.specialWorksApplied.push({ work: specialWorkName, count: specialWorksCount });
-        }
-        break;
-    }
-
-    // Calculate tokens and generate breakdown
-    const { totalTokens, breakdown } = calculateTokens(submissionData);
-    submissionData.finalTokenAmount = totalTokens;
-    submissionData.tokenCalculation = breakdown;
-    submissionData.updatedAt = new Date();
-
-    // Save updated submission data
+    // Save the submission data using submissionId as the key
     await saveSubmissionToStorage(submissionData.submissionId, submissionData);
 
-    // Only show token calculation in the final confirmation
-    if (customId === 'specialWorksCountModal') {
-      await interaction.reply({
-        content: `✅ **Count updated!**\n\n${breakdown}`,
-        flags: 64
+    // Handle different modal types
+    if (customId.startsWith('baseCountModal_')) {
+      const [_, baseSelection] = customId.split('_');
+      const baseCount = parseInt(interaction.fields.getTextInputValue('baseCountInput'), 10);
+      if (isNaN(baseCount) || baseCount < 1) {
+        return interaction.reply({
+          content: '❌ **Please enter a valid number greater than 0.**',
+          ephemeral: true
+        });
+      }
+
+      console.log('Processing base count for:', baseSelection);
+      
+      // Reset all counts when starting a new base selection
+      submissionData.characterCount = baseCount;
+      submissionData.typeMultiplierCounts = {};
+      submissionData.addOnsApplied = [];
+      submissionData.specialWorksApplied = [];
+      submissionData.finalTokenAmount = 0;
+      submissionData.tokenCalculation = null;
+      
+      // Add the base selection if it's not already there
+      if (!submissionData.baseSelections.includes(baseSelection)) {
+        submissionData.baseSelections.push(baseSelection);
+      }
+      
+      // Save and update UI
+      await saveSubmissionToStorage(submissionData.submissionId, submissionData);
+      console.log('Base selection saved:', submissionData.baseSelections);
+      
+      await interaction.update({
+        content: `☑️ **${baseCount} ${baseSelection}(s)** selected. Select another base or click "Next Section ➡️" when you are done.`,
+        components: [getBaseSelectMenu(true), getCancelButtonRow()]
       });
-    } else {
+    }
+    else if (customId.startsWith('multiplierCountModal_')) {
+      const [_, multiplierName] = customId.split('_');
+      const multiplierCount = parseInt(interaction.fields.getTextInputValue('multiplierCountInput'), 10);
+      if (isNaN(multiplierCount) || multiplierCount < 1) {
+        return interaction.reply({
+          content: '❌ **Please enter a valid number greater than 0.**',
+          ephemeral: true
+        });
+      }
+      submissionData.typeMultiplierCounts[multiplierName] = multiplierCount;
+      
+      // Save and update UI
+      await saveSubmissionToStorage(submissionData.submissionId, submissionData);
+      await interaction.update({
+        content: `☑️ **${multiplierCount}** selected for the multiplier **${capitalizeFirstLetter(multiplierName)}**. Select another Type Multiplier or click "Next Section ➡️" when you are done.`,
+        components: [getTypeMultiplierMenu(true), getCancelButtonRow()]
+      });
+    }
+    else if (customId.startsWith('addOnCountModal_')) {
+      const [__, addOnName] = customId.split('_');
+      const addOnCount = parseInt(interaction.fields.getTextInputValue('addOnCountInput'), 10);
+      if (isNaN(addOnCount) || addOnCount < 1) {
+        return interaction.reply({
+          content: '❌ **Please enter a valid number greater than 0.**',
+          ephemeral: true
+        });
+      }
+      const existingAddOn = submissionData.addOnsApplied.find(a => a.addOn === addOnName);
+      if (existingAddOn) {
+        existingAddOn.count = addOnCount;
+      } else {
+        submissionData.addOnsApplied.push({ addOn: addOnName, count: addOnCount });
+      }
+      
+      // Save and update UI
+      await saveSubmissionToStorage(submissionData.submissionId, submissionData);
+      const addOnsMenu = getAddOnsMenu(true);
+      await interaction.update({
+        content: `☑️ **${addOnCount} ${addOnName}(s)** added. Select more add-ons or click "Next Section ➡️".`,
+        components: [addOnsMenu, getCancelButtonRow()]
+      });
+    }
+    else if (customId.startsWith('specialWorksCountModal_')) {
+      const [___, specialWorkName] = customId.split('_');
+      const specialWorksCount = parseInt(interaction.fields.getTextInputValue('specialWorksCountInput'), 10);
+      if (isNaN(specialWorksCount) || specialWorksCount < 1) {
+        return interaction.reply({
+          content: '❌ **Please enter a valid number greater than 0.**',
+          ephemeral: true
+        });
+      }
+      const existingWork = submissionData.specialWorksApplied.find(w => w.work === specialWorkName);
+      if (existingWork) {
+        existingWork.count = specialWorksCount;
+      } else {
+        submissionData.specialWorksApplied.push({ work: specialWorkName, count: specialWorksCount });
+      }
+      
+      // Calculate tokens and generate breakdown
+      const { totalTokens, breakdown } = calculateTokens(submissionData);
+      submissionData.finalTokenAmount = totalTokens;
+      submissionData.tokenCalculation = breakdown;
+      
+      // Save and update UI
+      await saveSubmissionToStorage(submissionData.submissionId, submissionData);
+      await interaction.update({
+        content: `☑️ **${specialWorksCount} ${specialWorkName.replace(/([A-Z])/g, ' $1')}(s)** added. Select more or click "Complete ✅".\n\n${breakdown}`,
+        components: [getSpecialWorksMenu(true), getCancelButtonRow()]
+      });
+    }
+    else {
+      console.error(`[modalHandler.js]: ❌ Unknown modal type: ${customId}`);
       await interaction.reply({
-        content: '✅ **Count updated!**',
-        flags: 64
+        content: '❌ **An error occurred: Unknown modal type.**',
+        ephemeral: true
       });
     }
 
   } catch (error) {
     console.error(`[modalHandler.js]: ❌ Error in handleModalSubmission: ${error.message}`);
+    console.error(error.stack);
     
     if (!interaction.replied) {
       await interaction.reply({
-        content: '❌ **An error occurred while processing your submission.**',
-        flags: 64
+        content: '❌ **An error occurred while processing your submission. Please try again.**',
+        ephemeral: true
       });
     }
   }
@@ -157,7 +195,7 @@ async function handleModalSubmission(interaction) {
 // Triggers a modal for selecting the number of bases.
 async function triggerBaseCountModal(interaction, base) {
   const modal = new ModalBuilder()
-    .setCustomId('baseCountModal')
+    .setCustomId(`baseCountModal_${base}`)
     .setTitle('How Many of This Base?');
 
   const textInput = new TextInputBuilder()

@@ -910,79 +910,150 @@ const createWritingSubmissionEmbed = (submissionData) => {
 
 // ------------------- Subsection Title ------------------- 
 const createArtSubmissionEmbed = (submissionData, user, tokenCalculation) => {
- return new EmbedBuilder()
-  .setColor("#AA926A")
-  .setTitle(`🎨 ${submissionData.title || submissionData.fileName}`)
-  .setAuthor({
-   name: `Submitted by: ${submissionData.username}`,
-   iconURL: submissionData.userAvatar || "https://via.placeholder.com/128",
-  })
-  .addFields(
-   {
-    name: "Submission ID",
-    value: `\`${submissionData.submissionId || "N/A"}\``,
-    inline: false,
-   },
-   {
-    name: "Art Title",
-    value: submissionData.title || submissionData.fileName,
-    inline: false,
-   }, // Add title field
-   {
-    name: "Member",
-    value: `<@${submissionData.userId || "unknown"}>`,
-    inline: true,
-   },
-   {
-    name: "Collaboration",
-    value: submissionData.collab
-     ? `Tokens will be split equally with ${submissionData.collab}.`
-     : "No collaborator added.",
-    inline: false,
-   },
-   {
-    name: "Upload Link",
-    value: submissionData.fileUrl
-     ? `[View Uploaded Image](${submissionData.fileUrl})`
-     : "N/A",
-    inline: true,
-   },
-   {
-    name: "Token Tracker Link",
-    value: user?.tokenTracker ? `[Token Tracker](${user.tokenTracker})` : "N/A",
-    inline: true,
-   },
-   {
-    name: "Quest/Event",
-    value: submissionData.questEvent || "N/A",
-    inline: true,
-   },
-   {
-    name: "Quest/Event Bonus",
-    value: submissionData.questBonus || "N/A",
-    inline: true,
-   },
-   {
-    name: "Token Total",
-    value: `${submissionData.finalTokenAmount || 0} Tokens`,
-    inline: true,
-   },
-   {
-    name: "Collab Total Each",
-    value: submissionData.collab
-     ? `${Math.floor(submissionData.finalTokenAmount / 2) || 0} Tokens`
-     : "N/A",
-    inline: true,
-   },
-   {
-    name: "Token Calculation",
-    value: tokenCalculation || "N/A",
-    inline: false,
-   }
-  )
-  .setImage(submissionData.fileUrl || null)
-  .setTimestamp()
-  .setFooter({ text: "Art Submission System" });
+  // Format token calculation into a nice breakdown with actual selections
+  let tokenCalculationText = '```\n';
+  if (tokenCalculation) {
+    // Base selections
+    if (submissionData.baseSelections && submissionData.baseSelections.length > 0) {
+      const baseSelections = submissionData.baseSelections.map(base => 
+        `${base} (${tokenCalculation.baseTotal})`
+      ).join(' + ');
+      tokenCalculationText += `Base: ${baseSelections}\n`;
+    }
+
+    // Type multipliers
+    if (submissionData.typeMultiplierSelections && submissionData.typeMultiplierSelections.length > 0) {
+      const typeSelections = submissionData.typeMultiplierSelections.map(type => 
+        `${type} (${tokenCalculation.typeMultiplierTotal / submissionData.typeMultiplierSelections.length})`
+      ).join(' + ');
+      tokenCalculationText += `× Type Multiplier: ${typeSelections} = ${tokenCalculation.typeMultiplierTotal}\n`;
+    }
+
+    // Product multiplier
+    if (submissionData.productMultiplierValue) {
+      tokenCalculationText += `× Product Multiplier: ${submissionData.productMultiplierValue} (${tokenCalculation.productMultiplier})\n`;
+    }
+
+    // Add-ons
+    if (submissionData.addOnsApplied && submissionData.addOnsApplied.length > 0) {
+      tokenCalculationText += `+ Add-ons: ${submissionData.addOnsApplied.join(', ')} = ${tokenCalculation.addOnTotal}\n`;
+    }
+
+    // Special works
+    if (submissionData.specialWorksApplied && submissionData.specialWorksApplied.length > 0) {
+      tokenCalculationText += `+ Special Works: ${submissionData.specialWorksApplied.join(', ')} = ${tokenCalculation.specialWorksTotal}\n`;
+    }
+
+    tokenCalculationText += `\n---------------------\n`;
+    tokenCalculationText += `= ${tokenCalculation.finalTotal} Tokens\n`;
+    if (submissionData.collab) {
+      tokenCalculationText += `\nCollab Total Each: ${Math.floor(tokenCalculation.finalTotal / 2)} Tokens\n`;
+    }
+  }
+  tokenCalculationText += '```';
+
+  // Get the art title from the file name if title is not set
+  const artTitle = submissionData.title || submissionData.fileName?.split('.')[0] || "Untitled Art";
+
+  const fields = [
+    {
+      name: "Submission ID",
+      value: `\`${submissionData.submissionId || "N/A"}\``,
+      inline: false,
+    },
+    {
+      name: "Art Title",
+      value: artTitle,
+      inline: false,
+    },
+    {
+      name: "Member",
+      value: `<@${submissionData.userId || "unknown"}>`,
+      inline: true,
+    },
+    {
+      name: "Collaboration",
+      value: submissionData.collab
+        ? `Tokens will be split equally with ${submissionData.collab}.`
+        : "No collaborator added.",
+      inline: false,
+    }
+  ];
+
+  // Only add upload link if we have a file URL
+  if (submissionData.fileUrl) {
+    fields.push({
+      name: "Upload Link",
+      value: `[View Uploaded Image](${submissionData.fileUrl})`,
+      inline: true,
+    });
+  }
+
+  // Add token tracker if available
+  if (user?.tokenTracker) {
+    fields.push({
+      name: "Token Tracker Link",
+      value: `[Token Tracker](${user.tokenTracker})`,
+      inline: true,
+    });
+  }
+
+  // Add quest/event info if available
+  if (submissionData.questEvent && submissionData.questEvent !== "N/A") {
+    fields.push({
+      name: "Quest/Event",
+      value: submissionData.questEvent,
+      inline: true,
+    });
+  }
+
+  // Add quest bonus if available
+  if (submissionData.questBonus && submissionData.questBonus !== "N/A") {
+    fields.push({
+      name: "Quest/Event Bonus",
+      value: submissionData.questBonus,
+      inline: true,
+    });
+  }
+
+  // Add token totals
+  fields.push(
+    {
+      name: "Token Total",
+      value: `${submissionData.finalTokenAmount || 0} Tokens`,
+      inline: true,
+    },
+    {
+      name: "Collab Total Each",
+      value: submissionData.collab
+        ? `${Math.floor(submissionData.finalTokenAmount / 2) || 0} Tokens`
+        : "N/A",
+      inline: true,
+    },
+    {
+      name: "Token Calculation",
+      value: tokenCalculationText,
+      inline: false,
+    }
+  );
+
+  const embed = new EmbedBuilder()
+    .setColor("#AA926A")
+    .setTitle(`🎨 ${artTitle}`)
+    .setAuthor({
+      name: `Submitted by: ${submissionData.username || "Unknown User"}`,
+      iconURL: submissionData.userAvatar || "https://via.placeholder.com/128",
+    })
+    .addFields(fields)
+    .setTimestamp()
+    .setFooter({ text: "Art Submission System" });
+
+  // Set the image if we have a file URL
+  if (submissionData.fileUrl) {
+    embed.setImage(submissionData.fileUrl);
+  }
+
+  return embed;
 };
 
 // ------------------- Subsection Title ------------------- 
