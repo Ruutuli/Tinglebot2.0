@@ -359,17 +359,24 @@ function initializeScheduler(client) {
     for (const channelId of channels) {
       try {
         if (isBloodMoonDay()) {
+          console.log(`[scheduler.js]: 🌕 Blood Moon rising at 8 PM EST`);
           await renameChannels(client);
-          await sendBloodMoonAnnouncement(client, channelId, 'The Blood Moon is upon us! Beware!');
+          await sendBloodMoonAnnouncement(client, channelId, 'The Blood Moon rises at nightfall! Beware!');
         } else {
-          await revertChannelNames(client);
+          // Check if we need to revert from a previous Blood Moon
+          const yesterday = new Date();
+          yesterday.setDate(yesterday.getDate() - 1);
+          if (isBloodmoon(yesterday)) {
+            console.log(`[scheduler.js]: 🌑 Blood Moon fading at dawn`);
+            await revertChannelNames(client);
+          }
         }
       } catch (error) {
         handleError(error, 'scheduler.js');
         console.error(`[scheduler.js]: ❌ Blood Moon tracking failed: ${error.message}`);
       }
     }
-  });
+  }, 'America/New_York'); // Ensure timezone is set to EST
 }
 
 module.exports = {
