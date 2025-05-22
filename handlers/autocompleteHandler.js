@@ -1703,116 +1703,100 @@ async function handleTransferItemAutocomplete(interaction, focusedValue) {
 // Provides autocomplete suggestions for items in a character's inventory.
 async function handleItemAutocomplete(interaction, focusedOption) {
   try {
-                const userId = interaction.user.id;
-   const focusedName = focusedOption.name;
-   const characterName = interaction.options.getString("charactername");
-   const searchQuery = focusedOption.value?.toLowerCase() || "";
- 
-   if (!characterName) return await interaction.respond([]);
- 
-   const character = await fetchCharacterByNameAndUserId(characterName, userId);
-   if (!character) return await interaction.respond([]);
- 
-   const inventoryCollection = await getCharacterInventoryCollection(
-    character.name
-   );
-   const inventoryItems = await inventoryCollection.find().toArray();
- 
-   let choices = [];
- 
-   // Only fetch subcommand if autocompleting itemname
-   if (focusedName === "itemname") {
-    const subcommand = interaction.options.getSubcommand(false); // Pass false to prevent crash
- 
-    // --- Aggregate item quantities by item name (case-insensitive) ---
-    const itemTotals = {};
-    for (const item of inventoryItems) {
-      const name = item.itemName?.toLowerCase();
-      if (!name) continue;
-      if (!itemTotals[name]) itemTotals[name] = 0;
-      itemTotals[name] += item.quantity;
-    }
+    const userId = interaction.user.id;
+    const focusedName = focusedOption.name;
+    const characterName = interaction.options.getString("charactername");
+    const searchQuery = focusedOption.value?.toLowerCase() || "";
 
-    if (subcommand !== "sell") {
-     // --- Updated Healing Item + Voucher Filter ---
-     const itemNames = Object.keys(itemTotals).map((n) => n);
+    if (!characterName) return await interaction.respond([]);
 
-     const allowedItems = await Item.find({
-      itemName: { $in: itemNames },
-      $or: [
-       { "recipeTag.0": { $exists: true } }, // has at least one tag (healing)
-       { itemName: "Fairy" },
-       { itemName: "Job Voucher" },
-      ],
-     })
-      .select("itemName")
-      .lean();
+    const character = await fetchCharacterByNameAndUserId(characterName, userId);
+    if (!character) return await interaction.respond([]);
 
-     const allowedNames = new Set(
-      allowedItems.map((item) => item.itemName.toLowerCase())
-     );
+    const inventoryCollection = await getCharacterInventoryCollection(
+      character.name
+    );
+    const inventoryItems = await inventoryCollection.find().toArray();
 
-     choices = Object.entries(itemTotals)
-      .filter(
-       ([name]) =>
-        allowedNames.has(name) &&
-        name.includes(searchQuery)
-      )
-      .map(([name, total]) => ({
-       name: `${capitalizeWords(name)} - Qty: ${total}`,
-       value: name,
-      }));
+    let choices = [];
+
+    // Only fetch subcommand if autocompleting itemname
+    if (focusedName === "itemname") {
+      const subcommand = interaction.options.getSubcommand(false); // Pass false to prevent crash
+
+      // --- Aggregate item quantities by item name (case-insensitive) ---
+      const itemTotals = {};
+      for (const item of inventoryItems) {
+        const name = item.itemName?.toLowerCase();
+        if (!name) continue;
+        if (!itemTotals[name]) itemTotals[name] = 0;
+        itemTotals[name] += item.quantity;
+      }
+
+      if (subcommand === "sell") {
+        const itemNames = Object.keys(itemTotals).map((n) => n);
+        const itemsFromDB = await Item.find({ itemName: { $in: itemNames } })
+          .select("itemName sellPrice")
+          .lean();
+        const itemsMap = new Map(
+          itemsFromDB.map((item) => [item.itemName.toLowerCase(), item.sellPrice])
+        );
+
+        choices = Object.entries(itemTotals)
+          .filter(
+            ([name]) =>
+              name.includes(searchQuery) &&
+              name !== "initial item"
+          )
+          .sort((a, b) => a[0].localeCompare(b[0]))
+          .map(([name, total]) => ({
+            name: `${capitalizeWords(name)} - Qty: ${total} - Sell: ${itemsMap.get(name) || "N/A"}`,
+            value: name,
+          }));
+      } else {
+        // For non-sell subcommands, show all items in inventory
+        choices = Object.entries(itemTotals)
+          .filter(
+            ([name]) =>
+              name.includes(searchQuery) &&
+              name !== "initial item"
+          )
+          .sort((a, b) => a[0].localeCompare(b[0]))
+          .map(([name, total]) => ({
+            name: `${capitalizeWords(name)} - Qty: ${total}`,
+            value: name,
+          }));
+      }
     } else {
-     const itemNames = Object.keys(itemTotals).map((n) => n);
-     const itemsFromDB = await Item.find({ itemName: { $in: itemNames } })
-      .select("itemName sellPrice")
-      .lean();
-     const itemsMap = new Map(
-      itemsFromDB.map((item) => [item.itemName.toLowerCase(), item.sellPrice])
-     );
+      // If we're not focusing itemname, don't do anything fancy
+      // --- Aggregate item quantities by item name (case-insensitive) ---
+      const itemTotals = {};
+      for (const item of inventoryItems) {
+        const name = item.itemName?.toLowerCase();
+        if (!name) continue;
+        if (!itemTotals[name]) itemTotals[name] = 0;
+        itemTotals[name] += item.quantity;
+      }
+      choices = Object.entries(itemTotals)
+        .filter(([name]) => name.includes(searchQuery))
+        .map(([name, total]) => ({
+          name: `${capitalizeWords(name)} - Qty: ${total}`,
+          value: name,
+        }));
+    }
 
-     choices = Object.entries(itemTotals)
-      .filter(
-       ([name]) =>
-        name.includes(searchQuery) &&
-        name !== "initial item"
-      )
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([name, total]) => ({
-       name: `${capitalizeWords(name)} - Qty: ${total} - Sell: ${itemsMap.get(name) || "N/A"}`,
-       value: name,
-      }));
-    }
-   } else {
-    // If we're not focusing itemname, don't do anything fancy
-    // --- Aggregate item quantities by item name (case-insensitive) ---
-    const itemTotals = {};
-    for (const item of inventoryItems) {
-      const name = item.itemName?.toLowerCase();
-      if (!name) continue;
-      if (!itemTotals[name]) itemTotals[name] = 0;
-      itemTotals[name] += item.quantity;
-    }
-    choices = Object.entries(itemTotals)
-     .filter(([name]) => name.includes(searchQuery))
-     .map(([name, total]) => ({
-      name: `${capitalizeWords(name)} - Qty: ${total}`,
-      value: name,
-     }));
-   }
- 
-   await interaction.respond(choices.slice(0, 25));
+    await interaction.respond(choices.slice(0, 25));
   } catch (error) {
-   handleError(error, "autocompleteHandler.js");
- 
-   console.error("[handleItemAutocomplete]: Error:", error);
-   if (!interaction.responded) await interaction.respond([]);
+    handleError(error, "autocompleteHandler.js");
+
+    console.error("[handleItemAutocomplete]: Error:", error);
+    if (!interaction.responded) await interaction.respond([]);
   }
- }
- 
- // ------------------- Item Job Voucher Autocomplete -------------------
- // Provides autocomplete suggestions for Job Voucher items from a character's inventory.
- async function handleItemJobVoucherAutocomplete(interaction, focusedOption) {
+}
+
+// ------------------- Item Job Voucher Autocomplete -------------------
+// Provides autocomplete suggestions for Job Voucher items from a character's inventory.
+async function handleItemJobVoucherAutocomplete(interaction, focusedOption) {
   try {
    const characterName = interaction.options.getString("charactername");
    if (!characterName) return await interaction.respond([]);
