@@ -201,27 +201,58 @@ async function handleConfirmation(interaction, userId, submissionData) {
   if (!submissionData) {
     return interaction.reply({
       content: '❌ **Submission data not found. Please try again.**',
-      flags: 64 // 64 is the flag for ephemeral messages
+      ephemeral: true
     });
   }
 
-  const user = await getUserById(userId);
-  const { totalTokens } = calculateTokens(submissionData);
-  const breakdown = generateTokenBreakdown({ ...submissionData, finalTokenAmount: totalTokens });
+  try {
+    const user = await getUserById(userId);
+    const { totalTokens, breakdown } = calculateTokens(submissionData);
 
-  await interaction.update({
-    content: '✅ **You have confirmed your submission! Mods will review it shortly.**',
-    components: [],
-  });
+    // Update submission data with final calculations
+    submissionData.finalTokenAmount = totalTokens;
+    submissionData.tokenCalculation = breakdown;
 
-  if (!submissionData.embedSent) {
-    const embed = createArtSubmissionEmbed(submissionData, user, breakdown);
-    const sentMessage = await interaction.channel.send({ embeds: [embed] });
-    submissionData.messageUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${sentMessage.id}`;
-    saveSubmissionToStorage(submissionData.submissionId, submissionData);
+    // First update the interaction
+    await interaction.update({
+      content: '✅ **You have confirmed your submission! Mods will review it shortly.**',
+      components: [],
+    });
+
+    if (!submissionData.embedSent) {
+      // Ensure all required fields are present
+      const embedData = {
+        ...submissionData,
+        userId: submissionData.userId || userId,
+        username: submissionData.username || interaction.user.username,
+        userAvatar: submissionData.userAvatar || interaction.user.displayAvatarURL(),
+        finalTokenAmount: totalTokens,
+        tokenCalculation: breakdown
+      };
+
+      const embed = createArtSubmissionEmbed(embedData, user, breakdown);
+      const sentMessage = await interaction.channel.send({ embeds: [embed] });
+      submissionData.messageUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${sentMessage.id}`;
+      await saveSubmissionToStorage(userId, submissionData);
+    }
+
+    await retrieveSubmissionFromStorage(userId);
+  } catch (error) {
+    console.error('Error in handleConfirmation:', error);
+    // Only try to reply if we haven't already
+    if (!interaction.replied && !interaction.deferred) {
+      await interaction.reply({
+        content: '❌ **An error occurred while confirming your submission. Please try again.**',
+        ephemeral: true
+      });
+    } else {
+      // If we've already replied, try to edit the message
+      await interaction.editReply({
+        content: '❌ **An error occurred while confirming your submission. Please try again.**',
+        components: []
+      });
+    }
   }
-
-  await retrieveSubmissionFromStorage(userId);
 }
 
 // ------------------- Function: handleCancel -------------------

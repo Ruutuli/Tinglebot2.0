@@ -23,12 +23,13 @@ const { capitalizeFirstLetter } = require('../modules/formattingModule');
 // Token calculation and breakdown utilities
 const { calculateTokens, generateTokenBreakdown } = require('../utils/tokenUtils');
 
-// Database model for temporary data storage
-const TempData = require('../models/TempDataModel');
+// Storage utilities
+const { saveSubmissionToStorage, retrieveSubmissionFromStorage } = require('../utils/storage');
 
 // Menu utilities to generate select menus for the submission process
 const {
   getAddOnsMenu,
+  getBaseSelectMenu,
   getProductMultiplierMenu,
   getSpecialWorksMenu,
   getTypeMultiplierMenu,
@@ -60,36 +61,55 @@ async function handleSelectMenuInteraction(interaction) {
     const userId = interaction.user.id;
     const customId = interaction.customId;
 
-    // Get or create submission data from TempData
-    let tempData = await TempData.findByTypeAndKey('submission', userId);
-    let submissionData = tempData?.data || {
-      baseSelections: [],
-      typeMultiplierSelections: [],
-      productMultiplierValue: 1,
-      addOnsApplied: [],
-      characterCount: 1,
-      typeMultiplierCounts: {}, // For storing counts per multiplier
-      collab: null, // For collaborative submissions if applicable
-    };
+    // Get or create submission data
+    let submissionData = await retrieveSubmissionFromStorage(userId);
+    if (!submissionData) {
+      const submissionId = 'A' + Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
+      submissionData = {
+        submissionId,
+        userId,
+        baseSelections: [],
+        typeMultiplierSelections: [],
+        productMultiplierValue: 'default',
+        addOnsApplied: [],
+        specialWorksApplied: [],
+        characterCount: 1,
+        typeMultiplierCounts: {},
+        finalTokenAmount: 0,
+        tokenCalculation: null,
+        collab: null,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+    }
 
     // ------------------- Base Selection -------------------
-    // Handles the base selection from the user and triggers a count modal if needed.
     if (customId === 'baseSelect') {
       const selectedBase = interaction.values[0];
 
       if (selectedBase !== 'complete') {
-        submissionData.baseSelections.push(selectedBase);
-        await TempData.findOneAndUpdate(
-          { type: 'submission', key: userId },
-          { $set: { data: submissionData } },
-          { upsert: true, new: true }
-        );
+        // Ensure baseSelections is an array
+        submissionData.baseSelections = submissionData.baseSelections || [];
+        
+        // Clear any previous selections and add the new one
+        submissionData.baseSelections = [selectedBase];
+        
+        // Save immediately after adding base selection
+        await saveSubmissionToStorage(userId, submissionData);
+        console.log('Base selection saved:', submissionData.baseSelections);
 
+        // First show the modal with the selected base
         await triggerBaseCountModal(interaction, selectedBase);
-        // Stop further updates after showing modal
+        
+        // Then update the message
+        await interaction.editReply({
+          content: `⭐ **Selected Base:** ${capitalizeFirstLetter(selectedBase)}. How many would you like?`,
+          components: [getBaseSelectMenu(true), getCancelButtonRow()]
+        });
         return;
       }
 
+      // If complete, show type multiplier menu
       await interaction.update({
         content: '⭐ **Base Selection Complete:** Proceed to Type Multipliers.',
         components: [getTypeMultiplierMenu(false), getCancelButtonRow()],
@@ -97,20 +117,26 @@ async function handleSelectMenuInteraction(interaction) {
     }
 
     // ------------------- Type Multiplier Selection -------------------
-    // Handles the type multiplier selection and triggers its corresponding count modal.
     else if (customId === 'typeMultiplierSelect') {
       const selectedMultiplier = interaction.values[0];
 
       if (selectedMultiplier !== 'complete') {
-        submissionData.typeMultiplierSelections.push(selectedMultiplier);
-        await TempData.findOneAndUpdate(
-          { type: 'submission', key: userId },
-          { $set: { data: submissionData } },
-          { upsert: true, new: true }
-        );
+        // Ensure typeMultiplierSelections is an array and add the selection
+        submissionData.typeMultiplierSelections = submissionData.typeMultiplierSelections || [];
+        // Only add if not already present
+        if (!submissionData.typeMultiplierSelections.includes(selectedMultiplier)) {
+          submissionData.typeMultiplierSelections.push(selectedMultiplier);
+        }
+        
+        // Initialize typeMultiplierCounts if not exists
+        submissionData.typeMultiplierCounts = submissionData.typeMultiplierCounts || {};
+        submissionData.typeMultiplierCounts[selectedMultiplier] = 1;
+        
+        // Save immediately after adding multiplier selection
+        await saveSubmissionToStorage(userId, submissionData);
+        console.log('Type multiplier selection saved:', submissionData.typeMultiplierSelections);
 
         await triggerMultiplierCountModal(interaction, selectedMultiplier);
-        // Stop further updates after showing modal
         return;
       }
 
@@ -121,14 +147,11 @@ async function handleSelectMenuInteraction(interaction) {
     }
 
     // ------------------- Product Multiplier Selection -------------------
-    // Handles the product multiplier selection and updates the submission data.
     else if (customId === 'productMultiplierSelect') {
       submissionData.productMultiplierValue = interaction.values[0];
-      await TempData.findOneAndUpdate(
-        { type: 'submission', key: userId },
-        { $set: { data: submissionData } },
-        { upsert: true, new: true }
-      );
+      // Save immediately after setting product multiplier
+      await saveSubmissionToStorage(userId, submissionData);
+      console.log('Product multiplier saved:', submissionData.productMultiplierValue);
 
       await interaction.update({
         content: `🎨 **Product Multiplier Selected:** ${capitalizeFirstLetter(submissionData.productMultiplierValue)}.`,
@@ -137,7 +160,6 @@ async function handleSelectMenuInteraction(interaction) {
     }
 
     // ------------------- Add-Ons Selection -------------------
-    // Processes the add-ons selection and triggers the add-on count modal.
     else if (customId === 'addOnsSelect') {
       const selectedAddOn = interaction.values[0];
 
@@ -145,15 +167,13 @@ async function handleSelectMenuInteraction(interaction) {
         // Ensure addOnsApplied is initialized and remove duplicate entries
         submissionData.addOnsApplied = submissionData.addOnsApplied || [];
         submissionData.addOnsApplied = submissionData.addOnsApplied.filter(
-          (entry) => entry !== selectedAddOn
+          (entry) => entry.addOn !== selectedAddOn
         );
-        submissionData.addOnsApplied.push(selectedAddOn);
-
-        await TempData.findOneAndUpdate(
-          { type: 'submission', key: userId },
-          { $set: { data: submissionData } },
-          { upsert: true, new: true }
-        );
+        submissionData.addOnsApplied.push({ addOn: selectedAddOn, count: 1 });
+        
+        // Save immediately after adding add-on
+        await saveSubmissionToStorage(userId, submissionData);
+        console.log('Add-on saved:', submissionData.addOnsApplied);
 
         await triggerAddOnCountModal(interaction, selectedAddOn);
         return;
@@ -168,19 +188,17 @@ async function handleSelectMenuInteraction(interaction) {
     }
 
     // ------------------- Special Works Selection -------------------
-    // Handles special works selection and triggers its count modal; proceeds to confirmation when complete.
     else if (customId === 'specialWorksSelect') {
       const selectedWork = interaction.values[0];
 
       if (selectedWork !== 'complete') {
         // Ensure specialWorksApplied is initialized
         submissionData.specialWorksApplied = submissionData.specialWorksApplied || [];
-        submissionData.specialWorksApplied.push(selectedWork);
-        await TempData.findOneAndUpdate(
-          { type: 'submission', key: userId },
-          { $set: { data: submissionData } },
-          { upsert: true, new: true }
-        );
+        submissionData.specialWorksApplied.push({ work: selectedWork, count: 1 });
+        
+        // Save immediately after adding special work
+        await saveSubmissionToStorage(userId, submissionData);
+        console.log('Special work saved:', submissionData.specialWorksApplied);
 
         await triggerSpecialWorksCountModal(interaction, selectedWork);
         return;
@@ -196,12 +214,12 @@ async function handleSelectMenuInteraction(interaction) {
     if (interaction.replied || interaction.deferred) {
       await interaction.followUp({
         content: '❌ **An error occurred while processing your selection.**',
-        flags: 64 // 64 is the flag for ephemeral messages
+        ephemeral: true
       });
     } else {
       await interaction.reply({
         content: '❌ **An error occurred while processing your selection.**',
-        flags: 64 // 64 is the flag for ephemeral messages
+        ephemeral: true
       });
     }
   }
@@ -213,63 +231,50 @@ async function handleSelectMenuInteraction(interaction) {
 async function confirmSubmission(interaction) {
   try {
     const userId = interaction.user.id;
-    const tempData = await TempData.findByTypeAndKey('submission', userId);
-    const submissionData = tempData?.data;
+    const submissionData = await retrieveSubmissionFromStorage(userId);
 
     if (!submissionData) {
       await interaction.reply({
         content: '❌ **Submission data not found. Please restart the submission process.**',
-        flags: 64 // 64 is the flag for ephemeral messages
+        ephemeral: true
       });
       return;
     }
 
-    const {
-      baseSelections = [],
-      typeMultiplierSelections = [],
-      productMultiplierValue = 1,
-      addOnsApplied = [],
-      specialWorksApplied = [],
-      characterCount = 1,
-      typeMultiplierCounts = {},
-    } = submissionData;
-
-    // ------------------- Token Calculation -------------------
-    // Calculate the total tokens based on the submission selections.
-    const { totalTokens } = calculateTokens({
-      baseSelections,
-      typeMultiplierSelections,
-      productMultiplierValue,
-      addOnsApplied,
-      specialWorksApplied,
-      characterCount,
-      typeMultiplierCounts,
-      collab: submissionData.collab || null,
+    // Calculate tokens and generate breakdown
+    const { totalTokens, breakdown } = calculateTokens({
+      baseSelections: submissionData.baseSelections,
+      typeMultiplierSelections: submissionData.typeMultiplierSelections,
+      productMultiplierValue: submissionData.productMultiplierValue,
+      addOnsApplied: submissionData.addOnsApplied,
+      specialWorksApplied: submissionData.specialWorksApplied,
+      characterCount: submissionData.characterCount,
+      typeMultiplierCounts: submissionData.typeMultiplierCounts,
+      collab: submissionData.collab
     });
 
-    // ------------------- Token Breakdown Generation -------------------
-    // Generate a detailed breakdown of the token calculation.
-    const breakdownMessage = generateTokenBreakdown({
-      baseSelections,
-      typeMultiplierSelections,
-      productMultiplierValue,
-      addOnsApplied,
-      specialWorksApplied,
-      characterCount,
-      typeMultiplierCounts,
-      finalTokenAmount: totalTokens,
-      collab: submissionData.collab || null,
-    });
-
+    // Update submission data with final calculations
     submissionData.finalTokenAmount = totalTokens;
-    await TempData.findOneAndUpdate(
-      { type: 'submission', key: userId },
-      { $set: { data: submissionData } },
-      { upsert: true, new: true }
-    );
+    submissionData.tokenCalculation = breakdown;
+    submissionData.updatedAt = new Date();
+
+    // Save final submission data using submissionId as the key
+    await saveSubmissionToStorage(submissionData.submissionId, submissionData);
+
+    // Generate the token breakdown
+    const breakdownMessage = generateTokenBreakdown({
+      baseSelections: submissionData.baseSelections,
+      typeMultiplierSelections: submissionData.typeMultiplierSelections,
+      productMultiplierValue: submissionData.productMultiplierValue,
+      addOnsApplied: submissionData.addOnsApplied,
+      specialWorksApplied: submissionData.specialWorksApplied,
+      characterCount: submissionData.characterCount,
+      typeMultiplierCounts: submissionData.typeMultiplierCounts,
+      finalTokenAmount: totalTokens,
+      collab: submissionData.collab
+    });
 
     // ------------------- Display Confirmation -------------------
-    // Update the interaction with the final token breakdown and confirm/cancel buttons.
     await interaction.update({
       content: `${breakdownMessage}\n\n☑️ **Final Total Token Calculation:** ${totalTokens} Tokens`,
       components: [
@@ -286,12 +291,12 @@ async function confirmSubmission(interaction) {
     if (interaction.replied || interaction.deferred) {
       await interaction.followUp({
         content: '❌ **An error occurred while finalizing your submission.**',
-        flags: 64 // 64 is the flag for ephemeral messages
+        ephemeral: true
       });
     } else {
       await interaction.reply({
         content: '❌ **An error occurred while finalizing your submission.**',
-        flags: 64 // 64 is the flag for ephemeral messages
+        ephemeral: true
       });
     }
   }

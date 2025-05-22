@@ -9,57 +9,76 @@ const mongoose = require('mongoose');
 // Functions for saving, retrieving, and deleting submissions from persistent storage.
 
 // Save a submission to storage.
-async function saveSubmissionToStorage(submissionId, submissionData) {
+async function saveSubmissionToStorage(key, submissionData) {
   try {
-    if (!submissionId || !submissionData) {
-      console.error(`[storage.js]: ❌ Missing submissionId or data for save operation`);
-      throw new Error('Missing submissionId or data');
+    if (!key || !submissionData) {
+      console.error(`[storage.js]: ❌ Missing key or data for save operation`);
+      throw new Error('Missing key or data');
     }
 
     // Set expiration to 48 hours from now
     const now = new Date();
     const expiresAt = new Date(now.getTime() + 48 * 60 * 60 * 1000);
 
-    // Ensure all required fields are present
+    // Ensure all required fields are present and properly structured
     const submission = {
       type: 'submission',
-      key: submissionId,
+      key,
       data: {
-        ...submissionData,
-        submissionId,
-        updatedAt: now
+        submissionId: submissionData.submissionId || key,
+        userId: submissionData.userId,
+        username: submissionData.username,
+        userAvatar: submissionData.userAvatar,
+        category: submissionData.category || 'art',
+        questEvent: submissionData.questEvent || 'N/A',
+        questBonus: submissionData.questBonus || 'N/A',
+        baseSelections: submissionData.baseSelections || [],
+        typeMultiplierSelections: submissionData.typeMultiplierSelections || [],
+        productMultiplierValue: submissionData.productMultiplierValue || 'default',
+        addOnsApplied: submissionData.addOnsApplied || [],
+        specialWorksApplied: submissionData.specialWorksApplied || [],
+        characterCount: submissionData.characterCount || 1,
+        typeMultiplierCounts: submissionData.typeMultiplierCounts || {},
+        finalTokenAmount: submissionData.finalTokenAmount || 0,
+        tokenCalculation: submissionData.tokenCalculation || 'N/A',
+        collab: submissionData.collab || null,
+        fileUrl: submissionData.fileUrl,
+        fileName: submissionData.fileName,
+        title: submissionData.title,
+        updatedAt: now,
+        createdAt: submissionData.createdAt || now
       },
-      expiresAt,
-      createdAt: now
+      expiresAt
     };
 
+    // Log the data being saved for debugging
+    console.log('Storing submission data:', submission.data);
+
     const result = await TempData.findOneAndUpdate(
-      { type: 'submission', key: submissionId },
+      { type: 'submission', key },
       submission,
       { upsert: true, new: true }
     );
 
-    console.log(`[storage.js]: ✅ Saved submission ${submissionId}`);
+    console.log(`[storage.js]: ✅ Saved submission ${key}`);
     return result;
   } catch (error) {
-    handleError(error, 'storage.js');
-    console.error(`[storage.js]: ❌ Error saving submission ${submissionId}:`, error);
+    console.error(`[storage.js]: ❌ Error saving submission ${key}:`, error);
     throw error;
   }
 }
 
 // Retrieve a submission by its ID.
-async function retrieveSubmissionFromStorage(submissionId) {
+async function retrieveSubmissionFromStorage(key) {
   try {
-    const submission = await TempData.findByTypeAndKey('submission', submissionId);
+    const submission = await TempData.findByTypeAndKey('submission', key);
     if (submission) {
-      console.log(`[storage.js]: ✅ Found submission ${submissionId} (${submission.data?.status || 'unknown status'})`);
+      console.log(`[storage.js]: ✅ Found submission ${key} (${submission.data?.status || 'unknown status'})`);
       return submission.data;
     }
     return null;
   } catch (error) {
-    handleError(error, 'storage.js');
-    console.error(`[storage.js]: ❌ Error retrieving submission ${submissionId}:`, error);
+    console.error(`[storage.js]: ❌ Error retrieving submission ${key}:`, error);
     throw error;
   }
 }
