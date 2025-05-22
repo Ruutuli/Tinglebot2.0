@@ -556,10 +556,93 @@ async function handleFixMount(interaction, characterName, mountName) {
   }
 }
 
-// ============================================================================
-// ---- Command Handlers ----
-// Handlers for stable command subcommands
-// ============================================================================
+// ---- Store Mount Handler ----
+// Handles storing mounts in stable
+async function handleStoreMount(interaction, characterName, mountName) {
+  try {
+    console.log(`[stable.js]: 🚀 Starting store process for mount "${mountName}"`);
+    // Find the mount
+    const mount = await Mount.findOne({ owner: characterName, name: mountName, status: 'active' });
+    if (!mount) {
+      console.error(`[stable.js]: ❌ Mount "${mountName}" not found for character "${characterName}"`);
+      throw new Error('❌ Mount not found');
+    }
+    // Update mount storage status
+    mount.isStored = true;
+    await mount.save();
+    console.info(`[stable.js]: ✅ Updated mount storage status for "${mountName}"`);
+    // Update character's active mount status
+    const character = await Character.findOne({ name: characterName });
+    if (character && character.currentActiveMount && character.currentActiveMount.toString() === mount._id.toString()) {
+      character.currentActiveMount = null;
+      character.mount = false;
+      await character.save();
+      console.info(`[stable.js]: ✅ Updated character's active mount status`);
+    }
+    await interaction.reply({
+      content: `✅ **${mountName}** has been stored in the stable for **${characterName}**!`,
+      ephemeral: true
+    });
+  } catch (error) {
+    console.error(`[stable.js]: ❌ Error in store mount handler:`, error);
+    await interaction.reply({
+      content: error.message || '❌ An error occurred while storing your mount. Please try again.',
+      ephemeral: true
+    });
+  }
+}
+
+// ---- Retrieve Mount Handler ----
+// Handles retrieving mounts from stable
+async function handleRetrieveMount(interaction, characterName, mountName) {
+  try {
+    console.log(`[stable.js]: 🚀 Starting retrieve process for mount "${mountName}"`);
+    // Find the mount in the stable
+    const mount = await Mount.findOne({ owner: characterName, name: mountName, status: 'stored' });
+    if (!mount) {
+      console.error(`[stable.js]: ❌ Mount "${mountName}" not found in stable for character "${characterName}"`);
+      return await interaction.reply({
+        content: '❌ Mount not found in stable. Make sure the mount is stored and the name is correct.',
+        ephemeral: true
+      });
+    }
+    // Check if character already has an active mount
+    const character = await Character.findOne({ name: characterName });
+    if (!character) {
+      console.error(`[stable.js]: ❌ Character "${characterName}" not found`);
+      return await interaction.reply({
+        content: '❌ Character not found. Please check the name and try again.',
+        ephemeral: true
+      });
+    }
+    if (character.currentActiveMount) {
+      console.error(`[stable.js]: ❌ Character "${characterName}" already has an active mount`);
+      return await interaction.reply({
+        content: '❌ You already have an active mount. Store your current mount first.',
+        ephemeral: true
+      });
+    }
+    // Update mount storage status
+    mount.status = 'active';
+    await mount.save();
+    console.info(`[stable.js]: ✅ Updated mount storage status for "${mountName}"`);
+    // Update character's active mount status
+    character.currentActiveMount = mount._id;
+    character.mount = true;
+    await character.save();
+    console.info(`[stable.js]: ✅ Updated character's active mount status`);
+    await interaction.reply({
+      content: `✅ **${mountName}** has been retrieved from the stable and is now active for **${characterName}**!`,
+      ephemeral: true
+    });
+  } catch (error) {
+    console.error(`[stable.js]: ❌ Error in retrieve mount handler:`, error);
+    await interaction.reply({
+      content: '❌ An error occurred while retrieving your mount. Please try again.',
+      ephemeral: true
+    });
+  }
+}
 
 // ---- View Handler ----
 // Handles viewing stable contents
@@ -650,24 +733,16 @@ async function handleViewStable(interaction, userId, characterName) {
 async function handleStorePet(interaction, characterName, petName) {
   try {
     console.log(`[stable.js]: 🚀 Starting store process for pet "${petName}"`);
-    
     // Find the pet
-    const pet = await Pet.findOne({ 
-      ownerName: characterName,
-      name: petName,
-      isStored: false 
-    });
-
+    const pet = await Pet.findOne({ ownerName: characterName, name: petName, status: 'active' });
     if (!pet) {
       console.error(`[stable.js]: ❌ Pet "${petName}" not found for character "${characterName}"`);
       throw new Error('❌ Pet not found');
     }
-
     // Update pet storage status
-    pet.isStored = true;
+    pet.status = 'stored';
     await pet.save();
     console.info(`[stable.js]: ✅ Updated pet storage status for "${petName}"`);
-
     // Update character's active pet status
     const character = await Character.findOne({ name: characterName });
     if (character && character.activePet === petName) {
@@ -675,7 +750,6 @@ async function handleStorePet(interaction, characterName, petName) {
       await character.save();
       console.info(`[stable.js]: ✅ Updated character's active pet status`);
     }
-
     await interaction.reply({
       content: `✅ **${petName}** has been stored in the stable for **${characterName}**!`,
       ephemeral: true
@@ -694,14 +768,8 @@ async function handleStorePet(interaction, characterName, petName) {
 async function handleRetrievePet(interaction, characterName, petName) {
   try {
     console.log(`[stable.js]: 🚀 Starting retrieve process for pet "${petName}"`);
-    
     // Find the pet in the stable
-    const pet = await Pet.findOne({ 
-      ownerName: characterName,
-      name: petName,
-      isStored: true 
-    });
-
+    const pet = await Pet.findOne({ ownerName: characterName, name: petName, status: 'stored' });
     if (!pet) {
       console.error(`[stable.js]: ❌ Pet "${petName}" not found in stable for character "${characterName}"`);
       return await interaction.reply({
@@ -709,7 +777,6 @@ async function handleRetrievePet(interaction, characterName, petName) {
         ephemeral: true
       });
     }
-
     // Check if character already has an active pet
     const character = await Character.findOne({ name: characterName });
     if (!character) {
@@ -719,7 +786,6 @@ async function handleRetrievePet(interaction, characterName, petName) {
         ephemeral: true
       });
     }
-
     if (character.activePet) {
       console.error(`[stable.js]: ❌ Character "${characterName}" already has an active pet`);
       return await interaction.reply({
@@ -727,17 +793,14 @@ async function handleRetrievePet(interaction, characterName, petName) {
         ephemeral: true
       });
     }
-
     // Update pet storage status
-    pet.isStored = false;
+    pet.status = 'active';
     await pet.save();
     console.info(`[stable.js]: ✅ Updated pet storage status for "${petName}"`);
-
     // Update character's active pet status
     character.activePet = petName;
     await character.save();
     console.info(`[stable.js]: ✅ Updated character's active pet status`);
-
     await interaction.reply({
       content: `✅ **${petName}** has been retrieved from the stable and is now active for **${characterName}**!`,
       ephemeral: true
