@@ -1474,6 +1474,14 @@ async function handleChangeJob(interaction) {
   }
   const previousJob = character.job || "Unknown";
 
+  // Add validation to prevent changing to current job
+  if (previousJob.toLowerCase() === newJob.toLowerCase()) {
+    return interaction.followUp({
+      content: `❌ You cannot change your job to the same job you currently have (${previousJob}).`,
+      ephemeral: true,
+    });
+  }
+
   const jobValidation = await canChangeJob(character, newJob);
   if (!jobValidation.valid) {
    return interaction.followUp({
