@@ -23,6 +23,9 @@ const { createWritingSubmissionEmbed } = require('../../embeds/embeds.js');
 const User = require('../../models/UserModel.js'); 
 const { generateUniqueId } = require('../../utils/uniqueIdUtils.js');
 
+// Initialize submission store
+const submissionStore = new Map();
+
 // ------------------- Command Registration -------------------
 // Defines the `/submit` command, allowing users to submit art or writing and claim tokens
 module.exports = {

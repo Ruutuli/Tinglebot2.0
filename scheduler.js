@@ -199,7 +199,7 @@ async function executeBirthdayAnnouncements(client) {
 
 // ---- Function: handleJailRelease ----
 // Releases characters from jail when their time is served
-async function handleJailRelease() {
+async function handleJailRelease(client) {
   const now = new Date();
   const charactersToRelease = await Character.find({ inJail: true, jailReleaseTime: { $lte: now } });
   
@@ -327,7 +327,7 @@ function setupBlightScheduler(client) {
 // Initializes all scheduled tasks and cron jobs
 function initializeScheduler(client) {
   // Initialize all schedulers
-  createCronJob('0 0 * * *', 'jail release check', handleJailRelease);
+  createCronJob('0 0 * * *', 'jail release check', () => handleJailRelease(client));
   createCronJob('0 8 * * *', 'reset daily rolls', resetDailyRolls);
   createCronJob('0 8 * * *', 'daily stamina recovery', recoverDailyStamina);
   createCronJob('0 0 1 * *', 'monthly vending stock generation', generateVendingStockList);
