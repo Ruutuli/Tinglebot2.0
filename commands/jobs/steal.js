@@ -194,6 +194,15 @@ async function createStealResultEmbed(thiefCharacter, targetCharacter, item, qua
             iconURL: isNPC ? null : targetCharacter.icon 
         });
 
+    // Add job voucher indicator if active
+    if (thiefCharacter.jobVoucher && thiefCharacter.jobVoucherJob) {
+        embed.addFields({
+            name: '🎫 Job Voucher',
+            value: `> Using **${thiefCharacter.jobVoucherJob}** voucher`,
+            inline: false
+        });
+    }
+
     if (isSuccess) {
         embed.setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png');
     }
@@ -793,6 +802,10 @@ module.exports = {
                     stealStreaks.set(interaction.user.id, 0);
                     await updateStealStats(thiefCharacter._id, false, selectedItem.tier);
                     
+                    // Increment failed attempts counter
+                    thiefCharacter.failedStealAttempts = (thiefCharacter.failedStealAttempts || 0) + 1;
+                    await thiefCharacter.save();
+                    
                     try {
                         const embed = await createStealResultEmbed(thiefCharacter, mappedNPCName, selectedItem, 0, roll, failureThreshold, false, true);
                         
@@ -812,6 +825,14 @@ module.exports = {
                         if (attemptsLeft === 1) {
                             warningMessage = '⚠️ **Final Warning:** One more failed attempt and you\'ll be sent to jail!';
                             attemptsText = 'You have 1 attempt remaining before jail time!';
+                        } else if (attemptsLeft <= 0) {
+                            // Send to jail
+                            thiefCharacter.inJail = true;
+                            thiefCharacter.jailReleaseTime = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+                            thiefCharacter.failedStealAttempts = 0; // Reset counter
+                            await thiefCharacter.save();
+                            warningMessage = '⛔ **You have been sent to jail for 24 hours!**';
+                            attemptsText = 'Too many failed attempts!';
                         } else {
                             attemptsText = `You have ${attemptsLeft} attempt${attemptsLeft !== 1 ? 's' : ''} remaining before jail time!`;
                         }
@@ -820,13 +841,6 @@ module.exports = {
                             value: warningMessage ? `${warningMessage}\n${attemptsText}` : attemptsText,
                             inline: false
                         });
-                        
-                        if (thiefCharacter.jobVoucher && !voucherCheck?.skipVoucher) {
-                            const deactivationResult = await deactivateJobVoucher(thiefCharacter._id);
-                            if (!deactivationResult.success) {
-                                console.error(`[steal.js]: ❌ Failed to deactivate job voucher for ${thiefCharacter.name}`);
-                            }
-                        }
                         
                         await interaction.editReply({ embeds: [embed] });
                     } catch (error) {
@@ -987,6 +1001,10 @@ module.exports = {
                     stealStreaks.set(interaction.user.id, 0);
                     await updateStealStats(thiefCharacter._id, false, selectedItemPlayer.tier);
                     
+                    // Increment failed attempts counter
+                    thiefCharacter.failedStealAttempts = (thiefCharacter.failedStealAttempts || 0) + 1;
+                    await thiefCharacter.save();
+                    
                     try {
                         const embed = await createStealResultEmbed(thiefCharacter, targetCharacter, selectedItemPlayer, 0, rollPlayer, failureThresholdPlayer, false);
                         
@@ -1006,6 +1024,14 @@ module.exports = {
                         if (attemptsLeft === 1) {
                             warningMessage = '⚠️ **Final Warning:** One more failed attempt and you\'ll be sent to jail!';
                             attemptsText = 'You have 1 attempt remaining before jail time!';
+                        } else if (attemptsLeft <= 0) {
+                            // Send to jail
+                            thiefCharacter.inJail = true;
+                            thiefCharacter.jailReleaseTime = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+                            thiefCharacter.failedStealAttempts = 0; // Reset counter
+                            await thiefCharacter.save();
+                            warningMessage = '⛔ **You have been sent to jail for 24 hours!**';
+                            attemptsText = 'Too many failed attempts!';
                         } else {
                             attemptsText = `You have ${attemptsLeft} attempt${attemptsLeft !== 1 ? 's' : ''} remaining before jail time!`;
                         }
@@ -1014,13 +1040,6 @@ module.exports = {
                             value: warningMessage ? `${warningMessage}\n${attemptsText}` : attemptsText,
                             inline: false
                         });
-                        
-                        if (thiefCharacter.jobVoucher && !voucherCheck?.skipVoucher) {
-                            const deactivationResult = await deactivateJobVoucher(thiefCharacter._id);
-                            if (!deactivationResult.success) {
-                                console.error(`[steal.js]: ❌ Failed to deactivate job voucher for ${thiefCharacter.name}`);
-                            }
-                        }
                         
                         await interaction.editReply({ embeds: [embed] });
                     } catch (error) {
