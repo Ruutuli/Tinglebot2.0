@@ -133,7 +133,10 @@ async execute(interaction) {
             // ------------------- Update Monster Hearts After Battle -------------------
             if (newMonsterHeartsCurrent !== undefined) {
                 const { updateRaidProgress } = require('../../modules/raidModule');
-                await updateRaidProgress(battleId, newMonsterHeartsCurrent);
+                await updateRaidProgress(battleId, battleResult, {
+                    hearts: newMonsterHeartsCurrent,
+                    character: character
+                });
             }
 
 

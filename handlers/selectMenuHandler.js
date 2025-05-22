@@ -24,7 +24,7 @@ const { capitalizeFirstLetter } = require('../modules/formattingModule');
 const { calculateTokens, generateTokenBreakdown } = require('../utils/tokenUtils');
 
 // Storage utilities
-const { saveSubmissionToStorage, retrieveSubmissionFromStorage } = require('../utils/storage');
+const { saveSubmissionToStorage, retrieveSubmissionFromStorage, findLatestSubmissionIdForUser } = require('../utils/storage');
 
 // Menu utilities to generate select menus for the submission process
 const {
@@ -62,9 +62,15 @@ async function handleSelectMenuInteraction(interaction) {
     const customId = interaction.customId;
 
     // Get or create submission data
-    let submissionData = await retrieveSubmissionFromStorage(userId);
+    console.log(`[selectMenuHandler.js]: 🔄 Checking for existing submission for user: ${userId}`);
+    let submissionId = await findLatestSubmissionIdForUser(userId);
+    if (submissionId) {
+      console.log(`[selectMenuHandler.js]: 🔄 Found existing submissionId: ${submissionId}`);
+    }
+    let submissionData = submissionId ? await retrieveSubmissionFromStorage(submissionId) : null;
     if (!submissionData) {
-      const submissionId = 'A' + Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
+      submissionId = 'A' + Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
+      console.log(`[selectMenuHandler.js]: 🚀 Generating new submissionId: ${submissionId}`);
       submissionData = {
         submissionId,
         userId,
@@ -81,6 +87,11 @@ async function handleSelectMenuInteraction(interaction) {
         createdAt: new Date(),
         updatedAt: new Date()
       };
+      // Save initial submission data with submissionId
+      console.log(`[selectMenuHandler.js]: 💾 Saving new submission: ${submissionId} for user: ${userId}`);
+      await saveSubmissionToStorage(submissionId, submissionData);
+    } else {
+      console.log(`[selectMenuHandler.js]: 💾 Reusing submission: ${submissionId} for user: ${userId}`);
     }
 
     // ------------------- Base Selection -------------------
@@ -94,8 +105,8 @@ async function handleSelectMenuInteraction(interaction) {
         // Clear any previous selections and add the new one
         submissionData.baseSelections = [selectedBase];
         
-        // Save immediately after adding base selection
-        await saveSubmissionToStorage(userId, submissionData);
+        // Save immediately after adding base selection using submissionId
+        await saveSubmissionToStorage(submissionData.submissionId, submissionData);
         console.log('Base selection saved:', submissionData.baseSelections);
 
         // First show the modal with the selected base
@@ -121,19 +132,13 @@ async function handleSelectMenuInteraction(interaction) {
       const selectedMultiplier = interaction.values[0];
 
       if (selectedMultiplier !== 'complete') {
-        // Ensure typeMultiplierSelections is an array and add the selection
-        submissionData.typeMultiplierSelections = submissionData.typeMultiplierSelections || [];
-        // Only add if not already present
-        if (!submissionData.typeMultiplierSelections.includes(selectedMultiplier)) {
-          submissionData.typeMultiplierSelections.push(selectedMultiplier);
-        }
+        // Always replace with the latest type multiplier selection
+        submissionData.typeMultiplierSelections = [selectedMultiplier];
+        // Reset typeMultiplierCounts to only the current selection
+        submissionData.typeMultiplierCounts = { [selectedMultiplier]: 1 };
         
-        // Initialize typeMultiplierCounts if not exists
-        submissionData.typeMultiplierCounts = submissionData.typeMultiplierCounts || {};
-        submissionData.typeMultiplierCounts[selectedMultiplier] = 1;
-        
-        // Save immediately after adding multiplier selection
-        await saveSubmissionToStorage(userId, submissionData);
+        // Save immediately after adding multiplier selection using submissionId
+        await saveSubmissionToStorage(submissionData.submissionId, submissionData);
         console.log('Type multiplier selection saved:', submissionData.typeMultiplierSelections);
 
         await triggerMultiplierCountModal(interaction, selectedMultiplier);
@@ -149,8 +154,8 @@ async function handleSelectMenuInteraction(interaction) {
     // ------------------- Product Multiplier Selection -------------------
     else if (customId === 'productMultiplierSelect') {
       submissionData.productMultiplierValue = interaction.values[0];
-      // Save immediately after setting product multiplier
-      await saveSubmissionToStorage(userId, submissionData);
+      // Save immediately after setting product multiplier using submissionId
+      await saveSubmissionToStorage(submissionData.submissionId, submissionData);
       console.log('Product multiplier saved:', submissionData.productMultiplierValue);
 
       await interaction.update({
@@ -171,8 +176,8 @@ async function handleSelectMenuInteraction(interaction) {
         );
         submissionData.addOnsApplied.push({ addOn: selectedAddOn, count: 1 });
         
-        // Save immediately after adding add-on
-        await saveSubmissionToStorage(userId, submissionData);
+        // Save immediately after adding add-on using submissionId
+        await saveSubmissionToStorage(submissionData.submissionId, submissionData);
         console.log('Add-on saved:', submissionData.addOnsApplied);
 
         await triggerAddOnCountModal(interaction, selectedAddOn);
@@ -196,8 +201,8 @@ async function handleSelectMenuInteraction(interaction) {
         submissionData.specialWorksApplied = submissionData.specialWorksApplied || [];
         submissionData.specialWorksApplied.push({ work: selectedWork, count: 1 });
         
-        // Save immediately after adding special work
-        await saveSubmissionToStorage(userId, submissionData);
+        // Save immediately after adding special work using submissionId
+        await saveSubmissionToStorage(submissionData.submissionId, submissionData);
         console.log('Special work saved:', submissionData.specialWorksApplied);
 
         await triggerSpecialWorksCountModal(interaction, selectedWork);
@@ -230,9 +235,27 @@ async function handleSelectMenuInteraction(interaction) {
 // ------------------- Finalizes the submission process and displays the token breakdown -------------------
 async function confirmSubmission(interaction) {
   try {
-    const userId = interaction.user.id;
-    const submissionData = await retrieveSubmissionFromStorage(userId);
-
+    // Retrieve the submissionId from the latest saved data (from the select menu session)
+    let submissionId;
+    // Try to get it from the interaction, fallback to userId if not present
+    if (interaction.message && interaction.message.embeds && interaction.message.embeds[0]) {
+      const idField = interaction.message.embeds[0].fields?.find(f => f.name === 'Submission ID');
+      if (idField) submissionId = idField.value;
+    }
+    // If not found, try to get from storage by userId
+    if (!submissionId) {
+      const tempData = await retrieveSubmissionFromStorage(interaction.user.id);
+      submissionId = tempData?.submissionId;
+    }
+    if (!submissionId) {
+      await interaction.reply({
+        content: '❌ **Submission ID not found. Please restart the submission process.**',
+        ephemeral: true
+      });
+      return;
+    }
+    // Always retrieve the latest data by submissionId
+    const submissionData = await retrieveSubmissionFromStorage(submissionId);
     if (!submissionData) {
       await interaction.reply({
         content: '❌ **Submission data not found. Please restart the submission process.**',
@@ -240,7 +263,6 @@ async function confirmSubmission(interaction) {
       });
       return;
     }
-
     // Calculate tokens and generate breakdown
     const { totalTokens, breakdown } = calculateTokens({
       baseSelections: submissionData.baseSelections,
@@ -252,15 +274,12 @@ async function confirmSubmission(interaction) {
       typeMultiplierCounts: submissionData.typeMultiplierCounts,
       collab: submissionData.collab
     });
-
     // Update submission data with final calculations
     submissionData.finalTokenAmount = totalTokens;
     submissionData.tokenCalculation = breakdown;
     submissionData.updatedAt = new Date();
-
     // Save final submission data using submissionId as the key
-    await saveSubmissionToStorage(submissionData.submissionId, submissionData);
-
+    await saveSubmissionToStorage(submissionId, submissionData);
     // Generate the token breakdown
     const breakdownMessage = generateTokenBreakdown({
       baseSelections: submissionData.baseSelections,
@@ -273,7 +292,6 @@ async function confirmSubmission(interaction) {
       finalTokenAmount: totalTokens,
       collab: submissionData.collab
     });
-
     // ------------------- Display Confirmation -------------------
     await interaction.update({
       content: `${breakdownMessage}\n\n☑️ **Final Total Token Calculation:** ${totalTokens} Tokens`,
@@ -286,7 +304,6 @@ async function confirmSubmission(interaction) {
     });
   } catch (error) {
     handleError(error, 'selectMenuHandler.js');
-
     console.error(`[selectMenuHandler.js]: confirmSubmission: ${error.message}`);
     if (interaction.replied || interaction.deferred) {
       await interaction.followUp({
