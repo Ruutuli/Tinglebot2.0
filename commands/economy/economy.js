@@ -411,12 +411,11 @@ for (const { name } of items) {
   for (const { name } of items) {
     if (equippedItems.includes(name)) {
       await interaction.editReply(
-        `❌ You cannot gift \`${name}\` because it is currently equipped. Please unequip it first.`
+        `❌ You cannot gift \`${name}\` because it is currently equipped. Please unequip it first using the </gear:1372262090450141196> command.`
       );
       return;
     }
   }
-  
 
   const allCharacters = await fetchAllCharactersExceptUser(userId);
   const toCharacter = allCharacters.find((c) => c.name === toCharacterName);
@@ -538,13 +537,46 @@ for (const { name } of items) {
   const formattedItems = [];
 
   for (const { name, quantity } of aggregatedItems) {
-   await removeItemInventoryDatabase(
+   // Remove from source inventory first
+   const removeResult = await removeItemInventoryDatabase(
     fromCharacter._id,
     name,
     quantity,
     interaction
    );
-   await addItemInventoryDatabase(toCharacter._id, name, quantity, interaction, 'Gift from ' + fromCharacterName);
+
+   if (!removeResult) {
+     await interaction.editReply({
+       content: `❌ Failed to remove ${name} from your inventory. Please try again.`,
+       ephemeral: true
+     });
+     return;
+   }
+
+   // Add to target inventory
+   const addResult = await addItemInventoryDatabase(
+    toCharacter._id, 
+    name, 
+    quantity, 
+    interaction, 
+    'Gift from ' + fromCharacterName
+   );
+
+   if (!addResult) {
+     // If adding to target fails, try to restore the item to source
+     await addItemInventoryDatabase(
+      fromCharacter._id,
+      name,
+      quantity,
+      interaction,
+      'Restored after failed gift'
+     );
+     await interaction.editReply({
+       content: `❌ Failed to add ${name} to recipient's inventory. The item has been restored to your inventory.`,
+       ephemeral: true
+     });
+     return;
+   }
 
    const itemDetails = await ItemModel.findOne({
     itemName: new RegExp(`^${name}$`, "i"),
