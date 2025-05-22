@@ -8,26 +8,71 @@ const tempDataSchema = new mongoose.Schema({
   },
   data: {
     type: mongoose.Schema.Types.Mixed,
-    required: true
+    required: true,
+    submissionId: String,
+    fileUrl: String,
+    fileName: String,
+    title: String,
+    userId: String,
+    username: String,
+    userAvatar: String,
+    category: String,
+    questEvent: String,
+    questBonus: String,
+    baseSelections: [String],
+    typeMultiplierSelections: [String],
+    productMultiplierValue: String,
+    addOnsApplied: [{
+      addOn: String,
+      count: Number
+    }],
+    specialWorksApplied: [{
+      work: String,
+      count: Number
+    }],
+    characterCount: Number,
+    typeMultiplierCount: Number,
+    finalTokenAmount: Number,
+    tokenCalculation: String,
+    collab: mongoose.Schema.Types.Mixed,
+    createdAt: Date,
+    updatedAt: Date
   },
   type: {
     type: String,
     required: true,
     enum: [
-      'healing',      // Healing requests
-      'vending',      // Vending requests
-      'boosting',     // Boosting requests
-      'battle',       // Battle progress
-      'encounter',    // Mount encounters
-      'blight',       // Blight healing requests
-      'travel',       // Travel cooldowns
-      'gather',       // Gathering cooldowns
+      // Art & Submissions
+      'submission',    // Art/writing submissions
+      
+      // Character & Stats
+      'healing',       // Healing requests
+      'boosting',      // Boosting requests
+      'pendingEdit',   // Pending character edit requests
+      'stats',         // Character stats tracking
+      
+      // Economy & Trading
+      'vending',       // Vending requests
+      'trade',         // Trade requests
+      'delivery',      // Delivery requests
+      'quest',         // Quest tracking
+      
+      // Combat & Encounters
+      'battle',        // Battle progress
+      'encounter',     // Mount encounters
+      'blight',        // Blight healing requests
       'monthly_mount', // Monthly mount encounter tracking
-      'delivery',     // Delivery requests
-      'trade',        // Trade requests
-      'pendingEdit',  // Pending character edit requests
-      'submission',   // Art/writing submissions
-      'weather'       // Weather data caching
+      
+      // World & Environment
+      'travel',        // Travel cooldowns
+      'gather',        // Gathering cooldowns
+      'weather',       // Weather data caching
+      'location',      // Location tracking
+      
+      // System & Maintenance
+      'cache',         // General caching
+      'session',       // User sessions
+      'temp'          // Temporary data
     ],
     index: true
   },

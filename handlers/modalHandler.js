@@ -4,6 +4,7 @@ const { ActionRowBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = req
 
 // Custom modules for formatting and extended functionality.
 const { capitalizeFirstLetter } = require('../modules/formattingModule');
+const { handleError } = require('../utils/globalErrorHandler');
 
 
 // ------------------- Utility Functions -------------------
@@ -19,201 +20,133 @@ const { calculateTokens, generateTokenBreakdown } = require('../utils/tokenUtils
 const { handleMountNameSubmission } = require('./mountComponentHandler');
 
 
+// ------------------- Helper Functions -------------------
+function generateSubmissionId() {
+  return 'A' + Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
+}
+
+
 // ------------------- Modal Submission Handler -------------------
 // Handles the interaction responses for modal submissions.
 async function handleModalSubmission(interaction) {
+  if (interaction.replied || interaction.deferred) return;
+
+  const userId = interaction.user.id;
+  const customId = interaction.customId;
+
   try {
-    // Verify this is a modal submission
-    if (!interaction.isModalSubmit()) {
-      console.error('[modalHandler.js]: ❌ Interaction is not a modal submission');
-      return;
-    }
-
-    const customId = interaction.customId;
-    const userId = interaction.user.id;
-
     // Get existing submission data or create new
-    let submissionData = await retrieveSubmissionFromStorage(userId) || {
-      userId,
-      baseSelections: [],
-      typeMultiplierSelections: [],
-      typeMultiplierCounts: {},
-      addOnsApplied: [],
-      specialWorksApplied: [],
-      characterCount: 1,
-      productMultiplierValue: 'default'
-    };
-
-    // ------------------- Handle Mount Name Modal -------------------
-    if (customId.startsWith('mount-name-modal')) {
-      await handleMountNameSubmission(interaction);
-      return;
+    let submissionData = await retrieveSubmissionFromStorage(userId);
+    
+    // If no existing data, create new submission
+    if (!submissionData) {
+      submissionData = {
+        userId,
+        submissionId: generateSubmissionId(),
+        baseSelections: [],
+        typeMultiplierSelections: [],
+        productMultiplierValue: 'default',
+        addOnsApplied: [],
+        specialWorksApplied: [],
+        characterCount: 1,
+        typeMultiplierCounts: {},
+        finalTokenAmount: 0,
+        tokenCalculation: null,
+        collab: null,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
     }
 
-    // ------------------- Handle Base Count Modal -------------------
-    if (customId === 'baseCountModal') {
-      const baseCount = parseInt(interaction.components[0].components[0].value, 10) || 1;
-      submissionData.characterCount = baseCount;
-      
-      // Calculate tokens after updating character count
-      const { totalTokens, breakdown } = calculateTokens({
-        baseSelections: submissionData.baseSelections,
-        typeMultiplierSelections: submissionData.typeMultiplierSelections,
-        productMultiplierValue: submissionData.productMultiplierValue,
-        addOnsApplied: submissionData.addOnsApplied,
-        characterCount: baseCount,
-        typeMultiplierCounts: submissionData.typeMultiplierCounts,
-        specialWorksApplied: submissionData.specialWorksApplied,
-        collab: submissionData.collab
-      });
+    // Handle different modal types
+    switch (customId) {
+      case 'baseCountModal':
+        const baseCount = parseInt(interaction.components[0].components[0].value);
+        if (isNaN(baseCount) || baseCount < 1) {
+          return interaction.reply({
+            content: '❌ **Please enter a valid number greater than 0.**',
+            flags: 64
+          });
+        }
+        submissionData.characterCount = baseCount;
+        break;
 
-      submissionData.finalTokenAmount = totalTokens;
-      submissionData.tokenCalculation = generateTokenBreakdown({
-        ...submissionData,
-        finalTokenAmount: totalTokens
-      });
-      
-      await saveSubmissionToStorage(userId, submissionData);
-      
-      await interaction.update({
-        content: `☑️ **${baseCount} base(s)** selected. Select another base or click "Next Section ➡️" when you are done.\n\n${submissionData.tokenCalculation}`,
-        components: [getBaseSelectMenu(true), getCancelButtonRow()]
-      });
-      return;
+      case 'multiplierCountModal':
+        const [_, multiplierName] = customId.split('_');
+        const multiplierCount = parseInt(interaction.components[0].components[0].value);
+        if (isNaN(multiplierCount) || multiplierCount < 1) {
+          return interaction.reply({
+            content: '❌ **Please enter a valid number greater than 0.**',
+            flags: 64
+          });
+        }
+        submissionData.typeMultiplierCounts[multiplierName] = multiplierCount;
+        break;
+
+      case 'addOnCountModal':
+        const [__, addOnName] = customId.split('_');
+        const addOnCount = parseInt(interaction.components[0].components[0].value);
+        if (isNaN(addOnCount) || addOnCount < 1) {
+          return interaction.reply({
+            content: '❌ **Please enter a valid number greater than 0.**',
+            flags: 64
+          });
+        }
+        const existingAddOn = submissionData.addOnsApplied.find(a => a.addOn === addOnName);
+        if (existingAddOn) {
+          existingAddOn.count = addOnCount;
+        } else {
+          submissionData.addOnsApplied.push({ addOn: addOnName, count: addOnCount });
+        }
+        break;
+
+      case 'specialWorksCountModal':
+        const [___, specialWorkName] = customId.split('_');
+        const specialWorksCount = parseInt(interaction.components[0].components[0].value);
+        if (isNaN(specialWorksCount) || specialWorksCount < 1) {
+          return interaction.reply({
+            content: '❌ **Please enter a valid number greater than 0.**',
+            flags: 64
+          });
+        }
+        const existingWork = submissionData.specialWorksApplied.find(w => w.work === specialWorkName);
+        if (existingWork) {
+          existingWork.count = specialWorksCount;
+        } else {
+          submissionData.specialWorksApplied.push({ work: specialWorkName, count: specialWorksCount });
+        }
+        break;
     }
 
-    // ------------------- Handle Multiplier Count Modal -------------------
-    if (customId.startsWith('multiplierCountModal_')) {
-      const multiplierName = customId.split('_')[1];
-      const multiplierCount = parseInt(interaction.components[0].components[0].value, 10) || 1;
+    // Calculate tokens and generate breakdown
+    const { totalTokens, breakdown } = calculateTokens(submissionData);
+    submissionData.finalTokenAmount = totalTokens;
+    submissionData.tokenCalculation = breakdown;
+    submissionData.updatedAt = new Date();
 
-      console.info(`[modalHandler]: Multiplier Count Modal - User: ${userId}, Multiplier: ${multiplierName}, Count: ${multiplierCount}`);
+    // Save updated submission data
+    await saveSubmissionToStorage(submissionData.submissionId, submissionData);
 
-      submissionData.typeMultiplierCounts[multiplierName] = multiplierCount;
-      
-      // Calculate tokens after updating multiplier count
-      const { totalTokens, breakdown } = calculateTokens({
-        baseSelections: submissionData.baseSelections,
-        typeMultiplierSelections: submissionData.typeMultiplierSelections,
-        productMultiplierValue: submissionData.productMultiplierValue,
-        addOnsApplied: submissionData.addOnsApplied,
-        characterCount: submissionData.characterCount,
-        typeMultiplierCounts: submissionData.typeMultiplierCounts,
-        specialWorksApplied: submissionData.specialWorksApplied,
-        collab: submissionData.collab
-      });
-
-      submissionData.finalTokenAmount = totalTokens;
-      submissionData.tokenCalculation = generateTokenBreakdown({
-        ...submissionData,
-        finalTokenAmount: totalTokens
-      });
-
-      await saveSubmissionToStorage(userId, submissionData);
-
-      await interaction.update({
-        content: `☑️ **${multiplierCount}** selected for the multiplier **${capitalizeFirstLetter(multiplierName)}**. Select another Type Multiplier or click "Next Section ➡️" when you are done.\n\n${submissionData.tokenCalculation}`,
-        components: [getTypeMultiplierMenu(true), getCancelButtonRow()]
-      });
-      return;
-    }
-
-    // ------------------- Handle Add-On Count Modal -------------------
-    if (customId.startsWith('addOnCountModal_')) {
-      const selectedAddOn = customId.split('_')[1];
-      const addOnQuantity = parseInt(interaction.components[0].components[0].value, 10) || 1;
-
-      // Ensure addOnsApplied is initialized and filter out any invalid entries
-      submissionData.addOnsApplied = submissionData.addOnsApplied.filter(entry => typeof entry === 'object' && entry.addOn);
-
-      // Update or add the selected add-on
-      const existingAddOnIndex = submissionData.addOnsApplied.findIndex(entry => entry.addOn === selectedAddOn);
-      if (existingAddOnIndex !== -1) {
-        submissionData.addOnsApplied[existingAddOnIndex].count = addOnQuantity;
-      } else {
-        submissionData.addOnsApplied.push({ addOn: selectedAddOn, count: addOnQuantity });
-      }
-      
-      // Calculate tokens after updating add-ons
-      const { totalTokens, breakdown } = calculateTokens({
-        baseSelections: submissionData.baseSelections,
-        typeMultiplierSelections: submissionData.typeMultiplierSelections,
-        productMultiplierValue: submissionData.productMultiplierValue,
-        addOnsApplied: submissionData.addOnsApplied,
-        characterCount: submissionData.characterCount,
-        typeMultiplierCounts: submissionData.typeMultiplierCounts,
-        specialWorksApplied: submissionData.specialWorksApplied,
-        collab: submissionData.collab
-      });
-
-      submissionData.finalTokenAmount = totalTokens;
-      submissionData.tokenCalculation = generateTokenBreakdown({
-        ...submissionData,
-        finalTokenAmount: totalTokens
-      });
-      
-      await saveSubmissionToStorage(userId, submissionData);
-
-      const addOnsMenu = getAddOnsMenu(true);
-      await interaction.update({
-        content: `☑️ **${addOnQuantity} ${selectedAddOn}(s)** added. Select more add-ons or click "Next Section ➡️".\n\n${submissionData.tokenCalculation}`,
-        components: [addOnsMenu, getCancelButtonRow()]
-      });
-
-      if (interaction.values?.[0] === 'complete') {
-        const specialWorksMenu = getSpecialWorksMenu(true);
-        await interaction.editReply({
-          content: '🎨 **Select any special works (Comics or Animation):**',
-          components: [specialWorksMenu, getCancelButtonRow()],
-          ephemeral: true
-        });
-      }
-      return;
-    }
-
-    // ------------------- Handle Special Works Count Modal -------------------
-    if (customId.startsWith('specialWorksCountModal_')) {
-      const specialWork = customId.split('_')[1];
-      const specialWorkCount = parseInt(interaction.components[0].components[0].value, 10) || 1;
-
-      submissionData.specialWorksApplied.push({ work: specialWork, count: specialWorkCount });
-      
-      // Calculate tokens after updating special works
-      const { totalTokens, breakdown } = calculateTokens({
-        baseSelections: submissionData.baseSelections,
-        typeMultiplierSelections: submissionData.typeMultiplierSelections,
-        productMultiplierValue: submissionData.productMultiplierValue,
-        addOnsApplied: submissionData.addOnsApplied,
-        characterCount: submissionData.characterCount,
-        typeMultiplierCounts: submissionData.typeMultiplierCounts,
-        specialWorksApplied: submissionData.specialWorksApplied,
-        collab: submissionData.collab
-      });
-
-      submissionData.finalTokenAmount = totalTokens;
-      submissionData.tokenCalculation = generateTokenBreakdown({
-        ...submissionData,
-        finalTokenAmount: totalTokens
-      });
-      
-      await saveSubmissionToStorage(userId, submissionData);
-
-      await interaction.update({
-        content: `☑️ **${specialWorkCount} ${specialWork.replace(/([A-Z])/g, ' $1')}(s)** added. Select more or click "Complete ✅".\n\n${submissionData.tokenCalculation}`,
-        components: [getSpecialWorksMenu(true), getCancelButtonRow()]
-      });
-    }
-  } catch (error) {
-    console.error('[modalHandler.js]: ❌ Error handling modal submission:', error);
-    if (!interaction.replied && !interaction.deferred) {
+    // Only show token calculation in the final confirmation
+    if (customId === 'specialWorksCountModal') {
       await interaction.reply({
-        content: '❌ **An error occurred while processing your submission. Please try again.**',
-        ephemeral: true
+        content: `✅ **Count updated!**\n\n${breakdown}`,
+        flags: 64
       });
     } else {
-      await interaction.editReply({
-        content: '❌ **An error occurred while processing your submission. Please try again.**',
-        ephemeral: true
+      await interaction.reply({
+        content: '✅ **Count updated!**',
+        flags: 64
+      });
+    }
+
+  } catch (error) {
+    console.error(`[modalHandler.js]: ❌ Error in handleModalSubmission: ${error.message}`);
+    
+    if (!interaction.replied) {
+      await interaction.reply({
+        content: '❌ **An error occurred while processing your submission.**',
+        flags: 64
       });
     }
   }

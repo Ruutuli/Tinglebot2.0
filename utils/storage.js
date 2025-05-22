@@ -20,17 +20,17 @@ async function saveSubmissionToStorage(submissionId, submissionData) {
     const now = new Date();
     const expiresAt = new Date(now.getTime() + 48 * 60 * 60 * 1000);
 
-    // Create the properly structured document
+    // Ensure all required fields are present
     const submission = {
       type: 'submission',
       key: submissionId,
       data: {
         ...submissionData,
-        createdAt: submissionData.createdAt || now,
+        submissionId,
         updatedAt: now
       },
       expiresAt,
-      createdAt: now // Ensure createdAt is set
+      createdAt: now
     };
 
     const result = await TempData.findOneAndUpdate(
