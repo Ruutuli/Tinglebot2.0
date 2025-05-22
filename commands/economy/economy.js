@@ -1757,6 +1757,21 @@ async function handleTrade(interaction) {
   try {
     await interaction.deferReply({ ephemeral: false });
 
+    // ------------------- Validate Item Existence -------------------
+    const itemNamesToCheck = [item1, item2, item3].filter(Boolean);
+    const missingItems = [];
+    for (const name of itemNamesToCheck) {
+      const exists = await ItemModel.findOne({ itemName: { $regex: new RegExp(`^${name}$`, "i") } }).lean();
+      if (!exists) missingItems.push(name);
+    }
+    if (missingItems.length > 0) {
+      await interaction.editReply({
+        content: `❌ The following item(s) do not exist: ${missingItems.map(n => `\`${n}\``).join(", ")}. Please check your spelling or try a different item.`,
+        ephemeral: true,
+      });
+      return;
+    }
+
     // ------------------- Validate Trade Quantities -------------------
     const itemArrayRaw = [
       { name: item1, quantity: quantity1 },
