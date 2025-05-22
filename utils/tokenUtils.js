@@ -209,6 +209,9 @@ function handleTokenError(error, interaction) {
             '3. Share your sheet with: `tinglebot@rotw-tinglebot.iam.gserviceaccount.com`\n' +
             '4. Make sure you have a tab named exactly `loggedTracker`\n' +
             '5. Use `/tokens setup` to verify your setup';
+    } else if (error.message.includes('Unknown interaction')) {
+        errorMessage = '❌ The interaction has expired.';
+        guideMessage = '📝 **Quick Guide:**\n1. Please try the command again\n2. Make sure to respond within 3 seconds';
     } else {
         errorMessage = '❌ **An error occurred with your token tracker!**';
         guideMessage = '📝 **Quick Guide:**\n\n' +

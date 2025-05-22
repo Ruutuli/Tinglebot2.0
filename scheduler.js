@@ -349,7 +349,7 @@ function initializeScheduler(client) {
   setupBlightScheduler(client);
 
   // Blood moon tracking 
-  createCronJob('00 12 * * *', 'blood moon tracking', async () => {
+  createCronJob('00 20 * * *', 'blood moon tracking', async () => {
     const channels = [
       process.env.RUDANIA_TOWN_HALL,
       process.env.INARIKO_TOWN_HALL,
