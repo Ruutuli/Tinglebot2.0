@@ -62,36 +62,43 @@ const { Village } = require("../models/VillageModel");
 // Add safe response utility
 async function safeAutocompleteResponse(interaction, choices) {
   try {
-    
-    if (interaction.responded) {
-      console.log('[autocompleteHandler.js]: ⚠️ Interaction already responded to');
+    // Check if interaction is already responded to or expired
+    if (interaction.responded || !interaction.isAutocomplete()) {
+      console.log('[autocompleteHandler.js]: ⚠️ Interaction already responded to or invalid');
       return;
     }
 
-    // Set a shorter timeout for autocomplete responses
+    // Set a timeout for autocomplete responses (Discord's limit is 3 seconds)
     const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('Response timeout')), 2000)
+      setTimeout(() => reject(new Error('Response timeout')), 2500)
     );
 
+    // Try to respond with the choices
     await Promise.race([
       interaction.respond(choices),
       timeoutPromise
     ]);
   } catch (error) {
+    // Log the error
     console.error('[autocompleteHandler.js]: ❌ Error in safeAutocompleteResponse:', error);
-    handleError(error, 'autocompleteHandler.js', {
-      operation: 'safeAutocompleteResponse',
-      interactionId: interaction.id,
-      choices: choices?.length || 0
-    });
-
-    if (error.code === 10062) {
-      console.log('[autocompleteHandler.js]: ⚠️ Interaction expired');
+    
+    // Handle specific error cases
+    if (error.code === 10062 || error.message === 'Response timeout') {
+      console.log('[autocompleteHandler.js]: ⚠️ Interaction expired or timed out');
       return;
     }
 
+    // Log the error for debugging
+    handleError(error, 'autocompleteHandler.js', {
+      operation: 'safeAutocompleteResponse',
+      interactionId: interaction.id,
+      choices: choices?.length || 0,
+      errorCode: error.code
+    });
+
+    // Only try to send an empty response if we haven't responded yet
     try {
-      if (!interaction.responded) {
+      if (!interaction.responded && interaction.isAutocomplete()) {
         console.log('[autocompleteHandler.js]: 📤 Sending empty response as fallback');
         await interaction.respond([]).catch(() => {});
       }
@@ -437,21 +444,56 @@ async function handleAutocomplete(interaction) {
 // ------------------- Helper Function to Filter and Respond with Choices -------------------
 async function respondWithFilteredChoices(interaction, focusedOption, choices) {
   try {
+    // Check if interaction is already responded to or expired
+    if (interaction.responded || !interaction.isAutocomplete()) {
+      console.log('[autocompleteHandler.js]: ⚠️ Interaction already responded to or invalid');
+      return;
+    }
+
     const focusedValue = focusedOption?.value?.toLowerCase() || '';
 
     const filteredChoices = choices
       .filter(choice => choice.name.toLowerCase().includes(focusedValue))
       .slice(0, 25);
 
-    return await safeAutocompleteResponse(interaction, filteredChoices);
+    // Set a timeout for autocomplete responses (Discord's limit is 3 seconds)
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Response timeout')), 2500)
+    );
+
+    // Try to respond with the filtered choices
+    await Promise.race([
+      interaction.respond(filteredChoices),
+      timeoutPromise
+    ]);
   } catch (error) {
+    // Log the error
+    console.error('[autocompleteHandler.js]: ❌ Error in respondWithFilteredChoices:', error);
+    
+    // Handle specific error cases
+    if (error.code === 10062 || error.message === 'Response timeout') {
+      console.log('[autocompleteHandler.js]: ⚠️ Interaction expired or timed out');
+      return;
+    }
+
+    // Log the error for debugging
     handleError(error, 'autocompleteHandler.js', {
       operation: 'respondWithFilteredChoices',
       interactionId: interaction.id,
       focusedOption: focusedOption?.name,
-      choicesCount: choices?.length || 0
+      choicesCount: choices?.length || 0,
+      errorCode: error.code
     });
-    return await safeRespondWithError(interaction, error);
+
+    // Only try to send an empty response if we haven't responded yet
+    try {
+      if (!interaction.responded && interaction.isAutocomplete()) {
+        console.log('[autocompleteHandler.js]: 📤 Sending empty response as fallback');
+        await interaction.respond([]).catch(() => {});
+      }
+    } catch (e) {
+      console.error('[autocompleteHandler.js]: ❌ Error sending fallback response:', e);
+    }
   }
 }
 
