@@ -60,7 +60,7 @@ const { handleVendingViewVillage, handleSyncButton } = require('./vendingHandler
 const {
   deleteSubmissionFromStorage,
   saveSubmissionToStorage,
-  submissionStore
+  retrieveSubmissionFromStorage
 } = require('../utils/storage');
 
 const {
@@ -119,10 +119,10 @@ async function handleButtonInteraction(interaction) {
       case 'sync-no':
         return await handleSyncNo(interaction);
       case 'confirm':
-        const submissionData = submissionStore.get(userId);
+        const submissionData = await retrieveSubmissionFromStorage(userId);
         return await handleConfirmation(interaction, userId, submissionData);
       case 'cancel':
-        const cancelData = submissionStore.get(userId);
+        const cancelData = await retrieveSubmissionFromStorage(userId);
         return await handleCancel(interaction, userId, cancelData);
       case 'view':
         return await handleViewCharacter(interaction, characterId);
@@ -218,26 +218,34 @@ async function handleConfirmation(interaction, userId, submissionData) {
     const embed = createArtSubmissionEmbed(submissionData, user, breakdown);
     const sentMessage = await interaction.channel.send({ embeds: [embed] });
     submissionData.messageUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${sentMessage.id}`;
-    submissionStore.set(userId, submissionData);
     saveSubmissionToStorage(submissionData.submissionId, submissionData);
   }
 
-  submissionStore.delete(userId);
+  await retrieveSubmissionFromStorage(userId);
 }
 
 // ------------------- Function: handleCancel -------------------
-// Cancels submission and removes stored data.
+// Cancels an art submission and cleans up data.
 async function handleCancel(interaction, userId, submissionData) {
-  if (submissionData?.submissionId) {
-    deleteSubmissionFromStorage(submissionData.submissionId);
+  try {
+    if (submissionData && submissionData.submissionId) {
+      await deleteSubmissionFromStorage(submissionData.submissionId);
+    }
+    
+    await interaction.update({
+      content: '🚫 **Submission canceled.** Please restart the process if you wish to submit again.',
+      components: [], // Remove all action components
+    });
+  } catch (error) {
+    handleError(error, 'componentHandler.js');
+    console.error(`[componentHandler.js]: ❌ Error in handleCancel: ${error.message}`);
+    if (!interaction.replied && !interaction.deferred) {
+      await interaction.reply({
+        content: '❌ **An error occurred while canceling the submission.**',
+        flags: 64
+      });
+    }
   }
-
-  submissionStore.delete(userId);
-
-  await interaction.update({
-    content: '❌ **Your submission has been canceled.**',
-    components: [],
-  });
 }
 
 // ------------------- Function: handleViewCharacter -------------------
