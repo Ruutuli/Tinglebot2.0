@@ -858,15 +858,6 @@ module.exports = {
             .setRequired(true)
             .setAutocomplete(true)
         )
-        .addStringOption(option =>
-          option.setName('type')
-            .setDescription('Type of companion to store')
-            .setRequired(true)
-            .addChoices(
-              { name: 'Mount', value: 'mount' },
-              { name: 'Pet', value: 'pet' }
-            )
-        )
     )
     .addSubcommand(subcommand =>
       subcommand
@@ -986,20 +977,9 @@ module.exports = {
           break;
 
         case 'store':
-          const type = interaction.options.getString('type');
-          // Validate the type matches the actual companion type
+          // Auto-detect type by name
           const mountToStore = await Mount.findOne({ owner: characterName, name: name });
           const petToStore = await Pet.findOne({ ownerName: characterName, name: name });
-          
-          if (type === 'mount' && !mountToStore) {
-            await sendErrorResponse(interaction, 'This companion is not a mount. Please select the correct type.');
-            return;
-          }
-          if (type === 'pet' && !petToStore) {
-            await sendErrorResponse(interaction, 'This companion is not a pet. Please select the correct type.');
-            return;
-          }
-          
           if (mountToStore) {
             await handleStoreMount(interaction, characterName, name);
           } else if (petToStore) {
