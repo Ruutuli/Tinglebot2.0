@@ -38,13 +38,16 @@ module.exports = {
     const userId = interaction.user.id;
 
     try {
+      // Defer reply immediately to prevent timeout
+      await interaction.deferReply({ ephemeral: true });
+
       // ------------------- Handle 'check' subcommand -------------------
       if (subcommand === 'check') {
         const tokenRecord = await getOrCreateToken(userId);
         
         if (!tokenRecord.tokenTracker || !isValidGoogleSheetsUrl(tokenRecord.tokenTracker)) {
           const { fullMessage } = handleTokenError(new Error('Invalid URL'), interaction);
-          await interaction.reply({
+          await interaction.editReply({
             content: fullMessage,
             ephemeral: true,
           });
@@ -82,22 +85,22 @@ module.exports = {
             .setFooter({ text: 'Token Tracker' })
             .setTimestamp();
 
-          await interaction.reply({ embeds: [embed] });
+          await interaction.editReply({ embeds: [embed] });
         } catch (error) {
           const { fullMessage } = handleTokenError(error, interaction);
-          await interaction.reply({
+          await interaction.editReply({
             content: fullMessage,
             ephemeral: true,
           });
         }
-
+      }
       // ------------------- Handle 'setup' subcommand -------------------
-      } else if (subcommand === 'setup') {
+      else if (subcommand === 'setup') {
         const link = interaction.options.getString('link');
 
         if (!isValidGoogleSheetsUrl(link)) {
           const { fullMessage } = handleTokenError(new Error('Invalid URL'), interaction);
-          await interaction.reply({
+          await interaction.editReply({
             content: fullMessage,
             ephemeral: true,
           });
@@ -108,7 +111,7 @@ module.exports = {
           // Save the token tracker link to the user's database
           const user = await User.findOne({ discordId: userId });
           if (!user) {
-            await interaction.reply({
+            await interaction.editReply({
               content: '❌ **User data not found. Please try again later.**',
               ephemeral: true,
             });
@@ -125,7 +128,7 @@ module.exports = {
           const sheetId = await getSheetIdByTitle(auth, spreadsheetId, 'loggedTracker');
           if (!sheetId) {
             const { fullMessage } = handleTokenError(new Error('404'), interaction);
-            await interaction.reply({
+            await interaction.editReply({
               content: fullMessage,
               ephemeral: true,
             });
@@ -136,7 +139,7 @@ module.exports = {
           const sheetData = await readSheetData(auth, spreadsheetId, 'loggedTracker!B7:F7');
           if (!sheetData || !expectedHeaders.every(header => sheetData[0]?.includes(header))) {
             const { fullMessage } = handleTokenError(new Error('headers'), interaction);
-            await interaction.reply({
+            await interaction.editReply({
               content: fullMessage,
               ephemeral: true,
             });
@@ -156,7 +159,7 @@ module.exports = {
           );
 
           const setupEmbed = createTokenTrackerSetupEmbed(interaction.user.username, link);
-          const response = await interaction.reply({ 
+          const response = await interaction.editReply({ 
             embeds: [setupEmbed], 
             components: [row],
             ephemeral: true 
@@ -208,7 +211,7 @@ module.exports = {
 
         } catch (error) {
           const { fullMessage } = handleTokenError(error, interaction);
-          await interaction.reply({
+          await interaction.editReply({
             content: fullMessage,
             ephemeral: true,
           });
@@ -223,7 +226,7 @@ module.exports = {
         handleError(error, 'tokens.js');
       }
       const { fullMessage } = handleTokenError(error, interaction);
-      await interaction.reply({
+      await interaction.editReply({
         content: fullMessage,
         ephemeral: true,
       });
