@@ -337,17 +337,15 @@ module.exports = {
       return;
     }
 
-    // Initialize pets array
-    if (!character.pets) character.pets = [];
-
     // ------------------- Check for Existing Pet -------------------
     // Find the pet by name in the character's pets array.
-    const existingPet = character.pets.find((pet) => pet.name === petName);
+    const existingPet = await Pet.findOne({ owner: character._id, name: petName });
 
     // ------------------- Subcommand: Add Pet or Update Pet Details -------------------
     if (subcommand === "add") {
       // If adding a new pet, prevent adding if an active pet already exists.
-      if (!existingPet && character.pets && character.pets.length > 0) {
+      const existingActivePet = await Pet.findOne({ owner: character._id, status: 'active' });
+      if (!existingPet && existingActivePet) {
         return interaction.editReply({
           content: "❌ **You already have an active pet. Please store your current pet before adding a new one.**",
           ephemeral: true
@@ -380,9 +378,9 @@ module.exports = {
       // ------------------- Update Existing Pet or Add New Pet -------------------
       if (existingPet) {
         existingPet.species = species;
-        existingPet.perks = [petType];
+        existingPet.petType = petType;
         existingPet.imageUrl = petImageUrl || existingPet.imageUrl;
-        await updatePetToCharacter(character._id, petName, existingPet);
+        await existingPet.save();
 
         if (!character.currentActivePet) {
           await Character.findByIdAndUpdate(character._id, { currentActivePet: existingPet._id });
@@ -402,8 +400,6 @@ module.exports = {
           });
         }
 
-        await addPetToCharacter(character._id, petName, species, 0, petType, petImageUrl);
-
         const newPet = await Pet.create({
           ownerName: character.name,
           owner: character._id,
@@ -415,6 +411,7 @@ module.exports = {
           imageUrl: petImageUrl || "",
           rollCombination: petTypeData.rollCombination,
           tableDescription: petTypeData.description,
+          discordId: character.userId
         });
         
         await Character.findByIdAndUpdate(character._id, { currentActivePet: newPet._id });

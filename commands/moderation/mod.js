@@ -589,11 +589,6 @@ async function handlePetLevel(interaction) {
     petDoc.rollsRemaining = newLevel;
     await petDoc.save();
   
-    const updatedPet = petDoc.toObject();
-    delete updatedPet._id;
-  
-    await updatePetToCharacter(character._id, petName, updatedPet);
-  
     return interaction.editReply(
       `✅ Pet **${petName}** level and rolls set to **${newLevel}** for **${character.name}**.`
     );

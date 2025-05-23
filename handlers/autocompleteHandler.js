@@ -57,6 +57,7 @@ const Party = require("../models/PartyModel");
 const Pet = require("../models/PetModel");
 const ShopStock = require("../models/VillageShopsModel");
 const { Village } = require("../models/VillageModel");
+const { Stable } = require("../models/StableModel");
 
 
 // Add safe response utility
@@ -2713,6 +2714,7 @@ async function handleStableCharacterAutocomplete(interaction, focusedOption) {
 async function handleStableMountNameAutocomplete(interaction, focusedOption) {
   try {
     const characterNameRaw = interaction.options.getString("charactername");
+    const subcommand = interaction.options.getSubcommand();
 
     if (!characterNameRaw) {
       return await interaction.respond([]);
@@ -2727,11 +2729,37 @@ async function handleStableMountNameAutocomplete(interaction, focusedOption) {
         return await interaction.respond([]);
     }
 
-    // Fetch all mounts and pets owned by this character
-    const [mounts, pets] = await Promise.all([
-      Mount.find({ owner: cleanCharacterName }),
-      Pet.find({ ownerName: cleanCharacterName })
-    ]);
+    // Get stable
+    const stable = await Stable.findOne({ characterId: character._id });
+    if (!stable) {
+        return await interaction.respond([]);
+    }
+
+    let mounts = [];
+    let pets = [];
+
+    if (subcommand === 'retrieve') {
+        // For retrieve, only show stored companions
+        const storedMountIds = stable.storedMounts.map(m => m.mountId);
+        const storedPetIds = stable.storedPets.map(p => p.petId);
+        
+        [mounts, pets] = await Promise.all([
+            Mount.find({ _id: { $in: storedMountIds } }),
+            Pet.find({ _id: { $in: storedPetIds } })
+        ]);
+    } else if (subcommand === 'sell') {
+        // For sell, show all owned companions that aren't already for sale
+        [mounts, pets] = await Promise.all([
+            Mount.find({ owner: cleanCharacterName, status: { $ne: 'for_sale' } }),
+            Pet.find({ ownerName: cleanCharacterName, status: { $ne: 'for_sale' } })
+        ]);
+    } else {
+        // For other commands, show all owned companions
+        [mounts, pets] = await Promise.all([
+            Mount.find({ owner: cleanCharacterName }),
+            Pet.find({ ownerName: cleanCharacterName })
+        ]);
+    }
 
     // Format choices
     const mountChoices = mounts.map(mount => ({

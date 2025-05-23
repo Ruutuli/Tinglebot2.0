@@ -116,9 +116,21 @@ const characterSchema = new Schema({
   spiritOrbs: { type: Number, default: 0 },
 
   // ------------------- Companions -------------------
-  currentActivePet: { type: Schema.Types.ObjectId, ref: 'Pet', default: null },
-  mount: { type: Boolean, default: false },
-  stable: { type: [Object], default: [] }
+  currentActivePet: { 
+    type: Schema.Types.ObjectId, 
+    ref: 'Pet', 
+    default: null 
+  },
+  currentActiveMount: { 
+    type: Schema.Types.ObjectId, 
+    ref: 'Mount', 
+    default: null 
+  },
+  stable: { 
+    type: Schema.Types.ObjectId, 
+    ref: 'Stable', 
+    default: null 
+  }
 
 }, { collection: 'characters' });
 
