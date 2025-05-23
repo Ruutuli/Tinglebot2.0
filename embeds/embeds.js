@@ -1400,7 +1400,8 @@ const createHealEmbed = (
  heartsToHeal,
  paymentOffered,
  healingRequestId,
- isFulfilled = false
+ isFulfilled = false,
+ status = undefined
 ) => {
  if (!characterToHeal) {
   throw new Error("Character to heal is required.");
@@ -1413,56 +1414,66 @@ const createHealEmbed = (
   ? getCommonEmbedSettings(healerCharacter)
   : { color: "#AA926A" }; // Default color if no healer
 
+ // Handle cancelled state
+ if (status === 'cancelled') {
+  const embed = new EmbedBuilder()
+   .setColor('#888888')
+   .setAuthor({
+    name: `${characterToHeal.name} 🔗`,
+    iconURL: characterToHeal.icon || DEFAULT_IMAGE_URL,
+    url: characterToHeal.inventory || "",
+   })
+   .setTitle('❌ Healing Request Cancelled')
+   .setDescription(`This healing request was cancelled by the requester and can no longer be fulfilled.`)
+   .addFields(
+    {
+     name: "__📍 Village__",
+     value: `> ${capitalizeFirstLetter(characterToHeal.currentVillage)}`,
+     inline: true,
+    },
+    { name: "__❤️ Hearts to Heal__", value: `> ${heartsToHeal}`, inline: true },
+    {
+     name: "__💰 Payment Offered__",
+     value: `> ${paymentOffered || "None"}`,
+     inline: false,
+    },
+    {
+     name: "__🆔 Request ID__",
+     value: `> \`${healingRequestId}\``,
+     inline: false,
+    },
+    {
+     name: "__❌ Status__",
+     value: `> Cancelled by the requester. This request cannot be fulfilled.`,
+     inline: false,
+    }
+   )
+   .setFooter({
+    text: "This request was cancelled.",
+    iconURL: healerCharacter ? healerIcon : null,
+   });
+  return embed;
+ }
+
  const embed = new EmbedBuilder()
-  .setColor(settings.color)
+  .setColor("#AA926A")
   .setAuthor({
    name: `${characterToHeal.name} 🔗`,
    iconURL: characterToHeal.icon || DEFAULT_IMAGE_URL,
    url: characterToHeal.inventory || "",
   })
-  .setTitle("✬ Healing Request ✬")
+  .setTitle('✅ Healing Request Fulfilled')
   .setDescription(
-   isFulfilled
-    ? `✅ This healing request has been fulfilled by **${healerName}**.`
-    : healerCharacter
-    ? `**${characterToHeal.name}** is requesting healing services from **${healerName}**!`
-    : `**${
-       characterToHeal.name
-      }** is requesting healing! Healing request for any available healer in **${capitalizeFirstLetter(
-       characterToHeal.currentVillage
-      )}**.`
-  );
-
- embed.addFields(
-  {
-   name: "__📍 Village__",
-   value: `> ${capitalizeFirstLetter(characterToHeal.currentVillage)}`,
-   inline: true,
-  },
-  { name: "__❤️ Hearts to Heal__", value: `> ${heartsToHeal}`, inline: true },
-  {
-   name: "__💰 Payment Offered__",
-   value: `> ${paymentOffered || "None"}`,
-   inline: false,
-  }
- );
-
- if (isFulfilled) {
-  embed.addFields({
-   name: "__✅ Status__",
-   value: `> This request has been fulfilled by **${healerName}**.`,
-   inline: false,
-  });
- } else {
-  embed.addFields(
+   `> ${healerName} has healed your character for ${heartsToHeal} hearts!`)
+  .addFields(
    {
-    name: "__💡 Payment Instructions__",
-    value: `> _User will need to use </gift:1306176789755858976> to transfer payment to the healer._`,
-    inline: false,
+    name: "__❤️ Hearts to Heal__",
+    value: `> ${heartsToHeal}`,
+    inline: true,
    },
    {
-    name: "__🩹 Healing Instructions__",
-    value: `> Healers, please use </heal fulfill:1306176789755858977> to heal **${characterToHeal.name}**!`,
+    name: "__💰 Payment Offered__",
+    value: `> ${paymentOffered || "None"}`,
     inline: false,
    },
    {
@@ -1471,79 +1482,17 @@ const createHealEmbed = (
     inline: false,
    },
    {
-    name: "__❌ Cancel Request__",
-    value: `> _If you no longer want this request fulfilled, react with a ❌._`,
-    inline: false,
-   }
-  );
- }
-
- embed.setImage(DEFAULT_IMAGE_URL).setFooter({
-  text: isFulfilled
-   ? "Healing process successfully completed."
-   : "This request expires 24 hours from now.",
-  iconURL: healerCharacter ? healerIcon : null,
- });
-
- return embed;
-};
-
-// ------------------- Subsection Title ------------------- 
-const createHealingEmbed = (
- healerCharacter,
- characterToHeal,
- heartsHealed,
- staminaRecovered,
-) => {
- if (!characterToHeal || !healerCharacter) {
-  throw new Error("Both healer and character to heal are required.");
- }
-
- const healerName = healerCharacter.name || "Unknown Healer";
- const characterName = characterToHeal.name || "Unknown Character";
- const healerIcon = healerCharacter.icon || DEFAULT_IMAGE_URL;
- const characterIcon = characterToHeal.icon || DEFAULT_IMAGE_URL;
- const newHearts = Math.min(
-  characterToHeal.currentHearts + heartsHealed,
-  characterToHeal.maxHearts
- );
- const newStamina = Math.min(
-  healerCharacter.currentStamina - staminaRecovered,
-  healerCharacter.maxStamina
- );
-
- return new EmbedBuilder()
-  .setColor("#59A914")
-  .setTitle("✬ Healing Completed ✬")
-  .setDescription(`**${healerName}** successfully healed **${characterName}**!`)
-  .addFields(
-   {
-    name: `${characterName} has been healed!`,
-    value:
-     `❤️ Healed: **${heartsHealed} hearts**\n` +
-     `❤️ Hearts: **${characterToHeal.currentHearts}/${characterToHeal.maxHearts} → ${newHearts}/${characterToHeal.maxHearts}**`,
-    inline: false,
-   },
-   {
-    name: `${healerName} used their skills to heal`,
-    value:
-     `🟩 Stamina Used: **${staminaRecovered}**\n` +
-     `🟩 Stamina: **${healerCharacter.currentStamina}/${healerCharacter.maxStamina} → ${newStamina}/${healerCharacter.maxStamina}**`,
+    name: "__✅ Status__",
+    value: `> ${isFulfilled ? "Fulfilled" : "Pending"}`,
     inline: false,
    }
   )
-  .setAuthor({
-   name: `${characterName} 🔗`,
-   iconURL: characterIcon,
-   url: characterToHeal.inventory || "",
-  })
   .setFooter({
    text: "Healing process successfully completed.",
-   iconURL: healerIcon,
+   iconURL: healerCharacter ? healerIcon : null,
   })
-  .setImage(
-   "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
-  );
+  .setImage(DEFAULT_IMAGE_URL);
+ return embed;
 };
 
 // ------------------- Subsection Title ------------------- 
@@ -1785,7 +1734,6 @@ module.exports = {
  createNoEncounterEmbed,
  createKOEmbed,
  createHealEmbed,
- createHealingEmbed,
  createTravelMonsterEncounterEmbed,
  createInitialTravelEmbed,
  createTravelingEmbed,

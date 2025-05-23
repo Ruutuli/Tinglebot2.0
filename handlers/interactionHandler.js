@@ -86,7 +86,20 @@ const initializeReactionHandler = (client) => {
       if (reaction.message.partial) await reaction.message.fetch();
       if (reaction.partial) await reaction.fetch();
       
-      // TODO: Add routing logic here for specific emoji/message/channel reactions
+      // Healing request cancellation logic
+      if (reaction.emoji.name === '❌') {
+        // Try to fetch healing request by message ID
+        const { retrieveHealingRequestFromStorage, saveHealingRequestToStorage } = require('../utils/storage');
+        const { createHealEmbed } = require('../embeds/embeds');
+        const healingRequest = await retrieveHealingRequestFromStorage(reaction.message.id);
+        if (healingRequest && healingRequest.status === 'pending') {
+          healingRequest.status = 'cancelled';
+          await saveHealingRequestToStorage(healingRequest.healingRequestId, healingRequest);
+          // Update the embed to show cancellation
+          const embed = createHealEmbed(null, { ...healingRequest, name: healingRequest.characterRequesting }, healingRequest.heartsToHeal, healingRequest.paymentOffered, healingRequest.healingRequestId, null, 'cancelled');
+          await reaction.message.edit({ embeds: [embed] });
+        }
+      }
 
     } catch (error) {
       handleError(error, 'interactionHandler.js');
