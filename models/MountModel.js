@@ -55,7 +55,7 @@ const MountSchema = new mongoose.Schema({
   // ============================================================================
   status: {
     type: String,
-    enum: ['active', 'stored', 'listed'],
+    enum: ['active', 'stored', 'for_sale'],
     default: 'active'
   },
 

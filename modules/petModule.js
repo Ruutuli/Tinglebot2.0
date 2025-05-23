@@ -368,6 +368,50 @@ const canSpeciesPerformPetType = (speciesKey, petType) => {
   return requiredRolls.every((roll) => allowedRolls.includes(roll));
 };
 
+// ------------------- Pet Price Calculation -------------------
+function calculatePetPrice(pet) {
+  const basePrices = {
+    1: 100,  // Base price for level 1 pets
+    2: 200,  // Base price for level 2 pets
+    3: 500   // Base price for level 3 pets
+  };
+
+  const petTypeMultipliers = {
+    'Chuchu': 1.5,      // Special elemental pets are more valuable
+    'Conqueror': 1.3,   // Large foragers are valuable
+    'Explorer': 1.2,    // Versatile pets are valuable
+    'Forager': 1.0,     // Basic foragers
+    'Guardian': 1.3,    // Large protectors are valuable
+    'Hunter': 1.2,      // Large predators are valuable
+    'Nomad': 1.4,       // Most versatile pets are very valuable
+    'Omnivore': 1.1,    // Adaptable pets
+    'Protector': 1.0,   // Basic protectors
+    'Prowler': 1.2,     // Advanced hunters
+    'Ranger': 1.1,      // Versatile hunters
+    'Roamer': 1.3,      // Large versatile pets
+    'Scavenger': 1.1,   // Resourceful pets
+    'Sentinel': 1.4,    // Most powerful protectors
+    'Tracker': 1.2      // Skilled hunters
+  };
+
+  const basePrice = basePrices[pet.level] || 100; // Default to level 1 price if level is undefined
+  const typeMultiplier = petTypeMultipliers[pet.petType] || 1.0;
+  const rollsBonus = pet.rollsRemaining * 50; // Each remaining roll adds 50 to the price
+
+  // Log details of the calculation
+  console.log('[petModule.js]: Calculating base price for pet:', pet.name);
+  console.log(`[petModule.js]: Base price based on level (${pet.level}): ${basePrice}`);
+  console.log(`[petModule.js]: Type multiplier (${pet.petType}): ${typeMultiplier}`);
+  console.log(`[petModule.js]: Rolls bonus (${pet.rollsRemaining} rolls): ${rollsBonus}`);
+
+  const finalPrice = Math.floor((basePrice + rollsBonus) * typeMultiplier);
+
+  // Log the final calculated price
+  console.log(`[petModule.js]: Final calculated price for pet "${pet.name}": ${finalPrice}`);
+
+  return finalPrice;
+}
+
 // ------------------- Module Exports -------------------
 module.exports = {
   getPerkField,
@@ -386,5 +430,6 @@ module.exports = {
   specialPets,
   canSpeciesPerformPetType,
   speciesRollPermissions,
-  petTypeData
+  petTypeData,
+  calculatePetPrice
 };
