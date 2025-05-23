@@ -203,7 +203,7 @@ async function handleHealingRequest(interaction, characterName, heartsToHeal, pa
 
     // Create and save the healing request
     const healingRequestId = generateUniqueId('H');
-    const embed = createHealEmbed(null, characterToHeal, heartsToHeal, paymentOffered, healingRequestId);
+    const embed = createHealEmbed(null, characterToHeal, heartsToHeal, paymentOffered, healingRequestId, healerCharacter);
 
     // Send the embed and save the message ID
     const sentMessage = await interaction.followUp({
@@ -282,10 +282,12 @@ async function handleJobVoucher(healerCharacter, interaction) {
     return { success: false };
   }
 
-  await interaction.followUp({
-    content: activationResult.message,
-    ephemeral: true,
-  });
+  if (activationResult.message) {
+    await interaction.followUp({
+      content: activationResult.message,
+      ephemeral: true,
+    });
+  }
 
   return { success: true, skipVoucher: false };
 }
@@ -318,6 +320,20 @@ async function handleHealingFulfillment(interaction, requestId, healerName) {
       return;
     }
 
+    // Check if request was directed to a specific healer
+    if (healingRequest.healerName && healingRequest.healerName.toLowerCase() !== healerName.toLowerCase()) {
+      await interaction.editReply(
+        `❌ **Error:** This healing request was specifically directed to **${healingRequest.healerName}**. Only the requested healer can fulfill this request.`
+      );
+      return;
+    }
+
+    // Check if request was cancelled
+    if (healingRequest.status === 'cancelled') {
+      await interaction.editReply('❌ **Error:** This healing request was cancelled by the requester and cannot be fulfilled.');
+      return;
+    }
+
     // Fetch and validate characters
     const healerCharacter = await fetchCharacterByNameAndUserId(healerName, interaction.user.id);
     if (!healerCharacter) {
@@ -331,6 +347,12 @@ async function handleHealingFulfillment(interaction, requestId, healerName) {
       await interaction.editReply(
         `❌ **Error:** The character to be healed, **${healingRequest.characterRequesting}**, could not be found.`
       );
+      return;
+    }
+
+    // Prevent self-healing or healing your own characters
+    if (healerCharacter.userId === characterToHeal.userId) {
+      await interaction.editReply('❌ **Error:** You cannot fulfill a healing request for your own character.');
       return;
     }
 
