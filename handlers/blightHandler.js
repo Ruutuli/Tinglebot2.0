@@ -437,7 +437,10 @@ function createBlightHealingFields(healingRequirement, submissionId, expiresAt) 
   if (!submissionId || typeof submissionId !== 'string') {
     throw new Error('Invalid submission ID');
   }
-  if (!(expiresAt instanceof Date)) {
+  
+  // Convert expiresAt to Date if it's a string
+  const expirationDate = typeof expiresAt === 'string' ? new Date(expiresAt) : expiresAt;
+  if (!(expirationDate instanceof Date) || isNaN(expirationDate.getTime())) {
     throw new Error('Invalid expiration date');
   }
 
@@ -473,7 +476,7 @@ function createBlightHealingFields(healingRequirement, submissionId, expiresAt) 
     },
     {
       name: '<:bb0:854499720797618207> __Expiration__',
-      value: `> This request will expire in 30 days (<t:${Math.floor(expiresAt.getTime() / 1000)}:R>).\n> ⚠️ You must complete the healing before expiration or your character will remain blighted.`,
+      value: `> This request will expire in 30 days (<t:${Math.floor(expirationDate.getTime() / 1000)}:R>).\n> ⚠️ You must complete the healing before expiration or your character will remain blighted.`,
     }
   ];
 
