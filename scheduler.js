@@ -366,7 +366,7 @@ function initializeScheduler(client) {
           // Check if we need to revert from a previous Blood Moon
           const yesterday = new Date();
           yesterday.setDate(yesterday.getDate() - 1);
-          if (isBloodmoon(yesterday)) {
+          if (isBloodMoonDay(yesterday)) {
             console.log(`[scheduler.js]: 🌑 Blood Moon fading at dawn`);
             await revertChannelNames(client);
           }
