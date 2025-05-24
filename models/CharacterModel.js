@@ -136,12 +136,20 @@ const characterSchema = new Schema({
 
 // ============================================================================
 // ------------------- Pre-save hook -------------------
-// Ensures jobVoucher is always false on save
+// Ensures jobVoucher is always false on save and stable is valid
 // ============================================================================
 characterSchema.pre('save', function (next) {
   if (this.isNew || this.isModified('jobVoucher')) {
     this.jobVoucher = false;
   }
+  
+  // Ensure stable is either null or a valid ObjectId
+  if (this.isModified('stable') && this.stable !== null) {
+    if (!mongoose.Types.ObjectId.isValid(this.stable)) {
+      this.stable = null;
+    }
+  }
+  
   next();
 });
 
