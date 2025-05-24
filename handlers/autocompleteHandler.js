@@ -2749,9 +2749,23 @@ async function handleStableMountNameAutocomplete(interaction, focusedOption) {
         ]);
     } else if (subcommand === 'sell') {
         // For sell, show all owned companions that aren't already for sale
+        // This includes both active and stored companions
+        const storedMountIds = stable.storedMounts.map(m => m.mountId);
+        const storedPetIds = stable.storedPets.map(p => p.petId);
+        
         [mounts, pets] = await Promise.all([
-            Mount.find({ owner: cleanCharacterName, status: { $ne: 'for_sale' } }),
-            Pet.find({ ownerName: cleanCharacterName, status: { $ne: 'for_sale' } })
+            Mount.find({
+                $or: [
+                    { owner: cleanCharacterName, status: { $ne: 'for_sale' } },
+                    { _id: { $in: storedMountIds }, status: { $ne: 'for_sale' } }
+                ]
+            }),
+            Pet.find({
+                $or: [
+                    { ownerName: cleanCharacterName, status: { $ne: 'for_sale' } },
+                    { _id: { $in: storedPetIds }, status: { $ne: 'for_sale' } }
+                ]
+            })
         ]);
     } else {
         // For other commands, show all owned companions
@@ -2761,13 +2775,13 @@ async function handleStableMountNameAutocomplete(interaction, focusedOption) {
         ]);
     }
 
-    // Format choices
+    // Format choices with status indicators
     const mountChoices = mounts.map(mount => ({
-      name: `🐴 ${mount.name} | ${mount.species} | ${mount.level}`,
+      name: `🐴 ${mount.name} | ${mount.species} | ${mount.level}${mount.status === 'stored' ? ' (Stored)' : ''}`,
       value: mount.name
     }));
     const petChoices = pets.map(pet => ({
-      name: `🐾${pet.name} | ${pet.species} | ${pet.petType} | Lv.${pet.level}`,
+      name: `🐾 ${pet.name} | ${pet.species} | ${pet.petType} | Lv.${pet.level}${pet.status === 'stored' ? ' (Stored)' : ''}`,
       value: pet.name
     }));
 
