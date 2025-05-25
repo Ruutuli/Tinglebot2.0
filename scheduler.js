@@ -326,6 +326,32 @@ function setupBlightScheduler(client) {
 // ---- Function: initializeScheduler ----
 // Initializes all scheduled tasks and cron jobs
 function initializeScheduler(client) {
+  // Add startup Blood Moon check
+  (async () => {
+    try {
+      console.log('[scheduler.js]: 🔄 Checking Blood Moon status on startup...');
+      const channels = [
+        process.env.RUDANIA_TOWN_HALL,
+        process.env.INARIKO_TOWN_HALL,
+        process.env.VHINTL_TOWN_HALL,
+      ];
+
+      for (const channelId of channels) {
+        if (isBloodMoonDay()) {
+          console.log(`[scheduler.js]: 🌕 Blood Moon is active on startup`);
+          await renameChannels(client);
+          await sendBloodMoonAnnouncement(client, channelId, 'The Blood Moon is upon us! Beware!');
+        } else {
+          console.log(`[scheduler.js]: 🌑 Blood Moon is inactive on startup`);
+          await revertChannelNames(client);
+        }
+      }
+    } catch (error) {
+      handleError(error, 'scheduler.js');
+      console.error(`[scheduler.js]: ❌ Startup Blood Moon check failed: ${error.message}`);
+    }
+  })();
+
   // Initialize all schedulers
   createCronJob('0 0 * * *', 'jail release check', () => handleJailRelease(client));
   createCronJob('0 8 * * *', 'reset daily rolls', resetDailyRolls);
@@ -363,13 +389,8 @@ function initializeScheduler(client) {
           await renameChannels(client);
           await sendBloodMoonAnnouncement(client, channelId, 'The Blood Moon rises at nightfall! Beware!');
         } else {
-          // Check if we need to revert from a previous Blood Moon
-          const yesterday = new Date();
-          yesterday.setDate(yesterday.getDate() - 1);
-          if (isBloodMoonDay(yesterday)) {
-            console.log(`[scheduler.js]: 🌑 Blood Moon fading at dawn`);
-            await revertChannelNames(client);
-          }
+          console.log(`[scheduler.js]: 🌑 Blood Moon fading at dawn`);
+          await revertChannelNames(client);
         }
       } catch (error) {
         handleError(error, 'scheduler.js');
