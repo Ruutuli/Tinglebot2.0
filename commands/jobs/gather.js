@@ -111,6 +111,11 @@ module.exports = {
 
   // ------------------- Command Execution Logic -------------------
   async execute(interaction) {
+    // Initialize variables at the top of the function
+    let job;
+    let region;
+    let currentVillage;
+
     try {
       await interaction.deferReply();
 
@@ -126,8 +131,8 @@ module.exports = {
       // Check inventory sync before proceeding
       await checkInventorySync(character);
 
-      // Initialize job variable early
-      let job = (character.jobVoucher && character.jobVoucherJob) ? character.jobVoucherJob : character.job;
+      // Initialize job variable
+      job = (character.jobVoucher && character.jobVoucherJob) ? character.jobVoucherJob : character.job;
 
       // Check for KO status
       if (character.currentHearts === 0) {
@@ -171,7 +176,7 @@ module.exports = {
       }
 
       // ------------------- Step 2: Validate Interaction Channel -------------------
-      let currentVillage = capitalizeWords(character.currentVillage);
+      currentVillage = capitalizeWords(character.currentVillage);
       let allowedChannel = villageChannels[currentVillage];
 
       // If using a job voucher for a village-exclusive job, override to required village
@@ -345,7 +350,7 @@ module.exports = {
       }
 
       // ------------------- Step 5: Validate Region -------------------
-      const region = getVillageRegionByName(currentVillage);
+      region = getVillageRegionByName(currentVillage);
       if (!region) {
         await interaction.editReply({
           content: `❌ **No valid region found for the village ${currentVillage}.**\n📍 **Please check the character's current location and try again.**`,

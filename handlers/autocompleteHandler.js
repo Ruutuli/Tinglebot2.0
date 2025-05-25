@@ -444,9 +444,15 @@ async function handleAutocomplete(interaction) {
 // ------------------- Helper Function to Filter and Respond with Choices -------------------
 async function respondWithFilteredChoices(interaction, focusedOption, choices) {
   try {
-    // Check if interaction is already responded to or expired
-    if (interaction.responded || !interaction.isAutocomplete()) {
-      console.log('[autocompleteHandler.js]: ⚠️ Interaction already responded to or invalid');
+    // Check if interaction is already responded to
+    if (interaction.responded) {
+      console.log('[autocompleteHandler.js]: ⚠️ Interaction already responded to');
+      return;
+    }
+
+    // Check if interaction is still valid
+    if (!interaction.isAutocomplete()) {
+      console.log('[autocompleteHandler.js]: ⚠️ Not an autocomplete interaction');
       return;
     }
 
