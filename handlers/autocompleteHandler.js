@@ -3150,6 +3150,18 @@ async function handleStealRarityAutocomplete(interaction, focusedOption) {
 // ------------------- Travel Character Name Autocomplete -------------------
 async function handleTravelAutocomplete(interaction, focusedOption) {
   try {
+    // Check if interaction is already responded to
+    if (interaction.responded) {
+      console.log('[autocompleteHandler.js]: ⚠️ Travel autocomplete interaction already responded to');
+      return;
+    }
+
+    // Check if interaction is still valid
+    if (!interaction.isAutocomplete()) {
+      console.log('[autocompleteHandler.js]: ⚠️ Not a valid autocomplete interaction');
+      return;
+    }
+
     const userId = interaction.user.id;
     if (!userId) {
       return await safeRespondWithError(interaction);
@@ -3170,6 +3182,7 @@ async function handleTravelAutocomplete(interaction, focusedOption) {
         
         return await safeAutocompleteResponse(interaction, choices);
       } catch (fetchError) {
+        console.error('[autocompleteHandler.js]: ❌ Error fetching characters:', fetchError);
         return await safeRespondWithError(interaction);
       }
     } else if (focusedOption.name === "destination") {
@@ -3187,13 +3200,14 @@ async function handleTravelAutocomplete(interaction, focusedOption) {
         
         return await safeAutocompleteResponse(interaction, choices);
       } catch (villageError) {
+        console.error('[autocompleteHandler.js]: ❌ Error fetching villages:', villageError);
         return await safeRespondWithError(interaction);
       }
     } else {
       return await safeAutocompleteResponse(interaction, []);
     }
   } catch (error) {
-    handleError(error, "autocompleteHandler.js");
+    console.error('[autocompleteHandler.js]: ❌ Error in handleTravelAutocomplete:', error);
     return await safeRespondWithError(interaction);
   }
 }
