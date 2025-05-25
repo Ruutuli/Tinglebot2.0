@@ -158,55 +158,35 @@ function getRandomHealingRequirement(healer, characterName) {
 // Submits a new healing request, checking eligibility and permissions.
 async function healBlight(interaction, characterName, healerName) {
   try {
+    // Defer reply at the start to prevent interaction timeout
+    await interaction.deferReply({ ephemeral: false });
+
     // Input validation
     if (!characterName || typeof characterName !== 'string') {
-      if (!interaction.replied && !interaction.deferred) {
-        await interaction.reply({ content: '❌ Invalid character name provided.', ephemeral: true });
-      } else {
-        await interaction.editReply({ content: '❌ Invalid character name provided.', ephemeral: true });
-      }
+      await interaction.editReply({ content: '❌ Invalid character name provided.', ephemeral: true });
       return;
     }
     if (!healerName || typeof healerName !== 'string') {
-      if (!interaction.replied && !interaction.deferred) {
-        await interaction.reply({ content: '❌ Invalid healer name provided.', ephemeral: true });
-      } else {
-        await interaction.editReply({ content: '❌ Invalid healer name provided.', ephemeral: true });
-      }
+      await interaction.editReply({ content: '❌ Invalid healer name provided.', ephemeral: true });
       return;
     }
 
     const character = await Character.findOne({ name: characterName });
     if (!character) {
-      if (!interaction.replied && !interaction.deferred) {
-        await interaction.reply({ content: `❌ Character "${characterName}" not found.`, ephemeral: true });
-      } else {
-        await interaction.editReply({ content: `❌ Character "${characterName}" not found.`, ephemeral: true });
-      }
+      await interaction.editReply({ content: `❌ Character "${characterName}" not found.`, ephemeral: true });
       return;
     }
 
     if (!character.blighted) {
-      if (!interaction.replied && !interaction.deferred) {
-        await interaction.reply({ content: `⚠️ **${characterName}** is not blighted and does not require healing.`, ephemeral: true });
-      } else {
-        await interaction.editReply({ content: `⚠️ **${characterName}** is not blighted and does not require healing.`, ephemeral: true });
-      }
+      await interaction.editReply({ content: `⚠️ **${characterName}** is not blighted and does not require healing.`, ephemeral: true });
       return;
     }
 
     if (character.blightPaused) {
-      if (!interaction.replied && !interaction.deferred) {
-        await interaction.reply({
-          content: `⏸️ Blight progression is currently **paused** for **${character.name}**.`,
-          ephemeral: true
-        });
-      } else {
-        await interaction.editReply({
-          content: `⏸️ Blight progression is currently **paused** for **${character.name}**.`,
-          ephemeral: true
-        });
-      }
+      await interaction.editReply({
+        content: `⏸️ Blight progression is currently **paused** for **${character.name}**.`,
+        ephemeral: true
+      });
       return;
     }
 
