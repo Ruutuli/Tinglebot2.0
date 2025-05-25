@@ -125,32 +125,17 @@ const characterSchema = new Schema({
     type: Schema.Types.ObjectId, 
     ref: 'Mount', 
     default: null 
-  },
-  stable: { 
-    type: Schema.Types.ObjectId, 
-    ref: 'Stable', 
-    default: null 
   }
 
 }, { collection: 'characters' });
 
 // ============================================================================
 // ------------------- Pre-save hook -------------------
-// Ensures jobVoucher is always false on save and stable is valid
+// Ensures jobVoucher is always false on save
 // ============================================================================
 characterSchema.pre('save', function (next) {
   if (this.isNew || this.isModified('jobVoucher')) {
     this.jobVoucher = false;
-  }
-  
-  // Ensure stable is either null or a valid ObjectId
-  if (this.isModified('stable')) {
-    if (this.stable === null || this.stable === undefined) {
-      this.stable = null;
-    } else if (Array.isArray(this.stable) || !mongoose.Types.ObjectId.isValid(this.stable)) {
-      console.error(`[CharacterModel.js]: ❌ Invalid stable value detected: ${JSON.stringify(this.stable)}`);
-      this.stable = null;
-    }
   }
   
   next();

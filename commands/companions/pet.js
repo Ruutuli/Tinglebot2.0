@@ -57,7 +57,6 @@ const { characterExistsNotOwned } = require('../../utils/validation');
 // Data schemas for pet and character documents.
 const Pet = require("../../models/PetModel");
 const Character = require("../../models/CharacterModel");
-const Stable = require("../../models/StableModel");
 
 // ------------------- Helper Functions -------------------
 // Calculates the upgrade cost based on the pet's new level.
@@ -529,7 +528,7 @@ module.exports = {
     // Check if pet is stored
     if (pet.status === 'stored') {
       return interaction.editReply({
-        content: `❌ **Pet \`${petName}\` is currently stored in the stables and cannot perform actions.**\nTo use this pet, please retrieve it from the stables first using the \`/stable retrieve\` command.`,
+        content: `❌ **Pet \`${petName}\` is currently stored and cannot perform actions.**`,
         ephemeral: true
       });
     }
@@ -539,7 +538,7 @@ module.exports = {
      // ------------------- Check Pet Status -------------------
      if (pet.status === "stored") {
        return interaction.editReply(
-         `❌ **${pet.name}** is currently in the stables! You need to retrieve them first using \`/stable retrieve\` before they can roll.`
+         `❌ **${pet.name}** is currently stored! You need to retrieve them first before they can roll.`
        );
      }
 
@@ -858,7 +857,7 @@ module.exports = {
               inline: true,
             },
             { name: "__Pet Type__", value: `> ${pet.petType}`, inline: true },
-            { name: "__Status__", value: `> ${pet.status === 'stored' ? 'Stored' : 'Active'}`, inline: true },
+            { name: "__Status__", value: `> Active`, inline: true },
             {
               name: "Roll Combination",
               value: petTypeData.rollCombination.join(", "),
@@ -867,7 +866,7 @@ module.exports = {
             { name: "Description", value: petTypeData.description, inline: false }
           )
           .setImage(sanitizeUrl(pet.imageUrl))
-          .setColor(pet.status === 'stored' ? "#FF0000" : "#00FF00");
+          .setColor("#00FF00");
 
         return interaction.editReply({ embeds: [viewEmbed] });
       } catch (error) {

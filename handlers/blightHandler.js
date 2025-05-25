@@ -430,11 +430,6 @@ async function completeBlightHealing(character) {
     noGathering: false
   };
   
-  // Ensure stable is properly set
-  if (Array.isArray(character.stable) || !mongoose.Types.ObjectId.isValid(character.stable)) {
-    character.stable = null;
-  }
-  
   await character.save();
 }
 
