@@ -161,18 +161,25 @@ async function createRandomMountEncounter(channelId, isMonthly = false) {
             console.log(`[randomMountEncounterModule]: Created new monthly encounter for ${village}`);
         }
         
+        // Get the village from channel ID
+        const village = getVillageFromChannelId(channelId);
+        if (!village) {
+            console.error('[randomMountEncounterModule]: Invalid channel ID for encounter');
+            return null;
+        }
+        
         // Generate random mount data
-        const randomMount = getRandomMount();
+        const randomMount = getRandomMount(village);
         const rarity = getMountRarity();
         const mountStamina = getMountStamina(randomMount.level, rarity.isRare);
-        const environment = getRandomEnvironment(randomMount.village);
+        const environment = getRandomEnvironment(village);
         
         const encounterId = uuidv4();
         const encounter = {
             id: encounterId,
             mountType: randomMount.mount,
             mountLevel: randomMount.level,
-            village: randomMount.village,
+            village: village, // Use the village from channel ID
             rarity: rarity.isRare ? 'Rare' : 'Regular',
             mountStamina: mountStamina,
             environment: environment,
