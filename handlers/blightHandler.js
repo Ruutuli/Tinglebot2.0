@@ -236,13 +236,24 @@ async function healBlight(interaction, characterName, healerName) {
         // Do NOT reply yet; continue to process new request
       } else {
         const timeLeft = Math.ceil((existingSubmission.expiresAt - new Date()) / (1000 * 60 * 60 * 24));
+        const pendingMsg = `⚠️ **${characterName}** already has a pending healing request that expires in ${timeLeft} days.\n\n` +
+          `Submission ID: \`${existingSubmission.key}\`\n` +
+          `Healer: **${existingSubmission.data.healerName}**\n` +
+          `Task: ${existingSubmission.data.taskDescription}\n\n`;
         await interaction.reply({
-          content: `⚠️ **${characterName}** already has a pending healing request that expires in ${timeLeft} days.\n\n` +
-            `Submission ID: \`${existingSubmission.key}\`\n` +
-            `Healer: **${existingSubmission.data.healerName}**\n` +
-            `Task: ${existingSubmission.data.taskDescription}\n\n`,
+          content: pendingMsg,
           ephemeral: true
         });
+        // DM the user as well
+        try {
+          await interaction.user.send({
+            content: `Hi <@${interaction.user.id}>, you already have a pending blight healing request for **${characterName}**. Here are the details:\n\n${pendingMsg}`
+          });
+          console.log(`[blightHandler.js]: 📬 Sent DM to user ${interaction.user.id} about pending blight healing request.`);
+        } catch (dmError) {
+          handleError(dmError, 'blightHandler.js');
+          console.error(`[blightHandler.js]: ❌ Failed to send DM to user ${interaction.user.id} about pending blight healing request: ${dmError.message}`);
+        }
         return;
       }
     }
@@ -418,6 +429,12 @@ async function completeBlightHealing(character) {
     noMonsters: false,
     noGathering: false
   };
+  
+  // Ensure stable is properly set
+  if (Array.isArray(character.stable) || !mongoose.Types.ObjectId.isValid(character.stable)) {
+    character.stable = null;
+  }
+  
   await character.save();
 }
 

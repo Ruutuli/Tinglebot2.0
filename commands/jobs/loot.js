@@ -102,7 +102,7 @@ function canUseDailyRoll(character, activity) {
     rollover.setUTCDate(rollover.getUTCDate() - 1);
   }
 
-  const lastRoll = character.dailyRoll.get(activity);
+  const lastRoll = character.dailyRoll?.[activity];
   if (!lastRoll) {
     console.log(`[loot.js]: 📅 No previous roll for ${activity}. Allowing action.`);
     return true;
@@ -117,14 +117,14 @@ function canUseDailyRoll(character, activity) {
 async function updateDailyRoll(character, activity) {
   try {
     if (!character.dailyRoll) {
-      character.dailyRoll = new Map();
+      character.dailyRoll = {};
     }
     const now = new Date().toISOString();
-    character.dailyRoll.set(activity, now);
+    character.dailyRoll[activity] = now;
     await character.save();
   } catch (error) {
     console.error(`[loot.js]: ❌ Failed to update daily roll for ${character.name}:`, error);
-    throw error; // Re-throw to handle in the main execution
+    throw error;
   }
 }
 
@@ -211,6 +211,12 @@ module.exports = {
        character.blighted = true;
        character.blightedAt = new Date();
        character.blightStage = 1;
+       
+       // Ensure stable is properly set
+       if (Array.isArray(character.stable) || !mongoose.Types.ObjectId.isValid(character.stable)) {
+         character.stable = null;
+       }
+       
        await character.save();
        // Assign blighted role
        const guild = interaction.guild;

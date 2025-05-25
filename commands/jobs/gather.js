@@ -71,7 +71,7 @@ function canUseDailyRoll(character, activity) {
     rollover.setUTCDate(rollover.getUTCDate() - 1);
   }
 
-  const lastRoll = character.dailyRoll.get(activity);
+  const lastRoll = character.dailyRoll?.[activity];
   if (!lastRoll) {
     console.log(`[gather.js]: 📅 No previous roll for ${activity}. Allowing action.`);
     return true;
@@ -84,12 +84,17 @@ function canUseDailyRoll(character, activity) {
 
 // Update the daily roll timestamp for an activity
 async function updateDailyRoll(character, activity) {
-  if (!character.dailyRoll) {
-    character.dailyRoll = new Map();
+  try {
+    if (!character.dailyRoll) {
+      character.dailyRoll = {};
+    }
+    const now = new Date().toISOString();
+    character.dailyRoll[activity] = now;
+    await character.save();
+  } catch (error) {
+    console.error(`[gather.js]: ❌ Failed to update daily roll for ${character.name}:`, error);
+    throw error;
   }
-  const now = new Date().toISOString();
-  character.dailyRoll.set(activity, now);
-  await character.save();
 }
 
 // ------------------- Command Definition -------------------

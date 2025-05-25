@@ -285,7 +285,7 @@ module.exports = {
       let mount = null;
       if (mode === 'on mount') {
         console.log(`[travel.js]: 🔍 Checking mount for character ${character.name} (${character._id})`);
-        mount = await Mount.findOne({ characterId: character._id, isStored: false });
+        mount = await Mount.findOne({ characterId: character._id, status: 'active' });
         console.log(`[travel.js]: 🐴 Mount found: ${mount ? 'Yes' : 'No'}`);
         if (!mount) {
           console.log(`[travel.js]: ❌ No mount found for ${character.name}, blocking travel`);
@@ -536,7 +536,7 @@ module.exports = {
         if (characterName) {
           const character = await fetchCharacterByNameAndUserId(characterName, interaction.user.id);
           if (character) {
-            const mount = await Mount.findOne({ characterId: character._id, isStored: false });
+            const mount = await Mount.findOne({ characterId: character._id, status: 'active' });
             const choices = mount ? MODE_CHOICES : [{ name: 'on foot', value: 'on foot' }];
             await interaction.respond(choices);
             return;

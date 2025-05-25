@@ -10,6 +10,7 @@ const { handleError } = require('../../utils/globalErrorHandler');
 const { getPetEmoji, getPetThumbnail } = require('../../modules/petModule');
 const { getMountEmoji, calculateMountPrice, getMountThumbnail } = require('../../modules/mountModule');
 const { calculatePetPrice } = require('../../modules/petModule');
+const mongoose = require('mongoose');
 
 // ============================================================================
 // ------------------- Command Definition -------------------
@@ -99,28 +100,63 @@ async function getStableSlotsUsed(stable) {
 
 // ------------------- Function: findCompanion -------------------
 // Finds a companion (pet or mount) by name and type
-async function findCompanion(character, name) {
+async function findCompanion(character, name, stable = null) {
   const [mount, pet] = await Promise.all([
     Mount.findOne({ owner: character.name, name }),
     Pet.findOne({ owner: character._id, name })
   ]);
+
+  // If we're checking for a stored companion, verify it's in the stable
+  if (stable) {
+    if (mount) {
+      const isStored = stable.storedMounts.some(m => m.mountId.equals(mount._id));
+      if (!isStored) return null;
+    }
+    if (pet) {
+      const isStored = stable.storedPets.some(p => p.petId.equals(pet._id));
+      if (!isStored) return null;
+    }
+  }
+
   return mount || pet;
 }
 
 // ------------------- Function: createStableIfNeeded -------------------
 // Creates a stable for a character if they don't have one
 async function createStableIfNeeded(character) {
-  let stable = await Stable.findOne({ characterId: character._id });
-  if (!stable) {
-    stable = await Stable.create({
+  try {
+    // First check if character already has a valid stable
+    if (character.stable && mongoose.Types.ObjectId.isValid(character.stable)) {
+      const existingStable = await Stable.findById(character.stable);
+      if (existingStable) {
+        return existingStable;
+      }
+      // If stable ID exists but document not found, clear the invalid stable ID
+      character.stable = null;
+      await character.save();
+    }
+
+    // Create new stable
+    const stable = await Stable.create({
       characterId: character._id,
       discordId: character.userId,
       maxSlots: 3
     });
+
+    // Validate the created stable
+    if (!stable || !stable._id || !mongoose.Types.ObjectId.isValid(stable._id)) {
+      throw new Error('Failed to create valid stable');
+    }
+
+    // Update character with new stable ID
     character.stable = stable._id;
     await character.save();
+
+    return stable;
+  } catch (error) {
+    console.error(`[stable.js]: ❌ Error in createStableIfNeeded: ${error.message}`);
+    throw error;
   }
-  return stable;
 }
 
 // ============================================================================
@@ -265,6 +301,18 @@ async function handleStore(interaction, character, stable) {
     });
   }
 
+  // Verify ownership
+  const isOwner = companion instanceof Mount 
+    ? companion.owner === character.name
+    : companion.owner.toString() === character._id.toString();
+
+  if (!isOwner) {
+    return await interaction.reply({
+      content: '❌ You do not own this companion.',
+      ephemeral: true
+    });
+  }
+
   // Check if companion is already stored
   if (companion.status === 'stored') {
     return await interaction.reply({
@@ -326,17 +374,29 @@ async function handleStore(interaction, character, stable) {
 // ------------------- Function: handleRetrieve -------------------
 async function handleRetrieve(interaction, character, stable) {
   const companionName = interaction.options.getString('name');
-  const companion = await findCompanion(character, companionName);
+  const companion = await findCompanion(character, companionName, stable);
 
   if (!companion) {
     return await interaction.reply({
-      content: '❌ No pet or mount found with that name.',
+      content: '❌ No pet or mount found with that name in your stable.',
       ephemeral: true
     });
   }
 
   // Check if companion is stored
   if (companion.status !== 'stored') {
+    return await interaction.reply({
+      content: '❌ This companion is not stored in your stable.',
+      ephemeral: true
+    });
+  }
+
+  // Verify the companion is actually in this stable
+  const isInStable = companion instanceof Mount 
+    ? stable.storedMounts.some(m => m.mountId.equals(companion._id))
+    : stable.storedPets.some(p => p.petId.equals(companion._id));
+
+  if (!isInStable) {
     return await interaction.reply({
       content: '❌ This companion is not stored in your stable.',
       ephemeral: true
@@ -443,7 +503,15 @@ async function handleSell(interaction, character, stable) {
 
   // Update companion status and remove owner
   companion.status = 'for_sale';
-  companion.owner = 'stables';
+  if (companion instanceof Mount) {
+    companion.owner = 'stables';
+  } else {
+    // For pets, we need to keep the owner as an ObjectId but set ownerName to 'stables'
+    companion.ownerName = 'stables';
+    companion.discordId = 'stables'; // Set discordId for stables
+  }
+  companion.storedAt = null;
+  companion.removedFromStorageAt = new Date();
   await companion.save();
 
   // Remove from stable if stored
