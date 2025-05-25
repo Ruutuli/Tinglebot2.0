@@ -57,7 +57,6 @@ const Party = require("../models/PartyModel");
 const Pet = require("../models/PetModel");
 const ShopStock = require("../models/VillageShopsModel");
 const { Village } = require("../models/VillageModel");
-const { Stable } = require("../models/StableModel");
 
 
 // Add safe response utility

@@ -212,11 +212,6 @@ module.exports = {
        character.blightedAt = new Date();
        character.blightStage = 1;
        
-       // Ensure stable is properly set
-       if (Array.isArray(character.stable) || !mongoose.Types.ObjectId.isValid(character.stable)) {
-         character.stable = null;
-       }
-       
        await character.save();
        // Assign blighted role
        const guild = interaction.guild;
