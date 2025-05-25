@@ -89,7 +89,7 @@ function normalizeDate(date) {
 // Checks if today falls within a Blood Moon period based on predefined dates and time.
 function isBloodMoonDay() {
   if (!bloodmoonDates || !Array.isArray(bloodmoonDates)) {
-    console.error(`[bloodmoon.js]: logs Error: 'bloodmoonDates' is not defined or not an array.`);
+    console.error(`[bloodmoon.js]: ❌ Error: 'bloodmoonDates' is not defined or not an array.`);
     return false;
   }
 
@@ -109,12 +109,16 @@ function isBloodMoonDay() {
 
   // If it's not a Blood Moon date, return false
   if (!isBloodMoonDate) {
+    console.log(`[bloodmoon.js]: 🌑 Not a Blood Moon date`);
     return false;
   }
 
   // Check if it's 8 PM EST (20:00)
   const estHour = now.getUTCHours() - 4; // Convert UTC to EST
-  return estHour === 20;
+  const isBloodMoonHour = estHour === 20;
+  
+  console.log(`[bloodmoon.js]: ${isBloodMoonHour ? '🌕' : '🌑'} Blood Moon hour check: ${estHour}:00 EST`);
+  return isBloodMoonHour;
 }
 
 
