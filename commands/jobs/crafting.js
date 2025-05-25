@@ -148,10 +148,15 @@ module.exports = {
       }
 
       // ------------------- Validate Stamina -------------------
+      // Always fetch the latest character data before stamina check to avoid stale values
+      const freshCharacter = await fetchCharacterByNameAndUserId(characterName, userId);
+      if (!freshCharacter) {
+        return interaction.editReply({ content: `❌ **Character \"${characterName}\" not found or does not belong to you.**`, ephemeral: true });
+      }
       const staminaCost = item.staminaToCraft * quantity;
-      if (character.currentStamina < staminaCost) {
-        console.error(`[crafting.js]: ❌ Insufficient stamina for ${character.name} - needed ${staminaCost}, has ${character.currentStamina}`);
-        return interaction.editReply({ content: `❌ **Not enough stamina. Needed: ${staminaCost}, Available: ${character.currentStamina}.**`, ephemeral: true });
+      if (freshCharacter.currentStamina < staminaCost) {
+        console.error(`[crafting.js]: ❌ Insufficient stamina for ${freshCharacter.name} - needed ${staminaCost}, has ${freshCharacter.currentStamina}`);
+        return interaction.editReply({ content: `❌ **Not enough stamina. Needed: ${staminaCost}, Available: ${freshCharacter.currentStamina}.**`, ephemeral: true });
       }
 
       // ------------------- Validate Required Materials -------------------
@@ -253,10 +258,10 @@ module.exports = {
       // ------------------- Deduct Stamina -------------------
       let updatedStamina;
       try {
-        updatedStamina = await checkAndUseStamina(character, staminaCost);
-        console.log(`[crafting.js]: ✅ Stamina deducted for ${character.name} - remaining: ${updatedStamina}`);
+        updatedStamina = await checkAndUseStamina(freshCharacter, staminaCost);
+        console.log(`[crafting.js]: ✅ Stamina deducted for ${freshCharacter.name} - remaining: ${updatedStamina}`);
       } catch (error) {
-        console.error(`[crafting.js]: ❌ Failed to deduct stamina for ${character.name}: ${error.message}`);
+        console.error(`[crafting.js]: ❌ Failed to deduct stamina for ${freshCharacter.name}: ${error.message}`);
         handleError(error, 'crafting.js');
         return interaction.followUp({ content: `⚠️ **Crafting failed due to insufficient stamina.**`, ephemeral: true });
       }

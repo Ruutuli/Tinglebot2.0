@@ -144,8 +144,11 @@ characterSchema.pre('save', function (next) {
   }
   
   // Ensure stable is either null or a valid ObjectId
-  if (this.isModified('stable') && this.stable !== null) {
-    if (!mongoose.Types.ObjectId.isValid(this.stable)) {
+  if (this.isModified('stable')) {
+    if (this.stable === null || this.stable === undefined) {
+      this.stable = null;
+    } else if (Array.isArray(this.stable) || !mongoose.Types.ObjectId.isValid(this.stable)) {
+      console.error(`[CharacterModel.js]: ❌ Invalid stable value detected: ${JSON.stringify(this.stable)}`);
       this.stable = null;
     }
   }

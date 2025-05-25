@@ -1457,9 +1457,11 @@ async function handleMountNameSubmission(interaction) {
       level: encounter.mountLevel,
       name: mountName,
       stamina: encounter.mountStamina,
-      owner: character.name,
+      owner: character.name,  // This is already set correctly
       traits: traits,
       region: encounter.village,
+      currentStamina: encounter.mountStamina, // Add this to initialize currentStamina
+      status: 'active'  // Add this to set initial status
     };
   
     const newMount = new Mount(mountData);

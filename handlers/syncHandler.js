@@ -117,8 +117,9 @@ async function processInventoryItem(row, character, userId) {
             return null;
         }
 
-        // Parse quantity as number
-        const itemQuantity = parseInt(quantity);
+        // Parse quantity as number, removing any commas first
+        const cleanQuantity = String(quantity).replace(/,/g, '');
+        const itemQuantity = parseInt(cleanQuantity);
         if (isNaN(itemQuantity) || itemQuantity <= 0) {
             return null;
         }
@@ -198,6 +199,7 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
     let errors = [];
     let syncedItemsCount = 0;
     let skippedLinesCount = 0;
+    let skippedItems = []; // Now an array of { name, reason }
 
     try {
         // Connect to database and fetch character
@@ -269,7 +271,6 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
 
         // Process items in batches
         let batchRequests = [];
-        let skippedItems = [];
         let processedItems = new Set(); // Track which items have been processed
 
         for (let i = 0; i < filteredData.length; i += BATCH_SIZE) {
@@ -295,19 +296,34 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
 
                         try {
                             const result = await processInventoryItem(row, character, userId);
-                            if (!result) continue;
+                            if (!result) {
+                                // Determine reason for skip
+                                const [_, itemName, quantity] = row;
+                                let reason = 'Unknown';
+                                if (!itemName || !quantity) reason = 'Missing item name or quantity';
+                                else {
+                                    const cleanQuantity = String(quantity).replace(/,/g, '');
+                                    if (isNaN(parseInt(cleanQuantity))) reason = 'Invalid quantity';
+                                    else if (parseInt(cleanQuantity) <= 0) reason = 'Non-positive quantity';
+                                }
+                                skippedItems.push({ name: itemName || 'Unknown', reason });
+                                continue;
+                            }
                             if (result.error) {
                                 errors.push(result.error);
                                 skippedLinesCount++;
+                                skippedItems.push({ name: row[1] || 'Unknown', reason: result.error });
                                 continue;
                             }
 
                             const { inventoryItem, updatedRowData } = result;
                             
                             // Only update existing items in the database
-                            const existingItem = await ItemModel.findOne({ itemName: inventoryItem.itemName });
+                            const existingItem = await ItemModel.findOne({ 
+                                itemName: { $regex: new RegExp(`^${escapeRegExp(inventoryItem.itemName)}$`, 'i') }
+                            });
                             if (!existingItem) {
-                                skippedItems.push(inventoryItem.itemName);
+                                skippedItems.push({ name: inventoryItem.itemName, reason: 'Not in database' });
                                 continue;
                             }
 
@@ -372,7 +388,10 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
         let message = `✅ **Sync completed for ${character.name}!**\n\n`;
         message += `📦 **Synced Items:** ${totalSyncedItemsCount}\n`;
         if (skippedItems.length > 0) {
-            message += `⚠️ **Skipped Items (not in database):** ${skippedItems.join(', ')}\n`;
+            message += `⚠️ **Skipped Items:**\n`;
+            for (const item of skippedItems) {
+                message += `- ${item.name}: ${item.reason}\n`;
+            }
         }
         if (errors.length > 0) {
             message += `❌ **Errors:** ${errors.length}\n`;

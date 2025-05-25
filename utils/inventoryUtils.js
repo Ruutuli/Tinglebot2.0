@@ -178,7 +178,7 @@ async function syncToInventoryDatabase(character, item, interaction) {
 
     const existingItem = await inventoryCollection.findOne({
       characterId: dbDoc.characterId,
-      itemName: dbDoc.itemName,
+      itemName: { $regex: new RegExp(`^${escapeRegExp(dbDoc.itemName)}$`, 'i') }
     });
 
     if (item.quantity < 0) {
@@ -379,7 +379,7 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
     // First try exact match
     let inventoryItem = await inventoryCollection.findOne({
       characterId: character._id,
-      itemName: itemName
+      itemName: { $regex: new RegExp(`^${escapeRegExp(itemName.trim())}$`, 'i') }
     });
 
     // If no exact match, try case-insensitive match
