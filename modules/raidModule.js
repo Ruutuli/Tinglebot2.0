@@ -21,154 +21,7 @@ const {
 // ------------------- Constants -------------------
 const RAID_DURATION = 15 * 60 * 1000; // 15 minutes in milliseconds
 
-// Define RaidProgress Schema
-const raidProgressSchema = new mongoose.Schema({
-    villageId: {
-        type: String,
-        required: true,
-        index: true
-    },
-    startTime: {
-        type: Date,
-        required: true,
-        default: Date.now
-    },
-    endTime: {
-        type: Date,
-        required: true,
-        validate: {
-            validator: function(v) {
-                return v > this.startTime;
-            },
-            message: 'End time must be after start time'
-        }
-    },
-    status: {
-        type: String,
-        enum: ['active', 'completed', 'failed', 'timeout'],
-        default: 'active',
-        index: true
-    },
-    damage: {
-        type: Number,
-        min: 0,
-        default: 0
-    },
-    participants: {
-        type: [{
-            userId: {
-                type: String,
-                required: true
-            },
-            characterName: {
-                type: String,
-                required: true
-            },
-            damage: {
-                type: Number,
-                min: 0,
-                default: 0
-            },
-            joinedAt: {
-                type: Date,
-                default: Date.now
-            }
-        }],
-        validate: {
-            validator: function(v) {
-                return v.length <= 10; // Maximum 10 participants
-            },
-            message: 'Maximum 10 participants allowed'
-        }
-    },
-    monsterHearts: {
-        current: {
-            type: Number,
-            required: true,
-            min: 0
-        },
-        max: {
-            type: Number,
-            required: true,
-            min: 0
-        }
-    },
-    lastUpdated: {
-        type: Date,
-        default: Date.now
-    },
-    retryCount: {
-        type: Number,
-        default: 0,
-        max: 3
-    }
-});
-
-// Add indexes for common queries
-raidProgressSchema.index({ status: 1, endTime: 1 });
-raidProgressSchema.index({ 'participants.userId': 1 });
-
-// Add methods for state management
-raidProgressSchema.methods.isExpired = function() {
-    return Date.now() > this.endTime;
-};
-
-raidProgressSchema.methods.canJoin = function(userId) {
-    return this.status === 'active' && 
-           !this.isExpired() && 
-           this.participants.length < 10 &&
-           !this.participants.some(p => p.userId === userId);
-};
-
-// Add static methods for common operations
-raidProgressSchema.statics.findActiveRaids = function() {
-    return this.find({
-        status: 'active',
-        endTime: { $gt: new Date() }
-    });
-};
-
-raidProgressSchema.statics.findExpiredRaids = function() {
-    return this.find({
-        status: 'active',
-        endTime: { $lte: new Date() }
-    });
-};
-
-// Create RaidProgress model
-const RaidProgress = mongoose.model('RaidProgress', raidProgressSchema);
-
-// Add raid analytics tracking
-const raidAnalyticsSchema = new mongoose.Schema({
-    raidId: {
-        type: String,
-        required: true,
-        index: true
-    },
-    metrics: {
-        totalDamage: Number,
-        averageDamagePerParticipant: Number,
-        completionTime: Number,
-        participantCount: Number,
-        monsterTier: Number,
-        villageId: String,
-        success: Boolean
-    },
-    timestamps: {
-        started: Date,
-        completed: Date,
-        lastAction: Date
-    },
-    actions: [{
-        type: String,
-        timestamp: Date,
-        userId: String,
-        action: String,
-        damage: Number
-    }]
-});
-
-// Add rate limiting
+// Rate Limit Schema
 const raidRateLimitSchema = new mongoose.Schema({
     userId: {
         type: String,
@@ -188,8 +41,7 @@ const raidRateLimitSchema = new mongoose.Schema({
     cooldownEnds: Date
 });
 
-// Create models
-const RaidAnalytics = mongoose.model('RaidAnalytics', raidAnalyticsSchema);
+// Create model
 const RaidRateLimit = mongoose.model('RaidRateLimit', raidRateLimitSchema);
 
 // Add rate limiting middleware
@@ -217,71 +69,66 @@ async function checkRateLimit(userId, villageId) {
     }
 }
 
-// Add raid analytics tracking
-async function trackRaidAnalytics(battleProgress, action) {
-    try {
-        const analytics = await RaidAnalytics.findOne({ raidId: battleProgress.battleId }) || 
-            new RaidAnalytics({ raidId: battleProgress.battleId });
-
-        analytics.actions.push({
-            type: 'action',
-            timestamp: new Date(),
-            userId: action.userId,
-            action: action.type,
-            damage: action.damage || 0
-        });
-
-        // Update metrics
-        analytics.metrics.totalDamage = battleProgress.participants.reduce((sum, p) => sum + p.damage, 0);
-        analytics.metrics.averageDamagePerParticipant = analytics.metrics.totalDamage / battleProgress.participants.length;
-        analytics.metrics.participantCount = battleProgress.participants.length;
-        analytics.metrics.monsterTier = battleProgress.tier;
-        analytics.metrics.villageId = battleProgress.villageId;
-        analytics.metrics.success = battleProgress.status === 'completed';
-
-        if (battleProgress.status === 'completed') {
-            analytics.timestamps.completed = new Date();
-            analytics.metrics.completionTime = 
-                analytics.timestamps.completed - analytics.timestamps.started;
-        }
-
-        await analytics.save();
-    } catch (error) {
-        console.error(`[raidModule.js]: ❌ Error tracking raid analytics:`, error);
-    }
-}
-
 // ============================================================================
-// Raid Battle Progress Functions
+// ---- Raid Battle Progress Functions ----
+// Handles raid progress tracking and management
 // ============================================================================
 
 // ------------------- Store Raid Progress -------------------
-async function storeRaidProgress(character, monster, tier, monsterHearts, progress) {
-  const battleId = generateUniqueId('R'); // 'R' prefix for Raid battles
+async function storeRaidProgress(monster, tier, monsterHearts, progress, villageId) {
+  const battleId = generateUniqueId('R');
   
-  const battleData = {
-    battleId,
-    characters: [character],
-    monster: monster.name,
-    tier: tier,
-    monsterHearts: {
-      max: monster.hearts,
-      current: monsterHearts.current,
+  console.log(`[raidModule.js]: 📊 Detailed monster data received:`, {
+    monster: {
+      raw: monster,
+      name: monster.name,
+      tier: monster.tier,
+      hearts: monster.hearts,
+      nameMapping: monster.nameMapping
     },
-    progress: progress ? `\n${progress}` : '',
-    isBloodMoon: false,
-    startTime: Date.now(),
-    villageId: character.currentVillage // Add the village ID where the raid is taking place
-  };
+    tierParam: tier,
+    monsterHearts: monsterHearts
+  });
 
   try {
+    const battleData = {
+      battleId,
+      characters: [], // Empty array - characters will be added when they join
+      monster: {
+        name: monster.name,
+        tier: monster.tier || tier,
+        hearts: {
+          max: monster.hearts,
+          current: monsterHearts.current
+        }
+      },
+      progress: progress ? `\n${progress}` : '',
+      isBloodMoon: false,
+      startTime: Date.now(),
+      villageId: villageId,
+      status: 'active',
+      participants: [], // Empty array - participants will be added when they join
+      timestamps: {
+        started: Date.now(),
+        lastUpdated: Date.now()
+      }
+    };
+
+    console.log(`[raidModule.js]: 📊 Battle data being saved:`, {
+      battleId,
+      monster: battleData.monster,
+      monsterHearts: battleData.monster.hearts,
+      tier: battleData.monster.tier
+    });
+
     await saveBattleProgressToStorage(battleId, battleData);
+    console.log(`[raidModule.js]: ✅ Stored raid progress for Battle ID "${battleId}"`);
+    return battleId;
   } catch (err) {
     handleError(err, 'raidModule.js');
     console.error(`[raidModule.js]: ❌ Error storing raid progress for Battle ID "${battleId}":`, err);
     throw err;
   }
-  return battleId;
 }
 
 // ------------------- Get Raid Progress by ID -------------------
@@ -289,7 +136,7 @@ async function getRaidProgressById(battleId) {
   try {
     const battleProgress = await retrieveBattleProgressFromStorage(battleId);
     if (!battleProgress) {
-      console.error(`[raidModule.js]: ❌ Error - No raid progress found for Battle ID: ${battleId}`);
+      console.error(`[raidModule.js]: ❌ No raid progress found for Battle ID: ${battleId}`);
       return null;
     }
     return battleProgress;
@@ -304,90 +151,61 @@ async function getRaidProgressById(battleId) {
 async function updateRaidProgress(battleId, updatedProgress, outcome) {
     const session = await mongoose.startSession();
     session.startTransaction();
-    
-    try {
-        console.log(`[raidModule.js]: 🔄 Starting raid progress update for battle ${battleId}`, {
-            hasOutcome: !!outcome,
-            hasCharacter: !!outcome?.character,
-            hasUserId: !!outcome?.character?.userId,
-            hearts: outcome?.hearts
-        });
 
+    try {
         const battleProgress = await getRaidProgressById(battleId);
         if (!battleProgress) {
-            console.error(`[raidModule.js]: ❌ No battle progress found for ID: ${battleId}`);
+            console.error(`[raidModule.js]: ❌ No raid progress found for Battle ID: ${battleId}`);
             return null;
         }
 
-        console.log(`[raidModule.js]: 📊 Current battle progress:`, {
-            hasMonsterHearts: !!battleProgress.monsterHearts,
-            currentHearts: battleProgress.monsterHearts?.current,
-            maxHearts: battleProgress.monsterHearts?.max,
-            status: battleProgress.status
-        });
+        const participant = battleProgress.participants.find(p => p.characterId === outcome.character._id);
+        if (participant) {
+            const damageDealt = outcome.hearts || 0;
+            participant.damage += damageDealt;
 
-        // Validate outcome and character data
-        if (!outcome?.character?.userId) {
-            console.error(`[raidModule.js]: ❌ Invalid outcome data - missing userId`, {
-                outcome,
-                hasCharacter: !!outcome?.character,
-                userId: outcome?.character?.userId
-            });
-            return null;
+            const characterIndex = battleProgress.characters.findIndex(c => c._id === outcome.character._id);
+            if (characterIndex !== -1) {
+                battleProgress.characters[characterIndex] = {
+                    ...battleProgress.characters[characterIndex],
+                    currentHearts: outcome.character.currentHearts,
+                    currentStamina: outcome.character.currentStamina,
+                    buffs: outcome.character.buffs || [],
+                    status: outcome.character.status || 'active'
+                };
+            }
         }
 
-        // Check rate limit with validated data
-        try {
-            console.log(`[raidModule.js]: 🔄 Checking rate limit for user ${outcome.character.userId}`);
-            await checkRateLimit(outcome.character.userId, battleProgress.villageId);
-        } catch (rateLimitError) {
-            console.warn(`[raidModule.js]: ⚠️ Rate limit check failed: ${rateLimitError.message}`);
-            // Continue with the update even if rate limit check fails
-        }
-
-        // Validate monster hearts
-        if (!battleProgress.monsterHearts) {
-            console.log(`[raidModule.js]: 🔄 Initializing monsterHearts for battle ${battleId}`, {
-                monsterHearts: outcome.character?.monster?.hearts
-            });
-            battleProgress.monsterHearts = {
+        if (!battleProgress.monster.hearts) {
+            console.log(`[raidModule.js]: 🔄 Initializing monster hearts for battle ${battleId}`);
+            battleProgress.monster.hearts = {
                 current: outcome.character?.monster?.hearts || 0,
                 max: outcome.character?.monster?.hearts || 0
             };
         }
 
-        // Ensure valid monster hearts state
-        if (typeof battleProgress.monsterHearts.current !== 'number' || 
-            typeof battleProgress.monsterHearts.max !== 'number' ||
-            battleProgress.monsterHearts.current < 0 ||
-            battleProgress.monsterHearts.max < battleProgress.monsterHearts.current) {
-            console.error(`[raidModule.js]: ❌ Invalid monsterHearts state for battle ${battleId}`, {
-                current: battleProgress.monsterHearts.current,
-                max: battleProgress.monsterHearts.max
+        if (typeof battleProgress.monster.hearts.current !== 'number' || 
+            typeof battleProgress.monster.hearts.max !== 'number' ||
+            battleProgress.monster.hearts.current < 0 ||
+            battleProgress.monster.hearts.max < battleProgress.monster.hearts.current) {
+            console.error(`[raidModule.js]: ❌ Invalid monster hearts state for battle ${battleId}`, {
+                current: battleProgress.monster.hearts.current,
+                max: battleProgress.monster.hearts.max
             });
             return null;
         }
 
-        // Update monster hearts with validation
-        const newCurrent = Math.max(0, battleProgress.monsterHearts.current - (outcome.hearts || 0));
+        const newCurrent = Math.max(0, battleProgress.monster.hearts.current - (outcome.hearts || 0));
         console.log(`[raidModule.js]: 💥 Updating monster hearts`, {
-            oldCurrent: battleProgress.monsterHearts.current,
+            oldCurrent: battleProgress.monster.hearts.current,
             damage: outcome.hearts,
             newCurrent
         });
         
-        battleProgress.monsterHearts.current = newCurrent;
+        battleProgress.monster.hearts.current = newCurrent;
         battleProgress.progress += `\n${updatedProgress}`;
-        battleProgress.lastUpdated = new Date();
+        battleProgress.timestamps.lastUpdated = new Date();
 
-        // Track analytics
-        await trackRaidAnalytics(battleProgress, {
-            userId: outcome.character.userId,
-            type: 'damage',
-            damage: outcome.hearts
-        });
-
-        // Check for raid completion
         if (newCurrent <= 0) {
             console.log(`[raidModule.js]: 🎉 Raid completed for battle ${battleId}`);
             battleProgress.status = 'completed';
@@ -404,10 +222,9 @@ async function updateRaidProgress(battleId, updatedProgress, outcome) {
         handleError(error, 'raidModule.js');
         console.error(`[raidModule.js]: ❌ Error updating raid progress for Battle ID "${battleId}":`, error);
         
-        // Implement retry logic with proper battleProgress reference
         const currentProgress = await getRaidProgressById(battleId);
         if (currentProgress && currentProgress.retryCount < 3) {
-            currentProgress.retryCount++;
+            currentProgress.retryCount = (currentProgress.retryCount || 0) + 1;
             console.log(`[raidModule.js]: 🔄 Retrying update (attempt ${currentProgress.retryCount})`);
             return updateRaidProgress(battleId, updatedProgress, outcome);
         }
@@ -422,42 +239,90 @@ async function updateRaidProgress(battleId, updatedProgress, outcome) {
 async function deleteRaidProgressById(battleId) {
   try {
     await deleteBattleProgressFromStorage(battleId);
+    console.log(`[raidModule.js]: ✅ Deleted raid progress for Battle ID "${battleId}"`);
   } catch (error) {
     handleError(error, 'raidModule.js');
     console.error(`[raidModule.js]: ❌ Error deleting raid progress for Battle ID "${battleId}":`, error);
   }
 }
 
+// Add this new function to check raid expiration
+async function checkRaidExpiration(battleId) {
+  try {
+    const battleProgress = await getRaidProgressById(battleId);
+    if (!battleProgress) {
+      console.error(`[raidModule.js]: ❌ No raid progress found for Battle ID: ${battleId}`);
+      return true;
+    }
+
+    const now = Date.now();
+    const isExpired = now > battleProgress.endTime;
+
+    if (isExpired && battleProgress.status === 'active') {
+      console.log(`[raidModule.js]: ⚠️ Raid ${battleId} has expired`);
+      battleProgress.status = 'timeout';
+      await saveBattleProgressToStorage(battleId, battleProgress);
+      await handleRaidTimeout(battleProgress);
+    }
+
+    return isExpired;
+  } catch (error) {
+    handleError(error, 'raidModule.js');
+    console.error(`[raidModule.js]: ❌ Error checking raid expiration for Battle ID "${battleId}":`, error);
+    return true;
+  }
+}
+
 // ============================================================================
-// Raid Core Functions
+// ---- Core Raid Functions ----
+// Handles raid initialization and management
 // ============================================================================
 
 // ------------------- Create Raid Embed -------------------
-function createRaidEmbed(character, monster, battleId, isBloodMoon = false) {
+function createRaidEmbed(monster, battleId, isBloodMoon = false, villageId) {
+    console.log(`[raidModule.js]: 🔍 Creating raid embed with data:`, {
+        monster: {
+            name: monster.name,
+            hearts: monster.hearts,
+            tier: monster.tier,
+            image: monsterMapping[monster.nameMapping]?.image || monster.image
+        },
+        villageId
+    });
+
     const monsterData = monsterMapping[monster.nameMapping] || {};
     const monsterImage = monsterData.image || monster.image;
-    const villageName = capitalizeVillageName(character.currentVillage);
+    const villageName = capitalizeVillageName(villageId);
 
     const embed = new EmbedBuilder()
-        .setTitle(isBloodMoon ? `🔴 **Blood Moon Raid initiated!**` : `🛡️ **Raid initiated!**`)
+        .setTitle(isBloodMoon ? `🔴 **Blood Moon Raid!**` : `🛡️ **Village Raid!**`)
         .setDescription(
-            `Use \`/raid id:${battleId}\` to join or continue the raid!\n` +
-            `Use \`/item\` to heal during the raid!`
+            `**A ${monster.name} has been spotted in ${villageName}!**\n` +
+            `It's a Tier ${monster.tier} monster! Protect the village!\n\n` +
+            `</raid:1372378305021607979> to join or continue the raid!\n` +
+            `</item:1372378304773881879> to heal during the raid!`
         )
         .addFields(
-            { name: `__Monster Hearts__`, value: `💙 ${monster.hearts}/${monster.hearts}`, inline: false },
-            { name: `__${character.name || 'Unknown Adventurer'} Hearts__`, value: `❤️ ${character.currentHearts}/${character.maxHearts}`, inline: false },
-            { name: `__Battle ID__`, value: `\`\`\`${battleId}\`\`\``, inline: false }
+            { 
+                name: `__${monster.name}__`, 
+                value: `💙 **Hearts:** ${monster.hearts}/${monster.hearts}\n⭐ **Tier:** ${monster.tier}`, 
+                inline: false 
+            },
+            { 
+                name: `__Location__`, 
+                value: `🏘️ ${villageName}`, 
+                inline: true 
+            },
+            {
+                name: `__Raid ID__`,
+                value: `\`\`\`${battleId}\`\`\``,
+                inline: false
+            }
         )
-        .setAuthor({
-            name: character.name || 'Unknown Adventurer',
-            iconURL: character.icon || 'https://via.placeholder.com/100',
-        })
-        .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
-        .setFooter({ text: `You have ${RAID_DURATION / 60000} minutes to complete this raid!` })
-        .setColor(isBloodMoon ? '#FF4500' : '#FF0000');
+        .setColor(isBloodMoon ? 0xFF0000 : 0x00FF00)
+        .setTimestamp();
 
-    if (monsterImage && monsterImage.startsWith('http')) {
+    if (monsterImage) {
         embed.setThumbnail(monsterImage);
     }
 
@@ -465,12 +330,12 @@ function createRaidEmbed(character, monster, battleId, isBloodMoon = false) {
 }
 
 // ------------------- Create or Update Raid Thread -------------------
-async function createOrUpdateRaidThread(interaction, character, monster, embed, threadId = null, isBloodMoon = false) {
+async function createOrUpdateRaidThread(interaction, monster, embed, threadId = null, isBloodMoon = false, villageId) {
     try {
         let thread;
         if (!threadId) {
             const emoji = isBloodMoon ? '🔴' : '🛡️';
-            const villageName = capitalizeVillageName(character.currentVillage);
+            const villageName = capitalizeVillageName(villageId);
             const threadName = `${emoji} ${villageName} - ${monster.name} (Tier ${monster.tier})`;
         
             await interaction.editReply({ embeds: [embed] });
@@ -479,7 +344,7 @@ async function createOrUpdateRaidThread(interaction, character, monster, embed, 
                 message.startThread({
                     name: threadName,
                     autoArchiveDuration: 1440,
-                    reason: `Raid initiated for ${character.name} against ${monster.name}`,
+                    reason: `Raid initiated against ${monster.name}`,
                 })
             );
         
@@ -489,7 +354,7 @@ async function createOrUpdateRaidThread(interaction, character, monster, embed, 
             const residentRole = `@${safeVillageName} resident`;
             const visitorRole = `@visiting:${safeVillageName}`;
         
-            await thread.send(`👋 <@${interaction.user.id}> has initiated a raid against **${monster.name} (Tier ${monster.tier})**!\n\n${residentRole} ${visitorRole} — come help defend your home!`);
+            await thread.send(`👋 A raid has been initiated against **${monster.name} (Tier ${monster.tier})**!\n\n${residentRole} ${visitorRole} — come help defend your home!`);
         } else {
             thread = interaction.guild.channels.cache.get(threadId);
             if (!thread) {
@@ -500,6 +365,7 @@ async function createOrUpdateRaidThread(interaction, character, monster, embed, 
         return thread;
     } catch (error) {
         handleError(error, 'raidModule.js');
+        console.error(`[raidModule.js]: ❌ Error creating/updating raid thread:`, error);
         throw error;
     }
 }
@@ -512,89 +378,189 @@ function scheduleRaidTimer(villageName, monster, thread) {
             await applyVillageDamage(capitalizedVillageName, monster, thread);
         } catch (error) {
             handleError(error, 'raidModule.js');
-            console.error(`[raidModule.js]: Timer: Error during applyVillageDamage execution:`, error);
+            console.error(`[raidModule.js]: ❌ Error during applyVillageDamage execution:`, error);
         }
     }, RAID_DURATION);
 }
 
 // ------------------- Trigger Raid -------------------
-async function triggerRaid(character, monster, interaction, threadId, isBloodMoon) {
-    // ------------------- Define Monster Hearts -------------------
+async function triggerRaid(monster, interaction, threadId, isBloodMoon, villageId) {
+    // Get full monster data from mapping
+    const monsterKey = Object.keys(monsterMapping).find(key => 
+        monsterMapping[key].name === monster.name
+    );
+    
+    const fullMonsterData = monsterKey ? monsterMapping[monsterKey] : null;
+    
+    console.log(`[raidModule.js]: 🚀 Triggering raid with detailed data:`, {
+        monster: {
+            raw: monster,
+            name: monster.name,
+            nameMapping: monsterKey,
+            fullData: fullMonsterData
+        },
+        isBloodMoon,
+        villageId
+    });
+
+    if (!fullMonsterData) {
+        console.error(`[raidModule.js]: ❌ Could not find monster data for ${monster.name}`);
+        throw new Error(`Invalid monster: ${monster.name}`);
+    }
+
     const monsterHearts = {
-        max: monster.hearts,
-        current: monster.hearts,
+        max: fullMonsterData.hearts || 1,
+        current: fullMonsterData.hearts || 1,
     };
+
+    console.log(`[raidModule.js]: 💙 Monster hearts object:`, monsterHearts);
 
     let battleId;
 
-    // ------------------- Store Raid Progress -------------------
     try {
         battleId = await storeRaidProgress(
-            character,
-            monster,
-            monster.tier,
+            {
+                ...monster,
+                nameMapping: monsterKey,
+                hearts: fullMonsterData.hearts || 1,
+                tier: fullMonsterData.tier || 1
+            },
+            fullMonsterData.tier || 1,
             monsterHearts,
-            isBloodMoon ? '🔴 Blood Moon Raid initiated!' : 'Raid initiated! Player turn next.'
+            isBloodMoon ? '🔴 Blood Moon Raid initiated!' : 'Raid initiated! Join to participate.',
+            villageId
         );
-    } catch (error) {
-        handleError(error, 'raidModule.js');
-        console.error(`[raidModule.js]: triggerRaid: Failed to store raid progress: ${error.message}`);
-        await interaction.followUp(`❌ **Failed to trigger the raid. Please try again later.**`);
-        return;
-    }
 
-    // ------------------- Create Embed and Thread -------------------
-    try {
-        const embed = createRaidEmbed(character, monster, battleId, isBloodMoon);
-        const thread = await createOrUpdateRaidThread(interaction, character, monster, embed, threadId, isBloodMoon);
+        const embed = createRaidEmbed({
+            ...monster,
+            hearts: fullMonsterData.hearts || 1,
+            tier: fullMonsterData.tier || 1
+        }, battleId, isBloodMoon, villageId);
+        
+        const thread = await createOrUpdateRaidThread(interaction, {
+            ...monster,
+            hearts: fullMonsterData.hearts || 1,
+            tier: fullMonsterData.tier || 1
+        }, embed, threadId, isBloodMoon, villageId);
 
-        // ------------------- Schedule Timer for Village Damage -------------------
-        const villageName = character.currentVillage || "Unknown Village";
-        scheduleRaidTimer(villageName, monster, thread);
+        scheduleRaidTimer(villageId, {
+            ...monster,
+            hearts: fullMonsterData.hearts || 1,
+            tier: fullMonsterData.tier || 1
+        }, thread);
 
         return battleId;
     } catch (error) {
         handleError(error, 'raidModule.js');
-        console.error(`[raidModule.js]: triggerRaid: Error creating raid: ${error.message}`);
+        console.error(`[raidModule.js]: ❌ Error triggering raid:`, error);
         await interaction.followUp(`❌ **Failed to create the raid. Please try again later.**`);
         return null;
     }
 }
 
-// Add raid completion handler
+// ---- Function: handleRaidCompletion ----
+// Handles raid completion and reward distribution
 async function handleRaidCompletion(battleProgress) {
     try {
-        // Calculate rewards
         const rewards = calculateRaidRewards(battleProgress);
-        
-        // Distribute rewards to participants
+        battleProgress.rewards = rewards;
+
         for (const participant of battleProgress.participants) {
-            await distributeRewards(participant.userId, rewards);
+            await updateParticipantStats(participant, rewards);
         }
-        
-        // Update village status
-        await updateVillageStatus(battleProgress.villageId, 'success');
-        
-        // Send notifications
+
         await sendRaidCompletionNotifications(battleProgress);
-        
-        console.log(`[raidModule.js]: ✅ Raid ${battleProgress.battleId} completed successfully`);
+        await saveBattleProgressToStorage(battleProgress.battleId, battleProgress);
+
+        setTimeout(async () => {
+            try {
+                await deleteRaidProgressById(battleProgress.battleId);
+                console.log(`[raidModule.js]: 🧹 Cleaned up completed raid ${battleProgress.battleId}`);
+            } catch (error) {
+                console.error(`[raidModule.js]: ❌ Error cleaning up raid ${battleProgress.battleId}:`, error);
+            }
+        }, 5 * 60 * 1000);
+
+        return battleProgress;
     } catch (error) {
         handleError(error, 'raidModule.js');
-        console.error(`[raidModule.js]: ❌ Error handling raid completion:`, error);
+        console.error(`[raidModule.js]: ❌ Error handling raid completion for ${battleProgress.battleId}:`, error);
+        throw error;
     }
 }
 
-// Add timeout handler
+async function calculateRaidRewards(battleProgress) {
+    const baseRewards = {
+        items: []
+    };
+
+    const totalDamage = battleProgress.participants.reduce((sum, p) => sum + p.damage, 0);
+    
+    // Calculate rewards based on damage contribution
+    for (const participant of battleProgress.participants) {
+        const damageContribution = participant.damage / totalDamage;
+        participant.rewards = {
+            items: [] // Add item rewards logic here if needed
+        };
+    }
+
+    return {
+        baseRewards,
+        participantRewards: battleProgress.participants.map(p => ({
+            userId: p.userId,
+            characterId: p.characterId,
+            rewards: p.rewards
+        }))
+    };
+}
+
+async function updateParticipantStats(participant, rewards) {
+    try {
+        const character = await Character.findById(participant.characterId);
+        if (character) {
+            await character.save();
+        }
+    } catch (error) {
+        console.error(`[raidModule.js]: ❌ Error updating stats for participant ${participant.characterId}:`, error);
+    }
+}
+
+async function sendRaidCompletionNotifications(battleProgress) {
+    try {
+        for (const participant of battleProgress.participants) {
+            const rewards = battleProgress.rewards.participantRewards.find(r => r.characterId === participant.characterId);
+            if (rewards) {
+                const user = await client.users.fetch(participant.userId);
+                if (user) {
+                    await user.send({
+                        embeds: [{
+                            title: '🎉 Raid Completed!',
+                            description: `You have successfully completed the raid against ${battleProgress.monster.name}!`,
+                            fields: [
+                                {
+                                    name: 'Damage Dealt',
+                                    value: `${participant.damage} hearts`
+                                }
+                            ],
+                            color: 0x00ff00
+                        }]
+                    });
+                }
+            }
+        }
+    } catch (error) {
+        console.error(`[raidModule.js]: ❌ Error sending raid completion notifications:`, error);
+    }
+}
+
+// ---- Function: handleRaidTimeout ----
+// Handles raid timeout and cleanup
 async function handleRaidTimeout(battleProgress) {
     try {
         battleProgress.status = 'timeout';
         await saveBattleProgressToStorage(battleProgress.battleId, battleProgress);
         
-        // Apply village damage
         await applyVillageDamage(battleProgress.villageId, battleProgress.damage);
-        
-        // Send notifications
         await sendRaidTimeoutNotifications(battleProgress);
         
         console.log(`[raidModule.js]: ⚠️ Raid ${battleProgress.battleId} timed out`);
@@ -604,56 +570,13 @@ async function handleRaidTimeout(battleProgress) {
     }
 }
 
-// ---- Function: checkExpiredRaids ----
-// Checks for any raid timers that have expired during downtime
-async function checkExpiredRaids(client) {
-  try {
-    const now = new Date();
-    const expiredRaids = await RaidProgress.find({
-      status: 'active',
-      endTime: { $lte: now }
-    });
-
-    for (const raid of expiredRaids) {
-      try {
-        // Apply village damage
-        const village = await Village.findOne({ _id: raid.villageId });
-        if (village) {
-          village.health = Math.max(0, village.health - raid.damage);
-          await village.save();
-        }
-
-        // Update raid status
-        raid.status = 'completed';
-        await raid.save();
-
-        // Send notification
-        const channelId = process.env.RAID_NOTIFICATIONS_CHANNEL_ID;
-        const channel = client.channels.cache.get(channelId);
-        if (channel) {
-          const embed = new EmbedBuilder()
-            .setColor('#FF0000')
-            .setTitle('🏰 Raid Completed')
-            .setDescription(`A raid on ${village.name} has completed.\nDamage dealt: ${raid.damage}`)
-            .setTimestamp();
-
-          await channel.send({ embeds: [embed] });
-        }
-      } catch (error) {
-        console.error('[raidModule]: Error processing expired raid:', error);
-      }
-    }
-  } catch (error) {
-    console.error('[raidModule]: Error checking expired raids:', error);
-  }
-}
-
 module.exports = {
     // Raid Battle Progress Functions
     storeRaidProgress,
     getRaidProgressById,
     updateRaidProgress,
     deleteRaidProgressById,
+    checkRaidExpiration,
 
     // Core Raid Functions
     createRaidEmbed,
@@ -663,10 +586,6 @@ module.exports = {
 
     // Constants
     RAID_DURATION,
-    checkExpiredRaids,
-    RaidProgress,
-    RaidAnalytics,
     RaidRateLimit,
-    checkRateLimit,
-    trackRaidAnalytics
+    checkRateLimit
 }; 

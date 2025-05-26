@@ -1441,17 +1441,8 @@ async function handleRaid(interaction) {
       monster = monsters[Math.floor(Math.random() * monsters.length)];
     }
 
-    // Create a test character for the raid
-    const testCharacter = {
-      name: 'Test Character',
-      currentVillage: village,
-      currentHearts: 3,
-      maxHearts: 3,
-      icon: 'https://via.placeholder.com/50'
-    };
-
-    // Trigger the raid
-    const battleId = await triggerRaid(testCharacter, monster, interaction, null, false);
+    // Trigger the raid without an initial character
+    const battleId = await triggerRaid(monster, interaction, null, false, village);
 
     if (!battleId) {
       await interaction.editReply({ content: '❌ **Failed to create the raid.**' });
@@ -1459,7 +1450,7 @@ async function handleRaid(interaction) {
     }
 
     await interaction.editReply({ 
-      content: `✅ **Raid created successfully!**\nUse \`/raid id:${battleId}\` to join the raid.`
+      content: `✅ **Raid created successfully!**`
     });
   } catch (error) {
     handleError(error, 'mod.js');
