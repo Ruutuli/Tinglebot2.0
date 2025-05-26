@@ -412,6 +412,28 @@ const modCommand = new SlashCommandBuilder()
     .setDescription('Manually reset all pet rolls')
 )
 
+// ------------------- Subcommand: raid -------------------
+.addSubcommand(sub =>
+  sub
+    .setName('raid')
+    .setDescription('🐉 Create a raid for testing')
+    .addStringOption(option =>
+      option
+        .setName('village')
+        .setDescription('The village where the raid will take place')
+        .setRequired(true)
+        .addChoices(
+          { name: 'Rudania', value: 'rudania' },
+          { name: 'Inariko', value: 'inariko' },
+          { name: 'Vhintl', value: 'vhintl' }
+        ))
+    .addStringOption(option =>
+      option
+        .setName('monster')
+        .setDescription('The monster to raid (optional - random if not specified)')
+        .setRequired(false)
+        .setAutocomplete(true)))
+
   
 // ============================================================================
 // ------------------- Execute Command Handler -------------------
@@ -505,6 +527,8 @@ async function execute(interaction) {
         return await handleVendingReset(interaction);
     } else if (subcommand === 'resetpetrolls') {
         return await handlePetRollsReset(interaction);
+    } else if (subcommand === 'raid') {
+        return await handleRaid(interaction);
     } else {
         return interaction.editReply('❌ Unknown subcommand.');
     }
@@ -1389,6 +1413,54 @@ async function handlePetRollsReset(interaction) {
       content: `❌ Failed to reset pet rolls: ${error.message || 'Unknown error'}`,
       ephemeral: true
     });
+  }
+}
+
+// ------------------- Function: handleRaid -------------------
+// Creates a raid for testing purposes
+async function handleRaid(interaction) {
+  await interaction.deferReply();
+
+  const village = interaction.options.getString('village');
+  const monsterName = interaction.options.getString('monster');
+
+  try {
+    // Get a random monster if none specified
+    let monster;
+    if (monsterName) {
+      monster = await fetchMonsterByName(monsterName);
+      if (!monster) {
+        await interaction.editReply('❌ **Specified monster not found.**');
+        return;
+      }
+    } else {
+      // Get a random monster from the available ones
+      const monsters = Object.values(monsterMapping);
+      monster = monsters[Math.floor(Math.random() * monsters.length)];
+    }
+
+    // Create a test character for the raid
+    const testCharacter = {
+      name: 'Test Character',
+      currentVillage: village,
+      currentHearts: 3,
+      maxHearts: 3,
+      icon: 'https://via.placeholder.com/50'
+    };
+
+    // Trigger the raid
+    const battleId = await triggerRaid(testCharacter, monster, interaction, null, false);
+
+    if (!battleId) {
+      await interaction.editReply('❌ **Failed to create the raid.**');
+      return;
+    }
+
+    await interaction.editReply(`✅ **Raid created successfully!**\nUse \`/raid id:${battleId}\` to join the raid.`);
+  } catch (error) {
+    handleError(error, 'mod.js');
+    console.error('[ERROR] Error creating raid:', error);
+    await interaction.editReply('⚠️ **An error occurred while creating the raid.**');
   }
 }
 
