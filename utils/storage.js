@@ -220,97 +220,119 @@ async function retrieveBoostingRequestFromStorageByCharacter(characterName) {
 // Battle progress functions
 async function saveBattleProgressToStorage(battleId, battleData) {
   try {
-    // Validate and ensure proper hearts structure
-    let monsterHearts = {
-      current: 0,
-      max: 0
-    };
+    console.log(`[storage.js]: 🔍 Raw battle data received:`, {
+      battleId,
+      monster: {
+        name: battleData.monster?.name,
+        hearts: JSON.stringify(battleData.monster?.hearts),
+        tier: battleData.monster?.tier
+      },
+      raw: JSON.stringify(battleData, null, 2)
+    });
 
-    // First try to get hearts from the monster object
-    if (battleData.monster?.hearts) {
-      const hearts = battleData.monster.hearts;
-      monsterHearts = {
-        current: Math.max(0, Number(hearts.current) || Number(hearts.max) || 1),
-        max: Math.max(1, Number(hearts.max) || Number(hearts.current) || 1)
-      };
-    } 
-    // Then try monsterHearts if available
-    else if (battleData.monsterHearts) {
-      monsterHearts = {
-        current: Math.max(0, Number(battleData.monsterHearts.current) || Number(battleData.monsterHearts.max) || 1),
-        max: Math.max(1, Number(battleData.monsterHearts.max) || Number(battleData.monsterHearts.current) || 1)
-      };
-    }
-    // Finally try raw hearts value
-    else if (battleData.monster?.hearts) {
-      const rawHearts = Number(battleData.monster.hearts);
-      monsterHearts = {
-        current: Math.max(0, rawHearts),
-        max: Math.max(1, rawHearts)
-      };
-    }
+    // Process monster hearts
+    console.log(`[storage.js]: 🔍 Processing monster hearts:`, {
+      type: typeof battleData.monster?.hearts,
+      value: JSON.stringify(battleData.monster?.hearts),
+      hasCurrent: battleData.monster?.hearts?.current !== undefined,
+      hasMax: battleData.monster?.hearts?.max !== undefined,
+      rawValue: battleData.monster?.hearts
+    });
 
-    // Validate hearts values
-    if (monsterHearts.max < 1) {
-      console.error(`[storage.js]: ❌ Invalid max hearts value for battle ${battleId}:`, monsterHearts);
+    // Extract heart values
+    let currentHearts = 0;
+    let maxHearts = 1;
+
+    if (typeof battleData.monster?.hearts === 'object' && battleData.monster?.hearts !== null) {
+      console.log(`[storage.js]: 🔍 Extracting hearts from object:`, {
+        hearts: JSON.stringify(battleData.monster.hearts),
+        current: battleData.monster.hearts.current,
+        max: battleData.monster.hearts.max
+      });
+
+      currentHearts = Math.max(0, Number(battleData.monster.hearts.current || 0));
+      maxHearts = Math.max(1, Number(battleData.monster.hearts.max || 1));
+
+      console.log(`[storage.js]: ✅ Extracted hearts from object format:`, {
+        current: currentHearts,
+        max: maxHearts,
+        original: JSON.stringify(battleData.monster.hearts)
+      });
+    } else if (typeof battleData.monster?.hearts === 'number') {
+      console.log(`[storage.js]: 🔍 Extracting hearts from number:`, {
+        hearts: battleData.monster.hearts
+      });
+
+      currentHearts = Math.max(0, battleData.monster.hearts);
+      maxHearts = Math.max(1, currentHearts);
+
+      console.log(`[storage.js]: ✅ Extracted hearts from number format:`, {
+        current: currentHearts,
+        max: maxHearts,
+        original: battleData.monster.hearts
+      });
+    } else {
+      console.error(`[storage.js]: ❌ Invalid hearts format:`, {
+        type: typeof battleData.monster?.hearts,
+        value: battleData.monster?.hearts
+      });
       return null;
     }
 
-    if (monsterHearts.current > monsterHearts.max) {
-      console.warn(`[storage.js]: ⚠️ Current hearts (${monsterHearts.current}) exceeds max (${monsterHearts.max}), adjusting...`);
-      monsterHearts.current = monsterHearts.max;
-    }
-
-    // Transform battle data
+    // Transform data according to schema
     const transformedData = {
-      battleId,
-      monster: {
-        name: battleData.monster.name,
-        hearts: monsterHearts,
-        tier: battleData.monster.tier
-      },
-      villageId: battleData.villageId,
-      status: battleData.status || 'active',
-      startTime: battleData.startTime || Date.now(),
-      endTime: battleData.endTime,
-      participants: battleData.participants || [],
-      progress: battleData.progress || '',
-      isBloodMoon: battleData.isBloodMoon || false,
-      analytics: {
-        totalDamage: battleData.analytics?.totalDamage || 0,
-        participantCount: battleData.analytics?.participantCount || 0,
-        averageDamagePerParticipant: battleData.analytics?.averageDamagePerParticipant || 0,
-        monsterTier: battleData.monster.tier,
-        villageId: battleData.villageId,
-        success: battleData.analytics?.success || null,
-        startTime: battleData.analytics?.startTime || new Date(),
-        endTime: battleData.analytics?.endTime || null,
-        duration: battleData.analytics?.duration || null
-      },
-      timestamps: {
-        started: battleData.timestamps?.started || Date.now(),
-        lastUpdated: battleData.timestamps?.lastUpdated || Date.now()
-      }
-    };
-
-    // Save to database
-    await TempData.findOneAndUpdate(
-      { key: battleId, type: 'battle' },
-      { 
-        $set: { 
-          data: transformedData,
-          expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000) // 2 hours
+      type: 'battle',
+      key: battleId,
+      data: {
+        ...battleData,
+        monster: {
+          ...battleData.monster,
+          hearts: {
+            current: currentHearts,
+            max: maxHearts
+          }
         }
       },
-      { upsert: true, new: true }
+      expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000) // 2 hours
+    };
+
+    console.log(`[storage.js]: 🔄 Transformed data before save:`, {
+      type: transformedData.type,
+      key: transformedData.key,
+      monster: {
+        name: transformedData.data.monster.name,
+        hearts: JSON.stringify(transformedData.data.monster.hearts),
+        tier: transformedData.data.monster.tier
+      }
+    });
+
+    // Save to database
+    const result = await TempData.findOneAndUpdate(
+      { type: 'battle', key: battleId },
+      transformedData,
+      { new: true, upsert: true }
     );
 
-    console.log(`[storage.js]: ✅ Saved battle ${battleId} - Monster: ${transformedData.monster.name} (${transformedData.monster.hearts.current}/${transformedData.monster.hearts.max} hearts)`);
+    // Verify save
+    if (!result) {
+      console.error(`[storage.js]: ❌ Failed to save battle progress for ${battleId}`);
+      return null;
+    }
 
-    return transformedData;
+    console.log(`[storage.js]: ✅ Save result:`, {
+      battleId,
+      savedHearts: JSON.stringify(result.monster.hearts),
+      expectedHearts: JSON.stringify(transformedData.monster.hearts),
+      originalHearts: JSON.stringify(battleData.monster?.hearts)
+    });
+
+    return result;
   } catch (error) {
-    handleError(error, 'storage.js');
-    console.error(`[storage.js]: ❌ Error saving battle ${battleId}:`, error.message);
+    console.error(`[storage.js]: ❌ Error saving battle progress:`, {
+      error: error.message,
+      battleId,
+      battleData: JSON.stringify(battleData)
+    });
     return null;
   }
 }

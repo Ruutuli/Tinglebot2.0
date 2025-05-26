@@ -33,54 +33,197 @@ const mongoose = require('mongoose');
 // ------------------- Update Raid Progress -------------------
 async function updateRaidProgress(battleId, updateData) {
     try {
-        const battleProgress = await getRaidProgressById(battleId);
-        if (!battleProgress) {
-            throw new Error(`No battle progress found for ID: ${battleId}`);
+        // Validate update data
+        if (!updateData || typeof updateData === 'string') {
+            console.error(`[raidProgressModule.js]: ❌ Invalid update data received:`, updateData);
+            return null;
         }
 
+        console.log(`[raidProgressModule.js]: 🔄 Starting raid progress update for battle ${battleId}`, {
+            updateType: updateData.type,
+            hasHearts: !!updateData.hearts,
+            hasDamage: !!updateData.damage,
+            rawUpdate: JSON.stringify(updateData, null, 2)
+        });
+
+        // Get current battle progress
+        const battleProgress = await retrieveBattleProgressFromStorage(battleId);
+        if (!battleProgress) {
+            console.error(`[raidProgressModule.js]: ❌ No battle progress found for ${battleId}`);
+            return null;
+        }
+
+        console.log(`[raidProgressModule.js]: 📊 Current battle state:`, {
+            battleId,
+            monster: {
+                name: battleProgress.monster?.name,
+                hearts: JSON.stringify(battleProgress.monster?.hearts),
+                tier: battleProgress.monster?.tier
+            },
+            status: battleProgress.status
+        });
+
         // Update monster hearts if provided
-        if (updateData.hearts) {
-            const currentHearts = Number(battleProgress.monster.hearts.current) || 0;
-            const maxHearts = Number(battleProgress.monster.hearts.max) || 0;
-            const newCurrentHearts = Math.max(0, currentHearts - updateData.hearts);
-            
-            battleProgress.monster.hearts = {
-                current: newCurrentHearts,
-                max: maxHearts
-            };
-            
-            console.log(`[raidProgressModule.js]: 💙 Updated hearts for ${battleProgress.monster.name}: ${newCurrentHearts}/${maxHearts}`);
+        if (updateData.hearts !== undefined || updateData.monster?.hearts) {
+            console.log(`[raidProgressModule.js]: ❤️ Processing heart update:`, {
+                updateDataHearts: updateData.hearts,
+                updateDataMonsterHearts: JSON.stringify(updateData.monster?.hearts),
+                currentBattleHearts: JSON.stringify(battleProgress.monster?.hearts)
+            });
+
+            // Get current heart values
+            const currentHearts = Math.max(0, Number(battleProgress.monster?.hearts?.current || 0));
+            const maxHearts = Math.max(1, Number(battleProgress.monster?.hearts?.max || 1));
+
+            // Calculate damage
+            let damage = 0;
+            if (typeof updateData.hearts === 'number') {
+                damage = Math.max(0, updateData.hearts);
+            } else if (updateData.monster?.hearts) {
+                // Handle malformed heart data
+                if (updateData.monster.hearts.max && typeof updateData.monster.hearts.max === 'object') {
+                    // If max is an object, use its current value as damage
+                    damage = Math.max(0, Number(updateData.monster.hearts.max.current || 0));
+                } else {
+                    // Otherwise use the direct hearts value
+                    damage = Math.max(0, Number(updateData.monster.hearts.current || 0));
+                }
+            }
+
+            const newCurrentHearts = Math.max(0, currentHearts - damage);
+
+            console.log(`[raidProgressModule.js]: ❤️ Heart calculation details:`, {
+                currentHearts,
+                maxHearts,
+                damage,
+                newCurrentHearts,
+                updateDataHearts: updateData.hearts,
+                updateDataMonsterHearts: JSON.stringify(updateData.monster?.hearts)
+            });
+
+            // Only update if we have valid values
+            if (maxHearts > 0) {
+                const oldHearts = JSON.stringify(battleProgress.monster.hearts);
+                battleProgress.monster.hearts = {
+                    current: newCurrentHearts,
+                    max: maxHearts
+                };
+
+                console.log(`[raidProgressModule.js]: ✅ Updated monster hearts:`, {
+                    monster: battleProgress.monster.name,
+                    oldHearts,
+                    newHearts: JSON.stringify(battleProgress.monster.hearts),
+                    updateSource: updateData.hearts !== undefined ? 'direct' : 'monster'
+                });
+            } else {
+                console.error(`[raidProgressModule.js]: ❌ Invalid max hearts value: ${maxHearts}`, {
+                    updateData: JSON.stringify(updateData),
+                    battleProgress: JSON.stringify(battleProgress.monster)
+                });
+                return null;
+            }
         }
 
         // Update participant stats if provided
-        if (updateData.participantId && updateData.participantStats) {
-            const participant = battleProgress.participants.find(p => p.characterId === updateData.participantId);
-            if (participant) {
-                participant.battleStats = {
-                    ...participant.battleStats,
+        if (updateData.participantStats) {
+            console.log(`[raidProgressModule.js]: 👥 Updating participant stats:`, {
+                participantId: updateData.participantStats.userId,
+                damage: updateData.participantStats.damage,
+                currentHearts: JSON.stringify(battleProgress.monster.hearts)
+            });
+
+            const participantIndex = battleProgress.participants.findIndex(
+                p => p.userId === updateData.participantStats.userId
+            );
+
+            if (participantIndex === -1) {
+                battleProgress.participants.push({
                     ...updateData.participantStats,
-                    lastAction: new Date()
+                    lastAction: Date.now()
+                });
+            } else {
+                battleProgress.participants[participantIndex] = {
+                    ...battleProgress.participants[participantIndex],
+                    ...updateData.participantStats,
+                    lastAction: Date.now()
                 };
             }
         }
 
         // Update analytics
         if (updateData.damage) {
-            battleProgress.analytics.totalDamage += updateData.damage;
-            battleProgress.analytics.averageDamagePerParticipant = 
-                battleProgress.analytics.totalDamage / battleProgress.analytics.participantCount;
+            console.log(`[raidProgressModule.js]: 📊 Updating analytics:`, {
+                currentTotalDamage: battleProgress.analytics?.totalDamage,
+                newDamage: updateData.damage,
+                currentHearts: JSON.stringify(battleProgress.monster.hearts)
+            });
+
+            battleProgress.analytics = {
+                ...battleProgress.analytics,
+                totalDamage: (battleProgress.analytics?.totalDamage || 0) + updateData.damage,
+                participantCount: battleProgress.participants.length,
+                averageDamagePerParticipant: battleProgress.participants.length > 0 
+                    ? ((battleProgress.analytics?.totalDamage || 0) + updateData.damage) / battleProgress.participants.length 
+                    : 0
+            };
         }
 
-        // Update timestamps
+        // Update last modified timestamp
         battleProgress.timestamps.lastUpdated = Date.now();
 
+        // Verify heart values before saving
+        if (!battleProgress.monster?.hearts?.max || battleProgress.monster.hearts.max < 1) {
+            console.error(`[raidProgressModule.js]: ❌ Invalid heart values before save:`, {
+                hearts: JSON.stringify(battleProgress.monster.hearts),
+                updateData: JSON.stringify(updateData)
+            });
+            return null;
+        }
+
+        console.log(`[raidProgressModule.js]: 🔄 Saving updated battle progress:`, {
+            battleId,
+            monster: {
+                name: battleProgress.monster.name,
+                hearts: JSON.stringify(battleProgress.monster.hearts)
+            },
+            participantCount: battleProgress.participants.length,
+            totalDamage: battleProgress.analytics?.totalDamage
+        });
+
         // Save updated progress
-        await saveBattleProgressToStorage(battleId, battleProgress);
-        return battleProgress;
+        const updatedProgress = await saveBattleProgressToStorage(battleId, battleProgress);
+        
+        if (!updatedProgress) {
+            console.error(`[raidProgressModule.js]: ❌ Failed to save updated battle progress for ${battleId}`);
+            return null;
+        }
+
+        // Verify heart values after saving
+        if (!updatedProgress.monster?.hearts?.max || updatedProgress.monster.hearts.max < 1) {
+            console.error(`[raidProgressModule.js]: ❌ Heart values corrupted during save:`, {
+                originalHearts: JSON.stringify(battleProgress.monster.hearts),
+                savedHearts: JSON.stringify(updatedProgress.monster.hearts),
+                updateData: JSON.stringify(updateData)
+            });
+            return null;
+        }
+
+        console.log(`[raidProgressModule.js]: ✅ Successfully updated battle progress:`, {
+            battleId,
+            monster: {
+                name: updatedProgress.monster.name,
+                hearts: JSON.stringify(updatedProgress.monster.hearts)
+            },
+            updateData: JSON.stringify(updateData)
+        });
+
+        return updatedProgress;
     } catch (error) {
-        handleError(error, 'raidProgressModule.js');
-        console.error(`[raidProgressModule.js]: ❌ Error updating raid progress:`, error.message);
-        throw error;
+        console.error(`[raidProgressModule.js]: ❌ Error updating raid progress:`, {
+            error: error.message,
+            updateData: JSON.stringify(updateData)
+        });
+        return null;
     }
 }
 
