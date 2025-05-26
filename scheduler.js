@@ -306,8 +306,8 @@ function setupBlightScheduler(client) {
   // Blight roll call at 8 PM EST
   createCronJob('0 20 * * *', 'Blight Roll Call', () => postBlightRollCall(client));
   
-  // Check for missed rolls every hour
-  createCronJob('0 * * * *', 'Check Missed Rolls', () => checkMissedRolls(client));
+  // Check for missed rolls at 8 PM EST
+  createCronJob('0 20 * * *', 'Check Missed Rolls', () => checkMissedRolls(client));
   
   // Clean up expired blight requests daily at midnight EST
   createCronJob('0 0 * * *', 'Cleanup Expired Blight Requests', cleanupExpiredBlightRequests);

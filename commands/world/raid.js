@@ -8,7 +8,11 @@ const { checkInventorySync } = require('../../utils/characterUtils.js');
 // Local service and module imports
 const { fetchCharacterByNameAndUserId, fetchMonsterByName } = require('../../database/db.js');
 const { processBattle } = require('../../modules/encounterModule.js');
-const { getRaidProgressById, updateRaidProgress } = require('../../modules/raidModule.js');
+const { 
+    getRaidProgressById, 
+    updateRaidProgress
+} = require('../../modules/raidModule.js');
+const { saveBattleProgressToStorage } = require('../../utils/storage.js');
 const { monsterMapping } = require('../../models/MonsterModel.js');
 const { processLoot } = require('../../modules/lootModule.js');
 const {
@@ -132,21 +136,30 @@ async execute(interaction) {
 
       try {
           // ------------------- Process the Battle -------------------
+            console.log(`[raid.js]: 🔄 Starting battle process for ${character.name} (ID: ${character.userId})`);
             const battleOutcome = await processBattle(character, currentMonster, battleId, originalRoll, interaction);
 
             if (!battleOutcome || typeof battleOutcome !== 'object') {
-                console.error('[ERROR] Invalid battle outcome.');
+                console.error(`[raid.js]: ❌ Invalid battle outcome for ${character.name}:`, battleOutcome);
                 await interaction.editReply('⚠️ **An error occurred during the battle.**');
                 return;
             }
 
+            console.log(`[raid.js]: 📊 Battle outcome for ${character.name}:`, {
+                result: battleOutcome.result,
+                adjustedRoll: battleOutcome.adjustedRandomValue,
+                attackSuccess: battleOutcome.attackSuccess,
+                defenseSuccess: battleOutcome.defenseSuccess,
+                newMonsterHearts: battleOutcome.newMonsterHeartsCurrent
+            });
+
             // Ensure battleResult is defined, with a fallback value
             const {
-                result: battleResult = 'No result available.', // Fallback message for undefined results
+                result: battleResult = 'No result available.',
                 adjustedRandomValue = originalRoll,
                 attackSuccess = false,
                 defenseSuccess = false,
-                newMonsterHeartsCurrent // <-- we expect this from processBattle now
+                newMonsterHeartsCurrent
             } = battleOutcome;
 
             let buffMessage = '';
@@ -158,23 +171,80 @@ async execute(interaction) {
 
             // ------------------- Update Monster Hearts After Battle -------------------
             if (newMonsterHeartsCurrent !== undefined) {
-                const { updateRaidProgress } = require('../../modules/raidModule');
-                await updateRaidProgress(battleId, battleResult, {
-                    hearts: newMonsterHeartsCurrent,
-                    character: character
+                // Extract character data from Mongoose document
+                const characterData = character.toObject ? character.toObject() : character;
+                console.log(`[raid.js]: 🔄 Updating raid progress for ${characterData.name}`, {
+                    battleId,
+                    newHearts: newMonsterHeartsCurrent,
+                    characterId: characterData.userId,
+                    characterData: characterData // Log full character data for debugging
                 });
+
+                const { updateRaidProgress } = require('../../modules/raidModule');
+                const updateData = {
+                    hearts: newMonsterHeartsCurrent,
+                    character: {
+                        userId: characterData.userId,
+                        name: characterData.name,
+                        currentHearts: characterData.currentHearts,
+                        maxHearts: characterData.maxHearts,
+                        monster: {
+                            name: currentMonster.name,
+                            hearts: currentMonster.hearts,
+                            tier: currentMonster.tier
+                        }
+                    }
+                };
+                console.log(`[raid.js]: 📦 Update data:`, updateData);
+                
+                await updateRaidProgress(battleId, battleResult, updateData);
+            } else {
+                console.warn(`[raid.js]: ⚠️ No monster hearts update for ${character.name} - newMonsterHeartsCurrent is undefined`);
             }
 
-
         // ------------------- Create Embed -------------------
+          console.log(`[raid.js]: 🔄 Retrieving updated battle progress for ${battleId}`);
           const updatedBattleProgress = await getRaidProgressById(battleId);
-          const monsterHeartsCurrent = updatedBattleProgress.monsterHearts.current || 0;
+          
+          // Initialize monsterHearts if missing
+          if (updatedBattleProgress && !updatedBattleProgress.monsterHearts) {
+              console.log(`[raid.js]: 🔄 Initializing missing monsterHearts for battle ${battleId}`);
+              updatedBattleProgress.monsterHearts = {
+                  current: currentMonster.hearts,
+                  max: currentMonster.hearts
+              };
+              await saveBattleProgressToStorage(battleId, updatedBattleProgress);
+          }
+
+          console.log(`[raid.js]: 📊 Updated battle progress:`, {
+              exists: !!updatedBattleProgress,
+              hasMonsterHearts: !!updatedBattleProgress?.monsterHearts,
+              currentHearts: updatedBattleProgress?.monsterHearts?.current,
+              maxHearts: updatedBattleProgress?.monsterHearts?.max
+          });
+
+          if (!updatedBattleProgress || !updatedBattleProgress.monsterHearts) {
+              console.error(`[raid.js]: ❌ Invalid battle progress data for ID: ${battleId}`, {
+                  progress: updatedBattleProgress,
+                  hasMonsterHearts: !!updatedBattleProgress?.monsterHearts
+              });
+              await interaction.editReply('⚠️ **An error occurred while retrieving battle progress.**');
+              return;
+          }
+
+          const monsterHeartsCurrent = updatedBattleProgress.monsterHearts.current;
           const monsterHeartsMax = updatedBattleProgress.monsterHearts.max;
 
-          const monsterData = monsterMapping[currentMonster.nameMapping] || {};
-          const monsterImage = monsterData.image || currentMonster.image || 'https://via.placeholder.com/150'; // Fallback image
+          if (typeof monsterHeartsCurrent !== 'number' || typeof monsterHeartsMax !== 'number') {
+              console.error(`[raid.js]: ❌ Invalid monster hearts data for ID: ${battleId}`);
+              await interaction.editReply('⚠️ **An error occurred while processing monster hearts.**');
+              return;
+          }
 
-          console.log(`[EMBED LOG] Creating battle embed for ${character.name}'s turn.`);
+          const monsterData = monsterMapping[currentMonster.nameMapping] || {};
+          const monsterImage = monsterData.image || currentMonster.image || 'https://via.placeholder.com/150';
+
+          console.log(`[raid.js]: 🔄 Creating battle embed for ${character.name}'s turn`);
 
           const embed = new EmbedBuilder()
               .setAuthor({ 

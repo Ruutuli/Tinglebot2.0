@@ -469,6 +469,14 @@ async function processBattle(character, monster, battleId, originalRoll, interac
         await interaction.editReply('❌ **An error occurred during the battle: Battle progress not found.**');
         return;
     }
+
+    // Initialize monsterHearts if not present
+    if (!battleProgress.monsterHearts) {
+        battleProgress.monsterHearts = {
+            current: monster.hearts,
+            max: monster.hearts
+        };
+    }
     
     try {
         const attackSuccess = calculateAttackBuff(character);
@@ -518,10 +526,21 @@ async function processBattle(character, monster, battleId, originalRoll, interac
             return null;
         }
 
+        // Ensure monsterHearts exists and has current property
+        if (!battleProgress.monsterHearts || typeof battleProgress.monsterHearts.current === 'undefined') {
+            console.error('[encounterModule.js]: ❌ Invalid monster hearts state');
+            return null;
+        }
+
         battleProgress.monsterHearts.current = Math.max(0, battleProgress.monsterHearts.current - outcome.hearts);
         await updateRaidProgress(battleId, outcome.result, {
             hearts: outcome.hearts,
-            character: character
+            character: {
+                ...character,
+                monster: {
+                    hearts: monster.hearts
+                }
+            }
         });
 
         return { ...outcome, originalRoll, adjustedRandomValue, attackSuccess, defenseSuccess };
