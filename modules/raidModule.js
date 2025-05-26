@@ -6,7 +6,7 @@
 // ------------------- Import Necessary Modules and Services -------------------
 
 // Discord.js imports
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, ButtonBuilder, ActionRowBuilder, ButtonStyle } = require('discord.js');
 
 // Utility imports
 const { handleError } = require('../utils/globalErrorHandler.js');
@@ -305,106 +305,102 @@ function scheduleRaidTimer(villageName, monster, thread) {
 }
 
 // ------------------- Trigger Raid -------------------
-async function triggerRaid(monster, interaction, threadId, isBloodMoon, villageId) {
-    // Get full monster data from mapping
-    const monsterKey = Object.keys(monsterMapping).find(key => 
-        monsterMapping[key].name === monster.name
-    );
-    
-    const fullMonsterData = monsterKey ? monsterMapping[monsterKey] : null;
-
-    // Fetch complete monster data from database
-    const dbMonster = await fetchMonsterByName(monster.name);
-    
-    console.log(`[raidModule.js]: 🔍 Initial monster data:`, {
-        input: monster,
-        key: monsterKey,
-        mapping: fullMonsterData,
-        database: dbMonster,
-        raw: {
-            monster,
-            fullMonsterData,
-            dbMonster
-        }
-    });
-
-    if (!fullMonsterData) {
-        console.error(`[raidModule.js]: ❌ Could not find monster data for ${monster.name}`);
-        throw new Error(`Invalid monster: ${monster.name}`);
-    }
-
-    // Get the correct hearts value from the monster data
-    // Use database hearts if available, otherwise fall back to mapping data
-    const monsterHearts = {
-        max: dbMonster?.hearts || monster.hearts || fullMonsterData.hearts || 1,
-        current: dbMonster?.hearts || monster.hearts || fullMonsterData.hearts || 1,
-    };
-
-    console.log(`[raidModule.js]: 💙 Monster hearts calculation:`, {
-        databaseHearts: dbMonster?.hearts,
-        inputHearts: monster.hearts,
-        mappingHearts: fullMonsterData.hearts,
-        finalHearts: monsterHearts,
-        raw: {
-            monster,
-            fullMonsterData,
-            dbMonster
-        }
-    });
-
-    let battleId;
-
+async function triggerRaid(interaction, monster, villageId) {
     try {
-        const battleData = {
-            ...monster,
-            nameMapping: monsterKey,
-            hearts: monsterHearts.max,
-            tier: dbMonster?.tier || fullMonsterData.tier || monster.tier || 1
+        // Log initial state
+        console.log(`[raidModule.js]: 🎯 Triggering raid with initial state:`, {
+            monster: {
+                name: monster.name,
+                hearts: monster.hearts,
+                tier: monster.tier,
+                raw: monster
+            },
+            villageId
+        });
+
+        // Fetch complete monster data from database
+        const dbMonster = await fetchMonsterByName(monster.name);
+        console.log(`[raidModule.js]: 📥 Fetched monster data from database:`, {
+            name: dbMonster.name,
+            hearts: dbMonster.hearts,
+            tier: dbMonster.tier,
+            raw: dbMonster
+        });
+
+        // Initialize monster hearts structure
+        const monsterHearts = {
+            max: Number(dbMonster.hearts?.max) || Number(dbMonster.hearts) || Number(monster.hearts?.max) || Number(monster.hearts) || 1,
+            current: Number(dbMonster.hearts?.max) || Number(dbMonster.hearts) || Number(monster.hearts?.max) || Number(monster.hearts) || 1
         };
 
-        console.log(`[raidModule.js]: 📦 Prepared battle data:`, {
-            battleData,
-            monsterHearts,
-            tier: battleData.tier,
-            raw: {
-                monster,
-                fullMonsterData,
-                dbMonster
+        // Validate hearts values
+        if (monsterHearts.max < 1) {
+            console.error(`[raidModule.js]: ❌ Invalid max hearts value:`, monsterHearts);
+            throw new Error('Invalid max hearts value');
+        }
+
+        // Calculate tier based on database or mapping data
+        const tier = Number(dbMonster.tier) || Number(monster.tier) || 1;
+
+        // Create raid data
+        const raidData = {
+            battleId: `raid_${Date.now()}`,
+            monster: {
+                name: monster.name,
+                hearts: monsterHearts,
+                tier: tier,
+                raw: dbMonster
+            },
+            villageId,
+            status: 'active',
+            startTime: Date.now(),
+            participants: [],
+            progress: '',
+            isBloodMoon: false
+        };
+
+        console.log(`[raidModule.js]: 📝 Created raid data:`, {
+            battleId: raidData.battleId,
+            monster: {
+                name: raidData.monster.name,
+                hearts: raidData.monster.hearts,
+                tier: raidData.monster.tier
+            },
+            villageId: raidData.villageId,
+            status: raidData.status
+        });
+
+        // Save initial raid state
+        await saveBattleProgressToStorage(raidData.battleId, raidData);
+
+        // Create and send raid embed
+        const raidEmbed = createRaidEmbed(raidData);
+        const message = await interaction.channel.send({ embeds: [raidEmbed] });
+
+        // Add join button
+        const joinButton = new ButtonBuilder()
+            .setCustomId(`join_raid_${raidData.battleId}`)
+            .setLabel('Join Raid')
+            .setStyle(ButtonStyle.Primary);
+
+        const row = new ActionRowBuilder().addComponents(joinButton);
+        await message.edit({ embeds: [raidEmbed], components: [row] });
+
+        console.log(`[raidModule.js]: ✅ Raid triggered successfully:`, {
+            battleId: raidData.battleId,
+            messageId: message.id,
+            monster: {
+                name: raidData.monster.name,
+                hearts: raidData.monster.hearts,
+                tier: raidData.monster.tier
             }
         });
 
-        battleId = await storeRaidProgress(
-            battleData,
-            dbMonster?.tier || fullMonsterData.tier || monster.tier || 1,
-            monsterHearts,
-            isBloodMoon ? '🔴 Blood Moon Raid initiated!' : 'Raid initiated! Join to participate.',
-            villageId
-        );
-
-        const embed = createRaidEmbed({
-            ...monster,
-            hearts: monsterHearts.max,
-            tier: dbMonster?.tier || fullMonsterData.tier || monster.tier || 1
-        }, battleId, isBloodMoon, villageId);
-        
-        const thread = await createOrUpdateRaidThread(interaction, {
-            ...monster,
-            hearts: monsterHearts.max,
-            tier: dbMonster?.tier || fullMonsterData.tier || monster.tier || 1
-        }, embed, threadId, isBloodMoon, villageId);
-
-        scheduleRaidTimer(villageId, {
-            ...monster,
-            hearts: monsterHearts.max,
-            tier: dbMonster?.tier || fullMonsterData.tier || monster.tier || 1
-        }, thread);
-
-        return battleId;
+        return raidData;
     } catch (error) {
         handleError(error, 'raidModule.js');
         console.error(`[raidModule.js]: ❌ Error triggering raid:`, error);
-        await interaction.followUp(`❌ **Failed to create the raid. Please try again later.**`);
-        return null;
+        throw error;
     }
 }
 

@@ -220,123 +220,84 @@ async function retrieveBoostingRequestFromStorageByCharacter(characterName) {
 // Battle progress functions
 async function saveBattleProgressToStorage(battleId, battleData) {
   try {
-    // Validate required fields
-    if (!battleId || !battleData) {
-      console.error(`[storage.js]: ❌ Missing battleId or battleData for save operation`);
-      throw new Error('Missing battleId or battleData');
-    }
-
+    // Log received data
     console.log(`[storage.js]: 📥 Received battle data:`, {
       battleId,
       monster: {
-        name: battleData.monster?.name,
-        hearts: battleData.monster?.hearts,
-        tier: battleData.monster?.tier,
+        name: battleData.monster.name,
+        hearts: battleData.monster.hearts,
+        tier: battleData.monster.tier,
         raw: battleData.monster
       },
       monsterHearts: battleData.monsterHearts,
       raw: battleData
     });
 
-    // Ensure all required fields are present and properly structured
-    const battle = {
-      type: 'battle',
-      key: battleId,
-      data: {
-        battleId: battleData.battleId,
-        characters: battleData.characters?.map(char => ({
-          _id: char._id,
-          userId: char.userId,
-          name: char.name,
-          currentHearts: char.currentHearts || 0,
-          maxHearts: char.maxHearts || 0,
-          currentStamina: char.currentStamina || 0,
-          maxStamina: char.maxStamina || 0,
-          level: char.level || 1,
-          experience: char.experience || 0,
-          currentVillage: char.currentVillage,
-          equipment: char.equipment || {},
-          inventory: char.inventory || [],
-          stats: char.stats || {},
-          buffs: char.buffs || [],
-          status: char.status || 'active'
-        })) || [],
-        monster: {
-          name: battleData.monster.name,
-          tier: battleData.monster.tier,
-          hearts: {
-            max: Number(battleData.monster.hearts?.max) || Number(battleData.monster.hearts) || 1,
-            current: Number(battleData.monster.hearts?.current) || Number(battleData.monster.hearts) || 1
-          },
-          stats: battleData.monster.stats || {},
-          abilities: battleData.monster.abilities || []
-        },
-        progress: battleData.progress || '',
-        isBloodMoon: battleData.isBloodMoon || false,
-        startTime: battleData.startTime || Date.now(),
-        villageId: battleData.villageId,
-        status: battleData.status || 'active',
-        participants: battleData.participants?.map(p => ({
-          userId: p.userId,
-          characterId: p.characterId,
-          name: p.name,
-          damage: p.damage || 0,
-          joinedAt: p.joinedAt || Date.now(),
-          stats: {
-            initialHearts: p.stats?.initialHearts || 0,
-            initialStamina: p.stats?.initialStamina || 0,
-            damageDealt: p.stats?.damageDealt || 0,
-            healingDone: p.stats?.healingDone || 0,
-            buffsApplied: p.stats?.buffsApplied || [],
-            debuffsReceived: p.stats?.debuffsReceived || []
-          }
-        })) || [],
-        analytics: {
-          totalDamage: battleData.analytics?.totalDamage || 0,
-          participantCount: battleData.analytics?.participantCount || 0,
-          averageDamagePerParticipant: battleData.analytics?.averageDamagePerParticipant || 0,
-          monsterTier: battleData.analytics?.monsterTier || 0,
-          villageId: battleData.analytics?.villageId,
-          success: battleData.analytics?.success || false,
-          characterStats: battleData.analytics?.characterStats || {}
-        },
-        timestamps: {
-          started: battleData.timestamps?.started || Date.now(),
-          lastUpdated: battleData.timestamps?.lastUpdated || Date.now()
-        }
-      },
-      expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000) // 2 hours
-    };
+    // Validate and ensure proper hearts structure
+    if (battleData.monster && battleData.monster.hearts) {
+      const hearts = battleData.monster.hearts;
+      if (typeof hearts !== 'object' || !('max' in hearts) || !('current' in hearts)) {
+        console.error(`[storage.js]: ❌ Invalid hearts structure for battle ${battleId}:`, hearts);
+        return null;
+      }
 
-    console.log(`[storage.js]: 🔄 Transformed battle data:`, {
+      // Ensure hearts are numbers
+      hearts.max = Number(hearts.max) || 1;
+      hearts.current = Number(hearts.current) || hearts.max;
+
+      // Validate hearts values
+      if (hearts.current < 0 || hearts.max < hearts.current) {
+        console.error(`[storage.js]: ❌ Invalid hearts values for battle ${battleId}:`, hearts);
+        return null;
+      }
+    }
+
+    // Transform battle data
+    const transformedData = {
       battleId,
       monster: {
-        name: battle.data.monster.name,
-        hearts: battle.data.monster.hearts,
-        tier: battle.data.monster.tier,
-        raw: battle.data.monster
+        name: battleData.monster.name,
+        hearts: battleData.monster.hearts,
+        tier: battleData.monster.tier,
+        raw: battleData.monster
       },
-      raw: battle.data
-    });
+      raw: battleData
+    };
 
-    const result = await TempData.findOneAndUpdate(
-      { type: 'battle', key: battleId },
-      battle,
+    console.log(`[storage.js]: 🔄 Transformed battle data:`, transformedData);
+
+    // Save to database
+    await TempData.findOneAndUpdate(
+      { key: battleId, type: 'battle' },
+      { 
+        $set: { 
+          data: transformedData,
+          expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000) // 2 hours
+        }
+      },
       { upsert: true, new: true }
     );
 
     console.log(`[storage.js]: ✅ Saved battle progress for Battle ID "${battleId}" with details:`, {
       monster: {
-        name: result.data.monster.name,
-        hearts: result.data.monster.hearts,
-        tier: result.data.monster.tier
+        name: transformedData.monster.name,
+        hearts: transformedData.monster.hearts,
+        tier: transformedData.monster.tier
       },
-      raw: result.data.monster
+      raw: {
+        name: transformedData.monster.name,
+        tier: transformedData.monster.tier,
+        hearts: transformedData.monster.hearts,
+        stats: {},
+        abilities: []
+      }
     });
-    return result;
+
+    return transformedData;
   } catch (error) {
+    handleError(error, 'storage.js');
     console.error(`[storage.js]: ❌ Error saving battle progress for Battle ID "${battleId}":`, error);
-    throw error;
+    return null;
   }
 }
 
