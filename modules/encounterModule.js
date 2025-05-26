@@ -532,16 +532,31 @@ async function processBattle(character, monster, battleId, originalRoll, interac
             return null;
         }
 
-        battleProgress.monsterHearts.current = Math.max(0, battleProgress.monsterHearts.current - outcome.hearts);
-        await updateRaidProgress(battleId, outcome.result, {
+        // Calculate new heart values
+        const newCurrentHearts = Math.max(0, battleProgress.monsterHearts.current - outcome.hearts);
+        const maxHearts = battleProgress.monsterHearts.max;
+
+        // Create structured update data
+        const updateData = {
+            type: 'encounter',
             hearts: outcome.hearts,
-            character: {
-                ...character,
-                monster: {
-                    hearts: monster.hearts
+            damage: outcome.hearts,
+            participantStats: {
+                userId: character.userId,
+                characterId: character._id,
+                damage: outcome.hearts,
+                lastAction: Date.now()
+            },
+            monster: {
+                hearts: {
+                    current: newCurrentHearts,
+                    max: maxHearts
                 }
             }
-        });
+        };
+
+        // Update battle progress with structured data
+        await updateRaidProgress(battleId, updateData);
 
         return { 
             ...outcome, 
@@ -549,12 +564,57 @@ async function processBattle(character, monster, battleId, originalRoll, interac
             adjustedRandomValue, 
             attackSuccess, 
             defenseSuccess,
-            monsterHearts: battleProgress.monsterHearts 
+            monsterHearts: {
+                current: newCurrentHearts,
+                max: maxHearts
+            }
         };
     } catch (error) {
         handleError(error, 'encounterModule.js');
         console.error('[encounterModule.js]: ❌ Battle processing error:', error.message);
         return null;
+    }
+}
+
+async function handleEncounter(character, monster, battleId) {
+    try {
+        console.log(`[encounterModule.js]: ⚔️ ${character.name} vs ${monster.name} (T${monster.tier}) - Roll: ${roll}/${100}`);
+
+        // Calculate damage
+        const characterDamage = calculateDamage(character, monster);
+        const monsterDamage = calculateDamage(monster, character);
+
+        console.log(`[encounterModule.js]: 💥 Damage - ${character.name}: ${characterDamage}, ${monster.name}: ${monsterDamage}`);
+
+        // Update character stats
+        if (monsterDamage > 0) {
+            await updateCharacterHearts(character.id, monsterDamage);
+        }
+
+        // Update battle progress with structured data
+        const updateData = {
+            type: 'encounter',
+            hearts: characterDamage, // Damage dealt to monster
+            damage: characterDamage, // For analytics
+            participantStats: {
+                userId: character.userId,
+                characterId: character.id,
+                damage: characterDamage,
+                lastAction: Date.now()
+            }
+        };
+
+        // Update battle progress
+        await updateRaidProgress(battleId, updateData);
+
+        return {
+            characterDamage,
+            monsterDamage,
+            message: generateEncounterMessage(character, monster, characterDamage, monsterDamage)
+        };
+    } catch (error) {
+        console.error(`[encounterModule.js]: ❌ Error handling encounter:`, error.message);
+        throw error;
     }
 }
 
