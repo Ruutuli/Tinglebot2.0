@@ -324,6 +324,13 @@ async function handleAutocomplete(interaction) {
             }
             break;
 
+          // ------------------- Raid Command -------------------
+          case "raid":
+            if (focusedOption.name === "charactername") {
+              await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "raid");
+            }
+            break;
+
           // ------------------- Vending Command -------------------
           case "vending":
             const vendingSubcommand = interaction.options.getSubcommand(false);

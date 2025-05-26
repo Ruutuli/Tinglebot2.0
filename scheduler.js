@@ -303,19 +303,14 @@ async function resetPetLastRollDates() {
 // ---- Function: setupBlightScheduler ----
 // Sets up the blight roll call and missed rolls check
 function setupBlightScheduler(client) {
-  // Daily Blight Roll Call (8 PM)
-  createCronJob('00 20 * * *', 'blight roll call', () => postBlightRollCall(client));
-
-  // Check for Missed Rolls and Death Deadlines (7:59 PM)
-  createCronJob('01 20 * * *', 'check missed blight rolls and death deadlines', async () => {
-    try {
-      await checkMissedRolls(client);
-      console.log('[scheduler.js]: ✅ Completed blight checks for missed rolls and death deadlines');
-    } catch (error) {
-      handleError(error, 'scheduler.js');
-      console.error('[scheduler.js]: ❌ Error in blight checks:', error.message);
-    }
-  });
+  // Blight roll call at 8 PM EST
+  createCronJob('0 20 * * *', 'Blight Roll Call', () => postBlightRollCall(client));
+  
+  // Check for missed rolls every hour
+  createCronJob('0 * * * *', 'Check Missed Rolls', () => checkMissedRolls(client));
+  
+  // Clean up expired blight requests daily at midnight EST
+  createCronJob('0 0 * * *', 'Cleanup Expired Blight Requests', cleanupExpiredBlightRequests);
 }
 
 // ============================================================================
@@ -326,6 +321,12 @@ function setupBlightScheduler(client) {
 // ---- Function: initializeScheduler ----
 // Initializes all scheduled tasks and cron jobs
 function initializeScheduler(client) {
+  // Validate client
+  if (!client || !client.isReady()) {
+    console.error('[scheduler.js]: ❌ Invalid or unready Discord client provided to scheduler');
+    return;
+  }
+
   // Add startup Blood Moon check
   (async () => {
     try {
@@ -368,7 +369,7 @@ function initializeScheduler(client) {
     ]);
   });
   createCronJob('0 0 * * *', 'debuff expiry check', handleDebuffExpiry);
-  createCronJob('0 8  * * *', 'daily weather update', () => postWeatherUpdate(client), 'America/New_York'); //replace with 0 8 * * * for 8am EST
+  createCronJob('0 8  * * *', 'daily weather update', () => postWeatherUpdate(client), 'America/New_York');
   createCronJob('0 0 * * *', 'birthday announcements', () => executeBirthdayAnnouncements(client));
   
   // Initialize blight scheduler
@@ -397,7 +398,7 @@ function initializeScheduler(client) {
         console.error(`[scheduler.js]: ❌ Blood Moon tracking failed: ${error.message}`);
       }
     }
-  }, 'America/New_York'); // Ensure timezone is set to EST
+  }, 'America/New_York');
 }
 
 module.exports = {
