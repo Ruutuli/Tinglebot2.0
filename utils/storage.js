@@ -226,13 +226,25 @@ async function saveBattleProgressToStorage(battleId, battleData) {
       throw new Error('Missing battleId or battleData');
     }
 
+    console.log(`[storage.js]: 📥 Received battle data:`, {
+      battleId,
+      monster: {
+        name: battleData.monster?.name,
+        hearts: battleData.monster?.hearts,
+        tier: battleData.monster?.tier,
+        raw: battleData.monster
+      },
+      monsterHearts: battleData.monsterHearts,
+      raw: battleData
+    });
+
     // Ensure all required fields are present and properly structured
     const battle = {
       type: 'battle',
       key: battleId,
       data: {
         battleId: battleData.battleId,
-        characters: battleData.characters.map(char => ({
+        characters: battleData.characters?.map(char => ({
           _id: char._id,
           userId: char.userId,
           name: char.name,
@@ -248,13 +260,13 @@ async function saveBattleProgressToStorage(battleId, battleData) {
           stats: char.stats || {},
           buffs: char.buffs || [],
           status: char.status || 'active'
-        })),
+        })) || [],
         monster: {
           name: battleData.monster.name,
           tier: battleData.monster.tier,
           hearts: {
-            max: battleData.monster.hearts?.max || 0,
-            current: battleData.monster.hearts?.current || 0
+            max: Number(battleData.monster.hearts?.max) || Number(battleData.monster.hearts) || 1,
+            current: Number(battleData.monster.hearts?.current) || Number(battleData.monster.hearts) || 1
           },
           stats: battleData.monster.stats || {},
           abilities: battleData.monster.abilities || []
@@ -264,7 +276,7 @@ async function saveBattleProgressToStorage(battleId, battleData) {
         startTime: battleData.startTime || Date.now(),
         villageId: battleData.villageId,
         status: battleData.status || 'active',
-        participants: battleData.participants.map(p => ({
+        participants: battleData.participants?.map(p => ({
           userId: p.userId,
           characterId: p.characterId,
           name: p.name,
@@ -278,7 +290,7 @@ async function saveBattleProgressToStorage(battleId, battleData) {
             buffsApplied: p.stats?.buffsApplied || [],
             debuffsReceived: p.stats?.debuffsReceived || []
           }
-        })),
+        })) || [],
         analytics: {
           totalDamage: battleData.analytics?.totalDamage || 0,
           participantCount: battleData.analytics?.participantCount || 0,
@@ -296,13 +308,31 @@ async function saveBattleProgressToStorage(battleId, battleData) {
       expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000) // 2 hours
     };
 
+    console.log(`[storage.js]: 🔄 Transformed battle data:`, {
+      battleId,
+      monster: {
+        name: battle.data.monster.name,
+        hearts: battle.data.monster.hearts,
+        tier: battle.data.monster.tier,
+        raw: battle.data.monster
+      },
+      raw: battle.data
+    });
+
     const result = await TempData.findOneAndUpdate(
       { type: 'battle', key: battleId },
       battle,
       { upsert: true, new: true }
     );
 
-    console.log(`[storage.js]: ✅ Saved battle progress for Battle ID "${battleId}"`);
+    console.log(`[storage.js]: ✅ Saved battle progress for Battle ID "${battleId}" with details:`, {
+      monster: {
+        name: result.data.monster.name,
+        hearts: result.data.monster.hearts,
+        tier: result.data.monster.tier
+      },
+      raw: result.data.monster
+    });
     return result;
   } catch (error) {
     console.error(`[storage.js]: ❌ Error saving battle progress for Battle ID "${battleId}":`, error);

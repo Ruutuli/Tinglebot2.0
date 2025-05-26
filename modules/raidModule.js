@@ -3,20 +3,35 @@
 // timer management, and thread handling for both random encounters and manual raids.
 // -----------------------------------------------------------------------------------------
 
-const { EmbedBuilder } = require('discord.js');
-const { handleError } = require('../utils/globalErrorHandler');
-const { monsterMapping } = require('../models/MonsterModel');
-const { applyVillageDamage } = require('./villageModule');
-const { capitalizeVillageName } = require('../utils/stringUtils');
-const { generateUniqueId } = require('../utils/uniqueIdUtils');
-const mongoose = require('mongoose');
+// ------------------- Import Necessary Modules and Services -------------------
 
-// ------------------- Storage Functions -------------------
-const { 
-  saveBattleProgressToStorage, 
-  retrieveBattleProgressFromStorage, 
-  deleteBattleProgressFromStorage 
-} = require('../utils/storage.js');
+// Discord.js imports
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+
+// Utility imports
+const { handleError } = require('../utils/globalErrorHandler.js');
+const { checkInventorySync } = require('../utils/characterUtils.js');
+const { capitalizeVillageName } = require('../utils/stringUtils.js');
+const { generateUniqueId } = require('../utils/uniqueIdUtils.js');
+
+// Database and storage imports
+const { fetchCharacterByNameAndUserId, fetchMonsterByName } = require('../database/db.js');
+const { saveBattleProgressToStorage, retrieveBattleProgressFromStorage, deleteBattleProgressFromStorage } = require('../utils/storage.js');
+
+// Module imports
+const { processLoot } = require('../modules/lootModule.js');
+const { applyVillageDamage } = require('./villageModule.js');
+const { updateRaidProgress, getRaidProgressById, handleRaidCompletion } = require('./raidProgressModule.js');
+
+// Model imports
+const { monsterMapping } = require('../models/MonsterModel.js');
+
+// Embed and text imports
+const { createKOEmbed } = require('../embeds/embeds.js');
+const { generateDamageMessage, generateVictoryMessage } = require('../modules/flavorTextModule.js');
+
+// Database
+const mongoose = require('mongoose');
 
 // ------------------- Constants -------------------
 const RAID_DURATION = 15 * 60 * 1000; // 15 minutes in milliseconds
@@ -78,6 +93,10 @@ async function checkRateLimit(userId, villageId) {
 async function storeRaidProgress(monster, tier, monsterHearts, progress, villageId) {
   const battleId = generateUniqueId('R');
   
+  // Ensure we have valid heart values
+  const maxHearts = Number(monster.hearts) || Number(monsterHearts?.max) || 1;
+  const currentHearts = Number(monsterHearts?.current) || maxHearts;
+  
   console.log(`[raidModule.js]: 📊 Detailed monster data received:`, {
     monster: {
       raw: monster,
@@ -87,7 +106,11 @@ async function storeRaidProgress(monster, tier, monsterHearts, progress, village
       nameMapping: monster.nameMapping
     },
     tierParam: tier,
-    monsterHearts: monsterHearts
+    monsterHearts: monsterHearts,
+    calculatedHearts: {
+      max: maxHearts,
+      current: currentHearts
+    }
   });
 
   try {
@@ -98,9 +121,11 @@ async function storeRaidProgress(monster, tier, monsterHearts, progress, village
         name: monster.name,
         tier: monster.tier || tier,
         hearts: {
-          max: monster.hearts,
-          current: monsterHearts.current
-        }
+          max: maxHearts,
+          current: currentHearts
+        },
+        stats: {},
+        abilities: []
       },
       progress: progress ? `\n${progress}` : '',
       isBloodMoon: false,
@@ -176,33 +201,42 @@ async function updateRaidProgress(battleId, updatedProgress, outcome) {
             }
         }
 
-        if (!battleProgress.monster.hearts) {
+        // Initialize or update monster hearts with proper structure
+        if (!battleProgress.monster.hearts || !battleProgress.monster.hearts.max) {
             console.log(`[raidModule.js]: 🔄 Initializing monster hearts for battle ${battleId}`);
+            const maxHearts = Number(outcome.character?.monster?.hearts) || 1;
             battleProgress.monster.hearts = {
-                current: outcome.character?.monster?.hearts || 0,
-                max: outcome.character?.monster?.hearts || 0
+                current: maxHearts,
+                max: maxHearts
             };
         }
 
-        if (typeof battleProgress.monster.hearts.current !== 'number' || 
-            typeof battleProgress.monster.hearts.max !== 'number' ||
-            battleProgress.monster.hearts.current < 0 ||
-            battleProgress.monster.hearts.max < battleProgress.monster.hearts.current) {
+        // Ensure we have valid numbers for hearts
+        const currentHearts = Number(battleProgress.monster.hearts.current) || 0;
+        const maxHearts = Number(battleProgress.monster.hearts.max) || 1;
+
+        if (currentHearts < 0 || maxHearts < currentHearts) {
             console.error(`[raidModule.js]: ❌ Invalid monster hearts state for battle ${battleId}`, {
-                current: battleProgress.monster.hearts.current,
-                max: battleProgress.monster.hearts.max
+                current: currentHearts,
+                max: maxHearts
             });
             return null;
         }
 
-        const newCurrent = Math.max(0, battleProgress.monster.hearts.current - (outcome.hearts || 0));
+        const newCurrent = Math.max(0, currentHearts - (outcome.hearts || 0));
         console.log(`[raidModule.js]: 💥 Updating monster hearts`, {
-            oldCurrent: battleProgress.monster.hearts.current,
+            oldCurrent: currentHearts,
             damage: outcome.hearts,
-            newCurrent
+            newCurrent,
+            maxHearts
         });
         
-        battleProgress.monster.hearts.current = newCurrent;
+        // Update with clean structure, preserving max hearts
+        battleProgress.monster.hearts = {
+            current: newCurrent,
+            max: maxHearts
+        };
+        
         battleProgress.progress += `\n${updatedProgress}`;
         battleProgress.timestamps.lastUpdated = new Date();
 
@@ -220,16 +254,8 @@ async function updateRaidProgress(battleId, updatedProgress, outcome) {
     } catch (error) {
         await session.abortTransaction();
         handleError(error, 'raidModule.js');
-        console.error(`[raidModule.js]: ❌ Error updating raid progress for Battle ID "${battleId}":`, error);
-        
-        const currentProgress = await getRaidProgressById(battleId);
-        if (currentProgress && currentProgress.retryCount < 3) {
-            currentProgress.retryCount = (currentProgress.retryCount || 0) + 1;
-            console.log(`[raidModule.js]: 🔄 Retrying update (attempt ${currentProgress.retryCount})`);
-            return updateRaidProgress(battleId, updatedProgress, outcome);
-        }
-        
-        throw error;
+        console.error(`[raidModule.js]: ❌ Error updating raid progress:`, error);
+        return null;
     } finally {
         session.endSession();
     }
@@ -246,7 +272,7 @@ async function deleteRaidProgressById(battleId) {
   }
 }
 
-// Add this new function to check raid expiration
+// ------------------- Check Raid Expiration -------------------
 async function checkRaidExpiration(battleId) {
   try {
     const battleProgress = await getRaidProgressById(battleId);
@@ -391,16 +417,20 @@ async function triggerRaid(monster, interaction, threadId, isBloodMoon, villageI
     );
     
     const fullMonsterData = monsterKey ? monsterMapping[monsterKey] : null;
+
+    // Fetch complete monster data from database
+    const dbMonster = await fetchMonsterByName(monster.name);
     
-    console.log(`[raidModule.js]: 🚀 Triggering raid with detailed data:`, {
-        monster: {
-            raw: monster,
-            name: monster.name,
-            nameMapping: monsterKey,
-            fullData: fullMonsterData
-        },
-        isBloodMoon,
-        villageId
+    console.log(`[raidModule.js]: 🔍 Initial monster data:`, {
+        input: monster,
+        key: monsterKey,
+        mapping: fullMonsterData,
+        database: dbMonster,
+        raw: {
+            monster,
+            fullMonsterData,
+            dbMonster
+        }
     });
 
     if (!fullMonsterData) {
@@ -408,24 +438,49 @@ async function triggerRaid(monster, interaction, threadId, isBloodMoon, villageI
         throw new Error(`Invalid monster: ${monster.name}`);
     }
 
+    // Get the correct hearts value from the monster data
+    // Use database hearts if available, otherwise fall back to mapping data
     const monsterHearts = {
-        max: fullMonsterData.hearts || 1,
-        current: fullMonsterData.hearts || 1,
+        max: dbMonster?.hearts || monster.hearts || fullMonsterData.hearts || 1,
+        current: dbMonster?.hearts || monster.hearts || fullMonsterData.hearts || 1,
     };
 
-    console.log(`[raidModule.js]: 💙 Monster hearts object:`, monsterHearts);
+    console.log(`[raidModule.js]: 💙 Monster hearts calculation:`, {
+        databaseHearts: dbMonster?.hearts,
+        inputHearts: monster.hearts,
+        mappingHearts: fullMonsterData.hearts,
+        finalHearts: monsterHearts,
+        raw: {
+            monster,
+            fullMonsterData,
+            dbMonster
+        }
+    });
 
     let battleId;
 
     try {
+        const battleData = {
+            ...monster,
+            nameMapping: monsterKey,
+            hearts: monsterHearts.max,
+            tier: dbMonster?.tier || fullMonsterData.tier || monster.tier || 1
+        };
+
+        console.log(`[raidModule.js]: 📦 Prepared battle data:`, {
+            battleData,
+            monsterHearts,
+            tier: battleData.tier,
+            raw: {
+                monster,
+                fullMonsterData,
+                dbMonster
+            }
+        });
+
         battleId = await storeRaidProgress(
-            {
-                ...monster,
-                nameMapping: monsterKey,
-                hearts: fullMonsterData.hearts || 1,
-                tier: fullMonsterData.tier || 1
-            },
-            fullMonsterData.tier || 1,
+            battleData,
+            dbMonster?.tier || fullMonsterData.tier || monster.tier || 1,
             monsterHearts,
             isBloodMoon ? '🔴 Blood Moon Raid initiated!' : 'Raid initiated! Join to participate.',
             villageId
@@ -433,20 +488,20 @@ async function triggerRaid(monster, interaction, threadId, isBloodMoon, villageI
 
         const embed = createRaidEmbed({
             ...monster,
-            hearts: fullMonsterData.hearts || 1,
-            tier: fullMonsterData.tier || 1
+            hearts: monsterHearts.max,
+            tier: dbMonster?.tier || fullMonsterData.tier || monster.tier || 1
         }, battleId, isBloodMoon, villageId);
         
         const thread = await createOrUpdateRaidThread(interaction, {
             ...monster,
-            hearts: fullMonsterData.hearts || 1,
-            tier: fullMonsterData.tier || 1
+            hearts: monsterHearts.max,
+            tier: dbMonster?.tier || fullMonsterData.tier || monster.tier || 1
         }, embed, threadId, isBloodMoon, villageId);
 
         scheduleRaidTimer(villageId, {
             ...monster,
-            hearts: fullMonsterData.hearts || 1,
-            tier: fullMonsterData.tier || 1
+            hearts: monsterHearts.max,
+            tier: dbMonster?.tier || fullMonsterData.tier || monster.tier || 1
         }, thread);
 
         return battleId;

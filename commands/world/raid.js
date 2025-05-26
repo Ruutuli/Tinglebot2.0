@@ -12,7 +12,7 @@ const {
     getRaidProgressById, 
     updateRaidProgress,
     checkRaidExpiration
-} = require('../../modules/raidModule.js');
+} = require('../../modules/raidProgressModule.js');
 const { saveBattleProgressToStorage } = require('../../utils/storage.js');
 const { monsterMapping } = require('../../models/MonsterModel.js');
 const { processLoot } = require('../../modules/lootModule.js');
@@ -145,6 +145,19 @@ async execute(interaction) {
           return;
       }
 
+      // Update monster hearts in battle progress with correct structure
+      if (battleResult.monsterHearts) {
+          // Ensure we have a clean hearts structure
+          const hearts = {
+              current: Number(battleResult.monsterHearts.current) || 0,
+              max: Number(battleResult.monsterHearts.max) || 0
+          };
+          
+          // Update the monster hearts with clean structure
+          battleProgress.monster.hearts = hearts;
+          await saveBattleProgressToStorage(battleId, battleProgress);
+      }
+
       // ------------------- Create Embed -------------------
       console.log(`[raid.js]: 🔄 Creating battle embed for ${character.name}'s turn`);
 
@@ -156,10 +169,13 @@ async execute(interaction) {
           generateVictoryMessage(adjustedRandomValue) : 
           generateDamageMessage(battleResult.hearts || 1);
 
-      // Get monster hearts from battle result
-      const monsterHearts = battleResult.monsterHearts || battleProgress.monster.hearts;
-      const currentHearts = typeof monsterHearts === 'object' ? monsterHearts.current : monsterHearts;
-      const maxHearts = typeof monsterHearts === 'object' ? monsterHearts.max : monsterHearts;
+      // Get monster hearts from battle progress
+      const monsterHearts = battleProgress.monster.hearts;
+      console.log('[raid.js]: Debug monster hearts:', JSON.stringify(monsterHearts));
+      
+      // Get current and max hearts with fallbacks
+      const currentHearts = Number(monsterHearts?.current) || 0;
+      const maxHearts = Number(monsterHearts?.max) || 0;
 
       const embed = new EmbedBuilder()
           .setAuthor({ 

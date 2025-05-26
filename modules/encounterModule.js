@@ -18,7 +18,7 @@ const { getBattleProgressById, storeBattleProgress } = require('./raidCombatModu
 const Monster = require('../models/MonsterModel');
 const { calculateAttackBuff, calculateDefenseBuff, applyBuffs } = require('./buffModule');
 const { handleError } = require('../utils/globalErrorHandler');
-const { updateRaidProgress } = require('./raidModule');
+const { updateRaidProgress } = require('./raidProgressModule');
 
 // ============================================================================
 // Utility Functions
