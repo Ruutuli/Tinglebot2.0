@@ -33,6 +33,9 @@ const googleCredentials = JSON.parse(fs.readFileSync(credentialsPath, 'utf8'));
 const tokenPath = path.join(__dirname, 'token.json');
 const googleTokens = JSON.parse(fs.readFileSync(tokenPath, 'utf8'));
 
+// Game constants
+const RAID_DURATION = 15 * 60 * 1000; // 15 minutes in milliseconds
+
 module.exports = {
   discordToken: process.env.DISCORD_TOKEN,
   clientId: process.env.CLIENT_ID,
@@ -43,5 +46,6 @@ module.exports = {
   serviceAccount,
   googleCredentials,
   googleTokens,
+  RAID_DURATION,
 };
 

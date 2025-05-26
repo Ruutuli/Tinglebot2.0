@@ -88,8 +88,15 @@ async execute(interaction) {
       // ------------------- Retrieve Existing Raid Progress -------------------
       const battleProgress = await getRaidProgressById(battleId);
       if (!battleProgress) {
-          console.error(`[ERROR] No battle progress found for Battle ID: ${battleId}`);
-          await interaction.editReply('❌ **An error occurred during the battle: Battle progress not found.**');
+          console.error(`[raid.js]: ❌ No battle progress found for Battle ID: ${battleId}`);
+          await interaction.editReply('❌ **This raid is no longer available. It may have expired or been invalidated.**');
+          return;
+      }
+
+      // Validate battle progress structure
+      if (!battleProgress.villageId) {
+          console.error(`[raid.js]: ❌ Invalid battle progress structure. Missing villageId for Battle ID: ${battleId}`);
+          await interaction.editReply('❌ **An error occurred: Invalid battle data. Please try again or contact support.**');
           return;
       }
 
@@ -102,9 +109,15 @@ async execute(interaction) {
       }
 
       // Check if character is in the correct village
-      if (character.currentVillage !== battleProgress.villageId) {
+      if (!character.currentVillage || !battleProgress.villageId) {
+          console.error(`[raid.js]: ❌ Missing village data. Character village: ${character.currentVillage}, Battle village: ${battleProgress.villageId}`);
+          await interaction.editReply('❌ **An error occurred: Missing village data. Please try again or contact support.**');
+          return;
+      }
+
+      if (character.currentVillage.toLowerCase() !== battleProgress.villageId.toLowerCase()) {
           console.log(`[raid.js]: ⚠️ Character ${character.name} is not in the raid's village. Current: ${character.currentVillage}, Required: ${battleProgress.villageId}`);
-          await interaction.editReply(`❌ **You must be in ${battleProgress.villageId} to participate in this raid.**`);
+          await interaction.editReply(`❌ **You must be in ${capitalizeVillageName(battleProgress.villageId)} to participate in this raid.**`);
           return;
       }
 
