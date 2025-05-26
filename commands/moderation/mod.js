@@ -34,8 +34,12 @@ const {
   getOrCreateToken,
   updateTokenBalance,
   appendEarnedTokens,
-  resetPetRollsForAllCharacters
+  resetPetRollsForAllCharacters,
+  fetchMonsterByName
 } = require('../../database/db');
+
+const { monsterMapping } = require('../../models/MonsterModel');
+const { triggerRaid } = require('../../modules/raidModule');
 
 const {
   getVillageColorByName,
@@ -444,8 +448,8 @@ async function execute(interaction) {
   try {
     const subcommand = interaction.options.getSubcommand();
 
-    // Only defer with ephemeral for non-mount commands
-    if (subcommand !== 'mount') {
+    // Only defer with ephemeral for non-mount and non-raid commands
+    if (subcommand !== 'mount' && subcommand !== 'raid') {
       await interaction.deferReply({ ephemeral: true });
     } else {
       await interaction.deferReply();
@@ -1419,8 +1423,6 @@ async function handlePetRollsReset(interaction) {
 // ------------------- Function: handleRaid -------------------
 // Creates a raid for testing purposes
 async function handleRaid(interaction) {
-  await interaction.deferReply();
-
   const village = interaction.options.getString('village');
   const monsterName = interaction.options.getString('monster');
 
@@ -1430,7 +1432,7 @@ async function handleRaid(interaction) {
     if (monsterName) {
       monster = await fetchMonsterByName(monsterName);
       if (!monster) {
-        await interaction.editReply('❌ **Specified monster not found.**');
+        await interaction.editReply({ content: '❌ **Specified monster not found.**' });
         return;
       }
     } else {
@@ -1452,15 +1454,19 @@ async function handleRaid(interaction) {
     const battleId = await triggerRaid(testCharacter, monster, interaction, null, false);
 
     if (!battleId) {
-      await interaction.editReply('❌ **Failed to create the raid.**');
+      await interaction.editReply({ content: '❌ **Failed to create the raid.**' });
       return;
     }
 
-    await interaction.editReply(`✅ **Raid created successfully!**\nUse \`/raid id:${battleId}\` to join the raid.`);
+    await interaction.editReply({ 
+      content: `✅ **Raid created successfully!**\nUse \`/raid id:${battleId}\` to join the raid.`
+    });
   } catch (error) {
     handleError(error, 'mod.js');
     console.error('[ERROR] Error creating raid:', error);
-    await interaction.editReply('⚠️ **An error occurred while creating the raid.**');
+    await interaction.editReply({ 
+      content: '⚠️ **An error occurred while creating the raid.**'
+    });
   }
 }
 

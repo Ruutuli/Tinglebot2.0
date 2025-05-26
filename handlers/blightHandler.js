@@ -158,22 +158,16 @@ function getRandomHealingRequirement(healer, characterName) {
 // Submits a new healing request, checking eligibility and permissions.
 async function healBlight(interaction, characterName, healerName) {
   try {
-    // Defer reply at the start to prevent interaction timeout
-    await interaction.deferReply({ ephemeral: false });
+    // Defer reply immediately to prevent timeout
+    await interaction.deferReply();
 
-    // Input validation
-    if (!characterName || typeof characterName !== 'string') {
-      await interaction.editReply({ content: '❌ Invalid character name provided.', ephemeral: true });
-      return;
-    }
-    if (!healerName || typeof healerName !== 'string') {
-      await interaction.editReply({ content: '❌ Invalid healer name provided.', ephemeral: true });
-      return;
-    }
-
-    const character = await Character.findOne({ name: characterName });
+    // Validate character ownership
+    const character = await validateCharacterOwnership(interaction, characterName);
     if (!character) {
-      await interaction.editReply({ content: `❌ Character "${characterName}" not found.`, ephemeral: true });
+      await interaction.editReply({
+        content: `❌ You can only perform this action for your **own** characters!`,
+        ephemeral: true
+      });
       return;
     }
 
@@ -220,7 +214,7 @@ async function healBlight(interaction, characterName, healerName) {
           `Submission ID: \`${existingSubmission.key}\`\n` +
           `Healer: **${existingSubmission.data.healerName}**\n` +
           `Task: ${existingSubmission.data.taskDescription}\n\n`;
-        await interaction.reply({
+        await interaction.editReply({
           content: pendingMsg,
           ephemeral: true
         });
@@ -240,12 +234,12 @@ async function healBlight(interaction, characterName, healerName) {
 
     const healer = getModCharacterByName(healerName);
     if (!healer) {
-      await interaction.reply({ content: `❌ Healer "${healerName}" not found.`, ephemeral: true });
+      await interaction.editReply({ content: `❌ Healer "${healerName}" not found.`, ephemeral: true });
       return;
     }
 
     if (character.currentVillage.toLowerCase() !== healer.village.toLowerCase()) {
-      await interaction.reply({
+      await interaction.editReply({
         content: `⚠️ **${healer.name}** cannot heal **${characterName}** because they are from different villages.`,
         ephemeral: true,
       });
@@ -260,7 +254,7 @@ async function healBlight(interaction, characterName, healerName) {
         .map(category => category.toLowerCase())
         .join(' or ');
       
-      await interaction.reply({
+      await interaction.editReply({
         content: `⚠️ **${healer.name}** cannot heal **${characterName}** at Blight Stage ${blightStage}. Only ${allowedHealers} can heal this stage.`,
         ephemeral: true,
       });
@@ -313,12 +307,12 @@ async function healBlight(interaction, characterName, healerName) {
 
     const embed = createBlightHealingEmbed(character, healer, healingRequirement, newSubmissionId, expiresAt);
 
-    // Reply in-channel
+    // Reply in-channel using editReply since we deferred
     let replyContent = `<@${interaction.user.id}>`;
     if (oldRequestCancelled) {
       replyContent = `⚠️ **${characterName}** had a pending healing request from **${oldHealerName}**, but they can no longer heal at Stage ${oldStage}.\n\nThe old request has been cancelled. Here is your new healing prompt:\n\n` + replyContent;
     }
-    await interaction.reply({
+    await interaction.editReply({
       content: replyContent,
       embeds: [embed],
       ephemeral: false,
@@ -338,18 +332,11 @@ async function healBlight(interaction, characterName, healerName) {
     handleError(error, 'blightHandler.js');
     console.error('[blightHandler]: Error healing blight:', error);
     
-    // Check if we've already replied
-    if (!interaction.replied && !interaction.deferred) {
-      await interaction.reply({ 
-        content: '❌ An error occurred while processing your request. Please try again or contact support if the issue persists.', 
-        ephemeral: true 
-      });
-    } else {
-      await interaction.editReply({ 
-        content: '❌ An error occurred while processing your request. Please try again or contact support if the issue persists.', 
-        ephemeral: true 
-      });
-    }
+    // Since we deferred, we should always use editReply
+    await interaction.editReply({ 
+      content: '❌ An error occurred while processing your request. Please try again or contact support if the issue persists.', 
+      ephemeral: true 
+    });
   }
 }
 
@@ -365,7 +352,7 @@ async function validateCharacterOwnership(interaction, characterName) {
   const character = await Character.findOne({ name: characterName, userId });
   
   if (!character) {
-    await interaction.reply({
+    await interaction.editReply({
       content: `❌ You can only perform this action for your **own** characters!`,
       ephemeral: true
     });
@@ -876,18 +863,18 @@ async function rollForBlightProgression(interaction, characterName) {
   try {
     // ------------------- Input Validation -------------------
     if (!characterName || typeof characterName !== 'string') {
-      await interaction.reply({ content: '❌ Invalid character name provided.', ephemeral: true });
+      await interaction.editReply({ content: '❌ Invalid character name provided.', ephemeral: true });
       return;
     }
 
     const character = await Character.findOne({ name: characterName });
     if (!character) {
-      await interaction.reply({ content: `❌ Character "${characterName}" not found.`, ephemeral: true });
+      await interaction.editReply({ content: `❌ Character "${characterName}" not found.`, ephemeral: true });
       return;
     }
 
     if (!character.blighted) {
-      await interaction.reply({
+      await interaction.editReply({
         content: `**WOAH! ${characterName} is not blighted! You don't need to roll for them!** 🌟`,
         ephemeral: true,
       });
@@ -1161,14 +1148,19 @@ async function checkMissedRolls(client) {
     
     // ------------------- Validate Discord Client -------------------
     if (!client || !client.channels) {
-      console.error('[blightHandler]: Invalid Discord client.');
+      console.error('[blightHandler]: ❌ Invalid Discord client provided to checkMissedRolls');
       return;
     }
 
     const channelId = process.env.BLIGHT_NOTIFICATIONS_CHANNEL_ID;
+    if (!channelId) {
+      console.error('[blightHandler]: ❌ BLIGHT_NOTIFICATIONS_CHANNEL_ID not set in environment variables');
+      return;
+    }
+
     const channel = client.channels.cache.get(channelId);
     if (!channel) {
-      console.error('[blightHandler]: Channel not found for missed roll notifications.');
+      console.error('[blightHandler]: ❌ Channel not found for missed roll notifications:', channelId);
       return;
     }
 
@@ -1429,7 +1421,7 @@ async function checkMissedRolls(client) {
     console.log('[blightHandler]: Completed checkMissedRolls successfully');
   } catch (error) {
     handleError(error, 'blightHandler.js');
-    console.error('[blightHandler]: Error checking missed rolls:', error);
+    console.error('[blightHandler]: ❌ Error checking missed rolls:', error);
   }
 }
 
