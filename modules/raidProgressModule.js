@@ -30,105 +30,54 @@ const { generateDamageMessage, generateVictoryMessage } = require('../modules/fl
 const mongoose = require('mongoose');
 
 // ------------------- Update Raid Progress -------------------
-async function updateRaidProgress(battleId, updatedProgress, outcome) {
-    const session = await mongoose.startSession();
-    session.startTransaction();
-
+async function updateRaidProgress(battleId, updateData) {
     try {
+        console.log(`[raidProgressModule.js]: 🔄 Updating raid progress for ${battleId}:`, updateData);
+
         const battleProgress = await getRaidProgressById(battleId);
         if (!battleProgress) {
-            console.error(`[raidProgressModule.js]: ❌ No raid progress found for Battle ID: ${battleId}`);
-            return null;
+            throw new Error(`No battle progress found for ID: ${battleId}`);
         }
 
-        // Log initial state
-        console.log(`[raidProgressModule.js]: 📊 Initial battle state:`, {
-            monsterHearts: battleProgress.monster.hearts,
-            damage: outcome.hearts,
-            status: battleProgress.status
-        });
+        // Update monster hearts if provided
+        if (updateData.monsterHearts) {
+            battleProgress.monster.hearts = {
+                current: Number(updateData.monsterHearts.current) || 0,
+                max: Number(updateData.monsterHearts.max) || battleProgress.monster.hearts.max
+            };
+        }
 
-        const participant = battleProgress.participants.find(p => p.characterId === outcome.character._id);
-        if (participant) {
-            const damageDealt = outcome.hearts || 0;
-            participant.damage += damageDealt;
-
-            const characterIndex = battleProgress.characters.findIndex(c => c._id === outcome.character._id);
-            if (characterIndex !== -1) {
-                battleProgress.characters[characterIndex] = {
-                    ...battleProgress.characters[characterIndex],
-                    currentHearts: outcome.character.currentHearts,
-                    currentStamina: outcome.character.currentStamina,
-                    buffs: outcome.character.buffs || [],
-                    status: outcome.character.status || 'active'
+        // Update participant stats if provided
+        if (updateData.participantId && updateData.participantStats) {
+            const participant = battleProgress.participants.find(p => p.characterId === updateData.participantId);
+            if (participant) {
+                participant.battleStats = {
+                    ...participant.battleStats,
+                    ...updateData.participantStats,
+                    lastAction: new Date()
                 };
             }
         }
 
-        // Validate and initialize monster hearts if needed
-        if (!battleProgress.monster.hearts || typeof battleProgress.monster.hearts !== 'object') {
-            console.log(`[raidProgressModule.js]: 🔄 Initializing monster hearts for battle ${battleId}`);
-            const maxHearts = Number(outcome.character?.monster?.hearts) || 1;
-            battleProgress.monster.hearts = {
-                current: maxHearts,
-                max: maxHearts
-            };
+        // Update analytics
+        if (updateData.damage) {
+            battleProgress.analytics.totalDamage += updateData.damage;
+            battleProgress.analytics.averageDamagePerParticipant = 
+                battleProgress.analytics.totalDamage / battleProgress.analytics.participantCount;
         }
 
-        // Ensure we have valid numbers for hearts
-        const currentHearts = Number(battleProgress.monster.hearts.current) || 0;
-        const maxHearts = Number(battleProgress.monster.hearts.max) || 1;
+        // Update timestamps
+        battleProgress.timestamps.lastUpdated = Date.now();
 
-        // Validate hearts state
-        if (currentHearts < 0 || maxHearts < currentHearts) {
-            console.error(`[raidProgressModule.js]: ❌ Invalid monster hearts state for battle ${battleId}`, {
-                current: currentHearts,
-                max: maxHearts
-            });
-            return null;
-        }
-
-        const newCurrent = Math.max(0, currentHearts - (outcome.hearts || 0));
-        console.log(`[raidProgressModule.js]: 💥 Updating monster hearts`, {
-            oldCurrent: currentHearts,
-            damage: outcome.hearts,
-            newCurrent,
-            maxHearts
-        });
-        
-        // Update with clean structure, preserving max hearts
-        battleProgress.monster.hearts = {
-            current: newCurrent,
-            max: maxHearts
-        };
-        
-        battleProgress.progress += `\n${updatedProgress}`;
-        battleProgress.timestamps.lastUpdated = new Date();
-
-        if (newCurrent <= 0) {
-            console.log(`[raidProgressModule.js]: 🎉 Raid completed for battle ${battleId}`);
-            battleProgress.status = 'completed';
-            await handleRaidCompletion(battleProgress);
-        }
-
-        // Log final state before saving
-        console.log(`[raidProgressModule.js]: 📊 Final battle state before save:`, {
-            monsterHearts: battleProgress.monster.hearts,
-            status: battleProgress.status
-        });
-
-        console.log(`[raidProgressModule.js]: 💾 Saving updated battle progress`);
+        // Save updated progress
         await saveBattleProgressToStorage(battleId, battleProgress);
-        await session.commitTransaction();
-        
+        console.log(`[raidProgressModule.js]: ✅ Updated raid progress for ${battleId}`);
+
         return battleProgress;
     } catch (error) {
-        await session.abortTransaction();
         handleError(error, 'raidProgressModule.js');
         console.error(`[raidProgressModule.js]: ❌ Error updating raid progress:`, error);
-        return null;
-    } finally {
-        session.endSession();
+        throw error;
     }
 }
 
@@ -149,31 +98,47 @@ async function getRaidProgressById(battleId) {
 }
 
 // ------------------- Handle Raid Completion -------------------
-async function handleRaidCompletion(battleProgress) {
+async function handleRaidCompletion(battleId, isVictory) {
     try {
-        const rewards = calculateRaidRewards(battleProgress);
-        battleProgress.rewards = rewards;
+        console.log(`[raidProgressModule.js]: 🎉 Handling raid completion for ${battleId}, victory: ${isVictory}`);
 
-        for (const participant of battleProgress.participants) {
-            await updateParticipantStats(participant, rewards);
+        const battleProgress = await getRaidProgressById(battleId);
+        if (!battleProgress) {
+            throw new Error(`No battle progress found for ID: ${battleId}`);
         }
 
-        await sendRaidCompletionNotifications(battleProgress);
-        await saveBattleProgressToStorage(battleProgress.battleId, battleProgress);
+        // Update raid status
+        battleProgress.status = isVictory ? 'completed' : 'failed';
+        
+        // Update analytics
+        battleProgress.analytics.success = isVictory;
+        battleProgress.analytics.endTime = new Date();
+        battleProgress.analytics.duration = 
+            battleProgress.analytics.endTime - battleProgress.analytics.startTime;
 
-        setTimeout(async () => {
-            try {
-                await deleteRaidProgressById(battleProgress.battleId);
-                console.log(`[raidProgressModule.js]: 🧹 Cleaned up completed raid ${battleProgress.battleId}`);
-            } catch (error) {
-                console.error(`[raidProgressModule.js]: ❌ Error cleaning up raid ${battleProgress.battleId}:`, error);
-            }
-        }, 5 * 60 * 1000);
+        // Calculate final stats
+        const finalStats = {
+            totalDamage: battleProgress.analytics.totalDamage,
+            participantCount: battleProgress.analytics.participantCount,
+            averageDamagePerParticipant: battleProgress.analytics.averageDamagePerParticipant,
+            duration: battleProgress.analytics.duration,
+            success: isVictory
+        };
 
-        return battleProgress;
+        console.log(`[raidProgressModule.js]: 📊 Final raid stats:`, finalStats);
+
+        // Save final state
+        await saveBattleProgressToStorage(battleId, battleProgress);
+
+        // Process rewards if victorious
+        if (isVictory) {
+            await processRaidRewards(battleProgress);
+        }
+
+        return finalStats;
     } catch (error) {
         handleError(error, 'raidProgressModule.js');
-        console.error(`[raidProgressModule.js]: ❌ Error handling raid completion for ${battleProgress.battleId}:`, error);
+        console.error(`[raidProgressModule.js]: ❌ Error handling raid completion:`, error);
         throw error;
     }
 }
@@ -255,11 +220,18 @@ async function checkRaidExpiration(battleId) {
         }
 
         const now = Date.now();
-        const isExpired = now > battleProgress.endTime;
+        const raidDuration = now - battleProgress.startTime;
+        const isExpired = raidDuration > RAID_DURATION;
 
         if (isExpired && battleProgress.status === 'active') {
             console.log(`[raidProgressModule.js]: ⚠️ Raid ${battleId} has expired`);
             battleProgress.status = 'timeout';
+            
+            // Update analytics
+            battleProgress.analytics.endTime = new Date();
+            battleProgress.analytics.duration = raidDuration;
+            battleProgress.analytics.success = false;
+            
             await saveBattleProgressToStorage(battleId, battleProgress);
             await handleRaidTimeout(battleProgress);
         }
@@ -267,7 +239,7 @@ async function checkRaidExpiration(battleId) {
         return isExpired;
     } catch (error) {
         handleError(error, 'raidProgressModule.js');
-        console.error(`[raidProgressModule.js]: ❌ Error checking raid expiration for Battle ID "${battleId}":`, error);
+        console.error(`[raidProgressModule.js]: ❌ Error checking raid expiration:`, error);
         return true;
     }
 }
@@ -275,16 +247,28 @@ async function checkRaidExpiration(battleId) {
 // ------------------- Handle Raid Timeout -------------------
 async function handleRaidTimeout(battleProgress) {
     try {
-        battleProgress.status = 'timeout';
-        await saveBattleProgressToStorage(battleProgress.battleId, battleProgress);
-        
-        await applyVillageDamage(battleProgress.villageId, battleProgress.damage);
+        console.log(`[raidProgressModule.js]: ⏰ Handling raid timeout for ${battleProgress.battleId}`);
+
+        // Apply village damage
+        await applyVillageDamage(battleProgress.villageId, battleProgress.monster);
+
+        // Send notifications
         await sendRaidTimeoutNotifications(battleProgress);
-        
-        console.log(`[raidProgressModule.js]: ⚠️ Raid ${battleProgress.battleId} timed out`);
+
+        // Update analytics
+        battleProgress.analytics.success = false;
+        battleProgress.analytics.endTime = new Date();
+        battleProgress.analytics.duration = 
+            battleProgress.analytics.endTime - battleProgress.analytics.startTime;
+
+        // Save final state
+        await saveBattleProgressToStorage(battleProgress.battleId, battleProgress);
+
+        console.log(`[raidProgressModule.js]: ✅ Raid timeout handled for ${battleProgress.battleId}`);
     } catch (error) {
         handleError(error, 'raidProgressModule.js');
         console.error(`[raidProgressModule.js]: ❌ Error handling raid timeout:`, error);
+        throw error;
     }
 }
 

@@ -287,9 +287,7 @@ async function saveBattleProgressToStorage(battleId, battleData) {
       raw: {
         name: transformedData.monster.name,
         tier: transformedData.monster.tier,
-        hearts: transformedData.monster.hearts,
-        stats: {},
-        abilities: []
+        hearts: transformedData.monster.hearts
       }
     });
 

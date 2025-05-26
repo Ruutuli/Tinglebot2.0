@@ -11,32 +11,15 @@ const tempDataSchema = new mongoose.Schema({
     required: true,
     // Battle/Raid specific fields
     battleId: String,
-    characters: [{
-      _id: String,
-      userId: String,
-      name: String,
-      currentHearts: Number,
-      maxHearts: Number,
-      currentStamina: Number,
-      maxStamina: Number,
-      level: Number,
-      experience: Number,
-      currentVillage: String,
-      equipment: mongoose.Schema.Types.Mixed,
-      inventory: [mongoose.Schema.Types.Mixed],
-      stats: mongoose.Schema.Types.Mixed,
-      buffs: [mongoose.Schema.Types.Mixed],
-      status: String
-    }],
     monster: {
       name: String,
+      nameMapping: String,
+      image: String,
       tier: Number,
       hearts: {
         max: Number,
         current: Number
-      },
-      stats: mongoose.Schema.Types.Mixed,
-      abilities: [mongoose.Schema.Types.Mixed]
+      }
     },
     progress: String,
     isBloodMoon: Boolean,
@@ -49,13 +32,30 @@ const tempDataSchema = new mongoose.Schema({
       name: String,
       damage: Number,
       joinedAt: Number,
-      stats: {
-        initialHearts: Number,
-        initialStamina: Number,
+      // Character state at time of joining
+      characterState: {
+        currentHearts: Number,
+        maxHearts: Number,
+        currentStamina: Number,
+        maxStamina: Number,
+        attack: Number,
+        defense: Number,
+        gearArmor: {
+          head: mongoose.Schema.Types.Mixed,
+          chest: mongoose.Schema.Types.Mixed,
+          legs: mongoose.Schema.Types.Mixed
+        },
+        gearWeapon: mongoose.Schema.Types.Mixed,
+        gearShield: mongoose.Schema.Types.Mixed,
+        ko: Boolean
+      },
+      // Battle performance tracking
+      battleStats: {
         damageDealt: Number,
         healingDone: Number,
         buffsApplied: [mongoose.Schema.Types.Mixed],
-        debuffsReceived: [mongoose.Schema.Types.Mixed]
+        debuffsReceived: [mongoose.Schema.Types.Mixed],
+        lastAction: Date
       }
     }],
     analytics: {
@@ -65,7 +65,9 @@ const tempDataSchema = new mongoose.Schema({
       monsterTier: Number,
       villageId: String,
       success: Boolean,
-      characterStats: mongoose.Schema.Types.Mixed
+      startTime: Date,
+      endTime: Date,
+      duration: Number
     },
     timestamps: {
       started: Number,
