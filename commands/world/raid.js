@@ -79,7 +79,7 @@ async execute(interaction) {
           const koEmbed = createKOEmbed(character);
           await interaction.editReply({
               content: `❌ **${character.name} is KO'd and cannot take any further actions.**`,
-              embeds: [koEmbed], // Add KO embed here
+              embeds: [koEmbed],
           });
 
           return;
@@ -121,14 +121,39 @@ async execute(interaction) {
           return;
       }
 
-      // Add character to participants if not already present
+      // Add character to participants with complete state
       if (!battleProgress.participants.some(p => p.userId === userId && p.characterName && p.characterName.toLowerCase() === characterName.toLowerCase())) {
           battleProgress.participants.push({
               userId: userId,
-              characterName: characterName,
+              characterId: character._id,
+              name: characterName,
               damage: 0,
-              joinedAt: new Date()
+              joinedAt: Date.now(),
+              characterState: {
+                  currentHearts: character.currentHearts,
+                  maxHearts: character.maxHearts,
+                  currentStamina: character.currentStamina,
+                  maxStamina: character.maxStamina,
+                  attack: character.attack,
+                  defense: character.defense,
+                  gearArmor: character.gearArmor,
+                  gearWeapon: character.gearWeapon,
+                  gearShield: character.gearShield,
+                  ko: character.ko
+              },
+              battleStats: {
+                  damageDealt: 0,
+                  healingDone: 0,
+                  buffsApplied: [],
+                  debuffsReceived: [],
+                  lastAction: new Date()
+              }
           });
+
+          // Update analytics
+          battleProgress.analytics.participantCount = battleProgress.participants.length;
+          battleProgress.timestamps.lastUpdated = Date.now();
+
           await saveBattleProgressToStorage(battleId, battleProgress);
       }
 
@@ -147,14 +172,17 @@ async execute(interaction) {
 
       // Update monster hearts in battle progress with correct structure
       if (battleResult.monsterHearts) {
-          // Ensure we have a clean hearts structure
-          const hearts = {
+          battleProgress.monster.hearts = {
               current: Number(battleResult.monsterHearts.current) || 0,
               max: Number(battleResult.monsterHearts.max) || 0
           };
           
-          // Update the monster hearts with clean structure
-          battleProgress.monster.hearts = hearts;
+          // Update analytics
+          battleProgress.analytics.totalDamage += battleResult.damage || 0;
+          battleProgress.analytics.averageDamagePerParticipant = 
+              battleProgress.analytics.totalDamage / battleProgress.analytics.participantCount;
+          battleProgress.timestamps.lastUpdated = Date.now();
+
           await saveBattleProgressToStorage(battleId, battleProgress);
       }
 
@@ -162,7 +190,7 @@ async execute(interaction) {
       console.log(`[raid.js]: 🔄 Creating battle embed for ${character.name}'s turn`);
 
       const monsterData = monsterMapping[battleProgress.monster.nameMapping] || {};
-      const monsterImage = monsterData.image || battleProgress.monster.image || 'https://via.placeholder.com/150';
+      const monsterImage = battleProgress.monster.image || monsterData.image || 'https://via.placeholder.com/150';
 
       // Generate flavor text based on the battle result
       const flavorText = battleResult.isVictory ? 
@@ -198,9 +226,9 @@ async execute(interaction) {
                   value: `\`\`\`${battleId}\`\`\``, 
                   inline: false 
               },
-              { name: `📜 __Participants__`, value: battleProgress.participants.map((p) => `> ${p.characterName}`).join('\n'), inline: false }
+              { name: `📜 __Participants__`, value: battleProgress.participants.map((p) => `> ${p.name}`).join('\n'), inline: false }
           )
-          .setThumbnail(monsterImage.startsWith('http') ? monsterImage : 'https://via.placeholder.com/150')
+          .setThumbnail(monsterImage)
           .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
           .setFooter({ text: "⚠️ Act Quickly! You have 10 minutes to complete this raid!" });
 
