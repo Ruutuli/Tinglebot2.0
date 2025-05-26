@@ -4,11 +4,27 @@
 
 // ------------------- Import Necessary Modules and Services -------------------
 
+// Discord.js imports
+const { EmbedBuilder } = require('discord.js');
+
 // Utility imports
 const { handleError } = require('../utils/globalErrorHandler.js');
+const { checkInventorySync } = require('../utils/characterUtils.js');
 
 // Database and storage imports
-const { saveBattleProgressToStorage } = require('../utils/storage.js');
+const { fetchCharacterByNameAndUserId, fetchMonsterByName } = require('../database/db.js');
+const { saveBattleProgressToStorage, retrieveBattleProgressFromStorage, deleteBattleProgressFromStorage } = require('../utils/storage.js');
+
+// Module imports
+const { processLoot } = require('../modules/lootModule.js');
+const { applyVillageDamage } = require('./villageModule.js');
+
+// Model imports
+const { monsterMapping } = require('../models/MonsterModel.js');
+
+// Embed and text imports
+const { createKOEmbed } = require('../embeds/embeds.js');
+const { generateDamageMessage, generateVictoryMessage } = require('../modules/flavorTextModule.js');
 
 // Database
 const mongoose = require('mongoose');
@@ -218,5 +234,6 @@ async function sendRaidCompletionNotifications(battleProgress) {
 module.exports = {
     updateRaidProgress,
     getRaidProgressById,
-    handleRaidCompletion
+    handleRaidCompletion,
+    checkRaidExpiration
 }; 
