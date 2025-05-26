@@ -9,6 +9,69 @@ const tempDataSchema = new mongoose.Schema({
   data: {
     type: mongoose.Schema.Types.Mixed,
     required: true,
+    // Battle/Raid specific fields
+    battleId: String,
+    characters: [{
+      _id: String,
+      userId: String,
+      name: String,
+      currentHearts: Number,
+      maxHearts: Number,
+      currentStamina: Number,
+      maxStamina: Number,
+      level: Number,
+      experience: Number,
+      currentVillage: String,
+      equipment: mongoose.Schema.Types.Mixed,
+      inventory: [mongoose.Schema.Types.Mixed],
+      stats: mongoose.Schema.Types.Mixed,
+      buffs: [mongoose.Schema.Types.Mixed],
+      status: String
+    }],
+    monster: {
+      name: String,
+      tier: Number,
+      hearts: {
+        max: Number,
+        current: Number
+      },
+      stats: mongoose.Schema.Types.Mixed,
+      abilities: [mongoose.Schema.Types.Mixed]
+    },
+    progress: String,
+    isBloodMoon: Boolean,
+    startTime: Number,
+    villageId: String,
+    status: String,
+    participants: [{
+      userId: String,
+      characterId: String,
+      name: String,
+      damage: Number,
+      joinedAt: Number,
+      stats: {
+        initialHearts: Number,
+        initialStamina: Number,
+        damageDealt: Number,
+        healingDone: Number,
+        buffsApplied: [mongoose.Schema.Types.Mixed],
+        debuffsReceived: [mongoose.Schema.Types.Mixed]
+      }
+    }],
+    analytics: {
+      totalDamage: Number,
+      participantCount: Number,
+      averageDamagePerParticipant: Number,
+      monsterTier: Number,
+      villageId: String,
+      success: Boolean,
+      characterStats: mongoose.Schema.Types.Mixed
+    },
+    timestamps: {
+      started: Number,
+      lastUpdated: Number
+    },
+    // Other existing fields
     submissionId: String,
     fileUrl: String,
     fileName: String,

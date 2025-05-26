@@ -219,15 +219,120 @@ async function retrieveBoostingRequestFromStorageByCharacter(characterName) {
 
 // Battle progress functions
 async function saveBattleProgressToStorage(battleId, battleData) {
-  await saveToStorage(battleId, 'battle', battleData);
+  try {
+    // Validate required fields
+    if (!battleId || !battleData) {
+      console.error(`[storage.js]: ❌ Missing battleId or battleData for save operation`);
+      throw new Error('Missing battleId or battleData');
+    }
+
+    // Ensure all required fields are present and properly structured
+    const battle = {
+      type: 'battle',
+      key: battleId,
+      data: {
+        battleId: battleData.battleId,
+        characters: battleData.characters.map(char => ({
+          _id: char._id,
+          userId: char.userId,
+          name: char.name,
+          currentHearts: char.currentHearts || 0,
+          maxHearts: char.maxHearts || 0,
+          currentStamina: char.currentStamina || 0,
+          maxStamina: char.maxStamina || 0,
+          level: char.level || 1,
+          experience: char.experience || 0,
+          currentVillage: char.currentVillage,
+          equipment: char.equipment || {},
+          inventory: char.inventory || [],
+          stats: char.stats || {},
+          buffs: char.buffs || [],
+          status: char.status || 'active'
+        })),
+        monster: {
+          name: battleData.monster.name,
+          tier: battleData.monster.tier,
+          hearts: {
+            max: battleData.monster.hearts?.max || 0,
+            current: battleData.monster.hearts?.current || 0
+          },
+          stats: battleData.monster.stats || {},
+          abilities: battleData.monster.abilities || []
+        },
+        progress: battleData.progress || '',
+        isBloodMoon: battleData.isBloodMoon || false,
+        startTime: battleData.startTime || Date.now(),
+        villageId: battleData.villageId,
+        status: battleData.status || 'active',
+        participants: battleData.participants.map(p => ({
+          userId: p.userId,
+          characterId: p.characterId,
+          name: p.name,
+          damage: p.damage || 0,
+          joinedAt: p.joinedAt || Date.now(),
+          stats: {
+            initialHearts: p.stats?.initialHearts || 0,
+            initialStamina: p.stats?.initialStamina || 0,
+            damageDealt: p.stats?.damageDealt || 0,
+            healingDone: p.stats?.healingDone || 0,
+            buffsApplied: p.stats?.buffsApplied || [],
+            debuffsReceived: p.stats?.debuffsReceived || []
+          }
+        })),
+        analytics: {
+          totalDamage: battleData.analytics?.totalDamage || 0,
+          participantCount: battleData.analytics?.participantCount || 0,
+          averageDamagePerParticipant: battleData.analytics?.averageDamagePerParticipant || 0,
+          monsterTier: battleData.analytics?.monsterTier || 0,
+          villageId: battleData.analytics?.villageId,
+          success: battleData.analytics?.success || false,
+          characterStats: battleData.analytics?.characterStats || {}
+        },
+        timestamps: {
+          started: battleData.timestamps?.started || Date.now(),
+          lastUpdated: battleData.timestamps?.lastUpdated || Date.now()
+        }
+      },
+      expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000) // 2 hours
+    };
+
+    const result = await TempData.findOneAndUpdate(
+      { type: 'battle', key: battleId },
+      battle,
+      { upsert: true, new: true }
+    );
+
+    console.log(`[storage.js]: ✅ Saved battle progress for Battle ID "${battleId}"`);
+    return result;
+  } catch (error) {
+    console.error(`[storage.js]: ❌ Error saving battle progress for Battle ID "${battleId}":`, error);
+    throw error;
+  }
 }
 
 async function retrieveBattleProgressFromStorage(battleId) {
-  return retrieveFromStorage(battleId, 'battle');
+  try {
+    const battle = await TempData.findByTypeAndKey('battle', battleId);
+    if (battle) {
+      console.log(`[storage.js]: ✅ Found battle progress for Battle ID "${battleId}"`);
+      return battle.data;
+    }
+    console.error(`[storage.js]: ❌ No battle progress found for Battle ID "${battleId}"`);
+    return null;
+  } catch (error) {
+    console.error(`[storage.js]: ❌ Error retrieving battle progress for Battle ID "${battleId}":`, error);
+    throw error;
+  }
 }
 
 async function deleteBattleProgressFromStorage(battleId) {
-  await deleteFromStorage(battleId, 'battle');
+  try {
+    await TempData.findOneAndDelete({ type: 'battle', key: battleId });
+    console.log(`[storage.js]: ✅ Deleted battle progress for Battle ID "${battleId}"`);
+  } catch (error) {
+    console.error(`[storage.js]: ❌ Error deleting battle progress for Battle ID "${battleId}":`, error);
+    throw error;
+  }
 }
 
 // Encounter functions

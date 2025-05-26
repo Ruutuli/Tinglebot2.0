@@ -543,7 +543,14 @@ async function processBattle(character, monster, battleId, originalRoll, interac
             }
         });
 
-        return { ...outcome, originalRoll, adjustedRandomValue, attackSuccess, defenseSuccess };
+        return { 
+            ...outcome, 
+            originalRoll, 
+            adjustedRandomValue, 
+            attackSuccess, 
+            defenseSuccess,
+            monsterHearts: battleProgress.monsterHearts 
+        };
     } catch (error) {
         handleError(error, 'encounterModule.js');
         console.error('[encounterModule.js]: ❌ Battle processing error:', error.message);
