@@ -10,10 +10,11 @@ const { EmbedBuilder } = require('discord.js');
 // Utility imports
 const { handleError } = require('../utils/globalErrorHandler.js');
 const { checkInventorySync } = require('../utils/characterUtils.js');
+const { saveBattleProgressToStorage, retrieveBattleProgressFromStorage, deleteBattleProgressFromStorage } = require('../utils/storage.js');
+const { RAID_DURATION } = require('../config/config');
 
 // Database and storage imports
 const { fetchCharacterByNameAndUserId, fetchMonsterByName } = require('../database/db.js');
-const { saveBattleProgressToStorage, retrieveBattleProgressFromStorage, deleteBattleProgressFromStorage } = require('../utils/storage.js');
 
 // Module imports
 const { processLoot } = require('../modules/lootModule.js');
@@ -32,19 +33,23 @@ const mongoose = require('mongoose');
 // ------------------- Update Raid Progress -------------------
 async function updateRaidProgress(battleId, updateData) {
     try {
-        console.log(`[raidProgressModule.js]: 🔄 Updating raid progress for ${battleId}:`, updateData);
-
         const battleProgress = await getRaidProgressById(battleId);
         if (!battleProgress) {
             throw new Error(`No battle progress found for ID: ${battleId}`);
         }
 
         // Update monster hearts if provided
-        if (updateData.monsterHearts) {
+        if (updateData.hearts) {
+            const currentHearts = Number(battleProgress.monster.hearts.current) || 0;
+            const maxHearts = Number(battleProgress.monster.hearts.max) || 0;
+            const newCurrentHearts = Math.max(0, currentHearts - updateData.hearts);
+            
             battleProgress.monster.hearts = {
-                current: Number(updateData.monsterHearts.current) || 0,
-                max: Number(updateData.monsterHearts.max) || battleProgress.monster.hearts.max
+                current: newCurrentHearts,
+                max: maxHearts
             };
+            
+            console.log(`[raidProgressModule.js]: 💙 Updated hearts for ${battleProgress.monster.name}: ${newCurrentHearts}/${maxHearts}`);
         }
 
         // Update participant stats if provided
@@ -71,13 +76,73 @@ async function updateRaidProgress(battleId, updateData) {
 
         // Save updated progress
         await saveBattleProgressToStorage(battleId, battleProgress);
-        console.log(`[raidProgressModule.js]: ✅ Updated raid progress for ${battleId}`);
-
         return battleProgress;
     } catch (error) {
         handleError(error, 'raidProgressModule.js');
-        console.error(`[raidProgressModule.js]: ❌ Error updating raid progress:`, error);
+        console.error(`[raidProgressModule.js]: ❌ Error updating raid progress:`, error.message);
         throw error;
+    }
+}
+
+// ------------------- Repair Invalid Battle Progress -------------------
+async function repairBattleProgress(battleProgress, battleId) {
+    try {
+        console.log(`[raidProgressModule.js]: 🔧 Attempting to repair battle progress for ${battleId}`);
+        
+        // Handle nested raw objects
+        if (battleProgress.raw?.raw) {
+            console.log(`[raidProgressModule.js]: 🔧 Found nested raw objects, flattening structure`);
+            battleProgress = {
+                ...battleProgress.raw.raw,
+                monster: battleProgress.monster || battleProgress.raw.raw.monster,
+                villageId: battleProgress.villageId || battleProgress.raw.raw.villageId
+            };
+        }
+
+        // Set default village if missing
+        if (!battleProgress.villageId) {
+            battleProgress.villageId = 'rudania'; // Default to Rudania
+            console.log(`[raidProgressModule.js]: 🔧 Repaired missing villageId for ${battleId}`);
+        }
+
+        // Ensure participants array exists
+        if (!battleProgress.participants) {
+            battleProgress.participants = [];
+            console.log(`[raidProgressModule.js]: 🔧 Added missing participants array for ${battleId}`);
+        }
+
+        // Ensure analytics object exists
+        if (!battleProgress.analytics) {
+            battleProgress.analytics = {
+                totalDamage: 0,
+                participantCount: 0,
+                averageDamagePerParticipant: 0,
+                startTime: Date.now(),
+                endTime: null,
+                duration: null,
+                success: null
+            };
+            console.log(`[raidProgressModule.js]: 🔧 Added missing analytics object for ${battleId}`);
+        }
+
+        // Ensure timestamps object exists
+        if (!battleProgress.timestamps) {
+            battleProgress.timestamps = {
+                started: Date.now(),
+                lastUpdated: Date.now()
+            };
+            console.log(`[raidProgressModule.js]: 🔧 Added missing timestamps object for ${battleId}`);
+        }
+
+        // Save repaired progress
+        await saveBattleProgressToStorage(battleId, battleProgress);
+        console.log(`[raidProgressModule.js]: ✅ Successfully repaired battle progress for ${battleId}`);
+        
+        return battleProgress;
+    } catch (error) {
+        handleError(error, 'raidProgressModule.js');
+        console.error(`[raidProgressModule.js]: ❌ Error repairing battle progress for ${battleId}:`, error);
+        return null;
     }
 }
 
@@ -89,6 +154,18 @@ async function getRaidProgressById(battleId) {
             console.error(`[raidProgressModule.js]: ❌ No raid progress found for Battle ID: ${battleId}`);
             return null;
         }
+
+        // Validate and repair required fields
+        if (!battleProgress.villageId) {
+            console.log(`[raidProgressModule.js]: ⚠️ Attempting to repair invalid battle progress for ${battleId}`);
+            const repairedProgress = await repairBattleProgress(battleProgress, battleId);
+            if (!repairedProgress) {
+                console.error(`[raidProgressModule.js]: ❌ Failed to repair battle progress for ${battleId}`);
+                return null;
+            }
+            return repairedProgress;
+        }
+
         return battleProgress;
     } catch (error) {
         handleError(error, 'raidProgressModule.js');
@@ -302,5 +379,6 @@ module.exports = {
     updateRaidProgress,
     getRaidProgressById,
     handleRaidCompletion,
-    checkRaidExpiration
+    checkRaidExpiration,
+    repairBattleProgress
 }; 

@@ -1441,16 +1441,16 @@ async function handleRaid(interaction) {
       monster = monsters[Math.floor(Math.random() * monsters.length)];
     }
 
-    // Trigger the raid without an initial character
-    const battleId = await triggerRaid(monster, interaction, null, false, village);
+    // Trigger the raid with correct parameter order
+    const raidData = await triggerRaid(interaction, monster, village);
 
-    if (!battleId) {
+    if (!raidData) {
       await interaction.editReply({ content: '❌ **Failed to create the raid.**' });
       return;
     }
 
     await interaction.editReply({ 
-      content: `✅ **Raid created successfully!**`
+      content: `✅ **Raid created successfully! Battle ID: ${raidData.battleId}**`
     });
   } catch (error) {
     handleError(error, 'mod.js');
