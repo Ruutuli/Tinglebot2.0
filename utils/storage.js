@@ -553,5 +553,10 @@ module.exports = {
   cleanupEntriesWithoutExpiration,
   
   retrieveAllByType,
-  findLatestSubmissionIdForUser
+  findLatestSubmissionIdForUser,
+
+  // Add the generic storage functions
+  saveToStorage,
+  retrieveFromStorage,
+  deleteFromStorage
 };

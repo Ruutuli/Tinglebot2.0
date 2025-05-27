@@ -39,7 +39,7 @@ const {
 } = require('../../database/db');
 
 const { monsterMapping } = require('../../models/MonsterModel');
-const { triggerRaid } = require('../../modules/raidModule');
+const { startRaid, createRaidEmbed } = require('../../modules/raidModule');
 
 const {
   getVillageColorByName,
@@ -1432,30 +1432,42 @@ async function handleRaid(interaction) {
     if (monsterName) {
       monster = await fetchMonsterByName(monsterName);
       if (!monster) {
-        await interaction.editReply({ content: '❌ **Specified monster not found.**' });
-        return;
+        return interaction.editReply({ content: '❌ **Specified monster not found.**' });
       }
     } else {
       // Get a random monster from the available ones
       const monsters = Object.values(monsterMapping);
-      monster = monsters[Math.floor(Math.random() * monsters.length)];
+      const randomMonster = monsters[Math.floor(Math.random() * monsters.length)];
+      // Fetch the full monster data from the database
+      monster = await fetchMonsterByName(randomMonster.name);
+      if (!monster) {
+        return interaction.editReply({ content: '❌ **Failed to fetch random monster data.**' });
+      }
     }
 
-    // Trigger the raid with correct parameter order
-    const raidData = await triggerRaid(interaction, monster, village);
+    // Start the raid using our new function
+    const { raidId, raidData, thread } = await startRaid(monster, village, interaction);
 
-    if (!raidData) {
-      await interaction.editReply({ content: '❌ **Failed to create the raid.**' });
-      return;
+    if (!raidId || !raidData) {
+      return interaction.editReply({ content: '❌ **Failed to create the raid.**' });
     }
 
-    await interaction.editReply({ 
-      content: `✅ **Raid created successfully! Battle ID: ${raidData.battleId}**`
+    // Get the monster's image from monsterMapping
+    const monsterDetails = monsterMapping[monster.nameMapping] || { image: monster.image };
+    const monsterImage = monsterDetails.image || monster.image;
+
+    // Create the raid embed using our new function
+    const embed = createRaidEmbed(raidData, monsterImage);
+
+    return interaction.editReply({ 
+      content: `✅ **Raid created successfully!**`,
+      embeds: [embed]
     });
+
   } catch (error) {
     handleError(error, 'mod.js');
-    console.error('[ERROR] Error creating raid:', error);
-    await interaction.editReply({ 
+    console.error('[mod.js]: Error creating raid:', error);
+    return interaction.editReply({ 
       content: '⚠️ **An error occurred while creating the raid.**'
     });
   }

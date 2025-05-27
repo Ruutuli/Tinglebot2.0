@@ -14,11 +14,11 @@
 // Local Modules & Database Models
 // ============================================================================
 const { handleKO, useHearts } = require('./characterStatsModule');
-const { getBattleProgressById, storeBattleProgress } = require('./raidCombatModule');
 const Monster = require('../models/MonsterModel');
 const { calculateAttackBuff, calculateDefenseBuff, applyBuffs } = require('./buffModule');
 const { handleError } = require('../utils/globalErrorHandler');
-const { updateRaidProgress } = require('./raidProgressModule');
+const { retrieveFromStorage, saveToStorage } = require('../utils/storage');
+
 
 // ============================================================================
 // Utility Functions
@@ -616,6 +616,31 @@ async function handleEncounter(character, monster, battleId) {
         console.error(`[encounterModule.js]: ❌ Error handling encounter:`, error.message);
         throw error;
     }
+}
+
+// ---- Function: getBattleProgressById ----
+// Retrieves battle progress for a given battleId from storage
+async function getBattleProgressById(battleId) {
+  try {
+    const progress = await retrieveFromStorage(battleId, 'battle');
+    if (!progress) throw new Error(`Battle progress not found for ID: ${battleId}`);
+    return progress;
+  } catch (error) {
+    console.error(`[encounterModule.js]: ❌ Error in getBattleProgressById: ${error.message}`);
+    throw error;
+  }
+}
+
+// ---- Function: updateRaidProgress ----
+// Updates raid/battle progress in storage
+async function updateRaidProgress(battleId, updateData) {
+  try {
+    await saveToStorage(battleId, 'battle', updateData);
+    console.log(`[encounterModule.js]: 🔄 Updated raid progress for ${battleId}`);
+  } catch (error) {
+    console.error(`[encounterModule.js]: ❌ Error updating raid progress: ${error.message}`);
+    throw error;
+  }
 }
 
 // ============================================================================

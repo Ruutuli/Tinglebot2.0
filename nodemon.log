@@ -26,15 +26,6 @@
   - Option "petname" has autocomplete enabled
 .
 ✅ Loaded command: pet from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\companions\pet.js
-  - Option "charactername" has autocomplete enabled
-  - Option "charactername" has autocomplete enabled
-  - Option "name" has autocomplete enabled
-  - Option "charactername" has autocomplete enabled
-  - Option "name" has autocomplete enabled
-  - Option "charactername" has autocomplete enabled
-  - Option "name" has autocomplete enabled
-.
-✅ Loaded command: stable from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\companions\stable.js
   - Option "fromcharacter" has autocomplete enabled
   - Option "tocharacter" has autocomplete enabled
   - Option "itema" has autocomplete enabled
@@ -154,6 +145,7 @@
   - Option "petname" has autocomplete enabled
   - Option "character" has autocomplete enabled
   - Option "character" has autocomplete enabled
+  - Option "monster" has autocomplete enabled
 .
 ✅ Loaded command: mod from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\moderation\mod.js
   - Option "charactername" has autocomplete enabled
@@ -184,10 +176,10 @@
 .
 ✅ Loaded command: quest from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\world\quest.js
   - Option "charactername" has autocomplete enabled
-.
 ✅ Loaded command: raid from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\world\raid.js
   - Option "charactername" has autocomplete enabled
   - Option "destination" has autocomplete enabled
+.
 ✅ Loaded command: travel from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\world\travel.js
   - Option "charactername" has autocomplete enabled
   - Option "itemname" has autocomplete enabled
@@ -195,12 +187,10 @@
   - Option "itemname" has autocomplete enabled
 .
 ✅ Loaded command: village from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\world\village.js
-🔄 Started refreshing 35 guild (/) commands for guild ID: 1305484048063529002
-(node:14052) Warning: Accessing non-existent property 'connectToInventories' of module exports inside circular dependency
+🔄 Started refreshing 34 guild (/) commands for guild ID: 1305484048063529002
+(node:48992) Warning: Accessing non-existent property 'connectToInventories' of module exports inside circular dependency
 (Use `node --trace-warnings ...` to show where the warning was created)
-(node:14052) Warning: Accessing non-existent property 'fetchCharacterById' of module exports inside circular dependency
-(node:14052) Warning: Accessing non-existent property 'updateCharacterById' of module exports inside circular dependency
+(node:48992) Warning: Accessing non-existent property 'fetchCharacterById' of module exports inside circular dependency
+(node:48992) Warning: Accessing non-existent property 'updateCharacterById' of module exports inside circular dependency
 ✅ Successfully reloaded application (/) commands for guild ID: 1305484048063529002.
-🔄 Started refreshing 35 guild (/) commands for guild ID: 603960955839447050
-✅ Successfully reloaded application (/) commands for guild ID: 603960955839447050.
-✅ Successfully reloaded all guild (/) commands.
+🔄 Started refreshing 34 guild (/) commands for guild ID: 603960955839447050
