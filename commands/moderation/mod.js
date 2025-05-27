@@ -413,7 +413,27 @@ const modCommand = new SlashCommandBuilder()
 .addSubcommand(subcommand =>
   subcommand
     .setName('resetpetrolls')
-    .setDescription('Manually reset all pet rolls')
+    .setDescription('Reset all pet rolls for all characters')
+)
+
+.addSubcommand(subcommand =>
+  subcommand
+    .setName('forceresetpetrolls')
+    .setDescription('Force reset rolls for a specific pet')
+    .addStringOption(option =>
+      option
+        .setName('character')
+        .setDescription('The character name')
+        .setRequired(true)
+        .setAutocomplete(true)
+    )
+    .addStringOption(option =>
+      option
+        .setName('petname')
+        .setDescription('The pet name')
+        .setRequired(true)
+        .setAutocomplete(true)
+    )
 )
 
 // ------------------- Subcommand: raid -------------------
@@ -531,6 +551,8 @@ async function execute(interaction) {
         return await handleVendingReset(interaction);
     } else if (subcommand === 'resetpetrolls') {
         return await handlePetRollsReset(interaction);
+    } else if (subcommand === 'forceresetpetrolls') {
+        return await handleForceResetPetRolls(interaction);
     } else if (subcommand === 'raid') {
         return await handleRaid(interaction);
     } else {
@@ -1412,6 +1434,46 @@ async function handlePetRollsReset(interaction) {
     });
     
     console.error(`[mod.js]: Error in /mod resetpetrolls:`, error);
+    
+    return interaction.editReply({
+      content: `❌ Failed to reset pet rolls: ${error.message || 'Unknown error'}`,
+      ephemeral: true
+    });
+  }
+}
+
+// ------------------- Function: handleForceResetPetRolls -------------------
+async function handleForceResetPetRolls(interaction) {
+  try {
+    const charName = interaction.options.getString('character');
+    const petName = interaction.options.getString('petname');
+    
+    const character = await fetchCharacterByName(charName);
+    if (!character) {
+      return interaction.editReply(
+        `❌ Character **${charName}** not found in database.`
+      );
+    }
+    
+    const result = await forceResetPetRolls(character._id, petName);
+    
+    return interaction.editReply({
+      content: `✅ Successfully reset rolls for pet **${petName}** from ${result.oldRolls} to ${result.newRolls} rolls.`,
+      ephemeral: true
+    });
+  } catch (error) {
+    handleError(error, "mod.js", {
+      commandName: '/mod forceresetpetrolls',
+      userTag: interaction.user.tag,
+      userId: interaction.user.id,
+      options: {
+        subcommand: 'forceresetpetrolls',
+        character: interaction.options.getString('character'),
+        petname: interaction.options.getString('petname')
+      }
+    });
+    
+    console.error(`[mod.js]: Error in /mod forceresetpetrolls:`, error);
     
     return interaction.editReply({
       content: `❌ Failed to reset pet rolls: ${error.message || 'Unknown error'}`,

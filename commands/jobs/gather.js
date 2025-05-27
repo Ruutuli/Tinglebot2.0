@@ -91,6 +91,7 @@ async function updateDailyRoll(character, activity) {
     const now = new Date().toISOString();
     character.dailyRoll[activity] = now;
     await character.save();
+    console.log(`[gather.js]: ✅ Updated daily roll for ${activity} at ${now}`);
   } catch (error) {
     console.error(`[gather.js]: ❌ Failed to update daily roll for ${character.name}:`, error);
     throw error;
@@ -243,31 +244,21 @@ module.exports = {
       } else {
         console.log(`[Gather Command]: 🔄 No active job voucher for ${character.name}`);
         
-        // For jobs with both GATHERING and LOOTING perks, check both activities
-        const jobPerk = getJobPerk(job);
-        const hasBothPerks = jobPerk && jobPerk.perks.includes('GATHERING') && jobPerk.perks.includes('LOOTING');
-        
-        // Check if either gather or loot has been used today
+        // Check if gather has been used today
         const canGather = canUseDailyRoll(character, 'gather');
-        const canLoot = canUseDailyRoll(character, 'loot');
         
-        if (hasBothPerks && (!canGather || !canLoot)) {
+        if (!canGather) {
+          const nextRollover = new Date();
+          nextRollover.setUTCHours(12, 0, 0, 0); // 8AM EST = 12:00 UTC
+          if (nextRollover < new Date()) {
+            nextRollover.setUTCDate(nextRollover.getUTCDate() + 1);
+          }
+          const unixTimestamp = Math.floor(nextRollover.getTime() / 1000);
+          
           await interaction.editReply({
             embeds: [{
               color: 0x008B8B, // Dark cyan color
-              description: `*${character.name} seems exhausted from their earlier activities...*\n\n**Daily activity limit reached.**\nThe next opportunity to gather or loot will be available at 8AM EST.\n\n*Tip: A job voucher would allow you to gather again today.*`,
-              footer: {
-                text: 'Daily Activity Limit'
-              }
-            }],
-            ephemeral: true,
-          });
-          return;
-        } else if (!hasBothPerks && !canGather) {
-          await interaction.editReply({
-            embeds: [{
-              color: 0x008B8B, // Dark cyan color
-              description: `*${character.name} seems exhausted from their earlier gathering...*\n\n**Daily gathering limit reached.**\nThe next opportunity to gather will be available at 8AM EST.\n\n*Tip: A job voucher would allow you to gather again today.*`,
+              description: `*${character.name} seems exhausted from their earlier gathering...*\n\n**Daily gathering limit reached.**\nThe next opportunity to gather will be available at <t:${unixTimestamp}:F>.\n\n*Tip: A job voucher would allow you to gather again today.*`,
               footer: {
                 text: 'Daily Activity Limit'
               }
