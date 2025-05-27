@@ -625,6 +625,33 @@ async function restorePetLevel(characterId, petName, level) {
  }
 }
 
+// ------------------- forceResetPetRolls -------------------
+async function forceResetPetRolls(characterId, petName) {
+  try {
+    console.log(`[db.js]: 🔄 Force resetting rolls for pet "${petName}" (${characterId})`);
+    
+    const pet = await Pet.findOne({ name: petName, owner: characterId });
+    if (!pet) {
+      throw new Error(`Pet "${petName}" not found for character ${characterId}`);
+    }
+    
+    const newRolls = Math.min(pet.level, 3);
+    const oldRolls = pet.rollsRemaining;
+    
+    await Pet.updateOne(
+      { _id: pet._id },
+      { $set: { rollsRemaining: newRolls } }
+    );
+    
+    console.log(`[db.js]: ✅ Force reset pet "${pet.name}" (${pet.ownerName}) from ${oldRolls} to ${newRolls} rolls`);
+    return { success: true, oldRolls, newRolls };
+  } catch (error) {
+    handleError(error, "db.js");
+    console.error(`[db.js]: ❌ Error in forceResetPetRolls: ${error.message}`);
+    throw error;
+  }
+}
+
 // ============================================================================
 // ------------------- Item Service Functions  -------------------
 // Brief description of what this section handles.
@@ -2047,5 +2074,6 @@ module.exports = {
  getUserBlightHistory,
  connectToVending,
  addItemToInventory,
- restorePetLevel
+ restorePetLevel,
+ forceResetPetRolls
 };
