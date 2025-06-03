@@ -330,7 +330,7 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
       console.log(`[inventoryUtils.js]: ➕ Adding ${quantity} ${itemName}`);
       console.log(`[inventoryUtils.js]: 🔄 Updated ${itemName} quantity: ${inventoryItem.quantity} → ${newQuantity}`);
       await inventoryCollection.updateOne(
-        { characterId, itemName: inventoryItem.itemName, obtain },
+        { characterId, itemName: inventoryItem.itemName },
         { $set: { quantity: newQuantity } }
       );
     } else {
