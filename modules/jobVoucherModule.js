@@ -147,6 +147,15 @@ async function deactivateJobVoucher(characterId) {
             throw new Error(`Character not found with ID: ${characterId}`);
         }
 
+        // Check if the voucher has been used (indicated by lastGatheredAt being set)
+        if (character.lastGatheredAt) {
+            console.log(`[Job Voucher Module]: ❌ Cannot cancel used job voucher for ${character.name}`);
+            return {
+                success: false,
+                message: `❌ **Cannot cancel a job voucher that has already been used.**\nThe voucher has been consumed.`
+            };
+        }
+
         // Always set jobVoucher to false and clear the job
         await updateCharacterById(characterId, { 
             jobVoucher: false, 
