@@ -43,6 +43,9 @@ const getEncounterOutcome = async (character, monster, damageValue, adjustedRand
         const tier = monster.tier;
         let outcome;
 
+        console.log(`[encounterModule.js]: 🎯 Starting encounter calculation for ${character.name} vs ${monster.name} (T${tier})`);
+        console.log(`[encounterModule.js]: 📊 Initial values - Roll: ${damageValue}, Adjusted: ${adjustedRandomValue}, Attack: ${attackSuccess}, Defense: ${defenseSuccess}`);
+
         if (adjustedRandomValue <= 25) {
             outcome = {
                 result: `${tier} HEART(S)`,
@@ -63,7 +66,10 @@ const getEncounterOutcome = async (character, monster, damageValue, adjustedRand
             outcome = { result: 'Win!/Loot', canLoot: true, hearts: 0 };
         }
 
+        console.log(`[encounterModule.js]: 💥 Damage calculation - Tier: ${tier}, Hearts: ${outcome.hearts}, Can Loot: ${outcome.canLoot}`);
+
         if (outcome.hearts > 0) {
+            console.log(`[encounterModule.js]: ❤️ Applying damage - ${character.name} loses ${outcome.hearts} hearts`);
             await useHearts(character._id, outcome.hearts);
         }
 
