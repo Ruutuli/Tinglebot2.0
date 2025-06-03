@@ -1257,7 +1257,12 @@ const createMonsterEncounterEmbed = (
     value: `> ${heartsRemaining !== undefined ? heartsRemaining : "Unknown"}/${
      character.maxHearts !== undefined ? character.maxHearts : "Unknown"
     }`,
-    inline: false,
+    inline: true,
+   },
+   {
+    name: "__🟩 Stamina__",
+    value: `> ${character.currentStamina}/${character.maxStamina}`,
+    inline: true,
    },
    {
     name: "🔹 __Outcome__",
