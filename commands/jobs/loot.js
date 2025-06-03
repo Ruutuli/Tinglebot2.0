@@ -102,15 +102,30 @@ function canUseDailyRoll(character, activity) {
     rollover.setUTCDate(rollover.getUTCDate() - 1);
   }
 
-  const lastRoll = character.dailyRoll?.get(activity);
-  if (!lastRoll) {
-    console.log(`[loot.js]: 📅 No previous roll for ${activity}. Allowing action.`);
+  // Check both gather and loot activities since they share the same daily limit
+  const lastGatherRoll = character.dailyRoll?.get('gather');
+  const lastLootRoll = character.dailyRoll?.get('loot');
+  
+  if (!lastGatherRoll && !lastLootRoll) {
+    console.log(`[loot.js]: 📅 No previous rolls for gather/loot. Allowing action.`);
     return true;
   }
 
-  const lastRollDate = new Date(lastRoll);
-  console.log(`[loot.js]: 📅 now=${now.toISOString()} | lastRoll=${lastRollDate.toISOString()} | rollover=${rollover.toISOString()}`);
-  return lastRollDate < rollover;
+  const lastGatherDate = lastGatherRoll ? new Date(lastGatherRoll) : null;
+  const lastLootDate = lastLootRoll ? new Date(lastLootRoll) : null;
+  
+  // If either activity was used today, deny the action
+  if (lastGatherDate && lastGatherDate >= rollover) {
+    console.log(`[loot.js]: 📅 Already gathered today at ${lastGatherDate.toISOString()}`);
+    return false;
+  }
+  if (lastLootDate && lastLootDate >= rollover) {
+    console.log(`[loot.js]: 📅 Already looted today at ${lastLootDate.toISOString()}`);
+    return false;
+  }
+
+  console.log(`[loot.js]: 📅 now=${now.toISOString()} | lastGather=${lastGatherDate?.toISOString()} | lastLoot=${lastLootDate?.toISOString()} | rollover=${rollover.toISOString()}`);
+  return true;
 }
 
 // Update the daily roll timestamp for an activity
