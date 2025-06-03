@@ -149,7 +149,7 @@ function calculateFinalValue(character, diceRoll) {
     character.defense
   );
   return {
-    damageValue: character.attack,
+    damageValue: diceRoll,
     adjustedRandomValue,
     attackSuccess,
     defenseSuccess

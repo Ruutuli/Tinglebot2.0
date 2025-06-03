@@ -727,10 +727,25 @@ async function processLootingLogic(
   const items = await fetchItemsByMonster(encounteredMonster.name);
 
   // Step 1: Calculate Encounter Outcome
+  console.log(`[loot.js]: 🎲 Starting damage calculation for ${character.name} vs ${encounteredMonster.name}`);
+  console.log(`[loot.js]: 📊 Character stats - Attack: ${character.attack}, Defense: ${character.defense}`);
+  
+  // Generate a random dice roll between 1 and 100
+  const diceRoll = Math.floor(Math.random() * 100) + 1;
+  console.log(`[loot.js]: 🎲 Generated dice roll: ${diceRoll}/100`);
+  
   const { damageValue, adjustedRandomValue, attackSuccess, defenseSuccess } =
-   calculateFinalValue(character);
+   calculateFinalValue(character, diceRoll);
+
+  console.log(`[loot.js]: 📈 Damage calculation results:`);
+  console.log(`[loot.js]: - Base damage value: ${damageValue}`);
+  console.log(`[loot.js]: - Adjusted random value: ${adjustedRandomValue}`);
+  console.log(`[loot.js]: - Attack success: ${attackSuccess}`);
+  console.log(`[loot.js]: - Defense success: ${defenseSuccess}`);
 
   const weightedItems = createWeightedItemList(items, adjustedRandomValue);
+  console.log(`[loot.js]: 🎯 Created weighted item list with ${weightedItems.length} items based on adjusted value: ${adjustedRandomValue}`);
+
   const outcome = await getEncounterOutcome(
    character,
    encounteredMonster,
@@ -740,6 +755,11 @@ async function processLootingLogic(
    defenseSuccess
   );
 
+  console.log(`[loot.js]: 🎯 Encounter outcome:`);
+  console.log(`[loot.js]: - Result: ${outcome.result}`);
+  console.log(`[loot.js]: - Hearts lost: ${outcome.hearts || 0}`);
+  console.log(`[loot.js]: - Can loot: ${outcome.canLoot}`);
+
   // Step 2: Handle KO Logic
   const updatedCharacter = await Character.findById(character._id);
   if (!updatedCharacter) {
@@ -747,19 +767,24 @@ async function processLootingLogic(
   }
 
   if (updatedCharacter.currentHearts === 0 && !updatedCharacter.ko) {
+   console.log(`[loot.js]: 💀 Character ${character.name} has been KO'd`);
    await handleKO(updatedCharacter._id);
   }
 
   // Step 3: Generate Outcome Message
   const outcomeMessage = generateOutcomeMessage(outcome);
+  console.log(`[loot.js]: 📝 Generated outcome message: ${outcomeMessage}`);
 
   // Step 4: Loot Item Logic
   let lootedItem = null;
   if (outcome.canLoot && weightedItems.length > 0) {
+   console.log(`[loot.js]: 🎁 Attempting to loot items from ${encounteredMonster.name}`);
    lootedItem = generateLootedItem(encounteredMonster, weightedItems);
+   console.log(`[loot.js]: 🎁 Selected item: ${lootedItem?.itemName} (Quantity: ${lootedItem?.quantity})`);
 
    const inventoryLink = character.inventory || character.inventoryLink;
    if (!isValidGoogleSheetsUrl(inventoryLink)) {
+    console.log(`[loot.js]: ❌ Invalid inventory link for ${character.name}`);
     const embed = createMonsterEncounterEmbed(
      character,
      encounteredMonster,
@@ -781,6 +806,7 @@ async function processLootingLogic(
 
   // Update character timestamp
   await updateCharacterLootTimestamp(character);
+  console.log(`[loot.js]: ✅ Updated loot timestamp for ${character.name}`);
 
   const embed = createMonsterEncounterEmbed(
    character,
@@ -792,8 +818,10 @@ async function processLootingLogic(
    outcome.adjustedRandomValue
   );
   await interaction.editReply({ embeds: [embed] });
+  console.log(`[loot.js]: ✅ Loot process completed for ${character.name}`);
 
  } catch (error) {
+  console.error(`[loot.js]: ❌ Error in processLootingLogic:`, error);
   await handleLootError(interaction, error, "processing loot");
  }
 }
