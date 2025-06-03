@@ -160,9 +160,6 @@ function getRandomHealingRequirement(healer, characterName) {
 // Submits a new healing request, checking eligibility and permissions.
 async function healBlight(interaction, characterName, healerName) {
   try {
-    // Defer reply immediately to prevent timeout
-    await interaction.deferReply();
-
     // Validate character ownership
     const character = await validateCharacterOwnership(interaction, characterName);
     if (!character) {
@@ -174,7 +171,10 @@ async function healBlight(interaction, characterName, healerName) {
     }
 
     if (!character.blighted) {
-      await interaction.editReply({ content: `⚠️ **${characterName}** is not blighted and does not require healing.`, ephemeral: true });
+      await interaction.editReply({ 
+        content: `⚠️ **${characterName}** is not blighted and does not require healing.`, 
+        ephemeral: true 
+      });
       return;
     }
 
@@ -189,6 +189,7 @@ async function healBlight(interaction, characterName, healerName) {
     let oldRequestCancelled = false;
     let oldHealerName = null;
     let oldStage = null;
+
     // Check for existing pending submission
     const existingSubmissions = await TempData.find({
       type: 'blight',
@@ -203,29 +204,30 @@ async function healBlight(interaction, characterName, healerName) {
       const pendingHealer = getModCharacterByName(existingSubmission.data.healerName);
       const currentStage = character.blightStage || 1;
       const pendingPermission = validateHealerPermission(pendingHealer, currentStage);
+      
       if (!pendingPermission.canHeal) {
         // Expire/cancel the old request
         await deleteBlightRequestFromStorage(existingSubmission.key);
         oldRequestCancelled = true;
         oldHealerName = pendingHealer.name;
         oldStage = currentStage;
-        // Do NOT reply yet; continue to process new request
       } else {
         const timeLeft = Math.ceil((existingSubmission.expiresAt - new Date()) / (1000 * 60 * 60 * 24));
         const pendingMsg = `⚠️ **${characterName}** already has a pending healing request that expires in ${timeLeft} days.\n\n` +
           `Submission ID: \`${existingSubmission.key}\`\n` +
           `Healer: **${existingSubmission.data.healerName}**\n` +
           `Task: ${existingSubmission.data.taskDescription}\n\n`;
+        
         await interaction.editReply({
           content: pendingMsg,
           ephemeral: true
         });
+
         // DM the user as well
         try {
           await interaction.user.send({
             content: `Hi <@${interaction.user.id}>, you already have a pending blight healing request for **${characterName}**. Here are the details:\n\n${pendingMsg}`
           });
-          console.log(`[blightHandler.js]: 📬 Sent DM to user ${interaction.user.id} about pending blight healing request.`);
         } catch (dmError) {
           handleError(dmError, 'blightHandler.js');
           console.error(`[blightHandler.js]: ❌ Failed to send DM to user ${interaction.user.id} about pending blight healing request: ${dmError.message}`);
@@ -236,7 +238,10 @@ async function healBlight(interaction, characterName, healerName) {
 
     const healer = getModCharacterByName(healerName);
     if (!healer) {
-      await interaction.editReply({ content: `❌ Healer "${healerName}" not found.`, ephemeral: true });
+      await interaction.editReply({ 
+        content: `❌ Healer "${healerName}" not found.`, 
+        ephemeral: true 
+      });
       return;
     }
 
@@ -263,6 +268,7 @@ async function healBlight(interaction, characterName, healerName) {
       return;
     }
 
+    // Create new healing request
     const healingRequirement = getRandomHealingRequirement(healer, characterName);
     const newSubmissionId = generateUniqueId('B');
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days expiration
@@ -314,6 +320,7 @@ async function healBlight(interaction, characterName, healerName) {
     if (oldRequestCancelled) {
       replyContent = `⚠️ **${characterName}** had a pending healing request from **${oldHealerName}**, but they can no longer heal at Stage ${oldStage}.\n\nThe old request has been cancelled. Here is your new healing prompt:\n\n` + replyContent;
     }
+    
     await interaction.editReply({
       content: replyContent,
       embeds: [embed],
@@ -334,7 +341,6 @@ async function healBlight(interaction, characterName, healerName) {
     handleError(error, 'blightHandler.js');
     console.error('[blightHandler]: Error healing blight:', error);
     
-    // Since we deferred, we should always use editReply
     await interaction.editReply({ 
       content: '❌ An error occurred while processing your request. Please try again or contact support if the issue persists.', 
       ephemeral: true 
@@ -351,9 +357,6 @@ async function healBlight(interaction, characterName, healerName) {
 // Ensures a character belongs to the user making the interaction.
 async function validateCharacterOwnership(interaction, characterName) {
   try {
-    // Defer reply first to prevent timeout
-    await interaction.deferReply();
-    
     const userId = interaction.user.id;
     const character = await Character.findOne({ name: characterName, userId });
     if (!character) {
