@@ -350,25 +350,38 @@ async function healBlight(interaction, characterName, healerName) {
 // ------------------- Function: validateCharacterOwnership -------------------
 // Ensures a character belongs to the user making the interaction.
 async function validateCharacterOwnership(interaction, characterName) {
-  const userId = interaction.user.id;
-  const character = await Character.findOne({ name: characterName, userId });
-  if (!character) {
-    // Check if the character exists at all (for better error message)
-    const exists = await Character.findOne({ name: characterName });
-    if (!exists) {
-      await interaction.editReply({
-        content: `❌ Character "${characterName}" does not exist. Please check the spelling and try again.`,
-        ephemeral: true
-      });
-    } else {
-      await interaction.editReply({
-        content: `❌ You can only perform this action for your **own** characters!`,
-        ephemeral: true
-      });
+  try {
+    // Defer reply first to prevent timeout
+    await interaction.deferReply();
+    
+    const userId = interaction.user.id;
+    const character = await Character.findOne({ name: characterName, userId });
+    if (!character) {
+      // Check if the character exists at all (for better error message)
+      const exists = await Character.findOne({ name: characterName });
+      if (!exists) {
+        await interaction.editReply({
+          content: `❌ Character "${characterName}" does not exist. Please check the spelling and try again.`,
+          ephemeral: true
+        });
+      } else {
+        await interaction.editReply({
+          content: `❌ You can only perform this action for your **own** characters!`,
+          ephemeral: true
+        });
+      }
+      return null;
     }
+    return character;
+  } catch (error) {
+    handleError(error, 'blightHandler.js');
+    console.error('[blightHandler]: Error validating character ownership:', error);
+    await interaction.editReply({
+      content: '❌ An error occurred while validating character ownership.',
+      ephemeral: true
+    });
     return null;
   }
-  return character;
 }
 
 // ------------------- Function: validateHealerPermission -------------------

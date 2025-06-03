@@ -98,11 +98,13 @@ async function ensureCollectionExists(dbConnection, collectionName) {
 // Checks if the given character name is unique for the specified user.
 async function isUniqueCharacterName(userId, characterName) {
     try {
-        const existingCharacter = await Character.findOne({ userId, name: characterName });
+        const existingCharacter = await Character.findOne({ 
+            userId, 
+            name: { $regex: new RegExp(`^${characterName}$`, 'i') }
+        });
         return !existingCharacter;
     } catch (error) {
-    handleError(error, 'validation.js');
-
+        handleError(error, 'validation.js');
         console.error('[validation.js]: Error checking unique character name:', error);
         throw error;
     }
