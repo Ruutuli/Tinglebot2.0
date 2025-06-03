@@ -369,10 +369,15 @@ async function healBlight(interaction, characterName, healerName) {
 async function validateCharacterOwnership(interaction, characterName) {
   try {
     const userId = interaction.user.id;
-    const character = await Character.findOne({ name: characterName, userId });
+    const character = await Character.findOne({ 
+      name: { $regex: new RegExp(`^${characterName}$`, 'i') }, 
+      userId 
+    });
     if (!character) {
       // Check if the character exists at all (for better error message)
-      const exists = await Character.findOne({ name: characterName });
+      const exists = await Character.findOne({ 
+        name: { $regex: new RegExp(`^${characterName}$`, 'i') } 
+      });
       if (!exists) {
         await interaction.editReply({
           content: `❌ Character "${characterName}" does not exist. Please check the spelling and try again.`,
