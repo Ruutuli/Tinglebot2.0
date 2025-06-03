@@ -286,7 +286,7 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
     }
 
     // Extract dice roll from encounter message
-    const diceRollMatch = encounterMessage.embeds[0].description.match(/Roll: (\d+)\/100/);
+    const diceRollMatch = encounterMessage?.embeds?.[0]?.description?.match(/Roll: (\d+)\/100/);
     const diceRoll = diceRollMatch ? parseInt(diceRollMatch[1]) : Math.floor(Math.random() * 100) + 1;
 
     const { damageValue, adjustedRandomValue, attackSuccess, defenseSuccess } = calculateFinalValue(character, diceRoll);
