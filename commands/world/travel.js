@@ -23,7 +23,7 @@ const {
 } = require('../../database/db.js');
 
 // ------------------- Database Models -------------------
-const Mount = require('../../models/MountModel');
+// const Mount = require('../../models/MountModel');
 
 // ------------------- Embeds -------------------
 const {
@@ -85,8 +85,8 @@ const PATH_CHANNELS = {
 };
 
 const MODE_CHOICES = [
-  { name: 'on foot',  value: 'on foot'  },
-  { name: 'on mount', value: 'on mount' }
+  { name: 'on foot',  value: 'on foot'  }
+  // { name: 'on mount', value: 'on mount' } // Temporarily disabled
 ];
 
 const DELAY_MS = Number(TRAVEL_DELAY_MS);
@@ -122,11 +122,11 @@ function calculateTravelDuration(currentVillage, destination, mode, character) {
     'on foot': {
       'rudania-inariko': 2,
       'inariko-vhintl': 2
-    },
-    'on mount': {
-      'rudania-inariko': 1,
-      'inariko-vhintl': 1
-    }    
+    }
+    // 'on mount': { // Temporarily disabled
+    //   'rudania-inariko': 1,
+    //   'inariko-vhintl': 1
+    // }    
   };
 
   const key = `${currentVillage}-${destination}`;
@@ -282,43 +282,43 @@ module.exports = {
       }
 
       // ------------------- Mount Travel Logic -------------------
-      let mount = null;
-      if (mode === 'on mount') {
-        console.log(`[travel.js]: 🔍 Checking mount for character ${character.name} (${character._id})`);
-        mount = await Mount.findOne({ characterId: character._id, status: 'active' });
-        console.log(`[travel.js]: 🐴 Mount found: ${mount ? 'Yes' : 'No'}`);
-        if (!mount) {
-          console.log(`[travel.js]: ❌ No mount found for ${character.name}, blocking travel`);
-          return interaction.editReply({
-            content: `❌ **${character.name}** does not have a registered mount. You must register a mount before traveling on mount.`
-          });
-        }
-        console.log(`[travel.js]: ✅ Mount validation passed for ${character.name}`);
-        // Recover mount stamina if a day has passed since lastMountTravel
-        const now = new Date();
-        if (mount.lastMountTravel) {
-          const last = new Date(mount.lastMountTravel);
-          const msInDay = 24 * 60 * 60 * 1000;
-          const daysPassed = Math.floor((now - last) / msInDay);
-          if (daysPassed > 0) {
-            const maxStamina = mount.stamina;
-            mount.currentStamina = Math.min(maxStamina, (mount.currentStamina || maxStamina) + daysPassed);
-            await mount.save();
-          }
-          // Enforce 1 day cooldown
-          if ((now - last) < msInDay) {
-            return interaction.editReply({
-              content: `❌ **${mount.name}** must rest for 1 day before traveling again. Please wait before using your mount for travel.`
-            });
-          }
-        } else {
-          // If never traveled, initialize currentStamina
-          if (mount.currentStamina == null) {
-            mount.currentStamina = mount.stamina;
-            await mount.save();
-          }
-        }
-      }
+      // let mount = null;
+      // if (mode === 'on mount') {
+      //   console.log(`[travel.js]: 🔍 Checking mount for character ${character.name} (${character._id})`);
+      //   mount = await Mount.findOne({ characterId: character._id, status: 'active' });
+      //   console.log(`[travel.js]: 🐴 Mount found: ${mount ? 'Yes' : 'No'}`);
+      //   if (!mount) {
+      //     console.log(`[travel.js]: ❌ No mount found for ${character.name}, blocking travel`);
+      //     return interaction.editReply({
+      //       content: `❌ **${character.name}** does not have a registered mount. You must register a mount before traveling on mount.`
+      //     });
+      //   }
+      //   console.log(`[travel.js]: ✅ Mount validation passed for ${character.name}`);
+      //   // Recover mount stamina if a day has passed since lastMountTravel
+      //   const now = new Date();
+      //   if (mount.lastMountTravel) {
+      //     const last = new Date(mount.lastMountTravel);
+      //     const msInDay = 24 * 60 * 60 * 1000;
+      //     const daysPassed = Math.floor((now - last) / msInDay);
+      //     if (daysPassed > 0) {
+      //       const maxStamina = mount.stamina;
+      //       mount.currentStamina = Math.min(maxStamina, (mount.currentStamina || maxStamina) + daysPassed);
+      //       await mount.save();
+      //     }
+      //     // Enforce 1 day cooldown
+      //     if ((now - last) < msInDay) {
+      //       return interaction.editReply({
+      //         content: `❌ **${mount.name}** must rest for 1 day before traveling again. Please wait before using your mount for travel.`
+      //       });
+      //     }
+      //   } else {
+      //     // If never traveled, initialize currentStamina
+      //     if (mount.currentStamina == null) {
+      //       mount.currentStamina = mount.stamina;
+      //       await mount.save();
+      //     }
+      //   }
+      // }
 
       // ------------------- Check for Debuff -------------------
       if (character.debuff?.active) {
@@ -353,18 +353,18 @@ module.exports = {
       // ------------------- Calculate Travel Duration -------------------
       const totalTravelDuration = calculateTravelDuration(startingVillage, destination, mode, character);
 
-      if (mode === 'on mount') {
-        if (!mount) {
-          return interaction.editReply({
-            content: `❌ **${character.name}** does not have a registered mount. You must register a mount before traveling on mount.`
-          });
-        }
-        if (mount.currentStamina < totalTravelDuration) {
-          return interaction.editReply({
-            content: `❌ **${mount.name}** does not have enough stamina to complete this journey. Required: ${totalTravelDuration}, Available: ${mount.currentStamina}`
-          });
-        }
-      }
+      // if (mode === 'on mount') {
+      //   if (!mount) {
+      //     return interaction.editReply({
+      //       content: `❌ **${character.name}** does not have a registered mount. You must register a mount before traveling on mount.`
+      //     });
+      //   }
+      //   if (mount.currentStamina < totalTravelDuration) {
+      //     return interaction.editReply({
+      //       content: `❌ **${mount.name}** does not have enough stamina to complete this journey. Required: ${totalTravelDuration}, Available: ${mount.currentStamina}`
+      //     });
+      //   }
+      // }
 
       if (
         (startingVillage === 'rudania' && destination === 'vhintl') ||
@@ -397,12 +397,12 @@ module.exports = {
       if (!isChannelValid) return;
 
       // ------------------- Update Mount After All Validations Pass -------------------
-      if (mode === 'on mount') {
-        // Deduct mount stamina and update lastMountTravel
-        mount.currentStamina -= totalTravelDuration;
-        mount.lastMountTravel = new Date();
-        await mount.save();
-      }
+      // if (mode === 'on mount') {
+      //   // Deduct mount stamina and update lastMountTravel
+      //   mount.currentStamina -= totalTravelDuration;
+      //   mount.lastMountTravel = new Date();
+      //   await mount.save();
+      // }
 
       // ------------------- Determine Paths & Stops -------------------
       let paths = [];
@@ -426,7 +426,7 @@ module.exports = {
       }
 
       // ------------------- Send Initial Travel Embed -------------------
-      const initialEmbed = createInitialTravelEmbed(character, startingVillage, destination, paths, totalTravelDuration, mount, mode);
+      const initialEmbed = createInitialTravelEmbed(character, startingVillage, destination, paths, totalTravelDuration, null, mode);
       await interaction.followUp({ embeds: [initialEmbed] });
 
       // ------------------- Start Travel Processing -------------------
@@ -440,7 +440,7 @@ module.exports = {
         travelingMessages: [],
         currentChannel: interaction.channelId,
         travelLog: [],
-        mount,
+        mount: null,
         mode
       });
       
@@ -547,54 +547,54 @@ async function processTravelDay(day, context) {
 
 
     // ------------------- Mount Travel: Skip Encounters & Gathering -------------------
-    if (mode === 'on mount') {
-      if (day > totalTravelDuration) {
-        character.currentVillage = destination;
-        await character.save();
-        const finalChannelId = PATH_CHANNELS[paths[paths.length - 1]] || currentChannel;
-        const finalChannel = await interaction.client.channels.fetch(finalChannelId);
+    // if (mode === 'on mount') {
+    //   if (day > totalTravelDuration) {
+    //     character.currentVillage = destination;
+    //     await character.save();
+    //     const finalChannelId = PATH_CHANNELS[paths[paths.length - 1]] || currentChannel;
+    //     const finalChannel = await interaction.client.channels.fetch(finalChannelId);
         
-        // First embed with mount info
-        const mountEmbed = new EmbedBuilder()
-          .setTitle(`✅ Mount Travel Complete!`)
-          .setDescription(`**${character.name}** has arrived at **${capitalizeFirstLetter(destination)}** by mount!
+    //     // First embed with mount info
+    //     const mountEmbed = new EmbedBuilder()
+    //       .setTitle(`✅ Mount Travel Complete!`)
+    //       .setDescription(`**${character.name}** has arrived at **${capitalizeFirstLetter(destination)}** by mount!
 
-🥕 **${mount.name}**'s stamina remaining: ${mount.currentStamina}`)
-          .setColor('#AA926A')
-          .setTimestamp();
+    // 🥕 **${mount.name}**'s stamina remaining: ${mount.currentStamina}`)
+    //       .setColor('#AA926A')
+    //       .setTimestamp();
         
-        // Second embed with arrival image
-        const imageEmbed = new EmbedBuilder()
-          .setImage('https://storage.googleapis.com/tinglebot/Graphics/travel.png')
-          .setDescription(`🎉 **${character.name}** has arrived safely at **${capitalizeFirstLetter(destination)}**!`);
+    //     // Second embed with arrival image
+    //     const imageEmbed = new EmbedBuilder()
+    //       .setImage('https://storage.googleapis.com/tinglebot/Graphics/travel.png')
+    //       .setDescription(`🎉 **${character.name}** has arrived safely at **${capitalizeFirstLetter(destination)}**!`);
 
-        // Send both embeds in sequence
-        await finalChannel.send({ embeds: [mountEmbed] });
-        await finalChannel.send({ embeds: [imageEmbed] });
+    //     // Send both embeds in sequence
+    //     await finalChannel.send({ embeds: [mountEmbed] });
+    //     await finalChannel.send({ embeds: [imageEmbed] });
 
-        for (const msg of travelingMessages) {
-          await msg.delete();
-        }
-        return;
-      }
-      // Send a simple embed for each travel day
-      const currentPath = paths[0];
-      const channelId = PATH_CHANNELS[currentPath];
-      const channel = savedChannel || await interaction.client.channels.fetch(channelId);
-      const pathEmoji = pathEmojis[currentPath];
-      const travelDayEmbed = new EmbedBuilder()
-        .setTitle(`🐴 Traveling by Mount: Day ${day}`)
-        .setDescription(`**${character.name}** is traveling safely by mount (${mount.name}) to **${capitalizeFirstLetter(destination)}**.
+    //     for (const msg of travelingMessages) {
+    //       await msg.delete();
+    //     }
+    //     return;
+    //   }
+    //   // Send a simple embed for each travel day
+    //   const currentPath = paths[0];
+    //   const channelId = PATH_CHANNELS[currentPath];
+    //   const channel = savedChannel || await interaction.client.channels.fetch(channelId);
+    //   const pathEmoji = pathEmojis[currentPath];
+    //   const travelDayEmbed = new EmbedBuilder()
+    //     .setTitle(`🐴 Traveling by Mount: Day ${day}`)
+    //     .setDescription(`**${character.name}** is traveling safely by mount (${mount.name}) to **${capitalizeFirstLetter(destination)}**.
 
-${pathEmoji || ''} No monsters or gathering today!`)
-        .setColor('#AA926A')
-        .setTimestamp();
-      const travelMsg = await channel.send({ embeds: [travelDayEmbed] });
-      travelingMessages.push(travelMsg);
-      await new Promise(resolve => setTimeout(resolve, DELAY_MS));
-      await processTravelDay(day + 1, { ...context, channel });
-      return;
-    }
+    // ${pathEmoji || ''} No monsters or gathering today!`)
+    //     .setColor('#AA926A')
+    //     .setTimestamp();
+    //   const travelMsg = await channel.send({ embeds: [travelDayEmbed] });
+    //   travelingMessages.push(travelMsg);
+    //   await new Promise(resolve => setTimeout(resolve, DELAY_MS));
+    //   await processTravelDay(day + 1, { ...context, channel });
+    //   return;
+    // }
 
     // ------------------- Check if Journey is Complete -------------------
     if (day > totalTravelDuration) {
