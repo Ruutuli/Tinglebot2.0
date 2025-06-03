@@ -87,13 +87,76 @@ const villageChannels = {
 const { getCurrentWeather } = require('../../modules/weatherModule.js');
 
 // ------------------- Helper Functions -------------------
-// Check if a daily roll is available for a specific activity
-function canUseDailyRoll(character, activity) {
-  // If character has an active job voucher, they can always use the command
-  if (character.jobVoucher) {
-    return true;
+
+// Unified error handling
+async function handleLootError(interaction, error, context = '') {
+  handleError(error, "loot.js");
+  await interaction.editReply({
+    content: `❌ **An error occurred during the loot command execution${context ? `: ${context}` : ''}.**`,
+  });
+}
+
+// Unified character update
+async function updateCharacterLootTimestamp(character) {
+  character.lastLootedAt = new Date().toISOString();
+  await character.save();
+}
+
+// Unified embed creation
+async function sendNoEncounterEmbed(interaction, character, bloodMoonActive) {
+  const embed = createNoEncounterEmbed(character, bloodMoonActive);
+  await interaction.editReply({ embeds: [embed] });
+}
+
+// Unified character validation
+async function validateCharacterForLoot(interaction, characterName, userId) {
+  const character = await fetchCharacterByNameAndUserId(characterName, userId);
+  if (!character) {
+    await interaction.editReply({
+      content: `❌ **Character "${characterName}" not found or doesn't belong to you!**`,
+    });
+    return null;
+  }
+  return character;
+}
+
+// Unified job validation
+async function validateJobForLoot(interaction, character, job) {
+  if (!job || typeof job !== "string" || !job.trim() || !isValidJob(job)) {
+    console.error(`[loot.js]: ❌ Invalid job "${job}" for ${character.name}`);
+    await interaction.editReply({
+      content: getJobVoucherErrorMessage('MISSING_SKILLS', {
+        characterName: character.name,
+        jobName: job || "None"
+      }).message,
+      ephemeral: true,
+    });
+    return false;
   }
 
+  const jobPerkInfo = getJobPerk(job);
+  if (!jobPerkInfo || !jobPerkInfo.perks.includes("LOOTING")) {
+    console.error(`[Loot Command]: ${character.name} lacks required skills for job: "${job}"`);
+    await interaction.editReply({
+      embeds: [{
+        color: 0x008B8B,
+        description: `*${character.name} looks at their hands, unsure of how to proceed...*\n\n**Job Skill Mismatch**\n${character.name} cannot use the looting perk as a ${capitalizeWords(job)} because they lack the necessary looting skills.`,
+        image: {
+          url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+        },
+        footer: {
+          text: 'Job Skill Check'
+        }
+      }],
+      ephemeral: true
+    });
+    return false;
+  }
+  return true;
+}
+
+// Check if a daily roll is available for a specific activity
+function canUseDailyRoll(character, activity) {
   const now = new Date();
   // Compute the most recent 12:00 UTC (8am EST) rollover
   const rollover = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 12, 0, 0, 0));
@@ -165,14 +228,27 @@ module.exports = {
    await interaction.deferReply();
 
    // ------------------- Step 1: Validate Character -------------------
-   const characterName = interaction.options.getString("charactername"); // Fetch the character name from user input
-   const userId = interaction.user.id; // Get the ID of the interacting user
+   const characterName = interaction.options.getString("charactername");
+   const userId = interaction.user.id;
 
-   const character = await fetchCharacterByNameAndUserId(characterName, userId);
+   const character = await validateCharacterForLoot(interaction, characterName, userId);
    if (!character) {
-    await interaction.editReply({
-     content: `❌ **Character "${characterName}" not found or doesn't belong to you!**`,
-    });
+    return;
+   }
+
+   // ------------------- Step 2: Check Hearts and Job Validity -------------------
+   if (character.currentHearts === 0) {
+    const embed = createKOEmbed(character);
+    await interaction.editReply({ embeds: [embed] });
+    return;
+   }
+
+   // Determine job based on jobVoucher or default job
+   let job = character.jobVoucher && character.jobVoucherJob ? character.jobVoucherJob : character.job;
+   console.log(`[loot.js]: 🔄 Job determined for ${character.name}: "${job}"`);
+
+   // Validate job BEFORE any other checks
+   if (!await validateJobForLoot(interaction, character, job)) {
     return;
    }
 
@@ -181,9 +257,9 @@ module.exports = {
      return;
    }
 
-   // ------------------- Step 2: Validate Interaction Channel -------------------
-   let currentVillage = capitalizeWords(character.currentVillage); // Capitalize village name for consistency
-   let allowedChannel = villageChannels[currentVillage]; // Get the allowed channel from environment variables
+   // ------------------- Step 3: Validate Interaction Channel -------------------
+   let currentVillage = capitalizeWords(character.currentVillage);
+   let allowedChannel = villageChannels[currentVillage];
 
    // If using a job voucher for a village-exclusive job, override to required village
    if (character.jobVoucher && character.jobVoucherJob) {
@@ -201,6 +277,28 @@ module.exports = {
      content: `❌ **You can only use this command in the ${currentVillage} Town Hall channel!**\n${characterName} is currently in ${capitalizeWords(character.currentVillage)}! This command must be used in ${channelMention}.`,
     });
     return;
+   }
+
+   // Check for job voucher
+   if (character.jobVoucher) {
+     console.log(`[Loot Command]: 🔄 Active job voucher found for ${character.name}`);
+   } else {
+     console.log(`[Loot Command]: 🔄 No active job voucher for ${character.name}`);
+   }
+
+   // Validate job voucher (without consuming it)
+   let voucherCheck;
+   if (character.jobVoucher) {
+     console.log(`[loot.js]: 🎫 Validating job voucher for ${character.name}`);
+     voucherCheck = await validateJobVoucher(character, job, 'LOOTING');
+     if (!voucherCheck.success) {
+       await interaction.editReply({
+         content: voucherCheck.message,
+         ephemeral: true
+       });
+       return;
+     }
+     console.log(`[loot.js]: ✅ Job voucher validation successful for ${character.name}`);
    }
 
    // ---- Blight Rain Infection Check ----
@@ -255,118 +353,6 @@ module.exports = {
      return;
    }
 
-   // ------------------- Step 3: Check Hearts and Job Validity -------------------
-   if (character.currentHearts === 0) {
-    const embed = createKOEmbed(character); // Create embed for KO status
-    await interaction.editReply({ embeds: [embed] });
-    return;
-   }
-
-   // Determine job based on jobVoucher or default job
-   let job =
-    character.jobVoucher && character.jobVoucherJob
-     ? character.jobVoucherJob
-     : character.job;
-   console.log(`[loot.js]: 🔄 Job determined for ${character.name}: "${job}"`);
-
-   // Validate job
-   if (!job || typeof job !== "string" || !job.trim() || !isValidJob(job)) {
-    console.error(
-     `[loot.js]: ❌ Invalid job "${job}" for ${character.name}`
-    );
-    await interaction.editReply({
-     content: getJobVoucherErrorMessage('MISSING_SKILLS', {
-       characterName: character.name,
-       jobName: job || "None"
-     }).message,
-     ephemeral: true,
-    });
-    return;
-   }
-
-   // Validate job voucher (without consuming it)
-   let voucherCheck;
-   if (character.jobVoucher) {
-     console.log(`[loot.js]: 🎫 Validating job voucher for ${character.name}`);
-     voucherCheck = await validateJobVoucher(character, job, 'LOOTING');
-     if (!voucherCheck.success) {
-       await interaction.editReply({
-         content: voucherCheck.message,
-         ephemeral: true,
-       });
-       return;
-     }
-     console.log(`[loot.js]: ✅ Job voucher validation successful for ${character.name}`);
-   }
-
-   // Validate job perks
-   const jobPerkInfo = getJobPerk(job);
-   console.log(`[Loot Command]: Retrieved job perks for ${job}:`, jobPerkInfo);
-
-   if (!jobPerkInfo || !jobPerkInfo.perks.includes("STEALING")) {
-     console.error(`[Loot Command]: ${character.name} lacks required skills for job: "${job}"`);
-     await interaction.editReply({
-       embeds: [{
-         color: 0x008B8B, // Dark cyan color
-         description: `*${character.name} looks at their hands, unsure of how to proceed...*\n\n**Job Skill Mismatch**\n${character.name} cannot use the looting perk as a ${capitalizeWords(job)} because they lack the necessary stealing skills.`,
-         image: {
-           url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
-         },
-         footer: {
-           text: 'Job Skill Check'
-         }
-       }],
-       ephemeral: true
-     });
-     return;
-   }
-
-   // Check for job voucher and daily roll AFTER job validation
-   if (character.jobVoucher) {
-     console.log(`[Loot Command]: 🔄 Active job voucher found for ${character.name}`);
-   } else {
-     console.log(`[Loot Command]: 🔄 No active job voucher for ${character.name}`);
-     
-     // Check if loot has been used today
-     const canLoot = canUseDailyRoll(character, 'loot');
-     
-     if (!canLoot) {
-       const nextRollover = new Date();
-       nextRollover.setUTCHours(12, 0, 0, 0); // 8AM EST = 12:00 UTC
-       if (nextRollover < new Date()) {
-         nextRollover.setUTCDate(nextRollover.getUTCDate() + 1);
-       }
-       const unixTimestamp = Math.floor(nextRollover.getTime() / 1000);
-       
-       await interaction.editReply({
-         embeds: [{
-           color: 0x008B8B, // Dark cyan color
-           description: `*${character.name} seems exhausted from their earlier looting...*\n\n**Daily looting limit reached.**\nThe next opportunity to loot will be available at <t:${unixTimestamp}:F>.\n\n*Tip: A job voucher would allow you to loot again today.*`,
-           image: {
-             url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
-           },
-           footer: {
-             text: 'Daily Activity Limit'
-           }
-         }],
-         ephemeral: true,
-       });
-       return;
-     }
-
-     // Update daily roll AFTER all validations pass
-     try {
-       await updateDailyRoll(character, 'loot');
-     } catch (error) {
-       console.error(`[Loot Command]: ❌ Failed to update daily roll:`, error);
-       await interaction.editReply({
-         content: `❌ **An error occurred while updating your daily roll. Please try again.**`,
-         ephemeral: true,
-       });
-       return;
-     }
-   }
-
    if (character.debuff?.active) {
     const debuffEndDate = new Date(character.debuff.endDate);
     const unixTimestamp = Math.floor(debuffEndDate.getTime() / 1000);
@@ -384,6 +370,48 @@ module.exports = {
      ephemeral: true
     });
     return;
+   }
+
+   // Check daily roll limit AFTER job validation
+   if (!character.jobVoucher) {
+     // Check if loot has been used today
+     const canLoot = canUseDailyRoll(character, 'loot');
+     
+     if (!canLoot) {
+       const nextRollover = new Date();
+       nextRollover.setUTCHours(12, 0, 0, 0); // 8AM EST = 12:00 UTC
+       if (nextRollover < new Date()) {
+         nextRollover.setUTCDate(nextRollover.getUTCDate() + 1);
+       }
+       const unixTimestamp = Math.floor(nextRollover.getTime() / 1000);
+       
+       await interaction.editReply({
+         embeds: [{
+           color: 0x008B8B,
+           description: `*${character.name} seems exhausted from their earlier looting...*\n\n**Daily looting limit reached.**\nThe next opportunity to loot will be available at <t:${unixTimestamp}:F>.\n\n*Tip: A job voucher would allow you to loot again today.*`,
+           image: {
+             url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+           },
+           footer: {
+             text: 'Daily Activity Limit'
+           }
+         }],
+         ephemeral: true
+       });
+       return;
+     }
+
+     // Update daily roll AFTER all validations pass
+     try {
+       await updateDailyRoll(character, 'loot');
+     } catch (error) {
+       console.error(`[Loot Command]: ❌ Failed to update daily roll:`, error);
+       await interaction.editReply({
+         content: `❌ **An error occurred while updating your daily roll. Please try again.**`,
+         ephemeral: true
+       });
+       return;
+     }
    }
 
    // ------------------- Step 4: Determine Region and Encounter -------------------
@@ -507,10 +535,7 @@ module.exports = {
    console.log(`[loot.js]: ✅ Loot command completed successfully for ${character.name}`);
 
   } catch (error) {
-   handleError(error, "loot.js");
-   await interaction.editReply({
-    content: `❌ **An error occurred during the loot command execution.**`,
-   });
+   await handleLootError(interaction, error, "loot command execution");
   }
  },
 };
@@ -625,12 +650,10 @@ async function processLootingLogic(
    defenseSuccess
   );
 
-  // Step 2: Handle KO Logic (if not already handled in getEncounterOutcome)
+  // Step 2: Handle KO Logic
   const updatedCharacter = await Character.findById(character._id);
   if (!updatedCharacter) {
-   throw new Error(
-    `Unable to find updated character with ID ${character._id}`
-   );
+   throw new Error(`Unable to find updated character with ID ${character._id}`);
   }
 
   if (updatedCharacter.currentHearts === 0 && !updatedCharacter.ko) {
@@ -645,10 +668,7 @@ async function processLootingLogic(
    const lootedItem = generateLootedItem(encounteredMonster, weightedItems);
 
    const inventoryLink = character.inventory || character.inventoryLink;
-   if (
-    typeof inventoryLink !== "string" ||
-    !isValidGoogleSheetsUrl(inventoryLink)
-   ) {
+   if (!isValidGoogleSheetsUrl(inventoryLink)) {
     const embed = createMonsterEncounterEmbed(
      character,
      encounteredMonster,
@@ -664,114 +684,100 @@ async function processLootingLogic(
     return;
    }
 
-   const spreadsheetId = extractSpreadsheetId(inventoryLink);
-   const auth = await authorizeSheets();
-   const range = "loggedInventory!A2:M";
-   const uniqueSyncId = uuidv4();
-   const formattedDateTime = new Date().toLocaleString("en-US", {
+   await handleInventoryUpdate(interaction, character, lootedItem, encounteredMonster, bloodMoonActive);
+  }
+
+  // Update character timestamp
+  await updateCharacterLootTimestamp(character);
+
+  const embed = createMonsterEncounterEmbed(
+   character,
+   encounteredMonster,
+   outcomeMessage,
+   updatedCharacter.currentHearts,
+   outcome.canLoot && weightedItems.length > 0 ? lootedItem : null,
+   bloodMoonActive
+  );
+  await interaction.editReply({ embeds: [embed] });
+
+ } catch (error) {
+  await handleLootError(interaction, error, "processing loot");
+ }
+}
+
+// New helper function for inventory updates
+async function handleInventoryUpdate(interaction, character, lootedItem, encounteredMonster, bloodMoonActive) {
+  const spreadsheetId = extractSpreadsheetId(character.inventory);
+  const auth = await authorizeSheets();
+  const range = "loggedInventory!A2:M";
+  const uniqueSyncId = uuidv4();
+  const formattedDateTime = new Date().toLocaleString("en-US", {
     timeZone: "America/New_York",
-   });
-   const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
+  });
+  const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
 
-   const values = [
+  const values = [
     [
-     character.name,
-     lootedItem.itemName,
-     lootedItem.quantity.toString(),
-     lootedItem.category.join(", "),
-     lootedItem.type.join(", "),
-     lootedItem.subtype.join(", "),
-     "Looted",
-     character.job,
-     "",
-     character.currentVillage,
-     interactionUrl,
-     formattedDateTime,
-     uniqueSyncId,
+      character.name,
+      lootedItem.itemName,
+      lootedItem.quantity.toString(),
+      lootedItem.category.join(", "),
+      lootedItem.type.join(", "),
+      lootedItem.subtype.join(", "),
+      "Looted",
+      character.job,
+      "",
+      character.currentVillage,
+      interactionUrl,
+      formattedDateTime,
+      uniqueSyncId,
     ],
-   ];
+  ];
 
-   await addItemInventoryDatabase(
+  await addItemInventoryDatabase(
     character._id,
     lootedItem.itemName,
     lootedItem.quantity,
     lootedItem.category.join(", "),
     lootedItem.type.join(", "),
     interaction
-   );
+  );
 
-   // —— Wrap the Sheets append in its own try/catch ——
-   try {
+  try {
     if (character?.name && character?.inventory && character?.userId) {
-    await safeAppendDataToSheet(character.inventory, character, range, values, undefined, { 
+      await safeAppendDataToSheet(character.inventory, character, range, values, undefined, {
         skipValidation: true,
         context: {
-            commandName: 'loot',
-            userTag: interaction.user.tag,
-            userId: interaction.user.id,
-            characterName: character.name,
-            spreadsheetId: extractSpreadsheetId(character.inventory),
-            range: range,
-            sheetType: 'inventory',
-            options: {
-                monsterName: encounteredMonster.name,
-                itemName: lootedItem.itemName,
-                quantity: lootedItem.quantity,
-                bloodMoonActive: bloodMoonActive
-            }
+          commandName: 'loot',
+          userTag: interaction.user.tag,
+          userId: interaction.user.id,
+          characterName: character.name,
+          spreadsheetId: extractSpreadsheetId(character.inventory),
+          range: range,
+          sheetType: 'inventory',
+          options: {
+            monsterName: encounteredMonster.name,
+            itemName: lootedItem.itemName,
+            quantity: lootedItem.quantity,
+            bloodMoonActive: bloodMoonActive
+          }
         }
-    });
-} else {
-    console.error('[safeAppendDataToSheet]: Invalid character object detected before syncing.');
-}
-
-   } catch (sheetError) {
+      });
+    } else {
+      console.error('[safeAppendDataToSheet]: Invalid character object detected before syncing.');
+    }
+  } catch (sheetError) {
     console.error(`[LOOT] Google Sheets append error: ${sheetError.message}`);
     await interaction.editReply({
-     content:
-      `❌ **Failed to write to your Google Sheet.**\n` +
-      `> Make sure your **Inventory** link is a valid Google Sheets URL ` +
-      `and that you've shared the sheet with the service account ` +
-      `(the "client_email" in service_account.json).`,
-     ephemeral: true,
+      content:
+        `❌ **Failed to write to your Google Sheet.**\n` +
+        `> Make sure your **Inventory** link is a valid Google Sheets URL ` +
+        `and that you've shared the sheet with the service account ` +
+        `(the "client_email" in service_account.json).`,
+      ephemeral: true,
     });
-    return;
-   }
-
-   const embed = createMonsterEncounterEmbed(
-    character,
-    encounteredMonster,
-    outcomeMessage,
-    updatedCharacter.currentHearts,
-    lootedItem,
-    bloodMoonActive
-   );
-   await interaction.editReply({ embeds: [embed] });
-   // ------------------- Update Last Loot Timestamp -------------------
-character.lastLootedAt = new Date().toISOString();
-await character.save();
-
-  } else {
-   const embed = createMonsterEncounterEmbed(
-    character,
-    encounteredMonster,
-    outcomeMessage,
-    updatedCharacter.currentHearts,
-    null,
-    bloodMoonActive
-   );
-   await interaction.editReply({ embeds: [embed] });
-   // ------------------- Update Last Loot Timestamp -------------------
-character.lastLootedAt = new Date().toISOString();
-await character.save();
-
+    throw sheetError;
   }
- } catch (error) {
-  handleError(error, "loot.js");
-  await interaction.editReply({
-   content: `❌ **An error occurred while processing the loot.**`,
-  });
- }
 }
 
 // ------------------- Helper Function: Generate Outcome Message -------------------
