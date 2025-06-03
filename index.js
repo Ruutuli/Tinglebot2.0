@@ -30,7 +30,7 @@ const {
   logErrorToTrello,
 } = require("./scripts/trello");
 const { isBloodMoonDay } = require("./scripts/bloodmoon");
-const { initializeRandomEncounterBot } = require("./scripts/randomEncounters");
+// const { initializeRandomEncounterBot } = require("./scripts/randomEncounters");
 const {
   initializeScheduler,
   setupWeatherScheduler,
@@ -133,7 +133,7 @@ async function initializeClient() {
           initializeReactionHandler(client);
           logBloodMoonStatus();
           initializeScheduler(client);
-          initializeRandomEncounterBot(client);
+          // initializeRandomEncounterBot(client);
           startExpirationChecks(client);
 
           // Log initialization status

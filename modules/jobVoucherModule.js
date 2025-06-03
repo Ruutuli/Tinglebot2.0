@@ -23,7 +23,8 @@ function getJobVoucherErrorMessage(errorType, data = {}) {
             : `❌ ${data.characterName || 'Character'} cannot use the ${data.activity || 'looting'} perk as a ${capitalizeWords(data.jobName || '')}.`,
         ACTIVATION_ERROR: '❌ An error occurred while activating the job voucher.',
         DEACTIVATION_ERROR: '❌ An error occurred while deactivating the job voucher.',
-        ITEM_NOT_FOUND: '❌ Job Voucher item not found.'
+        ITEM_NOT_FOUND: '❌ Job Voucher item not found.',
+        STAMINA_LIMIT: `❌ ${data.characterName || 'Character'} cannot craft "${data.itemName}" with a job voucher because it requires more than 5 stamina. Try crafting something easier or use your main job.`,
     };
 
     return {
