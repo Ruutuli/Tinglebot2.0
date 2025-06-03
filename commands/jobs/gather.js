@@ -675,14 +675,13 @@ module.exports = {
         const embed = createGatherEmbed(character, randomItem);
         await interaction.editReply({ embeds: [embed] });
         // ------------------- Update Last Gather Timestamp -------------------
-character.lastGatheredAt = new Date().toISOString();
-await character.save();
+        character.lastGatheredAt = new Date().toISOString();
+        await character.save();
 
       }
 
       // ------------------- Deactivate Job Voucher -------------------
-      const voucherCheck = { skipVoucher: false }; // Define voucherCheck before use
-      if (character.jobVoucher && !voucherCheck?.skipVoucher) {
+      if (character.jobVoucher) {
         const deactivationResult = await deactivateJobVoucher(character._id);
         if (!deactivationResult.success) {
           console.error(`[gather.js]: ❌ Failed to deactivate job voucher for ${character.name}`);
