@@ -102,7 +102,7 @@ function canUseDailyRoll(character, activity) {
     rollover.setUTCDate(rollover.getUTCDate() - 1);
   }
 
-  const lastRoll = character.dailyRoll?.[activity];
+  const lastRoll = character.dailyRoll?.get(activity);
   if (!lastRoll) {
     console.log(`[loot.js]: 📅 No previous roll for ${activity}. Allowing action.`);
     return true;
@@ -117,10 +117,10 @@ function canUseDailyRoll(character, activity) {
 async function updateDailyRoll(character, activity) {
   try {
     if (!character.dailyRoll) {
-      character.dailyRoll = {};
+      character.dailyRoll = new Map();
     }
     const now = new Date().toISOString();
-    character.dailyRoll[activity] = now;
+    character.dailyRoll.set(activity, now);
     await character.save();
     console.log(`[loot.js]: ✅ Updated daily roll for ${activity} at ${now}`);
   } catch (error) {
