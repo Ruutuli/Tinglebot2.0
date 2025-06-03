@@ -112,7 +112,17 @@ module.exports = {
       );
       if (!ownedItem || ownedItem.quantity < quantity) {
         return void await interaction.editReply({
-          content: `❌ **${character.name}** does not have enough "${capitalizeWords(itemName)}" in their inventory.`
+          embeds: [{
+            color: 0x008B8B, // Dark cyan color
+            description: `*${character.name} looks through their inventory, confused...*\n\n**Item Not Found**\n${character.name} does not have enough "${capitalizeWords(itemName)}" in their inventory.`,
+            image: {
+              url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+            },
+            footer: {
+              text: 'Inventory Check'
+            }
+          }],
+          ephemeral: true
         });
       }
 

@@ -328,7 +328,16 @@ module.exports = {
         const unixTimestamp = Math.floor(nextGather.getTime() / 1000);
         
         await interaction.editReply({
-          content: `❌ **${character.name} has already gathered during special weather today.**`,
+          embeds: [{
+            color: 0x008B8B, // Dark cyan color
+            description: `*${character.name} has found all the special weather had to offer today!*\n\n**Daily special weather gathering limit reached.**\nYou've already gathered during special weather today. Special weather events are rare and unpredictable - keep an eye out for the next one!`,
+            image: {
+              url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+            },
+            footer: {
+              text: 'Daily Activity Limit'
+            }
+          }],
           ephemeral: true,
         });
         return;
@@ -356,7 +365,17 @@ module.exports = {
       // Check if character is in the correct village
       if (character.currentVillage.toLowerCase() !== currentVillage.toLowerCase()) {
         await interaction.editReply({
-          content: `❌ **${character.name} must be in ${currentVillage} to gather during its special weather.**\n🗺️ **Current Location:** ${character.currentVillage}`,
+          embeds: [{
+            color: 0x008B8B, // Dark cyan color
+            description: `*${character.name} looks around confused...*\n\n**Wrong Village Location**\nYou must be in ${currentVillage} to gather during its special weather.\n\n🗺️ **Current Location:** ${character.currentVillage}`,
+            image: {
+              url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+            },
+            footer: {
+              text: 'Location Check'
+            }
+          }],
+          ephemeral: true
         });
         return;
       }

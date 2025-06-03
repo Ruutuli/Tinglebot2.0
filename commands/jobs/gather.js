@@ -191,6 +191,40 @@ module.exports = {
         return;
       }
 
+      // ------------------- Step 3: Validate Job -------------------
+      if (!job || typeof job !== 'string' || !job.trim() || !isValidJob(job)) {
+        console.error(`[gather.js]: Job validation failed for ${character.name}. Invalid Job: ${job}`);
+        await interaction.editReply({
+          content: getJobVoucherErrorMessage('MISSING_SKILLS', {
+            characterName: character.name,
+            jobName: job || "None"
+          }).message,
+          ephemeral: true,
+        });
+        return;
+      }
+
+      // Check for gathering perk.
+      const jobPerk = getJobPerk(job);
+      console.log(`[gather.js]: 🔄 Job Perk for "${job}":`, jobPerk);
+      if (!jobPerk || !jobPerk.perks.includes('GATHERING')) {
+        console.error(`[gather.js]: ❌ ${character.name} lacks gathering skills for job: "${job}"`);
+        await interaction.editReply({
+          embeds: [{
+            color: 0x008B8B, // Dark cyan color
+            description: `${character.name} can't gather as a ${capitalizeWords(job)} because they lack the necessary gathering skills.`,
+            image: {
+              url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+            },
+            footer: {
+              text: 'Job Skill Check'
+            }
+          }],
+          ephemeral: true,
+        });
+        return;
+      }
+
       // ------------------- Step 2: Validate Interaction Channel -------------------
       currentVillage = capitalizeWords(character.currentVillage);
       let allowedChannel = villageChannels[currentVillage];
@@ -208,7 +242,17 @@ module.exports = {
       if (!allowedChannel || interaction.channelId !== allowedChannel) {
         const channelMention = `<#${allowedChannel}>`;
         await interaction.editReply({
-          content: `❌ **You can only use this command in the ${currentVillage} Town Hall channel!**\n📍 **Current Location:** ${capitalizeWords(character.currentVillage)}\n💬 **Command Allowed In:** ${channelMention}`,
+          embeds: [{
+            color: 0x008B8B, // Dark cyan color
+            description: `*${character.name} looks around, confused by their surroundings...*\n\n**Channel Restriction**\nYou can only use this command in the ${currentVillage} Town Hall channel!\n\n📍 **Current Location:** ${capitalizeWords(character.currentVillage)}\n💬 **Command Allowed In:** ${channelMention}`,
+            image: {
+              url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+            },
+            footer: {
+              text: 'Channel Restriction'
+            }
+          }],
+          ephemeral: true,
         });
         return;
       }
@@ -253,7 +297,7 @@ module.exports = {
         }
       }
 
-      // Check for job voucher and daily roll AFTER all other validations
+      // Check for job voucher and daily roll AFTER job validation
       if (character.jobVoucher) {
         console.log(`[Gather Command]: 🔄 Active job voucher found for ${character.name}`);
       } else {
@@ -274,6 +318,9 @@ module.exports = {
             embeds: [{
               color: 0x008B8B, // Dark cyan color
               description: `*${character.name} seems exhausted from their earlier gathering...*\n\n**Daily gathering limit reached.**\nThe next opportunity to gather will be available at <t:${unixTimestamp}:F>.\n\n*Tip: A job voucher would allow you to gather again today.*`,
+              image: {
+                url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+              },
               footer: {
                 text: 'Daily Activity Limit'
               }
@@ -294,65 +341,6 @@ module.exports = {
           });
           return;
         }
-      }
-
-      // ------------------- Step 3: Validate Job -------------------
-      if (!job || typeof job !== 'string' || !job.trim() || !isValidJob(job)) {
-        console.error(`[gather.js]: Job validation failed for ${character.name}. Invalid Job: ${job}`);
-        await interaction.editReply({
-          content: getJobVoucherErrorMessage('MISSING_SKILLS', {
-            characterName: character.name,
-            jobName: job || "None"
-          }).message,
-          ephemeral: true,
-        });
-        return;
-      }
-
-      // ------------------- Validate or Activate Job Voucher -------------------
-      let voucherCheck = { success: true, skipVoucher: false }; // Initialize with default values
-      if (character.jobVoucher) {
-        console.log(`[gather.js]: 🎫 Validating job voucher for ${character.name}`);
-        voucherCheck = await validateJobVoucher(character, job, 'GATHERING');
-
-        if (voucherCheck.skipVoucher) {
-          console.log(`[gather.js]: ✅ ${character.name} already has job "${job}" - skipping voucher`);
-          // No activation needed
-        } else if (!voucherCheck.success) {
-          console.error(`[gather.js]: ❌ Voucher validation failed: ${voucherCheck.message}`);
-          await interaction.editReply({
-            content: voucherCheck.message,
-            ephemeral: true,
-          });
-          return;
-        } else {
-          console.log(`[gather.js]: 🎫 Activating job voucher for ${character.name}`);
-          const { success: itemSuccess, item: jobVoucherItem, message: itemError } = await fetchJobVoucherItem();
-          if (!itemSuccess) {
-            await interaction.editReply({ content: itemError, ephemeral: true });
-            return;
-          }
-          const activationResult = await activateJobVoucher(character, job, jobVoucherItem, 1, interaction);
-          if (!activationResult.success) {
-            await interaction.editReply({
-              content: activationResult.message,
-              ephemeral: true,
-            });
-            return;
-          }
-        }
-      }
-
-      // Check for gathering perk.
-      const jobPerk = getJobPerk(job);
-      console.log(`[gather.js]: 🔄 Job Perk for "${job}":`, jobPerk);
-      if (!jobPerk || !jobPerk.perks.includes('GATHERING')) {
-        console.error(`[gather.js]: ❌ ${character.name} lacks gathering skills for job: "${job}"`);
-        await interaction.editReply({
-          content: `❌ ${character.name} can't gather as a ${capitalizeWords(job)} because they lack the necessary gathering skills.`,
-          ephemeral: true,
-        });
-        return;
       }
 
       // ------------------- Step 5: Validate Region -------------------
