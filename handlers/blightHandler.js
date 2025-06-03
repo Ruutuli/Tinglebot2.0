@@ -1005,16 +1005,31 @@ async function rollForBlightProgression(interaction, characterName) {
 
     // ------------------- Log Blight Roll History -------------------
     const BlightRollHistory = require('../models/BlightRollHistoryModel');
-    await BlightRollHistory.create({
-      characterId: character._id,
-      characterName: character.name,
-      userId: character.userId,
-      rollValue: roll,
-      previousStage,
-      newStage: stage,
-      timestamp: new Date(),
-      notes: ''
-    });
+    try {
+      // Ensure we're connected to the main database
+      if (mongoose.connection.readyState === 0) {
+        await mongoose.connect(process.env.MONGODB_URI, {
+          useNewUrlParser: true,
+          useUnifiedTopology: true
+        });
+      }
+      
+      console.log(`[blightHandler]: Creating blight roll history for ${character.name} - Roll: ${roll}, Previous Stage: ${previousStage}, New Stage: ${stage}`);
+      const historyEntry = await BlightRollHistory.create({
+        characterId: character._id,
+        characterName: character.name,
+        userId: character.userId,
+        rollValue: roll,
+        previousStage,
+        newStage: stage,
+        timestamp: new Date(),
+        notes: ''
+      });
+      console.log(`[blightHandler]: Successfully created blight roll history entry: ${historyEntry._id}`);
+    } catch (error) {
+      handleError(error, 'blightHandler.js');
+      console.error('[blightHandler]: Failed to create blight roll history:', error);
+    }
 
     // ------------------- Embed Construction -------------------
     const embed = new EmbedBuilder()
@@ -1027,11 +1042,11 @@ async function rollForBlightProgression(interaction, characterName) {
       .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png')
       .setTimestamp();
 
-    await interaction.reply({ content: `<@${interaction.user.id}> rolled for ${characterName}`, embeds: [embed] });
+    await interaction.editReply({ content: `<@${interaction.user.id}> rolled for ${characterName}`, embeds: [embed] });
   } catch (error) {
     handleError(error, 'blightHandler.js');
     console.error('[blightHandler]: Error rolling for blight progression:', error);
-    await interaction.reply({ content: '❌ An error occurred while processing your request.', ephemeral: true });
+    await interaction.editReply({ content: '❌ An error occurred while processing your request.', ephemeral: true });
   }
 }
 
@@ -1085,6 +1100,15 @@ async function viewBlightHistory(interaction, characterName, limit = 10) {
     const character = await Character.findOne({ name: characterName });
     if (!character) {
       await interaction.editReply({ content: `❌ Character "${characterName}" not found.`, ephemeral: true });
+      return;
+    }
+
+    // Check if character has ever been blighted
+    if (!character.blighted && !character.blightHistory) {
+      await interaction.editReply({
+        content: `📜 **${characterName}** has never been blighted.`,
+        ephemeral: true
+      });
       return;
     }
 
