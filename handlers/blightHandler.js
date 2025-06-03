@@ -352,15 +352,22 @@ async function healBlight(interaction, characterName, healerName) {
 async function validateCharacterOwnership(interaction, characterName) {
   const userId = interaction.user.id;
   const character = await Character.findOne({ name: characterName, userId });
-  
   if (!character) {
-    await interaction.editReply({
-      content: `❌ You can only perform this action for your **own** characters!`,
-      ephemeral: true
-    });
+    // Check if the character exists at all (for better error message)
+    const exists = await Character.findOne({ name: characterName });
+    if (!exists) {
+      await interaction.editReply({
+        content: `❌ Character "${characterName}" does not exist. Please check the spelling and try again.`,
+        ephemeral: true
+      });
+    } else {
+      await interaction.editReply({
+        content: `❌ You can only perform this action for your **own** characters!`,
+        ephemeral: true
+      });
+    }
     return null;
   }
-  
   return character;
 }
 
