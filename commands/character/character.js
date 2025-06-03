@@ -954,7 +954,17 @@ async function handleEditCharacter(interaction) {
     const character = await fetchCharacterByNameAndUserId(characterName, userId);
     if (!character) {
       await interaction.followUp({
-        content: `❌ **Character ${characterName} not found or does not belong to you.**`,
+        embeds: [{
+          color: 0xFF0000, // Red color
+          title: '❌ Character Not Found',
+          description: `Character \`${characterName}\` not found or does not belong to you.`,
+          image: {
+            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+          },
+          footer: {
+            text: 'Character Validation'
+          }
+        }],
         ephemeral: true,
       });
       return;
