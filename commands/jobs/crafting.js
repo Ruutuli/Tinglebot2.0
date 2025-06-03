@@ -97,13 +97,25 @@ module.exports = {
         return interaction.editReply({ content: `❌ **${character.name} is currently debuffed and cannot craft.**\n🕒 Debuff Ends: <t:${unixTimestamp}:F>`, ephemeral: true });
       }
 
+      // ------------------- Check Inventory Sync -------------------
       try {
         await checkInventorySync(character);
       } catch (error) {
-        return interaction.editReply({
-          content: error.message,
+        await interaction.editReply({
+          embeds: [{
+            color: 0xFF0000,
+            title: '❌ Inventory Sync Required',
+            description: error.message,
+            fields: [
+              {
+                name: 'How to Fix',
+                value: '1. Use </inventory test:1370788960267272302> to test your inventory\n2. Use </inventory sync:1370788960267272302> to sync your inventory'
+              }
+            ]
+          }],
           ephemeral: true
         });
+        return;
       }
 
       // ------------------- Validate Village Channel -------------------
