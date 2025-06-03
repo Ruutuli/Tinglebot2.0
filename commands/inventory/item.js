@@ -268,7 +268,7 @@ module.exports = {
           .setDescription(description)
           .addFields(
             { name: `${villageEmoji} Current Village`, value: `**${currentVillage}**`, inline: true },
-            { name: '🏷️ Normal Job', value: `**${character.job || 'Unemployed'}**`, inline: true }
+            { name: '🏷️ Normal Job', value: `**${capitalizeWords(character.job || 'Unemployed')}**`, inline: true }
           )
           .setThumbnail(item.image || 'https://via.placeholder.com/150')
           .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
