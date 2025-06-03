@@ -1206,9 +1206,9 @@ const createMonsterEncounterEmbed = (
  outcomeMessage,
  heartsRemaining,
  lootItem,
- isBloodMoon = false
+ isBloodMoon = false,
+ actualRoll = null
 ) => {
- const damageValue = Math.floor(Math.random() * 100) + 1;
  const settings = getCommonEmbedSettings(character) || {};
  const nameMapping = monster.nameMapping || monster.name;
  const monsterDetails = monsterMapping[nameMapping.replace(/\s+/g, "")] || {
@@ -1287,7 +1287,7 @@ const createMonsterEncounterEmbed = (
 
  embed.addFields({
   name: "__🎲 Dice Roll__",
-  value: `> \`${damageValue}/100\``,
+  value: `> \`${actualRoll || "Unknown"}/100\``,
   inline: false,
 });
 
