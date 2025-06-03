@@ -15,7 +15,7 @@ const { fetchCharacterByNameAndUserId, fetchAllItems } = require('../database/db
 // ------------------- Modules -------------------
 const { createWeightedItemList } = require('../modules/rngModule.js');
 const { handleError } = require('../utils/globalErrorHandler.js');
-const { syncItem, SOURCE_TYPES } = require('../utils/inventoryUtils.js');
+const { syncToInventoryDatabase, SOURCE_TYPES } = require('../utils/inventoryUtils.js');
 const { getCurrentWeather } = require('../modules/weatherModule.js');
 const { enforceJail } = require('../utils/jailCheck.js');
 
@@ -393,7 +393,7 @@ module.exports = {
       };
 
       // Sync item using itemSyncUtils
-      await syncItem(character, itemToSync, interaction, SOURCE_TYPES.GATHERING);
+      await syncToInventoryDatabase(character, itemToSync, interaction);
 
       // Update last special weather gather time
       character.lastSpecialWeatherGather = new Date();
