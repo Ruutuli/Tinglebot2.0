@@ -336,15 +336,30 @@ module.exports = {
 
       // Get current weather for the village
       const currentVillage = channelVillage; // Use the village from the channel
+      console.log(`[specialweather.js]: 🔍 Checking weather for ${currentVillage}`);
       const weather = await getCurrentWeather(currentVillage);
-      console.log(`[specialweather.js]: 🔄 Weather fetched for ${currentVillage}`);
+      console.log(`[specialweather.js]: 🔄 Weather data received:`, {
+        village: weather?.village,
+        date: weather?.date,
+        special: weather?.special,
+        precipitation: weather?.precipitation,
+        temperature: weather?.temperature,
+        wind: weather?.wind
+      });
       
       if (!weather || !weather.special || !weather.special.label) {
+        console.log(`[specialweather.js]: ⚠️ No special weather detected:`, {
+          hasWeather: !!weather,
+          hasSpecial: !!weather?.special,
+          hasLabel: !!weather?.special?.label
+        });
         await interaction.editReply({
           content: `❌ **There is no special weather in ${currentVillage} right now.**\n✨ **Special weather is required to use this command.**`,
         });
         return;
       }
+
+      console.log(`[specialweather.js]: ✅ Special weather detected: ${weather.special.label}`);
 
       // Check if character is in the correct village
       if (character.currentVillage.toLowerCase() !== currentVillage.toLowerCase()) {

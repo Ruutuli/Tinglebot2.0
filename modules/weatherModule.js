@@ -52,8 +52,8 @@ function getCacheKey(date) {
 // Gets the current weather for a village, using TempData for caching
 async function getCurrentWeather(village) {
   try {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    // Create date at UTC midnight for June 2nd
+    const today = new Date('2025-06-02T00:00:00.000Z');
     const normalizedVillage = normalizeVillageName(village);
     const cacheKey = `weather_${normalizedVillage}_${getCacheKey(today)}`;
 
@@ -63,18 +63,17 @@ async function getCurrentWeather(village) {
       return cachedWeather.data;
     }
 
-    // If not in cache, get from database
+    // If not in cache, get from database using exact date match
     const weather = await Weather.findOne({
       village: normalizedVillage,
       date: today
     });
 
-    // Store in TempData if found
     if (weather) {
-      // Set expiration to end of current day
+      // Set expiration to end of current day (UTC)
       const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      tomorrow.setHours(0, 0, 0, 0);
+      tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+      tomorrow.setUTCHours(0, 0, 0, 0);
 
       await TempData.create({
         type: 'weather',
@@ -86,7 +85,7 @@ async function getCurrentWeather(village) {
 
     return weather;
   } catch (error) {
-    console.error('[weatherModule.js]: Error getting current weather:', error);
+    console.error('[weatherModule.js]: ❌ Error getting current weather:', error);
     throw error;
   }
 }
@@ -96,7 +95,7 @@ async function getCurrentWeather(village) {
 async function saveWeather(village, weatherData) {
   try {
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    today.setUTCHours(0, 0, 0, 0);
     const normalizedVillage = normalizeVillageName(village);
     const cacheKey = `weather_${normalizedVillage}_${getCacheKey(today)}`;
 
@@ -109,8 +108,8 @@ async function saveWeather(village, weatherData) {
 
     // Set expiration to end of current day
     const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    tomorrow.setHours(0, 0, 0, 0);
+    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+    tomorrow.setUTCHours(0, 0, 0, 0);
 
     // Update TempData cache
     await TempData.findOneAndUpdate(
