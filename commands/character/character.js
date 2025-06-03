@@ -772,16 +772,7 @@ async function handleCreateCharacter(interaction, subcommand) {
   const characterName = interaction.options.getString("name");
   // Get the actual name part before the "|" if it exists
   const actualName = characterName.split('|')[0].trim();
-  const existingCharacter = await Character.findOne({ name: actualName });
-
-  if (existingCharacter) {
-   await interaction.reply({
-    content: `❌ A character with the name "${actualName}" already exists. Please choose a different name.`,
-    ephemeral: true,
-   });
-   return;
-  }
-
+  
   // Validate numeric fields
   const age = interaction.options.getInteger("age");
   const hearts = interaction.options.getInteger("hearts");
