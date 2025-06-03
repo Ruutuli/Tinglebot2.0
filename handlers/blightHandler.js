@@ -861,6 +861,9 @@ function validateDiscordMessageLink(link) {
 // Rolls to advance or maintain a character's blight stage once per daily window.
 async function rollForBlightProgression(interaction, characterName) {
   try {
+    // Defer reply immediately to prevent timeout
+    await interaction.deferReply();
+
     // ------------------- Input Validation -------------------
     if (!characterName || typeof characterName !== 'string') {
       await interaction.editReply({ content: '❌ Invalid character name provided.', ephemeral: true });
@@ -876,6 +879,16 @@ async function rollForBlightProgression(interaction, characterName) {
     if (!character.blighted) {
       await interaction.editReply({
         content: `**WOAH! ${characterName} is not blighted! You don't need to roll for them!** 🌟`,
+        ephemeral: true,
+      });
+      return;
+    }
+
+    // Prevent stage 5 characters from rolling
+    if (character.blightStage === 5) {
+      await interaction.editReply({
+        content: `⚠️ **${characterName}** is at Stage 5 Blight and cannot roll anymore.\n\n` +
+          `You have until <t:${Math.floor(character.deathDeadline.getTime() / 1000)}:F> to be healed by a Dragon or your character will die.`,
         ephemeral: true,
       });
       return;
@@ -930,7 +943,10 @@ async function rollForBlightProgression(interaction, characterName) {
       embedDescription = `⚠️ All outward signs of infection vanish—**except your eyes**, which now resemble those of Malice.\n\nVital organs begin to **fail**, and the infected is driven by an **uncontrollable desire to destroy**.\n\nAny contact with bodily fluids poses a **severe infection risk to others**.\n\n💀 **Stage 4 Effect**: No monsters. No gathering.\n\nYou can only be healed by **dragons** at this stage.`
     } else if (roll <= 100) {
       stage = 5;
-      character.deathDeadline = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+      // Only set death deadline if they weren't already at stage 5
+      if (previousStage < 5) {
+        character.deathDeadline = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+      }
       await character.save();
       embedTitle = `☠ Your Blight Sickness IS ON THE EDGE of STAGE 5 ☠`;
       embedDescription = `⚠️ You are dangerously close to death.\n\nYou have **7 days** to complete your **healing prompt** or find **miraculous intervention**. Stage 5 is irreversible.\n\n💀 **Stage 5 Effect**: No monsters. No gathering. No healing except by Dragons.\n\nThis is your **final warning**.`
@@ -955,7 +971,10 @@ async function rollForBlightProgression(interaction, characterName) {
           embedDescription = `⚠️ All outward signs of infection vanish—**except your eyes**, which now resemble those of Malice.\n\nVital organs begin to **fail**, and the infected is driven by an **uncontrollable desire to destroy**.\n\nAny contact with bodily fluids poses a **severe infection risk to others**.\n\n💀 **Stage 4 Effect**: No monsters. No gathering.\n\nYou can only be healed by **dragons** at this stage.`;
           break;
         case 5:
-          character.deathDeadline = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+          // Only set death deadline if they weren't already at stage 5
+          if (previousStage < 5) {
+            character.deathDeadline = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+          }
           await character.save();
           embedTitle = `☠ Your Blight Sickness IS ON THE EDGE of STAGE 5 ☠`;
           embedDescription = `⚠️ You are dangerously close to death.\n\nYou have **7 days** to complete your **healing prompt** or find **miraculous intervention**. Stage 5 is irreversible.\n\n💀 **Stage 5 Effect**: No monsters. No gathering. No healing except by Dragons.\n\nThis is your **final warning**.`;
@@ -1264,10 +1283,21 @@ async function checkMissedRolls(client) {
 
         // ------------------- Handle Death If Deadline Passed -------------------
         if (now > character.deathDeadline) {
-          character.blighted = false;
-          character.blightedAt = null;
-          character.blightStage = 0;
-          character.deathDeadline = null;
+          // Remove active companions first
+          if (character.currentActivePet) {
+            const pet = await Pet.findById(character.currentActivePet);
+            if (pet) {
+              pet.status = 'retired';
+              await pet.save();
+            }
+          }
+          if (character.currentActiveMount) {
+            const mount = await Mount.findById(character.currentActiveMount);
+            if (mount) {
+              mount.status = 'retired';
+              await mount.save();
+            }
+          }
 
           // Delete active blight submissions
           try {
@@ -1301,26 +1331,34 @@ async function checkMissedRolls(client) {
             console.error('[blightHandler]: Error wiping inventory:', error);
           }
 
-          await character.save();
+          // Store character info for the death announcement before deletion
+          const characterInfo = {
+            name: character.name,
+            userId: character.userId,
+            icon: character.icon
+          };
+
+          // Delete the character from the database
+          await Character.deleteOne({ _id: character._id });
 
           // ------------------- Death Announcement Embed -------------------
           const embed = new EmbedBuilder()
             .setColor('#D32F2F')
             .setTitle(`<:blight_eye:805576955725611058> **Blight Death Alert** <:blight_eye:805576955725611058>`)
             .setDescription(
-              `**${character.name}** has succumbed to Stage 5 Blight.\n\n` +
-              `*Their inventory database was cleared, but the sheet remains for records.*`
+              `**${characterInfo.name}** has succumbed to Stage 5 Blight.\n\n` +
+              `*Their character has been permanently removed from the database.*`
             )
-            .setThumbnail(character.icon || 'https://example.com/default-icon.png')
+            .setThumbnail(characterInfo.icon || 'https://example.com/default-icon.png')
             .setFooter({ text: 'Blight Death Announcement', iconURL: 'https://example.com/blight-icon.png' })
             .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png')
             .setTimestamp();
 
-          if (character.userId) {
-            await channel.send({ content: `<@${character.userId}>`, embeds: [embed] });
+          if (characterInfo.userId) {
+            await channel.send({ content: `<@${characterInfo.userId}>`, embeds: [embed] });
           } else {
             await channel.send({ embeds: [embed] });
-            console.error(`[blightHandler]: Missing userId for ${character.name}`);
+            console.error(`[blightHandler]: Missing userId for ${characterInfo.name}`);
           }
 
           // ------------------- Mod Log Death Report -------------------
@@ -1330,13 +1368,13 @@ async function checkMissedRolls(client) {
               const modLogEmbed = new EmbedBuilder()
                 .setColor('#FF0000')
                 .setTitle('☠️ Character Death from Blight')
-                .setDescription(`**Character**: ${character.name}\n**Owner**: <@${character.userId}>\n**Death Time**: <t:${Math.floor(Date.now() / 1000)}:F>`)
-                .setThumbnail(character.icon || 'https://example.com/default-icon.png')
+                .setDescription(`**Character**: ${characterInfo.name}\n**Owner**: <@${characterInfo.userId}>\n**Death Time**: <t:${Math.floor(Date.now() / 1000)}:F>`)
+                .setThumbnail(characterInfo.icon || 'https://example.com/default-icon.png')
                 .setFooter({ text: 'Blight Death Log', iconURL: 'https://example.com/blight-icon.png' })
                 .setTimestamp();
 
               await modLogChannel.send({ embeds: [modLogEmbed] });
-              console.log(`[blightHandler]: Sent death notification for ${character.name}`);
+              console.log(`[blightHandler]: Sent death notification for ${characterInfo.name}`);
             } else {
               console.error('[blightHandler]: Mod log channel not found');
             }
