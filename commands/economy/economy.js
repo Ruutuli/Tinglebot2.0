@@ -363,11 +363,20 @@ async function handleGift(interaction) {
  ].filter((item) => item.name && item.quantity);
 
  // ------------------- Validate Gift Quantities -------------------
-// Ensure all gifted item quantities are positive integers
 for (const { quantity } of items) {
   if (quantity <= 0) {
     await interaction.editReply({
-      content: `❌ You must gift a **positive quantity** of items. Negative numbers are not allowed.`,
+      embeds: [{
+        color: 0xFF0000, // Red color
+        title: '❌ Invalid Quantity',
+        description: 'You must gift a **positive quantity** of items. Negative numbers are not allowed.',
+        image: {
+          url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+        },
+        footer: {
+          text: 'Quantity Validation'
+        }
+      }],
       ephemeral: true,
     });
     return;
@@ -378,7 +387,17 @@ for (const { quantity } of items) {
 for (const { name } of items) {
   if (isSpiritOrb(name)) {
     await interaction.editReply({
-      content: `❌ Spirit Orbs cannot be gifted. They are sacred items that can only be used by their original owner.`,
+      embeds: [{
+        color: 0xFF0000, // Red color
+        title: '❌ Spirit Orb Protection',
+        description: 'Spirit Orbs cannot be gifted. They are sacred items that can only be used by their original owner.',
+        image: {
+          url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+        },
+        footer: {
+          text: 'Item Protection'
+        }
+      }],
       ephemeral: true,
     });
     return;
@@ -393,9 +412,20 @@ for (const { name } of items) {
     userId
   );
   if (!fromCharacter) {
-    await interaction.editReply(
-      `❌ Character \`${fromCharacterName}\` not found or does not belong to you.`
-    );
+    await interaction.editReply({
+      embeds: [{
+        color: 0xFF0000, // Red color
+        title: '❌ Character Not Found',
+        description: `Character \`${fromCharacterName}\` not found or does not belong to you.`,
+        image: {
+          url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+        },
+        footer: {
+          text: 'Character Validation'
+        }
+      }],
+      ephemeral: true
+    });
     return;
   }
   
@@ -410,9 +440,20 @@ for (const { name } of items) {
   
   for (const { name } of items) {
     if (equippedItems.includes(name)) {
-      await interaction.editReply(
-        `❌ You cannot gift \`${name}\` because it is currently equipped. Please unequip it first using the </gear:1372262090450141196> command.`
-      );
+      await interaction.editReply({
+        embeds: [{
+          color: 0xFF0000, // Red color
+          title: '❌ Item Equipped',
+          description: `You cannot gift \`${name}\` because it is currently equipped. Please unequip it first using the </gear:1372262090450141196> command.`,
+          image: {
+            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+          },
+          footer: {
+            text: 'Equipment Check'
+          }
+        }],
+        ephemeral: true
+      });
       return;
     }
   }
@@ -420,9 +461,20 @@ for (const { name } of items) {
   const allCharacters = await fetchAllCharactersExceptUser(userId);
   const toCharacter = allCharacters.find((c) => c.name === toCharacterName);
   if (!toCharacter) {
-   await interaction.editReply(
-    `❌ Character \`${toCharacterName}\` not found or belongs to you.`
-   );
+   await interaction.editReply({
+    embeds: [{
+      color: 0xFF0000, // Red color
+      title: '❌ Recipient Not Found',
+      description: `Character \`${toCharacterName}\` not found or belongs to you.`,
+      image: {
+        url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+      },
+      footer: {
+        text: 'Character Validation'
+      }
+    }],
+    ephemeral: true
+   });
    return;
   }
 
@@ -432,7 +484,23 @@ for (const { name } of items) {
     await checkInventorySync(toCharacter);
   } catch (error) {
     await interaction.editReply({
-      content: error.message,
+      embeds: [{
+        color: 0xFF0000, // Red color
+        title: '❌ Inventory Not Synced',
+        description: error.message,
+        fields: [
+          {
+            name: 'How to Fix',
+            value: '1. Use `/inventory test` to test your inventory\n2. Use `/inventory sync` to sync your inventory'
+          }
+        ],
+        image: {
+          url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+        },
+        footer: {
+          text: 'Inventory Sync Required'
+        }
+      }],
       ephemeral: true
     });
     return;
@@ -451,10 +519,26 @@ for (const { name } of items) {
     toCharacter.currentVillage.trim()
    );
 
-   await interaction.editReply(
-    `❌ \`${fromCharacter.name}\` is in **${fromVillageCapitalized}**, and \`${toCharacter.name}\` is in **${toVillageCapitalized}**. Both characters must be in the same village for gifting. ` +
-     `Please use the </travel:1306176790095728736> command to travel your character to \`${toVillageCapitalized}\`.`
-   );
+   await interaction.editReply({
+    embeds: [{
+      color: 0xFF0000, // Red color
+      title: '❌ Different Villages',
+      description: `\`${fromCharacter.name}\` is in **${fromVillageCapitalized}**, and \`${toCharacter.name}\` is in **${toVillageCapitalized}**. Both characters must be in the same village for gifting.`,
+      fields: [
+        {
+          name: 'How to Fix',
+          value: `Please use the </travel:1306176790095728736> command to travel your character to \`${toVillageCapitalized}\`.`
+        }
+      ],
+      image: {
+        url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+      },
+      footer: {
+        text: 'Village Check'
+      }
+    }],
+    ephemeral: true
+   });
    return;
   }
 
@@ -493,11 +577,25 @@ for (const { name } of items) {
   }
 
   if (!allItemsAvailable) {
-   await interaction.editReply(
-    `❌ \`${fromCharacterName}\` does not have enough of the following items to gift: ${unavailableItems.join(
-     ", "
-    )}`
-   );
+   await interaction.editReply({
+    embeds: [{
+      color: 0xFF0000, // Red color
+      title: '❌ Insufficient Items',
+      description: `\`${fromCharacterName}\` does not have enough of the following items to gift:`,
+      fields: unavailableItems.map(item => ({
+        name: item,
+        value: 'Insufficient quantity',
+        inline: true
+      })),
+      image: {
+        url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+      },
+      footer: {
+        text: 'Inventory Check'
+      }
+    }],
+    ephemeral: true
+   });
    return;
   }
 
@@ -507,8 +605,18 @@ for (const { name } of items) {
 
   if (!fromInventoryLink || !toInventoryLink) {
    await interaction.editReply({
-    content: `❌ Missing Google Sheets URL for character inventory.`,
-    ephemeral: true,
+    embeds: [{
+      color: 0xFF0000, // Red color
+      title: '❌ Missing Inventory Link',
+      description: 'Missing Google Sheets URL for character inventory.',
+      image: {
+        url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+      },
+      footer: {
+        text: 'Inventory Link Required'
+      }
+    }],
+    ephemeral: true
    });
    return;
   }
@@ -518,8 +626,18 @@ for (const { name } of items) {
    !isValidGoogleSheetsUrl(toInventoryLink)
   ) {
    await interaction.editReply({
-    content: `❌ Invalid Google Sheets URL for character inventory.`,
-    ephemeral: true,
+    embeds: [{
+      color: 0xFF0000, // Red color
+      title: '❌ Invalid Inventory Link',
+      description: 'Invalid Google Sheets URL for character inventory.',
+      image: {
+        url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+      },
+      footer: {
+        text: 'Valid URL Required'
+      }
+    }],
+    ephemeral: true
    });
    return;
   }
@@ -693,9 +811,20 @@ for (const { name } of items) {
  } catch (error) {
   handleError(error, "gift.js");
   console.error("❌ Error during gift execution:", error);
-  await interaction.editReply(
-   "❌ An error occurred while trying to gift the items."
-  );
+  await interaction.editReply({
+    embeds: [{
+      color: 0xFF0000, // Red color
+      title: '❌ Gift Error',
+      description: 'An error occurred while trying to gift the items.',
+      image: {
+        url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+      },
+      footer: {
+        text: 'Error Handling'
+      }
+    }],
+    ephemeral: true
+  });
  }
 }
 
@@ -1228,13 +1357,66 @@ if (quantity <= 0) {
   const character = await fetchCharacterByName(characterName);
   if (!character) {
    console.error(`[shops]: Character not found: ${characterName}`);
-   return interaction.editReply("❌ Character not found.");
+   return interaction.editReply({
+    embeds: [{
+      color: 0xFF0000, // Red color
+      title: '❌ Character Not Found',
+      description: 'Character not found.',
+      image: {
+        url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+      },
+      footer: {
+        text: 'Character Validation'
+      }
+    }],
+    ephemeral: true
+   });
   }
 
   // Add ownership check
   if (character.userId !== interaction.user.id) {
     console.error(`[shops]: User ${interaction.user.id} attempted to sell items for character ${characterName} which belongs to ${character.userId}`);
-    return interaction.editReply("❌ You can only sell items for characters that belong to you.");
+    return interaction.editReply({
+      embeds: [{
+        color: 0xFF0000, // Red color
+        title: '❌ Not Your Character',
+        description: 'You can only sell items for characters that belong to you.',
+        image: {
+          url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+        },
+        footer: {
+          text: 'Character Ownership'
+        }
+      }],
+      ephemeral: true
+    });
+  }
+
+  // ------------------- Check Inventory Sync -------------------
+  try {
+    await checkInventorySync(character);
+  } catch (error) {
+    await interaction.editReply({
+      embeds: [{
+        color: 0xFF0000, // Red color
+        title: '❌ Inventory Not Synced',
+        description: error.message,
+        fields: [
+          {
+            name: 'How to Fix',
+            value: '1. Use `/inventory test` to test your inventory\n2. Use `/inventory sync` to sync your inventory'
+          }
+        ],
+        image: {
+          url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+        },
+        footer: {
+          text: 'Inventory Sync Required'
+        }
+      }],
+      ephemeral: true
+    });
+    return;
   }
 
   const inventoryCollection = await getCharacterInventoryCollection(
@@ -1455,7 +1637,17 @@ async function handleTransfer(interaction) {
 for (const { quantity } of items) {
   if (quantity <= 0) {
     await interaction.editReply({
-      content: `❌ You must transfer a **positive quantity** of items. Negative numbers are not allowed.`,
+      embeds: [{
+        color: 0xFF0000, // Red color
+        title: '❌ Invalid Quantity',
+        description: 'You must transfer a **positive quantity** of items. Negative numbers are not allowed.',
+        image: {
+          url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+        },
+        footer: {
+          text: 'Quantity Validation'
+        }
+      }],
       ephemeral: true,
     });
     return;
@@ -1477,7 +1669,17 @@ for (const { quantity } of items) {
 
   if (!fromCharacter || !toCharacter) {
    await interaction.editReply({
-    content: `❌ Either the source or destination character does not exist or does not belong to you.`,
+    embeds: [{
+      color: 0xFF0000, // Red color
+      title: '❌ Character Not Found',
+      description: 'Either the source or destination character does not exist or does not belong to you.',
+      image: {
+        url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+      },
+      footer: {
+        text: 'Character Validation'
+      }
+    }],
     ephemeral: true,
    });
    return;
@@ -1495,7 +1697,17 @@ const equippedItems = [
 for (const { name } of items) {
   if (equippedItems.includes(name)) {
     await interaction.editReply({
-      content: `❌ You cannot sell/trade/transfer \`${name}\` because it is currently equipped. Please unequip it first.`,
+      embeds: [{
+        color: 0xFF0000, // Red color
+        title: '❌ Item Equipped',
+        description: `You cannot transfer \`${name}\` because it is currently equipped. Please unequip it first using the </gear:1372262090450141196> command.`,
+        image: {
+          url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+        },
+        footer: {
+          text: 'Equipment Check'
+        }
+      }],
       ephemeral: true,
     });
     return;
@@ -1509,7 +1721,23 @@ for (const { name } of items) {
     await checkInventorySync(toCharacter);
   } catch (error) {
     await interaction.editReply({
-      content: error.message,
+      embeds: [{
+        color: 0xFF0000, // Red color
+        title: '❌ Inventory Not Synced',
+        description: error.message,
+        fields: [
+          {
+            name: 'How to Fix',
+            value: '1. Use `/inventory test` to test your inventory\n2. Use `/inventory sync` to sync your inventory'
+          }
+        ],
+        image: {
+          url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+        },
+        footer: {
+          text: 'Inventory Sync Required'
+        }
+      }],
       ephemeral: true
     });
     return;
@@ -1571,9 +1799,22 @@ for (const { name } of items) {
 
   if (!allItemsAvailable) {
    await interaction.editReply({
-    content: `❌ \`${fromCharacterName}\` does not have enough of the following items to transfer: ${unavailableItems.join(
-     ", "
-    )}`,
+    embeds: [{
+      color: 0xFF0000, // Red color
+      title: '❌ Insufficient Items',
+      description: `\`${fromCharacterName}\` does not have enough of the following items to transfer:`,
+      fields: unavailableItems.map(item => ({
+        name: item,
+        value: 'Insufficient quantity',
+        inline: true
+      })),
+      image: {
+        url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+      },
+      footer: {
+        text: 'Inventory Check'
+      }
+    }],
     ephemeral: true,
    });
    return;
@@ -1585,18 +1826,35 @@ for (const { name } of items) {
 
   if (!fromInventoryLink || !toInventoryLink) {
    await interaction.editReply({
-    content: `❌ Missing Google Sheets URL for character inventory.`,
+    embeds: [{
+      color: 0xFF0000, // Red color
+      title: '❌ Missing Inventory Link',
+      description: 'Missing Google Sheets URL for character inventory.',
+      image: {
+        url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+      },
+      footer: {
+        text: 'Inventory Link Required'
+      }
+    }],
     ephemeral: true,
    });
    return;
   }
 
-  if (
-   !isValidGoogleSheetsUrl(fromInventoryLink) ||
-   !isValidGoogleSheetsUrl(toInventoryLink)
-  ) {
+  if (!isValidGoogleSheetsUrl(fromInventoryLink) || !isValidGoogleSheetsUrl(toInventoryLink)) {
    await interaction.editReply({
-    content: `❌ Invalid Google Sheets URL for character inventory.`,
+    embeds: [{
+      color: 0xFF0000, // Red color
+      title: '❌ Invalid Inventory Link',
+      description: 'Invalid Google Sheets URL for character inventory.',
+      image: {
+        url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+      },
+      footer: {
+        text: 'Valid URL Required'
+      }
+    }],
     ephemeral: true,
    });
    return;
@@ -1673,9 +1931,20 @@ for (const { name } of items) {
  } catch (error) {
   handleError(error, "transfer.js");
   console.error("❌ Error during transfer execution:", error);
-  await interaction.editReply(
-   "❌ An error occurred while trying to transfer the items."
-  );
+  await interaction.editReply({
+    embeds: [{
+      color: 0xFF0000, // Red color
+      title: '❌ Transfer Error',
+      description: 'An error occurred while trying to transfer the items.',
+      image: {
+        url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+      },
+      footer: {
+        text: 'Error Handling'
+      }
+    }],
+    ephemeral: true
+  });
  }
 }
 
