@@ -171,8 +171,19 @@ async function healBlight(interaction, characterName, healerName) {
     }
 
     if (!character.blighted) {
+      const notBlightedEmbed = new EmbedBuilder()
+        .setColor('#00FF00') // Green color for positive message
+        .setTitle('⚠️ Not Blighted')
+        .setDescription(`**${characterName}** is not blighted and does not require healing.`)
+        .setThumbnail(character.icon)
+        .setAuthor({ name: `${characterName}'s Status`, iconURL: interaction.user.displayAvatarURL() })
+        .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png')
+        .setFooter({ text: 'Blight Status Check', iconURL: 'https://static.wixstatic.com/media/7573f4_a510c95090fd43f5ae17e20d80c1289e~mv2.png' })
+        .setTimestamp();
+
       await interaction.editReply({ 
-        content: `⚠️ **${characterName}** is not blighted and does not require healing.`, 
+        content: `<@${interaction.user.id}>`,
+        embeds: [notBlightedEmbed],
         ephemeral: true 
       });
       return;
@@ -915,9 +926,20 @@ async function rollForBlightProgression(interaction, characterName) {
     }
 
     if (!character.blighted) {
-      await interaction.editReply({
-        content: `**WOAH! ${characterName} is not blighted! You don't need to roll for them!** 🌟`,
-        ephemeral: true,
+      const notBlightedEmbed = new EmbedBuilder()
+        .setColor('#00FF00') // Green color for positive message
+        .setTitle('⚠️ Not Blighted')
+        .setDescription(`**${characterName}** is not blighted and does not require healing.`)
+        .setThumbnail(character.icon)
+        .setAuthor({ name: `${characterName}'s Status`, iconURL: interaction.user.displayAvatarURL() })
+        .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png')
+        .setFooter({ text: 'Blight Status Check', iconURL: 'https://static.wixstatic.com/media/7573f4_a510c95090fd43f5ae17e20d80c1289e~mv2.png' })
+        .setTimestamp();
+
+      await interaction.editReply({ 
+        content: `<@${interaction.user.id}>`,
+        embeds: [notBlightedEmbed],
+        ephemeral: true 
       });
       return;
     }
@@ -1148,9 +1170,20 @@ async function viewBlightHistory(interaction, characterName, limit = 10) {
 
     // Check if character has ever been blighted
     if (!character.blighted && !character.blightHistory) {
-      await interaction.editReply({
-        content: `📜 **${characterName}** has never been blighted.`,
-        ephemeral: true
+      const neverBlightedEmbed = new EmbedBuilder()
+        .setColor('#00FF00') // Green color for positive message
+        .setTitle('📜 Never Blighted')
+        .setDescription(`**${characterName}** has never been blighted.`)
+        .setThumbnail(character.icon)
+        .setAuthor({ name: `${characterName}'s History`, iconURL: interaction.user.displayAvatarURL() })
+        .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png')
+        .setFooter({ text: 'Blight History Check', iconURL: 'https://static.wixstatic.com/media/7573f4_a510c95090fd43f5ae17e20d80c1289e~mv2.png' })
+        .setTimestamp();
+
+      await interaction.editReply({ 
+        content: `<@${interaction.user.id}>`,
+        embeds: [neverBlightedEmbed],
+        ephemeral: true 
       });
       return;
     }
