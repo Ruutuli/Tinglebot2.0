@@ -572,7 +572,7 @@ async function handleCharacterBasedCommandsAutocomplete(
 // in the "blight" command based on the user's input.
 async function handleBlightCharacterAutocomplete(interaction, focusedOption) {
  try {
-                const userId = interaction.user.id;
+  const userId = interaction.user.id;
   const subcommand = interaction.options.getSubcommand();
   const focusedName = focusedOption.name;
 
@@ -598,9 +598,8 @@ async function handleBlightCharacterAutocomplete(interaction, focusedOption) {
       const choices = healerCharacters.map((character) => ({
         name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
         value: character.name,
-                }));
-                
-                await respondWithFilteredChoices(interaction, focusedOption, choices);
+      }));
+      await respondWithFilteredChoices(interaction, focusedOption, choices);
     }
   } else if (subcommand === 'submit') {
     // For submit command, show characters with pending blight submissions
@@ -611,9 +610,9 @@ async function handleBlightCharacterAutocomplete(interaction, focusedOption) {
     }));
     await respondWithFilteredChoices(interaction, focusedOption, choices);
   } else {
-    // For other blight commands, show blighted characters
-    const blightedCharacters = await fetchBlightedCharactersByUserId(userId);
-    const choices = blightedCharacters.map((character) => ({
+    // For other blight commands (roll, history), show all characters owned by the user
+    const characters = await fetchCharactersByUserId(userId);
+    const choices = characters.map((character) => ({
       name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
       value: character.name,
     }));
