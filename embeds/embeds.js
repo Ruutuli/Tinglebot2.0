@@ -1455,43 +1455,80 @@ const createHealEmbed = (
   return embed;
  }
 
+ // Pending or fulfilled state
  const embed = new EmbedBuilder()
   .setColor("#AA926A")
   .setAuthor({
    name: `${characterToHeal.name} 🔗`,
    iconURL: characterToHeal.icon || DEFAULT_IMAGE_URL,
    url: characterToHeal.inventory || "",
-  })
-  .setTitle('✅ Healing Request Fulfilled')
-  .setDescription(
-   `> ${healerName} has healed your character for ${heartsToHeal} hearts!`)
-  .addFields(
-   {
-    name: "__❤️ Hearts to Heal__",
-    value: `> ${heartsToHeal}`,
-    inline: true,
-   },
-   {
-    name: "__💰 Payment Offered__",
-    value: `> ${paymentOffered || "None"}`,
-    inline: false,
-   },
-   {
-    name: "__🆔 Request ID__",
-    value: `> \`${healingRequestId}\``,
-    inline: false,
-   },
-   {
-    name: "__✅ Status__",
-    value: `> ${isFulfilled ? "Fulfilled" : "Pending"}`,
-    inline: false,
-   }
-  )
-  .setFooter({
-   text: "Healing process successfully completed.",
-   iconURL: healerCharacter ? healerIcon : null,
-  })
-  .setImage(DEFAULT_IMAGE_URL);
+  });
+
+ if (isFulfilled) {
+  embed
+   .setTitle('✅ Healing Request Fulfilled')
+   .setDescription(
+    `> ${healerName} has healed your character for ${heartsToHeal} hearts!`)
+   .addFields(
+    {
+     name: "__❤️ Hearts to Heal__",
+     value: `> ${heartsToHeal}`,
+     inline: true,
+    },
+    {
+     name: "__💰 Payment Offered__",
+     value: `> ${paymentOffered || "None"}`,
+     inline: false,
+    },
+    {
+     name: "__🆔 Request ID__",
+     value: `> \`${healingRequestId}\``,
+     inline: false,
+    },
+    {
+     name: "__✅ Status__",
+     value: `> Fulfilled`,
+     inline: false,
+    }
+   )
+   .setFooter({
+    text: "Healing process successfully completed.",
+    iconURL: healerCharacter ? healerIcon : null,
+   })
+   .setImage(DEFAULT_IMAGE_URL);
+ } else {
+  embed
+   .setTitle('📝 Healing Request Pending')
+   .setDescription(
+    `> ${healerName} has been requested to heal your character for ${heartsToHeal} hearts!`)
+   .addFields(
+    {
+     name: "__❤️ Hearts to Heal__",
+     value: `> ${heartsToHeal}`,
+     inline: true,
+    },
+    {
+     name: "__💰 Payment Offered__",
+     value: `> ${paymentOffered || "None"}`,
+     inline: false,
+    },
+    {
+     name: "__🆔 Request ID__",
+     value: `> \`${healingRequestId}\``,
+     inline: false,
+    },
+    {
+     name: "__🕒 Status__",
+     value: `> Pending`,
+     inline: false,
+    }
+   )
+   .setFooter({
+    text: "Waiting for a healer to fulfill this request.",
+    iconURL: healerCharacter ? healerIcon : null,
+   })
+   .setImage(DEFAULT_IMAGE_URL);
+ }
  return embed;
 };
 
