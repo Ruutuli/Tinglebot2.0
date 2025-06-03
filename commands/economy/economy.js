@@ -687,9 +687,7 @@ for (const { name } of items) {
     allowedMentions: { users: [toCharacterOwnerId] },
     embeds: [giftEmbed],
   });
-  await interaction.editReply({
-    content: `✅ Gift sent successfully!`,
-  }); 
+  await interaction.deleteReply();
   
   
  } catch (error) {
@@ -1732,11 +1730,28 @@ async function validateTradeItems(character, items) {
       itemName: { $regex: new RegExp(`^${item.name}$`, "i") },
     });
     if (!itemInventory || itemInventory.quantity < item.quantity) {
-      unavailableItems.push(`${item.name} - QTY:${itemInventory ? itemInventory.quantity : 0}`);
+      unavailableItems.push({
+        name: item.name,
+        requested: item.quantity,
+        available: itemInventory ? itemInventory.quantity : 0
+      });
     }
   }
   if (unavailableItems.length > 0) {
-    throw new Error(`❌ \`${character.name}\` does not have enough of the following items to trade: ${unavailableItems.join(", ")}`);
+    const errorEmbed = new EmbedBuilder()
+      .setTitle("❌ Insufficient Items")
+      .setDescription(`\`${character.name}\` doesn't have enough of the following items to trade:`)
+      .setColor("#FF0000")
+      .addFields(
+        unavailableItems.map(item => ({
+          name: item.name,
+          value: `Requested: ${item.requested}\nAvailable: ${item.available}`,
+          inline: true
+        }))
+      )
+      .setFooter({ text: "Please check your inventory and try again." });
+    
+    throw { embed: errorEmbed };
   }
 }
 
@@ -1950,7 +1965,7 @@ async function handleTrade(interaction) {
           // Only send confirmation message if one doesn't already exist
           if (!updatedTradeData.confirmMessageId) {
             const tradeConfirmMessage = await interaction.channel.send({
-              content: `**Trade confirmed!** <@${updatedTradeData.initiator.userId}>, please react to the trade post with ✅ to finalize the trade.`
+              content: `**Trade confirmed!** <@${updatedTradeData.initiator.userId}>, please react to the trade post with ✅ to finalize the trade.\n\nTrade ID: \`${tradeId}\`\nYou can also use the </economy trade:1372378304623149152> command with this ID to complete the trade.`
             });
             
             // Update trade data with confirmation message
@@ -2015,7 +2030,7 @@ async function handleTrade(interaction) {
         tradeEmbed.setColor("#FFD700");
 
         const tradeMessage = await interaction.editReply({
-          content: `🔃 <@${toCharacter.userId}>, use the </economy trade:1372262090450141196> command with this trade ID to complete your part of the trade:\n\n\`\`\`${tradeId}\`\`\``,
+          content: `🔃 <@${toCharacter.userId}>, use the </economy trade:1372378304623149152> command with this trade ID to complete your part of the trade:\n\n\`\`\`${tradeId}\`\`\``,
           embeds: [tradeEmbed],
         });
 
@@ -2101,18 +2116,40 @@ async function handleTrade(interaction) {
           console.error(`[trade.js]: ❌ Error setting up reaction collector: ${err.message}`);
         }
       } catch (error) {
-        console.error(`[trade.js]: ❌ Error initiating trade:`, error);
-        await interaction.editReply({
-          content: `❌ An error occurred while initiating the trade.`,
-          ephemeral: true,
-        });
+        // Only log a simple message for insufficient items
+        if (error.embed) {
+          console.log(`[trade.js]: Trade validation failed for ${characterName}`);
+        } else {
+          console.error(`[trade.js]: ❌ Error initiating trade:`, error);
+        }
+        
+        // If error has an embed, use it, otherwise create a generic error embed
+        if (error.embed) {
+          await interaction.editReply({ embeds: [error.embed] });
+        } else {
+          const errorEmbed = new EmbedBuilder()
+            .setTitle("❌ Trade Error")
+            .setDescription(error.message || "An error occurred while initiating the trade.")
+            .setColor("#FF0000");
+          await interaction.editReply({ embeds: [errorEmbed] });
+        }
+        return;
       }
     }
   } catch (error) {
     handleError(error, "trade.js");
-    console.error(`[trade.js]: ❌ Error executing trade command:`, error);
-    await interaction.editReply({
-      content: "❌ An error occurred while trying to execute the trade.",
-    });
+    // Only log a simple message for insufficient items
+    if (error.embed) {
+      console.log(`[trade.js]: Trade validation failed for ${characterName}`);
+    } else {
+      console.error(`[trade.js]: ❌ Error executing trade command:`, error);
+    }
+    
+    // Create a generic error embed
+    const errorEmbed = new EmbedBuilder()
+      .setTitle("❌ Trade Error")
+      .setDescription(error.message || "An error occurred while trying to execute the trade.")
+      .setColor("#FF0000");
+    await interaction.editReply({ embeds: [errorEmbed] });
   }
 }

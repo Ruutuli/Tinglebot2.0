@@ -1399,13 +1399,17 @@ async function handleTradeFromCharacterAutocomplete(interaction, focusedValue) {
 // Provides autocomplete for selecting the target character in a trade
 async function handleTradeToCharacterAutocomplete(interaction, focusedValue) {
   try {
-                const userId = interaction.user.id;
+    const userId = interaction.user.id;
     const characters = await fetchAllCharactersExceptUser(userId);
     const choices = characters.map(char => ({
-                  name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
-                  value: char.name
-                }));
-    const filtered = choices.filter(choice => choice.name.toLowerCase().includes(focusedValue));
+      name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
+      value: char.name
+    }));
+    const searchTerm = (focusedValue || '').toLowerCase();
+    const filtered = choices.filter(choice => 
+      choice.name.toLowerCase().includes(searchTerm) || 
+      choice.value.toLowerCase().includes(searchTerm)
+    );
     return await interaction.respond(filtered.slice(0, 25));
   } catch (error) {
     console.error('[handleTradeToCharacterAutocomplete]: Error:', error);
@@ -1916,27 +1920,6 @@ async function handleShopsAutocomplete(interaction, focusedOption) {
   }
  }
 
- // ------------------- Trade To Character Autocomplete -------------------
-async function handleTradeToCharacterAutocomplete(interaction, focusedOption) {
-  try {
-                const userId = interaction.user.id;
- 
-   const characters = await fetchAllCharactersExceptUser(userId);
- 
-   const choices = characters.map((character) => ({
-    name: `${character.name} | ${capitalize(character.currentVillage)}`,
-    value: character.name,
-                }));
-                
-                await respondWithFilteredChoices(interaction, focusedOption, choices);
-  } catch (error) {
-   handleError(error, "autocompleteHandler.js");
- 
-   console.error("[handleTradeToCharacterAutocomplete]: Error:", error);
-   await safeRespondWithError(interaction);
-  }
- }
- 
  // ------------------- Trade Item Autocomplete -------------------
  async function handleTradeItemAutocomplete(interaction, focusedOption) {
   try {
