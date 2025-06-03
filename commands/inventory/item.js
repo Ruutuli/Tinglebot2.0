@@ -184,7 +184,21 @@ module.exports = {
           const characterVillage = character.currentVillage?.toLowerCase().trim();
           if (characterVillage !== requiredVillage) {
             return void await interaction.editReply({
-              content: `❌ **${character.name} must be in ${capitalizeWords(jobPerkInfo.village)} to use this job voucher.**\nCurrently in: **${capitalizeWords(character.currentVillage)}**`,
+              embeds: [{
+                color: 0xFF0000,
+                title: '❌ Job Voucher Error',
+                description: `${character.name} must be in ${capitalizeWords(jobPerkInfo.village)} to use this job voucher.`,
+                fields: [
+                  { name: 'Current Location', value: capitalizeWords(character.currentVillage), inline: true },
+                  { name: 'Required Location', value: capitalizeWords(jobPerkInfo.village), inline: true }
+                ],
+                image: {
+                  url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+                },
+                footer: {
+                  text: 'Location Requirement'
+                }
+              }],
               ephemeral: true
             });
           }
