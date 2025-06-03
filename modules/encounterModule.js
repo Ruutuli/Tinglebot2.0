@@ -491,26 +491,26 @@ async function processBattle(character, monster, battleId, originalRoll, interac
 
         let outcome;
         if (monster.tier <= 4) {
-            outcome = await getEncounterOutcome(character, monster, character.attack, adjustedRandomValue, attackSuccess, defenseSuccess);
+            outcome = await getEncounterOutcome(character, monster, originalRoll, adjustedRandomValue, attackSuccess, defenseSuccess);
         } else {
             switch (monster.tier) {
                 case 5:
-                    outcome = await getTier5EncounterOutcome(character, monster, character.attack, adjustedRandomValue, attackSuccess, defenseSuccess);
+                    outcome = await getTier5EncounterOutcome(character, monster, originalRoll, adjustedRandomValue, attackSuccess, defenseSuccess);
                     break;
                 case 6:
-                    outcome = await getTier6EncounterOutcome(character, monster, character.attack, adjustedRandomValue, attackSuccess, defenseSuccess);
+                    outcome = await getTier6EncounterOutcome(character, monster, originalRoll, adjustedRandomValue, attackSuccess, defenseSuccess);
                     break;
                 case 7:
-                    outcome = await getTier7EncounterOutcome(character, monster, character.attack, adjustedRandomValue, attackSuccess, defenseSuccess);
+                    outcome = await getTier7EncounterOutcome(character, monster, originalRoll, adjustedRandomValue, attackSuccess, defenseSuccess);
                     break;
                 case 8:
-                    outcome = await getTier8EncounterOutcome(character, monster, character.attack, adjustedRandomValue, attackSuccess, defenseSuccess);
+                    outcome = await getTier8EncounterOutcome(character, monster, originalRoll, adjustedRandomValue, attackSuccess, defenseSuccess);
                     break;
                 case 9:
-                    outcome = await getTier9EncounterOutcome(character, monster, character.attack, adjustedRandomValue, attackSuccess, defenseSuccess);
+                    outcome = await getTier9EncounterOutcome(character, monster, originalRoll, adjustedRandomValue, attackSuccess, defenseSuccess);
                     break;
                 case 10:
-                    outcome = await getTier10EncounterOutcome(character, monster, character.attack, adjustedRandomValue, attackSuccess, defenseSuccess);
+                    outcome = await getTier10EncounterOutcome(character, monster, originalRoll, adjustedRandomValue, attackSuccess, defenseSuccess);
                     if (outcome.result.includes('KO')) {
                         console.log(`[encounterModule.js]: 💀 ${character.name} KO'd by ${monster.name}`);
                         await handleKO(character._id);

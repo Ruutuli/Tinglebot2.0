@@ -285,9 +285,11 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
       throw new Error(`Invalid monster passed to handleFight: ${JSON.stringify(monster)}`);
     }
 
-    // Extract dice roll from encounter message
-    const diceRollMatch = encounterMessage?.embeds?.[0]?.description?.match(/Roll: (\d+)\/100/);
-    const diceRoll = diceRollMatch ? parseInt(diceRollMatch[1]) : Math.floor(Math.random() * 100) + 1;
+    // Get the dice roll from the message's custom data
+    const diceRoll = encounterMessage.diceRoll;
+    if (!diceRoll) {
+      throw new Error('No dice roll found in encounter message');
+    }
 
     const { damageValue, adjustedRandomValue, attackSuccess, defenseSuccess } = calculateFinalValue(character, diceRoll);
     const outcome = await getEncounterOutcome(character, monster, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess);

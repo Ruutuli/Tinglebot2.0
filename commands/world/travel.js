@@ -770,6 +770,8 @@ async function processTravelDay(day, context) {
           new ButtonBuilder().setCustomId('flee').setLabel('💨 Flee').setStyle(ButtonStyle.Secondary).setDisabled(character.currentStamina === 0)
         );
         const encounterMessage = await channel.send({ embeds: [encounterEmbed], components: [buttons] });
+        // Store the dice roll in the message's custom data
+        encounterMessage.diceRoll = diceRoll;
         const collector = encounterMessage.createMessageComponentCollector({ 
           filter: i => {
             if (i.user.id !== interaction.user.id) {
