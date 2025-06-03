@@ -148,6 +148,7 @@ function calculateFinalValue(character, diceRoll) {
     character.attack,
     character.defense
   );
+  console.log(`[rngModule.js]: 🎲 Combat calculation - Roll: ${diceRoll}, Adjusted: ${adjustedRandomValue}, Attack: ${attackSuccess}, Defense: ${defenseSuccess}`);
   return {
     damageValue: diceRoll,
     adjustedRandomValue,

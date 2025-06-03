@@ -751,27 +751,23 @@ async function processTravelDay(day, context) {
         const tier = parseInt(getRandomTravelEncounter().split(' ')[1], 10);
         const options = monsters.filter(m => m.tier <= tier);
         const monster = options[Math.floor(Math.random() * options.length)];
-        const diceRoll = Math.floor(Math.random() * 100) + 1; // Calculate dice roll (1-100)
-        dailyLogEntry += `⚔️ Encountered a ${monster.name}! (Roll: ${diceRoll}/100)\n`;
+        dailyLogEntry += `⚔️ Encountered a ${monster.name}!\n`;
 
         // Before creating the encounter embed, check if Blood Moon is active
         const isBloodMoon = isBloodMoonActive();
         const encounterEmbed = createMonsterEncounterEmbed(
           character,
           monster,
-          `You encountered a ${monster.name}! (Roll: ${diceRoll}/100)\nWhat do you want to do? Fleeing costs 1 🟩 stamina!`,
+          `You encountered a ${monster.name}!\nWhat do you want to do? Fleeing costs 1 🟩 stamina!`,
           character.currentHearts,
           null,
-          isBloodMoon,
-          diceRoll
+          isBloodMoon
         );
         const buttons = new ActionRowBuilder().addComponents(
           new ButtonBuilder().setCustomId('fight').setLabel('⚔️ Fight').setStyle(ButtonStyle.Primary),
           new ButtonBuilder().setCustomId('flee').setLabel('💨 Flee').setStyle(ButtonStyle.Secondary).setDisabled(character.currentStamina === 0)
         );
         const encounterMessage = await channel.send({ embeds: [encounterEmbed], components: [buttons] });
-        // Store the dice roll in the message's custom data
-        encounterMessage.diceRoll = diceRoll;
         const collector = encounterMessage.createMessageComponentCollector({ 
           filter: i => {
             if (i.user.id !== interaction.user.id) {

@@ -285,17 +285,18 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
       throw new Error(`Invalid monster passed to handleFight: ${JSON.stringify(monster)}`);
     }
 
-    // Get the dice roll from the message's custom data
-    const diceRoll = encounterMessage.diceRoll;
-    if (!diceRoll) {
-      throw new Error('No dice roll found in encounter message');
-    }
+    console.log(`[travelHandler.js]: 🎯 Starting combat for ${character.name} vs ${monster.name} (Tier ${monster.tier})`);
+    console.log(`[travelHandler.js]: ❤️ Initial hearts: ${character.currentHearts}/${character.maxHearts}`);
 
-    const { damageValue, adjustedRandomValue, attackSuccess, defenseSuccess } = calculateFinalValue(character, diceRoll);
+    const { damageValue, adjustedRandomValue, attackSuccess, defenseSuccess } = calculateFinalValue(character);
+    console.log(`[travelHandler.js]: ⚔️ Combat results - Damage: ${damageValue}, Adjusted: ${adjustedRandomValue}, Attack: ${attackSuccess}, Defense: ${defenseSuccess}`);
+
     const outcome = await getEncounterOutcome(character, monster, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess);
+    console.log(`[travelHandler.js]: 🎲 Combat outcome: ${outcome.result}, Hearts: ${outcome.hearts}`);
 
     // ------------------- KO Branch -------------------
     if (outcome.result === 'KO') {
+      console.log(`[travelHandler.js]: 💀 Character KO'd - Previous hearts: ${character.currentHearts}`);
       const koEmbed = createKOEmbed(character);
       await interaction.followUp({ embeds: [koEmbed] });
 
@@ -323,6 +324,7 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
         outcome.hearts = 1;
         outcome.result = `💥⚔️ The monster attacks! You lose ❤️ 1 heart!`;
       }
+      console.log(`[travelHandler.js]: 💔 Applying damage - Hearts: ${character.currentHearts} → ${character.currentHearts - outcome.hearts}`);
     }
 
     // ------------------- Sync Hearts & Stamina -------------------
@@ -393,8 +395,7 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
     const description =
       `> ${outcomeMessage}` +
       `\n**❤️ Hearts:** ${character.currentHearts}/${character.maxHearts}` +
-      `\n**🟩 Stamina:** ${character.currentStamina}/${character.maxStamina}` +
-      `\n**🎲 Dice Roll:** ${diceRoll}/100`;
+      `\n**🟩 Stamina:** ${character.currentStamina}/${character.maxStamina}`;
 
     const embed = createUpdatedTravelEmbed({
       encounterMessage,

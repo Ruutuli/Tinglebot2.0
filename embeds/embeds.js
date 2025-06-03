@@ -1285,13 +1285,6 @@ const createMonsterEncounterEmbed = (
   });
  }
 
- embed.addFields({
-  name: "__🎲 Dice Roll__",
-  value: `> \`${actualRoll || "Unknown"}/100\``,
-  inline: false,
-});
-
-
  if (isValidImageUrl(monsterDetails.image)) {
   embed.setThumbnail(monsterDetails.image);
  } else {
