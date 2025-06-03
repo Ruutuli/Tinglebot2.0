@@ -2183,7 +2183,22 @@ async function handleTrade(interaction) {
     }
     if (missingItems.length > 0) {
       await interaction.editReply({
-        content: `❌ The following item(s) do not exist: ${missingItems.map(n => `\`${n}\``).join(", ")}. Please check your spelling or try a different item.`,
+        embeds: [{
+          color: 0xFF0000, // Red color
+          title: '❌ Invalid Items',
+          description: 'The following item(s) do not exist:',
+          fields: missingItems.map(name => ({
+            name: name,
+            value: 'Item not found in database',
+            inline: true
+          })),
+          image: {
+            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+          },
+          footer: {
+            text: 'Item Validation'
+          }
+        }],
         ephemeral: true,
       });
       return;
@@ -2199,7 +2214,17 @@ async function handleTrade(interaction) {
     for (const { quantity } of itemArrayRaw) {
       if (quantity <= 0) {
         await interaction.editReply({
-          content: "❌ You must trade a **positive quantity** of items. Negative numbers are not allowed.",
+          embeds: [{
+            color: 0xFF0000, // Red color
+            title: '❌ Invalid Quantity',
+            description: 'You must trade a **positive quantity** of items. Negative numbers are not allowed.',
+            image: {
+              url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+            },
+            footer: {
+              text: 'Quantity Validation'
+            }
+          }],
           ephemeral: true,
         });
         return;
@@ -2222,7 +2247,17 @@ async function handleTrade(interaction) {
     for (const { name } of itemArray) {
       if (isSpiritOrb(name)) {
         await interaction.editReply({
-          content: `❌ Spirit Orbs cannot be traded. They are sacred items that can only be used by their original owner.`,
+          embeds: [{
+            color: 0xFF0000, // Red color
+            title: '❌ Spirit Orb Protection',
+            description: 'Spirit Orbs cannot be traded. They are sacred items that can only be used by their original owner.',
+            image: {
+              url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+            },
+            footer: {
+              text: 'Item Protection'
+            }
+          }],
           ephemeral: true,
         });
         return;
@@ -2233,7 +2268,17 @@ async function handleTrade(interaction) {
     const fromCharacter = await fetchCharacterByNameAndUserId(characterName, userId);
     if (!fromCharacter) {
       await interaction.editReply({
-        content: `❌ Character \`${characterName}\` not found or does not belong to you.`,
+        embeds: [{
+          color: 0xFF0000, // Red color
+          title: '❌ Character Not Found',
+          description: `Character \`${characterName}\` not found or does not belong to you.`,
+          image: {
+            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+          },
+          footer: {
+            text: 'Character Validation'
+          }
+        }],
         ephemeral: true,
       });
       return;
@@ -2242,7 +2287,17 @@ async function handleTrade(interaction) {
     const toCharacter = await fetchCharacterByName(tradingWithName);
     if (!toCharacter || toCharacter.userId === userId) {
       await interaction.editReply({
-        content: `❌ Character \`${tradingWithName}\` not found or belongs to you.`,
+        embeds: [{
+          color: 0xFF0000, // Red color
+          title: '❌ Recipient Not Found',
+          description: `Character \`${tradingWithName}\` not found or belongs to you.`,
+          image: {
+            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+          },
+          footer: {
+            text: 'Character Validation'
+          }
+        }],
         ephemeral: true,
       });
       return;
@@ -2254,8 +2309,24 @@ async function handleTrade(interaction) {
       await checkInventorySync(toCharacter);
     } catch (error) {
       await interaction.editReply({
-        content: error.message,
-        ephemeral: true,
+        embeds: [{
+          color: 0xFF0000, // Red color
+          title: '❌ Inventory Not Synced',
+          description: error.message,
+          fields: [
+            {
+              name: 'How to Fix',
+              value: '1. Use `/inventory test` to test your inventory\n2. Use `/inventory sync` to sync your inventory'
+            }
+          ],
+          image: {
+            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+          },
+          footer: {
+            text: 'Inventory Sync Required'
+          }
+        }],
+        ephemeral: true
       });
       return;
     }
@@ -2267,7 +2338,17 @@ async function handleTrade(interaction) {
         if (!trade) {
           console.error(`[trade.js]: ❌ Trade ${tradeId} not found`);
           await interaction.editReply({
-            content: `❌ Invalid or expired trade ID.`,
+            embeds: [{
+              color: 0xFF0000, // Red color
+              title: '❌ Invalid Trade',
+              description: 'Invalid or expired trade ID.',
+              image: {
+                url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+              },
+              footer: {
+                text: 'Trade Validation'
+              }
+            }],
             ephemeral: true,
           });
           return;
@@ -2276,7 +2357,17 @@ async function handleTrade(interaction) {
         // Check if trade has expired
         if (new Date() > trade.expiresAt) {
           await interaction.editReply({
-            content: `❌ This trade has expired. Please initiate a new trade.`,
+            embeds: [{
+              color: 0xFF0000, // Red color
+              title: '❌ Trade Expired',
+              description: 'This trade has expired. Please initiate a new trade.',
+              image: {
+                url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+              },
+              footer: {
+                text: 'Trade Timeout'
+              }
+            }],
             ephemeral: true,
           });
           await TempData.deleteOne({ _id: trade._id });
@@ -2290,11 +2381,22 @@ async function handleTrade(interaction) {
         if (tradeData.initiator.userId !== userId && tradeData.target.userId !== userId) {
           console.error(`[trade.js]: ❌ User ${userId} not part of trade ${tradeId}`);
           await interaction.editReply({
-            content: `❌ You are not part of this trade.`,
+            embeds: [{
+              color: 0xFF0000, // Red color
+              title: '❌ Not Part of Trade',
+              description: 'You are not part of this trade.',
+              image: {
+                url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+              },
+              footer: {
+                text: 'Trade Validation'
+              }
+            }],
             ephemeral: true,
           });
           return;
         }
+
         // NEW: Verify character name matches the user's character in the trade
         if (
           (tradeData.initiator.userId === userId && tradeData.initiator.characterName !== characterName) ||
@@ -2302,7 +2404,17 @@ async function handleTrade(interaction) {
         ) {
           console.error(`[trade.js]: ❌ Character name mismatch for user ${userId} in trade ${tradeId}`);
           await interaction.editReply({
-            content: `❌ The character you provided does not match your character in this trade.`,
+            embeds: [{
+              color: 0xFF0000, // Red color
+              title: '❌ Character Mismatch',
+              description: 'The character you provided does not match your character in this trade.',
+              image: {
+                url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+              },
+              footer: {
+                text: 'Character Validation'
+              }
+            }],
             ephemeral: true,
           });
           return;
@@ -2313,7 +2425,17 @@ async function handleTrade(interaction) {
             (tradeData.target.userId === userId && tradeData.targetConfirmed)) {
           console.error(`[trade.js]: ❌ User ${userId} already confirmed trade ${tradeId}`);
           await interaction.editReply({
-            content: `❌ You have already confirmed this trade.`,
+            embeds: [{
+              color: 0xFF0000, // Red color
+              title: '❌ Already Confirmed',
+              description: 'You have already confirmed this trade.',
+              image: {
+                url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+              },
+              footer: {
+                text: 'Trade Status'
+              }
+            }],
             ephemeral: true,
           });
           return;
