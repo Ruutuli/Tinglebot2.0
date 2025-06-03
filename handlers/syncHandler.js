@@ -27,6 +27,10 @@ const ItemModel = require('../models/ItemModel');
 // Utility Functions
 // ============================================================================
 
+function escapeRegExp(string) {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 const { handleError } = require('../utils/globalErrorHandler');
 const { editCharacterNotFoundMessage, editSyncErrorMessage, editSyncMessage } = require('../embeds/embeds');
 const { removeInitialItemIfSynced, syncToInventoryDatabase } = require('../utils/inventoryUtils');
