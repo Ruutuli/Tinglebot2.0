@@ -1147,7 +1147,7 @@ async function checkMissedRolls(client) {
     console.log('[blightHandler]: Starting checkMissedRolls...');
     
     // ------------------- Validate Discord Client -------------------
-    if (!client || !client.channels) {
+    if (!client || !client.channels || !client.token) {
       console.error('[blightHandler]: ❌ Invalid Discord client provided to checkMissedRolls');
       return;
     }

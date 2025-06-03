@@ -21,6 +21,7 @@ const { loadBlightSubmissions, saveBlightSubmissions } = require('./handlers/bli
 const { connectToInventories } = require('./handlers/blightHandler');
 const { getCurrentWeather, saveWeather } = require('./modules/weatherModule');
 const Pet = require('./models/PetModel');
+const { client } = require('./index');
 
 // ============================================================================
 // ---- Utility Functions ----
@@ -303,8 +304,15 @@ async function resetPetLastRollDates() {
 // ---- Function: setupBlightScheduler ----
 // Sets up the blight roll call and missed rolls check
 function setupBlightScheduler(client) {
-  // Blight roll call at 8 PM EST
-  createCronJob('0 20 * * *', 'Blight Roll Call', () => postBlightRollCall(client));
+  // Schedule blight roll call for 8 PM EST
+  createCronJob('0 20 * * *', 'Blight Roll Call', async () => {
+    try {
+      await postBlightRollCall(client);
+    } catch (error) {
+      handleError(error, 'scheduler.js');
+      console.error('[scheduler.js]: ❌ Blight roll call failed:', error.message);
+    }
+  });
   
   // Check for missed rolls at 8 PM EST
   createCronJob('0 20 * * *', 'Check Missed Rolls', () => checkMissedRolls(client));
