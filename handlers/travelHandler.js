@@ -285,7 +285,11 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
       throw new Error(`Invalid monster passed to handleFight: ${JSON.stringify(monster)}`);
     }
 
-    const { damageValue, adjustedRandomValue, attackSuccess, defenseSuccess } = calculateFinalValue(character);
+    // Extract dice roll from encounter message
+    const diceRollMatch = encounterMessage.embeds[0].description.match(/Roll: (\d+)\/100/);
+    const diceRoll = diceRollMatch ? parseInt(diceRollMatch[1]) : Math.floor(Math.random() * 100) + 1;
+
+    const { damageValue, adjustedRandomValue, attackSuccess, defenseSuccess } = calculateFinalValue(character, diceRoll);
     const outcome = await getEncounterOutcome(character, monster, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess);
 
     // ------------------- KO Branch -------------------
@@ -387,7 +391,8 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
     const description =
       `> ${outcomeMessage}` +
       `\n**❤️ Hearts:** ${character.currentHearts}/${character.maxHearts}` +
-      `\n**🟩 Stamina:** ${character.currentStamina}/${character.maxStamina}`;
+      `\n**🟩 Stamina:** ${character.currentStamina}/${character.maxStamina}` +
+      `\n**🎲 Dice Roll:** ${diceRoll}/100`;
 
     const embed = createUpdatedTravelEmbed({
       encounterMessage,
