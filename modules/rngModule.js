@@ -138,13 +138,23 @@ function createWeightedItemList(items, fv) {
 // ------------------- Calculate Final Value -------------------
 // Calculates the Final Value (FV) for a character by generating a damage value,
 // applying attack and defense buffs, and returning the adjusted random value along with buff details.
-const calculateFinalValue = (character) => {
-  const damageValue = Math.floor(Math.random() * 100) + 1;
+function calculateFinalValue(character, diceRoll) {
   const attackSuccess = calculateAttackBuff(character);
   const defenseSuccess = calculateDefenseBuff(character);
-  const adjustedRandomValue = applyBuffs(damageValue, attackSuccess, defenseSuccess, character.attack, character.defense);
-  return { damageValue, adjustedRandomValue, attackSuccess, defenseSuccess };
-};
+  const adjustedRandomValue = applyBuffs(
+    diceRoll,
+    attackSuccess,
+    defenseSuccess,
+    character.attack,
+    character.defense
+  );
+  return {
+    damageValue: character.attack,
+    adjustedRandomValue,
+    attackSuccess,
+    defenseSuccess
+  };
+}
 
 // ============================================================================
 // Random Encounter Determination

@@ -733,14 +733,15 @@ async function processTravelDay(day, context) {
         const tier = parseInt(getRandomTravelEncounter().split(' ')[1], 10);
         const options = monsters.filter(m => m.tier <= tier);
         const monster = options[Math.floor(Math.random() * options.length)];
-        dailyLogEntry += `⚔️ Encountered a ${monster.name}!\n`;
+        const diceRoll = Math.floor(Math.random() * 100) + 1; // Calculate dice roll (1-100)
+        dailyLogEntry += `⚔️ Encountered a ${monster.name}! (Roll: ${diceRoll}/100)\n`;
 
         // Before creating the encounter embed, check if Blood Moon is active
         const isBloodMoon = isBloodMoonActive();
         const encounterEmbed = createMonsterEncounterEmbed(
           character,
           monster,
-          `You encountered a ${monster.name}! What do you want to do? Fleeing costs 1 🟩 stamina!`,
+          `You encountered a ${monster.name}! (Roll: ${diceRoll}/100)\nWhat do you want to do? Fleeing costs 1 🟩 stamina!`,
           character.currentHearts,
           null,
           isBloodMoon
