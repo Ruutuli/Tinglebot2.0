@@ -150,6 +150,7 @@ module.exports = {
       await submitHealingTask(interaction, submissionId, item, link, tokens);
       
     } else if (subcommand === 'history') {
+      await interaction.deferReply();
       const characterName = interaction.options.getString('character_name');
       const character = await validateCharacterOwnership(interaction, characterName);
       if (!character) return;

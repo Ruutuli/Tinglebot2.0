@@ -1082,9 +1082,6 @@ async function postBlightRollCall(client) {
 // Displays the most recent blight progression history for a character.
 async function viewBlightHistory(interaction, characterName, limit = 10) {
   try {
-    // Defer reply immediately to prevent timeout
-    await interaction.deferReply();
-
     const character = await Character.findOne({ name: characterName });
     if (!character) {
       await interaction.editReply({ content: `❌ Character "${characterName}" not found.`, ephemeral: true });
