@@ -921,10 +921,24 @@ async function rollForBlightProgression(interaction, characterName) {
       const hoursUntilNextRoll = Math.floor(timeUntilNextRoll / (1000 * 60 * 60));
       const minutesUntilNextRoll = Math.floor((timeUntilNextRoll % (1000 * 60 * 60)) / (1000 * 60));
 
-      await interaction.reply({
-        content: `**${characterName}** has already rolled during the current Blight Call window.\n\n` +
-          `You can roll again after **9:17 PM EST** (in ${hoursUntilNextRoll} hours and ${minutesUntilNextRoll} minutes).`,
-        ephemeral: true,
+      const alreadyRolledEmbed = new EmbedBuilder()
+        .setColor('#AD1457')
+        .setTitle('⏰ Already Rolled for Blight')
+        .setDescription(
+          `**${characterName}** has already rolled during the current Blight Call window.\n\n` +
+          `You can roll again after **8:00 PM EST** (in ${hoursUntilNextRoll} hours and ${minutesUntilNextRoll} minutes).\n\n` +
+          `*Remember to roll daily to prevent automatic blight progression!*`
+        )
+        .setThumbnail(character.icon)
+        .setAuthor({ name: `${characterName}'s Blight Status`, iconURL: interaction.user.displayAvatarURL() })
+        .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+        .setFooter({ text: 'Blight Roll Call', iconURL: 'https://static.wixstatic.com/media/7573f4_a510c95090fd43f5ae17e20d80c1289e~mv2.png' })
+        .setTimestamp();
+
+      await interaction.editReply({ 
+        content: `<@${interaction.user.id}>`,
+        embeds: [alreadyRolledEmbed],
+        ephemeral: true 
       });
       return;
     }
@@ -1051,7 +1065,7 @@ async function rollForBlightProgression(interaction, characterName) {
 }
 
 // ------------------- Function: postBlightRollCall -------------------
-// Sends daily roll reminder at 9:17 PM EST to the configured channel.
+// Sends daily roll reminder at 8:00 PM EST to the configured channel.
 async function postBlightRollCall(client) {
   const channelId = process.env.BLIGHT_NOTIFICATIONS_CHANNEL_ID;
   const roleId = process.env.BLIGHT_REMINDER_ROLE_ID;
@@ -1078,13 +1092,13 @@ async function postBlightRollCall(client) {
       `▹ [Blight Information](https://www.rootsofthewild.com/blight 'Blight Information')  \n` +
       `▹ [Currently Available Blight Healers](https://discord.com/channels/603960955839447050/651614266046152705/845481974671736842 'Blight Healers')  \n` +
       `**~~────────────────────~~**  \n` +
-      `:clock8: Blight calls happen every day around 9:17 PM EST!  \n` +
+      `:clock8: Blight calls happen every day around 8:00 PM EST!  \n` +
       `:alarm_clock: You must complete your roll before the next call for it to be counted!  \n` +
       `:warning: Remember, if you miss a roll you __automatically progress to the next stage__.  \n` +
       `▹To request blight healing, please use </blight heal:1306176789634355241>`
     )
     .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png')
-    .setFooter({ text: 'Blight calls happen daily at 9:17 PM EST!' })
+    .setFooter({ text: 'Blight calls happen daily at 8:00 PM EST!' })
     .setTimestamp();
 
   await channel.send({ content: `<@&${roleId}>` });
@@ -1267,13 +1281,13 @@ async function checkMissedRolls(client) {
       console.log(`[blightHandler]: Checking ${character.name} - Last roll: ${lastRollDate.toISOString()}, Time since: ${Math.floor(timeSinceLastRoll / (1000 * 60 * 60))} hours`);
 
       // ---- SKIP missed roll progression if newly blighted after last blight call ----
-      // Calculate last blight call (9:17 PM EST previous day)
+      // Calculate last blight call (8:00 PM EST previous day)
       const nowEST = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
       const lastBlightCall = new Date(nowEST);
-      if (nowEST.getHours() < 21 || (nowEST.getHours() === 21 && nowEST.getMinutes() < 17)) {
+      if (nowEST.getHours() < 20 || (nowEST.getHours() === 20 && nowEST.getMinutes() < 0)) {
         lastBlightCall.setDate(nowEST.getDate() - 1);
       }
-      lastBlightCall.setHours(21, 17, 0, 0);
+      lastBlightCall.setHours(20, 0, 0, 0);
       if (character.blightedAt && character.blightedAt > lastBlightCall) {
         console.log(`[blightHandler]: Skipping missed roll for ${character.name} (blightedAt=${character.blightedAt.toISOString()}) - infected after last blight call.`);
         continue;
@@ -1333,7 +1347,7 @@ async function checkMissedRolls(client) {
 
           // Delete active blight submissions
           try {
-            const blightSubmissions = loadBlightSubmissions();
+            const blightSubmissions = await loadBlightSubmissions();
             const pendingSubmissions = Object.keys(blightSubmissions).filter(id =>
               blightSubmissions[id].characterName === character.name &&
               blightSubmissions[id].status === 'pending'
@@ -1344,7 +1358,7 @@ async function checkMissedRolls(client) {
               deleteSubmissionFromStorage(submissionId);
             }
 
-            saveBlightSubmissions(blightSubmissions);
+            await saveBlightSubmissions(blightSubmissions);
           } catch (error) {
             handleError(error, 'blightHandler.js');
             console.error('[blightHandler]: Error cleaning up blight submissions:', error);
