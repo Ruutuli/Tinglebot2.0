@@ -10,6 +10,9 @@ eslint.config.mjs
 node_modules
 nodemon.log
 testingCode/
+.tmp.driveupload/
+.tmp.driveudownload/
+
 
 # Deployment scripts (no longer needed)
 # scripts/deploy.js
