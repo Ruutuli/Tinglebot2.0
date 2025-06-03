@@ -744,7 +744,8 @@ async function processTravelDay(day, context) {
           `You encountered a ${monster.name}! (Roll: ${diceRoll}/100)\nWhat do you want to do? Fleeing costs 1 🟩 stamina!`,
           character.currentHearts,
           null,
-          isBloodMoon
+          isBloodMoon,
+          diceRoll
         );
         const buttons = new ActionRowBuilder().addComponents(
           new ButtonBuilder().setCustomId('fight').setLabel('⚔️ Fight').setStyle(ButtonStyle.Primary),
