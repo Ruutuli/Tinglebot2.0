@@ -336,16 +336,8 @@ module.exports = {
 
       // Get current weather for the village
       const currentVillage = channelVillage; // Use the village from the channel
-      console.log(`[specialweather.js]: 🔍 Checking weather for ${currentVillage}`);
       const weather = await getCurrentWeather(currentVillage);
-      console.log(`[specialweather.js]: 🔄 Weather data received:`, {
-        village: weather?.village,
-        date: weather?.date,
-        special: weather?.special,
-        precipitation: weather?.precipitation,
-        temperature: weather?.temperature,
-        wind: weather?.wind
-      });
+
       
       if (!weather || !weather.special || !weather.special.label) {
         console.log(`[specialweather.js]: ⚠️ No special weather detected:`, {
