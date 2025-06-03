@@ -18,6 +18,7 @@ const { handleError } = require('../utils/globalErrorHandler.js');
 const { syncToInventoryDatabase, SOURCE_TYPES } = require('../utils/inventoryUtils.js');
 const { getCurrentWeather } = require('../modules/weatherModule.js');
 const { enforceJail } = require('../utils/jailCheck.js');
+const { checkInventorySync } = require('../utils/inventoryUtils.js');
 
 // ------------------- Constants -------------------
 const DEFAULT_IMAGE_URL = 'https://storage.googleapis.com/tinglebot/Graphics/Default-Footer.png';
@@ -282,6 +283,9 @@ module.exports = {
         return;
       }
 
+      // Check inventory sync before proceeding
+      await checkInventorySync(character);
+
       // Check if character is in jail
       const jailCheck = await enforceJail(character, 'gather during special weather');
       if (jailCheck) {
@@ -355,7 +359,17 @@ module.exports = {
           hasLabel: !!weather?.special?.label
         });
         await interaction.editReply({
-          content: `❌ **There is no special weather in ${currentVillage} right now.**\n✨ **Special weather is required to use this command.**`,
+          embeds: [{
+            color: 0x008B8B, // Dark cyan color
+            description: `*${character.name} looks up at the sky...*\n\n**No Special Weather Detected**\nThere is no special weather in ${currentVillage} right now.\n\n✨ **Special weather is required to use this command.**`,
+            image: {
+              url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+            },
+            footer: {
+              text: 'Weather Check'
+            }
+          }],
+          ephemeral: true
         });
         return;
       }
