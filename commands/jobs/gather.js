@@ -239,6 +239,25 @@ module.exports = {
         }
       }
 
+      // Check if character is physically in the correct village
+      const channelVillage = Object.entries(villageChannels).find(([_, id]) => id === interaction.channelId)?.[0];
+      if (channelVillage && character.currentVillage.toLowerCase() !== channelVillage.toLowerCase()) {
+        await interaction.editReply({
+          embeds: [{
+            color: 0x008B8B, // Dark cyan color
+            description: `*${character.name} looks around confused...*\n\n**Wrong Village Location**\nYou must be physically present in ${channelVillage} to gather here.\n\n🗺️ **Current Location:** ${capitalizeWords(character.currentVillage)}`,
+            image: {
+              url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+            },
+            footer: {
+              text: 'Location Check'
+            }
+          }],
+          ephemeral: true
+        });
+        return;
+      }
+
       if (!allowedChannel || interaction.channelId !== allowedChannel) {
         const channelMention = `<#${allowedChannel}>`;
         await interaction.editReply({
