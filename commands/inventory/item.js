@@ -157,7 +157,19 @@ module.exports = {
           });
         }
 
-        // Activate voucher and remove one from inventory.
+        // --- Location/Village validation for village-locked jobs ---
+        if (jobPerkInfo.village) {
+          const requiredVillage = jobPerkInfo.village.toLowerCase().trim();
+          const characterVillage = character.currentVillage?.toLowerCase().trim();
+          if (characterVillage !== requiredVillage) {
+            return void await interaction.editReply({
+              content: `❌ **${character.name} must be in ${capitalizeWords(jobPerkInfo.village)} to use this job voucher.**\nCurrently in: **${capitalizeWords(character.currentVillage)}**`,
+              ephemeral: true
+            });
+          }
+        }
+
+        // --- Only now activate voucher and remove from inventory ---
         await updateCharacterById(character._id, { jobVoucher: true, jobVoucherJob: jobName });
         await removeItemInventoryDatabase(character._id, 'Job Voucher', 1, interaction);
 

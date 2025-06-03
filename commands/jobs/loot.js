@@ -674,8 +674,9 @@ async function processLootingLogic(
   const outcomeMessage = generateOutcomeMessage(outcome);
 
   // Step 4: Loot Item Logic
+  let lootedItem = null;
   if (outcome.canLoot && weightedItems.length > 0) {
-   const lootedItem = generateLootedItem(encounteredMonster, weightedItems);
+   lootedItem = generateLootedItem(encounteredMonster, weightedItems);
 
    const inventoryLink = character.inventory || character.inventoryLink;
    if (!isValidGoogleSheetsUrl(inventoryLink)) {
@@ -685,7 +686,8 @@ async function processLootingLogic(
      outcomeMessage,
      updatedCharacter.currentHearts,
      lootedItem,
-     bloodMoonActive
+     bloodMoonActive,
+     outcome.adjustedRandomValue
     );
     await interaction.editReply({
      content: `❌ **Invalid Google Sheets URL for "${character.name}".**`,
@@ -706,7 +708,8 @@ async function processLootingLogic(
    outcomeMessage,
    updatedCharacter.currentHearts,
    outcome.canLoot && weightedItems.length > 0 ? lootedItem : null,
-   bloodMoonActive
+   bloodMoonActive,
+   outcome.adjustedRandomValue
   );
   await interaction.editReply({ embeds: [embed] });
 
