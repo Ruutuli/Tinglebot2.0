@@ -269,6 +269,7 @@ async function resetDailyRolls() {
     for (const character of characters) {
       if (character.dailyRoll && character.dailyRoll.size > 0) {
         character.dailyRoll = new Map();
+        character.markModified('dailyRoll');
         await character.save();
         resetCount++;
       }

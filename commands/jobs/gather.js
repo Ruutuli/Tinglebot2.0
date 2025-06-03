@@ -71,7 +71,7 @@ function canUseDailyRoll(character, activity) {
     rollover.setUTCDate(rollover.getUTCDate() - 1);
   }
 
-  const lastRoll = character.dailyRoll?.[activity];
+  const lastRoll = character.dailyRoll?.get(activity);
   if (!lastRoll) {
     console.log(`[gather.js]: 📅 No previous roll for ${activity}. Allowing action.`);
     return true;
@@ -86,10 +86,10 @@ function canUseDailyRoll(character, activity) {
 async function updateDailyRoll(character, activity) {
   try {
     if (!character.dailyRoll) {
-      character.dailyRoll = {};
+      character.dailyRoll = new Map();
     }
     const now = new Date().toISOString();
-    character.dailyRoll[activity] = now;
+    character.dailyRoll.set(activity, now);
     await character.save();
     console.log(`[gather.js]: ✅ Updated daily roll for ${activity} at ${now}`);
   } catch (error) {
@@ -332,6 +332,7 @@ module.exports = {
       const jobPerk = getJobPerk(job);
       console.log(`[gather.js]: 🔄 Job Perk for "${job}":`, jobPerk);
       if (!jobPerk || !jobPerk.perks.includes('GATHERING')) {
+  const lastRoll = character.dailyRoll?.[activity];
         console.error(`[gather.js]: ❌ ${character.name} lacks gathering skills for job: "${job}"`);
         await interaction.editReply({
           content: `❌ ${character.name} can't gather as a ${capitalizeWords(job)} because they lack the necessary gathering skills.`,
