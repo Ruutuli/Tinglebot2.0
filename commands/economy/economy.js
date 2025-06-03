@@ -855,7 +855,17 @@ async function handleShopBuy(interaction) {
     const user = await getOrCreateToken(interaction.user.id);
     if (!user.tokensSynced) {
       return interaction.editReply({
-        content: "❌ Your tokens are not synced. Please sync your tokens to use this command.",
+        embeds: [{
+          color: 0xFF0000, // Red color
+          title: '❌ Tokens Not Synced',
+          description: 'Your tokens are not synced. Please sync your tokens to use this command.',
+          image: {
+            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+          },
+          footer: {
+            text: 'Token Sync Required'
+          }
+        }],
         ephemeral: true
       });
     }
@@ -867,7 +877,17 @@ async function handleShopBuy(interaction) {
     // ------------------- Validate Buy Quantity -------------------
     if (quantity <= 0) {
       await interaction.editReply({
-        content: `❌ You must buy a **positive quantity** of items. Negative numbers are not allowed.`,
+        embeds: [{
+          color: 0xFF0000, // Red color
+          title: '❌ Invalid Quantity',
+          description: 'You must buy a **positive quantity** of items. Negative numbers are not allowed.',
+          image: {
+            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+          },
+          footer: {
+            text: 'Quantity Validation'
+          }
+        }],
         ephemeral: true,
       });
       return;
@@ -882,7 +902,17 @@ async function handleShopBuy(interaction) {
     if (!character) {
       console.error(`[shops]: ❌ Character ${characterName} not found or does not belong to user ${interaction.user.id}`);
       return interaction.editReply({
-        content: "❌ Character not found or does not belong to you.",
+        embeds: [{
+          color: 0xFF0000, // Red color
+          title: '❌ Character Not Found',
+          description: 'Character not found or does not belong to you.',
+          image: {
+            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+          },
+          footer: {
+            text: 'Character Validation'
+          }
+        }],
         ephemeral: true
       });
     }
@@ -892,7 +922,23 @@ async function handleShopBuy(interaction) {
       await checkInventorySync(character);
     } catch (error) {
       await interaction.editReply({
-        content: error.message,
+        embeds: [{
+          color: 0xFF0000, // Red color
+          title: '❌ Inventory Not Synced',
+          description: error.message,
+          fields: [
+            {
+              name: 'How to Fix',
+              value: '1. Use `/inventory test` to test your inventory\n2. Use `/inventory sync` to sync your inventory'
+            }
+          ],
+          image: {
+            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+          },
+          footer: {
+            text: 'Inventory Sync Required'
+          }
+        }],
         ephemeral: true
       });
       return;
@@ -905,7 +951,17 @@ async function handleShopBuy(interaction) {
     
     if (!shopItem) {
       return interaction.editReply({
-        content: `❌ Item "${itemName}" is not available in the shop.`,
+        embeds: [{
+          color: 0xFF0000, // Red color
+          title: '❌ Item Not Available',
+          description: `Item "${itemName}" is not available in the shop.`,
+          image: {
+            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+          },
+          footer: {
+            text: 'Shop Validation'
+          }
+        }],
         ephemeral: true
       });
     }
@@ -914,14 +970,34 @@ async function handleShopBuy(interaction) {
     if (isNaN(shopQuantity)) {
       console.error(`[shops]: ❌ Invalid stock quantity for item ${itemName}: ${shopItem.stock}`);
       return interaction.editReply({
-        content: "❌ Shop item quantity is invalid. Please try again later.",
+        embeds: [{
+          color: 0xFF0000, // Red color
+          title: '❌ Invalid Stock',
+          description: 'Shop item quantity is invalid. Please try again later.',
+          image: {
+            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+          },
+          footer: {
+            text: 'Shop Validation'
+          }
+        }],
         ephemeral: true
       });
     }
 
     if (shopQuantity < quantity) {
       return interaction.editReply({
-        content: `❌ Not enough stock available. Only ${shopQuantity} ${itemName} remaining in the shop.`,
+        embeds: [{
+          color: 0xFF0000, // Red color
+          title: '❌ Insufficient Stock',
+          description: `Not enough stock available. Only ${shopQuantity} ${itemName} remaining in the shop.`,
+          image: {
+            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+          },
+          footer: {
+            text: 'Shop Validation'
+          }
+        }],
         ephemeral: true
       });
     }
@@ -934,7 +1010,17 @@ async function handleShopBuy(interaction) {
     if (!itemDetails) {
       console.error(`[shops]: ❌ Item details not found for ${itemName}`);
       return interaction.editReply({
-        content: "❌ Unable to retrieve item details. Please try again later.",
+        embeds: [{
+          color: 0xFF0000, // Red color
+          title: '❌ Item Details Error',
+          description: 'Unable to retrieve item details. Please try again later.',
+          image: {
+            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+          },
+          footer: {
+            text: 'Item Validation'
+          }
+        }],
         ephemeral: true
       });
     }
@@ -942,7 +1028,17 @@ async function handleShopBuy(interaction) {
     if (!itemDetails.buyPrice || itemDetails.buyPrice <= 0) {
       console.error(`[shops]: ❌ Invalid buy price for item ${itemName}: ${itemDetails.buyPrice}`);
       return interaction.editReply({
-        content: "❌ This item cannot be purchased from the shop.",
+        embeds: [{
+          color: 0xFF0000, // Red color
+          title: '❌ Item Not For Sale',
+          description: 'This item cannot be purchased from the shop.',
+          image: {
+            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+          },
+          footer: {
+            text: 'Item Validation'
+          }
+        }],
         ephemeral: true
       });
     }
@@ -952,7 +1048,34 @@ async function handleShopBuy(interaction) {
 
     if (currentTokens < totalPrice) {
       return interaction.editReply({
-        content: `❌ You do not have enough tokens.\n\n**Current Balance:** 🪙 ${currentTokens}\n**Required:** 🪙 ${totalPrice}\n**Missing:** 🪙 ${totalPrice - currentTokens}`,
+        embeds: [{
+          color: 0xFF0000, // Red color
+          title: '❌ Insufficient Tokens',
+          description: `You do not have enough tokens to make this purchase.`,
+          fields: [
+            {
+              name: 'Current Balance',
+              value: `🪙 ${currentTokens}`,
+              inline: true
+            },
+            {
+              name: 'Required Amount',
+              value: `🪙 ${totalPrice}`,
+              inline: true
+            },
+            {
+              name: 'Missing Amount',
+              value: `🪙 ${totalPrice - currentTokens}`,
+              inline: true
+            }
+          ],
+          image: {
+            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+          },
+          footer: {
+            text: 'Token Balance Check'
+          }
+        }],
         ephemeral: true
       });
     }
@@ -1055,7 +1178,17 @@ async function handleShopBuy(interaction) {
     handleError(error, "shops.js");
     console.error("[shops]: Error buying item:", error);
     await interaction.editReply({
-      content: "❌ An error occurred while trying to buy the item. Please try again later.",
+      embeds: [{
+        color: 0xFF0000, // Red color
+        title: '❌ Purchase Error',
+        description: 'An error occurred while trying to buy the item. Please try again later.',
+        image: {
+          url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+        },
+        footer: {
+          text: 'Error Handling'
+        }
+      }],
       ephemeral: true
     });
   }
