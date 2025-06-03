@@ -119,7 +119,20 @@ module.exports = {
         }
       }
       if (!allowedChannel || interaction.channelId !== allowedChannel) {
-        return interaction.editReply({ content: `❌ **Command must be used in ${currentVillage} Town Hall (<#${allowedChannel}>).**`, ephemeral: true });
+        const channelMention = `<#${allowedChannel}>`;
+        return interaction.editReply({
+          embeds: [{
+            color: 0x008B8B, // Dark cyan color
+            description: `*${character.name} looks around, confused by their surroundings...*\n\n**Channel Restriction**\nYou can only use this command in the ${currentVillage} Town Hall channel!\n\n📍 **Current Location:** ${capitalizeWords(character.currentVillage)}\n💬 **Command Allowed In:** ${channelMention}`,
+            image: {
+              url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+            },
+            footer: {
+              text: 'Channel Restriction'
+            }
+          }],
+          ephemeral: true
+        });
       }
 
       // ------------------- Fetch and Validate Item -------------------
