@@ -262,68 +262,6 @@ module.exports = {
     return;
    }
 
-   // Check for job voucher and daily roll AFTER all other validations
-   if (character.jobVoucher) {
-     console.log(`[Loot Command]: 🔄 Active job voucher found for ${character.name}`);
-   } else {
-     console.log(`[Loot Command]: 🔄 No active job voucher for ${character.name}`);
-     
-     // Check if loot has been used today
-     const canLoot = canUseDailyRoll(character, 'loot');
-     
-     if (!canLoot) {
-       const nextRollover = new Date();
-       nextRollover.setUTCHours(12, 0, 0, 0); // 8AM EST = 12:00 UTC
-       if (nextRollover < new Date()) {
-         nextRollover.setUTCDate(nextRollover.getUTCDate() + 1);
-       }
-       const unixTimestamp = Math.floor(nextRollover.getTime() / 1000);
-       
-       await interaction.editReply({
-         embeds: [{
-           color: 0x008B8B, // Dark cyan color
-           description: `*${character.name} seems exhausted from their earlier looting...*\n\n**Daily looting limit reached.**\nThe next opportunity to loot will be available at <t:${unixTimestamp}:F>.\n\n*Tip: A job voucher would allow you to loot again today.*`,
-           footer: {
-             text: 'Daily Activity Limit'
-           }
-         }],
-         ephemeral: true,
-       });
-       return;
-     }
-
-     // Update daily roll AFTER all validations pass
-     try {
-       await updateDailyRoll(character, 'loot');
-     } catch (error) {
-       console.error(`[Loot Command]: ❌ Failed to update daily roll:`, error);
-       await interaction.editReply({
-         content: `❌ **An error occurred while updating your daily roll. Please try again.**`,
-         ephemeral: true,
-       });
-       return;
-     }
-   }
-
-   if (character.debuff?.active) {
-    const debuffEndDate = new Date(character.debuff.endDate);
-    const unixTimestamp = Math.floor(debuffEndDate.getTime() / 1000);
-    await interaction.editReply({
-     content: `❌ **${character.name} is currently debuffed and cannot loot. Please wait until the debuff expires.**\n🕒 **Debuff Expires:** <t:${unixTimestamp}:F>`,
-     ephemeral: true,
-    });
-    return;
-   }
-
-   // Check for blight stage 4 effect (no gathering)
-   if (character.blightEffects?.noGathering) {
-    await interaction.editReply({
-     content: `❌ **${character.name}** cannot gather items due to advanced blight stage.`,
-     ephemeral: true
-    });
-    return;
-   }
-
    // Determine job based on jobVoucher or default job
    let job =
     character.jobVoucher && character.jobVoucherJob
@@ -362,19 +300,88 @@ module.exports = {
    }
 
    // Validate job perks
-   const jobPerk = getJobPerk(job);
-   console.error(`[Loot Command]: Retrieved job perks for ${job}:`, jobPerk);
+   const jobPerkInfo = getJobPerk(job);
+   console.log(`[Loot Command]: Retrieved job perks for ${job}:`, jobPerkInfo);
 
-   if (!jobPerk || !jobPerk.perks.includes("LOOTING")) {
-    console.error(
-     `[Loot Command]: ${character.name} lacks looting skills for job: "${job}"`
-    );
+   if (!jobPerkInfo || !jobPerkInfo.perks.includes("STEALING")) {
+     console.error(`[Loot Command]: ${character.name} lacks required skills for job: "${job}"`);
+     await interaction.editReply({
+       embeds: [{
+         color: 0x008B8B, // Dark cyan color
+         description: `*${character.name} looks at their hands, unsure of how to proceed...*\n\n**Job Skill Mismatch**\n${character.name} cannot use the looting perk as a ${capitalizeWords(job)} because they lack the necessary stealing skills.`,
+         image: {
+           url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+         },
+         footer: {
+           text: 'Job Skill Check'
+         }
+       }],
+       ephemeral: true
+     });
+     return;
+   }
+
+   // Check for job voucher and daily roll AFTER job validation
+   if (character.jobVoucher) {
+     console.log(`[Loot Command]: 🔄 Active job voucher found for ${character.name}`);
+   } else {
+     console.log(`[Loot Command]: 🔄 No active job voucher for ${character.name}`);
+     
+     // Check if loot has been used today
+     const canLoot = canUseDailyRoll(character, 'loot');
+     
+     if (!canLoot) {
+       const nextRollover = new Date();
+       nextRollover.setUTCHours(12, 0, 0, 0); // 8AM EST = 12:00 UTC
+       if (nextRollover < new Date()) {
+         nextRollover.setUTCDate(nextRollover.getUTCDate() + 1);
+       }
+       const unixTimestamp = Math.floor(nextRollover.getTime() / 1000);
+       
+       await interaction.editReply({
+         embeds: [{
+           color: 0x008B8B, // Dark cyan color
+           description: `*${character.name} seems exhausted from their earlier looting...*\n\n**Daily looting limit reached.**\nThe next opportunity to loot will be available at <t:${unixTimestamp}:F>.\n\n*Tip: A job voucher would allow you to loot again today.*`,
+           image: {
+             url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+           },
+           footer: {
+             text: 'Daily Activity Limit'
+           }
+         }],
+         ephemeral: true,
+       });
+       return;
+     }
+
+     // Update daily roll AFTER all validations pass
+     try {
+       await updateDailyRoll(character, 'loot');
+     } catch (error) {
+       console.error(`[Loot Command]: ❌ Failed to update daily roll:`, error);
+       await interaction.editReply({
+         content: `❌ **An error occurred while updating your daily roll. Please try again.**`,
+         ephemeral: true,
+       });
+       return;
+     }
+   }
+
+   if (character.debuff?.active) {
+    const debuffEndDate = new Date(character.debuff.endDate);
+    const unixTimestamp = Math.floor(debuffEndDate.getTime() / 1000);
     await interaction.editReply({
-     content: getJobVoucherErrorMessage('MISSING_SKILLS', {
-       characterName: character.name,
-       jobName: job
-     }).message,
+     content: `❌ **${character.name} is currently debuffed and cannot loot. Please wait until the debuff expires.**\n🕒 **Debuff Expires:** <t:${unixTimestamp}:F>`,
      ephemeral: true,
+    });
+    return;
+   }
+
+   // Check for blight stage 4 effect (no gathering)
+   if (character.blightEffects?.noGathering) {
+    await interaction.editReply({
+     content: `❌ **${character.name}** cannot gather items due to advanced blight stage.`,
+     ephemeral: true
     });
     return;
    }
