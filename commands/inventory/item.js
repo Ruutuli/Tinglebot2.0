@@ -150,7 +150,17 @@ module.exports = {
 
         if (character.jobVoucher) {
           return void await interaction.editReply({
-            content: `❌ **${character.name}** already has an active Job Voucher for **${character.jobVoucherJob}**.\nPlease complete the current job before using another voucher.`
+            embeds: [{
+              color: 0xFF0000,
+              title: '❌ Job Voucher Error',
+              description: `**${character.name}** already has an active Job Voucher for **${character.jobVoucherJob} (Live)**.\n\nPlease complete the current job before using another voucher.`,
+              image: {
+                url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+              },
+              footer: {
+                text: 'Job Voucher System'
+              }
+            }]
           });
         }
 
