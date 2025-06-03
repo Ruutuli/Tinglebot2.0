@@ -11,7 +11,7 @@ const {
   deleteHealingRequestFromStorage,
   cleanupExpiredHealingRequests
 } = require('../../utils/storage.js');
-const { createHealEmbed, createHealingEmbed } = require('../../embeds/embeds.js');
+const { createHealEmbed } = require('../../embeds/embeds.js');
 const { validateJobVoucher, activateJobVoucher, fetchJobVoucherItem, deactivateJobVoucher, getJobVoucherErrorMessage } = require('../../modules/jobVoucherModule.js');
 const { handleTradeItemAutocomplete } = require('../../handlers/autocompleteHandler.js');
 const { checkInventorySync } = require('../../utils/characterUtils');
@@ -403,7 +403,7 @@ async function handleHealingFulfillment(interaction, requestId, healerName) {
         characterToHeal,
         healingRequest.heartsToHeal,
         healingRequest.paymentOffered,
-        null,
+        healingRequest.healingRequestId,
         true
       );
       await originalMessage.edit({ embeds: [updatedEmbed] });
@@ -413,12 +413,13 @@ async function handleHealingFulfillment(interaction, requestId, healerName) {
     const originalRequesterId = healingRequest.requesterUserId;
     const message = `<@${originalRequesterId}>, your character **${characterToHeal.name}** has been healed by **${healerCharacter.name}**!`;
 
-    const embed = createHealingEmbed(
+    const embed = createHealEmbed(
       healerCharacter,
       characterToHeal,
       healingRequest.heartsToHeal,
-      healingRequest.heartsToHeal,
-      `Healed by: **${healerCharacter.name}**`
+      healingRequest.paymentOffered,
+      healingRequest.healingRequestId,
+      true
     );
 
     await interaction.followUp({ content: message, embeds: [embed] });
