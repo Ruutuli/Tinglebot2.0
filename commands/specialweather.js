@@ -415,7 +415,8 @@ module.exports = {
         quantity: 1,
         category: randomItem.category,
         type: randomItem.type,
-        subtype: randomItem.subtype || ['None']
+        subtype: randomItem.subtype || ['None'],
+        obtain: `Special Weather: ${weather.special.label}`
       };
 
       // Sync item using itemSyncUtils

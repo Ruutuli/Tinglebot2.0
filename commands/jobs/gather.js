@@ -681,6 +681,7 @@ await character.save();
       }
 
       // ------------------- Deactivate Job Voucher -------------------
+      const voucherCheck = { skipVoucher: false }; // Define voucherCheck before use
       if (character.jobVoucher && !voucherCheck?.skipVoucher) {
         const deactivationResult = await deactivateJobVoucher(character._id);
         if (!deactivationResult.success) {
