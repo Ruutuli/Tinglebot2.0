@@ -216,11 +216,14 @@ async function handleAutocomplete(interaction) {
                   await handleBlightItemAutocomplete(interaction, focusedOption);
                 }
               } else if (blightSubcommand === "submit") {
-
                 if (focusedOption.name === "item") {
                   await handleBlightItemAutocomplete(interaction, focusedOption);
                 }
               } else if (blightSubcommand === "roll") {
+                if (focusedOption.name === "character_name") {
+                  await handleBlightCharacterAutocomplete(interaction, focusedOption);
+                }
+              } else if (blightSubcommand === "history") {
                 if (focusedOption.name === "character_name") {
                   await handleBlightCharacterAutocomplete(interaction, focusedOption);
                 }

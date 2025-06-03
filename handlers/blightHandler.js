@@ -1082,16 +1082,19 @@ async function postBlightRollCall(client) {
 // Displays the most recent blight progression history for a character.
 async function viewBlightHistory(interaction, characterName, limit = 10) {
   try {
+    // Defer reply immediately to prevent timeout
+    await interaction.deferReply();
+
     const character = await Character.findOne({ name: characterName });
     if (!character) {
-      await interaction.reply({ content: `❌ Character "${characterName}" not found.`, ephemeral: true });
+      await interaction.editReply({ content: `❌ Character "${characterName}" not found.`, ephemeral: true });
       return;
     }
 
     const history = await getCharacterBlightHistory(character._id, limit);
     
     if (history.length === 0) {
-      await interaction.reply({
+      await interaction.editReply({
         content: `📜 **${characterName}** has no recorded blight history.`,
         ephemeral: true
       });
@@ -1122,28 +1125,27 @@ async function viewBlightHistory(interaction, characterName, limit = 10) {
       return acc;
     }, {});
 
-    // Add fields for each date
+    // Add fields for each date group
     for (const [date, entries] of Object.entries(groupedHistory)) {
-      let fieldValue = '';
-      for (const entry of entries) {
+      const fieldValue = entries.map(entry => {
         const time = new Date(entry.timestamp).toLocaleTimeString('en-US', {
           hour: '2-digit',
           minute: '2-digit'
         });
-        const stageChange = entry.newStage > entry.previousStage ? '📈' : '📉';
-        fieldValue += `${time} - ${stageChange} Stage ${entry.previousStage} → Stage ${entry.newStage} (Roll: ${entry.rollValue})\n`;
-        if (entry.notes) {
-          fieldValue += `> ${entry.notes}\n`;
-        }
-      }
+        return `**${time}** - ${entry.description}`;
+      }).join('\n');
+      
       embed.addFields({ name: date, value: fieldValue });
     }
 
-    await interaction.reply({ embeds: [embed] });
+    await interaction.editReply({ embeds: [embed] });
   } catch (error) {
     handleError(error, 'blightHandler.js');
     console.error('[blightHandler]: Error viewing blight history:', error);
-    await interaction.reply({ content: '❌ An error occurred while fetching blight history.', ephemeral: true });
+    await interaction.editReply({ 
+      content: '❌ An error occurred while fetching the blight history.',
+      ephemeral: true 
+    });
   }
 }
 
