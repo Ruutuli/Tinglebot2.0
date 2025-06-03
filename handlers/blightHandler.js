@@ -27,6 +27,8 @@ const {
 // Character model representing a user's character document
 const Character = require('../models/CharacterModel');
 const TempData = require('../models/TempDataModel');
+const Pet = require('../models/PetModel');
+const Mount = require('../models/MountModel');
 
 // ------------------- Custom Modules -------------------
 // Module for retrieving moderator character data
@@ -898,8 +900,8 @@ async function rollForBlightProgression(interaction, characterName) {
     const now = new Date();
     const estNow = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
     const currentCallStart = new Date(estNow);
-    currentCallStart.setDate(estNow.getDate() - (estNow.getHours() < 20 ? 1 : 0));
-    currentCallStart.setHours(20, 0, 0, 0);
+    currentCallStart.setDate(estNow.getDate() - (estNow.getHours() < 21 ? 1 : 0));
+    currentCallStart.setHours(21, 17, 0, 0);
     const nextCallStart = new Date(currentCallStart);
     nextCallStart.setDate(currentCallStart.getDate() + 1);
 
@@ -914,7 +916,7 @@ async function rollForBlightProgression(interaction, characterName) {
 
       await interaction.reply({
         content: `**${characterName}** has already rolled during the current Blight Call window.\n\n` +
-          `You can roll again after **8 PM EST** (in ${hoursUntilNextRoll} hours and ${minutesUntilNextRoll} minutes).`,
+          `You can roll again after **9:17 PM EST** (in ${hoursUntilNextRoll} hours and ${minutesUntilNextRoll} minutes).`,
         ephemeral: true,
       });
       return;
@@ -1027,7 +1029,7 @@ async function rollForBlightProgression(interaction, characterName) {
 }
 
 // ------------------- Function: postBlightRollCall -------------------
-// Sends daily roll reminder at 8PM EST to the configured channel.
+// Sends daily roll reminder at 9:17 PM EST to the configured channel.
 async function postBlightRollCall(client) {
   const channelId = process.env.BLIGHT_NOTIFICATIONS_CHANNEL_ID;
   const roleId = process.env.BLIGHT_REMINDER_ROLE_ID;
@@ -1054,13 +1056,13 @@ async function postBlightRollCall(client) {
       `▹ [Blight Information](https://www.rootsofthewild.com/blight 'Blight Information')  \n` +
       `▹ [Currently Available Blight Healers](https://discord.com/channels/603960955839447050/651614266046152705/845481974671736842 'Blight Healers')  \n` +
       `**~~────────────────────~~**  \n` +
-      `:clock8: Blight calls happen every day around 8 PM EST!  \n` +
+      `:clock8: Blight calls happen every day around 9:17 PM EST!  \n` +
       `:alarm_clock: You must complete your roll before the next call for it to be counted!  \n` +
       `:warning: Remember, if you miss a roll you __automatically progress to the next stage__.  \n` +
       `▹To request blight healing, please use </blight heal:1306176789634355241>`
     )
     .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png')
-    .setFooter({ text: 'Blight calls happen daily at 8 PM EST!' })
+    .setFooter({ text: 'Blight calls happen daily at 9:17 PM EST!' })
     .setTimestamp();
 
   await channel.send({ content: `<@&${roleId}>` });
@@ -1235,13 +1237,13 @@ async function checkMissedRolls(client) {
       console.log(`[blightHandler]: Checking ${character.name} - Last roll: ${lastRollDate.toISOString()}, Time since: ${Math.floor(timeSinceLastRoll / (1000 * 60 * 60))} hours`);
 
       // ---- SKIP missed roll progression if newly blighted after last blight call ----
-      // Calculate last blight call (8 PM EST previous day)
+      // Calculate last blight call (9:17 PM EST previous day)
       const nowEST = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
       const lastBlightCall = new Date(nowEST);
-      if (nowEST.getHours() < 20) {
+      if (nowEST.getHours() < 21 || (nowEST.getHours() === 21 && nowEST.getMinutes() < 17)) {
         lastBlightCall.setDate(nowEST.getDate() - 1);
       }
-      lastBlightCall.setHours(20, 0, 0, 0);
+      lastBlightCall.setHours(21, 17, 0, 0);
       if (character.blightedAt && character.blightedAt > lastBlightCall) {
         console.log(`[blightHandler]: Skipping missed roll for ${character.name} (blightedAt=${character.blightedAt.toISOString()}) - infected after last blight call.`);
         continue;
@@ -1320,12 +1322,18 @@ async function checkMissedRolls(client) {
 
           // Wipe character's inventory from DB (not sheet)
           try {
-            const inventoriesConnection = await dbFunctions.connectToInventories();
+            const inventoriesConnection = await connectToInventories();
             const db = inventoriesConnection.useDb("inventories");
             const collectionName = character.name.toLowerCase();
-            const inventoryCollection = db.collection(collectionName);
-
-            await inventoryCollection.deleteMany({ characterId: character._id });
+            
+            // Drop the entire collection instead of just deleting documents
+            await db.collection(collectionName).drop().catch(error => {
+              if (error.code !== 26) { // Ignore "namespace not found" error
+                throw error;
+              }
+            });
+            
+            console.log(`[blightHandler]: Dropped inventory collection for ${character.name}`);
           } catch (error) {
             handleError(error, 'blightHandler.js');
             console.error('[blightHandler]: Error wiping inventory:', error);
@@ -1347,7 +1355,7 @@ async function checkMissedRolls(client) {
             .setTitle(`<:blight_eye:805576955725611058> **Blight Death Alert** <:blight_eye:805576955725611058>`)
             .setDescription(
               `**${characterInfo.name}** has succumbed to Stage 5 Blight.\n\n` +
-              `*Their character has been permanently removed from the database.*`
+              `*Their body has been claimed by the blight, their spirit lost to the void. Their name shall be remembered, but their presence in this world is no more.*`
             )
             .setThumbnail(characterInfo.icon || 'https://example.com/default-icon.png')
             .setFooter({ text: 'Blight Death Announcement', iconURL: 'https://example.com/blight-icon.png' })

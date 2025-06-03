@@ -304,8 +304,8 @@ async function resetPetLastRollDates() {
 // ---- Function: setupBlightScheduler ----
 // Sets up the blight roll call and missed rolls check
 function setupBlightScheduler(client) {
-  // Schedule blight roll call for 8 PM EST
-  createCronJob('0 20 * * *', 'Blight Roll Call', async () => {
+  // Schedule blight roll call for 9:17 PM EST
+  createCronJob('23 21 * * *', 'Blight Roll Call', async () => {
     try {
       await postBlightRollCall(client);
     } catch (error) {
@@ -314,8 +314,8 @@ function setupBlightScheduler(client) {
     }
   });
   
-  // Check for missed rolls at 8 PM EST
-  createCronJob('0 20 * * *', 'Check Missed Rolls', () => checkMissedRolls(client));
+  // Check for missed rolls at 9:17 PM EST
+  createCronJob('23 21 * * *', 'Check Missed Rolls', () => checkMissedRolls(client));
   
   // Clean up expired blight requests daily at midnight EST
   createCronJob('0 0 * * *', 'Cleanup Expired Blight Requests', cleanupExpiredBlightRequests);

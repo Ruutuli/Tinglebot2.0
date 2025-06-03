@@ -99,7 +99,7 @@ const characterSchema = new Schema({
   canBeStolenFrom: { type: Boolean, default: true },
   dailyRoll: {
     type: Map,
-    of: Date,
+    of: Schema.Types.Mixed,
     default: new Map()
   },
 
