@@ -273,13 +273,28 @@ module.exports = {
         });
       }
 
+      // Check inventory sync before proceeding
       try {
         await checkInventorySync(character);
       } catch (error) {
-        return void await interaction.editReply({
-          content: error.message,
+        await interaction.editReply({
+          embeds: [{
+            color: 0xFF0000,
+            title: '❌ Inventory Sync Required',
+            description: error.message,
+            fields: [
+              {
+                name: '📝 How to Fix',
+                value: '1. Use </inventory test:1370788960267272302> to test your inventory\n2. Use </inventory sync:1370788960267272302> to sync your inventory'
+              }
+            ],
+            footer: {
+              text: 'Inventory System'
+            }
+          }],
           ephemeral: true
         });
+        return;
       }
 
 
