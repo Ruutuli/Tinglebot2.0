@@ -883,9 +883,6 @@ function validateDiscordMessageLink(link) {
 // Rolls to advance or maintain a character's blight stage once per daily window.
 async function rollForBlightProgression(interaction, characterName) {
   try {
-    // Defer reply immediately to prevent timeout
-    await interaction.deferReply();
-
     // ------------------- Input Validation -------------------
     if (!characterName || typeof characterName !== 'string') {
       await interaction.editReply({ content: '❌ Invalid character name provided.', ephemeral: true });

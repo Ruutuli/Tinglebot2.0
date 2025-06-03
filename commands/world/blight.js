@@ -132,6 +132,7 @@ module.exports = {
       const character = await validateCharacterOwnership(interaction, characterName);
       if (!character) return;
       
+      await interaction.deferReply();
       await rollForBlightProgression(interaction, characterName);
     
     } else if (subcommand === 'heal') {
