@@ -307,7 +307,7 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
       character.currentHearts = 0;
       character.currentStamina = 0;
       character.debuff = { active: true, endDate: new Date(Date.now() + 7 * 86400000) };
-      character.currentVillage = startingVillage;
+      character.currentVillage = startingVillage || character.homeVillage;
       character.ko = true;
 
       await updateCurrentHearts(character._id, 0);
@@ -315,7 +315,7 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
       await character.save();
 
       travelLog.push(`fight: KO (${prevHearts}→0 hearts, ${prevStamina}→0 stam)`);
-      return `💀 ${character.name} was KO'd and moved to recovery village.`;
+      return `💀 ${character.name} was KO'd and moved back to ${capitalizeFirstLetter(character.currentVillage)}.`;
     }
 
     // ------------------- Fallback Heart Damage -------------------
