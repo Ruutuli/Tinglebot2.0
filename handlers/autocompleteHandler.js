@@ -1471,14 +1471,17 @@ async function handleGiftAutocomplete(interaction, focusedOption, focusedValue) 
 // Provides autocomplete for selecting the source character in a gift
 async function handleGiftFromCharacterAutocomplete(interaction, focusedOption) {
   try {
-                const userId = interaction.user.id;
-                const characters = await fetchCharactersByUserId(userId);
+    const userId = interaction.user.id;
+    const characters = await fetchCharactersByUserId(userId);
     const choices = characters.map(char => ({
-                  name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
-                  value: char.name
-                }));
+      name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
+      value: char.name
+    }));
     const focusedValue = focusedOption?.value?.toString().toLowerCase() || '';
-    const filtered = choices.filter(choice => choice.name.toLowerCase().includes(focusedValue));
+    const filtered = choices.filter(choice => 
+      choice.name.toLowerCase().includes(focusedValue) || 
+      choice.value.toLowerCase().includes(focusedValue)
+    );
     return await interaction.respond(filtered.slice(0, 25));
   } catch (error) {
     console.error('[handleGiftFromCharacterAutocomplete]: Error:', error);
@@ -1490,14 +1493,17 @@ async function handleGiftFromCharacterAutocomplete(interaction, focusedOption) {
 // Provides autocomplete for selecting the target character in a gift
 async function handleGiftToCharacterAutocomplete(interaction, focusedOption) {
   try {
-                const userId = interaction.user.id;
+    const userId = interaction.user.id;
     const characters = await fetchAllCharactersExceptUser(userId);
     const choices = characters.map(char => ({
-                  name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
-                  value: char.name
-                }));
+      name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
+      value: char.name
+    }));
     const focusedValue = focusedOption?.value?.toString().toLowerCase() || '';
-    const filtered = choices.filter(choice => choice.name.toLowerCase().includes(focusedValue));
+    const filtered = choices.filter(choice => 
+      choice.name.toLowerCase().includes(focusedValue) || 
+      choice.value.toLowerCase().includes(focusedValue)
+    );
     return await interaction.respond(filtered.slice(0, 25));
   } catch (error) {
     console.error('[handleGiftToCharacterAutocomplete]: Error:', error);
