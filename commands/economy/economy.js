@@ -1990,7 +1990,7 @@ async function createTradeSession(initiator, target, items) {
     confirmChannelId: null,
   };
 
-  const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 34 hours
   await TempData.create({ key: tradeId, type: 'trade', data: tradeData, expiresAt });
   return tradeId;
 }
@@ -2608,7 +2608,7 @@ async function handleTrade(interaction) {
               [fromCharacter.userId, toCharacter.userId].includes(user.id);
           };
 
-          const collector = tradeMessage.createReactionCollector({ filter, time: 15 * 60 * 1000 });
+          const collector = tradeMessage.createReactionCollector({ filter, time: 24 * 60 * 60 * 1000 }); // 34 hours
           collector.on('collect', async (reaction, user) => {
             try {
               const latestTrade = await TempData.findByTypeAndKey('trade', tradeId);
