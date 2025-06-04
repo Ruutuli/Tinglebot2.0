@@ -224,20 +224,43 @@ async function healBlight(interaction, characterName, healerName) {
         oldStage = currentStage;
       } else {
         const timeLeft = Math.ceil((existingSubmission.expiresAt - new Date()) / (1000 * 60 * 60 * 24));
-        const pendingMsg = `⚠️ **${characterName}** already has a pending healing request that expires in ${timeLeft} days.\n\n` +
-          `Submission ID: \`${existingSubmission.key}\`\n` +
-          `Healer: **${existingSubmission.data.healerName}**\n` +
-          `Task: ${existingSubmission.data.taskDescription}\n\n`;
         
+        // Create embed for pending request
+        const pendingEmbed = new EmbedBuilder()
+          .setColor('#FFA500') // Orange color for warning
+          .setTitle('⚠️ Pending Healing Request')
+          .setDescription(`**${characterName}** already has a pending healing request.`)
+          .addFields(
+            { name: '⏰ Expiration', value: `This request expires in **${timeLeft} days**` },
+            { name: '🆔 Submission ID', value: `\`${existingSubmission.key}\`` },
+            { name: '👨‍⚕️ Healer', value: `**${existingSubmission.data.healerName}**` }
+          );
+
+        // Split task description into chunks if needed
+        const taskChunks = splitIntoChunks(existingSubmission.data.taskDescription, 1000);
+        taskChunks.forEach((chunk, index) => {
+          pendingEmbed.addFields({
+            name: index === 0 ? '📝 Task Description' : '📝 Task Description (continued)',
+            value: chunk
+          });
+        });
+
+        pendingEmbed
+          .setThumbnail(character.icon)
+          .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png')
+          .setFooter({ text: 'Blight Healing Request', iconURL: 'https://static.wixstatic.com/media/7573f4_a510c95090fd43f5ae17e20d80c1289e~mv2.png'})
+          .setTimestamp();
+
         await interaction.editReply({
-          content: pendingMsg,
+          embeds: [pendingEmbed],
           ephemeral: true
         });
 
         // DM the user as well
         try {
           await interaction.user.send({
-            content: `Hi <@${interaction.user.id}>, you already have a pending blight healing request for **${characterName}**. Here are the details:\n\n${pendingMsg}`
+            content: `Hi <@${interaction.user.id}>, you already have a pending blight healing request for **${characterName}**.`,
+            embeds: [pendingEmbed]
           });
         } catch (dmError) {
           handleError(dmError, 'blightHandler.js');
@@ -652,9 +675,6 @@ function createBlightHealingCompleteEmbed(character, healer, additionalFields = 
 // ------------------- Function: submitHealingTask -------------------
 // Processes a healing task submission based on submission ID and type.
 async function submitHealingTask(interaction, submissionId, item = null, link = null, tokens = false) {
-  // Defer reply at the start to prevent interaction timeout
-  await interaction.deferReply({ ephemeral: false });
-
   try {
     // ------------------- Validate Submission ID -------------------
     if (!submissionId || typeof submissionId !== 'string') {
@@ -692,7 +712,22 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
 
     // ---- NEW: Only allow the owner to submit healing for their character ----
     if (interaction.user.id !== character.userId) {
-      await interaction.editReply({ content: '❌ You can only submit healing for your own characters.', ephemeral: true });
+      const errorEmbed = new EmbedBuilder()
+        .setColor('#FF0000')
+        .setTitle('❌ Ownership Error')
+        .setDescription('You can only submit healing for your **own** characters!')
+        .addFields(
+          { name: '🔒 Character Ownership', value: `The character "${submission.characterName}" belongs to another user.` },
+          { name: '💡 Suggestion', value: 'Please use this command with one of your own characters.' }
+        )
+        .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
+        .setFooter({ text: 'Character Validation' })
+        .setTimestamp();
+
+      await interaction.editReply({ 
+        embeds: [errorEmbed],
+        ephemeral: true 
+      });
       return;
     }
 
