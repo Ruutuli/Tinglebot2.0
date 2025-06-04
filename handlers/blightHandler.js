@@ -859,8 +859,22 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
       // ---- END NEW ----
 
       if (!requiredItem) {
+        const invalidRequirementEmbed = new EmbedBuilder()
+          .setColor('#FF0000')
+          .setTitle('❌ Invalid Healing Requirement')
+          .setDescription(`**${itemName} x${itemQuantityInt}** is not a valid requirement from **${healer.name}**.`)
+          .addFields(
+            { name: '📝 What Happened?', value: 'The item you submitted does not match any of the accepted items for this healing request.' },
+            { name: '💡 How to Fix', value: 'Please check the healing request details and submit one of the accepted items.' },
+            { name: '🆘 Need Help?', value: 'Use </blight heal:1306176789634355241> to request a new healing task.' }
+          )
+          .setThumbnail(healer.iconUrl)
+          .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
+          .setFooter({ text: 'Healing Submission Error', iconURL: 'https://static.wixstatic.com/media/7573f4_a510c95090fd43f5ae17e20d80c1289e~mv2.png' })
+          .setTimestamp();
+
         await interaction.editReply({
-          content: `❌ **${itemName} x${itemQuantityInt}** is not a valid requirement from **${healer.name}**.`,
+          embeds: [invalidRequirementEmbed],
           ephemeral: true
         });
         return;
@@ -957,8 +971,22 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
       // Validate Discord message link
       const linkValidation = validateDiscordMessageLink(link);
       if (!linkValidation.valid) {
+        const invalidLinkEmbed = new EmbedBuilder()
+          .setColor('#FF0000')
+          .setTitle('❌ Invalid Submission Link')
+          .setDescription('The link you provided is not a valid Discord message link.')
+          .addFields(
+            { name: '📝 What Happened?', value: 'The link format you submitted is not recognized as a valid Discord message link.' },
+            { name: '💡 How to Fix', value: 'Please submit your art/writing in the submissions channel and use the link from there.' },
+            { name: '🔗 Valid Link Format', value: 'A valid Discord message link looks like this:\n`https://discord.com/channels/serverId/channelId/messageId`' },
+            { name: '📌 Important', value: 'Make sure you\'re using the link from the submissions channel where you posted your art/writing.' }
+          )
+          .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
+          .setFooter({ text: 'Submission Link Error', iconURL: 'https://static.wixstatic.com/media/7573f4_a510c95090fd43f5ae17e20d80c1289e~mv2.png' })
+          .setTimestamp();
+
         await interaction.editReply({ 
-          content: `❌ ${linkValidation.error}\n\nPlease submit your art/writing in the submissions channel and use the link from there.`,
+          embeds: [invalidLinkEmbed],
           ephemeral: true 
         });
         return;
