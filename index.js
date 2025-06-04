@@ -4,7 +4,7 @@ const dotenv = require('dotenv');
 const env = process.env.NODE_ENV || 'development';
 dotenv.config({ path: `.env.${env}` });
 
-console.log(`🚀 Running in ${env} mode`);
+console.log(`🚀 Running in ${env} mode on port ${process.env.PORT}`);
 
 // ------------------- Standard Libraries -------------------
 const figlet = require("figlet");

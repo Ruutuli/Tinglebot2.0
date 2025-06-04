@@ -146,15 +146,15 @@ function getChannelMappings() {
   
   if (isProduction) {
     return {
-      [process.env.RUDANIA_TOWN_HALL]: '🔥》rudania-townhall',
-      [process.env.INARIKO_TOWN_HALL]: '💧》inariko-townhall',
-      [process.env.VHINTL_TOWN_HALL]: '🌱》vhintl-townhall',
+      [process.env.RUDANIA_TOWNHALL]: '🔥》rudania-townhall',
+      [process.env.INARIKO_TOWNHALL]: '💧》inariko-townhall',
+      [process.env.VHINTL_TOWNHALL]: '🌱》vhintl-townhall',
     };
   } else {
     return {
-      [process.env.RUDANIA_TOWN_HALL]: '🔥》rudania-townhall',
-      [process.env.INARIKO_TOWN_HALL]: '💧》inariko-townhall',
-      [process.env.VHINTL_TOWN_HALL]: '🌱》vhintl-townhall',
+      [process.env.RUDANIA_TOWNHALL]: '🔥》rudania-townhall',
+      [process.env.INARIKO_TOWNHALL]: '💧》inariko-townhall',
+      [process.env.VHINTL_TOWNHALL]: '🌱》vhintl-townhall',
     };
   }
 }
@@ -166,15 +166,15 @@ function getBloodMoonChannelMappings() {
   
   if (isProduction) {
     return {
-      [process.env.RUDANIA_TOWN_HALL]: '🔴🔥》rudania-townhall',
-      [process.env.INARIKO_TOWN_HALL]: '🔴💧》inariko-townhall',
-      [process.env.VHINTL_TOWN_HALL]: '🔴🌱》vhintl-townhall',
+      [process.env.RUDANIA_TOWNHALL]: '🔴🔥》rudania-townhall',
+      [process.env.INARIKO_TOWNHALL]: '🔴💧》inariko-townhall',
+      [process.env.VHINTL_TOWNHALL]: '🔴🌱》vhintl-townhall',
     };
   } else {
     return {
-      [process.env.RUDANIA_TOWN_HALL]: '🔴🔥》rudania-townhall',
-      [process.env.INARIKO_TOWN_HALL]: '🔴💧》inariko-townhall',
-      [process.env.VHINTL_TOWN_HALL]: '🔴🌱》vhintl-townhall',
+      [process.env.RUDANIA_TOWNHALL]: '🔴🔥》rudania-townhall',
+      [process.env.INARIKO_TOWNHALL]: '🔴💧》inariko-townhall',
+      [process.env.VHINTL_TOWNHALL]: '🔴🌱》vhintl-townhall',
     };
   }
 }
@@ -194,9 +194,9 @@ async function changeChannelName(client, channelId, newName) {
         // Only log environment variables when there's an error
         console.error('[bloodmoon.js]: 🔍 Environment variables:', {
           NODE_ENV: process.env.NODE_ENV,
-          RUDANIA_TOWN_HALL: process.env.RUDANIA_TOWN_HALL,
-          INARIKO_TOWN_HALL: process.env.INARIKO_TOWN_HALL,
-          VHINTL_TOWN_HALL: process.env.VHINTL_TOWN_HALL
+          RUDANIA_TOWNHALL: process.env.RUDANIA_TOWNHALL,
+          INARIKO_TOWNHALL: process.env.INARIKO_TOWNHALL,
+          VHINTL_TOWNHALL: process.env.VHINTL_TOWNHALL
         });
       }
       return null;
