@@ -57,8 +57,18 @@ let client;
 // ----------------------------------------------------------------------------
 async function initializeDatabases() {
   try {
+    console.log("[index.js]: 🔄 Attempting to connect to databases...");
+    
+    // Add timeout to database connections
+    const connectionTimeout = setTimeout(() => {
+      console.error("[index.js]: ❌ Database connection timeout after 30 seconds");
+      process.exit(1);
+    }, 30000);
+
     await connectToTinglebot();
     await connectToInventories();
+    
+    clearTimeout(connectionTimeout);
     
     // Clean up expired temp data and entries without expiration dates
     const [expiredResult, noExpirationResult] = await Promise.all([
@@ -68,13 +78,28 @@ async function initializeDatabases() {
     console.log(`[index.js]: 🧹 Cleaned up ${expiredResult.deletedCount} expired temp data entries`);
     console.log(`[index.js]: 🧹 Cleaned up ${noExpirationResult.deletedCount} entries without expiration dates`);
     
-    console.log("[index.js]: ✅ Databases connected");
+    console.log("[index.js]: ✅ Databases connected successfully");
   } catch (err) {
-    handleError(err, "index.js");
     console.error("[index.js]: ❌ Database initialization error:", err);
-    throw err;
+    console.error("[index.js]: ❌ Error details:", {
+      name: err.name,
+      message: err.message,
+      stack: err.stack
+    });
+    process.exit(1);
   }
 }
+
+// Add process error handlers
+process.on('uncaughtException', (error) => {
+  console.error('[index.js]: ❌ Uncaught Exception:', error);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[index.js]: ❌ Unhandled Rejection at:', promise, 'reason:', reason);
+  process.exit(1);
+});
 
 // ----------------------------------------------------------------------------
 // ──────────────────── Client Setup and Event Binding ───────────────────────
