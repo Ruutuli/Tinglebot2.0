@@ -7,6 +7,7 @@
 // Standard Libraries & Third-Party Modules
 // ------------------- Importing standard and third-party modules -------------------
 const mongoose = require('mongoose');
+const { EmbedBuilder } = require('discord.js');
 
 const { handleError } = require('../utils/globalErrorHandler');
 // ============================================================================
@@ -114,7 +115,17 @@ async function isUniqueCharacterName(userId, characterName) {
 // Checks if a character can change their village based on their job restrictions.
 async function canChangeVillage(character, newVillage) {
     if (!isValidVillage(newVillage)) {
-        return { valid: false, message: '❌ Invalid village specified.' };
+        const errorEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('❌ Invalid Village')
+            .setDescription('The specified village is not valid.')
+            .addFields(
+                { name: 'Village', value: newVillage, inline: true }
+            )
+            .setFooter({ text: 'Please select a valid village from the list' })
+            .setTimestamp();
+
+        return { valid: false, message: errorEmbed };
     }
 
     const villageJob = isVillageExclusiveJob(character.job);
@@ -131,13 +142,32 @@ async function canChangeVillage(character, newVillage) {
 // Checks if a character can change their job based on home village restrictions.
 async function canChangeJob(character, newJob) {
     if (!character || !newJob) {
-        console.error('[validation.js]: Character or job information is missing.');
-        return { valid: false, message: '❌ Character or job information is missing.' };
+        const errorEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('❌ Missing Information')
+            .setDescription('Character or job information is missing.')
+            .addFields(
+                { name: 'Character', value: character ? character.name : 'Not provided', inline: true },
+                { name: 'Job', value: newJob || 'Not provided', inline: true }
+            )
+            .setFooter({ text: 'Please provide all required information' })
+            .setTimestamp();
+
+        return { valid: false, message: errorEmbed };
     }
 
     if (!character.homeVillage) {
-        console.error('[validation.js]: Character home village is missing.');
-        return { valid: false, message: '❌ Character home village is missing.' };
+        const errorEmbed = new EmbedBuilder()
+            .setColor(0xFF0000)
+            .setTitle('❌ Missing Home Village')
+            .setDescription('Character home village is missing.')
+            .addFields(
+                { name: 'Character', value: character.name, inline: true }
+            )
+            .setFooter({ text: 'Please set a home village for your character' })
+            .setTimestamp();
+
+        return { valid: false, message: errorEmbed };
     }
 
     const jobVillage = isVillageExclusiveJob(newJob);
@@ -164,7 +194,17 @@ async function characterExistsNotOwned(characterName, userId) {
     try {
         const character = await Character.findOne({ name: characterName });
         if (!character) {
-            return { exists: false, message: '❌ Character not found.' };
+            const errorEmbed = new EmbedBuilder()
+                .setColor(0xFF0000)
+                .setTitle('❌ Character Not Found')
+                .setDescription(`The character "${characterName}" was not found.`)
+                .addFields(
+                    { name: 'Character Name', value: characterName, inline: true }
+                )
+                .setFooter({ text: 'Please check the character name and try again' })
+                .setTimestamp();
+
+            return { exists: false, message: errorEmbed };
         }
         if (character.userId === userId) {
             return { exists: true, owned: true, message: '' };
