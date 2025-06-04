@@ -56,7 +56,10 @@ async function createCharacterAutocomplete(interaction) {
 // ------------------- Create Character Interaction -------------------
 // Handles creating a new character with the specified attributes
 async function createCharacterInteraction(interaction) {
-    await interaction.deferReply({ ephemeral: true });
+    // Only defer if not already deferred or replied
+    if (!interaction.replied && !interaction.deferred) {
+        await interaction.deferReply({ ephemeral: true });
+    }
 
     const userId = interaction.user.id;
     const characterName = interaction.options.getString('name');
