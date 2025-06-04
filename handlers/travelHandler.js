@@ -363,7 +363,11 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
         }
 
         if (item) {
-          await syncToInventoryDatabase(character, item, interaction);
+          await syncToInventoryDatabase(character, {
+            ...item,
+            obtain: "Monster Loot",
+            perk: "" // Explicitly set perk to empty for monster loot
+          }, interaction);
           lootLine = `\nLooted ${item.itemName} × ${item.quantity}\n`;
           outcomeMessage = `${generateVictoryMessage(item)}${lootLine}`;
           travelLog.push(`fight: win & loot (${item.quantity}× ${item.itemName})`);
