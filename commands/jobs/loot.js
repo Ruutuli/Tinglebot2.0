@@ -6,7 +6,9 @@
 // Third-Party Libraries
 const { SlashCommandBuilder } = require("discord.js"); // Used to create slash commands for Discord bots
 const { v4: uuidv4 } = require("uuid"); // Generates unique identifiers
-require("dotenv").config();
+const dotenv = require('dotenv');
+const env = process.env.NODE_ENV || 'development';
+dotenv.config({ path: `.env.${env}` });
 
 // Database Services
 const {

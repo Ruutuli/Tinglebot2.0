@@ -1,77 +1,58 @@
 const mongoose = require('mongoose');
-require('dotenv').config();
+const dotenv = require('dotenv');
+const env = process.env.NODE_ENV || 'development';
+dotenv.config({ path: `.env.${env}` });
 
 async function testDatabaseConnection() {
-    console.log('🔍 Testing database connection...');
+    console.log('🔍 Testing database connections in', env, 'mode...');
     
     try {
-        // Test main database connection
-        console.log('\n📦 Testing main database connection...');
-        await mongoose.connect(process.env.MONGODB_URI, {
+        // Test Tinglebot database connection
+        console.log('\n📦 Testing Tinglebot database connection...');
+        await mongoose.connect(process.env.MONGODB_TINGLEBOT_URI, {
             useNewUrlParser: true,
             useUnifiedTopology: true,
-            serverSelectionTimeoutMS: 5000 // 5 second timeout
+            serverSelectionTimeoutMS: 5000
         });
-        console.log('✅ Main database connection successful!');
+        console.log('✅ Tinglebot database connection successful!');
+        console.log('Database name:', mongoose.connection.db.databaseName);
+        await mongoose.connection.close();
 
-        // Test ShopStock collection
-        console.log('\n🛍️ Testing ShopStock collection...');
-        const ShopStock = mongoose.model('ShopStock', new mongoose.Schema({}));
-        const shopItems = await ShopStock.find().limit(1);
-        console.log('✅ ShopStock collection accessible');
-        console.log('Sample item:', shopItems[0] || 'No items found');
-
-        // Test Items collection
-        console.log('\n📦 Testing Items collection...');
-        const Items = mongoose.model('Items', new mongoose.Schema({}));
-        const items = await Items.find().limit(1);
-        console.log('✅ Items collection accessible');
-        console.log('Sample item:', items[0] || 'No items found');
-
-        // Test Inventories collection
-        console.log('\n🎒 Testing Inventories collection...');
-        const Inventories = mongoose.model('Inventories', new mongoose.Schema({}));
-        const inventories = await Inventories.find().limit(1);
-        console.log('✅ Inventories collection accessible');
-        console.log('Sample inventory:', inventories[0] || 'No inventories found');
-
-        // Test database operations
-        console.log('\n⚡ Testing database operations...');
-        
-        // Test write operation
-        const testItem = new ShopStock({
-            itemName: 'Test Item',
-            stock: 1,
-            timestamp: new Date()
+        // Test Inventories database connection
+        console.log('\n🎒 Testing Inventories database connection...');
+        await mongoose.connect(process.env.MONGODB_INVENTORIES_URI, {
+            useNewUrlParser: true,
+            useUnifiedTopology: true,
+            serverSelectionTimeoutMS: 5000
         });
-        await testItem.save();
-        console.log('✅ Write operation successful');
+        console.log('✅ Inventories database connection successful!');
+        console.log('Database name:', mongoose.connection.db.databaseName);
+        await mongoose.connection.close();
 
-        // Test read operation
-        const readItem = await ShopStock.findOne({ itemName: 'Test Item' });
-        console.log('✅ Read operation successful');
+        // Test Vending database connection
+        console.log('\n🛍️ Testing Vending database connection...');
+        await mongoose.connect(process.env.MONGODB_VENDING_URI, {
+            useNewUrlParser: true,
+            useUnifiedTopology: true,
+            serverSelectionTimeoutMS: 5000
+        });
+        console.log('✅ Vending database connection successful!');
+        console.log('Database name:', mongoose.connection.db.databaseName);
+        await mongoose.connection.close();
 
-        // Test update operation
-        await ShopStock.updateOne(
-            { itemName: 'Test Item' },
-            { $set: { stock: 2 } }
-        );
-        console.log('✅ Update operation successful');
+        console.log('\n✨ All database connections tested successfully!');
+        console.log('\n📝 Summary:');
+        console.log('- Tinglebot DB:', process.env.MONGODB_TINGLEBOT_URI.split('/').pop());
+        console.log('- Inventories DB:', process.env.MONGODB_INVENTORIES_URI.split('/').pop());
+        console.log('- Vending DB:', process.env.MONGODB_VENDING_URI.split('/').pop());
 
-        // Test delete operation
-        await ShopStock.deleteOne({ itemName: 'Test Item' });
-        console.log('✅ Delete operation successful');
-
-        console.log('\n✨ All database tests completed successfully!');
     } catch (error) {
         console.error('\n❌ Database test failed:', error);
         
-        // Detailed error information
         if (error.name === 'MongoServerSelectionError') {
             console.error('\n🔍 Connection Details:');
             console.error('Error Type:', error.name);
             console.error('Error Message:', error.message);
-            console.error('Topology Description:', error.reason?.topologyDescription);
             console.error('\nPossible causes:');
             console.error('1. MongoDB server is not running');
             console.error('2. Network connectivity issues');
@@ -80,9 +61,10 @@ async function testDatabaseConnection() {
             console.error('5. MongoDB Atlas IP whitelist issues');
         }
     } finally {
-        // Close the connection
-        await mongoose.connection.close();
-        console.log('\n🔌 Database connection closed');
+        if (mongoose.connection.readyState !== 0) {
+            await mongoose.connection.close();
+            console.log('\n🔌 Database connection closed');
+        }
     }
 }
 
