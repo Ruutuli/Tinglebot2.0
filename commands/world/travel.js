@@ -623,22 +623,41 @@ async function processTravelDay(day, context) {
       const finalChannel = await interaction.client.channels.fetch(finalChannelId);
     
       // ------------------- Assign Village Role -------------------
-      const member = await interaction.guild.members.fetch(interaction.user.id);
-      const allRoles = await interaction.guild.roles.fetch();
-      const roleName = `${capitalizeFirstLetter(destination)} Visiting`;
-      const villageRole = allRoles.find(role => role.name === roleName);
-    
-      if (villageRole) {
-        // Remove other "* Visiting" roles first
-        const visitingRoles = member.roles.cache.filter(r => /Visiting$/.test(r.name) && r.id !== villageRole.id);
-        for (const [roleId] of visitingRoles) {
-          await member.roles.remove(roleId).catch(error => handleError(error, 'travel.js'));
+      try {
+        const member = await interaction.guild.members.fetch(interaction.user.id);
+        const allRoles = await interaction.guild.roles.fetch();
+        const roleName = `${capitalizeFirstLetter(destination)} Visiting`;
+        const villageRole = allRoles.find(role => role.name === roleName);
+      
+        if (villageRole) {
+          // Check if bot has manage roles permission
+          const botMember = await interaction.guild.members.fetch(interaction.client.user.id);
+          if (botMember.permissions.has('ManageRoles')) {
+            // Remove other "* Visiting" roles first
+            const visitingRoles = member.roles.cache.filter(r => /Visiting$/.test(r.name) && r.id !== villageRole.id);
+            for (const [roleId] of visitingRoles) {
+              try {
+                await member.roles.remove(roleId);
+              } catch (error) {
+                console.warn(`[travel.js]: ⚠️ Failed to remove role ${roleId}: ${error.message}`);
+              }
+            }
+        
+            // Add destination visiting role
+            if (!member.roles.cache.has(villageRole.id)) {
+              try {
+                await member.roles.add(villageRole);
+              } catch (error) {
+                console.warn(`[travel.js]: ⚠️ Failed to add role ${roleName}: ${error.message}`);
+              }
+            }
+          } else {
+            console.warn('[travel.js]: ⚠️ Bot lacks ManageRoles permission - skipping role management');
+          }
         }
-    
-        // Add destination visiting role
-        if (!member.roles.cache.has(villageRole.id)) {
-          await member.roles.add(villageRole).catch(error => handleError(error, 'travel.js'));
-        }
+      } catch (error) {
+        console.warn(`[travel.js]: ⚠️ Role management failed: ${error.message}`);
+        // Continue with travel completion even if role management fails
       }
     
       // Check destination for blight rain after arrival
