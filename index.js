@@ -22,7 +22,7 @@ const { handleAutocomplete } = require("./handlers/autocompleteHandler");
 const { handleComponentInteraction } = require("./handlers/componentHandler");
 const { handleSelectMenuInteraction } = require("./handlers/selectMenuHandler");
 const { handleInteraction, initializeReactionHandler } = require('./handlers/interactionHandler');
-const { handleMessage } = require('./handlers/messageHandler');
+// const { handleMessage } = require('./handlers/messageHandler');
 const { startExpirationChecks } = require('./utils/expirationHandler');
 
 // ------------------- Scripts -------------------
@@ -98,10 +98,10 @@ async function initializeClient() {
   const commandHandler = require("./handlers/commandHandler");
   commandHandler(client);
 
-  // Add message event handler
-  client.on('messageCreate', async (message) => {
-    await handleMessage(message);
-  });
+  // // Add message event handler
+  // client.on('messageCreate', async (message) => {
+  //   await handleMessage(message);
+  // });
 
   // --------------------------------------------------------------------------
   // Ready Event: Attach global error handler to send errors to Trello

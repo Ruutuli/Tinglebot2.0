@@ -10,7 +10,9 @@ const mongoose = require('mongoose');
 
 // ------------------- Environment Variables -------------------
 // Load environment variables from .env file
-require('dotenv').config();
+const dotenv = require('dotenv');
+const env = process.env.NODE_ENV || 'development';
+dotenv.config({ path: `.env.${env}` });
 
 // ------------------- Database Services -------------------
 // Services for token and inventory management, and character fetching

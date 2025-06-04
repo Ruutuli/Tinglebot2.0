@@ -2,6 +2,7 @@ require('dotenv').config();
 const fs = require('fs');
 const { handleError } = require('../utils/globalErrorHandler');
 const path = require('path');
+const dotenv = require('dotenv');
 
 // Load Google service account credentials
 let serviceAccount;
@@ -38,7 +39,7 @@ const RAID_DURATION = 15 * 60 * 1000; // 15 minutes in milliseconds
 
 // Load environment variables based on NODE_ENV
 const env = process.env.NODE_ENV || 'development';
-require('dotenv').config({ path: `.env.${env}` });
+dotenv.config({ path: `.env.${env}` });
 
 const config = {
   discordToken: process.env.DISCORD_TOKEN,

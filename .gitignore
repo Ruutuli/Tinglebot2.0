@@ -12,8 +12,7 @@ node_modules
 nodemon.log
 testingCode/
 .tmp.driveupload/
-.tmp.driveudownload/
-
+.tmp.drivedownload/
 
 # Deployment scripts (no longer needed)
 # scripts/deploy.js

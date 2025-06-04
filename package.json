@@ -7,11 +7,11 @@
   "node": ">=18.0.0"
  },
  "scripts": {
-  "start": "NODE_ENV=production node index.js",
-  "dev": "NODE_ENV=development nodemon index.js",
-  "scheduler": "NODE_ENV=production node scripts/scheduler.js",
-  "deploy-commands": "NODE_ENV=development node scripts/deploy-commands.js",
-  "deploy": "NODE_ENV=production node scripts/deploy.js"
+  "start": "cross-env NODE_ENV=production node index.js",
+  "dev": "cross-env NODE_ENV=development nodemon index.js",
+  "scheduler": "cross-env NODE_ENV=production node scripts/scheduler.js",
+  "deploy-commands": "cross-env NODE_ENV=development node scripts/deploy-commands.js",
+  "deploy": "cross-env NODE_ENV=production node scripts/deploy.js"
  },
  "author": "Ruu",
  "license": "ISC",
