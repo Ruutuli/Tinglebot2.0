@@ -2303,6 +2303,34 @@ async function handleTrade(interaction) {
       return;
     }
 
+    // ------------------- NEW: Check if characters are in the same village -------------------
+    if (fromCharacter.currentVillage.trim().toLowerCase() !== toCharacter.currentVillage.trim().toLowerCase()) {
+      const fromVillageCapitalized = capitalizeWords(fromCharacter.currentVillage.trim());
+      const toVillageCapitalized = capitalizeWords(toCharacter.currentVillage.trim());
+      
+      await interaction.editReply({
+        embeds: [{
+          color: 0xFF0000, // Red color
+          title: '❌ Different Villages',
+          description: `\`${fromCharacter.name}\` is in **${fromVillageCapitalized}**, and \`${toCharacter.name}\` is in **${toVillageCapitalized}**. Both characters must be in the same village for trading.`,
+          fields: [
+            {
+              name: 'How to Fix',
+              value: `Please use the </travel:1306176790095728736> command to travel your character to \`${toVillageCapitalized}\`.`
+            }
+          ],
+          image: {
+            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+          },
+          footer: {
+            text: 'Village Check'
+          }
+        }],
+        ephemeral: true
+      });
+      return;
+    }
+
     // ------------------- Check Inventory Sync -------------------
     try {
       await checkInventorySync(fromCharacter);
