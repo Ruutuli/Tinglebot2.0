@@ -957,9 +957,9 @@ async function handleEditCharacter(interaction) {
         embeds: [{
           color: 0xFF0000, // Red color
           title: '❌ Character Not Found',
-          description: `Character \`${characterName}\` not found or does not belong to you.`,
+          description: `The character "${characterName}" does not exist in the database.`,
           image: {
-            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+            url: 'https://storage.googleapis.com/tinglebot/border%20error.png'
           },
           footer: {
             text: 'Character Validation'
@@ -1103,7 +1103,17 @@ async function handleViewCharacter(interaction) {
 
   if (!character) {
    await interaction.reply({
-    content: `❌ Character **${characterName}** not found or does not belong to you.`,
+    embeds: [new EmbedBuilder()
+      .setColor('#FF0000')
+      .setTitle('❌ Character Not Found')
+      .setDescription(`The character "${characterName}" does not exist in the database.`)
+      .addFields(
+        { name: '🔍 Possible Reasons', value: '• Character name is misspelled\n• Character was deleted\n• Character was never created' },
+        { name: '💡 Suggestion', value: 'Please check the spelling and try again.' }
+      )
+      .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
+      .setFooter({ text: 'Character Validation' })
+      .setTimestamp()],
     ephemeral: true,
    });
    return;
@@ -1308,7 +1318,17 @@ async function handleDeleteCharacter(interaction) {
   const character = await fetchCharacterByNameAndUserId(characterName, userId);
   if (!character) {
    await interaction.editReply({
-    content: `❌ **Character not found**: **${characterName}** does not exist or does not belong to you.`,
+    embeds: [new EmbedBuilder()
+      .setColor('#FF0000')
+      .setTitle('❌ Character Not Found')
+      .setDescription(`The character "${characterName}" does not exist in the database.`)
+      .addFields(
+        { name: '🔍 Possible Reasons', value: '• Character name is misspelled\n• Character was deleted\n• Character was never created' },
+        { name: '💡 Suggestion', value: 'Please check the spelling and try again.' }
+      )
+      .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
+      .setFooter({ text: 'Character Validation' })
+      .setTimestamp()],
     ephemeral: true,
    });
    return;
