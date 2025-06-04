@@ -973,16 +973,15 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
       if (!linkValidation.valid) {
         const invalidLinkEmbed = new EmbedBuilder()
           .setColor('#FF0000')
-          .setTitle('❌ Invalid Submission Link')
-          .setDescription('The link you provided is not a valid Discord message link.')
+          .setTitle('❌ Invalid Submission Channel')
+          .setDescription('Your submission must be posted in the submissions channel first.')
           .addFields(
-            { name: '📝 What Happened?', value: 'The link format you submitted is not recognized as a valid Discord message link.' },
-            { name: '💡 How to Fix', value: 'Please submit your art/writing in the submissions channel and use the link from there.' },
-            { name: '🔗 Valid Link Format', value: 'A valid Discord message link looks like this:\n`https://discord.com/channels/serverId/channelId/messageId`' },
-            { name: '📌 Important', value: 'Make sure you\'re using the link from the submissions channel where you posted your art/writing.' }
+            { name: '📝 What Happened?', value: 'The link you provided is from a different channel. All art and writing submissions must be posted in the submissions channel first.' },
+            { name: '💡 How to Fix', value: '1. Post your art/writing in the submissions channel\n2. Copy the link from your submission\n3. Use that link with the healing command' },
+            { name: '📌 Important', value: 'This is required to ensure all submissions are properly documented and reviewed.' }
           )
           .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
-          .setFooter({ text: 'Submission Link Error', iconURL: 'https://static.wixstatic.com/media/7573f4_a510c95090fd43f5ae17e20d80c1289e~mv2.png' })
+          .setFooter({ text: 'Submission Channel Error', iconURL: 'https://static.wixstatic.com/media/7573f4_a510c95090fd43f5ae17e20d80c1289e~mv2.png' })
           .setTimestamp();
 
         await interaction.editReply({ 
