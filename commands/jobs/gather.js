@@ -595,6 +595,15 @@ module.exports = {
         
         // ------------------- Normal Gathering Logic -------------------
         const items = await fetchAllItems();
+        console.log(`[gather.js]: 🔍 Fetched ${items.length} total items from database`);
+        console.log(`[gather.js]: 📊 Database connection details:`, {
+          database: 'items',
+          collection: 'items',
+          character: character.name,
+          job: job,
+          region: region
+        });
+        
         const availableItems = items.filter(item => {
           if (job.toLowerCase() === 'ab (meat)') {
             return item.abMeat && item[region.toLowerCase()];
@@ -602,10 +611,16 @@ module.exports = {
             return item.abLive && item[region.toLowerCase()];
           } else {
             const jobKey = normalizeJobName(job);
+            console.log(`[gather.js]: 🔍 Checking item ${item.itemName} for job "${jobKey}" and region "${region.toLowerCase()}"`);
+            console.log(`[gather.js]: 🔍 Item properties: jobKey=${item[jobKey]}, region=${item[region.toLowerCase()]}`);
             return item[jobKey] && item[region.toLowerCase()];
           }
         });
+        
+        console.log(`[gather.js]: 🔍 Found ${availableItems.length} available items for job "${job}" in region "${region}"`);
+        
         if (availableItems.length === 0) {
+          console.log(`[gather.js]: ⚠️ No items available for job "${job}" in region "${region}"`);
           await interaction.editReply({
             content: `⚠️ **No items available to gather in this location with the given job.**`,
           });

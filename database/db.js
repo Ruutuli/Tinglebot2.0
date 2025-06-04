@@ -661,7 +661,9 @@ async function forceResetPetRolls(characterId, petName) {
 const fetchAllItems = async () => {
     try {
         const db = await connectToInventoriesForItems();
+        console.log(`[db.js]: 🔍 Fetching items from collection 'items' in database '${db.databaseName}'`);
         const items = await db.collection("items").find().toArray();
+        console.log(`[db.js]: ✅ Found ${items.length} items in collection`);
         return items;
     } catch (error) {
         handleError(error, "itemService.js");
@@ -1476,7 +1478,8 @@ const connectToDatabase = async () => {
 // ------------------- clearExistingStock -------------------
 const clearExistingStock = async () => {
  const client = await connectToDatabase();
- const db = client.db("tinglebot");
+ const dbName = inventoriesUri.split('/').pop();
+ const db = client.db(dbName);
  const stockCollection = db.collection("vending_stock");
 
  try {
@@ -1492,7 +1495,8 @@ const clearExistingStock = async () => {
 // ------------------- generateVendingStockList -------------------
 const generateVendingStockList = async () => {
  const client = await connectToDatabase();
- const db = client.db("tinglebot");
+ const dbName = inventoriesUri.split('/').pop();
+ const db = client.db(dbName);
  const stockCollection = db.collection("vending_stock");
 
  const priorityItems = [
@@ -1645,7 +1649,8 @@ const generateVendingStockList = async () => {
 // ------------------- getCurrentVendingStockList -------------------
 const getCurrentVendingStockList = async () => {
  const client = await connectToDatabase();
- const db = client.db("tinglebot");
+ const dbName = inventoriesUri.split('/').pop();
+ const db = client.db(dbName);
  const stockCollection = db.collection("vending_stock");
 
  try {
@@ -1680,7 +1685,8 @@ const getCurrentVendingStockList = async () => {
 // ------------------- getLimitedItems -------------------
 const getLimitedItems = async () => {
  const client = await connectToDatabase();
- const db = client.db("tinglebot");
+ const dbName = inventoriesUri.split('/').pop();
+ const db = client.db(dbName);
  const stockCollection = db.collection("vending_stock");
 
  try {
@@ -1702,7 +1708,8 @@ const getLimitedItems = async () => {
 // ------------------- updateItemStockByName -------------------
 const updateItemStockByName = async (itemName, quantity) => {
  const client = await connectToDatabase();
- const db = client.db("tinglebot");
+ const dbName = inventoriesUri.split('/').pop();
+ const db = client.db(dbName);
  const stockCollection = db.collection("vending_stock");
 
  try {
@@ -1737,6 +1744,7 @@ const updateItemStockByName = async (itemName, quantity) => {
   await client.close();
  }
 };
+
 // ------------------- updateVendingStock -------------------
 async function updateVendingStock({
  characterId,
@@ -1748,7 +1756,8 @@ async function updateVendingStock({
  tradesOpen,
 }) {
  const client = await connectToDatabase();
- const db = client.db("tinglebot");
+ const dbName = inventoriesUri.split('/').pop();
+ const db = client.db(dbName);
  const stockCollection = db.collection("vending_stock");
 
  try {
@@ -1831,7 +1840,7 @@ const checkMaterial = (materialId, materialName, quantityNeeded, inventory) => {
 const connectToInventoriesForItems = async () => {
     try {
         if (!inventoriesClient) {
-            inventoriesClient = new MongoClient(inventoriesUri, {
+            inventoriesClient = new MongoClient(dbConfig.inventories, {
                 maxPoolSize: 10,
                 minPoolSize: 5,
                 serverSelectionTimeoutMS: 30000,
@@ -1846,15 +1855,19 @@ const connectToInventoriesForItems = async () => {
                 family: 4
             });
             await inventoriesClient.connect();
-            inventoriesDb = inventoriesClient.db('tinglebot');
+            // Extract database name from URI
+            const dbName = dbConfig.inventories.split('/').pop();
+            inventoriesDb = inventoriesClient.db(dbName);
+            console.log(`[db.js]: 🔌 Connected to Inventories database: ${dbName}`);
         } else {
             // Try to ping the server to check connection
             try {
-                await inventoriesClient.db('tinglebot').command({ ping: 1 });
+                const dbName = dbConfig.inventories.split('/').pop();
+                await inventoriesClient.db(dbName).command({ ping: 1 });
             } catch (error) {
                 // If ping fails, reconnect
                 await inventoriesClient.close();
-                inventoriesClient = new MongoClient(inventoriesUri, {
+                inventoriesClient = new MongoClient(dbConfig.inventories, {
                     maxPoolSize: 10,
                     minPoolSize: 5,
                     serverSelectionTimeoutMS: 30000,
@@ -1869,7 +1882,9 @@ const connectToInventoriesForItems = async () => {
                     family: 4
                 });
                 await inventoriesClient.connect();
-                inventoriesDb = inventoriesClient.db('tinglebot');
+                const dbName = dbConfig.inventories.split('/').pop();
+                inventoriesDb = inventoriesClient.db(dbName);
+                console.log(`[db.js]: 🔌 Reconnected to Inventories database: ${dbName}`);
             }
         }
         return inventoriesDb;
