@@ -1717,7 +1717,16 @@ async function handleChangeJob(interaction) {
   const nonVendor = !["merchant", "shopkeeper"].includes(newJob.toLowerCase());
   if (nonVendor) {
     try {
-      const vendingClient = new MongoClient(process.env.MONGODB_VENDING_URI);
+      // Use production URI if in production, otherwise use development URI
+      const vendingUri = process.env.NODE_ENV === 'production' 
+        ? process.env.MONGODB_VENDING_URI 
+        : process.env.MONGODB_VENDING_URI_DEV;
+
+      if (!vendingUri) {
+        throw new Error('MongoDB vending URI is not defined in environment variables');
+      }
+
+      const vendingClient = new MongoClient(vendingUri);
       await vendingClient.connect();
 
       const vendingDb = vendingClient.db("vending");
