@@ -5,6 +5,9 @@ const path = require('path');
 const dotenv = require('dotenv');
 dotenv.config({ path: `.env.${env}` });
 
+// Load environment variables based on NODE_ENV
+const env = process.env.NODE_ENV || 'development';
+dotenv.config({ path: `.env.${env}` });
 
 // Load Google service account credentials
 let serviceAccount;
@@ -38,10 +41,6 @@ const googleTokens = JSON.parse(fs.readFileSync(tokenPath, 'utf8'));
 
 // Game constants
 const RAID_DURATION = 15 * 60 * 1000; // 15 minutes in milliseconds
-
-// Load environment variables based on NODE_ENV
-const env = process.env.NODE_ENV || 'development';
-dotenv.config({ path: `.env.${env}` });
 
 const config = {
   discordToken: process.env.DISCORD_TOKEN,
