@@ -788,7 +788,8 @@ async function processTravelDay(day, context) {
             currentPath,
             encounterMessage,
             monster,
-            travelLog
+            travelLog,
+            startingVillage
           );
           // Append both the loot line and the damage message to the daily log
           if (decision.includes('Looted')) {
@@ -808,7 +809,8 @@ async function processTravelDay(day, context) {
               currentPath,
               encounterMessage,
               monster,
-              travelLog
+              travelLog,
+              startingVillage
             );
         
             dailyLogEntry += decision.split('\n').map(line => `${line}`).join('\n') + '\n';
@@ -862,7 +864,7 @@ async function processTravelDay(day, context) {
           safeMessage,
           null,
           travelLog,
-          undefined,
+          startingVillage,
           i.customId === 'do_nothing' ? doNothingFlavor : undefined
         );    
         dailyLogEntry += `${decision}\n`;
@@ -885,13 +887,13 @@ async function processTravelDay(day, context) {
             safeMessage,
             null,
             travelLog,
-            undefined,
+            startingVillage,
             doNothingFlavor
           );
           dailyLogEntry += `${decision}\n`;
         }
       
-        if (await checkAndHandleKO(character, channel)) return;
+        if (await checkAndHandleKO(character, channel, startingVillage)) return;
       
         travelLog.push(dailyLogEntry);
 

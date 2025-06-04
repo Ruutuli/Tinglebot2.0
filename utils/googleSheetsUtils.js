@@ -846,13 +846,6 @@ async function deleteInventorySheetData(spreadsheetId, characterName, context = 
 // Safely appends data to a sheet with validation
 async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, client, { skipValidation = false } = {}) {
     try {
-        console.log(`[googleSheetsUtils.js]: 📝 Starting safeAppendDataToSheet for character ${character?.name}`, {
-            spreadsheetUrl,
-            range,
-            valuesCount: values?.length,
-            skipValidation
-        });
-
         if (!spreadsheetUrl || typeof spreadsheetUrl !== 'string') {
             console.error(`[googleSheetsUtils.js]: ❌ Invalid spreadsheet URL:`, spreadsheetUrl);
             return;
@@ -864,14 +857,9 @@ async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, c
         }
 
         const spreadsheetId = extractSpreadsheetId(spreadsheetUrl);
-        console.log(`[googleSheetsUtils.js]: 🔑 Extracted spreadsheet ID: ${spreadsheetId}`);
-
-        console.log(`[googleSheetsUtils.js]: 🔐 Attempting to authorize sheets...`);
         const auth = await authorizeSheets();
-        console.log(`[googleSheetsUtils.js]: ✅ Sheets authorization successful`);
 
         if (!skipValidation) {
-            console.log(`[googleSheetsUtils.js]: 🔍 Starting sheet validation...`);
             // Validate the range format
             const rangeParts = range.split('!');
             if (rangeParts.length !== 2) {
@@ -879,7 +867,6 @@ async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, c
             }
 
             const [sheetName, cellRange] = rangeParts;
-            console.log(`[googleSheetsUtils.js]: 📊 Validating sheet: ${sheetName} with range: ${cellRange}`);
 
             // Validate the cell range format
             if (!cellRange.match(/^[A-Z]+\d*:[A-Z]+\d*$/)) {
@@ -889,16 +876,12 @@ async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, c
             // Validate the appropriate sheet
             let validationResult;
             if (sheetName.toLowerCase() === 'loggedtracker') {
-                console.log(`[googleSheetsUtils.js]: 🔍 Validating token tracker sheet...`);
                 validationResult = await validateTokenTrackerSheet(spreadsheetUrl);
             } else if (sheetName.toLowerCase() === 'loggedinventory') {
-                console.log(`[googleSheetsUtils.js]: 🔍 Validating inventory sheet for ${character.name}...`);
                 validationResult = await validateInventorySheet(spreadsheetUrl, character.name);
             } else {
                 throw new Error(`Unknown sheet type: ${sheetName}. Expected 'loggedTracker' or 'loggedInventory'`);
             }
-            
-            console.log(`[googleSheetsUtils.js]: 📋 Validation result:`, validationResult);
             
             if (!validationResult.success) {
                 console.error(`[googleSheetsUtils.js]: ❌ Sheet validation failed:`, validationResult.message);
@@ -920,7 +903,6 @@ async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, c
         }
 
         // If validation passed or skipped, append the data
-        console.log(`[googleSheetsUtils.js]: 📝 Preparing to append data to sheet...`);
         const resource = {
             values: values.map(row =>
                 Array.isArray(row)
@@ -928,12 +910,6 @@ async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, c
                     : []
             )
         };
-
-        console.log(`[googleSheetsUtils.js]: 📤 Attempting to append data to sheet...`, {
-            spreadsheetId,
-            range,
-            valuesCount: resource.values.length
-        });
 
         await google.sheets({ version: 'v4', auth })
             .spreadsheets.values.append({
@@ -954,18 +930,7 @@ async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, c
         }
 
     } catch (error) {
-        console.error(`[googleSheetsUtils.js]: ❌ Error in safeAppendDataToSheet:`, {
-            error: error.message,
-            stack: error.stack,
-            characterName: character?.name,
-            spreadsheetId: extractSpreadsheetId(spreadsheetUrl),
-            range: range,
-            sheetType: range.split('!')[0].toLowerCase(),
-            commandName: client?.commandName,
-            userTag: client?.user?.tag,
-            userId: client?.user?.id,
-            options: client?.options?.data
-        });
+        console.error(`[googleSheetsUtils.js]: ❌ Error in safeAppendDataToSheet:`, error.message);
         // Add context to the error
         error.context = {
             characterName: character?.name,
