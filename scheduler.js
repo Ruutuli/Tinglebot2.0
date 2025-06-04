@@ -1,4 +1,5 @@
 const dotenv = require('dotenv');
+const path = require('path');
 const cron = require('node-cron');
 const { handleError } = require('./utils/globalErrorHandler');
 const { EmbedBuilder } = require('discord.js');
@@ -25,7 +26,15 @@ const { client } = require('./index');
 
 // Load environment variables based on NODE_ENV
 const env = process.env.NODE_ENV || 'development';
-dotenv.config({ path: `.env.${env}` });
+try {
+  const envPath = path.resolve(process.cwd(), `.env.${env}`);
+  dotenv.config({ path: envPath });
+  console.log(`[scheduler.js]: ✅ Loaded environment from ${envPath}`);
+} catch (error) {
+  console.error(`[scheduler.js]: ❌ Failed to load .env.${env}:`, error.message);
+  // Fallback to default .env
+  dotenv.config();
+}
 
 // ============================================================================
 // ---- Utility Functions ----
