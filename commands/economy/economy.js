@@ -413,17 +413,17 @@ for (const { name } of items) {
   );
   if (!fromCharacter) {
     await interaction.editReply({
-      embeds: [{
-        color: 0xFF0000, // Red color
-        title: '❌ Character Not Found',
-        description: `Character \`${fromCharacterName}\` not found or does not belong to you.`,
-        image: {
-          url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
-        },
-        footer: {
-          text: 'Character Validation'
-        }
-      }],
+      embeds: [new EmbedBuilder()
+        .setColor('#FF0000')
+        .setTitle('❌ Character Not Found')
+        .setDescription(`The character "${fromCharacterName}" does not exist in the database.`)
+        .addFields(
+          { name: '🔍 Possible Reasons', value: '• Character name is misspelled\n• Character was deleted\n• Character was never created' },
+          { name: '💡 Suggestion', value: 'Please check the spelling and try again.' }
+        )
+        .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
+        .setFooter({ text: 'Character Validation' })
+        .setTimestamp()],
       ephemeral: true
     });
     return;
@@ -2268,17 +2268,17 @@ async function handleTrade(interaction) {
     const fromCharacter = await fetchCharacterByNameAndUserId(characterName, userId);
     if (!fromCharacter) {
       await interaction.editReply({
-        embeds: [{
-          color: 0xFF0000, // Red color
-          title: '❌ Character Not Found',
-          description: `Character \`${characterName}\` not found or does not belong to you.`,
-          image: {
-            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
-          },
-          footer: {
-            text: 'Character Validation'
-          }
-        }],
+        embeds: [new EmbedBuilder()
+          .setColor('#FF0000')
+          .setTitle('❌ Character Not Found')
+          .setDescription(`The character "${characterName}" does not exist in the database.`)
+          .addFields(
+            { name: '🔍 Possible Reasons', value: '• Character name is misspelled\n• Character was deleted\n• Character was never created' },
+            { name: '💡 Suggestion', value: 'Please check the spelling and try again.' }
+          )
+          .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
+          .setFooter({ text: 'Character Validation' })
+          .setTimestamp()],
         ephemeral: true,
       });
       return;
@@ -2287,17 +2287,17 @@ async function handleTrade(interaction) {
     const toCharacter = await fetchCharacterByName(tradingWithName);
     if (!toCharacter || toCharacter.userId === userId) {
       await interaction.editReply({
-        embeds: [{
-          color: 0xFF0000, // Red color
-          title: '❌ Recipient Not Found',
-          description: `Character \`${tradingWithName}\` not found or belongs to you.`,
-          image: {
-            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
-          },
-          footer: {
-            text: 'Character Validation'
-          }
-        }],
+        embeds: [new EmbedBuilder()
+          .setColor('#FF0000')
+          .setTitle('❌ Recipient Not Found')
+          .setDescription(`The character "${tradingWithName}" does not exist or belongs to you.`)
+          .addFields(
+            { name: '🔍 Possible Reasons', value: '• Character name is misspelled\n• Character was deleted\n• Character belongs to you' },
+            { name: '💡 Suggestion', value: 'Please check the spelling and try again.' }
+          )
+          .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
+          .setFooter({ text: 'Character Validation' })
+          .setTimestamp()],
         ephemeral: true,
       });
       return;

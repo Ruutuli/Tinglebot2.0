@@ -289,8 +289,18 @@ async function handleViewCharacter(interaction, characterId) {
     if (!character) {
       console.error(`[componentHandler.js]: Character with ID "${characterId}" not found.`);
       return interaction.reply({ 
-        content: '❌ **This character no longer exists or has been deleted.**\nPlease try viewing a different character.', 
-        flags: 64 // 64 is the flag for ephemeral messages
+        embeds: [new EmbedBuilder()
+          .setColor('#FF0000')
+          .setTitle('❌ Character Not Found')
+          .setDescription('This character no longer exists or has been deleted.')
+          .addFields(
+            { name: '🔍 Possible Reasons', value: '• Character was deleted\n• Character was removed from the database\n• Character ID is invalid' },
+            { name: '💡 Suggestion', value: 'Please try viewing a different character.' }
+          )
+          .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
+          .setFooter({ text: 'Character Validation' })
+          .setTimestamp()],
+        ephemeral: true
       });
     }
 
