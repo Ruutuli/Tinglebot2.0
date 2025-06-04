@@ -15,7 +15,7 @@ const {
  readSheetData,
  safeAppendDataToSheet,
 } = require("../utils/googleSheetsUtils");
-require("dotenv").config();
+const dbConfig = require('../config/database');
 
 // Import inventoryUtils but don't use removeInitialItemIfSynced directly
 const inventoryUtils = require("../utils/inventoryUtils");
@@ -33,8 +33,8 @@ const generalCategories = require("../models/GeneralItemCategories");
 // ------------------- Database Connection Functions -------------------
 // Functions to establish and retrieve MongoDB connections.
 // ============================================================================
-const tinglebotUri = process.env.MONGODB_TINGLEBOT_URI;
-const inventoriesUri = process.env.MONGODB_INVENTORIES_URI;
+const tinglebotUri = dbConfig.tinglebot;
+const inventoriesUri = dbConfig.inventories;
 let tinglebotDbConnection;
 let inventoriesDbConnection;
 let inventoriesDbNativeConnection = null;
@@ -165,7 +165,7 @@ const getInventoryCollection = async (characterName) => {
 async function connectToVending() {
   try {
     if (!vendingDbConnection) {
-      vendingDbConnection = mongoose.createConnection(inventoriesUri, {
+      vendingDbConnection = mongoose.createConnection(dbConfig.vending, {
         dbName: 'vendingInventories'
       });
     }

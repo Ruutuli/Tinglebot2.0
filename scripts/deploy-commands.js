@@ -1,8 +1,11 @@
-require('dotenv').config();
 const { REST, Routes } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
-const { getGuildIds } = require('../utils/getGuildIds');
+const dotenv = require('dotenv');
+
+// Load environment variables based on NODE_ENV
+const env = process.env.NODE_ENV || 'development';
+dotenv.config({ path: `.env.${env}` });
 
 function getCommandFiles(dir) {
     let results = [];
@@ -35,7 +38,7 @@ for (const file of commandFiles) {
                 
                 const hasAutocompleteOption = checkForAutocompleteOptions(commandJson);
                 if (hasAutocompleteOption && typeof command.autocomplete !== 'function') {
-                    console.warn(`.`);
+                    console.warn(`⚠️ Command ${command.data.name} has autocomplete options but no autocomplete handler.`);
                 }
                 
                 commands.push(commandJson);
@@ -74,39 +77,32 @@ function checkForAutocompleteOptions(commandJson) {
 
 const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 
-async function deployGlobalCommands() {
-    console.log(`🔄 Started refreshing ${commands.length} global (/) commands.`);
-    await rest.put(
-        Routes.applicationCommands(process.env.CLIENT_ID),
-        { body: commands }
-    );
-    console.log('✅ Successfully reloaded global (/) commands.');
-}
-
-async function deployGuildCommands() {
-    const guildIds = getGuildIds();
-    for (const guildId of guildIds) {
-        console.log(`🔄 Started refreshing ${commands.length} guild (/) commands for guild ID: ${guildId}`);
-        await rest.put(
-            Routes.applicationGuildCommands(process.env.CLIENT_ID, guildId),
-            { body: commands }
-        );
-        console.log(`✅ Successfully reloaded application (/) commands for guild ID: ${guildId}.`);
-    }
-    console.log('✅ Successfully reloaded all guild (/) commands.');
-}
-
-(async () => {
+async function deployCommands() {
     try {
-        const args = process.argv.slice(2);
-        if (args.includes('global')) {
-            await deployGlobalCommands();
-        } else if (args.includes('guild')) {
-            await deployGuildCommands();
+        console.log(`🔄 Started refreshing ${commands.length} commands in ${env} mode.`);
+
+        if (env === 'development') {
+            // In development, register commands to the test server
+            const TEST_GUILD_ID = process.env.TEST_GUILD_ID;
+            if (!TEST_GUILD_ID) {
+                throw new Error('TEST_GUILD_ID is not defined in .env.development');
+            }
+            await rest.put(
+                Routes.applicationGuildCommands(process.env.CLIENT_ID, TEST_GUILD_ID),
+                { body: commands }
+            );
+            console.log(`✅ Successfully registered commands to test server (${TEST_GUILD_ID})`);
         } else {
-            console.error('❌ Please specify "global" or "guild" as an argument to the script.');
+            // In production, register commands globally
+            await rest.put(
+                Routes.applicationCommands(process.env.CLIENT_ID),
+                { body: commands }
+            );
+            console.log('✅ Successfully registered global commands');
         }
     } catch (error) {
         console.error('❌ Error deploying commands:', error);
     }
-})();
+}
+
+deployCommands();

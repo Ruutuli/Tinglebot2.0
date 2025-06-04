@@ -1,5 +1,6 @@
-# Ignore .env file
-.env
+# Ignore environment files
+.env*
+!.env.example
 
 .cursor/rules/
 .dependency-cruiser.js

@@ -1,6 +1,12 @@
 // Auto-deployed via GitHub Actions
+// ------------------- Load Environment -------------------
+const dotenv = require('dotenv');
+const env = process.env.NODE_ENV || 'development';
+dotenv.config({ path: `.env.${env}` });
+
+console.log(`🚀 Running in ${env} mode`);
+
 // ------------------- Standard Libraries -------------------
-require("dotenv").config();
 const figlet = require("figlet");
 
 // ------------------- Discord.js Components -------------------
