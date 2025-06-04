@@ -874,34 +874,108 @@ async function handleCreateCharacter(interaction, subcommand) {
 
   const member = interaction.member;
   const roleNames = [formattedRace, formattedVillage, formattedJob];
+  const missingRoles = [];
+  const assignedRoles = [];
+
+  // Check bot's permissions first
+  if (!interaction.guild.members.me.permissions.has('ManageRoles')) {
+    throw new Error('Bot lacks the "Manage Roles" permission. Please contact a server administrator.');
+  }
+
+  // Check if bot's role is high enough in hierarchy
+  const botRole = interaction.guild.members.me.roles.highest;
+
+  // Map role names to their IDs from .env
+  const roleIdMap = {
+    'Race: Hylian': process.env.RACE_HYLIAN,
+    'Race: Zora': process.env.RACE_ZORA,
+    'Race: Gerudo': process.env.RACE_GERUDO,
+    'Race: Goron': process.env.RACE_GORON,
+    'Race: Mixed': process.env.RACE_MIXED,
+    'Race: Sheikah': process.env.RACE_SHEIKAH,
+    'Race: Rito': process.env.RACE_RITO,
+    'Race: Korok/Kokiri': process.env.RACE_KOROK_KOKIRI,
+    'Race: Keaton': process.env.RACE_KEATON,
+    'Race: Twili': process.env.RACE_TWILI,
+    'Race: Mogma': process.env.RACE_MOGMA,
+    'Inariko Resident': process.env.INARIKO_RESIDENT,
+    'Rudania Resident': process.env.RUDANIA_RESIDENT,
+    'Vhintl Resident': process.env.VHINTL_RESIDENT
+  };
+
+  // Map job perks to their IDs
+  const jobPerkIdMap = {
+    'LOOTING': process.env.JOB_PERK_LOOTING,
+    'STEALING': process.env.JOB_PERK_STEALING,
+    'ENTERTAINING': process.env.JOB_PERK_ENTERTAINING,
+    'DELIVERING': process.env.JOB_PERK_DELIVERING,
+    'HEALING': process.env.JOB_PERK_HEALING,
+    'GATHERING': process.env.JOB_PERK_GATHERING,
+    'CRAFTING': process.env.JOB_PERK_CRAFTING,
+    'BOOSTING': process.env.JOB_PERK_BOOSTING,
+    'VENDING': process.env.JOB_PERK_VENDING
+  };
 
   for (const roleName of roleNames) {
-   const role = interaction.guild.roles.cache.find((r) => r.name === roleName);
-   if (role) {
-    await member.roles.add(role);
-    console.log(
-     `[Roles]: Assigned role "${roleName}" to user "${member.user.tag}".`
-    );
-   } else {
-    console.warn(`[Roles]: Role "${roleName}" not found in the guild.`);
-   }
+    const roleId = roleIdMap[roleName];
+    if (roleId) {
+      const role = interaction.guild.roles.cache.get(roleId);
+      if (role) {
+        if (botRole.position <= role.position) {
+          throw new Error(`Bot's role is not high enough to assign the "${roleName}" role. Please contact a server administrator.`);
+        }
+        try {
+          await member.roles.add(role);
+          assignedRoles.push(roleName);
+          console.log(`[Roles]: Assigned role "${roleName}" to user "${member.user.tag}".`);
+        } catch (error) {
+          console.error(`[Roles]: Failed to assign role "${roleName}":`, error.message);
+          missingRoles.push(roleName);
+        }
+      } else {
+        console.warn(`[Roles]: Role "${roleName}" not found in the guild.`);
+        missingRoles.push(roleName);
+      }
+    } else {
+      console.warn(`[Roles]: Role ID not found for "${roleName}" in configuration.`);
+      missingRoles.push(roleName);
+    }
   }
 
   for (const perk of jobPerks) {
-   const perkRoleName = `Job Perk: ${perk}`;
-   const perkRole = interaction.guild.roles.cache.find(
-    (r) => r.name === perkRoleName
-   );
-   if (perkRole) {
-    await member.roles.add(perkRole);
-    console.log(
-     `[Roles]: Assigned perk role "${perkRole.name}" to user "${member.user.tag}".`
-    );
-   } else {
-    console.warn(
-     `[Roles]: Perk role "${perkRoleName}" not found in the guild.`
-    );
-   }
+    const perkRoleId = jobPerkIdMap[perk];
+    if (perkRoleId) {
+      const perkRole = interaction.guild.roles.cache.get(perkRoleId);
+      if (perkRole) {
+        if (botRole.position <= perkRole.position) {
+          console.warn(`[Roles]: Bot's role is not high enough to assign the "Job Perk: ${perk}" role.`);
+          missingRoles.push(`Job Perk: ${perk}`);
+          continue;
+        }
+        try {
+          await member.roles.add(perkRole);
+          assignedRoles.push(`Job Perk: ${perk}`);
+          console.log(`[Roles]: Assigned perk role "Job Perk: ${perk}" to user "${member.user.tag}".`);
+        } catch (error) {
+          console.error(`[Roles]: Failed to assign perk role "Job Perk: ${perk}":`, error.message);
+          missingRoles.push(`Job Perk: ${perk}`);
+        }
+      } else {
+        console.warn(`[Roles]: Perk role "Job Perk: ${perk}" not found in the guild.`);
+        missingRoles.push(`Job Perk: ${perk}`);
+      }
+    } else {
+      console.warn(`[Roles]: Perk role ID not found for "${perk}" in configuration.`);
+      missingRoles.push(`Job Perk: ${perk}`);
+    }
+  }
+
+  // If any roles are missing, notify the user
+  if (missingRoles.length > 0) {
+    await interaction.followUp({
+      content: `⚠️ Some roles could not be assigned: ${missingRoles.join(', ')}. Please contact a server administrator to set up these roles.`,
+      ephemeral: true
+    });
   }
 
   user.characterSlot -= 1;
@@ -910,10 +984,8 @@ async function handleCreateCharacter(interaction, subcommand) {
   await createCharacterInteraction(interaction);
 
   await interaction.followUp({
-   content:
-    "🎉 Your character has been successfully created! Your remaining character slots: " +
-    user.characterSlot,
-   ephemeral: true,
+    content: `🎉 Your character has been successfully created! Your remaining character slots: ${user.characterSlot}${assignedRoles.length > 0 ? `\n✅ Assigned roles: ${assignedRoles.join(', ')}` : ''}`,
+    ephemeral: true,
   });
  } catch (error) {
   handleError(error, "character.js");

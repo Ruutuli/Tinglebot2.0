@@ -11,7 +11,7 @@ const { handleError } = require('../utils/globalErrorHandler');
 const TRELLO_API_KEY = process.env.TRELLO_API_KEY;
 const TRELLO_TOKEN = process.env.TRELLO_TOKEN;
 const TRELLO_LIST_ID = process.env.TRELLO_LIST_ID;
-const TRELLO_LOG = process.env.TRELLO_LOG || '67fe7cc498f7d8f31520c1af';
+const TRELLO_LOG = process.env.TRELLO_LOG;
 const TRELLO_BOARD_ID = process.env.TRELLO_BOARD_ID;
 const TRELLO_WISHLIST = process.env.TRELLO_WISHLIST;
 

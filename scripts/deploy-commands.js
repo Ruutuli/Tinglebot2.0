@@ -93,12 +93,13 @@ async function deployCommands() {
             );
             console.log(`✅ Successfully registered commands to test server (${TEST_GUILD_ID})`);
         } else {
-            // In production, register commands globally
+            // In production, register commands to the specific server
+            const PRODUCTION_GUILD_ID = '603960955839447050';
             await rest.put(
-                Routes.applicationCommands(process.env.CLIENT_ID),
+                Routes.applicationGuildCommands(process.env.CLIENT_ID, PRODUCTION_GUILD_ID),
                 { body: commands }
             );
-            console.log('✅ Successfully registered global commands');
+            console.log(`✅ Successfully registered commands to production server (${PRODUCTION_GUILD_ID})`);
         }
     } catch (error) {
         console.error('❌ Error deploying commands:', error);

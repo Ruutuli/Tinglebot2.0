@@ -49,9 +49,9 @@ const { createGatherEmbed, createMonsterEncounterEmbed, createKOEmbed } = requir
 // ------------------- Village Channels -------------------
 // Define the allowed channels for each village.
 const villageChannels = {
-  Inariko: process.env.INARIKO_TOWN_HALL,
-  Rudania: process.env.RUDANIA_TOWN_HALL,
-  Vhintl: process.env.VHINTL_TOWN_HALL,
+  Inariko: process.env.INARIKO_TOWNHALL,
+  Rudania: process.env.RUDANIA_TOWNHALL,
+  Vhintl: process.env.VHINTL_TOWNHALL,
 };
 
 

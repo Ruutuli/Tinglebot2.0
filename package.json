@@ -11,7 +11,7 @@
   "dev": "cross-env NODE_ENV=development nodemon index.js",
   "scheduler": "cross-env NODE_ENV=production node scripts/scheduler.js",
   "deploy-commands": "cross-env NODE_ENV=development node scripts/deploy-commands.js",
-  "deploy": "cross-env NODE_ENV=production node scripts/deploy.js"
+  "deploy": "cross-env NODE_ENV=production node scripts/deploy-commands.js"
  },
  "author": "Ruu",
  "license": "ISC",

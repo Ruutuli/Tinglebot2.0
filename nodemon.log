@@ -112,8 +112,8 @@
 ✅ Loaded command: travel from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\world\travel.js
 ⚠️ The command at C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\world\village.js is missing a required "data" or "execute" property.
 🔄 Started refreshing 18 commands in development mode.
-(node:40560) Warning: Accessing non-existent property 'connectToInventories' of module exports inside circular dependency
+(node:40956) Warning: Accessing non-existent property 'connectToInventories' of module exports inside circular dependency
 (Use `node --trace-warnings ...` to show where the warning was created)
-(node:40560) Warning: Accessing non-existent property 'fetchCharacterById' of module exports inside circular dependency
-(node:40560) Warning: Accessing non-existent property 'updateCharacterById' of module exports inside circular dependency
+(node:40956) Warning: Accessing non-existent property 'fetchCharacterById' of module exports inside circular dependency
+(node:40956) Warning: Accessing non-existent property 'updateCharacterById' of module exports inside circular dependency
 ✅ Successfully registered commands to test server (1305484048063529002)

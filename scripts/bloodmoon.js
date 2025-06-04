@@ -150,9 +150,9 @@ function getChannelMappings() {
     };
   } else {
     return {
-      [process.env.RUDANIA_TOWN_HALL]: '🔥》rudania-townhall',
-      [process.env.INARIKO_TOWN_HALL]: '💧》inariko-townhall',
-      [process.env.VHINTL_TOWN_HALL]: '🌱》vhintl-townhall',
+      [process.env.RUDANIA_TOWNHALL]: '🔥》rudania-townhall',
+      [process.env.INARIKO_TOWNHALL]: '💧》inariko-townhall',
+      [process.env.VHINTL_TOWNHALL]: '🌱》vhintl-townhall',
     };
   }
 }
@@ -170,9 +170,9 @@ function getBloodMoonChannelMappings() {
     };
   } else {
     return {
-      [process.env.RUDANIA_TOWN_HALL]: '🔴🔥》rudania-townhall',
-      [process.env.INARIKO_TOWN_HALL]: '🔴💧》inariko-townhall',
-      [process.env.VHINTL_TOWN_HALL]: '🔴🌱》vhintl-townhall',
+      [process.env.RUDANIA_TOWNHALL]: '🔴🔥》rudania-townhall',
+      [process.env.INARIKO_TOWNHALL]: '🔴💧》inariko-townhall',
+      [process.env.VHINTL_TOWNHALL]: '🔴🌱》vhintl-townhall',
     };
   }
 }
