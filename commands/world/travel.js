@@ -70,19 +70,19 @@ const SEVERE_WEATHER_CONDITIONS = [
 ];
 
 const {
-  PATH_OF_SCARLET_LEAVES_CHANNEL_ID,
-  LEAF_DEW_WAY_CHANNEL_ID,
+  PATH_OF_SCARLET_LEAVES,
+  LEAF_DEW_WAY,
   TRAVEL_DELAY_MS = '3000'
 } = process.env;
 
-if (!PATH_OF_SCARLET_LEAVES_CHANNEL_ID || !LEAF_DEW_WAY_CHANNEL_ID) {
+if (!PATH_OF_SCARLET_LEAVES || !LEAF_DEW_WAY) {
   handleError(new Error('Missing required path channel IDs in environment variables.'), 'travel.js');
   throw new Error('Missing required path channel IDs in environment variables.');
 }
 
 const PATH_CHANNELS = {
-  pathOfScarletLeaves: PATH_OF_SCARLET_LEAVES_CHANNEL_ID,
-  leafDewWay:      LEAF_DEW_WAY_CHANNEL_ID
+  pathOfScarletLeaves: PATH_OF_SCARLET_LEAVES,
+  leafDewWay: LEAF_DEW_WAY
 };
 
 const MODE_CHOICES = [

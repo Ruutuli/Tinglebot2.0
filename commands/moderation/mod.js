@@ -656,11 +656,11 @@ async function handleMount(interaction) {
     // ------------------- Determine Village from Channel -------------------
     if (!village) {
       const channelId = interaction.channelId;
-      if (channelId === process.env.RUDANIA_TOWN_HALL) {
+      if (channelId === process.env.RUDANIA_TOWNHALL) {
         village = 'rudania';
-      } else if (channelId === process.env.INARIKO_TOWN_HALL) {
+      } else if (channelId === process.env.INARIKO_TOWNHALL) {
         village = 'inariko';
-      } else if (channelId === process.env.VHINTL_TOWN_HALL) {
+      } else if (channelId === process.env.VHINTL_TOWNHALL) {
         village = 'vhintl';
       } else {
         return interaction.editReply('❌ **You must use this command inside a Town Hall channel (Rudania, Inariko, or Vhintl).**');

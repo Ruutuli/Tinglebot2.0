@@ -68,9 +68,9 @@ const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
 
 // Add channel mapping
 const VILLAGE_CHANNELS = {
-  Rudania: process.env.RUDANIA_TOWN_HALL,
-  Inariko: process.env.INARIKO_TOWN_HALL,
-  Vhintl: process.env.VHINTL_TOWN_HALL
+  Rudania: process.env.RUDANIA_TOWNHALL,
+  Inariko: process.env.INARIKO_TOWNHALL,
+  Vhintl: process.env.VHINTL_TOWNHALL
 };
 
 // ------------------- Helper Functions -------------------

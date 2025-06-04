@@ -85,9 +85,9 @@ function createAnnouncementEmbed(title, description, thumbnail, image, footer) {
 // ============================================================================
 
 const TOWNHALL_CHANNELS = {
-  Rudania: process.env.RUDANIA_TOWN_HALL,
-  Inariko: process.env.INARIKO_TOWN_HALL,
-  Vhintl: process.env.VHINTL_TOWN_HALL
+  Rudania: process.env.RUDANIA_TOWNHALL,
+  Inariko: process.env.INARIKO_TOWNHALL,
+  Vhintl: process.env.VHINTL_TOWNHALL
 };
 
 // ---- Function: getCurrentSeason ----
@@ -355,9 +355,9 @@ function initializeScheduler(client) {
   (async () => {
     try {
       const channels = [
-        process.env.RUDANIA_TOWN_HALL,
-        process.env.INARIKO_TOWN_HALL,
-        process.env.VHINTL_TOWN_HALL,
+        process.env.RUDANIA_TOWNHALL,
+        process.env.INARIKO_TOWNHALL,
+        process.env.VHINTL_TOWNHALL,
       ];
 
       for (const channelId of channels) {
@@ -402,9 +402,9 @@ function initializeScheduler(client) {
   // Blood moon tracking 
   createCronJob('00 20 * * *', 'blood moon tracking', async () => {
     const channels = [
-      process.env.RUDANIA_TOWN_HALL,
-      process.env.INARIKO_TOWN_HALL,
-      process.env.VHINTL_TOWN_HALL,
+      process.env.RUDANIA_TOWNHALL,
+      process.env.INARIKO_TOWNHALL,
+      process.env.VHINTL_TOWNHALL,
     ];
 
     for (const channelId of channels) {
