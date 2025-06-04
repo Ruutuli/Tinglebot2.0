@@ -109,7 +109,6 @@ function isBloodMoonDay() {
 
   // If it's not a Blood Moon date, return false
   if (!isBloodMoonDate) {
-    console.log(`[bloodmoon.js]: 🌑 Not a Blood Moon date`);
     return false;
   }
 
@@ -117,7 +116,6 @@ function isBloodMoonDay() {
   const estHour = now.getUTCHours() - 4; // Convert UTC to EST
   const isBloodMoonHour = estHour === 20;
   
-  console.log(`[bloodmoon.js]: ${isBloodMoonHour ? '🌕' : '🌑'} Blood Moon hour check: ${estHour}:00 EST`);
   return isBloodMoonHour;
 }
 
@@ -132,7 +130,6 @@ async function trackBloodMoon(client, channelId) {
     await renameChannels(client);
     await sendBloodMoonAnnouncement(client, channelId, 'The Blood Moon is upon us! Beware!');
   } else {
-    console.log('[bloodmoon.js]: 🌑 Blood Moon Inactive');
     await revertChannelNames(client);
   }
 }
@@ -140,28 +137,85 @@ async function trackBloodMoon(client, channelId) {
 
 // ============================================================================
 // Channel Management Functions
+// ------------------- getChannelMappings -------------------
+// Returns the appropriate channel mappings based on the current environment
+function getChannelMappings() {
+  const isProduction = process.env.NODE_ENV === 'production';
+  
+  if (isProduction) {
+    return {
+      [process.env.RUDANIA_TOWNHALL]: '🔥》rudania-townhall',
+      [process.env.INARIKO_TOWNHALL]: '💧》inariko-townhall',
+      [process.env.VHINTL_TOWNHALL]: '🌱》vhintl-townhall',
+    };
+  } else {
+    return {
+      [process.env.RUDANIA_TOWN_HALL]: '🔥》rudania-townhall',
+      [process.env.INARIKO_TOWN_HALL]: '💧》inariko-townhall',
+      [process.env.VHINTL_TOWN_HALL]: '🌱》vhintl-townhall',
+    };
+  }
+}
+
+// ------------------- getBloodMoonChannelMappings -------------------
+// Returns the blood moon channel mappings based on the current environment
+function getBloodMoonChannelMappings() {
+  const isProduction = process.env.NODE_ENV === 'production';
+  
+  if (isProduction) {
+    return {
+      [process.env.RUDANIA_TOWNHALL]: '🔴🔥》rudania-townhall',
+      [process.env.INARIKO_TOWNHALL]: '🔴💧》inariko-townhall',
+      [process.env.VHINTL_TOWNHALL]: '🔴🌱》vhintl-townhall',
+    };
+  } else {
+    return {
+      [process.env.RUDANIA_TOWN_HALL]: '🔴🔥》rudania-townhall',
+      [process.env.INARIKO_TOWN_HALL]: '🔴💧》inariko-townhall',
+      [process.env.VHINTL_TOWN_HALL]: '🔴🌱》vhintl-townhall',
+    };
+  }
+}
+
 // ------------------- changeChannelName -------------------
 // Changes the name of a Discord channel.
 async function changeChannelName(client, channelId, newName) {
   try {
-    const channel = await client.channels.fetch(channelId);
+    // First check if the channel exists and we have access
+    const channel = await client.channels.fetch(channelId).catch(error => {
+      if (error.code === 50001) {
+        console.error(`[bloodmoon.js]: ❌ Missing permissions for channel ${channelId}`);
+      } else if (error.code === 10003) {
+        console.error(`[bloodmoon.js]: ❌ Channel ${channelId} not found`);
+      } else {
+        console.error(`[bloodmoon.js]: ❌ Error accessing channel ${channelId}: ${error.message}`);
+      }
+      return null;
+    });
+
+    if (!channel) {
+      return; // Exit if channel couldn't be fetched
+    }
+
+    // Check if we have permission to manage the channel
+    const permissions = channel.permissionsFor(client.user);
+    if (!permissions?.has('ManageChannels')) {
+      console.error(`[bloodmoon.js]: ❌ Bot lacks 'Manage Channels' permission for channel ${channel.name}`);
+      return;
+    }
+
+    // Attempt to change the channel name
     await channel.setName(newName);
   } catch (error) {
     handleError(error, 'bloodmoon.js');
-
-    console.error(`[bloodmoon.js]: logs [changeChannelName] Error: ${error.message}`);
+    console.error(`[bloodmoon.js]: ❌ Failed to change channel name: ${error.message}`);
   }
 }
 
 // ------------------- renameChannels -------------------
 // Renames channels to indicate Blood Moon activation.
 async function renameChannels(client) {
-  const channelMappings = {
-    [process.env.RUDANIA_TOWN_HALL]: '🔴🔥》rudania-townhall',
-    [process.env.INARIKO_TOWN_HALL]: '🔴💧》inariko-townhall',
-    [process.env.VHINTL_TOWN_HALL]: '🔴🌱》vhintl-townhall',
-  };
-
+  const channelMappings = getBloodMoonChannelMappings();
   for (const [channelId, newName] of Object.entries(channelMappings)) {
     await changeChannelName(client, channelId, newName);
   }
@@ -170,23 +224,33 @@ async function renameChannels(client) {
 // ------------------- revertChannelNames -------------------
 // Reverts channel names to their default state and sends end-of-event announcements.
 async function revertChannelNames(client) {
-  const channelMappings = {
-    [process.env.RUDANIA_TOWN_HALL]: '🔥》rudania-townhall',
-    [process.env.INARIKO_TOWN_HALL]: '💧》inariko-townhall',
-    [process.env.VHINTL_TOWN_HALL]: '🌱》vhintl-townhall',
-  };
+  const channelMappings = getChannelMappings();
 
   // Determine if Yesterday Was a Blood Moon
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
+  const wasBloodMoonYesterday = isBloodmoon(yesterday);
 
-  const wasBloodMoonYesterday = isBloodmoon(yesterday);  // Using your existing isBloodmoon function
+  // Track successful channel changes
+  const successfulChannels = new Set();
 
   for (const [channelId, newName] of Object.entries(channelMappings)) {
-    await changeChannelName(client, channelId, newName);
+    try {
+      await changeChannelName(client, channelId, newName);
+      successfulChannels.add(channelId);
+    } catch (error) {
+      console.error(`[bloodmoon.js]: ❌ Failed to revert channel ${channelId}: ${error.message}`);
+    }
+  }
 
-    if (wasBloodMoonYesterday) {
-      await sendBloodMoonEndAnnouncement(client, channelId);  // Only send if true
+  // Only send announcements to channels we successfully modified
+  if (wasBloodMoonYesterday) {
+    for (const channelId of successfulChannels) {
+      try {
+        await sendBloodMoonEndAnnouncement(client, channelId);
+      } catch (error) {
+        console.error(`[bloodmoon.js]: ❌ Failed to send end announcement to channel ${channelId}: ${error.message}`);
+      }
     }
   }
 }
@@ -210,9 +274,7 @@ async function triggerBloodMoonNow(client, channelId) {
 // Returns whether the Blood Moon is currently active.
 function isBloodMoonActive() {
   try {
-    const active = isBloodMoonDay();
-    console.log(`[bloodmoon.js]: 🌙 Blood Moon status: ${active ? 'Active' : 'Inactive'}`);
-    return active;
+    return isBloodMoonDay();
   } catch (error) {
     handleError(error, 'bloodmoon.js');
     console.error(`[bloodmoon.js]: ❌ Blood Moon status check failed: ${error.message}`);

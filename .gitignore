@@ -13,8 +13,3 @@ nodemon.log
 testingCode/
 .tmp.driveupload/
 .tmp.drivedownload/
-
-# Deployment scripts (no longer needed)
-# scripts/deploy.js
-# railway.json
-# scripts/deploy.template.js

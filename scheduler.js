@@ -346,7 +346,6 @@ function initializeScheduler(client) {
   // Add startup Blood Moon check
   (async () => {
     try {
-      console.log('[scheduler.js]: 🔄 Checking Blood Moon status on startup...');
       const channels = [
         process.env.RUDANIA_TOWN_HALL,
         process.env.INARIKO_TOWN_HALL,
@@ -355,17 +354,16 @@ function initializeScheduler(client) {
 
       for (const channelId of channels) {
         if (isBloodMoonDay()) {
-          console.log(`[scheduler.js]: 🌕 Blood Moon is active on startup`);
+          console.log(`[scheduler.js]: 🌕 Blood Moon active`);
           await renameChannels(client);
           await sendBloodMoonAnnouncement(client, channelId, 'The Blood Moon is upon us! Beware!');
         } else {
-          console.log(`[scheduler.js]: 🌑 Blood Moon is inactive on startup`);
           await revertChannelNames(client);
         }
       }
     } catch (error) {
       handleError(error, 'scheduler.js');
-      console.error(`[scheduler.js]: ❌ Startup Blood Moon check failed: ${error.message}`);
+      console.error(`[scheduler.js]: ❌ Blood Moon check failed: ${error.message}`);
     }
   })();
 
@@ -375,9 +373,7 @@ function initializeScheduler(client) {
   createCronJob('0 8 * * *', 'daily stamina recovery', recoverDailyStamina);
   createCronJob('0 0 1 * *', 'monthly vending stock generation', generateVendingStockList);
   createCronJob('0 0 * * 0', 'weekly pet rolls reset', async () => {
-    console.log(`[scheduler.js]: 🔄 Starting weekly pet roll reset at ${new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })}`);
     await resetPetRollsForAllCharacters();
-    console.log(`[scheduler.js]: ✅ Completed weekly pet roll reset at ${new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })}`);
   }, 'America/New_York');
   createCronJob('0 0 * * *', 'reset pet last roll dates', resetPetLastRollDates);
   createCronJob('0 0 * * *', 'request expiration and cleanup', async () => {
@@ -410,7 +406,6 @@ function initializeScheduler(client) {
           await renameChannels(client);
           await sendBloodMoonAnnouncement(client, channelId, 'The Blood Moon rises at nightfall! Beware!');
         } else {
-          console.log(`[scheduler.js]: 🌑 Blood Moon fading at dawn`);
           await revertChannelNames(client);
         }
       } catch (error) {
