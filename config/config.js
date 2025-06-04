@@ -3,6 +3,8 @@ const fs = require('fs');
 const { handleError } = require('../utils/globalErrorHandler');
 const path = require('path');
 const dotenv = require('dotenv');
+dotenv.config({ path: `.env.${env}` });
+
 
 // Load Google service account credentials
 let serviceAccount;
