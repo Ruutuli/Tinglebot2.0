@@ -23,6 +23,10 @@ const { getCurrentWeather, saveWeather } = require('./modules/weatherModule');
 const Pet = require('./models/PetModel');
 const { client } = require('./index');
 
+// Load environment variables based on NODE_ENV
+const env = process.env.NODE_ENV || 'development';
+dotenv.config({ path: `.env.${env}` });
+
 // ============================================================================
 // ---- Utility Functions ----
 // Core utility functions for creating cron jobs and announcement embeds
@@ -136,7 +140,9 @@ async function executeBirthdayAnnouncements(client) {
   const now = new Date();
   const estNow = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
   const today = estNow.toISOString().slice(5, 10);
-  const guildIds = process.env.GUILD_IDS ? process.env.GUILD_IDS.split(',') : [];
+  const guildIds = env === 'development' 
+    ? [process.env.TEST_GUILD_ID]
+    : [process.env.PROD_GUILD_ID];
   
   const guildChannelMap = {
     '1305484048063529002': '1326997448085995530', // Roots Of The Wild
