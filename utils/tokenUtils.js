@@ -6,6 +6,7 @@
 // Modules for token calculations and formatting
 const artModule = require('../modules/artModule');
 const { capitalizeFirstLetter } = require('../modules/formattingModule');
+const { EmbedBuilder } = require('discord.js');
 
 
 // ------------------- Global Variables -------------------
@@ -179,60 +180,71 @@ function handleTokenError(error, interaction) {
         console.error('[tokenUtils.js]: ❌ System error:', error);
     }
 
-    let errorMessage = '';
-    let guideMessage = '';
+    let errorEmbed = new EmbedBuilder()
+        .setColor(0xFF0000)
+        .setTimestamp();
 
     if (error.message.includes('Invalid URL')) {
-        errorMessage = '❌ Your token tracker link is not set up correctly.';
-        guideMessage = '📝 **Quick Guide:**\n1. Use `/tokens setup` to set up your tracker\n2. Make sure to use a valid Google Sheets URL';
+        errorEmbed
+            .setTitle('❌ Invalid Token Tracker Link')
+            .setDescription('Your token tracker link is not set up correctly.')
+            .addFields(
+                { name: '📝 Quick Guide', value: '1. Use `/tokens setup` to set up your tracker\n2. Make sure to use a valid Google Sheets URL' }
+            )
+            .setFooter({ text: 'Need more help? Use /tokens setup to verify your setup' });
     } else if (error.message.includes('permission')) {
-        errorMessage = '❌ The bot cannot access your token tracker.';
-        guideMessage = '📝 **Quick Guide:**\n1. Share your sheet with: `tinglebot@rotw-tinglebot.iam.gserviceaccount.com`\n2. Make sure to give **edit** permissions';
+        errorEmbed
+            .setTitle('❌ Access Denied')
+            .setDescription('The bot cannot access your token tracker.')
+            .addFields(
+                { name: '📝 Quick Guide', value: '1. Share your sheet with: `tinglebot@rotw-tinglebot.iam.gserviceaccount.com`\n2. Make sure to give **edit** permissions' }
+            )
+            .setFooter({ text: 'Need more help? Use /tokens setup to verify your setup' });
     } else if (error.message.includes('404')) {
-        errorMessage = '❌ Your token tracker sheet or tab is missing.';
-        guideMessage = '📝 **Quick Guide:**\n1. Make sure you have a tab named `loggedTracker`\n2. Check that your sheet URL is correct';
+        errorEmbed
+            .setTitle('❌ Missing Sheet or Tab')
+            .setDescription('Your token tracker sheet or tab is missing.')
+            .addFields(
+                { name: '📝 Quick Guide', value: '1. Make sure you have a tab named `loggedTracker`\n2. Check that your sheet URL is correct' }
+            )
+            .setFooter({ text: 'Need more help? Use /tokens setup to verify your setup' });
     } else if (error.message.includes('headers')) {
-        errorMessage = '❌ Your token tracker is missing required headers.';
-        guideMessage = '📝 **Quick Guide:**\n1. Add these headers in cells B7:F7:\n`SUBMISSION | LINK | CATEGORIES | TYPE | TOKEN AMOUNT`';
+        errorEmbed
+            .setTitle('❌ Missing Required Headers')
+            .setDescription('Your token tracker is missing required headers.')
+            .addFields(
+                { name: '📝 Quick Guide', value: '1. Add these headers in cells B7:F7:\n`SUBMISSION | LINK | CATEGORIES | TYPE | TOKEN AMOUNT`' }
+            )
+            .setFooter({ text: 'Need more help? Use /tokens setup to verify your setup' });
     } else if (error.message.includes('No \'earned\' entries found')) {
-        errorMessage = '❌ No earned entries found in your token tracker.';
-        guideMessage = '📝 **Quick Guide:**\n\n' +
-            '1. Add at least one entry with type "earned" in column E:\n' +
-            '```\n' +
-            'SUBMISSION | LINK | CATEGORIES | TYPE   | TOKEN AMOUNT\n' +
-            'Artwork   | URL  | Art        | earned | 100\n' +
-            '```\n\n' +
-            '2. Make sure your sheet has these headers in row 7 (B7:F7):\n' +
-            '```\n' +
-            'SUBMISSION | LINK | CATEGORIES | TYPE | TOKEN AMOUNT\n' +
-            '```\n\n' +
-            '3. Share your sheet with: `tinglebot@rotw-tinglebot.iam.gserviceaccount.com`\n' +
-            '4. Make sure you have a tab named exactly `loggedTracker`\n' +
-            '5. Use `/tokens setup` to verify your setup';
+        errorEmbed
+            .setTitle('❌ No Earned Entries')
+            .setDescription('No earned entries found in your token tracker.')
+            .addFields(
+                { name: '📝 Quick Guide', value: '1. Add at least one entry with type "earned" in column E:\n```\nSUBMISSION | LINK | CATEGORIES | TYPE   | TOKEN AMOUNT\nArtwork   | URL  | Art        | earned | 100\n```\n\n2. Make sure your sheet has these headers in row 7 (B7:F7):\n```\nSUBMISSION | LINK | CATEGORIES | TYPE | TOKEN AMOUNT\n```\n\n3. Share your sheet with: `tinglebot@rotw-tinglebot.iam.gserviceaccount.com`\n4. Make sure you have a tab named exactly `loggedTracker`\n5. Use `/tokens setup` to verify your setup' }
+            )
+            .setFooter({ text: 'Need more help? Use /tokens setup to verify your setup' });
     } else if (error.message.includes('Unknown interaction')) {
-        errorMessage = '❌ The interaction has expired.';
-        guideMessage = '📝 **Quick Guide:**\n1. Please try the command again\n2. Make sure to respond within 3 seconds';
+        errorEmbed
+            .setTitle('❌ Interaction Expired')
+            .setDescription('The interaction has expired.')
+            .addFields(
+                { name: '📝 Quick Guide', value: '1. Please try the command again\n2. Make sure to respond within 3 seconds' }
+            )
+            .setFooter({ text: 'Need more help? Use /tokens setup to verify your setup' });
     } else {
-        errorMessage = '❌ **An error occurred with your token tracker!**';
-        guideMessage = '📝 **Quick Guide:**\n\n' +
-            '1. Make sure your sheet has these headers in row 7 (B7:F7):\n' +
-            '```\n' +
-            'SUBMISSION | LINK | CATEGORIES | TYPE | TOKEN AMOUNT\n' +
-            '```\n\n' +
-            '2. Add at least one entry with type "earned" in column E:\n' +
-            '```\n' +
-            'SUBMISSION | LINK | CATEGORIES | TYPE   | TOKEN AMOUNT\n' +
-            'Artwork   | URL  | Art        | earned | 100\n' +
-            '```\n\n' +
-            '3. Share your sheet with: `tinglebot@rotw-tinglebot.iam.gserviceaccount.com`\n' +
-            '4. Make sure you have a tab named exactly `loggedTracker`\n' +
-            '5. Use `/tokens setup` to verify your setup';
+        errorEmbed
+            .setTitle('❌ Token Tracker Error')
+            .setDescription('An error occurred with your token tracker!')
+            .addFields(
+                { name: '📝 Quick Guide', value: '1. Make sure your sheet has these headers in row 7 (B7:F7):\n```\nSUBMISSION | LINK | CATEGORIES | TYPE | TOKEN AMOUNT\n```\n\n2. Add at least one entry with type "earned" in column E:\n```\nSUBMISSION | LINK | CATEGORIES | TYPE   | TOKEN AMOUNT\nArtwork   | URL  | Art        | earned | 100\n```\n\n3. Share your sheet with: `tinglebot@rotw-tinglebot.iam.gserviceaccount.com`\n4. Make sure you have a tab named exactly `loggedTracker`\n5. Use `/tokens setup` to verify your setup' }
+            )
+            .setFooter({ text: 'Need more help? Use /tokens setup to verify your setup' });
     }
 
     return {
-        errorMessage,
-        guideMessage,
-        fullMessage: `${errorMessage}\n\n${guideMessage}\n\n💡 Need more help? Use \`/tokens setup\` to verify your setup.`
+        errorEmbed,
+        fullMessage: `${errorEmbed.data.title}\n\n${errorEmbed.data.description}\n\n${errorEmbed.data.fields[0].value}\n\n💡 Need more help? Use \`/tokens setup\` to verify your setup.`
     };
 }
 

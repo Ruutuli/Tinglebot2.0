@@ -18,6 +18,7 @@ const generalCategories = require("../models/GeneralItemCategories");
 const { v4: uuidv4 } = require('uuid');
 const mongoose = require('mongoose');
 const ItemModel = require('../models/ItemModel');
+const { EmbedBuilder } = require('discord.js');
 
 // ============================================================================
 // ---- Constants ----
@@ -185,6 +186,19 @@ async function syncToInventoryDatabase(character, item, interaction) {
       // Remove item logic
       if (!existingItem || existingItem.quantity < Math.abs(item.quantity)) {
         console.error(`[inventoryUtils.js]: ❌ Not enough ${dbDoc.itemName} for ${character.name}`);
+        const errorEmbed = new EmbedBuilder()
+          .setColor(0xFF0000)
+          .setTitle('❌ Insufficient Items')
+          .setDescription(`Not enough '${dbDoc.itemName}' to remove from inventory.`)
+          .addFields(
+            { name: 'Character', value: character.name, inline: true },
+            { name: 'Item', value: dbDoc.itemName, inline: true },
+            { name: 'Required', value: Math.abs(item.quantity).toString(), inline: true },
+            { name: 'Available', value: existingItem ? existingItem.quantity.toString() : '0', inline: true }
+          )
+          .setFooter({ text: 'Check your inventory and try again' })
+          .setTimestamp();
+
         throw new Error(`Not enough '${dbDoc.itemName}' to remove from inventory.`);
       }
       const newQty = existingItem.quantity + item.quantity; // item.quantity is negative
@@ -305,6 +319,16 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
 
     const character = await dbFunctions.fetchCharacterById(characterId);
     if (!character) {
+      const errorEmbed = new EmbedBuilder()
+        .setColor(0xFF0000)
+        .setTitle('❌ Character Not Found')
+        .setDescription(`Character with ID ${characterId} not found`)
+        .addFields(
+          { name: 'Character ID', value: characterId.toString(), inline: true }
+        )
+        .setFooter({ text: 'Please check the character ID and try again' })
+        .setTimestamp();
+
       throw new Error(`Character with ID ${characterId} not found`);
     }
     console.log(`[inventoryUtils.js]: 📦 Processing inventory for ${character.name}`);
@@ -396,8 +420,18 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
     }
 
     if (inventoryItem.quantity < quantity) {
-      console.log(`[inventoryUtils.js]: ❌ Not enough ${itemName} in inventory. Have: ${inventoryItem.quantity}, Need: ${quantity}`);
-      return false;
+      const errorEmbed = new EmbedBuilder()
+        .setColor(0xFF0000)
+        .setTitle('❌ Insufficient Items')
+        .setDescription(`Not enough ${itemName} in inventory`)
+        .addFields(
+          { name: 'Required', value: quantity.toString(), inline: true },
+          { name: 'Available', value: existingItem ? existingItem.quantity.toString() : '0', inline: true }
+        )
+        .setFooter({ text: 'Check your inventory and try again' })
+        .setTimestamp();
+
+      throw new Error(`Not enough ${itemName} in inventory`);
     }
 
     console.log(`[inventoryUtils.js]: 📊 Found ${inventoryItem.quantity} ${itemName} in ${character.name}'s inventory`);
@@ -674,12 +708,23 @@ const processMaterials = async (interaction, character, inventory, craftableItem
     );
     if (totalQuantity < requiredQuantity) {
       if (interaction && interaction.followUp) {
+        const errorEmbed = new EmbedBuilder()
+          .setColor(0xFF0000)
+          .setTitle('❌ Insufficient Materials')
+          .setDescription(`You don't have enough ${materialName} to craft this item!`)
+          .addFields(
+            { name: 'Required Quantity', value: requiredQuantity.toString(), inline: true },
+            { name: 'Available Quantity', value: totalQuantity.toString(), inline: true }
+          )
+          .setFooter({ text: 'Try gathering more materials or check your inventory' })
+          .setTimestamp();
+
         await interaction.followUp({
-          content: `❌ **You don't have enough ${materialName} to craft this item!**\nRequired: ${requiredQuantity}, Found: ${totalQuantity}`,
+          embeds: [errorEmbed],
           ephemeral: true,
         });
       }
-      return "canceled"; // Cancel crafting gracefully
+      return "canceled";
     }
 
     for (const specificItem of specificItems) {
