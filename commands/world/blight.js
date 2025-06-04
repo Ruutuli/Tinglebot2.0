@@ -126,10 +126,10 @@ module.exports = {
       return;
     }
 
-    // Defer reply immediately for all subcommands to prevent timeout
-    await interaction.deferReply();
-
     try {
+      // Defer reply immediately for all subcommands to prevent timeout
+      await interaction.deferReply();
+
       const subcommand = interaction.options.getSubcommand();
       
       if (subcommand === 'roll') {
@@ -260,12 +260,27 @@ module.exports = {
         }
       }
     } catch (error) {
-      handleError(error, 'blight.js');
-      console.error('[blight.js]: Error executing blight command:', error);
-      await interaction.editReply({
-        content: '❌ An error occurred while processing your request.',
-        ephemeral: true
-      });
+      console.error(`[blight.js]: Error executing blight command:`, error);
+      
+      // Create a detailed error message
+      let errorMessage = '❌ An error occurred while processing your request.\n\n';
+      
+      if (error.code === 'InteractionAlreadyReplied') {
+        errorMessage += '**Error Type**: Interaction Already Replied\n';
+        errorMessage += '**What Happened**: The system tried to respond to your command multiple times.\n';
+        errorMessage += '**How to Fix**: Please try your command again. If the issue persists, wait a few moments before trying again.';
+      } else {
+        errorMessage += '**Error Type**: Unexpected Error\n';
+        errorMessage += '**What Happened**: Something went wrong while processing your request.\n';
+        errorMessage += '**How to Fix**: Please try your command again. If the issue persists, contact a moderator.';
+      }
+
+      // Try to edit the reply if it exists, otherwise send a new reply
+      try {
+        await interaction.editReply({ content: errorMessage, ephemeral: true });
+      } catch (editError) {
+        await interaction.reply({ content: errorMessage, ephemeral: true });
+      }
     }
   }
 };
