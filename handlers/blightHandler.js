@@ -379,13 +379,37 @@ async function validateCharacterOwnership(interaction, characterName) {
         name: { $regex: new RegExp(`^${characterName}$`, 'i') } 
       });
       if (!exists) {
+        const errorEmbed = new EmbedBuilder()
+          .setColor('#FF0000')
+          .setTitle('❌ Character Not Found')
+          .setDescription(`The character "${characterName}" does not exist in the database.`)
+          .addFields(
+            { name: '🔍 Possible Reasons', value: '• Character name is misspelled\n• Character was deleted\n• Character was never created' },
+            { name: '💡 Suggestion', value: 'Please check the spelling and try again.' }
+          )
+          .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
+          .setFooter({ text: 'Character Validation' })
+          .setTimestamp();
+
         await interaction.editReply({
-          content: `❌ Character "${characterName}" does not exist. Please check the spelling and try again.`,
+          embeds: [errorEmbed],
           ephemeral: true
         });
       } else {
+        const errorEmbed = new EmbedBuilder()
+          .setColor('#FF0000')
+          .setTitle('❌ Ownership Error')
+          .setDescription(`You can only perform this action for your **own** characters!`)
+          .addFields(
+            { name: '🔒 Character Ownership', value: `The character "${characterName}" belongs to another user.` },
+            { name: '💡 Suggestion', value: 'Please use this command with one of your own characters.' }
+          )
+          .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
+          .setFooter({ text: 'Character Validation' })
+          .setTimestamp();
+
         await interaction.editReply({
-          content: `❌ You can only perform this action for your **own** characters!`,
+          embeds: [errorEmbed],
           ephemeral: true
         });
       }
@@ -395,8 +419,21 @@ async function validateCharacterOwnership(interaction, characterName) {
   } catch (error) {
     handleError(error, 'blightHandler.js');
     console.error('[blightHandler]: Error validating character ownership:', error);
+    
+    const errorEmbed = new EmbedBuilder()
+      .setColor('#FF0000')
+      .setTitle('❌ System Error')
+      .setDescription('An error occurred while validating character ownership.')
+      .addFields(
+        { name: '🔧 Technical Details', value: 'The system encountered an unexpected error while processing your request.' },
+        { name: '💡 Suggestion', value: 'Please try again later or contact a moderator if the issue persists.' }
+      )
+      .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
+      .setFooter({ text: 'Character Validation' })
+      .setTimestamp();
+
     await interaction.editReply({
-      content: '❌ An error occurred while validating character ownership.',
+      embeds: [errorEmbed],
       ephemeral: true
     });
     return null;
@@ -464,50 +501,112 @@ function createBlightHealingFields(healingRequirement, submissionId, expiresAt) 
     throw new Error('Invalid expiration date');
   }
 
-  let requirementValue;
-  if (healingRequirement.type === 'item' && Array.isArray(healingRequirement.items)) {
-    // Format item list
-    const itemList = healingRequirement.items
-      .map(i => `• **${i.name} x${i.quantity}**`)
-      .join('\n');
-    requirementValue = `> **Type**: 🍎 Item\n> ${healingRequirement.description}\n\n__Accepted Items:__\n${itemList}`;
-  } else {
-    requirementValue = `> **Type**: ${
+  const fields = [];
+
+  // Add requirement type and description
+  fields.push({
+    name: '<:bb0:854499720797618207> __Healing Requirement__',
+    value: `> **Type**: ${
       healingRequirement.type === 'art'
         ? '🎨 Art'
         : healingRequirement.type === 'writing'
         ? '✍️ Writing'
         : '🍎 Item'
-    }\n> ${healingRequirement.description}`;
+    }`
+  });
+
+  // Split description into chunks if needed
+  const descriptionChunks = splitIntoChunks(healingRequirement.description, 1000);
+  descriptionChunks.forEach((chunk, index) => {
+    fields.push({
+      name: index === 0 ? '📝 __Task Description__' : '📝 __Task Description (continued)__',
+      value: chunk
+    });
+  });
+
+  // Add accepted items if it's an item requirement
+  if (healingRequirement.type === 'item' && Array.isArray(healingRequirement.items)) {
+    const itemList = healingRequirement.items
+      .map(i => `• **${i.name} x${i.quantity}**`)
+      .join('\n');
+    
+    // Split item list into chunks if needed
+    const itemChunks = splitIntoChunks(itemList, 1000);
+    itemChunks.forEach((chunk, index) => {
+      fields.push({
+        name: index === 0 ? '📦 __Accepted Items__' : '📦 __Accepted Items (continued)__',
+        value: chunk
+      });
+    });
   }
 
-  const fields = [
-    {
-      name: '<:bb0:854499720797618207> __Healing Requirement__',
-      value: requirementValue,
-    },
-    {
-      name: '<:bb0:854499720797618207> __Submission ID__',
-      value: `\`${submissionId}\``,
-    },
-    {
-      name: '<:bb0:854499720797618207> __Alternative Option__',
-      value: `> If you cannot fulfill this request, you can forfeit all of your total tokens to be healed. Use </blight submit:1306176789634355241> to forfeit your tokens.`,
-    },
-    {
-      name: '<:bb0:854499720797618207> __Expiration__',
-      value: `> This request will expire in 30 days (<t:${Math.floor(expirationDate.getTime() / 1000)}:R>).\n> ⚠️ You must complete the healing before expiration or your character will remain blighted.`,
-    }
-  ];
+  // Add submission ID
+  fields.push({
+    name: '<:bb0:854499720797618207> __Submission ID__',
+    value: `\`${submissionId}\``
+  });
 
-  // Validate field values
-  for (const field of fields) {
-    if (!field.name || !field.value || typeof field.name !== 'string' || typeof field.value !== 'string') {
-      throw new Error('Invalid field format');
-    }
-  }
+  // Add alternative option
+  fields.push({
+    name: '<:bb0:854499720797618207> __Alternative Option__',
+    value: `> If you cannot fulfill this request, you can forfeit all of your total tokens to be healed. Use </blight submit:1306176789634355241> to forfeit your tokens.`
+  });
+
+  // Add expiration
+  fields.push({
+    name: '<:bb0:854499720797618207> __Expiration__',
+    value: `> This request will expire in 30 days (<t:${Math.floor(expirationDate.getTime() / 1000)}:R>).\n> ⚠️ You must complete the healing before expiration or your character will remain blighted.`
+  });
 
   return fields;
+}
+
+// Helper function to split text into chunks
+function splitIntoChunks(text, maxLength) {
+  const chunks = [];
+  let currentChunk = '';
+  
+  // Split by newlines first to preserve formatting
+  const lines = text.split('\n');
+  
+  for (const line of lines) {
+    // If adding this line would exceed the limit, start a new chunk
+    if (currentChunk.length + line.length + 1 > maxLength) {
+      if (currentChunk) {
+        chunks.push(currentChunk);
+        currentChunk = '';
+      }
+      
+      // If a single line is too long, split it into words
+      if (line.length > maxLength) {
+        const words = line.split(' ');
+        let tempLine = '';
+        
+        for (const word of words) {
+          if (tempLine.length + word.length + 1 > maxLength) {
+            chunks.push(tempLine);
+            tempLine = word;
+          } else {
+            tempLine += (tempLine ? ' ' : '') + word;
+          }
+        }
+        
+        if (tempLine) {
+          currentChunk = tempLine;
+        }
+      } else {
+        currentChunk = line;
+      }
+    } else {
+      currentChunk += (currentChunk ? '\n' : '') + line;
+    }
+  }
+  
+  if (currentChunk) {
+    chunks.push(currentChunk);
+  }
+  
+  return chunks;
 }
 
 // ------------------- Function: createBlightHealingEmbed -------------------

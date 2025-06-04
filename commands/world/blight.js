@@ -16,6 +16,7 @@ const { fetchCharacterByNameAndUserId, getCharacterBlightHistory } = require('..
 const { getModCharacterByName } = require('../../modules/modCharacters');
 const { retrieveBlightRequestFromStorage } = require('../../utils/storage');
 const Character = require('../../models/CharacterModel');
+const { handleError } = require('../../utils/globalErrorHandler');
 
 // ------------------- Define the Blight Command -------------------
 // This command manages blight progression, healing, and submission of healing tasks.
