@@ -1087,7 +1087,7 @@ async function rollForBlightProgression(interaction, characterName) {
 
     if (!character.blighted) {
       const notBlightedEmbed = new EmbedBuilder()
-        .setColor('#00FF00') // Green color for positive message
+        .setColor('#00FF00')
         .setTitle('⚠️ Not Blighted')
         .setDescription(`**${characterName}** is not blighted and does not require healing.`)
         .setThumbnail(character.icon)
@@ -1114,13 +1114,14 @@ async function rollForBlightProgression(interaction, characterName) {
       return;
     }
 
-    // ------------------- Blight Call Timing Logic -------------------
+    // ------------------- Enhanced Blight Call Timing Logic -------------------
     const now = new Date();
     const estNow = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+    
+    // Calculate current and next call windows
     const currentCallStart = new Date(estNow);
     currentCallStart.setHours(20, 0, 0, 0); // Set to 8:00 PM EST
     
-    // If current time is after 8:00 PM EST, next call is tomorrow
     const nextCallStart = new Date(currentCallStart);
     if (estNow.getHours() >= 20) {
       nextCallStart.setDate(currentCallStart.getDate() + 1);
@@ -1129,9 +1130,17 @@ async function rollForBlightProgression(interaction, characterName) {
     const lastRollDate = character.lastRollDate || new Date(0);
     const lastRollDateEST = new Date(lastRollDate.toLocaleString('en-US', { timeZone: 'America/New_York' }));
 
-    // Check if the last roll was within the current window
-    if (lastRollDateEST >= currentCallStart && lastRollDateEST < nextCallStart) {
-      const timeUntilNextRoll = nextCallStart - estNow;
+    // Check if we're in the same day (before 8 PM) or if the last roll was after 8 PM
+    const isSameDay = lastRollDateEST.getDate() === estNow.getDate() && 
+                     lastRollDateEST.getMonth() === estNow.getMonth() && 
+                     lastRollDateEST.getFullYear() === estNow.getFullYear();
+    
+    const lastRollWasAfter8PM = lastRollDateEST.getHours() >= 20;
+    const currentTimeIsAfter8PM = estNow.getHours() >= 20;
+
+    // If it's the same day and before 8 PM, or if the last roll was after 8 PM and current time is before 8 PM
+    if ((isSameDay && !currentTimeIsAfter8PM) || (lastRollWasAfter8PM && !currentTimeIsAfter8PM)) {
+      const timeUntilNextRoll = currentCallStart - estNow;
       const hoursUntilNextRoll = Math.floor(timeUntilNextRoll / (1000 * 60 * 60));
       const minutesUntilNextRoll = Math.floor((timeUntilNextRoll % (1000 * 60 * 60)) / (1000 * 60));
 
@@ -1139,8 +1148,9 @@ async function rollForBlightProgression(interaction, characterName) {
         .setColor('#AD1457')
         .setTitle('⏰ Already Rolled for Blight')
         .setDescription(
-          `**${characterName}** has already rolled during the current Blight Call window.\n\n` +
-          `You can roll again after **8:00 PM EST** (in ${hoursUntilNextRoll} hours and ${minutesUntilNextRoll} minutes).\n\n` +
+          `**${characterName}** has already rolled today.\n\n` +
+          `🎯 **Rolls reset at 8:00 PM EST every day!**\n\n` +
+          `You can roll again in **${hoursUntilNextRoll} hours and ${minutesUntilNextRoll} minutes**.\n\n` +
           `*Remember to roll daily to prevent automatic blight progression!*`
         )
         .setThumbnail(character.icon)
