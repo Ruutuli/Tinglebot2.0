@@ -856,7 +856,7 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
 
       // ---- NEW: Case-insensitive item matching ----
       const requiredItem = healingItems.find((i) =>
-        i.name.toLowerCase() === itemName.toLowerCase() && i.quantity === itemQuantityInt
+        i.name.toLowerCase() === itemName.toLowerCase()
       );
       // ---- END NEW ----
 
@@ -877,6 +877,14 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
 
         await interaction.editReply({
           embeds: [invalidRequirementEmbed],
+          ephemeral: true
+        });
+        return;
+      }
+
+      if (itemQuantityInt !== requiredItem.quantity) {
+        await interaction.editReply({
+          content: `❌ **${healer.name}** requires exactly **${requiredItem.quantity}** of **${requiredItem.name}**, but you provided **${itemQuantityInt}**.`,
           ephemeral: true
         });
         return;
