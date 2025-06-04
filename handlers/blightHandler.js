@@ -547,22 +547,6 @@ function createBlightHealingFields(healingRequirement, submissionId, expiresAt) 
     });
   });
 
-  // Add accepted items if it's an item requirement
-  if (healingRequirement.type === 'item' && Array.isArray(healingRequirement.items)) {
-    const itemList = healingRequirement.items
-      .map(i => `• **${i.name} x${i.quantity}**`)
-      .join('\n');
-    
-    // Split item list into chunks if needed
-    const itemChunks = splitIntoChunks(itemList, 1000);
-    itemChunks.forEach((chunk, index) => {
-      fields.push({
-        name: index === 0 ? '📦 __Accepted Items__' : '📦 __Accepted Items (continued)__',
-        value: chunk
-      });
-    });
-  }
-
   // Add submission ID
   fields.push({
     name: '<:bb0:854499720797618207> __Submission ID__',
@@ -1097,10 +1081,13 @@ async function rollForBlightProgression(interaction, characterName) {
     const now = new Date();
     const estNow = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
     const currentCallStart = new Date(estNow);
-    currentCallStart.setDate(estNow.getDate() - (estNow.getHours() < 21 ? 1 : 0));
-    currentCallStart.setHours(21, 17, 0, 0);
+    currentCallStart.setHours(20, 0, 0, 0); // Set to 8:00 PM EST
+    
+    // If current time is after 8:00 PM EST, next call is tomorrow
     const nextCallStart = new Date(currentCallStart);
-    nextCallStart.setDate(currentCallStart.getDate() + 1);
+    if (estNow.getHours() >= 20) {
+      nextCallStart.setDate(currentCallStart.getDate() + 1);
+    }
 
     const lastRollDate = character.lastRollDate || new Date(0);
     const lastRollDateEST = new Date(lastRollDate.toLocaleString('en-US', { timeZone: 'America/New_York' }));
