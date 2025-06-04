@@ -456,13 +456,11 @@ async function respondWithFilteredChoices(interaction, focusedOption, choices) {
   try {
     // Check if interaction is already responded to
     if (interaction.responded) {
-      console.log('[autocompleteHandler.js]: ⚠️ Interaction already responded to');
       return;
     }
 
     // Check if interaction is still valid
     if (!interaction.isAutocomplete()) {
-      console.log('[autocompleteHandler.js]: ⚠️ Not an autocomplete interaction');
       return;
     }
 
@@ -483,16 +481,12 @@ async function respondWithFilteredChoices(interaction, focusedOption, choices) {
       timeoutPromise
     ]);
   } catch (error) {
-    // Log the error
-    console.error('[autocompleteHandler.js]: ❌ Error in respondWithFilteredChoices:', error);
-    
-    // Handle specific error cases
+    // Handle specific error cases silently
     if (error.code === 10062 || error.message === 'Response timeout') {
-      console.log('[autocompleteHandler.js]: ⚠️ Interaction expired or timed out');
       return;
     }
 
-    // Log the error for debugging
+    // Only log other types of errors
     handleError(error, 'autocompleteHandler.js', {
       operation: 'respondWithFilteredChoices',
       interactionId: interaction.id,
@@ -504,11 +498,10 @@ async function respondWithFilteredChoices(interaction, focusedOption, choices) {
     // Only try to send an empty response if we haven't responded yet
     try {
       if (!interaction.responded && interaction.isAutocomplete()) {
-        console.log('[autocompleteHandler.js]: 📤 Sending empty response as fallback');
         await interaction.respond([]).catch(() => {});
       }
     } catch (e) {
-      console.error('[autocompleteHandler.js]: ❌ Error sending fallback response:', e);
+      // Silently ignore errors from fallback response
     }
   }
 }
