@@ -14,7 +14,7 @@
   ],
   "ignore": ["node_modules/"],
   "ext": "js,json",
-  "exec": "set NODE_ENV=production&& node index.js",
+  "exec": "set NODE_ENV=development&& node index.js",
   "legacy-watch": true,
   "exitcrash": true,
   "restartable": "rs",
