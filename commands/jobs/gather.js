@@ -600,28 +600,15 @@ module.exports = {
             normalizedInputJob = jobKey;
           }
           
-          console.log(`[gather.js]: 🔍 Checking item ${item.itemName}:`);
-          console.log(`[gather.js]: 📝 Input job: "${jobKey}"`);
-          console.log(`[gather.js]: 📝 Normalized job: "${normalizedInputJob}"`);
-          console.log(`[gather.js]: 📝 Available jobs:`, item.allJobsTags);
-          
           // Use allJobsTags which is already an array of job names
-          const isJobMatch = item.allJobsTags?.some(j => {
-            const match = j.toLowerCase() === normalizedInputJob.toLowerCase();
-            console.log(`[gather.js]: 🔄 Comparing "${j.toLowerCase()}" with "${normalizedInputJob.toLowerCase()}" -> ${match}`);
-            return match;
-          }) || false;
-          
-          console.log(`[gather.js]: ✅ Job match: ${isJobMatch}`);
-          console.log(`[gather.js]: ✅ Region match: ${item[regionKey]}`);
+          const isJobMatch = item.allJobsTags?.some(j => 
+            j.toLowerCase() === normalizedInputJob.toLowerCase()
+          ) || false;
           
           return isJobMatch && item[regionKey];
         });
         
-        console.log(`[gather.js]: 🔍 Found ${availableItems.length} available items for job "${job}" in region "${region}"`);
-        
         if (availableItems.length === 0) {
-          console.log(`[gather.js]: ⚠️ No items available for job "${job}" in region "${region}"`);
           await interaction.editReply({
             content: `⚠️ **No items available to gather in this location with the given job.**`,
           });
