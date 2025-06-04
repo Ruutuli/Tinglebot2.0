@@ -1,4 +1,4 @@
-require('dotenv').config();
+const dotenv = require('dotenv');
 const cron = require('node-cron');
 const { handleError } = require('./utils/globalErrorHandler');
 const { EmbedBuilder } = require('discord.js');
@@ -22,7 +22,6 @@ const { connectToInventories } = require('./handlers/blightHandler');
 const { getCurrentWeather, saveWeather } = require('./modules/weatherModule');
 const Pet = require('./models/PetModel');
 const { client } = require('./index');
-const dotenv = require('dotenv');
 
 // Load environment variables based on NODE_ENV
 const env = process.env.NODE_ENV || 'development';
