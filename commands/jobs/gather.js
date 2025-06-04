@@ -76,7 +76,6 @@ function canUseDailyRoll(character, activity) {
   const lastLootRoll = character.dailyRoll?.get('loot');
   
   if (!lastGatherRoll && !lastLootRoll) {
-    console.log(`[gather.js]: 📅 No previous rolls for gather/loot. Allowing action.`);
     return true;
   }
 
@@ -85,15 +84,12 @@ function canUseDailyRoll(character, activity) {
   
   // If either activity was used today, deny the action
   if (lastGatherDate && lastGatherDate >= rollover) {
-    console.log(`[gather.js]: 📅 Already gathered today at ${lastGatherDate.toISOString()}`);
     return false;
   }
   if (lastLootDate && lastLootDate >= rollover) {
-    console.log(`[gather.js]: 📅 Already looted today at ${lastLootDate.toISOString()}`);
     return false;
   }
 
-  console.log(`[gather.js]: 📅 now=${now.toISOString()} | lastGather=${lastGatherDate?.toISOString()} | lastLoot=${lastLootDate?.toISOString()} | rollover=${rollover.toISOString()}`);
   return true;
 }
 
@@ -106,7 +102,6 @@ async function updateDailyRoll(character, activity) {
     const now = new Date().toISOString();
     character.dailyRoll.set(activity, now);
     await character.save();
-    console.log(`[gather.js]: ✅ Updated daily roll for ${activity} at ${now}`);
   } catch (error) {
     console.error(`[gather.js]: ❌ Failed to update daily roll for ${character.name}:`, error);
     throw error;
@@ -193,7 +188,6 @@ module.exports = {
 
       // ------------------- Step 3: Validate Job -------------------
       if (!job || typeof job !== 'string' || !job.trim() || !isValidJob(job)) {
-        console.error(`[gather.js]: Job validation failed for ${character.name}. Invalid Job: ${job}`);
         await interaction.editReply({
           content: getJobVoucherErrorMessage('MISSING_SKILLS', {
             characterName: character.name,
@@ -206,9 +200,7 @@ module.exports = {
 
       // Check for gathering perk.
       const jobPerk = getJobPerk(job);
-      console.log(`[gather.js]: 🔄 Job Perk for "${job}":`, jobPerk);
       if (!jobPerk || !jobPerk.perks.includes('GATHERING')) {
-        console.error(`[gather.js]: ❌ ${character.name} lacks gathering skills for job: "${job}"`);
         await interaction.editReply({
           embeds: [{
             color: 0x008B8B, // Dark cyan color
@@ -594,27 +586,36 @@ module.exports = {
 
         
         // ------------------- Normal Gathering Logic -------------------
-        const items = await fetchAllItems();
-        console.log(`[gather.js]: 🔍 Fetched ${items.length} total items from database`);
-        console.log(`[gather.js]: 📊 Database connection details:`, {
-          database: 'items',
-          collection: 'items',
-          character: character.name,
-          job: job,
-          region: region
-        });
+        const items = await fetchAllItems();;
         
         const availableItems = items.filter(item => {
-          if (job.toLowerCase() === 'ab (meat)') {
-            return item.abMeat && item[region.toLowerCase()];
-          } else if (job.toLowerCase() === 'ab (live)') {
-            return item.abLive && item[region.toLowerCase()];
+          const jobKey = job.toLowerCase();
+          const regionKey = region.toLowerCase();
+          
+          // Normalize the input job name
+          let normalizedInputJob;
+          if (jobKey === 'rancher') {
+            normalizedInputJob = 'Rancher';
           } else {
-            const jobKey = normalizeJobName(job);
-            console.log(`[gather.js]: 🔍 Checking item ${item.itemName} for job "${jobKey}" and region "${region.toLowerCase()}"`);
-            console.log(`[gather.js]: 🔍 Item properties: jobKey=${item[jobKey]}, region=${item[region.toLowerCase()]}`);
-            return item[jobKey] && item[region.toLowerCase()];
+            normalizedInputJob = jobKey;
           }
+          
+          console.log(`[gather.js]: 🔍 Checking item ${item.itemName}:`);
+          console.log(`[gather.js]: 📝 Input job: "${jobKey}"`);
+          console.log(`[gather.js]: 📝 Normalized job: "${normalizedInputJob}"`);
+          console.log(`[gather.js]: 📝 Available jobs:`, item.allJobsTags);
+          
+          // Use allJobsTags which is already an array of job names
+          const isJobMatch = item.allJobsTags?.some(j => {
+            const match = j.toLowerCase() === normalizedInputJob.toLowerCase();
+            console.log(`[gather.js]: 🔄 Comparing "${j.toLowerCase()}" with "${normalizedInputJob.toLowerCase()}" -> ${match}`);
+            return match;
+          }) || false;
+          
+          console.log(`[gather.js]: ✅ Job match: ${isJobMatch}`);
+          console.log(`[gather.js]: ✅ Region match: ${item[regionKey]}`);
+          
+          return isJobMatch && item[regionKey];
         });
         
         console.log(`[gather.js]: 🔍 Found ${availableItems.length} available items for job "${job}" in region "${region}"`);

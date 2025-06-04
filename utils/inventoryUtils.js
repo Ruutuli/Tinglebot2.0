@@ -141,9 +141,18 @@ async function syncToInventoryDatabase(character, item, interaction) {
       throw new Error("Database functions not initialized in inventoryUtils");
     }
 
+    const env = process.env.NODE_ENV || 'development';
+    console.log(`[inventoryUtils.js]: 🔄 Syncing to ${env} environment`);
+    
     const inventoriesConnection = await dbFunctions.connectToInventories();
-    const db = inventoriesConnection.useDb("inventories");
-    const inventoryCollection = db.collection(character.name.toLowerCase());
+    const dbName = env === 'development' ? 'inventories_dev' : 'inventories';
+    console.log(`[inventoryUtils.js]: 📦 Using database: ${dbName}`);
+    
+    const db = inventoriesConnection.useDb(dbName);
+    const collectionName = character.name.toLowerCase();
+    console.log(`[inventoryUtils.js]: 📁 Using collection: ${collectionName}`);
+    
+    const inventoryCollection = db.collection(collectionName);
 
     // Fetch item details for required fields
     const itemDetails = await dbFunctions.fetchItemByName(item.itemName);
@@ -317,6 +326,9 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
       throw new Error("Required database functions not initialized");
     }
 
+    const env = process.env.NODE_ENV || 'development';
+    console.log(`[inventoryUtils.js]: 🔄 Adding item in ${env} environment`);
+
     const character = await dbFunctions.fetchCharacterById(characterId);
     if (!character) {
       const errorEmbed = new EmbedBuilder()
@@ -334,8 +346,13 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
     console.log(`[inventoryUtils.js]: 📦 Processing inventory for ${character.name}`);
 
     const inventoriesConnection = await dbFunctions.connectToInventories();
-    const db = inventoriesConnection.useDb("inventories");
+    const dbName = env === 'development' ? 'inventories_dev' : 'inventories';
+    console.log(`[inventoryUtils.js]: 📦 Using database: ${dbName}`);
+    
+    const db = inventoriesConnection.useDb(dbName);
     const collectionName = character.name.toLowerCase();
+    console.log(`[inventoryUtils.js]: 📁 Using collection: ${collectionName}`);
+    
     const inventoryCollection = db.collection(collectionName);
 
     const item = await dbFunctions.fetchItemByName(itemName);
@@ -389,6 +406,9 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
       throw new Error("Required database functions not initialized");
     }
 
+    const env = process.env.NODE_ENV || 'development';
+    console.log(`[inventoryUtils.js]: 🔄 Removing item in ${env} environment`);
+
     const character = await dbFunctions.fetchCharacterById(characterId);
     if (!character) {
       throw new Error(`Character with ID ${characterId} not found`);
@@ -397,7 +417,12 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
     console.log(`[inventoryUtils.js]: 📦 Processing inventory for ${character.name}`);
     const collectionName = character.name.toLowerCase();
     const inventoriesConnection = await dbFunctions.connectToInventories();
-    const db = inventoriesConnection.useDb("inventories");
+    const dbName = env === 'development' ? 'inventories_dev' : 'inventories';
+    console.log(`[inventoryUtils.js]: 📦 Using database: ${dbName}`);
+    
+    const db = inventoriesConnection.useDb(dbName);
+    console.log(`[inventoryUtils.js]: 📁 Using collection: ${collectionName}`);
+    
     const inventoryCollection = db.collection(collectionName);
 
     // First try exact match
@@ -539,9 +564,17 @@ const addItemsToDatabase = async (character, items, interaction) => {
       throw new Error("Required database functions not initialized");
     }
 
+    const env = process.env.NODE_ENV || 'development';
+    console.log(`[inventoryUtils.js]: 🔄 Adding multiple items in ${env} environment`);
+
     const inventoriesConnection = await dbFunctions.connectToInventories();
-    const db = inventoriesConnection.useDb("inventories");
+    const dbName = env === 'development' ? 'inventories_dev' : 'inventories';
+    console.log(`[inventoryUtils.js]: 📦 Using database: ${dbName}`);
+    
+    const db = inventoriesConnection.useDb(dbName);
     const collectionName = character.name.toLowerCase();
+    console.log(`[inventoryUtils.js]: 📁 Using collection: ${collectionName}`);
+    
     const inventoryCollection = db.collection(collectionName);
 
     for (const item of items) {
@@ -786,6 +819,9 @@ async function removeInitialItemIfSynced(characterId) {
       throw new Error("Required database functions not initialized");
     }
 
+    const env = process.env.NODE_ENV || 'development';
+    console.log(`[inventoryUtils.js]: 🔄 Removing initial item in ${env} environment`);
+
     const character = await dbFunctions.fetchCharacterById(characterId);
     if (!character) {
       throw new Error(`Character with ID ${characterId} not found`);
@@ -794,7 +830,12 @@ async function removeInitialItemIfSynced(characterId) {
     if (character.inventorySynced) {
       const collectionName = character.name.toLowerCase();
       const inventoriesConnection = await dbFunctions.connectToInventories();
-      const db = inventoriesConnection.useDb("inventories");
+      const dbName = env === 'development' ? 'inventories_dev' : 'inventories';
+      console.log(`[inventoryUtils.js]: 📦 Using database: ${dbName}`);
+      
+      const db = inventoriesConnection.useDb(dbName);
+      console.log(`[inventoryUtils.js]: 📁 Using collection: ${collectionName}`);
+      
       const inventoryCollection = db.collection(collectionName);
       const initialItem = await inventoryCollection.findOne({
         characterId: character._id,
@@ -822,8 +863,16 @@ const addItemToVendingInventory = async (collectionName, item) => {
       throw new Error("Required database functions not initialized");
     }
 
+    const env = process.env.NODE_ENV || 'development';
+    console.log(`[inventoryUtils.js]: 🔄 Adding item to vending in ${env} environment`);
+
     const inventoriesConnection = await dbFunctions.connectToInventories();
-    const db = inventoriesConnection.useDb("vending");
+    const dbName = env === 'development' ? 'vendingInventories_dev' : 'vendingInventories';
+    console.log(`[inventoryUtils.js]: 📦 Using database: ${dbName}`);
+    
+    const db = inventoriesConnection.useDb(dbName);
+    console.log(`[inventoryUtils.js]: 📁 Using collection: ${collectionName}`);
+    
     const inventoryCollection = db.collection(collectionName);
     const existingItem = await inventoryCollection.findOne({
       characterName: item.characterName,
