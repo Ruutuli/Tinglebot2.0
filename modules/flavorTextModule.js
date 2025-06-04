@@ -372,6 +372,10 @@ const generateGatherFlavorText = (itemType) => {
    "🐄 The fields and pastures yielded provisions essential to the journey ahead.",
    "🍗 Carefully prepared, this resource will sustain even the most arduous travels.",
    "🥩 The fruits of careful labor ensured a hearty supply for the days ahead.",
+   "🐮 Your ranching expertise has provided quality meat for the community.",
+   "🐷 The well-tended livestock has yielded excellent meat products.",
+   "🐑 Your careful breeding and husbandry has produced premium meat.",
+   "🐔 The farm's bounty provides fresh meat for all who need it."
   ],
   Monster: [
    "👹 The remnants of a defeated foe bore rare and curious materials.",

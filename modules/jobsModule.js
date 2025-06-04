@@ -14,7 +14,7 @@ const jobPages = [
   { title: 'General Jobs (Page 1)', jobs: ['Adventurer', 'Artist', "Bandit", 'Cook', 'Courier', 'Craftsman', 'Farmer', 'Forager', 'Graveskeeper', 'Guard', 'Healer'] },
   { title: 'General Jobs (Page 2)', jobs: ['Herbalist', 'Hunter', 'Merchant', 'Mercenary', 'Priest', 'Scout', 'Shopkeeper', 'Stablehand', 'Villager', 'Witch'] },
   { title: 'Inariko Exclusive Jobs', jobs: ['Fisherman', 'Researcher', 'Scholar', 'Teacher'] },
-  { title: 'Rudania Exclusive Jobs', jobs: ['AB (Meat)', 'AB (Live)', 'Blacksmith', 'Miner', 'Entertainer'] },
+  { title: 'Rudania Exclusive Jobs', jobs: ['Rancher', 'Blacksmith', 'Miner', 'Entertainer'] },
   { title: 'Vhintl Exclusive Jobs', jobs: ['Beekeeper', 'Fortune Teller', 'Mask Maker', 'Weaver'] },
   { title: 'All Jobs', jobs: [] } // This will be populated dynamically
 ];
@@ -22,7 +22,7 @@ const jobPages = [
 // Village-specific job assignments
 const villageJobs = {
   inariko: ['Fisherman', 'Researcher', 'Scholar', 'Teacher'],
-  rudania: ['AB (Meat)', 'AB (Live)', 'Blacksmith', 'Miner', 'Entertainer'],
+  rudania: ['Rancher', 'Blacksmith', 'Miner', 'Entertainer'],
   vhintl: ['Beekeeper', 'Fortune Teller', 'Mask Maker', 'Weaver']
 };
 
@@ -43,8 +43,7 @@ const jobPerks = [
   { job: 'Researcher', perk: 'CRAFTING', village: 'Inariko' },
   { job: 'Scholar', perk: 'BOOST', village: 'Inariko' },
   { job: 'Teacher', perk: 'BOOST', village: 'Inariko' },
-  { job: 'AB (Meat)', perk: 'GATHERING', village: 'Rudania' },
-  { job: 'AB (Live)', perk: 'GATHERING', village: 'Rudania' },
+  { job: 'Rancher', perk: 'GATHERING', village: 'Rudania' },
   { job: 'Blacksmith', perk: 'CRAFTING', village: 'Rudania' },
   { job: 'Miner', perk: 'GATHERING', village: 'Rudania' },
   { job: 'Entertainer', perk: 'BOOST', village: 'Rudania' },
@@ -78,8 +77,7 @@ const jobPerks = [
 // ------------------- Utility functions -------------------
 // Map job names to their proper titles
 const jobNameMap = {
-  'AB (Meat)': 'Animal Breeder (Meat)',
-  'AB (Live)': 'Animal Breeder (Live)',
+  'Rancher': 'Rancher',
   // Add additional mappings as needed
 };
 
