@@ -5,6 +5,8 @@ const path = require('path');
 
 // Determine environment
 const env = process.env.NODE_ENV || 'development';
+
+// Try to load .env file first
 const possiblePaths = [
   path.resolve(process.cwd(), `.env.${env}`),
   path.resolve(process.cwd(), '..', `.env.${env}`),
@@ -12,18 +14,18 @@ const possiblePaths = [
   `.env.${env}`
 ];
 
-let result;
+let loaded = false;
 for (const envPath of possiblePaths) {
-  result = dotenv.config({ path: envPath });
+  const result = dotenv.config({ path: envPath });
   if (!result.error) {
     console.log(`✅ Loaded environment from ${envPath}`);
+    loaded = true;
     break;
   }
 }
 
-if (result.error) {
-  console.error(`❌ Error loading environment file:`, result.error);
-  process.exit(1);
+if (!loaded) {
+  console.log('⚠️ No .env file found, using environment variables from Railway');
 }
 
 console.log(`🚀 Running in ${env} mode on port ${process.env.PORT}`);
