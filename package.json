@@ -7,13 +7,13 @@
   "node": ">=18.0.0"
  },
  "scripts": {
-  "start": "cross-env NODE_ENV=development node --max-old-space-size=512 --optimize-for-size ./index.js",
-  "dev": "cross-env NODE_ENV=development PORT=5000 nodemon ./index.js",
-  "prod": "cross-env NODE_ENV=production PORT=5001 nodemon ./index.js",
-  "both": "concurrently \"cross-env NODE_ENV=development PORT=5000 nodemon ./index.js\" \"cross-env NODE_ENV=production PORT=5001 nodemon ./index.js\"",
-  "scheduler": "cross-env NODE_ENV=production node ./scripts/scheduler.js",
-  "deploy-commands": "cross-env NODE_ENV=development node ./scripts/deploy-commands.js",
-  "deploy": "cross-env NODE_ENV=production node ./scripts/deploy-commands.js"
+  "start": "cross-env NODE_ENV=development node index.js",
+  "dev": "cross-env NODE_ENV=development PORT=5000 nodemon index.js",
+  "prod": "cross-env NODE_ENV=production PORT=5001 nodemon index.js",
+  "both": "concurrently \"cross-env NODE_ENV=development PORT=5000 nodemon index.js\" \"cross-env NODE_ENV=production PORT=5001 nodemon index.js\"",
+  "scheduler": "cross-env NODE_ENV=production node scripts/scheduler.js",
+  "deploy-commands": "cross-env NODE_ENV=development node scripts/deploy-commands.js",
+  "deploy": "cross-env NODE_ENV=production node scripts/deploy-commands.js"
  },
  "author": "Ruu",
  "license": "ISC",
