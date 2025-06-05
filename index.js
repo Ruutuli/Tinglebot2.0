@@ -380,16 +380,6 @@ async function initializeClient() {
     client.on("messageCreate", async (message) => {
       const FEEDBACK_FORUM_CHANNEL_ID = process.env.FEEDBACK_FORUM_CHANNEL_ID;
       
-      console.log('🔍 Message received:', {
-        channelId: message.channelId,
-        parentId: message.channel.parentId,
-        expectedChannelId: FEEDBACK_FORUM_CHANNEL_ID,
-        channelType: message.channel.parent?.type,
-        content: message.content.substring(0, 50) + '...', // Log first 50 chars of content
-        author: message.author.tag,
-        isBot: message.author.bot
-      });
-
       // Check if the message is in the feedback channel (either as a forum thread or regular channel)
       if (message.channel.parentId !== FEEDBACK_FORUM_CHANNEL_ID && message.channelId !== FEEDBACK_FORUM_CHANNEL_ID) {
         console.log('⏭️ Skipping message - not in feedback channel:', {
