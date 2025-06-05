@@ -195,7 +195,20 @@ const connectToInventoriesNative = async () => {
     throw new Error(`Missing MongoDB URI for ${env} environment`);
   }
   
-  const client = new MongoClient(uri, {});
+  const client = new MongoClient(uri, {
+    maxPoolSize: 10,
+    minPoolSize: 5,
+    serverSelectionTimeoutMS: 30000,
+    connectTimeoutMS: 30000,
+    socketTimeoutMS: 45000,
+    retryWrites: true,
+    retryReads: true,
+    w: 'majority',
+    wtimeoutMS: 2500,
+    heartbeatFrequencyMS: 10000,
+    maxIdleTimeMS: 60000,
+    family: 4
+  });
   await client.connect();
   inventoriesDbNativeConnection = client.db(env === 'development' ? 'inventories_dev' : 'inventories');
   
@@ -203,7 +216,7 @@ const connectToInventoriesNative = async () => {
     env: env,
     dbName: inventoriesDbNativeConnection.databaseName,
     usingDevDb: env === 'development',
-    clientConnected: client.isConnected()
+    clientConnected: client.topology?.isConnected() || false
   });
  }
  return inventoriesDbNativeConnection;

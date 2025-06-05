@@ -3641,8 +3641,9 @@ async function handleVendingViewAutocomplete(interaction, focusedOption) {
 // ------------------- Autocomplete: View Character Inventory -------------------
 async function handleViewInventoryAutocomplete(interaction, focusedOption) {
   try {
-    // Fetch all characters from the database
-    const characters = await fetchAllCharacters();
+    const userId = interaction.user.id;
+    // Fetch only characters owned by the user
+    const characters = await fetchCharactersByUserId(userId);
 
     // Map characters to autocomplete choices with formatted display
     const choices = characters.map((character) => ({
