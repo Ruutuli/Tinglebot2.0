@@ -136,7 +136,7 @@ async function connectToInventories() {
  try {
   if (!inventoriesDbConnection) {
    const env = process.env.NODE_ENV || 'development';
-   const uri = env === 'development' ? dbConfig.inventories : dbConfig.inventories;
+   const uri = env === 'development' ? process.env.MONGODB_INVENTORIES_URI_DEV : dbConfig.inventories;
    inventoriesDbConnection = await mongoose.createConnection(uri, {
     useNewUrlParser: true,
     useUnifiedTopology: true,
@@ -167,7 +167,7 @@ async function connectToInventories() {
 const connectToInventoriesNative = async () => {
  if (!inventoriesDbNativeConnection) {
   const env = process.env.NODE_ENV || 'development';
-  const uri = env === 'development' ? dbConfig.inventories : dbConfig.inventories;
+  const uri = env === 'development' ? process.env.MONGODB_INVENTORIES_URI_DEV : dbConfig.inventories;
   const client = new MongoClient(uri, {});
   await client.connect();
   inventoriesDbNativeConnection = client.db(env === 'development' ? 'inventories_dev' : 'inventories');
