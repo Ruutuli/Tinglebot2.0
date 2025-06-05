@@ -3641,36 +3641,37 @@ async function handleVendingViewAutocomplete(interaction, focusedOption) {
 // ------------------- Autocomplete: View Character Inventory -------------------
 async function handleViewInventoryAutocomplete(interaction, focusedOption) {
   try {
-                const userId = interaction.user.id;
- 
-  // Fetch only characters owned by the user
-                const characters = await fetchCharactersByUserId(userId);
- 
-  // Map characters to autocomplete choices with formatted display
-   const choices = characters.map((character) => ({
-   name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
-   value: character.name
-  }));
+    // Fetch all characters from the database
+    const characters = await fetchAllCharacters();
 
-  // Filter based on user input
-  const searchQuery = focusedOption.value?.toLowerCase() || "";
-  const filteredChoices = choices.filter(choice => 
-   choice.name.toLowerCase().includes(searchQuery)
-  );
+    // Map characters to autocomplete choices with formatted display
+    const choices = characters.map((character) => ({
+      name: `${character.name} | ${capitalize(character.currentVillage || 'No Village')} | ${capitalize(character.job || 'No Job')}`,
+      value: character.name
+    }));
 
-  // Respond with filtered choices (limit to 25)
-  await interaction.respond(filteredChoices.slice(0, 25));
+    // Sort choices alphabetically by name
+    choices.sort((a, b) => a.name.localeCompare(b.name));
+
+    // Filter based on user input
+    const searchQuery = focusedOption.value?.toLowerCase() || "";
+    const filteredChoices = choices.filter(choice => 
+      choice.name.toLowerCase().includes(searchQuery)
+    );
+
+    // Respond with filtered choices (limit to 25)
+    await interaction.respond(filteredChoices.slice(0, 25));
   } catch (error) {
-   handleError(error, "autocompleteHandler.js");
- 
-  // Log and handle errors gracefully
-  console.error(
-   "[handleViewInventoryAutocomplete]: Error handling inventory autocomplete:",
-   error
-  );
-   await safeRespondWithError(interaction);
+    handleError(error, "autocompleteHandler.js");
+    
+    // Log and handle errors gracefully
+    console.error(
+      "[handleViewInventoryAutocomplete]: Error handling inventory autocomplete:",
+      error
+    );
+    await safeRespondWithError(interaction);
   }
- }
+}
 
 // ============================================================================
 // EXPORT FUNCTIONS
