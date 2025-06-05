@@ -5,7 +5,7 @@ const path = require('path');
 
 // Determine environment
 const env = process.env.NODE_ENV || 'development';
-const envFile = `.env.${env}`;
+const envFile = path.resolve(process.cwd(), `.env.${env}`);
 
 // Load environment variables
 const result = dotenv.config({ path: envFile });
