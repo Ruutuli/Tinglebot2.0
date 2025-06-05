@@ -25,7 +25,7 @@ const { EmbedBuilder } = require('discord.js');
 // ============================================================================
 
 const SOURCE_TYPES = {
-  TRAVEL_LOOT: 'Travel Loot',
+  TRAVEL: 'Travel',
   GATHERING: 'Gathering',
   CRAFTING: 'Crafting',
   TRADING: 'Trading',
