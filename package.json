@@ -7,7 +7,7 @@
   "node": ">=18.0.0"
  },
  "scripts": {
-  "start": "cross-env NODE_ENV=development node --max-old-space-size=512 --optimize-for-size index.js",
+  "start": "cross-env NODE_ENV=production node --max-old-space-size=512 --optimize-for-size index.js",
   "dev": "cross-env NODE_ENV=development PORT=5000 nodemon index.js",
   "prod": "cross-env NODE_ENV=production PORT=5001 nodemon index.js",
   "both": "concurrently \"npm run dev\" \"npm run prod\"",

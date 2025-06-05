@@ -10,7 +10,8 @@ const envFile = `.env.${env}`;
 // Load environment variables
 const result = dotenv.config({ path: envFile });
 
-if (result.error) {
+// Don't exit if env file is missing - this allows Railway to use its own env vars
+if (result.error && result.error.code !== 'ENOENT') {
   console.error(`❌ Error loading environment file ${envFile}:`, result.error);
   process.exit(1);
 }
