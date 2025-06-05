@@ -142,34 +142,10 @@ async function syncToInventoryDatabase(character, item, interaction) {
     }
 
     const env = process.env.NODE_ENV || 'development';
-    console.log(`[inventoryUtils.js]: 🔄 Environment check:`, {
-      NODE_ENV: process.env.NODE_ENV,
-      env: env,
-      isDevelopment: env === 'development'
-    });
-    
     const inventoriesConnection = await dbFunctions.connectToInventories();
-    console.log(`[inventoryUtils.js]: 🔌 Database connection details:`, {
-      connectionState: inventoriesConnection.readyState,
-      connectionName: inventoriesConnection.name,
-      connectionHost: inventoriesConnection.host
-    });
-
     const dbName = env === 'development' ? 'inventories_dev' : 'inventories';
-    console.log(`[inventoryUtils.js]: 📦 Database selection:`, {
-      env: env,
-      selectedDb: dbName,
-      usingDevDb: dbName === 'inventories_dev'
-    });
-    
     const db = inventoriesConnection.useDb(dbName);
     const collectionName = character.name.toLowerCase();
-    console.log(`[inventoryUtils.js]: 📁 Collection details:`, {
-      collection: collectionName,
-      database: dbName,
-      character: character.name
-    });
-    
     const inventoryCollection = db.collection(collectionName);
 
     // Fetch item details for required fields
@@ -336,22 +312,15 @@ async function syncToInventoryDatabase(character, item, interaction) {
 // Adds a single item to inventory database
 async function addItemInventoryDatabase(characterId, itemName, quantity, interaction, obtain = "") {
   try {
-    if (!interaction && obtain !== 'Trade') {
-      throw new Error("Interaction object is undefined.");
-    }
-
-    if (!dbFunctions.fetchCharacterById || !dbFunctions.connectToInventories || !dbFunctions.fetchItemByName) {
+    if (!dbFunctions.fetchCharacterById || !dbFunctions.connectToInventories) {
       throw new Error("Required database functions not initialized");
     }
-
-    const env = process.env.NODE_ENV || 'development';
-    console.log(`[inventoryUtils.js]: 🔄 Adding item in ${env} environment`);
 
     const character = await dbFunctions.fetchCharacterById(characterId);
     if (!character) {
       const errorEmbed = new EmbedBuilder()
         .setColor(0xFF0000)
-        .setTitle('❌ Character Not Found')
+        .setTitle('Character Not Found')
         .setDescription(`Character with ID ${characterId} not found`)
         .addFields(
           { name: 'Character ID', value: characterId.toString(), inline: true }
@@ -361,17 +330,15 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
 
       throw new Error(`Character with ID ${characterId} not found`);
     }
-    console.log(`[inventoryUtils.js]: 📦 Processing inventory for ${character.name}`);
 
+    const env = process.env.NODE_ENV || 'development';
     const inventoriesConnection = await dbFunctions.connectToInventories();
     const dbName = env === 'development' ? 'inventories_dev' : 'inventories';
-    console.log(`[inventoryUtils.js]: 📦 Using database: ${dbName}`);
-    
     const db = inventoriesConnection.useDb(dbName);
     const collectionName = character.name.toLowerCase();
-    console.log(`[inventoryUtils.js]: 📁 Using collection: ${collectionName}`);
-    
     const inventoryCollection = db.collection(collectionName);
+
+    console.log(`[inventoryUtils.js]: Processing inventory for ${character.name}`);
 
     const item = await dbFunctions.fetchItemByName(itemName);
     if (!item) {
@@ -384,16 +351,16 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
     });
 
     if (inventoryItem) {
-      console.log(`[inventoryUtils.js]: 📊 Found ${inventoryItem.quantity} ${itemName} in ${character.name}'s inventory`);
+      console.log(`[inventoryUtils.js]: Found ${inventoryItem.quantity} ${itemName} in ${character.name}'s inventory`);
       const newQuantity = inventoryItem.quantity + quantity;
-      console.log(`[inventoryUtils.js]: ➕ Adding ${quantity} ${itemName}`);
-      console.log(`[inventoryUtils.js]: 🔄 Updated ${itemName} quantity: ${inventoryItem.quantity} → ${newQuantity}`);
+      console.log(`[inventoryUtils.js]: Adding ${quantity} ${itemName}`);
+      console.log(`[inventoryUtils.js]: Updated ${itemName} quantity: ${inventoryItem.quantity} → ${newQuantity}`);
       await inventoryCollection.updateOne(
         { characterId, itemName: inventoryItem.itemName },
         { $set: { quantity: newQuantity } }
       );
     } else {
-      console.log(`[inventoryUtils.js]: ➕ Adding new item ${itemName} (${quantity}) to ${character.name}'s inventory`);
+      console.log(`[inventoryUtils.js]: Adding new item ${itemName} (${quantity}) to ${character.name}'s inventory`);
       const newItem = {
         characterId,
         itemName: item.itemName,
@@ -411,7 +378,7 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
     return true;
   } catch (error) {
     handleError(error, "inventoryUtils.js");
-    console.error(`[inventoryUtils.js]: ❌ Error adding item to inventory:`, error.message);
+    console.error(`[inventoryUtils.js]: Error adding item to inventory:`, error.message);
     throw error;
   }
 }
@@ -583,34 +550,10 @@ const addItemsToDatabase = async (character, items, interaction) => {
     }
 
     const env = process.env.NODE_ENV || 'development';
-    console.log(`[inventoryUtils.js]: 🔄 Environment check (addItems):`, {
-      NODE_ENV: process.env.NODE_ENV,
-      env: env,
-      isDevelopment: env === 'development'
-    });
-
     const inventoriesConnection = await dbFunctions.connectToInventories();
-    console.log(`[inventoryUtils.js]: 🔌 Database connection details (addItems):`, {
-      connectionState: inventoriesConnection.readyState,
-      connectionName: inventoriesConnection.name,
-      connectionHost: inventoriesConnection.host
-    });
-
     const dbName = env === 'development' ? 'inventories_dev' : 'inventories';
-    console.log(`[inventoryUtils.js]: 📦 Database selection (addItems):`, {
-      env: env,
-      selectedDb: dbName,
-      usingDevDb: dbName === 'inventories_dev'
-    });
-    
     const db = inventoriesConnection.useDb(dbName);
     const collectionName = character.name.toLowerCase();
-    console.log(`[inventoryUtils.js]: 📁 Collection details (addItems):`, {
-      collection: collectionName,
-      database: dbName,
-      character: character.name
-    });
-    
     const inventoryCollection = db.collection(collectionName);
 
     for (const item of items) {
