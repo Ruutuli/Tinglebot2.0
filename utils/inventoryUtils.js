@@ -142,15 +142,33 @@ async function syncToInventoryDatabase(character, item, interaction) {
     }
 
     const env = process.env.NODE_ENV || 'development';
-    console.log(`[inventoryUtils.js]: 🔄 Syncing to ${env} environment`);
+    console.log(`[inventoryUtils.js]: 🔄 Environment check:`, {
+      NODE_ENV: process.env.NODE_ENV,
+      env: env,
+      isDevelopment: env === 'development'
+    });
     
     const inventoriesConnection = await dbFunctions.connectToInventories();
+    console.log(`[inventoryUtils.js]: 🔌 Database connection details:`, {
+      connectionState: inventoriesConnection.readyState,
+      connectionName: inventoriesConnection.name,
+      connectionHost: inventoriesConnection.host
+    });
+
     const dbName = env === 'development' ? 'inventories_dev' : 'inventories';
-    console.log(`[inventoryUtils.js]: 📦 Using database: ${dbName}`);
+    console.log(`[inventoryUtils.js]: 📦 Database selection:`, {
+      env: env,
+      selectedDb: dbName,
+      usingDevDb: dbName === 'inventories_dev'
+    });
     
     const db = inventoriesConnection.useDb(dbName);
     const collectionName = character.name.toLowerCase();
-    console.log(`[inventoryUtils.js]: 📁 Using collection: ${collectionName}`);
+    console.log(`[inventoryUtils.js]: 📁 Collection details:`, {
+      collection: collectionName,
+      database: dbName,
+      character: character.name
+    });
     
     const inventoryCollection = db.collection(collectionName);
 
@@ -565,15 +583,33 @@ const addItemsToDatabase = async (character, items, interaction) => {
     }
 
     const env = process.env.NODE_ENV || 'development';
-    console.log(`[inventoryUtils.js]: 🔄 Adding multiple items in ${env} environment`);
+    console.log(`[inventoryUtils.js]: 🔄 Environment check (addItems):`, {
+      NODE_ENV: process.env.NODE_ENV,
+      env: env,
+      isDevelopment: env === 'development'
+    });
 
     const inventoriesConnection = await dbFunctions.connectToInventories();
+    console.log(`[inventoryUtils.js]: 🔌 Database connection details (addItems):`, {
+      connectionState: inventoriesConnection.readyState,
+      connectionName: inventoriesConnection.name,
+      connectionHost: inventoriesConnection.host
+    });
+
     const dbName = env === 'development' ? 'inventories_dev' : 'inventories';
-    console.log(`[inventoryUtils.js]: 📦 Using database: ${dbName}`);
+    console.log(`[inventoryUtils.js]: 📦 Database selection (addItems):`, {
+      env: env,
+      selectedDb: dbName,
+      usingDevDb: dbName === 'inventories_dev'
+    });
     
     const db = inventoriesConnection.useDb(dbName);
     const collectionName = character.name.toLowerCase();
-    console.log(`[inventoryUtils.js]: 📁 Using collection: ${collectionName}`);
+    console.log(`[inventoryUtils.js]: 📁 Collection details (addItems):`, {
+      collection: collectionName,
+      database: dbName,
+      character: character.name
+    });
     
     const inventoryCollection = db.collection(collectionName);
 
