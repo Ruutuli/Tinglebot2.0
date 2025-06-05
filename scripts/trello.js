@@ -86,7 +86,7 @@ async function fetchLabels() {
 
 // ============================================================================
 // ------------------- Create a Trello Card -------------------
-async function createTrelloCard({ threadName, username, content, images, createdAt, overrideListId }) {
+async function createTrelloCard({ threadName, username, content, images, createdAt, overrideListId, isErrorLog = false }) {
   const dueDate = new Date(createdAt);
   dueDate.setHours(dueDate.getHours() + 48);
 
@@ -190,7 +190,11 @@ async function createTrelloCard({ threadName, username, content, images, created
     handleError(error, 'trello.js');
     const errorMsg = `[trello.js]: Failed to create Trello card: ${error.message}`;
     console.error(errorMsg);
-    await logErrorToTrello(errorMsg, 'createTrelloCard');
+    
+    // Only log to Trello if this isn't already an error logging attempt
+    if (!isErrorLog) {
+      await logErrorToTrello(errorMsg, 'createTrelloCard');
+    }
     return null;
   }
 }
@@ -206,12 +210,13 @@ async function logErrorToTrello(errorMessage, source = 'Unknown Source') {
     content: `**Error Message:**\n\`\`\`${errorMessage}\`\`\`\n\n**Timestamp:** ${now}`,
     images: [],
     createdAt: now,
-    overrideListId: TRELLO_LOG
+    overrideListId: TRELLO_LOG,
+    isErrorLog: true  // Mark this as an error logging attempt
   };
 
   try {
     const cardLink = await createTrelloCard(errorCard);
-    return cardLink; // ✅ RETURN the Trello card link
+    return cardLink;
   } catch (e) {
     handleError(e, 'trello.js');
     console.error(`[trello.js]: Failed to log error to Trello: ${e.message}`);
