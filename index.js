@@ -5,18 +5,42 @@ const path = require('path');
 
 // Determine environment
 const env = process.env.NODE_ENV || 'development';
-const envFile = `.env.${env}`;
 
-// Load environment variables
-const result = dotenv.config({ path: envFile });
+// Try to load .env files in order of priority
+const possiblePaths = [
+  path.resolve(process.cwd(), `.env.${env}`),
+  path.resolve(process.cwd(), '..', `.env.${env}`),
+  path.resolve('/app', `.env.${env}`),
+  `.env.${env}`,
+  // Also try loading the other environment file as fallback
+  path.resolve(process.cwd(), `.env.${env === 'development' ? 'production' : 'development'}`),
+  path.resolve(process.cwd(), '..', `.env.${env === 'development' ? 'production' : 'development'}`),
+  path.resolve('/app', `.env.${env === 'development' ? 'production' : 'development'}`),
+  `.env.${env === 'development' ? 'production' : 'development'}`
+];
 
-// Don't exit if env file is missing - this allows Railway to use its own env vars
-if (result.error && result.error.code !== 'ENOENT') {
-  console.error(`❌ Error loading environment file ${envFile}:`, result.error);
-  process.exit(1);
+let loaded = false;
+for (const envPath of possiblePaths) {
+  const result = dotenv.config({ path: envPath });
+  if (!result.error) {
+    console.log(`✅ Loaded environment from ${envPath}`);
+    loaded = true;
+    break;
+  }
 }
 
+if (!loaded) {
+  console.log('⚠️ No .env file found, using environment variables from Railway');
+}
+
+// Log which environment variables were loaded
 console.log(`🚀 Running in ${env} mode on port ${process.env.PORT}`);
+console.log('📝 Loaded environment variables:', {
+  DISCORD_TOKEN: process.env.DISCORD_TOKEN ? '✅ Set' : '❌ Not set',
+  CLIENT_ID: process.env.CLIENT_ID ? '✅ Set' : '❌ Not set',
+  FEEDBACK_FORUM_CHANNEL_ID: process.env.FEEDBACK_FORUM_CHANNEL_ID ? '✅ Set' : '❌ Not set',
+  // Add other critical environment variables here
+});
 
 // ------------------- Standard Libraries -------------------
 const figlet = require("figlet");
@@ -293,7 +317,8 @@ async function initializeClient() {
         threadId: thread.id,
         threadName: thread.name,
         parentId: thread.parentId,
-        expectedParentId: process.env.FEEDBACK_FORUM_CHANNEL_ID
+        expectedParentId: process.env.FEEDBACK_FORUM_CHANNEL_ID,
+        channelType: thread.parent?.type
       });
 
       const FEEDBACK_FORUM_CHANNEL_ID = process.env.FEEDBACK_FORUM_CHANNEL_ID;
@@ -303,10 +328,12 @@ async function initializeClient() {
         return;
       }
 
-      if (thread.parentId !== FEEDBACK_FORUM_CHANNEL_ID) {
-        console.log('⏭️ Skipping thread - not in feedback forum:', {
+      // Check if the thread is in the feedback channel (either as a forum thread or regular channel thread)
+      if (thread.parentId !== FEEDBACK_FORUM_CHANNEL_ID && thread.channelId !== FEEDBACK_FORUM_CHANNEL_ID) {
+        console.log('⏭️ Skipping thread - not in feedback channel:', {
           threadParentId: thread.parentId,
-          expectedParentId: FEEDBACK_FORUM_CHANNEL_ID
+          threadChannelId: thread.channelId,
+          expectedChannelId: FEEDBACK_FORUM_CHANNEL_ID
         });
         return;
       }
@@ -352,10 +379,39 @@ async function initializeClient() {
     // --------------------------------------------------------------------------
     client.on("messageCreate", async (message) => {
       const FEEDBACK_FORUM_CHANNEL_ID = process.env.FEEDBACK_FORUM_CHANNEL_ID;
-      if (message.channel.parentId !== FEEDBACK_FORUM_CHANNEL_ID) return;
-      if (message.author.bot) return;
+      
+      console.log('🔍 Message received:', {
+        channelId: message.channelId,
+        parentId: message.channel.parentId,
+        expectedChannelId: FEEDBACK_FORUM_CHANNEL_ID,
+        channelType: message.channel.parent?.type,
+        content: message.content.substring(0, 50) + '...', // Log first 50 chars of content
+        author: message.author.tag,
+        isBot: message.author.bot
+      });
+
+      // Check if the message is in the feedback channel (either as a forum thread or regular channel)
+      if (message.channel.parentId !== FEEDBACK_FORUM_CHANNEL_ID && message.channelId !== FEEDBACK_FORUM_CHANNEL_ID) {
+        console.log('⏭️ Skipping message - not in feedback channel:', {
+          messageChannelId: message.channelId,
+          messageParentId: message.channel.parentId,
+          expectedChannelId: FEEDBACK_FORUM_CHANNEL_ID
+        });
+        return;
+      }
+
+      if (message.author.bot) {
+        console.log('⏭️ Skipping message - from bot');
+        return;
+      }
+
+      console.log('✅ Processing feedback message:', {
+        content: message.content.substring(0, 50) + '...',
+        author: message.author.tag
+      });
 
       if (!message.content.replace(/\*/g, "").startsWith("Command")) {
+        console.log('❌ Message rejected - missing required format');
         const reply = await message.reply(
           "❌ **Bug Report Rejected — Missing Required Format!**\n\n" +
             "Your message must start with this line:\n" +
@@ -375,14 +431,22 @@ async function initializeClient() {
       }
 
       try {
-        const threadName = message.channel.name;
-        const username =
-          message.author?.tag ||
-          message.author?.username ||
-          `User-${message.author?.id}`;
+        // Extract command name from the message content
+        const commandMatch = message.content.match(/Command:\s*\[?([^\n\]]+)\]?/i);
+        const threadName = commandMatch ? commandMatch[1].trim() : 'Unknown Command';
+        
+        const username = message.author?.tag || message.author?.username || `User-${message.author?.id}`;
         const content = message.content;
         const createdAt = message.createdAt;
         const images = message.attachments.map((attachment) => attachment.url);
+
+        console.log('📝 Creating Trello card for feedback:', {
+          threadName,
+          username,
+          contentLength: content.length,
+          imageCount: images.length,
+          extractedCommand: commandMatch ? commandMatch[1] : 'Not found'
+        });
 
         const cardUrl = await createTrelloCard({
           threadName,
@@ -393,14 +457,21 @@ async function initializeClient() {
         });
 
         if (cardUrl) {
+          console.log('✅ Successfully created Trello card:', cardUrl);
           await message.reply(
             `✅ Bug report sent to Trello! ${cardUrl}\n\n_You can add comments to the Trello card if you want to provide more details or updates later._`
           );
         } else {
+          console.error('❌ Failed to create Trello card');
           await message.reply(`❌ Failed to send bug report to Trello.`);
         }
       } catch (err) {
         console.error("[index.js]: ❌ Error handling forum reply for Trello:", err);
+        console.error("[index.js]: Error details:", {
+          name: err.name,
+          message: err.message,
+          stack: err.stack
+        });
       }
     });
 
