@@ -365,7 +365,7 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
         if (item) {
           await syncToInventoryDatabase(character, {
             ...item,
-            obtain: "Monster Loot",
+            obtain: "Travel",
             perk: "" // Explicitly set perk to empty for monster loot
           }, interaction);
           lootLine = `\nLooted ${item.itemName} × ${item.quantity}\n`;

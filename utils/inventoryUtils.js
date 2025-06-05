@@ -161,11 +161,11 @@ async function syncToInventoryDatabase(character, item, interaction) {
     const type = Array.isArray(itemDetails?.type) ? itemDetails.type.join(", ") : (item.type || "");
     const subtype = Array.isArray(itemDetails?.subtype) ? itemDetails.subtype : (Array.isArray(item.subtype) ? item.subtype : (item.subtype ? [item.subtype] : []));
     const job = character.job || "";
-    const perk = character.perk || "";
+    const perk = item.perk !== undefined ? item.perk : (character.perk || "");
     const location = character.currentLocation || character.homeVillage || character.currentVillage || "";
     const link = interaction ? `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}` : (item.link || "");
     const date = item.date || new Date();
-    const obtain = item.obtain || "Manual Sync";
+    const obtain = item.obtain !== undefined ? item.obtain : "Manual Sync";
     const synced = item.synced || "";
     const characterName = character.name;
 
