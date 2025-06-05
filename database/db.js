@@ -136,7 +136,14 @@ async function connectToInventories() {
  try {
   if (!inventoriesDbConnection) {
    const env = process.env.NODE_ENV || 'development';
+   console.log(`[db.js]: 🔄 Connecting to Inventories database in ${env} mode`);
+   console.log(`[db.js]: 📝 Using URI: ${env === 'development' ? 'MONGODB_INVENTORIES_URI_DEV' : 'MONGODB_INVENTORIES_URI'}`);
+   
    const uri = env === 'development' ? process.env.MONGODB_INVENTORIES_URI_DEV : dbConfig.inventories;
+   if (!uri) {
+     throw new Error(`Missing MongoDB URI for ${env} environment`);
+   }
+   
    inventoriesDbConnection = await mongoose.createConnection(uri, {
     useNewUrlParser: true,
     useUnifiedTopology: true,
@@ -153,7 +160,9 @@ async function connectToInventories() {
     maxIdleTimeMS: 60000,
     family: 4
    });
+   
    console.log(`[db.js]: 🔌 Connected to Inventories database: ${env}`);
+   console.log(`[db.js]: 📦 Using database: ${env === 'development' ? 'inventories_dev' : 'inventories'}`);
   }
   return inventoriesDbConnection;
  } catch (error) {
@@ -167,10 +176,19 @@ async function connectToInventories() {
 const connectToInventoriesNative = async () => {
  if (!inventoriesDbNativeConnection) {
   const env = process.env.NODE_ENV || 'development';
+  console.log(`[db.js]: 🔄 Connecting to Inventories database (native) in ${env} mode`);
+  console.log(`[db.js]: 📝 Using URI: ${env === 'development' ? 'MONGODB_INVENTORIES_URI_DEV' : 'MONGODB_INVENTORIES_URI'}`);
+  
   const uri = env === 'development' ? process.env.MONGODB_INVENTORIES_URI_DEV : dbConfig.inventories;
+  if (!uri) {
+    throw new Error(`Missing MongoDB URI for ${env} environment`);
+  }
+  
   const client = new MongoClient(uri, {});
   await client.connect();
   inventoriesDbNativeConnection = client.db(env === 'development' ? 'inventories_dev' : 'inventories');
+  console.log(`[db.js]: 🔌 Connected to Inventories database (native): ${env}`);
+  console.log(`[db.js]: 📦 Using database: ${env === 'development' ? 'inventories_dev' : 'inventories'}`);
  }
  return inventoriesDbNativeConnection;
 };
