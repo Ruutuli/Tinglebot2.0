@@ -163,10 +163,6 @@ async function createCharacterInteraction(interaction) {
 
         await character.save();
         
-        // Only decrement character slot after successful character creation
-        user.characterSlot -= 1;
-        await user.save();
-
         // Create character embed
         const embed = createCharacterEmbed(character);
         await createCharacterInventory(characterName, character._id, character.job);

@@ -313,14 +313,6 @@ async function initializeClient() {
     // Forum Thread Creation Handling
     // --------------------------------------------------------------------------
     client.on("threadCreate", async (thread) => {
-      console.log('🔍 Thread created:', {
-        threadId: thread.id,
-        threadName: thread.name,
-        parentId: thread.parentId,
-        expectedParentId: process.env.FEEDBACK_FORUM_CHANNEL_ID,
-        channelType: thread.parent?.type
-      });
-
       const FEEDBACK_FORUM_CHANNEL_ID = process.env.FEEDBACK_FORUM_CHANNEL_ID;
       
       if (!FEEDBACK_FORUM_CHANNEL_ID) {
@@ -330,15 +322,8 @@ async function initializeClient() {
 
       // Check if the thread is in the feedback channel (either as a forum thread or regular channel thread)
       if (thread.parentId !== FEEDBACK_FORUM_CHANNEL_ID && thread.channelId !== FEEDBACK_FORUM_CHANNEL_ID) {
-        console.log('⏭️ Skipping thread - not in feedback channel:', {
-          threadParentId: thread.parentId,
-          threadChannelId: thread.channelId,
-          expectedChannelId: FEEDBACK_FORUM_CHANNEL_ID
-        });
         return;
       }
-
-      console.log('✅ Processing feedback thread:', thread.name);
 
       try {
         const starterMessage = await thread.fetchStarterMessage();
@@ -382,26 +367,14 @@ async function initializeClient() {
       
       // Check if the message is in the feedback channel (either as a forum thread or regular channel)
       if (message.channel.parentId !== FEEDBACK_FORUM_CHANNEL_ID && message.channelId !== FEEDBACK_FORUM_CHANNEL_ID) {
-        console.log('⏭️ Skipping message - not in feedback channel:', {
-          messageChannelId: message.channelId,
-          messageParentId: message.channel.parentId,
-          expectedChannelId: FEEDBACK_FORUM_CHANNEL_ID
-        });
         return;
       }
 
       if (message.author.bot) {
-        console.log('⏭️ Skipping message - from bot');
         return;
       }
 
-      console.log('✅ Processing feedback message:', {
-        content: message.content.substring(0, 50) + '...',
-        author: message.author.tag
-      });
-
       if (!message.content.replace(/\*/g, "").startsWith("Command")) {
-        console.log('❌ Message rejected - missing required format');
         const reply = await message.reply(
           "❌ **Bug Report Rejected — Missing Required Format!**\n\n" +
             "Your message must start with this line:\n" +
@@ -430,14 +403,6 @@ async function initializeClient() {
         const createdAt = message.createdAt;
         const images = message.attachments.map((attachment) => attachment.url);
 
-        console.log('📝 Creating Trello card for feedback:', {
-          threadName,
-          username,
-          contentLength: content.length,
-          imageCount: images.length,
-          extractedCommand: commandMatch ? commandMatch[1] : 'Not found'
-        });
-
         const cardUrl = await createTrelloCard({
           threadName,
           username,
@@ -447,12 +412,10 @@ async function initializeClient() {
         });
 
         if (cardUrl) {
-          console.log('✅ Successfully created Trello card:', cardUrl);
           await message.reply(
             `✅ Bug report sent to Trello! ${cardUrl}\n\n_You can add comments to the Trello card if you want to provide more details or updates later._`
           );
         } else {
-          console.error('❌ Failed to create Trello card');
           await message.reply(`❌ Failed to send bug report to Trello.`);
         }
       } catch (err) {
