@@ -1,7 +1,15 @@
 const path = require('path');
 const dotenv = require('dotenv');
+
+// Determine environment - use NODE_ENV or default to development
 const env = process.env.NODE_ENV || 'development';
-dotenv.config({ path: `.env.${env}` });
+
+// Try to load environment variables from .env file first
+try {
+  dotenv.config({ path: `.env.${env}` });
+} catch (error) {
+  console.log(`No .env.${env} file found, using environment variables directly`);
+}
 
 const dbConfig = {
   development: {
@@ -16,4 +24,14 @@ const dbConfig = {
   }
 };
 
-module.exports = dbConfig[process.env.NODE_ENV || 'development']; 
+// Validate configuration
+const config = dbConfig[env];
+if (!config.tinglebot || !config.inventories || !config.vending) {
+  console.error('Missing required MongoDB URIs in environment variables');
+  console.error('Current environment:', env);
+  console.error('Available environment variables:', Object.keys(process.env));
+  throw new Error('Database configuration is incomplete');
+}
+
+console.log(`[Database Config] Using ${env} environment configuration`);
+module.exports = config; 
