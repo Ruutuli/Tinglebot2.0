@@ -1,8 +1,19 @@
 // Auto-deployed via GitHub Actions
 // ------------------- Load Environment -------------------
 const dotenv = require('dotenv');
+const path = require('path');
+
+// Determine environment
 const env = process.env.NODE_ENV || 'development';
-dotenv.config({ path: `.env.${env}` });
+const envFile = `.env.${env}`;
+
+// Load environment variables
+const result = dotenv.config({ path: envFile });
+
+if (result.error) {
+  console.error(`❌ Error loading environment file ${envFile}:`, result.error);
+  process.exit(1);
+}
 
 console.log(`🚀 Running in ${env} mode on port ${process.env.PORT}`);
 
@@ -277,10 +288,29 @@ async function initializeClient() {
     // Forum Thread Creation Handling
     // --------------------------------------------------------------------------
     client.on("threadCreate", async (thread) => {
-      const FEEDBACK_FORUM_CHANNEL_ID = process.env.FEEDBACK_FORUM_CHANNEL_ID;
-      if (thread.parentId !== FEEDBACK_FORUM_CHANNEL_ID) return;
+      console.log('🔍 Thread created:', {
+        threadId: thread.id,
+        threadName: thread.name,
+        parentId: thread.parentId,
+        expectedParentId: process.env.FEEDBACK_FORUM_CHANNEL_ID
+      });
 
-      console.log(`[index.js]: New forum thread created: ${thread.name}`);
+      const FEEDBACK_FORUM_CHANNEL_ID = process.env.FEEDBACK_FORUM_CHANNEL_ID;
+      
+      if (!FEEDBACK_FORUM_CHANNEL_ID) {
+        console.error('❌ FEEDBACK_FORUM_CHANNEL_ID is not defined in environment variables');
+        return;
+      }
+
+      if (thread.parentId !== FEEDBACK_FORUM_CHANNEL_ID) {
+        console.log('⏭️ Skipping thread - not in feedback forum:', {
+          threadParentId: thread.parentId,
+          expectedParentId: FEEDBACK_FORUM_CHANNEL_ID
+        });
+        return;
+      }
+
+      console.log('✅ Processing feedback thread:', thread.name);
 
       try {
         const starterMessage = await thread.fetchStarterMessage();
