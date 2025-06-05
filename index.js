@@ -6,12 +6,17 @@ const path = require('path');
 // Determine environment
 const env = process.env.NODE_ENV || 'development';
 
-// Try to load .env file first
+// Try to load .env files in order of priority
 const possiblePaths = [
   path.resolve(process.cwd(), `.env.${env}`),
   path.resolve(process.cwd(), '..', `.env.${env}`),
   path.resolve('/app', `.env.${env}`),
-  `.env.${env}`
+  `.env.${env}`,
+  // Also try loading the other environment file as fallback
+  path.resolve(process.cwd(), `.env.${env === 'development' ? 'production' : 'development'}`),
+  path.resolve(process.cwd(), '..', `.env.${env === 'development' ? 'production' : 'development'}`),
+  path.resolve('/app', `.env.${env === 'development' ? 'production' : 'development'}`),
+  `.env.${env === 'development' ? 'production' : 'development'}`
 ];
 
 let loaded = false;
@@ -28,7 +33,14 @@ if (!loaded) {
   console.log('⚠️ No .env file found, using environment variables from Railway');
 }
 
+// Log which environment variables were loaded
 console.log(`🚀 Running in ${env} mode on port ${process.env.PORT}`);
+console.log('📝 Loaded environment variables:', {
+  DISCORD_TOKEN: process.env.DISCORD_TOKEN ? '✅ Set' : '❌ Not set',
+  CLIENT_ID: process.env.CLIENT_ID ? '✅ Set' : '❌ Not set',
+  FEEDBACK_FORUM_CHANNEL_ID: process.env.FEEDBACK_FORUM_CHANNEL_ID ? '✅ Set' : '❌ Not set',
+  // Add other critical environment variables here
+});
 
 // ------------------- Standard Libraries -------------------
 const figlet = require("figlet");
@@ -305,7 +317,9 @@ async function initializeClient() {
         threadId: thread.id,
         threadName: thread.name,
         parentId: thread.parentId,
-        expectedParentId: process.env.FEEDBACK_FORUM_CHANNEL_ID
+        expectedParentId: process.env.FEEDBACK_FORUM_CHANNEL_ID,
+        isForum: thread.parent?.isForum(),
+        channelType: thread.parent?.type
       });
 
       const FEEDBACK_FORUM_CHANNEL_ID = process.env.FEEDBACK_FORUM_CHANNEL_ID;
@@ -315,10 +329,12 @@ async function initializeClient() {
         return;
       }
 
-      if (thread.parentId !== FEEDBACK_FORUM_CHANNEL_ID) {
-        console.log('⏭️ Skipping thread - not in feedback forum:', {
+      // Check if the thread is in the feedback channel (either as a forum thread or regular channel thread)
+      if (thread.parentId !== FEEDBACK_FORUM_CHANNEL_ID && thread.channelId !== FEEDBACK_FORUM_CHANNEL_ID) {
+        console.log('⏭️ Skipping thread - not in feedback channel:', {
           threadParentId: thread.parentId,
-          expectedParentId: FEEDBACK_FORUM_CHANNEL_ID
+          threadChannelId: thread.channelId,
+          expectedChannelId: FEEDBACK_FORUM_CHANNEL_ID
         });
         return;
       }
@@ -364,7 +380,17 @@ async function initializeClient() {
     // --------------------------------------------------------------------------
     client.on("messageCreate", async (message) => {
       const FEEDBACK_FORUM_CHANNEL_ID = process.env.FEEDBACK_FORUM_CHANNEL_ID;
-      if (message.channel.parentId !== FEEDBACK_FORUM_CHANNEL_ID) return;
+      
+      console.log('🔍 Message received:', {
+        channelId: message.channelId,
+        parentId: message.channel.parentId,
+        expectedChannelId: FEEDBACK_FORUM_CHANNEL_ID,
+        isForum: message.channel.parent?.isForum(),
+        channelType: message.channel.parent?.type
+      });
+
+      // Check if the message is in the feedback channel (either as a forum thread or regular channel)
+      if (message.channel.parentId !== FEEDBACK_FORUM_CHANNEL_ID && message.channelId !== FEEDBACK_FORUM_CHANNEL_ID) return;
       if (message.author.bot) return;
 
       if (!message.content.replace(/\*/g, "").startsWith("Command")) {
