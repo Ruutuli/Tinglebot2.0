@@ -265,16 +265,21 @@ async function syncToInventoryDatabase(character, item, interaction) {
       const auth = await authorizeSheets();
       const spreadsheetId = extractSpreadsheetId(character.inventory);
       
-      // Check if this is a sync operation
-      if (obtain === "Manual Sync") {
-        // For sync, find and update existing row
+      // Check if this is a sync operation or crafted item
+      if (obtain === "Manual Sync" || obtain.toLowerCase().includes('crafting') || obtain.toLowerCase().includes('crafted')) {
+        // For sync or crafted items, find and update existing row
         const sheetData = await readSheetData(auth, spreadsheetId, 'loggedInventory!A2:M');
         const existingRowIndex = sheetData.findIndex(row => {
           const sheetChar = (row[0] || '').trim().toLowerCase();
           const sheetItem = (row[1] || '').trim().toLowerCase();
+          const sheetObtain = (row[6] || '').trim().toLowerCase();
           const dbChar = characterName.trim().toLowerCase();
           const dbItem = dbDoc.itemName.trim().toLowerCase();
-          return sheetChar === dbChar && sheetItem === dbItem;
+          return sheetChar === dbChar && 
+                 sheetItem === dbItem && 
+                 (obtain === "Manual Sync" || 
+                  (obtain.toLowerCase().includes('crafting') && sheetObtain.includes('crafting')) ||
+                  (obtain.toLowerCase().includes('crafted') && sheetObtain.includes('crafted')));
         });
 
         if (existingRowIndex !== -1) {
@@ -287,7 +292,7 @@ async function syncToInventoryDatabase(character, item, interaction) {
           );
           console.log(`[inventoryUtils.js]: ✅ Updated existing row for ${dbDoc.itemName} in sheet`);
         } else {
-          // If no existing row found during sync, append new row
+          // If no existing row found, append new row
           await appendSheetData(auth, spreadsheetId, 'loggedInventory!A2:M', values);
           console.log(`[inventoryUtils.js]: ✅ Appended new row for ${dbDoc.itemName} in sheet (no existing row found)`);
         }
