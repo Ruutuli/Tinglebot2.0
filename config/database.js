@@ -30,6 +30,16 @@ if (!config.tinglebot || !config.inventories || !config.vending) {
   console.error('Missing required MongoDB URIs in environment variables');
   console.error('Current environment:', env);
   console.error('Available environment variables:', Object.keys(process.env));
+  console.error('Development config:', {
+    tinglebot: !!process.env.MONGODB_TINGLEBOT_URI_DEV,
+    inventories: !!process.env.MONGODB_INVENTORIES_URI_DEV,
+    vending: !!process.env.MONGODB_VENDING_URI_DEV
+  });
+  console.error('Production config:', {
+    tinglebot: !!process.env.MONGODB_TINGLEBOT_URI_PROD,
+    inventories: !!process.env.MONGODB_INVENTORIES_URI_PROD,
+    vending: !!process.env.MONGODB_VENDING_URI_PROD
+  });
   throw new Error('Database configuration is incomplete');
 }
 
