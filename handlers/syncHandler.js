@@ -298,9 +298,9 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
                         const [sheetCharacterName, itemName] = row;
                         const itemKey = `${sheetCharacterName}:${itemName}`;
 
-                        // Skip if already processed
-                        if (processedItems.has(itemKey)) {
-                            console.log(`[syncHandler.js]: ⏭️ Skipping already processed item: ${itemName}`);
+                        // Skip if already synced (has synced value)
+                        if (row[12]) { // Check if synced column has a value
+                            console.log(`[syncHandler.js]: ⏭️ Skipping already synced item: ${itemName}`);
                             continue;
                         }
 
