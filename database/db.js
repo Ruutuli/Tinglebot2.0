@@ -78,11 +78,6 @@ async function connectToTinglebot() {
    mongoose.set("strictQuery", false);
    const env = process.env.NODE_ENV || 'development';
    const uri = env === 'development' ? dbConfig.tinglebot : dbConfig.tinglebot;
-   
-   if (!uri) {
-     throw new Error('Database URI is undefined. Please check your environment variables.');
-   }
-
    try {
     tinglebotDbConnection = await mongoose.connect(uri, {
      useNewUrlParser: true,
@@ -100,6 +95,7 @@ async function connectToTinglebot() {
      maxIdleTimeMS: 60000,
      family: 4
     });
+    console.log(`[db.js]: 🔌 Connected to Tinglebot database: ${env}`);
    } catch (connectError) {
     console.error("❌ Error connecting to Tinglebot database:", connectError);
     // Try to reconnect once
@@ -120,6 +116,7 @@ async function connectToTinglebot() {
       maxIdleTimeMS: 60000,
       family: 4
      });
+     console.log(`[db.js]: 🔌 Reconnected to Tinglebot database: ${env}`);
     } catch (retryError) {
      console.error("❌ Failed to reconnect to Tinglebot database:", retryError);
      throw retryError;
@@ -140,14 +137,28 @@ async function connectToInventories() {
   if (!inventoriesDbConnection) {
    const env = process.env.NODE_ENV || 'development';
    const uri = env === 'development' ? dbConfig.inventories : dbConfig.inventories;
-   inventoriesDbConnection = mongoose.createConnection(uri, {
-    dbName: env === 'development' ? 'inventories_dev' : 'inventories'
+   inventoriesDbConnection = await mongoose.createConnection(uri, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+    serverSelectionTimeoutMS: 30000,
+    socketTimeoutMS: 45000,
+    connectTimeoutMS: 30000,
+    maxPoolSize: 10,
+    minPoolSize: 5,
+    retryWrites: true,
+    retryReads: true,
+    w: 'majority',
+    wtimeoutMS: 2500,
+    heartbeatFrequencyMS: 10000,
+    maxIdleTimeMS: 60000,
+    family: 4
    });
+   console.log(`[db.js]: 🔌 Connected to Inventories database: ${env}`);
   }
   return inventoriesDbConnection;
  } catch (error) {
-  handleError(error, "connection.js");
-  console.error("❌ Error connecting to Inventories database:", error);
+  handleError(error, "db.js");
+  console.error("❌ Error in connectToInventories:", error);
   throw error;
  }
 }
@@ -176,20 +187,34 @@ const getInventoryCollection = async (characterName) => {
 
 // ------------------- connectToVending -------------------
 async function connectToVending() {
-  try {
-    if (!vendingDbConnection) {
-      const env = process.env.NODE_ENV || 'development';
-      const uri = env === 'development' ? dbConfig.vending : dbConfig.vending;
-      vendingDbConnection = mongoose.createConnection(uri, {
-        dbName: env === 'development' ? 'vendingInventories_dev' : 'vendingInventories'
-      });
-    }
-    return vendingDbConnection;
-  } catch (error) {
-    handleError(error, "db.js");
-    console.error("❌ Error connecting to Vending database:", error);
-    throw error;
+ try {
+  if (!vendingDbConnection) {
+   const env = process.env.NODE_ENV || 'development';
+   const uri = env === 'development' ? dbConfig.vending : dbConfig.vending;
+   vendingDbConnection = await mongoose.createConnection(uri, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+    serverSelectionTimeoutMS: 30000,
+    socketTimeoutMS: 45000,
+    connectTimeoutMS: 30000,
+    maxPoolSize: 10,
+    minPoolSize: 5,
+    retryWrites: true,
+    retryReads: true,
+    w: 'majority',
+    wtimeoutMS: 2500,
+    heartbeatFrequencyMS: 10000,
+    maxIdleTimeMS: 60000,
+    family: 4
+   });
+   console.log(`[db.js]: 🔌 Connected to Vending database: ${env}`);
   }
+  return vendingDbConnection;
+ } catch (error) {
+  handleError(error, "db.js");
+  console.error("❌ Error in connectToVending:", error);
+  throw error;
+ }
 }
 
 // ============================================================================
