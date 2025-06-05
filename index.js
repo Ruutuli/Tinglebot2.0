@@ -3,8 +3,28 @@
 const dotenv = require('dotenv');
 const path = require('path');
 
-// Determine environment
+// Environment check
 const env = process.env.NODE_ENV || 'development';
+const isDevelopment = env === 'development';
+console.log(`[index.js]: Starting bot in ${env} mode`);
+
+// Load environment variables
+const envFile = isDevelopment ? '.env.development' : '.env.production';
+console.log(`[index.js]: Loading environment from ${envFile}`);
+
+// Log critical environment variables
+const criticalVars = {
+  'DISCORD_TOKEN': process.env.DISCORD_TOKEN,
+  'CLIENT_ID': process.env.CLIENT_ID,
+  'MONGODB_INVENTORIES_URI_DEV': process.env.MONGODB_INVENTORIES_URI_DEV,
+  'MONGODB_INVENTORIES_URI_PROD': process.env.MONGODB_INVENTORIES_URI_PROD
+};
+
+console.log('[index.js]: 🔑 Critical environment variables:', 
+  Object.entries(criticalVars)
+    .map(([key, value]) => `${key}: ${value ? '✅' : '❌'}`)
+    .join(', ')
+);
 
 // Try to load .env files in order of priority
 const possiblePaths = [
@@ -23,23 +43,32 @@ let loaded = false;
 for (const envPath of possiblePaths) {
   const result = dotenv.config({ path: envPath });
   if (!result.error) {
-    console.log(`✅ Loaded environment from ${envPath}`);
+    console.log(`[index.js]: Loaded environment from ${envPath}`);
     loaded = true;
     break;
   }
 }
 
 if (!loaded) {
-  console.log('⚠️ No .env file found, using environment variables from Railway');
+  console.log('[index.js]: No .env file found, using environment variables from Railway');
 }
 
+// Validate environment after loading
+const finalEnv = process.env.NODE_ENV || 'development';
+console.log(`[index.js]: Final environment check:`, {
+  NODE_ENV: process.env.NODE_ENV,
+  env: finalEnv,
+  isDevelopment: finalEnv === 'development'
+});
+
 // Log which environment variables were loaded
-console.log(`🚀 Running in ${env} mode on port ${process.env.PORT}`);
-console.log('📝 Loaded environment variables:', {
-  DISCORD_TOKEN: process.env.DISCORD_TOKEN ? '✅ Set' : '❌ Not set',
-  CLIENT_ID: process.env.CLIENT_ID ? '✅ Set' : '❌ Not set',
-  FEEDBACK_FORUM_CHANNEL_ID: process.env.FEEDBACK_FORUM_CHANNEL_ID ? '✅ Set' : '❌ Not set',
-  // Add other critical environment variables here
+console.log(`[index.js]: Running in ${finalEnv} mode on port ${process.env.PORT}`);
+console.log('[index.js]: Loaded environment variables:', {
+  DISCORD_TOKEN: process.env.DISCORD_TOKEN ? 'Set' : 'Not set',
+  CLIENT_ID: process.env.CLIENT_ID ? 'Set' : 'Not set',
+  FEEDBACK_FORUM_CHANNEL_ID: process.env.FEEDBACK_FORUM_CHANNEL_ID ? 'Set' : 'Not set',
+  MONGODB_INVENTORIES_URI_DEV: process.env.MONGODB_INVENTORIES_URI_DEV ? 'Set' : 'Not set',
+  MONGODB_INVENTORIES_URI_PROD: process.env.MONGODB_INVENTORIES_URI_PROD ? 'Set' : 'Not set'
 });
 
 // ------------------- Standard Libraries -------------------
@@ -93,11 +122,11 @@ let client;
 // ----------------------------------------------------------------------------
 async function initializeDatabases() {
   try {
-    console.log("[index.js]: 🔄 Attempting to connect to databases...");
+    console.log("[index.js]: Connecting to databases...");
     
     // Add timeout to database connections
     const connectionTimeout = setTimeout(() => {
-      console.error("[index.js]: ❌ Database connection timeout after 30 seconds");
+      console.error("[index.js]: Database connection timeout after 30 seconds");
       process.exit(1);
     }, 30000);
 
@@ -139,16 +168,16 @@ process.on('unhandledRejection', (reason, promise) => {
 
 // Add graceful shutdown handler
 process.on('SIGTERM', async () => {
-  console.log('[index.js]: 🔄 Received SIGTERM. Performing graceful shutdown...');
+  console.log('[index.js]: Received SIGTERM. Performing graceful shutdown...');
   try {
     if (client) {
-      console.log('[index.js]: 🔄 Destroying Discord client...');
+      console.log('[index.js]: Destroying Discord client...');
       await client.destroy();
     }
-    console.log('[index.js]: ✅ Graceful shutdown complete');
+    console.log('[index.js]: Graceful shutdown complete');
     process.exit(0);
   } catch (error) {
-    console.error('[index.js]: ❌ Error during graceful shutdown:', error);
+    console.error('[index.js]: Error during graceful shutdown:', error.message);
     process.exit(1);
   }
 });
@@ -158,11 +187,11 @@ process.on('SIGTERM', async () => {
 // ----------------------------------------------------------------------------
 async function initializeClient() {
   try {
-    console.log("[index.js]: 🔄 Starting bot initialization...");
+    console.log("[index.js]: Starting bot initialization...");
     
     // Initialize databases first
     await initializeDatabases();
-    console.log("[index.js]: ✅ Database initialization complete");
+    console.log("[index.js]: Database initialization complete");
 
     client = new Client({
       intents: [
@@ -176,13 +205,13 @@ async function initializeClient() {
 
     // Add error handler for Discord client
     client.on('error', error => {
-      console.error('[index.js]: ❌ Discord client error:', error);
+      console.error('[index.js]: Discord client error:', error.message);
       process.exit(1);
     });
 
     // Add error handler for Discord connection
     client.on('disconnect', () => {
-      console.error('[index.js]: ❌ Discord client disconnected');
+      console.error('[index.js]: Discord client disconnected');
       process.exit(1);
     });
 
