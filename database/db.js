@@ -78,6 +78,11 @@ async function connectToTinglebot() {
    mongoose.set("strictQuery", false);
    const env = process.env.NODE_ENV || 'development';
    const uri = env === 'development' ? dbConfig.tinglebot : dbConfig.tinglebot;
+   
+   if (!uri) {
+     throw new Error('Database URI is undefined. Please check your environment variables.');
+   }
+
    try {
     tinglebotDbConnection = await mongoose.connect(uri, {
      useNewUrlParser: true,

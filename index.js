@@ -277,7 +277,7 @@ async function initializeClient() {
     // Forum Thread Creation Handling
     // --------------------------------------------------------------------------
     client.on("threadCreate", async (thread) => {
-      const FEEDBACK_FORUM_CHANNEL_ID = "1315866996776374302";
+      const FEEDBACK_FORUM_CHANNEL_ID = process.env.FEEDBACK_FORUM_CHANNEL_ID;
       if (thread.parentId !== FEEDBACK_FORUM_CHANNEL_ID) return;
 
       console.log(`[index.js]: New forum thread created: ${thread.name}`);
@@ -320,7 +320,7 @@ async function initializeClient() {
     // Forum Thread Reply Handling
     // --------------------------------------------------------------------------
     client.on("messageCreate", async (message) => {
-      const FEEDBACK_FORUM_CHANNEL_ID = "1315866996776374302";
+      const FEEDBACK_FORUM_CHANNEL_ID = process.env.FEEDBACK_FORUM_CHANNEL_ID;
       if (message.channel.parentId !== FEEDBACK_FORUM_CHANNEL_ID) return;
       if (message.author.bot) return;
 
