@@ -5,13 +5,24 @@ const path = require('path');
 
 // Determine environment
 const env = process.env.NODE_ENV || 'development';
-const envFile = path.resolve(process.cwd(), `.env.${env}`);
+const possiblePaths = [
+  path.resolve(process.cwd(), `.env.${env}`),
+  path.resolve(process.cwd(), '..', `.env.${env}`),
+  path.resolve('/app', `.env.${env}`),
+  `.env.${env}`
+];
 
-// Load environment variables
-const result = dotenv.config({ path: envFile });
+let result;
+for (const envPath of possiblePaths) {
+  result = dotenv.config({ path: envPath });
+  if (!result.error) {
+    console.log(`✅ Loaded environment from ${envPath}`);
+    break;
+  }
+}
 
 if (result.error) {
-  console.error(`❌ Error loading environment file ${envFile}:`, result.error);
+  console.error(`❌ Error loading environment file:`, result.error);
   process.exit(1);
 }
 
