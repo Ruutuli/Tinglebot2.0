@@ -23,6 +23,7 @@ const { isValidVillage } = require('../modules/locationsModule');
 const { isValidRace, getRaceValueByName } = require('../modules/raceModule');
 const { capitalizeFirstLetter } = require('../modules/formattingModule');
 const { capitalizeVillageName } = require('./stringUtils');
+const { isValidGoogleSheetsUrl, extractSpreadsheetId } = require('./googleSheetsUtils');
 
 
 // ============================================================================
@@ -224,27 +225,6 @@ async function characterExistsNotOwned(characterName, userId) {
 // Validates that the character's inventory is an array and that each item has a name and quantity.
 function validateCharacterInventory(inventory) {
     return Array.isArray(inventory) && inventory.every(item => item.name && item.quantity);
-}
-
-
-// ============================================================================
-// URL Validation Functions
-// ------------------- Google Sheets URL Validation -------------------
-// Checks if a given URL is a valid Google Sheets URL.
-function isValidGoogleSheetsUrl(url) {
-    const regex = /^https:\/\/docs\.google\.com\/spreadsheets\/d\/[a-zA-Z0-9-_]+\/(edit|view)(\?[^#]+)?(#.+)?$/;
-    return regex.test(url);
-}
-
-// ------------------- Extract Spreadsheet ID -------------------
-// Extracts the spreadsheet ID from a valid Google Sheets URL.
-function extractSpreadsheetId(url) {
-    if (typeof url !== 'string') {
-        throw new Error('Invalid URL: URL must be a string');
-    }
-    const regex = /\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/;
-    const match = url.match(regex);
-    return match ? match[1] : null;
 }
 
 

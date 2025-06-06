@@ -11,7 +11,7 @@ const {
   getSheetIdByTitle,
   readSheetData,
 } = require('../../utils/googleSheetsUtils.js');
-const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../../utils/validation.js');
+const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../../utils/googleSheetsUtils.js');
 const { createTokenTrackerSetupEmbed } = require('../../embeds/embeds.js');
 
 // ------------------- Command data definition for managing tokens -------------------

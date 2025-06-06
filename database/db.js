@@ -1443,7 +1443,7 @@ async function getUserGoogleSheetId(userId) {
      `[tokenService.js]: Invalid Google Sheets URL for user ${userId}`
     );
    }
-   return extractSpreadsheetIdFromUrl(user.tokenTracker);
+   return extractSpreadsheetId(user.tokenTracker);
   } else {
    console.error(
     `[tokenService.js]: No Token Tracker linked for user ${userId}`
@@ -1458,12 +1458,6 @@ async function getUserGoogleSheetId(userId) {
   );
   return null;
  }
-}
-
-function extractSpreadsheetIdFromUrl(url) {
- const regex = /\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/;
- const match = url.match(regex);
- return match ? match[1] : null;
 }
 
 // ------------------- getOrCreateUser -------------------
