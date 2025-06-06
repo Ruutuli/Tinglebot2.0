@@ -427,10 +427,12 @@ module.exports = {
       const itemToSync = {
         itemName: randomItem.itemName,
         quantity: 1,
-        category: randomItem.category,
-        type: randomItem.type,
-        subtype: randomItem.subtype || ['None'],
-        obtain: `Special Weather: ${weather.special.label}`
+        category: Array.isArray(randomItem.category) ? randomItem.category : [randomItem.category],
+        type: Array.isArray(randomItem.type) ? randomItem.type : [randomItem.type],
+        subtype: Array.isArray(randomItem.subtype) ? randomItem.subtype : (randomItem.subtype ? [randomItem.subtype] : []),
+        obtain: `Special Weather: ${weather.special.label}`,
+        date: new Date(),
+        link: `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`
       };
 
       // Sync item using itemSyncUtils
