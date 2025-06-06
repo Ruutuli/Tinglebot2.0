@@ -440,10 +440,14 @@ async function handleAutocomplete(interaction) {
             }
             break;
 
+          // ------------------- Handle Spirit Orb Character Autocomplete -------------------
+          case 'spiritorbs':
+            await handleSpiritOrbCharacterAutocomplete(interaction, focusedOption);
+            return;
         }
     } catch (error) {
         console.error('[autocompleteHandler.js]: ❌ Error in handleAutocomplete:', error);
-        await safeRespondWithError(interaction);
+        await safeRespondWithError(interaction, error);
     }
 }
 
@@ -3677,6 +3681,29 @@ async function handleViewInventoryAutocomplete(interaction, focusedOption) {
 // ============================================================================
 // EXPORT FUNCTIONS
 // ============================================================================
+
+// ------------------- Handle Spirit Orb Character Autocomplete -------------------
+async function handleSpiritOrbCharacterAutocomplete(interaction, focusedOption) {
+  try {
+    const userId = interaction.user.id;
+    const searchQuery = focusedOption.value.toLowerCase();
+
+    const characters = await Character.find({
+      userId,
+      name: { $regex: searchQuery, $options: 'i' }
+    }).limit(25);
+
+    const choices = characters.map(character => ({
+      name: `${character.name} | ${capitalize(character.currentVillage || 'Unknown')} | ${capitalize(character.job || 'Unknown')}`,
+      value: character.name
+    }));
+
+    await safeAutocompleteResponse(interaction, choices);
+  } catch (error) {
+    handleError(error, 'autocompleteHandler.js');
+    await safeRespondWithError(interaction, error);
+  }
+}
 
 module.exports = {
  handleAutocomplete,
