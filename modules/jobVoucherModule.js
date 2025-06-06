@@ -3,7 +3,7 @@
 // Import necessary modules
 const { handleError } = require('../utils/globalErrorHandler');
 const { removeItemInventoryDatabase } = require('../utils/inventoryUtils');
-const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../utils/validation');
+const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../utils/googleSheetsUtils');
 const { authorizeSheets, appendSheetData, safeAppendDataToSheet } = require('../utils/googleSheetsUtils');
 const { getCharacterInventoryCollection, updateCharacterById, fetchItemByName } = require('../database/db'); 
 const { v4: uuidv4 } = require('uuid');

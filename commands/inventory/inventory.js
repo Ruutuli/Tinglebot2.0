@@ -26,7 +26,7 @@ const {
 
 // ------------------- Project Utilities -------------------
 const { handleError } = require('../../utils/globalErrorHandler.js');
-const { isValidGoogleSheetsUrl, extractSpreadsheetId } = require('../../utils/validation.js');
+const { isValidGoogleSheetsUrl, extractSpreadsheetId } = require('../../utils/googleSheetsUtils.js');
 const { authorizeSheets, appendSheetData, getSheetIdByTitle, readSheetData, validateInventorySheet } = require('../../utils/googleSheetsUtils.js');
 const { typeColors, capitalize } = require('../../modules/formattingModule.js');
 const { checkInventorySync } = require('../../utils/characterUtils.js');

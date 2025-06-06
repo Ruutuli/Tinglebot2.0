@@ -7,7 +7,7 @@ const { handleError } = require('../utils/globalErrorHandler');
 const { createWeightedItemList, calculateFinalValue } = require('../modules/rngModule');
 const { fetchItemsByMonster, fetchCharacterByName } = require('../database/db');
 const { addItemInventoryDatabase } = require('../utils/inventoryUtils');
-const { extractSpreadsheetId } = require('../utils/validation');
+const { extractSpreadsheetId } = require('../utils/googleSheetsUtils');
 const { authorizeSheets, appendSheetData,  safeAppendDataToSheet, } = require('../utils/googleSheetsUtils');
 
 // Additional utilities and services

@@ -37,7 +37,7 @@ const { getCurrentWeather } = require('../../modules/weatherModule.js');
 // Import helper utilities for inventory management, Google Sheets integration, URL validation, and Blood Moon detection.
 const { addItemInventoryDatabase } = require('../../utils/inventoryUtils.js');
 const { authorizeSheets, appendSheetData,safeAppendDataToSheet  } = require('../../utils/googleSheetsUtils.js');
-const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../../utils/validation.js');
+const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../../utils/googleSheetsUtils.js');
 const { isBloodMoonActive } = require('../../scripts/bloodmoon.js');
 
 

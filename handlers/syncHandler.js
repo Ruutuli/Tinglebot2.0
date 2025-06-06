@@ -35,7 +35,7 @@ const { handleError } = require('../utils/globalErrorHandler');
 const { editCharacterNotFoundMessage, editSyncErrorMessage, editSyncMessage } = require('../embeds/embeds');
 const { removeInitialItemIfSynced, syncToInventoryDatabase } = require('../utils/inventoryUtils');
 const { authorizeSheets, getSheetIdByTitle, readSheetData, writeBatchData, validateInventorySheet } = require('../utils/googleSheetsUtils');
-const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../utils/validation');
+const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../utils/googleSheetsUtils');
 
 // ============================================================================
 // Constants

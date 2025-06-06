@@ -19,7 +19,7 @@ const { connectToInventories } = require('../database/db');
 // Utility Functions
 // ------------------- Importing utility functions -------------------
 const { appendSheetData } = require('../utils/googleSheetsUtils');
-const { extractSpreadsheetId } = require('../utils/validation');
+const { extractSpreadsheetId } = require('./googleSheetsUtils');
 
 // ============================================================================
 // Database Models
