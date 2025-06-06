@@ -179,6 +179,25 @@ async function syncToInventoryDatabase(character, item, interaction) {
       synced
     };
 
+    // First, update the database
+    const existingItem = await inventoryCollection.findOne({
+      characterId: character._id,
+      itemName: dbDoc.itemName
+    });
+
+    if (existingItem) {
+      // Update existing item
+      await inventoryCollection.updateOne(
+        { characterId: character._id, itemName: dbDoc.itemName },
+        { $set: dbDoc }
+      );
+      console.log(`[inventoryUtils.js]: ✅ Updated item ${dbDoc.itemName} in database`);
+    } else {
+      // Insert new item
+      await inventoryCollection.insertOne(dbDoc);
+      console.log(`[inventoryUtils.js]: ✅ Added new item ${dbDoc.itemName} to database`);
+    }
+
     // Google Sheets Sync
     try {
       // Get existing row data if it exists
