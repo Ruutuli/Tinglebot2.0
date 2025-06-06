@@ -52,8 +52,9 @@ function getCacheKey(date) {
 // Gets the current weather for a village, using TempData for caching
 async function getCurrentWeather(village) {
   try {
-    // Create date at UTC midnight for June 2nd
-    const today = new Date('2025-06-02T00:00:00.000Z');
+    // Get current date at UTC midnight
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
     const normalizedVillage = normalizeVillageName(village);
     const cacheKey = `weather_${normalizedVillage}_${getCacheKey(today)}`;
 
