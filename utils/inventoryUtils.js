@@ -196,7 +196,6 @@ async function syncToInventoryDatabase(character, item, interaction) {
         
         // Skip rows that are already synced
         if (sheetSync) {
-          console.log(`[inventoryUtils.js]: ⏭️ Skipping already synced item: ${sheetItem}`);
           return false;
         }
         
@@ -218,16 +217,6 @@ async function syncToInventoryDatabase(character, item, interaction) {
         // Update each matching row
         for (const existingRow of matchingRows) {
           const rowIndex = sheetData.indexOf(existingRow);
-          console.log(`[inventoryUtils.js]: 📝 Processing row for ${dbDoc.itemName} with fields:`, {
-            category: existingRow[3],
-            type: existingRow[4],
-            subtype: existingRow[5],
-            obtain: existingRow[6],
-            job: existingRow[7],
-            perk: existingRow[8],
-            location: existingRow[9],
-            link: existingRow[10]
-          });
 
           const values = [[
             characterName,
