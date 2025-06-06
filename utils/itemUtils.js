@@ -294,6 +294,27 @@ const promptUserForSpecificItems = async (interaction, inventory, generalCategor
     return selectedItems;
 };
 
+// ------------------- Process Sheet Data for Database -------------------
+// Converts sheet data into the correct format for database insertion
+const processSheetDataForDatabase = (sheetData) => {
+    return sheetData.map(row => {
+        const [characterName, itemName, quantity, category, type, subtype, obtain, job, perk, location, link, date, syncId] = row;
+        return {
+            itemName: itemName.trim().toLowerCase(),
+            quantity: parseInt(quantity) || 0,
+            category: category || '',
+            type: type || '',
+            subtype: subtype || '',
+            obtain: obtain || 'Manual Sync',
+            job: job || '',
+            perk: perk || '',
+            location: location || '',
+            link: link || '',
+            date: date || new Date().toISOString(),
+            syncId: syncId || ''
+        };
+    });
+};
 
 module.exports = {
     createNewItemDatabase,       // Creates a new inventory item entry.
@@ -301,4 +322,5 @@ module.exports = {
     removeItemDatabase,          // Removes a specified quantity of an item from the database.
     addItemsToDatabase,          // Adds multiple items to the inventory database.
     promptUserForSpecificItems,  // Prompts the user to select specific items from a general category.
+    processSheetDataForDatabase  // Processes sheet data for database insertion.
 };
