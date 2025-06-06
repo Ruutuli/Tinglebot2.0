@@ -13,6 +13,6 @@
   ],
   "ignore": ["node_modules/"],
   "ext": "js,json",
-  "exec": "node scripts/deploy-commands.js guild > nodemon.log 2>&1",
+  "exec": "set NODE_ENV=production && node scripts/deploy-commands.js > nodemon.log 2>&1",
   "legacy-watch": true
 }
