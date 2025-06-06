@@ -1,119 +1,327 @@
-  - Option "race" has autocomplete enabled
-  - Option "race" has autocomplete enabled
-  - Option "race" has autocomplete enabled
-  - Option "race" has autocomplete enabled
-  - Option "charactername" has autocomplete enabled
-  - Option "updatedinfo" has autocomplete enabled
-  - Option "charactername" has autocomplete enabled
-  - Option "charactername" has autocomplete enabled
-  - Option "charactername" has autocomplete enabled
-  - Option "newjob" has autocomplete enabled
-  - Option "charactername" has autocomplete enabled
-✅ Loaded command: character from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\character\character.js
-⚠️ The command at C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\companions\mount.js is missing a required "data" or "execute" property.
-⚠️ The command at C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\companions\pet.js is missing a required "data" or "execute" property.
-  - Option "fromcharacter" has autocomplete enabled
-  - Option "tocharacter" has autocomplete enabled
-  - Option "itema" has autocomplete enabled
-  - Option "itemb" has autocomplete enabled
-  - Option "itemc" has autocomplete enabled
-  - Option "charactername" has autocomplete enabled
-  - Option "itemname" has autocomplete enabled
-  - Option "charactername" has autocomplete enabled
-  - Option "itemname" has autocomplete enabled
-  - Option "fromcharacter" has autocomplete enabled
-  - Option "tocharacter" has autocomplete enabled
-  - Option "item1" has autocomplete enabled
-  - Option "item2" has autocomplete enabled
-  - Option "item3" has autocomplete enabled
-  - Option "fromcharacter" has autocomplete enabled
-  - Option "tocharacter" has autocomplete enabled
-  - Option "itema" has autocomplete enabled
-  - Option "itemb" has autocomplete enabled
-  - Option "itemc" has autocomplete enabled
-⚠️ Command economy has autocomplete options but no autocomplete handler.
-✅ Loaded command: economy from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\economy\economy.js
-⚠️ The command at C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\exploration\explore.js is missing a required "data" or "execute" property.
-⚠️ The command at C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\exploration\viewMap.js is missing a required "data" or "execute" property.
-⚠️ The command at C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\inventory\customWeapon.js is missing a required "data" or "execute" property.
-  - Option "charactername" has autocomplete enabled
-  - Option "itemname" has autocomplete enabled
-⚠️ Command gear has autocomplete options but no autocomplete handler.
-✅ Loaded command: gear from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\inventory\gear.js
-  - Option "charactername" has autocomplete enabled
-  - Option "charactername" has autocomplete enabled
-  - Option "charactername" has autocomplete enabled
-⚠️ Command inventory has autocomplete options but no autocomplete handler.
-✅ Loaded command: inventory from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\inventory\inventory.js
-  - Option "charactername" has autocomplete enabled
-  - Option "itemname" has autocomplete enabled
-  - Option "jobname" has autocomplete enabled
-⚠️ Command item has autocomplete options but no autocomplete handler.
-✅ Loaded command: item from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\inventory\item.js
-⚠️ The command at C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\inventory\relic.js is missing a required "data" or "execute" property.
-  - Option "character" has autocomplete enabled
-  - Option "character" has autocomplete enabled
-⚠️ Command spiritorbs has autocomplete options but no autocomplete handler.
-✅ Loaded command: spiritorbs from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\inventory\spiritOrb.js
-⚠️ The command at C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\jobs\boosting.js is missing a required "data" or "execute" property.
-  - Option "charactername" has autocomplete enabled
-  - Option "itemname" has autocomplete enabled
-⚠️ Command crafting has autocomplete options but no autocomplete handler.
-✅ Loaded command: crafting from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\jobs\crafting.js
-⚠️ The command at C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\jobs\deliver.js is missing a required "data" or "execute" property.
-  - Option "charactername" has autocomplete enabled
-⚠️ Command gather has autocomplete options but no autocomplete handler.
-✅ Loaded command: gather from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\jobs\gather.js
-  - Option "charactername" has autocomplete enabled
-  - Option "healer" has autocomplete enabled
-  - Option "healername" has autocomplete enabled
-⚠️ Command heal has autocomplete options but no autocomplete handler.
-✅ Loaded command: heal from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\jobs\heal.js
-  - Option "charactername" has autocomplete enabled
-⚠️ Command loot has autocomplete options but no autocomplete handler.
-✅ Loaded command: loot from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\jobs\loot.js
-⚠️ The command at C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\jobs\steal.js is missing a required "data" or "execute" property.
-⚠️ The command at C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\jobs\vending.js is missing a required "data" or "execute" property.
-  - Option "character" has autocomplete enabled
-  - Option "item" has autocomplete enabled
-  - Option "character" has autocomplete enabled
-  - Option "petname" has autocomplete enabled
-  - Option "character" has autocomplete enabled
-  - Option "character" has autocomplete enabled
-  - Option "character" has autocomplete enabled
-  - Option "petname" has autocomplete enabled
-  - Option "monster" has autocomplete enabled
-⚠️ Command mod has autocomplete options but no autocomplete handler.
-✅ Loaded command: mod from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\moderation\mod.js
-  - Option "charactername" has autocomplete enabled
-⚠️ Command specialweather has autocomplete options but no autocomplete handler.
-✅ Loaded command: specialweather from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\specialweather.js
-  - Option "charactername" has autocomplete enabled
-⚠️ Command cancelvoucher has autocomplete options but no autocomplete handler.
-✅ Loaded command: cancelvoucher from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\utility\cancelvoucher.js
-  - Option "item" has autocomplete enabled
-  - Option "ingredient" has autocomplete enabled
-✅ Loaded command: lookup from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\utility\lookup.js
-✅ Loaded command: roll from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\utility\roll.js
-⚠️ The command at C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\utility\submit.js is missing a required "data" or "execute" property.
-✅ Loaded command: tokens from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\utility\tokens.js
-  - Option "character_name" has autocomplete enabled
-  - Option "character_name" has autocomplete enabled
-  - Option "item" has autocomplete enabled
-  - Option "character_name" has autocomplete enabled
-⚠️ Command blight has autocomplete options but no autocomplete handler.
-✅ Loaded command: blight from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\world\blight.js
-⚠️ The command at C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\world\combat.js is missing a required "data" or "execute" property.
-⚠️ The command at C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\world\quest.js is missing a required "data" or "execute" property.
-⚠️ The command at C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\world\raid.js is missing a required "data" or "execute" property.
-  - Option "charactername" has autocomplete enabled
-  - Option "destination" has autocomplete enabled
-⚠️ Command travel has autocomplete options but no autocomplete handler.
-✅ Loaded command: travel from C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\world\travel.js
-⚠️ The command at C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\world\village.js is missing a required "data" or "execute" property.
-🔄 Started refreshing 18 commands in development mode.
-(node:26096) Warning: Accessing non-existent property 'connectToInventories' of module exports inside circular dependency
+[deploy-commands.js]: Deploying commands in production  mode
+[deploy-commands.js]: Forcing production mode from command line
+[deploy-commands.js]: Loaded environment from C:\Users\Ruu\Desktop\Tinglebot 2.0\.env.production
+[deploy-commands.js]: Deploying commands in production mode
+[deploy-commands.js]: Found 35 potential command files
+[deploy-commands.js]: Setting up database mocks
+
+[deploy-commands.js]: Processing file: commands\character\character.js
+[deploy-commands.js]: Attempting to require: commands\character\character.js
+[deploy-commands.js]: Requiring module: C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\character\character.js
+[database.js]: Using production environment
+[database.js]: Loaded environment from .env.production
+[database.js]: Using production environment configuration
+[database.js]: Database URIs: { tinglebot: '✅ Set', inventories: '✅ Set', vending: '✅ Set' }
+[deploy-commands.js]: Successfully required commands\character\character.js
+[deploy-commands.js]: Found command data in commands\character\character.js
+[deploy-commands.js]: Command data: {
+  name: 'character',
+  description: 'Manage your characters',
+  options: 7
+}
+✅ Loaded command: character from commands\character\character.js
+
+[deploy-commands.js]: Processing file: commands\companions\mount.js
+[deploy-commands.js]: Attempting to require: commands\companions\mount.js
+[deploy-commands.js]: Requiring module: C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\companions\mount.js
+[deploy-commands.js]: Successfully required commands\companions\mount.js
+⚠️ The command at commands\companions\mount.js is missing a required "data" property.
+
+[deploy-commands.js]: Processing file: commands\companions\pet.js
+[deploy-commands.js]: Attempting to require: commands\companions\pet.js
+[deploy-commands.js]: Requiring module: C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\companions\pet.js
+[deploy-commands.js]: Successfully required commands\companions\pet.js
+⚠️ The command at commands\companions\pet.js is missing a required "data" property.
+
+[deploy-commands.js]: Processing file: commands\economy\economy.js
+[deploy-commands.js]: Attempting to require: commands\economy\economy.js
+[deploy-commands.js]: Requiring module: C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\economy\economy.js
+[deploy-commands.js]: Successfully required commands\economy\economy.js
+[deploy-commands.js]: Found command data in commands\economy\economy.js
+[deploy-commands.js]: Command data: {
+  name: 'economy',
+  description: 'Economy commands for gifts, shops, trades, and transfers',
+  options: 6
+}
+✅ Loaded command: economy from commands\economy\economy.js
+
+[deploy-commands.js]: Processing file: commands\exploration\explore.js
+[deploy-commands.js]: Attempting to require: commands\exploration\explore.js
+[deploy-commands.js]: Requiring module: C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\exploration\explore.js
+[deploy-commands.js]: Successfully required commands\exploration\explore.js
+⚠️ The command at commands\exploration\explore.js is missing a required "data" property.
+
+[deploy-commands.js]: Processing file: commands\exploration\viewMap.js
+[deploy-commands.js]: Attempting to require: commands\exploration\viewMap.js
+[deploy-commands.js]: Requiring module: C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\exploration\viewMap.js
+[deploy-commands.js]: Successfully required commands\exploration\viewMap.js
+⚠️ The command at commands\exploration\viewMap.js is missing a required "data" property.
+
+[deploy-commands.js]: Processing file: commands\inventory\customWeapon.js
+[deploy-commands.js]: Attempting to require: commands\inventory\customWeapon.js
+[deploy-commands.js]: Requiring module: C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\inventory\customWeapon.js
+[deploy-commands.js]: Successfully required commands\inventory\customWeapon.js
+⚠️ The command at commands\inventory\customWeapon.js is missing a required "data" property.
+
+[deploy-commands.js]: Processing file: commands\inventory\gear.js
+[deploy-commands.js]: Attempting to require: commands\inventory\gear.js
+[deploy-commands.js]: Requiring module: C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\inventory\gear.js
+[deploy-commands.js]: Successfully required commands\inventory\gear.js
+[deploy-commands.js]: Found command data in commands\inventory\gear.js
+[deploy-commands.js]: Command data: {
+  name: 'gear',
+  description: 'Displays, equips, or unequips gear of a character.',
+  options: 4
+}
+✅ Loaded command: gear from commands\inventory\gear.js
+
+[deploy-commands.js]: Processing file: commands\inventory\inventory.js
+[deploy-commands.js]: Attempting to require: commands\inventory\inventory.js
+[deploy-commands.js]: Requiring module: C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\inventory\inventory.js
+[deploy-commands.js]: Successfully required commands\inventory\inventory.js
+[deploy-commands.js]: Found command data in commands\inventory\inventory.js
+[deploy-commands.js]: Command data: {
+  name: 'inventory',
+  description: "Manage your character's inventory",
+  options: 3
+}
+✅ Loaded command: inventory from commands\inventory\inventory.js
+
+[deploy-commands.js]: Processing file: commands\inventory\item.js
+[deploy-commands.js]: Attempting to require: commands\inventory\item.js
+[deploy-commands.js]: Requiring module: C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\inventory\item.js
+[deploy-commands.js]: Successfully required commands\inventory\item.js
+[deploy-commands.js]: Found command data in commands\inventory\item.js
+[deploy-commands.js]: Command data: {
+  name: 'item',
+  description: 'Use an item for various purposes',
+  options: 4
+}
+✅ Loaded command: item from commands\inventory\item.js
+
+[deploy-commands.js]: Processing file: commands\inventory\relic.js
+[deploy-commands.js]: Attempting to require: commands\inventory\relic.js
+[deploy-commands.js]: Requiring module: C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\inventory\relic.js
+[deploy-commands.js]: Successfully required commands\inventory\relic.js
+⚠️ The command at commands\inventory\relic.js is missing a required "data" property.
+
+[deploy-commands.js]: Processing file: commands\inventory\spiritOrb.js
+[deploy-commands.js]: Attempting to require: commands\inventory\spiritOrb.js
+[deploy-commands.js]: Requiring module: C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\inventory\spiritOrb.js
+[deploy-commands.js]: Successfully required commands\inventory\spiritOrb.js
+[deploy-commands.js]: Found command data in commands\inventory\spiritOrb.js
+[deploy-commands.js]: Command data: {
+  name: 'spiritorbs',
+  description: 'Check or exchange Spirit Orbs for health or stamina upgrades',
+  options: 2
+}
+✅ Loaded command: spiritorbs from commands\inventory\spiritOrb.js
+
+[deploy-commands.js]: Processing file: commands\jobs\boosting.js
+[deploy-commands.js]: Attempting to require: commands\jobs\boosting.js
+[deploy-commands.js]: Requiring module: C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\jobs\boosting.js
+[deploy-commands.js]: Successfully required commands\jobs\boosting.js
+⚠️ The command at commands\jobs\boosting.js is missing a required "data" property.
+
+[deploy-commands.js]: Processing file: commands\jobs\crafting.js
+[deploy-commands.js]: Attempting to require: commands\jobs\crafting.js
+[deploy-commands.js]: Requiring module: C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\jobs\crafting.js
+[deploy-commands.js]: Successfully required commands\jobs\crafting.js
+[deploy-commands.js]: Found command data in commands\jobs\crafting.js
+[deploy-commands.js]: Command data: {
+  name: 'crafting',
+  description: 'Craft an item for a character',
+  options: 4
+}
+✅ Loaded command: crafting from commands\jobs\crafting.js
+
+[deploy-commands.js]: Processing file: commands\jobs\deliver.js
+[deploy-commands.js]: Attempting to require: commands\jobs\deliver.js
+[deploy-commands.js]: Requiring module: C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\jobs\deliver.js
+[deploy-commands.js]: Successfully required commands\jobs\deliver.js
+⚠️ The command at commands\jobs\deliver.js is missing a required "data" property.
+
+[deploy-commands.js]: Processing file: commands\jobs\gather.js
+[deploy-commands.js]: Attempting to require: commands\jobs\gather.js
+[deploy-commands.js]: Requiring module: C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\jobs\gather.js
+[deploy-commands.js]: Successfully required commands\jobs\gather.js
+[deploy-commands.js]: Found command data in commands\jobs\gather.js
+[deploy-commands.js]: Command data: {
+  name: 'gather',
+  description: "Gather items based on your character's job and location",
+  options: 1
+}
+✅ Loaded command: gather from commands\jobs\gather.js
+
+[deploy-commands.js]: Processing file: commands\jobs\heal.js
+[deploy-commands.js]: Attempting to require: commands\jobs\heal.js
+[deploy-commands.js]: Requiring module: C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\jobs\heal.js
+[deploy-commands.js]: Successfully required commands\jobs\heal.js
+[deploy-commands.js]: Found command data in commands\jobs\heal.js
+[deploy-commands.js]: Command data: {
+  name: 'heal',
+  description: 'Handle healing interactions',
+  options: 2
+}
+✅ Loaded command: heal from commands\jobs\heal.js
+
+[deploy-commands.js]: Processing file: commands\jobs\loot.js
+[deploy-commands.js]: Attempting to require: commands\jobs\loot.js
+[deploy-commands.js]: Requiring module: C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\jobs\loot.js
+[deploy-commands.js]: Successfully required commands\jobs\loot.js
+[deploy-commands.js]: Found command data in commands\jobs\loot.js
+[deploy-commands.js]: Command data: {
+  name: 'loot',
+  description: "Loot items based on your character's job and location",
+  options: 1
+}
+✅ Loaded command: loot from commands\jobs\loot.js
+
+[deploy-commands.js]: Processing file: commands\jobs\steal.js
+[deploy-commands.js]: Attempting to require: commands\jobs\steal.js
+[deploy-commands.js]: Requiring module: C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\jobs\steal.js
+[deploy-commands.js]: Successfully required commands\jobs\steal.js
+⚠️ The command at commands\jobs\steal.js is missing a required "data" property.
+
+[deploy-commands.js]: Processing file: commands\jobs\vending.js
+[deploy-commands.js]: Attempting to require: commands\jobs\vending.js
+[deploy-commands.js]: Requiring module: C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\jobs\vending.js
+[deploy-commands.js]: Successfully required commands\jobs\vending.js
+⚠️ The command at commands\jobs\vending.js is missing a required "data" property.
+
+[deploy-commands.js]: Processing file: commands\moderation\mod.js
+[deploy-commands.js]: Attempting to require: commands\moderation\mod.js
+[deploy-commands.js]: Requiring module: C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\moderation\mod.js
+[deploy-commands.js]: Successfully required commands\moderation\mod.js
+[deploy-commands.js]: Found command data in commands\moderation\mod.js
+[deploy-commands.js]: Command data: {
+  name: 'mod',
+  description: '🛠️ Moderator utilities: manage items, pets, encounters, status, tables, and submissions',
+  options: 16
+}
+✅ Loaded command: mod from commands\moderation\mod.js
+
+[deploy-commands.js]: Processing file: commands\specialweather.js
+[deploy-commands.js]: Attempting to require: commands\specialweather.js
+[deploy-commands.js]: Requiring module: C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\specialweather.js
+[deploy-commands.js]: Successfully required commands\specialweather.js
+[deploy-commands.js]: Found command data in commands\specialweather.js
+[deploy-commands.js]: Command data: {
+  name: 'specialweather',
+  description: 'Gather special items during special weather conditions',
+  options: 1
+}
+✅ Loaded command: specialweather from commands\specialweather.js
+
+[deploy-commands.js]: Processing file: commands\utility\cancelvoucher.js
+[deploy-commands.js]: Attempting to require: commands\utility\cancelvoucher.js
+[deploy-commands.js]: Requiring module: C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\utility\cancelvoucher.js
+[deploy-commands.js]: Successfully required commands\utility\cancelvoucher.js
+[deploy-commands.js]: Found command data in commands\utility\cancelvoucher.js
+[deploy-commands.js]: Command data: {
+  name: 'cancelvoucher',
+  description: '🎫 Cancel your active job voucher',
+  options: 1
+}
+✅ Loaded command: cancelvoucher from commands\utility\cancelvoucher.js
+
+[deploy-commands.js]: Processing file: commands\utility\lookup.js
+[deploy-commands.js]: Attempting to require: commands\utility\lookup.js
+[deploy-commands.js]: Requiring module: C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\utility\lookup.js
+[deploy-commands.js]: Successfully required commands\utility\lookup.js
+[deploy-commands.js]: Found command data in commands\utility\lookup.js
+[deploy-commands.js]: Command data: {
+  name: 'lookup',
+  description: 'Look up details of a specific item or ingredient',
+  options: 2
+}
+✅ Loaded command: lookup from commands\utility\lookup.js
+
+[deploy-commands.js]: Processing file: commands\utility\roll.js
+[deploy-commands.js]: Attempting to require: commands\utility\roll.js
+[deploy-commands.js]: Requiring module: C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\utility\roll.js
+[deploy-commands.js]: Successfully required commands\utility\roll.js
+[deploy-commands.js]: Found command data in commands\utility\roll.js
+[deploy-commands.js]: Command data: {
+  name: 'roll',
+  description: '🎲 Rolls a dice and returns the result',
+  options: 4
+}
+✅ Loaded command: roll from commands\utility\roll.js
+
+[deploy-commands.js]: Processing file: commands\utility\submit.js
+[deploy-commands.js]: Attempting to require: commands\utility\submit.js
+[deploy-commands.js]: Requiring module: C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\utility\submit.js
+[deploy-commands.js]: Successfully required commands\utility\submit.js
+⚠️ The command at commands\utility\submit.js is missing a required "data" property.
+
+[deploy-commands.js]: Processing file: commands\utility\tokens.js
+[deploy-commands.js]: Attempting to require: commands\utility\tokens.js
+[deploy-commands.js]: Requiring module: C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\utility\tokens.js
+[deploy-commands.js]: Successfully required commands\utility\tokens.js
+[deploy-commands.js]: Found command data in commands\utility\tokens.js
+[deploy-commands.js]: Command data: { name: 'tokens', description: 'Manage your tokens', options: 2 }
+✅ Loaded command: tokens from commands\utility\tokens.js
+
+[deploy-commands.js]: Processing file: commands\world\blight.js
+[deploy-commands.js]: Attempting to require: commands\world\blight.js
+[deploy-commands.js]: Requiring module: C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\world\blight.js
+[deploy-commands.js]: Successfully required commands\world\blight.js
+[deploy-commands.js]: Found command data in commands\world\blight.js
+[deploy-commands.js]: Command data: {
+  name: 'blight',
+  description: 'Manage blight progression, healing, and submissions.',
+  options: 5
+}
+✅ Loaded command: blight from commands\world\blight.js
+
+[deploy-commands.js]: Processing file: commands\world\combat.js
+[deploy-commands.js]: Attempting to require: commands\world\combat.js
+[deploy-commands.js]: Requiring module: C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\world\combat.js
+[deploy-commands.js]: Successfully required commands\world\combat.js
+⚠️ The command at commands\world\combat.js is missing a required "data" property.
+
+[deploy-commands.js]: Processing file: commands\world\quest.js
+[deploy-commands.js]: Attempting to require: commands\world\quest.js
+[deploy-commands.js]: Requiring module: C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\world\quest.js
+[deploy-commands.js]: Successfully required commands\world\quest.js
+⚠️ The command at commands\world\quest.js is missing a required "data" property.
+
+[deploy-commands.js]: Processing file: commands\world\raid.js
+[deploy-commands.js]: Attempting to require: commands\world\raid.js
+[deploy-commands.js]: Requiring module: C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\world\raid.js
+[deploy-commands.js]: Successfully required commands\world\raid.js
+⚠️ The command at commands\world\raid.js is missing a required "data" property.
+
+[deploy-commands.js]: Processing file: commands\world\travel.js
+[deploy-commands.js]: Attempting to require: commands\world\travel.js
+[deploy-commands.js]: Requiring module: C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\world\travel.js
+[deploy-commands.js]: Successfully required commands\world\travel.js
+[deploy-commands.js]: Found command data in commands\world\travel.js
+[deploy-commands.js]: Command data: { name: 'travel', description: 'Travel between villages', options: 3 }
+✅ Loaded command: travel from commands\world\travel.js
+
+[deploy-commands.js]: Processing file: commands\world\village.js
+[deploy-commands.js]: Attempting to require: commands\world\village.js
+[deploy-commands.js]: Requiring module: C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\world\village.js
+[deploy-commands.js]: Successfully required commands\world\village.js
+⚠️ The command at commands\world\village.js is missing a required "data" property.
+
+[deploy-commands.js]: Processing file: embeds\embeds.js
+[deploy-commands.js]: Attempting to require: embeds\embeds.js
+[deploy-commands.js]: Requiring module: C:\Users\Ruu\Desktop\Tinglebot 2.0\embeds\embeds.js
+[deploy-commands.js]: Successfully required embeds\embeds.js
+⚠️ The command at embeds\embeds.js is missing a required "data" property.
+
+[deploy-commands.js]: Processing file: embeds\weatherEmbed.js
+[deploy-commands.js]: Attempting to require: embeds\weatherEmbed.js
+[deploy-commands.js]: Requiring module: C:\Users\Ruu\Desktop\Tinglebot 2.0\embeds\weatherEmbed.js
+[deploy-commands.js]: Successfully required embeds\weatherEmbed.js
+⚠️ The command at embeds\weatherEmbed.js is missing a required "data" property.
+[deploy-commands.js]: Restoring original require and environment
+[deploy-commands.js]: Successfully loaded 18 commands
+🔄 Started refreshing 18 commands in production mode.
+[deploy-commands.js]: Deploying to production guild: 603960955839447050
+(node:40632) Warning: Accessing non-existent property 'connectToInventories' of module exports inside circular dependency
 (Use `node --trace-warnings ...` to show where the warning was created)
-(node:26096) Warning: Accessing non-existent property 'fetchCharacterById' of module exports inside circular dependency
-(node:26096) Warning: Accessing non-existent property 'updateCharacterById' of module exports inside circular dependency
-✅ Successfully registered commands to test server (1305484048063529002)
+✅ Successfully registered 18 commands to production server.

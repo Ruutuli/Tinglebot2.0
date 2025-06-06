@@ -20,11 +20,7 @@ const getMongoUri = (env, type) => {
   const fallbackUri = process.env.MONGODB_URI;
 
   if (env === 'development') {
-    if (!devUri) {
-      console.error(`[database.js]: Missing MONGODB_${type}_URI_DEV for development environment`);
-      throw new Error(`Missing MONGODB_${type}_URI_DEV for development environment`);
-    }
-    return devUri;
+    return devUri || fallbackUri;
   } else {
     return prodUri || fallbackUri;
   }
