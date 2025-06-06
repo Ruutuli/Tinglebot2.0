@@ -121,7 +121,10 @@ const jobFormatted = jobText.join('\n'); // Join array elements with a newline
 
   const embed = new EmbedBuilder()
     .setColor(getCategoryColor(item.category))
-    .setAuthor({ name: `${item.itemName}`, iconURL: item.imageType })
+    .setAuthor({ 
+      name: `${item.itemName}`, 
+      ...(item.imageType ? { iconURL: item.imageType } : {})
+    })
     .setDescription(`**__✨ Category:__** ${item.category.join(', ') || 'None'}
     **__✨ Type:__** ${item.type.join(', ') || 'None'}
     **__✨ Subtype:__** ${item.subtype.join(', ') || 'None'}
