@@ -29,6 +29,7 @@ const {
  deleteCharacterById,
  deleteCharacterInventoryCollection,
  createCharacterInventory,
+ getCharacterInventoryCollection,
 } = require("../../database/db");
 const {
  getVillageColorByName,
@@ -1056,6 +1057,15 @@ async function handleEditCharacter(interaction) {
       return;
     }
 
+    // Get actual spirit orb count from inventory
+    await connectToInventories();
+    const inventoryCollection = await getCharacterInventoryCollection(character.name);
+    const spiritOrb = await inventoryCollection.findOne({
+      characterId: character._id,
+      itemName: { $regex: /^spirit orb$/i }
+    });
+    character.spiritOrbs = spiritOrb?.quantity || 0;
+
     let previousValue = character[category] !== undefined ? character[category] : "N/A";
     let updatedValue = updatedInfo;
 
@@ -1204,6 +1214,15 @@ async function handleViewCharacter(interaction) {
    });
    return;
   }
+
+  // Get actual spirit orb count from inventory
+  await connectToInventories();
+  const inventoryCollection = await getCharacterInventoryCollection(character.name);
+  const spiritOrb = await inventoryCollection.findOne({
+    characterId: character._id,
+    itemName: { $regex: /^spirit orb$/i }
+  });
+  character.spiritOrbs = spiritOrb?.quantity || 0;
 
   const settings = getCommonEmbedSettings(character);
 
