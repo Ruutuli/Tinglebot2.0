@@ -159,6 +159,11 @@ tempDataSchema.index({ type: 1, key: 1 });
 tempDataSchema.pre('save', function(next) {
   const now = new Date();
   
+  // Prevent weather data storage for test/_dev bot
+  if (this.type === 'weather' && this.data?.botId && this.data.botId !== '603960955839447050') {
+    return next(new Error('Weather data storage not allowed for this bot'));
+  }
+  
   // Set expiration based on type
   switch (this.type) {
     case 'blight':

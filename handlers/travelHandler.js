@@ -67,7 +67,14 @@ function createFinalTravelEmbed(character, destination, paths, totalTravelDurati
   const processedLog = Object.entries(
     travelLog.reduce((acc, entry) => {
       const dayMatch = entry.match(/Day (\d+):/);
-      if (!dayMatch) return acc;
+      if (!dayMatch) {
+        // If it's a damage message, add it to the last day
+        const lastDay = Object.keys(acc).pop();
+        if (lastDay) {
+          acc[lastDay].push(entry);
+        }
+        return acc;
+      }
 
       const day = dayMatch[1];
       const content = entry.replace(/^\*\*Day \d+:\*\*\n/, '').trim();
@@ -383,17 +390,8 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
       // ... existing KO logic ...
     } else {
       outcomeMessage = generateDamageMessage(outcome.hearts);
-      // Find the last day entry and append the damage message to it
-      const lastDayEntry = travelLog.findLast(entry => entry.startsWith('**Day'));
-      if (lastDayEntry) {
-        const dayMatch = lastDayEntry.match(/Day (\d+):/);
-        if (dayMatch) {
-          const day = dayMatch[1];
-          const updatedEntry = lastDayEntry + `\n${outcomeMessage}`;
-          const entryIndex = travelLog.indexOf(lastDayEntry);
-          travelLog[entryIndex] = updatedEntry;
-        }
-      }
+      // Add the damage message to the travel log
+      travelLog.push(outcomeMessage);
     }
 
     // ------------------- Embed Update -------------------

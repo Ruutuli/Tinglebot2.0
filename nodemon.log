@@ -322,6 +322,6 @@
 [deploy-commands.js]: Successfully loaded 18 commands
 🔄 Started refreshing 18 commands in production mode.
 [deploy-commands.js]: Deploying to production guild: 603960955839447050
-(node:40632) Warning: Accessing non-existent property 'connectToInventories' of module exports inside circular dependency
+(node:42840) Warning: Accessing non-existent property 'connectToInventories' of module exports inside circular dependency
 (Use `node --trace-warnings ...` to show where the warning was created)
 ✅ Successfully registered 18 commands to production server.
