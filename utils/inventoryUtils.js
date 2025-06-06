@@ -263,7 +263,26 @@ async function syncToInventoryDatabase(character, item, interaction) {
           console.log(`[inventoryUtils.js]: ✅ Updated row for ${dbDoc.itemName} (${existingRow[6] || dbDoc.obtain}) in sheet with all fields`);
         }
       } else {
-        console.log(`[inventoryUtils.js]: ⚠️ No matching unsynced rows found for ${dbDoc.itemName}`);
+        // No matching rows found, append a new row
+        const newRow = [
+          characterName,
+          dbDoc.itemName,
+          dbDoc.quantity,
+          dbDoc.category,
+          dbDoc.type,
+          Array.isArray(dbDoc.subtype) ? dbDoc.subtype.join(", ") : (dbDoc.subtype || ''),
+          dbDoc.obtain,
+          dbDoc.job,
+          dbDoc.perk,
+          dbDoc.location,
+          dbDoc.link,
+          formatDateTime(dbDoc.date),
+          uuidv4() // Generate new sync ID
+        ];
+
+        // Append the new row to the sheet
+        await appendSheetData(auth, spreadsheetId, 'loggedInventory!A:M', [newRow]);
+        console.log(`[inventoryUtils.js]: ✅ Added new row for ${dbDoc.itemName} to sheet`);
       }
     } catch (sheetError) {
       console.error(`[inventoryUtils.js]: ❌ Sheet sync error for ${character.name}: ${sheetError.message}`);
