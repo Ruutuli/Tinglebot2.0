@@ -810,10 +810,8 @@ async function processTravelDay(day, context) {
             travelLog,
             startingVillage
           );
-          // Append both the loot line and the damage message to the daily log
-          if (decision.includes('Looted')) {
-            dailyLogEntry += `${decision}\n`;
-          } else if (decision.includes('heart')) {
+          // Only append the decision to the daily log if it's not a damage message
+          if (!decision.includes('heart')) {
             dailyLogEntry += `${decision}\n`;
           }
           collector.stop();
