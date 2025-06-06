@@ -886,6 +886,72 @@ async function refundJobVoucher(character, interaction) {
     }
 }
 
+// ---- Function: syncSheetDataToDatabase ----
+// Syncs data from a sheet directly to the database
+const syncSheetDataToDatabase = async (character, sheetData) => {
+    try {
+        if (!dbFunctions.connectToInventories) {
+            throw new Error("Required database functions not initialized");
+        }
+
+        const env = process.env.NODE_ENV || 'development';
+        console.log(`[inventoryUtils.js]: 🔄 Syncing sheet data in ${env} environment`);
+
+        const inventoriesConnection = await dbFunctions.connectToInventories();
+        const dbName = env === 'development' ? 'inventories_dev' : 'inventories';
+        console.log(`[inventoryUtils.js]: 📦 Using database: ${dbName}`);
+        
+        const db = inventoriesConnection.useDb(dbName);
+        const collectionName = character.name.toLowerCase();
+        console.log(`[inventoryUtils.js]: 📁 Using collection: ${collectionName}`);
+        
+        const inventoryCollection = db.collection(collectionName);
+
+        // Process the sheet data
+        const processedItems = sheetData.map(row => {
+            const [_, itemName, quantity, category, type, subtype, obtain, job, perk, location, link, date, syncId] = row;
+            return {
+                characterId: character._id,
+                characterName: character.name,
+                itemName: itemName.trim().toLowerCase(),
+                quantity: parseInt(quantity) || 0,
+                category: category || '',
+                type: type || '',
+                subtype: subtype || '',
+                job: job || '',
+                perk: perk || '',
+                location: location || '',
+                link: link || '',
+                date: date || new Date().toISOString(),
+                obtain: obtain || 'Manual Sync',
+                syncId: syncId || ''
+            };
+        });
+
+        // Add each item to the database
+        for (const item of processedItems) {
+            const existingItem = await inventoryCollection.findOne({
+                characterId: character._id,
+                itemName: item.itemName,
+                syncId: item.syncId // Check for existing sync ID to prevent duplicates
+            });
+
+            if (!existingItem) {
+                console.log(`[inventoryUtils.js]: ➕ Adding new item ${item.itemName} (${item.quantity}) to ${character.name}'s inventory`);
+                await inventoryCollection.insertOne(item);
+            } else {
+                console.log(`[inventoryUtils.js]: ⚠️ Item ${item.itemName} with sync ID ${item.syncId} already exists in database`);
+            }
+        }
+
+        return true;
+    } catch (error) {
+        handleError(error, "inventoryUtils.js");
+        console.error(`[inventoryUtils.js]: ❌ Error syncing sheet data to database:`, error.message);
+        throw error;
+    }
+};
+
 // ============================================================================
 // ---- Exports ----
 // Module exports
@@ -905,5 +971,6 @@ module.exports = {
   addItemToVendingInventory,
   logMaterialsToGoogleSheets,
   refundJobVoucher,
-  SOURCE_TYPES
+  SOURCE_TYPES,
+  syncSheetDataToDatabase
 };
