@@ -112,7 +112,18 @@ module.exports = {
       );
       if (!ownedItem || ownedItem.quantity < quantity) {
         return void await interaction.editReply({
-          content: `❌ **${character.name}** does not have enough "${capitalizeWords(itemName)}" in their inventory.`
+          embeds: [{
+            color: 0xAA926A,
+            title: '🎫 Job Voucher Usage',
+            description: `*${character.name} looks through their inventory, confused...*\n\n**Item Not Found**\n${character.name} does not have enough "${capitalizeWords(itemName)}" in their inventory.`,
+            image: {
+              url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+            },
+            footer: {
+              text: 'Job Voucher System'
+            }
+          }],
+          ephemeral: true
         });
       }
 
@@ -123,13 +134,33 @@ module.exports = {
         // Force quantity to 1 for job vouchers
         if (quantity !== 1) {
           return void await interaction.editReply({
-            content: `❌ **Job Vouchers can only be used one at a time.**\nPlease use a quantity of 1.`
+            embeds: [{
+              color: 0xAA926A,
+              title: '🎫 Job Voucher Usage',
+              description: '❌ **Job Vouchers can only be used one at a time.**\nPlease use a quantity of 1.',
+              image: {
+                url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+              },
+              footer: {
+                text: 'Job Voucher System'
+              }
+            }]
           });
         }
 
         if (character.jobVoucher) {
           return void await interaction.editReply({
-            content: `❌ **${character.name}** already has an active Job Voucher for **${character.jobVoucherJob}**.\nPlease complete the current job before using another voucher.`
+            embeds: [{
+              color: 0xFF0000,
+              title: '❌ Job Voucher Error',
+              description: `**${character.name}** already has an active Job Voucher for **${character.jobVoucherJob} (Live)**.\n\nPlease complete the current job before using another voucher.`,
+              image: {
+                url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+              },
+              footer: {
+                text: 'Job Voucher System'
+              }
+            }]
           });
         }
 
@@ -147,7 +178,33 @@ module.exports = {
           });
         }
 
-        // Activate voucher and remove one from inventory.
+        // --- Location/Village validation for village-locked jobs ---
+        if (jobPerkInfo.village) {
+          const requiredVillage = jobPerkInfo.village.toLowerCase().trim();
+          const characterVillage = character.currentVillage?.toLowerCase().trim();
+          if (characterVillage !== requiredVillage) {
+            return void await interaction.editReply({
+              embeds: [{
+                color: 0xFF0000,
+                title: '❌ Job Voucher Error',
+                description: `${character.name} must be in ${capitalizeWords(jobPerkInfo.village)} to use this job voucher.`,
+                fields: [
+                  { name: 'Current Location', value: capitalizeWords(character.currentVillage), inline: true },
+                  { name: 'Required Location', value: capitalizeWords(jobPerkInfo.village), inline: true }
+                ],
+                image: {
+                  url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+                },
+                footer: {
+                  text: 'Location Requirement'
+                }
+              }],
+              ephemeral: true
+            });
+          }
+        }
+
+        // --- Only now activate voucher and remove from inventory ---
         await updateCharacterById(character._id, { jobVoucher: true, jobVoucherJob: jobName });
         await removeItemInventoryDatabase(character._id, 'Job Voucher', 1, interaction);
 
@@ -211,7 +268,7 @@ module.exports = {
           .setDescription(description)
           .addFields(
             { name: `${villageEmoji} Current Village`, value: `**${currentVillage}**`, inline: true },
-            { name: '🏷️ Normal Job', value: `**${character.job || 'Unemployed'}**`, inline: true }
+            { name: '🏷️ Normal Job', value: `**${capitalizeWords(character.job || 'Unemployed')}**`, inline: true }
           )
           .setThumbnail(item.image || 'https://via.placeholder.com/150')
           .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
@@ -230,13 +287,28 @@ module.exports = {
         });
       }
 
+      // Check inventory sync before proceeding
       try {
         await checkInventorySync(character);
       } catch (error) {
-        return void await interaction.editReply({
-          content: error.message,
+        await interaction.editReply({
+          embeds: [{
+            color: 0xFF0000,
+            title: '❌ Inventory Sync Required',
+            description: error.message,
+            fields: [
+              {
+                name: '📝 How to Fix',
+                value: '1. Use </inventory test:1370788960267272302> to test your inventory\n2. Use </inventory sync:1370788960267272302> to sync your inventory'
+              }
+            ],
+            footer: {
+              text: 'Inventory System'
+            }
+          }],
           ephemeral: true
         });
+        return;
       }
 
 

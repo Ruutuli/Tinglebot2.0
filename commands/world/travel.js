@@ -5,7 +5,8 @@
 
 // ------------------- Standard Libraries -------------------
 const dotenv = require('dotenv');
-dotenv.config();
+const env = process.env.NODE_ENV || 'development';
+dotenv.config({ path: `.env.${env}` });
 
 // ------------------- Discord.js Components -------------------
 const {
@@ -69,19 +70,19 @@ const SEVERE_WEATHER_CONDITIONS = [
 ];
 
 const {
-  PATH_OF_SCARLET_LEAVES_CHANNEL_ID,
-  LEAF_DEW_WAY_CHANNEL_ID,
+  PATH_OF_SCARLET_LEAVES_CHANNEL_ID: PATH_OF_SCARLET_LEAVES,
+  LEAF_DEW_WAY_CHANNEL_ID: LEAF_DEW_WAY,
   TRAVEL_DELAY_MS = '3000'
 } = process.env;
 
-if (!PATH_OF_SCARLET_LEAVES_CHANNEL_ID || !LEAF_DEW_WAY_CHANNEL_ID) {
+if (!PATH_OF_SCARLET_LEAVES || !LEAF_DEW_WAY) {
   handleError(new Error('Missing required path channel IDs in environment variables.'), 'travel.js');
   throw new Error('Missing required path channel IDs in environment variables.');
 }
 
 const PATH_CHANNELS = {
-  pathOfScarletLeaves: PATH_OF_SCARLET_LEAVES_CHANNEL_ID,
-  leafDewWay:      LEAF_DEW_WAY_CHANNEL_ID
+  pathOfScarletLeaves: PATH_OF_SCARLET_LEAVES,
+  leafDewWay: LEAF_DEW_WAY
 };
 
 const MODE_CHOICES = [
@@ -329,7 +330,25 @@ module.exports = {
       }
 
       // ------------------- Check Inventory Sync -------------------
-      await checkInventorySync(character);
+      try {
+        await checkInventorySync(character);
+      } catch (error) {
+        await interaction.editReply({
+          embeds: [{
+            color: 0xFF0000,
+            title: '❌ Inventory Sync Required',
+            description: error.message,
+            fields: [
+              {
+                name: 'How to Fix',
+                value: '1. Use </inventory test:1370788960267272302> to test your inventory\n2. Use </inventory sync:1370788960267272302> to sync your inventory'
+              }
+            ]
+          }],
+          ephemeral: true
+        });
+        return;
+      }
 
       // ------------------- Check if KO'd -------------------
       if (character.currentHearts <= 0 || character.ko) {
@@ -604,22 +623,41 @@ async function processTravelDay(day, context) {
       const finalChannel = await interaction.client.channels.fetch(finalChannelId);
     
       // ------------------- Assign Village Role -------------------
-      const member = await interaction.guild.members.fetch(interaction.user.id);
-      const allRoles = await interaction.guild.roles.fetch();
-      const roleName = `${capitalizeFirstLetter(destination)} Visiting`;
-      const villageRole = allRoles.find(role => role.name === roleName);
-    
-      if (villageRole) {
-        // Remove other "* Visiting" roles first
-        const visitingRoles = member.roles.cache.filter(r => /Visiting$/.test(r.name) && r.id !== villageRole.id);
-        for (const [roleId] of visitingRoles) {
-          await member.roles.remove(roleId).catch(error => handleError(error, 'travel.js'));
+      try {
+        const member = await interaction.guild.members.fetch(interaction.user.id);
+        const allRoles = await interaction.guild.roles.fetch();
+        const roleName = `${capitalizeFirstLetter(destination)} Visiting`;
+        const villageRole = allRoles.find(role => role.name === roleName);
+      
+        if (villageRole) {
+          // Check if bot has manage roles permission
+          const botMember = await interaction.guild.members.fetch(interaction.client.user.id);
+          if (botMember.permissions.has('ManageRoles')) {
+            // Remove other "* Visiting" roles first
+            const visitingRoles = member.roles.cache.filter(r => /Visiting$/.test(r.name) && r.id !== villageRole.id);
+            for (const [roleId] of visitingRoles) {
+              try {
+                await member.roles.remove(roleId);
+              } catch (error) {
+                console.warn(`[travel.js]: ⚠️ Failed to remove role ${roleId}: ${error.message}`);
+              }
+            }
+        
+            // Add destination visiting role
+            if (!member.roles.cache.has(villageRole.id)) {
+              try {
+                await member.roles.add(villageRole);
+              } catch (error) {
+                console.warn(`[travel.js]: ⚠️ Failed to add role ${roleName}: ${error.message}`);
+              }
+            }
+          } else {
+            console.warn('[travel.js]: ⚠️ Bot lacks ManageRoles permission - skipping role management');
+          }
         }
-    
-        // Add destination visiting role
-        if (!member.roles.cache.has(villageRole.id)) {
-          await member.roles.add(villageRole).catch(error => handleError(error, 'travel.js'));
-        }
+      } catch (error) {
+        console.warn(`[travel.js]: ⚠️ Role management failed: ${error.message}`);
+        // Continue with travel completion even if role management fails
       }
     
       // Check destination for blight rain after arrival
@@ -740,7 +778,7 @@ async function processTravelDay(day, context) {
         const encounterEmbed = createMonsterEncounterEmbed(
           character,
           monster,
-          `You encountered a ${monster.name}! What do you want to do? Fleeing costs 1 🟩 stamina!`,
+          `You encountered a ${monster.name}!\nWhat do you want to do? Fleeing costs 1 🟩 stamina!`,
           character.currentHearts,
           null,
           isBloodMoon
@@ -769,12 +807,11 @@ async function processTravelDay(day, context) {
             currentPath,
             encounterMessage,
             monster,
-            travelLog
+            travelLog,
+            startingVillage
           );
-          // Append both the loot line and the damage message to the daily log
-          if (decision.includes('Looted')) {
-            dailyLogEntry += `${decision}\n`;
-          } else if (decision.includes('heart')) {
+          // Only append the decision to the daily log if it's not a damage message
+          if (!decision.includes('heart')) {
             dailyLogEntry += `${decision}\n`;
           }
           collector.stop();
@@ -789,7 +826,8 @@ async function processTravelDay(day, context) {
               currentPath,
               encounterMessage,
               monster,
-              travelLog
+              travelLog,
+              startingVillage
             );
         
             dailyLogEntry += decision.split('\n').map(line => `${line}`).join('\n') + '\n';
@@ -843,7 +881,7 @@ async function processTravelDay(day, context) {
           safeMessage,
           null,
           travelLog,
-          undefined,
+          startingVillage,
           i.customId === 'do_nothing' ? doNothingFlavor : undefined
         );    
         dailyLogEntry += `${decision}\n`;
@@ -866,13 +904,13 @@ async function processTravelDay(day, context) {
             safeMessage,
             null,
             travelLog,
-            undefined,
+            startingVillage,
             doNothingFlavor
           );
           dailyLogEntry += `${decision}\n`;
         }
       
-        if (await checkAndHandleKO(character, channel)) return;
+        if (await checkAndHandleKO(character, channel, startingVillage)) return;
       
         travelLog.push(dailyLogEntry);
 

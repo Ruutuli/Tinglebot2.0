@@ -29,6 +29,7 @@ const {
  deleteCharacterById,
  deleteCharacterInventoryCollection,
  createCharacterInventory,
+ getCharacterInventoryCollection,
 } = require("../../database/db");
 const {
  getVillageColorByName,
@@ -745,200 +746,277 @@ module.exports = {
 // ============================================================================
 
 async function handleCreateCharacter(interaction, subcommand) {
- try {
-  const userId = interaction.user.id;
-  let user = await User.findOne({ discordId: userId });
+  // Defer reply early to prevent timeout
+  await interaction.deferReply({ ephemeral: true });
 
-  if (!user) {
-   user = new User({
-    discordId: userId,
-    characterSlot: 2,
-   });
-   await user.save();
-   console.log(
-    `[CreateCharacter]: Created new user profile for ${interaction.user.tag} with 2 character slots.`
-   );
-  }
+  try {
+    const userId = interaction.user.id;
+    let user = await User.findOne({ discordId: userId });
 
-  if (user.characterSlot <= 0) {
-   await interaction.reply({
-    content:
-     "❌ You do not have enough character slots available to create a new character.",
-    ephemeral: true,
-   });
-   return;
-  }
+    if (!user) {
+      user = new User({
+        discordId: userId,
+        characterSlot: 2,
+      });
+      await user.save();
+      console.log(
+        `[CreateCharacter]: Created new user profile for ${interaction.user.tag} with 2 character slots.`
+      );
+    }
 
-  const characterName = interaction.options.getString("name");
-  // Get the actual name part before the "|" if it exists
-  const actualName = characterName.split('|')[0].trim();
-  const existingCharacter = await Character.findOne({ name: actualName });
+    if (user.characterSlot <= 0) {
+      await interaction.editReply({
+        content:
+          "❌ You do not have enough character slots available to create a new character.",
+        ephemeral: true,
+      });
+      return;
+    }
 
-  if (existingCharacter) {
-   await interaction.reply({
-    content: `❌ A character with the name "${actualName}" already exists. Please choose a different name.`,
-    ephemeral: true,
-   });
-   return;
-  }
+    const characterName = interaction.options.getString("name");
+    // Get the actual name part before the "|" if it exists
+    const actualName = characterName.split('|')[0].trim();
+    
+    // Validate numeric fields
+    const age = interaction.options.getInteger("age");
+    const hearts = interaction.options.getInteger("hearts");
+    const stamina = interaction.options.getInteger("stamina");
+    const height = interaction.options.getNumber("height");
 
-  // Validate numeric fields
-  const age = interaction.options.getInteger("age");
-  const hearts = interaction.options.getInteger("hearts");
-  const stamina = interaction.options.getInteger("stamina");
-  const height = interaction.options.getNumber("height");
+    // Validate age
+    if (age < 1) {
+      await interaction.reply({
+        content: "❌ Age must be a positive number.",
+        ephemeral: true,
+      });
+      return;
+    }
 
-  // Validate age
-  if (age < 1) {
-   await interaction.reply({
-    content: "❌ Age must be a positive number.",
-    ephemeral: true,
-   });
-   return;
-  }
+    // Validate hearts and stamina
+    if (hearts < 1 || stamina < 1) {
+      await interaction.reply({
+        content: "❌ Hearts and stamina values must be positive numbers.",
+        ephemeral: true,
+      });
+      return;
+    }
 
-  // Validate hearts and stamina
-  if (hearts < 1 || stamina < 1) {
-   await interaction.reply({
-    content: "❌ Hearts and stamina values must be positive numbers.",
-    ephemeral: true,
-   });
-   return;
-  }
+    // Validate height
+    if (isNaN(height) || height <= 0) {
+      await interaction.reply({
+        content: "❌ Height must be a positive number.",
+        ephemeral: true,
+      });
+      return;
+    }
 
-  // Validate height
-  if (isNaN(height) || height <= 0) {
-   await interaction.reply({
-    content: "❌ Height must be a positive number.",
-    ephemeral: true,
-   });
-   return;
-  }
+    // Validate race
+    const race = interaction.options.getString("race");
+    if (!isValidRace(race)) {
+      await interaction.reply({
+        content: `❌ "${race}" is not a valid race. Please select a valid race from the autocomplete options.`,
+        ephemeral: true,
+      });
+      return;
+    }
 
-  // Validate race
-  const race = interaction.options.getString("race");
-  if (!isValidRace(race)) {
-   await interaction.reply({
-    content: `❌ "${race}" is not a valid race. Please select a valid race from the autocomplete options.`,
-    ephemeral: true,
-   });
-   return;
-  }
+    // Validate village (for general subcommand)
+    const village = interaction.options.getString("village");
+    if (subcommand === "general" && !["inariko", "rudania", "vhintl"].includes(village)) {
+      await interaction.reply({
+        content: `❌ "${village}" is not a valid village. Please select a valid village from the choices.`,
+        ephemeral: true,
+      });
+      return;
+    }
 
-  // Validate village (for general subcommand)
-  const village = interaction.options.getString("village");
-  if (subcommand === "general" && !["inariko", "rudania", "vhintl"].includes(village)) {
-   await interaction.reply({
-    content: `❌ "${village}" is not a valid village. Please select a valid village from the choices.`,
-    ephemeral: true,
-   });
-   return;
-  }
+    // Validate job
+    const job = interaction.options.getString("job");
+    if (!job) {
+      await interaction.reply({
+        content: "❌ Please select a valid job from the choices.",
+        ephemeral: true,
+      });
+      return;
+    }
 
-  // Validate job
-  const job = interaction.options.getString("job");
-  if (!job) {
-   await interaction.reply({
-    content: "❌ Please select a valid job from the choices.",
-    ephemeral: true,
-   });
-   return;
-  }
+    // Validate inventory link
+    const inventory = interaction.options.getString("inventory");
+    if (!isValidGoogleSheetsUrl(inventory)) {
+      await interaction.reply({
+        content: "❌ Please provide a valid Google Sheets URL for the inventory.",
+        ephemeral: true,
+      });
+      return;
+    }
 
-  // Validate inventory link
-  const inventory = interaction.options.getString("inventory");
-  if (!isValidGoogleSheetsUrl(inventory)) {
-   await interaction.reply({
-    content: "❌ Please provide a valid Google Sheets URL for the inventory.",
-    ephemeral: true,
-   });
-   return;
-  }
+    // Validate app link
+    const appLink = interaction.options.getString("applink");
+    if (!appLink) {
+      await interaction.reply({
+        content: "❌ Please provide a valid application link.",
+        ephemeral: true,
+      });
+      return;
+    }
 
-  // Validate app link
-  const appLink = interaction.options.getString("applink");
-  if (!appLink) {
-   await interaction.reply({
-    content: "❌ Please provide a valid application link.",
-    ephemeral: true,
-   });
-   return;
-  }
+    // Validate icon
+    const icon = interaction.options.getAttachment("icon");
+    if (!icon) {
+      await interaction.reply({
+        content: "❌ Please provide a valid icon image.",
+        ephemeral: true,
+      });
+      return;
+    }
 
-  // Validate icon
-  const icon = interaction.options.getAttachment("icon");
-  if (!icon) {
-   await interaction.reply({
-    content: "❌ Please provide a valid icon image.",
-    ephemeral: true,
-   });
-   return;
-  }
+    const formattedRace = `Race: ${race}`;
+    const formattedVillage = `${capitalizeFirstLetter(village)} Resident`;
+    const formattedJob = `Job: ${capitalizeWords(job)}`;
 
-  const formattedRace = `Race: ${race}`;
-  const formattedVillage = `${capitalizeFirstLetter(village)} Resident`;
-  const formattedJob = `Job: ${capitalizeWords(job)}`;
+    const { perks: jobPerks } = getJobPerk(job) || { perks: [] };
 
-  const { perks: jobPerks } = getJobPerk(job) || { perks: [] };
+    const member = interaction.member;
+    const roleNames = [formattedRace, formattedVillage, formattedJob];
+    const missingRoles = [];
+    const assignedRoles = [];
 
-  const member = interaction.member;
-  const roleNames = [formattedRace, formattedVillage, formattedJob];
+    // Check bot's permissions first
+    if (!interaction.guild.members.me.permissions.has('ManageRoles')) {
+      console.warn('[Roles]: Bot lacks the "Manage Roles" permission.');
+      missingRoles.push('All roles (Bot lacks permissions)');
+    } else {
+      // Check if bot's role is high enough in hierarchy
+      const botRole = interaction.guild.members.me.roles.highest;
 
-  for (const roleName of roleNames) {
-   const role = interaction.guild.roles.cache.find((r) => r.name === roleName);
-   if (role) {
-    await member.roles.add(role);
-    console.log(
-     `[Roles]: Assigned role "${roleName}" to user "${member.user.tag}".`
+      // Map role names to their IDs from .env
+      const roleIdMap = {
+        'Race: Hylian': process.env.RACE_HYLIAN,
+        'Race: Zora': process.env.RACE_ZORA,
+        'Race: Gerudo': process.env.RACE_GERUDO,
+        'Race: Goron': process.env.RACE_GORON,
+        'Race: Mixed': process.env.RACE_MIXED,
+        'Race: Sheikah': process.env.RACE_SHEIKAH,
+        'Race: Rito': process.env.RACE_RITO,
+        'Race: Korok/Kokiri': process.env.RACE_KOROK_KOKIRI,
+        'Race: Keaton': process.env.RACE_KEATON,
+        'Race: Twili': process.env.RACE_TWILI,
+        'Race: Mogma': process.env.RACE_MOGMA,
+        'Inariko Resident': process.env.INARIKO_RESIDENT,
+        'Rudania Resident': process.env.RUDANIA_RESIDENT,
+        'Vhintl Resident': process.env.VHINTL_RESIDENT
+      };
+
+      // Map job perks to their IDs
+      const jobPerkIdMap = {
+        'LOOTING': process.env.JOB_PERK_LOOTING,
+        'STEALING': process.env.JOB_PERK_STEALING,
+        'ENTERTAINING': process.env.JOB_PERK_ENTERTAINING,
+        'DELIVERING': process.env.JOB_PERK_DELIVERING,
+        'HEALING': process.env.JOB_PERK_HEALING,
+        'GATHERING': process.env.JOB_PERK_GATHERING,
+        'CRAFTING': process.env.JOB_PERK_CRAFTING,
+        'BOOSTING': process.env.JOB_PERK_BOOSTING,
+        'VENDING': process.env.JOB_PERK_VENDING
+      };
+
+      // Try to assign roles, but don't fail if they're missing
+      for (const roleName of roleNames) {
+        const roleId = roleIdMap[roleName];
+        if (!roleId) {
+          console.warn(`[Roles]: Role ID not found for "${roleName}" in configuration.`);
+          missingRoles.push(roleName);
+          continue;
+        }
+
+        const role = interaction.guild.roles.cache.get(roleId);
+        if (!role) {
+          console.warn(`[Roles]: Role "${roleName}" not found in the guild.`);
+          missingRoles.push(roleName);
+          continue;
+        }
+
+        if (botRole.position <= role.position) {
+          console.warn(`[Roles]: Bot's role is not high enough to assign the "${roleName}" role.`);
+          missingRoles.push(roleName);
+          continue;
+        }
+
+        try {
+          await member.roles.add(role);
+          assignedRoles.push(roleName);
+          console.log(`[Roles]: Assigned role "${roleName}" to user "${member.user.tag}".`);
+        } catch (error) {
+          console.error(`[Roles]: Failed to assign role "${roleName}":`, error.message);
+          missingRoles.push(roleName);
+        }
+      }
+
+      // Try to assign perk roles, but don't fail if they're missing
+      for (const perk of jobPerks) {
+        const perkRoleId = jobPerkIdMap[perk];
+        if (!perkRoleId) {
+          console.warn(`[Roles]: Perk role ID not found for "${perk}" in configuration.`);
+          missingRoles.push(`Job Perk: ${perk}`);
+          continue;
+        }
+
+        const perkRole = interaction.guild.roles.cache.get(perkRoleId);
+        if (!perkRole) {
+          console.warn(`[Roles]: Perk role "Job Perk: ${perk}" not found in the guild.`);
+          missingRoles.push(`Job Perk: ${perk}`);
+          continue;
+        }
+
+        if (botRole.position <= perkRole.position) {
+          console.warn(`[Roles]: Bot's role is not high enough to assign the "Job Perk: ${perk}" role.`);
+          missingRoles.push(`Job Perk: ${perk}`);
+          continue;
+        }
+
+        try {
+          await member.roles.add(perkRole);
+          assignedRoles.push(`Job Perk: ${perk}`);
+          console.log(`[Roles]: Assigned perk role "Job Perk: ${perk}" to user "${member.user.tag}".`);
+        } catch (error) {
+          console.error(`[Roles]: Failed to assign perk role "Job Perk: ${perk}":`, error.message);
+          missingRoles.push(`Job Perk: ${perk}`);
+        }
+      }
+    }
+
+    user.characterSlot -= 1;
+    await user.save();
+
+    await createCharacterInteraction(interaction);
+
+    // Build success message
+    let successMessage = `🎉 Your character has been successfully created! Your remaining character slots: ${user.characterSlot}`;
+    
+    if (assignedRoles.length > 0) {
+      successMessage += `\n✅ Assigned roles: ${assignedRoles.join(', ')}`;
+    }
+    
+    if (missingRoles.length > 0) {
+      successMessage += `\n⚠️ Some roles could not be assigned: ${missingRoles.join(', ')}. Please contact a server administrator to set up these roles.`;
+    }
+
+    await interaction.editReply({
+      content: successMessage,
+      ephemeral: true,
+    });
+  } catch (error) {
+    handleError(error, "character.js");
+    console.error(
+      "[CreateCharacter]: Error during character creation:",
+      error.message
     );
-   } else {
-    console.warn(`[Roles]: Role "${roleName}" not found in the guild.`);
-   }
+
+    await interaction.editReply({
+      content: "❌ An error occurred during character creation. Please try again later.",
+      ephemeral: true,
+    });
   }
-
-  for (const perk of jobPerks) {
-   const perkRoleName = `Job Perk: ${perk}`;
-   const perkRole = interaction.guild.roles.cache.find(
-    (r) => r.name === perkRoleName
-   );
-   if (perkRole) {
-    await member.roles.add(perkRole);
-    console.log(
-     `[Roles]: Assigned perk role "${perkRole.name}" to user "${member.user.tag}".`
-    );
-   } else {
-    console.warn(
-     `[Roles]: Perk role "${perkRoleName}" not found in the guild.`
-    );
-   }
-  }
-
-  user.characterSlot -= 1;
-  await user.save();
-
-  await createCharacterInteraction(interaction);
-
-  await interaction.followUp({
-   content:
-    "🎉 Your character has been successfully created! Your remaining character slots: " +
-    user.characterSlot,
-   ephemeral: true,
-  });
- } catch (error) {
-  handleError(error, "character.js");
-  console.error(
-   "[CreateCharacter]: Error during character creation:",
-   error.message
-  );
-
-  if (!interaction.replied && !interaction.deferred) {
-   await interaction.reply({
-    content:
-     "❌ An error occurred during character creation. Please try again later.",
-    ephemeral: true,
-   });
-  }
- }
 }
 
 // ============================================================================
@@ -963,11 +1041,30 @@ async function handleEditCharacter(interaction) {
     const character = await fetchCharacterByNameAndUserId(characterName, userId);
     if (!character) {
       await interaction.followUp({
-        content: `❌ **Character ${characterName} not found or does not belong to you.**`,
+        embeds: [{
+          color: 0xFF0000, // Red color
+          title: '❌ Character Not Found',
+          description: `The character "${characterName}" does not exist in the database.`,
+          image: {
+            url: 'https://storage.googleapis.com/tinglebot/border%20error.png'
+          },
+          footer: {
+            text: 'Character Validation'
+          }
+        }],
         ephemeral: true,
       });
       return;
     }
+
+    // Get actual spirit orb count from inventory
+    await connectToInventories();
+    const inventoryCollection = await getCharacterInventoryCollection(character.name);
+    const spiritOrb = await inventoryCollection.findOne({
+      characterId: character._id,
+      itemName: { $regex: /^spirit orb$/i }
+    });
+    character.spiritOrbs = spiritOrb?.quantity || 0;
 
     let previousValue = character[category] !== undefined ? character[category] : "N/A";
     let updatedValue = updatedInfo;
@@ -1102,11 +1199,30 @@ async function handleViewCharacter(interaction) {
 
   if (!character) {
    await interaction.reply({
-    content: `❌ Character **${characterName}** not found or does not belong to you.`,
+    embeds: [new EmbedBuilder()
+      .setColor('#FF0000')
+      .setTitle('❌ Character Not Found')
+      .setDescription(`The character "${characterName}" does not exist in the database.`)
+      .addFields(
+        { name: '🔍 Possible Reasons', value: '• Character name is misspelled\n• Character was deleted\n• Character was never created' },
+        { name: '💡 Suggestion', value: 'Please check the spelling and try again.' }
+      )
+      .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
+      .setFooter({ text: 'Character Validation' })
+      .setTimestamp()],
     ephemeral: true,
    });
    return;
   }
+
+  // Get actual spirit orb count from inventory
+  await connectToInventories();
+  const inventoryCollection = await getCharacterInventoryCollection(character.name);
+  const spiritOrb = await inventoryCollection.findOne({
+    characterId: character._id,
+    itemName: { $regex: /^spirit orb$/i }
+  });
+  character.spiritOrbs = spiritOrb?.quantity || 0;
 
   const settings = getCommonEmbedSettings(character);
 
@@ -1307,7 +1423,17 @@ async function handleDeleteCharacter(interaction) {
   const character = await fetchCharacterByNameAndUserId(characterName, userId);
   if (!character) {
    await interaction.editReply({
-    content: `❌ **Character not found**: **${characterName}** does not exist or does not belong to you.`,
+    embeds: [new EmbedBuilder()
+      .setColor('#FF0000')
+      .setTitle('❌ Character Not Found')
+      .setDescription(`The character "${characterName}" does not exist in the database.`)
+      .addFields(
+        { name: '🔍 Possible Reasons', value: '• Character name is misspelled\n• Character was deleted\n• Character was never created' },
+        { name: '💡 Suggestion', value: 'Please check the spelling and try again.' }
+      )
+      .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
+      .setFooter({ text: 'Character Validation' })
+      .setTimestamp()],
     ephemeral: true,
    });
    return;
@@ -1624,7 +1750,16 @@ async function handleChangeJob(interaction) {
   const nonVendor = !["merchant", "shopkeeper"].includes(newJob.toLowerCase());
   if (nonVendor) {
     try {
-      const vendingClient = new MongoClient(process.env.MONGODB_VENDING_URI);
+      // Use production URI if in production, otherwise use development URI
+      const vendingUri = process.env.NODE_ENV === 'production' 
+        ? process.env.MONGODB_VENDING_URI 
+        : process.env.MONGODB_VENDING_URI_DEV;
+
+      if (!vendingUri) {
+        throw new Error('MongoDB vending URI is not defined in environment variables');
+      }
+
+      const vendingClient = new MongoClient(vendingUri);
       await vendingClient.connect();
 
       const vendingDb = vendingClient.db("vending");

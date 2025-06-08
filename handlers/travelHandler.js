@@ -67,7 +67,14 @@ function createFinalTravelEmbed(character, destination, paths, totalTravelDurati
   const processedLog = Object.entries(
     travelLog.reduce((acc, entry) => {
       const dayMatch = entry.match(/Day (\d+):/);
-      if (!dayMatch) return acc;
+      if (!dayMatch) {
+        // If it's a damage message, add it to the last day
+        const lastDay = Object.keys(acc).pop();
+        if (lastDay) {
+          acc[lastDay].push(entry);
+        }
+        return acc;
+      }
 
       const day = dayMatch[1];
       const content = entry.replace(/^\*\*Day \d+:\*\*\n/, '').trim();
@@ -285,11 +292,19 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
       throw new Error(`Invalid monster passed to handleFight: ${JSON.stringify(monster)}`);
     }
 
-    const { damageValue, adjustedRandomValue, attackSuccess, defenseSuccess } = calculateFinalValue(character);
+    console.log(`[travelHandler.js]: 🎯 Starting combat for ${character.name} vs ${monster.name} (Tier ${monster.tier})`);
+    console.log(`[travelHandler.js]: ❤️ Initial hearts: ${character.currentHearts}/${character.maxHearts}`);
+
+    const diceRoll = Math.floor(Math.random() * 100) + 1;
+    const { damageValue, adjustedRandomValue, attackSuccess, defenseSuccess } = calculateFinalValue(character, diceRoll);
+    console.log(`[travelHandler.js]: ⚔️ Combat results - Damage: ${damageValue}, Adjusted: ${adjustedRandomValue}, Attack: ${attackSuccess}, Defense: ${defenseSuccess}`);
+
     const outcome = await getEncounterOutcome(character, monster, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess);
+    console.log(`[travelHandler.js]: 🎲 Combat outcome: ${outcome.result}, Hearts: ${outcome.hearts}`);
 
     // ------------------- KO Branch -------------------
     if (outcome.result === 'KO') {
+      console.log(`[travelHandler.js]: 💀 Character KO'd - Previous hearts: ${character.currentHearts}`);
       const koEmbed = createKOEmbed(character);
       await interaction.followUp({ embeds: [koEmbed] });
 
@@ -299,7 +314,7 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
       character.currentHearts = 0;
       character.currentStamina = 0;
       character.debuff = { active: true, endDate: new Date(Date.now() + 7 * 86400000) };
-      character.currentVillage = startingVillage;
+      character.currentVillage = startingVillage || character.homeVillage;
       character.ko = true;
 
       await updateCurrentHearts(character._id, 0);
@@ -307,7 +322,7 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
       await character.save();
 
       travelLog.push(`fight: KO (${prevHearts}→0 hearts, ${prevStamina}→0 stam)`);
-      return `💀 ${character.name} was KO'd and moved to recovery village.`;
+      return `💀 ${character.name} was KO'd and moved back to ${capitalizeFirstLetter(character.currentVillage)}.`;
     }
 
     // ------------------- Fallback Heart Damage -------------------
@@ -317,6 +332,7 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
         outcome.hearts = 1;
         outcome.result = `💥⚔️ The monster attacks! You lose ❤️ 1 heart!`;
       }
+      console.log(`[travelHandler.js]: 💔 Applying damage - Hearts: ${character.currentHearts} → ${character.currentHearts - outcome.hearts}`);
     }
 
     // ------------------- Sync Hearts & Stamina -------------------
@@ -354,7 +370,11 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
         }
 
         if (item) {
-          await syncToInventoryDatabase(character, item, interaction);
+          await syncToInventoryDatabase(character, {
+            ...item,
+            obtain: "Travel",
+            perk: "" // Explicitly set perk to empty for monster loot
+          }, interaction);
           lootLine = `\nLooted ${item.itemName} × ${item.quantity}\n`;
           outcomeMessage = `${generateVictoryMessage(item)}${lootLine}`;
           travelLog.push(`fight: win & loot (${item.quantity}× ${item.itemName})`);
@@ -370,17 +390,8 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
       // ... existing KO logic ...
     } else {
       outcomeMessage = generateDamageMessage(outcome.hearts);
-      // Find the last day entry and append the damage message to it
-      const lastDayEntry = travelLog.findLast(entry => entry.startsWith('**Day'));
-      if (lastDayEntry) {
-        const dayMatch = lastDayEntry.match(/Day (\d+):/);
-        if (dayMatch) {
-          const day = dayMatch[1];
-          const updatedEntry = lastDayEntry + `\n${outcomeMessage}`;
-          const entryIndex = travelLog.indexOf(lastDayEntry);
-          travelLog[entryIndex] = updatedEntry;
-        }
-      }
+      // Add the damage message to the travel log
+      travelLog.push(outcomeMessage);
     }
 
     // ------------------- Embed Update -------------------

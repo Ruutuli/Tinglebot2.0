@@ -18,6 +18,7 @@ const { handleError } = require('../utils/globalErrorHandler.js');
 const { syncToInventoryDatabase, SOURCE_TYPES } = require('../utils/inventoryUtils.js');
 const { getCurrentWeather } = require('../modules/weatherModule.js');
 const { enforceJail } = require('../utils/jailCheck.js');
+const { checkInventorySync } = require('../utils/characterUtils.js');
 
 // ------------------- Constants -------------------
 const DEFAULT_IMAGE_URL = 'https://storage.googleapis.com/tinglebot/Graphics/Default-Footer.png';
@@ -67,9 +68,9 @@ const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
 
 // Add channel mapping
 const VILLAGE_CHANNELS = {
-  Rudania: process.env.RUDANIA_TOWN_HALL,
-  Inariko: process.env.INARIKO_TOWN_HALL,
-  Vhintl: process.env.VHINTL_TOWN_HALL
+  Rudania: process.env.RUDANIA_TOWNHALL,
+  Inariko: process.env.INARIKO_TOWNHALL,
+  Vhintl: process.env.VHINTL_TOWNHALL
 };
 
 // ------------------- Helper Functions -------------------
@@ -282,6 +283,9 @@ module.exports = {
         return;
       }
 
+      // Check inventory sync before proceeding
+      await checkInventorySync(character);
+
       // Check if character is in jail
       const jailCheck = await enforceJail(character, 'gather during special weather');
       if (jailCheck) {
@@ -328,7 +332,16 @@ module.exports = {
         const unixTimestamp = Math.floor(nextGather.getTime() / 1000);
         
         await interaction.editReply({
-          content: `❌ **${character.name} has already gathered during special weather today.**`,
+          embeds: [{
+            color: 0x008B8B, // Dark cyan color
+            description: `*${character.name} has found all the special weather had to offer today!*\n\n**Daily special weather gathering limit reached.**\nYou've already gathered during special weather today. Special weather events are rare and unpredictable - keep an eye out for the next one!`,
+            image: {
+              url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+            },
+            footer: {
+              text: 'Daily Activity Limit'
+            }
+          }],
           ephemeral: true,
         });
         return;
@@ -346,7 +359,17 @@ module.exports = {
           hasLabel: !!weather?.special?.label
         });
         await interaction.editReply({
-          content: `❌ **There is no special weather in ${currentVillage} right now.**\n✨ **Special weather is required to use this command.**`,
+          embeds: [{
+            color: 0x008B8B, // Dark cyan color
+            description: `*${character.name} looks up at the sky...*\n\n**No Special Weather Detected**\nThere is no special weather in ${currentVillage} right now.\n\n✨ **Special weather is required to use this command.**`,
+            image: {
+              url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+            },
+            footer: {
+              text: 'Weather Check'
+            }
+          }],
+          ephemeral: true
         });
         return;
       }
@@ -356,7 +379,17 @@ module.exports = {
       // Check if character is in the correct village
       if (character.currentVillage.toLowerCase() !== currentVillage.toLowerCase()) {
         await interaction.editReply({
-          content: `❌ **${character.name} must be in ${currentVillage} to gather during its special weather.**\n🗺️ **Current Location:** ${character.currentVillage}`,
+          embeds: [{
+            color: 0x008B8B, // Dark cyan color
+            description: `*${character.name} looks around confused...*\n\n**Wrong Village Location**\nYou must be in ${currentVillage} to gather during its special weather.\n\n🗺️ **Current Location:** ${character.currentVillage}`,
+            image: {
+              url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+            },
+            footer: {
+              text: 'Location Check'
+            }
+          }],
+          ephemeral: true
         });
         return;
       }
@@ -394,9 +427,12 @@ module.exports = {
       const itemToSync = {
         itemName: randomItem.itemName,
         quantity: 1,
-        category: randomItem.category,
-        type: randomItem.type,
-        subtype: randomItem.subtype || ['None']
+        category: Array.isArray(randomItem.category) ? randomItem.category : [randomItem.category],
+        type: Array.isArray(randomItem.type) ? randomItem.type : [randomItem.type],
+        subtype: Array.isArray(randomItem.subtype) ? randomItem.subtype : (randomItem.subtype ? [randomItem.subtype] : []),
+        obtain: `Special Weather: ${weather.special.label}`,
+        date: new Date(),
+        link: `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`
       };
 
       // Sync item using itemSyncUtils
@@ -423,11 +459,60 @@ module.exports = {
       });
 
     } catch (error) {
-      handleError(error, 'specialweather.js');
-      console.error(`[specialweather.js]: ❌ Error during special weather gathering: ${error.message}`);
-      await interaction.editReply({
-        content: error.message || `⚠️ **An error occurred during special weather gathering.**`,
-      });
+      // Only log errors that aren't inventory sync related
+      if (!error.message.includes('inventory is not synced')) {
+        handleError(error, 'specialweather.js', {
+          commandName: '/specialweather',
+          userTag: interaction.user.tag,
+          userId: interaction.user.id,
+          characterName: interaction.options.getString('charactername')
+        });
+      }
+
+      // Provide more specific error messages based on the error type
+      let errorMessage;
+      if (error.message.includes('inventory is not synced')) {
+        await interaction.editReply({
+          embeds: [{
+            color: 0xFF0000, // Red color
+            title: '❌ Inventory Not Synced',
+            description: error.message,
+            fields: [
+              {
+                name: 'How to Fix',
+                value: '1. Use `/inventory test` to test your inventory\n2. Use `/inventory sync` to sync your inventory'
+              }
+            ],
+            image: {
+              url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+            },
+            footer: {
+              text: 'Inventory Sync Required'
+            }
+          }],
+          ephemeral: true
+        });
+        return;
+      } else if (error.message.includes('MongoDB')) {
+        errorMessage = '❌ **Database connection error.** Please try again in a few moments.';
+      } else if (error.message.includes('Google Sheets')) {
+        errorMessage = '❌ **Inventory sync error.** Your items were gathered but may not appear in your inventory sheet immediately.';
+      } else if (error.message.includes('ETIMEDOUT') || error.message.includes('Connect Timeout')) {
+        errorMessage = '❌ **Connection timeout.** Please try again in a few moments.';
+      } else if (error.message.includes('Permission denied')) {
+        errorMessage = '❌ **Permission denied.** Please make sure your inventory sheet is shared with the bot.';
+      } else if (error.message.includes('Invalid Google Sheets URL')) {
+        errorMessage = '❌ **Invalid inventory sheet URL.** Please check your character\'s inventory sheet link.';
+      } else {
+        errorMessage = `❌ **Error during special weather gathering:** ${error.message}`;
+      }
+
+      if (errorMessage) {
+        await interaction.editReply({
+          content: errorMessage,
+          ephemeral: true
+        });
+      }
     }
   },
 }; 

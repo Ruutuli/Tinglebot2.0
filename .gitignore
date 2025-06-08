@@ -1,5 +1,6 @@
-# Ignore .env file
-.env
+# Ignore environment files
+.env*
+!.env.example
 
 .cursor/rules/
 .dependency-cruiser.js
@@ -11,10 +12,4 @@ node_modules
 nodemon.log
 testingCode/
 .tmp.driveupload/
-.tmp.driveudownload/
-
-
-# Deployment scripts (no longer needed)
-# scripts/deploy.js
-# railway.json
-# scripts/deploy.template.js
+.tmp.drivedownload/

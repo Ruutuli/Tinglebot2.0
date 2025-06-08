@@ -3,7 +3,7 @@
 // Import necessary modules
 const { handleError } = require('../utils/globalErrorHandler');
 const { removeItemInventoryDatabase } = require('../utils/inventoryUtils');
-const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../utils/validation');
+const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../utils/googleSheetsUtils');
 const { authorizeSheets, appendSheetData, safeAppendDataToSheet } = require('../utils/googleSheetsUtils');
 const { getCharacterInventoryCollection, updateCharacterById, fetchItemByName } = require('../database/db'); 
 const { v4: uuidv4 } = require('uuid');
@@ -23,7 +23,8 @@ function getJobVoucherErrorMessage(errorType, data = {}) {
             : `❌ ${data.characterName || 'Character'} cannot use the ${data.activity || 'looting'} perk as a ${capitalizeWords(data.jobName || '')}.`,
         ACTIVATION_ERROR: '❌ An error occurred while activating the job voucher.',
         DEACTIVATION_ERROR: '❌ An error occurred while deactivating the job voucher.',
-        ITEM_NOT_FOUND: '❌ Job Voucher item not found.'
+        ITEM_NOT_FOUND: '❌ Job Voucher item not found.',
+        STAMINA_LIMIT: `❌ ${data.characterName || 'Character'} cannot craft "${data.itemName}" with a job voucher because it requires more than 5 stamina. Try crafting something easier or use your main job.`,
     };
 
     return {
@@ -144,6 +145,15 @@ async function deactivateJobVoucher(characterId) {
         const character = await Character.findById(characterId);
         if (!character) {
             throw new Error(`Character not found with ID: ${characterId}`);
+        }
+
+        // Check if the voucher has been used (indicated by lastGatheredAt being set)
+        if (character.lastGatheredAt) {
+            console.log(`[Job Voucher Module]: ❌ Cannot cancel used job voucher for ${character.name}`);
+            return {
+                success: false,
+                message: `❌ **Cannot cancel a job voucher that has already been used.**\nThe voucher has been consumed.`
+            };
         }
 
         // Always set jobVoucher to false and clear the job

@@ -52,8 +52,9 @@ function getCacheKey(date) {
 // Gets the current weather for a village, using TempData for caching
 async function getCurrentWeather(village) {
   try {
-    // Create date at UTC midnight for June 2nd
-    const today = new Date('2025-06-02T00:00:00.000Z');
+    // Get current date at UTC midnight
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
     const normalizedVillage = normalizeVillageName(village);
     const cacheKey = `weather_${normalizedVillage}_${getCacheKey(today)}`;
 
@@ -94,6 +95,12 @@ async function getCurrentWeather(village) {
 // Saves weather data for a village and updates TempData cache
 async function saveWeather(village, weatherData) {
   try {
+    // Check if this is from the correct bot
+    if (weatherData.botId && weatherData.botId !== '603960955839447050') {
+      console.log('[weatherModule.js]: Skipping weather save for non-main bot');
+      return null;
+    }
+
     const today = new Date();
     today.setUTCHours(0, 0, 0, 0);
     const normalizedVillage = normalizeVillageName(village);
@@ -111,17 +118,19 @@ async function saveWeather(village, weatherData) {
     tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
     tomorrow.setUTCHours(0, 0, 0, 0);
 
-    // Update TempData cache
-    await TempData.findOneAndUpdate(
-      { type: 'weather', key: cacheKey },
-      {
-        type: 'weather',
-        key: cacheKey,
-        data: savedWeather,
-        expiresAt: tomorrow
-      },
-      { upsert: true, new: true }
-    );
+    // Update TempData cache only if we successfully saved to Weather collection
+    if (savedWeather) {
+      await TempData.findOneAndUpdate(
+        { type: 'weather', key: cacheKey },
+        {
+          type: 'weather',
+          key: cacheKey,
+          data: savedWeather,
+          expiresAt: tomorrow
+        },
+        { upsert: true, new: true }
+      );
+    }
 
     return savedWeather;
   } catch (error) {

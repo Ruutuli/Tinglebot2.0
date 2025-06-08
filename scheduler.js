@@ -1,4 +1,5 @@
-require('dotenv').config();
+const dotenv = require('dotenv');
+const path = require('path');
 const cron = require('node-cron');
 const { handleError } = require('./utils/globalErrorHandler');
 const { EmbedBuilder } = require('discord.js');
@@ -22,6 +23,18 @@ const { connectToInventories } = require('./handlers/blightHandler');
 const { getCurrentWeather, saveWeather } = require('./modules/weatherModule');
 const Pet = require('./models/PetModel');
 const { client } = require('./index');
+
+// Load environment variables based on NODE_ENV
+const env = process.env.NODE_ENV || 'development';
+try {
+  const envPath = path.resolve(process.cwd(), `.env.${env}`);
+  dotenv.config({ path: envPath });
+  console.log(`[scheduler.js]: ✅ Loaded environment from ${envPath}`);
+} catch (error) {
+  console.error(`[scheduler.js]: ❌ Failed to load .env.${env}:`, error.message);
+  // Fallback to default .env
+  dotenv.config();
+}
 
 // ============================================================================
 // ---- Utility Functions ----
@@ -72,9 +85,9 @@ function createAnnouncementEmbed(title, description, thumbnail, image, footer) {
 // ============================================================================
 
 const TOWNHALL_CHANNELS = {
-  Rudania: process.env.RUDANIA_TOWN_HALL,
-  Inariko: process.env.INARIKO_TOWN_HALL,
-  Vhintl: process.env.VHINTL_TOWN_HALL
+  Rudania: process.env.RUDANIA_TOWNHALL,
+  Inariko: process.env.INARIKO_TOWNHALL,
+  Vhintl: process.env.VHINTL_TOWNHALL
 };
 
 // ---- Function: getCurrentSeason ----
@@ -136,7 +149,9 @@ async function executeBirthdayAnnouncements(client) {
   const now = new Date();
   const estNow = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
   const today = estNow.toISOString().slice(5, 10);
-  const guildIds = process.env.GUILD_IDS ? process.env.GUILD_IDS.split(',') : [];
+  const guildIds = env === 'development' 
+    ? [process.env.TEST_GUILD_ID]
+    : [process.env.PROD_GUILD_ID];
   
   const guildChannelMap = {
     '1305484048063529002': '1326997448085995530', // Roots Of The Wild
@@ -339,26 +354,24 @@ function initializeScheduler(client) {
   // Add startup Blood Moon check
   (async () => {
     try {
-      console.log('[scheduler.js]: 🔄 Checking Blood Moon status on startup...');
       const channels = [
-        process.env.RUDANIA_TOWN_HALL,
-        process.env.INARIKO_TOWN_HALL,
-        process.env.VHINTL_TOWN_HALL,
+        process.env.RUDANIA_TOWNHALL,
+        process.env.INARIKO_TOWNHALL,
+        process.env.VHINTL_TOWNHALL,
       ];
 
       for (const channelId of channels) {
         if (isBloodMoonDay()) {
-          console.log(`[scheduler.js]: 🌕 Blood Moon is active on startup`);
+          console.log(`[scheduler.js]: 🌕 Blood Moon active`);
           await renameChannels(client);
           await sendBloodMoonAnnouncement(client, channelId, 'The Blood Moon is upon us! Beware!');
         } else {
-          console.log(`[scheduler.js]: 🌑 Blood Moon is inactive on startup`);
           await revertChannelNames(client);
         }
       }
     } catch (error) {
       handleError(error, 'scheduler.js');
-      console.error(`[scheduler.js]: ❌ Startup Blood Moon check failed: ${error.message}`);
+      console.error(`[scheduler.js]: ❌ Blood Moon check failed: ${error.message}`);
     }
   })();
 
@@ -368,9 +381,7 @@ function initializeScheduler(client) {
   createCronJob('0 8 * * *', 'daily stamina recovery', recoverDailyStamina);
   createCronJob('0 0 1 * *', 'monthly vending stock generation', generateVendingStockList);
   createCronJob('0 0 * * 0', 'weekly pet rolls reset', async () => {
-    console.log(`[scheduler.js]: 🔄 Starting weekly pet roll reset at ${new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })}`);
     await resetPetRollsForAllCharacters();
-    console.log(`[scheduler.js]: ✅ Completed weekly pet roll reset at ${new Date().toLocaleString('en-US', { timeZone: 'America/New_York' })}`);
   }, 'America/New_York');
   createCronJob('0 0 * * *', 'reset pet last roll dates', resetPetLastRollDates);
   createCronJob('0 0 * * *', 'request expiration and cleanup', async () => {
@@ -391,9 +402,9 @@ function initializeScheduler(client) {
   // Blood moon tracking 
   createCronJob('00 20 * * *', 'blood moon tracking', async () => {
     const channels = [
-      process.env.RUDANIA_TOWN_HALL,
-      process.env.INARIKO_TOWN_HALL,
-      process.env.VHINTL_TOWN_HALL,
+      process.env.RUDANIA_TOWNHALL,
+      process.env.INARIKO_TOWNHALL,
+      process.env.VHINTL_TOWNHALL,
     ];
 
     for (const channelId of channels) {
@@ -403,7 +414,6 @@ function initializeScheduler(client) {
           await renameChannels(client);
           await sendBloodMoonAnnouncement(client, channelId, 'The Blood Moon rises at nightfall! Beware!');
         } else {
-          console.log(`[scheduler.js]: 🌑 Blood Moon fading at dawn`);
           await revertChannelNames(client);
         }
       } catch (error) {

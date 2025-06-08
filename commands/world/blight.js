@@ -16,6 +16,7 @@ const { fetchCharacterByNameAndUserId, getCharacterBlightHistory } = require('..
 const { getModCharacterByName } = require('../../modules/modCharacters');
 const { retrieveBlightRequestFromStorage } = require('../../utils/storage');
 const Character = require('../../models/CharacterModel');
+const { handleError } = require('../../utils/globalErrorHandler');
 
 // ------------------- Define the Blight Command -------------------
 // This command manages blight progression, healing, and submission of healing tasks.
@@ -125,135 +126,160 @@ module.exports = {
       return;
     }
 
-    const subcommand = interaction.options.getSubcommand();
-    
-    if (subcommand === 'roll') {
-      const characterName = interaction.options.getString('character_name');
-      const character = await validateCharacterOwnership(interaction, characterName);
-      if (!character) return;
-      
-      await rollForBlightProgression(interaction, characterName);
-    
-    } else if (subcommand === 'heal') {
-      const characterName = interaction.options.getString('character_name');
-      const character = await validateCharacterOwnership(interaction, characterName);
-      if (!character) return;
-      
-      const healerName = interaction.options.getString('healer_name');
-      await healBlight(interaction, characterName, healerName);
-        
-    } else if (subcommand === 'submit') {
-      const submissionId = interaction.options.getString('submission_id');
-      const item = interaction.options.getString('item');
-      const link = interaction.options.getString('link');
-      const tokens = interaction.options.getBoolean('tokens');
-      await submitHealingTask(interaction, submissionId, item, link, tokens);
-      
-    } else if (subcommand === 'history') {
-      const characterName = interaction.options.getString('character_name');
-      const character = await validateCharacterOwnership(interaction, characterName);
-      if (!character) return;
-      
-      const limit = interaction.options.getInteger('limit') || 10;
-      await viewBlightHistory(interaction, characterName, limit);
-
-    } else if (subcommand === 'roster') {
+    try {
+      // Defer reply immediately for all subcommands to prevent timeout
       await interaction.deferReply();
+
+      const subcommand = interaction.options.getSubcommand();
       
-      try {
-        // Get all blighted characters
-        const blightedCharacters = await Character.find({ blighted: true });
+      if (subcommand === 'roll') {
+        const characterName = interaction.options.getString('character_name');
+        const character = await validateCharacterOwnership(interaction, characterName);
+        if (!character) return;
         
-        if (blightedCharacters.length === 0) {
-          await interaction.editReply({
-            content: '✅ There are currently no blighted characters in the world.',
-            ephemeral: true
-          });
-          return;
-        }
-
-        // Get all blight submissions
-        const blightSubmissions = await loadBlightSubmissions();
-        const showExpired = interaction.options.getBoolean('show_expired') || false;
-
-        // Group characters by village
-        const charactersByVillage = blightedCharacters.reduce((acc, char) => {
-          const village = char.currentVillage || 'Unknown Village';
-          if (!acc[village]) {
-            acc[village] = [];
-          }
-          acc[village].push(char);
-          return acc;
-        }, {});
-
-        // Create the main embed
-        const embed = new EmbedBuilder()
-          .setColor('#AD1457')
-          .setTitle('📋 Blighted Characters Roster')
-          .setDescription(`Total Blighted Characters: ${blightedCharacters.length}`)
-          .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png')
-          .setFooter({ text: 'Blighted Characters Roster' })
-          .setTimestamp();
-
-        // Add fields for each village
-        for (const [village, characters] of Object.entries(charactersByVillage)) {
-          let villageField = '';
+        await rollForBlightProgression(interaction, characterName);
+      
+      } else if (subcommand === 'heal') {
+        const characterName = interaction.options.getString('character_name');
+        const character = await validateCharacterOwnership(interaction, characterName);
+        if (!character) return;
+        
+        const healerName = interaction.options.getString('healer_name');
+        await healBlight(interaction, characterName, healerName);
           
-          for (const char of characters) {
-            // Get submission status
-            const submission = Object.values(blightSubmissions).find(
-              sub => sub.characterName === char.name && 
-              (showExpired ? true : sub.status === 'pending')
-            );
+      } else if (subcommand === 'submit') {
+        const submissionId = interaction.options.getString('submission_id');
+        const item = interaction.options.getString('item');
+        const link = interaction.options.getString('link');
+        const tokens = interaction.options.getBoolean('tokens');
+        await submitHealingTask(interaction, submissionId, item, link, tokens);
+        
+      } else if (subcommand === 'history') {
+        const characterName = interaction.options.getString('character_name');
+        const character = await validateCharacterOwnership(interaction, characterName);
+        if (!character) return;
+        
+        const limit = interaction.options.getInteger('limit') || 10;
+        await viewBlightHistory(interaction, characterName, limit);
 
-            // Get stage emoji
-            const stageEmoji = char.blightStage === 5 ? '☠️' : 
-                             char.blightStage === 4 ? '💀' :
-                             char.blightStage === 3 ? '👻' :
-                             char.blightStage === 2 ? '🎯' : '⚠️';
-
-            // Format character info
-            villageField += `${stageEmoji} **${char.name}** - Stage ${char.blightStage}\n`;
-            
-            if (submission) {
-              const status = submission.status === 'pending' ? '🔄' : '⏰';
-              const timeLeft = submission.status === 'pending' ? 
-                `(<t:${Math.floor(new Date(submission.expiresAt).getTime() / 1000)}:R>)` : 
-                '(Expired)';
-              villageField += `└ ${status} Pending healing from **${submission.healerName}** ${timeLeft}\n`;
-            }
-
-            if (char.blightStage === 5 && char.deathDeadline) {
-              villageField += `└ ⚰️ Death deadline: <t:${Math.floor(char.deathDeadline.getTime() / 1000)}:R>\n`;
-            }
-
-            villageField += '\n';
+      } else if (subcommand === 'roster') {
+        try {
+          // Get all blighted characters
+          const blightedCharacters = await Character.find({ blighted: true });
+          
+          if (blightedCharacters.length === 0) {
+            await interaction.editReply({
+              content: '✅ There are currently no blighted characters in the world.',
+              ephemeral: true
+            });
+            return;
           }
 
-          // Split field if too long
-          if (villageField.length > 1024) {
-            const chunks = villageField.match(/.{1,1024}/g) || [];
-            for (let i = 0; i < chunks.length; i++) {
+          // Get all blight submissions
+          const blightSubmissions = await loadBlightSubmissions();
+          const showExpired = interaction.options.getBoolean('show_expired') || false;
+
+          // Group characters by village
+          const charactersByVillage = blightedCharacters.reduce((acc, char) => {
+            const village = char.currentVillage || 'Unknown Village';
+            if (!acc[village]) {
+              acc[village] = [];
+            }
+            acc[village].push(char);
+            return acc;
+          }, {});
+
+          // Create the main embed
+          const embed = new EmbedBuilder()
+            .setColor('#AD1457')
+            .setTitle('📋 Blighted Characters Roster')
+            .setDescription(`Total Blighted Characters: ${blightedCharacters.length}`)
+            .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png')
+            .setFooter({ text: 'Blighted Characters Roster' })
+            .setTimestamp();
+
+          // Add fields for each village
+          for (const [village, characters] of Object.entries(charactersByVillage)) {
+            let villageField = '';
+            
+            for (const char of characters) {
+              // Get submission status
+              const submission = Object.values(blightSubmissions).find(
+                sub => sub.characterName === char.name && 
+                (showExpired ? true : sub.status === 'pending')
+              );
+
+              // Get stage emoji
+              const stageEmoji = char.blightStage === 5 ? '☠️' : 
+                               char.blightStage === 4 ? '💀' :
+                               char.blightStage === 3 ? '👻' :
+                               char.blightStage === 2 ? '🎯' : '⚠️';
+
+              // Format character info
+              villageField += `${stageEmoji} **${char.name}** - Stage ${char.blightStage}\n`;
+              
+              if (submission) {
+                const status = submission.status === 'pending' ? '🔄' : '⏰';
+                const timeLeft = submission.status === 'pending' ? 
+                  `(<t:${Math.floor(new Date(submission.expiresAt).getTime() / 1000)}:R>)` : 
+                  '(Expired)';
+                villageField += `└ ${status} Pending healing from **${submission.healerName}** ${timeLeft}\n`;
+              }
+
+              if (char.blightStage === 5 && char.deathDeadline) {
+                villageField += `└ ⚰️ Death deadline: <t:${Math.floor(char.deathDeadline.getTime() / 1000)}:R>\n`;
+              }
+
+              villageField += '\n';
+            }
+
+            // Split field if too long
+            if (villageField.length > 1024) {
+              const chunks = villageField.match(/.{1,1024}/g) || [];
+              for (let i = 0; i < chunks.length; i++) {
+                embed.addFields({
+                  name: i === 0 ? `🏰 ${village}` : `${village} (continued)`,
+                  value: chunks[i]
+                });
+              }
+            } else {
               embed.addFields({
-                name: i === 0 ? `🏰 ${village}` : `${village} (continued)`,
-                value: chunks[i]
+                name: `🏰 ${village}`,
+                value: villageField
               });
             }
-          } else {
-            embed.addFields({
-              name: `🏰 ${village}`,
-              value: villageField
-            });
           }
-        }
 
-        await interaction.editReply({ embeds: [embed] });
-      } catch (error) {
-        console.error('[blight.js]: ❌ Error fetching blighted roster:', error);
-        await interaction.editReply({
-          content: '❌ An error occurred while fetching the blighted roster.',
-          ephemeral: true
-        });
+          await interaction.editReply({ embeds: [embed] });
+        } catch (error) {
+          console.error('[blight.js]: ❌ Error fetching blighted roster:', error);
+          await interaction.editReply({
+            content: '❌ An error occurred while fetching the blighted roster.',
+            ephemeral: true
+          });
+        }
+      }
+    } catch (error) {
+      console.error(`[blight.js]: Error executing blight command:`, error);
+      
+      // Create a detailed error message
+      let errorMessage = '❌ An error occurred while processing your request.\n\n';
+      
+      if (error.code === 'InteractionAlreadyReplied') {
+        errorMessage += '**Error Type**: Interaction Already Replied\n';
+        errorMessage += '**What Happened**: The system tried to respond to your command multiple times.\n';
+        errorMessage += '**How to Fix**: Please try your command again. If the issue persists, wait a few moments before trying again.';
+      } else {
+        errorMessage += '**Error Type**: Unexpected Error\n';
+        errorMessage += '**What Happened**: Something went wrong while processing your request.\n';
+        errorMessage += '**How to Fix**: Please try your command again. If the issue persists, contact a moderator.';
+      }
+
+      // Try to edit the reply if it exists, otherwise send a new reply
+      try {
+        await interaction.editReply({ content: errorMessage, ephemeral: true });
+      } catch (editError) {
+        await interaction.reply({ content: errorMessage, ephemeral: true });
       }
     }
   }

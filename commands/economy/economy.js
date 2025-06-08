@@ -363,11 +363,20 @@ async function handleGift(interaction) {
  ].filter((item) => item.name && item.quantity);
 
  // ------------------- Validate Gift Quantities -------------------
-// Ensure all gifted item quantities are positive integers
 for (const { quantity } of items) {
   if (quantity <= 0) {
     await interaction.editReply({
-      content: `❌ You must gift a **positive quantity** of items. Negative numbers are not allowed.`,
+      embeds: [{
+        color: 0xFF0000, // Red color
+        title: '❌ Invalid Quantity',
+        description: 'You must gift a **positive quantity** of items. Negative numbers are not allowed.',
+        image: {
+          url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+        },
+        footer: {
+          text: 'Quantity Validation'
+        }
+      }],
       ephemeral: true,
     });
     return;
@@ -378,7 +387,17 @@ for (const { quantity } of items) {
 for (const { name } of items) {
   if (isSpiritOrb(name)) {
     await interaction.editReply({
-      content: `❌ Spirit Orbs cannot be gifted. They are sacred items that can only be used by their original owner.`,
+      embeds: [{
+        color: 0xFF0000, // Red color
+        title: '❌ Spirit Orb Protection',
+        description: 'Spirit Orbs cannot be gifted. They are sacred items that can only be used by their original owner.',
+        image: {
+          url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+        },
+        footer: {
+          text: 'Item Protection'
+        }
+      }],
       ephemeral: true,
     });
     return;
@@ -393,9 +412,20 @@ for (const { name } of items) {
     userId
   );
   if (!fromCharacter) {
-    await interaction.editReply(
-      `❌ Character \`${fromCharacterName}\` not found or does not belong to you.`
-    );
+    await interaction.editReply({
+      embeds: [new EmbedBuilder()
+        .setColor('#FF0000')
+        .setTitle('❌ Character Not Found')
+        .setDescription(`The character "${fromCharacterName}" does not exist in the database.`)
+        .addFields(
+          { name: '🔍 Possible Reasons', value: '• Character name is misspelled\n• Character was deleted\n• Character was never created' },
+          { name: '💡 Suggestion', value: 'Please check the spelling and try again.' }
+        )
+        .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
+        .setFooter({ text: 'Character Validation' })
+        .setTimestamp()],
+      ephemeral: true
+    });
     return;
   }
   
@@ -410,9 +440,20 @@ for (const { name } of items) {
   
   for (const { name } of items) {
     if (equippedItems.includes(name)) {
-      await interaction.editReply(
-        `❌ You cannot gift \`${name}\` because it is currently equipped. Please unequip it first using the </gear:1372262090450141196> command.`
-      );
+      await interaction.editReply({
+        embeds: [{
+          color: 0xFF0000, // Red color
+          title: '❌ Item Equipped',
+          description: `You cannot gift \`${name}\` because it is currently equipped. Please unequip it first using the </gear:1372262090450141196> command.`,
+          image: {
+            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+          },
+          footer: {
+            text: 'Equipment Check'
+          }
+        }],
+        ephemeral: true
+      });
       return;
     }
   }
@@ -420,9 +461,20 @@ for (const { name } of items) {
   const allCharacters = await fetchAllCharactersExceptUser(userId);
   const toCharacter = allCharacters.find((c) => c.name === toCharacterName);
   if (!toCharacter) {
-   await interaction.editReply(
-    `❌ Character \`${toCharacterName}\` not found or belongs to you.`
-   );
+   await interaction.editReply({
+    embeds: [{
+      color: 0xFF0000, // Red color
+      title: '❌ Recipient Not Found',
+      description: `Character \`${toCharacterName}\` not found or belongs to you.`,
+      image: {
+        url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+      },
+      footer: {
+        text: 'Character Validation'
+      }
+    }],
+    ephemeral: true
+   });
    return;
   }
 
@@ -432,7 +484,23 @@ for (const { name } of items) {
     await checkInventorySync(toCharacter);
   } catch (error) {
     await interaction.editReply({
-      content: error.message,
+      embeds: [{
+        color: 0xFF0000, // Red color
+        title: '❌ Inventory Not Synced',
+        description: error.message,
+        fields: [
+          {
+            name: 'How to Fix',
+            value: '1. Use `/inventory test` to test your inventory\n2. Use `/inventory sync` to sync your inventory'
+          }
+        ],
+        image: {
+          url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+        },
+        footer: {
+          text: 'Inventory Sync Required'
+        }
+      }],
       ephemeral: true
     });
     return;
@@ -451,10 +519,26 @@ for (const { name } of items) {
     toCharacter.currentVillage.trim()
    );
 
-   await interaction.editReply(
-    `❌ \`${fromCharacter.name}\` is in **${fromVillageCapitalized}**, and \`${toCharacter.name}\` is in **${toVillageCapitalized}**. Both characters must be in the same village for gifting. ` +
-     `Please use the </travel:1306176790095728736> command to travel your character to \`${toVillageCapitalized}\`.`
-   );
+   await interaction.editReply({
+    embeds: [{
+      color: 0xFF0000, // Red color
+      title: '❌ Different Villages',
+      description: `\`${fromCharacter.name}\` is in **${fromVillageCapitalized}**, and \`${toCharacter.name}\` is in **${toVillageCapitalized}**. Both characters must be in the same village for gifting.`,
+      fields: [
+        {
+          name: 'How to Fix',
+          value: `Please use the </travel:1306176790095728736> command to travel your character to \`${toVillageCapitalized}\`.`
+        }
+      ],
+      image: {
+        url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+      },
+      footer: {
+        text: 'Village Check'
+      }
+    }],
+    ephemeral: true
+   });
    return;
   }
 
@@ -493,11 +577,25 @@ for (const { name } of items) {
   }
 
   if (!allItemsAvailable) {
-   await interaction.editReply(
-    `❌ \`${fromCharacterName}\` does not have enough of the following items to gift: ${unavailableItems.join(
-     ", "
-    )}`
-   );
+   await interaction.editReply({
+    embeds: [{
+      color: 0xFF0000, // Red color
+      title: '❌ Insufficient Items',
+      description: `\`${fromCharacterName}\` does not have enough of the following items to gift:`,
+      fields: unavailableItems.map(item => ({
+        name: item,
+        value: 'Insufficient quantity',
+        inline: true
+      })),
+      image: {
+        url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+      },
+      footer: {
+        text: 'Inventory Check'
+      }
+    }],
+    ephemeral: true
+   });
    return;
   }
 
@@ -507,8 +605,18 @@ for (const { name } of items) {
 
   if (!fromInventoryLink || !toInventoryLink) {
    await interaction.editReply({
-    content: `❌ Missing Google Sheets URL for character inventory.`,
-    ephemeral: true,
+    embeds: [{
+      color: 0xFF0000, // Red color
+      title: '❌ Missing Inventory Link',
+      description: 'Missing Google Sheets URL for character inventory.',
+      image: {
+        url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+      },
+      footer: {
+        text: 'Inventory Link Required'
+      }
+    }],
+    ephemeral: true
    });
    return;
   }
@@ -518,8 +626,18 @@ for (const { name } of items) {
    !isValidGoogleSheetsUrl(toInventoryLink)
   ) {
    await interaction.editReply({
-    content: `❌ Invalid Google Sheets URL for character inventory.`,
-    ephemeral: true,
+    embeds: [{
+      color: 0xFF0000, // Red color
+      title: '❌ Invalid Inventory Link',
+      description: 'Invalid Google Sheets URL for character inventory.',
+      image: {
+        url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+      },
+      footer: {
+        text: 'Valid URL Required'
+      }
+    }],
+    ephemeral: true
    });
    return;
   }
@@ -687,17 +805,26 @@ for (const { name } of items) {
     allowedMentions: { users: [toCharacterOwnerId] },
     embeds: [giftEmbed],
   });
-  await interaction.editReply({
-    content: `✅ Gift sent successfully!`,
-  }); 
+  await interaction.deleteReply();
   
   
  } catch (error) {
   handleError(error, "gift.js");
   console.error("❌ Error during gift execution:", error);
-  await interaction.editReply(
-   "❌ An error occurred while trying to gift the items."
-  );
+  await interaction.editReply({
+    embeds: [{
+      color: 0xFF0000, // Red color
+      title: '❌ Gift Error',
+      description: 'An error occurred while trying to gift the items.',
+      image: {
+        url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+      },
+      footer: {
+        text: 'Error Handling'
+      }
+    }],
+    ephemeral: true
+  });
  }
 }
 
@@ -857,7 +984,17 @@ async function handleShopBuy(interaction) {
     const user = await getOrCreateToken(interaction.user.id);
     if (!user.tokensSynced) {
       return interaction.editReply({
-        content: "❌ Your tokens are not synced. Please sync your tokens to use this command.",
+        embeds: [{
+          color: 0xFF0000, // Red color
+          title: '❌ Tokens Not Synced',
+          description: 'Your tokens are not synced. Please sync your tokens to use this command.',
+          image: {
+            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+          },
+          footer: {
+            text: 'Token Sync Required'
+          }
+        }],
         ephemeral: true
       });
     }
@@ -869,7 +1006,17 @@ async function handleShopBuy(interaction) {
     // ------------------- Validate Buy Quantity -------------------
     if (quantity <= 0) {
       await interaction.editReply({
-        content: `❌ You must buy a **positive quantity** of items. Negative numbers are not allowed.`,
+        embeds: [{
+          color: 0xFF0000, // Red color
+          title: '❌ Invalid Quantity',
+          description: 'You must buy a **positive quantity** of items. Negative numbers are not allowed.',
+          image: {
+            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+          },
+          footer: {
+            text: 'Quantity Validation'
+          }
+        }],
         ephemeral: true,
       });
       return;
@@ -884,7 +1031,17 @@ async function handleShopBuy(interaction) {
     if (!character) {
       console.error(`[shops]: ❌ Character ${characterName} not found or does not belong to user ${interaction.user.id}`);
       return interaction.editReply({
-        content: "❌ Character not found or does not belong to you.",
+        embeds: [{
+          color: 0xFF0000, // Red color
+          title: '❌ Character Not Found',
+          description: 'Character not found or does not belong to you.',
+          image: {
+            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+          },
+          footer: {
+            text: 'Character Validation'
+          }
+        }],
         ephemeral: true
       });
     }
@@ -894,7 +1051,23 @@ async function handleShopBuy(interaction) {
       await checkInventorySync(character);
     } catch (error) {
       await interaction.editReply({
-        content: error.message,
+        embeds: [{
+          color: 0xFF0000, // Red color
+          title: '❌ Inventory Not Synced',
+          description: error.message,
+          fields: [
+            {
+              name: 'How to Fix',
+              value: '1. Use `/inventory test` to test your inventory\n2. Use `/inventory sync` to sync your inventory'
+            }
+          ],
+          image: {
+            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+          },
+          footer: {
+            text: 'Inventory Sync Required'
+          }
+        }],
         ephemeral: true
       });
       return;
@@ -907,7 +1080,17 @@ async function handleShopBuy(interaction) {
     
     if (!shopItem) {
       return interaction.editReply({
-        content: `❌ Item "${itemName}" is not available in the shop.`,
+        embeds: [{
+          color: 0xFF0000, // Red color
+          title: '❌ Item Not Available',
+          description: `Item "${itemName}" is not available in the shop.`,
+          image: {
+            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+          },
+          footer: {
+            text: 'Shop Validation'
+          }
+        }],
         ephemeral: true
       });
     }
@@ -916,14 +1099,34 @@ async function handleShopBuy(interaction) {
     if (isNaN(shopQuantity)) {
       console.error(`[shops]: ❌ Invalid stock quantity for item ${itemName}: ${shopItem.stock}`);
       return interaction.editReply({
-        content: "❌ Shop item quantity is invalid. Please try again later.",
+        embeds: [{
+          color: 0xFF0000, // Red color
+          title: '❌ Invalid Stock',
+          description: 'Shop item quantity is invalid. Please try again later.',
+          image: {
+            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+          },
+          footer: {
+            text: 'Shop Validation'
+          }
+        }],
         ephemeral: true
       });
     }
 
     if (shopQuantity < quantity) {
       return interaction.editReply({
-        content: `❌ Not enough stock available. Only ${shopQuantity} ${itemName} remaining in the shop.`,
+        embeds: [{
+          color: 0xFF0000, // Red color
+          title: '❌ Insufficient Stock',
+          description: `Not enough stock available. Only ${shopQuantity} ${itemName} remaining in the shop.`,
+          image: {
+            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+          },
+          footer: {
+            text: 'Shop Validation'
+          }
+        }],
         ephemeral: true
       });
     }
@@ -936,7 +1139,17 @@ async function handleShopBuy(interaction) {
     if (!itemDetails) {
       console.error(`[shops]: ❌ Item details not found for ${itemName}`);
       return interaction.editReply({
-        content: "❌ Unable to retrieve item details. Please try again later.",
+        embeds: [{
+          color: 0xFF0000, // Red color
+          title: '❌ Item Details Error',
+          description: 'Unable to retrieve item details. Please try again later.',
+          image: {
+            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+          },
+          footer: {
+            text: 'Item Validation'
+          }
+        }],
         ephemeral: true
       });
     }
@@ -944,7 +1157,17 @@ async function handleShopBuy(interaction) {
     if (!itemDetails.buyPrice || itemDetails.buyPrice <= 0) {
       console.error(`[shops]: ❌ Invalid buy price for item ${itemName}: ${itemDetails.buyPrice}`);
       return interaction.editReply({
-        content: "❌ This item cannot be purchased from the shop.",
+        embeds: [{
+          color: 0xFF0000, // Red color
+          title: '❌ Item Not For Sale',
+          description: 'This item cannot be purchased from the shop.',
+          image: {
+            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+          },
+          footer: {
+            text: 'Item Validation'
+          }
+        }],
         ephemeral: true
       });
     }
@@ -954,7 +1177,34 @@ async function handleShopBuy(interaction) {
 
     if (currentTokens < totalPrice) {
       return interaction.editReply({
-        content: `❌ You do not have enough tokens.\n\n**Current Balance:** 🪙 ${currentTokens}\n**Required:** 🪙 ${totalPrice}\n**Missing:** 🪙 ${totalPrice - currentTokens}`,
+        embeds: [{
+          color: 0xFF0000, // Red color
+          title: '❌ Insufficient Tokens',
+          description: `You do not have enough tokens to make this purchase.`,
+          fields: [
+            {
+              name: 'Current Balance',
+              value: `🪙 ${currentTokens}`,
+              inline: true
+            },
+            {
+              name: 'Required Amount',
+              value: `🪙 ${totalPrice}`,
+              inline: true
+            },
+            {
+              name: 'Missing Amount',
+              value: `🪙 ${totalPrice - currentTokens}`,
+              inline: true
+            }
+          ],
+          image: {
+            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+          },
+          footer: {
+            text: 'Token Balance Check'
+          }
+        }],
         ephemeral: true
       });
     }
@@ -1057,7 +1307,17 @@ async function handleShopBuy(interaction) {
     handleError(error, "shops.js");
     console.error("[shops]: Error buying item:", error);
     await interaction.editReply({
-      content: "❌ An error occurred while trying to buy the item. Please try again later.",
+      embeds: [{
+        color: 0xFF0000, // Red color
+        title: '❌ Purchase Error',
+        description: 'An error occurred while trying to buy the item. Please try again later.',
+        image: {
+          url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+        },
+        footer: {
+          text: 'Error Handling'
+        }
+      }],
       ephemeral: true
     });
   }
@@ -1097,13 +1357,66 @@ if (quantity <= 0) {
   const character = await fetchCharacterByName(characterName);
   if (!character) {
    console.error(`[shops]: Character not found: ${characterName}`);
-   return interaction.editReply("❌ Character not found.");
+   return interaction.editReply({
+    embeds: [{
+      color: 0xFF0000, // Red color
+      title: '❌ Character Not Found',
+      description: 'Character not found.',
+      image: {
+        url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+      },
+      footer: {
+        text: 'Character Validation'
+      }
+    }],
+    ephemeral: true
+   });
   }
 
   // Add ownership check
   if (character.userId !== interaction.user.id) {
     console.error(`[shops]: User ${interaction.user.id} attempted to sell items for character ${characterName} which belongs to ${character.userId}`);
-    return interaction.editReply("❌ You can only sell items for characters that belong to you.");
+    return interaction.editReply({
+      embeds: [{
+        color: 0xFF0000, // Red color
+        title: '❌ Not Your Character',
+        description: 'You can only sell items for characters that belong to you.',
+        image: {
+          url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+        },
+        footer: {
+          text: 'Character Ownership'
+        }
+      }],
+      ephemeral: true
+    });
+  }
+
+  // ------------------- Check Inventory Sync -------------------
+  try {
+    await checkInventorySync(character);
+  } catch (error) {
+    await interaction.editReply({
+      embeds: [{
+        color: 0xFF0000, // Red color
+        title: '❌ Inventory Not Synced',
+        description: error.message,
+        fields: [
+          {
+            name: 'How to Fix',
+            value: '1. Use `/inventory test` to test your inventory\n2. Use `/inventory sync` to sync your inventory'
+          }
+        ],
+        image: {
+          url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+        },
+        footer: {
+          text: 'Inventory Sync Required'
+        }
+      }],
+      ephemeral: true
+    });
+    return;
   }
 
   const inventoryCollection = await getCharacterInventoryCollection(
@@ -1324,7 +1637,17 @@ async function handleTransfer(interaction) {
 for (const { quantity } of items) {
   if (quantity <= 0) {
     await interaction.editReply({
-      content: `❌ You must transfer a **positive quantity** of items. Negative numbers are not allowed.`,
+      embeds: [{
+        color: 0xFF0000, // Red color
+        title: '❌ Invalid Quantity',
+        description: 'You must transfer a **positive quantity** of items. Negative numbers are not allowed.',
+        image: {
+          url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+        },
+        footer: {
+          text: 'Quantity Validation'
+        }
+      }],
       ephemeral: true,
     });
     return;
@@ -1346,7 +1669,17 @@ for (const { quantity } of items) {
 
   if (!fromCharacter || !toCharacter) {
    await interaction.editReply({
-    content: `❌ Either the source or destination character does not exist or does not belong to you.`,
+    embeds: [{
+      color: 0xFF0000, // Red color
+      title: '❌ Character Not Found',
+      description: 'Either the source or destination character does not exist or does not belong to you.',
+      image: {
+        url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+      },
+      footer: {
+        text: 'Character Validation'
+      }
+    }],
     ephemeral: true,
    });
    return;
@@ -1364,7 +1697,17 @@ const equippedItems = [
 for (const { name } of items) {
   if (equippedItems.includes(name)) {
     await interaction.editReply({
-      content: `❌ You cannot sell/trade/transfer \`${name}\` because it is currently equipped. Please unequip it first.`,
+      embeds: [{
+        color: 0xFF0000, // Red color
+        title: '❌ Item Equipped',
+        description: `You cannot transfer \`${name}\` because it is currently equipped. Please unequip it first using the </gear:1372262090450141196> command.`,
+        image: {
+          url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+        },
+        footer: {
+          text: 'Equipment Check'
+        }
+      }],
       ephemeral: true,
     });
     return;
@@ -1378,7 +1721,23 @@ for (const { name } of items) {
     await checkInventorySync(toCharacter);
   } catch (error) {
     await interaction.editReply({
-      content: error.message,
+      embeds: [{
+        color: 0xFF0000, // Red color
+        title: '❌ Inventory Not Synced',
+        description: error.message,
+        fields: [
+          {
+            name: 'How to Fix',
+            value: '1. Use `/inventory test` to test your inventory\n2. Use `/inventory sync` to sync your inventory'
+          }
+        ],
+        image: {
+          url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+        },
+        footer: {
+          text: 'Inventory Sync Required'
+        }
+      }],
       ephemeral: true
     });
     return;
@@ -1440,9 +1799,22 @@ for (const { name } of items) {
 
   if (!allItemsAvailable) {
    await interaction.editReply({
-    content: `❌ \`${fromCharacterName}\` does not have enough of the following items to transfer: ${unavailableItems.join(
-     ", "
-    )}`,
+    embeds: [{
+      color: 0xFF0000, // Red color
+      title: '❌ Insufficient Items',
+      description: `\`${fromCharacterName}\` does not have enough of the following items to transfer:`,
+      fields: unavailableItems.map(item => ({
+        name: item,
+        value: 'Insufficient quantity',
+        inline: true
+      })),
+      image: {
+        url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+      },
+      footer: {
+        text: 'Inventory Check'
+      }
+    }],
     ephemeral: true,
    });
    return;
@@ -1454,18 +1826,35 @@ for (const { name } of items) {
 
   if (!fromInventoryLink || !toInventoryLink) {
    await interaction.editReply({
-    content: `❌ Missing Google Sheets URL for character inventory.`,
+    embeds: [{
+      color: 0xFF0000, // Red color
+      title: '❌ Missing Inventory Link',
+      description: 'Missing Google Sheets URL for character inventory.',
+      image: {
+        url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+      },
+      footer: {
+        text: 'Inventory Link Required'
+      }
+    }],
     ephemeral: true,
    });
    return;
   }
 
-  if (
-   !isValidGoogleSheetsUrl(fromInventoryLink) ||
-   !isValidGoogleSheetsUrl(toInventoryLink)
-  ) {
+  if (!isValidGoogleSheetsUrl(fromInventoryLink) || !isValidGoogleSheetsUrl(toInventoryLink)) {
    await interaction.editReply({
-    content: `❌ Invalid Google Sheets URL for character inventory.`,
+    embeds: [{
+      color: 0xFF0000, // Red color
+      title: '❌ Invalid Inventory Link',
+      description: 'Invalid Google Sheets URL for character inventory.',
+      image: {
+        url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+      },
+      footer: {
+        text: 'Valid URL Required'
+      }
+    }],
     ephemeral: true,
    });
    return;
@@ -1542,9 +1931,20 @@ for (const { name } of items) {
  } catch (error) {
   handleError(error, "transfer.js");
   console.error("❌ Error during transfer execution:", error);
-  await interaction.editReply(
-   "❌ An error occurred while trying to transfer the items."
-  );
+  await interaction.editReply({
+    embeds: [{
+      color: 0xFF0000, // Red color
+      title: '❌ Transfer Error',
+      description: 'An error occurred while trying to transfer the items.',
+      image: {
+        url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+      },
+      footer: {
+        text: 'Error Handling'
+      }
+    }],
+    ephemeral: true
+  });
  }
 }
 
@@ -1590,7 +1990,7 @@ async function createTradeSession(initiator, target, items) {
     confirmChannelId: null,
   };
 
-  const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 34 hours
   await TempData.create({ key: tradeId, type: 'trade', data: tradeData, expiresAt });
   return tradeId;
 }
@@ -1732,11 +2132,28 @@ async function validateTradeItems(character, items) {
       itemName: { $regex: new RegExp(`^${item.name}$`, "i") },
     });
     if (!itemInventory || itemInventory.quantity < item.quantity) {
-      unavailableItems.push(`${item.name} - QTY:${itemInventory ? itemInventory.quantity : 0}`);
+      unavailableItems.push({
+        name: item.name,
+        requested: item.quantity,
+        available: itemInventory ? itemInventory.quantity : 0
+      });
     }
   }
   if (unavailableItems.length > 0) {
-    throw new Error(`❌ \`${character.name}\` does not have enough of the following items to trade: ${unavailableItems.join(", ")}`);
+    const errorEmbed = new EmbedBuilder()
+      .setTitle("❌ Insufficient Items")
+      .setDescription(`\`${character.name}\` doesn't have enough of the following items to trade:`)
+      .setColor("#FF0000")
+      .addFields(
+        unavailableItems.map(item => ({
+          name: item.name,
+          value: `Requested: ${item.requested}\nAvailable: ${item.available}`,
+          inline: true
+        }))
+      )
+      .setFooter({ text: "Please check your inventory and try again." });
+    
+    throw { embed: errorEmbed };
   }
 }
 
@@ -1766,7 +2183,22 @@ async function handleTrade(interaction) {
     }
     if (missingItems.length > 0) {
       await interaction.editReply({
-        content: `❌ The following item(s) do not exist: ${missingItems.map(n => `\`${n}\``).join(", ")}. Please check your spelling or try a different item.`,
+        embeds: [{
+          color: 0xFF0000, // Red color
+          title: '❌ Invalid Items',
+          description: 'The following item(s) do not exist:',
+          fields: missingItems.map(name => ({
+            name: name,
+            value: 'Item not found in database',
+            inline: true
+          })),
+          image: {
+            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+          },
+          footer: {
+            text: 'Item Validation'
+          }
+        }],
         ephemeral: true,
       });
       return;
@@ -1782,7 +2214,17 @@ async function handleTrade(interaction) {
     for (const { quantity } of itemArrayRaw) {
       if (quantity <= 0) {
         await interaction.editReply({
-          content: "❌ You must trade a **positive quantity** of items. Negative numbers are not allowed.",
+          embeds: [{
+            color: 0xFF0000, // Red color
+            title: '❌ Invalid Quantity',
+            description: 'You must trade a **positive quantity** of items. Negative numbers are not allowed.',
+            image: {
+              url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+            },
+            footer: {
+              text: 'Quantity Validation'
+            }
+          }],
           ephemeral: true,
         });
         return;
@@ -1805,7 +2247,17 @@ async function handleTrade(interaction) {
     for (const { name } of itemArray) {
       if (isSpiritOrb(name)) {
         await interaction.editReply({
-          content: `❌ Spirit Orbs cannot be traded. They are sacred items that can only be used by their original owner.`,
+          embeds: [{
+            color: 0xFF0000, // Red color
+            title: '❌ Spirit Orb Protection',
+            description: 'Spirit Orbs cannot be traded. They are sacred items that can only be used by their original owner.',
+            image: {
+              url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+            },
+            footer: {
+              text: 'Item Protection'
+            }
+          }],
           ephemeral: true,
         });
         return;
@@ -1816,7 +2268,17 @@ async function handleTrade(interaction) {
     const fromCharacter = await fetchCharacterByNameAndUserId(characterName, userId);
     if (!fromCharacter) {
       await interaction.editReply({
-        content: `❌ Character \`${characterName}\` not found or does not belong to you.`,
+        embeds: [new EmbedBuilder()
+          .setColor('#FF0000')
+          .setTitle('❌ Character Not Found')
+          .setDescription(`The character "${characterName}" does not exist in the database.`)
+          .addFields(
+            { name: '🔍 Possible Reasons', value: '• Character name is misspelled\n• Character was deleted\n• Character was never created' },
+            { name: '💡 Suggestion', value: 'Please check the spelling and try again.' }
+          )
+          .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
+          .setFooter({ text: 'Character Validation' })
+          .setTimestamp()],
         ephemeral: true,
       });
       return;
@@ -1825,8 +2287,46 @@ async function handleTrade(interaction) {
     const toCharacter = await fetchCharacterByName(tradingWithName);
     if (!toCharacter || toCharacter.userId === userId) {
       await interaction.editReply({
-        content: `❌ Character \`${tradingWithName}\` not found or belongs to you.`,
+        embeds: [new EmbedBuilder()
+          .setColor('#FF0000')
+          .setTitle('❌ Recipient Not Found')
+          .setDescription(`The character "${tradingWithName}" does not exist or belongs to you.`)
+          .addFields(
+            { name: '🔍 Possible Reasons', value: '• Character name is misspelled\n• Character was deleted\n• Character belongs to you' },
+            { name: '💡 Suggestion', value: 'Please check the spelling and try again.' }
+          )
+          .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
+          .setFooter({ text: 'Character Validation' })
+          .setTimestamp()],
         ephemeral: true,
+      });
+      return;
+    }
+
+    // ------------------- NEW: Check if characters are in the same village -------------------
+    if (fromCharacter.currentVillage.trim().toLowerCase() !== toCharacter.currentVillage.trim().toLowerCase()) {
+      const fromVillageCapitalized = capitalizeWords(fromCharacter.currentVillage.trim());
+      const toVillageCapitalized = capitalizeWords(toCharacter.currentVillage.trim());
+      
+      await interaction.editReply({
+        embeds: [{
+          color: 0xFF0000, // Red color
+          title: '❌ Different Villages',
+          description: `\`${fromCharacter.name}\` is in **${fromVillageCapitalized}**, and \`${toCharacter.name}\` is in **${toVillageCapitalized}**. Both characters must be in the same village for trading.`,
+          fields: [
+            {
+              name: 'How to Fix',
+              value: `Please use the </travel:1306176790095728736> command to travel your character to \`${toVillageCapitalized}\`.`
+            }
+          ],
+          image: {
+            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+          },
+          footer: {
+            text: 'Village Check'
+          }
+        }],
+        ephemeral: true
       });
       return;
     }
@@ -1837,8 +2337,24 @@ async function handleTrade(interaction) {
       await checkInventorySync(toCharacter);
     } catch (error) {
       await interaction.editReply({
-        content: error.message,
-        ephemeral: true,
+        embeds: [{
+          color: 0xFF0000, // Red color
+          title: '❌ Inventory Not Synced',
+          description: error.message,
+          fields: [
+            {
+              name: 'How to Fix',
+              value: '1. Use `/inventory test` to test your inventory\n2. Use `/inventory sync` to sync your inventory'
+            }
+          ],
+          image: {
+            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+          },
+          footer: {
+            text: 'Inventory Sync Required'
+          }
+        }],
+        ephemeral: true
       });
       return;
     }
@@ -1850,7 +2366,17 @@ async function handleTrade(interaction) {
         if (!trade) {
           console.error(`[trade.js]: ❌ Trade ${tradeId} not found`);
           await interaction.editReply({
-            content: `❌ Invalid or expired trade ID.`,
+            embeds: [{
+              color: 0xFF0000, // Red color
+              title: '❌ Invalid Trade',
+              description: 'Invalid or expired trade ID.',
+              image: {
+                url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+              },
+              footer: {
+                text: 'Trade Validation'
+              }
+            }],
             ephemeral: true,
           });
           return;
@@ -1859,7 +2385,17 @@ async function handleTrade(interaction) {
         // Check if trade has expired
         if (new Date() > trade.expiresAt) {
           await interaction.editReply({
-            content: `❌ This trade has expired. Please initiate a new trade.`,
+            embeds: [{
+              color: 0xFF0000, // Red color
+              title: '❌ Trade Expired',
+              description: 'This trade has expired. Please initiate a new trade.',
+              image: {
+                url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+              },
+              footer: {
+                text: 'Trade Timeout'
+              }
+            }],
             ephemeral: true,
           });
           await TempData.deleteOne({ _id: trade._id });
@@ -1873,11 +2409,22 @@ async function handleTrade(interaction) {
         if (tradeData.initiator.userId !== userId && tradeData.target.userId !== userId) {
           console.error(`[trade.js]: ❌ User ${userId} not part of trade ${tradeId}`);
           await interaction.editReply({
-            content: `❌ You are not part of this trade.`,
+            embeds: [{
+              color: 0xFF0000, // Red color
+              title: '❌ Not Part of Trade',
+              description: 'You are not part of this trade.',
+              image: {
+                url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+              },
+              footer: {
+                text: 'Trade Validation'
+              }
+            }],
             ephemeral: true,
           });
           return;
         }
+
         // NEW: Verify character name matches the user's character in the trade
         if (
           (tradeData.initiator.userId === userId && tradeData.initiator.characterName !== characterName) ||
@@ -1885,7 +2432,17 @@ async function handleTrade(interaction) {
         ) {
           console.error(`[trade.js]: ❌ Character name mismatch for user ${userId} in trade ${tradeId}`);
           await interaction.editReply({
-            content: `❌ The character you provided does not match your character in this trade.`,
+            embeds: [{
+              color: 0xFF0000, // Red color
+              title: '❌ Character Mismatch',
+              description: 'The character you provided does not match your character in this trade.',
+              image: {
+                url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+              },
+              footer: {
+                text: 'Character Validation'
+              }
+            }],
             ephemeral: true,
           });
           return;
@@ -1896,7 +2453,17 @@ async function handleTrade(interaction) {
             (tradeData.target.userId === userId && tradeData.targetConfirmed)) {
           console.error(`[trade.js]: ❌ User ${userId} already confirmed trade ${tradeId}`);
           await interaction.editReply({
-            content: `❌ You have already confirmed this trade.`,
+            embeds: [{
+              color: 0xFF0000, // Red color
+              title: '❌ Already Confirmed',
+              description: 'You have already confirmed this trade.',
+              image: {
+                url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+              },
+              footer: {
+                text: 'Trade Status'
+              }
+            }],
             ephemeral: true,
           });
           return;
@@ -1950,7 +2517,7 @@ async function handleTrade(interaction) {
           // Only send confirmation message if one doesn't already exist
           if (!updatedTradeData.confirmMessageId) {
             const tradeConfirmMessage = await interaction.channel.send({
-              content: `**Trade confirmed!** <@${updatedTradeData.initiator.userId}>, please react to the trade post with ✅ to finalize the trade.`
+              content: `**Trade confirmed!** <@${updatedTradeData.initiator.userId}>, please react to the trade post with ✅ to finalize the trade.\n\nTrade ID: \`${tradeId}\`\nYou can also use the </economy trade:1372378304623149152> command with this ID to complete the trade.`
             });
             
             // Update trade data with confirmation message
@@ -2015,7 +2582,7 @@ async function handleTrade(interaction) {
         tradeEmbed.setColor("#FFD700");
 
         const tradeMessage = await interaction.editReply({
-          content: `🔃 <@${toCharacter.userId}>, use the </economy trade:1372262090450141196> command with this trade ID to complete your part of the trade:\n\n\`\`\`${tradeId}\`\`\``,
+          content: `🔃 <@${toCharacter.userId}>, use the </economy trade:1372378304623149152> command with this trade ID to complete your part of the trade:\n\n\`\`\`${tradeId}\`\`\``,
           embeds: [tradeEmbed],
         });
 
@@ -2041,7 +2608,7 @@ async function handleTrade(interaction) {
               [fromCharacter.userId, toCharacter.userId].includes(user.id);
           };
 
-          const collector = tradeMessage.createReactionCollector({ filter, time: 15 * 60 * 1000 });
+          const collector = tradeMessage.createReactionCollector({ filter, time: 24 * 60 * 60 * 1000 }); // 34 hours
           collector.on('collect', async (reaction, user) => {
             try {
               const latestTrade = await TempData.findByTypeAndKey('trade', tradeId);
@@ -2101,18 +2668,40 @@ async function handleTrade(interaction) {
           console.error(`[trade.js]: ❌ Error setting up reaction collector: ${err.message}`);
         }
       } catch (error) {
-        console.error(`[trade.js]: ❌ Error initiating trade:`, error);
-        await interaction.editReply({
-          content: `❌ An error occurred while initiating the trade.`,
-          ephemeral: true,
-        });
+        // Only log a simple message for insufficient items
+        if (error.embed) {
+          console.log(`[trade.js]: Trade validation failed for ${characterName}`);
+        } else {
+          console.error(`[trade.js]: ❌ Error initiating trade:`, error);
+        }
+        
+        // If error has an embed, use it, otherwise create a generic error embed
+        if (error.embed) {
+          await interaction.editReply({ embeds: [error.embed] });
+        } else {
+          const errorEmbed = new EmbedBuilder()
+            .setTitle("❌ Trade Error")
+            .setDescription(error.message || "An error occurred while initiating the trade.")
+            .setColor("#FF0000");
+          await interaction.editReply({ embeds: [errorEmbed] });
+        }
+        return;
       }
     }
   } catch (error) {
     handleError(error, "trade.js");
-    console.error(`[trade.js]: ❌ Error executing trade command:`, error);
-    await interaction.editReply({
-      content: "❌ An error occurred while trying to execute the trade.",
-    });
+    // Only log a simple message for insufficient items
+    if (error.embed) {
+      console.log(`[trade.js]: Trade validation failed for ${characterName}`);
+    } else {
+      console.error(`[trade.js]: ❌ Error executing trade command:`, error);
+    }
+    
+    // Create a generic error embed
+    const errorEmbed = new EmbedBuilder()
+      .setTitle("❌ Trade Error")
+      .setDescription(error.message || "An error occurred while trying to execute the trade.")
+      .setColor("#FF0000");
+    await interaction.editReply({ embeds: [errorEmbed] });
   }
 }

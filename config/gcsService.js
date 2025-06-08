@@ -1,7 +1,9 @@
 const { Storage } = require('@google-cloud/storage');
 const { handleError } = require('../utils/globalErrorHandler');
 const path = require('path');
-require('dotenv').config();
+const dotenv = require('dotenv');
+const env = process.env.NODE_ENV || 'development';
+dotenv.config({ path: `.env.${env}` });
 
 // Create a storage client
 let storage;

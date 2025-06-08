@@ -368,10 +368,14 @@ const generateGatherFlavorText = (itemType) => {
    "🌿 The orchard whispered of life's abundance, yielding its colorful harvest.",
   ],
   Meat: [
-   "🍖 The land provided its sustenance, a reminder of nature's cycle.",
-   "🐄 The fields and pastures yielded provisions essential to the journey ahead.",
-   "🍗 Carefully prepared, this resource will sustain even the most arduous travels.",
-   "🥩 The fruits of careful labor ensured a hearty supply for the days ahead.",
+   "🍖 Fresh meat was gathered, ready to be prepared for meals.",
+   "🥩 The land provided its bounty, yielding quality meat for the community.",
+   "🍗 A successful gathering trip brought back fresh meat for all.",
+   "🥓 The day's hunt yielded enough meat to feed many.",
+   "🍖 Nature's bounty provided fresh meat for the journey ahead.",
+   "🥩 The wilderness offered its gifts, bringing meat to the table.",
+   "🍗 The land's resources were gathered, providing meat for all.",
+   "🥓 A good haul of meat was collected, ready for preparation."
   ],
   Monster: [
    "👹 The remnants of a defeated foe bore rare and curious materials.",

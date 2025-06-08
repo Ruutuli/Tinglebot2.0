@@ -37,7 +37,7 @@ const { getCurrentWeather } = require('../../modules/weatherModule.js');
 // Import helper utilities for inventory management, Google Sheets integration, URL validation, and Blood Moon detection.
 const { addItemInventoryDatabase } = require('../../utils/inventoryUtils.js');
 const { authorizeSheets, appendSheetData,safeAppendDataToSheet  } = require('../../utils/googleSheetsUtils.js');
-const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../../utils/validation.js');
+const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../../utils/googleSheetsUtils.js');
 const { isBloodMoonActive } = require('../../scripts/bloodmoon.js');
 
 
@@ -49,9 +49,9 @@ const { createGatherEmbed, createMonsterEncounterEmbed, createKOEmbed } = requir
 // ------------------- Village Channels -------------------
 // Define the allowed channels for each village.
 const villageChannels = {
-  Inariko: process.env.INARIKO_TOWN_HALL,
-  Rudania: process.env.RUDANIA_TOWN_HALL,
-  Vhintl: process.env.VHINTL_TOWN_HALL,
+  Inariko: process.env.INARIKO_TOWNHALL,
+  Rudania: process.env.RUDANIA_TOWNHALL,
+  Vhintl: process.env.VHINTL_TOWNHALL,
 };
 
 
@@ -76,7 +76,6 @@ function canUseDailyRoll(character, activity) {
   const lastLootRoll = character.dailyRoll?.get('loot');
   
   if (!lastGatherRoll && !lastLootRoll) {
-    console.log(`[gather.js]: 📅 No previous rolls for gather/loot. Allowing action.`);
     return true;
   }
 
@@ -85,15 +84,12 @@ function canUseDailyRoll(character, activity) {
   
   // If either activity was used today, deny the action
   if (lastGatherDate && lastGatherDate >= rollover) {
-    console.log(`[gather.js]: 📅 Already gathered today at ${lastGatherDate.toISOString()}`);
     return false;
   }
   if (lastLootDate && lastLootDate >= rollover) {
-    console.log(`[gather.js]: 📅 Already looted today at ${lastLootDate.toISOString()}`);
     return false;
   }
 
-  console.log(`[gather.js]: 📅 now=${now.toISOString()} | lastGather=${lastGatherDate?.toISOString()} | lastLoot=${lastLootDate?.toISOString()} | rollover=${rollover.toISOString()}`);
   return true;
 }
 
@@ -106,7 +102,6 @@ async function updateDailyRoll(character, activity) {
     const now = new Date().toISOString();
     character.dailyRoll.set(activity, now);
     await character.save();
-    console.log(`[gather.js]: ✅ Updated daily roll for ${activity} at ${now}`);
   } catch (error) {
     console.error(`[gather.js]: ❌ Failed to update daily roll for ${character.name}:`, error);
     throw error;
@@ -191,6 +186,37 @@ module.exports = {
         return;
       }
 
+      // ------------------- Step 3: Validate Job -------------------
+      if (!job || typeof job !== 'string' || !job.trim() || !isValidJob(job)) {
+        await interaction.editReply({
+          content: getJobVoucherErrorMessage('MISSING_SKILLS', {
+            characterName: character.name,
+            jobName: job || "None"
+          }).message,
+          ephemeral: true,
+        });
+        return;
+      }
+
+      // Check for gathering perk.
+      const jobPerk = getJobPerk(job);
+      if (!jobPerk || !jobPerk.perks.includes('GATHERING')) {
+        await interaction.editReply({
+          embeds: [{
+            color: 0x008B8B, // Dark cyan color
+            description: `${character.name} can't gather as a ${capitalizeWords(job)} because they lack the necessary gathering skills.`,
+            image: {
+              url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+            },
+            footer: {
+              text: 'Job Skill Check'
+            }
+          }],
+          ephemeral: true,
+        });
+        return;
+      }
+
       // ------------------- Step 2: Validate Interaction Channel -------------------
       currentVillage = capitalizeWords(character.currentVillage);
       let allowedChannel = villageChannels[currentVillage];
@@ -205,10 +231,39 @@ module.exports = {
         }
       }
 
+      // Check if character is physically in the correct village
+      const channelVillage = Object.entries(villageChannels).find(([_, id]) => id === interaction.channelId)?.[0];
+      if (channelVillage && character.currentVillage.toLowerCase() !== channelVillage.toLowerCase()) {
+        await interaction.editReply({
+          embeds: [{
+            color: 0x008B8B, // Dark cyan color
+            description: `*${character.name} looks around confused...*\n\n**Wrong Village Location**\nYou must be physically present in ${channelVillage} to gather here.\n\n🗺️ **Current Location:** ${capitalizeWords(character.currentVillage)}`,
+            image: {
+              url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+            },
+            footer: {
+              text: 'Location Check'
+            }
+          }],
+          ephemeral: true
+        });
+        return;
+      }
+
       if (!allowedChannel || interaction.channelId !== allowedChannel) {
         const channelMention = `<#${allowedChannel}>`;
         await interaction.editReply({
-          content: `❌ **You can only use this command in the ${currentVillage} Town Hall channel!**\n📍 **Current Location:** ${capitalizeWords(character.currentVillage)}\n💬 **Command Allowed In:** ${channelMention}`,
+          embeds: [{
+            color: 0x008B8B, // Dark cyan color
+            description: `*${character.name} looks around, confused by their surroundings...*\n\n**Channel Restriction**\nYou can only use this command in the ${currentVillage} Town Hall channel!\n\n📍 **Current Location:** ${capitalizeWords(character.currentVillage)}\n💬 **Command Allowed In:** ${channelMention}`,
+            image: {
+              url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+            },
+            footer: {
+              text: 'Channel Restriction'
+            }
+          }],
+          ephemeral: true,
         });
         return;
       }
@@ -253,7 +308,7 @@ module.exports = {
         }
       }
 
-      // Check for job voucher and daily roll AFTER all other validations
+      // Check for job voucher and daily roll AFTER job validation
       if (character.jobVoucher) {
         console.log(`[Gather Command]: 🔄 Active job voucher found for ${character.name}`);
       } else {
@@ -274,6 +329,9 @@ module.exports = {
             embeds: [{
               color: 0x008B8B, // Dark cyan color
               description: `*${character.name} seems exhausted from their earlier gathering...*\n\n**Daily gathering limit reached.**\nThe next opportunity to gather will be available at <t:${unixTimestamp}:F>.\n\n*Tip: A job voucher would allow you to gather again today.*`,
+              image: {
+                url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+              },
               footer: {
                 text: 'Daily Activity Limit'
               }
@@ -294,65 +352,6 @@ module.exports = {
           });
           return;
         }
-      }
-
-      // ------------------- Step 3: Validate Job -------------------
-      if (!job || typeof job !== 'string' || !job.trim() || !isValidJob(job)) {
-        console.error(`[gather.js]: Job validation failed for ${character.name}. Invalid Job: ${job}`);
-        await interaction.editReply({
-          content: getJobVoucherErrorMessage('MISSING_SKILLS', {
-            characterName: character.name,
-            jobName: job || "None"
-          }).message,
-          ephemeral: true,
-        });
-        return;
-      }
-
-      // ------------------- Validate or Activate Job Voucher -------------------
-      let voucherCheck = { success: true, skipVoucher: false }; // Initialize with default values
-      if (character.jobVoucher) {
-        console.log(`[gather.js]: 🎫 Validating job voucher for ${character.name}`);
-        voucherCheck = await validateJobVoucher(character, job, 'GATHERING');
-
-        if (voucherCheck.skipVoucher) {
-          console.log(`[gather.js]: ✅ ${character.name} already has job "${job}" - skipping voucher`);
-          // No activation needed
-        } else if (!voucherCheck.success) {
-          console.error(`[gather.js]: ❌ Voucher validation failed: ${voucherCheck.message}`);
-          await interaction.editReply({
-            content: voucherCheck.message,
-            ephemeral: true,
-          });
-          return;
-        } else {
-          console.log(`[gather.js]: 🎫 Activating job voucher for ${character.name}`);
-          const { success: itemSuccess, item: jobVoucherItem, message: itemError } = await fetchJobVoucherItem();
-          if (!itemSuccess) {
-            await interaction.editReply({ content: itemError, ephemeral: true });
-            return;
-          }
-          const activationResult = await activateJobVoucher(character, job, jobVoucherItem, 1, interaction);
-          if (!activationResult.success) {
-            await interaction.editReply({
-              content: activationResult.message,
-              ephemeral: true,
-            });
-            return;
-          }
-        }
-      }
-
-      // Check for gathering perk.
-      const jobPerk = getJobPerk(job);
-      console.log(`[gather.js]: 🔄 Job Perk for "${job}":`, jobPerk);
-      if (!jobPerk || !jobPerk.perks.includes('GATHERING')) {
-        console.error(`[gather.js]: ❌ ${character.name} lacks gathering skills for job: "${job}"`);
-        await interaction.editReply({
-          content: `❌ ${character.name} can't gather as a ${capitalizeWords(job)} because they lack the necessary gathering skills.`,
-          ephemeral: true,
-        });
-        return;
       }
 
       // ------------------- Step 5: Validate Region -------------------
@@ -514,6 +513,13 @@ module.exports = {
               );
               if (character?.name && character?.inventory && character?.userId) {
                 try {
+                  console.log(`[gather.js]: 📝 Attempting to sync inventory sheet for ${character.name}`, {
+                    inventoryUrl: character.inventory,
+                    spreadsheetId: extractSpreadsheetId(character.inventory),
+                    range: range,
+                    values: values
+                  });
+
                   await safeAppendDataToSheet(character.inventory, character, range, values, undefined, { 
                     skipValidation: true,
                     context: {
@@ -527,12 +533,25 @@ module.exports = {
                       options: {
                         region: region,
                         itemName: lootedItem.itemName,
-                        quantity: lootedItem.quantity,
-                        monsterName: encounteredMonster?.name
+                        quantity: lootedItem.quantity
                       }
                     }
                   });
+                  console.log(`[gather.js]: ✅ Successfully synced inventory sheet for ${character.name}`);
                 } catch (sheetError) {
+                  console.error(`[gather.js]: ❌ Failed to sync inventory sheet for ${character.name}:`, {
+                    error: sheetError.message,
+                    stack: sheetError.stack,
+                    characterName: character.name,
+                    inventoryUrl: character.inventory,
+                    spreadsheetId: extractSpreadsheetId(character.inventory),
+                    range: range,
+                    options: {
+                      region: region,
+                      itemName: lootedItem.itemName,
+                      quantity: lootedItem.quantity
+                    }
+                  });
                   handleError(sheetError, 'gather.js', {
                     commandName: '/gather',
                     userTag: interaction.user.tag,
@@ -544,15 +563,17 @@ module.exports = {
                     options: {
                       region: region,
                       itemName: lootedItem.itemName,
-                      quantity: lootedItem.quantity,
-                      monsterName: encounteredMonster?.name
+                      quantity: lootedItem.quantity
                     }
                   });
-                  console.error(`[gather.js]: ❌ Failed to sync inventory sheet: ${sheetError.message}`);
                   // Continue execution since the item was already added to the database
                 }
               } else {
-                console.error('[safeAppendDataToSheet]: Invalid character object detected before syncing.');
+                console.error('[gather.js]: ❌ Invalid character object detected before syncing:', {
+                  characterName: character?.name,
+                  hasInventory: !!character?.inventory,
+                  userId: character?.userId
+                });
               }
 
               const embed = createMonsterEncounterEmbed(
@@ -587,17 +608,28 @@ module.exports = {
 
         
         // ------------------- Normal Gathering Logic -------------------
-        const items = await fetchAllItems();
+        const items = await fetchAllItems();;
+        
         const availableItems = items.filter(item => {
-          if (job.toLowerCase() === 'ab (meat)') {
-            return item.abMeat && item[region.toLowerCase()];
-          } else if (job.toLowerCase() === 'ab (live)') {
-            return item.abLive && item[region.toLowerCase()];
+          const jobKey = job.toLowerCase();
+          const regionKey = region.toLowerCase();
+          
+          // Normalize the input job name
+          let normalizedInputJob;
+          if (jobKey === 'rancher') {
+            normalizedInputJob = 'Rancher';
           } else {
-            const jobKey = normalizeJobName(job);
-            return item[jobKey] && item[region.toLowerCase()];
+            normalizedInputJob = jobKey;
           }
+          
+          // Use allJobsTags which is already an array of job names
+          const isJobMatch = item.allJobsTags?.some(j => 
+            j.toLowerCase() === normalizedInputJob.toLowerCase()
+          ) || false;
+          
+          return isJobMatch && item[regionKey];
         });
+        
         if (availableItems.length === 0) {
           await interaction.editReply({
             content: `⚠️ **No items available to gather in this location with the given job.**`,
@@ -645,6 +677,13 @@ module.exports = {
         ]];
         if (character?.name && character?.inventory && character?.userId) {
           try {
+            console.log(`[gather.js]: 📝 Attempting to sync inventory sheet for ${character.name}`, {
+              inventoryUrl: character.inventory,
+              spreadsheetId: extractSpreadsheetId(character.inventory),
+              range: range,
+              values: values
+            });
+
             await safeAppendDataToSheet(character.inventory, character, range, values, undefined, { 
               skipValidation: true,
               context: {
@@ -662,7 +701,21 @@ module.exports = {
                 }
               }
             });
+            console.log(`[gather.js]: ✅ Successfully synced inventory sheet for ${character.name}`);
           } catch (sheetError) {
+            console.error(`[gather.js]: ❌ Failed to sync inventory sheet for ${character.name}:`, {
+              error: sheetError.message,
+              stack: sheetError.stack,
+              characterName: character.name,
+              inventoryUrl: character.inventory,
+              spreadsheetId: extractSpreadsheetId(character.inventory),
+              range: range,
+              options: {
+                region: region,
+                itemName: randomItem.itemName,
+                quantity: quantity
+              }
+            });
             handleError(sheetError, 'gather.js', {
               commandName: '/gather',
               userTag: interaction.user.tag,
@@ -677,23 +730,26 @@ module.exports = {
                 quantity: quantity
               }
             });
-            console.error(`[gather.js]: ❌ Failed to sync inventory sheet: ${sheetError.message}`);
             // Continue execution since the item was already added to the database
           }
         } else {
-          console.error('[safeAppendDataToSheet]: Invalid character object detected before syncing.');
+          console.error('[gather.js]: ❌ Invalid character object detected before syncing:', {
+            characterName: character?.name,
+            hasInventory: !!character?.inventory,
+            userId: character?.userId
+          });
         }
 
         const embed = createGatherEmbed(character, randomItem);
         await interaction.editReply({ embeds: [embed] });
         // ------------------- Update Last Gather Timestamp -------------------
-character.lastGatheredAt = new Date().toISOString();
-await character.save();
+        character.lastGatheredAt = new Date().toISOString();
+        await character.save();
 
       }
 
       // ------------------- Deactivate Job Voucher -------------------
-      if (character.jobVoucher && !voucherCheck?.skipVoucher) {
+      if (character.jobVoucher) {
         const deactivationResult = await deactivateJobVoucher(character._id);
         if (!deactivationResult.success) {
           console.error(`[gather.js]: ❌ Failed to deactivate job voucher for ${character.name}`);
@@ -703,43 +759,76 @@ await character.save();
       }
 
     } catch (error) {
-      handleError(error, 'gather.js', {
-        commandName: '/gather',
-        userTag: interaction.user.tag,
-        userId: interaction.user.id,
-        characterName: interaction.options.getString('charactername'),
-        options: {
-          job: job,
-          region: region,
-          currentVillage: currentVillage,
-          bloodMoonActive: isBloodMoonActive()
-        }
-      });
-
-      console.error(`[gather.js]: Error during gathering process: ${error.message}`, {
-        stack: error.stack,
-        interactionData: {
+      // Only log errors that aren't inventory sync related
+      if (!error.message.includes('inventory is not synced')) {
+        handleError(error, 'gather.js', {
+          commandName: '/gather',
+          userTag: interaction.user.tag,
           userId: interaction.user.id,
           characterName: interaction.options.getString('charactername'),
-          guildId: interaction.guildId,
-          channelId: interaction.channelId,
-        },
-      });
+          options: {
+            job: job,
+            region: region,
+            currentVillage: currentVillage,
+            bloodMoonActive: isBloodMoonActive()
+          }
+        });
 
-      // Provide a more user-friendly error message
-      let errorMessage = '⚠️ **An error occurred during the gathering process.**';
-      if (error.message.includes('MongoDB')) {
-        errorMessage = '⚠️ **Database connection error.** Please try again in a few moments.';
-      } else if (error.message.includes('Google Sheets')) {
-        errorMessage = '⚠️ **Inventory sync error.** Your items were gathered but may not appear in your inventory sheet immediately.';
-      } else if (error.message.includes('ETIMEDOUT') || error.message.includes('Connect Timeout')) {
-        errorMessage = '⚠️ **Connection timeout.** Please try again in a few moments.';
+        console.error(`[gather.js]: Error during gathering process: ${error.message}`, {
+          stack: error.stack,
+          interactionData: {
+            userId: interaction.user.id,
+            characterName: interaction.options.getString('charactername'),
+            guildId: interaction.guildId,
+            channelId: interaction.channelId,
+          },
+        });
       }
 
-      await interaction.editReply({
-        content: errorMessage,
-        ephemeral: true
-      });
+      // Provide more specific error messages based on the error type
+      let errorMessage;
+      if (error.message.includes('inventory is not synced')) {
+        await interaction.editReply({
+          embeds: [{
+            color: 0xFF0000, // Red color
+            title: '❌ Inventory Not Synced',
+            description: error.message,
+            fields: [
+              {
+                name: 'How to Fix',
+                value: '1. Use `/inventory test` to test your inventory\n2. Use `/inventory sync` to sync your inventory'
+              }
+            ],
+            image: {
+              url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+            },
+            footer: {
+              text: 'Inventory Sync Required'
+            }
+          }],
+          ephemeral: true
+        });
+        return;
+      } else if (error.message.includes('MongoDB')) {
+        errorMessage = '❌ **Database connection error.** Please try again in a few moments.';
+      } else if (error.message.includes('Google Sheets')) {
+        errorMessage = '❌ **Inventory sync error.** Your items were gathered but may not appear in your inventory sheet immediately.';
+      } else if (error.message.includes('ETIMEDOUT') || error.message.includes('Connect Timeout')) {
+        errorMessage = '❌ **Connection timeout.** Please try again in a few moments.';
+      } else if (error.message.includes('Permission denied')) {
+        errorMessage = '❌ **Permission denied.** Please make sure your inventory sheet is shared with the bot.';
+      } else if (error.message.includes('Invalid Google Sheets URL')) {
+        errorMessage = '❌ **Invalid inventory sheet URL.** Please check your character\'s inventory sheet link.';
+      } else {
+        errorMessage = `❌ **Error during gathering:** ${error.message}`;
+      }
+
+      if (errorMessage) {
+        await interaction.editReply({
+          content: errorMessage,
+          ephemeral: true
+        });
+      }
     }
   },
 };
