@@ -102,6 +102,13 @@ const { generateWeatherEmbed } = require('../../embeds/weatherEmbed.js');
 
 const { addItemInventoryDatabase } = require('../../utils/inventoryUtils');
 
+const {
+  authorizeSheets,
+  extractSpreadsheetId,
+  isValidGoogleSheetsUrl,
+  safeAppendDataToSheet
+} = require('../../utils/googleSheetsUtils');
+
 // ============================================================================
 // ------------------- Constants -------------------
 // ============================================================================
@@ -602,6 +609,61 @@ async function handleGive(interaction) {
       interaction,
       'Admin Give'
     );
+
+    // ------------------- Update Google Sheet -------------------
+    if (character.inventory && isValidGoogleSheetsUrl(character.inventory)) {
+      try {
+        const spreadsheetId = extractSpreadsheetId(character.inventory);
+        const auth = await authorizeSheets();
+        const range = 'loggedInventory!A2:M';
+        const uniqueSyncId = uuidv4();
+        const formattedDateTime = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
+        const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
+        
+        const values = [[
+          character.name,
+          itemName,
+          quantity.toString(),
+          item.category.join(', '),
+          item.type.join(', '),
+          item.subtype.join(', '),
+          'Admin Give',
+          character.job,
+          '',
+          character.currentVillage,
+          interactionUrl,
+          formattedDateTime,
+          uniqueSyncId
+        ]];
+
+        await safeAppendDataToSheet(
+          character.inventory,
+          character,
+          range,
+          values,
+          undefined,
+          { 
+            skipValidation: true,
+            context: {
+              commandName: 'mod give',
+              userTag: interaction.user.tag,
+              userId: interaction.user.id,
+              characterName: character.name,
+              spreadsheetId: spreadsheetId,
+              range: range,
+              sheetType: 'inventory',
+              options: {
+                itemName: itemName,
+                quantity: quantity
+              }
+            }
+          }
+        );
+      } catch (sheetError) {
+        console.error(`[mod.js]: ❌ Error updating Google Sheet:`, sheetError);
+        // Don't throw here, just log the error since the item was already given
+      }
+    }
   
     // Send error messages as ephemeral but success message as public
     await interaction.editReply({ content: '✅ Processing...', ephemeral: true });
@@ -656,11 +718,11 @@ async function handleMount(interaction) {
     // ------------------- Determine Village from Channel -------------------
     if (!village) {
       const channelId = interaction.channelId;
-      if (channelId === process.env.RUDANIA_TOWN_HALL) {
+      if (channelId === process.env.RUDANIA_TOWNHALL) {
         village = 'rudania';
-      } else if (channelId === process.env.INARIKO_TOWN_HALL) {
+      } else if (channelId === process.env.INARIKO_TOWNHALL) {
         village = 'inariko';
-      } else if (channelId === process.env.VHINTL_TOWN_HALL) {
+      } else if (channelId === process.env.VHINTL_TOWNHALL) {
         village = 'vhintl';
       } else {
         return interaction.editReply('❌ **You must use this command inside a Town Hall channel (Rudania, Inariko, or Vhintl).**');

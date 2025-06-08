@@ -56,7 +56,10 @@ async function createCharacterAutocomplete(interaction) {
 // ------------------- Create Character Interaction -------------------
 // Handles creating a new character with the specified attributes
 async function createCharacterInteraction(interaction) {
-    await interaction.deferReply({ ephemeral: true });
+    // Only defer if not already deferred or replied
+    if (!interaction.replied && !interaction.deferred) {
+        await interaction.deferReply({ ephemeral: true });
+    }
 
     const userId = interaction.user.id;
     const characterName = interaction.options.getString('name');
@@ -159,7 +162,7 @@ async function createCharacterInteraction(interaction) {
         });
 
         await character.save();
-
+        
         // Create character embed
         const embed = createCharacterEmbed(character);
         await createCharacterInventory(characterName, character._id, character.job);
@@ -170,7 +173,7 @@ async function createCharacterInteraction(interaction) {
 
         // Send success message with the character embed
         await interaction.editReply({
-            content: `Character **${characterName}** created successfully! 🎉`,
+            content: `🎉 Your character has been successfully created! Your remaining character slots: ${user.characterSlot}`,
             embeds: [embed],
             ephemeral: true
         });
@@ -184,9 +187,11 @@ async function createCharacterInteraction(interaction) {
             await interaction.followUp({ embeds: [setupInstructionsEmbed], ephemeral: true });
         }
     } catch (error) {
-    handleError(error, 'characterInteractionHandler.js');
-
-        await interaction.editReply({ content: `There was an error uploading the icon: ${error.message}`, ephemeral: true });
+        handleError(error, 'characterInteractionHandler.js');
+        await interaction.editReply({
+            content: '❌ An error occurred while creating your character. Please try again.',
+            ephemeral: true
+        });
     }
 }
 

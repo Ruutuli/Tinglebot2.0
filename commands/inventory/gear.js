@@ -4,7 +4,7 @@
 
 // ------------------- Discord.js Components -------------------
 // Import Discord.js classes for building slash commands.
-const { SlashCommandBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 
 
 const { handleError } = require('../../utils/globalErrorHandler.js');
@@ -183,7 +183,20 @@ module.exports = {
       const inventoryCollection = await getCharacterInventoryCollection(character.name);
       const inventoryItems = await inventoryCollection.find({ characterId: character._id, itemName }).toArray();
       if (!inventoryItems.length) {
-        await interaction.editReply({ content: `❌ **Item ${itemName} not found in your inventory.**` });
+        await interaction.editReply({ 
+          embeds: [new EmbedBuilder()
+            .setColor('#FF0000')
+            .setTitle('❌ Item Not Found')
+            .setDescription(`The item "${itemName}" was not found in ${characterName}'s inventory.`)
+            .addFields(
+              { name: '🔍 What Happened', value: 'The system could not find the specified item in your character\'s inventory.' },
+              { name: '💡 How to Fix', value: '• Check if the item name is spelled correctly\n• Make sure you have the item in your inventory\n• Use `/inventory view` to check your current inventory' }
+            )
+            .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
+            .setFooter({ text: 'Inventory Validation' })
+            .setTimestamp()],
+          ephemeral: true 
+        });
         return;
       }
 

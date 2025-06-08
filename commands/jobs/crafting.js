@@ -26,7 +26,7 @@ const { capitalizeWords, formatDateTime } = require('../../modules/formattingMod
 // ------------------- Utility Functions -------------------
 const { addItemInventoryDatabase, processMaterials } = require('../../utils/inventoryUtils');
 const { checkInventorySync } = require('../../utils/characterUtils');
-const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../../utils/validation');
+const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../../utils/googleSheetsUtils');
 const { safeAppendDataToSheet } = require('../../utils/googleSheetsUtils');
 const { handleError } = require('../../utils/globalErrorHandler');
 const { enforceJail } = require('../../utils/jailCheck');
@@ -74,9 +74,9 @@ module.exports = {
     const flavorText = interaction.options.getString('flavortext') || '';
 
     const villageChannels = {
-      Rudania: process.env.RUDANIA_TOWN_HALL,
-      Inariko: process.env.INARIKO_TOWN_HALL,
-      Vhintl: process.env.VHINTL_TOWN_HALL,
+      Rudania: process.env.RUDANIA_TOWNHALL,
+      Inariko: process.env.INARIKO_TOWNHALL,
+      Vhintl: process.env.VHINTL_TOWNHALL,
     };
 
     try {
@@ -97,13 +97,25 @@ module.exports = {
         return interaction.editReply({ content: `❌ **${character.name} is currently debuffed and cannot craft.**\n🕒 Debuff Ends: <t:${unixTimestamp}:F>`, ephemeral: true });
       }
 
+      // ------------------- Check Inventory Sync -------------------
       try {
         await checkInventorySync(character);
       } catch (error) {
-        return interaction.editReply({
-          content: error.message,
+        await interaction.editReply({
+          embeds: [{
+            color: 0xFF0000,
+            title: '❌ Inventory Sync Required',
+            description: error.message,
+            fields: [
+              {
+                name: 'How to Fix',
+                value: '1. Use </inventory test:1370788960267272302> to test your inventory\n2. Use </inventory sync:1370788960267272302> to sync your inventory'
+              }
+            ]
+          }],
           ephemeral: true
         });
+        return;
       }
 
       // ------------------- Validate Village Channel -------------------
@@ -119,7 +131,20 @@ module.exports = {
         }
       }
       if (!allowedChannel || interaction.channelId !== allowedChannel) {
-        return interaction.editReply({ content: `❌ **Command must be used in ${currentVillage} Town Hall (<#${allowedChannel}>).**`, ephemeral: true });
+        const channelMention = `<#${allowedChannel}>`;
+        return interaction.editReply({
+          embeds: [{
+            color: 0x008B8B, // Dark cyan color
+            description: `*${character.name} looks around, confused by their surroundings...*\n\n**Channel Restriction**\nYou can only use this command in the ${currentVillage} Town Hall channel!\n\n📍 **Current Location:** ${capitalizeWords(character.currentVillage)}\n💬 **Command Allowed In:** ${channelMention}`,
+            image: {
+              url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+            },
+            footer: {
+              text: 'Channel Restriction'
+            }
+          }],
+          ephemeral: true
+        });
       }
 
       // ------------------- Fetch and Validate Item -------------------
@@ -145,6 +170,58 @@ module.exports = {
           }).message,
           ephemeral: false 
         });
+      }
+
+      // ------------------- Validate Job Voucher Eligibility FIRST -------------------
+      let voucherCheck;
+      let jobVoucherItem;
+      if (character.jobVoucher) {
+        console.log(`[crafting.js]: 🎫 Validating job voucher for ${character.name}`);
+        voucherCheck = await validateJobVoucher(character, job);
+        if (voucherCheck.skipVoucher) {
+          console.log(`[crafting.js]: ✅ ${character.name} already has job "${job}" - skipping voucher`);
+        } else if (!voucherCheck.success) {
+          if (character.jobVoucherJob === null) {
+            console.log(`[crafting.js]: 🔄 Unrestricted job voucher - proceeding with "${job}"`);
+          } else {
+            console.error(`[crafting.js]: ❌ Voucher validation failed: ${voucherCheck.message}`);
+            return interaction.editReply({ content: voucherCheck.message, ephemeral: true });
+          }
+        } else {
+          // Restrict crafting of items that require more than 5 stamina when using a job voucher
+          if (item.staminaToCraft > 5) {
+            console.error(`[crafting.js]: ❌ Item "${itemName}" requires ${item.staminaToCraft} stamina - exceeds job voucher limit`);
+            await interaction.editReply({
+              content: getJobVoucherErrorMessage('STAMINA_LIMIT', {
+                characterName: character.name,
+                itemName: itemName
+              }).message,
+              ephemeral: true,
+            });
+            return;
+          }
+
+          const lockedVillage = isVillageExclusiveJob(job);
+          if (lockedVillage && character.currentVillage.toLowerCase() !== lockedVillage.toLowerCase()) {
+            console.error(`[crafting.js]: ❌ ${character.name} must be in ${lockedVillage} to use ${job} voucher`);
+            return interaction.editReply({ 
+              content: getJobVoucherErrorMessage('MISSING_SKILLS', {
+                characterName: character.name,
+                jobName: job,
+                activity: 'crafting'
+              }).message,
+              ephemeral: true 
+            });
+          }
+
+          // Fetch the job voucher item for later activation
+          const fetchResult = await fetchJobVoucherItem();
+          if (!fetchResult.success) {
+            await interaction.editReply({ content: fetchResult.message, ephemeral: true });
+            return;
+          }
+          jobVoucherItem = fetchResult.item;
+        }
       }
 
       // ------------------- Validate Stamina -------------------
@@ -189,64 +266,6 @@ module.exports = {
           }],
           ephemeral: true
         });
-      }
-
-      // ------------------- Activate Job Voucher (only after all checks pass) -------------------
-      let voucherCheck;
-      if (character.jobVoucher) {
-        console.log(`[crafting.js]: 🎫 Validating job voucher for ${character.name}`);
-        voucherCheck = await validateJobVoucher(character, job);
-        if (voucherCheck.skipVoucher) {
-          console.log(`[crafting.js]: ✅ ${character.name} already has job "${job}" - skipping voucher`);
-          // No activation needed
-        } else if (!voucherCheck.success) {
-          if (character.jobVoucherJob === null) {
-            console.log(`[crafting.js]: 🔄 Unrestricted job voucher - proceeding with "${job}"`);
-          } else {
-            console.error(`[crafting.js]: ❌ Voucher validation failed: ${voucherCheck.message}`);
-            return interaction.editReply({ content: voucherCheck.message, ephemeral: true });
-          }
-        } else {
-          // Restrict crafting of items that require more than 5 stamina when using a job voucher
-          if (item.staminaToCraft > 5) {
-            console.error(`[crafting.js]: ❌ Item "${itemName}" requires ${item.staminaToCraft} stamina - exceeds job voucher limit`);
-            await interaction.editReply({
-              content: getJobVoucherErrorMessage('MISSING_SKILLS', {
-                characterName: character.name,
-                jobName: job
-              }).message,
-              ephemeral: true,
-            });
-            return;
-          }
-
-          const lockedVillage = isVillageExclusiveJob(job);
-          if (lockedVillage && character.currentVillage.toLowerCase() !== lockedVillage.toLowerCase()) {
-            console.error(`[crafting.js]: ❌ ${character.name} must be in ${lockedVillage} to use ${job} voucher`);
-            return interaction.editReply({ 
-              content: getJobVoucherErrorMessage('MISSING_SKILLS', {
-                characterName: character.name,
-                jobName: job
-              }).message,
-              ephemeral: true 
-            });
-          }
-
-          console.log(`[crafting.js]: 🎫 Activating job voucher for ${character.name}`);
-          const { success: itemSuccess, item: jobVoucherItem, message: itemError } = await fetchJobVoucherItem();
-          if (!itemSuccess) {
-            await interaction.editReply({ content: itemError, ephemeral: true });
-            return;
-          }
-          const activationResult = await activateJobVoucher(character, job, jobVoucherItem, 1, interaction);
-          if (!activationResult.success) {
-            await interaction.editReply({
-              content: activationResult.message,
-              ephemeral: true,
-            });
-            return;
-          }
-        }
       }
 
       // ------------------- Process Materials -------------------
@@ -328,13 +347,18 @@ module.exports = {
 
       await addItemInventoryDatabase(character._id, item.itemName, quantity, interaction, 'Crafting');
 
-      // ------------------- Deactivate Job Voucher -------------------
-      if (character.jobVoucher && !voucherCheck?.skipVoucher) {
-        const deactivationResult = await deactivateJobVoucher(character._id);
-        if (!deactivationResult.success) {
-          console.error(`[crafting.js]: ❌ Failed to deactivate job voucher for ${character.name}`);
+      // ------------------- Activate and Deactivate Job Voucher AFTER Crafting Success -------------------
+      if (character.jobVoucher && !voucherCheck?.skipVoucher && jobVoucherItem) {
+        const activationResult = await activateJobVoucher(character, job, jobVoucherItem, 1, interaction);
+        if (!activationResult.success) {
+          console.error(`[crafting.js]: ❌ Failed to activate job voucher for ${character.name}`);
         } else {
-          console.log(`[crafting.js]: ✅ Job voucher deactivated for ${character.name}`);
+          const deactivationResult = await deactivateJobVoucher(character._id);
+          if (!deactivationResult.success) {
+            console.error(`[crafting.js]: ❌ Failed to deactivate job voucher for ${character.name}`);
+          } else {
+            console.log(`[crafting.js]: ✅ Job voucher activated and deactivated for ${character.name}`);
+          }
         }
       }
     } catch (error) {

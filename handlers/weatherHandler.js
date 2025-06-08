@@ -419,8 +419,14 @@ async function updateWeatherHistory(village, weatherResult) {
   weatherHistoryByVillage[village] = weatherHistoryByVillage[village].slice(-2);
   weatherHistoryByVillage[village].push(weatherResult);
   
+  // Add bot ID to weather data before saving
+  const weatherDataWithBotId = {
+    ...weatherResult,
+    botId: '603960955839447050' // Main bot ID
+  };
+  
   // Save weather to database
-  await saveWeather(village, weatherResult);
+  await saveWeather(village, weatherDataWithBotId);
 }
 
 // ============================================================================

@@ -285,11 +285,19 @@ async function appendSheetData(auth, spreadsheetId, range, values) {
 async function writeSheetData(auth, spreadsheetId, range, values) {
     const resource = {
         values: values.map(row =>
-            row.map(value =>
-                (typeof value === 'number')
-                    ? value
-                    : (value != null ? value.toString() : '')
-            )
+            row.map(value => {
+                // Handle different value types
+                if (typeof value === 'number') {
+                    return value;
+                }
+                if (Array.isArray(value)) {
+                    return value.join(', ');
+                }
+                if (value === null || value === undefined) {
+                    return '';
+                }
+                return value.toString();
+            })
         )
     };
 

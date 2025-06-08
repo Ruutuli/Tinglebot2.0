@@ -26,7 +26,7 @@ const {
 
 // ------------------- Project Utilities -------------------
 const { handleError } = require('../../utils/globalErrorHandler.js');
-const { isValidGoogleSheetsUrl, extractSpreadsheetId } = require('../../utils/validation.js');
+const { isValidGoogleSheetsUrl, extractSpreadsheetId } = require('../../utils/googleSheetsUtils.js');
 const { authorizeSheets, appendSheetData, getSheetIdByTitle, readSheetData, validateInventorySheet } = require('../../utils/googleSheetsUtils.js');
 const { typeColors, capitalize } = require('../../modules/formattingModule.js');
 const { checkInventorySync } = require('../../utils/characterUtils.js');
@@ -106,12 +106,38 @@ module.exports = {
           await this.handleTest(interaction);
           break;
         default:
-          await interaction.reply({ content: '❌ Invalid subcommand.', ephemeral: true });
+          await interaction.reply({ 
+            embeds: [new EmbedBuilder()
+              .setColor('#FF0000')
+              .setTitle('❌ Invalid Command')
+              .setDescription('The subcommand you used is not recognized.')
+              .addFields(
+                { name: '🔍 Available Commands', value: '• `/inventory view` - View your inventory\n• `/inventory sync` - Sync your inventory\n• `/inventory test` - Test your inventory connection' },
+                { name: '💡 Suggestion', value: 'Please select one of the available subcommands from the dropdown menu.' }
+              )
+              .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
+              .setFooter({ text: 'Command Validation' })
+              .setTimestamp()],
+            ephemeral: true 
+          });
       }
     } catch (error) {
       handleError(error, 'inventory.js');
       console.error('[inventory.js]: Error executing command', error);
-      await interaction.reply({ content: '❌ An error occurred while processing the command.', ephemeral: true });
+      await interaction.reply({ 
+        embeds: [new EmbedBuilder()
+          .setColor('#FF0000')
+          .setTitle('❌ Command Error')
+          .setDescription('An unexpected error occurred while processing your command.')
+          .addFields(
+            { name: '🔍 What Happened', value: 'The command encountered an error while trying to process your request.' },
+            { name: '💡 How to Fix', value: '• Try using the command again\n• Check if your inventory is properly set up\n• If the error persists, contact staff for assistance' }
+          )
+          .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
+          .setFooter({ text: 'Error ID: ' + Date.now() })
+          .setTimestamp()],
+        ephemeral: true 
+      });
     }
   },
 
@@ -128,7 +154,20 @@ module.exports = {
       const characterName = fullCharacterName?.split(' | ')[0]?.trim();
       
       if (!characterName) {
-        await interaction.editReply({ content: '❌ Character name is required.' });
+        await interaction.editReply({ 
+          embeds: [new EmbedBuilder()
+            .setColor('#FF0000')
+            .setTitle('❌ Missing Character Name')
+            .setDescription('You must provide a character name to view their inventory.')
+            .addFields(
+              { name: '🔍 Required Format', value: '• Use the character name exactly as it appears in the game\n• Example: `/inventory view character:Link`' },
+              { name: '💡 Suggestion', value: 'Please try the command again with a valid character name.' }
+            )
+            .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
+            .setFooter({ text: 'Command Validation' })
+            .setTimestamp()],
+          ephemeral: true 
+        });
         return;
       }
 
@@ -136,7 +175,20 @@ module.exports = {
       const character = await fetchCharacterByName(characterName);
       
       if (!character) {
-        await interaction.editReply({ content: `❌ Character \`${characterName}\` not found.` });
+        await interaction.editReply({
+          embeds: [new EmbedBuilder()
+            .setColor('#FF0000')
+            .setTitle('❌ Character Not Found')
+            .setDescription(`The character "${characterName}" does not exist in the database.`)
+            .addFields(
+              { name: '🔍 Possible Reasons', value: '• Character name is misspelled\n• Character was deleted\n• Character was never created' },
+              { name: '💡 Suggestion', value: 'Please check the spelling and try again.' }
+            )
+            .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
+            .setFooter({ text: 'Character Validation' })
+            .setTimestamp()],
+          ephemeral: true
+        });
         return;
       }
 

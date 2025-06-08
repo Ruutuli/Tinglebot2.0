@@ -27,11 +27,15 @@ const ItemModel = require('../models/ItemModel');
 // Utility Functions
 // ============================================================================
 
+function escapeRegExp(string) {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 const { handleError } = require('../utils/globalErrorHandler');
 const { editCharacterNotFoundMessage, editSyncErrorMessage, editSyncMessage } = require('../embeds/embeds');
 const { removeInitialItemIfSynced, syncToInventoryDatabase } = require('../utils/inventoryUtils');
 const { authorizeSheets, getSheetIdByTitle, readSheetData, writeBatchData, validateInventorySheet } = require('../utils/googleSheetsUtils');
-const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../utils/validation');
+const { extractSpreadsheetId, isValidGoogleSheetsUrl } = require('../utils/googleSheetsUtils');
 
 // ============================================================================
 // Constants
@@ -114,6 +118,12 @@ async function processInventoryItem(row, character, userId) {
 
         // Skip if no item name or quantity
         if (!itemName || !quantity) {
+            return null;
+        }
+
+        // Skip if item is already synced
+        if (synced) {
+            console.log(`[syncHandler.js]: ⏭️ Skipping already synced item: ${itemName}`);
             return null;
         }
 
@@ -288,9 +298,9 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
                         const [sheetCharacterName, itemName] = row;
                         const itemKey = `${sheetCharacterName}:${itemName}`;
 
-                        // Skip if already processed
-                        if (processedItems.has(itemKey)) {
-                            console.log(`[syncHandler.js]: ⏭️ Skipping already processed item: ${itemName}`);
+                        // Skip if already synced (has synced value)
+                        if (row[12]) { // Check if synced column has a value
+                            console.log(`[syncHandler.js]: ⏭️ Skipping already synced item: ${itemName}`);
                             continue;
                         }
 
@@ -323,18 +333,53 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
                                 itemName: { $regex: new RegExp(`^${escapeRegExp(inventoryItem.itemName)}$`, 'i') }
                             });
                             if (!existingItem) {
-                                skippedItems.push({ name: inventoryItem.itemName, reason: 'Not in database' });
+                                skippedItems.push({ name: inventoryItem.itemName, reason: 'Item not found in database' });
                                 continue;
+                            }
+
+                            // Check if this is a crafted/crafting item
+                            const isCraftedItem = inventoryItem.obtain.toLowerCase().includes('crafting') || 
+                                                inventoryItem.obtain.toLowerCase().includes('crafted');
+
+                            // For crafted items, find and update existing row instead of appending
+                            if (isCraftedItem) {
+                                const sheetData = await readSheetData(auth, spreadsheetId, 'loggedInventory!A2:M');
+                                const existingRowIndex = sheetData.findIndex(row => {
+                                    const sheetChar = (row[0] || '').trim().toLowerCase();
+                                    const sheetItem = (row[1] || '').trim().toLowerCase();
+                                    const sheetObtain = (row[6] || '').trim().toLowerCase();
+                                    const dbChar = characterName.trim().toLowerCase();
+                                    const dbItem = inventoryItem.itemName.trim().toLowerCase();
+                                    return sheetChar === dbChar && 
+                                           sheetItem === dbItem && 
+                                           (sheetObtain.includes('crafting') || sheetObtain.includes('crafted'));
+                                });
+
+                                if (existingRowIndex !== -1) {
+                                    // Update existing row
+                                    currentBatchRequests.push({
+                                        range: `loggedInventory!A${existingRowIndex + 2}:M${existingRowIndex + 2}`,
+                                        values: [updatedRowData]
+                                    });
+                                    console.log(`[syncHandler.js]: ✅ Updated existing crafted item row for ${inventoryItem.itemName}`);
+                                } else {
+                                    // If no existing row found, append new row
+                                    currentBatchRequests.push({
+                                        range: `loggedInventory!A${originalRowIndex}:M${originalRowIndex}`,
+                                        values: [updatedRowData]
+                                    });
+                                    console.log(`[syncHandler.js]: ✅ Appended new crafted item row for ${inventoryItem.itemName}`);
+                                }
+                            } else {
+                                // For non-crafted items, use normal update logic
+                                currentBatchRequests.push({
+                                    range: `loggedInventory!A${originalRowIndex}:M${originalRowIndex}`,
+                                    values: [updatedRowData]
+                                });
                             }
 
                             await syncToInventoryDatabase(character, inventoryItem, interaction);
                             syncedItemsCount++;
-
-                            // Add to current batch requests
-                            currentBatchRequests.push({
-                                range: `loggedInventory!A${originalRowIndex}:M${originalRowIndex}`,
-                                values: [updatedRowData]
-                            });
 
                             // Mark as processed
                             processedItems.add(itemKey);
@@ -347,6 +392,7 @@ async function syncInventory(characterName, userId, interaction, retryCount = 0,
                                 console.error(`[syncHandler.js]: ❌ Error processing row ${originalRowIndex}: ${error.message}`);
                             }
                             errors.push(`Row ${originalRowIndex}: ${error.message}`);
+                            skippedItems.push({ name: row[1] || 'Unknown', reason: error.message });
                             skippedLinesCount++;
                         }
                     }
