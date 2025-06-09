@@ -730,7 +730,7 @@ const fetchAllItems = async () => {
 async function fetchItemByName(itemName) {
     try {
         const db = await connectToInventoriesForItems();
-        const normalizedItemName = itemName.trim().toLowerCase();
+        const normalizedItemName = itemName.trim();
         const escapedName = normalizedItemName.replace(/[-\/\\^$*+?.()|[\]{}]/g, "\\$&");
         const item = await db.collection("items").findOne({
             itemName: new RegExp(`^${escapedName}$`, "i"),
