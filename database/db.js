@@ -163,19 +163,7 @@ async function connectToInventories() {
 const connectToInventoriesNative = async () => {
  if (!inventoriesDbNativeConnection) {
   const env = process.env.NODE_ENV || 'development';
-  console.log(`[db.js]: 🔄 Environment check (connectToInventoriesNative):`, {
-    NODE_ENV: process.env.NODE_ENV,
-    env: env,
-    isDevelopment: env === 'development'
-  });
-  
   const uri = env === 'development' ? process.env.MONGODB_INVENTORIES_URI_DEV : dbConfig.inventories;
-  console.log(`[db.js]: 📝 URI details (native):`, {
-    env: env,
-    uriType: env === 'development' ? 'MONGODB_INVENTORIES_URI_DEV' : 'MONGODB_INVENTORIES_URI',
-    uriExists: !!uri,
-    uriLength: uri ? uri.length : 0
-  });
   
   if (!uri) {
     throw new Error(`Missing MongoDB URI for ${env} environment`);
@@ -197,13 +185,6 @@ const connectToInventoriesNative = async () => {
   });
   await client.connect();
   inventoriesDbNativeConnection = client.db(env === 'development' ? 'inventories_dev' : 'inventories');
-  
-  console.log(`[db.js]: 🔌 Connection details (native):`, {
-    env: env,
-    dbName: inventoriesDbNativeConnection.databaseName,
-    usingDevDb: env === 'development',
-    clientConnected: client.topology?.isConnected() || false
-  });
  }
  return inventoriesDbNativeConnection;
 };

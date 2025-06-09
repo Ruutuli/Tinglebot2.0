@@ -228,7 +228,16 @@ async function initializeClient() {
           
           await handleComponentInteraction(interaction);
         } else if (interaction.isStringSelectMenu()) {
-          await handleSelectMenuInteraction(interaction);
+          console.log(`[index.js]: 🔄 Processing select menu interaction: ${interaction.customId}`);
+          
+          // Route submission-related select menus to the submission handler
+          const submissionMenuIds = ['baseSelect', 'typeMultiplierSelect', 'productMultiplierSelect', 'addOnsSelect', 'specialWorksSelect'];
+          if (submissionMenuIds.includes(interaction.customId)) {
+            await handleSelectMenuInteraction(interaction);
+          } else {
+            // Route other select menus to the component handler
+            await handleComponentInteraction(interaction);
+          }
         } else if (interaction.isAutocomplete()) {
           const command = client.commands.get(interaction.commandName);
           if (command && typeof command.autocomplete === "function") {
@@ -338,7 +347,27 @@ async function initializeClient() {
       const author = message.author.tag;
 
       try {
-        await logWishlistToTrello(content, author);
+        await logWishlistToTrello(content, author, process.env.TRELLO_WISHLIST);
+        await message.react("⭐");
+      } catch (err) {
+        console.error("[index.js]: Failed to log wishlist to Trello:", err);
+        await message.reply("❌ Could not send this wishlist item to Trello.");
+      }
+    });
+
+    // --------------------------------------------------------------------------
+    // New Channel Handling
+    // --------------------------------------------------------------------------
+    client.on("messageCreate", async (message) => {
+      const NEW_CHANNEL_ID = "1381442926667763773";
+      if (message.channelId !== NEW_CHANNEL_ID) return;
+      if (message.author.bot) return;
+
+      const content = message.content;
+      const author = message.author.tag;
+
+      try {
+        await logWishlistToTrello(content, author, process.env.TRELLO_WISHLIST);
         await message.react("⭐");
       } catch (err) {
         console.error("[index.js]: Failed to log wishlist to Trello:", err);

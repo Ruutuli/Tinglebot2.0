@@ -58,6 +58,13 @@ async function handleSelectMenuInteraction(interaction) {
     // Ensure the interaction is from a string select menu
     if (!interaction.isStringSelectMenu()) return;
 
+    // Check if this is a submission-related select menu
+    const submissionMenuIds = ['baseSelect', 'typeMultiplierSelect', 'productMultiplierSelect', 'addOnsSelect', 'specialWorksSelect'];
+    if (!submissionMenuIds.includes(interaction.customId)) {
+      console.log(`[selectMenuHandler.js]: ⏭️ Skipping non-submission select menu: ${interaction.customId}`);
+      return;
+    }
+
     const userId = interaction.user.id;
     const customId = interaction.customId;
 
