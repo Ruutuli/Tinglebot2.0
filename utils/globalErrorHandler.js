@@ -5,7 +5,7 @@
 const { EmbedBuilder } = require('discord.js');
 
 // ------------------- Standard Libraries -------------------
-const ERROR_LOG_CHANNEL_ID = process.env.ERROR_LOG_CHANNEL_ID || "1381446528836833450";
+const ERROR_LOG_CHANNEL_ID = process.env.CONSOLE_LOG_CHANNEL;
 
 // ------------------- Variables -------------------
 let trelloLogger = null;
