@@ -390,8 +390,8 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
       // ... existing KO logic ...
     } else {
       outcomeMessage = generateDamageMessage(outcome.hearts);
-      // Add the damage message to the travel log
-      travelLog.push(outcomeMessage);
+      // Remove the direct travel log addition since it will be handled by the caller
+      // travelLog.push(outcomeMessage);
     }
 
     // ------------------- Embed Update -------------------
