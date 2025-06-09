@@ -47,7 +47,7 @@ async function enforceJail(interaction, character) {
 
     await interaction.editReply({
         embeds: [jailEmbed],
-        ephemeral: true
+        flags: [4096]
     });
 
     return true;

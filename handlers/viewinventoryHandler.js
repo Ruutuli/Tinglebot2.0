@@ -57,7 +57,7 @@ module.exports = {
       // Fetch character from the database.
       const character = await fetchCharacterByNameAndUserId(characterName, userId);
       if (!character) {
-        await interaction.reply({ content: `❌ **Character ${characterName} not found or does not belong to you.**`, ephemeral: true });
+        await interaction.reply({ content: `❌ **Character ${characterName} not found or does not belong to you.**`, flags: [4096] });
         return;
       }
       const characterId = character._id;
@@ -72,7 +72,7 @@ module.exports = {
       const inventoryItems = await inventoryCollection.find({ characterId }).toArray();
 
       if (!inventoryItems.length) {
-        await interaction.reply({ content: `❌ **No inventory items found for character ${characterName}.**`, ephemeral: true });
+        await interaction.reply({ content: `❌ **No inventory items found for character ${characterName}.**`, flags: [4096] });
         return;
       }
 
@@ -179,7 +179,7 @@ module.exports = {
     handleError(error, 'viewinventoryHandler.js');
 
       console.error("[viewinventoryHandler.js]: logs Error fetching inventory:", error);
-      await interaction.reply({ content: `❌ An error occurred while fetching the inventory.`, ephemeral: true });
+      await interaction.reply({ content: `❌ An error occurred while fetching the inventory.`, flags: [4096] });
     }
   }
 };

@@ -1210,7 +1210,7 @@ async function handleViewCharacter(interaction) {
       .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
       .setFooter({ text: 'Character Validation' })
       .setTimestamp()],
-    ephemeral: true,
+    flags: [4096]
    });
    return;
   }
@@ -1327,13 +1327,13 @@ async function handleViewCharacter(interaction) {
    embeds.push(mountEmbed);
   }
 
-  await interaction.reply({ embeds, ephemeral: true });
+  await interaction.reply({ embeds, flags: [4096] });
  } catch (error) {
   handleError(error, "character.js");
   console.error("Error executing viewcharacter command:", error);
   await interaction.reply({
    content: "❌ An error occurred while fetching the character.",
-   ephemeral: true,
+   flags: [4096]
   });
  }
 }
@@ -1349,7 +1349,7 @@ async function handleViewCharacterList(interaction) {
   if (!characters.length) {
    await interaction.reply({
     content: `❌ **${targetUser.username}** has no saved characters.`,
-    ephemeral: true,
+    flags: [4096]
    });
    return;
   }
@@ -1412,7 +1412,7 @@ async function handleViewCharacterList(interaction) {
 
 
 async function handleDeleteCharacter(interaction) {
- await interaction.deferReply({ ephemeral: true });
+ await interaction.deferReply({ flags: [4096] });
 
  try {
   const characterName = interaction.options.getString("charactername");
@@ -1434,7 +1434,7 @@ async function handleDeleteCharacter(interaction) {
       .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
       .setFooter({ text: 'Character Validation' })
       .setTimestamp()],
-    ephemeral: true,
+    flags: [4096]
    });
    return;
   }

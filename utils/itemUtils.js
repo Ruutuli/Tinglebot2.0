@@ -237,7 +237,7 @@ const promptUserForSpecificItems = async (interaction, inventory, generalCategor
         await interaction.editReply({
             content: `**Select an item for ${generalCategoryItemName} (${totalSelectedQuantity + 1}/${requiredQuantity}):**`,
             components: [row1, row2],
-            ephemeral: true,
+            flags: [4096]
         });
 
         const startTime = Date.now();
@@ -247,7 +247,7 @@ const promptUserForSpecificItems = async (interaction, inventory, generalCategor
             const collected = await interaction.channel.awaitMessageComponent({ filter, time: 300000 });
 
             if (collected.customId === 'cancel_crafting') {
-                await interaction.editReply({ content: '❌ **Crafting canceled.**', components: [], ephemeral: true });
+                await interaction.editReply({ content: '❌ **Crafting canceled.**', components: [], flags: [4096] });
                 return 'canceled';
             }
 
@@ -278,7 +278,7 @@ const promptUserForSpecificItems = async (interaction, inventory, generalCategor
                 availableItems[itemIndex].label = `${selectedItemName} - Qty: ${selectedItem.quantity}`;
             }
 
-            await collected.update({ content: `You selected: ${selectedItemName}`, components: [], ephemeral: true });
+            await collected.update({ content: `You selected: ${selectedItemName}`, components: [], flags: [4096] });
 
             const endTime = Date.now();
             totalTimeTaken += (endTime - startTime);

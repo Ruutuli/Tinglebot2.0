@@ -735,7 +735,7 @@ const processMaterials = async (interaction, character, inventory, craftableItem
 
         await interaction.followUp({
           embeds: [errorEmbed],
-          ephemeral: true,
+          flags: [4096]
         });
       }
       return "canceled";
