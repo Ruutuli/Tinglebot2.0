@@ -513,13 +513,6 @@ module.exports = {
               );
               if (character?.name && character?.inventory && character?.userId) {
                 try {
-                  console.log(`[gather.js]: 📝 Attempting to sync inventory sheet for ${character.name}`, {
-                    inventoryUrl: character.inventory,
-                    spreadsheetId: extractSpreadsheetId(character.inventory),
-                    range: range,
-                    values: values
-                  });
-
                   await safeAppendDataToSheet(character.inventory, character, range, values, undefined, { 
                     skipValidation: true,
                     context: {
@@ -537,21 +530,7 @@ module.exports = {
                       }
                     }
                   });
-                  console.log(`[gather.js]: ✅ Successfully synced inventory sheet for ${character.name}`);
                 } catch (sheetError) {
-                  console.error(`[gather.js]: ❌ Failed to sync inventory sheet for ${character.name}:`, {
-                    error: sheetError.message,
-                    stack: sheetError.stack,
-                    characterName: character.name,
-                    inventoryUrl: character.inventory,
-                    spreadsheetId: extractSpreadsheetId(character.inventory),
-                    range: range,
-                    options: {
-                      region: region,
-                      itemName: lootedItem.itemName,
-                      quantity: lootedItem.quantity
-                    }
-                  });
                   handleError(sheetError, 'gather.js', {
                     commandName: '/gather',
                     userTag: interaction.user.tag,
@@ -569,7 +548,7 @@ module.exports = {
                   // Continue execution since the item was already added to the database
                 }
               } else {
-                console.error('[gather.js]: ❌ Invalid character object detected before syncing:', {
+                handleError(new Error('Invalid character object'), 'gather.js', {
                   characterName: character?.name,
                   hasInventory: !!character?.inventory,
                   userId: character?.userId
@@ -677,13 +656,6 @@ module.exports = {
         ]];
         if (character?.name && character?.inventory && character?.userId) {
           try {
-            console.log(`[gather.js]: 📝 Attempting to sync inventory sheet for ${character.name}`, {
-              inventoryUrl: character.inventory,
-              spreadsheetId: extractSpreadsheetId(character.inventory),
-              range: range,
-              values: values
-            });
-
             await safeAppendDataToSheet(character.inventory, character, range, values, undefined, { 
               skipValidation: true,
               context: {
@@ -701,21 +673,7 @@ module.exports = {
                 }
               }
             });
-            console.log(`[gather.js]: ✅ Successfully synced inventory sheet for ${character.name}`);
           } catch (sheetError) {
-            console.error(`[gather.js]: ❌ Failed to sync inventory sheet for ${character.name}:`, {
-              error: sheetError.message,
-              stack: sheetError.stack,
-              characterName: character.name,
-              inventoryUrl: character.inventory,
-              spreadsheetId: extractSpreadsheetId(character.inventory),
-              range: range,
-              options: {
-                region: region,
-                itemName: randomItem.itemName,
-                quantity: quantity
-              }
-            });
             handleError(sheetError, 'gather.js', {
               commandName: '/gather',
               userTag: interaction.user.tag,
@@ -733,7 +691,7 @@ module.exports = {
             // Continue execution since the item was already added to the database
           }
         } else {
-          console.error('[gather.js]: ❌ Invalid character object detected before syncing:', {
+          handleError(new Error('Invalid character object'), 'gather.js', {
             characterName: character?.name,
             hasInventory: !!character?.inventory,
             userId: character?.userId
