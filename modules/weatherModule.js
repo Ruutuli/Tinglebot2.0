@@ -17,6 +17,7 @@ const {
   weatherWeightModifiers 
 } = require('../data/weatherData');
 const seasonsData = require('../data/seasonsData');
+const { validateWeatherCombination } = require('../utils/weatherValidation');
 
 // Helper to capitalize village names
 function normalizeVillageName(name) {
@@ -58,6 +59,44 @@ function capitalizeFirstLetter(string) {
   return string.charAt(0).toUpperCase() + string.slice(1);
 }
 
+// Helper function to validate weight modifiers
+function validateWeightModifiers(village, season, modifiers) {
+  const issues = [];
+  
+  // Check temperature modifiers
+  if (modifiers.temperature) {
+    Object.entries(modifiers.temperature).forEach(([temp, mod]) => {
+      if (mod < 0 || mod > 5) {
+        issues.push(`Invalid temperature modifier for ${temp}: ${mod} (should be between 0 and 5)`);
+      }
+    });
+  }
+  
+  // Check precipitation modifiers
+  if (modifiers.precipitation) {
+    Object.entries(modifiers.precipitation).forEach(([precip, mod]) => {
+      if (mod < 0 || mod > 5) {
+        issues.push(`Invalid precipitation modifier for ${precip}: ${mod} (should be between 0 and 5)`);
+      }
+    });
+  }
+  
+  // Check special weather modifiers
+  if (modifiers.special) {
+    Object.entries(modifiers.special).forEach(([special, mod]) => {
+      if (mod < 0 || mod > 5) {
+        issues.push(`Invalid special weather modifier for ${special}: ${mod} (should be between 0 and 5)`);
+      }
+    });
+  }
+  
+  if (issues.length > 0) {
+    console.warn(`[weatherModule.js]: Weight modifier issues for ${village} in ${season}:`, issues);
+  }
+  
+  return issues.length === 0;
+}
+
 // Simulate weighted weather based on village and season
 function simulateWeightedWeather(village, season) {
   const seasonKey = capitalizeFirstLetter(season);
@@ -70,6 +109,12 @@ function simulateWeightedWeather(village, season) {
 
   const seasonInfo = villageData.seasons[seasonKey];
   const weightModifiers = weatherWeightModifiers[village]?.[seasonKey] || {};
+  
+  // Validate weight modifiers
+  validateWeightModifiers(village, seasonKey, weightModifiers);
+  
+  // Log applied modifiers for debugging
+  console.log(`[weatherModule.js]: Applied weight modifiers for ${village} in ${seasonKey}:`, weightModifiers);
   
   // Get available options for this village and season
   const availableTemps = seasonInfo.Temperature;
@@ -281,14 +326,11 @@ async function getCurrentWeather(village) {
     // Get today's weather
     let weather = await getWeatherWithoutGeneration(normalizedVillage);
     
-    console.log(`[weatherModule.js]: Checking weather for ${village} (normalized: ${normalizedVillage})`);
-    console.log(`[weatherModule.js]: Found existing weather:`, weather);
-    
     // Only generate new weather if none exists for today
     if (!weather) {
       const season = getCurrentSeason();
       const capitalizedSeason = capitalizeFirstLetter(season);
-      console.log(`[weatherModule.js]: Generating new weather for ${village} in ${season} season`);
+      console.log(`[weatherModule.js]: Generating weather for ${village} (${season})`);
       const newWeather = simulateWeightedWeather(normalizedVillage, capitalizedSeason);
       
       if (!newWeather) {
@@ -298,12 +340,16 @@ async function getCurrentWeather(village) {
       // Add date and season to weather data
       newWeather.date = new Date();
       newWeather.season = season;
-      
-      console.log(`[weatherModule.js]: Saving new weather data:`, newWeather);
+
+      // Validate weather combination before saving
+      if (!validateWeatherCombination(newWeather)) {
+        console.log(`[weatherModule.js]: Removed invalid special weather for ${village}`);
+        newWeather.special = null;
+      }
       
       // Save new weather
       weather = await saveWeather(newWeather);
-      console.log(`[weatherModule.js]: Saved weather data:`, weather);
+      console.log(`[weatherModule.js]: ✅ Weather saved for ${village}`);
     }
     
     return weather;
