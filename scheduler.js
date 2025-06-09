@@ -389,7 +389,7 @@ function initializeScheduler(client) {
     ]);
   });
   createCronJob('0 0 * * *', 'debuff expiry check', () => handleDebuffExpiry(client));
-  createCronJob('0 8  * * *', 'daily weather update', () => postWeatherUpdate(client));
+  createCronJob('52 21 * * *', 'daily weather update', () => postWeatherUpdate(client));
   createCronJob('0 0 * * *', 'birthday announcements', () => executeBirthdayAnnouncements(client));
   
   // Initialize blight scheduler

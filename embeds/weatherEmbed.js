@@ -202,9 +202,9 @@ async function generateWeatherEmbed(village, weather) {
       .setDescription(`${emojiSummary}\n\n${dateLine}`)
       .setAuthor({ name: `${village} Town Hall`, iconURL: `attachment://${crestIconName}` })
       .addFields(
-        { name: 'Temperature', value: weather.temperature.label || `${weather.temperature.value}°F`, inline: false },
-        { name: 'Wind', value: weather.wind.label || `${weather.wind.speed} mph ${weather.wind.direction}`, inline: false },
-        { name: 'Precipitation', value: weather.precipitation.label, inline: false }
+        { name: 'Temperature', value: weather.temperature?.label || `${weather.temperature?.value || 'N/A'}°F`, inline: false },
+        { name: 'Wind', value: weather.wind?.label || `${weather.wind?.speed || 'N/A'} mph ${weather.wind?.direction || 'N/A'}`, inline: false },
+        { name: 'Precipitation', value: weather.precipitation?.label || 'N/A', inline: false }
       )
       .setThumbnail(`attachment://${seasonIconName}`)
       .setTimestamp();
