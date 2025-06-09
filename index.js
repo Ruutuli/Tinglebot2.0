@@ -216,7 +216,7 @@ async function initializeClient() {
             await command.execute(interaction);
           } catch (error) {
             handleError(error, 'index.js');
-            const errorMessage = { content: 'There was an error while executing this command!', ephemeral: true };
+            const errorMessage = { content: 'There was an error while executing this command!', flags: [4096] };
             if (interaction.replied || interaction.deferred) {
               await interaction.followUp(errorMessage);
             } else {
