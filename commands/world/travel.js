@@ -50,10 +50,10 @@ const { checkInventorySync } = require('../../utils/characterUtils');
 const { enforceJail } = require('../../utils/jailCheck');
 const { handleError } = require('../../utils/globalErrorHandler.js');
 const { retrieveAllByType } = require('../../utils/storage.js');
+const { getWeatherWithoutGeneration } = require('../../modules/weatherModule.js');
 
 // ------------------- External API Integrations -------------------
 const { isBloodMoonActive } = require('../../scripts/bloodmoon.js');
-const { getCurrentWeather } = require('../../modules/weatherModule.js');
 
 // ============================================================================
 // ------------------- Constants -------------------
@@ -201,7 +201,7 @@ module.exports = {
 
       // ---- Blight Rain Infection Check ----
       const startingVillage = character.currentVillage.toLowerCase();
-      const startingWeather = await getCurrentWeather(startingVillage);
+      const startingWeather = await getWeatherWithoutGeneration(startingVillage);
 
       // Check starting village for blight rain
       if (startingWeather?.special?.label === 'Blight Rain') {
@@ -661,7 +661,7 @@ async function processTravelDay(day, context) {
       }
     
       // Check destination for blight rain after arrival
-      const destinationWeather = await getCurrentWeather(destination);
+      const destinationWeather = await getWeatherWithoutGeneration(destination);
       if (destinationWeather?.special?.label === 'Blight Rain') {
         if (character.blighted) {
           const alreadyMsg =
@@ -958,7 +958,7 @@ async function processTravelDay(day, context) {
 async function checkSevereWeather(village) {
   try {
     console.log(`[travel.js]: 🌤️ Checking weather for ${village}`);
-    const weather = await getCurrentWeather(village);
+    const weather = await getWeatherWithoutGeneration(village);
     if (!weather) {
       console.log(`[travel.js]: ⚠️ No weather data found for ${village}`);
       return false;

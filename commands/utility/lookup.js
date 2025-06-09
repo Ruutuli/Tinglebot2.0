@@ -33,7 +33,7 @@ module.exports = {
   // ------------------- Main execute function for lookup -------------------
   async execute(interaction) {
     try {
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: [4096] }); // 4096 is the flag for ephemeral messages
       await connectToTinglebot();
   
       const itemName = interaction.options.getString('item');
