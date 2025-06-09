@@ -12,8 +12,7 @@ const { handleError } = require('../utils/globalErrorHandler');
 // ============================================================================
 
 // ------------------- Importing database service functions -------------------
-const { connectToInventories } = require('../database/db');
-
+let connectToInventories = null;
 
 // ============================================================================
 // Utility Functions
@@ -26,7 +25,10 @@ const { extractSpreadsheetId } = require('./googleSheetsUtils');
 // ------------------- Importing database models -------------------
 const generalCategories = require('../models/GeneralItemCategories');
 
-
+// Initialize database connection function
+function initializeDbConnection(dbConnectFn) {
+    connectToInventories = dbConnectFn;
+}
 
 // ============================================================================
 // Inventory Management Functions

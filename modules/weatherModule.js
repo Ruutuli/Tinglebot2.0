@@ -5,7 +5,6 @@
 
 const mongoose = require('mongoose');
 const Weather = require('../models/WeatherModel');
-const { simulateWeightedWeather } = require('../handlers/weatherHandler');
 
 // Helper to capitalize village names
 function normalizeVillageName(name) {
@@ -26,6 +25,69 @@ function getCurrentSeason() {
 function capitalizeSeason(season) {
   if (!season) return '';
   return season.charAt(0).toUpperCase() + season.slice(1).toLowerCase();
+}
+
+// Simulate weighted weather based on village and season
+function simulateWeightedWeather(village, season) {
+  // Default weather probabilities
+  const weatherProbabilities = {
+    spring: { sunny: 0.4, cloudy: 0.3, rainy: 0.3 },
+    summer: { sunny: 0.6, cloudy: 0.2, rainy: 0.2 },
+    fall: { sunny: 0.3, cloudy: 0.4, rainy: 0.3 },
+    winter: { sunny: 0.2, cloudy: 0.3, snowy: 0.5 }
+  };
+
+  // Get probabilities for current season
+  const probabilities = weatherProbabilities[season.toLowerCase()] || weatherProbabilities.spring;
+  
+  // Generate random number
+  const random = Math.random();
+  let cumulativeProbability = 0;
+  
+  // Determine weather based on probabilities
+  for (const [weather, probability] of Object.entries(probabilities)) {
+    cumulativeProbability += probability;
+    if (random <= cumulativeProbability) {
+      return {
+        village,
+        weather,
+        temperature: getTemperatureForWeather(weather, season),
+        humidity: getHumidityForWeather(weather)
+      };
+    }
+  }
+  
+  // Fallback to sunny weather
+  return {
+    village,
+    weather: 'sunny',
+    temperature: getTemperatureForWeather('sunny', season),
+    humidity: getHumidityForWeather('sunny')
+  };
+}
+
+// Helper to get temperature based on weather and season
+function getTemperatureForWeather(weather, season) {
+  const baseTemps = {
+    spring: { sunny: 65, cloudy: 60, rainy: 55 },
+    summer: { sunny: 85, cloudy: 80, rainy: 75 },
+    fall: { sunny: 70, cloudy: 65, rainy: 60 },
+    winter: { sunny: 40, cloudy: 35, snowy: 30 }
+  };
+  
+  return baseTemps[season.toLowerCase()]?.[weather] || 70;
+}
+
+// Helper to get humidity based on weather
+function getHumidityForWeather(weather) {
+  const humidities = {
+    sunny: 40,
+    cloudy: 60,
+    rainy: 80,
+    snowy: 70
+  };
+  
+  return humidities[weather] || 50;
 }
 
 // ------------------- Get Current Weather -------------------
@@ -101,5 +163,6 @@ async function clearOldWeather() {
 module.exports = {
   getCurrentWeather,
   saveWeather,
-  clearOldWeather
+  clearOldWeather,
+  simulateWeightedWeather
 }; 
