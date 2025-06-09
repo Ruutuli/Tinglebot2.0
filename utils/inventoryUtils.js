@@ -186,12 +186,12 @@ async function syncToInventoryDatabase(character, item, interaction) {
     });
 
     if (existingItem) {
-      // Update existing item
+      // Update existing item by incrementing quantity
       await inventoryCollection.updateOne(
         { characterId: character._id, itemName: dbDoc.itemName },
-        { $set: dbDoc }
+        { $inc: { quantity: dbDoc.quantity } }
       );
-      console.log(`[inventoryUtils.js]: ✅ Updated item ${dbDoc.itemName} in database`);
+      console.log(`[inventoryUtils.js]: ✅ Updated item ${dbDoc.itemName} in database (incremented quantity)`);
     } else {
       // Insert new item
       await inventoryCollection.insertOne(dbDoc);
@@ -349,13 +349,12 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
 
     if (inventoryItem) {
       console.log(`[inventoryUtils.js]: 📊 Found ${inventoryItem.quantity} ${itemName} in ${character.name}'s inventory`);
-      const newQuantity = inventoryItem.quantity + quantity;
       console.log(`[inventoryUtils.js]: ➕ Adding ${quantity} ${itemName}`);
-      console.log(`[inventoryUtils.js]: 🔄 Updated ${itemName} quantity: ${inventoryItem.quantity} → ${newQuantity}`);
       await inventoryCollection.updateOne(
         { characterId, itemName: inventoryItem.itemName },
-        { $set: { quantity: newQuantity } }
+        { $inc: { quantity: quantity } }
       );
+      console.log(`[inventoryUtils.js]: ✅ Updated ${itemName} quantity (incremented by ${quantity})`);
     } else {
       console.log(`[inventoryUtils.js]: ➕ Adding new item ${itemName} (${quantity}) to ${character.name}'s inventory`);
       const newItem = {
@@ -460,7 +459,7 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
     } else {
       const updateResult = await inventoryCollection.updateOne(
         { characterId: character._id, itemName: inventoryItem.itemName },
-        { $set: { quantity: newQuantity } }
+        { $inc: { quantity: -quantity } }
       );
       
       if (updateResult.modifiedCount === 0) {
