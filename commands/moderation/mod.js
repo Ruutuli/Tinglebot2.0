@@ -477,7 +477,7 @@ async function execute(interaction) {
 
     // Only defer with ephemeral for non-mount and non-raid commands
     if (subcommand !== 'mount' && subcommand !== 'raid') {
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: [4096] }); // 4096 is the flag for ephemeral messages
     } else {
       await interaction.deferReply();
     }

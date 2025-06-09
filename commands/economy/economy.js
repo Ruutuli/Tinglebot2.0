@@ -1773,26 +1773,41 @@ for (const { name } of items) {
     `[transfer.js:logs] Checking availability for item: ${name} (Required: ${quantity})`
    );
 
+   // Find the canonical item name from the database first
+   const itemDetails = await ItemModel.findOne({
+     itemName: new RegExp(`^${name}$`, "i")
+   }).exec();
+
+   if (!itemDetails) {
+     console.log(`[transfer.js:logs] Item not found in database: ${name}`);
+     unavailableItems.push(`${name} - Not Found`);
+     allItemsAvailable = false;
+     continue;
+   }
+
+   // Use the canonical item name from the database
+   const canonicalName = itemDetails.itemName;
+
    const fromInventoryEntries = await fromInventoryCollection
-    .find({ itemName: new RegExp(`^${name}$`, "i") })
+    .find({ itemName: new RegExp(`^${canonicalName}$`, "i") })
     .toArray();
    const totalQuantity = fromInventoryEntries.reduce(
     (sum, entry) => sum + entry.quantity,
     0
    );
    console.log(
-    `[transfer.js:logs] Total quantity of '${name}' in inventory: ${totalQuantity} (Required: ${quantity})`
+    `[transfer.js:logs] Total quantity of '${canonicalName}' in inventory: ${totalQuantity} (Required: ${quantity})`
    );
 
    if (totalQuantity < quantity) {
     console.log(
-     `[transfer.js:logs] Insufficient quantity for item '${name}' (Available: ${totalQuantity}, Required: ${quantity}).`
+     `[transfer.js:logs] Insufficient quantity for item '${canonicalName}' (Available: ${totalQuantity}, Required: ${quantity}).`
     );
-    unavailableItems.push(`${name} - QTY:${totalQuantity}`);
+    unavailableItems.push(`${canonicalName} - QTY:${totalQuantity}`);
     allItemsAvailable = false;
    } else {
     console.log(
-     `[transfer.js:logs] Sufficient quantity available for '${name}' (Total: ${totalQuantity}, Required: ${quantity}).`
+     `[transfer.js:logs] Sufficient quantity available for '${canonicalName}' (Total: ${totalQuantity}, Required: ${quantity}).`
     );
    }
   }
@@ -1873,9 +1888,18 @@ for (const { name } of items) {
   const formattedItems = [];
 
   for (const { name, quantity } of aggregatedItems) {
+    // Find the canonical item name from the database
     const itemDetails = await ItemModel.findOne({
       itemName: new RegExp(`^${name}$`, "i"),
     }).exec();
+
+    if (!itemDetails) {
+      console.error(`[transfer.js:logs] Item not found in database: ${name}`);
+      continue;
+    }
+
+    // Use the canonical item name from the database
+    const canonicalName = itemDetails.itemName;
     const category = itemDetails?.category.join(", ") || "";
     const type = itemDetails?.type.join(", ") || "";
     const subtype = itemDetails?.subtype.join(", ") || "";
@@ -1883,7 +1907,7 @@ for (const { name } of items) {
     // Remove from source (fromCharacter)
     const removeData = {
       characterId: fromCharacter._id,
-      itemName: name,
+      itemName: canonicalName,
       quantity: -quantity,
       category,
       type,
@@ -1897,7 +1921,7 @@ for (const { name } of items) {
     // Add to target (toCharacter)
     const addData = {
       characterId: toCharacter._id,
-      itemName: name,
+      itemName: canonicalName,
       quantity: quantity,
       category,
       type,
@@ -1909,7 +1933,7 @@ for (const { name } of items) {
     await syncToInventoryDatabase(toCharacter, addData);
 
     const itemIcon = itemDetails?.emoji || "🎁";
-    formattedItems.push({ itemName: name, quantity, itemIcon });
+    formattedItems.push({ itemName: canonicalName, quantity, itemIcon });
   }
 
   const fromCharacterIcon = fromCharacter.icon || "🧙";
