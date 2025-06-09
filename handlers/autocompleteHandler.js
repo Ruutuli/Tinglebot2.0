@@ -1715,24 +1715,16 @@ async function handleTransferItemAutocomplete(interaction, focusedValue) {
     }
 
     const searchTerm = focusedValue?.toLowerCase().trim() || '';
-    console.log('Search term:', searchTerm);
-    
     const allItems = Array.from(itemMap.values());
-    console.log('All items before filter:', allItems.map(i => i.name));
-    
     const filteredItems = allItems.filter(item => 
       item.name.toLowerCase().includes(searchTerm)
     );
-    console.log('Filtered items:', filteredItems.map(i => i.name));
 
     const choices = filteredItems.map(item => ({
       name: `${capitalizeWords(item.name)} (Qty: ${item.quantity})`,
       value: item.name
     }));
 
-    console.log('Final choices:', choices.map(c => c.name));
-    
-    // Ensure we're using the proper Discord.js autocomplete response format
     await interaction.respond(
       choices.slice(0, 25).map(choice => ({
         name: choice.name,
@@ -1998,27 +1990,6 @@ async function handleTransferCharacterAutocomplete(interaction, focusedOption) {
   }
  }
  
- // ------------------- Transfer Item Autocomplete -------------------
- async function handleTransferItemAutocomplete(interaction, focusedOption) {
-  try {
-   const fromCharacter = interaction.options.getString('fromcharacter');
-   if (!fromCharacter) return await interaction.respond([]);
- 
-   const inventoryCollection = await getCharacterInventoryCollection(fromCharacter);
-   const items = await inventoryCollection
-     .find({ itemName: { $regex: (focusedOption?.value?.toString() || ''), $options: 'i' } })
-     .toArray();
- 
-   const choices = items.map(item => ({
-     name: `${item.itemName} (Qty: ${item.quantity})`,
-     value: item.itemName
-   }));
-   return await respondWithFilteredChoices(interaction, focusedOption, choices);
-  } catch (error) {
-   console.error('[handleTransferItemAutocomplete]: Error:', error);
-   return await safeRespondWithError(interaction);
-  }
- }
  
 // ============================================================================
 // EDITCHARACTER COMMANDS
