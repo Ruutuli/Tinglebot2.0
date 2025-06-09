@@ -1134,24 +1134,25 @@ async function handleShopBuy(interaction) {
     // ------------------- Validate Item Details -------------------
     const itemDetails = await ItemModel.findOne({ 
       itemName: { $regex: new RegExp(`^${itemName}$`, 'i') }
-    }).select("buyPrice image category type subtype").lean();
-    
+    })
+     .select("buyPrice sellPrice category type image craftingJobs")
+     .lean();
     if (!itemDetails) {
-      console.error(`[shops]: ❌ Item details not found for ${itemName}`);
-      return interaction.editReply({
-        embeds: [{
-          color: 0xFF0000, // Red color
-          title: '❌ Item Details Error',
-          description: 'Unable to retrieve item details. Please try again later.',
-          image: {
-            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
-          },
-          footer: {
-            text: 'Item Validation'
-          }
-        }],
-        ephemeral: true
-      });
+     console.error(`[shops]: ❌ Item details not found for ${itemName}`);
+     return interaction.editReply({
+       embeds: [{
+         color: 0xFF0000, // Red color
+         title: '❌ Item Details Error',
+         description: 'Unable to retrieve item details. Please try again later.',
+         image: {
+           url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+         },
+         footer: {
+           text: 'Item Validation'
+         }
+       }],
+       ephemeral: true
+     });
     }
 
     if (!itemDetails.buyPrice || itemDetails.buyPrice <= 0) {

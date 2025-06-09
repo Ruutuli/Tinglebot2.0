@@ -255,19 +255,31 @@ async function logErrorToTrello(errorMessage, source = 'Unknown Source') {
 
 // ============================================================================
 // ------------------- Log Wishlist Entry to Trello -------------------
-async function logWishlistToTrello(content, author = 'WishlistBot') {
+async function logWishlistToTrello(content, author = 'WishlistBot', listId = TRELLO_WISHLIST) {
   const now = new Date().toISOString();
 
-  const match = content.match(/\*\*Feature Name:\*\*\s*(.+)/i);
-  const featureName = match ? match[1].trim() : 'Wishlist Request';
+  // Extract feature name and format content
+  const featureNameMatch = content.match(/\*\*Feature Name:\*\*\s*([^\n]+)/i);
+  const descriptionMatch = content.match(/\*\*Description:\*\*\s*([^\n]+)/i);
+  const whyItMattersMatch = content.match(/\*\*Why It Matters:\*\*\s*([^\n]+)/i);
+
+  const featureName = featureNameMatch ? featureNameMatch[1].trim() : 'Untitled Request';
+  const description = descriptionMatch ? descriptionMatch[1].trim() : '';
+  const whyItMatters = whyItMattersMatch ? whyItMattersMatch[1].trim() : '';
+
+  // Format the description with all sections
+  const formattedContent = `**Submitted By:** ${author}\n\n` +
+    `**Feature Name:** ${featureName}\n` +
+    `**Description:** ${description}\n` +
+    `**Why It Matters:** ${whyItMatters}`;
 
   const wishlistCard = {
     threadName: featureName,
     username: author,
-    content: content,
+    content: formattedContent,
     images: [],
     createdAt: now,
-    overrideListId: TRELLO_WISHLIST
+    overrideListId: listId
   };
 
   try {
