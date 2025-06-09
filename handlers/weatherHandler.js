@@ -10,6 +10,13 @@ const seasonsData = require('../data/seasonsData');
 const weatherData = require('../data/weatherData');
 const { weatherWeightModifiers } = require('../data/weatherData');
 const { saveWeather } = require('../modules/weatherModule.js');
+const Weather = require('../models/WeatherModel');
+
+// Helper to normalize season names
+function normalizeSeason(season) {
+  if (!season) return '';
+  return season.charAt(0).toUpperCase() + season.slice(1).toLowerCase();
+}
 
 // ============================================================================
 // ------------------- Weather History Memory -------------------
@@ -216,16 +223,19 @@ function simulateWeightedWeather(village, season) {
       console.error('[weatherHandler.js]: Unknown village:', village);
       throw new Error(`[weatherHandler.js]: Unknown village: ${village}`);
     }
-    const seasonData = seasonsData[village].seasons[season];
+
+    // Normalize season name to match seasonsData format
+    const normalizedSeason = normalizeSeason(season);
+    const seasonData = seasonsData[village].seasons[normalizedSeason];
     if (!seasonData) {
-      console.error('[weatherHandler.js]: Unknown season for village:', village, season);
-      throw new Error(`[weatherHandler.js]: Unknown season "${season}" for village "${village}"`);
+      console.error('[weatherHandler.js]: Unknown season for village:', village, normalizedSeason);
+      throw new Error(`[weatherHandler.js]: Unknown season "${normalizedSeason}" for village "${village}"`);
     }
 
     // ------------------- Modifiers -------------------
-    const tempMods = weatherWeightModifiers[village]?.[season]?.temperature || {};
-    const precipMods = weatherWeightModifiers[village]?.[season]?.precipitation || {};
-    const specialMods = weatherWeightModifiers[village]?.[season]?.special || {};
+    const tempMods = weatherWeightModifiers[village]?.[normalizedSeason]?.temperature || {};
+    const precipMods = weatherWeightModifiers[village]?.[normalizedSeason]?.precipitation || {};
+    const specialMods = weatherWeightModifiers[village]?.[normalizedSeason]?.special || {};
 
     // ------------------- History & Streaks -------------------
     const history = weatherHistoryByVillage[village] || [];
@@ -321,16 +331,9 @@ function simulateWeightedWeather(village, season) {
     const specialObj = specialLabel ? findWeatherEmoji('specials', specialLabel) : null;
 
     // ------------------- Update History -------------------
-    updateWeatherHistory(village, {
-      temperature: { label: temperatureLabel },
-      wind: { label: windLabel },
-      precipitation: { label: precipitationLabel },
-      special: specialLabel ? { label: specialLabel } : null
-    });
-
-    return {
+    const weatherResult = {
       village,
-      season,
+      season: season.toLowerCase(), // Store lowercase season
       temperature: {
         label: temperatureLabel,
         emoji: temperatureObj?.emoji || '',
@@ -354,6 +357,9 @@ function simulateWeightedWeather(village, season) {
           }
         : null
     };
+
+    updateWeatherHistory(village, weatherResult);
+    return weatherResult;
   } catch (error) {
     console.error('[weatherHandler.js]: simulateWeightedWeather error:', error);
     throw error;
@@ -419,14 +425,17 @@ async function updateWeatherHistory(village, weatherResult) {
   weatherHistoryByVillage[village] = weatherHistoryByVillage[village].slice(-2);
   weatherHistoryByVillage[village].push(weatherResult);
   
-  // Add bot ID to weather data before saving
-  const weatherDataWithBotId = {
+  // Add required fields to weather data before saving
+  const weatherDataWithRequiredFields = {
     ...weatherResult,
+    village: village,
+    date: new Date(),
+    season: weatherResult.season, // Already lowercase from simulateWeightedWeather
     botId: '603960955839447050' // Main bot ID
   };
   
-  // Save weather to database
-  await saveWeather(village, weatherDataWithBotId);
+  // Save weather to database using Weather model's static method
+  await Weather.saveWeather(weatherDataWithRequiredFields);
 }
 
 // ============================================================================
@@ -434,12 +443,23 @@ async function updateWeatherHistory(village, weatherResult) {
 // Export core simulation methods and utility functions
 // ============================================================================
 module.exports = {
-  chooseRandom,
-  checkNumericCondition,
-  findWeatherEmoji,
+  simulateWeightedWeather,
   getRandomInt,
+  chooseRandom,
   parseFahrenheit,
   parseWind,
+  checkNumericCondition,
+  findWeatherEmoji,
   precipitationMatches,
-  simulateWeightedWeather
+  candidateMatches,
+  specialCandidateMatches,
+  weightedChoice,
+  calculateCandidateProbability,
+  getPrecipitationLabel,
+  getSpecialCondition,
+  getSmoothTemperatureChoices,
+  getSmoothWindChoices,
+  getSmoothedTemperature,
+  getSmoothedWind,
+  updateWeatherHistory
 };

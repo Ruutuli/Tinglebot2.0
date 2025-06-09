@@ -267,12 +267,7 @@ async function initializeClient() {
 
             // Log initialization status
             console.log("----------------------------------------------------------");
-            console.log("[index.js]: ✅ Core Systems Initialized:");
-            console.log("  • Reaction Handler");
-            console.log("  • Blood Moon Tracker");
-            console.log("  • Scheduler");
-            console.log("  • Random Encounters");
-            console.log("  • Request Expiration Handler");
+            console.log("[index.js]: ✅ Core Systems Initialized");
             console.log("==========================================================");
             console.log("[index.js]: 🚀 Tinglebot 2.0 is fully operational!");
             console.log("==========================================================");
@@ -339,63 +334,13 @@ async function initializeClient() {
     });
 
     // --------------------------------------------------------------------------
-    // Forum Thread Creation Handling
-    // --------------------------------------------------------------------------
-    client.on("threadCreate", async (thread) => {
-      const FEEDBACK_FORUM_CHANNEL_ID = process.env.FEEDBACK_FORUM_CHANNEL_ID;
-      
-      if (!FEEDBACK_FORUM_CHANNEL_ID) {
-        console.error('❌ FEEDBACK_FORUM_CHANNEL_ID is not defined in environment variables');
-        return;
-      }
-
-      // Check if the thread is in the feedback channel (either as a forum thread or regular channel thread)
-      if (thread.parentId !== FEEDBACK_FORUM_CHANNEL_ID && thread.channelId !== FEEDBACK_FORUM_CHANNEL_ID) {
-        return;
-      }
-
-      try {
-        const starterMessage = await thread.fetchStarterMessage();
-        if (!starterMessage || starterMessage.author.bot) return;
-        if (!starterMessage.content.replace(/\*/g, "").startsWith("Command:")) return;
-
-        const threadName = thread.name;
-        const username =
-          starterMessage.author?.tag ||
-          starterMessage.author?.username ||
-          `User-${starterMessage.author?.id}`;
-        const content = starterMessage.content;
-        const createdAt = starterMessage.createdAt;
-        const images = starterMessage.attachments.map((attachment) => attachment.url);
-
-        const cardUrl = await createTrelloCard({
-          threadName,
-          username,
-          content,
-          images,
-          createdAt,
-        });
-
-        if (cardUrl) {
-          await starterMessage.reply(
-            `✅ Bug report sent to Trello! ${cardUrl}\n\n_You can add comments to the Trello card if you want to provide more details or updates later._`
-          );
-        } else {
-          await starterMessage.reply(`❌ Failed to send bug report to Trello.`);
-        }
-      } catch (err) {
-        console.error("[index.js]: ❌ Error handling forum thread creation:", err);
-      }
-    });
-
-    // --------------------------------------------------------------------------
-    // Forum Thread Reply Handling
+    // Error Report Channel Handling
     // --------------------------------------------------------------------------
     client.on("messageCreate", async (message) => {
-      const FEEDBACK_FORUM_CHANNEL_ID = process.env.FEEDBACK_FORUM_CHANNEL_ID;
+      const ERROR_REPORT_CHANNEL_ID = "1379974822506795030";
       
-      // Check if the message is in the feedback channel (either as a forum thread or regular channel)
-      if (message.channel.parentId !== FEEDBACK_FORUM_CHANNEL_ID && message.channelId !== FEEDBACK_FORUM_CHANNEL_ID) {
+      // Check if the message is in the error report channel
+      if (message.channelId !== ERROR_REPORT_CHANNEL_ID) {
         return;
       }
 
@@ -448,7 +393,7 @@ async function initializeClient() {
           await message.reply(`❌ Failed to send bug report to Trello.`);
         }
       } catch (err) {
-        console.error("[index.js]: ❌ Error handling forum reply for Trello:", err);
+        console.error("[index.js]: ❌ Error handling error report for Trello:", err);
         console.error("[index.js]: Error details:", {
           name: err.name,
           message: err.message,
