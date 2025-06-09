@@ -1210,7 +1210,7 @@ async function handleViewCharacter(interaction) {
       .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
       .setFooter({ text: 'Character Validation' })
       .setTimestamp()],
-    flags: [4096]
+    ephemeral: true
    });
    return;
   }
@@ -1327,13 +1327,13 @@ async function handleViewCharacter(interaction) {
    embeds.push(mountEmbed);
   }
 
-  await interaction.reply({ embeds, flags: [4096] });
+  await interaction.reply({ embeds, ephemeral: true });
  } catch (error) {
   handleError(error, "character.js");
   console.error("Error executing viewcharacter command:", error);
   await interaction.reply({
    content: "❌ An error occurred while fetching the character.",
-   flags: [4096]
+   ephemeral: true
   });
  }
 }
@@ -1349,7 +1349,7 @@ async function handleViewCharacterList(interaction) {
   if (!characters.length) {
    await interaction.reply({
     content: `❌ **${targetUser.username}** has no saved characters.`,
-    flags: [4096]
+    ephemeral: true
    });
    return;
   }
@@ -1395,12 +1395,12 @@ async function handleViewCharacterList(interaction) {
    rows[rows.length - 1].addComponents(button);
   });
 
-  await interaction.reply({ embeds: [embed], components: rows });
+  await interaction.reply({ embeds: [embed], components: rows, ephemeral: true });
  } catch (error) {
   handleError(error, "character.js");
   await interaction.reply({
    content: `❌ Error retrieving character list.`,
-   flags: 64 // 64 is the flag for ephemeral messages
+   ephemeral: true
   });
  }
 }
@@ -1412,7 +1412,7 @@ async function handleViewCharacterList(interaction) {
 
 
 async function handleDeleteCharacter(interaction) {
- await interaction.deferReply({ flags: [4096] });
+ await interaction.deferReply({ ephemeral: true });
 
  try {
   const characterName = interaction.options.getString("charactername");
@@ -1434,7 +1434,7 @@ async function handleDeleteCharacter(interaction) {
       .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
       .setFooter({ text: 'Character Validation' })
       .setTimestamp()],
-    flags: [4096]
+    ephemeral: true
    });
    return;
   }
@@ -1573,7 +1573,7 @@ async function handleDeleteCharacter(interaction) {
 
 
 async function handleChangeJob(interaction) {
- await interaction.deferReply({ ephemeral: false });
+ await interaction.deferReply({ ephemeral: true });
 
  try {
   const userId = interaction.user.id;
@@ -1612,7 +1612,7 @@ async function handleChangeJob(interaction) {
   if (!jobValidation.valid) {
    return interaction.followUp({
     content: jobValidation.message,
-    ephemeral: false,
+    ephemeral: true,
    });
   }
 
@@ -1825,14 +1825,14 @@ async function handleChangeJob(interaction) {
    .setImage(DEFAULT_IMAGE_URL)
    .setTimestamp();
 
-  return interaction.followUp({ embeds: [embed], ephemeral: false });
+  return interaction.followUp({ embeds: [embed], ephemeral: true });
  } catch (error) {
   handleError(error, "character.js");
   console.error("[changejob.js]: Error changing job:", error);
   return interaction.followUp({
    content:
     "❌ An error occurred while processing your request. Please try again later.",
-   ephemeral: false,
+   ephemeral: true,
   });
  }
 }
