@@ -813,6 +813,9 @@ async function processTravelDay(day, context) {
           // Only append the decision to the daily log if it's not a damage message
           if (!decision.includes('heart')) {
             dailyLogEntry += `${decision}\n`;
+          } else {
+            // Add damage message to the current day's log
+            dailyLogEntry += `${decision}\n`;
           }
           collector.stop();
         });
