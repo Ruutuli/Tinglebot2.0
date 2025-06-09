@@ -1459,11 +1459,11 @@ async function handleTradeItemAutocomplete(interaction, focusedValue) {
 async function handleGiftAutocomplete(interaction, focusedOption, focusedValue) {
   try {
     if (focusedOption.name === 'fromcharacter') {
-      return await handleGiftFromCharacterAutocomplete(interaction, focusedValue);
+      return await handleGiftFromCharacterAutocomplete(interaction, focusedOption);
     } else if (focusedOption.name === 'tocharacter') {
-      return await handleGiftToCharacterAutocomplete(interaction, focusedValue);
+      return await handleGiftToCharacterAutocomplete(interaction, focusedOption);
     } else if (['itema', 'itemb', 'itemc'].includes(focusedOption.name)) {
-      return await handleGiftItemAutocomplete(interaction, focusedValue);
+      return await handleGiftItemAutocomplete(interaction, focusedOption);
     }
   } catch (error) {
     console.error('[handleGiftAutocomplete]: Error:', error);
@@ -1517,16 +1517,17 @@ async function handleGiftToCharacterAutocomplete(interaction, focusedOption) {
 
 // ------------------- Function: handleGiftItemAutocomplete -------------------
 // Provides autocomplete for selecting items to gift with quantity tracking
-async function handleGiftItemAutocomplete(interaction, focusedValue) {
+async function handleGiftItemAutocomplete(interaction, focusedOption) {
   try {
     const fromCharacter = interaction.options.getString('fromcharacter');
     if (!fromCharacter) return await interaction.respond([]);
     const inventoryCollection = await getCharacterInventoryCollection(fromCharacter);
     const items = await inventoryCollection.find().toArray();
-    // Aggregate by name, exclude 'Initial Item'
+    // Aggregate by name, exclude 'Initial Item' and items with quantity <= 0
     const itemMap = new Map();
     for (const item of items) {
       if (!item.itemName || item.itemName.toLowerCase() === 'initial item') continue;
+      if (item.quantity <= 0) continue;
       const key = item.itemName.trim().toLowerCase();
       if (!itemMap.has(key)) {
         itemMap.set(key, { name: item.itemName, quantity: item.quantity });
@@ -1538,6 +1539,7 @@ async function handleGiftItemAutocomplete(interaction, focusedValue) {
       name: `${capitalizeWords(item.name)} (Qty: ${item.quantity})`,
       value: item.name
     }));
+    const focusedValue = focusedOption?.value?.toString().toLowerCase() || '';
     const filtered = choices.filter(choice => choice.name.toLowerCase().includes(focusedValue));
     return await interaction.respond(filtered.slice(0, 25));
   } catch (error) {

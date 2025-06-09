@@ -30,7 +30,7 @@ const { capitalizeWords } = require('../../modules/formattingModule.js');
 const { validateJobVoucher, activateJobVoucher, fetchJobVoucherItem, deactivateJobVoucher, getJobVoucherErrorMessage } = require('../../modules/jobVoucherModule.js');
 const { checkInventorySync } = require('../../utils/characterUtils');
 const { enforceJail } = require('../../utils/jailCheck');
-const { getCurrentWeather } = require('../../modules/weatherModule.js');
+const { getWeatherWithoutGeneration } = require('../../modules/weatherModule.js');
 
 
 // ------------------- Utilities -------------------
@@ -269,7 +269,7 @@ module.exports = {
       }
 
       // ---- Blight Rain Infection Check ----
-      const weather = await getCurrentWeather(character.currentVillage);
+      const weather = await getWeatherWithoutGeneration(character.currentVillage);
       if (weather?.special?.label === 'Blight Rain') {
         if (character.blighted) {
           const alreadyMsg =

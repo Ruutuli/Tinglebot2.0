@@ -31,6 +31,7 @@ const { addItemInventoryDatabase } = require("../../utils/inventoryUtils.js");
 const { isBloodMoonActive } = require("../../scripts/bloodmoon.js");
 const { checkInventorySync } = require('../../utils/characterUtils');
 const { enforceJail } = require('../../utils/jailCheck');
+const { getWeatherWithoutGeneration } = require('../../modules/weatherModule.js');
 
 // Modules - Job, Location, Damage, and Formatting Logic
 const { getJobPerk, isValidJob } = require("../../modules/jobsModule.js");
@@ -325,7 +326,7 @@ module.exports = {
    }
 
    // ---- Blight Rain Infection Check ----
-   const weather = await getCurrentWeather(character.currentVillage);
+   const weather = await getWeatherWithoutGeneration(character.currentVillage);
    if (weather?.special?.label === 'Blight Rain') {
      if (character.blighted) {
        const alreadyMsg =
