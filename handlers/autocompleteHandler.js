@@ -1698,8 +1698,10 @@ async function handleTransferItemAutocomplete(interaction, focusedValue) {
   try {
     const fromCharacter = interaction.options.getString('fromcharacter');
     if (!fromCharacter) return await interaction.respond([]);
+
     const inventoryCollection = await getCharacterInventoryCollection(fromCharacter);
     const items = await inventoryCollection.find().toArray();
+
     // Aggregate by name, exclude 'Initial Item'
     const itemMap = new Map();
     for (const item of items) {
@@ -1711,12 +1713,32 @@ async function handleTransferItemAutocomplete(interaction, focusedValue) {
         itemMap.get(key).quantity += item.quantity;
       }
     }
-    const choices = Array.from(itemMap.values()).map(item => ({
+
+    const searchTerm = focusedValue?.toLowerCase().trim() || '';
+    console.log('Search term:', searchTerm);
+    
+    const allItems = Array.from(itemMap.values());
+    console.log('All items before filter:', allItems.map(i => i.name));
+    
+    const filteredItems = allItems.filter(item => 
+      item.name.toLowerCase().includes(searchTerm)
+    );
+    console.log('Filtered items:', filteredItems.map(i => i.name));
+
+    const choices = filteredItems.map(item => ({
       name: `${capitalizeWords(item.name)} (Qty: ${item.quantity})`,
       value: item.name
     }));
-    const filtered = choices.filter(choice => choice.name.toLowerCase().includes(focusedValue));
-    return await interaction.respond(filtered.slice(0, 25));
+
+    console.log('Final choices:', choices.map(c => c.name));
+    
+    // Ensure we're using the proper Discord.js autocomplete response format
+    await interaction.respond(
+      choices.slice(0, 25).map(choice => ({
+        name: choice.name,
+        value: choice.value
+      }))
+    );
   } catch (error) {
     console.error('[handleTransferItemAutocomplete]: Error:', error);
     return await safeRespondWithError(interaction);
