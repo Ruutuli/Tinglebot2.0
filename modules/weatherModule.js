@@ -14,10 +14,24 @@ function normalizeVillageName(name) {
 
 // Helper to get current season
 function getCurrentSeason() {
-  const month = new Date().getMonth();
-  if (month >= 2 && month <= 4) return 'spring';
-  if (month >= 5 && month <= 7) return 'summer';
-  if (month >= 8 && month <= 10) return 'fall';
+  const now = new Date();
+  const month = now.getMonth();
+  const day = now.getDate();
+  
+  // Spring: March 20 - June 19
+  // Summer: June 20 - September 21
+  // Fall: September 22 - December 20
+  // Winter: December 21 - March 19
+  
+  if (month === 2 && day >= 20 || month === 3 || month === 4 || month === 5 && day < 20) {
+    return 'spring';
+  }
+  if (month === 5 && day >= 20 || month === 6 || month === 7 || month === 8 && day < 22) {
+    return 'summer';
+  }
+  if (month === 8 && day >= 22 || month === 9 || month === 10 || month === 11 && day < 21) {
+    return 'fall';
+  }
   return 'winter';
 }
 
@@ -39,6 +53,7 @@ function simulateWeightedWeather(village, season) {
 
   // Get probabilities for current season
   const probabilities = weatherProbabilities[season.toLowerCase()] || weatherProbabilities.spring;
+  console.log(`[weatherModule.js]: Weather probabilities for ${village} in ${season}:`, probabilities);
   
   // Generate random number
   const random = Math.random();
@@ -48,22 +63,87 @@ function simulateWeightedWeather(village, season) {
   for (const [weather, probability] of Object.entries(probabilities)) {
     cumulativeProbability += probability;
     if (random <= cumulativeProbability) {
-      return {
+      const temp = getTemperatureForWeather(weather, season);
+      const result = {
         village,
-        weather,
-        temperature: getTemperatureForWeather(weather, season),
-        humidity: getHumidityForWeather(weather)
+        temperature: {
+          label: `${temp}°F`,
+          emoji: '🌡️',
+          probability: '100%'
+        },
+        wind: {
+          label: `${getWindSpeed(weather)} mph ${getWindDirection()}`,
+          emoji: '💨',
+          probability: '100%'
+        },
+        precipitation: {
+          label: capitalizeFirstLetter(weather),
+          emoji: getWeatherEmoji(weather),
+          probability: '100%'
+        },
+        season: season.toLowerCase()
       };
+      console.log(`[weatherModule.js]: Generated weather for ${village}:`, result);
+      return result;
     }
   }
   
   // Fallback to sunny weather
-  return {
+  const temp = getTemperatureForWeather('sunny', season);
+  const fallback = {
     village,
-    weather: 'sunny',
-    temperature: getTemperatureForWeather('sunny', season),
-    humidity: getHumidityForWeather('sunny')
+    temperature: {
+      label: `${temp}°F`,
+      emoji: '🌡️',
+      probability: '100%'
+    },
+    wind: {
+      label: `${getWindSpeed('sunny')} mph ${getWindDirection()}`,
+      emoji: '💨',
+      probability: '100%'
+    },
+    precipitation: {
+      label: 'Sunny',
+      emoji: '☀️',
+      probability: '100%'
+    },
+    season: season.toLowerCase()
   };
+  console.log(`[weatherModule.js]: Using fallback weather for ${village}:`, fallback);
+  return fallback;
+}
+
+// Helper to get wind speed based on weather
+function getWindSpeed(weather) {
+  const speeds = {
+    sunny: 5,
+    cloudy: 8,
+    rainy: 12,
+    snowy: 15
+  };
+  return speeds[weather] || 5;
+}
+
+// Helper to get random wind direction
+function getWindDirection() {
+  const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+  return directions[Math.floor(Math.random() * directions.length)];
+}
+
+// Helper to get weather emoji
+function getWeatherEmoji(weather) {
+  const emojis = {
+    sunny: '☀️',
+    cloudy: '☁️',
+    rainy: '🌧️',
+    snowy: '❄️'
+  };
+  return emojis[weather] || '☀️';
+}
+
+// Helper to capitalize first letter
+function capitalizeFirstLetter(string) {
+  return string.charAt(0).toUpperCase() + string.slice(1);
 }
 
 // Helper to get temperature based on weather and season
@@ -75,7 +155,9 @@ function getTemperatureForWeather(weather, season) {
     winter: { sunny: 40, cloudy: 35, snowy: 30 }
   };
   
-  return baseTemps[season.toLowerCase()]?.[weather] || 70;
+  const temp = baseTemps[season.toLowerCase()]?.[weather] || 70;
+  console.log(`[weatherModule.js]: Temperature for ${weather} in ${season}: ${temp}°F`);
+  return temp;
 }
 
 // Helper to get humidity based on weather
@@ -87,7 +169,9 @@ function getHumidityForWeather(weather) {
     snowy: 70
   };
   
-  return humidities[weather] || 50;
+  const humidity = humidities[weather] || 50;
+  console.log(`[weatherModule.js]: Humidity for ${weather}: ${humidity}%`);
+  return humidity;
 }
 
 // ------------------- Get Current Weather -------------------
@@ -99,6 +183,8 @@ async function getCurrentWeather(village) {
     
     // Check if we need to generate new weather (after 8 AM)
     const shouldGenerateNew = now.getHours() >= 8;
+    console.log(`[weatherModule.js]: Checking weather for ${village} (normalized: ${normalizedVillage})`);
+    console.log(`[weatherModule.js]: Should generate new weather: ${shouldGenerateNew}`);
     
     // Get today's weather
     let weather = await Weather.findOne({
@@ -109,19 +195,24 @@ async function getCurrentWeather(village) {
       }
     });
     
+    console.log(`[weatherModule.js]: Found existing weather:`, weather);
+    
     // If no weather exists or it's after 8 AM, generate new weather
     if (!weather || shouldGenerateNew) {
       const season = getCurrentSeason();
       const capitalizedSeason = capitalizeSeason(season);
-      console.log(`Generating new weather for ${village} in ${season} season`);
+      console.log(`[weatherModule.js]: Generating new weather for ${village} in ${season} season`);
       const newWeather = simulateWeightedWeather(normalizedVillage, capitalizedSeason);
       
       // Add date and season to weather data
-      newWeather.date = now;
-      newWeather.season = season; // Keep lowercase for database
+      newWeather.date = new Date();
+      newWeather.season = season;
+      
+      console.log(`[weatherModule.js]: Saving new weather data:`, newWeather);
       
       // Save new weather
       weather = await saveWeather(newWeather);
+      console.log(`[weatherModule.js]: Saved weather data:`, weather);
     }
     
     return weather;
