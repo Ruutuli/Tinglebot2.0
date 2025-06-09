@@ -87,6 +87,11 @@ async function fetchLabels() {
 // ============================================================================
 // ------------------- Create a Trello Card -------------------
 async function createTrelloCard({ threadName, username, content, images, createdAt, overrideListId, isErrorLog = false }) {
+  // Validate required environment variables
+  if (!TRELLO_API_KEY || !TRELLO_TOKEN) {
+    throw new Error('Missing required Trello credentials (API_KEY or TOKEN)');
+  }
+
   const dueDate = new Date(createdAt);
   dueDate.setHours(dueDate.getHours() + 48);
 
@@ -154,15 +159,24 @@ async function createTrelloCard({ threadName, username, content, images, created
 
   // ------------------- Build Card Payload -------------------
   const cardData = {
-    name: formattedName,
-    desc: formattedDesc,
+    name: formattedName || 'Untitled Card',  // Ensure name is never empty
+    desc: formattedDesc || '',  // Ensure description is never undefined
     idList: overrideListId || TRELLO_LIST_ID,
-    start: new Date(createdAt).toISOString(),
-    idLabels: matchedLabels
+    start: new Date(createdAt).toISOString(), // Ensure proper ISO string format
+    idLabels: matchedLabels || [],  // Ensure labels is never undefined
+    pos: 'bottom'  // Add position to ensure card is added at bottom of list
   };
 
   if (overrideListId !== TRELLO_WISHLIST) {
     cardData.due = dueDate.toISOString();
+  }
+
+  // Validate required fields before making request
+  if (!cardData.idList) {
+    throw new Error('Missing required field: idList');
+  }
+  if (!cardData.name) {
+    throw new Error('Missing required field: name');
   }
 
   // ------------------- Post Card and Attachments -------------------
@@ -175,28 +189,39 @@ async function createTrelloCard({ threadName, username, content, images, created
     });
     const cardId = response.data.id;
 
+    // Process attachments sequentially to avoid rate limits
     for (const imageUrl of images) {
-      await axios.post(`https://api.trello.com/1/cards/${cardId}/attachments`, null, {
-        params: {
-          url: imageUrl,
-          key: TRELLO_API_KEY,
-          token: TRELLO_TOKEN,
-          setCover: false,
-        },
-      });
+      try {
+        await axios.post(`https://api.trello.com/1/cards/${cardId}/attachments`, null, {
+          params: {
+            url: imageUrl,
+            key: TRELLO_API_KEY,
+            token: TRELLO_TOKEN,
+            setCover: false,
+          },
+        });
+      } catch (attachmentError) {
+        console.warn(`[trello.js]: Failed to attach image ${imageUrl}: ${attachmentError.message}`);
+      }
     }
 
     console.log(`[trello.js]: Trello card created: ${response.data.shortUrl}`);
     return response.data.shortUrl;
 
   } catch (error) {
-    handleError(error, 'trello.js');
-    const errorMsg = `[trello.js]: Failed to create Trello card: ${error.message}`;
-    console.error(errorMsg);
+    // Enhanced error logging
+    const errorDetails = {
+      status: error.response?.status,
+      data: error.response?.data,
+      message: error.message,
+      cardData: { ...cardData, desc: cardData.desc?.substring(0, 100) + '...' } // Truncate description for logging
+    };
+    
+    console.error('[trello.js]: Failed to create Trello card:', JSON.stringify(errorDetails, null, 2));
     
     // Only log to Trello if this isn't already an error logging attempt
     if (!isErrorLog) {
-      await logErrorToTrello(errorMsg, 'createTrelloCard');
+      await logErrorToTrello(`Failed to create Trello card: ${error.message}\nDetails: ${JSON.stringify(errorDetails)}`, 'createTrelloCard');
     }
     return null;
   }
