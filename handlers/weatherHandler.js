@@ -11,6 +11,7 @@ const weatherData = require('../data/weatherData');
 const { weatherWeightModifiers } = require('../data/weatherData');
 const { saveWeather } = require('../modules/weatherModule.js');
 const Weather = require('../models/WeatherModel');
+const { validateWeatherCombination, findWeatherEmoji } = require('../utils/weatherValidation');
 
 // Helper to normalize season names
 function normalizeSeason(season) {
@@ -75,14 +76,6 @@ function checkNumericCondition(value, condition) {
     case '>=': return value >= num;
     default: return true;
   }
-}
-
-// ------------------- Emoji Finder -------------------
-// Finds the corresponding emoji object for a category and label.
-function findWeatherEmoji(category, label) {
-  const items = weatherData[category];
-  if (!items) return null;
-  return items.find(item => item.label === label) || null;
 }
 
 // ============================================================================
@@ -161,6 +154,15 @@ function specialCandidateMatches(candidateLabel, simTemp, simWind, precipLabel) 
     if (cond === 'any') return true;
     return precipitationMatches(precipLabel, cond);
   });
+
+  // Log validation details for debugging
+  if (!tempOK || !windOK || !precipOK) {
+    console.log(`[weatherHandler.js]: Special weather validation failed for ${candidateLabel}:`, {
+      temperature: { conditions: tempConds, value: simTemp, valid: tempOK },
+      wind: { conditions: windConds, value: simWind, valid: windOK },
+      precipitation: { conditions: precipConds, value: precipLabel, valid: precipOK }
+    });
+  }
   
   return tempOK && windOK && precipOK;
 }
@@ -217,7 +219,7 @@ function getPrecipitationLabel(seasonData, simTemp, simWind, cloudyStreak, weigh
   
   // If no valid candidates, return null to indicate no valid precipitation
   if (validCandidates.length === 0) {
-    console.warn('[weatherHandler.js]: No valid precipitation candidates found for current conditions');
+    console.warn('[weatherHandler.js]: No valid precipitation candidates found');
     return null;
   }
   
@@ -229,7 +231,8 @@ function getPrecipitationLabel(seasonData, simTemp, simWind, cloudyStreak, weigh
     });
   }
   
-  return weightedChoice(validCandidates, adjustedWeights, modifierMap);
+  const selectedLabel = weightedChoice(validCandidates, adjustedWeights, modifierMap);
+  return selectedLabel;
 }
 
 // ------------------- Special Condition Selector -------------------
@@ -242,7 +245,14 @@ function getSpecialCondition(seasonData, simTemp, simWind, precipLabel, rainStre
     specialCandidateMatches(specialType, simTemp, simWind, precipLabel)
   );
   
-  if (validSpecials.length === 0) return null;
+  if (validSpecials.length === 0) {
+    console.log(`[weatherHandler.js]: No valid special conditions for current weather:`, {
+      temperature: simTemp,
+      wind: simWind,
+      precipitation: precipLabel
+    });
+    return null;
+  }
   
   const adjustedWeights = { ...weightMapping };
   if (rainStreak >= 2) {
@@ -252,7 +262,17 @@ function getSpecialCondition(seasonData, simTemp, simWind, precipLabel, rainStre
     });
   }
   
-  return weightedChoice(validSpecials, adjustedWeights, modifierMap);
+  const selectedSpecial = weightedChoice(validSpecials, adjustedWeights, modifierMap);
+  
+  // Log special weather selection details
+  console.log(`[weatherHandler.js]: Selected special weather: ${selectedSpecial}`, {
+    temperature: simTemp,
+    wind: simWind,
+    precipitation: precipLabel,
+    validSpecials: validSpecials.length
+  });
+  
+  return selectedSpecial;
 }
 
 // ============================================================================
@@ -260,6 +280,45 @@ function getSpecialCondition(seasonData, simTemp, simWind, precipLabel, rainStre
 // Main exported function for weighted simulation with smoothing and modifiers
 // ============================================================================
   
+// ------------------- Weight Modifier Validator -------------------
+// Validates that weight modifiers are within expected ranges and logs any issues
+function validateWeightModifiers(village, season, modifiers) {
+  const issues = [];
+  
+  // Check temperature modifiers
+  if (modifiers.temperature) {
+    Object.entries(modifiers.temperature).forEach(([temp, mod]) => {
+      if (mod < 0 || mod > 5) {
+        issues.push(`Invalid temperature modifier for ${temp}: ${mod} (should be between 0 and 5)`);
+      }
+    });
+  }
+  
+  // Check precipitation modifiers
+  if (modifiers.precipitation) {
+    Object.entries(modifiers.precipitation).forEach(([precip, mod]) => {
+      if (mod < 0 || mod > 5) {
+        issues.push(`Invalid precipitation modifier for ${precip}: ${mod} (should be between 0 and 5)`);
+      }
+    });
+  }
+  
+  // Check special weather modifiers
+  if (modifiers.special) {
+    Object.entries(modifiers.special).forEach(([special, mod]) => {
+      if (mod < 0 || mod > 5) {
+        issues.push(`Invalid special weather modifier for ${special}: ${mod} (should be between 0 and 5)`);
+      }
+    });
+  }
+  
+  if (issues.length > 0) {
+    console.warn(`[weatherHandler.js]: Weight modifier issues for ${village} in ${season}:`, issues);
+  }
+  
+  return issues.length === 0;
+}
+
 // ------------------- Weighted Weather Simulator -------------------
 // Simulates weather with weighting, smoothing, and modifiers.
 function simulateWeightedWeather(village, season) {
@@ -281,6 +340,13 @@ function simulateWeightedWeather(village, season) {
     const tempMods = weatherWeightModifiers[village]?.[normalizedSeason]?.temperature || {};
     const precipMods = weatherWeightModifiers[village]?.[normalizedSeason]?.precipitation || {};
     const specialMods = weatherWeightModifiers[village]?.[normalizedSeason]?.special || {};
+    
+    // Validate weight modifiers
+    validateWeightModifiers(village, normalizedSeason, {
+      temperature: tempMods,
+      precipitation: precipMods,
+      special: specialMods
+    });
 
     // ------------------- History & Streaks -------------------
     const history = weatherHistoryByVillage[village] || [];
@@ -467,6 +533,13 @@ function getSmoothedWind(windOptions, previous, weightMap) {
 // ------------------- History Updater -------------------
 // Updates weather history buffer for a village.
 async function updateWeatherHistory(village, weatherResult) {
+  // Validate weather combinations before updating history
+  if (!validateWeatherCombination(weatherResult)) {
+    console.error(`[weatherHandler.js]: Removing invalid weather combination for ${village}`);
+    // Remove invalid special weather
+    weatherResult.special = null;
+  }
+
   weatherHistoryByVillage[village] = weatherHistoryByVillage[village].slice(-2);
   weatherHistoryByVillage[village].push(weatherResult);
   
@@ -528,5 +601,6 @@ module.exports = {
   getSmoothWindChoices,
   getSmoothedTemperature,
   getSmoothedWind,
-  updateWeatherHistory
+  updateWeatherHistory,
+  validateWeatherCombination
 };
