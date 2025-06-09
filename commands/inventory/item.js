@@ -66,7 +66,7 @@ module.exports = {
   // ------------------- Execute Handler -------------------
   // Orchestrates the command flow: validation, business logic, side-effects, and response.
   async execute(interaction) {
-    await interaction.deferReply({ ephemeral: false });
+    await interaction.deferReply({ flags: [] });
 
     const characterName = interaction.options.getString('charactername');
     const itemName = interaction.options.getString('itemname');

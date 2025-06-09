@@ -268,7 +268,9 @@ async function fetchCharactersWithItem(itemName) {
     const inventoryCollection = await getCharacterInventoryCollection(char.name);
     const inventory = await inventoryCollection.find().toArray();
 
-    const itemEntry = inventory.find(item => item.itemName === itemName);
+    const itemEntry = inventory.find(item => 
+      item.itemName.toLowerCase() === itemName.toLowerCase()
+    );
     if (itemEntry) {
       charactersWithItem.push({ name: char.name, quantity: itemEntry.quantity });
     }
