@@ -172,8 +172,8 @@ async function createTrelloCard({ threadName, username, content, images, created
   }
 
   // Validate required fields before making request
-  if (!cardData.idList) {
-    throw new Error('Missing required field: idList');
+  if (!cardData.idList || typeof cardData.idList !== 'string' || cardData.idList.length < 8) {
+    throw new Error('Invalid or missing Trello list ID. Please check your environment variables.');
   }
   if (!cardData.name) {
     throw new Error('Missing required field: name');
@@ -230,7 +230,19 @@ async function createTrelloCard({ threadName, username, content, images, created
 // ============================================================================
 // ------------------- Log Error to Trello -------------------
 async function logErrorToTrello(errorMessage, source = 'Unknown Source') {
+  // Prevent infinite recursion by checking if this is already an error logging attempt
+  if (errorMessage.includes('Failed to create Trello card')) {
+    console.error('[trello.js]: Skipping Trello error logging to prevent recursion');
+    return null;
+  }
+
   const now = new Date().toISOString();
+
+  // Validate Trello credentials before attempting to create card
+  if (!TRELLO_API_KEY || !TRELLO_TOKEN || !TRELLO_LOG) {
+    console.error('[trello.js]: Missing required Trello credentials or list ID');
+    return null;
+  }
 
   const errorCard = {
     threadName: `${source} - Console Log Report`,
@@ -246,7 +258,6 @@ async function logErrorToTrello(errorMessage, source = 'Unknown Source') {
     const cardLink = await createTrelloCard(errorCard);
     return cardLink;
   } catch (e) {
-    handleError(e, 'trello.js');
     console.error(`[trello.js]: Failed to log error to Trello: ${e.message}`);
     return null;
   }

@@ -113,7 +113,7 @@ const {
 
 const DEFAULT_IMAGE_URL =
  "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png";
-const EDIT_NOTIFICATION_CHANNEL_ID = "1319524801408274434";
+const EDIT_NOTIFICATION_CHANNEL_ID = '1381479893090566144';
 const characterEmojis = [
  "🍃",
  "🍂",
@@ -1026,7 +1026,7 @@ async function handleCreateCharacter(interaction, subcommand) {
 
 
 async function handleEditCharacter(interaction) {
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: [4096] }); // 4096 is the flag for ephemeral messages
 
   try {
     const fullCharacterName = interaction.options.getString("charactername");
