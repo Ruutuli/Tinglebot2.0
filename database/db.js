@@ -80,8 +80,6 @@ async function connectToTinglebot() {
    const uri = env === 'development' ? dbConfig.tinglebot : dbConfig.tinglebot;
    try {
     tinglebotDbConnection = await mongoose.connect(uri, {
-     useNewUrlParser: true,
-     useUnifiedTopology: true,
      serverSelectionTimeoutMS: 30000,
      socketTimeoutMS: 45000,
      connectTimeoutMS: 30000,
@@ -95,14 +93,10 @@ async function connectToTinglebot() {
      maxIdleTimeMS: 60000,
      family: 4
     });
-    console.log(`[db.js]: Connected to Tinglebot database (${env})`);
    } catch (connectError) {
-    console.error("[db.js]: Error connecting to Tinglebot database:", connectError.message);
     // Try to reconnect once
     try {
      tinglebotDbConnection = await mongoose.connect(uri, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
       serverSelectionTimeoutMS: 30000,
       socketTimeoutMS: 45000,
       connectTimeoutMS: 30000,
@@ -116,9 +110,7 @@ async function connectToTinglebot() {
       maxIdleTimeMS: 60000,
       family: 4
      });
-     console.log(`[db.js]: Reconnected to Tinglebot database (${env})`);
     } catch (retryError) {
-     console.error("[db.js]: Failed to reconnect to Tinglebot database:", retryError.message);
      throw retryError;
     }
    }
@@ -126,7 +118,6 @@ async function connectToTinglebot() {
   return tinglebotDbConnection;
  } catch (error) {
   handleError(error, "connection.js");
-  console.error("[db.js]: Error in connectToTinglebot:", error.message);
   throw error;
  }
 }
@@ -143,8 +134,6 @@ async function connectToInventories() {
    }
    
    inventoriesDbConnection = await mongoose.createConnection(uri, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
     serverSelectionTimeoutMS: 30000,
     socketTimeoutMS: 45000,
     connectTimeoutMS: 30000,
@@ -162,13 +151,10 @@ async function connectToInventories() {
    // Set the database name based on environment
    const dbName = env === 'development' ? 'inventories_dev' : 'inventories';
    inventoriesDbConnection.useDb(dbName);
-   
-   console.log(`[db.js]: Connected to Inventories database (${env})`);
   }
   return inventoriesDbConnection;
  } catch (error) {
   handleError(error, "db.js");
-  console.error(`[db.js]: Error in connectToInventories:`, error.message);
   throw error;
  }
 }

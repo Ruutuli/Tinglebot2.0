@@ -29,7 +29,6 @@ const env = process.env.NODE_ENV || 'development';
 try {
   const envPath = path.resolve(process.cwd(), `.env.${env}`);
   dotenv.config({ path: envPath });
-  console.log(`[scheduler.js]: ✅ Loaded environment from ${envPath}`);
 } catch (error) {
   console.error(`[scheduler.js]: ❌ Failed to load .env.${env}:`, error.message);
   // Fallback to default .env

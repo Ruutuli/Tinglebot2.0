@@ -45,12 +45,31 @@ module.exports = (client) => {
     }
   }
 
-  if (errorCount === 0) {
-    console.log(`[commandHandler.js]: ✅ Successfully loaded all ${successCount} commands.`);
-    return true;
-  } else {
-    console.log(`[commandHandler.js]: ⚠️ Loaded ${successCount} commands with ${errorCount} errors:`);
-    errorMessages.forEach(msg => console.log(`[commandHandler.js]: - ${msg}`));
-    return false;
+  return errorCount === 0;
+};
+
+// Load commands
+const loadCommands = async (client) => {
+  const commands = [];
+  const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
+
+  for (const file of commandFiles) {
+    try {
+      const filePath = path.join(commandsPath, file);
+      const command = require(filePath);
+      
+      if (command.data && command.execute) {
+        commands.push(command.data.toJSON());
+      }
+    } catch (error) {
+      // Silently skip invalid commands
+      continue;
+    }
+  }
+
+  try {
+    await client.application.commands.set(commands);
+  } catch (error) {
+    // Silent fail on command setting error
   }
 };

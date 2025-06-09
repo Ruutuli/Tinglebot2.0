@@ -10,66 +10,10 @@ console.log(`[index.js]: Starting bot in ${env} mode`);
 
 // Load environment variables
 const envFile = isDevelopment ? '.env.development' : '.env.production';
-console.log(`[index.js]: Loading environment from ${envFile}`);
+dotenv.config({ path: envFile });
 
-// Log critical environment variables
-const criticalVars = {
-  'DISCORD_TOKEN': process.env.DISCORD_TOKEN,
-  'CLIENT_ID': process.env.CLIENT_ID,
-  'MONGODB_INVENTORIES_URI_DEV': process.env.MONGODB_INVENTORIES_URI_DEV,
-  'MONGODB_INVENTORIES_URI_PROD': process.env.MONGODB_INVENTORIES_URI_PROD
-};
-
-console.log('[index.js]: 🔑 Critical environment variables:', 
-  Object.entries(criticalVars)
-    .map(([key, value]) => `${key}: ${value ? '✅' : '❌'}`)
-    .join(', ')
-);
-
-// Try to load .env files in order of priority
-const possiblePaths = [
-  path.resolve(process.cwd(), `.env.${env}`),
-  path.resolve(process.cwd(), '..', `.env.${env}`),
-  path.resolve('/app', `.env.${env}`),
-  `.env.${env}`,
-  // Also try loading the other environment file as fallback
-  path.resolve(process.cwd(), `.env.${env === 'development' ? 'production' : 'development'}`),
-  path.resolve(process.cwd(), '..', `.env.${env === 'development' ? 'production' : 'development'}`),
-  path.resolve('/app', `.env.${env === 'development' ? 'production' : 'development'}`),
-  `.env.${env === 'development' ? 'production' : 'development'}`
-];
-
-let loaded = false;
-for (const envPath of possiblePaths) {
-  const result = dotenv.config({ path: envPath });
-  if (!result.error) {
-    console.log(`[index.js]: Loaded environment from ${envPath}`);
-    loaded = true;
-    break;
-  }
-}
-
-if (!loaded) {
-  console.log('[index.js]: No .env file found, using environment variables from Railway');
-}
-
-// Validate environment after loading
-const finalEnv = process.env.NODE_ENV || 'development';
-console.log(`[index.js]: Final environment check:`, {
-  NODE_ENV: process.env.NODE_ENV,
-  env: finalEnv,
-  isDevelopment: finalEnv === 'development'
-});
-
-// Log which environment variables were loaded
-console.log(`[index.js]: Running in ${finalEnv} mode on port ${process.env.PORT}`);
-console.log('[index.js]: Loaded environment variables:', {
-  DISCORD_TOKEN: process.env.DISCORD_TOKEN ? 'Set' : 'Not set',
-  CLIENT_ID: process.env.CLIENT_ID ? 'Set' : 'Not set',
-  FEEDBACK_FORUM_CHANNEL_ID: process.env.FEEDBACK_FORUM_CHANNEL_ID ? 'Set' : 'Not set',
-  MONGODB_INVENTORIES_URI_DEV: process.env.MONGODB_INVENTORIES_URI_DEV ? 'Set' : 'Not set',
-  MONGODB_INVENTORIES_URI_PROD: process.env.MONGODB_INVENTORIES_URI_PROD ? 'Set' : 'Not set'
-});
+// Remove all environment variable logging and checks
+const port = process.env.PORT || 5001;
 
 // ------------------- Standard Libraries -------------------
 const figlet = require("figlet");
@@ -116,6 +60,15 @@ const { convertToHyruleanDate } = require("./modules/calendarModule");
 // ------------------- Main Initialization -------------------
 // ============================================================================
 let client;
+
+// Suppress circular dependency warnings
+process.removeAllListeners('warning');
+process.on('warning', (warning) => {
+  if (warning.name === 'DeprecationWarning' || warning.name === 'ExperimentalWarning') {
+    return;
+  }
+  console.warn(warning);
+});
 
 // ----------------------------------------------------------------------------
 // ──────────────────── Database Initialization ──────────────────────────────
@@ -187,11 +140,8 @@ process.on('SIGTERM', async () => {
 // ----------------------------------------------------------------------------
 async function initializeClient() {
   try {
-    console.log("[index.js]: Starting bot initialization...");
-    
     // Initialize databases first
     await initializeDatabases();
-    console.log("[index.js]: Database initialization complete");
 
     client = new Client({
       intents: [
@@ -205,13 +155,11 @@ async function initializeClient() {
 
     // Add error handler for Discord client
     client.on('error', error => {
-      console.error('[index.js]: Discord client error:', error.message);
       process.exit(1);
     });
 
     // Add error handler for Discord connection
     client.on('disconnect', () => {
-      console.error('[index.js]: Discord client disconnected');
       process.exit(1);
     });
 
@@ -221,22 +169,10 @@ async function initializeClient() {
     const commandHandler = require("./handlers/commandHandler");
     commandHandler(client);
 
-    // // Add message event handler
-    // client.on('messageCreate', async (message) => {
-    //   await handleMessage(message);
-    // });
-
-    // --------------------------------------------------------------------------
-    // Ready Event: Attach global error handler to send errors to Trello
-    // --------------------------------------------------------------------------
     client.once("ready", async () => {
-      console.log(`[index.js]: 🤖 Logged in as ${client.user.tag}!`);
       initializeErrorHandler(logErrorToTrello, client);
     });
 
-    // --------------------------------------------------------------------------
-    // Ready Event: ASCII banner and bot feature initialization
-    // --------------------------------------------------------------------------
     client.once("ready", async () => {
       console.clear();
 
@@ -248,10 +184,7 @@ async function initializeClient() {
           verticalLayout: "default",
         },
         async (err, data) => {
-          if (err) {
-            console.error("[index.js]: ❌ Figlet error:", err);
-            return;
-          }
+          if (err) return;
 
           console.log(data);
           console.log("==========================================================");
@@ -262,18 +195,9 @@ async function initializeClient() {
             initializeReactionHandler(client);
             logBloodMoonStatus();
             initializeScheduler(client);
-            // initializeRandomEncounterBot(client);
             startExpirationChecks(client);
-
-            // Log initialization status
-            console.log("----------------------------------------------------------");
-            console.log("[index.js]: ✅ Core Systems Initialized");
-            console.log("==========================================================");
-            console.log("[index.js]: 🚀 Tinglebot 2.0 is fully operational!");
-            console.log("==========================================================");
           } catch (error) {
             handleError(error, "index.js");
-            console.error("[index.js]: ❌ Error during initialization:", error);
           }
         }
       );
