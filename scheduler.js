@@ -22,7 +22,6 @@ const { loadBlightSubmissions, saveBlightSubmissions } = require('./handlers/bli
 const { connectToInventories } = require('./handlers/blightHandler');
 const { getCurrentWeather, saveWeather } = require('./modules/weatherModule');
 const Pet = require('./models/PetModel');
-const { client } = require('./index');
 
 // Load environment variables based on NODE_ENV
 const env = process.env.NODE_ENV || 'development';
@@ -254,7 +253,7 @@ async function handleJailRelease(client) {
 
 // ---- Function: handleDebuffExpiry ----
 // Removes expired debuffs from characters
-async function handleDebuffExpiry() {
+async function handleDebuffExpiry(client) {
   const now = new Date();
   const charactersWithActiveDebuffs = await Character.find({
     'debuff.active': true,
@@ -275,7 +274,7 @@ async function handleDebuffExpiry() {
 
 // ---- Function: resetDailyRolls ----
 // Resets daily rolls for all characters
-async function resetDailyRolls() {
+async function resetDailyRolls(client) {
   try {
     const characters = await Character.find({});
     let resetCount = 0;
@@ -298,7 +297,7 @@ async function resetDailyRolls() {
 
 // ---- Function: resetPetLastRollDates ----
 // Resets lastRollDate for all pets to allow daily rolls
-async function resetPetLastRollDates() {
+async function resetPetLastRollDates(client) {
   try {
     const result = await Pet.updateMany(
       { status: 'active' },
@@ -376,23 +375,21 @@ function initializeScheduler(client) {
 
   // Initialize all schedulers
   createCronJob('0 0 * * *', 'jail release check', () => handleJailRelease(client));
-  createCronJob('0 8 * * *', 'reset daily rolls', resetDailyRolls);
-  createCronJob('0 8 * * *', 'daily stamina recovery', recoverDailyStamina);
-  createCronJob('0 0 1 * *', 'monthly vending stock generation', generateVendingStockList);
-  createCronJob('0 0 * * 0', 'weekly pet rolls reset', async () => {
-    await resetPetRollsForAllCharacters();
-  }, 'America/New_York');
-  createCronJob('0 0 * * *', 'reset pet last roll dates', resetPetLastRollDates);
-  createCronJob('0 0 * * *', 'request expiration and cleanup', async () => {
-    await Promise.all([
+  createCronJob('0 8 * * *', 'reset daily rolls', () => resetDailyRolls(client));
+  createCronJob('0 8 * * *', 'daily stamina recovery', () => recoverDailyStamina(client));
+  createCronJob('0 0 1 * *', 'monthly vending stock generation', () => generateVendingStockList(client));
+  createCronJob('0 0 * * 0', 'weekly pet rolls reset', () => resetPetRollsForAllCharacters(client));
+  createCronJob('0 0 * * *', 'reset pet last roll dates', () => resetPetLastRollDates(client));
+  createCronJob('0 0 * * *', 'request expiration and cleanup', () => {
+    Promise.all([
       cleanupExpiredEntries(),
       cleanupExpiredHealingRequests(),
       checkExpiredRequests(client),
       cleanupExpiredBlightRequests()
     ]);
   });
-  createCronJob('0 0 * * *', 'debuff expiry check', handleDebuffExpiry);
-  createCronJob('0 8  * * *', 'daily weather update', () => postWeatherUpdate(client), 'America/New_York');
+  createCronJob('0 0 * * *', 'debuff expiry check', () => handleDebuffExpiry(client));
+  createCronJob('0 8  * * *', 'daily weather update', () => postWeatherUpdate(client));
   createCronJob('0 0 * * *', 'birthday announcements', () => executeBirthdayAnnouncements(client));
   
   // Initialize blight scheduler
@@ -423,11 +420,16 @@ function initializeScheduler(client) {
   }, 'America/New_York');
 }
 
+// Export all functions
 module.exports = {
   initializeScheduler,
   setupBlightScheduler,
   postWeatherUpdate,
-  cleanupExpiredHealingRequests
+  executeBirthdayAnnouncements,
+  handleJailRelease,
+  handleDebuffExpiry,
+  resetDailyRolls,
+  resetPetLastRollDates
 };
 
 
