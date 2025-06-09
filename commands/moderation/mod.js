@@ -1053,7 +1053,7 @@ Your changes have been successfully applied!`);
       }
 
       return interaction.editReply({
-        content: `✅ Character edit request approved and applied successfully.`,
+        content: `✅ Character edit request approved and applied successfully.\nRequest ID: \`${requestId}\``,
         ephemeral: true
       });
     } catch (err) {
