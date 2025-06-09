@@ -139,13 +139,7 @@ function validateWeatherCombination(weather) {
   }
   
   if (issues.length > 0) {
-    console.error(`[weatherValidation.js]: Invalid weather combination detected for ${weather.village}:`, {
-      temperature: weather.temperature.label,
-      wind: weather.wind.label,
-      precipitation: weather.precipitation.label,
-      special: weather.special?.label,
-      issues
-    });
+    return false;
   }
   
   return issues.length === 0;
