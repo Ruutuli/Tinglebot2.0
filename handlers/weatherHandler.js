@@ -99,11 +99,17 @@ const precipitationAliases = {
 function precipitationMatches(label, condition) {
   const normalizedLabel = label.toLowerCase();
   const normalizedCond = condition.toLowerCase();
+  
+  // Handle "any" condition
   if (normalizedCond === 'any') return true;
+  
+  // Handle precipitation aliases
   if (precipitationAliases[normalizedCond]) {
     return precipitationAliases[normalizedCond]
       .some(alias => alias.toLowerCase() === normalizedLabel);
   }
+  
+  // Handle exact matches
   return normalizedLabel === normalizedCond;
 }
 
@@ -112,9 +118,21 @@ function precipitationMatches(label, condition) {
 function candidateMatches(candidateLabel, simTemp, simWind) {
   const candidateObj = findWeatherEmoji('precipitations', candidateLabel);
   if (!candidateObj || !candidateObj.conditions) return true;
+  
   const { temperature: tempConds, wind: windConds } = candidateObj.conditions;
-  const tempOK = !tempConds || tempConds.every(cond => checkNumericCondition(simTemp, cond));
-  const windOK = !windConds || windConds.every(cond => checkNumericCondition(simWind, cond));
+  
+  // Handle temperature conditions
+  const tempOK = !tempConds || tempConds.every(cond => {
+    if (cond === 'any') return true;
+    return checkNumericCondition(simTemp, cond);
+  });
+  
+  // Handle wind conditions
+  const windOK = !windConds || windConds.every(cond => {
+    if (cond === 'any') return true;
+    return checkNumericCondition(simWind, cond);
+  });
+  
   return tempOK && windOK;
 }
 
@@ -123,10 +141,27 @@ function candidateMatches(candidateLabel, simTemp, simWind) {
 function specialCandidateMatches(candidateLabel, simTemp, simWind, precipLabel) {
   const candidateObj = findWeatherEmoji('specials', candidateLabel);
   if (!candidateObj || !candidateObj.conditions) return true;
+  
   const { temperature: tempConds, wind: windConds, precipitation: precipConds } = candidateObj.conditions;
-  const tempOK = !tempConds || tempConds.every(cond => cond.toLowerCase() === 'any' || checkNumericCondition(simTemp, cond));
-  const windOK = !windConds || windConds.every(cond => cond.toLowerCase() === 'any' || checkNumericCondition(simWind, cond));
-  const precipOK = !precipConds || precipConds.some(cond => precipitationMatches(precipLabel, cond));
+  
+  // Handle temperature conditions
+  const tempOK = !tempConds || tempConds.every(cond => {
+    if (cond === 'any') return true;
+    return checkNumericCondition(simTemp, cond);
+  });
+  
+  // Handle wind conditions
+  const windOK = !windConds || windConds.every(cond => {
+    if (cond === 'any') return true;
+    return checkNumericCondition(simWind, cond);
+  });
+  
+  // Handle precipitation conditions
+  const precipOK = !precipConds || precipConds.some(cond => {
+    if (cond === 'any') return true;
+    return precipitationMatches(precipLabel, cond);
+  });
+  
   return tempOK && windOK && precipOK;
 }
 
@@ -175,9 +210,17 @@ function calculateCandidateProbability(candidates, weightMapping, selectedCandid
 // ------------------- Precipitation Label Selector -------------------
 // Selects precipitation label based on seasonData, temperature, wind, and dynamic weights.
 function getPrecipitationLabel(seasonData, simTemp, simWind, cloudyStreak, weightMapping, modifierMap = {}) {
-  const validCandidates = seasonData.Precipitation.filter(label => candidateMatches(label, simTemp, simWind));
-  const pool = validCandidates.length ? validCandidates : seasonData.Precipitation;
-
+  // First filter out invalid candidates based on conditions
+  const validCandidates = seasonData.Precipitation.filter(label => 
+    candidateMatches(label, simTemp, simWind)
+  );
+  
+  // If no valid candidates, return null to indicate no valid precipitation
+  if (validCandidates.length === 0) {
+    console.warn('[weatherHandler.js]: No valid precipitation candidates found for current conditions');
+    return null;
+  }
+  
   const adjustedWeights = { ...weightMapping };
   if (cloudyStreak > 0) {
     const boostFactor = 1 + cloudyStreak * 0.5;
@@ -185,14 +228,22 @@ function getPrecipitationLabel(seasonData, simTemp, simWind, cloudyStreak, weigh
       adjustedWeights[label] = (adjustedWeights[label] ?? 0.01) * boostFactor;
     });
   }
-  return weightedChoice(pool, adjustedWeights, modifierMap);
+  
+  return weightedChoice(validCandidates, adjustedWeights, modifierMap);
 }
 
 // ------------------- Special Condition Selector -------------------
 // Selects special weather condition based on dynamic rules (e.g., floods after rain).
 function getSpecialCondition(seasonData, simTemp, simWind, precipLabel, rainStreak, weightMapping, modifierMap = {}) {
   if (!seasonData.Special.length || Math.random() >= 0.3) return null;
-
+  
+  // Filter out invalid special conditions based on current weather
+  const validSpecials = seasonData.Special.filter(specialType => 
+    specialCandidateMatches(specialType, simTemp, simWind, precipLabel)
+  );
+  
+  if (validSpecials.length === 0) return null;
+  
   const adjustedWeights = { ...weightMapping };
   if (rainStreak >= 2) {
     const boostFactor = rainStreak >= 3 ? 2 : 1.5;
@@ -200,14 +251,8 @@ function getSpecialCondition(seasonData, simTemp, simWind, precipLabel, rainStre
       adjustedWeights[label] = (adjustedWeights[label] ?? 0.01) * boostFactor;
     });
   }
-
-  for (let i = 0; i < 5; i++) {
-    const candidate = weightedChoice(seasonData.Special, adjustedWeights, modifierMap);
-    if (specialCandidateMatches(candidate, simTemp, simWind, precipLabel)) {
-      return candidate;
-    }
-  }
-  return null;
+  
+  return weightedChoice(validSpecials, adjustedWeights, modifierMap);
 }
 
 // ============================================================================
@@ -427,12 +472,34 @@ async function updateWeatherHistory(village, weatherResult) {
   
   // Add required fields to weather data before saving
   const weatherDataWithRequiredFields = {
-    ...weatherResult,
     village: village,
     date: new Date(),
-    season: weatherResult.season, // Already lowercase from simulateWeightedWeather
-    botId: '603960955839447050' // Main bot ID
+    season: weatherResult.season.toLowerCase(),
+    temperature: {
+      label: weatherResult.temperature.label,
+      emoji: weatherResult.temperature.emoji,
+      probability: weatherResult.temperature.probability
+    },
+    wind: {
+      label: weatherResult.wind.label,
+      emoji: weatherResult.wind.emoji,
+      probability: weatherResult.wind.probability
+    },
+    precipitation: {
+      label: weatherResult.precipitation.label,
+      emoji: weatherResult.precipitation.emoji,
+      probability: weatherResult.precipitation.probability
+    }
   };
+
+  // Add special weather if it exists
+  if (weatherResult.special) {
+    weatherDataWithRequiredFields.special = {
+      label: weatherResult.special.label,
+      emoji: weatherResult.special.emoji,
+      probability: weatherResult.special.probability
+    };
+  }
   
   // Save weather to database using Weather model's static method
   await Weather.saveWeather(weatherDataWithRequiredFields);

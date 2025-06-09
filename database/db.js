@@ -1924,13 +1924,13 @@ const connectToInventoriesForItems = async () => {
                 family: 4
             });
             await inventoriesClient.connect();
-            // Use tinglebot_dev database for items
-            inventoriesDb = inventoriesClient.db('tinglebot_dev');
-            console.log(`[db.js]: 🔌 Connected to Items database: tinglebot_dev`);
+            // Use tinglebot database for items
+            inventoriesDb = inventoriesClient.db('tinglebot');
+            console.log(`[db.js]: 🔌 Connected to Items database: tinglebot`);
         } else {
             // Try to ping the server to check connection
             try {
-                await inventoriesClient.db('tinglebot_dev').command({ ping: 1 });
+                await inventoriesClient.db('tinglebot').command({ ping: 1 });
             } catch (error) {
                 // If ping fails, reconnect
                 await inventoriesClient.close();
@@ -1951,8 +1951,8 @@ const connectToInventoriesForItems = async () => {
                     family: 4
                 });
                 await inventoriesClient.connect();
-                inventoriesDb = inventoriesClient.db('tinglebot_dev');
-                console.log(`[db.js]: 🔌 Reconnected to Items database: tinglebot_dev`);
+                inventoriesDb = inventoriesClient.db('tinglebot');
+                console.log(`[db.js]: 🔌 Reconnected to Items database: tinglebot`);
             }
         }
         return inventoriesDb;

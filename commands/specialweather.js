@@ -16,7 +16,7 @@ const { fetchCharacterByNameAndUserId, fetchAllItems } = require('../database/db
 const { createWeightedItemList } = require('../modules/rngModule.js');
 const { handleError } = require('../utils/globalErrorHandler.js');
 const { syncToInventoryDatabase, SOURCE_TYPES } = require('../utils/inventoryUtils.js');
-const { getCurrentWeather } = require('../modules/weatherModule.js');
+const { getWeatherWithoutGeneration } = require('../modules/weatherModule.js');
 const { enforceJail } = require('../utils/jailCheck.js');
 const { checkInventorySync } = require('../utils/characterUtils.js');
 
@@ -326,7 +326,9 @@ module.exports = {
       // Convert lastSpecialWeatherGather to Date object if it's a string
       const lastGather = character.lastSpecialWeatherGather ? new Date(character.lastSpecialWeatherGather) : null;
       
-      if (lastGather && lastGather > rollover) {
+      // Skip daily limit check for moderator characters
+      const isModerator = ['inarikomod', 'rudaniamod', 'vhintlmod'].includes(character.name.toLowerCase());
+      if (!isModerator && lastGather && lastGather > rollover) {
         const nextGather = new Date(rollover);
         nextGather.setDate(nextGather.getDate() + 1);
         const unixTimestamp = Math.floor(nextGather.getTime() / 1000);
@@ -349,7 +351,7 @@ module.exports = {
 
       // Get current weather for the village
       const currentVillage = channelVillage; // Use the village from the channel
-      const weather = await getCurrentWeather(currentVillage);
+      const weather = await getWeatherWithoutGeneration(currentVillage);
 
       
       if (!weather || !weather.special || !weather.special.label) {
