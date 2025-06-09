@@ -158,9 +158,7 @@ async function createTrelloCard({ threadName, username, content, images, created
     desc: formattedDesc,
     idList: overrideListId || TRELLO_LIST_ID,
     start: new Date(createdAt).toISOString(),
-    idLabels: matchedLabels,
-    key: TRELLO_API_KEY,
-    token: TRELLO_TOKEN,
+    idLabels: matchedLabels
   };
 
   if (overrideListId !== TRELLO_WISHLIST) {
@@ -169,7 +167,12 @@ async function createTrelloCard({ threadName, username, content, images, created
 
   // ------------------- Post Card and Attachments -------------------
   try {
-    const response = await axios.post('https://api.trello.com/1/cards', cardData);
+    const response = await axios.post('https://api.trello.com/1/cards', cardData, {
+      params: {
+        key: TRELLO_API_KEY,
+        token: TRELLO_TOKEN
+      }
+    });
     const cardId = response.data.id;
 
     for (const imageUrl of images) {
