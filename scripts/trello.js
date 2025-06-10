@@ -238,9 +238,15 @@ async function logErrorToTrello(errorMessage, source = 'Unknown Source') {
 
   const now = new Date().toISOString();
 
-  // Validate Trello credentials before attempting to create card
+  // Validate Trello credentials and list ID before attempting to create card
   if (!TRELLO_API_KEY || !TRELLO_TOKEN || !TRELLO_LOG) {
     console.error('[trello.js]: Missing required Trello credentials or list ID');
+    return null;
+  }
+
+  // Validate that TRELLO_LOG is a valid Trello list ID (should be 24 characters)
+  if (TRELLO_LOG.length !== 24 || !/^[0-9a-fA-F]{24}$/.test(TRELLO_LOG)) {
+    console.error('[trello.js]: Invalid TRELLO_LOG ID format. Must be a 24-character hex string.');
     return null;
   }
 

@@ -773,8 +773,8 @@ async function handleCreateCharacter(interaction, subcommand) {
       await interaction.editReply({
         content:
           "❌ You do not have enough character slots available to create a new character.",
-        flags: [MessageFlags.Ephemeral]
-      });
+     flags: [MessageFlags.Ephemeral]
+    });
       return;
     }
 
@@ -1035,19 +1035,32 @@ async function handleEditCharacter(interaction) {
 
   try {
     const fullCharacterName = interaction.options.getString("charactername");
+    console.log(`[handleEditCharacter] Starting edit for character: ${fullCharacterName}`);
+    
     const characterName = fullCharacterName?.split(' | ')[0];
+    console.log(`[handleEditCharacter] Parsed character name: ${characterName}`);
+    
     const category = interaction.options.getString("category");
+    console.log(`[handleEditCharacter] Edit category: ${category}`);
+    
     const updatedInfo = interaction.options.getString("updatedinfo");
+    console.log(`[handleEditCharacter] Updated info: ${updatedInfo}`);
+    
     const userId = interaction.user.id;
     const newIcon = interaction.options.getAttachment("newicon");
+    console.log(`[handleEditCharacter] User ID: ${userId}, Has new icon: ${!!newIcon}`);
 
     await connectToTinglebot();
+    console.log('[handleEditCharacter] Connected to Tinglebot database');
 
     const character = await fetchCharacterByNameAndUserId(characterName, userId);
+    console.log(`[handleEditCharacter] Character found: ${!!character}`);
+    
     if (!character) {
+      console.log(`[handleEditCharacter] Character not found for name: ${characterName} and user: ${userId}`);
       await interaction.followUp({
         embeds: [{
-          color: 0xFF0000, // Red color
+          color: 0xFF0000,
           title: '❌ Character Not Found',
           description: `The character "${characterName}" does not exist in the database.`,
           image: {
@@ -1064,19 +1077,29 @@ async function handleEditCharacter(interaction) {
 
     // Get actual spirit orb count from inventory
     await connectToInventories();
+    console.log('[handleEditCharacter] Connected to Inventories database');
+    
     const inventoryCollection = await getCharacterInventoryCollection(character.name);
+    console.log(`[handleEditCharacter] Got inventory collection for ${character.name}`);
+    
     const spiritOrb = await inventoryCollection.findOne({
       characterId: character._id,
       itemName: { $regex: /^spirit orb$/i }
     });
+    console.log(`[handleEditCharacter] Found spirit orb: ${!!spiritOrb}`);
+    
     character.spiritOrbs = spiritOrb?.quantity || 0;
+    console.log(`[handleEditCharacter] Set spirit orbs to: ${character.spiritOrbs}`);
 
     let previousValue = character[category] !== undefined ? character[category] : "N/A";
     let updatedValue = updatedInfo;
+    console.log(`[handleEditCharacter] Previous value: ${previousValue}, Updated value: ${updatedValue}`);
 
     // Validate the edit based on category
     if (category === "job") {
+      console.log('[handleEditCharacter] Validating job change');
       if (!isValidJob(updatedInfo)) {
+        console.log(`[handleEditCharacter] Invalid job: ${updatedInfo}`);
         await interaction.followUp({
           content: `❌ **${updatedInfo}** is not a valid job. Please select a valid job from the list.`,
           flags: [MessageFlags.Ephemeral]
@@ -1084,7 +1107,9 @@ async function handleEditCharacter(interaction) {
         return;
       }
       const validationResult = await canChangeJob(character, updatedInfo);
+      console.log(`[handleEditCharacter] Job change validation result:`, validationResult);
       if (!validationResult.valid) {
+        console.log(`[handleEditCharacter] Job change validation failed: ${validationResult.message}`);
         await interaction.followUp({
           content: validationResult.message,
           flags: [MessageFlags.Ephemeral]
@@ -1092,7 +1117,9 @@ async function handleEditCharacter(interaction) {
         return;
       }
     } else if (category === "race") {
+      console.log('[handleEditCharacter] Validating race change');
       if (!isValidRace(updatedInfo)) {
+        console.log(`[handleEditCharacter] Invalid race: ${updatedInfo}`);
         await interaction.followUp({
           content: `⚠️ **${updatedInfo}** is not a valid race.`,
           flags: [MessageFlags.Ephemeral]
@@ -1175,17 +1202,47 @@ async function handleEditCharacter(interaction) {
       console.error(`[character.js]: Error sending update notification: ${err.message}`);
     }
 
-    await interaction.followUp({
-      content: `✅ Your edit request for **${character.name}** has been submitted and is pending mod approval.`,
-      flags: [MessageFlags.Ephemeral]
-    });
+    // Update the character
+    console.log(`[handleEditCharacter] Updating character ${character.name} with category ${category}`);
+    character[category] = updatedValue;
+    await character.save();
+    console.log(`[handleEditCharacter] Character saved successfully`);
+
+    // Send success message
+    const successMessage = `✅ Successfully updated ${character.name}'s ${category} from "${previousValue}" to "${updatedValue}"`;
+    console.log(`[handleEditCharacter] Sending success message: ${successMessage}`);
+    
+    if (!interaction.replied && !interaction.deferred) {
+      console.log('[handleEditCharacter] Using reply');
+      await interaction.reply({
+        content: successMessage,
+        flags: [MessageFlags.Ephemeral]
+      });
+    } else {
+      console.log('[handleEditCharacter] Using followUp');
+      await interaction.followUp({
+        content: successMessage,
+        flags: [MessageFlags.Ephemeral]
+      });
+    }
+    console.log('[handleEditCharacter] Success message sent');
 
   } catch (error) {
+    console.error('[handleEditCharacter] Error occurred:', error);
     handleError(error, "character.js");
-    await interaction.followUp({
-      content: `⚠️ **There was an error processing your edit request: ${error.message}**`,
-      flags: [MessageFlags.Ephemeral]
-    });
+    if (!interaction.replied && !interaction.deferred) {
+      console.log('[handleEditCharacter] Error: Using reply');
+      await interaction.reply({
+        content: "❌ An error occurred while processing your request.",
+        flags: [MessageFlags.Ephemeral]
+      });
+    } else {
+      console.log('[handleEditCharacter] Error: Using followUp');
+      await interaction.followUp({
+        content: "❌ An error occurred while processing your request.",
+        flags: [MessageFlags.Ephemeral]
+      });
+    }
   }
 }
 
