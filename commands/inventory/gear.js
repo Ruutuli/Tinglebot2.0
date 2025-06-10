@@ -4,7 +4,7 @@
 
 // ------------------- Discord.js Components -------------------
 // Import Discord.js classes for building slash commands.
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require('discord.js');
 
 
 const { handleError } = require('../../utils/globalErrorHandler.js');
@@ -81,7 +81,7 @@ module.exports = {
       if (status && status !== 'equip' && status !== 'unequip') {
         await interaction.editReply({
           content: `❌ **Invalid status selected. Please choose either "Equip" or "Unequip".**`,
-          ephemeral: true,
+          flags: [MessageFlags.Ephemeral],
         });
         return;
       }
@@ -90,12 +90,12 @@ module.exports = {
 
       // ------------------- Acknowledge Interaction -------------------
       // Defer reply to avoid timeout.
-      await interaction.deferReply({ flags: [4096] }); // 4096 is the flag for ephemeral messages
+      await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
 
       // ------------------- Fetch Character Details -------------------
       const character = await fetchCharacterByNameAndUserId(characterName, userId);
       if (!character) {
-        await interaction.editReply({ content: `❌ **Character ${characterName} not found or does not belong to you.**` });
+        await interaction.editReply({ content: `❌ **Character ${characterName} not found or does not belong to you.**`, flags: [MessageFlags.Ephemeral] });
         return;
       }
 
@@ -105,7 +105,7 @@ module.exports = {
       } catch (error) {
         await interaction.editReply({
           content: error.message,
-          ephemeral: true
+          flags: [MessageFlags.Ephemeral]
         });
         return;
       }
@@ -165,7 +165,7 @@ module.exports = {
 
         // Create and send the updated gear embed.
         const gearEmbed = createCharacterGearEmbed(updatedCharacter, updatedGearMap, type);
-        await interaction.editReply({ content: `✅ **${type.charAt(0).toUpperCase() + type.slice(1)} has been unequipped from ${characterName}.**`, embeds: [gearEmbed] });
+        await interaction.editReply({ content: `✅ **${type.charAt(0).toUpperCase() + type.slice(1)} has been unequipped from ${characterName}.**`, embeds: [gearEmbed], flags: [MessageFlags.Ephemeral] });
         return;
       }
 
@@ -195,7 +195,7 @@ module.exports = {
             .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
             .setFooter({ text: 'Inventory Validation' })
             .setTimestamp()],
-          ephemeral: true 
+          flags: [MessageFlags.Ephemeral]
         });
         return;
       }
@@ -204,7 +204,7 @@ module.exports = {
       // Get item details from the item database.
       const itemDetail = await ItemModel.findOne({ itemName });
       if (!itemDetail) {
-        await interaction.editReply({ content: `❌ **Item ${itemName} not found in the item database.**` });
+        await interaction.editReply({ content: `❌ **Item ${itemName} not found in the item database.**`, flags: [MessageFlags.Ephemeral] });
         return;
       }
 
@@ -220,13 +220,13 @@ module.exports = {
       if (['head', 'chest', 'legs'].includes(type)) {
         if (!categories.includes('armor') || !types.includes(type)) {
           console.log(`[gear.js]: Item mismatch - Expected Armor with ${type}, got: Category: ${categories}, Type: ${types}`);
-          await interaction.editReply({ content: `❌ **${itemName} is an ${types.join(', ') || 'unknown'} item and cannot be equipped to the ${type} slot!**` });
+          await interaction.editReply({ content: `❌ **${itemName} is an ${types.join(', ') || 'unknown'} item and cannot be equipped to the ${type} slot!**`, flags: [MessageFlags.Ephemeral] });
           return;
         }
       } else if (type === 'weapon') {
         if (!categories.includes('weapon')) {
           console.log(`[gear.js]: Item mismatch - Expected Weapon, got: ${categories}`);
-          await interaction.editReply({ content: `❌ **${itemName} is not a weapon and cannot be equipped to the weapon slot.**` });
+          await interaction.editReply({ content: `❌ **${itemName} is not a weapon and cannot be equipped to the weapon slot.**`, flags: [MessageFlags.Ephemeral] });
           return;
         }
       } else if (type === 'shield') {
@@ -236,12 +236,12 @@ module.exports = {
       
         if (!isShield) {
           console.log(`[gear.js]: Item mismatch - Expected Shield, got Category: ${categories}, Subtype: ${subtypes}`);
-          await interaction.editReply({ content: `❌ **${itemName} is not recognized as a shield and cannot be equipped to the shield slot.**` });
+          await interaction.editReply({ content: `❌ **${itemName} is not recognized as a shield and cannot be equipped to the shield slot.**`, flags: [MessageFlags.Ephemeral] });
           return;
         }      
       } else {
         console.log(`[gear.js]: Invalid slot type detected - ${type}`);
-        await interaction.editReply({ content: `❌ **Invalid slot type selected for equipping ${itemName}.**` });
+        await interaction.editReply({ content: `❌ **Invalid slot type selected for equipping ${itemName}.**`, flags: [MessageFlags.Ephemeral] });
         return;
       }
 
@@ -329,12 +329,12 @@ module.exports = {
       // ------------------- Create and Send Gear Embed -------------------
       console.log(`[gear.js]: Generating gear embed for ${character.name}`);
       const gearEmbed = createCharacterGearEmbed(updatedCharacter, updatedGearMap, type);
-      await interaction.editReply({ content: `✅ **${itemName} has been equipped to the ${type} slot for ${characterName}.** ${unequippedMessage}`, embeds: [gearEmbed] });
+      await interaction.editReply({ content: `✅ **${itemName} has been equipped to the ${type} slot for ${characterName}.** ${unequippedMessage}`, embeds: [gearEmbed], flags: [MessageFlags.Ephemeral] });
     } catch (error) {
     handleError(error, 'gear.js');
 
       console.error(`[gear.js]: Error executing gear command: ${error.message}`);
-      await interaction.editReply({ content: `❌ **An error occurred while executing the gear command. Please try again later.**` });
+      await interaction.editReply({ content: `❌ **An error occurred while executing the gear command. Please try again later.**`, flags: [MessageFlags.Ephemeral] });
     }
   }
 };
