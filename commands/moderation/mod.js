@@ -921,6 +921,33 @@ async function handleApproveEdit(interaction) {
       });
     }
 
+    // Update the character in the database if approved
+    if (shouldApprove) {
+      try {
+        // Handle special cases for certain fields
+        let updateValue = pendingEdit.updatedValue;
+        if (pendingEdit.category === 'age' || pendingEdit.category === 'hearts' || pendingEdit.category === 'stamina') {
+          updateValue = parseInt(pendingEdit.updatedValue);
+        } else if (pendingEdit.category === 'height') {
+          updateValue = parseFloat(pendingEdit.updatedValue);
+        }
+
+        // Update the character
+        await Character.findByIdAndUpdate(
+          pendingEdit.characterId,
+          { $set: { [pendingEdit.category]: updateValue } },
+          { new: true }
+        );
+        console.log(`[mod.js]: ✅ Successfully updated character ${character.name}'s ${pendingEdit.category} to ${updateValue}`);
+      } catch (err) {
+        console.error(`[mod.js]: ❌ Error updating character in database:`, err);
+        return interaction.editReply({
+          content: '❌ Failed to update the character in the database. Please try again.',
+          ephemeral: true
+        });
+      }
+    }
+
     // Try to update the original notification message first
     let notificationUpdated = false;
     try {

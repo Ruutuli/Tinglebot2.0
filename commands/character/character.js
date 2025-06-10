@@ -9,6 +9,7 @@ const {
  ActionRowBuilder,
  ButtonBuilder,
  ButtonStyle,
+ MessageFlags
 } = require("discord.js");
 const axios = require("axios");
 const { v4: uuidv4 } = require("uuid");
@@ -746,7 +747,7 @@ module.exports = {
 // ============================================================================
 
 async function handleCreateCharacter(interaction, subcommand) {
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
 
   try {
     const userId = interaction.user.id;
@@ -767,7 +768,7 @@ async function handleCreateCharacter(interaction, subcommand) {
       await interaction.editReply({
         content:
           "❌ You do not have enough character slots available to create a new character.",
-        ephemeral: true
+        flags: [MessageFlags.Ephemeral]
       });
       return;
     }
@@ -786,7 +787,7 @@ async function handleCreateCharacter(interaction, subcommand) {
     if (age < 1) {
       await interaction.reply({
         content: "❌ Age must be a positive number.",
-        ephemeral: true
+        flags: [MessageFlags.Ephemeral]
       });
       return;
     }
@@ -795,7 +796,7 @@ async function handleCreateCharacter(interaction, subcommand) {
     if (hearts < 1 || stamina < 1) {
       await interaction.reply({
         content: "❌ Hearts and stamina values must be positive numbers.",
-        ephemeral: true
+        flags: [MessageFlags.Ephemeral]
       });
       return;
     }
@@ -804,7 +805,7 @@ async function handleCreateCharacter(interaction, subcommand) {
     if (isNaN(height) || height <= 0) {
       await interaction.reply({
         content: "❌ Height must be a positive number.",
-        ephemeral: true
+        flags: [MessageFlags.Ephemeral]
       });
       return;
     }
@@ -814,7 +815,7 @@ async function handleCreateCharacter(interaction, subcommand) {
     if (!isValidRace(race)) {
       await interaction.reply({
         content: `❌ "${race}" is not a valid race. Please select a valid race from the autocomplete options.`,
-        ephemeral: true
+        flags: [MessageFlags.Ephemeral]
       });
       return;
     }
@@ -824,7 +825,7 @@ async function handleCreateCharacter(interaction, subcommand) {
     if (subcommand === "general" && !["inariko", "rudania", "vhintl"].includes(village)) {
       await interaction.reply({
         content: `❌ "${village}" is not a valid village. Please select a valid village from the choices.`,
-        ephemeral: true
+        flags: [MessageFlags.Ephemeral]
       });
       return;
     }
@@ -834,7 +835,7 @@ async function handleCreateCharacter(interaction, subcommand) {
     if (!job) {
       await interaction.reply({
         content: "❌ Please select a valid job from the choices.",
-        ephemeral: true
+        flags: [MessageFlags.Ephemeral]
       });
       return;
     }
@@ -844,7 +845,7 @@ async function handleCreateCharacter(interaction, subcommand) {
     if (!isValidGoogleSheetsUrl(inventory)) {
       await interaction.reply({
         content: "❌ Please provide a valid Google Sheets URL for the inventory.",
-        ephemeral: true
+        flags: [MessageFlags.Ephemeral]
       });
       return;
     }
@@ -854,7 +855,7 @@ async function handleCreateCharacter(interaction, subcommand) {
     if (!appLink) {
       await interaction.reply({
         content: "❌ Please provide a valid application link.",
-        ephemeral: true
+        flags: [MessageFlags.Ephemeral]
       });
       return;
     }
@@ -864,7 +865,7 @@ async function handleCreateCharacter(interaction, subcommand) {
     if (!icon) {
       await interaction.reply({
         content: "❌ Please provide a valid icon image.",
-        ephemeral: true
+        flags: [MessageFlags.Ephemeral]
       });
       return;
     }
@@ -1002,7 +1003,7 @@ async function handleCreateCharacter(interaction, subcommand) {
 
     await interaction.editReply({
       content: successMessage,
-      ephemeral: true
+      flags: [MessageFlags.Ephemeral]
     });
   } catch (error) {
     handleError(error, "character.js");
@@ -1013,7 +1014,7 @@ async function handleCreateCharacter(interaction, subcommand) {
 
     await interaction.editReply({
       content: "❌ An error occurred during character creation. Please try again later.",
-      ephemeral: true
+      flags: [MessageFlags.Ephemeral]
     });
   }
 }
@@ -1025,7 +1026,7 @@ async function handleCreateCharacter(interaction, subcommand) {
 
 
 async function handleEditCharacter(interaction) {
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
 
   try {
     const fullCharacterName = interaction.options.getString("charactername");
@@ -1051,7 +1052,7 @@ async function handleEditCharacter(interaction) {
             text: 'Character Validation'
           }
         }],
-        ephemeral: true
+        flags: [MessageFlags.Ephemeral]
       });
       return;
     }
@@ -1073,7 +1074,7 @@ async function handleEditCharacter(interaction) {
       if (!isValidJob(updatedInfo)) {
         await interaction.followUp({
           content: `❌ **${updatedInfo}** is not a valid job. Please select a valid job from the list.`,
-          ephemeral: true
+          flags: [MessageFlags.Ephemeral]
         });
         return;
       }
@@ -1081,7 +1082,7 @@ async function handleEditCharacter(interaction) {
       if (!validationResult.valid) {
         await interaction.followUp({
           content: validationResult.message,
-          ephemeral: true
+          flags: [MessageFlags.Ephemeral]
         });
         return;
       }
@@ -1089,7 +1090,7 @@ async function handleEditCharacter(interaction) {
       if (!isValidRace(updatedInfo)) {
         await interaction.followUp({
           content: `⚠️ **${updatedInfo}** is not a valid race.`,
-          ephemeral: true
+          flags: [MessageFlags.Ephemeral]
         });
         return;
       }
@@ -1098,7 +1099,7 @@ async function handleEditCharacter(interaction) {
       if (isNaN(hearts) || hearts < 0) {
         await interaction.followUp({
           content: `⚠️ **${updatedInfo}** is not valid for hearts. Please provide a non-negative number.`,
-          ephemeral: true
+          flags: [MessageFlags.Ephemeral]
         });
         return;
       }
@@ -1107,7 +1108,7 @@ async function handleEditCharacter(interaction) {
       if (isNaN(stamina) || stamina < 0) {
         await interaction.followUp({
           content: `⚠️ **${updatedInfo}** is not valid for stamina. Please provide a non-negative number.`,
-          ephemeral: true
+          flags: [MessageFlags.Ephemeral]
         });
         return;
       }
@@ -1116,7 +1117,7 @@ async function handleEditCharacter(interaction) {
       if (isNaN(age) || age < 0) {
         await interaction.followUp({
           content: `⚠️ **${updatedInfo}** is not a valid age. Please provide a non-negative number.`,
-          ephemeral: true
+          flags: [MessageFlags.Ephemeral]
         });
         return;
       }
@@ -1125,7 +1126,7 @@ async function handleEditCharacter(interaction) {
       if (isNaN(heightInCm) || heightInCm < 0) {
         await interaction.followUp({
           content: `⚠️ **${updatedInfo}** is not valid for height. Please provide a non-negative number in centimeters.`,
-          ephemeral: true
+          flags: [MessageFlags.Ephemeral]
         });
         return;
       }
@@ -1171,14 +1172,14 @@ async function handleEditCharacter(interaction) {
 
     await interaction.followUp({
       content: `✅ Your edit request for **${character.name}** has been submitted and is pending mod approval.`,
-      ephemeral: true
+      flags: [MessageFlags.Ephemeral]
     });
 
   } catch (error) {
     handleError(error, "character.js");
     await interaction.followUp({
       content: `⚠️ **There was an error processing your edit request: ${error.message}**`,
-      ephemeral: true
+      flags: [MessageFlags.Ephemeral]
     });
   }
 }
@@ -1411,7 +1412,7 @@ async function handleViewCharacterList(interaction) {
 
 
 async function handleDeleteCharacter(interaction) {
- await interaction.deferReply({ ephemeral: true });
+ await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
 
  try {
   const characterName = interaction.options.getString("charactername");
@@ -1433,7 +1434,7 @@ async function handleDeleteCharacter(interaction) {
       .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
       .setFooter({ text: 'Character Validation' })
       .setTimestamp()],
-    ephemeral: true
+    flags: [MessageFlags.Ephemeral]
    });
    return;
   }
@@ -1548,7 +1549,7 @@ async function handleDeleteCharacter(interaction) {
 
   await interaction.editReply({
    content: `✅ **Character deleted**: **${characterName}** has been successfully removed.`,
-   ephemeral: true
+   flags: [MessageFlags.Ephemeral]
   });
  } catch (error) {
   handleError(error, "character.js", {
@@ -1560,7 +1561,7 @@ async function handleDeleteCharacter(interaction) {
   });
   await interaction.editReply({
    content: `❌ **An error occurred while deleting the character**: ${error.message}`,
-   ephemeral: true
+   flags: [MessageFlags.Ephemeral]
   });
  }
 }
@@ -1572,7 +1573,7 @@ async function handleDeleteCharacter(interaction) {
 
 
 async function handleChangeJob(interaction) {
- await interaction.deferReply({ ephemeral: true });
+ await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
 
  try {
   const userId = interaction.user.id;
@@ -1584,7 +1585,7 @@ async function handleChangeJob(interaction) {
     console.warn(`[character.js]: ❌ Invalid job change attempt: '${newJob}' by user ${userId}`);
     return interaction.followUp({
       content: `❌ **${newJob}** is not a valid job. Please select a valid job from the list.`,
-      ephemeral: true
+      flags: [MessageFlags.Ephemeral]
     });
   }
 
@@ -1594,7 +1595,7 @@ async function handleChangeJob(interaction) {
   if (!character) {
    return interaction.followUp({
     content: `❌ **Character \"${characterName}\"** not found or does not belong to you.`,
-    ephemeral: true
+    flags: [MessageFlags.Ephemeral]
    });
   }
   const previousJob = character.job || "Unknown";
@@ -1603,7 +1604,7 @@ async function handleChangeJob(interaction) {
   if (previousJob.toLowerCase() === newJob.toLowerCase()) {
     return interaction.followUp({
       content: `❌ You cannot change your job to the same job you currently have (${previousJob}).`,
-      ephemeral: true
+      flags: [MessageFlags.Ephemeral]
     });
   }
 
@@ -1611,7 +1612,7 @@ async function handleChangeJob(interaction) {
   if (!jobValidation.canChange) {
     return interaction.followUp({
       content: jobValidation.message,
-      ephemeral: true
+      flags: [MessageFlags.Ephemeral]
     });
   }
 
@@ -1623,7 +1624,7 @@ async function handleChangeJob(interaction) {
     const remainingDays = Math.ceil((lastJobChange - oneMonthAgo) / (1000 * 60 * 60 * 24));
     return interaction.followUp({
       content: `⚠️ You can only change jobs once per month. Please wait **${remainingDays}** more day(s).`,
-      ephemeral: true
+      flags: [MessageFlags.Ephemeral]
     });
   }
 
@@ -1631,13 +1632,13 @@ async function handleChangeJob(interaction) {
   if (!userTokens) {
     return interaction.followUp({
       content: "❌ You do not have a Token Tracker set up. Please use `/tokens setup` first.",
-      ephemeral: true
+      flags: [MessageFlags.Ephemeral]
     });
   }
   if (userTokens.tokens < 500) {
     return interaction.followUp({
       content: `❌ You need **500 tokens** to change your character's job. Current balance: **${userTokens.tokens} tokens**.`,
-      ephemeral: true
+      flags: [MessageFlags.Ephemeral]
     });
   }
 
@@ -1732,7 +1733,7 @@ async function handleChangeJob(interaction) {
    .setImage(DEFAULT_IMAGE_URL)
    .setTimestamp();
 
-  await interaction.followUp({ embeds: [embed], ephemeral: true });
+  await interaction.followUp({ embeds: [embed], flags: [MessageFlags.Ephemeral] });
   
   console.log(
    `[Character]: Successfully processed job change for character "${characterName}" from "${previousJob}" to "${newJob}"`
@@ -1741,7 +1742,7 @@ async function handleChangeJob(interaction) {
   handleError(error, "character.js");
   await interaction.followUp({
    content: "❌ An error occurred while processing your request. Please try again later.",
-   ephemeral: true
+   flags: [MessageFlags.Ephemeral]
   });
  }
 }
@@ -1762,7 +1763,7 @@ async function handleSetBirthday(interaction) {
    return interaction.reply({
     content:
      "❌ Invalid date format. Please provide the birthday in **MM-DD** format (e.g., 01-15 for January 15th).",
-    ephemeral: true,
+    flags: [MessageFlags.Ephemeral]
    });
   }
 
@@ -1777,7 +1778,7 @@ async function handleSetBirthday(interaction) {
     ];
     return interaction.reply({
       content: `❌ Invalid month: ${month}. Month must be between 01 and 12.\n\nValid months are:\n${monthNames.map((name, i) => `${String(i + 1).padStart(2, '0')} - ${name}`).join('\n')}`,
-      ephemeral: true,
+      flags: [MessageFlags.Ephemeral]
     });
   }
 
@@ -1821,7 +1822,7 @@ async function handleSetBirthday(interaction) {
     
     return interaction.reply({
       content: errorMessage,
-      ephemeral: true,
+      flags: [MessageFlags.Ephemeral]
     });
   }
 
@@ -1832,7 +1833,7 @@ async function handleSetBirthday(interaction) {
   if (!character) {
    await interaction.reply({
     content: `❌ Character **${characterName}** not found or does not belong to you.`,
-    ephemeral: true,
+    flags: [MessageFlags.Ephemeral]
    });
    return;
   }
@@ -1844,13 +1845,13 @@ async function handleSetBirthday(interaction) {
 
   await interaction.reply({
    content: `✅ **Birthday set**: **${characterName}'s** birthday has been successfully updated to **${birthday}**.`,
-   ephemeral: true,
+   flags: [MessageFlags.Ephemeral]
   });
  } catch (error) {
   handleError(error, "character.js");
   await interaction.reply({
    content: `❌ **An error occurred while setting the birthday**: ${error.message}`,
-   ephemeral: true,
+   flags: [MessageFlags.Ephemeral]
   });
  }
 }
@@ -1915,7 +1916,7 @@ async function handleJobCategorySelection(interaction, character, updatedInfo) {
   components.push(navigationRow);
  }
 
- await interaction.followUp({ embeds: [embed], components, ephemeral: true });
+ await interaction.followUp({ embeds: [embed], components, flags: [MessageFlags.Ephemeral] });
 
  console.log(
   `[Job Selection]: Job selection buttons sent for user "${interaction.user.tag}".`
