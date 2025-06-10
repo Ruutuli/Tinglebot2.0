@@ -21,7 +21,7 @@ function initializeErrorHandler(trelloLoggerFunction, discordClient) {
 // ------------------- Handle Errors -------------------
 // Captures, formats, and sends errors to both Trello and Discord.
 async function handleError(error, source = "Unknown Source", context = {}) {
-  const message = error?.stack || error?.message || String(error);
+  const message = error?.stack || error?.message || String(error) || 'Unknown error occurred';
   const timestamp = new Date().toLocaleString("en-US", { timeZone: "America/New_York" });
 
   // ---- Extra context for Mongo/network errors ----
@@ -99,13 +99,17 @@ Error: ${message}
           { name: "🧠 Command Used", value: context.commandName || "Unknown", inline: false },
           { name: "🙋 User", value: context.userTag ? `${context.userTag} (${context.userId})` : "Unknown", inline: false },
           { name: "📦 Options", value: context.options ? `\`\`\`json\n${JSON.stringify(context.options, null, 2)}\n\`\`\`` : "None" },
-          { name: "📝 Error Message", value: `\`\`\`\n${message.slice(0, 1000)}\n\`\`\`` },
+          { name: "📝 Error Message", value: `\`\`\`\n${message.slice(0, 1000)}\n\`\`\`` || "No error message available" },
           ...(extraInfo ? [{ name: "🌐 Context", value: extraInfo }] : []),
           { name: "🔗 Trello Link", value: trelloLink ? trelloLink : "No Trello card available." }
         )
         .setTimestamp();
 
-      errorChannel.send({ embeds: [errorEmbed] }).catch(console.error);
+      try {
+        await errorChannel.send({ embeds: [errorEmbed] });
+      } catch (sendError) {
+        console.error(`[globalErrorHandler.js]: ❌ Failed to send error to Discord channel: ${sendError.message}`);
+      }
     }
   }
 }

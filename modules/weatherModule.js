@@ -296,12 +296,21 @@ async function getWeatherWithoutGeneration(village) {
     const normalizedVillage = normalizeVillageName(village);
     const now = new Date();
     
-    // Get today's weather
+    // Calculate the start of the current weather period (8am of the current day)
+    const startOfPeriod = new Date(now);
+    startOfPeriod.setHours(8, 0, 0, 0);
+    
+    // If current time is before 8am, look for weather from previous day
+    if (now.getHours() < 8) {
+      startOfPeriod.setDate(startOfPeriod.getDate() - 1);
+    }
+    
+    // Get weather from the current period
     const weather = await Weather.findOne({
       village: normalizedVillage,
       date: {
-        $gte: new Date(now.setHours(0, 0, 0, 0)),
-        $lt: new Date(now.setHours(23, 59, 59, 999))
+        $gte: startOfPeriod,
+        $lt: new Date(startOfPeriod.getTime() + 24 * 60 * 60 * 1000) // 24 hours after start
       }
     });
     
@@ -319,10 +328,25 @@ async function getCurrentWeather(village) {
     const normalizedVillage = normalizeVillageName(village);
     const now = new Date();
     
-    // Get today's weather
-    let weather = await getWeatherWithoutGeneration(normalizedVillage);
+    // Calculate the start of the current weather period (8am of the current day)
+    const startOfPeriod = new Date(now);
+    startOfPeriod.setHours(8, 0, 0, 0);
     
-    // Only generate new weather if none exists for today
+    // If current time is before 8am, look for weather from previous day
+    if (now.getHours() < 8) {
+      startOfPeriod.setDate(startOfPeriod.getDate() - 1);
+    }
+    
+    // Get weather from the current period
+    let weather = await Weather.findOne({
+      village: normalizedVillage,
+      date: {
+        $gte: startOfPeriod,
+        $lt: new Date(startOfPeriod.getTime() + 24 * 60 * 60 * 1000) // 24 hours after start
+      }
+    });
+    
+    // Only generate new weather if none exists for the current period
     if (!weather) {
       const season = getCurrentSeason();
       const capitalizedSeason = capitalizeFirstLetter(season);
