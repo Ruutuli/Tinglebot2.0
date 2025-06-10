@@ -353,22 +353,61 @@ module.exports = {
       const currentVillage = channelVillage; // Use the village from the channel
       const weather = await getWeatherWithoutGeneration(currentVillage);
 
+      // Add detailed logging for weather data
+      console.log(`[specialweather.js]: Weather data for ${currentVillage}:`, {
+        hasWeather: !!weather,
+        weatherData: weather,
+        specialWeather: weather?.special,
+        specialLabel: weather?.special?.label
+      });
       
-      if (!weather || !weather.special || !weather.special.label) {
-        console.log(`[specialweather.js]: ⚠️ No special weather detected:`, {
-          hasWeather: !!weather,
-          hasSpecial: !!weather?.special,
-          hasLabel: !!weather?.special?.label
-        });
+      if (!weather) {
+        console.error(`[specialweather.js]: ❌ No weather data found for ${currentVillage}`);
         await interaction.editReply({
           embeds: [{
-            color: 0x008B8B, // Dark cyan color
+            color: 0x008B8B,
+            description: `*${character.name} looks up at the sky...*\n\n**Weather Data Error**\nUnable to retrieve weather data for ${currentVillage}.\n\nPlease try again in a few moments.`,
+            image: {
+              url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+            },
+            footer: {
+              text: 'Weather Data Error'
+            }
+          }],
+          ephemeral: true
+        });
+        return;
+      }
+
+      if (!weather.special) {
+        console.log(`[specialweather.js]: ⚠️ No special weather object found for ${currentVillage}`);
+        await interaction.editReply({
+          embeds: [{
+            color: 0x008B8B,
             description: `*${character.name} looks up at the sky...*\n\n**No Special Weather Detected**\nThere is no special weather in ${currentVillage} right now.\n\n✨ **Special weather is required to use this command.**`,
             image: {
               url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
             },
             footer: {
               text: 'Weather Check'
+            }
+          }],
+          ephemeral: true
+        });
+        return;
+      }
+
+      if (!weather.special.label) {
+        console.error(`[specialweather.js]: ❌ Special weather object found but no label for ${currentVillage}`);
+        await interaction.editReply({
+          embeds: [{
+            color: 0x008B8B,
+            description: `*${character.name} looks up at the sky...*\n\n**Weather Data Error**\nThe special weather data for ${currentVillage} appears to be incomplete.\n\nPlease try again in a few moments.`,
+            image: {
+              url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+            },
+            footer: {
+              text: 'Weather Data Error'
             }
           }],
           ephemeral: true
