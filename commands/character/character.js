@@ -649,6 +649,11 @@ module.exports = {
      content: "❌ An error occurred while processing your request.",
      flags: 64
     });
+   } else {
+    await interaction.followUp({
+     content: "❌ An error occurred while processing your request.",
+     flags: 64
+    });
    }
   }
  },

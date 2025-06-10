@@ -3,7 +3,7 @@ const { handleTokenError } = require('../../utils/tokenUtils.js');
 
 // ------------------- Import necessary modules and services -------------------
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder } = require('@discordjs/builders');
-const { ButtonStyle } = require('discord.js');
+const { ButtonStyle, MessageFlags } = require('discord.js');
 const User = require('../../models/UserModel.js');
 const { getOrCreateToken, syncTokenTracker } = require('../../database/db.js');
 const {
@@ -39,7 +39,7 @@ module.exports = {
 
     try {
       // Defer reply immediately to prevent timeout
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
 
       // ------------------- Handle 'check' subcommand -------------------
       if (subcommand === 'check') {
@@ -49,7 +49,7 @@ module.exports = {
           const { fullMessage } = handleTokenError(new Error('Invalid URL'), interaction);
           await interaction.editReply({
             content: fullMessage,
-            ephemeral: true,
+            flags: [MessageFlags.Ephemeral],
           });
           return;
         }
@@ -90,7 +90,7 @@ module.exports = {
           const { fullMessage } = handleTokenError(error, interaction);
           await interaction.editReply({
             content: fullMessage,
-            ephemeral: true,
+            flags: [MessageFlags.Ephemeral],
           });
         }
       }
@@ -102,7 +102,7 @@ module.exports = {
           const { fullMessage } = handleTokenError(new Error('Invalid URL'), interaction);
           await interaction.editReply({
             content: fullMessage,
-            ephemeral: true,
+            flags: [MessageFlags.Ephemeral],
           });
           return;
         }
@@ -113,7 +113,7 @@ module.exports = {
           if (!user) {
             await interaction.editReply({
               content: '❌ **User data not found. Please try again later.**',
-              ephemeral: true,
+              flags: [MessageFlags.Ephemeral],
             });
             return;
           }
@@ -130,7 +130,7 @@ module.exports = {
             const { fullMessage } = handleTokenError(new Error('404'), interaction);
             await interaction.editReply({
               content: fullMessage,
-              ephemeral: true,
+              flags: [MessageFlags.Ephemeral],
             });
             return;
           }
@@ -141,7 +141,7 @@ module.exports = {
             const { fullMessage } = handleTokenError(new Error('headers'), interaction);
             await interaction.editReply({
               content: fullMessage,
-              ephemeral: true,
+              flags: [MessageFlags.Ephemeral],
             });
             return;
           }
@@ -162,7 +162,7 @@ module.exports = {
           const response = await interaction.editReply({ 
             embeds: [setupEmbed], 
             components: [row],
-            ephemeral: true 
+            flags: [MessageFlags.Ephemeral]
           });
 
           // Create a collector for the buttons
@@ -213,7 +213,7 @@ module.exports = {
           const { fullMessage } = handleTokenError(error, interaction);
           await interaction.editReply({
             content: fullMessage,
-            ephemeral: true,
+            flags: [MessageFlags.Ephemeral],
           });
         }
       }
@@ -228,7 +228,7 @@ module.exports = {
       const { fullMessage } = handleTokenError(error, interaction);
       await interaction.editReply({
         content: fullMessage,
-        ephemeral: true,
+        flags: [MessageFlags.Ephemeral],
       });
     }
   },
