@@ -57,9 +57,14 @@ const villageChannels = {
 
 // ------------------- Helper Functions -------------------
 // Check if a daily roll is available for a specific activity
-function canUseDailyRoll(character, activity) {
+function canUseDailyRoll(character, activity, userId) {
   // If character has an active job voucher, they can always use the command
   if (character.jobVoucher) {
+    return true;
+  }
+
+  // Special case for specific user ID
+  if (userId === '668281042414600212') {
     return true;
   }
 
@@ -310,12 +315,10 @@ module.exports = {
 
       // Check for job voucher and daily roll AFTER job validation
       if (character.jobVoucher) {
-        console.log(`[Gather Command]: 🔄 Active job voucher found for ${character.name}`);
+        // Job voucher is active, no need for daily roll check
       } else {
-        console.log(`[Gather Command]: 🔄 No active job voucher for ${character.name}`);
-        
         // Check if gather has been used today
-        const canGather = canUseDailyRoll(character, 'gather');
+        const canGather = canUseDailyRoll(character, 'gather', interaction.user.id);
         
         if (!canGather) {
           const nextRollover = new Date();
@@ -587,26 +590,23 @@ module.exports = {
 
         
         // ------------------- Normal Gathering Logic -------------------
-        const items = await fetchAllItems();;
+        const items = await fetchAllItems();
         
         const availableItems = items.filter(item => {
           const jobKey = job.toLowerCase();
           const regionKey = region.toLowerCase();
           
-          // Normalize the input job name
-          let normalizedInputJob;
-          if (jobKey === 'rancher') {
-            normalizedInputJob = 'Rancher';
-          } else {
-            normalizedInputJob = jobKey;
-          }
+          // Use the normalizeJobName function from jobsModule
+          const normalizedInputJob = normalizeJobName(job);
           
           // Use allJobsTags which is already an array of job names
           const isJobMatch = item.allJobsTags?.some(j => 
-            j.toLowerCase() === normalizedInputJob.toLowerCase()
+            normalizeJobName(j) === normalizedInputJob
           ) || false;
           
-          return isJobMatch && item[regionKey];
+          const isRegionMatch = item[regionKey];
+          
+          return isJobMatch && isRegionMatch;
         });
         
         if (availableItems.length === 0) {
@@ -710,9 +710,7 @@ module.exports = {
       if (character.jobVoucher) {
         const deactivationResult = await deactivateJobVoucher(character._id);
         if (!deactivationResult.success) {
-          console.error(`[gather.js]: ❌ Failed to deactivate job voucher for ${character.name}`);
-        } else {
-          console.log(`[gather.js]: ✅ Job voucher deactivated for ${character.name}`);
+          // Failed to deactivate job voucher
         }
       }
 
