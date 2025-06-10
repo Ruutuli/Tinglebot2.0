@@ -11,7 +11,7 @@ const { handleError } = require('../utils/globalErrorHandler');
 const TRELLO_API_KEY = process.env.TRELLO_API_KEY;
 const TRELLO_TOKEN = process.env.TRELLO_TOKEN;
 const TRELLO_LIST_ID = process.env.TRELLO_LIST_ID;
-const TRELLO_LOG = process.env.TRELLO_LOG;
+const CONSOLE_LOG_CHANNEL = process.env.CONSOLE_LOG_CHANNEL;
 const TRELLO_BOARD_ID = process.env.TRELLO_BOARD_ID;
 const TRELLO_WISHLIST = process.env.TRELLO_WISHLIST;
 
@@ -99,7 +99,7 @@ async function createTrelloCard({ threadName, username, content, images, created
   const labels = await fetchLabels();
 
   // ------------------- Label Matching by Card Type -------------------
-  if (overrideListId === TRELLO_LOG) {
+  if (overrideListId === CONSOLE_LOG_CHANNEL) {
     // Match exact file name from "file.js - Console Log Report"
     const fileBase = threadName.split(' - ')[0].toLowerCase().trim();
     for (const label of labels) {
@@ -230,45 +230,40 @@ async function createTrelloCard({ threadName, username, content, images, created
 // ============================================================================
 // ------------------- Log Error to Trello -------------------
 async function logErrorToTrello(errorMessage, source = 'Unknown Source') {
-  // Prevent infinite recursion by checking if this is already an error logging attempt
-  if (errorMessage.includes('Failed to create Trello card')) {
-    console.error('[trello.js]: Skipping Trello error logging to prevent recursion');
-    return null;
-  }
-
-  const now = new Date().toISOString();
-
-  // Validate Trello credentials and list ID before attempting to create card
-  if (!TRELLO_API_KEY || !TRELLO_TOKEN || !TRELLO_LOG) {
-    console.error('[trello.js]: Missing required Trello credentials or list ID');
-    return null;
-  }
-
-  // Validate that TRELLO_LOG is a valid Trello list ID (should be 24 characters)
-  if (TRELLO_LOG.length !== 24 || !/^[0-9a-fA-F]{24}$/.test(TRELLO_LOG)) {
-    console.error('[trello.js]: Invalid TRELLO_LOG ID format. Must be a 24-character hex string.');
-    return null;
-  }
-
-  const errorCard = {
-    threadName: `${source} - Console Log Report`,
-    username: source,
-    content: `**Error Message:**\n\`\`\`${errorMessage}\`\`\`\n\n**Timestamp:** ${now}`,
-    images: [],
-    createdAt: now,
-    overrideListId: TRELLO_LOG,
-    isErrorLog: true  // Mark this as an error logging attempt
-  };
-
   try {
-    const cardLink = await createTrelloCard(errorCard);
-    return cardLink;
-  } catch (e) {
-    console.error(`[trello.js]: Failed to log error to Trello: ${e.message}`);
+    const now = new Date();
+    
+    // Create the card data
+    const cardData = {
+      name: `${source} - Console Log Report`,
+      desc: `**Error Message:**\n\`\`\`${errorMessage}\`\`\``,
+      idList: TRELLO_LIST_ID, // Use the default Trello list ID instead of Discord channel ID
+      start: now.toISOString(),
+      idLabels: [],
+      pos: 'bottom',
+      due: new Date(now.getTime() + 48 * 60 * 60 * 1000).toISOString()
+    };
+
+    // Validate Trello credentials before attempting to create card
+    if (!TRELLO_API_KEY || !TRELLO_TOKEN || !TRELLO_LIST_ID) {
+      console.error('[trello.js]: Missing required Trello credentials or list ID');
+      return null;
+    }
+
+    // Create the Trello card
+    const response = await axios.post('https://api.trello.com/1/cards', cardData, {
+      params: {
+        key: TRELLO_API_KEY,
+        token: TRELLO_TOKEN
+      }
+    });
+
+    return response.data.url;
+  } catch (error) {
+    console.error('[trello.js]: Failed to create Trello card:', error.message);
     return null;
   }
 }
-
 
 // ============================================================================
 // ------------------- Log Wishlist Entry to Trello -------------------
