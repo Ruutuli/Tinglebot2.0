@@ -296,22 +296,34 @@ async function getWeatherWithoutGeneration(village) {
     const normalizedVillage = normalizeVillageName(village);
     const now = new Date();
     
-    // Calculate the start of the current weather period (8am of the current day)
-    const startOfPeriod = new Date(now);
-    startOfPeriod.setHours(8, 0, 0, 0);
+    // Calculate the start and end of the current day in UTC
+    const startOfDay = new Date(now);
+    startOfDay.setUTCHours(0, 0, 0, 0);
     
-    // If current time is before 8am, look for weather from previous day
-    if (now.getHours() < 8) {
-      startOfPeriod.setDate(startOfPeriod.getDate() - 1);
-    }
+    const endOfDay = new Date(now);
+    endOfDay.setUTCHours(23, 59, 59, 999);
     
-    // Get weather from the current period
+    console.log(`[weatherModule.js]: Searching for weather between ${startOfDay.toISOString()} and ${endOfDay.toISOString()}`);
+    
+    // Get weather from the current day
     const weather = await Weather.findOne({
       village: normalizedVillage,
       date: {
-        $gte: startOfPeriod,
-        $lt: new Date(startOfPeriod.getTime() + 24 * 60 * 60 * 1000) // 24 hours after start
+        $gte: startOfDay,
+        $lte: endOfDay
       }
+    });
+    
+    if (!weather) {
+      console.log(`[weatherModule.js]: No weather found for ${normalizedVillage} on ${startOfDay.toISOString()}`);
+      return null;
+    }
+    
+    console.log(`[weatherModule.js]: Found weather for ${normalizedVillage}:`, {
+      date: weather.date,
+      temperature: weather.temperature?.label,
+      precipitation: weather.precipitation?.label,
+      special: weather.special?.label
     });
     
     return weather;
@@ -328,26 +340,27 @@ async function getCurrentWeather(village) {
     const normalizedVillage = normalizeVillageName(village);
     const now = new Date();
     
-    // Calculate the start of the current weather period (8am of the current day)
-    const startOfPeriod = new Date(now);
-    startOfPeriod.setHours(8, 0, 0, 0);
+    // Calculate the start and end of the current day in UTC
+    const startOfDay = new Date(now);
+    startOfDay.setUTCHours(0, 0, 0, 0);
     
-    // If current time is before 8am, look for weather from previous day
-    if (now.getHours() < 8) {
-      startOfPeriod.setDate(startOfPeriod.getDate() - 1);
-    }
+    const endOfDay = new Date(now);
+    endOfDay.setUTCHours(23, 59, 59, 999);
     
-    // Get weather from the current period
+    console.log(`[weatherModule.js]: Searching for weather between ${startOfDay.toISOString()} and ${endOfDay.toISOString()}`);
+    
+    // Get weather from the current day
     let weather = await Weather.findOne({
       village: normalizedVillage,
       date: {
-        $gte: startOfPeriod,
-        $lt: new Date(startOfPeriod.getTime() + 24 * 60 * 60 * 1000) // 24 hours after start
+        $gte: startOfDay,
+        $lte: endOfDay
       }
     });
     
-    // Only generate new weather if none exists for the current period
+    // Only generate new weather if none exists for the current day
     if (!weather) {
+      console.log(`[weatherModule.js]: No weather found for ${normalizedVillage}, generating new weather`);
       const season = getCurrentSeason();
       const capitalizedSeason = capitalizeFirstLetter(season);
       const newWeather = simulateWeightedWeather(normalizedVillage, capitalizedSeason);
@@ -367,6 +380,19 @@ async function getCurrentWeather(village) {
       
       // Save new weather
       weather = await saveWeather(newWeather);
+      console.log(`[weatherModule.js]: Generated and saved new weather for ${normalizedVillage}:`, {
+        date: weather.date,
+        temperature: weather.temperature?.label,
+        precipitation: weather.precipitation?.label,
+        special: weather.special?.label
+      });
+    } else {
+      console.log(`[weatherModule.js]: Found existing weather for ${normalizedVillage}:`, {
+        date: weather.date,
+        temperature: weather.temperature?.label,
+        precipitation: weather.precipitation?.label,
+        special: weather.special?.label
+      });
     }
     
     return weather;

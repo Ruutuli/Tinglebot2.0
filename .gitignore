@@ -13,3 +13,4 @@ nodemon.log
 testingCode/
 .tmp.driveupload/
 .tmp.drivedownload/
+.dashboard/
