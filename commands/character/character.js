@@ -1041,166 +1041,144 @@ async function handleEditCharacter(interaction) {
 
   try {
     const fullCharacterName = interaction.options.getString("charactername");
-    console.log(`[handleEditCharacter] Starting edit for character: ${fullCharacterName}`);
-    
     const characterName = fullCharacterName?.split(' | ')[0];
-    console.log(`[handleEditCharacter] Parsed character name: ${characterName}`);
-    
     const category = interaction.options.getString("category");
-    console.log(`[handleEditCharacter] Edit category: ${category}`);
-    
     const updatedInfo = interaction.options.getString("updatedinfo");
-    console.log(`[handleEditCharacter] Updated info: ${updatedInfo}`);
-    
     const userId = interaction.user.id;
     const newIcon = interaction.options.getAttachment("newicon");
-    console.log(`[handleEditCharacter] User ID: ${userId}, Has new icon: ${!!newIcon}`);
+
+    console.log(`[handleEditCharacter] Starting edit for character: ${characterName}, category: ${category}`);
 
     await connectToTinglebot();
-    console.log('[handleEditCharacter] Connected to Tinglebot database');
-
     const character = await fetchCharacterByNameAndUserId(characterName, userId);
-    console.log(`[handleEditCharacter] Character found: ${!!character}`);
-    
     if (!character) {
-      console.log(`[handleEditCharacter] Character not found for name: ${characterName} and user: ${userId}`);
-      await interaction.followUp({
-        embeds: [{
-          color: 0xFF0000,
-          title: '❌ Character Not Found',
-          description: `The character "${characterName}" does not exist in the database.`,
-          image: {
-            url: 'https://storage.googleapis.com/tinglebot/border%20error.png'
-          },
-          footer: {
-            text: 'Character Validation'
-          }
-        }],
-        flags: [MessageFlags.Ephemeral]
-      });
-      return;
+      return await safeReply(interaction, {
+        color: 0xFF0000,
+        title: '❌ Character Not Found',
+        description: `The character "${characterName}" does not exist in the database.`,
+        image: { url: 'https://storage.googleapis.com/tinglebot/border%20error.png' },
+        footer: { text: 'Character Validation' }
+      }, true);
     }
 
-    // Get actual spirit orb count from inventory
     await connectToInventories();
-    console.log('[handleEditCharacter] Connected to Inventories database');
-    
     const inventoryCollection = await getCharacterInventoryCollection(character.name);
-    console.log(`[handleEditCharacter] Got inventory collection for ${character.name}`);
-    
     const spiritOrb = await inventoryCollection.findOne({
       characterId: character._id,
       itemName: { $regex: /^spirit orb$/i }
     });
-    console.log(`[handleEditCharacter] Found spirit orb: ${!!spiritOrb}`);
-    
     character.spiritOrbs = spiritOrb?.quantity || 0;
-    console.log(`[handleEditCharacter] Set spirit orbs to: ${character.spiritOrbs}`);
 
-    let previousValue = character[category] !== undefined ? character[category] : "N/A";
-    let updatedValue = updatedInfo;
-    console.log(`[handleEditCharacter] Previous value: ${previousValue}, Updated value: ${updatedValue}`);
+    let previousValue;
+    switch (category) {
+      case 'stamina':
+        previousValue = {
+          maxStamina: character.maxStamina,
+          currentStamina: character.currentStamina
+        };
+        break;
+      case 'hearts':
+        previousValue = character.currentHearts;
+        break;
+      case 'name':
+        previousValue = character.name;
+        break;
+      case 'age':
+        previousValue = character.age;
+        break;
+      case 'height':
+        previousValue = character.height;
+        break;
+      case 'pronouns':
+        previousValue = character.pronouns;
+        break;
+      case 'race':
+        previousValue = character.race;
+        break;
+      case 'job':
+        previousValue = character.job;
+        break;
+      case 'homeVillage':
+        previousValue = character.homeVillage;
+        break;
+      case 'icon':
+        previousValue = character.icon;
+        break;
+      case 'app_link':
+        previousValue = character.appLink;
+        break;
+      case 'inventory':
+        previousValue = character.inventory;
+        break;
+      default:
+        previousValue = character[category];
+    }
 
-    // Validate the edit based on category
+    // ------------------- Validation -------------------
     if (category === "job") {
-      console.log('[handleEditCharacter] Validating job change');
       if (!isValidJob(updatedInfo)) {
-        console.log(`[handleEditCharacter] Invalid job: ${updatedInfo}`);
-        await interaction.followUp({
-          content: `❌ **${updatedInfo}** is not a valid job. Please select a valid job from the list.`,
-          flags: [MessageFlags.Ephemeral]
-        });
-        return;
+        return await safeReply(interaction, `❌ **${updatedInfo}** is not a valid job.`);
       }
       const jobValidation = canChangeJob(character, updatedInfo);
-      console.log(`[handleEditCharacter] Job change validation result:`, jobValidation);
       if (!jobValidation.valid) {
-        console.log(`[handleEditCharacter] Job change validation failed: ${jobValidation.message}`);
-        await interaction.followUp({
-          content: jobValidation.message,
-          flags: [MessageFlags.Ephemeral]
-        });
-        return;
-      }
-    } else if (category === "race") {
-      console.log('[handleEditCharacter] Validating race change');
-      if (!isValidRace(updatedInfo)) {
-        console.log(`[handleEditCharacter] Invalid race: ${updatedInfo}`);
-        await interaction.followUp({
-          content: `⚠️ **${updatedInfo}** is not a valid race.`,
-          flags: [MessageFlags.Ephemeral]
-        });
-        return;
-      }
-    } else if (category === "hearts") {
-      const hearts = parseInt(updatedInfo, 10);
-      if (isNaN(hearts) || hearts < 0) {
-        await interaction.followUp({
-          content: `⚠️ **${updatedInfo}** is not valid for hearts. Please provide a non-negative number.`,
-          flags: [MessageFlags.Ephemeral]
-        });
-        return;
-      }
-    } else if (category === "stamina") {
-      const stamina = parseInt(updatedInfo, 10);
-      if (isNaN(stamina) || stamina < 0) {
-        await interaction.followUp({
-          content: `⚠️ **${updatedInfo}** is not valid for stamina. Please provide a non-negative number.`,
-          flags: [MessageFlags.Ephemeral]
-        });
-        return;
-      }
-    } else if (category === "age") {
-      const age = parseInt(updatedInfo, 10);
-      if (isNaN(age) || age < 0) {
-        await interaction.followUp({
-          content: `⚠️ **${updatedInfo}** is not a valid age. Please provide a non-negative number.`,
-          flags: [MessageFlags.Ephemeral]
-        });
-        return;
-      }
-    } else if (category === "height") {
-      const heightInCm = parseFloat(updatedInfo);
-      if (isNaN(heightInCm) || heightInCm < 0) {
-        await interaction.followUp({
-          content: `⚠️ **${updatedInfo}** is not valid for height. Please provide a non-negative number in centimeters.`,
-          flags: [MessageFlags.Ephemeral]
-        });
-        return;
+        return await safeReply(interaction, jobValidation.message);
       }
     }
 
-    // Create pending edit request
+    if (category === "race" && !isValidRace(updatedInfo)) {
+      return await safeReply(interaction, `⚠️ **${updatedInfo}** is not a valid race.`);
+    }
+
+    if (["hearts", "age"].includes(category)) {
+      const parsed = parseInt(updatedInfo, 10);
+      if (isNaN(parsed) || parsed < 0) {
+        return await safeReply(interaction, `⚠️ **${updatedInfo}** is not a valid ${category}. Please provide a non-negative number.`);
+      }
+    }
+
+    if (category === "height") {
+      const height = parseFloat(updatedInfo);
+      if (isNaN(height) || height < 0) {
+        return await safeReply(interaction, `⚠️ **${updatedInfo}** is not a valid height. Please use centimeters.`);
+      }
+    }
+
+    if (category === "stamina") {
+      const stamina = parseInt(updatedInfo, 10);
+      if (isNaN(stamina) || stamina < 0) {
+        return await safeReply(interaction, `⚠️ **${updatedInfo}** is not valid for stamina.`);
+      }
+    }
+
+    // ------------------- Pending Edit Logic -------------------
     const editId = new mongoose.Types.ObjectId().toString();
-    
-    // Notify mods about pending edit
+    const finalUpdatedValue = category === 'stamina'
+      ? { maxStamina: parseInt(updatedInfo, 10), currentStamina: parseInt(updatedInfo, 10) }
+      : updatedInfo;
+
+    const notificationMessage = formatEditNotification(
+      interaction.user.tag,
+      character.name,
+      category,
+      previousValue,
+      finalUpdatedValue,
+      editId
+    );
+
     try {
       const notificationChannel = await interaction.client.channels.fetch(EDIT_NOTIFICATION_CHANNEL_ID);
-      if (notificationChannel && notificationChannel.isTextBased()) {
-        const notificationMessage = `📢 **PENDING CHARACTER EDIT REQUEST**\n
-🌱 **User:** \`${interaction.user.tag}\` 
-👤 **Character Name:** \`${character.name}\`
-🛠️ **Edited Category:** \`${category}\`
-🔄 **Previous Value:** \`${previousValue || "N/A"}\`
-✅ **Requested Value:** \`${updatedValue || "N/A"}\`
-⏳ **Status:** Pending Approval
-🔗 **Request ID:** \`${editId}\``;
-
+      if (notificationChannel?.isTextBased()) {
         const sentMessage = await notificationChannel.send(notificationMessage);
-        
-        // Create the pending edit with the message ID included
         const pendingEdit = {
           characterId: character._id,
           userId: userId,
           category: category,
           previousValue: previousValue,
-          updatedValue: updatedValue,
+          updatedValue: finalUpdatedValue,
           status: 'pending',
           createdAt: new Date(),
           notificationMessageId: sentMessage.id
         };
-
-        // Save the pending edit with the message ID
         await savePendingEditToStorage(editId, pendingEdit);
       }
     } catch (err) {
@@ -1208,47 +1186,86 @@ async function handleEditCharacter(interaction) {
       console.error(`[character.js]: Error sending update notification: ${err.message}`);
     }
 
-    // Update the character
-    console.log(`[handleEditCharacter] Updating character ${character.name} with category ${category}`);
-    character[category] = updatedValue;
-    await character.save();
-    console.log(`[handleEditCharacter] Character saved successfully`);
+    const successEmbed = new EmbedBuilder()
+      .setColor('#00FF00')
+      .setTitle('📝 Edit Request Submitted')
+      .setDescription(`Your request to change ${character.name}'s ${category} has been sent to the mod team for review.`)
+      .addFields(
+        { name: '⏳ Review Time', value: '> Please allow up to 48 hours for review.', inline: true },
+        { name: '🔗 Request ID', value: `> \`${editId}\``, inline: true }
+      )
+      .setFooter({
+        text: 'Character Edit Request',
+        iconURL: 'https://static.wixstatic.com/media/7573f4_a510c95090fd43f5ae17e20d80c1289e~mv2.png'
+      })
+      .setTimestamp();
 
-    // Send success message
-    const successMessage = `✅ Successfully updated ${character.name}'s ${category} from "${previousValue}" to "${updatedValue}"`;
-    console.log(`[handleEditCharacter] Sending success message: ${successMessage}`);
-    
-    if (!interaction.replied && !interaction.deferred) {
-      console.log('[handleEditCharacter] Using reply');
-      await interaction.reply({
-        content: successMessage,
-        flags: [MessageFlags.Ephemeral]
-      });
-    } else {
-      console.log('[handleEditCharacter] Using followUp');
-      await interaction.followUp({
-        content: successMessage,
-        flags: [MessageFlags.Ephemeral]
-      });
-    }
-    console.log('[handleEditCharacter] Success message sent');
+    await safeReply(interaction, successEmbed, true);
 
   } catch (error) {
-    console.error('[handleEditCharacter] Error occurred:', error);
     handleError(error, "character.js");
-    if (!interaction.replied && !interaction.deferred) {
-      console.log('[handleEditCharacter] Error: Using reply');
-      await interaction.reply({
-        content: "❌ An error occurred while processing your request.",
-        flags: [MessageFlags.Ephemeral]
-      });
-    } else {
-      console.log('[handleEditCharacter] Error: Using followUp');
-      await interaction.followUp({
-        content: "❌ An error occurred while processing your request.",
-        flags: [MessageFlags.Ephemeral]
-      });
-    }
+    console.error('[handleEditCharacter] Error occurred:', error);
+    await safeReply(interaction, "❌ An error occurred while processing your request.");
+  }
+}
+
+// ------------------- Utility Functions -------------------
+
+function formatEditNotification(userTag, characterName, category, previousValue, updatedValue, editId) {
+  const embed = new EmbedBuilder()
+    .setColor('#FFA500')
+    .setTitle('📢 PENDING CHARACTER EDIT REQUEST')
+    .setAuthor({
+      name: userTag,
+      iconURL: 'https://static.wixstatic.com/media/7573f4_a510c95090fd43f5ae17e20d80c1289e~mv2.png'
+    })
+    .addFields(
+      { name: '👤 Character Name', value: `> \`${characterName}\``, inline: true },
+      { name: '🛠️ Edited Category', value: `> \`${category}\``, inline: true }
+    );
+
+  if (category === 'stamina') {
+    const prevMax = previousValue?.maxStamina || 'N/A';
+    const prevCurrent = previousValue?.currentStamina || 'N/A';
+    const newMax = updatedValue?.maxStamina || 'N/A';
+    const newCurrent = updatedValue?.currentStamina || 'N/A';
+
+    embed.addFields(
+      { name: '🔄 Previous Values', value: `> Max: \`${prevMax}\`\n> Current: \`${prevCurrent}\``, inline: true },
+      { name: '✅ Requested Values', value: `> Max: \`${newMax}\`\n> Current: \`${newCurrent}\``, inline: true }
+    );
+  } else {
+    const prevValue = typeof previousValue === 'object' ? JSON.stringify(previousValue) : previousValue || 'N/A';
+    const newValue = typeof updatedValue === 'object' ? JSON.stringify(updatedValue) : updatedValue || 'N/A';
+
+    embed.addFields(
+      { name: '🔄 Previous Value', value: `> \`${prevValue}\``, inline: true },
+      { name: '✅ Requested Value', value: `> \`${newValue}\``, inline: true }
+    );
+  }
+
+  embed.addFields(
+    { name: '⏳ Status', value: '> Pending Approval', inline: true },
+    { name: '🔗 Request ID', value: `> \`${editId}\``, inline: true }
+  )
+  .setFooter({
+    text: 'Character Edit Request',
+    iconURL: 'https://static.wixstatic.com/media/7573f4_a510c95090fd43f5ae17e20d80c1289e~mv2.png'
+  })
+  .setTimestamp();
+
+  return embed;
+}
+
+async function safeReply(interaction, message, isEmbed = false) {
+  const payload = isEmbed
+    ? { embeds: [message], flags: [MessageFlags.Ephemeral] }
+    : { content: message, flags: [MessageFlags.Ephemeral] };
+
+  if (!interaction.replied && !interaction.deferred) {
+    return interaction.reply(payload);
+  } else {
+    return interaction.followUp(payload);
   }
 }
 
@@ -1753,6 +1770,26 @@ async function handleChangeJob(interaction) {
   console.log('[handleChangeJob] Updating token balance');
   await updateTokenBalance(interaction.user.id, -500);
 
+  // Log to token tracker
+  try {
+    const user = await User.findOne({ discordId: interaction.user.id });
+    if (user?.tokenTracker && isValidGoogleSheetsUrl(user.tokenTracker)) {
+      const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
+      const tokenRow = [
+        `${character.name} - Job Change from ${previousJob} to ${newJob}`,
+        interactionUrl,
+        'Job Change',
+        'spent',
+        '-500'
+      ];
+      await safeAppendDataToSheet(user.tokenTracker, character, 'loggedTracker!B7:F', [tokenRow], undefined, { skipValidation: true });
+      console.log(`[handleChangeJob]: ✅ Logged job change to token tracker for ${character.name}`);
+    }
+  } catch (sheetError) {
+    console.error(`[handleChangeJob]: ❌ Error logging to token tracker:`, sheetError);
+    // Don't throw here, just log the error since the job change was already processed
+  }
+
   console.log('[handleChangeJob] Updating character job');
   character.job = newJob;
   character.lastJobChange = now;
@@ -1770,7 +1807,7 @@ async function handleChangeJob(interaction) {
     console.log('[handleChangeJob] Resetting vending data for non-vendor job');
     try {
       const vendingUri = process.env.NODE_ENV === 'production' 
-        ? process.env.MONGODB_VENDING_URI 
+        ? process.env.MONGODB_VENDING_URI_PROD 
         : process.env.MONGODB_VENDING_URI_DEV;
 
       if (!vendingUri) {

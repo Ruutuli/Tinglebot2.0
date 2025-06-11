@@ -881,229 +881,194 @@ async function handleApprove(interaction) {
   }
 
   // ------------------- Function: handleApproveEdit -------------------
-// Approves or rejects a pending character edit and applies the changes
 async function handleApproveEdit(interaction) {
   try {
-    let requestId = interaction.options.getString('requestid');
+    let requestId = sanitizeRequestId(interaction.options.getString('requestid'));
     const shouldApprove = interaction.options.getBoolean('approve');
 
-    // Sanitize requestId to extract only the raw ID and remove any special characters
-    if (requestId.includes(':')) {
-      requestId = requestId.split(':').pop();
-    }
-    // Remove any special characters and trim
-    requestId = requestId.replace(/[`'"]/g, '').trim();
-    
-    console.log(`[mod.js]: 🔍 Sanitized requestId=${requestId}`);
-
     const pendingEdit = await retrievePendingEditFromStorage(requestId);
-    console.log(`[mod.js]: 🔍 retrievePendingEditFromStorage result: ${pendingEdit ? 'FOUND' : 'NOT FOUND'}`);
-
-    if (!pendingEdit) {
-      return interaction.editReply({
-        content: '❌ No pending edit request found with that ID.',
-        ephemeral: true
-      });
-    }
+    if (!pendingEdit) return reply(interaction, '❌ No pending edit request found with that ID.');
 
     if (pendingEdit.status !== 'pending') {
-      return interaction.editReply({
-        content: '❌ This edit request has already been processed.',
-        ephemeral: true
-      });
+      return reply(interaction, '❌ This edit request has already been processed.');
     }
 
     const character = await Character.findById(pendingEdit.characterId);
-    if (!character) {
-      return interaction.editReply({
-        content: '❌ The character associated with this edit request no longer exists.',
-        ephemeral: true
-      });
-    }
+    if (!character) return reply(interaction, '❌ Character not found.');
 
-    // Update the character in the database if approved
+    // ------------------- Database Update -------------------
     if (shouldApprove) {
       try {
-        // Handle special cases for certain fields
-        let updateValue = pendingEdit.updatedValue;
-        if (pendingEdit.category === 'age' || pendingEdit.category === 'hearts' || pendingEdit.category === 'stamina') {
-          updateValue = parseInt(pendingEdit.updatedValue);
-        } else if (pendingEdit.category === 'height') {
-          updateValue = parseFloat(pendingEdit.updatedValue);
-        }
-
-        // Update the character
-        await Character.findByIdAndUpdate(
-          pendingEdit.characterId,
-          { $set: { [pendingEdit.category]: updateValue } },
-          { new: true }
-        );
-        console.log(`[mod.js]: ✅ Successfully updated character ${character.name}'s ${pendingEdit.category} to ${updateValue}`);
-      } catch (err) {
-        console.error(`[mod.js]: ❌ Error updating character in database:`, err);
-        return interaction.editReply({
-          content: '❌ Failed to update the character in the database. Please try again.',
-          ephemeral: true
-        });
-      }
-    }
-
-    // Try to update the original notification message first
-    let notificationUpdated = false;
-    try {
-      // Try to get the channel from the guild's cache first
-      const notificationChannel = interaction.guild.channels.cache.get(EDIT_NOTIFICATION_CHANNEL_ID);
-      
-      if (!notificationChannel) {
-        console.error(`[mod.js]: Could not find notification channel ${EDIT_NOTIFICATION_CHANNEL_ID} in guild cache`);
-        return interaction.editReply({
-          content: '❌ Could not access the notification channel. Please ensure the channel exists and the bot has access.',
-          ephemeral: true
-        });
-      }
-
-      if (!notificationChannel.isTextBased()) {
-        console.error(`[mod.js]: Channel ${EDIT_NOTIFICATION_CHANNEL_ID} is not a text channel`);
-        return interaction.editReply({
-          content: '❌ The notification channel is not a text channel.',
-          ephemeral: true
-        });
-      }
-
-      try {
-        // Ensure we have a valid message ID
-        if (!pendingEdit.notificationMessageId) {
-          console.error(`[mod.js]: No notification message ID found for edit ${requestId}`);
-          return interaction.editReply({
-            content: '❌ No notification message ID found for this edit request.',
-            ephemeral: true
+        const updateValue = castValueByCategory(pendingEdit.category, pendingEdit.updatedValue);
+        
+        // Special handling for stamina and hearts updates
+        if (pendingEdit.category === 'stamina') {
+          await Character.findByIdAndUpdate(pendingEdit.characterId, {
+            $set: {
+              maxStamina: updateValue.maxStamina,
+              currentStamina: updateValue.currentStamina
+            }
           });
-        }
-
-        console.log(`[mod.js]: Attempting to fetch message ${pendingEdit.notificationMessageId} in channel ${EDIT_NOTIFICATION_CHANNEL_ID}`);
-        
-        const originalMessage = await notificationChannel.messages.fetch(pendingEdit.notificationMessageId);
-        
-        if (originalMessage) {
-          const updatedContent = `📢 **${shouldApprove ? 'APPROVED' : 'REJECTED'} CHARACTER EDIT REQUEST**\n\n` +
-            `🌱 **User:** \`${pendingEdit.userId}\`\n` +
-            `👤 **Character Name:** \`${character.name}\`\n` +
-            `🛠️ **Edited Category:** \`${pendingEdit.category}\`\n` +
-            `🔄 **Previous Value:** \`${pendingEdit.previousValue}\`\n` +
-            `✅ **Requested Value:** \`${pendingEdit.updatedValue}\`\n` +
-            `⏳ **Status:** ${shouldApprove ? 'APPROVED' : 'REJECTED'} by ${interaction.user.tag}\n` +
-            `🔗 **Request ID:** \`${requestId}\``;
-
-          await originalMessage.edit(updatedContent);
-          notificationUpdated = true;
-          console.log(`[mod.js]: ✅ Successfully updated notification message for edit ${requestId}`);
+        } else if (pendingEdit.category === 'hearts') {
+          await Character.findByIdAndUpdate(pendingEdit.characterId, {
+            $set: {
+              maxHearts: updateValue.maxHearts,
+              currentHearts: updateValue.currentHearts
+            }
+          });
         } else {
-          console.error(`[mod.js]: Could not find original message ${pendingEdit.notificationMessageId} in notification channel`);
-        }
-      } catch (err) {
-        console.error(`[mod.js]: Error updating notification message: ${err.message}`, {
-          messageId: pendingEdit.notificationMessageId,
-          channelId: EDIT_NOTIFICATION_CHANNEL_ID,
-          error: err
-        });
-      }
-    } catch (err) {
-      console.error(`[mod.js]: Error accessing notification channel: ${err.message}`, {
-        channelId: EDIT_NOTIFICATION_CHANNEL_ID,
-        error: err
-      });
-    }
-
-    // First ensure notification message is updated
-    if (!notificationUpdated) {
-      console.log(`[mod.js]: ⚠️ Failed to update notification message for edit ${requestId}`);
-      return interaction.editReply({
-        content: `❌ Failed to update notification message. The edit request will remain pending until the notification can be updated.`,
-        ephemeral: true
-      });
-    }
-
-    // Only delete from storage after successful notification update
-    await deletePendingEditFromStorage(requestId);
-    console.log(`[mod.js]: ✅ Deleted pending edit ${requestId} from storage after successful notification update`);
-
-    // Notify the user
-    try {
-      console.log(`[mod.js]: 🔍 Attempting to fetch user ${pendingEdit.userId} for DM notification`);
-      const user = await interaction.client.users.fetch(pendingEdit.userId);
-      
-      if (!user) {
-        console.error(`[mod.js]: ❌ User ${pendingEdit.userId} not found`);
-        return interaction.editReply({
-          content: `✅ Character edit request approved and applied successfully, but could not send DM to user.`,
-          ephemeral: true
-        });
-      }
-      console.log(`[mod.js]: ✅ Successfully fetched user ${pendingEdit.userId}`);
-
-      // Try to send DM with retry logic
-      let dmSent = false;
-      let retryCount = 0;
-      const maxRetries = 3;
-
-      while (!dmSent && retryCount < maxRetries) {
-        try {
-          console.log(`[mod.js]: 🔄 Attempt ${retryCount + 1}/${maxRetries} to send DM to user ${pendingEdit.userId}`);
-          await user.send(`🎉 **Character Edit Approved!**
-
-👤 **Character:** \`${character.name}\`
-🛠️ **Category:** \`${pendingEdit.category}\`
-🔄 **Previous Value:** \`${pendingEdit.previousValue}\`
-✅ **New Value:** \`${pendingEdit.updatedValue}\`
-
-Your changes have been successfully applied!`);
-          console.log(`[mod.js]: ✅ Successfully sent DM to user ${pendingEdit.userId}`);
-          dmSent = true;
-        } catch (dmError) {
-          retryCount++;
-          console.error(`[mod.js]: ❌ DM attempt ${retryCount}/${maxRetries} failed for user ${pendingEdit.userId}:`, {
-            error: dmError.message,
-            code: dmError.code,
-            stack: dmError.stack
+          await Character.findByIdAndUpdate(pendingEdit.characterId, {
+            $set: { [pendingEdit.category]: updateValue }
           });
-          
-          if (retryCount === maxRetries) {
-            console.error(`[mod.js]: ❌ All ${maxRetries} DM attempts failed for user ${pendingEdit.userId}`);
-            return interaction.editReply({
-              content: `✅ Character edit request approved and applied successfully, but could not send DM to user after ${maxRetries} attempts.`,
-              ephemeral: true
-            });
-          }
-          console.log(`[mod.js]: ⏳ Waiting 1 second before retry ${retryCount + 1}/${maxRetries}`);
-          await new Promise(resolve => setTimeout(resolve, 1000));
         }
+        
+        console.log(`[mod.js]: ✅ Updated character ${character.name}'s ${pendingEdit.category} to`, updateValue);
+      } catch (err) {
+        handleError(err, 'mod.js');
+        return reply(interaction, '❌ Failed to update the character. Please try again.');
       }
-
-      return interaction.editReply({
-        content: `✅ Character edit request approved and applied successfully.\nRequest ID: \`${requestId}\``,
-        ephemeral: true
-      });
-    } catch (err) {
-      console.error(`[mod.js]: ❌ Critical error in DM notification process:`, {
-        error: err.message,
-        code: err.code,
-        stack: err.stack,
-        userId: pendingEdit.userId
-      });
-      return interaction.editReply({
-        content: `✅ Character edit request approved and applied successfully, but could not send DM to user.`,
-        ephemeral: true
-      });
     }
+
+    // ------------------- Notification Update -------------------
+    const notificationChannel = interaction.guild.channels.cache.get(EDIT_NOTIFICATION_CHANNEL_ID);
+    if (!notificationChannel?.isTextBased()) {
+      return reply(interaction, '❌ Cannot update the mod notification — invalid or missing channel.');
+    }
+
+    try {
+      const originalMsg = await notificationChannel.messages.fetch(pendingEdit.notificationMessageId);
+      if (originalMsg) {
+        const updatedContent = formatApprovalNotification({
+          userTag: interaction.user.tag,
+          userId: pendingEdit.userId,
+          characterName: character.name,
+          category: pendingEdit.category,
+          previous: pendingEdit.previousValue,
+          updated: pendingEdit.updatedValue,
+          status: shouldApprove,
+          requestId
+        });
+        await originalMsg.edit(updatedContent);
+      }
+    } catch (err) {
+      handleError(err, 'mod.js');
+      return reply(interaction, '❌ Could not update the original mod message. Edit request remains pending.');
+    }
+
+    await deletePendingEditFromStorage(requestId);
+
+    // ------------------- User DM Notification -------------------
+    try {
+      const user = await interaction.client.users.fetch(pendingEdit.userId);
+      const dmMessage = formatUserDM(character.name, pendingEdit.category, pendingEdit.previousValue, pendingEdit.updatedValue);
+      await attemptDMWithRetry(user, dmMessage, 3);
+    } catch (err) {
+      handleError(err, 'mod.js');
+      console.warn(`[mod.js]: Could not DM user ${pendingEdit.userId}`);
+    }
+
+    return reply(interaction, `✅ Character edit request ${shouldApprove ? 'approved' : 'rejected'}.\nRequest ID: \`${requestId}\``);
   } catch (error) {
     handleError(error, 'mod.js');
-    console.error('[mod.js]: Error in handleApproveEdit:', error);
-    return interaction.editReply({
-      content: '❌ An error occurred while processing the edit request.',
-      ephemeral: true
-    });
+    return reply(interaction, '❌ An error occurred while processing the edit request.');
   }
 }
+
+
+function sanitizeRequestId(rawId) {
+  return rawId?.split(':').pop().replace(/[`'"]/g, '').trim();
+}
+
+function castValueByCategory(category, value) {
+  if (category === 'age') return parseInt(value, 10);
+  if (category === 'height') return parseFloat(value);
+  if (category === 'stamina') {
+    if (typeof value === 'object') {
+      return {
+        maxStamina: parseInt(value.maxStamina, 10),
+        currentStamina: parseInt(value.currentStamina, 10)
+      };
+    }
+    // If it's a single number, set both max and current to that value
+    const staminaValue = parseInt(value, 10);
+    return {
+      maxStamina: staminaValue,
+      currentStamina: staminaValue
+    };
+  }
+  if (category === 'hearts') {
+    if (typeof value === 'object') {
+      return {
+        maxHearts: parseInt(value.maxHearts, 10),
+        currentHearts: parseInt(value.currentHearts, 10)
+      };
+    }
+    // If it's a single number, set both max and current to that value
+    const heartsValue = parseInt(value, 10);
+    return {
+      maxHearts: heartsValue,
+      currentHearts: heartsValue
+    };
+  }
+  return value;
+}
+
+function formatApprovalNotification({ userTag, userId, characterName, category, previous, updated, status, requestId }) {
+  const isStamina = category === 'stamina';
+  const prev = isStamina ? `Max: ${previous.maxStamina}, Current: ${previous.currentStamina}` : previous;
+  const next = isStamina ? `Max: ${updated.maxStamina}, Current: ${updated.currentStamina}` : updated;
+  return `📢 **${status ? 'APPROVED' : 'REJECTED'} CHARACTER EDIT REQUEST**\n\n` +
+         `🌱 **User:** \`${userId}\`\n` +
+         `👤 **Character Name:** \`${characterName}\`\n` +
+         `🛠️ **Edited Category:** \`${category}\`\n` +
+         `🔄 **Previous Value:** \`${prev}\`\n` +
+         `✅ **Requested Value:** \`${next}\`\n` +
+         `⏳ **Status:** ${status ? 'APPROVED' : 'REJECTED'} by ${userTag}\n` +
+         `🔗 **Request ID:** \`${requestId}\``;
+}
+
+function formatUserDM(characterName, category, previous, updated) {
+  const prev = typeof previous === 'object' ? JSON.stringify(previous) : previous;
+  const next = typeof updated === 'object' ? JSON.stringify(updated) : updated;
+  
+  const embed = new EmbedBuilder()
+    .setColor('#00FF00')
+    .setTitle('🎉 Character Edit Approved!')
+    .addFields(
+      { name: '👤 Character', value: `> \`${characterName}\``, inline: true },
+      { name: '🛠️ Category', value: `> \`${category}\``, inline: true },
+      { name: '🔄 Previous Value', value: `> \`${prev}\``, inline: true },
+      { name: '✅ New Value', value: `> \`${next}\``, inline: true }
+    )
+    .setDescription('Your changes have been successfully applied!')
+    .setFooter({
+      text: 'Character Edit Request',
+      iconURL: 'https://static.wixstatic.com/media/7573f4_a510c95090fd43f5ae17e20d80c1289e~mv2.png'
+    })
+    .setTimestamp();
+
+  return embed;
+}
+
+async function attemptDMWithRetry(user, message, retries = 3) {
+  let attempts = 0;
+  while (attempts < retries) {
+    try {
+      await user.send(message);
+      return;
+    } catch (err) {
+      attempts++;
+      console.warn(`[mod.js]: DM failed (attempt ${attempts}) to user ${user.id}: ${err.message}`);
+      if (attempts >= retries) throw err;
+      await new Promise(r => setTimeout(r, 1000));
+    }
+  }
+}
+
+async function reply(interaction, content) {
+  return interaction.editReply({ content, ephemeral: true });
+}
+
 
 // ------------------- Function: handleInactivityReport -------------------
 // Generates a report of users inactive for 3+ months, including message counts and last activity.

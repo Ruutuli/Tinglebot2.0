@@ -87,6 +87,11 @@ const characterSchema = new Schema({
     noMonsters: { type: Boolean, default: false },
     noGathering: { type: Boolean, default: false }
   },
+  specialWeatherUsage: {
+    type: Map,
+    of: Date,
+    default: new Map()
+  },
   ko: { type: Boolean, default: false },
   debuff: {
     active: { type: Boolean, default: false },
@@ -145,4 +150,5 @@ characterSchema.pre('save', function (next) {
 // ------------------- Define and export model -------------------
 // ============================================================================
 const Character = mongoose.model('Character', characterSchema);
+
 module.exports = Character;
