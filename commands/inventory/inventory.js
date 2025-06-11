@@ -149,6 +149,12 @@ module.exports = {
   // ------------------- View Handler -------------------
   async handleView(interaction) {
     try {
+      // Check if interaction is still valid before deferring
+      if (!interaction.isRepliable()) {
+        console.log('[inventory.js]: Interaction is no longer repliable');
+        return;
+      }
+
       await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
 
       const fullCharacterName = interaction.options.getString('charactername');
@@ -272,6 +278,12 @@ module.exports = {
 
       collector.on('collect', async i => {
         try {
+          if (!i.isRepliable()) {
+            console.log('[inventory.js]: Component interaction is no longer repliable');
+            collector.stop();
+            return;
+          }
+
           if (i.customId === 'type-select') {
             currentType = i.values[0];
             currentPage = 0;
@@ -295,7 +307,7 @@ module.exports = {
           if (error.code === 10062) { // Unknown interaction error
             console.log('[inventory.js]: 🔄 Interaction expired, removing components');
             collector.stop();
-          } else {
+          } else if (i.isRepliable()) {
             await i.reply({ 
               content: '❌ An error occurred while updating the inventory view.',
               flags: [MessageFlags.Ephemeral]

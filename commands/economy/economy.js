@@ -4,6 +4,7 @@ const {
  ButtonBuilder,
  ButtonStyle,
  EmbedBuilder,
+ MessageFlags,
 } = require("discord.js");
 const { handleError } = require("../../utils/globalErrorHandler.js");
 const { handleTokenError } = require('../../utils/tokenUtils.js');
@@ -830,7 +831,7 @@ for (const { name } of items) {
 
 async function handleShopView(interaction) {
  try {
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
   
   // Add error handling for database connection
   let items;
@@ -838,11 +839,17 @@ async function handleShopView(interaction) {
     items = await ShopStock.find().sort({ itemName: 1 }).lean();
   } catch (dbError) {
     console.error("[shops]: Database connection error:", dbError);
-    return interaction.editReply("❌ Unable to connect to the shop database. Please try again later.");
+    return interaction.editReply({ 
+      content: "❌ Unable to connect to the shop database. Please try again later.",
+      flags: [MessageFlags.Ephemeral]
+    });
   }
 
   if (!items || items.length === 0) {
-   return interaction.editReply("❌ The shop is currently empty. Please try again later.");
+   return interaction.editReply({ 
+     content: "❌ The shop is currently empty. Please try again later.",
+     flags: [MessageFlags.Ephemeral]
+   });
   }
 
   const ITEMS_PER_PAGE = 10;
@@ -995,7 +1002,7 @@ async function handleShopBuy(interaction) {
             text: 'Token Sync Required'
           }
         }],
-        ephemeral: true
+        flags: [MessageFlags.Ephemeral]
       });
     }
 
@@ -1017,7 +1024,7 @@ async function handleShopBuy(interaction) {
             text: 'Quantity Validation'
           }
         }],
-        ephemeral: true,
+        flags: [MessageFlags.Ephemeral]
       });
       return;
     }
@@ -1232,7 +1239,7 @@ async function handleShopBuy(interaction) {
       { $set: { stock: shopQuantity - quantity } }
     );
 
-c    // Delete item if stock reaches 0
+    // Delete item if stock reaches 0
     if (shopQuantity - quantity <= 0) {
       await ShopStock.deleteOne({ 
         itemName: { $regex: new RegExp(`^${itemName}$`, 'i') } 
@@ -1792,7 +1799,7 @@ for (const { name } of items) {
 
    // Find the canonical item name from the database first
    const itemDetails = await ItemModel.findOne({
-     itemName: new RegExp(`^${baseItemName}$`, "i")
+     itemName: { $regex: new RegExp(`^${baseItemName}$`, "i") }
    }).exec();
 
    if (!itemDetails) {
@@ -1806,7 +1813,7 @@ for (const { name } of items) {
    const canonicalName = itemDetails.itemName;
 
    const fromInventoryEntries = await fromInventoryCollection
-    .find({ itemName: new RegExp(`^${canonicalName}$`, "i") })
+    .find({ itemName: { $regex: new RegExp(`^${canonicalName}$`, "i") } })
     .toArray();
    const totalQuantity = fromInventoryEntries.reduce(
     (sum, entry) => sum + entry.quantity,

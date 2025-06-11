@@ -238,8 +238,40 @@ const createSpecialWeatherEmbed = async (character, item, weather) => {
 
 // ------------------- Special Weather Usage Helper -------------------
 function getESTTime() {
-  // Get current time in EST/EDT using the same method as scheduler.js
-  return new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
+  const now = new Date();
+  
+  // Use Intl.DateTimeFormat to get the time in EST/EDT
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: 'numeric',
+    second: 'numeric',
+    hour12: false
+  });
+  
+  // Parse the formatted date string back into a Date object
+  const parts = formatter.formatToParts(now);
+  const values = {};
+  parts.forEach(part => {
+    if (part.type !== 'literal') {
+      values[part.type] = part.value;
+    }
+  });
+  
+  // Create a new date in EST/EDT
+  const estTime = new Date(
+    values.year,
+    values.month - 1,
+    values.day,
+    values.hour,
+    values.minute,
+    values.second
+  );
+  
+  return estTime;
 }
 
 function canUseSpecialWeather(character, village) {
@@ -253,19 +285,52 @@ function canUseSpecialWeather(character, village) {
   const startOfPeriod = new Date(now);
   startOfPeriod.setHours(8, 0, 0, 0);
   
-  // If current time is before 8am EST/EDT, look for weather from previous day
+  // If current time is before 8am EST/EDT, use previous day's 8am as start
   if (now.getHours() < 8) {
     startOfPeriod.setDate(startOfPeriod.getDate() - 1);
   }
 
+  // Get the end of the current weather period (7:59:59 AM EST/EDT of the next day)
+  const endOfPeriod = new Date(startOfPeriod);
+  endOfPeriod.setDate(endOfPeriod.getDate() + 1);
+  endOfPeriod.setHours(7, 59, 59, 999);
+
   // Check if last usage was before the start of the current period
-  return lastUsage < startOfPeriod;
+  // AND if we're still within the current period
+  return lastUsage < startOfPeriod && now < endOfPeriod;
 }
 
 function getNextAvailableTime(lastUsage) {
-  // Convert lastUsage to EST/EDT
-  const lastUsageEST = new Date(lastUsage.toLocaleString("en-US", { timeZone: "America/New_York" }));
+  // Convert lastUsage to EST/EDT using the same method
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: 'numeric',
+    second: 'numeric',
+    hour12: false
+  });
   
+  const parts = formatter.formatToParts(lastUsage);
+  const values = {};
+  parts.forEach(part => {
+    if (part.type !== 'literal') {
+      values[part.type] = part.value;
+    }
+  });
+  
+  const lastUsageEST = new Date(
+    values.year,
+    values.month - 1,
+    values.day,
+    values.hour,
+    values.minute,
+    values.second
+  );
+  
+  // Set to 8am EST/EDT of the next day
   const nextAvailable = new Date(lastUsageEST);
   nextAvailable.setHours(8, 0, 0, 0);
   nextAvailable.setDate(nextAvailable.getDate() + 1);
