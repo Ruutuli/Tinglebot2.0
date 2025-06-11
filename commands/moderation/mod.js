@@ -967,7 +967,17 @@ async function handleApproveEdit(interaction) {
       console.warn(`[mod.js]: Could not DM user ${pendingEdit.userId}`);
     }
 
-    return reply(interaction, `✅ Character edit request ${shouldApprove ? 'approved' : 'rejected'}.\nRequest ID: \`${requestId}\``);
+    const replyEmbed = new EmbedBuilder()
+      .setColor('#00FF00')
+      .setTitle('✅ Character Edit Request Processed')
+      .setDescription(`Character name edit approved!\nRequest ID: \`${requestId}\``)
+      .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+      .setFooter({
+        text: `Processed by ${interaction.user.tag}`
+      })
+      .setTimestamp();
+
+    return reply(interaction, { embeds: [replyEmbed] });
   } catch (error) {
     handleError(error, 'mod.js');
     return reply(interaction, '❌ An error occurred while processing the edit request.');
@@ -1017,14 +1027,26 @@ function formatApprovalNotification({ userTag, userId, characterName, category, 
   const isStamina = category === 'stamina';
   const prev = isStamina ? `Max: ${previous.maxStamina}, Current: ${previous.currentStamina}` : previous;
   const next = isStamina ? `Max: ${updated.maxStamina}, Current: ${updated.currentStamina}` : updated;
-  return `📢 **${status ? 'APPROVED' : 'REJECTED'} CHARACTER EDIT REQUEST**\n\n` +
-         `🌱 **User:** \`${userId}\`\n` +
-         `👤 **Character Name:** \`${characterName}\`\n` +
-         `🛠️ **Edited Category:** \`${category}\`\n` +
-         `🔄 **Previous Value:** \`${prev}\`\n` +
-         `✅ **Requested Value:** \`${next}\`\n` +
-         `⏳ **Status:** ${status ? 'APPROVED' : 'REJECTED'} by ${userTag}\n` +
-         `🔗 **Request ID:** \`${requestId}\``;
+
+  const embed = new EmbedBuilder()
+    .setColor(status ? '#00FF00' : '#FF0000')
+    .setTitle(`📢 ${status ? 'APPROVED' : 'REJECTED'} CHARACTER EDIT REQUEST`)
+    .addFields(
+      { name: '🌱 User', value: `> \`${userId}\``, inline: false },
+      { name: '👤 Character Name', value: `> \`${characterName}\``, inline: false },
+      { name: '🛠️ Edited Category', value: `> \`${category}\``, inline: false },
+      { name: '🔄 Previous Value', value: `> \`${prev}\``, inline: false },
+      { name: '✅ Requested Value', value: `> \`${next}\``, inline: false },
+      { name: '⏳ Status', value: `> ${status ? 'APPROVED' : 'REJECTED'} by ${userTag}`, inline: false },
+      { name: '🔗 Request ID', value: `> \`${requestId}\``, inline: false }
+    )
+    .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+    .setFooter({
+      text: 'Character Edit Request'
+    })
+    .setTimestamp();
+
+  return { embeds: [embed] };
 }
 
 function formatUserDM(characterName, category, previous, updated) {
@@ -1034,20 +1056,20 @@ function formatUserDM(characterName, category, previous, updated) {
   const embed = new EmbedBuilder()
     .setColor('#00FF00')
     .setTitle('🎉 Character Edit Approved!')
+    .setDescription('Your character edit request has been approved and the changes have been applied.')
     .addFields(
-      { name: '👤 Character', value: `> \`${characterName}\``, inline: true },
-      { name: '🛠️ Category', value: `> \`${category}\``, inline: true },
-      { name: '🔄 Previous Value', value: `> \`${prev}\``, inline: true },
-      { name: '✅ New Value', value: `> \`${next}\``, inline: true }
+      { name: '👤 Character', value: `> \`${characterName}\``, inline: false },
+      { name: '🛠️ Category', value: `> \`${category}\``, inline: false },
+      { name: '🔄 Previous Value', value: `> \`${prev}\``, inline: false },
+      { name: '✅ New Value', value: `> \`${next}\``, inline: false }
     )
-    .setDescription('Your changes have been successfully applied!')
+    .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
     .setFooter({
-      text: 'Character Edit Request',
-      iconURL: 'https://static.wixstatic.com/media/7573f4_a510c95090fd43f5ae17e20d80c1289e~mv2.png'
+      text: 'Character Edit Request'
     })
     .setTimestamp();
 
-  return embed;
+  return { embeds: [embed] };
 }
 
 async function attemptDMWithRetry(user, message, retries = 3) {
@@ -1066,7 +1088,11 @@ async function attemptDMWithRetry(user, message, retries = 3) {
 }
 
 async function reply(interaction, content) {
-  return interaction.editReply({ content, ephemeral: true });
+  if (typeof content === 'string') {
+    return interaction.editReply({ content, ephemeral: true });
+  } else {
+    return interaction.editReply({ ...content, ephemeral: true });
+  }
 }
 
 
