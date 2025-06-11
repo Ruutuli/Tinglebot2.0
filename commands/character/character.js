@@ -1152,9 +1152,36 @@ async function handleEditCharacter(interaction) {
 
     // ------------------- Pending Edit Logic -------------------
     const editId = new mongoose.Types.ObjectId().toString();
-    const finalUpdatedValue = category === 'stamina'
-      ? { maxStamina: parseInt(updatedInfo, 10), currentStamina: parseInt(updatedInfo, 10) }
-      : updatedInfo;
+    let finalUpdatedValue;
+    
+    if (category === 'stamina') {
+      finalUpdatedValue = { maxStamina: parseInt(updatedInfo, 10), currentStamina: parseInt(updatedInfo, 10) };
+    } else if (category === 'icon') {
+      if (!newIcon) {
+        return await safeReply(interaction, "❌ Please attach a new icon image when updating the icon.");
+      }
+
+      try {
+        // Download and upload the icon image
+        const response = await axios.get(newIcon.url, { responseType: 'arraybuffer' });
+        const iconData = Buffer.from(response.data, 'binary');
+        const blob = bucket.file(uuidv4() + path.extname(newIcon.name));
+        const blobStream = blob.createWriteStream({ resumable: false });
+        blobStream.end(iconData);
+        await new Promise((resolve, reject) => {
+          blobStream.on('finish', resolve);
+          blobStream.on('error', reject);
+        });
+
+        // Generate public URL for the uploaded icon
+        finalUpdatedValue = `https://storage.googleapis.com/${bucket.name}/${blob.name}`;
+      } catch (err) {
+        handleError(err, "character.js");
+        return await safeReply(interaction, "❌ Failed to upload the new icon. Please try again later.");
+      }
+    } else {
+      finalUpdatedValue = updatedInfo;
+    }
 
     const notificationEmbed = formatEditNotification(
       interaction.user.tag,

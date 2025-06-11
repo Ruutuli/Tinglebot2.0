@@ -12,7 +12,8 @@ const {
   ButtonBuilder,
   ButtonStyle,
   EmbedBuilder,
-  StringSelectMenuBuilder
+  StringSelectMenuBuilder,
+  MessageFlags
 } = require('discord.js');
 
 // ------------------- Database Services -------------------
@@ -118,7 +119,7 @@ module.exports = {
               .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
               .setFooter({ text: 'Command Validation' })
               .setTimestamp()],
-            ephemeral: true 
+            flags: [MessageFlags.Ephemeral]
           });
       }
     } catch (error) {
@@ -136,7 +137,7 @@ module.exports = {
           .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
           .setFooter({ text: 'Error ID: ' + Date.now() })
           .setTimestamp()],
-        ephemeral: true 
+        flags: [MessageFlags.Ephemeral]
       });
     }
   },
@@ -148,7 +149,7 @@ module.exports = {
   // ------------------- View Handler -------------------
   async handleView(interaction) {
     try {
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
 
       const fullCharacterName = interaction.options.getString('charactername');
       const characterName = fullCharacterName?.split(' | ')[0]?.trim();
@@ -166,7 +167,7 @@ module.exports = {
             .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
             .setFooter({ text: 'Command Validation' })
             .setTimestamp()],
-          ephemeral: true 
+          flags: [MessageFlags.Ephemeral]
         });
         return;
       }
@@ -187,7 +188,7 @@ module.exports = {
             .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
             .setFooter({ text: 'Character Validation' })
             .setTimestamp()],
-          ephemeral: true
+          flags: [MessageFlags.Ephemeral]
         });
         return;
       }
@@ -197,7 +198,7 @@ module.exports = {
       } catch (error) {
         await interaction.editReply({
           content: error.message,
-          ephemeral: true
+          flags: [MessageFlags.Ephemeral]
         });
         return;
       }
@@ -297,7 +298,7 @@ module.exports = {
           } else {
             await i.reply({ 
               content: '❌ An error occurred while updating the inventory view.',
-              ephemeral: true 
+              flags: [MessageFlags.Ephemeral]
             }).catch(() => {});
           }
         }
@@ -319,12 +320,12 @@ module.exports = {
         if (!interaction.replied && !interaction.deferred) {
           await interaction.reply({ 
             content: '❌ An error occurred while viewing the inventory.',
-            ephemeral: true 
+            flags: [MessageFlags.Ephemeral]
           });
         } else {
           await interaction.editReply({ 
             content: '❌ An error occurred while viewing the inventory.',
-            ephemeral: true 
+            flags: [MessageFlags.Ephemeral]
           });
         }
       } catch (replyError) {
@@ -354,14 +355,14 @@ module.exports = {
           inventoryUrl, 
           'Invalid Google Sheets URL. Please check the URL and try again.'
         );
-        await interaction.reply({ embeds: [setupEmbed], ephemeral: true });
+        await interaction.reply({ embeds: [setupEmbed], flags: [MessageFlags.Ephemeral] });
         return;
       }
 
       if (character.inventorySynced) {
         await interaction.reply({
           content: `🔄 Inventory for ${character.name} has already been synced and cannot be synced again.`,
-          ephemeral: true
+          flags: [MessageFlags.Ephemeral]
         });
         return;
       }
@@ -382,20 +383,20 @@ module.exports = {
       await interaction.reply({ 
         embeds: [syncEmbed], 
         components: [row], 
-        ephemeral: true 
+        flags: [MessageFlags.Ephemeral] 
       });
 
     } catch (error) {
       handleError(error, 'inventory.js');
       console.error('[inventory.js]: Error in handleSync', error);
-      await interaction.reply({ content: '❌ An error occurred while syncing inventory.', ephemeral: true });
+      await interaction.reply({ content: '❌ An error occurred while syncing inventory.', flags: [MessageFlags.Ephemeral] });
     }
   },
 
   // ------------------- Test Handler -------------------
   async handleTest(interaction) {
     try {
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
       
       const characterName = interaction.options.getString('charactername');
       const userId = interaction.user.id;
@@ -453,7 +454,7 @@ module.exports = {
 
       await interaction.editReply({
         content: `✅ **Success!**\n\n🛠️ **Inventory setup for** **${character.name}** **has been successfully tested.**\n\n📄 **See your inventory [here](<${inventoryUrl}>)**.\n\n🔄 **Once ready, use the** \`/inventory sync\` **command to sync your character's inventory.**`,
-        ephemeral: true
+        flags: [MessageFlags.Ephemeral]
       });
 
     } catch (error) {
@@ -488,12 +489,12 @@ module.exports = {
         if (!interaction.replied && !interaction.deferred) {
           await interaction.reply({
             content: errorMessage,
-            ephemeral: true
+            flags: [MessageFlags.Ephemeral]
           });
         } else {
           await interaction.editReply({
             content: errorMessage,
-            ephemeral: true
+            flags: [MessageFlags.Ephemeral]
           });
         }
       } catch (replyError) {
@@ -573,7 +574,7 @@ module.exports = {
 
     const errorMessage = customMessage || errorMessages[errorType] || 'An unexpected error occurred. Please check your setup.';
     const embed = await createSetupInstructionsEmbed(characterName, googleSheetsUrl, errorMessage);
-    await interaction.reply({ embeds: [embed], ephemeral: true });
+    await interaction.reply({ embeds: [embed], flags: [MessageFlags.Ephemeral] });
     console.log(`🔄 Setup instructions sent to the user: ${errorMessage}`);
   },
 }; 
