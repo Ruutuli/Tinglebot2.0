@@ -970,7 +970,7 @@ async function handleApproveEdit(interaction) {
     const replyEmbed = new EmbedBuilder()
       .setColor('#00FF00')
       .setTitle('✅ Character Edit Request Processed')
-      .setDescription(`Character name edit approved!\nRequest ID: \`${requestId}\``)
+      .setDescription(`${character.name}'s ${pendingEdit.category} edit ${shouldApprove ? 'approved' : 'rejected'}!\nRequest ID: \`${requestId}\``)
       .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
       .setFooter({
         text: `Processed by ${interaction.user.tag}`
