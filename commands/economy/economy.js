@@ -1232,6 +1232,13 @@ async function handleShopBuy(interaction) {
       { $set: { stock: shopQuantity - quantity } }
     );
 
+c    // Delete item if stock reaches 0
+    if (shopQuantity - quantity <= 0) {
+      await ShopStock.deleteOne({ 
+        itemName: { $regex: new RegExp(`^${itemName}$`, 'i') } 
+      });
+    }
+
     // ------------------- Log Transaction -------------------
     const inventoryLink = character.inventory || "https://example.com/inventory/default";
     const tokenTrackerLink = user.tokenTracker || "https://example.com/tokens/default";
@@ -1520,6 +1527,12 @@ if (quantity <= 0) {
    { $inc: { stock: quantity } },
    { upsert: true }
   );
+
+  // Delete item if stock reaches 0
+  const updatedStock = await ShopStock.findOne({ itemName });
+  if (updatedStock && updatedStock.stock <= 0) {
+    await ShopStock.deleteOne({ itemName });
+  }
 
   console.log(`[shops]: Added ${quantity}x ${itemName} to shop stock.`);
 

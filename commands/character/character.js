@@ -1156,7 +1156,7 @@ async function handleEditCharacter(interaction) {
       ? { maxStamina: parseInt(updatedInfo, 10), currentStamina: parseInt(updatedInfo, 10) }
       : updatedInfo;
 
-    const notificationMessage = formatEditNotification(
+    const notificationEmbed = formatEditNotification(
       interaction.user.tag,
       character.name,
       category,
@@ -1166,24 +1166,29 @@ async function handleEditCharacter(interaction) {
     );
 
     try {
-      const notificationChannel = await interaction.client.channels.fetch(EDIT_NOTIFICATION_CHANNEL_ID);
-      if (notificationChannel?.isTextBased()) {
-        const sentMessage = await notificationChannel.send(notificationMessage);
-        const pendingEdit = {
-          characterId: character._id,
-          userId: userId,
-          category: category,
-          previousValue: previousValue,
-          updatedValue: finalUpdatedValue,
-          status: 'pending',
-          createdAt: new Date(),
-          notificationMessageId: sentMessage.id
-        };
-        await savePendingEditToStorage(editId, pendingEdit);
+      const notificationChannel = interaction.guild.channels.cache.get(EDIT_NOTIFICATION_CHANNEL_ID);
+      if (!notificationChannel?.isTextBased()) {
+        throw new Error('Invalid notification channel');
       }
+
+      const sentMessage = await notificationChannel.send(notificationEmbed);
+      
+      const pendingEdit = {
+        characterId: character._id,
+        userId: userId,
+        category: category,
+        previousValue: previousValue,
+        updatedValue: finalUpdatedValue,
+        status: 'pending',
+        createdAt: new Date(),
+        notificationMessageId: sentMessage.id
+      };
+      
+      await savePendingEditToStorage(editId, pendingEdit);
     } catch (err) {
       handleError(err, "character.js");
       console.error(`[character.js]: Error sending update notification: ${err.message}`);
+      return await safeReply(interaction, "❌ Failed to send edit request to mods. Please try again later.");
     }
 
     const successEmbed = new EmbedBuilder()
@@ -1191,12 +1196,12 @@ async function handleEditCharacter(interaction) {
       .setTitle('📝 Edit Request Submitted')
       .setDescription(`Your request to change ${character.name}'s ${category} has been sent to the mod team for review.`)
       .addFields(
-        { name: '⏳ Review Time', value: '> Please allow up to 48 hours for review.', inline: true },
-        { name: '🔗 Request ID', value: `> \`${editId}\``, inline: true }
+        { name: '⏳ Review Time', value: '> Please allow up to 48 hours for review.', inline: false },
+        { name: '🔗 Request ID', value: `> \`${editId}\``, inline: false }
       )
+      .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
       .setFooter({
-        text: 'Character Edit Request',
-        iconURL: 'https://static.wixstatic.com/media/7573f4_a510c95090fd43f5ae17e20d80c1289e~mv2.png'
+        text: 'Character Edit Request'
       })
       .setTimestamp();
 
@@ -1211,50 +1216,25 @@ async function handleEditCharacter(interaction) {
 
 // ------------------- Utility Functions -------------------
 
-function formatEditNotification(userTag, characterName, category, previousValue, updatedValue, editId) {
+function formatEditNotification(userTag, characterName, category, previous, updated, requestId) {
   const embed = new EmbedBuilder()
-    .setColor('#FFA500')
+    .setColor('#FF0000')
     .setTitle('📢 PENDING CHARACTER EDIT REQUEST')
-    .setAuthor({
-      name: userTag,
-      iconURL: 'https://static.wixstatic.com/media/7573f4_a510c95090fd43f5ae17e20d80c1289e~mv2.png'
-    })
     .addFields(
-      { name: '👤 Character Name', value: `> \`${characterName}\``, inline: true },
-      { name: '🛠️ Edited Category', value: `> \`${category}\``, inline: true }
-    );
+      { name: '🌱 User', value: `> \`${userTag}\``, inline: false },
+      { name: '👤 Character Name', value: `> \`${characterName}\``, inline: false },
+      { name: '🛠️ Edited Category', value: `> \`${category}\``, inline: false },
+      { name: '🔄 Previous Value', value: `> \`${typeof previous === 'object' ? JSON.stringify(previous) : previous}\``, inline: false },
+      { name: '✅ Requested Value', value: `> \`${typeof updated === 'object' ? JSON.stringify(updated) : updated}\``, inline: false },
+      { name: '🔗 Request ID', value: `> \`${requestId}\``, inline: false }
+    )
+    .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+    .setFooter({
+      text: 'Character Edit Request'
+    })
+    .setTimestamp();
 
-  if (category === 'stamina') {
-    const prevMax = previousValue?.maxStamina || 'N/A';
-    const prevCurrent = previousValue?.currentStamina || 'N/A';
-    const newMax = updatedValue?.maxStamina || 'N/A';
-    const newCurrent = updatedValue?.currentStamina || 'N/A';
-
-    embed.addFields(
-      { name: '🔄 Previous Values', value: `> Max: \`${prevMax}\`\n> Current: \`${prevCurrent}\``, inline: true },
-      { name: '✅ Requested Values', value: `> Max: \`${newMax}\`\n> Current: \`${newCurrent}\``, inline: true }
-    );
-  } else {
-    const prevValue = typeof previousValue === 'object' ? JSON.stringify(previousValue) : previousValue || 'N/A';
-    const newValue = typeof updatedValue === 'object' ? JSON.stringify(updatedValue) : updatedValue || 'N/A';
-
-    embed.addFields(
-      { name: '🔄 Previous Value', value: `> \`${prevValue}\``, inline: true },
-      { name: '✅ Requested Value', value: `> \`${newValue}\``, inline: true }
-    );
-  }
-
-  embed.addFields(
-    { name: '⏳ Status', value: '> Pending Approval', inline: true },
-    { name: '🔗 Request ID', value: `> \`${editId}\``, inline: true }
-  )
-  .setFooter({
-    text: 'Character Edit Request',
-    iconURL: 'https://static.wixstatic.com/media/7573f4_a510c95090fd43f5ae17e20d80c1289e~mv2.png'
-  })
-  .setTimestamp();
-
-  return embed;
+  return { embeds: [embed] };
 }
 
 async function safeReply(interaction, message, isEmbed = false) {

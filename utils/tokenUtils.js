@@ -254,8 +254,7 @@ function handleTokenError(error, interaction) {
                 }
             )
             .setFooter({ 
-                text: 'Need more help? Use /tokens setup to verify your setup',
-                iconURL: 'https://static.wixstatic.com/media/7573f4_a510c95090fd43f5ae17e20d80c1289e~mv2.png'
+                text: 'Need more help? Use /tokens setup to verify your setup'
             })
             .setTimestamp();
     }

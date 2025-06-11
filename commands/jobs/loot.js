@@ -972,6 +972,7 @@ function generateLootedItem(encounteredMonster, weightedItems) {
    : 1;
   lootedItem.itemName = jellyType;
   lootedItem.quantity = quantity;
+  lootedItem.emoji = '<:Chuchu_Jelly:744755431175356416>'; // Set the correct emoji for Chuchu Jelly
  } else {
   lootedItem.quantity = 1; // Default quantity for non-Chuchu items
  }
