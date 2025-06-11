@@ -294,28 +294,52 @@ function getHumidityForWeather(weather) {
 async function getWeatherWithoutGeneration(village) {
   try {
     const normalizedVillage = normalizeVillageName(village);
+    
+    // Get current time in EST/EDT
     const now = new Date();
+    console.log(`[weatherModule.js]: Current UTC time: ${now.toISOString()}`);
     
-    // Calculate the start and end of the current day in UTC
-    const startOfDay = new Date(now);
-    startOfDay.setUTCHours(0, 0, 0, 0);
+    // Convert to EST/EDT
+    const estTime = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+    console.log(`[weatherModule.js]: Current EST/EDT time: ${estTime.toLocaleString("en-US", { timeZone: "America/New_York" })}`);
     
-    const endOfDay = new Date(now);
-    endOfDay.setUTCHours(23, 59, 59, 999);
+    // Calculate the start of the current weather period (8am EST/EDT of the current day)
+    const startOfPeriod = new Date(estTime);
+    startOfPeriod.setHours(8, 0, 0, 0);
     
-    console.log(`[weatherModule.js]: Searching for weather between ${startOfDay.toISOString()} and ${endOfDay.toISOString()}`);
+    // If current time is before 8am EST/EDT, use previous day's 8am as start
+    if (estTime.getHours() < 8) {
+      startOfPeriod.setDate(startOfPeriod.getDate() - 1);
+    }
     
-    // Get weather from the current day
+    // Calculate the end of the current weather period (7:59:59 AM EST/EDT of the next day)
+    const endOfPeriod = new Date(startOfPeriod);
+    endOfPeriod.setDate(endOfPeriod.getDate() + 1);
+    endOfPeriod.setHours(7, 59, 59, 999);
+    
+    console.log(`[weatherModule.js]: Weather period boundaries (EST/EDT):`);
+    console.log(`[weatherModule.js]: Start of period: ${startOfPeriod.toLocaleString("en-US", { timeZone: "America/New_York" })}`);
+    console.log(`[weatherModule.js]: End of period: ${endOfPeriod.toLocaleString("en-US", { timeZone: "America/New_York" })}`);
+    
+    // Convert EST/EDT times to UTC for database query
+    const startOfPeriodUTC = new Date(startOfPeriod.getTime() - (startOfPeriod.getTimezoneOffset() * 60000));
+    const endOfPeriodUTC = new Date(endOfPeriod.getTime() - (endOfPeriod.getTimezoneOffset() * 60000));
+    
+    console.log(`[weatherModule.js]: UTC boundaries for database query:`);
+    console.log(`[weatherModule.js]: Start of period (UTC): ${startOfPeriodUTC.toISOString()}`);
+    console.log(`[weatherModule.js]: End of period (UTC): ${endOfPeriodUTC.toISOString()}`);
+    
+    // Get weather from the current period
     const weather = await Weather.findOne({
       village: normalizedVillage,
       date: {
-        $gte: startOfDay,
-        $lte: endOfDay
+        $gte: startOfPeriodUTC,
+        $lte: endOfPeriodUTC
       }
     });
     
     if (!weather) {
-      console.log(`[weatherModule.js]: No weather found for ${normalizedVillage} on ${startOfDay.toISOString()}`);
+      console.log(`[weatherModule.js]: No weather found for ${normalizedVillage} between ${startOfPeriodUTC.toISOString()} and ${endOfPeriodUTC.toISOString()}`);
       return null;
     }
     
@@ -338,29 +362,55 @@ async function getWeatherWithoutGeneration(village) {
 async function getCurrentWeather(village) {
   try {
     const normalizedVillage = normalizeVillageName(village);
+    
+    // Get current time in EST/EDT
     const now = new Date();
+    console.log(`[weatherModule.js]: Current UTC time: ${now.toISOString()}`);
     
-    // Calculate the start and end of the current day in UTC
-    const startOfDay = new Date(now);
-    startOfDay.setUTCHours(0, 0, 0, 0);
+    // Convert to EST/EDT
+    const estTime = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+    console.log(`[weatherModule.js]: Current EST/EDT time: ${estTime.toLocaleString("en-US", { timeZone: "America/New_York" })}`);
     
-    const endOfDay = new Date(now);
-    endOfDay.setUTCHours(23, 59, 59, 999);
+    // Calculate the start of the current weather period (8am EST/EDT of the current day)
+    const startOfPeriod = new Date(estTime);
+    startOfPeriod.setHours(8, 0, 0, 0);
     
-    console.log(`[weatherModule.js]: Searching for weather between ${startOfDay.toISOString()} and ${endOfDay.toISOString()}`);
+    // If current time is before 8am EST/EDT, use previous day's 8am as start
+    if (estTime.getHours() < 8) {
+      startOfPeriod.setDate(startOfPeriod.getDate() - 1);
+    }
     
-    // Get weather from the current day
+    // Calculate the end of the current weather period (7:59:59 AM EST/EDT of the next day)
+    const endOfPeriod = new Date(startOfPeriod);
+    endOfPeriod.setDate(endOfPeriod.getDate() + 1);
+    endOfPeriod.setHours(7, 59, 59, 999);
+    
+    console.log(`[weatherModule.js]: Weather period boundaries (EST/EDT):`);
+    console.log(`[weatherModule.js]: Start of period: ${startOfPeriod.toLocaleString("en-US", { timeZone: "America/New_York" })}`);
+    console.log(`[weatherModule.js]: End of period: ${endOfPeriod.toLocaleString("en-US", { timeZone: "America/New_York" })}`);
+    
+    // Convert EST/EDT times to UTC for database query
+    const startOfPeriodUTC = new Date(startOfPeriod.getTime() - (startOfPeriod.getTimezoneOffset() * 60000));
+    const endOfPeriodUTC = new Date(endOfPeriod.getTime() - (endOfPeriod.getTimezoneOffset() * 60000));
+    
+    console.log(`[weatherModule.js]: UTC boundaries for database query:`);
+    console.log(`[weatherModule.js]: Start of period (UTC): ${startOfPeriodUTC.toISOString()}`);
+    console.log(`[weatherModule.js]: End of period (UTC): ${endOfPeriodUTC.toISOString()}`);
+    
+    // Get weather from the current period
     let weather = await Weather.findOne({
       village: normalizedVillage,
       date: {
-        $gte: startOfDay,
-        $lte: endOfDay
+        $gte: startOfPeriodUTC,
+        $lte: endOfPeriodUTC
       }
     });
     
-    // Only generate new weather if none exists for the current day
+    // Only generate new weather if none exists for the current period
     if (!weather) {
-      console.log(`[weatherModule.js]: No weather found for ${normalizedVillage}, generating new weather`);
+      console.log(`[weatherModule.js]: No weather found for ${normalizedVillage} between ${startOfPeriodUTC.toISOString()} and ${endOfPeriodUTC.toISOString()}`);
+      console.log(`[weatherModule.js]: Generating new weather for ${normalizedVillage}`);
+      
       const season = getCurrentSeason();
       const capitalizedSeason = capitalizeFirstLetter(season);
       const newWeather = simulateWeightedWeather(normalizedVillage, capitalizedSeason);
