@@ -164,14 +164,14 @@ function specialWeatherFlavorText(weatherType) {
     const weatherTextMap = {
         "Avalanche": "There has been an avalanche and some roads are blocked! Travel to and from this village today is impossible.",
         "Drought": "A drought has dried up the smaller vegetation surrounding the village... any plants or mushrooms rolled today are found dead and will not be gathered.",
-        "Fairy Circle": "Fairy circles have popped up all over Hyrule! All residents and visitors may use /specialweather to gather mushrooms today!",
+        "Fairy Circle": "Fairy circles have popped up all over Hyrule! All residents and visitors may use </specialweather:1379838613356806315> to gather mushrooms today!",
         "Flood": "There has been a flood! Traveling to and from this village is impossible today due to the danger.",
-        "Flower Bloom": "An overabundance of plants and flowers have been spotted growing in and around the village! All residents and visitors may use /specialweather to gather today!",
-        "Jubilee": "Fish are practically jumping out of the water! All residents and visitors may use /specialweather to catch some fish!",
-        "Meteor Shower": "Shooting stars have been spotted streaking through the sky! Quick, all residents and visitors make a wish and use /specialweather for a chance to find a star fragment!",
-        "Muggy": "Oof! Sure is humid today! Critters are out and about more than usual. All residents and visitors may use /specialweather to catch some critters!",
-        "Rock Slide": "Oh no, there's been a rock slide! Traveling to and from this village is impossible today. All residents and visitors may use /specialweather to help clear the road! You might just find something interesting while you work...",
-        "Blight Rain": "Blighted rain falls from the sky, staining the ground and creating sickly maroon-tinged puddles... if you roll for gathering today, you must also use /specialweather to see if you get infected! If you skip this roll, blighting will be automatic."
+        "Flower Bloom": "An overabundance of plants and flowers have been spotted growing in and around the village! All residents and visitors may use </specialweather:1379838613356806315> to gather today!",
+        "Jubilee": "Fish are practically jumping out of the water! All residents and visitors may use </specialweather:1379838613356806315> to catch some fish!",
+        "Meteor Shower": "Shooting stars have been spotted streaking through the sky! Quick, all residents and visitors make a wish and use </specialweather:1379838613356806315> for a chance to find a star fragment!",
+        "Muggy": "Oof! Sure is humid today! Critters are out and about more than usual. All residents and visitors may use </specialweather:1379838613356806315> to catch some critters!",
+        "Rock Slide": "Oh no, there's been a rock slide! Traveling to and from this village is impossible today. All residents and visitors may use </specialweather:1379838613356806315> to help clear the road! You might just find something interesting while you work...",
+        "Blight Rain": "Blighted rain falls from the sky, staining the ground and creating sickly maroon-tinged puddles... if you roll for gathering today, you must also use </specialweather:1379838613356806315> to see if you get infected! If you skip this roll, blighting will be automatic."
     };
 
     return weatherTextMap[weatherType] || "Unknown weather condition.";

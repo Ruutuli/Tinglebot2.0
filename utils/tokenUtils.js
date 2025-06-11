@@ -237,9 +237,27 @@ function handleTokenError(error, interaction) {
             .setTitle('❌ Token Tracker Error')
             .setDescription('An error occurred with your token tracker!')
             .addFields(
-                { name: '📝 Quick Guide', value: '1. Make sure your sheet has these headers in row 7 (B7:F7):\n```\nSUBMISSION | LINK | CATEGORIES | TYPE | TOKEN AMOUNT\n```\n\n2. Add at least one entry with type "earned" in column E:\n```\nSUBMISSION | LINK | CATEGORIES | TYPE   | TOKEN AMOUNT\nArtwork   | URL  | Art        | earned | 100\n```\n\n3. Share your sheet with: `tinglebot@rotw-tinglebot.iam.gserviceaccount.com`\n4. Make sure you have a tab named exactly `loggedTracker`\n5. Use `/tokens setup` to verify your setup' }
+                { 
+                    name: '📝 Required Headers', 
+                    value: 'Make sure your sheet has these headers in row 7 (B7:F7):\n```\nSUBMISSION | LINK | CATEGORIES | TYPE | TOKEN AMOUNT\n```',
+                    inline: false 
+                },
+                { 
+                    name: '📋 Example Entry', 
+                    value: 'Add at least one entry with type "earned" in column E:\n```\nSUBMISSION | LINK | CATEGORIES | TYPE   | TOKEN AMOUNT\nArtwork   | URL  | Art        | earned | 100\n```',
+                    inline: false 
+                },
+                { 
+                    name: '🔑 Access Setup', 
+                    value: '1. Share your sheet with: `tinglebot@rotw-tinglebot.iam.gserviceaccount.com`\n2. Make sure you have a tab named exactly `loggedTracker`\n3. Use `/tokens setup` to verify your setup',
+                    inline: false 
+                }
             )
-            .setFooter({ text: 'Need more help? Use /tokens setup to verify your setup' });
+            .setFooter({ 
+                text: 'Need more help? Use /tokens setup to verify your setup',
+                iconURL: 'https://static.wixstatic.com/media/7573f4_a510c95090fd43f5ae17e20d80c1289e~mv2.png'
+            })
+            .setTimestamp();
     }
 
     return {

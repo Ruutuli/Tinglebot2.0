@@ -10,26 +10,82 @@ const { v4: uuidv4 } = require('uuid');
 const { getJobPerk } = require('./jobsModule');
 const Character = require('../models/CharacterModel');
 const { capitalizeWords } = require('./formattingModule');
+const { EmbedBuilder } = require('discord.js');
 
 // ------------------- Get Job Voucher Error Message -------------------
 function getJobVoucherErrorMessage(errorType, data = {}) {
     const messages = {
-        ALREADY_HAS_JOB: `✅ Character already has the job "${capitalizeWords(data.jobName || '')}". No job voucher needed.`,
+        ALREADY_HAS_JOB: {
+            title: '❌ Job Voucher Already Active',
+            description: 'You already have an active job voucher.',
+            fields: [
+                { name: 'Current Job', value: `> ${data.currentJob || 'Unknown'}` },
+                { name: 'How to Fix', value: '> Use `/job voucher deactivate` to cancel your current job voucher first.' }
+            ],
+            color: '#FF0000'
+        },
         NO_VOUCHER: '❌ No active job voucher found.',
         WRONG_JOB: `❌ The job voucher is locked to **${capitalizeWords(data.voucherJob || '')}**, not **${capitalizeWords(data.requestedJob || '')}**. Please use the correct job.`,
         ALREADY_ACTIVE: `❌ ${data.characterName || 'Character'} already has an active Job Voucher for ${capitalizeWords(data.jobName || '')}. Please complete the current job before using another voucher.`,
         MISSING_SKILLS: data.activity === 'village-specific job' 
             ? `❌ ${data.characterName || 'Character'} must be in **${capitalizeWords(data.requiredVillage || '')}** to use the ${capitalizeWords(data.jobName || '')} job voucher. Currently in: **${capitalizeWords(data.currentVillage || '')}**`
             : `❌ ${data.characterName || 'Character'} cannot use the ${data.activity || 'looting'} perk as a ${capitalizeWords(data.jobName || '')}.`,
-        ACTIVATION_ERROR: '❌ An error occurred while activating the job voucher.',
-        DEACTIVATION_ERROR: '❌ An error occurred while deactivating the job voucher.',
-        ITEM_NOT_FOUND: '❌ Job Voucher item not found.',
-        STAMINA_LIMIT: `❌ ${data.characterName || 'Character'} cannot craft "${data.itemName}" with a job voucher because it requires more than 5 stamina. Try crafting something easier or use your main job.`,
+        ACTIVATION_ERROR: {
+            title: '❌ Job Voucher Activation Failed',
+            description: 'An error occurred while activating the job voucher.',
+            fields: [
+                { name: 'What Happened', value: '> The system encountered an error while processing your request.' },
+                { name: 'How to Fix', value: '> Please try again in a few moments. If the problem persists, contact a moderator.' }
+            ],
+            color: '#FF0000'
+        },
+        DEACTIVATION_ERROR: {
+            title: '❌ Job Voucher Deactivation Failed',
+            description: 'An error occurred while deactivating the job voucher.',
+            fields: [
+                { name: 'What Happened', value: '> The system encountered an error while processing your request.' },
+                { name: 'How to Fix', value: '> Please try again in a few moments. If the problem persists, contact a moderator.' }
+            ],
+            color: '#FF0000'
+        },
+        ITEM_NOT_FOUND: {
+            title: '❌ Job Voucher Not Found',
+            description: 'The job voucher item could not be found in your inventory.',
+            fields: [
+                { name: 'What Happened', value: '> The system could not locate a job voucher in your inventory.' },
+                { name: 'How to Fix', value: '> Make sure you have a job voucher in your inventory before using this command.' }
+            ],
+            color: '#FF0000'
+        },
+        STAMINA_LIMIT: {
+            title: '❌ Stamina Limit Exceeded',
+            description: `${data.characterName || 'Character'} cannot craft "${data.itemName}" with a job voucher.`,
+            fields: [
+                { name: 'What Happened', value: '> The item requires more than 5 stamina to craft.' },
+                { name: 'How to Fix', value: '> Try crafting something easier or use your main job instead.' }
+            ],
+            color: '#FF0000'
+        }
+    };
+
+    const errorInfo = messages[errorType] || {
+        title: '❌ Unknown Error',
+        description: 'An unknown error occurred with the job voucher.',
+        fields: [
+            { name: 'What Happened', value: '> The system encountered an unexpected error.' },
+            { name: 'How to Fix', value: '> Please try again or contact a moderator if the problem persists.' }
+        ],
+        color: '#FF0000'
     };
 
     return {
         success: false,
-        message: messages[errorType] || '❌ An unknown error occurred with the job voucher.',
+        embed: new EmbedBuilder()
+            .setTitle(errorInfo.title)
+            .setDescription(errorInfo.description)
+            .addFields(errorInfo.fields)
+            .setColor(errorInfo.color)
+            .setTimestamp(),
         skipVoucher: errorType === 'ALREADY_HAS_JOB'
     };
 }

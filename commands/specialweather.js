@@ -236,6 +236,42 @@ const createSpecialWeatherEmbed = async (character, item, weather) => {
   return { embed, files: [] };
 };
 
+// ------------------- Special Weather Usage Helper -------------------
+function getESTTime() {
+  // Get current time in EST/EDT using the same method as scheduler.js
+  return new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
+}
+
+function canUseSpecialWeather(character, village) {
+  const lastUsage = character.specialWeatherUsage?.get(village);
+  if (!lastUsage) return true;
+
+  // Get current time in EST/EDT
+  const now = getESTTime();
+  
+  // Get the start of the current weather period (8am EST/EDT of the current day)
+  const startOfPeriod = new Date(now);
+  startOfPeriod.setHours(8, 0, 0, 0);
+  
+  // If current time is before 8am EST/EDT, look for weather from previous day
+  if (now.getHours() < 8) {
+    startOfPeriod.setDate(startOfPeriod.getDate() - 1);
+  }
+
+  // Check if last usage was before the start of the current period
+  return lastUsage < startOfPeriod;
+}
+
+function getNextAvailableTime(lastUsage) {
+  // Convert lastUsage to EST/EDT
+  const lastUsageEST = new Date(lastUsage.toLocaleString("en-US", { timeZone: "America/New_York" }));
+  
+  const nextAvailable = new Date(lastUsageEST);
+  nextAvailable.setHours(8, 0, 0, 0);
+  nextAvailable.setDate(nextAvailable.getDate() + 1);
+  return nextAvailable;
+}
+
 // ------------------- Command Definition -------------------
 module.exports = {
   data: new SlashCommandBuilder()
@@ -313,30 +349,17 @@ module.exports = {
         return;
       }
 
-      // Check if character has already gathered during special weather today
-      const now = new Date();
-      const rollover = new Date();
-      rollover.setUTCHours(13, 0, 0, 0); // 8AM EST = 1PM UTC
-
-      // If we're before rollover time, use yesterday's rollover
-      if (now < rollover) {
-        rollover.setDate(rollover.getDate() - 1);
-      }
-
-      // Convert lastSpecialWeatherGather to Date object if it's a string
-      const lastGather = character.lastSpecialWeatherGather ? new Date(character.lastSpecialWeatherGather) : null;
-      
-      // Skip daily limit check for moderator characters
+      // Check if character has already gathered during special weather in this village today
       const isModerator = ['inarikomod', 'rudaniamod', 'vhintlmod'].includes(character.name.toLowerCase());
-      if (!isModerator && lastGather && lastGather > rollover) {
-        const nextGather = new Date(rollover);
-        nextGather.setDate(nextGather.getDate() + 1);
+      if (!isModerator && !canUseSpecialWeather(character, channelVillage)) {
+        const lastUsage = character.specialWeatherUsage.get(channelVillage);
+        const nextGather = getNextAvailableTime(lastUsage);
         const unixTimestamp = Math.floor(nextGather.getTime() / 1000);
         
         await interaction.editReply({
           embeds: [{
             color: 0x008B8B, // Dark cyan color
-            description: `*${character.name} has found all the special weather had to offer today!*\n\n**Daily special weather gathering limit reached.**\nYou've already gathered during special weather today. Special weather events are rare and unpredictable - keep an eye out for the next one!`,
+            description: `*${character.name} has found all the special weather had to offer in ${channelVillage} today!*\n\n**Daily special weather gathering limit reached for ${channelVillage}.**\nYou've already gathered during special weather in ${channelVillage} today. Special weather events are rare and unpredictable - keep an eye out for the next one!\n\n⏰ **Next available:** <t:${unixTimestamp}:R>`,
             image: {
               url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
             },
@@ -481,6 +504,13 @@ module.exports = {
 
       // Update last special weather gather time
       character.lastSpecialWeatherGather = new Date();
+      await character.save();
+
+      // Update special weather usage for this village
+      if (!character.specialWeatherUsage) {
+        character.specialWeatherUsage = new Map();
+      }
+      character.specialWeatherUsage.set(channelVillage, new Date());
       await character.save();
 
       // Create and send embed
