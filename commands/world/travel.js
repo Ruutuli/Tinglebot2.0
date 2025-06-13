@@ -215,7 +215,7 @@ module.exports = {
             "<:blight_eye:805576955725611058> **Blight Infection!**\n\n" +
             `◈ Oh no... your character **${character.name}** has come into contact with the blight rain and has been **blighted**! ◈\n\n` +
             "You can be healed by **Oracles, Sages & Dragons**  \n" +
-            "▹ [Blight Information](https://www.rootsofthewild.com/blight)  \n" +
+            "▹ [Blight Information](https://www.rootsofrootsofthewild.com/blight)  \n" +
             "▹ [Currently Available Blight Healers](https://discord.com/channels/603960955839447050/651614266046152705/845481974671736842)\n\n" +
             "**STAGE 1:**  \n" +
             "Infected areas appear like blight-colored bruises on the body. Side effects include fatigue, nausea, and feverish symptoms. At this stage you can be helped by having one of the sages, oracles or dragons heal you.\n\n" +
@@ -673,7 +673,7 @@ async function processTravelDay(day, context) {
             "<:blight_eye:805576955725611058> **Blight Infection!**\n\n" +
             `◈ Oh no... your character **${character.name}** has come into contact with the blight rain and has been **blighted**! ◈\n\n` +
             "You can be healed by **Oracles, Sages & Dragons**  \n" +
-            "▹ [Blight Information](https://www.rootsofthewild.com/blight)  \n" +
+            "▹ [Blight Information](https://www.rootsofrootsofthewild.com/blight)  \n" +
             "▹ [Currently Available Blight Healers](https://discord.com/channels/603960955839447050/651614266046152705/845481974671736842)\n\n" +
             "**STAGE 1:**  \n" +
             "Infected areas appear like blight-colored bruises on the body. Side effects include fatigue, nausea, and feverish symptoms. At this stage you can be helped by having one of the sages, oracles or dragons heal you.\n\n" +

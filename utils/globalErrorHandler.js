@@ -3,6 +3,7 @@
 // Global error capturing and logging to Discord and Trello.
 // ============================================================================
 const { EmbedBuilder } = require('discord.js');
+const dbConfig = require('../config/database');
 
 // ------------------- Standard Libraries -------------------
 const ERROR_LOG_CHANNEL_ID = process.env.CONSOLE_LOG_CHANNEL;
@@ -42,7 +43,7 @@ async function handleError(error, source = "Unknown Source", context = {}) {
     if (host) extraInfo += `• Host: ${host}\n`;
     if (port) extraInfo += `• Port: ${port}\n`;
     if (process.env.MONGODB_TINGLEBOT_URI) extraInfo += `• Tinglebot URI: ${redact(process.env.MONGODB_TINGLEBOT_URI)}\n`;
-    if (process.env.MONGODB_INVENTORIES_URI) extraInfo += `• Inventories URI: ${redact(process.env.MONGODB_INVENTORIES_URI)}\n`;
+    if (dbConfig.inventories) extraInfo += `• Inventories URI: ${redact(dbConfig.inventories)}\n`;
     if (process.env.NODE_ENV) extraInfo += `• Node Env: ${process.env.NODE_ENV}\n`;
     if (context.options) extraInfo += `• Command Options: ${JSON.stringify(context.options)}\n`;
   }

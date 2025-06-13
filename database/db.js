@@ -76,8 +76,7 @@ async function connectToTinglebot() {
  try {
   if (!tinglebotDbConnection || mongoose.connection.readyState === 0) {
    mongoose.set("strictQuery", false);
-   const env = process.env.NODE_ENV || 'development';
-   const uri = env === 'development' ? dbConfig.tinglebot : dbConfig.tinglebot;
+   const uri = dbConfig.tinglebot;
    try {
     tinglebotDbConnection = await mongoose.connect(uri, {
      serverSelectionTimeoutMS: 30000,
@@ -126,11 +125,10 @@ async function connectToTinglebot() {
 async function connectToInventories() {
  try {
   if (!inventoriesDbConnection) {
-   const env = process.env.NODE_ENV || 'development';
-   const uri = env === 'development' ? process.env.MONGODB_INVENTORIES_URI_DEV : dbConfig.inventories;
+   const uri = dbConfig.inventories;
    
    if (!uri) {
-     throw new Error(`Missing MongoDB URI for ${env} environment`);
+     throw new Error('Missing MongoDB URI for inventories database');
    }
    
    inventoriesDbConnection = await mongoose.createConnection(uri, {
@@ -148,9 +146,8 @@ async function connectToInventories() {
     family: 4
    });
 
-   // Set the database name based on environment
-   const dbName = env === 'development' ? 'inventories_dev' : 'inventories';
-   inventoriesDbConnection.useDb(dbName);
+   // Set the database name
+   inventoriesDbConnection.useDb('inventories');
   }
   return inventoriesDbConnection;
  } catch (error) {
@@ -162,11 +159,10 @@ async function connectToInventories() {
 // ------------------- connectToInventoriesNative -------------------
 const connectToInventoriesNative = async () => {
  if (!inventoriesDbNativeConnection) {
-  const env = process.env.NODE_ENV || 'development';
-  const uri = env === 'development' ? process.env.MONGODB_INVENTORIES_URI_DEV : dbConfig.inventories;
+  const uri = dbConfig.inventories;
   
   if (!uri) {
-    throw new Error(`Missing MongoDB URI for ${env} environment`);
+    throw new Error('Missing MongoDB URI for inventories database');
   }
   
   const client = new MongoClient(uri, {
@@ -184,7 +180,7 @@ const connectToInventoriesNative = async () => {
     family: 4
   });
   await client.connect();
-  inventoriesDbNativeConnection = client.db(env === 'development' ? 'inventories_dev' : 'inventories');
+  inventoriesDbNativeConnection = client.db('inventories');
  }
  return inventoriesDbNativeConnection;
 };
@@ -203,8 +199,7 @@ const getInventoryCollection = async (characterName) => {
 async function connectToVending() {
  try {
   if (!vendingDbConnection) {
-   const env = process.env.NODE_ENV || 'development';
-   const uri = env === 'development' ? dbConfig.vending : dbConfig.vending;
+   const uri = dbConfig.vending;
    vendingDbConnection = await mongoose.createConnection(uri, {
     useNewUrlParser: true,
     useUnifiedTopology: true,
@@ -221,7 +216,7 @@ async function connectToVending() {
     maxIdleTimeMS: 60000,
     family: 4
    });
-   console.log(`[db.js]: 🔌 Connected to Vending database: ${env}`);
+   console.log(`[db.js]: 🔌 Connected to Vending database`);
   }
   return vendingDbConnection;
  } catch (error) {
