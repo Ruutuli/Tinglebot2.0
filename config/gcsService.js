@@ -28,7 +28,7 @@ if (process.env.RAILWAY_ENVIRONMENT) {
     });
 } else {
     // Local environment - use key file
-    const serviceKeyPath = path.join('./config/service_account.json');
+    const serviceKeyPath = path.join(__dirname, 'service_account.json');
     storage = new Storage({
         keyFilename: serviceKeyPath,
         projectId: process.env.GCP_PROJECT_ID,

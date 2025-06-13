@@ -70,7 +70,8 @@ const { sendUserDM } = require('../utils/messageUtils');
 async function connectToInventories() {
   try {
     if (mongoose.connection.readyState === 0) {
-      await mongoose.connect(process.env.MONGODB_INVENTORIES_URI, {
+      const dbConfig = require('../config/database');
+      await mongoose.connect(dbConfig.inventories, {
         useNewUrlParser: true,
         useUnifiedTopology: true
       });
@@ -81,7 +82,7 @@ async function connectToInventories() {
       operation: 'connectToInventories',
       options: {
         readyState: mongoose.connection.readyState,
-        uri: process.env.MONGODB_INVENTORIES_URI ? '[REDACTED]' : 'undefined'
+        uri: dbConfig.inventories ? '[REDACTED]' : 'undefined'
       }
     });
     console.error('[blightHandler]: ❌ Error connecting to inventories database:', error);
@@ -1287,7 +1288,7 @@ async function postBlightRollCall(client) {
       `Use this command:  \n` +
       `\`/blight roll character_name\`  \n` + `➸ And you're done until the next time!\n\n` +
       `**~~────────────────────~~**  \n` +
-      `▹ [Blight Information](https://www.rootsofthewild.com/blight 'Blight Information')  \n` +
+      `▹ [Blight Information](https://www.rootsofrootsofthewild.com/blight 'Blight Information')  \n` +
       `▹ [Currently Available Blight Healers](https://discord.com/channels/603960955839447050/651614266046152705/845481974671736842 'Blight Healers')  \n` +
       `**~~────────────────────~~**  \n` +
       `:clock8: Blight calls happen every day around 8:00 PM EST!  \n` +

@@ -7,7 +7,7 @@
 const { v4: uuidv4 } = require('uuid');
 const { MongoClient } = require("mongodb");
 const mongoose = require('mongoose');
-const VENDING_DB_URI = process.env.MONGODB_INVENTORIES_URI;
+const dbConfig = require('../config/database');
 const { generateUniqueId } = require('../utils/uniqueIdUtils');
 
 // ------------------- Discord.js Components -------------------
@@ -94,7 +94,7 @@ const VIEW_SHOP_IMAGE_URL = DEFAULT_IMAGE_URL;
 
 // ------------------- Connect to vending database -------------------
 async function connectToVendingDatabase() {
-  const client = new MongoClient(process.env.MONGODB_INVENTORIES_URI, {});
+  const client = new MongoClient(dbConfig.vending, {});
   try {
     await client.connect();
     return client.db("vendingInventories");
