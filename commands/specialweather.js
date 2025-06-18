@@ -295,9 +295,38 @@ function canUseSpecialWeather(character, village) {
   endOfPeriod.setDate(endOfPeriod.getDate() + 1);
   endOfPeriod.setHours(7, 59, 59, 999);
 
+  // Convert lastUsage to EST/EDT for comparison
+  const lastUsageEST = new Date(lastUsage);
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: 'numeric',
+    second: 'numeric',
+    hour12: false
+  });
+  
+  const parts = formatter.formatToParts(lastUsageEST);
+  const values = {};
+  parts.forEach(part => {
+    if (part.type !== 'literal') {
+      values[part.type] = part.value;
+    }
+  });
+  
+  const lastUsageESTDate = new Date(
+    values.year,
+    values.month - 1,
+    values.day,
+    values.hour,
+    values.minute,
+    values.second
+  );
+
   // Check if last usage was before the start of the current period
-  // AND if we're still within the current period
-  return lastUsage < startOfPeriod && now < endOfPeriod;
+  return lastUsageESTDate < startOfPeriod;
 }
 
 function getNextAvailableTime(lastUsage) {
