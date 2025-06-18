@@ -152,17 +152,82 @@ async function handleItemLookup(interaction, itemName) {
 
   // Get characters that have this item and format their details
   const charactersWithItem = await fetchCharactersWithItem(itemName);
-  const charactersFormatted = charactersWithItem.length > 0
-    ? charactersWithItem.map(char => formatItemDetails(char.name, char.quantity, emoji)).join('\n')
-    : 'None';
+  
+  // Send the main item embed first
+  await interaction.editReply({ embeds: [embed] });
 
-  const charactersEmbed = new EmbedBuilder()
-    .setColor(getCategoryColor(item.category))
-    .setTitle('Characters that have this item')
-    .setDescription(charactersFormatted)
-    .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png');
+  // If there are characters with the item, create paginated embeds for them
+  if (charactersWithItem.length > 0) {
+    let currentPage = 0;
+    const totalPages = Math.ceil(charactersWithItem.length / ITEMS_PER_PAGE);
 
-  await interaction.editReply({ embeds: [embed, charactersEmbed], ephemeral: true });
+    const generateCharactersEmbed = (page) => {
+      const start = page * ITEMS_PER_PAGE;
+      const end = start + ITEMS_PER_PAGE;
+      const charactersToDisplay = charactersWithItem.slice(start, end);
+      
+      const charactersFormatted = charactersToDisplay
+        .map(char => formatItemDetails(char.name, char.quantity, emoji))
+        .join('\n');
+
+      return new EmbedBuilder()
+        .setColor(getCategoryColor(item.category))
+        .setTitle(`Characters that have ${item.itemName}`)
+        .setDescription(charactersFormatted)
+        .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+        .setFooter({ text: `Page ${page + 1} of ${totalPages}` });
+    };
+
+    const generatePaginationRow = () => new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId('prev')
+        .setLabel('Previous')
+        .setStyle(ButtonStyle.Primary)
+        .setDisabled(currentPage === 0),
+      new ButtonBuilder()
+        .setCustomId('next')
+        .setLabel('Next')
+        .setStyle(ButtonStyle.Primary)
+        .setDisabled(currentPage === totalPages - 1)
+    );
+
+    const message = await interaction.followUp({
+      embeds: [generateCharactersEmbed(currentPage)],
+      components: [generatePaginationRow()],
+      ephemeral: true
+    });
+
+    const collector = message.createMessageComponentCollector({ time: 600000 }); // 10 minutes
+
+    collector.on('collect', async i => {
+      if (i.user.id !== interaction.user.id) {
+        await i.reply({ content: '❌ **You cannot use these buttons.**', ephemeral: true });
+        return;
+      }
+
+      if (i.customId === 'prev') {
+        currentPage--;
+      } else if (i.customId === 'next') {
+        currentPage++;
+      }
+
+      await i.update({
+        embeds: [generateCharactersEmbed(currentPage)],
+        components: [generatePaginationRow()],
+      });
+    });
+
+    collector.on('end', async () => {
+      try {
+        await interaction.editReply({ components: [] });
+      } catch (error) {
+        handleError(error, 'lookup.js');
+      }
+    });
+  } else {
+    // If no characters have the item, send a simple message
+    await interaction.followUp({ content: 'No characters currently have this item.', ephemeral: true });
+  }
 }
 
 // ------------------- Handle ingredient lookup -------------------
