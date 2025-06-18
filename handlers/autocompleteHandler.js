@@ -1422,8 +1422,10 @@ async function handleTradeItemAutocomplete(interaction, focusedValue) {
   try {
     const fromCharacter = interaction.options.getString('fromcharacter');
     if (!fromCharacter) return await interaction.respond([]);
+    
     const inventoryCollection = await getCharacterInventoryCollection(fromCharacter);
     const items = await inventoryCollection.find().toArray();
+    
     // Aggregate by name, exclude 'Initial Item'
     const itemMap = new Map();
     for (const item of items) {
@@ -1435,11 +1437,21 @@ async function handleTradeItemAutocomplete(interaction, focusedValue) {
         itemMap.get(key).quantity += item.quantity;
       }
     }
+    
     const choices = Array.from(itemMap.values()).map(item => ({
       name: `${capitalizeWords(item.name)} (Qty: ${item.quantity})`,
       value: item.name
     }));
-    const filtered = choices.filter(choice => choice.name.toLowerCase().includes(focusedValue));
+    
+    // Convert search term to lowercase for case-insensitive matching
+    const searchTerm = (focusedValue || '').toLowerCase().trim();
+    
+    // More flexible filtering that matches any part of the item name
+    const filtered = choices.filter(choice => 
+      choice.name.toLowerCase().includes(searchTerm) || 
+      choice.value.toLowerCase().includes(searchTerm)
+    );
+    
     return await interaction.respond(filtered.slice(0, 25));
   } catch (error) {
     console.error('[handleTradeItemAutocomplete]: Error:', error);
@@ -1629,8 +1641,10 @@ async function handleShopItemAutocomplete(interaction, focusedValue) {
     if (!character) return await interaction.respond([]);
 
     const inventoryCollection = await getCharacterInventoryCollection(character);
+    // Escape special regex characters in the search value
+    const escapedValue = focusedValue.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const items = await inventoryCollection
-      .find({ itemName: { $regex: focusedValue, $options: 'i' } })
+      .find({ itemName: { $regex: escapedValue, $options: 'i' } })
       .toArray();
 
     const choices = items.map(item => ({
@@ -1937,35 +1951,6 @@ async function handleShopsAutocomplete(interaction, focusedOption) {
    handleError(error, "autocompleteHandler.js");
  
    console.error("[handleShopsAutocomplete]: Error:", error);
-   await safeRespondWithError(interaction);
-  }
- }
-
- // ------------------- Trade Item Autocomplete -------------------
- async function handleTradeItemAutocomplete(interaction, focusedOption) {
-  try {
-                const userId = interaction.user.id;
-   const characterName = interaction.options.getString("fromcharacter");
-   if (!characterName) return await interaction.respond([]);
- 
-   const character = await fetchCharacterByNameAndUserId(characterName, userId);
-   if (!character) return await interaction.respond([]);
- 
-   const inventoryCollection = await getCharacterInventoryCollection(
-    character.name
-   );
-   const inventory = await inventoryCollection.find().toArray();
- 
-   const choices = inventory.map((item) => ({
-    name: `${item.itemName} - QTY:${item.quantity}`,
-    value: item.itemName,
-                }));
-                
-                await respondWithFilteredChoices(interaction, focusedOption, choices);
-  } catch (error) {
-   handleError(error, "autocompleteHandler.js");
- 
-   console.error("[handleTradeItemAutocomplete]: Error:", error);
    await safeRespondWithError(interaction);
   }
  }

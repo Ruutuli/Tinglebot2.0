@@ -1,17 +1,12 @@
 [deploy-commands.js]: Deploying commands in production  mode
-[deploy-commands.js]: Forcing production mode from command line
-[deploy-commands.js]: Loaded environment from C:\Users\Ruu\Desktop\Tinglebot 2.0\.env.production
-[deploy-commands.js]: Deploying commands in production mode
+[deploy-commands.js]: No .env file found, using environment variables from system
+[deploy-commands.js]: Deploying commands in production  mode
 [deploy-commands.js]: Found 35 potential command files
 [deploy-commands.js]: Setting up database mocks
 
 [deploy-commands.js]: Processing file: commands\character\character.js
 [deploy-commands.js]: Attempting to require: commands\character\character.js
 [deploy-commands.js]: Requiring module: C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\character\character.js
-[database.js]: Using production environment
-[database.js]: Loaded environment from .env.production
-[database.js]: Using production environment configuration
-[database.js]: Database URIs: { tinglebot: '✅ Set', inventories: '✅ Set', vending: '✅ Set' }
 [deploy-commands.js]: Successfully required commands\character\character.js
 [deploy-commands.js]: Found command data in commands\character\character.js
 [deploy-commands.js]: Command data: {
@@ -285,7 +280,13 @@
 [deploy-commands.js]: Attempting to require: commands\world\quest.js
 [deploy-commands.js]: Requiring module: C:\Users\Ruu\Desktop\Tinglebot 2.0\commands\world\quest.js
 [deploy-commands.js]: Successfully required commands\world\quest.js
-⚠️ The command at commands\world\quest.js is missing a required "data" property.
+[deploy-commands.js]: Found command data in commands\world\quest.js
+[deploy-commands.js]: Command data: {
+  name: 'quest',
+  description: 'Quest management system - smaller, optional, fun timed tasks for rewards!',
+  options: 7
+}
+✅ Loaded command: quest from commands\world\quest.js
 
 [deploy-commands.js]: Processing file: commands\world\raid.js
 [deploy-commands.js]: Attempting to require: commands\world\raid.js
@@ -319,9 +320,13 @@
 [deploy-commands.js]: Successfully required embeds\weatherEmbed.js
 ⚠️ The command at embeds\weatherEmbed.js is missing a required "data" property.
 [deploy-commands.js]: Restoring original require and environment
-[deploy-commands.js]: Successfully loaded 18 commands
-🔄 Started refreshing 18 commands in production mode.
-[deploy-commands.js]: Deploying to production guild: 603960955839447050
-(node:42840) Warning: Accessing non-existent property 'connectToInventories' of module exports inside circular dependency
-(Use `node --trace-warnings ...` to show where the warning was created)
-✅ Successfully registered 18 commands to production server.
+[deploy-commands.js]: Successfully loaded 19 commands
+🔄 Started refreshing 19 commands in production  mode.
+[deploy-commands.js]: Deploying to test guild: undefined
+❌ Error deploying commands: Error: Expected token to be set for this request, but none was present
+    at _REST.resolveRequest (C:\Users\Ruu\Desktop\Tinglebot 2.0\node_modules\@discordjs\rest\dist\index.js:1346:15)
+    at _REST.queueRequest (C:\Users\Ruu\Desktop\Tinglebot 2.0\node_modules\@discordjs\rest\dist\index.js:1306:46)
+    at _REST.request (C:\Users\Ruu\Desktop\Tinglebot 2.0\node_modules\@discordjs\rest\dist\index.js:1272:33)
+    at _REST.put (C:\Users\Ruu\Desktop\Tinglebot 2.0\node_modules\@discordjs\rest\dist\index.js:1255:17)
+    at deployCommands (C:\Users\Ruu\Desktop\Tinglebot 2.0\scripts\deploy-commands.js:206:24)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
