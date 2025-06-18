@@ -97,105 +97,138 @@ function validateWeightModifiers(village, season, modifiers) {
   return issues.length === 0;
 }
 
-// Simulate weighted weather based on village and season
-function simulateWeightedWeather(village, season) {
+// ------------------- Smoothing Helpers -------------------
+// Filters temperature options close to the previous temperature.
+function getSmoothTemperatureChoices(currentTempF, seasonTemps, forceDrop = false) {
+  const maxDelta = forceDrop ? 0 : 10;
+  return seasonTemps.filter(label => {
+    const temp = parseFahrenheit(label);
+    return temp !== null && Math.abs(temp - currentTempF) <= maxDelta;
+  });
+}
+// Restricts wind options to adjacent values in the wind ranking.
+function getSmoothWindChoices(currentWindLabel, seasonWinds) {
+  const index = seasonWinds.indexOf(currentWindLabel);
+  return [index - 1, index, index + 1]
+    .filter(i => i >= 0 && i < seasonWinds.length)
+    .map(i => seasonWinds[i]);
+}
+// Chooses temperature with smoothing and modifiers.
+function getSmoothedTemperature(tempOptions, previous, hadStormYesterday, weightMap, modifierMap) {
+  const prevTemp = parseFahrenheit(previous?.temperature?.label);
+  const filtered = previous?.temperature?.label
+    ? getSmoothTemperatureChoices(prevTemp, tempOptions, hadStormYesterday)
+    : tempOptions;
+  return weightedChoice(filtered, weightMap, modifierMap);
+}
+// Chooses wind with smoothing and modifiers.
+function getSmoothedWind(windOptions, previous, weightMap) {
+  const filtered = previous?.wind?.label
+    ? getSmoothWindChoices(previous.wind?.label, windOptions)
+    : windOptions;
+  return weightedChoice(filtered, weightMap);
+}
+
+// Refactored simulateWeightedWeather to use DB-backed history
+async function simulateWeightedWeather(village, season) {
   const seasonKey = capitalizeFirstLetter(season);
   const villageData = seasonsData[village];
-  
   if (!villageData || !villageData.seasons[seasonKey]) {
     console.error(`[weatherModule.js]: No season data found for ${village} in ${seasonKey}`);
     return null;
   }
-
   const seasonInfo = villageData.seasons[seasonKey];
   const weightModifiers = weatherWeightModifiers[village]?.[seasonKey] || {};
-  
-  // Validate weight modifiers
   validateWeightModifiers(village, seasonKey, weightModifiers);
-  
-  // Get available options for this village and season
-  const availableTemps = seasonInfo.Temperature;
-  const availableWinds = seasonInfo.Wind;
-  const availablePrecip = seasonInfo.Precipitation;
-  const availableSpecial = seasonInfo.Special;
-
-  // Apply weight modifiers to temperature selection
-  const tempWeights = availableTemps.map(temp => {
-    const baseWeight = temperatureWeights[temp] || 1;
-    const modifier = weightModifiers.temperature?.[temp] || 1;
-    return baseWeight * modifier;
-  });
-  const tempIndex = weightedRandom(availableTemps.length, tempWeights);
-  const temp = availableTemps[tempIndex];
-  const tempData = temperatures.find(t => t.label === temp) || { label: temp, emoji: '🌡️' };
-
-  // Apply weight modifiers to wind selection
-  const calculatedWindWeights = availableWinds.map(wind => {
-    const baseWeight = windWeights[wind] || 1;
-    const modifier = weightModifiers.wind?.[wind] || 1;
-    return baseWeight * modifier;
-  });
-  const windIndex = weightedRandom(availableWinds.length, calculatedWindWeights);
-  const wind = availableWinds[windIndex];
-  const windData = winds.find(w => w.label === wind) || { label: wind, emoji: '💨' };
-
-  // Apply weight modifiers to precipitation selection
-  const precipWeights = availablePrecip.map(precip => {
+  // Fetch last 3 weather entries for smoothing
+  const history = await Weather.getRecentWeather(village, 3);
+  const previous = history[0] || {};
+  const secondPrevious = history[1] || {};
+  const cloudyStreak = [previous, secondPrevious]
+    .filter(w => ['Cloudy', 'Partly cloudy'].includes(w?.precipitation?.label))
+    .length;
+  const rainStreak = history.slice(0, 3)
+    .filter(w => ['Rain', 'Light Rain', 'Heavy Rain', 'Thunderstorm']
+    .includes(w?.precipitation?.label))
+    .length;
+  const hadStormYesterday = ['Thunderstorm', 'Heavy Rain'].includes(previous.precipitation?.label);
+  // Temperature
+  const temperatureLabel = getSmoothedTemperature(
+    seasonInfo.Temperature,
+    previous,
+    hadStormYesterday,
+    temperatureWeights,
+    weightModifiers.temperature || {}
+  );
+  const simTemp = parseFahrenheit(temperatureLabel);
+  // Wind
+  const windLabel = getSmoothedWind(
+    seasonInfo.Wind,
+    previous,
+    windWeights
+  );
+  const simWind = parseWind(windLabel);
+  // Precipitation
+  const precipWeights = seasonInfo.Precipitation.map(precip => {
     const baseWeight = precipitationWeights[precip] || 1;
     const modifier = weightModifiers.precipitation?.[precip] || 1;
     return baseWeight * modifier;
   });
-  const precipIndex = weightedRandom(availablePrecip.length, precipWeights);
-  const precip = availablePrecip[precipIndex];
-  const precipData = precipitations.find(p => p.label === precip) || { label: precip, emoji: '🌧️' };
-
-  // Apply weight modifiers to special weather selection
+  const precipitationLabel = getPrecipitationLabel(
+    seasonInfo,
+    simTemp,
+    simWind,
+    cloudyStreak,
+    precipitationWeights,
+    weightModifiers.precipitation || {}
+  );
+  // Special
+  let specialLabel = null;
   let special = null;
-  if (availableSpecial && availableSpecial.length > 0) {
-    const calculatedSpecialWeights = availableSpecial.map(specialType => {
-      const baseWeight = specialWeights[specialType] || 0.1;
-      const modifier = weightModifiers.special?.[specialType] || 1;
-      return baseWeight * modifier;
-    });
-    const specialIndex = weightedRandom(availableSpecial.length, calculatedSpecialWeights);
-    const specialType = availableSpecial[specialIndex];
-    const specialData = specials.find(s => s.label === specialType);
-    if (specialData) {
+  if (seasonInfo.Special.length && Math.random() < 0.3) {
+    specialLabel = getSpecialCondition(
+      seasonInfo,
+      simTemp,
+      simWind,
+      precipitationLabel,
+      rainStreak,
+      specialWeights,
+      weightModifiers.special || {}
+    );
+    if (specialLabel) {
+      const specialObj = specials.find(s => s.label === specialLabel);
       special = {
-        label: specialData.label,
-        emoji: specialData.emoji,
+        label: specialObj.label,
+        emoji: specialObj.emoji,
         probability: '10%'
       };
     }
   }
-
-  // Calculate probabilities
-  const tempProbability = calculateCandidateProbability(availableTemps, temperatureWeights, temp, weightModifiers.temperature);
-  const windProbability = calculateCandidateProbability(availableWinds, windWeights, wind, weightModifiers.wind);
-  const precipProbability = calculateCandidateProbability(availablePrecip, precipitationWeights, precip, weightModifiers.precipitation);
-  const specialProbability = special ? calculateCandidateProbability(availableSpecial, specialWeights, special.label, weightModifiers.special) : 0;
-
+  // Probabilities
+  const tempProbability = calculateCandidateProbability(seasonInfo.Temperature, temperatureWeights, temperatureLabel, weightModifiers.temperature);
+  const windProbability = calculateCandidateProbability(seasonInfo.Wind, windWeights, windLabel, weightModifiers.wind);
+  const precipProbability = calculateCandidateProbability(seasonInfo.Precipitation, precipitationWeights, precipitationLabel, weightModifiers.precipitation);
+  const specialProbability = special ? calculateCandidateProbability(seasonInfo.Special, specialWeights, special.label, weightModifiers.special) : 0;
   const result = {
     village,
     date: new Date(),
     season: season.toLowerCase(),
     temperature: {
-      label: tempData.label,
-      emoji: tempData.emoji,
+      label: temperatureLabel,
+      emoji: temperatures.find(t => t.label === temperatureLabel)?.emoji || '🌡️',
       probability: `${tempProbability.toFixed(1)}%`
     },
     wind: {
-      label: windData.label,
-      emoji: windData.emoji,
+      label: windLabel,
+      emoji: winds.find(w => w.label === windLabel)?.emoji || '💨',
       probability: `${windProbability.toFixed(1)}%`
     },
     precipitation: {
-      label: precipData.label,
-      emoji: precipData.emoji,
+      label: precipitationLabel,
+      emoji: precipitations.find(p => p.label === precipitationLabel)?.emoji || '🌧️',
       probability: `${precipProbability.toFixed(1)}%`
     }
   };
-
   if (special) {
     result.special = {
       label: special.label,
@@ -203,8 +236,6 @@ function simulateWeightedWeather(village, season) {
       probability: `${specialProbability.toFixed(1)}%`
     };
   }
-
-  console.log(`[weatherModule.js]: Generated weather for ${village}:`, result);
   return result;
 }
 
@@ -413,19 +444,35 @@ async function getCurrentWeather(village) {
       
       const season = getCurrentSeason();
       const capitalizedSeason = capitalizeFirstLetter(season);
-      const newWeather = simulateWeightedWeather(normalizedVillage, capitalizedSeason);
       
-      if (!newWeather) {
-        throw new Error(`Failed to generate weather for ${village}`);
-      }
+      // Try to generate valid weather with retry limit
+      let newWeather = null;
+      let attempts = 0;
+      const maxAttempts = 10;
       
-      // Add date and season to weather data
-      newWeather.date = new Date();
-      newWeather.season = season;
+      while (attempts < maxAttempts) {
+        attempts++;
+        newWeather = await simulateWeightedWeather(normalizedVillage, capitalizedSeason);
+        
+        if (!newWeather) {
+          throw new Error(`Failed to generate weather for ${village}`);
+        }
+        
+        // Add date and season to weather data
+        newWeather.date = new Date();
+        newWeather.season = season;
 
-      // Validate weather combination before saving
-      if (!validateWeatherCombination(newWeather)) {
-        newWeather.special = null;
+        // Validate weather combination
+        if (validateWeatherCombination(newWeather)) {
+          console.log(`[weatherModule.js]: Valid weather generated on attempt ${attempts}`);
+          break;
+        } else {
+          console.log(`[weatherModule.js]: Invalid weather generated on attempt ${attempts}, retrying...`);
+          if (attempts === maxAttempts) {
+            console.warn(`[weatherModule.js]: Failed to generate valid weather after ${maxAttempts} attempts, removing special weather`);
+            newWeather.special = null;
+          }
+        }
       }
       
       // Save new weather

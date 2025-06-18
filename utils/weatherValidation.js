@@ -80,6 +80,30 @@ function precipitationMatches(label, condition) {
 function validateWeatherCombination(weather) {
   const issues = [];
   
+  // Check precipitation conditions FIRST (most important)
+  const precipObj = findWeatherEmoji('precipitations', weather.precipitation.label);
+  if (precipObj && precipObj.conditions) {
+    const { temperature: tempConds, wind: windConds } = precipObj.conditions;
+    
+    // Check temperature conditions
+    if (tempConds && !tempConds.includes('any')) {
+      const temp = parseFahrenheit(weather.temperature.label);
+      const tempValid = tempConds.every(cond => checkNumericCondition(temp, cond));
+      if (!tempValid) {
+        issues.push(`Invalid temperature ${temp}°F for ${weather.precipitation.label} (requires ${tempConds.join(', ')})`);
+      }
+    }
+    
+    // Check wind conditions
+    if (windConds && !windConds.includes('any')) {
+      const wind = parseWind(weather.wind.label);
+      const windValid = windConds.every(cond => checkNumericCondition(wind, cond));
+      if (!windValid) {
+        issues.push(`Invalid wind speed ${wind} km/h for ${weather.precipitation.label} (requires ${windConds.join(', ')})`);
+      }
+    }
+  }
+  
   // Check special weather conditions
   if (weather.special) {
     const specialObj = findWeatherEmoji('specials', weather.special.label);
@@ -114,35 +138,20 @@ function validateWeatherCombination(weather) {
     }
   }
   
-  // Check precipitation conditions
-  const precipObj = findWeatherEmoji('precipitations', weather.precipitation.label);
-  if (precipObj && precipObj.conditions) {
-    const { temperature: tempConds, wind: windConds } = precipObj.conditions;
-    
-    // Check temperature conditions
-    if (tempConds && !tempConds.includes('any')) {
-      const temp = parseFahrenheit(weather.temperature.label);
-      const tempValid = tempConds.every(cond => checkNumericCondition(temp, cond));
-      if (!tempValid) {
-        issues.push(`Invalid temperature ${temp}°F for ${weather.precipitation.label} (requires ${tempConds.join(', ')})`);
-      }
-    }
-    
-    // Check wind conditions
-    if (windConds && !windConds.includes('any')) {
-      const wind = parseWind(weather.wind.label);
-      const windValid = windConds.every(cond => checkNumericCondition(wind, cond));
-      if (!windValid) {
-        issues.push(`Invalid wind speed ${wind} km/h for ${weather.precipitation.label} (requires ${windConds.join(', ')})`);
-      }
-    }
-  }
-  
   if (issues.length > 0) {
+    console.warn(`[weatherValidation.js]: Weather validation failed:`, {
+      weather: {
+        temperature: weather.temperature?.label,
+        wind: weather.wind?.label,
+        precipitation: weather.precipitation?.label,
+        special: weather.special?.label
+      },
+      issues: issues
+    });
     return false;
   }
   
-  return issues.length === 0;
+  return true;
 }
 
 module.exports = {

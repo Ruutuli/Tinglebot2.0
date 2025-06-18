@@ -75,6 +75,14 @@ WeatherSchema.statics.clearOldWeather = async function(daysToKeep = 7) {
   });
 };
 
+// Static method to get recent weather history for a village
+WeatherSchema.statics.getRecentWeather = async function(village, n = 3) {
+  return this.find({ village })
+    .sort({ date: -1 })
+    .limit(n)
+    .lean();
+};
+
 const Weather = mongoose.model('Weather', WeatherSchema);
 
 module.exports = Weather; 
