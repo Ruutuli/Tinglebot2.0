@@ -239,7 +239,8 @@ async function handleGather(interaction, character, currentPath, encounterMessag
         quantity: chosen.quantity || 1,
         category: Array.isArray(chosen.category) ? chosen.category : [chosen.category],
         type: Array.isArray(chosen.type) ? chosen.type : [chosen.type],
-        subtype: Array.isArray(chosen.subtype) ? chosen.subtype : chosen.subtype ? [chosen.subtype] : []
+        subtype: Array.isArray(chosen.subtype) ? chosen.subtype : chosen.subtype ? [chosen.subtype] : [],
+        perk: "" // Explicitly set perk to empty for gathered items
       };
 
       await syncToInventoryDatabase(character, formattedItem, interaction);
