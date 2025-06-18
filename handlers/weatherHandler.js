@@ -469,7 +469,7 @@ function simulateWeightedWeather(village, season) {
         : null
     };
 
-    updateWeatherHistory(village, weatherResult);
+    console.log(`[weatherHandler.js]: Generated weather for ${village}:`, weatherResult);
     return weatherResult;
   } catch (error) {
     console.error('[weatherHandler.js]: simulateWeightedWeather error:', error);
@@ -533,11 +533,116 @@ function getSmoothedWind(windOptions, previous, weightMap) {
 // ------------------- History Updater -------------------
 // Updates weather history buffer for a village.
 async function updateWeatherHistory(village, weatherResult) {
-  // Validate weather combinations before updating history
-  if (!validateWeatherCombination(weatherResult)) {
-    console.error(`[weatherHandler.js]: Removing invalid weather combination for ${village}`);
-    // Remove invalid special weather
-    weatherResult.special = null;
+  // Try to generate valid weather with retry limit
+  let attempts = 0;
+  const maxAttempts = 10;
+  
+  while (attempts < maxAttempts) {
+    attempts++;
+    
+    // Validate weather combination
+    if (validateWeatherCombination(weatherResult)) {
+      console.log(`[weatherHandler.js]: Valid weather generated on attempt ${attempts}`);
+      break;
+    } else {
+      console.log(`[weatherHandler.js]: Invalid weather generated on attempt ${attempts}, retrying...`);
+      if (attempts === maxAttempts) {
+        console.warn(`[weatherHandler.js]: Failed to generate valid weather after ${maxAttempts} attempts, removing special weather`);
+        weatherResult.special = null;
+      } else {
+        // Regenerate the entire weather for this attempt
+        const season = weatherResult.season;
+        const normalizedSeason = normalizeSeason(season);
+        const seasonData = seasonsData[village].seasons[normalizedSeason];
+        
+        // Regenerate temperature, wind, and precipitation
+        const tempMods = weatherWeightModifiers[village]?.[normalizedSeason]?.temperature || {};
+        const precipMods = weatherWeightModifiers[village]?.[normalizedSeason]?.precipitation || {};
+        const specialMods = weatherWeightModifiers[village]?.[normalizedSeason]?.special || {};
+        
+        const history = weatherHistoryByVillage[village] || [];
+        const previous = history[history.length - 1] || {};
+        const hadStormYesterday = ['Thunderstorm', 'Heavy Rain'].includes(previous.precipitation?.label);
+        
+        // Regenerate temperature
+        const temperatureLabel = getSmoothedTemperature(
+          seasonData.Temperature,
+          previous,
+          hadStormYesterday,
+          weatherData.temperatureWeights,
+          tempMods
+        );
+        const simTemp = parseFahrenheit(temperatureLabel);
+        
+        // Regenerate wind
+        const windLabel = getSmoothedWind(
+          seasonData.Wind,
+          previous,
+          weatherData.windWeights
+        );
+        const simWind = parseWind(windLabel);
+        
+        // Regenerate precipitation
+        const cloudyStreak = [previous]
+          .filter(w => ['Cloudy', 'Partly cloudy'].includes(w?.precipitation?.label))
+          .length;
+        const precipitationLabel = getPrecipitationLabel(
+          seasonData,
+          simTemp,
+          simWind,
+          cloudyStreak,
+          weatherData.precipitationWeights,
+          precipMods
+        );
+        
+        // Regenerate special weather
+        let specialLabel = null;
+        if (seasonData.Special.length && Math.random() < 0.3) {
+          const rainStreak = history.slice(-3)
+            .filter(w => ['Rain', 'Light Rain', 'Heavy Rain', 'Thunderstorm']
+            .includes(w?.precipitation?.label))
+            .length;
+          specialLabel = getSpecialCondition(
+            seasonData,
+            simTemp,
+            simWind,
+            precipitationLabel,
+            rainStreak,
+            weatherData.specialWeights,
+            specialMods
+          );
+        }
+        
+        // Update weather result with new values
+        const temperatureObj = findWeatherEmoji('temperatures', temperatureLabel);
+        const windObj = findWeatherEmoji('winds', windLabel);
+        const precipitationObj = findWeatherEmoji('precipitations', precipitationLabel);
+        const specialObj = specialLabel ? findWeatherEmoji('specials', specialLabel) : null;
+        
+        weatherResult.temperature = {
+          label: temperatureLabel,
+          emoji: temperatureObj?.emoji || '',
+          probability: weatherResult.temperature.probability
+        };
+        weatherResult.wind = {
+          label: windLabel,
+          emoji: windObj?.emoji || '',
+          probability: weatherResult.wind.probability
+        };
+        weatherResult.precipitation = {
+          label: precipitationLabel,
+          emoji: precipitationObj?.emoji || '',
+          probability: weatherResult.precipitation.probability
+        };
+        weatherResult.special = specialLabel
+          ? {
+              label: specialLabel,
+              emoji: specialObj?.emoji || '',
+              probability: weatherResult.special?.probability || '10%'
+            }
+          : null;
+      }
+    }
   }
 
   weatherHistoryByVillage[village] = weatherHistoryByVillage[village].slice(-2);
