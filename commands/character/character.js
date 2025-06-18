@@ -1729,7 +1729,8 @@ async function handleChangeJob(interaction) {
 
   const lastJobChange = character.lastJobChange ? new Date(character.lastJobChange) : null;
   const now = new Date();
-  const oneMonthAgo = new Date(now.setMonth(now.getMonth() - 1));
+  const oneMonthAgo = new Date(now);
+  oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
   console.log(`[handleChangeJob] Last job change: ${lastJobChange}, One month ago: ${oneMonthAgo}`);
 
   if (lastJobChange && lastJobChange > oneMonthAgo) {
@@ -1853,7 +1854,9 @@ async function handleChangeJob(interaction) {
 
   const villageColor = getVillageColorByName(character.homeVillage) || "#4CAF50";
   const villageEmoji = getVillageEmojiByName(character.homeVillage) || "\ud83c\udfe1";
-  const nextJobChangeDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString(
+  const nextJobChangeDate = new Date();
+  nextJobChangeDate.setMonth(nextJobChangeDate.getMonth() + 1);
+  const formattedNextChangeDate = nextJobChangeDate.toLocaleDateString(
    "en-US",
    {
     year: "numeric",
@@ -1882,7 +1885,7 @@ async function handleChangeJob(interaction) {
     },
     {
      name: "\ud83d\udd04 __Next Change Available__",
-     value: nextJobChangeDate,
+     value: formattedNextChangeDate,
      inline: true,
     }
    )

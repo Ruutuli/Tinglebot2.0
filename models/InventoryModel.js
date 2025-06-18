@@ -24,16 +24,24 @@ const inventorySchema = new Schema({
 // Initialize the model using the inventories database connection
 const initializeInventoryModel = async () => {
   console.log(`[initializeInventoryModel]: Initializing inventory model.`);
-  const inventoriesConnection = await connectToInventories();
-
-  if (!inventoriesConnection) {
+  try {
+    const inventoriesConnection = await connectToInventories();
+    if (!inventoriesConnection) {
       throw new Error(`[initializeInventoryModel]: Failed to connect to the inventories database.`);
+    }
+    console.log(`[initializeInventoryModel]: Successfully connected to the inventories database.`);
+
+    // Create and return both the model and connection
+    const model = inventoriesConnection.model('Inventory', inventorySchema);
+    return {
+      model,
+      connection: inventoriesConnection
+    };
+  } catch (error) {
+    console.error(`[initializeInventoryModel]: Error initializing model:`, error);
+    throw error;
   }
-  console.log(`[initializeInventoryModel]: Successfully connected to the inventories database.`);
-
-  return inventoriesConnection.model('Inventory', inventorySchema);
 };
-
 
 module.exports = initializeInventoryModel;
 
