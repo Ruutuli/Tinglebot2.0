@@ -1314,7 +1314,12 @@ async function handleViewCharacter(interaction) {
     characterId: character._id,
     itemName: { $regex: /^spirit orb$/i }
   });
+  
+  // Update character's spirit orb count
   character.spiritOrbs = spiritOrb?.quantity || 0;
+  
+  // Save the updated spirit orb count to the character document
+  await Character.findByIdAndUpdate(character._id, { spiritOrbs: character.spiritOrbs });
 
   const settings = getCommonEmbedSettings(character);
 
