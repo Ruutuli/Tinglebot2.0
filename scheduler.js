@@ -6,7 +6,7 @@ const { EmbedBuilder } = require('discord.js');
 const { recoverDailyStamina } = require('./modules/characterStatsModule');
 const { generateVendingStockList, getCurrentVendingStockList, resetPetRollsForAllCharacters } = require('./database/db');
 const { postBlightRollCall, cleanupExpiredBlightRequests, checkMissedRolls } = require('./handlers/blightHandler');
-const { sendBloodMoonAnnouncement, isBloodMoonDay, renameChannels, revertChannelNames } = require('./scripts/bloodmoon');
+const { sendBloodMoonAnnouncement, isBloodMoonDay, renameChannels, revertChannelNames, cleanupOldTrackingData } = require('./scripts/bloodmoon');
 const { cleanupExpiredEntries, cleanupExpiredHealingRequests } = require('./utils/storage');
 const { authorizeSheets, clearSheetFormatting, writeSheetData } = require('./utils/googleSheetsUtils');
 const { convertToHyruleanDate } = require('./modules/calendarModule');
@@ -113,7 +113,7 @@ async function postWeatherUpdate(client) {
         // If no weather data exists for today, generate and save new weather
         if (!weather) {
           weather = weatherHandler.simulateWeightedWeather(village, currentSeason);
-          await saveWeather(village, weather);
+          await saveWeather(weather);
         }
         
         const channelId = TOWNHALL_CHANNELS[village];
@@ -352,21 +352,39 @@ function initializeScheduler(client) {
   // Add startup Blood Moon check
   (async () => {
     try {
+      console.log(`[scheduler.js]: 🌕 Starting Blood Moon startup check...`);
+      
       const channels = [
         process.env.RUDANIA_TOWNHALL,
         process.env.INARIKO_TOWNHALL,
         process.env.VHINTL_TOWNHALL,
       ];
 
-      for (const channelId of channels) {
-        if (isBloodMoonDay()) {
-          console.log(`[scheduler.js]: 🌕 Blood Moon active`);
-          await renameChannels(client);
+      console.log(`[scheduler.js]: 📋 Checking ${channels.length} channels for Blood Moon status`);
+
+      // Check Blood Moon status once for all channels
+      const isBloodMoonActive = isBloodMoonDay();
+      console.log(`[scheduler.js]: 🔍 Blood Moon status check result: ${isBloodMoonActive ? 'ACTIVE' : 'INACTIVE'}`);
+
+      if (isBloodMoonActive) {
+        console.log(`[scheduler.js]: 🌕 Blood Moon active - processing all channels`);
+        await renameChannels(client);
+        
+        // Send announcements to each channel
+        for (const channelId of channels) {
+          if (!channelId) {
+            console.warn(`[scheduler.js]: ⚠️ Skipping undefined channel ID`);
+            continue;
+          }
+          console.log(`[scheduler.js]: 🌕 Sending Blood Moon announcement to channel ${channelId}`);
           await sendBloodMoonAnnouncement(client, channelId, 'The Blood Moon is upon us! Beware!');
-        } else {
-          await revertChannelNames(client);
         }
+      } else {
+        console.log(`[scheduler.js]: 📅 No Blood Moon - reverting all channels`);
+        await revertChannelNames(client);
       }
+      
+      console.log(`[scheduler.js]: ✅ Blood Moon startup check completed`);
     } catch (error) {
       handleError(error, 'scheduler.js');
       console.error(`[scheduler.js]: ❌ Blood Moon check failed: ${error.message}`);
@@ -392,31 +410,62 @@ function initializeScheduler(client) {
   createCronJob('0 8 * * *', 'daily weather update', () => postWeatherUpdate(client));
   createCronJob('0 0 * * *', 'birthday announcements', () => executeBirthdayAnnouncements(client));
   
+  // Blood Moon tracking cleanup (daily at 1 AM EST)
+  createCronJob('0 1 * * *', 'blood moon tracking cleanup', () => {
+    console.log(`[scheduler.js]: 🧹 Starting Blood Moon tracking cleanup`);
+    cleanupOldTrackingData();
+    console.log(`[scheduler.js]: ✅ Blood Moon tracking cleanup completed`);
+  });
+  
   // Initialize blight scheduler
   setupBlightScheduler(client);
 
   // Blood moon tracking 
   createCronJob('00 20 * * *', 'blood moon tracking', async () => {
+    console.log(`[scheduler.js]: 🌕 Starting scheduled Blood Moon check at 8 PM EST`);
+    
     const channels = [
       process.env.RUDANIA_TOWNHALL,
       process.env.INARIKO_TOWNHALL,
       process.env.VHINTL_TOWNHALL,
     ];
 
-    for (const channelId of channels) {
-      try {
-        if (isBloodMoonDay()) {
-          console.log(`[scheduler.js]: 🌕 Blood Moon rising at 8 PM EST`);
-          await renameChannels(client);
-          await sendBloodMoonAnnouncement(client, channelId, 'The Blood Moon rises at nightfall! Beware!');
-        } else {
-          await revertChannelNames(client);
+    console.log(`[scheduler.js]: 📋 Processing ${channels.length} channels for scheduled Blood Moon check`);
+
+    // Check Blood Moon status once for all channels
+    const isBloodMoonActive = isBloodMoonDay();
+    console.log(`[scheduler.js]: 🔍 Scheduled Blood Moon status check result: ${isBloodMoonActive ? 'ACTIVE' : 'INACTIVE'}`);
+
+    if (isBloodMoonActive) {
+      console.log(`[scheduler.js]: 🌕 Blood Moon rising at 8 PM EST - processing all channels`);
+      await renameChannels(client);
+      
+      // Send announcements to each channel
+      for (const channelId of channels) {
+        if (!channelId) {
+          console.warn(`[scheduler.js]: ⚠️ Skipping undefined channel ID in scheduled check`);
+          continue;
         }
+        
+        try {
+          console.log(`[scheduler.js]: 🌕 Sending scheduled Blood Moon announcement to channel ${channelId}`);
+          await sendBloodMoonAnnouncement(client, channelId, 'The Blood Moon rises at nightfall! Beware!');
+        } catch (error) {
+          handleError(error, 'scheduler.js');
+          console.error(`[scheduler.js]: ❌ Blood Moon announcement failed for channel ${channelId}: ${error.message}`);
+        }
+      }
+    } else {
+      console.log(`[scheduler.js]: 📅 No Blood Moon at 8 PM EST - reverting all channels`);
+      try {
+        await revertChannelNames(client);
       } catch (error) {
         handleError(error, 'scheduler.js');
-        console.error(`[scheduler.js]: ❌ Blood Moon tracking failed: ${error.message}`);
+        console.error(`[scheduler.js]: ❌ Blood Moon channel reversion failed: ${error.message}`);
       }
     }
+    
+    console.log(`[scheduler.js]: ✅ Scheduled Blood Moon check completed`);
   }, 'America/New_York');
 }
 

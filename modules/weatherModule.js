@@ -18,6 +18,13 @@ const {
 } = require('../data/weatherData');
 const seasonsData = require('../data/seasonsData');
 const { validateWeatherCombination } = require('../utils/weatherValidation');
+const {
+  parseFahrenheit,
+  parseWind,
+  weightedChoice,
+  getPrecipitationLabel,
+  getSpecialCondition
+} = require('../handlers/weatherHandler');
 
 // Helper to capitalize village names
 function normalizeVillageName(name) {
