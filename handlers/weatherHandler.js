@@ -9,7 +9,6 @@
 const seasonsData = require('../data/seasonsData');
 const weatherData = require('../data/weatherData');
 const { weatherWeightModifiers } = require('../data/weatherData');
-const { saveWeather } = require('../modules/weatherModule.js');
 const Weather = require('../models/WeatherModel');
 const { validateWeatherCombination, findWeatherEmoji } = require('../utils/weatherValidation');
 
