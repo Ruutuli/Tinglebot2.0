@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tinglebot 2.0 - Welcome</title>
+    <link rel="stylesheet" href="/styles.css">
+    <script src="https://kit.fontawesome.com/262000d25d.js" crossorigin="anonymous"></script>
+</head>
+<body class="login-page">
+    <div class="login-container">
+        <div class="login-header">
+            <img src="/images/tingleicon.png" alt="Tinglebot Logo" class="login-logo">
+            <h1>Tinglebot 2.0</h1>
+            <p class="login-subtitle">Welcome to Tinglebot Dashboard</p>
+        </div>
+        <div class="login-form-container">
+            <div class="guest-access-section">
+                <button type="button" class="primary-button" onclick="window.location.href='/dashboard'">
+                    <i class="fas fa-arrow-right"></i>
+                    Enter Dashboard
+                </button>
+            </div>
+            <div class="login-divider">
+                <span>or</span>
+            </div>
+            <form id="login-form" class="login-form">
+                <p class="login-note">Optional: Login for additional features</p>
+                <div class="form-group">
+                    <label for="username">
+                        <i class="fas fa-user"></i>
+                        Username
+                    </label>
+                    <input type="text" id="username" name="username">
+                </div>
+                <div class="form-group">
+                    <label for="password">
+                        <i class="fas fa-lock"></i>
+                        Password
+                    </label>
+                    <input type="password" id="password" name="password">
+                </div>
+                <div class="form-group remember-me">
+                    <input type="checkbox" id="remember" name="remember">
+                    <label for="remember">Remember me</label>
+                </div>
+                <button type="submit" class="login-button">
+                    <i class="fas fa-sign-in-alt"></i>
+                    Login
+                </button>
+            </form>
+            <div class="login-footer">
+                <a href="#" class="forgot-password">Forgot Password?</a>
+            </div>
+        </div>
+    </div>
+    <script type="module" src="/js/login.js"></script>
+</body>
+</html> 

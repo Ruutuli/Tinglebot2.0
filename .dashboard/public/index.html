@@ -1,0 +1,323 @@
+<!-- ========================================================================== -->
+<!-- 01-document-setup — DOCTYPE, HTML tag, Head Metadata                      -->
+<!-- ========================================================================== -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tinglebot 2.0 Dashboard</title>
+  <link
+    rel="stylesheet"
+    href="css/styles.css"
+    onload="console.log('CSS loaded successfully')"
+    onerror="console.error('Failed to load CSS')"
+  />
+  <script src="https://kit.fontawesome.com/262000d25d.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+  <script>
+    console.log('Page loading started');
+    window.addEventListener('DOMContentLoaded', () => {
+      console.log('DOM Content Loaded');
+      const styles = document.styleSheets;
+      console.log('Loaded stylesheets:', styles.length);
+      for (let i = 0; i < styles.length; i++) {
+        try {
+          console.log(`Stylesheet ${i}:`, styles[i].href);
+        } catch (e) {
+          console.log(`Stylesheet ${i}: Error accessing href - likely a cross-origin stylesheet`);
+        }
+      }
+    });
+  </script>
+</head>
+
+<!-- ========================================================================== -->
+<!-- 02-global-resources — CSS, Fonts, Icons, Scripts                          -->
+<!-- ========================================================================== -->
+<body>
+  <!-- ========================================================================== -->
+  <!-- 03-header — Topbar / Navbar / Notifications                               -->
+  <!-- ========================================================================== -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <button id="sidebar-toggle" class="sidebar-toggle" aria-label="Toggle Sidebar">
+        <i class="fas fa-bars" aria-hidden="true"></i>
+      </button>
+      <div class="breadcrumb">Dashboard</div>
+    </div>
+    <div class="topbar-right">
+      <div class="bot-status online">
+        <span class="status-dot"></span>
+        <span class="status-text">Online</span>
+      </div>
+      <div class="user-menu">
+        <img src="/images/ankleicon.png" alt="Profile picture of the user" class="user-avatar" />
+        <span class="username">Admin</span>
+        <i class="fas fa-chevron-down" aria-hidden="true"></i>
+      </div>
+    </div>
+  </header>
+
+  <!-- ========================================================================== -->
+  <!-- 04-body-wrapper — Main Wrapper / Layout Containers                        -->
+  <!-- ========================================================================== -->
+  <div class="main-wrapper">
+    <!-- ========================================================================== -->
+    <!-- 05-sidebar — Sidebar Navigation Layout                                    -->
+    <!-- ========================================================================== -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <img src="/images/tingleicon.png" alt="Tinglebot Logo" class="bot-logo" />
+        <h1>Tinglebot</h1>
+      </div>
+      <nav class="sidebar-nav" aria-label="Main sidebar navigation">
+        <ul>
+          <li class="active">
+            <a href="#dashboard" data-section="dashboard-section"><i class="fas fa-chart-line"></i><span>Dashboard</span></a>
+          </li>
+          <li>
+            <a href="#guilds" data-section="guilds-section"><i class="fas fa-server"></i><span>Guilds</span></a>
+          </li>
+          <li>
+            <a href="#commands" data-section="commands-section"><i class="fas fa-terminal"></i><span>Commands</span></a>
+          </li>
+          <li>
+            <a href="#logs" data-section="logs-section"><i class="fas fa-history"></i><span>Logs</span></a>
+          </li>
+          <li>
+            <a href="#settings" data-section="settings-section"><i class="fas fa-cog"></i><span>Settings</span></a>
+          </li>
+          <li>
+            <a href="#stats" data-section="stats-section"><i class="fas fa-chart-bar"></i><span>Stats</span></a>
+          </li>
+        </ul>
+      </nav>
+    </aside>
+
+    <!-- ========================================================================== -->
+    <!-- 06-main-content — Dashboard, Panels, and Primary UI Content               -->
+    <!-- ========================================================================== -->
+    <main class="main-content">
+      <section id="dashboard-section">
+        <div class="dashboard-header">
+          <h1>Dashboard</h1>
+          <div class="dashboard-divider"></div>
+          <section class="dashboard-welcome-box">
+            <p class="dashboard-welcome">
+              Welcome to the dashboard for Tinglebot! Use this page to view, explore, and manage your bot's data models.
+              Click any card below to browse the data for that model.
+            </p>
+          </section>
+        </div>
+
+        <div class="dashboard-section-card dashboard-links-section">
+          <span class="dashboard-links-icon"><i class="fas fa-link" aria-hidden="true"></i></span>
+          <span class="dashboard-links-label">Links</span>
+        </div>
+
+        <div class="dashboard-links-divider"></div>
+
+        <section class="model-grid">
+          <button type="button" class="model-card" data-model="character">
+            <i class="fas fa-user" aria-hidden="true"></i><span>Characters</span>
+          </button>
+          <button type="button" class="model-card" data-model="weather">
+            <i class="fas fa-cloud-sun" aria-hidden="true"></i><span>Weather</span>
+          </button>
+          <button type="button" class="model-card" data-model="monster">
+            <i class="fas fa-dragon" aria-hidden="true"></i><span>Monsters</span>
+          </button>
+          <button type="button" class="model-card" data-model="pet">
+            <i class="fas fa-paw" aria-hidden="true"></i><span>Pets</span>
+          </button>
+          <button type="button" class="model-card" data-model="mount">
+            <i class="fas fa-horse" aria-hidden="true"></i><span>Mounts</span>
+          </button>
+          <button type="button" class="model-card" data-model="vending">
+            <i class="fas fa-store" aria-hidden="true"></i><span>Vending</span>
+          </button>
+          <button type="button" class="model-card" data-model="item">
+            <i class="fas fa-box" aria-hidden="true"></i><span>Items</span>
+          </button>
+          <button type="button" class="model-card" data-model="village">
+            <i class="fas fa-home" aria-hidden="true"></i><span>Villages</span>
+          </button>
+          <button type="button" class="model-card" data-model="party">
+            <i class="fas fa-users" aria-hidden="true"></i><span>Parties</span>
+          </button>
+          <button type="button" class="model-card" data-model="relic">
+            <i class="fas fa-gem" aria-hidden="true"></i><span>Relics</span>
+          </button>
+          <button type="button" class="model-card" data-model="quest">
+            <i class="fas fa-scroll" aria-hidden="true"></i><span>Quests</span>
+          </button>
+          <button type="button" class="model-card" data-model="inventory">
+            <i class="fas fa-shopping-bag" aria-hidden="true"></i><span>Inventories</span>
+          </button>
+        </section>
+      </section>
+
+      <!-- Model Details Page -->
+      <div id="model-details-page" class="model-details-page" style="display: none;">
+        <div class="model-details-header">
+          <button class="back-button" aria-label="Back to dashboard">
+            <i class="fas fa-arrow-left" aria-hidden="true"></i>
+          </button>
+          <h2 id="model-details-title">Model Details</h2>
+        </div>
+        <div id="model-details-data" class="model-details-content">
+          <!-- Character Filters Bar (only shown for character model) -->
+          <div class="character-filters" style="display:none;">
+            <input type="text" id="character-search-input" placeholder="Search characters..." />
+            <select id="filter-job">
+              <option value="all">All Jobs</option>
+            </select>
+            <select id="filter-race">
+              <option value="all">All Races</option>
+            </select>
+            <select id="filter-village">
+              <option value="all">All Villages</option>
+            </select>
+            <select id="sort-by">
+              <option value="name-asc">Name (A-Z)</option>
+              <option value="name-desc">Name (Z-A)</option>
+              <option value="job-asc">Job (A-Z)</option>
+              <option value="job-desc">Job (Z-A)</option>
+              <option value="race-asc">Race (A-Z)</option>
+              <option value="race-desc">Race (Z-A)</option>
+            </select>
+            <button id="clear-filters">Clear</button>
+          </div>
+          <div id="inventory-loading-state" class="loading-state" style="display: none;">
+            <div class="loading-spinner"></div>
+            <p>Loading inventory data...</p>
+          </div>
+          <div id="inventory-error-state" class="error-state" style="display: none;">
+            <i class="fas fa-exclamation-circle" aria-hidden="true"></i>
+            <p>Failed to load inventory data</p>
+            <button class="retry-button" onclick="loadInventory()">Retry</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Stats Section -->
+      <section id="stats-section" style="display:none;">
+        <div class="dashboard-header">
+          <h1>Stats</h1>
+          <div class="dashboard-divider"></div>
+        </div>
+        <div class="stats-cards-grid">
+          <div class="stats-card">
+            <h3>Total Characters</h3>
+            <p id="stats-total-characters">Loading...</p>
+          </div>
+          <div class="stats-card">
+            <h3>Characters per Village</h3>
+            <div class="chart-container">
+              <canvas id="villageDistributionChart"></canvas>
+            </div>
+          </div>
+        </div>
+        <div class="stats-card-wide">
+          <h3>Characters per Race</h3>
+          <div class="chart-container">
+            <canvas id="raceDistributionChart"></canvas>
+          </div>
+        </div>
+        <div class="stats-card-wide">
+          <h3>Characters per Job</h3>
+          <div class="chart-container">
+            <canvas id="jobDistributionChart"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <!-- Inventory Section -->
+      <section id="inventory-section" style="display:none;">
+        <div class="dashboard-header">
+          <h1>Inventories</h1>
+          <div class="dashboard-divider"></div>
+        </div>
+        <div class="inventory-container">
+          <div class="inventory-filters">
+            <label for="inventory-search" class="visually-hidden">Search inventories</label>
+            <input type="text" id="inventory-search" placeholder="Search inventories..." />
+
+            <label for="inventory-character-filter" class="visually-hidden">Filter by Character</label>
+            <select id="inventory-character-filter" name="inventory-character-filter">
+              <option value="all">All Characters</option>
+            </select>
+
+            <label for="inventory-category-filter" class="visually-hidden">Filter by Category</label>
+            <select id="inventory-category-filter" name="inventory-category-filter">
+              <option value="all">All Categories</option>
+            </select>
+
+            <label for="inventory-type-filter" class="visually-hidden">Filter by Type</label>
+            <select id="inventory-type-filter" name="inventory-type-filter">
+              <option value="all">All Types</option>
+            </select>
+
+            <label for="inventory-sort" class="visually-hidden">Sort Inventories</label>
+            <select id="inventory-sort" name="inventory-sort">
+              <option value="character-asc">Character (A-Z)</option>
+              <option value="character-desc">Character (Z-A)</option>
+              <option value="item-asc">Item (A-Z)</option>
+              <option value="item-desc">Item (Z-A)</option>
+              <option value="quantity-desc">Quantity (High-Low)</option>
+              <option value="quantity-asc">Quantity (Low-High)</option>
+            </select>
+
+            <button id="inventory-clear-filters">Clear Filters</button>
+          </div>
+
+          <div id="inventory-grid" class="inventory-grid">
+            <!-- Inventory items rendered here -->
+          </div>
+          <div id="inventory-pagination" class="pagination">
+            <!-- Pagination controls rendered here -->
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Back to Top Button -->
+  <button id="backToTop" class="back-to-top" aria-label="Back to top">
+    <i class="fas fa-arrow-up" aria-hidden="true"></i>
+  </button>
+
+  <!-- Scripts -->
+  <script>
+    // Add error handling for module loading
+    window.addEventListener('error', function(event) {
+      console.error('❌ Script Error:', event.error);
+    });
+
+    // Add module loading error handling
+    window.addEventListener('unhandledrejection', function(event) {
+      console.error('❌ Module Loading Error:', event.reason);
+    });
+
+    // Log when the page is fully loaded
+    window.addEventListener('load', function() {
+      console.log('✅ Page fully loaded');
+      // Check if modules are loaded
+      const scripts = document.querySelectorAll('script[type="module"]');
+      console.log('📜 Module scripts found:', scripts.length);
+      scripts.forEach(script => {
+        console.log('🔍 Module script:', script.src);
+      });
+    });
+  </script>
+  <script type="module" src="js/ui.js"></script>
+  <script type="module" src="js/characters.js"></script>
+  <script type="module" src="js/items.js"></script>
+  <script type="module" src="js/inventory.js"></script>
+  <script type="module" src="js/stats.js"></script>
+  <script type="module" src="js/index.js"></script>
+  <script src="js/debug.js"></script>
+</body>
+</html>
