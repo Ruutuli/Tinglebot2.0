@@ -1,0 +1,34 @@
+{
+  "categories": [
+    "Armor", "Material", "Recipe", "Weapon"
+  ],
+  "types": [
+    "1h", "2h", "Ancient Parts", "Bow", "Chest", "Creature", "Dairy", "Fish", "Fruit", "Fungi",
+    "Grain", "Head", "Inedible", "Legs", "Meat", "Monster", "Mushroom", "Natural", "Ore", "Plant",
+    "Potion", "Protein", "Seafood", "Special", "Sweets", "Top", "Vegetable"
+  ],
+  "subtypes": [
+    "Arm", "Armor", "Arrow", "Axe", "Bandanna", "Boomerang", "Boots", "Bow", "Cap", "Carver",
+    "Circlet", "Club", "Crusher", "Cuirass", "Doublet", "Earrings", "Gear", "Greaves", "Guard",
+    "Hammer", "Headband", "Headdress", "Headpiece", "Helm", "Hood", "Leaf", "Leg Wraps", "Legwear",
+    "Mask", "Polearm", "Robe", "Rod", "Shield", "Shirt", "Sickle", "Sirwal", "Spaulder", "Spear",
+    "Sword", "Tights", "Top", "Trousers", "Tunic", "Uniform", "Veil"
+  ],
+  "jobs": [
+    "Adventurer", "Artist", "Beekeeper", "Blacksmith", "Cook", "Craftsman", "Farmer", "Fisherman",
+    "Forager", "Graveskeeper", "Guard", "Herbalist", "Hunter", "Mask Maker",
+    "Mercenary", "Miner", "Rancher", "Researcher", "Scout", "Weaver", "Witch"
+  ],
+  "locations": [
+    "Eldin", "Lanayru", "Faron", "Central Hyrule", "Gerudo", "Hebra",
+    "Path of Scarlet Leaves", "Leaf-Dew Way"
+  ],
+  "sources": [
+    "Crafting", "Exploring", "Gathering", "Looting", "Pet Perk",
+    "Traveling", "Vending", "Special Weather"
+  ],
+  "special_weather": [
+    "Avalanche", "Fairy Circle", "Flowerbloom", "Jubilee",
+    "Meteor Shower", "Muggy", "Rockslide"
+  ]
+}
