@@ -132,26 +132,35 @@ function candidateMatches(candidateLabel, simTemp, simWind) {
 // Determines if a special weather candidate is valid based on temperature, wind, and precipitation.
 function specialCandidateMatches(candidateLabel, simTemp, simWind, precipLabel) {
   const candidateObj = findWeatherEmoji('specials', candidateLabel);
-  if (!candidateObj || !candidateObj.conditions) return true;
+  if (!candidateObj || !candidateObj.conditions) {
+    console.log(`[weatherHandler.js]: Special ${candidateLabel} has no conditions, allowing`);
+    return true;
+  }
   
   const { temperature: tempConds, wind: windConds, precipitation: precipConds } = candidateObj.conditions;
   
   // Handle temperature conditions
   const tempOK = !tempConds || tempConds.every(cond => {
     if (cond === 'any') return true;
-    return checkNumericCondition(simTemp, cond);
+    const isValid = checkNumericCondition(simTemp, cond);
+    console.log(`[weatherHandler.js]: Temperature condition "${cond}" for ${simTemp}°F: ${isValid}`);
+    return isValid;
   });
   
   // Handle wind conditions
   const windOK = !windConds || windConds.every(cond => {
     if (cond === 'any') return true;
-    return checkNumericCondition(simWind, cond);
+    const isValid = checkNumericCondition(simWind, cond);
+    console.log(`[weatherHandler.js]: Wind condition "${cond}" for ${simWind} km/h: ${isValid}`);
+    return isValid;
   });
   
   // Handle precipitation conditions
   const precipOK = !precipConds || precipConds.some(cond => {
     if (cond === 'any') return true;
-    return precipitationMatches(precipLabel, cond);
+    const isValid = precipitationMatches(precipLabel, cond);
+    console.log(`[weatherHandler.js]: Precipitation condition "${cond}" for "${precipLabel}": ${isValid}`);
+    return isValid;
   });
 
   // Log validation details for debugging
@@ -161,6 +170,8 @@ function specialCandidateMatches(candidateLabel, simTemp, simWind, precipLabel) 
       wind: { conditions: windConds, value: simWind, valid: windOK },
       precipitation: { conditions: precipConds, value: precipLabel, valid: precipOK }
     });
+  } else {
+    console.log(`[weatherHandler.js]: Special weather validation passed for ${candidateLabel}`);
   }
   
   return tempOK && windOK && precipOK;
@@ -239,10 +250,20 @@ function getPrecipitationLabel(seasonData, simTemp, simWind, cloudyStreak, weigh
 function getSpecialCondition(seasonData, simTemp, simWind, precipLabel, rainStreak, weightMapping, modifierMap = {}) {
   if (!seasonData.Special.length || Math.random() >= 0.3) return null;
   
+  console.log(`[weatherHandler.js]: Checking special weather conditions for:`, {
+    availableSpecials: seasonData.Special,
+    currentTemp: simTemp,
+    currentWind: simWind,
+    currentPrecip: precipLabel,
+    rainStreak: rainStreak
+  });
+  
   // Filter out invalid special conditions based on current weather
-  const validSpecials = seasonData.Special.filter(specialType => 
-    specialCandidateMatches(specialType, simTemp, simWind, precipLabel)
-  );
+  const validSpecials = seasonData.Special.filter(specialType => {
+    const isValid = specialCandidateMatches(specialType, simTemp, simWind, precipLabel);
+    console.log(`[weatherHandler.js]: Special ${specialType} valid: ${isValid}`);
+    return isValid;
+  });
   
   if (validSpecials.length === 0) {
     console.log(`[weatherHandler.js]: No valid special conditions for current weather:`, {
@@ -252,6 +273,8 @@ function getSpecialCondition(seasonData, simTemp, simWind, precipLabel, rainStre
     });
     return null;
   }
+  
+  console.log(`[weatherHandler.js]: Valid specials found:`, validSpecials);
   
   const adjustedWeights = { ...weightMapping };
   if (rainStreak >= 2) {
@@ -484,7 +507,7 @@ function simulateWeightedWeather(village, season) {
 // ------------------- Temperature Smoothing Choices -------------------
 // Filters temperature options close to the previous temperature.
 function getSmoothTemperatureChoices(currentTempF, seasonTemps, forceDrop = false) {
-  const maxDelta = forceDrop ? 0 : 10;
+  const maxDelta = forceDrop ? 0 : 20;
   return seasonTemps.filter(label => {
     const temp = parseFahrenheit(label);
     return temp !== null && Math.abs(temp - currentTempF) <= maxDelta;
