@@ -60,7 +60,15 @@ function validateHealingJob(character) {
 async function checkDebuff(character) {
   if (character.debuff?.active) {
     const debuffEndDate = new Date(character.debuff.endDate);
-    const unixTimestamp = Math.floor(debuffEndDate.getTime() / 1000);
+    
+    // Convert to EST and set to midnight for display
+    const estDate = new Date(debuffEndDate.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+    estDate.setHours(0, 0, 0, 0);
+    
+    // Convert back to UTC for Discord timestamp
+    const utcDate = new Date(estDate.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+    const unixTimestamp = Math.floor(utcDate.getTime() / 1000);
+    
     return {
       hasDebuff: true,
       message: `❌ **Error:** Healing cannot be requested because **${character.name}** is currently affected by a debuff. Please wait until the debuff expires.\n🕒 **Debuff Expires:** <t:${unixTimestamp}:F>`
@@ -216,7 +224,14 @@ async function handleHealingRequest(interaction, characterName, heartsToHeal, pa
 
     // Create and save the healing request
     const healingRequestId = generateUniqueId('H');
-    const embed = createHealEmbed(null, characterToHeal, heartsToHeal, paymentOffered, healingRequestId, healerCharacter);
+    const embed = createHealEmbed(
+      healerCharacter,
+      characterToHeal,
+      heartsToHeal,
+      paymentOffered,
+      healingRequestId,
+      false
+    );
 
     // Send the embed and save the message ID
     const sentMessage = await interaction.followUp({

@@ -460,7 +460,12 @@ for (const { name } of items) {
   }
 
   const allCharacters = await fetchAllCharactersExceptUser(userId);
-  const toCharacter = allCharacters.find((c) => c.name === toCharacterName);
+  if (allCharacters.length === 0) {
+    console.log('[handleGift]: No characters found in fetchAllCharactersExceptUser. Possible DB connection issue.');
+  }
+  // Extract actual name from input (before '|'), trim, and compare case-insensitively
+  const toCharacterActualName = toCharacterName.split('|')[0].trim().toLowerCase();
+  const toCharacter = allCharacters.find((c) => c.name.trim().toLowerCase() === toCharacterActualName);
   if (!toCharacter) {
    await interaction.editReply({
     embeds: [{

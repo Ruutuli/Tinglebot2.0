@@ -1321,16 +1321,22 @@ async function handleViewCharacter(interaction) {
   // Save the updated spirit orb count to the character document
   await Character.findByIdAndUpdate(character._id, { spiritOrbs: character.spiritOrbs });
 
-  const settings = getCommonEmbedSettings(character);
+  // Refresh the character object to ensure it has the updated spirit orb count
+  const updatedCharacter = await Character.findById(character._id);
+  if (!updatedCharacter) {
+    throw new Error('Failed to refresh character data');
+  }
 
-  const characterEmbed = createCharacterEmbed(character);
+  const settings = getCommonEmbedSettings(updatedCharacter);
+
+  const characterEmbed = createCharacterEmbed(updatedCharacter);
 
   const itemNames = [
-   character.gearWeapon?.name,
-   character.gearShield?.name,
-   character.gearArmor?.head?.name,
-   character.gearArmor?.chest?.name,
-   character.gearArmor?.legs?.name,
+   updatedCharacter.gearWeapon?.name,
+   updatedCharacter.gearShield?.name,
+   updatedCharacter.gearArmor?.head?.name,
+   updatedCharacter.gearArmor?.chest?.name,
+   updatedCharacter.gearArmor?.legs?.name,
   ].filter(Boolean);
 
   const itemDetails = await ItemModel.find({ itemName: { $in: itemNames } });
@@ -1343,34 +1349,34 @@ async function handleViewCharacter(interaction) {
   };
 
   const gearMap = {
-   head: character.gearArmor?.head
-    ? `> ${getItemDetail(character.gearArmor.head.name)}`
+   head: updatedCharacter.gearArmor?.head
+    ? `> ${getItemDetail(updatedCharacter.gearArmor.head.name)}`
     : "> N/A",
-   chest: character.gearArmor?.chest
-    ? `> ${getItemDetail(character.gearArmor.chest.name)}`
+   chest: updatedCharacter.gearArmor?.chest
+    ? `> ${getItemDetail(updatedCharacter.gearArmor.chest.name)}`
     : "> N/A",
-   legs: character.gearArmor?.legs
-    ? `> ${getItemDetail(character.gearArmor.legs.name)}`
+   legs: updatedCharacter.gearArmor?.legs
+    ? `> ${getItemDetail(updatedCharacter.gearArmor.legs.name)}`
     : "> N/A",
-   weapon: character.gearWeapon
-    ? `> ${getItemDetail(character.gearWeapon.name)}`
+   weapon: updatedCharacter.gearWeapon
+    ? `> ${getItemDetail(updatedCharacter.gearWeapon.name)}`
     : "> N/A",
-   shield: character.gearShield
-    ? `> ${getItemDetail(character.gearShield.name)}`
+   shield: updatedCharacter.gearShield
+    ? `> ${getItemDetail(updatedCharacter.gearShield.name)}`
     : "> N/A",
   };
 
-  const gearEmbed = createCharacterGearEmbed(character, gearMap, "all");
+  const gearEmbed = createCharacterGearEmbed(updatedCharacter, gearMap, "all");
 
-  const jobPerkInfo = getJobPerk(character.job);
+  const jobPerkInfo = getJobPerk(updatedCharacter.job);
   const embeds = [characterEmbed, gearEmbed];
 
-  if (jobPerkInfo?.perks.includes("VENDING") && character.vendorType) {
-   const vendorEmbed = createVendorEmbed(character);
+  if (jobPerkInfo?.perks.includes("VENDING") && updatedCharacter.vendorType) {
+   const vendorEmbed = createVendorEmbed(updatedCharacter);
    if (vendorEmbed) embeds.push(vendorEmbed);
   }
 
-  const mount = await Mount.findOne({ characterId: character._id });
+  const mount = await Mount.findOne({ characterId: updatedCharacter._id });
   if (mount) {
    const speciesEmoji = getMountEmoji(mount.species);
    const formattedTraits =
@@ -1380,7 +1386,7 @@ async function handleViewCharacter(interaction) {
 
    const mountEmbed = {
     title: `${speciesEmoji} **${mount.name}** - Mount Details`,
-    description: `✨ **Mount Stats for**: **${character.name}**`,
+    description: `✨ **Mount Stats for**: **${updatedCharacter.name}**`,
     fields: [
      {
       name: "🌟 **__Species__**",
@@ -1415,8 +1421,8 @@ async function handleViewCharacter(interaction) {
      url: "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png",
     },
     footer: {
-     text: `${character.name}'s Mount Stats`,
-     iconURL: character.icon,
+     text: `${updatedCharacter.name}'s Mount Stats`,
+     iconURL: updatedCharacter.icon,
     },
     timestamp: new Date(),
    };

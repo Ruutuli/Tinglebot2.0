@@ -512,9 +512,8 @@ async function checkAndHandleKO(character, channel, startingVillage) {
   if (character.currentHearts <= 0 || character.ko) {
     character.ko = true;
 
-    const recoveryVillage = ['rudania', 'vhintl'].includes(startingVillage)
-    ? 'inariko'
-    : startingVillage;  
+    // Character should always wake up in their starting village when KO'd during travel
+    const recoveryVillage = startingVillage;
 
     character.currentVillage = recoveryVillage;
     character.currentStamina = 0;
