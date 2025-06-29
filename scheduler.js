@@ -11,7 +11,6 @@ const { cleanupExpiredEntries, cleanupExpiredHealingRequests } = require('./util
 const { authorizeSheets, clearSheetFormatting, writeSheetData } = require('./utils/googleSheetsUtils');
 const { convertToHyruleanDate } = require('./modules/calendarModule');
 const Character = require('./models/CharacterModel');
-const weatherHandler = require('./handlers/weatherHandler');
 const { sendUserDM } = require('./utils/messageUtils');
 const { generateWeatherEmbed } = require('./embeds/weatherEmbed');
 const { checkExpiredRequests } = require('./utils/expirationHandler');
@@ -103,17 +102,15 @@ function getCurrentSeason() {
 async function postWeatherUpdate(client) {
   try {
     const villages = Object.keys(TOWNHALL_CHANNELS);
-    const currentSeason = getCurrentSeason();
     
     for (const village of villages) {
       try {
-        // Try to get existing weather data first
-        let weather = await getCurrentWeather(village);
+        // Use getCurrentWeather which handles generation properly
+        const weather = await getCurrentWeather(village);
         
-        // If no weather data exists for today, generate and save new weather
         if (!weather) {
-          weather = weatherHandler.simulateWeightedWeather(village, currentSeason);
-          await saveWeather(weather);
+          console.error(`[scheduler.js]: ❌ Failed to get or generate weather for ${village}`);
+          continue;
         }
         
         const channelId = TOWNHALL_CHANNELS[village];

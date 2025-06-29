@@ -107,7 +107,8 @@ function validateWeightModifiers(village, season, modifiers) {
 // ------------------- Smoothing Helpers -------------------
 // Filters temperature options close to the previous temperature.
 function getSmoothTemperatureChoices(currentTempF, seasonTemps, forceDrop = false) {
-  const maxDelta = forceDrop ? 0 : 10;
+  // Increase maxDelta to allow more temperature variation
+  const maxDelta = forceDrop ? 0 : 20; // Changed from 10 to 20
   return seasonTemps.filter(label => {
     const temp = parseFahrenheit(label);
     return temp !== null && Math.abs(temp - currentTempF) <= maxDelta;
@@ -147,6 +148,7 @@ async function simulateWeightedWeather(village, season) {
   const seasonInfo = villageData.seasons[seasonKey];
   const weightModifiers = weatherWeightModifiers[village]?.[seasonKey] || {};
   validateWeightModifiers(village, seasonKey, weightModifiers);
+  
   // Fetch last 3 weather entries for smoothing
   const history = await Weather.getRecentWeather(village, 3);
   const previous = history[0] || {};
@@ -159,6 +161,7 @@ async function simulateWeightedWeather(village, season) {
     .includes(w?.precipitation?.label))
     .length;
   const hadStormYesterday = ['Thunderstorm', 'Heavy Rain'].includes(previous.precipitation?.label);
+  
   // Temperature
   const temperatureLabel = getSmoothedTemperature(
     seasonInfo.Temperature,
@@ -168,6 +171,7 @@ async function simulateWeightedWeather(village, season) {
     weightModifiers.temperature || {}
   );
   const simTemp = parseFahrenheit(temperatureLabel);
+  
   // Wind
   const windLabel = getSmoothedWind(
     seasonInfo.Wind,
@@ -175,12 +179,8 @@ async function simulateWeightedWeather(village, season) {
     windWeights
   );
   const simWind = parseWind(windLabel);
+  
   // Precipitation
-  const precipWeights = seasonInfo.Precipitation.map(precip => {
-    const baseWeight = precipitationWeights[precip] || 1;
-    const modifier = weightModifiers.precipitation?.[precip] || 1;
-    return baseWeight * modifier;
-  });
   const precipitationLabel = getPrecipitationLabel(
     seasonInfo,
     simTemp,
@@ -189,10 +189,21 @@ async function simulateWeightedWeather(village, season) {
     precipitationWeights,
     weightModifiers.precipitation || {}
   );
-  // Special
+  
+  // Special - Improved logic with better logging
   let specialLabel = null;
   let special = null;
+  
+  // Check if special weather should be considered (30% chance)
   if (seasonInfo.Special.length && Math.random() < 0.3) {
+    console.log(`[weatherModule.js]: Considering special weather for ${village} in ${seasonKey}`);
+    console.log(`[weatherModule.js]: Available specials:`, seasonInfo.Special);
+    console.log(`[weatherModule.js]: Current conditions:`, {
+      temperature: simTemp,
+      wind: simWind,
+      precipitation: precipitationLabel
+    });
+    
     specialLabel = getSpecialCondition(
       seasonInfo,
       simTemp,
@@ -202,6 +213,7 @@ async function simulateWeightedWeather(village, season) {
       specialWeights,
       weightModifiers.special || {}
     );
+    
     if (specialLabel) {
       const specialObj = specials.find(s => s.label === specialLabel);
       special = {
@@ -209,13 +221,20 @@ async function simulateWeightedWeather(village, season) {
         emoji: specialObj.emoji,
         probability: '10%'
       };
+      console.log(`[weatherModule.js]: Generated special weather: ${specialLabel}`);
+    } else {
+      console.log(`[weatherModule.js]: No valid special weather conditions met`);
     }
+  } else {
+    console.log(`[weatherModule.js]: Special weather not considered (random chance or no specials available)`);
   }
+  
   // Probabilities
   const tempProbability = calculateCandidateProbability(seasonInfo.Temperature, temperatureWeights, temperatureLabel, weightModifiers.temperature);
   const windProbability = calculateCandidateProbability(seasonInfo.Wind, windWeights, windLabel, weightModifiers.wind);
   const precipProbability = calculateCandidateProbability(seasonInfo.Precipitation, precipitationWeights, precipitationLabel, weightModifiers.precipitation);
   const specialProbability = special ? calculateCandidateProbability(seasonInfo.Special, specialWeights, special.label, weightModifiers.special) : 0;
+  
   const result = {
     village,
     date: new Date(),
@@ -236,6 +255,7 @@ async function simulateWeightedWeather(village, season) {
       probability: `${precipProbability.toFixed(1)}%`
     }
   };
+  
   if (special) {
     result.special = {
       label: special.label,
@@ -243,6 +263,7 @@ async function simulateWeightedWeather(village, season) {
       probability: `${specialProbability.toFixed(1)}%`
     };
   }
+  
   return result;
 }
 
