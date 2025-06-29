@@ -183,7 +183,15 @@ module.exports = {
       // Check if the character is debuffed.
       if (character.debuff?.active) {
         const debuffEndDate = new Date(character.debuff.endDate);
-        const unixTimestamp = Math.floor(debuffEndDate.getTime() / 1000);
+        
+        // Convert to EST and set to midnight for display
+        const estDate = new Date(debuffEndDate.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+        estDate.setHours(0, 0, 0, 0);
+        
+        // Convert back to UTC for Discord timestamp
+        const utcDate = new Date(estDate.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+        const unixTimestamp = Math.floor(utcDate.getTime() / 1000);
+        
         await interaction.editReply({
           content: `❌ **${character.name}** is currently debuffed and cannot gather.**\n🕒 **Debuff Expires:** <t:${unixTimestamp}:F>`,
           ephemeral: true,

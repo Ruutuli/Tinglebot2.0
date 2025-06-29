@@ -281,7 +281,16 @@ module.exports = {
       // ------------------- Debuff and Inventory Sync Checks -------------------
       // Prevent item use if character is debuffed or inventory isn't synced.
       if (character.debuff?.active) {
-        const expireUnix = Math.floor(new Date(character.debuff.endDate).getTime() / 1000);
+        const debuffEndDate = new Date(character.debuff.endDate);
+        
+        // Convert to EST and set to midnight for display
+        const estDate = new Date(debuffEndDate.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+        estDate.setHours(0, 0, 0, 0);
+        
+        // Convert back to UTC for Discord timestamp
+        const utcDate = new Date(estDate.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+        const expireUnix = Math.floor(utcDate.getTime() / 1000);
+        
         return void await interaction.editReply({
           content: `❌ **${character.name} is currently debuffed and cannot use items to heal.**\n🕒 **Debuff Expires:** <t:${expireUnix}:F>`
         });
