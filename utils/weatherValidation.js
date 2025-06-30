@@ -40,7 +40,7 @@ function parseFahrenheit(label) {
 // Helper to parse wind speed from label
 function parseWind(label) {
   if (!label) return 0;
-  const match = label.match(/(\d+)\s*-\s*(\d+)/);
+  const match = label.match(/(\d+)/);
   return match ? parseInt(match[1]) : 0;
 }
 
