@@ -112,6 +112,23 @@ async function isUniqueCharacterName(userId, characterName) {
     }
 }
 
+// ------------------- Unique Mod Character Name Check -------------------
+// Checks if the given mod character name is unique for the specified user.
+async function isUniqueModCharacterName(userId, characterName) {
+    try {
+        const ModCharacter = require('../models/ModCharacterModel');
+        const existingModCharacter = await ModCharacter.findOne({ 
+            userId, 
+            name: { $regex: new RegExp(`^${characterName}$`, 'i') }
+        });
+        return !existingModCharacter;
+    } catch (error) {
+        handleError(error, 'validation.js');
+        console.error('[validation.js]: Error checking unique mod character name:', error);
+        throw error;
+    }
+}
+
 // ------------------- Village Change Validation -------------------
 // Checks if a character can change their village based on their job restrictions.
 async function canChangeVillage(character, newVillage) {
@@ -257,6 +274,7 @@ module.exports = {
     ensureInventoriesConnection,
     ensureCollectionExists,
     isUniqueCharacterName,
+    isUniqueModCharacterName,
     canChangeJob,
     canChangeVillage,
     validateCharacterInventory,

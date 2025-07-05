@@ -7,13 +7,9 @@
   "node": ">=18.0.0"
  },
  "scripts": {
-  "start": "cross-env NODE_ENV=production node --max-old-space-size=512 --optimize-for-size index.js",
-  "dev": "cross-env NODE_ENV=development PORT=5000 nodemon index.js",
-  "prod": "cross-env NODE_ENV=production PORT=5001 nodemon index.js",
-  "both": "concurrently \"npm run dev\" \"npm run prod\"",
-  "scheduler": "cross-env NODE_ENV=production node scripts/scheduler.js",
-  "deploy-commands": "cross-env NODE_ENV=development node scripts/deploy-commands.js",
-  "deploy": "cross-env NODE_ENV=production node scripts/deploy-commands.js"
+  "start": "node index.js",
+  "dev": "nodemon index.js",
+  "deploy-commands": "node scripts/deploy-commands.js"
  },
  "author": "Ruu",
  "license": "ISC",
@@ -22,6 +18,7 @@
   "@google-cloud/storage": "^7.16.0",
   "axios": "^1.8.4",
   "bottleneck": "^2.19.5",
+  "csv-parser": "^3.2.0",
   "discord.js": "^14.18.0",
   "dotenv": "^16.5.0",
   "figlet": "^1.8.1",

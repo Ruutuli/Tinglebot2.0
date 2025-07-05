@@ -158,9 +158,13 @@ const weatherWeightModifiers = {
     },
     Summer: {
       temperature: {
-        "89°F / 32°C - Hot": 1.5,
+        "75°F / 24°C - Warm": 0.8,
+        "82°F / 28°C - Hot": 1.2,
+        "89°F / 32°C - Very Hot": 1.5,
         "97°F / 36°C - Scorching": 2,
-        "100°F / 38°C - Heat Wave": 2
+        "105°F / 41°C - Blazing": 2.2,
+        "110°F / 43°C - Heat Wave": 2.5,
+        "115°F / 46°C - Infernal": 2.8
       },
       precipitation: {
         "Cinder Storm": 2,

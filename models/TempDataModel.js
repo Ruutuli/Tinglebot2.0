@@ -159,8 +159,8 @@ tempDataSchema.index({ type: 1, key: 1 });
 tempDataSchema.pre('save', function(next) {
   const now = new Date();
   
-  // Prevent weather data storage for test/_dev bot
-  if (this.type === 'weather' && this.data?.botId && this.data.botId !== '603960955839447050') {
+  // Prevent weather data storage for non-production bots
+  if (this.type === 'weather' && this.data?.botId && this.data.botId !== process.env.GUILD_ID) {
     return next(new Error('Weather data storage not allowed for this bot'));
   }
   

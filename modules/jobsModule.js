@@ -33,8 +33,11 @@ const generalJobs = [
   'Minstrel', 'Priest', 'Scout', 'Shopkeeper', 'Stablehand', 'Villager', 'Witch'
 ];
 
+// Mod character jobs (Oracle, Sage, Dragon)
+const modCharacterJobs = ['Oracle', 'Sage', 'Dragon'];
+
 // Combine all job categories into a single sorted array
-const allJobs = [...new Set([...Object.values(villageJobs).flat(), ...generalJobs])].sort();
+const allJobs = [...new Set([...Object.values(villageJobs).flat(), ...generalJobs, ...modCharacterJobs])].sort();
 jobPages.find(page => page.title === 'All Jobs').jobs = allJobs;
 
 // ------------------- Job perks and metadata -------------------
@@ -71,7 +74,10 @@ const jobPerks = [
   { job: 'Shopkeeper', perk: 'VENDING', village: null },
   { job: 'Stablehand', perk: 'N/A', village: null },
   { job: 'Villager', perk: 'NONE', village: null },
-  { job: 'Witch', perk: 'CRAFTING', village: null }
+  { job: 'Witch', perk: 'CRAFTING', village: null },
+  { job: 'Oracle', perk: 'ALL', village: null },
+  { job: 'Sage', perk: 'ALL', village: null },
+  { job: 'Dragon', perk: 'ALL', village: null }
 ];
 
 // ------------------- Utility functions -------------------
@@ -171,6 +177,7 @@ module.exports = {
   jobPages,
   villageJobs,
   generalJobs,
+  modCharacterJobs,
   jobPerks,
   getVillageExclusiveJobs,
   getJobPage,

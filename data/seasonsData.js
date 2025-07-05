@@ -91,7 +91,6 @@ module.exports = {
         },
         Summer: {
           Temperature: [
-            "61°F / 16°C - Mild",
             "72°F / 22°C - Perfect",
             "82°F / 28°C - Warm",
             "89°F / 32°C - Hot",
