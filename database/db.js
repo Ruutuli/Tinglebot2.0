@@ -884,8 +884,20 @@ const fetchItemById = async (itemId) => {
 const fetchItemsByMonster = async (monsterName) => {
     try {
         const db = await connectToInventoriesForItems();
+        
+        // Map monster names to their corresponding item field names
+        const monsterToFieldMap = {
+            'Frox': 'littleFrox',
+            'Little Frox': 'littleFrox'
+        };
+        
+        const fieldName = monsterToFieldMap[monsterName] || monsterName;
         const query = {
-            $or: [{ monsterList: monsterName }, { [monsterName]: true }],
+            $or: [
+                { monsterList: monsterName }, 
+                { monsterList: { $in: [monsterName] } },
+                { [fieldName]: true }
+            ],
         };
         const items = await db.collection("items").find(query).toArray();
         return items.filter((item) => item.itemName && item.itemRarity);
