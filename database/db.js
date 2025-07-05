@@ -22,6 +22,7 @@ const inventoryUtils = require("../utils/inventoryUtils");
 
 // ------------------- Models -------------------
 const Character = require("../models/CharacterModel");
+const ModCharacter = require("../models/ModCharacterModel");
 const Monster = require("../models/MonsterModel");
 const Quest = require("../models/QuestModel");
 const RelicModel = require("../models/RelicModel");
@@ -506,6 +507,130 @@ const deleteCharacterInventoryCollection = async (characterName) => {
   console.error(
    `[characterService]: logs - Error in deleteCharacterInventoryCollection for "${characterName}": ${error.message}`
   );
+  throw error;
+ }
+};
+
+// ============================================================================
+// ------------------- Mod Character Database Functions -------------------
+// Functions for managing mod characters with unlimited hearts/stamina
+// ============================================================================
+
+const fetchModCharacterByNameAndUserId = async (characterName, userId) => {
+ try {
+  await connectToTinglebot();
+  // Get the actual name part before the "|" if it exists
+  const actualName = characterName.split('|')[0].trim();
+  
+  // Escape special regex characters in the character name
+  const escapedName = actualName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  
+  const modCharacter = await ModCharacter.findOne({
+    name: new RegExp(`^${escapedName}$`, "i"),
+    userId
+  });
+
+  if (!modCharacter) {
+    console.log(`[modCharacterService]: 🔍 Mod character "${actualName}" not found for userId: ${userId}`);
+    return null;
+  }
+
+  return modCharacter;
+ } catch (error) {
+  handleError(error, "db.js", {
+   function: "fetchModCharacterByNameAndUserId",
+   characterName: characterName,
+   userId: userId,
+  });
+  throw error;
+ }
+};
+
+const fetchModCharactersByUserId = async (userId) => {
+ try {
+  await connectToTinglebot();
+  const modCharacters = await ModCharacter.find({ userId: userId });
+  return modCharacters;
+ } catch (error) {
+  handleError(error, "db.js", {
+   function: "fetchModCharactersByUserId",
+   userId: userId,
+  });
+  throw error;
+ }
+};
+
+const fetchAllModCharacters = async () => {
+ try {
+  await connectToTinglebot();
+  const modCharacters = await ModCharacter.find({});
+  return modCharacters;
+ } catch (error) {
+  handleError(error, "db.js", {
+   function: "fetchAllModCharacters",
+  });
+  throw error;
+ }
+};
+
+const createModCharacter = async (modCharacterData) => {
+ try {
+  await connectToTinglebot();
+  const modCharacter = new ModCharacter(modCharacterData);
+  const savedModCharacter = await modCharacter.save();
+  return savedModCharacter;
+ } catch (error) {
+  handleError(error, "db.js", {
+   function: "createModCharacter",
+   modCharacterData: modCharacterData,
+  });
+  throw error;
+ }
+};
+
+const updateModCharacterById = async (modCharacterId, updateData) => {
+ try {
+  await connectToTinglebot();
+  const updatedModCharacter = await ModCharacter.findByIdAndUpdate(
+   modCharacterId,
+   updateData,
+   { new: true }
+  );
+  return updatedModCharacter;
+ } catch (error) {
+  handleError(error, "db.js", {
+   function: "updateModCharacterById",
+   modCharacterId: modCharacterId,
+   updateData: updateData,
+  });
+  throw error;
+ }
+};
+
+const deleteModCharacterById = async (modCharacterId) => {
+ try {
+  await connectToTinglebot();
+  const deletedModCharacter = await ModCharacter.findByIdAndDelete(modCharacterId);
+  return deletedModCharacter;
+ } catch (error) {
+  handleError(error, "db.js", {
+   function: "deleteModCharacterById",
+   modCharacterId: modCharacterId,
+  });
+  throw error;
+ }
+};
+
+const fetchModCharacterById = async (modCharacterId) => {
+ try {
+  await connectToTinglebot();
+  const modCharacter = await ModCharacter.findById(modCharacterId);
+  return modCharacter;
+ } catch (error) {
+  handleError(error, "db.js", {
+   function: "fetchModCharacterById",
+   modCharacterId: modCharacterId,
+  });
   throw error;
  }
 };
@@ -2073,6 +2198,14 @@ module.exports = {
  getCharacterInventoryCollection,
  createCharacterInventory,
  deleteCharacterInventoryCollection,
+ // Mod Character Functions
+ fetchModCharacterByNameAndUserId,
+ fetchModCharactersByUserId,
+ fetchAllModCharacters,
+ createModCharacter,
+ updateModCharacterById,
+ deleteModCharacterById,
+ fetchModCharacterById,
  addPetToCharacter,
  updatePetRolls,
  upgradePetLevel,

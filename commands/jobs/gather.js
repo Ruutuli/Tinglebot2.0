@@ -295,7 +295,7 @@ module.exports = {
             `◈ Oh no... your character **${character.name}** has come into contact with the blight rain and has been **blighted**! ◈\n\n` +
             "You can be healed by **Oracles, Sages & Dragons**  \n" +
             "▹ [Blight Information](https://www.rootsofrootsofthewild.com/blight)  \n" +
-            "▹ [Currently Available Blight Healers](https://discord.com/channels/603960955839447050/651614266046152705/845481974671736842)\n\n" +
+            "▹ [Currently Available Blight Healers](https://discord.com/channels/${process.env.GUILD_ID}/651614266046152705/845481974671736842)\n\n" +
             "**STAGE 1:**  \n" +
             "Infected areas appear like blight-colored bruises on the body. Side effects include fatigue, nausea, and feverish symptoms. At this stage you can be helped by having one of the sages, oracles or dragons heal you.\n\n" +
             "> **Starting tomorrow, you'll be prompted to roll in the Community Board each day to see if your blight gets worse!**\n" +

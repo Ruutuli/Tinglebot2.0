@@ -55,7 +55,7 @@ async function createCharacterAutocomplete(interaction) {
 
 // ------------------- Create Character Interaction -------------------
 // Handles creating a new character with the specified attributes
-async function createCharacterInteraction(interaction) {
+async function createCharacterInteraction(interaction, assignedRoles = [], missingRoles = []) {
     // Only defer if not already deferred or replied
     if (!interaction.replied && !interaction.deferred) {
         await interaction.deferReply({ ephemeral: true });
@@ -171,9 +171,20 @@ async function createCharacterInteraction(interaction) {
         // Always ensure description is set
         embed.setDescription("📋 Character profile created successfully.");
 
+        // Build success message with role assignment information
+        let successMessage = `🎉 Your character has been successfully created! Your remaining character slots: ${user.characterSlot}`;
+        
+        if (assignedRoles.length > 0) {
+            successMessage += `\n✅ Assigned roles: ${assignedRoles.join(', ')}`;
+        }
+        
+        if (missingRoles.length > 0) {
+            successMessage += `\n⚠️ Some roles could not be assigned: ${missingRoles.join(', ')}. Please contact a server administrator to set up these roles.`;
+        }
+
         // Send success message with the character embed
         await interaction.editReply({
-            content: `🎉 Your character has been successfully created! Your remaining character slots: ${user.characterSlot}`,
+            content: successMessage,
             embeds: [embed],
             ephemeral: true
         });

@@ -89,11 +89,7 @@ const {
   getMountEmoji
 } = require('../../modules/mountModule');
 
-const {
-  fetchTableFromDatabase,
-  loadTable,
-  rollItem
-} = require('../../utils/sheetTableUtils');
+
 
 const { v4: uuidv4 } = require('uuid');
 
@@ -289,34 +285,7 @@ const modCommand = new SlashCommandBuilder()
     .setDescription("📋 View members inactive for 3+ months")
 )
 
-// ------------------- Subcommand Group: table -------------------
-.addSubcommandGroup(group =>
-  group
-    .setName('table')
-    .setDescription("📊 Load or roll from item tables")
-    .addSubcommand(sub =>
-      sub
-        .setName('load')
-        .setDescription('Loads a table from Google Sheets into the database')
-        .addStringOption(option =>
-          option
-            .setName('tablename')
-            .setDescription('The name of the sheet tab')
-            .setRequired(true)
-        )
-    )
-    .addSubcommand(sub =>
-      sub
-        .setName('roll')
-        .setDescription('Rolls an item from a loaded table stored in the database')
-        .addStringOption(option =>
-          option
-            .setName('tablename')
-            .setDescription('The name of the table to roll from')
-            .setRequired(true)
-        )
-    )
-)
+
 
 // ------------------- Subcommand: blightpause -------------------
 .addSubcommand(sub =>
@@ -494,8 +463,7 @@ async function execute(interaction) {
         return await handleApproveEdit(interaction);
     } else if (subcommand === 'inactivityreport') {
         return await handleInactivityReport(interaction);      
-    } else if (subcommand === 'table') {
-        return await handleTable(interaction);      
+      
     } else if (subcommand === 'blightpause') {
         return await handleBlightPause(interaction);
     } else if (subcommand === 'kick_travelers') {
@@ -1228,56 +1196,7 @@ async function handleInactivityReport(interaction) {
     }
   }
   
-  // ------------------- Function: handleTable -------------------
-// Loads a table from Google Sheets or rolls from a loaded table in the database.
-async function handleTable(interaction) {
-    const subcommandGroup = interaction.options.getSubcommand();
-    const tableName = interaction.options.getString('tablename');
-  
-    if (!tableName) {
-      return interaction.editReply('❌ Please provide a table name.');
-    }
-  
-    try {
-      if (subcommandGroup === 'load') {
-        const success = await loadTable(tableName);
-        if (success) {
-          return interaction.editReply(`✅ **Successfully loaded table: ${tableName} into the database.**`);
-        } else {
-          return interaction.editReply(`❌ **Failed to load table: ${tableName}**`);
-        }
-      }
-  
-      if (subcommandGroup === 'roll') {
-        const tableData = await fetchTableFromDatabase(tableName);
-        if (!tableData) {
-          return interaction.editReply(`❌ **No data found for table: ${tableName}**`);
-        }
-  
-        const result = await rollItem(tableName);
-        if (!result) {
-          return interaction.editReply(`❌ **Failed to roll from table: ${tableName}**`);
-        }
-  
-        const embed = new EmbedBuilder()
-          .setColor('#0099ff')
-          .setTitle(`🎲 Roll Result from ${tableName}`)
-          .addFields(
-            { name: 'Item', value: result.item || 'Unknown', inline: true },
-            { name: 'Flavor Text', value: result.flavorText || 'No description', inline: false }
-          )
-          .setTimestamp();
-  
-        return interaction.editReply({ embeds: [embed] });
-      }
-  
-      return interaction.editReply('❌ Invalid subcommand for /mod table.');
-    } catch (err) {
-      handleError(err, 'mod.js');
-      console.error('[mod.js]: Error in table handler', err);
-      return interaction.editReply('⚠️ An error occurred while processing the table command.');
-    }
-  }
+
   
   // ------------------- Function: handleBlightPause -------------------
 // Pauses or unpauses blight progression for a given character.

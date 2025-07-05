@@ -21,6 +21,7 @@ const {
  fetchCharacterByNameAndUserId,
  fetchCharactersByUserId,
  fetchCraftableItemsAndCheckMaterials,
+ fetchModCharactersByUserId,
  getCharacterInventoryCollection,
  getCurrentVendingStockList,
  getVendingModel
@@ -444,6 +445,10 @@ async function handleAutocomplete(interaction) {
           case 'spiritorbs':
             await handleSpiritOrbCharacterAutocomplete(interaction, focusedOption);
             return;
+
+          // ------------------- Mod Character Command -------------------
+          // Note: ModCharacter autocomplete is handled locally in the command file
+          break;
         }
     } catch (error) {
         console.error('[autocompleteHandler.js]: ❌ Error in handleAutocomplete:', error);
@@ -971,13 +976,20 @@ async function handleCreateCharacterRaceAutocomplete(
 ) {
  try {
   // Retrieve all races and format them for autocomplete
-  const choices = getAllRaces().map((race) => ({
+  const races = getAllRaces();
+  
+  // Add Dragon race for mod characters only
+  if (interaction.commandName === 'modcharacter') {
+    races.push('dragon');
+  }
+  
+  const choices = races.map((race) => ({
    name: capitalize(race), // Display race name in a capitalized format
    value: race, // Use the raw race value
   }));
 
   // Respond to the interaction with filtered race choices
-                await respondWithFilteredChoices(interaction, focusedOption, choices);
+  await respondWithFilteredChoices(interaction, focusedOption, choices);
  } catch (error) {
   handleError(error, "autocompleteHandler.js");
 
@@ -2561,6 +2573,7 @@ async function handleModCharacterAutocomplete(interaction, focusedOption) {
  }
 }
 
+
 // ============================================================================
 // MOUNT COMMANDS
 // ============================================================================
@@ -3685,6 +3698,90 @@ async function handleSpiritOrbCharacterAutocomplete(interaction, focusedOption) 
   }
 }
 
+// ============================================================================
+// MOD CHARACTER COMMANDS
+// ============================================================================
+// This section handles autocomplete interactions for the "/modcharacter" command.
+// It provides suggestions for job selection and mod character names.
+
+// ------------------- Mod Character Job Autocomplete -------------------
+// Provides autocomplete suggestions for job selection when creating mod characters.
+async function handleModCharacterJobAutocomplete(interaction, focusedOption) {
+  try {
+    // Get all jobs from all categories
+    const generalJobs1 = getGeneralJobsPage(1);
+    const generalJobs2 = getGeneralJobsPage(2);
+    const inarikoJobs = getVillageExclusiveJobs('inariko');
+    const rudaniaJobs = getVillageExclusiveJobs('rudania');
+    const vhintlJobs = getVillageExclusiveJobs('vhintl');
+    
+    const allJobs = [
+      ...generalJobs1,
+      ...generalJobs2,
+      ...inarikoJobs,
+      ...rudaniaJobs,
+      ...vhintlJobs
+    ];
+
+    // Add mod character titles as valid jobs
+    const modTitles = ['Oracle', 'Dragon', 'Sage'];
+    allJobs.push(...modTitles);
+
+    // Remove duplicates and sort
+    const uniqueJobs = [...new Set(allJobs)].sort();
+
+    // Filter jobs based on user's typing
+    const searchQuery = focusedOption.value?.toLowerCase() || "";
+    const filteredJobs = uniqueJobs.filter((job) =>
+      job.toLowerCase().includes(searchQuery)
+    );
+
+    // Format autocomplete choices
+    const formattedChoices = filteredJobs.map((job) => ({
+      name: capitalizeWords(job),
+      value: job,
+    }));
+
+    await interaction.respond(formattedChoices.slice(0, 25));
+  } catch (error) {
+    handleError(error, "autocompleteHandler.js");
+    await safeRespondWithError(interaction);
+  }
+}
+
+// ------------------- Mod Character Name Autocomplete -------------------
+// Provides autocomplete suggestions for mod character names owned by the user.
+async function handleModCharacterNameAutocomplete(interaction, focusedOption) {
+  try {
+    const userId = interaction.user.id;
+    
+    // Fetch mod characters owned by the user
+    const modCharacters = await fetchModCharactersByUserId(userId);
+    
+    if (!modCharacters || modCharacters.length === 0) {
+      return await interaction.respond([]);
+    }
+
+    // Map mod characters to autocomplete choices
+    const choices = modCharacters.map((character) => ({
+      name: `${character.name} | ${character.modTitle} of ${character.modType}`,
+      value: character.name,
+    }));
+
+    // Filter based on user input
+    const searchQuery = focusedOption.value?.toLowerCase() || "";
+    const filteredChoices = choices.filter(choice => 
+      choice.name.toLowerCase().includes(searchQuery)
+    );
+
+    await interaction.respond(filteredChoices.slice(0, 25));
+  } catch (error) {
+    handleError(error, "autocompleteHandler.js");
+    console.error("[handleModCharacterNameAutocomplete]: Error:", error);
+    await safeRespondWithError(interaction);
+  }
+}
+
 module.exports = {
  handleAutocomplete,
  handleEconomyAutocomplete,
@@ -3755,8 +3852,12 @@ module.exports = {
  handleLookupAutocomplete,
 
  // ------------------- Mod Give Functions -------------------
- handleModGiveCharacterAutocomplete,
- handleModGiveItemAutocomplete,
+handleModGiveCharacterAutocomplete,
+handleModGiveItemAutocomplete,
+
+// ------------------- Mod Character Functions -------------------
+handleModCharacterJobAutocomplete,
+handleModCharacterNameAutocomplete,
 
  // ------------------- Mount/Stable Functions -------------------
  handleMountAutocomplete,

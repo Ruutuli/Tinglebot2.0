@@ -796,7 +796,7 @@ async function handleCreateCharacter(interaction, subcommand) {
 
     // Validate age
     if (age < 1) {
-      await interaction.reply({
+      await interaction.editReply({
         content: "❌ Age must be a positive number.",
         flags: [MessageFlags.Ephemeral]
       });
@@ -805,7 +805,7 @@ async function handleCreateCharacter(interaction, subcommand) {
 
     // Validate hearts and stamina
     if (hearts < 1 || stamina < 1) {
-      await interaction.reply({
+      await interaction.editReply({
         content: "❌ Hearts and stamina values must be positive numbers.",
         flags: [MessageFlags.Ephemeral]
       });
@@ -814,7 +814,7 @@ async function handleCreateCharacter(interaction, subcommand) {
 
     // Validate height
     if (isNaN(height) || height <= 0) {
-      await interaction.reply({
+      await interaction.editReply({
         content: "❌ Height must be a positive number.",
         flags: [MessageFlags.Ephemeral]
       });
@@ -824,7 +824,7 @@ async function handleCreateCharacter(interaction, subcommand) {
     // Validate race
     const race = interaction.options.getString("race");
     if (!isValidRace(race)) {
-      await interaction.reply({
+      await interaction.editReply({
         content: `❌ "${race}" is not a valid race. Please select a valid race from the autocomplete options.`,
         flags: [MessageFlags.Ephemeral]
       });
@@ -834,7 +834,7 @@ async function handleCreateCharacter(interaction, subcommand) {
     // Validate village (for general subcommand)
     const village = interaction.options.getString("village");
     if (subcommand === "general" && !["inariko", "rudania", "vhintl"].includes(village)) {
-      await interaction.reply({
+      await interaction.editReply({
         content: `❌ "${village}" is not a valid village. Please select a valid village from the choices.`,
         flags: [MessageFlags.Ephemeral]
       });
@@ -844,7 +844,7 @@ async function handleCreateCharacter(interaction, subcommand) {
     // Validate job
     const job = interaction.options.getString("job");
     if (!job) {
-      await interaction.reply({
+      await interaction.editReply({
         content: "❌ Please select a valid job from the choices.",
         flags: [MessageFlags.Ephemeral]
       });
@@ -854,7 +854,7 @@ async function handleCreateCharacter(interaction, subcommand) {
     // Validate inventory link
     const inventory = interaction.options.getString("inventory");
     if (!isValidGoogleSheetsUrl(inventory)) {
-      await interaction.reply({
+      await interaction.editReply({
         content: "❌ Please provide a valid Google Sheets URL for the inventory.",
         flags: [MessageFlags.Ephemeral]
       });
@@ -864,7 +864,7 @@ async function handleCreateCharacter(interaction, subcommand) {
     // Validate app link
     const appLink = interaction.options.getString("applink");
     if (!appLink) {
-      await interaction.reply({
+      await interaction.editReply({
         content: "❌ Please provide a valid application link.",
         flags: [MessageFlags.Ephemeral]
       });
@@ -874,7 +874,7 @@ async function handleCreateCharacter(interaction, subcommand) {
     // Validate icon
     const icon = interaction.options.getAttachment("icon");
     if (!icon) {
-      await interaction.reply({
+      await interaction.editReply({
         content: "❌ Please provide a valid icon image.",
         flags: [MessageFlags.Ephemeral]
       });
@@ -999,23 +999,10 @@ async function handleCreateCharacter(interaction, subcommand) {
     user.characterSlot -= 1;
     await user.save();
 
-    await createCharacterInteraction(interaction);
+    await createCharacterInteraction(interaction, assignedRoles, missingRoles);
 
-    // Build success message
-    let successMessage = `🎉 Your character has been successfully created! Your remaining character slots: ${user.characterSlot}`;
-    
-    if (assignedRoles.length > 0) {
-      successMessage += `\n✅ Assigned roles: ${assignedRoles.join(', ')}`;
-    }
-    
-    if (missingRoles.length > 0) {
-      successMessage += `\n⚠️ Some roles could not be assigned: ${missingRoles.join(', ')}. Please contact a server administrator to set up these roles.`;
-    }
-
-    await interaction.editReply({
-      content: successMessage,
-      flags: [MessageFlags.Ephemeral]
-    });
+    // Note: createCharacterInteraction already handles sending the reply,
+    // so we don't need to send another one here
   } catch (error) {
     handleError(error, "character.js");
     console.error(

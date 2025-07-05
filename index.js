@@ -1,18 +1,10 @@
 // Auto-deployed via GitHub Actions
 // ------------------- Load Environment -------------------
 const dotenv = require('dotenv');
-const path = require('path');
-
-// Environment check
-const env = process.env.NODE_ENV || 'development';
-const isDevelopment = env === 'development';
-console.log(`[index.js]: Starting bot in ${env} mode`);
 
 // Load environment variables
-const envFile = isDevelopment ? '.env.development' : '.env.production';
-dotenv.config({ path: envFile });
+dotenv.config();
 
-// Remove all environment variable logging and checks
 const port = process.env.PORT || 5001;
 
 // ------------------- Standard Libraries -------------------

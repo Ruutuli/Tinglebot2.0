@@ -144,13 +144,10 @@ async function executeBirthdayAnnouncements(client) {
   const now = new Date();
   const estNow = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
   const today = estNow.toISOString().slice(5, 10);
-  const guildIds = env === 'development' 
-    ? [process.env.TEST_GUILD_ID]
-    : [process.env.PROD_GUILD_ID];
+  const guildIds = [process.env.GUILD_ID];
   
   const guildChannelMap = {
-    '1305484048063529002': '1326997448085995530', // Roots Of The Wild
-    '603960955839447050': 'AnotherChannelIDHere', // Replace with the appropriate channel ID
+    [process.env.GUILD_ID]: process.env.BIRTHDAY_CHANNEL_ID || '1326997448085995530',
   };
 
   const birthdayMessages = [
