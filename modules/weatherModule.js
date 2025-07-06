@@ -21,7 +21,6 @@ const { validateWeatherCombination } = require('../utils/weatherValidation');
 const {
   parseFahrenheit,
   parseWind,
-  weightedChoice,
   getPrecipitationLabel,
   getSpecialCondition
 } = require('../handlers/weatherHandler');
@@ -127,14 +126,21 @@ function getSmoothedTemperature(tempOptions, previous, hadStormYesterday, weight
   const filtered = previous?.temperature?.label
     ? getSmoothTemperatureChoices(prevTemp, tempOptions, hadStormYesterday)
     : tempOptions;
-  return weightedChoice(filtered, weightMap, modifierMap);
+  
+  // Ensure we have valid temperature options
+  if (!filtered || filtered.length === 0) {
+    console.warn(`[weatherModule.js]: No valid temperature options found, using original options`);
+    return safeWeightedChoice(tempOptions, weightMap, modifierMap);
+  }
+  
+  return safeWeightedChoice(filtered, weightMap, modifierMap);
 }
 // Chooses wind with smoothing and modifiers.
 function getSmoothedWind(windOptions, previous, weightMap) {
   const filtered = previous?.wind?.label
     ? getSmoothWindChoices(previous.wind?.label, windOptions)
     : windOptions;
-  return weightedChoice(filtered, weightMap);
+  return safeWeightedChoice(filtered, weightMap);
 }
 
 // Refactored simulateWeightedWeather to use DB-backed history
@@ -170,7 +176,12 @@ async function simulateWeightedWeather(village, season) {
     temperatureWeights,
     weightModifiers.temperature || {}
   );
+  
+  console.log(`[weatherModule.js]: Generated temperature label: ${temperatureLabel}`);
+  
   const simTemp = parseFahrenheit(temperatureLabel);
+  
+  console.log(`[weatherModule.js]: Parsed temperature value: ${simTemp}`);
   
   // Wind
   const windLabel = getSmoothedWind(
@@ -189,6 +200,28 @@ async function simulateWeightedWeather(village, season) {
     precipitationWeights,
     weightModifiers.precipitation || {}
   );
+  
+  // Validate that we have valid labels
+  if (!temperatureLabel) {
+    console.error(`[weatherModule.js]: Failed to generate temperature label for ${village}`);
+    return null;
+  }
+  
+  if (!windLabel) {
+    console.error(`[weatherModule.js]: Failed to generate wind label for ${village}`);
+    return null;
+  }
+  
+  if (!precipitationLabel) {
+    console.error(`[weatherModule.js]: Failed to generate precipitation label for ${village}`);
+    return null;
+  }
+  
+  console.log(`[weatherModule.js]: All weather labels generated successfully:`, {
+    temperature: temperatureLabel,
+    wind: windLabel,
+    precipitation: precipitationLabel
+  });
   
   // Special - Improved logic with better logging
   let specialLabel = null;
@@ -256,6 +289,12 @@ async function simulateWeightedWeather(village, season) {
     }
   };
   
+  // Validate the result object
+  if (!result.temperature.label || !result.wind.label || !result.precipitation.label) {
+    console.error(`[weatherModule.js]: Invalid weather result object:`, result);
+    return null;
+  }
+  
   if (special) {
     result.special = {
       label: special.label,
@@ -263,6 +302,14 @@ async function simulateWeightedWeather(village, season) {
       probability: `${specialProbability.toFixed(1)}%`
     };
   }
+  
+  console.log(`[weatherModule.js]: Final weather result:`, {
+    village: result.village,
+    temperature: result.temperature.label,
+    wind: result.wind.label,
+    precipitation: result.precipitation.label,
+    special: result.special?.label || 'None'
+  });
   
   return result;
 }
@@ -291,6 +338,49 @@ function weightedRandom(length, weights) {
   }
   
   return length - 1;
+}
+
+// Safe weighted choice function that never returns undefined
+function safeWeightedChoice(candidates, weightMapping, modifierMap = {}) {
+  if (!candidates || candidates.length === 0) {
+    console.error('[weatherModule.js]: No candidates provided to weightedChoice');
+    return null;
+  }
+  
+  console.log(`[weatherModule.js]: Processing ${candidates.length} candidates:`, candidates);
+  
+  let totalWeight = 0;
+  const weightedCandidates = candidates.map(candidate => {
+    const baseWeight = weightMapping[candidate] ?? 0.01;
+    const modifier = modifierMap[candidate] ?? 1;
+    const weight = baseWeight * modifier;
+    totalWeight += weight;
+    return { candidate, weight };
+  });
+
+  if (totalWeight <= 0) {
+    console.warn('[weatherModule.js]: Total weight is 0 or negative, selecting random candidate');
+    return candidates[Math.floor(Math.random() * candidates.length)];
+  }
+
+  let threshold = Math.random() * totalWeight;
+  for (const { candidate, weight } of weightedCandidates) {
+    threshold -= weight;
+    if (threshold < 0) {
+      console.log(`[weatherModule.js]: Selected candidate: ${candidate}`);
+      return candidate;
+    }
+  }
+  
+  // Fallback to last candidate if something goes wrong
+  const result = candidates[candidates.length - 1];
+  if (!result) {
+    console.error('[weatherModule.js]: Failed to select candidate, returning first option');
+    return candidates[0];
+  }
+  
+  console.log(`[weatherModule.js]: Fallback selected candidate: ${result}`);
+  return result;
 }
 
 // Helper to get wind speed based on weather
@@ -483,7 +573,11 @@ async function getCurrentWeather(village) {
         newWeather = await simulateWeightedWeather(normalizedVillage, capitalizedSeason);
         
         if (!newWeather) {
-          throw new Error(`Failed to generate weather for ${village}`);
+          console.error(`[weatherModule.js]: Failed to generate weather for ${village} on attempt ${attempts}`);
+          if (attempts === maxAttempts) {
+            throw new Error(`Failed to generate weather for ${village} after ${maxAttempts} attempts`);
+          }
+          continue;
         }
         
         // Add date and season to weather data
@@ -501,6 +595,31 @@ async function getCurrentWeather(village) {
             newWeather.special = null;
           }
         }
+      }
+      
+      // If all attempts failed, create fallback weather
+      if (!newWeather) {
+        console.warn(`[weatherModule.js]: Creating fallback weather for ${normalizedVillage}`);
+        newWeather = {
+          village: normalizedVillage,
+          date: new Date(),
+          season: season,
+          temperature: {
+            label: '72°F / 22°C - Perfect',
+            emoji: '🌡️',
+            probability: '100%'
+          },
+          wind: {
+            label: '2 - 12(km/h) // Breeze',
+            emoji: '💨',
+            probability: '100%'
+          },
+          precipitation: {
+            label: 'Sunny',
+            emoji: '☀️',
+            probability: '100%'
+          }
+        };
       }
       
       // Save new weather
