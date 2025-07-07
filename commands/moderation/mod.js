@@ -665,13 +665,62 @@ async function handlePetLevel(interaction) {
       );
     }
   
+    const oldLevel = petDoc.level;
     petDoc.level = newLevel;
     petDoc.rollsRemaining = newLevel;
     await petDoc.save();
   
-    return interaction.editReply(
-      `✅ Pet **${petName}** level and rolls set to **${newLevel}** for **${character.name}**.`
-    );
+    // Create a beautiful embed for the pet level update
+    const petLevelEmbed = new EmbedBuilder()
+      .setAuthor({ name: character.name, iconURL: character.icon })
+      .setTitle("🎉 Pet Level Updated!")
+      .setDescription(`Your pet has been upgraded by a moderator!`)
+      .setThumbnail(petDoc.imageUrl || "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png")
+      .addFields(
+        { 
+          name: "🐾 Pet Name", 
+          value: `> ${petName}`, 
+          inline: true 
+        },
+        { 
+          name: "🦊 Species", 
+          value: `> ${petDoc.species}`, 
+          inline: true 
+        },
+        { 
+          name: "🎯 Pet Type", 
+          value: `> ${petDoc.petType}`, 
+          inline: true 
+        },
+        { 
+          name: "📈 Level Change", 
+          value: `> Level ${oldLevel} → **Level ${newLevel}**`, 
+          inline: true 
+        },
+        { 
+          name: "🎲 Weekly Rolls", 
+          value: `> **${newLevel} rolls per week**`, 
+          inline: true 
+        },
+        { 
+          name: "🔄 Rolls Reset", 
+          value: `> Every Sunday at midnight`, 
+          inline: true 
+        }
+      )
+      .setColor("#00FF00")
+      .setImage("https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png")
+      .setFooter({ 
+        text: `Updated by ${interaction.user.tag}` 
+      })
+      .setTimestamp();
+
+    // Send the embed as a public message and mention the character owner
+    await interaction.editReply({ content: '✅ Processing pet level update...', ephemeral: true });
+    return interaction.followUp({
+      content: `🎉 <@${character.userId}> | ${character.name}'s pet ${petName} is now level ${newLevel}! It can roll ${newLevel} times per week! Rolls reset every Sunday at midnight.`,
+      embeds: [petLevelEmbed]
+    });
   }
   
   // ------------------- Function: handleMount -------------------

@@ -305,7 +305,8 @@ const validatePetSpeciesCompatibility = (species, petType) => {
   if (!allowedRolls) {
     return {
       isValid: false,
-      error: `❌ **Unknown or unsupported species \`${species}\`. Please select a valid species.**`
+      error: `❌ **Unknown or unsupported species \`${species}\`. Please select a valid species.**`,
+      species: species
     };
   }
 
@@ -314,7 +315,8 @@ const validatePetSpeciesCompatibility = (species, petType) => {
   if (!selectedPetTypeData) {
     return {
       isValid: false,
-      error: `❌ **Unknown or unsupported pet type \`${petType}\`.**`
+      error: `❌ **Unknown or unsupported pet type \`${petType}\`.**`,
+      petType: petType
     };
   }
 
@@ -328,10 +330,11 @@ const validatePetSpeciesCompatibility = (species, petType) => {
 
     return {
       isValid: false,
-      error: `❌ **The selected species \`${species}\` cannot be assigned to the pet type \`${petType}\`.**\n\n` +
-        `__Allowed Rolls__: ${allowedRollsFormatted}\n` +
-        `__Compatible Pet Types__: ${validPetTypesFormatted}\n\n` +
-        `👉 **Please choose a compatible pet type based on your species' available rolls.**`
+      error: `❌ **The selected species \`${species}\` cannot be assigned to the pet type \`${petType}\`.**`,
+      allowedRolls: allowedRollsFormatted,
+      compatiblePetTypes: validPetTypesFormatted,
+      species: species,
+      petType: petType
     };
   }
 
