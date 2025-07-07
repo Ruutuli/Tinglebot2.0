@@ -145,6 +145,8 @@ function getSmoothedWind(windOptions, previous, weightMap) {
 
 // Refactored simulateWeightedWeather to use DB-backed history
 async function simulateWeightedWeather(village, season) {
+  console.log(`[weatherModule.js]: 🌤️ Starting weather generation for ${village} in ${season}`);
+  
   const seasonKey = capitalizeFirstLetter(season);
   const villageData = seasonsData[village];
   if (!villageData || !villageData.seasons[seasonKey]) {
@@ -154,6 +156,12 @@ async function simulateWeightedWeather(village, season) {
   const seasonInfo = villageData.seasons[seasonKey];
   const weightModifiers = weatherWeightModifiers[village]?.[seasonKey] || {};
   validateWeightModifiers(village, seasonKey, weightModifiers);
+  
+  console.log(`[weatherModule.js]: 📊 Season info for ${village} in ${seasonKey}:`, {
+    availableSpecials: seasonInfo.Special,
+    specialCount: seasonInfo.Special.length,
+    weightModifiers: weightModifiers
+  });
   
   // Fetch last 3 weather entries for smoothing
   const history = await Weather.getRecentWeather(village, 3);
@@ -168,6 +176,13 @@ async function simulateWeightedWeather(village, season) {
     .length;
   const hadStormYesterday = ['Thunderstorm', 'Heavy Rain'].includes(previous.precipitation?.label);
   
+  console.log(`[weatherModule.js]: 📈 Weather history for ${village}:`, {
+    previousWeather: previous.precipitation?.label || 'None',
+    cloudyStreak,
+    rainStreak,
+    hadStormYesterday
+  });
+  
   // Temperature
   const temperatureLabel = getSmoothedTemperature(
     seasonInfo.Temperature,
@@ -177,11 +192,11 @@ async function simulateWeightedWeather(village, season) {
     weightModifiers.temperature || {}
   );
   
-  console.log(`[weatherModule.js]: Generated temperature label: ${temperatureLabel}`);
+  console.log(`[weatherModule.js]: 🌡️ Generated temperature label: ${temperatureLabel}`);
   
   const simTemp = parseFahrenheit(temperatureLabel);
   
-  console.log(`[weatherModule.js]: Parsed temperature value: ${simTemp}`);
+  console.log(`[weatherModule.js]: 🌡️ Parsed temperature value: ${simTemp}`);
   
   // Wind
   const windLabel = getSmoothedWind(
@@ -190,6 +205,8 @@ async function simulateWeightedWeather(village, season) {
     windWeights
   );
   const simWind = parseWind(windLabel);
+  
+  console.log(`[weatherModule.js]: 💨 Generated wind: ${windLabel} (${simWind} km/h)`);
   
   // Precipitation
   const precipitationLabel = getPrecipitationLabel(
@@ -200,6 +217,8 @@ async function simulateWeightedWeather(village, season) {
     precipitationWeights,
     weightModifiers.precipitation || {}
   );
+  
+  console.log(`[weatherModule.js]: 🌧️ Generated precipitation: ${precipitationLabel}`);
   
   // Validate that we have valid labels
   if (!temperatureLabel) {
@@ -217,21 +236,28 @@ async function simulateWeightedWeather(village, season) {
     return null;
   }
   
-  console.log(`[weatherModule.js]: All weather labels generated successfully:`, {
+  console.log(`[weatherModule.js]: ✅ All weather labels generated successfully:`, {
     temperature: temperatureLabel,
     wind: windLabel,
     precipitation: precipitationLabel
   });
   
-  // Special - Improved logic with better logging
+  // Special - Enhanced logging for Rudania and Vhintl
   let specialLabel = null;
   let special = null;
   
-  // Check if special weather should be considered (30% chance)
-  if (seasonInfo.Special.length && Math.random() < 0.3) {
-    console.log(`[weatherModule.js]: Considering special weather for ${village} in ${seasonKey}`);
-    console.log(`[weatherModule.js]: Available specials:`, seasonInfo.Special);
-    console.log(`[weatherModule.js]: Current conditions:`, {
+  console.log(`[weatherModule.js]: ✨ Special weather check for ${village}:`, {
+    hasSpecials: seasonInfo.Special.length > 0,
+    availableSpecials: seasonInfo.Special,
+    randomChance: Math.random(),
+    threshold: 0.5
+  });
+  
+  // Check if special weather should be considered (50% chance - increased from 30%)
+  if (seasonInfo.Special.length && Math.random() < 0.5) {
+    console.log(`[weatherModule.js]: 🎲 Special weather RNG passed for ${village} in ${seasonKey}`);
+    console.log(`[weatherModule.js]: 📋 Available specials:`, seasonInfo.Special);
+    console.log(`[weatherModule.js]: 🌡️ Current conditions:`, {
       temperature: simTemp,
       wind: simWind,
       precipitation: precipitationLabel
@@ -254,12 +280,16 @@ async function simulateWeightedWeather(village, season) {
         emoji: specialObj.emoji,
         probability: '10%'
       };
-      console.log(`[weatherModule.js]: Generated special weather: ${specialLabel}`);
+      console.log(`[weatherModule.js]: ✨ Generated special weather for ${village}: ${specialLabel}`);
     } else {
-      console.log(`[weatherModule.js]: No valid special weather conditions met`);
+      console.log(`[weatherModule.js]: ❌ No valid special weather conditions met for ${village}`);
     }
   } else {
-    console.log(`[weatherModule.js]: Special weather not considered (random chance or no specials available)`);
+    if (!seasonInfo.Special.length) {
+      console.log(`[weatherModule.js]: 📝 No specials defined for ${village} in ${seasonKey}`);
+    } else {
+      console.log(`[weatherModule.js]: 🎲 Special weather RNG failed for ${village} (random chance)`);
+    }
   }
   
   // Probabilities
@@ -303,12 +333,13 @@ async function simulateWeightedWeather(village, season) {
     };
   }
   
-  console.log(`[weatherModule.js]: Final weather result:`, {
+  console.log(`[weatherModule.js]: 🎯 Final weather result for ${village}:`, {
     village: result.village,
     temperature: result.temperature.label,
     wind: result.wind.label,
     precipitation: result.precipitation.label,
-    special: result.special?.label || 'None'
+    special: result.special?.label || 'None',
+    specialProbability: result.special ? `${specialProbability.toFixed(1)}%` : 'N/A'
   });
   
   return result;

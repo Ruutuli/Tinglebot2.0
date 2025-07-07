@@ -131,19 +131,32 @@ function candidateMatches(candidateLabel, simTemp, simWind) {
 // ------------------- Special Condition Validator -------------------
 // Determines if a special weather candidate is valid based on temperature, wind, and precipitation.
 function specialCandidateMatches(candidateLabel, simTemp, simWind, precipLabel) {
+  console.log(`[weatherHandler.js]: 🔍 Validating special weather candidate: ${candidateLabel}`);
+  
   const candidateObj = findWeatherEmoji('specials', candidateLabel);
   if (!candidateObj || !candidateObj.conditions) {
-    console.log(`[weatherHandler.js]: Special ${candidateLabel} has no conditions, allowing`);
+    console.log(`[weatherHandler.js]: ✅ Special ${candidateLabel} has no conditions, allowing`);
     return true;
   }
   
   const { temperature: tempConds, wind: windConds, precipitation: precipConds } = candidateObj.conditions;
   
+  console.log(`[weatherHandler.js]: 📋 Conditions for ${candidateLabel}:`, {
+    temperature: tempConds,
+    wind: windConds,
+    precipitation: precipConds,
+    currentValues: {
+      temperature: simTemp,
+      wind: simWind,
+      precipitation: precipLabel
+    }
+  });
+  
   // Handle temperature conditions
   const tempOK = !tempConds || tempConds.every(cond => {
     if (cond === 'any') return true;
     const isValid = checkNumericCondition(simTemp, cond);
-    console.log(`[weatherHandler.js]: Temperature condition "${cond}" for ${simTemp}°F: ${isValid}`);
+    console.log(`[weatherHandler.js]: 🌡️ Temperature condition "${cond}" for ${simTemp}°F: ${isValid}`);
     return isValid;
   });
   
@@ -151,7 +164,7 @@ function specialCandidateMatches(candidateLabel, simTemp, simWind, precipLabel) 
   const windOK = !windConds || windConds.every(cond => {
     if (cond === 'any') return true;
     const isValid = checkNumericCondition(simWind, cond);
-    console.log(`[weatherHandler.js]: Wind condition "${cond}" for ${simWind} km/h: ${isValid}`);
+    console.log(`[weatherHandler.js]: 💨 Wind condition "${cond}" for ${simWind} km/h: ${isValid}`);
     return isValid;
   });
   
@@ -159,19 +172,19 @@ function specialCandidateMatches(candidateLabel, simTemp, simWind, precipLabel) 
   const precipOK = !precipConds || precipConds.some(cond => {
     if (cond === 'any') return true;
     const isValid = precipitationMatches(precipLabel, cond);
-    console.log(`[weatherHandler.js]: Precipitation condition "${cond}" for "${precipLabel}": ${isValid}`);
+    console.log(`[weatherHandler.js]: 🌧️ Precipitation condition "${cond}" for "${precipLabel}": ${isValid}`);
     return isValid;
   });
 
   // Log validation details for debugging
   if (!tempOK || !windOK || !precipOK) {
-    console.log(`[weatherHandler.js]: Special weather validation failed for ${candidateLabel}:`, {
+    console.log(`[weatherHandler.js]: ❌ Special weather validation failed for ${candidateLabel}:`, {
       temperature: { conditions: tempConds, value: simTemp, valid: tempOK },
       wind: { conditions: windConds, value: simWind, valid: windOK },
       precipitation: { conditions: precipConds, value: precipLabel, valid: precipOK }
     });
   } else {
-    console.log(`[weatherHandler.js]: Special weather validation passed for ${candidateLabel}`);
+    console.log(`[weatherHandler.js]: ✅ Special weather validation passed for ${candidateLabel}`);
   }
   
   return tempOK && windOK && precipOK;
@@ -248,9 +261,22 @@ function getPrecipitationLabel(seasonData, simTemp, simWind, cloudyStreak, weigh
 // ------------------- Special Condition Selector -------------------
 // Selects special weather condition based on dynamic rules (e.g., floods after rain).
 function getSpecialCondition(seasonData, simTemp, simWind, precipLabel, rainStreak, weightMapping, modifierMap = {}) {
-  if (!seasonData.Special.length || Math.random() >= 0.3) return null;
+  console.log(`[weatherHandler.js]: 🎲 Special weather RNG check:`, {
+    randomValue: Math.random(),
+    threshold: 0.5,
+    passed: Math.random() < 0.5
+  });
   
-  console.log(`[weatherHandler.js]: Checking special weather conditions for:`, {
+  if (!seasonData.Special.length || Math.random() >= 0.5) {
+    console.log(`[weatherHandler.js]: ❌ Special weather check failed:`, {
+      hasSpecials: seasonData.Special.length > 0,
+      specialCount: seasonData.Special.length,
+      rngPassed: Math.random() < 0.5
+    });
+    return null;
+  }
+  
+  console.log(`[weatherHandler.js]: ✨ Checking special weather conditions for:`, {
     availableSpecials: seasonData.Special,
     currentTemp: simTemp,
     currentWind: simWind,
@@ -261,20 +287,26 @@ function getSpecialCondition(seasonData, simTemp, simWind, precipLabel, rainStre
   // Filter out invalid special conditions based on current weather
   const validSpecials = seasonData.Special.filter(specialType => {
     const isValid = specialCandidateMatches(specialType, simTemp, simWind, precipLabel);
-    console.log(`[weatherHandler.js]: Special ${specialType} valid: ${isValid}`);
-    return isValid;
-  });
-  
-  if (validSpecials.length === 0) {
-    console.log(`[weatherHandler.js]: No valid special conditions for current weather:`, {
+    console.log(`[weatherHandler.js]: 🔍 Special ${specialType} validation:`, {
+      isValid,
       temperature: simTemp,
       wind: simWind,
       precipitation: precipLabel
     });
+    return isValid;
+  });
+  
+  if (validSpecials.length === 0) {
+    console.log(`[weatherHandler.js]: ❌ No valid special conditions for current weather:`, {
+      temperature: simTemp,
+      wind: simWind,
+      precipitation: precipLabel,
+      availableSpecials: seasonData.Special
+    });
     return null;
   }
   
-  console.log(`[weatherHandler.js]: Valid specials found:`, validSpecials);
+  console.log(`[weatherHandler.js]: ✅ Valid specials found:`, validSpecials);
   
   const adjustedWeights = { ...weightMapping };
   if (rainStreak >= 2) {
@@ -282,16 +314,29 @@ function getSpecialCondition(seasonData, simTemp, simWind, precipLabel, rainStre
     ['Flood'].forEach(label => {
       adjustedWeights[label] = (adjustedWeights[label] ?? 0.01) * boostFactor;
     });
+    console.log(`[weatherHandler.js]: 🌧️ Rain streak boost applied:`, {
+      rainStreak,
+      boostFactor,
+      adjustedWeights
+    });
   }
+  
+  console.log(`[weatherHandler.js]: 🎯 Weight mapping for special selection:`, {
+    validSpecials,
+    baseWeights: weightMapping,
+    adjustedWeights,
+    modifiers: modifierMap
+  });
   
   const selectedSpecial = weightedChoice(validSpecials, adjustedWeights, modifierMap);
   
   // Log special weather selection details
-  console.log(`[weatherHandler.js]: Selected special weather: ${selectedSpecial}`, {
+  console.log(`[weatherHandler.js]: ✨ Selected special weather: ${selectedSpecial}`, {
     temperature: simTemp,
     wind: simWind,
     precipitation: precipLabel,
-    validSpecials: validSpecials.length
+    validSpecials: validSpecials.length,
+    selectedFrom: validSpecials
   });
   
   return selectedSpecial;

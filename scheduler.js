@@ -101,10 +101,16 @@ function getCurrentSeason() {
 // Posts weather updates to all village town halls
 async function postWeatherUpdate(client) {
   try {
+    console.log(`[scheduler.js]: 🌤️ Starting 8am weather update process`);
+    console.log(`[scheduler.js]: 📅 Current time: ${new Date().toISOString()}`);
+    
     const villages = Object.keys(TOWNHALL_CHANNELS);
+    console.log(`[scheduler.js]: 🏘️ Processing villages: ${villages.join(', ')}`);
     
     for (const village of villages) {
       try {
+        console.log(`[scheduler.js]: 🌤️ Processing weather for ${village}...`);
+        
         // Use getCurrentWeather which handles generation properly
         const weather = await getCurrentWeather(village);
         
@@ -112,6 +118,13 @@ async function postWeatherUpdate(client) {
           console.error(`[scheduler.js]: ❌ Failed to get or generate weather for ${village}`);
           continue;
         }
+        
+        console.log(`[scheduler.js]: ✅ Weather generated for ${village}:`, {
+          temperature: weather.temperature?.label,
+          precipitation: weather.precipitation?.label,
+          special: weather.special?.label || 'None',
+          date: weather.date
+        });
         
         const channelId = TOWNHALL_CHANNELS[village];
         const channel = client.channels.cache.get(channelId);
@@ -121,15 +134,34 @@ async function postWeatherUpdate(client) {
           continue;
         }
         
+        console.log(`[scheduler.js]: 📢 Generating weather embed for ${village}...`);
         const { embed, files } = await generateWeatherEmbed(village, weather);
+        
+        console.log(`[scheduler.js]: 📤 Sending weather update to ${village} channel...`);
         await channel.send({ embeds: [embed], files });
         console.log(`[scheduler.js]: ✅ Posted weather for ${village}`);
+        
+        // Special logging for Rudania and Vhintl
+        if (village === 'Rudania' || village === 'Vhintl') {
+          console.log(`[scheduler.js]: 🔍 Special weather check for ${village}:`, {
+            hasSpecial: !!weather.special,
+            specialType: weather.special?.label || 'None',
+            specialEmoji: weather.special?.emoji || 'None',
+            temperature: weather.temperature?.label,
+            precipitation: weather.precipitation?.label
+          });
+        }
+        
       } catch (error) {
         console.error(`[scheduler.js]: ❌ Error posting weather for ${village}:`, error.message);
+        console.error(`[scheduler.js]: ❌ Full error for ${village}:`, error);
       }
     }
+    
+    console.log(`[scheduler.js]: ✅ 8am weather update process completed`);
   } catch (error) {
     console.error('[scheduler.js]: ❌ Weather update process failed:', error.message);
+    console.error('[scheduler.js]: ❌ Full weather update error:', error);
   }
 }
 
