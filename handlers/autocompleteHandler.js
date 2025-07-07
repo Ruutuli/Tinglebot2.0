@@ -201,6 +201,12 @@ async function handleAutocomplete(interaction) {
                 } else if (focusedOption.name === "item") {
                   await handleModGiveItemAutocomplete(interaction, focusedOption);
                 }
+              } else if (modSubcommand === "petlevel") {
+                if (focusedOption.name === "character") {
+                  await handleModPetLevelCharacterAutocomplete(interaction, focusedOption);
+                } else if (focusedOption.name === "petname") {
+                  await handleModPetLevelPetNameAutocomplete(interaction, focusedOption);
+                }
               }
             }
             break;
@@ -2557,6 +2563,54 @@ async function handleModGiveItemAutocomplete(interaction, focusedOption) {
 }
 
 // ------------------- /mod petlevel: Character Autocomplete -------------------
+async function handleModPetLevelCharacterAutocomplete(interaction, focusedOption) {
+  try {
+    // Provides autocomplete suggestions for all characters (admin can target any)
+    const characters = await fetchAllCharacters();
+    const choices = characters.map((c) => ({
+      name: `${c.name} | ${capitalize(c.currentVillage)} | ${capitalize(c.job)}`,
+      value: c.name,
+    }));
+    await respondWithFilteredChoices(interaction, focusedOption, choices);
+  } catch (error) {
+    handleError(error, "autocompleteHandler.js");
+    console.error("[handleModPetLevelCharacterAutocomplete]: Error:", error);
+    await safeRespondWithError(interaction);
+  }
+}
+
+// ------------------- /mod petlevel: Pet Name Autocomplete -------------------
+async function handleModPetLevelPetNameAutocomplete(interaction, focusedOption) {
+  try {
+    const characterName = interaction.options.getString("character");
+    if (!characterName) return await interaction.respond([]);
+
+    // Get character from database
+    const character = await fetchCharacterByName(characterName);
+    if (!character) return await interaction.respond([]);
+
+    // Get all pets for this character
+    const pets = await Pet.find({ owner: character._id }).lean();
+
+    if (!pets.length) {
+      return await interaction.respond([]);
+    }
+
+    // Return pet names with species and level info
+    const choices = pets.map((pet) => ({
+      name: `${pet.name} | ${pet.species} | ${pet.petType} | Level ${pet.level}`,
+      value: pet.name,
+    }));
+    
+    await respondWithFilteredChoices(interaction, focusedOption, choices);
+  } catch (error) {
+    handleError(error, "autocompleteHandler.js");
+    console.error("[handleModPetLevelPetNameAutocomplete]: Error:", error);
+    await safeRespondWithError(interaction);
+  }
+}
+
+// ------------------- /mod petlevel: Character Autocomplete (Legacy) -------------------
 async function handleModCharacterAutocomplete(interaction, focusedOption) {
  try {
   // Provides autocomplete suggestions for all characters (admin can target any)
@@ -3854,6 +3908,10 @@ module.exports = {
  // ------------------- Mod Give Functions -------------------
 handleModGiveCharacterAutocomplete,
 handleModGiveItemAutocomplete,
+
+// ------------------- Mod PetLevel Functions -------------------
+handleModPetLevelCharacterAutocomplete,
+handleModPetLevelPetNameAutocomplete,
 
 // ------------------- Mod Character Functions -------------------
 handleModCharacterJobAutocomplete,
