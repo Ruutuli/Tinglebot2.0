@@ -424,22 +424,34 @@ async function handleHealingFulfillment(interaction, requestId, healerName) {
 
     // Update original request message
     const channel = interaction.channel;
-    const originalMessage = await channel.messages.fetch(healingRequest.messageId);
-    if (originalMessage) {
-      const updatedEmbed = createHealEmbed(
-        healerCharacter,
-        characterToHeal,
-        healingRequest.heartsToHeal,
-        healingRequest.paymentOffered,
-        healingRequest.healingRequestId,
-        true
-      );
-      await originalMessage.edit({ embeds: [updatedEmbed] });
+    let originalMessageUpdated = false;
+    try {
+      const originalMessage = await channel.messages.fetch(healingRequest.messageId);
+      if (originalMessage) {
+        const updatedEmbed = createHealEmbed(
+          healerCharacter,
+          characterToHeal,
+          healingRequest.heartsToHeal,
+          healingRequest.paymentOffered,
+          healingRequest.healingRequestId,
+          true
+        );
+        await originalMessage.edit({ embeds: [updatedEmbed] });
+        originalMessageUpdated = true;
+      }
+    } catch (error) {
+      // Log the error but don't fail the entire operation
+      console.log(`[heal.js]: ⚠️ Could not update original message ${healingRequest.messageId}: ${error.message}`);
     }
 
     // Notify requester
     const originalRequesterId = healingRequest.requesterUserId;
-    const message = `<@${originalRequesterId}>, your character **${characterToHeal.name}** has been healed by **${healerCharacter.name}**!`;
+    let message = `<@${originalRequesterId}>, your character **${characterToHeal.name}** has been healed by **${healerCharacter.name}**!`;
+    
+    // Add fallback message if original message couldn't be updated
+    if (!originalMessageUpdated) {
+      message += `\n\nℹ️ **Note:** The original healing request message could not be updated (it may have been deleted).`;
+    }
 
     const embed = createHealEmbed(
       healerCharacter,
