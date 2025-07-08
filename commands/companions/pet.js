@@ -113,6 +113,26 @@ const sanitizeUrl = (url) => {
   }
 };
 
+// ------------------- Pet Image URL Encoding Helper -------------------
+const encodePetImageUrl = (petImageUrl) => {
+  if (!petImageUrl) return null;
+  try {
+    // Split the URL into base and filename parts
+    const lastSlashIndex = petImageUrl.lastIndexOf('/');
+    if (lastSlashIndex !== -1) {
+      const baseUrl = petImageUrl.substring(0, lastSlashIndex + 1);
+      const filename = petImageUrl.substring(lastSlashIndex + 1);
+      const encodedFilename = encodeURIComponent(filename);
+      const encodedUrl = baseUrl + encodedFilename;
+      console.log(`[pet.js]: Encoded pet image URL: "${petImageUrl}" -> "${encodedUrl}"`);
+      return encodedUrl;
+    }
+  } catch (error) {
+    console.log(`[pet.js]: Error encoding pet image URL: ${error.message}`);
+  }
+  return null;
+};
+
 // ============================================================================
 // ------------------- Slash Command Definition for Pets -------------------
 // This object defines the pet slash command and its subcommands (roll, upgrade, add, edit,)
@@ -513,7 +533,7 @@ module.exports = {
             { name: "Roll Combination", value: petTypeData.rollCombination.join(", "), inline: false },
             { name: "Description", value: petTypeData.description, inline: false }
           )
-          .setImage(sanitizeUrl(petImageUrl))
+          .setImage(sanitizeUrl(encodePetImageUrl(petImageUrl) || petImageUrl))
           .setColor("#00FF00");
 
         return interaction.editReply({ embeds: [successEmbed] });
@@ -552,8 +572,9 @@ module.exports = {
         );
         await updatePetToCharacter(character._id, petName, petDoc);
 
-        // Sanitize the URL before using it in the embed
-        const sanitizedImageUrl = sanitizeUrl(petDoc.imageUrl);
+        // Encode and sanitize the URL before using it in the embed
+        const encodedImageUrl = encodePetImageUrl(petDoc.imageUrl);
+        const sanitizedImageUrl = sanitizeUrl(encodedImageUrl || petDoc.imageUrl);
 
         // ------------------- Determine Embed Color Based on Village -------------------
         const villageName =
@@ -678,7 +699,7 @@ module.exports = {
          .setAuthor({ name: character.name, iconURL: character.icon })
          .setTitle("😴 Pet Needs Rest")
          .setDescription(`${pet.name} is exhausted from today's adventures and needs time to recover.`)
-         .setThumbnail(sanitizeUrl(pet.imageUrl))
+         .setThumbnail(sanitizeUrl(encodePetImageUrl(pet.imageUrl) || pet.imageUrl))
          .addFields(
            { 
              name: "🐾 Pet Name", 
@@ -903,7 +924,7 @@ module.exports = {
 
      // ------------------- Create and Send Roll Result Embed -------------------
      const rollEmbed = new EmbedBuilder()
-      .setAuthor({ name: `${pet.name} the ${pet.species}`, iconURL: sanitizeUrl(pet.imageUrl) })
+      .setAuthor({ name: `${pet.name} the ${pet.species}`, iconURL: sanitizeUrl(encodePetImageUrl(pet.imageUrl) || pet.imageUrl) })
       .setThumbnail(sanitizeUrl(randomItem.image || "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"))
       .setTitle(
        `${character.name}'s Pet Roll - ${pet.name} | Level ${pet.level}`
@@ -1023,7 +1044,7 @@ module.exports = {
      const upgradeEmbed = new EmbedBuilder()
       .setAuthor({ name: character.name, iconURL: character.icon })
       .setTitle(`⬆️ Pet Upgrade Successful — ${pet.name}`)
-      .setThumbnail(sanitizeUrl(pet.imageUrl))
+      .setThumbnail(sanitizeUrl(encodePetImageUrl(pet.imageUrl) || pet.imageUrl))
       .setColor(embedColor)
       .setDescription(`🎉 **${pet.name}** has successfully advanced to **Level ${targetLevel}!**`)
       .setImage(sanitizeUrl("https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"))
@@ -1157,7 +1178,7 @@ module.exports = {
         const viewEmbed = new EmbedBuilder()
           .setAuthor({ name: character.name, iconURL: character.icon })
           .setTitle(`🐾 ${pet.name} — Pet Details`)
-          .setThumbnail(sanitizeUrl(pet.imageUrl))
+          .setThumbnail(sanitizeUrl(encodePetImageUrl(pet.imageUrl) || pet.imageUrl))
           .setColor(embedColor)
           .setImage(sanitizeUrl("https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"))
           .addFields(
