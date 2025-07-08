@@ -207,6 +207,12 @@ async function handleAutocomplete(interaction) {
                 } else if (focusedOption.name === "petname") {
                   await handleModPetLevelPetNameAutocomplete(interaction, focusedOption);
                 }
+              } else if (modSubcommand === "forceresetpetrolls") {
+                if (focusedOption.name === "character") {
+                  await handleModPetLevelCharacterAutocomplete(interaction, focusedOption);
+                } else if (focusedOption.name === "petname") {
+                  await handleModPetLevelPetNameAutocomplete(interaction, focusedOption);
+                }
               }
             }
             break;
