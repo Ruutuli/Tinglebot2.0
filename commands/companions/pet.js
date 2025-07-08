@@ -552,24 +552,55 @@ module.exports = {
         // Sanitize the URL before using it in the embed
         const sanitizedImageUrl = sanitizeUrl(petDoc.imageUrl);
 
+        // ------------------- Determine Embed Color Based on Village -------------------
+        const villageName =
+         character.currentVillage.charAt(0).toUpperCase() +
+         character.currentVillage.slice(1).toLowerCase();
+        const villageColors = {
+         Rudania: "#d7342a",
+         Inariko: "#277ecd",
+         Vhintl: "#25c059",
+        };
+        const embedColor = villageColors[villageName] || "#00FF00";
+
+        // ------------------- Calculate Rolls Display -------------------
+        const petEmoji = getPetEmoji(petDoc.species);
+        const rollsDisplay = getRollsDisplay(petDoc.rollsRemaining || 0, petDoc.level || 0);
+
         // Build and send embed showing updated pet
         const editEmbed = new EmbedBuilder()
           .setAuthor({ name: character.name, iconURL: character.icon })
-          .setTitle(`Pet Image Updated — ${petDoc.name}`)
+          .setTitle(`🖼️ Pet Image Updated — ${petDoc.name}`)
           .setThumbnail(sanitizedImageUrl)
+          .setColor(embedColor)
+          .setDescription(`✅ **${petDoc.name}**'s image has been successfully updated!`)
+          .setImage(sanitizeUrl("https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"))
           .addFields(
-            { name: "Name", value: `\`${petDoc.name}\``, inline: true },
-            { name: "Species", value: petDoc.species, inline: true },
-            { name: "Type", value: petDoc.petType, inline: true },
-            { name: "Level", value: `${petDoc.level}`, inline: true },
+            { name: "__Pet Name__", value: `> ${petDoc.name}`, inline: true },
+            { name: "__Owner__", value: `> ${character.name}`, inline: true },
+            { name: "__Village__", value: `> ${character.currentVillage}`, inline: true },
             {
-              name: "Rolls Remaining",
-              value: `${petDoc.rollsRemaining}`,
+              name: "__Pet Species__",
+              value: `> ${petEmoji} ${petDoc.species}`,
+              inline: true,
+            },
+            { name: "__Pet Type__", value: `> ${petDoc.petType}`, inline: true },
+            { name: "__Status__", value: `> ${petDoc.status === 'active' ? '🟢 Active' : '🔵 Stored'}`, inline: true },
+            {
+              name: "__Current Level__",
+              value: `> Level ${petDoc.level || 0}`,
+              inline: true,
+            },
+            {
+              name: "__Rolls Available__",
+              value: `> ${rollsDisplay}`,
               inline: true,
             }
           )
-          .setImage(sanitizedImageUrl)
-          .setColor("#00FF00");
+          .setFooter({
+            text: `Pet image updated successfully!`,
+            iconURL: character.icon
+          });
 
         return interaction.editReply({ embeds: [editEmbed] });
       } catch (error) {
@@ -639,9 +670,51 @@ module.exports = {
        lastRoll.getDate() === now.getDate();
 
      if (isSameDay) {
-       return interaction.editReply(
-         `❌ ${pet.name} is too tired to roll again today. Come back tomorrow for more adventures!`
-       );
+       // Create a beautiful embed for the pet cooldown error
+       const cooldownEmbed = new EmbedBuilder()
+         .setAuthor({ name: character.name, iconURL: character.icon })
+         .setTitle("😴 Pet Needs Rest")
+         .setDescription(`${pet.name} is exhausted from today's adventures and needs time to recover.`)
+         .setThumbnail(sanitizeUrl(pet.imageUrl))
+         .addFields(
+           { 
+             name: "🐾 Pet Name", 
+             value: `> ${pet.name}`, 
+             inline: true 
+           },
+           { 
+             name: "🦊 Species", 
+             value: `> ${pet.species}`, 
+             inline: true 
+           },
+           { 
+             name: "📊 Level", 
+             value: `> Level ${pet.level}`, 
+             inline: true 
+           },
+           { 
+             name: "🎲 Rolls Remaining", 
+             value: `> ${pet.rollsRemaining} rolls this week`, 
+             inline: true 
+           },
+           { 
+             name: "⏰ Last Roll", 
+             value: `> Today at ${lastRoll.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`, 
+             inline: true 
+           },
+           { 
+             name: "🔄 Next Available", 
+             value: `> Tomorrow at 8:00 AM`, 
+             inline: true 
+           }
+         )
+         .setColor("#FF6B35")
+         .setImage("https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png")
+         .setFooter({ 
+           text: "Pets can only roll once per day and reset at 8:00 AM daily" 
+         });
+       
+       return interaction.editReply({ embeds: [cooldownEmbed], ephemeral: true });
      }
 
      // ------------------- Check Inventory Sync -------------------
@@ -734,6 +807,10 @@ module.exports = {
      );
      await updatePetRolls(character._id, petName, newRollsRemaining);
      pet.rollsRemaining = newRollsRemaining;
+     
+     // Verify the database update worked
+     const updatedPet = await Pet.findOne({ _id: pet._id });
+     console.log(`[pet.js]: logs - After update, pet rollsRemaining in DB: ${updatedPet.rollsRemaining}`);
      // Only set lastRollDate after a successful roll
      pet.lastRollDate = now;
      await Pet.updateOne(
@@ -923,21 +1000,87 @@ module.exports = {
        }
      }
 
-     return interaction.editReply(
-       `✅ **${pet.name} is now level ${targetLevel}!**\n` +
-       `💰 Spent ${cost} tokens — you have ${balance - cost} left.\n` +
-       `🎲 Rolls remaining set to ${targetLevel}.`
-     );
+     // ------------------- Determine Embed Color Based on Village -------------------
+     const villageName =
+      character.currentVillage.charAt(0).toUpperCase() +
+      character.currentVillage.slice(1).toLowerCase();
+     const villageColors = {
+      Rudania: "#d7342a",
+      Inariko: "#277ecd",
+      Vhintl: "#25c059",
+     };
+     const embedColor = villageColors[villageName] || "#00FF00";
+
+     // ------------------- Calculate Roll Display -------------------
+     const petEmoji = getPetEmoji(pet.species);
+     const rollsDisplay = getRollsDisplay(targetLevel, targetLevel);
+
+     // ------------------- Create and Send Upgrade Success Embed -------------------
+     const upgradeEmbed = new EmbedBuilder()
+      .setAuthor({ name: character.name, iconURL: character.icon })
+      .setTitle(`⬆️ Pet Upgrade Successful — ${pet.name}`)
+      .setThumbnail(sanitizeUrl(pet.imageUrl))
+      .setColor(embedColor)
+      .setDescription(`🎉 **${pet.name}** has successfully advanced to **Level ${targetLevel}!**`)
+      .setImage(sanitizeUrl("https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"))
+             .addFields(
+        { name: "__Pet Name__", value: `> ${pet.name}`, inline: true },
+        { name: "__Owner__", value: `> ${character.name}`, inline: true },
+        { name: "__Previous Level__", value: `> Level ${pet.level}`, inline: true },
+        { name: "__New Level__", value: `> Level ${targetLevel}`, inline: true },
+        {
+         name: "__Pet Species__",
+         value: `> ${petEmoji} ${pet.species}`,
+         inline: true,
+        },
+        { name: "__Pet Type__", value: `> ${pet.petType}`, inline: true },
+        {
+         name: "__New Rolls__",
+         value: `> ${rollsDisplay}`,
+         inline: true,
+        },
+        {
+         name: "__Token Cost__",
+         value: `> 💰 ${cost.toLocaleString()} tokens spent`,
+         inline: true,
+        },
+        {
+         name: "__Remaining Balance__",
+         value: `> 💰 ${(balance - cost).toLocaleString()} tokens`,
+         inline: true,
+        },
+        {
+         name: "__Village__",
+         value: `> ${character.currentVillage}`,
+         inline: true,
+        }
+       )
+      .setFooter({
+       text: `Pet upgraded successfully! Rolls reset every Sunday at midnight.`,
+       iconURL: character.icon
+      });
+
+     // Add token tracker link if available
+     if (user && user.tokenTracker) {
+       upgradeEmbed.addFields({
+        name: "__Token Tracker__",
+        value: `> [View Token Tracker](${user.tokenTracker})`,
+        inline: false,
+       });
+     }
+
+     return interaction.editReply({ embeds: [upgradeEmbed] });
     }
 
     // ------------------- Subcommand: View Pet -------------------
     if (subcommand === "view") {
       try {
-        // Find pet directly using Pet model
+        // Find pet directly using Pet model - ensure we get fresh data
+        // Force a fresh database fetch to avoid cached data
         const pet = await Pet.findOne({
           owner: character._id,
           name: petName
-        });
+        }).exec();
 
         if (!pet) {
           return interaction.editReply({
@@ -947,36 +1090,118 @@ module.exports = {
         }
 
         const petTypeData = getPetTypeData(pet.petType);
-        const rollsDisplay = getRollsDisplay(pet.rollsRemaining || 0, pet.level || 0);
+        
+        // ------------------- Determine Embed Color Based on Village -------------------
+        const villageName =
+         character.currentVillage.charAt(0).toUpperCase() +
+         character.currentVillage.slice(1).toLowerCase();
+        const villageColors = {
+         Rudania: "#d7342a",
+         Inariko: "#277ecd",
+         Vhintl: "#25c059",
+        };
+        const embedColor = villageColors[villageName] || "#00FF00";
+
+        // ------------------- Check Roll Status -------------------
+        const now = new Date();
+        const lastRoll = pet.lastRollDate ? new Date(pet.lastRollDate) : null;
+        const isSameDay = lastRoll && 
+          lastRoll.getFullYear() === now.getFullYear() &&
+          lastRoll.getMonth() === now.getMonth() &&
+          lastRoll.getDate() === now.getDate();
+        
+        let rollStatus = "🟢 Available";
+        let rollStatusDescription = "Ready to roll today!";
+        
+        if (isSameDay) {
+          rollStatus = "🔴 Used Today";
+          rollStatusDescription = `Last rolled at ${lastRoll.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`;
+        } else if (pet.rollsRemaining <= 0) {
+          rollStatus = "🟡 No Rolls Left";
+          rollStatusDescription = "Rolls reset every Sunday at midnight";
+        }
+
+        // ------------------- Calculate Rolls Display Based on Today's Usage -------------------
+        let rollsDisplay;
+        if (isSameDay) {
+          // If pet rolled today, show remaining rolls as available (🔔) and one as used (🔕)
+          // For a Level 3 pet that rolled today: should show 🔔🔔🔕 (2 remaining, 1 used today)
+          // But since rollsRemaining is still 3, we need to show 2 available + 1 used
+          const availableRolls = Math.max(0, pet.rollsRemaining - 1); // Subtract 1 for today's roll
+          const usedToday = 1;
+          rollsDisplay = "🔔".repeat(availableRolls) + "🔕".repeat(usedToday);
+          
+          // Debug logging
+          console.log(`[pet.js]: Pet ${pet.name} rolled today. Level: ${pet.level}, RollsRemaining: ${pet.rollsRemaining}, Available: ${availableRolls}, Used: ${usedToday}, Display: ${rollsDisplay}`);
+        } else {
+          // Normal display based on rolls remaining vs level
+          rollsDisplay = getRollsDisplay(pet.rollsRemaining || 0, pet.level || 0);
+          console.log(`[pet.js]: Pet ${pet.name} hasn't rolled today. Level: ${pet.level}, RollsRemaining: ${pet.rollsRemaining}, Display: ${rollsDisplay}`);
+        }
+
+        // ------------------- Calculate Next Upgrade Info -------------------
+        let upgradeInfo = "🎉 Maximum Level Reached!";
+        let upgradeCost = "N/A";
+        
+        if (pet.level < 3) {
+          const nextLevel = pet.level + 1;
+          const cost = getUpgradeCost(nextLevel);
+          upgradeInfo = `Level ${nextLevel} (${cost.toLocaleString()} tokens)`;
+          upgradeCost = `${cost.toLocaleString()} tokens`;
+        }
         
         const viewEmbed = new EmbedBuilder()
           .setAuthor({ name: character.name, iconURL: character.icon })
-          .setTitle(`🐾 ${pet.name} — Details`)
+          .setTitle(`🐾 ${pet.name} — Pet Details`)
           .setThumbnail(sanitizeUrl(pet.imageUrl))
+          .setColor(embedColor)
+          .setImage(sanitizeUrl("https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"))
           .addFields(
             { name: "__Pet Name__", value: `> ${pet.name}`, inline: true },
             { name: "__Owner__", value: `> ${character.name}`, inline: true },
-            {
-              name: "__Pet Level & Rolls__",
-              value: `> Level ${pet.level || 0} | ${rollsDisplay}`,
-              inline: true,
-            },
+            { name: "__Village__", value: `> ${character.currentVillage}`, inline: true },
             {
               name: "__Pet Species__",
               value: `> ${getPetEmoji(pet.species)} ${pet.species}`,
               inline: true,
             },
             { name: "__Pet Type__", value: `> ${pet.petType}`, inline: true },
-            { name: "__Status__", value: `> Active`, inline: true },
+            { name: "__Status__", value: `> ${pet.status === 'active' ? '🟢 Active' : '🔵 Stored'}`, inline: true },
             {
-              name: "Roll Combination",
+              name: "__Current Level__",
+              value: `> Level ${pet.level || 0}`,
+              inline: true,
+            },
+            {
+              name: "__Rolls Available__",
+              value: `> ${rollsDisplay}`,
+              inline: true,
+            },
+            {
+              name: "__Roll Status__",
+              value: `> ${rollStatus}`,
+              inline: true,
+            },
+            {
+              name: "__Next Upgrade__",
+              value: `> ${upgradeInfo}`,
+              inline: true,
+            },
+            {
+              name: "🎲 Available Roll Types",
               value: petTypeData.rollCombination.join(", "),
               inline: false,
             },
-            { name: "Description", value: petTypeData.description, inline: false }
+            {
+              name: "📝 Pet Description",
+              value: petTypeData.description,
+              inline: false,
+            }
           )
-          .setImage(sanitizeUrl(pet.imageUrl))
-          .setColor("#00FF00");
+          .setFooter({
+            text: rollStatusDescription,
+            iconURL: character.icon
+          });
 
         return interaction.editReply({ embeds: [viewEmbed] });
       } catch (error) {
