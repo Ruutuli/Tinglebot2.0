@@ -107,6 +107,13 @@ function isValidUrl(string) {
   }
 }
 
+// Helper function to clean URLs by removing trailing semicolons and other invalid characters
+function cleanUrl(url) {
+  if (!url) return null;
+  // Remove trailing semicolons, spaces, and other common invalid characters
+  return url.replace(/[;\s]+$/, '').trim();
+}
+
 const { addItemInventoryDatabase } = require('../../utils/inventoryUtils');
 
 const {
@@ -738,11 +745,12 @@ async function handlePetLevel(interaction) {
       .setTimestamp();
 
     // Only set author if icon URL is valid
-    if (character.icon && isValidUrl(character.icon)) {
-      petLevelEmbed.setAuthor({ name: character.name, iconURL: character.icon });
+    const cleanedIconUrl = cleanUrl(character.icon);
+    if (cleanedIconUrl && isValidUrl(cleanedIconUrl)) {
+      petLevelEmbed.setAuthor({ name: character.name, iconURL: cleanedIconUrl });
     } else {
       petLevelEmbed.setAuthor({ name: character.name });
-      console.log(`[mod.js]: Invalid character icon URL: ${character.icon}`);
+      console.log(`[mod.js]: Invalid character icon URL: ${character.icon} (cleaned: ${cleanedIconUrl})`);
     }
 
     // Log the embed data before sending
@@ -1569,19 +1577,21 @@ async function handleForceResetPetRolls(interaction) {
       .setTimestamp();
 
     // Only set author if icon URL is valid
-    if (character.icon && isValidUrl(character.icon)) {
-      resetEmbed.setAuthor({ name: character.name, iconURL: character.icon });
+    const cleanedIconUrl = cleanUrl(character.icon);
+    if (cleanedIconUrl && isValidUrl(cleanedIconUrl)) {
+      resetEmbed.setAuthor({ name: character.name, iconURL: cleanedIconUrl });
     } else {
       resetEmbed.setAuthor({ name: character.name });
-      console.log(`[mod.js]: Invalid character icon URL (reset): ${character.icon}`);
+      console.log(`[mod.js]: Invalid character icon URL (reset): ${character.icon} (cleaned: ${cleanedIconUrl})`);
     }
 
     // Only set thumbnail if pet image URL is valid
-    if (pet.imageUrl && isValidUrl(pet.imageUrl)) {
-      resetEmbed.setThumbnail(pet.imageUrl);
+    const cleanedPetImageUrl = cleanUrl(pet.imageUrl);
+    if (cleanedPetImageUrl && isValidUrl(cleanedPetImageUrl)) {
+      resetEmbed.setThumbnail(cleanedPetImageUrl);
     } else {
       resetEmbed.setThumbnail("https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png");
-      console.log(`[mod.js]: Invalid pet image URL: ${pet.imageUrl}`);
+      console.log(`[mod.js]: Invalid pet image URL: ${pet.imageUrl} (cleaned: ${cleanedPetImageUrl})`);
     }
 
     // Set image (this URL should be valid)
