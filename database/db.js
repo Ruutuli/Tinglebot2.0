@@ -705,7 +705,8 @@ async function upgradePetLevel(characterId, petName, newLevel) {
    { 
      $set: { 
        level: newLevel,
-       rollsRemaining: Math.min(newLevel, 3) // Reset rolls based on new level
+       rollsRemaining: Math.min(newLevel, 3), // Reset rolls based on new level
+       lastRollDate: null // Clear daily roll restriction so pet can roll immediately
      } 
    }
   );
@@ -786,7 +787,8 @@ async function restorePetLevel(characterId, petName, level) {
    { 
      $set: { 
        level: level,
-       rollsRemaining: Math.min(level, 3) // Also update rolls to match level
+       rollsRemaining: Math.min(level, 3), // Also update rolls to match level
+       lastRollDate: null // Clear daily roll restriction so pet can roll immediately
      } 
    }
   );

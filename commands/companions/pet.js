@@ -981,7 +981,8 @@ module.exports = {
 
      // perform the upgrade
      await upgradePetLevel(character._id, petName, targetLevel);
-     await updatePetRolls(character._id, petName, targetLevel);
+     // Don't call updatePetRolls here as it sets lastRollDate
+     // The upgradePetLevel function already sets rollsRemaining to the new level
 
      // Log to token tracker sheet if available
      const User = require("../../models/UserModel");
