@@ -135,8 +135,20 @@ const flavorText = {
 // ------------------- Pet Types Data -------------------
 const petTypeData = {
   Chuchu: {
-    rollCombination: ['petprey', 'petforage', 'petchu', 'petfirechu', 'peticechu', 'petelectricchu'],
-    description: 'Special elemental creatures that can access specific elemental resources (Chuchu-only).'
+    rollCombination: ['petprey', 'petforage', 'petchu'],
+    description: 'Special creatures that can access unique resources and use their special abilities.'
+  },
+  FireChuchu: {
+    rollCombination: ['petprey', 'petforage', 'petchu', 'petfirechu'],
+    description: 'Fire elemental chuchu that can access fire-based resources and abilities.'
+  },
+  IceChuchu: {
+    rollCombination: ['petprey', 'petforage', 'petchu', 'peticechu'],
+    description: 'Ice elemental chuchu that can access ice-based resources and abilities.'
+  },
+  ElectricChuchu: {
+    rollCombination: ['petprey', 'petforage', 'petchu', 'petelectricchu'],
+    description: 'Electric elemental chuchu that can access electric-based resources and abilities.'
   },
   Conqueror: {
     rollCombination: ['lgpetprey', 'petforage'],
@@ -229,7 +241,10 @@ const speciesRollPermissions = {
     walltula: ['petprey', 'petmon'],
     smallspecial: ['petprey', 'petforage', 'petmon'],
     largespecial: ['lgpetprey', 'petforage', 'petmon'],
-    chuchu: ['petprey', 'petforage', 'petchu', 'petfirechu', 'peticechu', 'petelectricchu']
+    chuchu: ['petprey', 'petforage', 'petchu'],
+    firechuchu: ['petprey', 'petforage', 'petchu', 'petfirechu'],
+    icechuchu: ['petprey', 'petforage', 'petchu', 'peticechu'],
+    electricchuchu: ['petprey', 'petforage', 'petchu', 'petelectricchu']
   };
   
 // ------------------- Helper Functions for Pet Module -------------------

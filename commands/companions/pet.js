@@ -223,23 +223,26 @@ module.exports = {
       .setName("pettype")
       .setDescription("Select the pet type for the pet")
       .setRequired(true)
-      .addChoices(
-       { name: "Chuchu", value: "Chuchu" },
-       { name: "Conqueror", value: "Conqueror" },
-       { name: "Explorer", value: "Explorer" },
-       { name: "Forager", value: "Forager" },
-       { name: "Guardian", value: "Guardian" },
-       { name: "Hunter", value: "Hunter" },
-       { name: "Nomad", value: "Nomad" },
-       { name: "Omnivore", value: "Omnivore" },
-       { name: "Protector", value: "Protector" },
-       { name: "Prowler", value: "Prowler" },
-       { name: "Ranger", value: "Ranger" },
-       { name: "Roamer", value: "Roamer" },
-       { name: "Scavenger", value: "Scavenger" },
-       { name: "Sentinel", value: "Sentinel" },
-       { name: "Tracker", value: "Tracker" }
-      )
+             .addChoices(
+        { name: "Chuchu", value: "Chuchu" },
+        { name: "Fire Chuchu", value: "FireChuchu" },
+        { name: "Ice Chuchu", value: "IceChuchu" },
+        { name: "Electric Chuchu", value: "ElectricChuchu" },
+        { name: "Conqueror", value: "Conqueror" },
+        { name: "Explorer", value: "Explorer" },
+        { name: "Forager", value: "Forager" },
+        { name: "Guardian", value: "Guardian" },
+        { name: "Hunter", value: "Hunter" },
+        { name: "Nomad", value: "Nomad" },
+        { name: "Omnivore", value: "Omnivore" },
+        { name: "Protector", value: "Protector" },
+        { name: "Prowler", value: "Prowler" },
+        { name: "Ranger", value: "Ranger" },
+        { name: "Roamer", value: "Roamer" },
+        { name: "Scavenger", value: "Scavenger" },
+        { name: "Sentinel", value: "Sentinel" },
+        { name: "Tracker", value: "Tracker" }
+       )
     )
     .addAttachmentOption((option) =>
      option
