@@ -35,6 +35,7 @@ const {
   updateTokenBalance,
   appendEarnedTokens,
   resetPetRollsForAllCharacters,
+  forceResetPetRolls,
   fetchMonsterByName
 } = require('../../database/db');
 
@@ -704,7 +705,7 @@ async function handlePetLevel(interaction) {
         },
         { 
           name: "🔄 Rolls Reset", 
-          value: `> Every Sunday at midnight`, 
+          value: `> Every Sunday at 8:00 AM`, 
           inline: true 
         }
       )
@@ -718,7 +719,7 @@ async function handlePetLevel(interaction) {
     // Send the embed as a public message and mention the character owner
     await interaction.editReply({ content: '✅ Processing pet level update...', ephemeral: true });
     return interaction.followUp({
-      content: `🎉 <@${character.userId}> | ${character.name}'s pet ${petName} is now level ${newLevel}! It can roll ${newLevel} times per week! Rolls reset every Sunday at midnight.`,
+      content: `🎉 <@${character.userId}> | ${character.name}'s pet ${petName} is now level ${newLevel}! It can roll ${newLevel} times per week! Rolls reset every Sunday at 8:00 AM.`,
       embeds: [petLevelEmbed]
     });
   }
@@ -1454,11 +1455,70 @@ async function handleForceResetPetRolls(interaction) {
       );
     }
     
+    // Get the pet details for the embed
+    const pet = await Pet.findOne({
+      owner: character._id,
+      name: petName,
+    });
+    
+    if (!pet) {
+      return interaction.editReply(
+        `❌ Pet **${petName}** not found for **${character.name}**.`
+      );
+    }
+    
     const result = await forceResetPetRolls(character._id, petName);
     
-    return interaction.editReply({
-      content: `✅ Successfully reset rolls for pet **${petName}** from ${result.oldRolls} to ${result.newRolls} rolls.`,
-      ephemeral: true
+    // Create a beautiful embed for the pet roll reset
+    const resetEmbed = new EmbedBuilder()
+      .setAuthor({ name: character.name, iconURL: character.icon })
+      .setTitle("🔄 Pet Rolls Reset Successfully!")
+      .setDescription(`A moderator has reset your pet's rolls for this week.`)
+      .setThumbnail(pet.imageUrl || "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png")
+      .addFields(
+        { 
+          name: "🐾 Pet Name", 
+          value: `> ${petName}`, 
+          inline: true 
+        },
+        { 
+          name: "🦊 Species", 
+          value: `> ${pet.species}`, 
+          inline: true 
+        },
+        { 
+          name: "🎯 Pet Type", 
+          value: `> ${pet.petType}`, 
+          inline: true 
+        },
+        { 
+          name: "📊 Level", 
+          value: `> Level ${pet.level}`, 
+          inline: true 
+        },
+        { 
+          name: "🔄 Rolls Reset", 
+          value: `> ${result.oldRolls} → **${result.newRolls}** rolls`, 
+          inline: true 
+        },
+        { 
+          name: "📅 Reset Schedule", 
+          value: `> Every Sunday at midnight`, 
+          inline: true 
+        }
+      )
+      .setColor("#00FF00")
+      .setImage("https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png")
+      .setFooter({ 
+        text: `Reset by ${interaction.user.tag}` 
+      })
+      .setTimestamp();
+
+    // Send the embed as a public message and mention the character owner
+    await interaction.editReply({ content: '✅ Processing pet roll reset...', ephemeral: true });
+    return interaction.followUp({
+      content: `🔄 <@${character.userId}> | ${character.name}'s pet ${petName} rolls have been reset from ${result.oldRolls} to ${result.newRolls} rolls! Daily reset at 8:00 AM.`,
+      embeds: [resetEmbed]
     });
   } catch (error) {
     handleError(error, "mod.js", {

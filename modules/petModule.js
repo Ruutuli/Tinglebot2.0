@@ -95,40 +95,40 @@ const petTableRollDescriptions = {
 // ------------------- Randomized Flavor Texts -------------------
 const flavorText = {
   petprey: [
-    "**{petName}** went on a little hunt and brought you back **{itemName}**!",
-    "Your loyal **{petSpecies} {petName}** found **{itemName}** while hunting small game!",
-    "**{petName}** pounced through the fields and returned with **{itemName}**!"
+    "**{petName}** went hunting and brought back **{itemName}**!",
+    "**{petName}** returned from a hunt with **{itemName}**!",
+    "**{petName}** found **{itemName}** while out hunting!"
   ],
   lgpetprey: [
-    "**{petName}** chased down a big catch and found **{itemName}**!",
-    "After a mighty hunt, **{petName}** has returned with **{itemName}**!",
-    "Your brave **{petSpecies} {petName}** conquered the hunt and brought back **{itemName}**!"
+    "**{petName}** went on a big hunt and found **{itemName}**!",
+    "After an intense hunt, **{petName}** returned with **{itemName}**!",
+    "**{petName}** found **{itemName}** during a major hunt!"
   ],
   petforage: [
-    "**{petName}** foraged around and discovered **{itemName}**!",
-    "On a quiet walk, **{petName}** stumbled upon **{itemName}**!",
-    "Your curious **{petSpecies} {petName}** found **{itemName}** while foraging."
+    "**{petName}** foraged around and found **{itemName}**!",
+    "While exploring, **{petName}** discovered **{itemName}**!",
+    "**{petName}** gathered some resources and found **{itemName}**!"
   ],
   petmon: [
-    "**{petName}** tracked down a monster and brought back **{itemName}**!",
-    "After a daring adventure, **{petName}** returned with **{itemName}** from the hunt!",
-    "Your fierce **{petSpecies} {petName}** defeated a monster and found **{itemName}**!"
+    "**{petName}** tracked a monster and found **{itemName}**!",
+    "After a dangerous encounter, **{petName}** discovered **{itemName}**!",
+    "**{petName}** found **{itemName}** while tracking monsters!"
   ],
   petchu: [
-    "**{petName}** tapped into its elemental nature and discovered **{itemName}**!",
-    "The mystical **{petSpecies} {petName}** revealed **{itemName}** through its elemental powers!"
+    "**{petName}** used its special abilities and found **{itemName}**!",
+    "**{petName}** discovered **{itemName}** using its unique powers!"
   ],
   petfirechu: [
-    "**{petName}** ignited a spark and uncovered **{itemName}**!",
-    "Flames danced as **{petName}** returned with **{itemName}**!"
+    "**{petName}** used its fire abilities and found **{itemName}**!",
+    "**{petName}** discovered **{itemName}** with its fiery powers!"
   ],
   peticechu: [
-    "**{petName}** chilled the air and found **{itemName}**!",
-    "With a frosty demeanor, **{petSpecies} {petName}** delivered **{itemName}**!"
+    "**{petName}** used its ice abilities and found **{itemName}**!",
+    "**{petName}** discovered **{itemName}** with its frosty powers!"
   ],
   petelectricchu: [
-    "**{petName}** charged up and brought back **{itemName}**!",
-    "Electricity surged as **{petName}** discovered **{itemName}**!"
+    "**{petName}** used its lightning abilities and found **{itemName}**!",
+    "**{petName}** discovered **{itemName}** with its electric powers!"
   ]
 };
 

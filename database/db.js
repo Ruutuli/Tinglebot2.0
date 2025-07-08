@@ -814,7 +814,7 @@ async function forceResetPetRolls(characterId, petName) {
     
     await Pet.updateOne(
       { _id: pet._id },
-      { $set: { rollsRemaining: newRolls } }
+      { $set: { rollsRemaining: newRolls, lastRollDate: null } }
     );
     
     console.log(`[db.js]: ✅ Force reset pet "${pet.name}" (${pet.ownerName}) from ${oldRolls} to ${newRolls} rolls`);
