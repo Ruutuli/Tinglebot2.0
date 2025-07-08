@@ -669,6 +669,7 @@ async function handlePetLevel(interaction) {
     const oldLevel = petDoc.level;
     petDoc.level = newLevel;
     petDoc.rollsRemaining = newLevel;
+    petDoc.lastRollDate = null; // Clear daily roll restriction so pet can roll immediately
     await petDoc.save();
   
     // Create a beautiful embed for the pet level update
