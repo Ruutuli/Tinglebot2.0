@@ -1583,17 +1583,33 @@ async function handleForceResetPetRolls(interaction) {
     const cleanedPetImageUrl = cleanUrl(pet.imageUrl);
     console.log(`[mod.js]: Original pet image URL: "${pet.imageUrl}"`);
     console.log(`[mod.js]: Cleaned pet image URL: "${cleanedPetImageUrl}"`);
-    console.log(`[mod.js]: Is valid URL: ${isValidUrl(cleanedPetImageUrl)}`);
     
-    // Check if URL contains spaces (which would make it invalid)
-    if (cleanedPetImageUrl && cleanedPetImageUrl.includes(' ')) {
-      console.log(`[mod.js]: Pet image URL contains spaces - this makes it invalid!`);
-      console.log(`[mod.js]: Pet name: "${pet.name}"`);
+    // URL-encode the pet image URL to handle spaces properly
+    let encodedPetImageUrl = null;
+    if (cleanedPetImageUrl) {
+      try {
+        // Split the URL into base and filename parts
+        const lastSlashIndex = cleanedPetImageUrl.lastIndexOf('/');
+        if (lastSlashIndex !== -1) {
+          const baseUrl = cleanedPetImageUrl.substring(0, lastSlashIndex + 1);
+          const filename = cleanedPetImageUrl.substring(lastSlashIndex + 1);
+          const encodedFilename = encodeURIComponent(filename);
+          encodedPetImageUrl = baseUrl + encodedFilename;
+          console.log(`[mod.js]: Encoded pet image URL: "${encodedPetImageUrl}"`);
+        }
+      } catch (error) {
+        console.log(`[mod.js]: Error encoding pet image URL: ${error.message}`);
+      }
     }
     
-    // Use default thumbnail since pet image URLs might not have proper extensions or contain spaces
-    resetEmbed.setThumbnail("https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png");
-    console.log(`[mod.js]: Using default thumbnail for pet`);
+    // Use the encoded URL if available, otherwise use default
+    if (encodedPetImageUrl && isValidUrl(encodedPetImageUrl)) {
+      resetEmbed.setThumbnail(encodedPetImageUrl);
+      console.log(`[mod.js]: Using encoded pet image URL as thumbnail`);
+    } else {
+      resetEmbed.setThumbnail("https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png");
+      console.log(`[mod.js]: Using default thumbnail for pet`);
+    }
 
     // Set image (this URL should be valid)
     resetEmbed.setImage("https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png");
