@@ -97,6 +97,16 @@ const { v4: uuidv4 } = require('uuid');
 const { createMountEncounterEmbed } = require('../../embeds/embeds');
 const { generateWeatherEmbed } = require('../../embeds/weatherEmbed.js');
 
+// Helper function to validate URLs
+function isValidUrl(string) {
+  try {
+    new URL(string);
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
 const { addItemInventoryDatabase } = require('../../utils/inventoryUtils');
 
 const {
@@ -672,12 +682,23 @@ async function handlePetLevel(interaction) {
     petDoc.lastRollDate = null; // Clear daily roll restriction so pet can roll immediately
     await petDoc.save();
   
+    // Log character and pet data for debugging
+    console.log(`[mod.js]: Character data:`, {
+      name: character.name,
+      icon: character.icon,
+      userId: character.userId
+    });
+    console.log(`[mod.js]: Pet data:`, {
+      name: petDoc.name,
+      species: petDoc.species,
+      petType: petDoc.petType,
+      imageUrl: petDoc.imageUrl
+    });
+  
     // Create a beautiful embed for the pet level update
     const petLevelEmbed = new EmbedBuilder()
-      .setAuthor({ name: character.name, iconURL: character.icon })
       .setTitle("🎉 Pet Level Updated!")
       .setDescription(`Your pet has been upgraded by a moderator!`)
-      .setThumbnail(petDoc.imageUrl || "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png")
       .addFields(
         { 
           name: "🐾 Pet Name", 
@@ -711,18 +732,40 @@ async function handlePetLevel(interaction) {
         }
       )
       .setColor("#00FF00")
-      .setImage("https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png")
       .setFooter({ 
         text: `Updated by ${interaction.user.tag}` 
       })
       .setTimestamp();
 
-    // Send the embed as a public message and mention the character owner
-    await interaction.editReply({ content: '✅ Processing pet level update...', ephemeral: true });
-    return interaction.followUp({
-      content: `🎉 <@${character.userId}> | ${character.name}'s pet ${petName} is now level ${newLevel}! It can roll ${newLevel} times per week! Rolls reset every Sunday at 8:00 AM.`,
-      embeds: [petLevelEmbed]
+    // Only set author if icon URL is valid
+    if (character.icon && isValidUrl(character.icon)) {
+      petLevelEmbed.setAuthor({ name: character.name, iconURL: character.icon });
+    } else {
+      petLevelEmbed.setAuthor({ name: character.name });
+      console.log(`[mod.js]: Invalid character icon URL: ${character.icon}`);
+    }
+
+    // Log the embed data before sending
+    console.log(`[mod.js]: Embed data:`, {
+      author: petLevelEmbed.data.author,
+      title: petLevelEmbed.data.title,
+      fields: petLevelEmbed.data.fields,
+      footer: petLevelEmbed.data.footer,
+      color: petLevelEmbed.data.color
     });
+
+    // Send the embed as a public message and mention the character owner
+    try {
+      await interaction.editReply({ content: '✅ Processing pet level update...', ephemeral: true });
+      return await interaction.followUp({
+        content: `🎉 <@${character.userId}> | ${character.name}'s pet ${petName} is now level ${newLevel}! It can roll ${newLevel} times per week! Rolls reset every Sunday at 8:00 AM.`,
+        embeds: [petLevelEmbed]
+      });
+    } catch (error) {
+      console.error(`[mod.js]: Error sending pet level embed:`, error);
+      console.error(`[mod.js]: Embed data that caused error:`, JSON.stringify(petLevelEmbed.data, null, 2));
+      throw error;
+    }
   }
   
   // ------------------- Function: handleMount -------------------
@@ -1470,12 +1513,23 @@ async function handleForceResetPetRolls(interaction) {
     
     const result = await forceResetPetRolls(character._id, petName);
     
+    // Log character and pet data for debugging
+    console.log(`[mod.js]: Character data (force reset):`, {
+      name: character.name,
+      icon: character.icon,
+      userId: character.userId
+    });
+    console.log(`[mod.js]: Pet data (force reset):`, {
+      name: pet.name,
+      species: pet.species,
+      petType: pet.petType,
+      imageUrl: pet.imageUrl
+    });
+
     // Create a beautiful embed for the pet roll reset
     const resetEmbed = new EmbedBuilder()
-      .setAuthor({ name: character.name, iconURL: character.icon })
       .setTitle("🔄 Pet Rolls Reset Successfully!")
       .setDescription(`A moderator has reset your pet's rolls for this week.`)
-      .setThumbnail(pet.imageUrl || "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png")
       .addFields(
         { 
           name: "🐾 Pet Name", 
@@ -1509,18 +1563,53 @@ async function handleForceResetPetRolls(interaction) {
         }
       )
       .setColor("#00FF00")
-      .setImage("https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png")
       .setFooter({ 
         text: `Reset by ${interaction.user.tag}` 
       })
       .setTimestamp();
 
-    // Send the embed as a public message and mention the character owner
-    await interaction.editReply({ content: '✅ Processing pet roll reset...', ephemeral: true });
-    return interaction.followUp({
-      content: `🔄 <@${character.userId}> | ${character.name}'s pet ${petName} rolls have been reset from ${result.oldRolls} to ${result.newRolls} rolls! Daily reset at 8:00 AM.`,
-      embeds: [resetEmbed]
+    // Only set author if icon URL is valid
+    if (character.icon && isValidUrl(character.icon)) {
+      resetEmbed.setAuthor({ name: character.name, iconURL: character.icon });
+    } else {
+      resetEmbed.setAuthor({ name: character.name });
+      console.log(`[mod.js]: Invalid character icon URL (reset): ${character.icon}`);
+    }
+
+    // Only set thumbnail if pet image URL is valid
+    if (pet.imageUrl && isValidUrl(pet.imageUrl)) {
+      resetEmbed.setThumbnail(pet.imageUrl);
+    } else {
+      resetEmbed.setThumbnail("https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png");
+      console.log(`[mod.js]: Invalid pet image URL: ${pet.imageUrl}`);
+    }
+
+    // Set image (this URL should be valid)
+    resetEmbed.setImage("https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png");
+
+    // Log the embed data before sending
+    console.log(`[mod.js]: Reset embed data:`, {
+      author: resetEmbed.data.author,
+      title: resetEmbed.data.title,
+      thumbnail: resetEmbed.data.thumbnail,
+      image: resetEmbed.data.image,
+      fields: resetEmbed.data.fields,
+      footer: resetEmbed.data.footer,
+      color: resetEmbed.data.color
     });
+
+    // Send the embed as a public message and mention the character owner
+    try {
+      await interaction.editReply({ content: '✅ Processing pet roll reset...', ephemeral: true });
+      return await interaction.followUp({
+        content: `🔄 <@${character.userId}> | ${character.name}'s pet ${petName} rolls have been reset from ${result.oldRolls} to ${result.newRolls} rolls! Daily reset at 8:00 AM.`,
+        embeds: [resetEmbed]
+      });
+    } catch (error) {
+      console.error(`[mod.js]: Error sending pet reset embed:`, error);
+      console.error(`[mod.js]: Reset embed data that caused error:`, JSON.stringify(resetEmbed.data, null, 2));
+      throw error;
+    }
   } catch (error) {
     handleError(error, "mod.js", {
       commandName: '/mod forceresetpetrolls',
