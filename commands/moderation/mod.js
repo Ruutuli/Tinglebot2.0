@@ -111,7 +111,11 @@ function isValidUrl(string) {
 function cleanUrl(url) {
   if (!url) return null;
   // Remove trailing semicolons, spaces, and other common invalid characters
-  return url.replace(/[;\s]+$/, '').trim();
+  let cleaned = url.replace(/[;\s]+$/, '').trim();
+  // Also remove any semicolons that might be in the middle or end
+  cleaned = cleaned.replace(/;+$/, '');
+  console.log(`[mod.js]: cleanUrl input: "${url}" -> output: "${cleaned}"`);
+  return cleaned;
 }
 
 const { addItemInventoryDatabase } = require('../../utils/inventoryUtils');
@@ -744,14 +748,9 @@ async function handlePetLevel(interaction) {
       })
       .setTimestamp();
 
-    // Only set author if icon URL is valid
-    const cleanedIconUrl = cleanUrl(character.icon);
-    if (cleanedIconUrl && isValidUrl(cleanedIconUrl)) {
-      petLevelEmbed.setAuthor({ name: character.name, iconURL: cleanedIconUrl });
-    } else {
-      petLevelEmbed.setAuthor({ name: character.name });
-      console.log(`[mod.js]: Invalid character icon URL: ${character.icon} (cleaned: ${cleanedIconUrl})`);
-    }
+    // Skip character icon URL for now to avoid URL issues
+    petLevelEmbed.setAuthor({ name: character.name });
+    console.log(`[mod.js]: Skipping character icon URL to avoid issues (pet level)`);
 
     // Log the embed data before sending
     console.log(`[mod.js]: Embed data:`, {
@@ -1576,23 +1575,25 @@ async function handleForceResetPetRolls(interaction) {
       })
       .setTimestamp();
 
-    // Only set author if icon URL is valid
-    const cleanedIconUrl = cleanUrl(character.icon);
-    if (cleanedIconUrl && isValidUrl(cleanedIconUrl)) {
-      resetEmbed.setAuthor({ name: character.name, iconURL: cleanedIconUrl });
-    } else {
-      resetEmbed.setAuthor({ name: character.name });
-      console.log(`[mod.js]: Invalid character icon URL (reset): ${character.icon} (cleaned: ${cleanedIconUrl})`);
-    }
+    // Skip character icon URL for now to avoid URL issues
+    resetEmbed.setAuthor({ name: character.name });
+    console.log(`[mod.js]: Skipping character icon URL to avoid issues`);
 
-    // Only set thumbnail if pet image URL is valid
+    // Check if pet image URL is valid and log details
     const cleanedPetImageUrl = cleanUrl(pet.imageUrl);
-    if (cleanedPetImageUrl && isValidUrl(cleanedPetImageUrl)) {
-      resetEmbed.setThumbnail(cleanedPetImageUrl);
-    } else {
-      resetEmbed.setThumbnail("https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png");
-      console.log(`[mod.js]: Invalid pet image URL: ${pet.imageUrl} (cleaned: ${cleanedPetImageUrl})`);
+    console.log(`[mod.js]: Original pet image URL: "${pet.imageUrl}"`);
+    console.log(`[mod.js]: Cleaned pet image URL: "${cleanedPetImageUrl}"`);
+    console.log(`[mod.js]: Is valid URL: ${isValidUrl(cleanedPetImageUrl)}`);
+    
+    // Check if URL contains spaces (which would make it invalid)
+    if (cleanedPetImageUrl && cleanedPetImageUrl.includes(' ')) {
+      console.log(`[mod.js]: Pet image URL contains spaces - this makes it invalid!`);
+      console.log(`[mod.js]: Pet name: "${pet.name}"`);
     }
+    
+    // Use default thumbnail since pet image URLs might not have proper extensions or contain spaces
+    resetEmbed.setThumbnail("https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png");
+    console.log(`[mod.js]: Using default thumbnail for pet`);
 
     // Set image (this URL should be valid)
     resetEmbed.setImage("https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png");
