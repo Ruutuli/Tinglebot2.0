@@ -52,16 +52,31 @@ function calculateTokens({
     const baseValue = artModule.baseTokens[base] || 0;
     return total + baseValue * validCharacterCount;
   }, 0);
+  
+  console.log(`[tokenUtils.js]: 🧮 Token calculation debug:`, {
+    baseSelections,
+    baseTotal,
+    validCharacterCount,
+    typeMultiplierSelections,
+    typeMultiplierCounts
+  });
 
   // Type Multiplier Calculation
-  const typeMultiplierTotal = typeMultiplierSelections.reduce((sum, multiplier) => {
-    const multiplierValue = artModule.typeMultipliers[multiplier] || 1;
-    const count = typeMultiplierCounts[multiplier] || 1; // Default to 1 if no count is provided
-    return sum + multiplierValue * count; // Sum values considering individual counts
-  }, 0);
+  const typeMultiplierTotal = typeMultiplierSelections.length > 0 
+    ? typeMultiplierSelections.reduce((sum, multiplier) => {
+        const multiplierValue = artModule.typeMultipliers[multiplier] || 1;
+        const count = typeMultiplierCounts[multiplier] || 1; // Default to 1 if no count is provided
+        return sum + multiplierValue * count; // Sum values considering individual counts
+      }, 0)
+    : 1; // Default to 1 if no type multipliers are selected
 
   // Product Multiplier Calculation
-  const productMultiplier = artModule.productMultipliers[productMultiplierValue] || 1;
+  const productMultiplier = artModule.productMultipliers[productMultiplierValue];
+  if (!productMultiplier) {
+    console.error(`[tokenUtils.js]: ❌ Invalid product multiplier: ${productMultiplierValue}`);
+    throw new Error(`Invalid product multiplier: ${productMultiplierValue}. Please select a valid product multiplier.`);
+  }
+  console.log(`[tokenUtils.js]: 🎨 Product multiplier: ${productMultiplierValue} = ${productMultiplier}`);
 
   // Add-Ons Calculation
   const addOnTotal = addOnsApplied
@@ -79,9 +94,20 @@ function calculateTokens({
 
   // Regular Total Calculation
   const regularTotal = Math.ceil(baseTotal * typeMultiplierTotal * productMultiplier + addOnTotal);
+  console.log(`[tokenUtils.js]: 📊 Regular total calculation: ${baseTotal} × ${typeMultiplierTotal} × ${productMultiplier} + ${addOnTotal} = ${regularTotal}`);
 
   // Final Token Calculation
   const totalTokens = regularTotal + specialWorksTotal;
+
+  console.log(`[tokenUtils.js]: 💰 Final calculation:`, {
+    baseTotal,
+    typeMultiplierTotal,
+    productMultiplier,
+    addOnTotal,
+    specialWorksTotal,
+    regularTotal,
+    totalTokens
+  });
 
   return {
     totalTokens,
@@ -126,8 +152,15 @@ function generateTokenBreakdown({
     })
     .join(' + ');
 
-  const productMultiplierLabel = capitalizeFirstLetter(productMultiplierValue) || 'Default';
-  const productMultiplierValueFinal = artModule.productMultipliers[productMultiplierValue] || 1;
+  if (!productMultiplierValue) {
+    throw new Error('Product multiplier is required. Please select a valid product multiplier.');
+  }
+  
+  const productMultiplierLabel = capitalizeFirstLetter(productMultiplierValue);
+  const productMultiplierValueFinal = artModule.productMultipliers[productMultiplierValue];
+  if (!productMultiplierValueFinal) {
+    throw new Error(`Invalid product multiplier: ${productMultiplierValue}. Please select a valid product multiplier.`);
+  }
 
   const addOnSection = addOnsApplied
     .filter(({ addOn, count }) => addOn && count > 0)

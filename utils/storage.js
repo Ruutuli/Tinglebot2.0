@@ -34,7 +34,7 @@ async function saveSubmissionToStorage(key, submissionData) {
         questBonus: submissionData.questBonus || 'N/A',
         baseSelections: submissionData.baseSelections || [],
         typeMultiplierSelections: submissionData.typeMultiplierSelections || [],
-        productMultiplierValue: submissionData.productMultiplierValue || 'default',
+        productMultiplierValue: submissionData.productMultiplierValue,
         addOnsApplied: submissionData.addOnsApplied || [],
         specialWorksApplied: submissionData.specialWorksApplied || [],
         characterCount: submissionData.characterCount || 1,
@@ -61,6 +61,115 @@ async function saveSubmissionToStorage(key, submissionData) {
     return result;
   } catch (error) {
     console.error(`[storage.js]: ❌ Error saving submission ${key}:`, error);
+    throw error;
+  }
+}
+
+// Update submission data efficiently without duplicate saves
+async function updateSubmissionData(submissionId, updates) {
+  try {
+    if (!submissionId || !updates) {
+      console.error(`[storage.js]: ❌ Missing submissionId or updates for update operation`);
+      throw new Error('Missing submissionId or updates');
+    }
+
+    const now = new Date();
+    
+    // First, get the existing submission data
+    const existingData = await retrieveSubmissionFromStorage(submissionId);
+    if (!existingData) {
+      console.error(`[storage.js]: ❌ Submission ${submissionId} not found for update`);
+      return null;
+    }
+
+    // Merge the updates with existing data
+    const updateData = {
+      ...existingData,
+      ...updates,
+      updatedAt: now
+    };
+
+    console.log(`[storage.js]: 🔄 Updating submission ${submissionId} with:`, updates);
+
+    const result = await TempData.findOneAndUpdate(
+      { type: 'submission', key: submissionId },
+      { 
+        $set: { 
+          'data': updateData,
+          expiresAt: new Date(now.getTime() + 48 * 60 * 60 * 1000)
+        }
+      },
+      { new: true }
+    );
+
+    if (result) {
+      console.log(`[storage.js]: ✅ Updated submission ${submissionId}`);
+      return result.data;
+    } else {
+      console.error(`[storage.js]: ❌ Submission ${submissionId} not found for update`);
+      return null;
+    }
+  } catch (error) {
+    console.error(`[storage.js]: ❌ Error updating submission ${submissionId}:`, error);
+    throw error;
+  }
+}
+
+// Get or create submission data for a user
+async function getOrCreateSubmission(userId, initialData = {}) {
+  try {
+    console.log(`[storage.js]: 🔍 Getting or creating submission for user: ${userId}`);
+    
+    // Try to find existing submission
+    let submissionId = await findLatestSubmissionIdForUser(userId);
+    let submissionData = null;
+
+    if (submissionId) {
+      console.log(`[storage.js]: 🔍 Found existing submissionId: ${submissionId}`);
+      submissionData = await retrieveSubmissionFromStorage(submissionId);
+      console.log(`[storage.js]: 🔍 Retrieved submission data:`, submissionData ? 'found' : 'not found');
+    } else {
+      console.log(`[storage.js]: 🔍 No existing submission found for user: ${userId}`);
+    }
+
+    // If no existing submission, create new one
+    if (!submissionData) {
+      submissionId = 'A' + Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
+      console.log(`[storage.js]: 🚀 Generating new submissionId: ${submissionId}`);
+      
+      submissionData = {
+        submissionId,
+        userId,
+        baseSelections: [],
+        typeMultiplierSelections: [],
+        productMultiplierValue: undefined,
+        addOnsApplied: [],
+        specialWorksApplied: [],
+        characterCount: 1,
+        typeMultiplierCounts: {},
+        finalTokenAmount: 0,
+        tokenCalculation: null,
+        collab: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        ...initialData
+      };
+
+      await saveSubmissionToStorage(submissionId, submissionData);
+      console.log(`[storage.js]: 💾 Created new submission: ${submissionId} for user: ${userId}`);
+    } else {
+      console.log(`[storage.js]: 💾 Reusing existing submission: ${submissionId} for user: ${userId}`);
+      console.log(`[storage.js]: 📊 Existing submission data:`, {
+        baseSelections: submissionData.baseSelections,
+        characterCount: submissionData.characterCount,
+        typeMultiplierSelections: submissionData.typeMultiplierSelections,
+        productMultiplierValue: submissionData.productMultiplierValue
+      });
+    }
+
+    return { submissionId, submissionData };
+  } catch (error) {
+    console.error(`[storage.js]: ❌ Error in getOrCreateSubmission:`, error);
     throw error;
   }
 }
@@ -494,12 +603,19 @@ async function runWithTransaction(fn) {
 
 // Find the latest (not expired) submission for a userId
 async function findLatestSubmissionIdForUser(userId) {
-  const result = await TempData.findOne({
-    type: 'submission',
-    'data.userId': userId,
-    expiresAt: { $gt: new Date() }
-  }).sort({ updatedAt: -1 });
-  return result?.data?.submissionId || null;
+  try {
+    const result = await TempData.findOne({
+      type: 'submission',
+      'data.userId': userId,
+      expiresAt: { $gt: new Date() }
+    }).sort({ 'data.updatedAt': -1 });
+    
+    console.log(`[storage.js]: 🔍 Found latest submission for user ${userId}:`, result?.data?.submissionId || 'none');
+    return result?.data?.submissionId || null;
+  } catch (error) {
+    console.error(`[storage.js]: ❌ Error finding latest submission for user ${userId}:`, error);
+    return null;
+  }
 }
 
 // ============================================================================
@@ -507,6 +623,8 @@ async function findLatestSubmissionIdForUser(userId) {
 // Export all storage-related functions for use in other modules.
 module.exports = {
   saveSubmissionToStorage,
+  updateSubmissionData,
+  getOrCreateSubmission,
   retrieveSubmissionFromStorage,
   deleteSubmissionFromStorage,
   

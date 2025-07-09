@@ -905,7 +905,7 @@ const createWritingSubmissionEmbed = (submissionData) => {
   )
   .setImage(DEFAULT_IMAGE_URL)
   .setTimestamp()
-  .setFooter({ text: "Writing Submission System" });
+  .setFooter({ text: "⏳ Please wait for a mod to approve your submission!" });
 };
 
 // ------------------- Subsection Title ------------------- 
@@ -934,8 +934,8 @@ const createArtSubmissionEmbed = (submissionData) => {
   // Art title fallback
   const artTitle = title || fileName || 'Untitled Art';
 
-  // Member field (mention if possible)
-  const memberField = username ? `@${username}` : userId ? `<@${userId}>` : 'N/A';
+  // Member field (proper mention)
+  const memberField = userId ? `<@${userId}>` : username ? `@${username}` : 'N/A';
 
   // Upload link
   const uploadLink = fileUrl ? `[View Uploaded Image](${fileUrl})` : 'N/A';
@@ -950,32 +950,27 @@ const createArtSubmissionEmbed = (submissionData) => {
   // Token calculation breakdown (no duplicate lines)
   let breakdown = '';
   if (tokenCalculation && typeof tokenCalculation === 'object') {
+    // Use the breakdown object structure from calculateTokens
+    const { baseTotal, typeMultiplierTotal, productMultiplier, addOnTotal, specialWorksTotal, regularTotal, finalTotal } = tokenCalculation;
+    
     // Compose breakdown lines
     if (baseSelections && baseSelections.length) {
-      breakdown += baseSelections.map(base => {
-        const baseVal = tokenCalculation.baseValues?.[base] || 0;
-        const charCount = submissionData.characterCount || 1;
-        return `${capitalizeFirst(base)} (${baseVal} × ${charCount}) = ${baseVal * charCount}`;
-      }).join(' \u00D7 ') + '\n';
+      breakdown += `${capitalizeFirst(baseSelections[0])} (${baseTotal} × ${characterCount || 1}) = ${baseTotal}\n`;
     }
-    if (typeMultiplierSelections && typeMultiplierSelections.length) {
-      breakdown += typeMultiplierSelections.map(type => {
-        const typeVal = tokenCalculation.typeMultiplierValues?.[type] || 1;
-        const typeCount = (submissionData.typeMultiplierCounts && submissionData.typeMultiplierCounts[type]) || 1;
-        return `× ${capitalizeFirst(type)} (${typeVal} × ${typeCount}) = ${typeVal * typeCount}`;
-      }).join(' ') + '\n';
+    if (typeMultiplierTotal && typeMultiplierTotal !== 1) {
+      breakdown += `× Type Multiplier (${typeMultiplierTotal})\n`;
     }
-    if (productMultiplierValue && productMultiplierValue !== 'default') {
-      breakdown += `× ${capitalizeFirst(productMultiplierValue)}\n`;
+    if (productMultiplier && productMultiplier !== 1) {
+      breakdown += `× Product Multiplier (${productMultiplier})\n`;
     }
-    if (addOnsApplied && addOnsApplied.length) {
-      breakdown += addOnsApplied.map(a => `× ${capitalizeFirst(a.addOn)} (${a.count})`).join(' ') + '\n';
+    if (addOnTotal && addOnTotal > 0) {
+      breakdown += `+ Add-ons: ${addOnTotal}\n`;
     }
-    if (specialWorksApplied && specialWorksApplied.length) {
-      breakdown += specialWorksApplied.map(w => `× ${capitalizeFirst(w.work)} (${w.count})`).join(' ') + '\n';
+    if (specialWorksTotal && specialWorksTotal > 0) {
+      breakdown += `+ Special Works: ${specialWorksTotal}\n`;
     }
     breakdown += '\n-----------------------\n';
-    breakdown += `= ${finalTokenAmount} Tokens`;
+    breakdown += `= ${finalTotal || finalTokenAmount} Tokens`;
   } else if (typeof tokenCalculation === 'string') {
     breakdown = tokenCalculation;
   } else {
@@ -1001,7 +996,7 @@ const createArtSubmissionEmbed = (submissionData) => {
     .setAuthor({ name: `Submitted by: ${username || 'Unknown User'}`, iconURL: userAvatar || undefined })
     .setTitle(`🎨 ${artTitle}`)
     .addFields(fields)
-    .setFooter({ text: 'Art Submission System', iconURL: undefined })
+    .setFooter({ text: '⏳ Please wait for a mod to approve your submission!', iconURL: undefined })
     .setTimestamp(updatedAt || new Date());
 
   if (fileUrl) {

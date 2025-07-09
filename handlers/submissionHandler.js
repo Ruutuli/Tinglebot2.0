@@ -13,14 +13,21 @@ const { handleError } = require('../utils/globalErrorHandler');
 // Database Services
 // ============================================================================
 
-const { appendEarnedTokens } = require('../database/db');
+const { appendEarnedTokens, updateTokenBalance } = require('../database/db');
 
 // ============================================================================
 // Utility Functions
 // ============================================================================
 
 const { resetSubmissionState, calculateTokens } = require('../utils/tokenUtils');
-const { saveSubmissionToStorage, submissionStore, retrieveSubmissionFromStorage, deleteSubmissionFromStorage } = require('../utils/storage');
+// Storage utilities
+const { 
+  saveSubmissionToStorage, 
+  updateSubmissionData, 
+  retrieveSubmissionFromStorage, 
+  deleteSubmissionFromStorage,
+  findLatestSubmissionIdForUser 
+} = require('../utils/storage');
 
 
 // ============================================================================
@@ -90,6 +97,11 @@ async function handleSubmissionCompletion(interaction) {
       throw new Error('File URL or File Name missing.');
     }
 
+    // Validate required selections
+    if (!productMultiplierValue) {
+      throw new Error('Product multiplier is required. Please select a product multiplier before submitting.');
+    }
+    
     // Calculate final token amount
     console.log(`[submissionHandler.js]: 🧮 Calculating tokens for submission:`, {
       baseSelections,
@@ -104,9 +116,13 @@ async function handleSubmissionCompletion(interaction) {
       typeMultiplierSelections,
       productMultiplierValue,
       addOnsApplied,
-      characterCount
+      characterCount,
+      typeMultiplierCounts: submissionData.typeMultiplierCounts || {},
+      specialWorksApplied: submissionData.specialWorksApplied || [],
+      collab: submissionData.collab
     });
     console.log(`[submissionHandler.js]: 💰 Calculated tokens: ${totalTokens}`);
+    console.log(`[submissionHandler.js]: 📊 Token breakdown:`, breakdown);
 
     // Update submission data with final calculations
     submissionData.finalTokenAmount = totalTokens;
@@ -124,9 +140,10 @@ async function handleSubmissionCompletion(interaction) {
     await interaction.reply({ embeds: [embed] });
     console.log(`[submissionHandler.js]: ✅ Submission embed sent`);
 
-    // Update token count in database
+    // Update token count in database and log to Google Sheets
     console.log(`[submissionHandler.js]: 💰 Updating token count for user: ${user.id}`);
-    await appendEarnedTokens(user.id, totalTokens);
+    await appendEarnedTokens(user.id, fileName, 'art', totalTokens, fileUrl);
+    await updateTokenBalance(user.id, totalTokens);
     console.log(`[submissionHandler.js]: ✅ Token count updated`);
 
     // Clean up storage
@@ -246,12 +263,15 @@ async function handleSubmitAction(interaction) {
         const splitTokens = submission.finalTokenAmount / 2;
         // Update tokens for the main user
         await appendEarnedTokens(user.id, submission.fileName, 'art', splitTokens, submission.fileUrl);
+        await updateTokenBalance(user.id, splitTokens);
         // Update tokens for the collaborator (extracting their user ID)
         const collaboratorId = submission.collab.replace(/[<@>]/g, '');
         await appendEarnedTokens(collaboratorId, submission.fileName, 'art', splitTokens, submission.fileUrl);
+        await updateTokenBalance(collaboratorId, splitTokens);
       } else {
         // No collaboration; assign all tokens to the main user.
         await appendEarnedTokens(user.id, submission.fileName, 'art', submission.finalTokenAmount, submission.fileUrl);
+        await updateTokenBalance(user.id, submission.finalTokenAmount);
       }
     } catch (error) {
     handleError(error, 'submissionHandler.js');

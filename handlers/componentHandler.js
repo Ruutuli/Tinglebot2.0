@@ -57,10 +57,12 @@ const { syncInventory } = require('../handlers/syncHandler');
 const { handleVendingViewVillage, handleSyncButton } = require('./vendingHandler');
 
 // ------------------- Utility Functions -------------------
-const {
+const { 
+  saveSubmissionToStorage, 
+  updateSubmissionData, 
+  retrieveSubmissionFromStorage, 
   deleteSubmissionFromStorage,
-  saveSubmissionToStorage,
-  retrieveSubmissionFromStorage
+  findLatestSubmissionIdForUser 
 } = require('../utils/storage');
 
 const {
@@ -119,10 +121,33 @@ async function handleButtonInteraction(interaction) {
       case 'sync-no':
         return await handleSyncNo(interaction);
       case 'confirm':
-        const submissionData = await retrieveSubmissionFromStorage(userId);
+        // Find the latest submission for this user
+        console.log(`[componentHandler.js]: 🔍 Looking for latest submission for user: ${userId}`);
+        const submissionId = await findLatestSubmissionIdForUser(userId);
+        console.log(`[componentHandler.js]: 📋 Found submission ID: ${submissionId}`);
+        if (!submissionId) {
+          return interaction.reply({
+            content: '❌ **No active submission found. Please start a new submission.**',
+            ephemeral: true
+          });
+        }
+        const submissionData = await retrieveSubmissionFromStorage(submissionId);
+        console.log(`[componentHandler.js]: 📊 Retrieved submission data:`, {
+          submissionId,
+          finalTokenAmount: submissionData.finalTokenAmount,
+          hasTokenCalculation: !!submissionData.tokenCalculation
+        });
         return await handleConfirmation(interaction, userId, submissionData);
       case 'cancel':
-        const cancelData = await retrieveSubmissionFromStorage(userId);
+        // Find the latest submission for this user
+        const cancelSubmissionId = await findLatestSubmissionIdForUser(userId);
+        if (!cancelSubmissionId) {
+          return interaction.reply({
+            content: '❌ **No active submission found. Please start a new submission.**',
+            ephemeral: true
+          });
+        }
+        const cancelData = await retrieveSubmissionFromStorage(cancelSubmissionId);
         return await handleCancel(interaction, userId, cancelData);
       case 'view':
         return await handleViewCharacter(interaction, characterId);
@@ -196,7 +221,7 @@ async function handleSyncNo(interaction) {
 }
 
 // ------------------- Function: handleConfirmation -------------------
-// Confirms an art submission and posts embed.
+// Confirms an art submission and finalizes the process.
 async function handleConfirmation(interaction, userId, submissionData) {
   if (!submissionData) {
     return interaction.reply({
@@ -207,11 +232,19 @@ async function handleConfirmation(interaction, userId, submissionData) {
 
   try {
     const user = await getUserById(userId);
-    const { totalTokens, breakdown } = calculateTokens(submissionData);
+    
+    // Use already calculated token values if they exist
+    const totalTokens = submissionData.finalTokenAmount;
+    const breakdown = submissionData.tokenCalculation;
+    
+    if (!totalTokens || !breakdown) {
+      throw new Error('Token calculation not found. Please try again.');
+    }
 
     // Update submission data with final calculations
-    submissionData.finalTokenAmount = totalTokens;
-    submissionData.tokenCalculation = breakdown;
+    const updates = {
+      embedSent: true
+    };
 
     // First update the interaction
     await interaction.update({
@@ -219,24 +252,25 @@ async function handleConfirmation(interaction, userId, submissionData) {
       components: [],
     });
 
-    if (!submissionData.embedSent) {
-      // Ensure all required fields are present
-      const embedData = {
-        ...submissionData,
-        userId: submissionData.userId || userId,
-        username: submissionData.username || interaction.user.username,
-        userAvatar: submissionData.userAvatar || interaction.user.displayAvatarURL(),
-        finalTokenAmount: totalTokens,
-        tokenCalculation: breakdown
-      };
+    // Ensure all required fields are present
+    const embedData = {
+      ...submissionData,
+      ...updates,
+      userId: submissionData.userId || userId,
+      username: submissionData.username || interaction.user.username,
+      userAvatar: submissionData.userAvatar || interaction.user.displayAvatarURL(),
+    };
 
-      const embed = createArtSubmissionEmbed(embedData, user, breakdown);
-      const sentMessage = await interaction.channel.send({ embeds: [embed] });
-      submissionData.messageUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${sentMessage.id}`;
-      await saveSubmissionToStorage(userId, submissionData);
-    }
+    const embed = createArtSubmissionEmbed(embedData, user);
+    const sentMessage = await interaction.channel.send({ embeds: [embed] });
+    
+    // Update with message URL
+    await updateSubmissionData(submissionData.submissionId, {
+      ...updates,
+      messageUrl: `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${sentMessage.id}`
+    });
 
-    await retrieveSubmissionFromStorage(userId);
+    console.log(`[componentHandler.js]: ✅ Confirmed submission ${submissionData.submissionId} with ${totalTokens} tokens`);
   } catch (error) {
     console.error('Error in handleConfirmation:', error);
     // Only try to reply if we haven't already
