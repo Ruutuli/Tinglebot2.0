@@ -237,7 +237,7 @@ async function handleHealingRequest(interaction, characterName, heartsToHeal, pa
     const sentMessage = await interaction.followUp({
       content: healerName
         ? `🔔 <@${healerCharacter.userId}>, **${characterToHeal.name}** is requesting healing from **${healerName}**!`
-        : `🔔 @Job Perk: Healing, Healing request for any eligible healer in **${capitalizeFirstLetter(characterToHeal.currentVillage)}**!`,
+        : `🔔 <@&1083191610478698547>, Healing request for any eligible healer in **${capitalizeFirstLetter(characterToHeal.currentVillage)}**!`,
       embeds: [embed],
     });
 
