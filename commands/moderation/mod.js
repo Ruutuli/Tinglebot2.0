@@ -118,6 +118,39 @@ function cleanUrl(url) {
   return cleaned;
 }
 
+// ------------------- URL Sanitization Helper -------------------
+const sanitizeUrl = (url) => {
+  if (!url) return "https://i.imgur.com/placeholder.png";
+  try {
+    const encodedUrl = encodeURI(url).replace(/!/g, '%21');
+    const urlObj = new URL(encodedUrl);
+    return urlObj.protocol === 'http:' || urlObj.protocol === 'https:' ? encodedUrl : "https://i.imgur.com/placeholder.png";
+  } catch (_) {
+    console.error(`[mod.js]: ❌ Error sanitizing URL: ${url}`);
+    return "https://i.imgur.com/placeholder.png";
+  }
+};
+
+// ------------------- Pet Image URL Encoding Helper -------------------
+const encodePetImageUrl = (petImageUrl) => {
+  if (!petImageUrl) return null;
+  try {
+    // Split the URL into base and filename parts
+    const lastSlashIndex = petImageUrl.lastIndexOf('/');
+    if (lastSlashIndex !== -1) {
+      const baseUrl = petImageUrl.substring(0, lastSlashIndex + 1);
+      const filename = petImageUrl.substring(lastSlashIndex + 1);
+      const encodedFilename = encodeURIComponent(filename);
+      const encodedUrl = baseUrl + encodedFilename;
+      console.log(`[mod.js]: Encoded pet image URL: "${petImageUrl}" -> "${encodedUrl}"`);
+      return encodedUrl;
+    }
+  } catch (error) {
+    console.log(`[mod.js]: Error encoding pet image URL: ${error.message}`);
+  }
+  return null;
+};
+
 const { addItemInventoryDatabase } = require('../../utils/inventoryUtils');
 
 const {
@@ -748,9 +781,23 @@ async function handlePetLevel(interaction) {
       })
       .setTimestamp();
 
-    // Skip character icon URL for now to avoid URL issues
-    petLevelEmbed.setAuthor({ name: character.name });
-    console.log(`[mod.js]: Skipping character icon URL to avoid issues (pet level)`);
+    // Set character as author with icon if available
+    petLevelEmbed.setAuthor({ name: character.name, iconURL: character.icon });
+
+    // Set pet image as thumbnail if available
+    if (petDoc.imageUrl) {
+      const encodedPetImageUrl = encodePetImageUrl(petDoc.imageUrl);
+      const sanitizedPetImageUrl = sanitizeUrl(encodedPetImageUrl || petDoc.imageUrl);
+      petLevelEmbed.setThumbnail(sanitizedPetImageUrl);
+      console.log(`[mod.js]: Using pet image as thumbnail: "${sanitizedPetImageUrl}"`);
+    } else {
+      petLevelEmbed.setThumbnail("https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png");
+      console.log(`[mod.js]: Using default thumbnail for pet`);
+    }
+
+    // Set banner image
+    petLevelEmbed.setImage("https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png");
+    console.log(`[mod.js]: Using banner image for pet level update`);
 
     // Log the embed data before sending
     console.log(`[mod.js]: Embed data:`, {
@@ -1575,44 +1622,23 @@ async function handleForceResetPetRolls(interaction) {
       })
       .setTimestamp();
 
-    // Skip character icon URL for now to avoid URL issues
-    resetEmbed.setAuthor({ name: character.name });
-    console.log(`[mod.js]: Skipping character icon URL to avoid issues`);
+    // Set character as author with icon if available
+    resetEmbed.setAuthor({ name: character.name, iconURL: character.icon });
 
-    // Check if pet image URL is valid and log details
-    const cleanedPetImageUrl = cleanUrl(pet.imageUrl);
-    console.log(`[mod.js]: Original pet image URL: "${pet.imageUrl}"`);
-    console.log(`[mod.js]: Cleaned pet image URL: "${cleanedPetImageUrl}"`);
-    
-    // URL-encode the pet image URL to handle spaces properly
-    let encodedPetImageUrl = null;
-    if (cleanedPetImageUrl) {
-      try {
-        // Split the URL into base and filename parts
-        const lastSlashIndex = cleanedPetImageUrl.lastIndexOf('/');
-        if (lastSlashIndex !== -1) {
-          const baseUrl = cleanedPetImageUrl.substring(0, lastSlashIndex + 1);
-          const filename = cleanedPetImageUrl.substring(lastSlashIndex + 1);
-          const encodedFilename = encodeURIComponent(filename);
-          encodedPetImageUrl = baseUrl + encodedFilename;
-          console.log(`[mod.js]: Encoded pet image URL: "${encodedPetImageUrl}"`);
-        }
-      } catch (error) {
-        console.log(`[mod.js]: Error encoding pet image URL: ${error.message}`);
-      }
-    }
-    
-    // Use the encoded URL if available, otherwise use default
-    if (encodedPetImageUrl && isValidUrl(encodedPetImageUrl)) {
-      resetEmbed.setThumbnail(encodedPetImageUrl);
-      console.log(`[mod.js]: Using encoded pet image URL as thumbnail`);
+    // Set pet image as thumbnail if available
+    if (pet.imageUrl) {
+      const encodedPetImageUrl = encodePetImageUrl(pet.imageUrl);
+      const sanitizedPetImageUrl = sanitizeUrl(encodedPetImageUrl || pet.imageUrl);
+      resetEmbed.setThumbnail(sanitizedPetImageUrl);
+      console.log(`[mod.js]: Using pet image as thumbnail: "${sanitizedPetImageUrl}"`);
     } else {
       resetEmbed.setThumbnail("https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png");
       console.log(`[mod.js]: Using default thumbnail for pet`);
     }
 
-    // Set image (this URL should be valid)
+    // Set banner image
     resetEmbed.setImage("https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png");
+    console.log(`[mod.js]: Using banner image for pet reset`);
 
     // Log the embed data before sending
     console.log(`[mod.js]: Reset embed data:`, {
