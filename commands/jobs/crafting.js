@@ -300,7 +300,7 @@ module.exports = {
         character.jobVoucher ? character.jobVoucherJob : null
       );
 
-      await interaction.editReply({ content: `✅ **Successfully crafted ${quantity} "${itemName}".**`, flags: [4096] });
+      await interaction.editReply({ content: `✅ **Successfully crafted ${quantity} "${itemName}".**`, ephemeral: true });
       await interaction.followUp({ embeds: [embed], ephemeral: false });
 
       // ------------------- Update Inventory and Sheets -------------------
