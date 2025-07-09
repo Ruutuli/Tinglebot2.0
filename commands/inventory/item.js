@@ -413,6 +413,7 @@ module.exports = {
             }
           )
           .setThumbnail(item.image || character.icon)
+          .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
           .setFooter({ text: 'Revival successful! 🌿' });
 
         return void await interaction.editReply({ embeds: [successEmbed] });
@@ -463,6 +464,7 @@ module.exports = {
           }
         )
         .setThumbnail(item.image || character.icon)
+        .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
         .setFooter({ text: 'Healing successful! 🌿' });
 
       return void await interaction.editReply({ embeds: [successEmbed] });
