@@ -220,7 +220,7 @@ const speciesRollPermissions = {
     foragingbird: ['petforage'],
     keese: ['petprey', 'petforage'],
     lagamorph: ['petforage'],
-    largecanine: ['lgpetprey', 'petmon'],
+    largecanine: ['lgpetprey', 'petmon', 'petforage'],
     largefeline: ['lgpetprey', 'petmon'],
     largereptile: ['lgpetprey', 'petforage'],
     marsupial: ['petprey', 'petforage'],
