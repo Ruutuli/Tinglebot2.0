@@ -10,7 +10,12 @@ const { handleError } = require('../utils/globalErrorHandler');
 // ------------------- Utility Functions -------------------
 // Generic helper utilities for menu creation and storage.
 const { getAddOnsMenu, getBaseSelectMenu, getSpecialWorksMenu, getTypeMultiplierMenu } = require('../utils/menuUtils');
-const { saveSubmissionToStorage, retrieveSubmissionFromStorage, findLatestSubmissionIdForUser } = require('../utils/storage');
+const { 
+  getOrCreateSubmission, 
+  updateSubmissionData, 
+  retrieveSubmissionFromStorage, 
+  findLatestSubmissionIdForUser 
+} = require('../utils/storage');
 const { getCancelButtonRow } = require('./buttonHelperHandler');
 const { calculateTokens, generateTokenBreakdown } = require('../utils/tokenUtils');
 
@@ -35,45 +40,12 @@ async function handleModalSubmission(interaction) {
   const customId = interaction.customId;
 
   try {
-    // Get existing submission data or create new
-    console.log(`[modalHandler.js]: 🔄 Checking for existing submission for user: ${userId}`);
-    let submissionId = await findLatestSubmissionIdForUser(userId);
-    if (submissionId) {
-      console.log(`[modalHandler.js]: 🔄 Found existing submissionId: ${submissionId}`);
-    }
-    let submissionData = submissionId ? await retrieveSubmissionFromStorage(submissionId) : null;
-    let isNewSubmission = false;
-    // If no existing data or if this is a new base selection, create new submission
-    if (!submissionData || customId === 'baseCountModal') {
-      isNewSubmission = true;
-      submissionId = submissionData?.submissionId || submissionId || generateSubmissionId();
-      if (!submissionData?.submissionId && !submissionId) {
-        submissionId = generateSubmissionId();
-        console.log(`[modalHandler.js]: 🚀 Generating new submissionId: ${submissionId}`);
-      } else {
-        console.log(`[modalHandler.js]: 🔄 Reusing submissionId: ${submissionId}`);
-      }
-      submissionData = {
-        submissionId,
-        userId,
-        baseSelections: [],
-        typeMultiplierSelections: [],
-        productMultiplierValue: 'default',
-        addOnsApplied: [],
-        specialWorksApplied: [],
-        characterCount: 1,
-        typeMultiplierCounts: {},
-        finalTokenAmount: 0,
-        tokenCalculation: null,
-        collab: null,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      };
-    }
+    // Get or create submission data using the new helper
+    console.log(`[modalHandler.js]: 🔄 Getting or creating submission for user: ${userId}`);
+    const { submissionId, submissionData } = await getOrCreateSubmission(userId);
 
-    // Save the submission data using submissionId as the key
-    console.log(`[modalHandler.js]: 💾 Saving submission: ${submissionId} for user: ${userId}`);
-    await saveSubmissionToStorage(submissionData.submissionId, submissionData);
+    // Track updates to apply at the end
+    let updates = {};
 
     // Handle different modal types
     if (customId.startsWith('baseCountModal_')) {
@@ -88,20 +60,16 @@ async function handleModalSubmission(interaction) {
 
       console.log('Processing base count for:', baseSelection);
       
-      // Reset all counts when starting a new base selection
-      submissionData.characterCount = baseCount;
-      submissionData.typeMultiplierCounts = {};
-      submissionData.addOnsApplied = [];
-      submissionData.specialWorksApplied = [];
-      submissionData.finalTokenAmount = 0;
-      submissionData.tokenCalculation = null;
+      // Update character count for this specific base
+      updates.characterCount = baseCount;
       
-      // Always replace with the latest base selection
-      submissionData.baseSelections = [baseSelection];
+      // Ensure the current base selection is included in the baseSelections array
+      const currentSelections = submissionData.baseSelections || [];
+      if (!currentSelections.includes(baseSelection)) {
+        updates.baseSelections = [...currentSelections, baseSelection];
+      }
       
-      // Save and update UI
-      await saveSubmissionToStorage(submissionData.submissionId, submissionData);
-      console.log('Base selection saved:', submissionData.baseSelections);
+      console.log('Base selection updated:', updates.baseSelections);
       
       await interaction.update({
         content: `☑️ **${baseCount} ${baseSelection}(s)** selected. Select another base or click "Next Section ➡️" when you are done.`,
@@ -117,10 +85,17 @@ async function handleModalSubmission(interaction) {
           ephemeral: true
         });
       }
-      submissionData.typeMultiplierCounts[multiplierName] = multiplierCount;
       
-      // Save and update UI
-      await saveSubmissionToStorage(submissionData.submissionId, submissionData);
+      // Update the specific multiplier count
+      const currentCounts = submissionData.typeMultiplierCounts || {};
+      updates.typeMultiplierCounts = { ...currentCounts, [multiplierName]: multiplierCount };
+      
+      // Also update the typeMultiplierSelections array to include this multiplier
+      const currentSelections = submissionData.typeMultiplierSelections || [];
+      if (!currentSelections.includes(multiplierName)) {
+        updates.typeMultiplierSelections = [...currentSelections, multiplierName];
+      }
+      
       await interaction.update({
         content: `☑️ **${multiplierCount}** selected for the multiplier **${capitalizeFirstLetter(multiplierName)}**. Select another Type Multiplier or click "Next Section ➡️" when you are done.`,
         components: [getTypeMultiplierMenu(true), getCancelButtonRow()]
@@ -135,15 +110,12 @@ async function handleModalSubmission(interaction) {
           ephemeral: true
         });
       }
-      const existingAddOn = submissionData.addOnsApplied.find(a => a.addOn === addOnName);
-      if (existingAddOn) {
-        existingAddOn.count = addOnCount;
-      } else {
-        submissionData.addOnsApplied.push({ addOn: addOnName, count: addOnCount });
-      }
       
-      // Save and update UI
-      await saveSubmissionToStorage(submissionData.submissionId, submissionData);
+      // Update the specific add-on count
+      const currentAddOns = submissionData.addOnsApplied || [];
+      const filteredAddOns = currentAddOns.filter(a => a.addOn !== addOnName);
+      updates.addOnsApplied = [...filteredAddOns, { addOn: addOnName, count: addOnCount }];
+      
       const addOnsMenu = getAddOnsMenu(true);
       await interaction.update({
         content: `☑️ **${addOnCount} ${addOnName}(s)** added. Select more add-ons or click "Next Section ➡️".`,
@@ -159,22 +131,45 @@ async function handleModalSubmission(interaction) {
           ephemeral: true
         });
       }
-      const existingWork = submissionData.specialWorksApplied.find(w => w.work === specialWorkName);
-      if (existingWork) {
-        existingWork.count = specialWorksCount;
-      } else {
-        submissionData.specialWorksApplied.push({ work: specialWorkName, count: specialWorksCount });
+      
+      // Update the specific special work count
+      const currentWorks = submissionData.specialWorksApplied || [];
+      const filteredWorks = currentWorks.filter(w => w.work !== specialWorkName);
+      updates.specialWorksApplied = [...filteredWorks, { work: specialWorkName, count: specialWorksCount }];
+      
+      // Apply updates first
+      if (Object.keys(updates).length > 0) {
+        await updateSubmissionData(submissionId, updates);
+        console.log(`[modalHandler.js]: 💾 Applied updates to submission: ${submissionId}`);
       }
+
+      // Get updated submission data
+      const updatedSubmissionData = await retrieveSubmissionFromStorage(submissionId);
       
       // Calculate tokens and generate breakdown
-      const { totalTokens, breakdown } = calculateTokens(submissionData);
-      submissionData.finalTokenAmount = totalTokens;
-      submissionData.tokenCalculation = breakdown;
+      const { totalTokens, breakdown } = calculateTokens(updatedSubmissionData);
       
-      // Save and update UI
-      await saveSubmissionToStorage(submissionData.submissionId, submissionData);
+      // Generate the breakdown string
+      const breakdownString = generateTokenBreakdown({
+        baseSelections: updatedSubmissionData.baseSelections,
+        typeMultiplierSelections: updatedSubmissionData.typeMultiplierSelections,
+        productMultiplierValue: updatedSubmissionData.productMultiplierValue,
+        addOnsApplied: updatedSubmissionData.addOnsApplied,
+        specialWorksApplied: updatedSubmissionData.specialWorksApplied,
+        characterCount: updatedSubmissionData.characterCount,
+        typeMultiplierCounts: updatedSubmissionData.typeMultiplierCounts,
+        finalTokenAmount: totalTokens,
+        collab: updatedSubmissionData.collab
+      });
+      
+      // Update with final calculations
+      await updateSubmissionData(submissionId, {
+        finalTokenAmount: totalTokens,
+        tokenCalculation: breakdownString
+      });
+      
       await interaction.update({
-        content: `☑️ **${specialWorksCount} ${specialWorkName.replace(/([A-Z])/g, ' $1')}(s)** added. Select more or click "Complete ✅".\n\n${breakdown}`,
+        content: `☑️ **${specialWorksCount} ${specialWorkName.replace(/([A-Z])/g, ' $1')}(s)** added. Select more or click "Complete ✅".\n\n${breakdownString}`,
         components: [getSpecialWorksMenu(true), getCancelButtonRow()]
       });
     }
@@ -184,6 +179,12 @@ async function handleModalSubmission(interaction) {
         content: '❌ **An error occurred: Unknown modal type.**',
         ephemeral: true
       });
+    }
+
+    // Apply updates only if there are any
+    if (Object.keys(updates).length > 0) {
+      await updateSubmissionData(submissionId, updates);
+      console.log(`[modalHandler.js]: 💾 Applied updates to submission: ${submissionId}`);
     }
 
   } catch (error) {

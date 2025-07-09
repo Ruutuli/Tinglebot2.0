@@ -151,6 +151,131 @@ const encodePetImageUrl = (petImageUrl) => {
   return null;
 };
 
+// ------------------- Embed Footer Update Helper -------------------
+async function updateSubmissionEmbedFooter(message, status, moderatorTag, reason = null) {
+  try {
+    const embed = message.embeds[0];
+    if (!embed) {
+      console.warn('[mod.js]: No embed found in message to update footer');
+      return;
+    }
+
+    const updatedEmbed = embed.toJSON();
+    let footerText = '';
+    
+    if (status === 'approved') {
+      footerText = `✅ Approved by ${moderatorTag}`;
+    } else if (status === 'denied') {
+      footerText = `❌ Denied by ${moderatorTag}${reason ? ` - ${reason}` : ''}`;
+    } else {
+      footerText = `⏳ Please wait for a mod to approve your submission!`;
+    }
+
+    updatedEmbed.footer = {
+      text: footerText,
+      iconURL: undefined
+    };
+
+    await message.edit({ embeds: [updatedEmbed] });
+    console.log(`[mod.js]: ✅ Updated embed footer to: ${footerText}`);
+  } catch (error) {
+    console.error(`[mod.js]: ❌ Error updating embed footer:`, error);
+    handleError(error, 'mod.js');
+  }
+}
+
+// ------------------- Approval DM Embed Helper -------------------
+function createApprovalDMEmbed(submissionId, title, tokenAmount, isCollaboration = false) {
+  const embed = new EmbedBuilder()
+    .setColor('#00FF00')
+    .setTitle('🎉 Submission Approved!')
+    .setDescription(`Your submission has been approved and tokens have been added to your balance.`)
+    .addFields(
+      { name: '📝 Submission ID', value: `\`${submissionId}\``, inline: true },
+      { name: '🎨 Title', value: title || 'Untitled', inline: true },
+      { name: '💰 Tokens Earned', value: `**${tokenAmount}** tokens`, inline: true },
+      { name: '🤝 Collaboration', value: isCollaboration ? 'Yes - tokens split' : 'No', inline: true }
+    )
+    .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+    .setFooter({ text: 'Submission Approval' })
+    .setTimestamp();
+
+  return embed;
+}
+
+// ------------------- Collaboration Approval DM Embed Helper -------------------
+function createCollaborationApprovalDMEmbed(submissionId, title, tokenAmount) {
+  const embed = new EmbedBuilder()
+    .setColor('#00FF00')
+    .setTitle('🎉 Collaboration Submission Approved!')
+    .setDescription(`A submission you collaborated on has been approved and tokens have been added to your balance.`)
+    .addFields(
+      { name: '📝 Submission ID', value: `\`${submissionId}\``, inline: true },
+      { name: '🎨 Title', value: title || 'Untitled', inline: true },
+      { name: '💰 Tokens Earned', value: `**${tokenAmount}** tokens (split)`, inline: true }
+    )
+    .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+    .setFooter({ text: 'Collaboration Submission Approval' })
+    .setTimestamp();
+
+  return embed;
+}
+
+// ------------------- Denial DM Embed Helper -------------------
+function createDenialDMEmbed(submissionId, title, reason) {
+  const embed = new EmbedBuilder()
+    .setColor('#FF0000')
+    .setTitle('❌ Submission Denied')
+    .setDescription(`Your submission has been denied. Please review the feedback and resubmit if needed.`)
+    .addFields(
+      { name: '📝 Submission ID', value: `\`${submissionId}\``, inline: true },
+      { name: '🎨 Title', value: title || 'Untitled', inline: true },
+      { name: '📋 Reason', value: reason || 'No reason provided', inline: false }
+    )
+    .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+    .setFooter({ text: 'Submission Denial' })
+    .setTimestamp();
+
+  return embed;
+}
+
+// ------------------- Mod Approval Confirmation Embed Helper -------------------
+function createModApprovalConfirmationEmbed(submissionId, title, tokenAmount, userId, collab) {
+  const embed = new EmbedBuilder()
+    .setColor('#00FF00')
+    .setTitle('✅ Submission Approved Successfully')
+    .setDescription(`<@${userId}>, your submission has been approved!`)
+    .addFields(
+      { name: '📝 Submission ID', value: `\`${submissionId}\``, inline: true },
+      { name: '🎨 Title', value: title || 'Untitled', inline: true },
+      { name: '💰 Tokens Awarded', value: `**${tokenAmount}** tokens`, inline: true },
+      { name: '🤝 Collaboration', value: collab ? `Yes - split with ${collab}` : 'No', inline: true }
+    )
+    .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+    .setFooter({ text: 'Moderator Approval' })
+    .setTimestamp();
+
+  return embed;
+}
+
+// ------------------- Mod Denial Confirmation Embed Helper -------------------
+function createModDenialConfirmationEmbed(submissionId, title, userId, reason) {
+  const embed = new EmbedBuilder()
+    .setColor('#FF0000')
+    .setTitle('❌ Submission Denied Successfully')
+    .setDescription(`<@${userId}>, your submission has been denied.`)
+    .addFields(
+      { name: '📝 Submission ID', value: `\`${submissionId}\``, inline: true },
+      { name: '🎨 Title', value: title || 'Untitled', inline: true },
+      { name: '📋 Reason', value: reason || 'No reason provided', inline: false }
+    )
+    .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+    .setFooter({ text: 'Moderator Denial' })
+    .setTimestamp();
+
+  return embed;
+}
+
 const { addItemInventoryDatabase } = require('../../utils/inventoryUtils');
 
 const {
@@ -944,48 +1069,57 @@ async function handleApprove(interaction) {
   
         await message.react('☑️');
   
-        if (collab) {
+        // Update the embed footer to show approval status
+        await updateSubmissionEmbedFooter(message, 'approved', interaction.user.tag);
+  
+                if (collab) {
           const splitTokens = Math.floor(tokenAmount / 2);
           const collaboratorId = collab.replace(/[<@>]/g, '');
-  
+
           await updateTokenBalance(userId, splitTokens);
           await appendEarnedTokens(userId, title, category, tokenAmount, messageUrl);
-  
+
           await updateTokenBalance(collaboratorId, splitTokens);
           await appendEarnedTokens(collaboratorId, title, category, splitTokens, messageUrl);
-  
-          await interaction.client.users.send(
-            userId,
-            `**✅ Your submission \`${submissionId}\` has been approved!**\nYou have received **${splitTokens}** tokens.`
-          );
-          await interaction.client.users.send(
-            collaboratorId,
-            `**✅ A submission you collaborated on (\`${submissionId}\`) has been approved!**\nYou have received **${splitTokens}** tokens.`
-          );
+
+          // Send embed DM to main user
+          const mainUserEmbed = createApprovalDMEmbed(submissionId, title, splitTokens, true);
+          await interaction.client.users.send(userId, { embeds: [mainUserEmbed] });
+
+          // Send embed DM to collaborator
+          const collabUserEmbed = createCollaborationApprovalDMEmbed(submissionId, title, splitTokens);
+          await interaction.client.users.send(collaboratorId, { embeds: [collabUserEmbed] });
         } else {
           await updateTokenBalance(userId, tokenAmount);
           await appendEarnedTokens(userId, title, category, tokenAmount, messageUrl);
-  
-          await interaction.client.users.send(
-            userId,
-            `**✅ Your submission \`${submissionId}\` has been approved!**\n**${tokenAmount}** tokens have been added to your balance.`
-          );
+
+          // Send embed DM to user
+          const userEmbed = createApprovalDMEmbed(submissionId, title, tokenAmount, false);
+          await interaction.client.users.send(userId, { embeds: [userEmbed] });
         }
-  
+
         await deleteSubmissionFromStorage(submissionId);
-        return interaction.editReply({ content: `✅ Submission \`${submissionId}\` has been approved.`, ephemeral: true });
+        
+        // Create improved mod confirmation message
+        const modConfirmationEmbed = createModApprovalConfirmationEmbed(submissionId, title, tokenAmount, userId, collab);
+        return interaction.editReply({ embeds: [modConfirmationEmbed], ephemeral: true });
       }
   
       if (action === 'deny') {
         await message.react('❌');
   
-        await interaction.client.users.send(
-          userId,
-          `**❌ Your submission \`${submissionId}\` has been denied.**\nPlease resubmit your submission for approval.\n**Reason:** ${reason || 'No reason provided.'}`
-        );
+        // Update the embed footer to show denial status
+        await updateSubmissionEmbedFooter(message, 'denied', interaction.user.tag, reason);
   
+                // Send embed DM to user for denial
+        const denialEmbed = createDenialDMEmbed(submissionId, title, reason);
+        await interaction.client.users.send(userId, { embeds: [denialEmbed] });
+
         await deleteSubmissionFromStorage(submissionId);
-        return interaction.editReply({ content: `❌ Submission \`${submissionId}\` has been denied.\n**Reason:** ${reason || 'No reason provided.'}`, ephemeral: true });
+        
+        // Create improved mod denial confirmation message
+        const modDenialEmbed = createModDenialConfirmationEmbed(submissionId, title, userId, reason);
+        return interaction.editReply({ embeds: [modDenialEmbed], ephemeral: true });
       }
   
       return interaction.editReply({ content: '❌ Invalid action specified. Use `approve` or `deny`.', ephemeral: true });

@@ -1043,7 +1043,7 @@ function validateDiscordMessageLink(link) {
     const [, guildId, channelId, messageId] = match;
     
     // Check if the link is from the submissions channel
-    const submissionsChannelId = process.env.SUBMISSIONS_CHANNEL_ID;
+    const submissionsChannelId = process.env.SUBMISSIONS;
     if (submissionsChannelId && channelId !== submissionsChannelId) {
       return {
         valid: false,
