@@ -720,7 +720,7 @@ module.exports = {
            },
            { 
              name: "⏰ Last Roll", 
-             value: `> Today at ${lastRoll.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`, 
+             value: `> Today at ${lastRoll.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'America/New_York' })}`, 
              inline: true 
            },
            { 
@@ -1137,7 +1137,7 @@ module.exports = {
         
         if (isSameDay) {
           rollStatus = "🔴 Used Today";
-          rollStatusDescription = `Last rolled at ${lastRoll.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`;
+          rollStatusDescription = `Last rolled at ${lastRoll.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'America/New_York' })}`;
         } else if (pet.rollsRemaining <= 0) {
           rollStatus = "🟡 No Rolls Left";
           rollStatusDescription = "Rolls reset every Sunday at midnight";
@@ -1148,8 +1148,8 @@ module.exports = {
         if (isSameDay) {
           // If pet rolled today, show remaining rolls as available (🔔) and one as used (🔕)
           // For a Level 3 pet that rolled today: should show 🔔🔔🔕 (2 remaining, 1 used today)
-          // But since rollsRemaining is still 3, we need to show 2 available + 1 used
-          const availableRolls = Math.max(0, pet.rollsRemaining - 1); // Subtract 1 for today's roll
+          // The pet has used 1 roll today, so show (level - 1) available bells + 1 used bell
+          const availableRolls = Math.max(0, pet.level - 1); // Level 3 pet that rolled = 2 available
           const usedToday = 1;
           rollsDisplay = "🔔".repeat(availableRolls) + "🔕".repeat(usedToday);
           
