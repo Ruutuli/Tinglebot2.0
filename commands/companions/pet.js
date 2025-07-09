@@ -354,10 +354,7 @@ module.exports = {
       });
     }
 
-    // Check if character is in jail
-    if (await enforceJail(interaction, character)) {
-      return;
-    }
+    // Jail check removed - pets can be used regardless of character status
 
     // ------------------- Check for Existing Pet -------------------
     // Find the pet by name in the character's pets array.
