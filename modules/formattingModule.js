@@ -8,7 +8,7 @@ const typeColors = {
   'Monster': '#FF00FF', 'Dairy': '#FFFFFF', 'Protein': '#FFA500', 'Sweets': '#FFFF00',
   'Grain': '#A52A2A', 'Vegetable': '#00FF00', 'Fungi': '#FF0000', 'Seafood': '#0000FF',
   'Special': '#800080', 'Head': '#FFD700', 'Bow': '#ADFF2F', 'Potion': '#7FFF00',
-  'Inedible': '#696969'
+  'Inedible': '#696969', 'Recipe': '#00CC00'
 };
 
 // Function to get color based on item category
