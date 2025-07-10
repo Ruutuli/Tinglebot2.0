@@ -217,6 +217,10 @@ async function handleAutocomplete(interaction) {
                 if (focusedOption.name === "itemname") {
                   await handleModGiveItemAutocomplete(interaction, focusedOption);
                 }
+              } else if (modSubcommand === "triggerRaid") {
+                if (focusedOption.name === "monster") {
+                  await handleMonsterAutocomplete(interaction, focusedOption);
+                }
               }
             }
             break;

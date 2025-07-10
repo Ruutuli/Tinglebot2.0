@@ -636,6 +636,31 @@ const modCommand = new SlashCommandBuilder()
     )
 )
 
+// ------------------- Subcommand: triggerRaid -------------------
+.addSubcommand(sub =>
+  sub
+    .setName('triggerRaid')
+    .setDescription('🐉 Manually trigger a raid for testing or RP purposes')
+    .addStringOption(option =>
+      option
+        .setName('village')
+        .setDescription('The village where the raid will take place')
+        .setRequired(true)
+        .addChoices(
+          { name: 'Rudania', value: 'rudania' },
+          { name: 'Inariko', value: 'inariko' },
+          { name: 'Vhintl', value: 'vhintl' }
+        )
+    )
+    .addStringOption(option =>
+      option
+        .setName('monster')
+        .setDescription('The monster to raid (optional - random if not specified)')
+        .setRequired(false)
+        .setAutocomplete(true)
+    )
+)
+
 // ============================================================================
 // ------------------- Execute Command Handler -------------------
 // Delegates logic to subcommand-specific handlers
@@ -733,6 +758,8 @@ async function execute(interaction) {
         return await handleRaid(interaction);
     } else if (subcommand === 'shopadd') {
         return await handleShopAdd(interaction);
+    } else if (subcommand === 'triggerRaid') {
+        return await handleTriggerRaid(interaction);
     } else {
         return interaction.editReply('❌ Unknown subcommand.');
     }
@@ -1867,7 +1894,7 @@ async function handleRaid(interaction) {
     }
 
     // Start the raid using our new function
-    const { raidId, raidData, thread } = await startRaid(monster, village, interaction);
+    const { raidId, raidData, thread } = await startRaid(monster, village, { client: interaction.client });
 
     if (!raidId || !raidData) {
       return interaction.editReply({ content: '❌ **Failed to create the raid.**' });
@@ -1881,7 +1908,7 @@ async function handleRaid(interaction) {
     const embed = createRaidEmbed(raidData, monsterImage);
 
     return interaction.editReply({ 
-      content: `✅ **Raid created successfully!**`,
+      content: `✅ **Raid created successfully!** Check <#1391812848099004578> for the raid thread.`,
       embeds: [embed]
     });
 
@@ -2039,6 +2066,72 @@ async function handleShopAdd(interaction) {
         .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
         .setFooter({ text: 'Error Handling' })
         .setTimestamp()],
+      ephemeral: true
+    });
+  }
+}
+
+// ------------------- Function: handleTriggerRaid -------------------
+// Manually triggers a raid for testing or RP purposes
+async function handleTriggerRaid(interaction) {
+  const village = interaction.options.getString('village');
+  const monsterName = interaction.options.getString('monster');
+
+  try {
+    // Get a random monster if none specified
+    let monster;
+    if (monsterName) {
+      monster = await fetchMonsterByName(monsterName);
+      if (!monster) {
+        return interaction.editReply({ content: '❌ **Specified monster not found.**' });
+      }
+    } else {
+      // Get a random monster from the available ones
+      const monsters = Object.values(monsterMapping);
+      const randomMonster = monsters[Math.floor(Math.random() * monsters.length)];
+      // Fetch the full monster data from the database
+      monster = await fetchMonsterByName(randomMonster.name);
+      if (!monster) {
+        return interaction.editReply({ content: '❌ **Failed to fetch random monster data.**' });
+      }
+    }
+
+    // Import the triggerRaid function from raidModule
+    const { triggerRaid } = require('../../modules/raidModule');
+
+    // Trigger the raid (no character specified, so it will be random)
+    const result = await triggerRaid(null, monster, interaction, village, false);
+
+    if (!result || !result.success) {
+      return interaction.editReply({ 
+        content: '❌ **Failed to trigger the raid.**',
+        ephemeral: true
+      });
+    }
+
+    // Create success message
+    const monsterText = monster.name;
+    const villageText = village.charAt(0).toUpperCase() + village.slice(1);
+
+    return interaction.editReply({ 
+      content: `✅ **Raid triggered successfully!**\n\n🐉 **${monsterText}**\n🏘️ **Village:** ${villageText}\n📍 **Location:** <#1391812848099004578>`,
+      ephemeral: true
+    });
+
+  } catch (error) {
+    handleError(error, 'mod.js', {
+      commandName: '/mod triggerRaid',
+      userTag: interaction.user.tag,
+      userId: interaction.user.id,
+      options: {
+        village: village,
+        monster: monsterName
+      }
+    });
+    
+    console.error('[mod.js]: Error triggering raid:', error);
+    return interaction.editReply({ 
+      content: '⚠️ **An error occurred while triggering the raid.**',
       ephemeral: true
     });
   }
