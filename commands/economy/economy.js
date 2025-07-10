@@ -1147,7 +1147,7 @@ async function handleShopBuy(interaction) {
     const itemDetails = await ItemModel.findOne({ 
       itemName: { $regex: new RegExp(`^${itemName}$`, 'i') }
     })
-     .select("buyPrice sellPrice category type image craftingJobs")
+     .select("buyPrice sellPrice category type image craftingJobs itemRarity")
      .lean();
     if (!itemDetails) {
      console.error(`[shops]: ❌ Item details not found for ${itemName}`);
@@ -1475,6 +1475,11 @@ if (quantity <= 0) {
    `[shops]: Inventory item found. Quantity available: ${inventoryItem.quantity}`
   );
 
+  // Add detailed inventory item logging
+  console.log(`[shops]: 📦 Inventory item details:`, JSON.stringify(inventoryItem, null, 2));
+  console.log(`[shops]: 📦 Inventory item name: "${inventoryItem.itemName}"`);
+  console.log(`[shops]: 📦 Inventory item obtain method: "${inventoryItem.obtain}"`);
+
   const isCrafted = inventoryItem.obtain.includes("Crafting");
   console.log(`[shops]: Item crafted: ${isCrafted}`);
 
@@ -1485,17 +1490,36 @@ if (quantity <= 0) {
    console.log(`[shops]: Proceeding to sell item at the standard sell price.`);
   }
 
-  const itemDetails = await ItemModel.findOne({ itemName })
-   .select("buyPrice sellPrice category type image craftingJobs")
+  const itemDetails = await ItemModel.findOne({ itemName: { $regex: new RegExp(`^${itemName}$`, 'i') } })
+   .select("buyPrice sellPrice category type image craftingJobs itemRarity")
    .lean();
+  
+  // Add comprehensive logging for debugging
+  console.log(`[shops]: 🔍 Searching for item: "${itemName}"`);
+  console.log(`[shops]: 🔍 Query used: { itemName: { $regex: new RegExp("^${itemName}$", "i") } }`);
+  
   if (!itemDetails) {
    console.error(`[shops]: Item details not found in database: ${itemName}`);
+   
+   // Try a partial search to see if there are similar items
+   const similarItems = await ItemModel.find({ 
+     itemName: { $regex: new RegExp(itemName, 'i') }
+   }).select("itemName buyPrice sellPrice").limit(5).lean();
+   
+   if (similarItems.length > 0) {
+     console.log(`[shops]: 🔍 Similar items found:`, similarItems.map(item => ({
+       itemName: item.itemName,
+       buyPrice: item.buyPrice,
+       sellPrice: item.sellPrice
+     })));
+   }
+   
    return interaction.editReply("❌ Item details not found.");
   }
 
-  console.log(
-   `[shops]: Item details found. Buy price: ${itemDetails.buyPrice}, Sell price: ${itemDetails.sellPrice}, Category: ${itemDetails.category}, Crafting jobs: ${itemDetails.craftingJobs}`
-  );
+  console.log(`[shops]: ✅ Item found in database: "${itemDetails.itemName}"`);
+  console.log(`[shops]: 📊 Item details found. Buy price: ${itemDetails.buyPrice}, Sell price: ${itemDetails.sellPrice}, Category: ${itemDetails.category}, Crafting jobs: ${itemDetails.craftingJobs}`);
+  console.log(`[shops]: 📊 Full item details:`, JSON.stringify(itemDetails, null, 2));
 
   const normalizedCharacterJob = character.job.toLowerCase();
   const normalizedCraftingJobs = itemDetails.craftingJobs.map((job) =>
@@ -1518,6 +1542,13 @@ if (quantity <= 0) {
     ? itemDetails.buyPrice
     : itemDetails.sellPrice || 0;
 
+  console.log(`[shops]: 💰 Sale price calculation:`);
+  console.log(`[shops]: 💰 - Is crafted: ${isCrafted}`);
+  console.log(`[shops]: 💰 - Character meets requirements: ${characterMeetsRequirements}`);
+  console.log(`[shops]: 💰 - Buy price from DB: ${itemDetails.buyPrice}`);
+  console.log(`[shops]: 💰 - Sell price from DB: ${itemDetails.sellPrice}`);
+  console.log(`[shops]: 💰 - Final sell price: ${sellPrice}`);
+
   if (sellPrice <= 0) {
    console.warn(
     `[shops]: Invalid sell price for item: ${itemName}. Character job: ${character.job}, Item category: ${itemDetails.category}`
@@ -1527,6 +1558,8 @@ if (quantity <= 0) {
 
   console.log(`[shops]: Valid sell price determined: ${sellPrice}`);
 
+  // Log the inventory update
+  console.log(`[shops]: 🔄 Updating inventory - removing ${quantity}x ${itemName} from ${characterName}'s inventory`);
   await inventoryCollection.updateOne(
    { itemName },
    { $inc: { quantity: -quantity } }
@@ -1534,21 +1567,72 @@ if (quantity <= 0) {
 
   console.log(`[shops]: Deducted ${quantity}x ${itemName} from inventory.`);
 
+  // Log the shop stock update
+  console.log(`[shops]: 🔄 Updating shop stock - adding ${quantity}x ${itemName} to shop stock`);
+  
+  // Check existing shop stock data
+  const existingShopStock = await ShopStock.findOne({ itemName: { $regex: new RegExp(`^${itemName}$`, 'i') } });
+  if (existingShopStock) {
+    console.log(`[shops]: 📊 Existing shop stock data:`, JSON.stringify(existingShopStock, null, 2));
+  } else {
+    console.log(`[shops]: 📊 No existing shop stock found for ${itemName}`);
+  }
+  
+  // Update shop stock with correct item data
   await ShopStock.updateOne(
-   { itemName },
-   { $inc: { stock: quantity } },
+   { itemName: { $regex: new RegExp(`^${itemName}$`, 'i') } },
+   { 
+     $inc: { stock: quantity },
+     $set: {
+       itemName: itemName, // Ensure correct case
+       buyPrice: itemDetails.buyPrice,
+       sellPrice: itemDetails.sellPrice,
+       category: itemDetails.category,
+       type: itemDetails.type,
+       image: itemDetails.image || 'No Image',
+       itemRarity: itemDetails.itemRarity || 1
+     }
+   },
    { upsert: true }
   );
 
-  // Delete item if stock reaches 0
-  const updatedStock = await ShopStock.findOne({ itemName });
+  // Check updated shop stock data
+  const updatedStock = await ShopStock.findOne({ itemName: { $regex: new RegExp(`^${itemName}$`, 'i') } });
+  console.log(`[shops]: 📊 Updated shop stock data:`, JSON.stringify(updatedStock, null, 2));
+  
+  // Check if shop stock has correct price data
+  if (updatedStock) {
+    console.log(`[shops]: 🔍 Comparing ItemModel vs ShopStock prices:`);
+    console.log(`[shops]: 🔍 - ItemModel buyPrice: ${itemDetails.buyPrice}, sellPrice: ${itemDetails.sellPrice}`);
+    console.log(`[shops]: 🔍 - ShopStock buyPrice: ${updatedStock.buyPrice}, sellPrice: ${updatedStock.sellPrice}`);
+    
+    // If there's a mismatch, update the shop stock with correct ItemModel data
+    if (updatedStock.buyPrice !== itemDetails.buyPrice || updatedStock.sellPrice !== itemDetails.sellPrice) {
+      console.log(`[shops]: ⚠️ Price mismatch detected! Updating shop stock with correct ItemModel data.`);
+      await ShopStock.updateOne(
+        { itemName: { $regex: new RegExp(`^${itemName}$`, 'i') } },
+        { 
+          $set: { 
+            buyPrice: itemDetails.buyPrice,
+            sellPrice: itemDetails.sellPrice,
+            category: itemDetails.category,
+            type: itemDetails.type
+          }
+        }
+      );
+      console.log(`[shops]: ✅ Updated shop stock with correct ItemModel data.`);
+    }
+  }
+  
   if (updatedStock && updatedStock.stock <= 0) {
-    await ShopStock.deleteOne({ itemName });
+    await ShopStock.deleteOne({ itemName: { $regex: new RegExp(`^${itemName}$`, 'i') } });
+    console.log(`[shops]: 🗑️ Deleted shop stock entry for ${itemName} (stock <= 0)`);
   }
 
   console.log(`[shops]: Added ${quantity}x ${itemName} to shop stock.`);
 
   const totalPrice = sellPrice * quantity;
+  console.log(`[shops]: 💰 Total sale price: ${sellPrice} × ${quantity} = ${totalPrice} tokens`);
 
   await updateTokenBalance(interaction.user.id, totalPrice);
 
@@ -1592,11 +1676,30 @@ if (quantity <= 0) {
     formattedDateTime,
     uuidv4(),
    ];
+   
+   console.log(`[shops]: 📊 Logging to inventory sheet:`);
+   console.log(`[shops]: 📊 - Character: ${character.name}`);
+   console.log(`[shops]: 📊 - Item: ${itemName}`);
+   console.log(`[shops]: 📊 - Quantity: -${quantity}`);
+   console.log(`[shops]: 📊 - Category: ${itemDetails.category}`);
+   console.log(`[shops]: 📊 - Type: ${itemDetails.type}`);
+   console.log(`[shops]: 📊 - Full row data:`, inventoryRow);
+   
    await appendSheetData(auth, spreadsheetId, "loggedInventory!A2:M", [
     inventoryRow,
    ]);
    console.log(`[shops]: Logged sale in inventory tracker.`);
   }
+
+  // Final verification and summary
+  console.log(`[shops]: ✅ Sale process completed successfully!`);
+  console.log(`[shops]: 📋 Sale Summary:`);
+  console.log(`[shops]: 📋 - Character: ${characterName}`);
+  console.log(`[shops]: 📋 - Item: ${itemName}`);
+  console.log(`[shops]: 📋 - Quantity sold: ${quantity}`);
+  console.log(`[shops]: 📋 - Price per item: ${sellPrice}`);
+  console.log(`[shops]: 📋 - Total earned: ${totalPrice} tokens`);
+  console.log(`[shops]: 📋 - Item data source: ItemModel (buyPrice: ${itemDetails.buyPrice}, sellPrice: ${itemDetails.sellPrice})`);
 
   const saleEmbed = new EmbedBuilder()
    .setTitle("✅ Sale Successful!")
