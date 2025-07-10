@@ -1666,9 +1666,10 @@ async function handleShopItemAutocomplete(interaction, focusedValue) {
 
     const inventoryCollection = await getCharacterInventoryCollection(character);
     // Escape special regex characters in the search value
-    const escapedValue = focusedValue.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const escapedValue = focusedValue.replace(/[.*+?^${}()|[\\]/g, '\\$&');
+    // Only include items with quantity > 0
     const items = await inventoryCollection
-      .find({ itemName: { $regex: escapedValue, $options: 'i' } })
+      .find({ itemName: { $regex: escapedValue, $options: 'i' }, quantity: { $gt: 0 } })
       .toArray();
 
     const choices = items.map(item => ({
