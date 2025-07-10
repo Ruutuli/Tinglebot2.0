@@ -257,6 +257,16 @@ module.exports = {
       }, {});
       itemsByType['All'] = combinedItems;
 
+      // Add Recipe filter for cooked food items
+      const recipeItems = combinedItems.filter(item => {
+        const categories = Array.isArray(item.category) ? item.category : [item.category || 'Unknown'];
+        return categories.includes('Recipe');
+      });
+      
+      if (recipeItems.length > 0) {
+        itemsByType['Recipe'] = recipeItems;
+      }
+
       const types = Object.keys(itemsByType).sort((a, b) => a.localeCompare(b));
       let currentType = 'All';
       let currentPage = 0;
@@ -549,7 +559,16 @@ module.exports = {
 
   // ------------------- Generate Type Dropdown -------------------
   generateTypeDropdown(types) {
-    const options = types.slice(0, 25).map(type => ({ label: type, value: type }));
+    // Sort types to prioritize "Recipe" at the top, then "All", then alphabetically
+    const sortedTypes = types.sort((a, b) => {
+      if (a === 'Recipe') return -1;
+      if (b === 'Recipe') return 1;
+      if (a === 'All') return -1;
+      if (b === 'All') return 1;
+      return a.localeCompare(b);
+    });
+    
+    const options = sortedTypes.slice(0, 25).map(type => ({ label: type, value: type }));
     return new ActionRowBuilder().addComponents(
       new StringSelectMenuBuilder()
         .setCustomId('type-select')
