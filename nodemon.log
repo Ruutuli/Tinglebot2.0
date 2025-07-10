@@ -65,7 +65,7 @@
 [deploy-commands.js]: Processing file: commands\world\quest.js
 ✅ Loaded command: quest from commands\world\quest.js
 [deploy-commands.js]: Processing file: commands\world\raid.js
-⚠️ The command at commands\world\raid.js is missing a required "data" property.
+✅ Loaded command: raid from commands\world\raid.js
 [deploy-commands.js]: Processing file: commands\world\travel.js
 ✅ Loaded command: travel from commands\world\travel.js
 [deploy-commands.js]: Processing file: commands\world\village.js
@@ -74,7 +74,7 @@
 ⚠️ The command at embeds\embeds.js is missing a required "data" property.
 [deploy-commands.js]: Processing file: embeds\weatherEmbed.js
 ⚠️ The command at embeds\weatherEmbed.js is missing a required "data" property.
-[deploy-commands.js]: Successfully loaded 23 commands
-🔄 Started refreshing 23 commands.
+[deploy-commands.js]: Successfully loaded 24 commands
+🔄 Started refreshing 24 commands.
 [deploy-commands.js]: Deploying to guild: 603960955839447050
-✅ Successfully registered 23 commands to guild.
+✅ Successfully registered 24 commands to guild.
