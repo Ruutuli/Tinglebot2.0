@@ -634,20 +634,6 @@ const modCommand = new SlashCommandBuilder()
         .setRequired(true)
         .setMinValue(1)
     )
-    .addIntegerOption(option =>
-      option
-        .setName('buyprice')
-        .setDescription('Buy price for the item (tokens) - optional, will use item default')
-        .setRequired(false)
-        .setMinValue(0)
-    )
-    .addIntegerOption(option =>
-      option
-        .setName('sellprice')
-        .setDescription('Sell price for the item (tokens) - optional, will use item default')
-        .setRequired(false)
-        .setMinValue(0)
-    )
 )
 
 // ============================================================================
@@ -1913,8 +1899,6 @@ async function handleRaid(interaction) {
 async function handleShopAdd(interaction) {
   const itemName = interaction.options.getString('itemname');
   const stock = interaction.options.getInteger('stock');
-  const buyPrice = interaction.options.getInteger('buyprice');
-  const sellPrice = interaction.options.getInteger('sellprice');
 
   if (stock < 1) {
     return interaction.editReply('❌ You must specify a quantity of at least **1** for the shop stock.');
@@ -1930,9 +1914,9 @@ async function handleShopAdd(interaction) {
       return interaction.editReply(`❌ Item **${itemName}** does not exist in the database.`);
     }
 
-    // Auto-populate prices from item data if not provided
-    const finalBuyPrice = buyPrice !== null ? buyPrice : (item.buyPrice || 0);
-    const finalSellPrice = sellPrice !== null ? sellPrice : (item.sellPrice || 0);
+    // Always use database prices
+    const finalBuyPrice = item.buyPrice || 0;
+    const finalSellPrice = item.sellPrice || 0;
 
     // Check if item already exists in shop
     const existingShopItem = await VillageShopsModel.findOne({ 
@@ -2039,9 +2023,7 @@ async function handleShopAdd(interaction) {
       userId: interaction.user.id,
       options: {
         itemName: itemName,
-        stock: stock,
-        buyPrice: buyPrice,
-        sellPrice: sellPrice
+        stock: stock
       }
     });
     console.error('[mod.js]: Error adding shop item:', error);
@@ -2052,8 +2034,7 @@ async function handleShopAdd(interaction) {
         .setDescription('An error occurred while adding the item to the shop.')
         .addFields(
           { name: '🔍 Item Name', value: itemName, inline: true },
-          { name: '📦 Stock', value: stock.toString(), inline: true },
-          { name: '💰 Buy Price', value: buyPrice?.toString() || 'Auto', inline: true }
+          { name: '📦 Stock', value: stock.toString(), inline: true }
         )
         .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
         .setFooter({ text: 'Error Handling' })
