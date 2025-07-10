@@ -1990,7 +1990,7 @@ async function handleShopAdd(interaction) {
         looting: item.looting || false,
         vending: item.vending || false,
         traveling: item.traveling || false,
-        specialWeather: item.specialWeather || false,
+        specialWeather: typeof item.specialWeather === 'object' ? false : (item.specialWeather || false),
         petPerk: item.petPerk || false,
         exploring: item.exploring || false,
         craftingJobs: item.craftingJobs || [],
