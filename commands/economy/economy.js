@@ -1150,22 +1150,27 @@ async function handleShopBuy(interaction) {
      .select("buyPrice sellPrice category type image craftingJobs itemRarity")
      .lean();
     if (!itemDetails) {
-     console.error(`[shops]: ❌ Item details not found for ${itemName}`);
-     return interaction.editReply({
-       embeds: [{
-         color: 0xFF0000, // Red color
-         title: '❌ Item Details Error',
-         description: 'Unable to retrieve item details. Please try again later.',
-         image: {
-           url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
-         },
-         footer: {
-           text: 'Item Validation'
-         }
-       }],
-       ephemeral: true
-     });
+     console.error(`[shops]: Item details not found in database: ${itemName}`);
+     
+     // Try a partial search to see if there are similar items
+     const similarItems = await ItemModel.find({ 
+       itemName: { $regex: new RegExp(itemName, 'i') }
+     }).select("itemName buyPrice sellPrice").limit(5).lean();
+     
+     if (similarItems.length > 0) {
+       console.log(`[shops]: 🔍 Similar items found:`, similarItems.map(item => ({
+         itemName: item.itemName,
+         buyPrice: item.buyPrice,
+         sellPrice: item.sellPrice
+       })));
+     }
+     
+     return interaction.editReply("❌ Item details not found.");
     }
+
+    console.log(
+     `[shops]: Item details found. Buy price: ${itemDetails.buyPrice}, Sell price: ${itemDetails.sellPrice}, Category: ${itemDetails.category}, Crafting jobs: ${itemDetails.craftingJobs}`
+    );
 
     if (!itemDetails.buyPrice || itemDetails.buyPrice <= 0) {
       console.error(`[shops]: ❌ Invalid buy price for item ${itemName}: ${itemDetails.buyPrice}`);
@@ -1475,11 +1480,6 @@ if (quantity <= 0) {
    `[shops]: Inventory item found. Quantity available: ${inventoryItem.quantity}`
   );
 
-  // Add detailed inventory item logging
-  console.log(`[shops]: 📦 Inventory item details:`, JSON.stringify(inventoryItem, null, 2));
-  console.log(`[shops]: 📦 Inventory item name: "${inventoryItem.itemName}"`);
-  console.log(`[shops]: 📦 Inventory item obtain method: "${inventoryItem.obtain}"`);
-
   const isCrafted = inventoryItem.obtain.includes("Crafting");
   console.log(`[shops]: Item crafted: ${isCrafted}`);
 
@@ -1542,13 +1542,6 @@ if (quantity <= 0) {
     ? itemDetails.buyPrice
     : itemDetails.sellPrice || 0;
 
-  console.log(`[shops]: 💰 Sale price calculation:`);
-  console.log(`[shops]: 💰 - Is crafted: ${isCrafted}`);
-  console.log(`[shops]: 💰 - Character meets requirements: ${characterMeetsRequirements}`);
-  console.log(`[shops]: 💰 - Buy price from DB: ${itemDetails.buyPrice}`);
-  console.log(`[shops]: 💰 - Sell price from DB: ${itemDetails.sellPrice}`);
-  console.log(`[shops]: 💰 - Final sell price: ${sellPrice}`);
-
   if (sellPrice <= 0) {
    console.warn(
     `[shops]: Invalid sell price for item: ${itemName}. Character job: ${character.job}, Item category: ${itemDetails.category}`
@@ -1570,14 +1563,6 @@ if (quantity <= 0) {
   // Log the shop stock update
   console.log(`[shops]: 🔄 Updating shop stock - adding ${quantity}x ${itemName} to shop stock`);
   
-  // Check existing shop stock data
-  const existingShopStock = await ShopStock.findOne({ itemName: { $regex: new RegExp(`^${itemName}$`, 'i') } });
-  if (existingShopStock) {
-    console.log(`[shops]: 📊 Existing shop stock data:`, JSON.stringify(existingShopStock, null, 2));
-  } else {
-    console.log(`[shops]: 📊 No existing shop stock found for ${itemName}`);
-  }
-  
   // Update shop stock with correct item data
   await ShopStock.updateOne(
    { itemName: { $regex: new RegExp(`^${itemName}$`, 'i') } },
@@ -1596,43 +1581,9 @@ if (quantity <= 0) {
    { upsert: true }
   );
 
-  // Check updated shop stock data
-  const updatedStock = await ShopStock.findOne({ itemName: { $regex: new RegExp(`^${itemName}$`, 'i') } });
-  console.log(`[shops]: 📊 Updated shop stock data:`, JSON.stringify(updatedStock, null, 2));
-  
-  // Check if shop stock has correct price data
-  if (updatedStock) {
-    console.log(`[shops]: 🔍 Comparing ItemModel vs ShopStock prices:`);
-    console.log(`[shops]: 🔍 - ItemModel buyPrice: ${itemDetails.buyPrice}, sellPrice: ${itemDetails.sellPrice}`);
-    console.log(`[shops]: 🔍 - ShopStock buyPrice: ${updatedStock.buyPrice}, sellPrice: ${updatedStock.sellPrice}`);
-    
-    // If there's a mismatch, update the shop stock with correct ItemModel data
-    if (updatedStock.buyPrice !== itemDetails.buyPrice || updatedStock.sellPrice !== itemDetails.sellPrice) {
-      console.log(`[shops]: ⚠️ Price mismatch detected! Updating shop stock with correct ItemModel data.`);
-      await ShopStock.updateOne(
-        { itemName: { $regex: new RegExp(`^${itemName}$`, 'i') } },
-        { 
-          $set: { 
-            buyPrice: itemDetails.buyPrice,
-            sellPrice: itemDetails.sellPrice,
-            category: itemDetails.category,
-            type: itemDetails.type
-          }
-        }
-      );
-      console.log(`[shops]: ✅ Updated shop stock with correct ItemModel data.`);
-    }
-  }
-  
-  if (updatedStock && updatedStock.stock <= 0) {
-    await ShopStock.deleteOne({ itemName: { $regex: new RegExp(`^${itemName}$`, 'i') } });
-    console.log(`[shops]: 🗑️ Deleted shop stock entry for ${itemName} (stock <= 0)`);
-  }
-
   console.log(`[shops]: Added ${quantity}x ${itemName} to shop stock.`);
 
   const totalPrice = sellPrice * quantity;
-  console.log(`[shops]: 💰 Total sale price: ${sellPrice} × ${quantity} = ${totalPrice} tokens`);
 
   await updateTokenBalance(interaction.user.id, totalPrice);
 
@@ -1676,14 +1627,6 @@ if (quantity <= 0) {
     formattedDateTime,
     uuidv4(),
    ];
-   
-   console.log(`[shops]: 📊 Logging to inventory sheet:`);
-   console.log(`[shops]: 📊 - Character: ${character.name}`);
-   console.log(`[shops]: 📊 - Item: ${itemName}`);
-   console.log(`[shops]: 📊 - Quantity: -${quantity}`);
-   console.log(`[shops]: 📊 - Category: ${itemDetails.category}`);
-   console.log(`[shops]: 📊 - Type: ${itemDetails.type}`);
-   console.log(`[shops]: 📊 - Full row data:`, inventoryRow);
    
    await appendSheetData(auth, spreadsheetId, "loggedInventory!A2:M", [
     inventoryRow,
