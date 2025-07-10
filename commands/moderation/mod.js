@@ -75,6 +75,7 @@ const User = require('../../models/UserModel');
 const Character = require('../../models/CharacterModel');
 const ItemModel = require("../../models/ItemModel");
 const TempData = require('../../models/TempDataModel');
+const VillageShopsModel = require('../../models/VillageShopsModel');
 const {
   savePendingEditToStorage,
   retrievePendingEditFromStorage,
@@ -614,7 +615,41 @@ const modCommand = new SlashCommandBuilder()
         .setRequired(false)
         .setAutocomplete(true)))
 
-  
+// ------------------- Subcommand: shopadd -------------------
+.addSubcommand(sub =>
+  sub
+    .setName('shopadd')
+    .setDescription('🛒 Add an item to the village shop')
+    .addStringOption(option =>
+      option
+        .setName('itemname')
+        .setDescription('Name of the item to add to the shop')
+        .setRequired(true)
+        .setAutocomplete(true)
+    )
+    .addIntegerOption(option =>
+      option
+        .setName('stock')
+        .setDescription('Quantity of the item to add to shop stock')
+        .setRequired(true)
+        .setMinValue(1)
+    )
+    .addIntegerOption(option =>
+      option
+        .setName('buyprice')
+        .setDescription('Buy price for the item (tokens)')
+        .setRequired(true)
+        .setMinValue(0)
+    )
+    .addIntegerOption(option =>
+      option
+        .setName('sellprice')
+        .setDescription('Sell price for the item (tokens)')
+        .setRequired(true)
+        .setMinValue(0)
+    )
+)
+
 // ============================================================================
 // ------------------- Execute Command Handler -------------------
 // Delegates logic to subcommand-specific handlers
@@ -710,6 +745,8 @@ async function execute(interaction) {
         return await handleForceResetPetRolls(interaction);
     } else if (subcommand === 'raid') {
         return await handleRaid(interaction);
+    } else if (subcommand === 'shopadd') {
+        return await handleShopAdd(interaction);
     } else {
         return interaction.editReply('❌ Unknown subcommand.');
     }
@@ -1867,6 +1904,161 @@ async function handleRaid(interaction) {
     console.error('[mod.js]: Error creating raid:', error);
     return interaction.editReply({ 
       content: '⚠️ **An error occurred while creating the raid.**'
+    });
+  }
+}
+
+// ------------------- Function: handleShopAdd -------------------
+// Adds an item to the village shop
+async function handleShopAdd(interaction) {
+  const itemName = interaction.options.getString('itemname');
+  const stock = interaction.options.getInteger('stock');
+  const buyPrice = interaction.options.getInteger('buyprice');
+  const sellPrice = interaction.options.getInteger('sellprice');
+
+  if (stock < 1) {
+    return interaction.editReply('❌ You must specify a quantity of at least **1** for the shop stock.');
+  }
+  if (buyPrice < 0) {
+    return interaction.editReply('❌ Buy price cannot be negative.');
+  }
+  if (sellPrice < 0) {
+    return interaction.editReply('❌ Sell price cannot be negative.');
+  }
+
+  try {
+    // Fetch the item from the database to get all its properties
+    const item = await ItemModel.findOne({ 
+      itemName: { $regex: new RegExp(`^${itemName}$`, 'i') }
+    });
+    
+    if (!item) {
+      return interaction.editReply(`❌ Item **${itemName}** does not exist in the database.`);
+    }
+
+    // Check if item already exists in shop
+    const existingShopItem = await VillageShopsModel.findOne({ 
+      itemName: { $regex: new RegExp(`^${itemName}$`, 'i') }
+    });
+
+    if (existingShopItem) {
+      // Update existing shop item
+      existingShopItem.stock += stock;
+      existingShopItem.buyPrice = buyPrice;
+      existingShopItem.sellPrice = sellPrice;
+      await existingShopItem.save();
+      
+      return interaction.editReply({
+        embeds: [new EmbedBuilder()
+          .setColor('#00FF00')
+          .setTitle('✅ Shop Item Updated')
+          .setDescription(`Updated **${itemName}** in the village shop.`)
+          .addFields(
+            { name: '📦 New Stock', value: `${existingShopItem.stock}`, inline: true },
+            { name: '💰 Buy Price', value: `${buyPrice} tokens`, inline: true },
+            { name: '💸 Sell Price', value: `${sellPrice} tokens`, inline: true },
+            { name: '📝 Item ID', value: `\`${item._id}\``, inline: false }
+          )
+          .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+          .setFooter({ text: `Updated by ${interaction.user.tag}` })
+          .setTimestamp()],
+        ephemeral: true
+      });
+    } else {
+      // Create new shop item with all the item's properties
+      const newShopItem = new VillageShopsModel({
+        itemId: item._id,
+        itemName: item.itemName,
+        image: item.image || 'No Image',
+        imageType: item.imageType || 'No Image Type',
+        itemRarity: item.itemRarity || 1,
+        category: item.category || ['Misc'],
+        categoryGear: item.categoryGear || 'None',
+        type: item.type || ['Unknown'],
+        subtype: item.subtype || ['None'],
+        recipeTag: item.recipeTag || ['#Not Craftable'],
+        craftingMaterial: item.craftingMaterial || [],
+        buyPrice: buyPrice,
+        sellPrice: sellPrice,
+        staminaToCraft: item.staminaToCraft || null,
+        modifierHearts: item.modifierHearts || 0,
+        staminaRecovered: item.staminaRecovered || 0,
+        obtain: item.obtain || [],
+        obtainTags: item.obtainTags || [],
+        crafting: item.crafting || false,
+        gathering: item.gathering || false,
+        looting: item.looting || false,
+        vending: item.vending || false,
+        traveling: item.traveling || false,
+        specialWeather: item.specialWeather || false,
+        petPerk: item.petPerk || false,
+        exploring: item.exploring || false,
+        craftingJobs: item.craftingJobs || [],
+        craftingTags: item.craftingTags || [],
+        artist: item.artist || false,
+        blacksmith: item.blacksmith || false,
+        cook: item.cook || false,
+        craftsman: item.craftsman || false,
+        maskMaker: item.maskMaker || false,
+        researcher: item.researcher || false,
+        weaver: item.weaver || false,
+        witch: item.witch || false,
+        locations: item.locations || [],
+        locationsTags: item.locationsTags || [],
+        emoji: item.emoji || '',
+        allJobs: item.allJobs || ['None'],
+        allJobsTags: item.allJobsTags || ['None'],
+        stock: stock
+      });
+
+      await newShopItem.save();
+      
+      return interaction.editReply({
+        embeds: [new EmbedBuilder()
+          .setColor('#00FF00')
+          .setTitle('✅ Shop Item Added')
+          .setDescription(`Successfully added **${itemName}** to the village shop.`)
+          .addFields(
+            { name: '📦 Stock', value: `${stock}`, inline: true },
+            { name: '💰 Buy Price', value: `${buyPrice} tokens`, inline: true },
+            { name: '💸 Sell Price', value: `${sellPrice} tokens`, inline: true },
+            { name: '📝 Item ID', value: `\`${item._id}\``, inline: false },
+            { name: '🏷️ Category', value: item.category?.join(', ') || 'Misc', inline: true },
+            { name: '🎯 Type', value: item.type?.join(', ') || 'Unknown', inline: true }
+          )
+          .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+          .setFooter({ text: `Added by ${interaction.user.tag}` })
+          .setTimestamp()],
+        ephemeral: true
+      });
+    }
+  } catch (error) {
+    handleError(error, 'mod.js', {
+      commandName: '/mod shopadd',
+      userTag: interaction.user.tag,
+      userId: interaction.user.id,
+      options: {
+        itemName: itemName,
+        stock: stock,
+        buyPrice: buyPrice,
+        sellPrice: sellPrice
+      }
+    });
+    console.error('[mod.js]: Error adding shop item:', error);
+    return interaction.editReply({
+      embeds: [new EmbedBuilder()
+        .setColor('#FF0000')
+        .setTitle('❌ Shop Add Error')
+        .setDescription('An error occurred while adding the item to the shop.')
+        .addFields(
+          { name: '🔍 Item Name', value: itemName, inline: true },
+          { name: '📦 Stock', value: stock.toString(), inline: true },
+          { name: '💰 Buy Price', value: buyPrice.toString(), inline: true }
+        )
+        .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+        .setFooter({ text: 'Error Handling' })
+        .setTimestamp()],
+      ephemeral: true
     });
   }
 }
