@@ -637,15 +637,15 @@ const modCommand = new SlashCommandBuilder()
     .addIntegerOption(option =>
       option
         .setName('buyprice')
-        .setDescription('Buy price for the item (tokens)')
-        .setRequired(true)
+        .setDescription('Buy price for the item (tokens) - optional, will use item default')
+        .setRequired(false)
         .setMinValue(0)
     )
     .addIntegerOption(option =>
       option
         .setName('sellprice')
-        .setDescription('Sell price for the item (tokens)')
-        .setRequired(true)
+        .setDescription('Sell price for the item (tokens) - optional, will use item default')
+        .setRequired(false)
         .setMinValue(0)
     )
 )
@@ -1919,12 +1919,6 @@ async function handleShopAdd(interaction) {
   if (stock < 1) {
     return interaction.editReply('❌ You must specify a quantity of at least **1** for the shop stock.');
   }
-  if (buyPrice < 0) {
-    return interaction.editReply('❌ Buy price cannot be negative.');
-  }
-  if (sellPrice < 0) {
-    return interaction.editReply('❌ Sell price cannot be negative.');
-  }
 
   try {
     // Fetch the item from the database to get all its properties
@@ -1936,6 +1930,10 @@ async function handleShopAdd(interaction) {
       return interaction.editReply(`❌ Item **${itemName}** does not exist in the database.`);
     }
 
+    // Auto-populate prices from item data if not provided
+    const finalBuyPrice = buyPrice !== null ? buyPrice : (item.buyPrice || 0);
+    const finalSellPrice = sellPrice !== null ? sellPrice : (item.sellPrice || 0);
+
     // Check if item already exists in shop
     const existingShopItem = await VillageShopsModel.findOne({ 
       itemName: { $regex: new RegExp(`^${itemName}$`, 'i') }
@@ -1944,8 +1942,8 @@ async function handleShopAdd(interaction) {
     if (existingShopItem) {
       // Update existing shop item
       existingShopItem.stock += stock;
-      existingShopItem.buyPrice = buyPrice;
-      existingShopItem.sellPrice = sellPrice;
+      existingShopItem.buyPrice = finalBuyPrice;
+      existingShopItem.sellPrice = finalSellPrice;
       await existingShopItem.save();
       
       return interaction.editReply({
@@ -1955,9 +1953,11 @@ async function handleShopAdd(interaction) {
           .setDescription(`Updated **${itemName}** in the village shop.`)
           .addFields(
             { name: '📦 New Stock', value: `${existingShopItem.stock}`, inline: true },
-            { name: '💰 Buy Price', value: `${buyPrice} tokens`, inline: true },
-            { name: '💸 Sell Price', value: `${sellPrice} tokens`, inline: true },
-            { name: '📝 Item ID', value: `\`${item._id}\``, inline: false }
+            { name: '💰 Buy Price', value: `${finalBuyPrice} tokens`, inline: true },
+            { name: '💸 Sell Price', value: `${finalSellPrice} tokens`, inline: true },
+            { name: '📝 Item ID', value: `\`${item._id}\``, inline: false },
+            { name: '🏷️ Category', value: item.category?.join(', ') || 'Misc', inline: true },
+            { name: '🎯 Type', value: item.type?.join(', ') || 'Unknown', inline: true }
           )
           .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
           .setFooter({ text: `Updated by ${interaction.user.tag}` })
@@ -1978,8 +1978,8 @@ async function handleShopAdd(interaction) {
         subtype: item.subtype || ['None'],
         recipeTag: item.recipeTag || ['#Not Craftable'],
         craftingMaterial: item.craftingMaterial || [],
-        buyPrice: buyPrice,
-        sellPrice: sellPrice,
+        buyPrice: finalBuyPrice,
+        sellPrice: finalSellPrice,
         staminaToCraft: item.staminaToCraft || null,
         modifierHearts: item.modifierHearts || 0,
         staminaRecovered: item.staminaRecovered || 0,
@@ -2020,8 +2020,8 @@ async function handleShopAdd(interaction) {
           .setDescription(`Successfully added **${itemName}** to the village shop.`)
           .addFields(
             { name: '📦 Stock', value: `${stock}`, inline: true },
-            { name: '💰 Buy Price', value: `${buyPrice} tokens`, inline: true },
-            { name: '💸 Sell Price', value: `${sellPrice} tokens`, inline: true },
+            { name: '💰 Buy Price', value: `${finalBuyPrice} tokens`, inline: true },
+            { name: '💸 Sell Price', value: `${finalSellPrice} tokens`, inline: true },
             { name: '📝 Item ID', value: `\`${item._id}\``, inline: false },
             { name: '🏷️ Category', value: item.category?.join(', ') || 'Misc', inline: true },
             { name: '🎯 Type', value: item.type?.join(', ') || 'Unknown', inline: true }
@@ -2053,7 +2053,7 @@ async function handleShopAdd(interaction) {
         .addFields(
           { name: '🔍 Item Name', value: itemName, inline: true },
           { name: '📦 Stock', value: stock.toString(), inline: true },
-          { name: '💰 Buy Price', value: buyPrice.toString(), inline: true }
+          { name: '💰 Buy Price', value: buyPrice?.toString() || 'Auto', inline: true }
         )
         .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
         .setFooter({ text: 'Error Handling' })
