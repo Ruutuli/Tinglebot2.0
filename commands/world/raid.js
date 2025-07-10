@@ -1,10 +1,10 @@
 // ============================================================================
 // ---- Standard Libraries ----
 // ============================================================================
-const { SlashCommandBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const { handleError } = require('../../utils/globalErrorHandler');
 const { fetchCharacterByNameAndUserId } = require('../../database/db');
-const { startRaid, joinRaid, processRaidTurn, checkRaidExpiration, createOrUpdateRaidThread } = require('../../modules/raidModule');
+const { startRaid, joinRaid, processRaidTurn, checkRaidExpiration, createOrUpdateRaidThread, createRaidEmbed } = require('../../modules/raidModule');
 const Character = require('../../models/CharacterModel');
 
 // ============================================================================
@@ -100,17 +100,10 @@ module.exports = {
       // Always use updatedRaidData for processRaidTurn
       const turnResult = await processRaidTurn(character, raidId, interaction, updatedRaidData);
       
-      // Format the response
-      const response = [
-        `🎲 **${character.name}'s Turn in Raid ${raidId}**`,
-        `Monster: ${updatedRaidData.monster.name} (Tier ${updatedRaidData.monster.tier})`,
-        `Monster HP: ${updatedRaidData.monster.hearts.current}/${updatedRaidData.monster.hearts.max}`,
-        `Damage Dealt: ${turnResult.battleResult.hearts}`,
-        `Total Damage: ${turnResult.participant.damage}`,
-        `\n${updatedRaidData.progress}`
-      ].join('\n');
+      // Create embed for the turn result using the raid module
+      const embed = createRaidTurnEmbed(character, raidId, turnResult, updatedRaidData);
 
-      return interaction.editReply(response);
+      return interaction.editReply({ embeds: [embed] });
 
     } catch (error) {
       handleError(error, 'raid.js', {

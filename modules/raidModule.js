@@ -58,8 +58,9 @@ async function createOrUpdateRaidThread(interaction, raidData, monsterImage) {
     // Create the initial thread message
     const threadMessage = [
       `👋 A raid has been initiated against **${raidData.monster.name} (Tier ${raidData.monster.tier})**!`,
-      `\n@${villageName} resident @visiting:${villageName} — come help defend your home!`,
-      `\nUse \`/raid ${raidData.battleId} <character>\` to join the fight!`
+      `\n@${villageName} residents — come help defend your home!`,
+      `\nUse \`/raid ${raidData.battleId} <character>\` to join the fight!`,
+      `\n\n**Raid ID:** \`${raidData.battleId}\``
     ].join('');
 
     // Send only the text message to the thread (no embed)
@@ -167,7 +168,8 @@ async function startRaid(monster, villageId, interaction = null) {
         const threadMessage = [
           `👋 A moderation raid has been initiated against **${monster.name} (Tier ${monster.tier})**!`,
           `\n@${villageId} residents — come help defend your home!`,
-          `\nUse \`/raid ${raidId} <character>\` to join the fight!`
+          `\nUse \`/raid ${raidId} <character>\` to join the fight!`,
+          `\n\n**Raid ID:** \`${raidId}\``
         ].join('');
         
         await thread.send(threadMessage);
@@ -501,6 +503,16 @@ async function triggerRaid(character, monster, interaction, villageId = null, is
       name: `🛡️ ${targetVillage} - ${monster.name} (T${monster.tier})`,
       autoArchiveDuration: THREAD_AUTO_ARCHIVE_DURATION
     });
+
+    // Send initial thread message with raid ID
+    const threadMessage = [
+      `👋 A raid has been initiated against **${monster.name} (Tier ${monster.tier})**!`,
+      `\n@${targetVillage} residents — come help defend your home!`,
+      `\nUse \`/raid ${raidId} <character>\` to join the fight!`,
+      `\n\n**Raid ID:** \`${raidId}\``
+    ].join('');
+
+    await thread.send(threadMessage);
 
     console.log(`[raidModule.js]: 🐉 Triggered raid ${raidId} - ${monster.name} (T${monster.tier}) in ${targetVillage}${isBloodMoon ? ' (Blood Moon)' : ''}`);
 

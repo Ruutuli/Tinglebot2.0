@@ -593,27 +593,7 @@ const modCommand = new SlashCommandBuilder()
     )
 )
 
-// ------------------- Subcommand: raid -------------------
-.addSubcommand(sub =>
-  sub
-    .setName('raid')
-    .setDescription('🐉 Create a raid for testing')
-    .addStringOption(option =>
-      option
-        .setName('village')
-        .setDescription('The village where the raid will take place')
-        .setRequired(true)
-        .addChoices(
-          { name: 'Rudania', value: 'rudania' },
-          { name: 'Inariko', value: 'inariko' },
-          { name: 'Vhintl', value: 'vhintl' }
-        ))
-    .addStringOption(option =>
-      option
-        .setName('monster')
-        .setDescription('The monster to raid (optional - random if not specified)')
-        .setRequired(false)
-        .setAutocomplete(true)))
+
 
 // ------------------- Subcommand: shopadd -------------------
 .addSubcommand(sub =>
@@ -636,10 +616,10 @@ const modCommand = new SlashCommandBuilder()
     )
 )
 
-// ------------------- Subcommand: triggerRaid -------------------
+// ------------------- Subcommand: trigger-raid -------------------
 .addSubcommand(sub =>
   sub
-    .setName('triggerRaid')
+    .setName('trigger-raid')
     .setDescription('🐉 Manually trigger a raid for testing or RP purposes')
     .addStringOption(option =>
       option
@@ -670,8 +650,8 @@ async function execute(interaction) {
   try {
     const subcommand = interaction.options.getSubcommand();
 
-    // Only defer with ephemeral for non-mount and non-raid commands
-    if (subcommand !== 'mount' && subcommand !== 'raid') {
+    // Only defer with ephemeral for non-mount commands
+    if (subcommand !== 'mount') {
       await interaction.deferReply({ flags: [4096] }); // 4096 is the flag for ephemeral messages
     } else {
       await interaction.deferReply();
@@ -754,11 +734,9 @@ async function execute(interaction) {
         return await handlePetRollsReset(interaction);
     } else if (subcommand === 'forceresetpetrolls') {
         return await handleForceResetPetRolls(interaction);
-    } else if (subcommand === 'raid') {
-        return await handleRaid(interaction);
     } else if (subcommand === 'shopadd') {
         return await handleShopAdd(interaction);
-    } else if (subcommand === 'triggerRaid') {
+    } else if (subcommand === 'trigger-raid') {
         return await handleTriggerRaid(interaction);
     } else {
         return interaction.editReply('❌ Unknown subcommand.');
@@ -1868,58 +1846,7 @@ async function handleForceResetPetRolls(interaction) {
   }
 }
 
-// ------------------- Function: handleRaid -------------------
-// Creates a raid for testing purposes
-async function handleRaid(interaction) {
-  const village = interaction.options.getString('village');
-  const monsterName = interaction.options.getString('monster');
 
-  try {
-    // Get a random monster if none specified
-    let monster;
-    if (monsterName) {
-      monster = await fetchMonsterByName(monsterName);
-      if (!monster) {
-        return interaction.editReply({ content: '❌ **Specified monster not found.**' });
-      }
-    } else {
-      // Get a random monster from the available ones
-      const monsters = Object.values(monsterMapping);
-      const randomMonster = monsters[Math.floor(Math.random() * monsters.length)];
-      // Fetch the full monster data from the database
-      monster = await fetchMonsterByName(randomMonster.name);
-      if (!monster) {
-        return interaction.editReply({ content: '❌ **Failed to fetch random monster data.**' });
-      }
-    }
-
-    // Start the raid using our new function
-    const { raidId, raidData, thread } = await startRaid(monster, village, { client: interaction.client });
-
-    if (!raidId || !raidData) {
-      return interaction.editReply({ content: '❌ **Failed to create the raid.**' });
-    }
-
-    // Get the monster's image from monsterMapping
-    const monsterDetails = monsterMapping[monster.nameMapping] || { image: monster.image };
-    const monsterImage = monsterDetails.image || monster.image;
-
-    // Create the raid embed using our new function
-    const embed = createRaidEmbed(raidData, monsterImage);
-
-    return interaction.editReply({ 
-      content: `✅ **Raid created successfully!** Check <#1391812848099004578> for the raid thread.`,
-      embeds: [embed]
-    });
-
-  } catch (error) {
-    handleError(error, 'mod.js');
-    console.error('[mod.js]: Error creating raid:', error);
-    return interaction.editReply({ 
-      content: '⚠️ **An error occurred while creating the raid.**'
-    });
-  }
-}
 
 // ------------------- Function: handleShopAdd -------------------
 // Adds an item to the village shop
@@ -2085,15 +2012,18 @@ async function handleTriggerRaid(interaction) {
       if (!monster) {
         return interaction.editReply({ content: '❌ **Specified monster not found.**' });
       }
-    } else {
-      // Get a random monster from the available ones
-      const monsters = Object.values(monsterMapping);
-      const randomMonster = monsters[Math.floor(Math.random() * monsters.length)];
-      // Fetch the full monster data from the database
-      monster = await fetchMonsterByName(randomMonster.name);
-      if (!monster) {
-        return interaction.editReply({ content: '❌ **Failed to fetch random monster data.**' });
+      // Check if monster is tier 5 or above
+      if (monster.tier < 5) {
+        return interaction.editReply({ content: `❌ **${monster.name} is tier ${monster.tier}. Only tier 5+ monsters can be used for triggered raids.**` });
       }
+    } else {
+      // Get a random monster from the database (tier 5 and above only)
+      const Monster = require('../../models/MonsterModel');
+      const monsters = await Monster.find({ tier: { $gte: 5 } }).limit(100);
+      if (monsters.length === 0) {
+        return interaction.editReply({ content: '❌ **No tier 5+ monsters found in database.**' });
+      }
+      monster = monsters[Math.floor(Math.random() * monsters.length)];
     }
 
     // Import the triggerRaid function from raidModule
@@ -2120,7 +2050,7 @@ async function handleTriggerRaid(interaction) {
 
   } catch (error) {
     handleError(error, 'mod.js', {
-      commandName: '/mod triggerRaid',
+      commandName: '/mod trigger-raid',
       userTag: interaction.user.tag,
       userId: interaction.user.id,
       options: {

@@ -217,9 +217,9 @@ async function handleAutocomplete(interaction) {
                 if (focusedOption.name === "itemname") {
                   await handleModGiveItemAutocomplete(interaction, focusedOption);
                 }
-              } else if (modSubcommand === "triggerRaid") {
+              } else if (modSubcommand === "trigger-raid") {
                 if (focusedOption.name === "monster") {
-                  await handleMonsterAutocomplete(interaction, focusedOption);
+                  await handleTier5PlusMonsterAutocomplete(interaction, focusedOption);
                 }
               }
             }
@@ -3818,6 +3818,63 @@ async function handleModCharacterJobAutocomplete(interaction, focusedOption) {
   }
 }
 
+// ------------------- Function: handleMonsterAutocomplete -------------------
+// Provides autocomplete suggestions for monster names
+async function handleMonsterAutocomplete(interaction, focusedOption) {
+  try {
+    const Monster = require('../models/MonsterModel');
+    const searchQuery = focusedOption.value.toLowerCase();
+    
+    // Fetch monsters from database
+    const monsters = await Monster.find({
+      $or: [
+        { name: { $regex: searchQuery, $options: 'i' } },
+        { nameMapping: { $regex: searchQuery, $options: 'i' } }
+      ]
+    }).limit(25);
+    
+    const choices = monsters.map(monster => ({
+      name: `${monster.name} (T${monster.tier})`,
+      value: monster.name
+    }));
+
+    await safeAutocompleteResponse(interaction, choices);
+  } catch (error) {
+    handleError(error, "autocompleteHandler.js");
+    console.error("[handleMonsterAutocomplete]: Error:", error);
+    await safeRespondWithError(interaction);
+  }
+}
+
+// ------------------- Function: handleTier5PlusMonsterAutocomplete -------------------
+// Provides autocomplete suggestions for tier 5+ monster names
+async function handleTier5PlusMonsterAutocomplete(interaction, focusedOption) {
+  try {
+    const Monster = require('../models/MonsterModel');
+    const searchQuery = focusedOption.value.toLowerCase();
+    
+    // Fetch tier 5+ monsters from database
+    const monsters = await Monster.find({
+      tier: { $gte: 5 },
+      $or: [
+        { name: { $regex: searchQuery, $options: 'i' } },
+        { nameMapping: { $regex: searchQuery, $options: 'i' } }
+      ]
+    }).limit(25);
+    
+    const choices = monsters.map(monster => ({
+      name: `${monster.name} (T${monster.tier})`,
+      value: monster.name
+    }));
+
+    await safeAutocompleteResponse(interaction, choices);
+  } catch (error) {
+    handleError(error, "autocompleteHandler.js");
+    console.error("[handleTier5PlusMonsterAutocomplete]: Error:", error);
+    await safeRespondWithError(interaction);
+  }
+}
+
 // ------------------- Mod Character Name Autocomplete -------------------
 // Provides autocomplete suggestions for mod character names owned by the user.
 async function handleModCharacterNameAutocomplete(interaction, focusedOption) {
@@ -3931,6 +3988,10 @@ handleModPetLevelPetNameAutocomplete,
 // ------------------- Mod Character Functions -------------------
 handleModCharacterJobAutocomplete,
 handleModCharacterNameAutocomplete,
+
+// ------------------- Monster Functions -------------------
+handleMonsterAutocomplete,
+handleTier5PlusMonsterAutocomplete,
 
  // ------------------- Mount/Stable Functions -------------------
  handleMountAutocomplete,
