@@ -149,24 +149,30 @@ async function handleSubmissionCompletion(interaction) {
     try {
       const approvalChannel = interaction.client.channels.cache.get('1381479893090566144');
       if (approvalChannel?.isTextBased()) {
+        // Determine submission type based on available data
+        const isWriting = submissionData.category === 'writing' || (!submissionData.fileName && !submissionData.fileUrl);
+        const submissionType = isWriting ? 'WRITING' : 'ART';
+        const typeEmoji = isWriting ? '📝' : '🎨';
+        const typeColor = isWriting ? '#FF6B35' : '#FF0000'; // Orange for writing, red for art
+        
         const notificationEmbed = new EmbedBuilder()
-          .setColor('#FF0000')
-          .setTitle('📢 PENDING ART SUBMISSION!')
+          .setColor(typeColor)
+          .setTitle(`${typeEmoji} PENDING ${submissionType} SUBMISSION!`)
           .setDescription('⏳ **Please approve within 24 hours!**')
           .addFields(
             { name: '👤 Submitted by', value: `<@${interaction.user.id}>`, inline: true },
             { name: '📅 Submitted on', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true },
-            { name: '🎨 Art Title', value: submissionData.title || submissionData.fileName, inline: true },
+            { name: `${typeEmoji} Title`, value: submissionData.title || submissionData.fileName || 'Untitled', inline: true },
             { name: '💰 Token Amount', value: `${totalTokens} tokens`, inline: true },
             { name: '🆔 Submission ID', value: `\`${submissionId}\``, inline: true },
             { name: '🔗 View Submission', value: `[Click Here](${submissionData.messageUrl})`, inline: true }
           )
           .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
-          .setFooter({ text: 'Art Submission Approval Required' })
+          .setFooter({ text: `${submissionType} Submission Approval Required` })
           .setTimestamp();
 
         await approvalChannel.send({ embeds: [notificationEmbed] });
-        console.log(`[submissionHandler.js]: ✅ Notification sent to approval channel`);
+        console.log(`[submissionHandler.js]: ✅ Notification sent to approval channel for ${submissionType} submission`);
       }
     } catch (notificationError) {
       console.error(`[submissionHandler.js]: ❌ Failed to send notification to approval channel:`, notificationError);

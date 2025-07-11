@@ -345,23 +345,33 @@ function createDenialDMEmbed(submissionId, title, reason) {
 
 // ------------------- Function: createModApprovalConfirmationEmbed -------------------
 // Creates mod approval confirmation embed
-function createModApprovalConfirmationEmbed(submissionId, title, tokenAmount, userId, collab) {
+async function createModApprovalConfirmationEmbed(submissionId, title, tokenAmount, userId, collab) {
   const embed = createSubmissionEmbed('modApproval', { submissionId, title, tokenAmount, userId, collab });
+  
+  // Get user token tracker URLs
+  const user = await User.findOne({ discordId: userId });
+  const userTokenTracker = user?.tokenTracker || 'No token tracker set up';
+  const userTrackerLink = userTokenTracker !== 'No token tracker set up' ? `[View Token Tracker](${userTokenTracker})` : 'No token tracker set up';
   
   // Add token tracker links for collaboration
   if (collab) {
     const collaboratorId = collab.replace(/[<@>]/g, '');
     const splitTokens = Math.floor(tokenAmount / 2);
     
+    // Get collaborator token tracker URL
+    const collaborator = await User.findOne({ discordId: collaboratorId });
+    const collabTokenTracker = collaborator?.tokenTracker || 'No token tracker set up';
+    const collabTrackerLink = collabTokenTracker !== 'No token tracker set up' ? `[View Token Tracker](${collabTokenTracker})` : 'No token tracker set up';
+    
     embed.addFields(
       { 
         name: '💰 Main User Tokens', 
-        value: `<@${userId}> received **${splitTokens} tokens**\n[View Token Tracker](https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit#gid=0)`, 
+        value: `<@${userId}> received **${splitTokens} tokens**\n${userTrackerLink}`, 
         inline: true 
       },
       { 
         name: '💰 Collaborator Tokens', 
-        value: `<@${collaboratorId}> received **${splitTokens} tokens**\n[View Token Tracker](https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit#gid=0)`, 
+        value: `<@${collaboratorId}> received **${splitTokens} tokens**\n${collabTrackerLink}`, 
         inline: true 
       }
     );
@@ -369,7 +379,7 @@ function createModApprovalConfirmationEmbed(submissionId, title, tokenAmount, us
     embed.addFields(
       { 
         name: '💰 User Tokens', 
-        value: `<@${userId}> received **${tokenAmount} tokens**\n[View Token Tracker](https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit#gid=0)`, 
+        value: `<@${userId}> received **${tokenAmount} tokens**\n${userTrackerLink}`, 
         inline: true 
       }
     );
@@ -1232,12 +1242,12 @@ async function handleApprove(interaction) {
         const approvedSubmissionData = {
           submissionId: submission.submissionId,
           title: submission.title || submission.fileName,
-          fileName: submission.fileName,
+          fileName: submission.fileName || null,
           category: submission.category || 'art',
           userId: submission.userId,
           username: submission.username,
           userAvatar: submission.userAvatar,
-          fileUrl: submission.fileUrl,
+          fileUrl: submission.fileUrl || null,
           messageUrl: submission.messageUrl,
           finalTokenAmount: submission.finalTokenAmount,
           tokenCalculation: submission.tokenCalculation,
@@ -1299,7 +1309,7 @@ async function handleApprove(interaction) {
         await deleteSubmissionFromStorage(submissionId);
         
         // Create improved mod confirmation message
-        const modConfirmationEmbed = createModApprovalConfirmationEmbed(submissionId, title, tokenAmount, userId, collab);
+        const modConfirmationEmbed = await createModApprovalConfirmationEmbed(submissionId, title, tokenAmount, userId, collab);
         return interaction.editReply({ embeds: [modConfirmationEmbed], ephemeral: true });
       }
   
