@@ -122,9 +122,7 @@ async function handleButtonInteraction(interaction) {
         return await handleSyncNo(interaction);
       case 'confirm':
         // Find the latest submission for this user
-        console.log(`[componentHandler.js]: 🔍 Looking for latest submission for user: ${userId}`);
         const submissionId = await findLatestSubmissionIdForUser(userId);
-        console.log(`[componentHandler.js]: 📋 Found submission ID: ${submissionId}`);
         if (!submissionId) {
           return interaction.reply({
             content: '❌ **No active submission found. Please start a new submission.**',
@@ -132,11 +130,6 @@ async function handleButtonInteraction(interaction) {
           });
         }
         const submissionData = await retrieveSubmissionFromStorage(submissionId);
-        console.log(`[componentHandler.js]: 📊 Retrieved submission data:`, {
-          submissionId,
-          finalTokenAmount: submissionData.finalTokenAmount,
-          hasTokenCalculation: !!submissionData.tokenCalculation
-        });
         return await handleConfirmation(interaction, userId, submissionData);
       case 'cancel':
         // Find the latest submission for this user
@@ -274,10 +267,45 @@ async function handleConfirmation(interaction, userId, submissionData) {
     const sentMessage = await interaction.channel.send({ embeds: [embed] });
     
     // Update with message URL
+    const messageUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${sentMessage.id}`;
     await updateSubmissionData(submissionData.submissionId, {
       ...updates,
-      messageUrl: `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${sentMessage.id}`
+      messageUrl: messageUrl
     });
+
+    // Send notification to approval channel
+    try {
+      const approvalChannel = interaction.client.channels.cache.get('1381479893090566144');
+      if (approvalChannel?.isTextBased()) {
+        // Determine submission type based on available data
+        const isWriting = submissionData.category === 'writing' || (!submissionData.fileName && !submissionData.fileUrl);
+        const submissionType = isWriting ? 'WRITING' : 'ART';
+        const typeEmoji = isWriting ? '📝' : '🎨';
+        const typeColor = isWriting ? '#FF6B35' : '#FF0000'; // Orange for writing, red for art
+        
+        const notificationEmbed = new EmbedBuilder()
+          .setColor(typeColor)
+          .setTitle(`${typeEmoji} PENDING ${submissionType} SUBMISSION!`)
+          .setDescription('⏳ **Please approve within 24 hours!**')
+          .addFields(
+            { name: '👤 Submitted by', value: `<@${interaction.user.id}>`, inline: true },
+            { name: '📅 Submitted on', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true },
+            { name: `${typeEmoji} Title`, value: submissionData.title || submissionData.fileName || 'Untitled', inline: true },
+            { name: '💰 Token Amount', value: `${totalTokens} tokens`, inline: true },
+            { name: '🆔 Submission ID', value: `\`${submissionData.submissionId}\``, inline: true },
+            { name: '🔗 View Submission', value: `[Click Here](${messageUrl})`, inline: true }
+          )
+          .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+          .setFooter({ text: `${submissionType} Submission Approval Required` })
+          .setTimestamp();
+
+        await approvalChannel.send({ embeds: [notificationEmbed] });
+        console.log(`[componentHandler.js]: ✅ Notification sent to approval channel for ${submissionType} submission`);
+      }
+    } catch (notificationError) {
+      console.error(`[componentHandler.js]: ❌ Failed to send notification to approval channel:`, notificationError);
+      // Don't throw here, just log the error since the submission was already posted
+    }
 
     console.log(`[componentHandler.js]: ✅ Confirmed submission ${submissionData.submissionId} with ${totalTokens} tokens`);
   } catch (error) {

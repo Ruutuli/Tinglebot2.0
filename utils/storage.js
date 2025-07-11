@@ -89,8 +89,6 @@ async function updateSubmissionData(submissionId, updates) {
       updatedAt: now
     };
 
-    console.log(`[storage.js]: 🔄 Updating submission ${submissionId} with:`, updates);
-
     const result = await TempData.findOneAndUpdate(
       { type: 'submission', key: submissionId },
       { 
@@ -103,7 +101,6 @@ async function updateSubmissionData(submissionId, updates) {
     );
 
     if (result) {
-      console.log(`[storage.js]: ✅ Updated submission ${submissionId}`);
       return result.data;
     } else {
       console.error(`[storage.js]: ❌ Submission ${submissionId} not found for update`);
@@ -118,24 +115,17 @@ async function updateSubmissionData(submissionId, updates) {
 // Get or create submission data for a user
 async function getOrCreateSubmission(userId, initialData = {}) {
   try {
-    console.log(`[storage.js]: 🔍 Getting or creating submission for user: ${userId}`);
-    
     // Try to find existing submission
     let submissionId = await findLatestSubmissionIdForUser(userId);
     let submissionData = null;
 
     if (submissionId) {
-      console.log(`[storage.js]: 🔍 Found existing submissionId: ${submissionId}`);
       submissionData = await retrieveSubmissionFromStorage(submissionId);
-      console.log(`[storage.js]: 🔍 Retrieved submission data:`, submissionData ? 'found' : 'not found');
-    } else {
-      console.log(`[storage.js]: 🔍 No existing submission found for user: ${userId}`);
     }
 
     // If no existing submission, create new one
     if (!submissionData) {
       submissionId = 'A' + Math.floor(Math.random() * 1000000).toString().padStart(6, '0');
-      console.log(`[storage.js]: 🚀 Generating new submissionId: ${submissionId}`);
       
       submissionData = {
         submissionId,
@@ -156,15 +146,7 @@ async function getOrCreateSubmission(userId, initialData = {}) {
       };
 
       await saveSubmissionToStorage(submissionId, submissionData);
-      console.log(`[storage.js]: 💾 Created new submission: ${submissionId} for user: ${userId}`);
-    } else {
-      console.log(`[storage.js]: 💾 Reusing existing submission: ${submissionId} for user: ${userId}`);
-      console.log(`[storage.js]: 📊 Existing submission data:`, {
-        baseSelections: submissionData.baseSelections,
-        characterCount: submissionData.characterCount,
-        typeMultiplierSelections: submissionData.typeMultiplierSelections,
-        productMultiplierValue: submissionData.productMultiplierValue
-      });
+      console.log(`[storage.js]: ✅ Created new submission: ${submissionId}`);
     }
 
     return { submissionId, submissionData };
@@ -179,7 +161,6 @@ async function retrieveSubmissionFromStorage(key) {
   try {
     const submission = await TempData.findByTypeAndKey('submission', key);
     if (submission) {
-      console.log(`[storage.js]: ✅ Found submission ${key} (${submission.data?.status || 'unknown status'})`);
       return submission.data;
     }
     return null;
@@ -610,7 +591,6 @@ async function findLatestSubmissionIdForUser(userId) {
       expiresAt: { $gt: new Date() }
     }).sort({ 'data.updatedAt': -1 });
     
-    console.log(`[storage.js]: 🔍 Found latest submission for user ${userId}:`, result?.data?.submissionId || 'none');
     return result?.data?.submissionId || null;
   } catch (error) {
     console.error(`[storage.js]: ❌ Error finding latest submission for user ${userId}:`, error);

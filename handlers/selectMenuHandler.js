@@ -74,7 +74,6 @@ async function handleSelectMenuInteraction(interaction) {
     const customId = interaction.customId;
 
     // Get or create submission data using the new helper
-    console.log(`[selectMenuHandler.js]: 🔄 Getting or creating submission for user: ${userId}`);
     const { submissionId, submissionData } = await getOrCreateSubmission(userId);
 
     // Track updates to apply at the end
@@ -93,11 +92,8 @@ async function handleSelectMenuInteraction(interaction) {
           // If already selected, just update the existing selection
           updates.baseSelections = currentSelections;
         }
-        console.log('Base selection updated:', updates.baseSelections);
-
         // Save the updates before triggering the modal
         await updateSubmissionData(submissionId, updates);
-        console.log(`[selectMenuHandler.js]: 💾 Saved base selection for submission: ${submissionId}`);
 
         // First show the modal with the selected base
         await triggerBaseCountModal(interaction, selectedBase);
@@ -135,11 +131,8 @@ async function handleSelectMenuInteraction(interaction) {
           updates.typeMultiplierCounts = currentCounts;
         }
         
-        console.log('Type multiplier selection updated:', updates.typeMultiplierSelections);
-
         // Save the updates before triggering the modal
         await updateSubmissionData(submissionId, updates);
-        console.log(`[selectMenuHandler.js]: 💾 Saved type multiplier selection for submission: ${submissionId}`);
 
         await triggerMultiplierCountModal(interaction, selectedMultiplier);
         return;
@@ -154,7 +147,6 @@ async function handleSelectMenuInteraction(interaction) {
     // ------------------- Product Multiplier Selection -------------------
     else if (customId === 'productMultiplierSelect') {
       updates.productMultiplierValue = interaction.values[0];
-      console.log('Product multiplier updated:', updates.productMultiplierValue);
 
       await interaction.update({
         content: `🎨 **Product Multiplier Selected:** ${capitalizeFirstLetter(updates.productMultiplierValue)}.`,
@@ -172,11 +164,8 @@ async function handleSelectMenuInteraction(interaction) {
         const filteredAddOns = currentAddOns.filter(entry => entry.addOn !== selectedAddOn);
         updates.addOnsApplied = [...filteredAddOns, { addOn: selectedAddOn, count: 1 }];
         
-        console.log('Add-on updated:', updates.addOnsApplied);
-
         // Save the updates before triggering the modal
         await updateSubmissionData(submissionId, updates);
-        console.log(`[selectMenuHandler.js]: 💾 Saved add-on selection for submission: ${submissionId}`);
 
         await triggerAddOnCountModal(interaction, selectedAddOn);
         return;

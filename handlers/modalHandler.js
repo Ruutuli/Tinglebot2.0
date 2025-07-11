@@ -41,7 +41,6 @@ async function handleModalSubmission(interaction) {
 
   try {
     // Get or create submission data using the new helper
-    console.log(`[modalHandler.js]: 🔄 Getting or creating submission for user: ${userId}`);
     const { submissionId, submissionData } = await getOrCreateSubmission(userId);
 
     // Track updates to apply at the end
@@ -58,8 +57,6 @@ async function handleModalSubmission(interaction) {
         });
       }
 
-      console.log('Processing base count for:', baseSelection);
-      
       // Update base counts for this specific base
       // Handle both Map objects and plain objects for baseCounts
       let currentBaseCounts;
@@ -82,9 +79,6 @@ async function handleModalSubmission(interaction) {
       if (!currentSelections.includes(baseSelection)) {
         updates.baseSelections = [...currentSelections, baseSelection];
       }
-      
-      console.log('Base selection updated:', updates.baseSelections);
-      console.log('Base counts updated:', Object.fromEntries(currentBaseCounts));
       
       await interaction.update({
         content: `☑️ **${baseCount} ${baseSelection}(s)** selected. Select another base or click "Next Section ➡️" when you are done.`,
@@ -169,7 +163,6 @@ async function handleModalSubmission(interaction) {
       // Apply updates first
       if (Object.keys(updates).length > 0) {
         await updateSubmissionData(submissionId, updates);
-        console.log(`[modalHandler.js]: 💾 Applied updates to submission: ${submissionId}`);
       }
 
       // Get updated submission data

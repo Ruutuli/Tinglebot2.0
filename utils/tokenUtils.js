@@ -94,13 +94,7 @@ function calculateTokens({
     return total + baseValue * baseCount;
   }, 0);
   
-  console.log(`[tokenUtils.js]: 🧮 Token calculation debug:`, {
-    baseSelections,
-    baseCounts: baseCounts instanceof Map ? Object.fromEntries(baseCounts) : baseCounts,
-    baseTotal,
-    typeMultiplierSelections,
-    typeMultiplierCounts
-  });
+
 
   // Type Multiplier Calculation
   const typeMultiplierTotal = typeMultiplierSelections.length > 0 
@@ -117,7 +111,7 @@ function calculateTokens({
     console.error(`[tokenUtils.js]: ❌ Invalid product multiplier: ${productMultiplierValue}`);
     throw new Error(`Invalid product multiplier: ${productMultiplierValue}. Please select a valid product multiplier.`);
   }
-  console.log(`[tokenUtils.js]: 🎨 Product multiplier: ${productMultiplierValue} = ${productMultiplier}`);
+
 
   // Add-Ons Calculation
   const addOnTotal = addOnsApplied
@@ -142,20 +136,8 @@ function calculateTokens({
 
   // Regular Total Calculation
   const regularTotal = Math.ceil(baseTotal * typeMultiplierTotal * productMultiplier + addOnTotal);
-  console.log(`[tokenUtils.js]: 📊 Regular total calculation: ${baseTotal} × ${typeMultiplierTotal} × ${productMultiplier} + ${addOnTotal} = ${regularTotal}`);
-
   // Final Token Calculation
   const totalTokens = regularTotal + specialWorksTotal;
-
-  console.log(`[tokenUtils.js]: 💰 Final calculation:`, {
-    baseTotal,
-    typeMultiplierTotal,
-    productMultiplier,
-    addOnTotal,
-    specialWorksTotal,
-    regularTotal,
-    totalTokens
-  });
 
   return {
     totalTokens,
