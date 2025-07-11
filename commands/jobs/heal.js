@@ -21,6 +21,30 @@ const { generateUniqueId } = require('../../utils/uniqueIdUtils.js');
 // ---- Helper Functions ----
 // ============================================================================
 
+// ------------------- Function: createErrorEmbed -------------------
+// Creates a styled error embed for user-friendly error messages (ID: 2959553)
+function createErrorEmbed(title, description, fields = [], footer = null) {
+  const { EmbedBuilder } = require('discord.js');
+  
+  const embed = new EmbedBuilder()
+    .setColor('#FF6B6B') // Red color for errors
+    .setTitle(`❌ ${title}`)
+    .setDescription(description)
+    .setTimestamp();
+
+  // Add fields if provided
+  if (fields.length > 0) {
+    embed.addFields(fields);
+  }
+
+  // Add footer if provided
+  if (footer) {
+    embed.setFooter({ text: footer });
+  }
+
+  return embed;
+}
+
 // ---- Function: getHealingJobs ----
 // Returns list of jobs that can perform healing
 function getHealingJobs() {
@@ -201,13 +225,49 @@ async function handleHealingRequest(interaction, characterName, heartsToHeal, pa
 
     // Ensure the character exists and belongs to the user
     if (!characterToHeal) {
-      await interaction.editReply('❌ **Error:** This character does not belong to you!');
+      const errorEmbed = createErrorEmbed(
+        'Character Not Found',
+        `> The character **${characterName}** does not belong to you or could not be found.`,
+        [
+          {
+            name: '🔍 __Why This Happened__',
+            value: `> You can only request healing for characters that you own.`,
+            inline: false
+          },
+          {
+            name: '💡 __What You Can Do__',
+            value: `> • Check the character name spelling\n> • Make sure you own this character\n> • Try using the autocomplete feature`,
+            inline: false
+          }
+        ],
+        'Only character owners can request healing for their characters.'
+      );
+      
+      await interaction.editReply({ embeds: [errorEmbed] });
       return;
     }
 
     // Check if healer exists if specified
     if (healerName && !healerCharacter) {
-      await interaction.editReply(`❌ **Error:** The healer character "${healerName}" does not exist!`);
+      const errorEmbed = createErrorEmbed(
+        'Healer Not Found',
+        `> The healer character **${healerName}** does not exist or could not be found.`,
+        [
+          {
+            name: '🔍 __Why This Happened__',
+            value: `> The specified healer character may not exist or may have been deleted.`,
+            inline: false
+          },
+          {
+            name: '💡 __What You Can Do__',
+            value: `> • Check the healer name spelling\n> • Try requesting without specifying a healer\n> • Ask the healer to confirm their character name`,
+            inline: false
+          }
+        ],
+        'You can leave the healer field empty to allow any available healer to fulfill your request.'
+      );
+      
+      await interaction.editReply({ embeds: [errorEmbed] });
       return;
     }
 
@@ -256,10 +316,25 @@ async function handleHealingRequest(interaction, characterName, heartsToHeal, pa
       console.log(`[heal.js]: ✅ Healing request saved successfully with ID: ${healingRequestId}`);
     } catch (error) {
       console.error(`[heal.js]: ❌ Failed to save healing request: ${error.message}`);
-      await interaction.followUp({
-        content: '❌ **Error:** Failed to save healing request. Please try again.',
-        ephemeral: true
-      });
+      const errorEmbed = createErrorEmbed(
+        'Save Failed',
+        `> Failed to save your healing request. Please try again.`,
+        [
+          {
+            name: '🔍 __Why This Happened__',
+            value: `> There was a temporary issue with the system while saving your request.`,
+            inline: false
+          },
+          {
+            name: '💡 __What You Can Do__',
+            value: `> • Try creating the healing request again\n> • Wait a moment and try again\n> • Contact support if the issue persists`,
+            inline: false
+          }
+        ],
+        'This is usually a temporary issue that resolves quickly.'
+      );
+      
+      await interaction.followUp({ embeds: [errorEmbed], ephemeral: true });
     }
   } catch (error) {
     await handleErrorResponse(error, interaction, 'creating the healing request');
@@ -329,36 +404,122 @@ async function handleHealingFulfillment(interaction, requestId, healerName) {
     // Retrieve and validate healing request
     const healingRequest = await retrieveHealingRequestFromStorage(requestId);
     if (!healingRequest) {
-      await interaction.editReply(`❌ **Error:** No healing request found with ID **${requestId}**.`);
+      const errorEmbed = createErrorEmbed(
+        'Request Not Found',
+        `> No healing request found with ID **${requestId}**.`,
+        [
+          {
+            name: '🔍 __Why This Happened__',
+            value: `> The request may have been deleted, expired, or the ID may be incorrect.`,
+            inline: false
+          },
+          {
+            name: '💡 __What You Can Do__',
+            value: `> • Check the request ID carefully\n> • Ask the requester to share the request again\n> • Create a new healing request`,
+            inline: false
+          }
+        ],
+        'Healing request IDs are case-sensitive and must be entered exactly as shown.'
+      );
+      
+      await interaction.editReply({ embeds: [errorEmbed] });
       return;
     }
 
     // Check request expiration
     const requestAge = Date.now() - healingRequest.timestamp;
     if (requestAge > 24 * 60 * 60 * 1000) {
-      await interaction.editReply(`❌ **Error:** Healing request **${requestId}** has expired. Please request healing again.`);
+      const errorEmbed = createErrorEmbed(
+        'Request Expired',
+        `> Healing request **${requestId}** has expired and can no longer be fulfilled.`,
+        [
+          {
+            name: '🔍 __Why This Happened__',
+            value: `> Healing requests expire after 24 hours to keep the system current and prevent stale requests.`,
+            inline: false
+          },
+          {
+            name: '💡 __What You Can Do__',
+            value: `> • Ask the requester to create a new healing request\n> • Look for other active healing requests to fulfill\n> • Offer your healing services to others`,
+            inline: false
+          }
+        ],
+        'Healing requests expire after 24 hours for system maintenance.'
+      );
+      
+      await interaction.editReply({ embeds: [errorEmbed] });
       await deleteHealingRequestFromStorage(requestId);
       return;
     }
 
     if (healingRequest.status !== 'pending') {
-      await interaction.editReply(
-        `❌ **Error:** Healing request **${requestId}** has already been fulfilled or expired.`
+      const errorEmbed = createErrorEmbed(
+        'Request Already Processed',
+        `> Healing request **${requestId}** has already been fulfilled or is no longer available.`,
+        [
+          {
+            name: '🔍 __Why This Happened__',
+            value: `> This request may have been fulfilled by another healer or has been processed already.`,
+            inline: false
+          },
+          {
+            name: '💡 __What You Can Do__',
+            value: `> • Look for other active healing requests to fulfill\n> • Ask the requester to create a new request if needed\n> • Offer your healing services to others`,
+            inline: false
+          }
+        ],
+        'Each healing request can only be fulfilled once.'
       );
+      
+      await interaction.editReply({ embeds: [errorEmbed] });
       return;
     }
 
     // Check if request was directed to a specific healer
     if (healingRequest.healerName && healingRequest.healerName.toLowerCase() !== healerName.toLowerCase()) {
-      await interaction.editReply(
-        `❌ **Error:** This healing request was specifically directed to **${healingRequest.healerName}**. Only the requested healer can fulfill this request.`
+      const errorEmbed = createErrorEmbed(
+        'Wrong Healer',
+        `> This healing request was specifically directed to **${healingRequest.healerName}** and cannot be fulfilled by other healers.`,
+        [
+          {
+            name: '🔍 __Why This Happened__',
+            value: `> The requester specifically asked for **${healingRequest.healerName}** to fulfill this request.`,
+            inline: false
+          },
+          {
+            name: '💡 __What You Can Do__',
+            value: `> • Look for other healing requests that don't specify a healer\n> • Ask the requester to create a new request without specifying a healer\n> • Offer your healing services to others`,
+            inline: false
+          }
+        ],
+        'Some healing requests are directed to specific healers for roleplay or preference reasons.'
       );
+      
+      await interaction.editReply({ embeds: [errorEmbed] });
       return;
     }
 
     // Check if request was cancelled
     if (healingRequest.status === 'cancelled') {
-      await interaction.editReply('❌ **Error:** This healing request was cancelled by the requester and cannot be fulfilled.');
+      const errorEmbed = createErrorEmbed(
+        'Request Cancelled',
+        `> This healing request was cancelled by the requester and cannot be fulfilled.`,
+        [
+          {
+            name: '🔍 __Why This Happened__',
+            value: `> The person who created this healing request has cancelled it.`,
+            inline: false
+          },
+          {
+            name: '💡 __What You Can Do__',
+            value: `> • Look for other healing requests to fulfill\n> • Ask the requester to create a new request\n> • Offer your healing services to others`,
+            inline: false
+          }
+        ],
+        'Cancelled requests cannot be fulfilled and must be recreated if needed.'
+      );
+      
+      await interaction.editReply({ embeds: [errorEmbed] });
       return;
     }
 
@@ -366,21 +527,73 @@ async function handleHealingFulfillment(interaction, requestId, healerName) {
     const healerCharacter = await fetchCharacterByNameAndUserId(healerName, interaction.user.id);
     if (!healerCharacter) {
       console.error(`[heal.js]: ❌ Invalid healer character "${healerName}"`);
-      await interaction.editReply(`❌ **Error:** You do not own the healer character "${healerName}"!`);
+      const errorEmbed = createErrorEmbed(
+        'Healer Ownership Required',
+        `> You do not own the healer character **${healerName}**.`,
+        [
+          {
+            name: '🔍 __Why This Happened__',
+            value: `> You can only fulfill healing requests with characters that you own.`,
+            inline: false
+          },
+          {
+            name: '💡 __What You Can Do__',
+            value: `> • Use a different character that you own\n> • Check the character name spelling\n> • Make sure you own this character`,
+            inline: false
+          }
+        ],
+        'Only character owners can use their characters to fulfill healing requests.'
+      );
+      
+      await interaction.editReply({ embeds: [errorEmbed] });
       return;
     }
 
     const characterToHeal = await fetchCharacterByName(healingRequest.characterRequesting);
     if (!characterToHeal) {
-      await interaction.editReply(
-        `❌ **Error:** The character to be healed, **${healingRequest.characterRequesting}**, could not be found.`
+      const errorEmbed = createErrorEmbed(
+        'Target Character Not Found',
+        `> The character to be healed, **${healingRequest.characterRequesting}**, could not be found.`,
+        [
+          {
+            name: '🔍 __Why This Happened__',
+            value: `> The character may have been deleted or the name may be incorrect.`,
+            inline: false
+          },
+          {
+            name: '💡 __What You Can Do__',
+            value: `> • Contact the requester to confirm the character name\n> • Ask them to create a new healing request\n> • Check if the character still exists`,
+            inline: false
+          }
+        ],
+        'The character to be healed must exist and be accessible.'
       );
+      
+      await interaction.editReply({ embeds: [errorEmbed] });
       return;
     }
 
     // Prevent self-healing or healing your own characters
     if (healerCharacter.userId === characterToHeal.userId) {
-      await interaction.editReply('❌ **Error:** You cannot fulfill a healing request for your own character.');
+      const errorEmbed = createErrorEmbed(
+        'Self-Healing Not Allowed',
+        `> You cannot heal your own character. Healing requests must be fulfilled by other players to maintain game balance and encourage community interaction.`,
+        [
+          {
+            name: '🔍 __Why This Happened__',
+            value: `> Both **${healerCharacter.name}** and **${characterToHeal.name}** belong to the same user.`,
+            inline: false
+          },
+          {
+            name: '💡 __What You Can Do__',
+            value: `> • Ask another player to fulfill your healing request\n> • Use healing items from your inventory`,
+            inline: false
+          }
+        ],
+        'Healing requests promote community interaction and prevent self-exploitation.'
+      );
+      
+      await interaction.editReply({ embeds: [errorEmbed] });
       return;
     }
 
@@ -471,6 +684,8 @@ async function handleHealingFulfillment(interaction, requestId, healerName) {
 // ============================================================================
 // ---- Main Command Handler ----
 // ============================================================================
+
+
 
 module.exports = {
   data: new SlashCommandBuilder()
