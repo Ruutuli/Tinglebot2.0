@@ -230,6 +230,64 @@ async function updateSubmissionEmbedFooter(message, status, moderatorTag, reason
   }
 }
 
+// ------------------- Approval Notification Message Update Helper -------------------
+async function updateApprovalNotificationMessage(interaction, submissionId, status, reason = null) {
+  try {
+    // Find the approval notification message in the approval channel
+    const approvalChannel = interaction.client.channels.cache.get('1381479893090566144');
+    if (!approvalChannel?.isTextBased()) {
+      console.warn('[mod.js]: Approval channel not found or not text-based');
+      return;
+    }
+
+    // Search for the notification message that contains this submission ID
+    const messages = await approvalChannel.messages.fetch({ limit: 50 });
+    const notificationMessage = messages.find(msg => {
+      const embed = msg.embeds[0];
+      return embed && embed.fields && embed.fields.some(field => 
+        field.name === '🆔 Submission ID' && field.value.includes(submissionId)
+      );
+    });
+
+    if (!notificationMessage) {
+      console.warn(`[mod.js]: No notification message found for submission ${submissionId}`);
+      return;
+    }
+
+    // Update the notification message
+    const embed = notificationMessage.embeds[0];
+    const updatedEmbed = embed.toJSON();
+    
+    // Update the title and color based on status
+    if (status === 'approved') {
+      updatedEmbed.title = '✅ APPROVED ART SUBMISSION!';
+      updatedEmbed.color = 0x00FF00; // Green
+    } else if (status === 'denied') {
+      updatedEmbed.title = '❌ DENIED ART SUBMISSION!';
+      updatedEmbed.color = 0xFF0000; // Red
+    }
+
+    // Update the description
+    updatedEmbed.description = status === 'approved' 
+      ? '✅ **Approved and tokens awarded!**'
+      : `❌ **Denied${reason ? ` - ${reason}` : ''}**`;
+
+    // Update the footer
+    updatedEmbed.footer = {
+      text: status === 'approved' 
+        ? `✅ Approved by ${interaction.user.tag}`
+        : `❌ Denied by ${interaction.user.tag}${reason ? ` - ${reason}` : ''}`,
+      iconURL: undefined
+    };
+
+    await notificationMessage.edit({ embeds: [updatedEmbed] });
+    console.log(`[mod.js]: ✅ Updated approval notification message for submission ${submissionId}`);
+  } catch (error) {
+    console.error(`[mod.js]: ❌ Error updating approval notification message:`, error);
+    handleError(error, 'mod.js');
+  }
+}
+
 // ============================================================================
 // ------------------- Submission Embed Creation Functions -------------------
 // Consolidated embed creation for submission approval/denial notifications
@@ -1238,6 +1296,9 @@ async function handleApprove(interaction) {
         // Update the embed footer to show approval status
         await updateSubmissionEmbedFooter(message, 'approved', interaction.user.tag);
 
+        // Update the approval notification message in the approval channel
+        await updateApprovalNotificationMessage(interaction, submissionId, 'approved', null);
+
         // Save approved submission to database
         const approvedSubmissionData = {
           submissionId: submission.submissionId,
@@ -1267,6 +1328,7 @@ async function handleApprove(interaction) {
           approvedBy: interaction.user.tag,
           approvedAt: new Date(),
           approvalMessageId: interaction.id,
+          pendingNotificationMessageId: submission.pendingNotificationMessageId || null,
           submittedAt: submission.submittedAt || new Date()
         };
 
@@ -1280,37 +1342,78 @@ async function handleApprove(interaction) {
           // Continue with token updates even if database save fails
         }
 
+        let tokenErrors = [];
+        
         if (collab) {
           const splitTokens = Math.floor(tokenAmount / 2);
           const collaboratorId = collab.replace(/[<@>]/g, '');
 
-          await updateTokenBalance(userId, splitTokens);
-          await appendEarnedTokens(userId, title, category, tokenAmount, messageUrl);
+          try {
+            await updateTokenBalance(userId, splitTokens);
+            await appendEarnedTokens(userId, title, category, tokenAmount, messageUrl);
+          } catch (tokenError) {
+            console.error(`[mod.js]: ❌ Error updating tokens for main user ${userId}:`, tokenError);
+            tokenErrors.push(`Main user (${userId})`);
+          }
 
-          await updateTokenBalance(collaboratorId, splitTokens);
-          await appendEarnedTokens(collaboratorId, title, category, splitTokens, messageUrl);
+          try {
+            await updateTokenBalance(collaboratorId, splitTokens);
+            await appendEarnedTokens(collaboratorId, title, category, splitTokens, messageUrl);
+          } catch (tokenError) {
+            console.error(`[mod.js]: ❌ Error updating tokens for collaborator ${collaboratorId}:`, tokenError);
+            tokenErrors.push(`Collaborator (${collaboratorId})`);
+          }
 
           // Send embed DM to main user
-          const mainUserEmbed = createApprovalDMEmbed(submissionId, title, splitTokens, true);
-          await interaction.client.users.send(userId, { embeds: [mainUserEmbed] });
+          try {
+            const mainUserEmbed = createApprovalDMEmbed(submissionId, title, splitTokens, true);
+            await interaction.client.users.send(userId, { embeds: [mainUserEmbed] });
+          } catch (dmError) {
+            console.error(`[mod.js]: ❌ Error sending DM to main user ${userId}:`, dmError);
+          }
 
           // Send embed DM to collaborator
-          const collabUserEmbed = createCollaborationApprovalDMEmbed(submissionId, title, splitTokens);
-          await interaction.client.users.send(collaboratorId, { embeds: [collabUserEmbed] });
+          try {
+            const collabUserEmbed = createCollaborationApprovalDMEmbed(submissionId, title, splitTokens);
+            await interaction.client.users.send(collaboratorId, { embeds: [collabUserEmbed] });
+          } catch (dmError) {
+            console.error(`[mod.js]: ❌ Error sending DM to collaborator ${collaboratorId}:`, dmError);
+          }
         } else {
-          await updateTokenBalance(userId, tokenAmount);
-          await appendEarnedTokens(userId, title, category, tokenAmount, messageUrl);
+          
+          try {
+            await updateTokenBalance(userId, tokenAmount);
+            await appendEarnedTokens(userId, title, category, tokenAmount, messageUrl);
+          } catch (tokenError) {
+            console.error(`[mod.js]: ❌ Error updating tokens for user ${userId}:`, tokenError);
+            tokenErrors.push(`User (${userId})`);
+          }
 
           // Send embed DM to user
-          const userEmbed = createApprovalDMEmbed(submissionId, title, tokenAmount, false);
-          await interaction.client.users.send(userId, { embeds: [userEmbed] });
+          try {
+            const userEmbed = createApprovalDMEmbed(submissionId, title, tokenAmount, false);
+            await interaction.client.users.send(userId, { embeds: [userEmbed] });
+          } catch (dmError) {
+            console.error(`[mod.js]: ❌ Error sending DM to user ${userId}:`, dmError);
+          }
         }
 
         await deleteSubmissionFromStorage(submissionId);
         
         // Create improved mod confirmation message
         const modConfirmationEmbed = await createModApprovalConfirmationEmbed(submissionId, title, tokenAmount, userId, collab);
-        return interaction.editReply({ embeds: [modConfirmationEmbed], ephemeral: true });
+        
+        // Add warning if token updates failed
+        let warningMessage = '';
+        if (tokenErrors.length > 0) {
+          warningMessage = `⚠️ **Note:** Submission approved, but there were issues updating token trackers for: ${tokenErrors.join(', ')}. Please check that users have valid token tracker URLs set up.`;
+        }
+        
+        return interaction.editReply({ 
+          content: warningMessage,
+          embeds: [modConfirmationEmbed], 
+          ephemeral: true 
+        });
       }
   
       if (action === 'deny') {
@@ -1318,6 +1421,9 @@ async function handleApprove(interaction) {
   
         // Update the embed footer to show denial status
         await updateSubmissionEmbedFooter(message, 'denied', interaction.user.tag, reason);
+
+        // Update the approval notification message in the approval channel
+        await updateApprovalNotificationMessage(interaction, submissionId, 'denied', reason);
   
                 // Send embed DM to user for denial
         const denialEmbed = createDenialDMEmbed(submissionId, title, reason);

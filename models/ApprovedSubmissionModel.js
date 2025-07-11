@@ -135,6 +135,10 @@ const approvedSubmissionSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+  pendingNotificationMessageId: {
+    type: String,
+    default: null
+  },
   
   // ------------------- Timestamps -------------------
   submittedAt: {

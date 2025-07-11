@@ -171,8 +171,12 @@ async function handleSubmissionCompletion(interaction) {
           .setFooter({ text: `${submissionType} Submission Approval Required` })
           .setTimestamp();
 
-        await approvalChannel.send({ embeds: [notificationEmbed] });
+        const notificationMessage = await approvalChannel.send({ embeds: [notificationEmbed] });
         console.log(`[submissionHandler.js]: ✅ Notification sent to approval channel for ${submissionType} submission`);
+        
+        // Save the pending notification message ID to the submission data
+        submissionData.pendingNotificationMessageId = notificationMessage.id;
+        await saveSubmissionToStorage(submissionId, submissionData);
       }
     } catch (notificationError) {
       console.error(`[submissionHandler.js]: ❌ Failed to send notification to approval channel:`, notificationError);
