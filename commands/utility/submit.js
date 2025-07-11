@@ -7,7 +7,7 @@ const path = require('path');
 
 const { handleError } = require('../../utils/globalErrorHandler.js');
 // Discord.js Imports
-const { SlashCommandBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 
 // Handler Imports
 const { handleSelectMenuInteraction } = require('../../handlers/selectMenuHandler.js');
@@ -99,6 +99,12 @@ module.exports = {
             .setDescription('Quest ID if this is for a quest')
             .setRequired(false)
         )
+        .addStringOption(option =>
+          option
+            .setName('collab')
+            .setDescription('Collaborator username if this is a collaboration')
+            .setRequired(false)
+        )
     ),
 
   // ------------------- Command Execution -------------------
@@ -135,6 +141,14 @@ module.exports = {
         const title = interaction.options.getString('title')?.trim() || attachedFile.name; // Use user-input title or default to file name
         const questId = interaction.options.getString('questid') || 'N/A';
         const collab = interaction.options.getString('collab');
+
+        // Validate collaboration format if provided
+        if (collab && !collab.match(/^<@\d+>$/)) {
+          await interaction.editReply({ 
+            content: '❌ **Invalid collaboration format.** Please use the autocomplete to select a collaborator from the server. The collaborator must be mentioned with @username format.' 
+          });
+          return;
+        }
 
         // Check if a file is attached
         if (!attachedFile) {
@@ -213,6 +227,15 @@ module.exports = {
         }
         const description = interaction.options.getString('description') || 'No description provided.';
         const questId = interaction.options.getString('questid') || 'N/A';
+        const collab = interaction.options.getString('collab');
+
+        // Validate collaboration format if provided
+        if (collab && !collab.match(/^<@\d+>$/)) {
+          await interaction.editReply({ 
+            content: '❌ **Invalid collaboration format.** Please use the autocomplete to select a collaborator from the server. The collaborator must be mentioned with @username format.' 
+          });
+          return;
+        }
     
         // Fetch user data from the database
         const userData = await User.findOne({ discordId: user.id });
@@ -238,6 +261,8 @@ module.exports = {
           link,
           description,
           questEvent: questId,
+          questBonus: 'N/A',
+          collab: collab || null,
           tokenTracker: userData.tokenTracker || null,
         };
     
@@ -247,13 +272,47 @@ module.exports = {
     
         const embed = createWritingSubmissionEmbed(submissionData);
     
-        // Post the embed publicly in the channel
-        const sentMessage = await interaction.channel.send({ embeds: [embed] });
+        // Post the embed publicly in the submissions channel
+        const submissionsChannel = interaction.client.channels.cache.get('1393274995580604566');
+        const sentMessage = await submissionsChannel.send({ embeds: [embed] });
         
         // Update with message URL
         await updateSubmissionData(submissionId, { 
-          messageUrl: `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${sentMessage.id}` 
+          messageUrl: `https://discord.com/channels/${interaction.guildId}/${submissionsChannel.id}/${sentMessage.id}` 
         });
+
+        // Send notification to approval channel
+        try {
+          const approvalChannel = interaction.client.channels.cache.get('1381479893090566144');
+          if (approvalChannel?.isTextBased()) {
+            const notificationEmbed = new EmbedBuilder()
+              .setColor('#FF6B35') // Orange for writing
+              .setTitle('📝 PENDING WRITING SUBMISSION!')
+              .setDescription('⏳ **Please approve within 24 hours!**')
+              .addFields(
+                { name: '👤 Submitted by', value: `<@${interaction.user.id}>`, inline: true },
+                { name: '📅 Submitted on', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true },
+                { name: '📝 Title', value: title || 'Untitled', inline: true },
+                { name: '💰 Token Amount', value: `${finalTokenAmount} tokens`, inline: true },
+                { name: '🆔 Submission ID', value: `\`${submissionId}\``, inline: true },
+                { name: '🔗 View Submission', value: `[Click Here](https://discord.com/channels/${interaction.guildId}/${submissionsChannel.id}/${sentMessage.id})`, inline: true }
+              )
+              .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+              .setFooter({ text: 'WRITING Submission Approval Required' })
+              .setTimestamp();
+
+            const notificationMessage = await approvalChannel.send({ embeds: [notificationEmbed] });
+            console.log(`[submit.js]: ✅ Notification sent to approval channel for WRITING submission`);
+            
+            // Save the pending notification message ID to the submission data
+            await updateSubmissionData(submissionId, {
+              pendingNotificationMessageId: notificationMessage.id
+            });
+          }
+        } catch (notificationError) {
+          console.error(`[submit.js]: ❌ Failed to send notification to approval channel:`, notificationError);
+          // Don't throw here, just log the error since the submission was already posted
+        }
     
         // Send an ephemeral confirmation message
         await interaction.editReply({

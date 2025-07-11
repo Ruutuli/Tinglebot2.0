@@ -264,10 +264,12 @@ async function handleConfirmation(interaction, userId, submissionData) {
     };
 
     const embed = createArtSubmissionEmbed(embedData, user);
-    const sentMessage = await interaction.channel.send({ embeds: [embed] });
+    // Post to specific submissions channel
+    const submissionsChannel = interaction.client.channels.cache.get('1393274995580604566');
+    const sentMessage = await submissionsChannel.send({ embeds: [embed] });
     
     // Update with message URL
-    const messageUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${sentMessage.id}`;
+    const messageUrl = `https://discord.com/channels/${interaction.guildId}/${submissionsChannel.id}/${sentMessage.id}`;
     await updateSubmissionData(submissionData.submissionId, {
       ...updates,
       messageUrl: messageUrl
@@ -299,8 +301,13 @@ async function handleConfirmation(interaction, userId, submissionData) {
           .setFooter({ text: `${submissionType} Submission Approval Required` })
           .setTimestamp();
 
-        await approvalChannel.send({ embeds: [notificationEmbed] });
+        const notificationMessage = await approvalChannel.send({ embeds: [notificationEmbed] });
         console.log(`[componentHandler.js]: ✅ Notification sent to approval channel for ${submissionType} submission`);
+        
+        // Save the pending notification message ID to the submission data
+        await updateSubmissionData(submissionData.submissionId, {
+          pendingNotificationMessageId: notificationMessage.id
+        });
       }
     } catch (notificationError) {
       console.error(`[componentHandler.js]: ❌ Failed to send notification to approval channel:`, notificationError);
