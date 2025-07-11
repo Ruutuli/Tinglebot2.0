@@ -937,9 +937,6 @@ const createArtSubmissionEmbed = (submissionData) => {
   // Member field (proper mention)
   const memberField = userId ? `<@${userId}>` : username ? `@${username}` : 'N/A';
 
-  // Upload link
-  const uploadLink = fileUrl ? `[View Uploaded Image](${fileUrl})` : 'N/A';
-
   // Token tracker link (placeholder, replace with actual if available)
   const tokenTrackerLink = '[Token Tracker](https://tracker.example.com)';
 
@@ -977,18 +974,36 @@ const createArtSubmissionEmbed = (submissionData) => {
     breakdown = 'N/A';
   }
 
-  // Compose fields array
-  const fields = [
-    { name: 'Submission ID', value: submissionId || 'N/A', inline: false },
-    { name: 'Art Title', value: artTitle, inline: false },
-    { name: 'Member', value: memberField, inline: true },
-    { name: 'Upload Link', value: uploadLink, inline: true },
-    { name: 'Token Tracker Link', value: tokenTrackerLink, inline: true },
-    { name: 'Quest/Event', value: questEventField, inline: true },
-    { name: 'Quest/Event Bonus', value: questBonusField, inline: true },
-    { name: 'Token Total', value: `${finalTokenAmount || 0} Tokens`, inline: true },
-    { name: 'Token Calculation', value: `\n${breakdown}\n`, inline: false },
-  ];
+  // Build fields array dynamically - only include non-N/A fields
+  const fields = [];
+
+  // Always include these core fields
+  if (submissionId && submissionId !== 'N/A') {
+    fields.push({ name: 'Submission ID', value: submissionId, inline: false });
+  }
+  
+  fields.push({ name: 'Art Title', value: artTitle, inline: false });
+  fields.push({ name: 'Member', value: memberField, inline: true });
+  fields.push({ name: 'Token Tracker Link', value: tokenTrackerLink, inline: true });
+  
+  // Only add quest/event fields if they're not N/A
+  if (questEvent && questEvent !== 'N/A') {
+    fields.push({ name: 'Quest/Event', value: questEvent, inline: true });
+  }
+  
+  if (questBonus && questBonus !== 'N/A') {
+    fields.push({ name: 'Quest/Event Bonus', value: questBonus, inline: true });
+  }
+  
+  // Add collab field if present
+  if (collab && collab !== 'N/A') {
+    // Format collab display - if it's a Discord mention, show it as a mention, otherwise show as is
+    const collabDisplay = collab.startsWith('<@') && collab.endsWith('>') ? collab : `@${collab}`;
+    fields.push({ name: 'Collaboration', value: `Collaborating with ${collabDisplay}`, inline: true });
+  }
+  
+  fields.push({ name: 'Token Total', value: `${finalTokenAmount || 0} Tokens`, inline: true });
+  fields.push({ name: 'Token Calculation', value: `\n${breakdown}\n`, inline: false });
 
   // Build the embed
   const embed = new EmbedBuilder()

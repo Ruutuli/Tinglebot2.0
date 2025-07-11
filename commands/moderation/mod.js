@@ -103,6 +103,7 @@ const {
 const { simulateWeightedWeather } = require('../../handlers/weatherHandler');
 
 // ------------------- Database Models -------------------
+const ApprovedSubmission = require('../../models/ApprovedSubmissionModel');
 const Character = require('../../models/CharacterModel');
 const ItemModel = require('../../models/ItemModel');
 const Pet = require('../../models/PetModel');
@@ -1187,18 +1188,60 @@ async function handleApprove(interaction) {
       const channel = await interaction.client.channels.fetch(channelId);
       const message = await channel.messages.fetch(messageId);
   
-      if (action === 'approve') {
+            if (action === 'approve') {
         const user = await getOrCreateToken(userId);
         if (!user) {
           return interaction.editReply({ content: `❌ User with ID \`${userId}\` not found.`, ephemeral: true });
         }
-  
+
         await message.react('☑️');
-  
+
         // Update the embed footer to show approval status
         await updateSubmissionEmbedFooter(message, 'approved', interaction.user.tag);
-  
-                if (collab) {
+
+        // Save approved submission to database
+        const approvedSubmissionData = {
+          submissionId: submission.submissionId,
+          title: submission.title || submission.fileName,
+          fileName: submission.fileName,
+          category: submission.category || 'art',
+          userId: submission.userId,
+          username: submission.username,
+          userAvatar: submission.userAvatar,
+          fileUrl: submission.fileUrl,
+          messageUrl: submission.messageUrl,
+          finalTokenAmount: submission.finalTokenAmount,
+          tokenCalculation: submission.tokenCalculation,
+          baseSelections: submission.baseSelections || [],
+          baseCounts: submission.baseCounts || new Map(),
+          typeMultiplierSelections: submission.typeMultiplierSelections || [],
+          typeMultiplierCounts: submission.typeMultiplierCounts || new Map(),
+          productMultiplierValue: submission.productMultiplierValue,
+          addOnsApplied: submission.addOnsApplied || [],
+          specialWorksApplied: submission.specialWorksApplied || [],
+          wordCount: submission.wordCount,
+          link: submission.link,
+          description: submission.description,
+          collab: submission.collab,
+          questEvent: submission.questEvent || 'N/A',
+          questBonus: submission.questBonus || 'N/A',
+          approvedBy: interaction.user.tag,
+          approvedAt: new Date(),
+          approvalMessageId: interaction.id,
+          submittedAt: submission.submittedAt || new Date()
+        };
+
+        try {
+          const approvedSubmission = new ApprovedSubmission(approvedSubmissionData);
+          await approvedSubmission.save();
+          console.log(`[mod.js]: ✅ Saved approved submission ${submissionId} to database`);
+        } catch (dbError) {
+          handleError(dbError, 'mod.js');
+          console.error(`[mod.js]: ❌ Failed to save approved submission to database:`, dbError);
+          // Continue with token updates even if database save fails
+        }
+
+        if (collab) {
           const splitTokens = Math.floor(tokenAmount / 2);
           const collaboratorId = collab.replace(/[<@>]/g, '');
 

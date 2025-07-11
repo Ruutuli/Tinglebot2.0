@@ -227,68 +227,60 @@ function generateTokenBreakdown({
     })
     .join('\n');
 
-  // Construct the breakdown in the expected format
+  // Construct the breakdown in table format
   let breakdown = '```\n';
 
-  // Format base selections in the expected format: 【Base (value) xcount】
-  const baseFormatted = baseSelections
-    .map(base => {
-      const baseValue = artModule.baseTokens[base] || 0;
-      const baseCount = (baseCounts instanceof Map ? baseCounts.get(base) : baseCounts[base]) || 1;
-      return `【${getDisplayName(base)} (${baseValue}) x${baseCount}】`;
-    })
-    .join('+');
+  // Calculate base tokens total
+  const baseTotal = baseSelections.reduce((total, base) => {
+    const baseValue = artModule.baseTokens[base] || 0;
+    const baseCount = (baseCounts instanceof Map ? baseCounts.get(base) : baseCounts[base]) || 1;
+    return total + baseValue * baseCount;
+  }, 0);
 
-  // Format type multipliers in the expected format: 【Multiplier (value×count)】
-  const typeMultiplierFormatted = typeMultiplierSelections
-    .map(multiplier => {
-      const multiplierValue = artModule.typeMultipliers[multiplier] || 1;
-      const multiplierCount = typeMultiplierCounts[multiplier] || 1;
-      return `【${getDisplayName(multiplier)} (${multiplierValue}×${multiplierCount})】`;
-    })
-    .join('+');
+  // Calculate type multiplier total
+  const typeMultiplierTotal = typeMultiplierSelections.length > 0 
+    ? typeMultiplierSelections.reduce((sum, multiplier) => {
+        const multiplierValue = artModule.typeMultipliers[multiplier] || 1;
+        const multiplierCount = typeMultiplierCounts[multiplier] || 1;
+        return sum + (multiplierValue * multiplierCount);
+      }, 0)
+    : 1;
 
-  // Format product multiplier in the expected format: 【Product ×(value)】
-  const productFormatted = `【${getDisplayName(productMultiplierValue)} ×(${productMultiplierValueFinal})】`;
-
-  // Format add-ons in the expected format: 【Add-on (value) xcount】
-  const addOnFormatted = addOnsApplied
+  // Calculate add-ons total
+  const addOnTotal = addOnsApplied
     .filter(({ addOn, count }) => addOn && count > 0)
-    .map(({ addOn, count }) => {
+    .reduce((total, { addOn, count }) => {
       const addOnValue = artModule.addOns[addOn] || 0;
-      return `【${getDisplayName(addOn)} (${addOnValue}) x${count}】`;
-    })
-    .join('+');
+      return total + addOnValue * count;
+    }, 0);
 
-  // Format special works in the expected format: 【Special Work (value) xcount】
-  // Validate: Cannot have both comics and animation
-  const comics = specialWorksApplied.filter(({ work }) => work && work.startsWith('comic'));
-  const animations = specialWorksApplied.filter(({ work }) => work && work.startsWith('frame'));
-  
-  if (comics.length > 0 && animations.length > 0) {
-    throw new Error('Cannot have both Comics and Animation special works. Please choose only one type.');
-  }
-  
-  const specialWorksFormatted = specialWorksApplied
+  // Calculate special works total
+  const specialWorksTotal = specialWorksApplied
     .filter(({ work, count }) => work && count > 0)
-    .map(({ work, count }) => {
+    .reduce((total, { work, count }) => {
       const workValue = artModule.specialWorks[work] || 0;
-      return `【${getDisplayName(work)} (${workValue}) x${count}】`;
-    })
-    .join('+');
+      return total + workValue * count;
+    }, 0);
 
-  // Build the breakdown in mathematical equation format
-  breakdown += `${baseFormatted} x (+${typeMultiplierFormatted}) x ${productFormatted}`;
+  // Build the table format
+  breakdown += `Base tokens: ${baseTotal}\n`;
   
-  if (addOnFormatted) {
-    breakdown += `+ ${addOnFormatted}`;
+  if (typeMultiplierSelections.length > 0) {
+    breakdown += `x Type multiplier: ${typeMultiplierTotal}\n`;
   }
   
-  if (specialWorksFormatted) {
-    breakdown += `+ ${specialWorksFormatted}`;
+  breakdown += `x Product multiplier: ${productMultiplierValueFinal}\n`;
+  
+  if (addOnTotal > 0) {
+    breakdown += `+ Add-ons: ${addOnTotal}\n`;
   }
   
-  breakdown += ` = ${finalTokenAmount} Tokens`;
+  if (specialWorksTotal > 0) {
+    breakdown += `+ Special Works: ${specialWorksTotal}\n`;
+  }
+  
+  breakdown += `-----------------------------\n`;
+  breakdown += ` ${finalTokenAmount} Tokens`;
   
   if (collab) {
     breakdown += `\n\nCollab Total Each: ${Math.floor(finalTokenAmount / 2)} Tokens`;
