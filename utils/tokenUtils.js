@@ -262,21 +262,48 @@ function generateTokenBreakdown({
       return total + workValue * count;
     }, 0);
 
-  // Build the table format
-  breakdown += `Base tokens: ${baseTotal}\n`;
+  // Build the table format with actual names
+  // Base tokens with individual breakdown
+  const baseLines = baseSelections.map(base => {
+    const baseValue = artModule.baseTokens[base] || 0;
+    const baseCount = (baseCounts instanceof Map ? baseCounts.get(base) : baseCounts[base]) || 1;
+    return `${getDisplayName(base)} (${baseValue}×${baseCount})`;
+  });
+  breakdown += baseLines.join(' + ') + '\n';
   
+  // Type multipliers with individual breakdown
   if (typeMultiplierSelections.length > 0) {
-    breakdown += `x Type multiplier: ${typeMultiplierTotal}\n`;
+    const typeLines = typeMultiplierSelections.map(multiplier => {
+      const multiplierValue = artModule.typeMultipliers[multiplier] || 1;
+      const multiplierCount = typeMultiplierCounts[multiplier] || 1;
+      return `${getDisplayName(multiplier)} (${multiplierValue}×${multiplierCount})`;
+    });
+    breakdown += `x ${typeLines.join(' + ')}\n`;
   }
   
-  breakdown += `x Product multiplier: ${productMultiplierValueFinal}\n`;
+  // Product multiplier
+  breakdown += `x ${getDisplayName(productMultiplierValue)} ×(${productMultiplierValueFinal})\n`;
   
+  // Add-ons with individual breakdown
   if (addOnTotal > 0) {
-    breakdown += `+ Add-ons: ${addOnTotal}\n`;
+    const addOnLines = addOnsApplied
+      .filter(({ addOn, count }) => addOn && count > 0)
+      .map(({ addOn, count }) => {
+        const addOnValue = artModule.addOns[addOn] || 0;
+        return `${getDisplayName(addOn)} (${addOnValue}×${count})`;
+      });
+    breakdown += `+ ${addOnLines.join(' + ')}\n`;
   }
   
+  // Special works with individual breakdown
   if (specialWorksTotal > 0) {
-    breakdown += `+ Special Works: ${specialWorksTotal}\n`;
+    const specialLines = specialWorksApplied
+      .filter(({ work, count }) => work && count > 0)
+      .map(({ work, count }) => {
+        const workValue = artModule.specialWorks[work] || 0;
+        return `${getDisplayName(work)} (${workValue}×${count})`;
+      });
+    breakdown += `+ ${specialLines.join(' + ')}\n`;
   }
   
   breakdown += `-----------------------------\n`;

@@ -9,6 +9,7 @@
 const { EmbedBuilder } = require('discord.js');
 
 const { handleError } = require('../utils/globalErrorHandler');
+const { createArtSubmissionEmbed } = require('../embeds/embeds');
 // ============================================================================
 // Database Services
 // ============================================================================
@@ -137,8 +138,40 @@ async function handleSubmissionCompletion(interaction) {
     // Create and send the embed
     console.log(`[submissionHandler.js]: 🎨 Creating submission embed`);
     const embed = createArtSubmissionEmbed(submissionData);
-    await interaction.reply({ embeds: [embed] });
+    const sentMessage = await interaction.reply({ embeds: [embed] });
     console.log(`[submissionHandler.js]: ✅ Submission embed sent`);
+
+    // Update submission data with message URL
+    submissionData.messageUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${sentMessage.id}`;
+    await saveSubmissionToStorage(submissionId, submissionData);
+
+    // Send notification to approval channel
+    try {
+      const approvalChannel = interaction.client.channels.cache.get('1381479893090566144');
+      if (approvalChannel?.isTextBased()) {
+        const notificationEmbed = new EmbedBuilder()
+          .setColor('#FF0000')
+          .setTitle('📢 PENDING ART SUBMISSION!')
+          .setDescription('⏳ **Please approve within 24 hours!**')
+          .addFields(
+            { name: '👤 Submitted by', value: `<@${interaction.user.id}>`, inline: true },
+            { name: '📅 Submitted on', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true },
+            { name: '🎨 Art Title', value: submissionData.title || submissionData.fileName, inline: true },
+            { name: '💰 Token Amount', value: `${totalTokens} tokens`, inline: true },
+            { name: '🆔 Submission ID', value: `\`${submissionId}\``, inline: true },
+            { name: '🔗 View Submission', value: `[Click Here](${submissionData.messageUrl})`, inline: true }
+          )
+          .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+          .setFooter({ text: 'Art Submission Approval Required' })
+          .setTimestamp();
+
+        await approvalChannel.send({ embeds: [notificationEmbed] });
+        console.log(`[submissionHandler.js]: ✅ Notification sent to approval channel`);
+      }
+    } catch (notificationError) {
+      console.error(`[submissionHandler.js]: ❌ Failed to send notification to approval channel:`, notificationError);
+      // Don't throw here, just log the error since the submission was already posted
+    }
 
     // Update token count in database and log to Google Sheets
     console.log(`[submissionHandler.js]: 💰 Updating token count for user: ${user.id}`);
