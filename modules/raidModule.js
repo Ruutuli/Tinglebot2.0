@@ -2,187 +2,211 @@
 // ---- Standard Libraries ----
 // ============================================================================
 const { handleError } = require('../utils/globalErrorHandler');
-const { saveToStorage, retrieveFromStorage } = require('../utils/storage');
 const { generateUniqueId } = require('../utils/uniqueIdUtils');
 const { calculateFinalValue } = require('./rngModule');
-const { processBattle } = require('./encounterModule');
 const { EmbedBuilder } = require('discord.js');
+const { 
+  getTier5EncounterOutcome,
+  getTier6EncounterOutcome,
+  getTier7EncounterOutcome,
+  getTier8EncounterOutcome,
+  getTier9EncounterOutcome,
+  getTier10EncounterOutcome
+} = require('./encounterModule');
 const { getVillageEmojiByName } = require('./locationsModule');
 const { capitalizeVillageName } = require('../utils/stringUtils');
 const { monsterMapping } = require('../models/MonsterModel');
+const Raid = require('../models/RaidModel');
 
 // ============================================================================
 // ---- Constants ----
 // ============================================================================
-const RAID_DURATION = 15 * 60 * 1000; // 15 minutes in milliseconds
-const VILLAGE_DAMAGE_MULTIPLIER = 0.1; // 10% of monster's max health as village damage
+const RAID_DURATION = 20 * 1000; // 20 seconds in milliseconds (for testing)
 const THREAD_AUTO_ARCHIVE_DURATION = 60; // 60 minutes (minimum allowed by Discord)
 
-// Temporary raid channel - all raids will happen here
-const TEMP_RAID_CHANNEL_ID = '1391812848099004578';
-
 // ============================================================================
-// ---- Utility: canCreateThread ----
-// Checks if a thread can be created in the interaction's channel
-function canCreateThread(interaction) {
-  const channel = interaction.channel;
-  // Discord.js v13+: GUILD_TEXT = 0, GUILD_NEWS = 5, or use string types
-  return channel && (channel.type === 0 || channel.type === 5 || channel.type === 'GUILD_TEXT' || channel.type === 'GUILD_NEWS');
+// ---- Raid Battle Processing ----
+// ============================================================================
+
+// ---- Function: processRaidBattle ----
+// Processes a raid battle turn using the encounter module's tier-specific logic
+async function processRaidBattle(character, monster, diceRoll, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess) {
+  try {
+    console.log(`[raidModule.js]: ⚔️ Processing raid battle - ${character.name} vs ${monster.name} (T${monster.tier})`);
+    console.log(`[raidModule.js]: 🎲 Roll: ${diceRoll}, Damage Value: ${damageValue}, Adjusted: ${adjustedRandomValue}`);
+
+    let outcome;
+    
+    // Use the encounter module's tier-specific logic
+    switch (monster.tier) {
+      case 5:
+        outcome = await getTier5EncounterOutcome(character, monster, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess);
+        break;
+      case 6:
+        outcome = await getTier6EncounterOutcome(character, monster, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess);
+        break;
+      case 7:
+        outcome = await getTier7EncounterOutcome(character, monster, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess);
+        break;
+      case 8:
+        outcome = await getTier8EncounterOutcome(character, monster, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess);
+        break;
+      case 9:
+        outcome = await getTier9EncounterOutcome(character, monster, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess);
+        break;
+      case 10:
+        outcome = await getTier10EncounterOutcome(character, monster, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess);
+        break;
+      default:
+        throw new Error(`Unsupported monster tier for raid: ${monster.tier}`);
+    }
+
+    if (!outcome) {
+      throw new Error('Failed to calculate raid battle outcome');
+    }
+
+    console.log(`[raidModule.js]: 💥 Battle result - Damage dealt: ${outcome.hearts}, Character damage: ${outcome.result.includes('loses') ? 'Yes' : 'No'}`);
+
+    return {
+      hearts: outcome.hearts, // Damage dealt to monster
+      outcome: outcome.result, // Use the detailed outcome message from encounter module
+      playerHearts: {
+        current: character.currentHearts,
+        max: character.maxHearts
+      },
+      monsterHearts: {
+        current: monster.currentHearts,
+        max: monster.maxHearts
+      },
+      originalRoll: diceRoll,
+      adjustedRandomValue: adjustedRandomValue,
+      attackSuccess: attackSuccess,
+      defenseSuccess: defenseSuccess
+    };
+
+  } catch (error) {
+    handleError(error, 'raidModule.js', {
+      functionName: 'processRaidBattle',
+      characterName: character?.name,
+      monsterName: monster?.name
+    });
+    console.error(`[raidModule.js]: ❌ Error processing raid battle:`, error);
+    return null;
+  }
 }
 
 // ============================================================================
 // ---- Raid Functions ----
 // ============================================================================
 
-// ---- Function: createOrUpdateRaidThread ----
-// Creates or updates a Discord thread for raid communication
-async function createOrUpdateRaidThread(interaction, raidData, monsterImage) {
-  try {
-    if (!canCreateThread(interaction)) {
-      console.warn(`[raidModule.js]: ⚠️ Cannot create thread: Not a guild text/news channel`);
-      return { thread: null };
-    }
-    const villageName = capitalizeVillageName(raidData.villageId);
-    const emoji = raidData.isBloodMoon ? '🔴' : '🛡️';
-    const threadName = `${emoji} ${villageName} - ${raidData.monster.name} (Tier ${raidData.monster.tier})`;
-
-    // Create the thread
-    const thread = await interaction.fetchReply().then(message =>
-      message.startThread({
-        name: threadName,
-        autoArchiveDuration: THREAD_AUTO_ARCHIVE_DURATION,
-        reason: `Raid initiated against ${raidData.monster.name}`
-      })
-    );
-
-    // Create the initial thread message
-    const threadMessage = [
-      `👋 A raid has been initiated against **${raidData.monster.name} (Tier ${raidData.monster.tier})**!`,
-      `\n@${villageName} residents — come help defend your home!`,
-      `\nUse \`/raid ${raidData.battleId} <character>\` to join the fight!`,
-      `\n\n**Raid ID:** \`${raidData.battleId}\``
-    ].join('');
-
-    // Send only the text message to the thread (no embed)
-    await thread.send(threadMessage);
-    return { thread };
-  } catch (error) {
-    console.error(`[raidModule.js]: ❌ Error creating raid thread: ${error.message}`);
-    return { thread: null };
-  }
-}
-
-// ---- Function: archiveRaidThread ----
-// Archives a raid thread when the raid ends
-async function archiveRaidThread(thread) {
-  try {
-    if (thread && !thread.archived) {
-      await thread.setArchived(true);
-      console.log(`[raidModule.js]: 📦 Archived raid thread ${thread.name}`);
-    }
-  } catch (error) {
-    handleError(error, 'raidModule.js');
-    console.error(`[raidModule.js]: ❌ Error archiving raid thread:`, error);
-  }
-}
-
 // ---- Function: startRaid ----
 // Creates a new raid instance with the given monster and village
-async function startRaid(monster, villageId, interaction = null) {
+async function startRaid(monster, village, interaction = null) {
   try {
     // Generate unique raid ID with 'R' prefix for Raid
     const raidId = generateUniqueId('R');
     
-    // Use monster's actual hearts value
-    const monsterHearts = {
-      max: monster.hearts,
-      current: monster.hearts
-    };
-
-    // Create raid object with battle progress compatibility
-    const raidData = {
-      battleId: raidId,
+    // Create raid document
+    const raid = new Raid({
+      raidId: raidId,
       monster: {
         name: monster.name,
         nameMapping: monster.nameMapping,
         image: monster.image,
         tier: monster.tier,
-        hearts: monsterHearts
+        currentHearts: monster.hearts,
+        maxHearts: monster.hearts
       },
-      // Add monsterHearts at top level for battle progress compatibility
-      monsterHearts: monsterHearts,
-      progress: 'A new raid has begun!',
-      isBloodMoon: false,
-      startTime: Date.now(),
-      villageId: villageId,
-      status: 'active',
-      participants: [],
+      village: village,
+      channelId: interaction?.channel?.id || null,
+      expiresAt: new Date(Date.now() + RAID_DURATION),
       analytics: {
-        totalDamage: 0,
-        participantCount: 0,
-        averageDamagePerParticipant: 0,
         monsterTier: monster.tier,
-        villageId: villageId,
-        success: false,
-        startTime: new Date(),
-        endTime: null,
-        duration: null
-      },
-      timestamps: {
-        started: Date.now(),
-        lastUpdated: Date.now()
+        village: village
       }
-    };
+    });
 
-    // Save raid to storage
-    await saveToStorage(raidId, 'battle', raidData);
+    // Save raid to database
+    await raid.save();
 
-    console.log(`[raidModule.js]: 🐉 Started new raid ${raidId} - ${monster.name} (T${monster.tier}) in ${villageId}`);
+    console.log(`[raidModule.js]: 🐉 Started new raid ${raidId} - ${monster.name} (T${monster.tier}) in ${village}`);
     
-    // Create thread if interaction is provided, otherwise use temporary channel
-    let thread = null;
-    if (interaction) {
-      thread = await createOrUpdateRaidThread(interaction, raidData, monster.image);
-    } else {
-      // For moderation raids, use the temporary channel
-      const client = interaction?.client || interaction;
-      const raidChannel = client?.channels?.cache?.get(TEMP_RAID_CHANNEL_ID);
-      if (raidChannel) {
-        const monsterDetails = monsterMapping && monsterMapping[monster.nameMapping] 
-          ? monsterMapping[monster.nameMapping] 
-          : { image: monster.image };
-        const monsterImage = monsterDetails.image || monster.image;
-        const embed = createRaidEmbed(raidData, monsterImage);
-        
-        const raidMessage = await raidChannel.send({
-          content: `🐉 **MODERATION RAID!**`,
-          embeds: [embed]
+    // Set up internal timer for raid timeout
+    setTimeout(async () => {
+      try {
+        // Check if raid is still active
+        const currentRaid = await Raid.findOne({ raidId: raidId });
+        if (currentRaid && currentRaid.status === 'active') {
+          console.log(`[raidModule.js]: ⏰ Raid ${raidId} timed out after ${RAID_DURATION/1000} seconds`);
+          
+          // Calculate village damage (10% of monster's max health)
+          const villageDamage = Math.floor(currentRaid.monster.maxHearts * 0.1);
+          
+          // Mark raid as timed out
+          await currentRaid.timeoutRaid(villageDamage);
+          
+          // Send timeout message to thread if it exists
+          if (currentRaid.threadId && interaction?.client) {
+            try {
+              const thread = await interaction.client.channels.fetch(currentRaid.threadId);
+              if (thread) {
+                const timeoutEmbed = new EmbedBuilder()
+                  .setColor('#FF0000')
+                  .setTitle('⏰ **Raid Timed Out!**')
+                  .setDescription(`The raid against **${currentRaid.monster.name}** has timed out after ${RAID_DURATION/1000} seconds!`)
+                  .addFields(
+                    {
+                      name: '__Village Damage__',
+                      value: `💥 **${villageDamage} damage** inflicted on ${currentRaid.village}`,
+                      inline: false
+                    },
+                    {
+                      name: '__Monster Status__',
+                      value: `💙 **Hearts:** ${currentRaid.monster.currentHearts}/${currentRaid.monster.maxHearts}`,
+                      inline: false
+                    },
+                    {
+                      name: '__Participants__',
+                      value: currentRaid.participants.length > 0 
+                        ? currentRaid.participants.map(p => `• **${p.name}** (${p.damage} hearts)`).join('\n')
+                        : 'No participants',
+                      inline: false
+                    }
+                  )
+                  .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+                  .setFooter({ text: `Raid ID: ${raidId}` })
+                  .setTimestamp();
+                
+                await thread.send({ embeds: [timeoutEmbed] });
+                console.log(`[raidModule.js]: 💬 Timeout message sent to raid thread`);
+              }
+            } catch (threadError) {
+              console.error(`[raidModule.js]: ❌ Error sending timeout message to thread:`, threadError);
+            }
+          }
+          
+          console.log(`[raidModule.js]: 💥 Raid ${raidId} timed out - Village took ${villageDamage} damage`);
+        }
+      } catch (timeoutError) {
+        console.error(`[raidModule.js]: ❌ Error in raid timeout handler:`, timeoutError);
+        handleError(timeoutError, 'raidModule.js', {
+          functionName: 'raidTimeout',
+          raidId: raidId
         });
-        
-        thread = await raidMessage.startThread({
-          name: `🛡️ ${villageId} - ${monster.name} (T${monster.tier})`,
-          autoArchiveDuration: THREAD_AUTO_ARCHIVE_DURATION,
-          reason: `Moderation raid against ${monster.name}`
-        });
-        
-        const threadMessage = [
-          `👋 A moderation raid has been initiated against **${monster.name} (Tier ${monster.tier})**!`,
-          `\n@${villageId} residents — come help defend your home!`,
-          `\nUse \`/raid ${raidId} <character>\` to join the fight!`,
-          `\n\n**Raid ID:** \`${raidId}\``
-        ].join('');
-        
-        await thread.send(threadMessage);
       }
-    }
+    }, RAID_DURATION);
     
     return {
       raidId,
-      raidData,
-      thread
+      raidData: raid,
+      thread: null // Thread will be created in triggerRaid function
     };
   } catch (error) {
-    handleError(error, 'raidModule.js');
+    handleError(error, 'raidModule.js', {
+      functionName: 'startRaid',
+      monsterName: monster?.name,
+      village: village
+    });
     console.error(`[raidModule.js]: ❌ Error starting raid:`, error);
     throw error;
   }
@@ -192,36 +216,25 @@ async function startRaid(monster, villageId, interaction = null) {
 // Allows a character to join an active raid after validation checks
 async function joinRaid(character, raidId) {
   try {
-    // Retrieve raid data
-    const raidData = await retrieveFromStorage(raidId, 'battle');
-    if (!raidData) {
-      console.error(`[raidModule.js]: ❌ Raid ${raidId} not found`);
+    // Retrieve raid from database
+    const raid = await Raid.findOne({ raidId: raidId });
+    if (!raid) {
       throw new Error('Raid not found');
     }
 
     // Check if raid is active
-    if (raidData.status !== 'active') {
-      console.error(`[raidModule.js]: ❌ Raid ${raidId} is not active (status: ${raidData.status})`);
+    if (raid.status !== 'active') {
       throw new Error('Raid is not active');
     }
 
     // Check if character is KO'd
     if (character.ko) {
-      console.error(`[raidModule.js]: ❌ Character ${character.name} is KO'd and cannot join raid`);
       throw new Error('Character is KO\'d and cannot join raid');
     }
 
     // Check if character is in the same village
-    if (character.currentVillage.toLowerCase() !== raidData.villageId.toLowerCase()) {
-      console.error(`[raidModule.js]: ❌ Character ${character.name} is not in the same village as the raid`);
+    if (character.currentVillage.toLowerCase() !== raid.village.toLowerCase()) {
       throw new Error('Character must be in the same village as the raid');
-    }
-
-    // Check if user already has a character in the raid
-    const existingParticipant = raidData.participants.find(p => p.userId === character.userId);
-    if (existingParticipant) {
-      console.error(`[raidModule.js]: ❌ User already has character ${existingParticipant.name} in raid ${raidId}`);
-      throw new Error('You already have a character in this raid');
     }
 
     // Create participant data
@@ -230,7 +243,7 @@ async function joinRaid(character, raidId) {
       characterId: character._id,
       name: character.name,
       damage: 0,
-      joinedAt: Date.now(),
+      joinedAt: new Date(),
       characterState: {
         currentHearts: character.currentHearts,
         maxHearts: character.maxHearts,
@@ -242,33 +255,25 @@ async function joinRaid(character, raidId) {
         gearWeapon: character.gearWeapon,
         gearShield: character.gearShield,
         ko: character.ko
-      },
-      battleStats: {
-        damageDealt: 0,
-        healingDone: 0,
-        buffsApplied: [],
-        debuffsReceived: [],
-        lastAction: new Date()
       }
     };
 
-    // Add participant to raid
-    raidData.participants.push(participant);
-    raidData.analytics.participantCount = raidData.participants.length;
-    raidData.timestamps.lastUpdated = Date.now();
-
-    // Save updated raid data
-    await saveToStorage(raidId, 'battle', raidData);
+    // Add participant to raid using the model method
+    await raid.addParticipant(participant);
 
     console.log(`[raidModule.js]: 👤 ${character.name} joined raid ${raidId}`);
     
     return {
       raidId,
-      raidData,
+      raidData: raid,
       participant
     };
   } catch (error) {
-    handleError(error, 'raidModule.js');
+    handleError(error, 'raidModule.js', {
+      functionName: 'joinRaid',
+      characterName: character?.name,
+      raidId: raidId
+    });
     console.error(`[raidModule.js]: ❌ Error joining raid:`, error);
     throw error;
   }
@@ -278,31 +283,28 @@ async function joinRaid(character, raidId) {
 // Processes a single turn in a raid for a character
 async function processRaidTurn(character, raidId, interaction, raidData = null) {
   try {
-    // Use provided raidData or fetch from storage
-    if (!raidData) {
-      raidData = await retrieveFromStorage(raidId, 'battle');
+    // Use provided raidData or fetch from database
+    let raid = raidData;
+    if (!raid) {
+      raid = await Raid.findOne({ raidId: raidId });
     }
-    if (!raidData) {
-      console.error(`[raidModule.js]: ❌ Raid ${raidId} not found`);
+    if (!raid) {
       throw new Error('Raid not found');
     }
 
     // Check if raid is active
-    if (raidData.status !== 'active') {
-      console.error(`[raidModule.js]: ❌ Raid ${raidId} is not active (status: ${raidData.status})`);
+    if (raid.status !== 'active') {
       throw new Error('Raid is not active');
     }
 
     // Find participant
-    const participant = raidData.participants.find(p => p.characterId === character._id);
+    const participant = raid.participants.find(p => p.characterId.toString() === character._id.toString());
     if (!participant) {
-      console.error(`[raidModule.js]: ❌ Character ${character.name} is not in raid ${raidId}`);
       throw new Error('Character is not in this raid');
     }
 
     // Check if character is KO'd
     if (character.ko) {
-      console.error(`[raidModule.js]: ❌ Character ${character.name} is KO'd and cannot take turns`);
       throw new Error('Character is KO\'d and cannot take turns');
     }
 
@@ -310,58 +312,49 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
     const diceRoll = Math.floor(Math.random() * 100) + 1;
     const { damageValue, adjustedRandomValue, attackSuccess, defenseSuccess } = calculateFinalValue(character, diceRoll);
 
-    // Process the battle turn
-    const battleResult = await processBattle(
+    // Process the raid battle turn
+    const battleResult = await processRaidBattle(
       character,
-      raidData.monster,
-      raidId,
+      raid.monster,
+      diceRoll,
       damageValue,
-      interaction
+      adjustedRandomValue,
+      attackSuccess,
+      defenseSuccess
     );
 
     if (!battleResult) {
-      throw new Error('Failed to process battle turn');
+      throw new Error('Failed to process raid battle turn');
     }
 
-    // Update participant's battle stats
-    participant.battleStats.damageDealt += battleResult.hearts;
-    participant.battleStats.lastAction = new Date();
-    participant.damage += battleResult.hearts;
+    // Update participant's damage using the model method
+    await raid.updateParticipantDamage(character._id, battleResult.hearts);
 
-    // Update raid analytics
-    raidData.analytics.totalDamage += battleResult.hearts;
-    raidData.analytics.averageDamagePerParticipant = 
-      raidData.analytics.totalDamage / raidData.analytics.participantCount;
+    // Update monster hearts
+    raid.monster.currentHearts = battleResult.monsterHearts.current;
 
     // Check if monster is defeated
-    if (battleResult.monsterHearts.current <= 0) {
-      raidData.status = 'completed';
-      raidData.analytics.success = true;
-      raidData.analytics.endTime = new Date();
-      raidData.analytics.duration = raidData.analytics.endTime - raidData.analytics.startTime;
-      raidData.progress = `The ${raidData.monster.name} has been defeated!`;
+    if (raid.monster.currentHearts <= 0) {
+      await raid.completeRaid('defeated');
     }
 
-    // Sync monster hearts between raid data and battle progress format
-    raidData.monster.hearts = battleResult.monsterHearts;
-    raidData.monsterHearts = battleResult.monsterHearts;
-
-    // Update timestamps
-    raidData.timestamps.lastUpdated = Date.now();
-
     // Save updated raid data
-    await saveToStorage(raidId, 'battle', raidData);
+    await raid.save();
 
     console.log(`[raidModule.js]: ⚔️ ${character.name} completed turn in raid ${raidId}`);
     
     return {
       raidId,
-      raidData,
+      raidData: raid,
       battleResult,
       participant
     };
   } catch (error) {
-    handleError(error, 'raidModule.js');
+    handleError(error, 'raidModule.js', {
+      functionName: 'processRaidTurn',
+      characterName: character?.name,
+      raidId: raidId
+    });
     console.error(`[raidModule.js]: ❌ Error processing raid turn:`, error);
     throw error;
   }
@@ -371,79 +364,100 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
 // Checks if a raid has expired and handles the timeout consequences
 async function checkRaidExpiration(raidId) {
   try {
-    // Retrieve raid data
-    const raidData = await retrieveFromStorage(raidId, 'battle');
-    if (!raidData) {
-      console.error(`[raidModule.js]: ❌ Raid ${raidId} not found`);
-      throw new Error('Raid not found');
+    // Retrieve raid from database
+    const raid = await Raid.findOne({ raidId: raidId });
+    if (!raid) {
+      return null;
     }
 
-    // Skip if raid is already completed or timed out
-    if (raidData.status !== 'active') {
-      return raidData;
+    // Skip if raid is already completed
+    if (raid.status !== 'active') {
+      return raid;
     }
-
-    const currentTime = Date.now();
-    const raidStartTime = raidData.timestamps.started;
-    const timeElapsed = currentTime - raidStartTime;
 
     // Check if raid has expired
-    if (timeElapsed >= RAID_DURATION) {
-      console.log(`[raidModule.js]: ⏰ Raid ${raidId} has expired after ${timeElapsed / 1000}s`);
+    if (raid.isExpired()) {
+      console.log(`[raidModule.js]: ⏰ Raid ${raidId} has expired`);
 
-      // Calculate village damage based on monster's max health
-      const monsterMaxHealth = raidData.monster.hearts.max;
-      const villageDamage = Math.floor(monsterMaxHealth * VILLAGE_DAMAGE_MULTIPLIER);
+      // Calculate village damage based on monster's max health (10% of max health)
+      const villageDamage = Math.floor(raid.monster.maxHearts * 0.1);
 
-      // Update raid status and analytics
-      raidData.status = 'timed_out';
-      raidData.analytics.success = false;
-      raidData.analytics.endTime = new Date();
-      raidData.analytics.duration = timeElapsed;
-      raidData.analytics.villageDamage = villageDamage;
-      raidData.progress = `The raid has timed out! The ${raidData.monster.name} has escaped and caused ${villageDamage} damage to the village!`;
-
-      // Update timestamps
-      raidData.timestamps.lastUpdated = currentTime;
-
-      // Save updated raid data
-      await saveToStorage(raidId, 'battle', raidData);
-
-      // Archive the thread if it exists
-      if (raidData.thread) {
-        await archiveRaidThread(raidData.thread);
-      }
+      // Update raid status using the model method
+      await raid.timeoutRaid(villageDamage);
 
       console.log(`[raidModule.js]: 💥 Raid ${raidId} timed out - Village took ${villageDamage} damage`);
     }
 
-    return raidData;
+    return raid;
   } catch (error) {
-    handleError(error, 'raidModule.js');
+    handleError(error, 'raidModule.js', {
+      functionName: 'checkRaidExpiration',
+      raidId: raidId
+    });
     console.error(`[raidModule.js]: ❌ Error checking raid expiration:`, error);
     throw error;
   }
 }
 
+// ---- Function: createRaidThread ----
+// Creates a Discord thread for raid communication
+async function createRaidThread(interaction, raid) {
+  try {
+    const villageName = capitalizeVillageName(raid.village);
+    const emoji = '🛡️';
+    const threadName = `${emoji} ${villageName} - ${raid.monster.name} (Tier ${raid.monster.tier})`;
+
+    // Create the thread
+    const thread = await interaction.fetchReply().then(message =>
+      message.startThread({
+        name: threadName,
+        autoArchiveDuration: THREAD_AUTO_ARCHIVE_DURATION,
+        reason: `Raid initiated against ${raid.monster.name}`
+      })
+    );
+
+    // Create the initial thread message
+    const threadMessage = [
+      `💀 A raid has been initiated against **${raid.monster.name} (Tier ${raid.monster.tier})**!`,
+      `\n@${villageName} residents — come help defend your home!`,
+      `\nUse \`/raid ${raid.raidId} <character>\` to join the fight!`,
+      `\n\n**Raid ID:** \`\`\`${raid.raidId}\`\`\``
+    ].join('');
+
+    // Send the text message to the thread
+    await thread.send(threadMessage);
+
+    // Update raid with thread information
+    raid.threadId = thread.id;
+    raid.messageId = interaction.id;
+    await raid.save();
+
+    return thread;
+  } catch (error) {
+    console.error(`[raidModule.js]: ❌ Error creating raid thread: ${error.message}`);
+    return null;
+  }
+}
+
 // ---- Function: createRaidEmbed ----
 // Creates an embed for displaying raid information
-function createRaidEmbed(raidData, monsterImage) {
-  const villageName = capitalizeVillageName(raidData.villageId);
-  const villageEmoji = getVillageEmojiByName(raidData.villageId) || '';
+function createRaidEmbed(raid, monsterImage) {
+  const villageName = capitalizeVillageName(raid.village);
+  const villageEmoji = getVillageEmojiByName(raid.village) || '';
 
   const embed = new EmbedBuilder()
     .setColor('#FF0000')
     .setTitle('🛡️ Village Raid!')
     .setDescription(
-      `**${raidData.monster.name} has been spotted in ${villageName}!**\n` +
-      `*It's a Tier ${raidData.monster.tier} monster! Protect the village!*\n\n` +
+      `**${raid.monster.name} has been spotted in ${villageName}!**\n` +
+      `*It's a Tier ${raid.monster.tier} monster! Protect the village!*\n\n` +
       `/raid to join or continue the raid!\n` +
       `/item to heal during the raid!`
     )
     .addFields(
       {
-        name: `__${raidData.monster.name}__`,
-        value: `💙 **Hearts:** ${raidData.monster.hearts.current}/${raidData.monster.hearts.max}\n⭐ **Tier:** ${raidData.monster.tier}`,
+        name: `__${raid.monster.name}__`,
+        value: `💙 **Hearts:** ${raid.monster.currentHearts}/${raid.monster.maxHearts}\n⭐ **Tier:** ${raid.monster.tier}`,
         inline: false
       },
       {
@@ -453,14 +467,14 @@ function createRaidEmbed(raidData, monsterImage) {
       },
       {
         name: `__Raid ID__`,
-        value: `\u0060\u0060\u0060${raidData.battleId}\u0060\u0060\u0060`,
+        value: `\u0060\u0060\u0060${raid.raidId}\u0060\u0060\u0060`,
         inline: false
       }
     )
     .setImage('https://storage.googleapis.com/tinglebot/Graphics/border%20blood%20moon.png')
     .setTimestamp();
 
-  // Restore monster image as thumbnail if available
+  // Add monster image as thumbnail if available
   if (monsterImage && monsterImage !== 'No Image') {
     embed.setThumbnail(monsterImage);
   }
@@ -469,22 +483,16 @@ function createRaidEmbed(raidData, monsterImage) {
 }
 
 // ---- Function: triggerRaid ----
-// Triggers a raid in the temporary raid channel
-async function triggerRaid(character, monster, interaction, villageId = null, isBloodMoon = false) {
+// Triggers a raid in the specified channel
+async function triggerRaid(monster, interaction, villageId, isBloodMoon = false) {
   try {
-    // Use character's current village if no village specified
-    const targetVillage = villageId || character.currentVillage;
+    console.log(`[raidModule.js]: 🐉 Starting raid trigger for ${monster.name} in ${villageId}`);
+    console.log(`[raidModule.js]: 📍 Interaction type: ${interaction?.constructor?.name || 'unknown'}`);
+    console.log(`[raidModule.js]: 📍 Channel ID: ${interaction?.channel?.id || 'unknown'}`);
     
     // Start the raid
-    const { raidId, raidData } = await startRaid(monster, targetVillage);
+    const { raidId, raidData } = await startRaid(monster, villageId, interaction);
     
-    // Get the temporary raid channel
-    const raidChannel = interaction.client.channels.cache.get(TEMP_RAID_CHANNEL_ID);
-    if (!raidChannel) {
-      console.error(`[raidModule.js]: ❌ Temporary raid channel not found: ${TEMP_RAID_CHANNEL_ID}`);
-      throw new Error('Raid channel not available');
-    }
-
     // Create the raid embed
     const monsterDetails = monsterMapping && monsterMapping[monster.nameMapping] 
       ? monsterMapping[monster.nameMapping] 
@@ -492,29 +500,102 @@ async function triggerRaid(character, monster, interaction, villageId = null, is
     const monsterImage = monsterDetails.image || monster.image;
     const embed = createRaidEmbed(raidData, monsterImage);
 
+    console.log(`[raidModule.js]: 📤 Sending raid announcement to channel ${interaction.channel.id}`);
+    console.log(`[raidModule.js]: 📤 Interaction deferred: ${interaction.deferred}`);
+    console.log(`[raidModule.js]: 📤 Interaction replied: ${interaction.replied}`);
+    
     // Send the raid announcement
-    const raidMessage = await raidChannel.send({
-      content: isBloodMoon ? `🌙 **BLOOD MOON RAID!**` : `🐉 **RAID TRIGGERED!**`,
-      embeds: [embed]
-    });
+    let raidMessage;
+    if (interaction.deferred || interaction.replied) {
+      // If interaction is already deferred/replied, send to channel directly
+      raidMessage = await interaction.channel.send({
+        content: isBloodMoon ? `🌙 **BLOOD MOON RAID!**` : `⚠️ **RAID TRIGGERED!** ⚠️`,
+        embeds: [embed]
+      });
+    } else {
+      // If interaction is not deferred, reply to it
+      raidMessage = await interaction.reply({
+        content: isBloodMoon ? `🌙 **BLOOD MOON RAID!**` : `⚠️ **RAID TRIGGERED!** ⚠️`,
+        embeds: [embed],
+        fetchReply: true
+      });
+    }
 
-    // Create the raid thread
-    const thread = await raidMessage.startThread({
-      name: `🛡️ ${targetVillage} - ${monster.name} (T${monster.tier})`,
-      autoArchiveDuration: THREAD_AUTO_ARCHIVE_DURATION
-    });
+    console.log(`[raidModule.js]: 📝 Raid message sent with ID: ${raidMessage.id}`);
+    console.log(`[raidModule.js]: 📝 Raid message type: ${raidMessage.constructor.name}`);
+    console.log(`[raidModule.js]: 📝 Raid message channel: ${raidMessage.channel?.id}`);
+    console.log(`[raidModule.js]: 📝 Raid message guild: ${raidMessage.guild?.id}`);
+    console.log(`[raidModule.js]: 🧵 Creating thread on raid message...`);
 
-    // Send initial thread message with raid ID
-    const threadMessage = [
-      `👋 A raid has been initiated against **${monster.name} (Tier ${monster.tier})**!`,
-      `\n@${targetVillage} residents — come help defend your home!`,
-      `\nUse \`/raid ${raidId} <character>\` to join the fight!`,
-      `\n\n**Raid ID:** \`${raidId}\``
-    ].join('');
+    // Create the raid thread with error handling
+    let thread = null;
+    try {
+      // Ensure we're creating the thread on the actual raid message
+      console.log(`[raidModule.js]: 🧵 Creating thread on message ID: ${raidMessage.id}`);
+      
+      thread = await raidMessage.startThread({
+        name: `🛡️ ${villageId} - ${monster.name} (T${monster.tier})`,
+        autoArchiveDuration: THREAD_AUTO_ARCHIVE_DURATION,
+        reason: `Raid thread for ${monster.name} in ${villageId}`
+      });
 
-    await thread.send(threadMessage);
+      // Verify thread was created properly
+      if (!thread || !thread.id) {
+        throw new Error('Failed to create raid thread');
+      }
 
-    console.log(`[raidModule.js]: 🐉 Triggered raid ${raidId} - ${monster.name} (T${monster.tier}) in ${targetVillage}${isBloodMoon ? ' (Blood Moon)' : ''}`);
+      console.log(`[raidModule.js]: 🧵 Thread created with ID: ${thread.id}`);
+      console.log(`[raidModule.js]: 📝 Thread name: ${thread.name}`);
+      console.log(`[raidModule.js]: 📍 Thread parent message ID: ${thread.parentId}`);
+      console.log(`[raidModule.js]: 📍 Raid message ID: ${raidMessage.id}`);
+      
+      // Verify the thread is properly connected to the raid message
+      if (thread.parentId !== raidMessage.id) {
+        console.warn(`[raidModule.js]: ⚠️ Thread parent ID (${thread.parentId}) doesn't match raid message ID (${raidMessage.id})`);
+      } else {
+        console.log(`[raidModule.js]: ✅ Thread created successfully on raid message`);
+      }
+      
+      // Send initial thread message with raid ID
+      const threadMessage = [
+        `💀 A raid has been initiated against **${monster.name} (Tier ${monster.tier})**!`,
+        `\n@${villageId} residents — come help defend your home!`,
+        `\nUse \`/raid ${raidId} <character>\` to join the fight!`,
+        `\n\n**Raid ID:** \`\`\`${raidId}\`\`\``
+      ].join('');
+
+      await thread.send(threadMessage);
+      console.log(`[raidModule.js]: 💬 Thread message sent`);
+
+      // Update raid data with thread information
+      raidData.threadId = thread.id;
+      raidData.messageId = raidMessage.id;
+      await raidData.save();
+      console.log(`[raidModule.js]: 💾 Updated raid data with thread information`);
+
+    } catch (threadError) {
+      console.warn(`[raidModule.js]: ⚠️ Could not create thread: ${threadError.message}`);
+      console.warn(`[raidModule.js]: ⚠️ This may be because the channel doesn't support threads (DM, etc.)`);
+      console.warn(`[raidModule.js]: ⚠️ Raid will continue without a thread - participants can use the raid ID directly`);
+      
+      // Send the raid information as a follow-up message instead
+      const raidInfoMessage = [
+        `💀 A raid has been initiated against **${monster.name} (Tier ${monster.tier})**!`,
+        `\n@${villageId} residents — come help defend your home!`,
+        `\nUse \`/raid ${raidId} <character>\` to join the fight!`,
+        `\n\n**Raid ID:** \`\`\`${raidId}\`\`\``,
+        `\n\n*Note: No thread was created in this channel. Use the raid ID to participate!*`
+      ].join('');
+
+      await interaction.followUp({ content: raidInfoMessage });
+      
+      // Update raid data without thread information
+      raidData.messageId = raidMessage.id;
+      await raidData.save();
+      console.log(`[raidModule.js]: 💾 Updated raid data without thread information`);
+    }
+
+    console.log(`[raidModule.js]: 🐉 Triggered raid ${raidId} - ${monster.name} (T${monster.tier}) in ${villageId}${isBloodMoon ? ' (Blood Moon)' : ''}`);
 
     return {
       success: true,
@@ -526,8 +607,7 @@ async function triggerRaid(character, monster, interaction, villageId = null, is
 
   } catch (error) {
     handleError(error, 'raidModule.js', {
-      commandName: 'triggerRaid',
-      characterName: character?.name,
+      functionName: 'triggerRaid',
       monsterName: monster?.name,
       villageId: villageId,
       isBloodMoon: isBloodMoon
@@ -548,7 +628,6 @@ module.exports = {
   processRaidTurn,
   checkRaidExpiration,
   createRaidEmbed,
-  createOrUpdateRaidThread,
-  archiveRaidThread,
+  createRaidThread,
   triggerRaid
-}; 
+};

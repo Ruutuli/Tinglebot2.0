@@ -77,4 +77,6 @@
 [deploy-commands.js]: Successfully loaded 24 commands
 🔄 Started refreshing 24 commands.
 [deploy-commands.js]: Deploying to guild: 603960955839447050
+(node:46780) [MONGOOSE] Warning: Duplicate schema index on {"raidId":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(Use `node --trace-warnings ...` to show where the warning was created)
 ✅ Successfully registered 24 commands to guild.

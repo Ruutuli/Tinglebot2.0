@@ -3,102 +3,168 @@
 // Grouped and alphabetized within each section
 // ============================================================================
 
+// ------------------- Node.js Standard Libraries -------------------
 const fs = require('fs');
 const path = require('path');
 
+// ------------------- Discord.js Components -------------------
 const {
   EmbedBuilder,
   PermissionsBitField,
   SlashCommandBuilder
 } = require('discord.js');
 
-const { handleError } = require('../../utils/globalErrorHandler');
+// ------------------- Database Connections -------------------
 const {
-  connectToTinglebot,
   connectToInventories,
-  fetchCharacterByName,
-  fetchCharacterById,
-  fetchAllCharacters,
-  fetchAllItems,
-  fetchItemByName,
-  fetchItemsByCategory,
-  fetchItemRarityByName,
-  fetchItemsByIds,
-  fetchValidWeaponSubtypes,
-  getSpecificItems,
-  getIngredientItems,
-  getCharacterInventoryCollection,
-  deleteCharacterInventoryCollection,
-  createCharacterInventory,
-  updatePetToCharacter,
-  getOrCreateToken,
-  updateTokenBalance,
-  appendEarnedTokens,
-  resetPetRollsForAllCharacters,
-  forceResetPetRolls,
-  fetchMonsterByName
+  connectToTinglebot
 } = require('../../database/db');
 
+// ------------------- Database Services -------------------
+const {
+  appendEarnedTokens,
+  createCharacterInventory,
+  deleteCharacterInventoryCollection,
+  fetchAllCharacters,
+  fetchAllItems,
+  fetchAllMonsters,
+  fetchCharacterById,
+  fetchCharacterByName,
+  fetchItemByName,
+  fetchItemRarityByName,
+  fetchItemsByCategory,
+  fetchItemsByIds,
+  fetchMonsterByName,
+  fetchValidWeaponSubtypes,
+  forceResetPetRolls,
+  getCharacterInventoryCollection,
+  getIngredientItems,
+  getOrCreateToken,
+  getSpecificItems,
+  resetPetRollsForAllCharacters,
+  updatePetToCharacter,
+  updateTokenBalance
+} = require('../../database/db');
+
+// ------------------- Custom Modules -------------------
 const { monsterMapping } = require('../../models/MonsterModel');
-const { startRaid, createRaidEmbed } = require('../../modules/raidModule');
+
+// ------------------- Utility Functions -------------------
+const { handleError } = require('../../utils/globalErrorHandler');
+const { addItemInventoryDatabase } = require('../../utils/inventoryUtils');
+const {
+  authorizeSheets,
+  extractSpreadsheetId,
+  isValidGoogleSheetsUrl,
+  safeAppendDataToSheet
+} = require('../../utils/googleSheetsUtils');
+const {
+  deletePendingEditFromStorage,
+  deleteSubmissionFromStorage,
+  retrievePendingEditFromStorage,
+  retrieveSubmissionFromStorage,
+  savePendingEditToStorage
+} = require('../../utils/storage');
+
+// ------------------- Modules -------------------
+const {
+  capitalize,
+  capitalizeFirstLetter,
+  capitalizeWords,
+  getRandomColor
+} = require('../../modules/formattingModule');
+
+const {
+  getMountEmoji,
+  getMountThumbnail,
+  getRandomMount,
+  storeEncounter
+} = require('../../modules/mountModule');
 
 const {
   getVillageColorByName,
-  getVillageEmojiByName,
-} = require("../../modules/locationsModule");
+  getVillageEmojiByName
+} = require('../../modules/locationsModule');
 
+const {
+  createRaidEmbed,
+  startRaid,
+  triggerRaid
+} = require('../../modules/raidModule');
+
+// ------------------- Handlers -------------------
 const {
   handleAutocomplete,
-  handleModGiveCharacterAutocomplete,
-  handleModGiveItemAutocomplete,
   handleModCharacterAutocomplete,
-} = require("../../handlers/autocompleteHandler");
+  handleModGiveCharacterAutocomplete,
+  handleModGiveItemAutocomplete
+} = require('../../handlers/autocompleteHandler');
 
-const {
-  capitalizeFirstLetter,
-  capitalizeWords,
-  capitalize,
-  getRandomColor,
-} = require("../../modules/formattingModule");
+const { simulateWeightedWeather } = require('../../handlers/weatherHandler');
 
+// ------------------- Database Models -------------------
+const Character = require('../../models/CharacterModel');
+const ItemModel = require('../../models/ItemModel');
+const Pet = require('../../models/PetModel');
+const TempData = require('../../models/TempDataModel');
+const User = require('../../models/UserModel');
+const VillageShopsModel = require('../../models/VillageShopsModel');
+
+// ------------------- External API Integrations -------------------
+const bucket = require('../../config/gcsService');
+
+// ------------------- Embeds -------------------
 const {
   createCharacterEmbed,
-  createVendorEmbed,
   createCharacterGearEmbed,
-  getCommonEmbedSettings,
-} = require("../../embeds/embeds");
-
-const bucket = require("../../config/gcsService");
-
-const Pet = require('../../models/PetModel');
-const User = require('../../models/UserModel');
-const Character = require('../../models/CharacterModel');
-const ItemModel = require("../../models/ItemModel");
-const TempData = require('../../models/TempDataModel');
-const VillageShopsModel = require('../../models/VillageShopsModel');
-const {
-  savePendingEditToStorage,
-  retrievePendingEditFromStorage,
-  deletePendingEditFromStorage,
-  retrieveSubmissionFromStorage,
-  deleteSubmissionFromStorage
-} = require('../../utils/storage');
-
-const {
-  storeEncounter,
-  getRandomMount,
-  getMountThumbnail,
-  getMountEmoji
-} = require('../../modules/mountModule');
-
-
-
-const { v4: uuidv4 } = require('uuid');
+  createVendorEmbed,
+  getCommonEmbedSettings
+} = require('../../embeds/embeds');
 
 const { createMountEncounterEmbed } = require('../../embeds/embeds');
 const { generateWeatherEmbed } = require('../../embeds/weatherEmbed.js');
 
-// Helper function to validate URLs
+// ------------------- Third-Party Libraries -------------------
+const { v4: uuidv4 } = require('uuid');
+
+
+// ============================================================================
+// ------------------- URL Utility Functions -------------------
+// Consolidated URL handling for validation, cleaning, and sanitization
+// ============================================================================
+
+// ------------------- Function: validateAndSanitizeUrl -------------------
+// Validates, cleans, and sanitizes URLs with fallback to placeholder
+function validateAndSanitizeUrl(url, fallbackUrl = "https://i.imgur.com/placeholder.png") {
+  if (!url) return fallbackUrl;
+  
+  try {
+    // Clean the URL by removing trailing semicolons, spaces, and invalid characters
+    let cleaned = url.replace(/[;\s]+$/, '').trim();
+    cleaned = cleaned.replace(/;+$/, '');
+    
+    // Encode the URL properly
+    const encodedUrl = encodeURI(cleaned).replace(/!/g, '%21');
+    
+    // Validate the URL structure
+    const urlObj = new URL(encodedUrl);
+    
+    // Only allow http and https protocols
+    if (urlObj.protocol === 'http:' || urlObj.protocol === 'https:') {
+      console.log(`[mod.js]: ✅ URL validated and sanitized: "${url}" -> "${encodedUrl}"`);
+      return encodedUrl;
+    } else {
+      console.warn(`[mod.js]: ⚠️ Invalid protocol for URL: ${url}`);
+      return fallbackUrl;
+    }
+  } catch (error) {
+    console.error(`[mod.js]: ❌ Error processing URL: ${url}`, error.message);
+    return fallbackUrl;
+  }
+}
+
+// ------------------- Function: isValidUrl -------------------
+// Simple URL validation without sanitization
 function isValidUrl(string) {
   try {
     new URL(string);
@@ -108,33 +174,11 @@ function isValidUrl(string) {
   }
 }
 
-// Helper function to clean URLs by removing trailing semicolons and other invalid characters
-function cleanUrl(url) {
-  if (!url) return null;
-  // Remove trailing semicolons, spaces, and other common invalid characters
-  let cleaned = url.replace(/[;\s]+$/, '').trim();
-  // Also remove any semicolons that might be in the middle or end
-  cleaned = cleaned.replace(/;+$/, '');
-  console.log(`[mod.js]: cleanUrl input: "${url}" -> output: "${cleaned}"`);
-  return cleaned;
-}
-
-// ------------------- URL Sanitization Helper -------------------
-const sanitizeUrl = (url) => {
-  if (!url) return "https://i.imgur.com/placeholder.png";
-  try {
-    const encodedUrl = encodeURI(url).replace(/!/g, '%21');
-    const urlObj = new URL(encodedUrl);
-    return urlObj.protocol === 'http:' || urlObj.protocol === 'https:' ? encodedUrl : "https://i.imgur.com/placeholder.png";
-  } catch (_) {
-    console.error(`[mod.js]: ❌ Error sanitizing URL: ${url}`);
-    return "https://i.imgur.com/placeholder.png";
-  }
-};
-
-// ------------------- Pet Image URL Encoding Helper -------------------
-const encodePetImageUrl = (petImageUrl) => {
+// ------------------- Function: encodePetImageUrl -------------------
+// Encodes pet image URLs by splitting and encoding filename separately
+function encodePetImageUrl(petImageUrl) {
   if (!petImageUrl) return null;
+  
   try {
     // Split the URL into base and filename parts
     const lastSlashIndex = petImageUrl.lastIndexOf('/');
@@ -150,7 +194,7 @@ const encodePetImageUrl = (petImageUrl) => {
     console.log(`[mod.js]: Error encoding pet image URL: ${error.message}`);
   }
   return null;
-};
+}
 
 // ------------------- Embed Footer Update Helper -------------------
 async function updateSubmissionEmbedFooter(message, status, moderatorTag, reason = null) {
@@ -185,106 +229,211 @@ async function updateSubmissionEmbedFooter(message, status, moderatorTag, reason
   }
 }
 
-// ------------------- Approval DM Embed Helper -------------------
+// ============================================================================
+// ------------------- Submission Embed Creation Functions -------------------
+// Consolidated embed creation for submission approval/denial notifications
+// ============================================================================
+
+// ------------------- Function: createSubmissionEmbed -------------------
+// Creates submission-related embeds with consistent styling and structure
+function createSubmissionEmbed(type, options = {}) {
+  const {
+    submissionId,
+    title = 'Untitled',
+    tokenAmount = 0,
+    userId = null,
+    reason = null,
+    collab = null,
+    isCollaboration = false
+  } = options;
+
+  const embedConfigs = {
+    approval: {
+      color: '#00FF00',
+      title: '🎉 Submission Approved!',
+      description: 'Your submission has been approved and tokens have been added to your balance.',
+      footer: 'Submission Approval',
+      fields: [
+        { name: '📝 Submission ID', value: `\`${submissionId}\``, inline: true },
+        { name: '🎨 Title', value: title, inline: true },
+        { name: '💰 Tokens Earned', value: `**${tokenAmount}** tokens`, inline: true },
+        { name: '🤝 Collaboration', value: isCollaboration ? 'Yes - tokens split' : 'No', inline: true }
+      ]
+    },
+    collaboration: {
+      color: '#00FF00',
+      title: '🎉 Collaboration Submission Approved!',
+      description: 'A submission you collaborated on has been approved and tokens have been added to your balance.',
+      footer: 'Collaboration Submission Approval',
+      fields: [
+        { name: '📝 Submission ID', value: `\`${submissionId}\``, inline: true },
+        { name: '🎨 Title', value: title, inline: true },
+        { name: '💰 Tokens Earned', value: `**${tokenAmount}** tokens (split)`, inline: true }
+      ]
+    },
+    denial: {
+      color: '#FF0000',
+      title: '❌ Submission Denied',
+      description: 'Your submission has been denied. Please review the feedback and resubmit if needed.',
+      footer: 'Submission Denial',
+      fields: [
+        { name: '📝 Submission ID', value: `\`${submissionId}\``, inline: true },
+        { name: '🎨 Title', value: title, inline: true },
+        { name: '📋 Reason', value: reason || 'No reason provided', inline: false }
+      ]
+    },
+    modApproval: {
+      color: '#00FF00',
+      title: '✅ Submission Approved Successfully',
+      description: `<@${userId}>, your submission has been approved!`,
+      footer: 'Moderator Approval',
+      fields: [
+        { name: '📝 Submission ID', value: `\`${submissionId}\``, inline: true },
+        { name: '🎨 Title', value: title, inline: true },
+        { name: '💰 Tokens Awarded', value: `**${tokenAmount}** tokens`, inline: true },
+        { name: '🤝 Collaboration', value: collab ? `Yes - split with ${collab}` : 'No', inline: true }
+      ]
+    },
+    modDenial: {
+      color: '#FF0000',
+      title: '❌ Submission Denied Successfully',
+      description: `<@${userId}>, your submission has been denied.`,
+      footer: 'Moderator Denial',
+      fields: [
+        { name: '📝 Submission ID', value: `\`${submissionId}\``, inline: true },
+        { name: '🎨 Title', value: title, inline: true },
+        { name: '📋 Reason', value: reason || 'No reason provided', inline: false }
+      ]
+    }
+  };
+
+  const config = embedConfigs[type];
+  if (!config) {
+    throw new Error(`Invalid embed type: ${type}`);
+  }
+
+  const embed = new EmbedBuilder()
+    .setColor(config.color)
+    .setTitle(config.title)
+    .setDescription(config.description)
+    .addFields(config.fields)
+    .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+    .setFooter({ text: config.footer })
+    .setTimestamp();
+
+  return embed;
+}
+
+// ------------------- Function: createApprovalDMEmbed -------------------
+// Creates approval DM embed for users
 function createApprovalDMEmbed(submissionId, title, tokenAmount, isCollaboration = false) {
-  const embed = new EmbedBuilder()
-    .setColor('#00FF00')
-    .setTitle('🎉 Submission Approved!')
-    .setDescription(`Your submission has been approved and tokens have been added to your balance.`)
-    .addFields(
-      { name: '📝 Submission ID', value: `\`${submissionId}\``, inline: true },
-      { name: '🎨 Title', value: title || 'Untitled', inline: true },
-      { name: '💰 Tokens Earned', value: `**${tokenAmount}** tokens`, inline: true },
-      { name: '🤝 Collaboration', value: isCollaboration ? 'Yes - tokens split' : 'No', inline: true }
-    )
-    .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
-    .setFooter({ text: 'Submission Approval' })
-    .setTimestamp();
-
-  return embed;
+  return createSubmissionEmbed('approval', { submissionId, title, tokenAmount, isCollaboration });
 }
 
-// ------------------- Collaboration Approval DM Embed Helper -------------------
+// ------------------- Function: createCollaborationApprovalDMEmbed -------------------
+// Creates collaboration approval DM embed for users
 function createCollaborationApprovalDMEmbed(submissionId, title, tokenAmount) {
-  const embed = new EmbedBuilder()
-    .setColor('#00FF00')
-    .setTitle('🎉 Collaboration Submission Approved!')
-    .setDescription(`A submission you collaborated on has been approved and tokens have been added to your balance.`)
-    .addFields(
-      { name: '📝 Submission ID', value: `\`${submissionId}\``, inline: true },
-      { name: '🎨 Title', value: title || 'Untitled', inline: true },
-      { name: '💰 Tokens Earned', value: `**${tokenAmount}** tokens (split)`, inline: true }
-    )
-    .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
-    .setFooter({ text: 'Collaboration Submission Approval' })
-    .setTimestamp();
-
-  return embed;
+  return createSubmissionEmbed('collaboration', { submissionId, title, tokenAmount });
 }
 
-// ------------------- Denial DM Embed Helper -------------------
+// ------------------- Function: createDenialDMEmbed -------------------
+// Creates denial DM embed for users
 function createDenialDMEmbed(submissionId, title, reason) {
-  const embed = new EmbedBuilder()
-    .setColor('#FF0000')
-    .setTitle('❌ Submission Denied')
-    .setDescription(`Your submission has been denied. Please review the feedback and resubmit if needed.`)
-    .addFields(
-      { name: '📝 Submission ID', value: `\`${submissionId}\``, inline: true },
-      { name: '🎨 Title', value: title || 'Untitled', inline: true },
-      { name: '📋 Reason', value: reason || 'No reason provided', inline: false }
-    )
-    .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
-    .setFooter({ text: 'Submission Denial' })
-    .setTimestamp();
-
-  return embed;
+  return createSubmissionEmbed('denial', { submissionId, title, reason });
 }
 
-// ------------------- Mod Approval Confirmation Embed Helper -------------------
+// ------------------- Function: createModApprovalConfirmationEmbed -------------------
+// Creates mod approval confirmation embed
 function createModApprovalConfirmationEmbed(submissionId, title, tokenAmount, userId, collab) {
-  const embed = new EmbedBuilder()
-    .setColor('#00FF00')
-    .setTitle('✅ Submission Approved Successfully')
-    .setDescription(`<@${userId}>, your submission has been approved!`)
-    .addFields(
-      { name: '📝 Submission ID', value: `\`${submissionId}\``, inline: true },
-      { name: '🎨 Title', value: title || 'Untitled', inline: true },
-      { name: '💰 Tokens Awarded', value: `**${tokenAmount}** tokens`, inline: true },
-      { name: '🤝 Collaboration', value: collab ? `Yes - split with ${collab}` : 'No', inline: true }
-    )
-    .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
-    .setFooter({ text: 'Moderator Approval' })
-    .setTimestamp();
-
-  return embed;
+  return createSubmissionEmbed('modApproval', { submissionId, title, tokenAmount, userId, collab });
 }
 
-// ------------------- Mod Denial Confirmation Embed Helper -------------------
+// ------------------- Function: createModDenialConfirmationEmbed -------------------
+// Creates mod denial confirmation embed
 function createModDenialConfirmationEmbed(submissionId, title, userId, reason) {
+  return createSubmissionEmbed('modDenial', { submissionId, title, userId, reason });
+}
+
+// ============================================================================
+// ------------------- Pet Embed Creation Functions -------------------
+// Consolidated embed creation for pet-related notifications
+// ============================================================================
+
+// ------------------- Function: createPetEmbed -------------------
+// Creates pet-related embeds with consistent styling and structure
+function createPetEmbed(type, options = {}) {
+  const {
+    character,
+    pet,
+    petName,
+    oldLevel,
+    newLevel,
+    result,
+    moderatorTag
+  } = options;
+
+  const embedConfigs = {
+    levelUpdate: {
+      title: "🎉 Pet Level Updated!",
+      description: "Your pet has been upgraded by a moderator!",
+      fields: [
+        { name: "🐾 Pet Name", value: `> ${petName}`, inline: true },
+        { name: "🦊 Species", value: `> ${pet.species}`, inline: true },
+        { name: "🎯 Pet Type", value: `> ${pet.petType}`, inline: true },
+        { name: "📈 Level Change", value: `> Level ${oldLevel} → **Level ${newLevel}**`, inline: true },
+        { name: "🎲 Weekly Rolls", value: `> **${newLevel} rolls per week**`, inline: true },
+        { name: "🔄 Rolls Reset", value: `> Every Sunday at 8:00 AM`, inline: true }
+      ],
+      footer: `Updated by ${moderatorTag}`
+    },
+    rollReset: {
+      title: "🔄 Pet Rolls Reset Successfully!",
+      description: "A moderator has reset your pet's rolls for this week.",
+      fields: [
+        { name: "🐾 Pet Name", value: `> ${petName}`, inline: true },
+        { name: "🦊 Species", value: `> ${pet.species}`, inline: true },
+        { name: "🎯 Pet Type", value: `> ${pet.petType}`, inline: true },
+        { name: "📊 Level", value: `> Level ${pet.level}`, inline: true },
+        { name: "🔄 Rolls Reset", value: `> ${result.oldRolls} → **${result.newRolls}** rolls`, inline: true },
+        { name: "📅 Reset Schedule", value: `> Every Sunday at midnight`, inline: true }
+      ],
+      footer: `Reset by ${moderatorTag}`
+    }
+  };
+
+  const config = embedConfigs[type];
+  if (!config) {
+    throw new Error(`Invalid pet embed type: ${type}`);
+  }
+
   const embed = new EmbedBuilder()
-    .setColor('#FF0000')
-    .setTitle('❌ Submission Denied Successfully')
-    .setDescription(`<@${userId}>, your submission has been denied.`)
-    .addFields(
-      { name: '📝 Submission ID', value: `\`${submissionId}\``, inline: true },
-      { name: '🎨 Title', value: title || 'Untitled', inline: true },
-      { name: '📋 Reason', value: reason || 'No reason provided', inline: false }
-    )
-    .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
-    .setFooter({ text: 'Moderator Denial' })
+    .setTitle(config.title)
+    .setDescription(config.description)
+    .addFields(config.fields)
+    .setColor("#00FF00")
+    .setFooter({ text: config.footer })
     .setTimestamp();
+
+  // Set character as author with icon if available
+  embed.setAuthor({ name: character.name, iconURL: character.icon });
+
+  // Set pet image as thumbnail if available
+  if (pet.imageUrl) {
+    const encodedPetImageUrl = encodePetImageUrl(pet.imageUrl);
+    const sanitizedPetImageUrl = validateAndSanitizeUrl(encodedPetImageUrl || pet.imageUrl);
+    embed.setThumbnail(sanitizedPetImageUrl);
+    console.log(`[mod.js]: Using pet image as thumbnail: "${sanitizedPetImageUrl}"`);
+  } else {
+    embed.setThumbnail("https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png");
+    console.log(`[mod.js]: Using default thumbnail for pet`);
+  }
+
+  // Set banner image
+  embed.setImage("https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png");
+  console.log(`[mod.js]: Using banner image for pet ${type}`);
 
   return embed;
 }
-
-const { addItemInventoryDatabase } = require('../../utils/inventoryUtils');
-
-const {
-  authorizeSheets,
-  extractSpreadsheetId,
-  isValidGoogleSheetsUrl,
-  safeAppendDataToSheet
-} = require('../../utils/googleSheetsUtils');
 
 // ============================================================================
 // ------------------- Constants -------------------
@@ -677,7 +826,6 @@ async function execute(interaction) {
     } else if (subcommand === 'tokens') {
         const user = interaction.options.getUser('user');
         const amount = interaction.options.getInteger('amount');
-        const User = require('../../models/UserModel.js'); // ✅ adjust if needed
       
         try {
           let target = await User.findOne({ discordId: user.id });
@@ -893,64 +1041,14 @@ async function handlePetLevel(interaction) {
     });
   
     // Create a beautiful embed for the pet level update
-    const petLevelEmbed = new EmbedBuilder()
-      .setTitle("🎉 Pet Level Updated!")
-      .setDescription(`Your pet has been upgraded by a moderator!`)
-      .addFields(
-        { 
-          name: "🐾 Pet Name", 
-          value: `> ${petName}`, 
-          inline: true 
-        },
-        { 
-          name: "🦊 Species", 
-          value: `> ${petDoc.species}`, 
-          inline: true 
-        },
-        { 
-          name: "🎯 Pet Type", 
-          value: `> ${petDoc.petType}`, 
-          inline: true 
-        },
-        { 
-          name: "📈 Level Change", 
-          value: `> Level ${oldLevel} → **Level ${newLevel}**`, 
-          inline: true 
-        },
-        { 
-          name: "🎲 Weekly Rolls", 
-          value: `> **${newLevel} rolls per week**`, 
-          inline: true 
-        },
-        { 
-          name: "🔄 Rolls Reset", 
-          value: `> Every Sunday at 8:00 AM`, 
-          inline: true 
-        }
-      )
-      .setColor("#00FF00")
-      .setFooter({ 
-        text: `Updated by ${interaction.user.tag}` 
-      })
-      .setTimestamp();
-
-    // Set character as author with icon if available
-    petLevelEmbed.setAuthor({ name: character.name, iconURL: character.icon });
-
-    // Set pet image as thumbnail if available
-    if (petDoc.imageUrl) {
-      const encodedPetImageUrl = encodePetImageUrl(petDoc.imageUrl);
-      const sanitizedPetImageUrl = sanitizeUrl(encodedPetImageUrl || petDoc.imageUrl);
-      petLevelEmbed.setThumbnail(sanitizedPetImageUrl);
-      console.log(`[mod.js]: Using pet image as thumbnail: "${sanitizedPetImageUrl}"`);
-    } else {
-      petLevelEmbed.setThumbnail("https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png");
-      console.log(`[mod.js]: Using default thumbnail for pet`);
-    }
-
-    // Set banner image
-    petLevelEmbed.setImage("https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png");
-    console.log(`[mod.js]: Using banner image for pet level update`);
+    const petLevelEmbed = createPetEmbed('levelUpdate', {
+      character,
+      pet: petDoc,
+      petName,
+      oldLevel,
+      newLevel,
+      moderatorTag: interaction.user.tag
+    });
 
     // Log the embed data before sending
     console.log(`[mod.js]: Embed data:`, {
@@ -1615,7 +1713,6 @@ async function handleSlots(interaction) {
 async function handleWeather(interaction) {
   try {
     const village = interaction.options.getString('village');
-    const { simulateWeightedWeather } = require('../../handlers/weatherHandler.js');
     const currentSeason = getCurrentSeason();
     
     const weather = simulateWeightedWeather(village, currentSeason);
@@ -1743,64 +1840,13 @@ async function handleForceResetPetRolls(interaction) {
     });
 
     // Create a beautiful embed for the pet roll reset
-    const resetEmbed = new EmbedBuilder()
-      .setTitle("🔄 Pet Rolls Reset Successfully!")
-      .setDescription(`A moderator has reset your pet's rolls for this week.`)
-      .addFields(
-        { 
-          name: "🐾 Pet Name", 
-          value: `> ${petName}`, 
-          inline: true 
-        },
-        { 
-          name: "🦊 Species", 
-          value: `> ${pet.species}`, 
-          inline: true 
-        },
-        { 
-          name: "🎯 Pet Type", 
-          value: `> ${pet.petType}`, 
-          inline: true 
-        },
-        { 
-          name: "📊 Level", 
-          value: `> Level ${pet.level}`, 
-          inline: true 
-        },
-        { 
-          name: "🔄 Rolls Reset", 
-          value: `> ${result.oldRolls} → **${result.newRolls}** rolls`, 
-          inline: true 
-        },
-        { 
-          name: "📅 Reset Schedule", 
-          value: `> Every Sunday at midnight`, 
-          inline: true 
-        }
-      )
-      .setColor("#00FF00")
-      .setFooter({ 
-        text: `Reset by ${interaction.user.tag}` 
-      })
-      .setTimestamp();
-
-    // Set character as author with icon if available
-    resetEmbed.setAuthor({ name: character.name, iconURL: character.icon });
-
-    // Set pet image as thumbnail if available
-    if (pet.imageUrl) {
-      const encodedPetImageUrl = encodePetImageUrl(pet.imageUrl);
-      const sanitizedPetImageUrl = sanitizeUrl(encodedPetImageUrl || pet.imageUrl);
-      resetEmbed.setThumbnail(sanitizedPetImageUrl);
-      console.log(`[mod.js]: Using pet image as thumbnail: "${sanitizedPetImageUrl}"`);
-    } else {
-      resetEmbed.setThumbnail("https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png");
-      console.log(`[mod.js]: Using default thumbnail for pet`);
-    }
-
-    // Set banner image
-    resetEmbed.setImage("https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png");
-    console.log(`[mod.js]: Using banner image for pet reset`);
+    const resetEmbed = createPetEmbed('rollReset', {
+      character,
+      pet,
+      petName,
+      result,
+      moderatorTag: interaction.user.tag
+    });
 
     // Log the embed data before sending
     console.log(`[mod.js]: Reset embed data:`, {
@@ -2018,33 +2064,36 @@ async function handleTriggerRaid(interaction) {
       }
     } else {
       // Get a random monster from the database (tier 5 and above only)
-      const Monster = require('../../models/MonsterModel');
-      const monsters = await Monster.find({ tier: { $gte: 5 } }).limit(100);
-      if (monsters.length === 0) {
+      const allMonsters = await fetchAllMonsters();
+      const tier5PlusMonsters = allMonsters.filter(m => m.tier >= 5);
+      if (tier5PlusMonsters.length === 0) {
         return interaction.editReply({ content: '❌ **No tier 5+ monsters found in database.**' });
       }
-      monster = monsters[Math.floor(Math.random() * monsters.length)];
+      monster = tier5PlusMonsters[Math.floor(Math.random() * tier5PlusMonsters.length)];
     }
 
-    // Import the triggerRaid function from raidModule
-    const { triggerRaid } = require('../../modules/raidModule');
-
-    // Trigger the raid (no character specified, so it will be random)
-    const result = await triggerRaid(null, monster, interaction, village, false);
+    // Capitalize the village name to match the Raid model enum values
+    const capitalizedVillage = village.charAt(0).toUpperCase() + village.slice(1);
+    
+    console.log(`[mod.js]: 🎯 Triggering raid for ${monster.name} in ${capitalizedVillage}`);
+    console.log(`[mod.js]: 📍 Interaction type: ${interaction?.constructor?.name || 'unknown'}`);
+    console.log(`[mod.js]: 📍 Channel ID: ${interaction?.channel?.id || 'unknown'}`);
+    
+    // Trigger the raid
+    const result = await triggerRaid(monster, interaction, capitalizedVillage, false);
 
     if (!result || !result.success) {
       return interaction.editReply({ 
-        content: '❌ **Failed to trigger the raid.**',
+        content: `❌ **Failed to trigger the raid:** ${result?.error || 'Unknown error'}`,
         ephemeral: true
       });
     }
 
-    // Create success message
-    const monsterText = monster.name;
-    const villageText = village.charAt(0).toUpperCase() + village.slice(1);
-
+    console.log(`[mod.js]: ✅ Raid triggered successfully, sending confirmation message`);
+    
+    // Don't send a separate success message - the raid embed serves as the success message
     return interaction.editReply({ 
-      content: `✅ **Raid triggered successfully!**\n\n🐉 **${monsterText}**\n🏘️ **Village:** ${villageText}\n📍 **Location:** <#1391812848099004578>`,
+      content: `✅ **Raid triggered successfully!** The raid embed has been posted in the channel.`,
       ephemeral: true
     });
 
@@ -2075,5 +2124,3 @@ module.exports = {
   data: modCommand,
   execute
 };
-
-

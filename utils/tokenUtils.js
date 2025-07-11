@@ -6,6 +6,47 @@
 // Modules for token calculations and formatting
 const artModule = require('../modules/artModule');
 const { capitalizeFirstLetter } = require('../modules/formattingModule');
+
+// Mapping for display names
+const getDisplayName = (value) => {
+  const displayNames = {
+    // Base tokens
+    'chibi': 'Chibi',
+    'headshot': 'Headshot',
+    'waistup': 'Waist Up',
+    'fullbody': 'Full Body',
+    'other': 'Other',
+    
+    // Type multipliers
+    'simple': 'Simple Creature',
+    'complex': 'Complex Creature',
+    'humanoid': 'Humanoid',
+    'anthro': 'Anthro',
+    
+    // Product multipliers
+    'sketch': 'Sketch',
+    'lineArt': 'Line Art',
+    'monochrome': 'Monochrome/Spot',
+    'flatColor': 'Flat Color',
+    'fullColor': 'Full Color',
+    'pixel': 'Pixel',
+    'painted': 'Painted',
+    
+    // Add-ons
+    'simpleProp': 'Simple Prop',
+    'complexProp': 'Complex Prop',
+    'simpleBg': 'Simple Background',
+    'complexBg': 'Complex Background',
+    
+    // Special Works
+    'comicSimple': 'Simple Panel',
+    'comicComplex': 'Complex Panel',
+    'frameSimple': 'Simple Frame',
+    'frameComplex': 'Complex Frame'
+  };
+  
+  return displayNames[value] || capitalizeFirstLetter(value);
+};
 const { EmbedBuilder } = require('discord.js');
 
 
@@ -37,26 +78,26 @@ function resetSubmissionState() {
 // Calculates the total tokens based on user selections and configurations
 function calculateTokens({
   baseSelections = [],
+  baseCounts = new Map(),
   typeMultiplierSelections = [],
   productMultiplierValue,
   addOnsApplied = [],
-  characterCount = 1,
   typeMultiplierCounts = {}, // Include multiplier counts
   specialWorksApplied = [],
   collab = null, // Add collab as a parameter
 }) {
-  const validCharacterCount = characterCount || 1;
-
-  // Base Token Calculation
+  // Base Token Calculation with individual counts
   const baseTotal = baseSelections.reduce((total, base) => {
     const baseValue = artModule.baseTokens[base] || 0;
-    return total + baseValue * validCharacterCount;
+    // Handle both Map objects and plain objects for baseCounts
+    const baseCount = (baseCounts instanceof Map ? baseCounts.get(base) : baseCounts[base]) || 1; // Default to 1 if no count specified
+    return total + baseValue * baseCount;
   }, 0);
   
   console.log(`[tokenUtils.js]: 🧮 Token calculation debug:`, {
     baseSelections,
+    baseCounts: baseCounts instanceof Map ? Object.fromEntries(baseCounts) : baseCounts,
     baseTotal,
-    validCharacterCount,
     typeMultiplierSelections,
     typeMultiplierCounts
   });
@@ -65,8 +106,8 @@ function calculateTokens({
   const typeMultiplierTotal = typeMultiplierSelections.length > 0 
     ? typeMultiplierSelections.reduce((sum, multiplier) => {
         const multiplierValue = artModule.typeMultipliers[multiplier] || 1;
-        const count = typeMultiplierCounts[multiplier] || 1; // Default to 1 if no count is provided
-        return sum + multiplierValue * count; // Sum values considering individual counts
+        const multiplierCount = typeMultiplierCounts[multiplier] || 1;
+        return sum + (multiplierValue * multiplierCount); // Multiply value by count, then sum
       }, 0)
     : 1; // Default to 1 if no type multipliers are selected
 
@@ -86,7 +127,14 @@ function calculateTokens({
       return total + addOnValue * count;
     }, 0);
 
-  // Special Works Calculation
+  // Special Works Calculation with validation
+  const comics = specialWorksApplied.filter(({ work }) => work && work.startsWith('comic'));
+  const animations = specialWorksApplied.filter(({ work }) => work && work.startsWith('frame'));
+  
+  if (comics.length > 0 && animations.length > 0) {
+    throw new Error('Cannot have both Comics and Animation special works. Please choose only one type.');
+  }
+  
   const specialWorksTotal = specialWorksApplied.reduce((total, { work, count }) => {
     const workValue = artModule.specialWorks[work] || 0;
     return total + workValue * (count || 1);
@@ -128,11 +176,11 @@ function calculateTokens({
 // Generates a detailed breakdown of the token calculations
 function generateTokenBreakdown({
   baseSelections = [],
+  baseCounts = new Map(),
   typeMultiplierSelections = [],
   productMultiplierValue,
   addOnsApplied = [],
   specialWorksApplied = [],
-  characterCount = 1,
   typeMultiplierCounts = {}, // Add typeMultiplierCounts here
   finalTokenAmount,
   collab = null, // Add collab parameter
@@ -140,15 +188,16 @@ function generateTokenBreakdown({
   const baseSection = baseSelections
     .map(base => {
       const baseValue = artModule.baseTokens[base] || 0;
-      return `${capitalizeFirstLetter(base)} (${baseValue} × ${characterCount}) = ${baseValue * characterCount}`;
+      // Handle both Map objects and plain objects for baseCounts
+      const baseCount = (baseCounts instanceof Map ? baseCounts.get(base) : baseCounts[base]) || 1;
+      return `${capitalizeFirstLetter(base)} (${baseValue} × ${baseCount}) = ${baseValue * baseCount}`;
     })
     .join(' x ');
 
   const typeMultiplierSection = typeMultiplierSelections
     .map(multiplier => {
       const multiplierValue = artModule.typeMultipliers[multiplier] || 1;
-      const count = typeMultiplierCounts[multiplier] || 1;
-      return `${capitalizeFirstLetter(multiplier)} (${multiplierValue} × ${count}) = ${multiplierValue * count}`;
+      return `${capitalizeFirstLetter(multiplier)} (${multiplierValue}) = ${multiplierValue}`;
     })
     .join(' + ');
 
@@ -178,17 +227,73 @@ function generateTokenBreakdown({
     })
     .join('\n');
 
-  // Construct the breakdown
+  // Construct the breakdown in the expected format
   let breakdown = '```\n';
 
-  if (baseSection) breakdown += ` ${baseSection}\n`;
-  if (typeMultiplierSection) breakdown += `× (${typeMultiplierSection})\n`;
-  breakdown += `× ${productMultiplierLabel} (${productMultiplierValueFinal})\n`;
-  if (addOnSection) breakdown += `${addOnSection}\n`;
-  if (specialWorksSection) breakdown += `${specialWorksSection}\n`;
-  breakdown += `\n---------------------\n`;
-  breakdown += `= ${finalTokenAmount} Tokens\n`;
-  if (collab) breakdown += `\nCollab Total Each: ${Math.floor(finalTokenAmount / 2)} Tokens\n`;
+  // Format base selections in the expected format: 【Base (value) xcount】
+  const baseFormatted = baseSelections
+    .map(base => {
+      const baseValue = artModule.baseTokens[base] || 0;
+      const baseCount = (baseCounts instanceof Map ? baseCounts.get(base) : baseCounts[base]) || 1;
+      return `【${getDisplayName(base)} (${baseValue}) x${baseCount}】`;
+    })
+    .join('+');
+
+  // Format type multipliers in the expected format: 【Multiplier (value×count)】
+  const typeMultiplierFormatted = typeMultiplierSelections
+    .map(multiplier => {
+      const multiplierValue = artModule.typeMultipliers[multiplier] || 1;
+      const multiplierCount = typeMultiplierCounts[multiplier] || 1;
+      return `【${getDisplayName(multiplier)} (${multiplierValue}×${multiplierCount})】`;
+    })
+    .join('+');
+
+  // Format product multiplier in the expected format: 【Product ×(value)】
+  const productFormatted = `【${getDisplayName(productMultiplierValue)} ×(${productMultiplierValueFinal})】`;
+
+  // Format add-ons in the expected format: 【Add-on (value) xcount】
+  const addOnFormatted = addOnsApplied
+    .filter(({ addOn, count }) => addOn && count > 0)
+    .map(({ addOn, count }) => {
+      const addOnValue = artModule.addOns[addOn] || 0;
+      return `【${getDisplayName(addOn)} (${addOnValue}) x${count}】`;
+    })
+    .join('+');
+
+  // Format special works in the expected format: 【Special Work (value) xcount】
+  // Validate: Cannot have both comics and animation
+  const comics = specialWorksApplied.filter(({ work }) => work && work.startsWith('comic'));
+  const animations = specialWorksApplied.filter(({ work }) => work && work.startsWith('frame'));
+  
+  if (comics.length > 0 && animations.length > 0) {
+    throw new Error('Cannot have both Comics and Animation special works. Please choose only one type.');
+  }
+  
+  const specialWorksFormatted = specialWorksApplied
+    .filter(({ work, count }) => work && count > 0)
+    .map(({ work, count }) => {
+      const workValue = artModule.specialWorks[work] || 0;
+      return `【${getDisplayName(work)} (${workValue}) x${count}】`;
+    })
+    .join('+');
+
+  // Build the breakdown in mathematical equation format
+  breakdown += `${baseFormatted} x (+${typeMultiplierFormatted}) x ${productFormatted}`;
+  
+  if (addOnFormatted) {
+    breakdown += `+ ${addOnFormatted}`;
+  }
+  
+  if (specialWorksFormatted) {
+    breakdown += `+ ${specialWorksFormatted}`;
+  }
+  
+  breakdown += ` = ${finalTokenAmount} Tokens`;
+  
+  if (collab) {
+    breakdown += `\n\nCollab Total Each: ${Math.floor(finalTokenAmount / 2)} Tokens`;
+  }
+  
   breakdown += '```';
 
   return breakdown;

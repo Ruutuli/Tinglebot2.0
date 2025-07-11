@@ -21,6 +21,7 @@ const { loadBlightSubmissions, saveBlightSubmissions } = require('./handlers/bli
 const { connectToInventories } = require('./handlers/blightHandler');
 const { getCurrentWeather, saveWeather } = require('./modules/weatherModule');
 const Pet = require('./models/PetModel');
+const Raid = require('./models/RaidModel');
 
 // Load environment variables based on NODE_ENV
 const env = process.env.NODE_ENV || 'development';
@@ -162,6 +163,30 @@ async function postWeatherUpdate(client) {
   } catch (error) {
     console.error('[scheduler.js]: ❌ Weather update process failed:', error.message);
     console.error('[scheduler.js]: ❌ Full weather update error:', error);
+  }
+}
+
+// ============================================================================
+// ---- Raid Functions ----
+// Handles raid cleanup and maintenance
+// ============================================================================
+
+// ---- Function: cleanupExpiredRaids ----
+// Cleans up expired raids by marking them as timed out
+async function cleanupExpiredRaids() {
+  try {
+    console.log(`[scheduler.js]: 🧹 Starting raid cleanup process`);
+    
+    const expiredCount = await Raid.cleanupExpiredRaids();
+    
+    if (expiredCount > 0) {
+      console.log(`[scheduler.js]: ✅ Cleaned up ${expiredCount} expired raids`);
+    } else {
+      console.log(`[scheduler.js]: ✅ No expired raids to clean up`);
+    }
+  } catch (error) {
+    console.error(`[scheduler.js]: ❌ Error cleaning up expired raids:`, error);
+    handleError(error, 'scheduler.js');
   }
 }
 
@@ -429,7 +454,8 @@ function initializeScheduler(client) {
       cleanupExpiredEntries(),
       cleanupExpiredHealingRequests(),
       checkExpiredRequests(client),
-      cleanupExpiredBlightRequests()
+      cleanupExpiredBlightRequests(),
+      cleanupExpiredRaids()
     ]);
   });
   createCronJob('0 0 * * *', 'debuff expiry check', () => handleDebuffExpiry(client));

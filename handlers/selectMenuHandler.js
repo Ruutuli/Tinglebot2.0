@@ -122,10 +122,18 @@ async function handleSelectMenuInteraction(interaction) {
       const selectedMultiplier = interaction.values[0];
 
       if (selectedMultiplier !== 'complete') {
-        // Always replace with the latest type multiplier selection
-        updates.typeMultiplierSelections = [selectedMultiplier];
-        // Reset typeMultiplierCounts to only the current selection
-        updates.typeMultiplierCounts = { [selectedMultiplier]: 1 };
+        // Add to existing selections instead of replacing
+        const currentSelections = submissionData.typeMultiplierSelections || [];
+        const currentCounts = submissionData.typeMultiplierCounts || {};
+        
+        if (!currentSelections.includes(selectedMultiplier)) {
+          updates.typeMultiplierSelections = [...currentSelections, selectedMultiplier];
+          updates.typeMultiplierCounts = { ...currentCounts, [selectedMultiplier]: 1 };
+        } else {
+          // If already selected, just update the existing selection
+          updates.typeMultiplierSelections = currentSelections;
+          updates.typeMultiplierCounts = currentCounts;
+        }
         
         console.log('Type multiplier selection updated:', updates.typeMultiplierSelections);
 
@@ -187,8 +195,23 @@ async function handleSelectMenuInteraction(interaction) {
       const selectedWork = interaction.values[0];
 
       if (selectedWork !== 'complete') {
-        // Ensure specialWorksApplied is initialized and remove duplicate entries
+        // Check for comic/animation conflict
         const currentWorks = submissionData.specialWorksApplied || [];
+        const hasComic = currentWorks.some(work => work.work.startsWith('comic'));
+        const hasAnimation = currentWorks.some(work => work.work.startsWith('frame'));
+        const isComic = selectedWork.startsWith('comic');
+        const isAnimation = selectedWork.startsWith('frame');
+        
+        // Validate: Cannot have both comic and animation
+        if ((hasComic && isAnimation) || (hasAnimation && isComic)) {
+          await interaction.reply({
+            content: '❌ **Cannot select both Comics and Animation.**\n\nYou can only choose either Comics OR Animation, not both. Please remove one type before adding the other.',
+            ephemeral: true
+          });
+          return;
+        }
+        
+        // Ensure specialWorksApplied is initialized and remove duplicate entries
         const filteredWorks = currentWorks.filter(entry => entry.work !== selectedWork);
         updates.specialWorksApplied = [...filteredWorks, { work: selectedWork, count: 1 }];
         
@@ -217,11 +240,11 @@ async function handleSelectMenuInteraction(interaction) {
       // Generate the breakdown string
       const breakdownString = generateTokenBreakdown({
         baseSelections: updatedSubmissionData.baseSelections,
+        baseCounts: updatedSubmissionData.baseCounts || new Map(),
         typeMultiplierSelections: updatedSubmissionData.typeMultiplierSelections,
         productMultiplierValue: updatedSubmissionData.productMultiplierValue,
         addOnsApplied: updatedSubmissionData.addOnsApplied,
         specialWorksApplied: updatedSubmissionData.specialWorksApplied,
-        characterCount: updatedSubmissionData.characterCount,
         typeMultiplierCounts: updatedSubmissionData.typeMultiplierCounts,
         finalTokenAmount: totalTokens,
         collab: updatedSubmissionData.collab
@@ -250,11 +273,20 @@ async function handleSelectMenuInteraction(interaction) {
     console.error(`[selectMenuHandler.js]: ❌ Error in handleSelectMenuInteraction: ${error.message}`);
     console.error(error.stack);
     
-    if (!interaction.replied && !interaction.deferred) {
-      await interaction.reply({
-        content: '❌ **An error occurred while processing your selection. Please try again.**',
-        ephemeral: true
-      });
+    try {
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({
+          content: '❌ **An error occurred while processing your selection. Please try again.**',
+          ephemeral: true
+        });
+      } else if (interaction.replied) {
+        await interaction.followUp({
+          content: '❌ **An error occurred while processing your selection. Please try again.**',
+          ephemeral: true
+        });
+      }
+    } catch (replyError) {
+      console.error(`[selectMenuHandler.js]: ❌ Failed to send select menu error response: ${replyError.message}`);
     }
   }
 }
@@ -295,11 +327,11 @@ async function confirmSubmission(interaction) {
     // Calculate tokens and generate breakdown
     const { totalTokens, breakdown } = calculateTokens({
       baseSelections: submissionData.baseSelections,
+      baseCounts: submissionData.baseCounts || new Map(),
       typeMultiplierSelections: submissionData.typeMultiplierSelections,
       productMultiplierValue: submissionData.productMultiplierValue,
       addOnsApplied: submissionData.addOnsApplied,
       specialWorksApplied: submissionData.specialWorksApplied,
-      characterCount: submissionData.characterCount,
       typeMultiplierCounts: submissionData.typeMultiplierCounts,
       collab: submissionData.collab
     });
@@ -312,11 +344,11 @@ async function confirmSubmission(interaction) {
     // Generate the token breakdown
     const breakdownMessage = generateTokenBreakdown({
       baseSelections: submissionData.baseSelections,
+      baseCounts: submissionData.baseCounts || new Map(),
       typeMultiplierSelections: submissionData.typeMultiplierSelections,
       productMultiplierValue: submissionData.productMultiplierValue,
       addOnsApplied: submissionData.addOnsApplied,
       specialWorksApplied: submissionData.specialWorksApplied,
-      characterCount: submissionData.characterCount,
       typeMultiplierCounts: submissionData.typeMultiplierCounts,
       finalTokenAmount: totalTokens,
       collab: submissionData.collab
@@ -334,16 +366,20 @@ async function confirmSubmission(interaction) {
   } catch (error) {
     handleError(error, 'selectMenuHandler.js');
     console.error(`[selectMenuHandler.js]: confirmSubmission: ${error.message}`);
-    if (interaction.replied || interaction.deferred) {
-      await interaction.followUp({
-        content: '❌ **An error occurred while finalizing your submission.**',
-        ephemeral: true
-      });
-    } else {
-      await interaction.reply({
-        content: '❌ **An error occurred while finalizing your submission.**',
-        ephemeral: true
-      });
+    try {
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({
+          content: '❌ **An error occurred while finalizing your submission.**',
+          ephemeral: true
+        });
+      } else if (interaction.replied) {
+        await interaction.followUp({
+          content: '❌ **An error occurred while finalizing your submission.**',
+          ephemeral: true
+        });
+      }
+    } catch (replyError) {
+      console.error(`[selectMenuHandler.js]: ❌ Failed to send confirm submission error response: ${replyError.message}`);
     }
   }
 }

@@ -4,8 +4,17 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const { handleError } = require('../../utils/globalErrorHandler');
 const { fetchCharacterByNameAndUserId } = require('../../database/db');
-const { startRaid, joinRaid, processRaidTurn, checkRaidExpiration, createOrUpdateRaidThread, createRaidEmbed } = require('../../modules/raidModule');
-const Character = require('../../models/CharacterModel');
+const { joinRaid, processRaidTurn, checkRaidExpiration } = require('../../modules/raidModule');
+
+// ============================================================================
+// ---- Import Loot Functions ----
+// ============================================================================
+const { fetchItemsByMonster } = require('../../database/db');
+const { createWeightedItemList, calculateFinalValue } = require('../../modules/rngModule');
+const { addItemInventoryDatabase } = require('../../utils/inventoryUtils');
+const { isValidGoogleSheetsUrl, extractSpreadsheetId } = require('../../utils/validation');
+const { authorizeSheets, safeAppendDataToSheet } = require('../../utils/googleSheetsUtils');
+const { v4: uuidv4 } = require('uuid');
 
 // ============================================================================
 // ---- Command Definition ----
@@ -74,16 +83,18 @@ module.exports = {
       }
 
       // Check if character is in the same village as the raid
-      if (character.currentVillage.toLowerCase() !== raidData.villageId.toLowerCase()) {
+      if (character.currentVillage.toLowerCase() !== raidData.village.toLowerCase()) {
         return interaction.editReply({
-          content: `❌ ${character.name} must be in ${raidData.villageId} to participate in this raid. Current location: ${character.currentVillage}`,
+          content: `❌ ${character.name} must be in ${raidData.village} to participate in this raid. Current location: ${character.currentVillage}`,
           ephemeral: true
         });
       }
 
       // Try to join the raid if not already participating
       let updatedRaidData = raidData;
-      const existingParticipant = raidData.participants.find(p => p.characterId === character._id);
+      const existingParticipant = raidData.participants.find(p => 
+        p.characterId.toString() === character._id.toString()
+      );
       
       if (!existingParticipant) {
         try {
@@ -95,14 +106,27 @@ module.exports = {
             ephemeral: true
           });
         }
+      } else {
+        console.log(`[raid.js]: ✅ Character ${character.name} is already in raid ${raidId}, processing turn directly`);
       }
 
-      // Always use updatedRaidData for processRaidTurn
+      // Process the raid turn
       const turnResult = await processRaidTurn(character, raidId, interaction, updatedRaidData);
       
-      // Create embed for the turn result using the raid module
+      // Create embed for the turn result
       const embed = createRaidTurnEmbed(character, raidId, turnResult, updatedRaidData);
 
+      // Check if monster was defeated in this turn
+      if (turnResult.raidData.monster.currentHearts <= 0 && turnResult.raidData.status === 'completed') {
+        // Send the final turn embed first
+        await interaction.editReply({ embeds: [embed] });
+        
+        // Then handle raid victory (which will send a follow-up)
+        await handleRaidVictory(interaction, turnResult.raidData, turnResult.raidData.monster);
+        return;
+      }
+      
+      // Send the turn result embed
       return interaction.editReply({ embeds: [embed] });
 
     } catch (error) {
@@ -123,5 +147,305 @@ module.exports = {
       });
     }
   },
+};
 
+// ============================================================================
+// ---- Helper Functions ----
+// ============================================================================
+
+// ---- Function: createRaidTurnEmbed ----
+// Creates an embed showing the results of a raid turn
+function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
+  const { battleResult, participant } = turnResult;
+  const { monster } = raidData;
+
+  // Get monster image from monsterMapping
+  const { monsterMapping } = require('../../models/MonsterModel');
+  const monsterDetails = monsterMapping && monsterMapping[monster.nameMapping]
+    ? monsterMapping[monster.nameMapping]
+    : { image: monster.image };
+  const monsterImage = monsterDetails.image || monster.image || 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png';
+
+  // Get character icon (if available)
+  const characterIcon = character.icon || 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png';
+
+  // Build turn order list
+  const turnOrder = raidData.participants.map((p, idx) => `${idx + 1}. ${p.name}`).join('\n');
+
+  // Determine embed color based on outcome
+  let color = '#00FF00'; // Green for success
+  if (battleResult.playerHearts.current <= 0) {
+    color = '#FF0000'; // Red for KO
+  } else if (battleResult.hearts <= 0) {
+    color = '#FFFF00'; // Yellow for no damage
+  }
+
+  const embed = new EmbedBuilder()
+    .setColor(color)
+    .setTitle(`⚔️ ${character.name}'s Raid Turn`)
+    .setAuthor({ name: character.name, iconURL: characterIcon })
+    .setDescription(battleResult.outcome)
+    .addFields(
+      {
+        name: `__${monster.name} Status__`,
+        value: `💙 **Hearts:** ${monster.currentHearts}/${monster.maxHearts}`,
+        inline: false
+      },
+      {
+        name: `__${character.name} Status__`,
+        value: `💙 **Hearts:** ${battleResult.playerHearts.current}/${battleResult.playerHearts.max}`,
+        inline: false
+      },
+      {
+        name: `__Damage Dealt__`,
+        value: `⚔️ **${battleResult.hearts}** hearts`,
+        inline: false
+      },
+      {
+        name: `__Turn Order__`,
+        value: turnOrder || 'No participants',
+        inline: false
+      },
+      {
+        name: 'Raid ID',
+        value: `\`\`\`${raidId}\`\`\``,
+        inline: false
+      },
+      {
+        name: 'Want to join in?',
+        value: 'Use `/raid` to join!',
+        inline: false
+      }
+    )
+    .setThumbnail(monsterImage)
+    .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+    .setTimestamp();
+
+  // Add KO warning if character is down
+  if (battleResult.playerHearts.current <= 0) {
+    embed.addFields({
+      name: 'KO',
+      value: `💥 **${character.name} has been knocked out and cannot continue!**`,
+      inline: false
+    });
+  }
+
+  return embed;
+}
+
+// ---- Function: handleRaidVictory ----
+// Handles raid victory with loot distribution for all participants
+async function handleRaidVictory(interaction, raidData, monster) {
+  try {
+    console.log(`[raid.js]: 🎉 Raid victory! Processing loot for ${raidData.participants.length} participants`);
+    
+    // Fetch items for the monster
+    const items = await fetchItemsByMonster(monster.name);
+    const weightedItems = createWeightedItemList(items, 50); // Use middle-range roll for raid loot
+    
+    // Process loot for each participant
+    const lootResults = [];
+    const Character = require('../../models/CharacterModel');
+    
+    for (const participant of raidData.participants) {
+      try {
+        // Fetch the character's current data
+        const character = await Character.findById(participant.characterId);
+        if (!character) {
+          console.log(`[raid.js]: ⚠️ Character ${participant.name} not found, skipping loot`);
+          continue;
+        }
+        
+        // Generate loot for this participant
+        const lootedItem = generateLootedItem(monster, weightedItems);
+        
+        // Add to inventory if character has valid inventory link
+        if (character.inventory && isValidGoogleSheetsUrl(character.inventory)) {
+          try {
+            await addItemInventoryDatabase(
+              character._id,
+              lootedItem.itemName,
+              lootedItem.quantity,
+              lootedItem.category.join(", "),
+              lootedItem.type.join(", "),
+              interaction
+            );
+            
+            // Add to Google Sheets
+            const spreadsheetId = extractSpreadsheetId(character.inventory);
+            const auth = await authorizeSheets();
+            const range = "loggedInventory!A2:M";
+            const uniqueSyncId = uuidv4();
+            const formattedDateTime = new Date().toLocaleString("en-US", {
+              timeZone: "America/New_York",
+            });
+            const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
+
+            const values = [
+              [
+                character.name,
+                lootedItem.itemName,
+                lootedItem.quantity.toString(),
+                lootedItem.category.join(", "),
+                lootedItem.type.join(", "),
+                lootedItem.subtype.join(", "),
+                "Raid Loot",
+                character.job,
+                "",
+                character.currentVillage,
+                interactionUrl,
+                formattedDateTime,
+                uniqueSyncId,
+              ],
+            ];
+
+            await safeAppendDataToSheet(character.inventory, character, range, values, undefined, {
+              skipValidation: true,
+              context: {
+                commandName: 'raid',
+                userTag: interaction.user.tag,
+                userId: interaction.user.id,
+                characterName: character.name,
+                spreadsheetId: extractSpreadsheetId(character.inventory),
+                range: range,
+                sheetType: 'inventory',
+                options: {
+                  monsterName: monster.name,
+                  itemName: lootedItem.itemName,
+                  quantity: lootedItem.quantity,
+                  raidId: raidData.raidId
+                }
+              }
+            });
+            
+            lootResults.push(`**${character.name}** got ${lootedItem.emoji || ''} **${lootedItem.itemName}** × ${lootedItem.quantity}!`);
+            
+          } catch (error) {
+            console.error(`[raid.js]: ❌ Error processing loot for ${character.name}:`, error);
+            lootResults.push(`**${character.name}** got ${lootedItem.emoji || ''} **${lootedItem.itemName}** × ${lootedItem.quantity}! *(inventory sync failed)*`);
+          }
+        } else {
+          // Character doesn't have valid inventory, but still show loot
+          lootResults.push(`**${character.name}** got ${lootedItem.emoji || ''} **${lootedItem.itemName}** × ${lootedItem.quantity}! *(no inventory link)*`);
+        }
+        
+      } catch (error) {
+        console.error(`[raid.js]: ❌ Error processing participant ${participant.name}:`, error);
+        lootResults.push(`**${participant.name}** - *Error processing loot*`);
+      }
+    }
+    
+    // Create participant list
+    const participantList = raidData.participants.map(p => `• **${p.name}** (${p.damage} hearts)`).join('\n');
+    
+    // Get monster image from monsterMapping
+    const { monsterMapping } = require('../../models/MonsterModel');
+    const monsterDetails = monsterMapping && monsterMapping[monster.nameMapping] 
+      ? monsterMapping[monster.nameMapping] 
+      : { image: monster.image };
+    const monsterImage = monsterDetails.image || monster.image || 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png';
+    
+    // Create victory embed
+    const victoryEmbed = new EmbedBuilder()
+      .setColor('#FFD700') // Gold color for victory
+      .setTitle(`🎉 **${monster.name} Defeated!**`)
+      .setDescription(`The raid has been completed successfully! Here's what everyone got:`)
+      .addFields(
+        {
+          name: '__Raid Summary__',
+          value: `🎯 **Total Damage:** ${raidData.analytics.totalDamage} hearts\n👥 **Participants:** ${raidData.participants.length}\n⏱️ **Duration:** ${Math.floor((raidData.analytics.endTime - raidData.analytics.startTime) / 1000)}s`,
+          inline: false
+        },
+        {
+          name: '__Participants__',
+          value: participantList || 'No participants found.',
+          inline: false
+        },
+        {
+          name: '__Loot Distribution__',
+          value: lootResults.length > 0 ? lootResults.join('\n') : 'No loot was found.',
+          inline: false
+        }
+      )
+      .setThumbnail(monsterImage)
+      .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+      .setFooter({ text: `Raid ID: ${raidData.raidId}` })
+      .setTimestamp();
+    
+    // Send victory embed to the raid thread (if it exists)
+    if (raidData.threadId) {
+      try {
+        const thread = await interaction.client.channels.fetch(raidData.threadId);
+        if (thread) {
+          await thread.send({ embeds: [victoryEmbed] });
+          console.log(`[raid.js]: ✅ Victory embed sent to raid thread`);
+        }
+      } catch (error) {
+        console.error(`[raid.js]: ❌ Error sending victory embed to thread:`, error);
+        console.log(`[raid.js]: ⚠️ Thread may not exist or be accessible`);
+      }
+    } else {
+      console.log(`[raid.js]: ⚠️ No thread ID found for raid ${raidData.raidId} - victory embed will only be sent to the original interaction`);
+      // Only send to original interaction if no thread exists
+      await interaction.followUp({ embeds: [victoryEmbed] });
+    }
+    
+  } catch (error) {
+    handleError(error, 'raid.js', {
+      functionName: 'handleRaidVictory',
+      raidId: raidData.raidId,
+      monsterName: monster.name
+    });
+    console.error(`[raid.js]: ❌ Error handling raid victory:`, error);
+    
+    // Send a simple victory message if the full victory handling fails
+    await interaction.editReply({
+      content: `🎉 **${monster.name} has been defeated!** The raid is complete!`,
+      ephemeral: false
+    });
+  }
+}
+
+// ---- Function: generateLootedItem ----
+// Generates looted item for raid participants (similar to loot.js)
+function generateLootedItem(monster, weightedItems) {
+  if (weightedItems.length === 0) {
+    return {
+      itemName: 'nothing',
+      quantity: 0,
+      category: ['Misc'],
+      type: ['Misc'],
+      subtype: ['Misc'],
+      emoji: ''
+    };
+  }
+  
+  const randomIndex = Math.floor(Math.random() * weightedItems.length);
+  const lootedItem = { ...weightedItems[randomIndex] };
+
+  // Handle Chuchu special case
+  if (monster.name.includes("Chuchu")) {
+    let jellyType;
+    if (monster.name.includes('Ice')) {
+      jellyType = 'White Chuchu Jelly';
+    } else if (monster.name.includes('Fire')) {
+      jellyType = 'Red Chuchu Jelly';
+    } else if (monster.name.includes('Electric')) {
+      jellyType = 'Yellow Chuchu Jelly';
+    } else {
+      jellyType = 'Chuchu Jelly';
+    }
+    const quantity = monster.name.includes("Large")
+      ? 3
+      : monster.name.includes("Medium")
+      ? 2
+      : 1;
+    lootedItem.itemName = jellyType;
+    lootedItem.quantity = quantity;
+    lootedItem.emoji = '<:Chuchu_Jelly:744755431175356416>';
+  } else {
+    lootedItem.quantity = 1; // Default quantity for non-Chuchu items
+  }
+
+  return lootedItem;
 }
