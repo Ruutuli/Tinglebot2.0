@@ -19,7 +19,7 @@ const approvedSubmissionSchema = new mongoose.Schema({
   },
   fileName: {
     type: String,
-    required: true
+    required: false // Optional for writing submissions
   },
   category: {
     type: String,
@@ -45,7 +45,7 @@ const approvedSubmissionSchema = new mongoose.Schema({
   // ------------------- File Information -------------------
   fileUrl: {
     type: String,
-    required: true
+    required: false // Optional for writing submissions
   },
   messageUrl: {
     type: String,
