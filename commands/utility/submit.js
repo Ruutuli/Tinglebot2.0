@@ -157,7 +157,6 @@ module.exports = {
 
         // Create submission data using the new helper
         const submissionId = generateUniqueId('A');
-        console.log('Generated Submission ID:', submissionId);
         
         const initialData = {
           submissionId,
@@ -175,7 +174,6 @@ module.exports = {
 
         // Save to database using the helper
         await saveSubmissionToStorage(submissionId, initialData);
-        console.log(`[submit.js]: 💾 Saved initial art submission: ${submissionId}`);
 
         // Generate the dropdown menu and cancel button for user options
         const dropdownMenu = getBaseSelectMenu(false);
