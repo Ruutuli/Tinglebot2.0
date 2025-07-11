@@ -57,6 +57,7 @@ const {
 
 // Event Handlers
 const { triggerRaid } = require('../../modules/raidModule.js');
+const { capitalizeVillageName } = require('../../utils/stringUtils');
 
 // Flavor Text and Messages
 const {
@@ -527,10 +528,9 @@ module.exports = {
 
       if (encounteredMonster.tier > 4) {
        await triggerRaid(
-        character,
         encounteredMonster,
         interaction,
-        null,
+        capitalizeVillageName(character.currentVillage),
         true
        ); // Pass `true` for Blood Moon
        return;
@@ -677,10 +677,9 @@ async function handleBloodMoonRerolls(
 
    if (encounteredMonster.tier > 4) {
     await triggerRaid(
-     character,
      encounteredMonster,
      interaction,
-     null,
+     capitalizeVillageName(character.currentVillage),
      bloodMoonActive
     ); // Let triggerRaid handle thread creation
     return;

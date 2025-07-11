@@ -274,6 +274,19 @@ module.exports = {
     
   },
 
+  // ------------------- Autocomplete Handler -------------------
+  // Handles autocomplete for the submit command options
+  async onAutocomplete(interaction) {
+    try {
+      const { handleAutocomplete } = require('../../handlers/autocompleteHandler.js');
+      await handleAutocomplete(interaction);
+    } catch (error) {
+      handleError(error, 'submit.js');
+      console.error('Error handling autocomplete:', error);
+      await interaction.respond([]);
+    }
+  },
+
   // ------------------- Interaction Handling -------------------
   // Handles interactions during the submission process (dropdowns, buttons, modals).
   async interactionCreate(interaction) {

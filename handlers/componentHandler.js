@@ -162,11 +162,20 @@ async function handleButtonInteraction(interaction) {
     handleError(error, 'componentHandler.js');
     console.error(`[componentHandler.js]: ❌ Error handling button (${action}): ${error.message}`);
 
-    if (!interaction.replied) {
-      await interaction.reply({
-        content: '❌ **An error occurred while processing your action.**',
-        flags: 64 // 64 is the flag for ephemeral messages
-      });
+    try {
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({
+          content: '❌ **An error occurred while processing your action.**',
+          ephemeral: true
+        });
+      } else if (interaction.replied) {
+        await interaction.followUp({
+          content: '❌ **An error occurred while processing your action.**',
+          ephemeral: true
+        });
+      }
+    } catch (replyError) {
+      console.error(`[componentHandler.js]: ❌ Failed to send error response: ${replyError.message}`);
     }
   }
 }
@@ -177,7 +186,7 @@ async function handleSyncYes(interaction, characterId) {
   try {
     const character = await fetchCharacterById(characterId);
     if (!character) {
-      return interaction.reply({ content: '❌ **Character not found.**', flags: 64 });
+              return interaction.reply({ content: '❌ **Character not found.**', ephemeral: true });
     }
 
     // Check if inventory is already synced
@@ -273,18 +282,21 @@ async function handleConfirmation(interaction, userId, submissionData) {
     console.log(`[componentHandler.js]: ✅ Confirmed submission ${submissionData.submissionId} with ${totalTokens} tokens`);
   } catch (error) {
     console.error('Error in handleConfirmation:', error);
-    // Only try to reply if we haven't already
-    if (!interaction.replied && !interaction.deferred) {
-      await interaction.reply({
-        content: '❌ **An error occurred while confirming your submission. Please try again.**',
-        ephemeral: true
-      });
-    } else {
-      // If we've already replied, try to edit the message
-      await interaction.editReply({
-        content: '❌ **An error occurred while confirming your submission. Please try again.**',
-        components: []
-      });
+    try {
+      // Only try to reply if we haven't already
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({
+          content: '❌ **An error occurred while confirming your submission. Please try again.**',
+          ephemeral: true
+        });
+      } else if (interaction.replied) {
+        await interaction.followUp({
+          content: '❌ **An error occurred while confirming your submission. Please try again.**',
+          ephemeral: true
+        });
+      }
+    } catch (replyError) {
+      console.error(`[componentHandler.js]: ❌ Failed to send confirmation error response: ${replyError.message}`);
     }
   }
 }
@@ -304,11 +316,20 @@ async function handleCancel(interaction, userId, submissionData) {
   } catch (error) {
     handleError(error, 'componentHandler.js');
     console.error(`[componentHandler.js]: ❌ Error in handleCancel: ${error.message}`);
-    if (!interaction.replied && !interaction.deferred) {
-      await interaction.reply({
-        content: '❌ **An error occurred while canceling the submission.**',
-        flags: 64
-      });
+    try {
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({
+          content: '❌ **An error occurred while canceling the submission.**',
+          ephemeral: true
+        });
+      } else if (interaction.replied) {
+        await interaction.followUp({
+          content: '❌ **An error occurred while canceling the submission.**',
+          ephemeral: true
+        });
+      }
+    } catch (replyError) {
+      console.error(`[componentHandler.js]: ❌ Failed to send cancel error response: ${replyError.message}`);
     }
   }
 }
@@ -363,16 +384,25 @@ async function handleViewCharacter(interaction, characterId) {
     };
 
     const gearEmbed = createCharacterGearEmbed(character, gearMap, 'all');
-    await interaction.reply({ embeds: [embed, gearEmbed], flags: 64 });
+          await interaction.reply({ embeds: [embed, gearEmbed], ephemeral: true });
   } catch (error) {
     handleError(error, 'componentHandler.js');
     console.error(`[componentHandler.js]: Error in handleViewCharacter:`, error);
     
-    if (!interaction.replied) {
-      await interaction.reply({
-        content: '❌ **An error occurred while viewing the character.**\nPlease try again later.',
-        flags: 64 // 64 is the flag for ephemeral messages
-      });
+    try {
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({
+          content: '❌ **An error occurred while viewing the character.**\nPlease try again later.',
+          ephemeral: true
+        });
+      } else if (interaction.replied) {
+        await interaction.followUp({
+          content: '❌ **An error occurred while viewing the character.**\nPlease try again later.',
+          ephemeral: true
+        });
+      }
+    } catch (replyError) {
+      console.error(`[componentHandler.js]: ❌ Failed to send view character error response: ${replyError.message}`);
     }
   }
 }
@@ -391,7 +421,7 @@ async function handleJobSelect(interaction, characterId, updatedJob) {
   
       if (!character) {
         console.error(`[componentHandler.js]: Character not found for ID: ${characterId}`);
-        return interaction.reply({ content: '❌ **Character not found.**', flags: 64 });
+        return interaction.reply({ content: '❌ **Character not found.**', ephemeral: true });
       }
   
       // Validate job change
@@ -675,6 +705,22 @@ async function handleComponentInteraction(interaction) {
   } catch (error) {
     handleError(error, 'componentHandler.js');
     console.error(`[componentHandler.js]: ❌ Failed to handle component: ${error.message}`);
+    
+    try {
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({
+          content: '❌ **An error occurred while processing your interaction.**',
+          ephemeral: true
+        });
+      } else if (interaction.replied) {
+        await interaction.followUp({
+          content: '❌ **An error occurred while processing your interaction.**',
+          ephemeral: true
+        });
+      }
+    } catch (replyError) {
+      console.error(`[componentHandler.js]: ❌ Failed to send component error response: ${replyError.message}`);
+    }
   }
 }
 

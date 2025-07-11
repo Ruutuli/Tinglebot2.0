@@ -60,8 +60,22 @@ async function handleModalSubmission(interaction) {
 
       console.log('Processing base count for:', baseSelection);
       
-      // Update character count for this specific base
-      updates.characterCount = baseCount;
+      // Update base counts for this specific base
+      // Handle both Map objects and plain objects for baseCounts
+      let currentBaseCounts;
+      if (submissionData.baseCounts instanceof Map) {
+        currentBaseCounts = submissionData.baseCounts;
+      } else {
+        // Convert plain object to Map if needed
+        currentBaseCounts = new Map();
+        if (submissionData.baseCounts) {
+          Object.entries(submissionData.baseCounts).forEach(([key, value]) => {
+            currentBaseCounts.set(key, value);
+          });
+        }
+      }
+      currentBaseCounts.set(baseSelection, baseCount);
+      updates.baseCounts = currentBaseCounts;
       
       // Ensure the current base selection is included in the baseSelections array
       const currentSelections = submissionData.baseSelections || [];
@@ -70,6 +84,7 @@ async function handleModalSubmission(interaction) {
       }
       
       console.log('Base selection updated:', updates.baseSelections);
+      console.log('Base counts updated:', Object.fromEntries(currentBaseCounts));
       
       await interaction.update({
         content: `☑️ **${baseCount} ${baseSelection}(s)** selected. Select another base or click "Next Section ➡️" when you are done.`,
@@ -132,8 +147,22 @@ async function handleModalSubmission(interaction) {
         });
       }
       
-      // Update the specific special work count
+      // Check for comic/animation conflict
       const currentWorks = submissionData.specialWorksApplied || [];
+      const hasComic = currentWorks.some(work => work.work.startsWith('comic'));
+      const hasAnimation = currentWorks.some(work => work.work.startsWith('frame'));
+      const isComic = specialWorkName.startsWith('comic');
+      const isAnimation = specialWorkName.startsWith('frame');
+      
+      // Validate: Cannot have both comic and animation
+      if ((hasComic && isAnimation) || (hasAnimation && isComic)) {
+        return interaction.reply({
+          content: '❌ **Cannot select both Comics and Animation.**\n\nYou can only choose either Comics OR Animation, not both. Please remove one type before adding the other.',
+          ephemeral: true
+        });
+      }
+      
+      // Update the specific special work count
       const filteredWorks = currentWorks.filter(w => w.work !== specialWorkName);
       updates.specialWorksApplied = [...filteredWorks, { work: specialWorkName, count: specialWorksCount }];
       
@@ -152,11 +181,11 @@ async function handleModalSubmission(interaction) {
       // Generate the breakdown string
       const breakdownString = generateTokenBreakdown({
         baseSelections: updatedSubmissionData.baseSelections,
+        baseCounts: updatedSubmissionData.baseCounts || new Map(),
         typeMultiplierSelections: updatedSubmissionData.typeMultiplierSelections,
         productMultiplierValue: updatedSubmissionData.productMultiplierValue,
         addOnsApplied: updatedSubmissionData.addOnsApplied,
         specialWorksApplied: updatedSubmissionData.specialWorksApplied,
-        characterCount: updatedSubmissionData.characterCount,
         typeMultiplierCounts: updatedSubmissionData.typeMultiplierCounts,
         finalTokenAmount: totalTokens,
         collab: updatedSubmissionData.collab
@@ -191,11 +220,20 @@ async function handleModalSubmission(interaction) {
     console.error(`[modalHandler.js]: ❌ Error in handleModalSubmission: ${error.message}`);
     console.error(error.stack);
     
-    if (!interaction.replied) {
-      await interaction.reply({
-        content: '❌ **An error occurred while processing your submission. Please try again.**',
-        ephemeral: true
-      });
+    try {
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({
+          content: '❌ **An error occurred while processing your submission. Please try again.**',
+          ephemeral: true
+        });
+      } else if (interaction.replied) {
+        await interaction.followUp({
+          content: '❌ **An error occurred while processing your submission. Please try again.**',
+          ephemeral: true
+        });
+      }
+    } catch (replyError) {
+      console.error(`[modalHandler.js]: ❌ Failed to send modal error response: ${replyError.message}`);
     }
   }
 }

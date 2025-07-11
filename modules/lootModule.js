@@ -12,7 +12,6 @@ const { authorizeSheets, appendSheetData,  safeAppendDataToSheet, } = require('.
 
 // Additional utilities and services
 const { v4: uuidv4 } = require('uuid');
-const { deleteBattleProgressById } = require('../modules/raidCombatModule');
 
 // Monster data for reference
 const { monsterMapping } = require('../models/MonsterModel');
@@ -121,14 +120,8 @@ async function processLoot(battleProgress, currentMonster, interaction, battleId
     console.error('Error sending loot embed:', error);  // Error handling if sending embed fails
   }
 
-  // ------------------- Delete the battle progress from the file -------------------
-  try {
-    await deleteBattleProgressById(battleId);  // Delete battle progress after loot is processed
-  } catch (error) {
-    handleError(error, 'lootModule.js');
-
-    console.error('Error deleting battle progress:', error);  // Error handling for deletion
-  }
+  // ------------------- Cleanup completed -------------------
+  console.log(`[lootModule.js]: ✅ Loot processing completed for battle ${battleId}`);
 }
 
 // ------------------- Export Loot Processing Function -------------------

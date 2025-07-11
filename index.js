@@ -188,6 +188,10 @@ async function initializeClient() {
             logBloodMoonStatus();
             initializeScheduler(client);
             startExpirationChecks(client);
+            
+            // Initialize random encounters system
+            const { initializeRandomEncounters } = require('./modules/randomEncountersModule');
+            initializeRandomEncounters(client);
           } catch (error) {
             handleError(error, "index.js");
           }

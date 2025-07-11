@@ -136,7 +136,7 @@ async function triggerRandomEncounter(channel) {
 
     // Send the raid announcement to the temporary channel
     const raidMessage = await channel.send({
-      content: `🐉 **RANDOM ENCOUNTER RAID!**`,
+      content: `⚠️ **RANDOM ENCOUNTER RAID!** ⚠️`,
       embeds: [encounterEmbed]
     });
 
@@ -149,9 +149,10 @@ async function triggerRandomEncounter(channel) {
 
     // Send initial thread message
     const threadMessage = [
-      `👋 A random encounter raid has been initiated against **${monster.name} (Tier ${monster.tier})**!`,
+      `💀 A random encounter raid has been initiated against **${monster.name} (Tier ${monster.tier})**!`,
       `\n@${selectedVillage} residents — come help defend your home!`,
-      `\nUse \`/raid ${raidId} <character>\` to join the fight!`
+      `\nUse \`/raid ${raidId} <character>\` to join the fight!`,
+      `\n\n**Raid ID:** \`\`\`${raidId}\`\`\``
     ].join('');
 
     await thread.send(threadMessage);

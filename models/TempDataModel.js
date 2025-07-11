@@ -85,6 +85,10 @@ const tempDataSchema = new mongoose.Schema({
     questEvent: String,
     questBonus: String,
     baseSelections: [String],
+    baseCounts: {
+      type: Map,
+      of: Number
+    },
     typeMultiplierSelections: [String],
     productMultiplierValue: String,
     addOnsApplied: [{
@@ -95,8 +99,10 @@ const tempDataSchema = new mongoose.Schema({
       work: String,
       count: Number
     }],
-    characterCount: Number,
-    typeMultiplierCount: Number,
+    typeMultiplierCounts: {
+      type: Map,
+      of: Number
+    },
     finalTokenAmount: Number,
     tokenCalculation: String,
     collab: mongoose.Schema.Types.Mixed,

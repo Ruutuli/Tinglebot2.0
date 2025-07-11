@@ -105,18 +105,18 @@ async function handleSubmissionCompletion(interaction) {
     // Calculate final token amount
     console.log(`[submissionHandler.js]: 🧮 Calculating tokens for submission:`, {
       baseSelections,
+      baseCounts: Object.fromEntries(submissionData.baseCounts || new Map()),
       typeMultiplierSelections,
       productMultiplierValue,
-      addOnsApplied,
-      characterCount
+      addOnsApplied
     });
     
     const { totalTokens, breakdown } = calculateTokens({
       baseSelections,
+      baseCounts: submissionData.baseCounts || new Map(),
       typeMultiplierSelections,
       productMultiplierValue,
       addOnsApplied,
-      characterCount,
       typeMultiplierCounts: submissionData.typeMultiplierCounts || {},
       specialWorksApplied: submissionData.specialWorksApplied || [],
       collab: submissionData.collab

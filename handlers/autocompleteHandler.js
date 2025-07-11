@@ -466,6 +466,13 @@ async function handleAutocomplete(interaction) {
             await handleSpiritOrbCharacterAutocomplete(interaction, focusedOption);
             return;
 
+          // ------------------- Submit Command -------------------
+          case "submit":
+            if (focusedOption.name === "collab") {
+              await handleSubmitCollabAutocomplete(interaction, focusedOption);
+            }
+            break;
+
           // ------------------- Mod Character Command -------------------
           // Note: ModCharacter autocomplete is handled locally in the command file
           break;
@@ -3846,6 +3853,48 @@ async function handleMonsterAutocomplete(interaction, focusedOption) {
   }
 }
 
+// ------------------- Function: handleSubmitCollabAutocomplete -------------------
+// Provides autocomplete suggestions for collaboration partners in submit command
+async function handleSubmitCollabAutocomplete(interaction, focusedOption) {
+  try {
+    const searchQuery = focusedOption.value?.toLowerCase() || '';
+    
+    // Get all members in the guild
+    const guild = interaction.guild;
+    if (!guild) {
+      return await safeAutocompleteResponse(interaction, []);
+    }
+
+    // Fetch all members from the guild
+    const members = await guild.members.fetch();
+    
+    // Filter members based on search query and exclude the current user
+    const filteredMembers = members
+      .filter(member => {
+        const memberName = member.user.username.toLowerCase();
+        const memberDisplayName = member.displayName.toLowerCase();
+        const currentUserId = interaction.user.id;
+        
+        // Exclude the current user and include only those matching the search
+        return member.id !== currentUserId && 
+               (memberName.includes(searchQuery) || memberDisplayName.includes(searchQuery));
+      })
+      .slice(0, 25); // Limit to 25 choices
+
+    // Format choices for autocomplete
+    const choices = filteredMembers.map(member => ({
+      name: `${member.displayName} (@${member.user.username})`,
+      value: `<@${member.id}>`
+    }));
+
+    await safeAutocompleteResponse(interaction, choices);
+  } catch (error) {
+    handleError(error, "autocompleteHandler.js");
+    console.error("[handleSubmitCollabAutocomplete]: Error:", error);
+    await safeRespondWithError(interaction);
+  }
+}
+
 // ------------------- Function: handleTier5PlusMonsterAutocomplete -------------------
 // Provides autocomplete suggestions for tier 5+ monster names
 async function handleTier5PlusMonsterAutocomplete(interaction, focusedOption) {
@@ -3985,9 +4034,12 @@ handleModGiveItemAutocomplete,
 handleModPetLevelCharacterAutocomplete,
 handleModPetLevelPetNameAutocomplete,
 
-// ------------------- Mod Character Functions -------------------
-handleModCharacterJobAutocomplete,
-handleModCharacterNameAutocomplete,
+ // ------------------- Mod Character Functions -------------------
+ handleModCharacterJobAutocomplete,
+ handleModCharacterNameAutocomplete,
+
+ // ------------------- Submit Functions -------------------
+ handleSubmitCollabAutocomplete,
 
 // ------------------- Monster Functions -------------------
 handleMonsterAutocomplete,
