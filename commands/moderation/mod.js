@@ -346,7 +346,36 @@ function createDenialDMEmbed(submissionId, title, reason) {
 // ------------------- Function: createModApprovalConfirmationEmbed -------------------
 // Creates mod approval confirmation embed
 function createModApprovalConfirmationEmbed(submissionId, title, tokenAmount, userId, collab) {
-  return createSubmissionEmbed('modApproval', { submissionId, title, tokenAmount, userId, collab });
+  const embed = createSubmissionEmbed('modApproval', { submissionId, title, tokenAmount, userId, collab });
+  
+  // Add token tracker links for collaboration
+  if (collab) {
+    const collaboratorId = collab.replace(/[<@>]/g, '');
+    const splitTokens = Math.floor(tokenAmount / 2);
+    
+    embed.addFields(
+      { 
+        name: '💰 Main User Tokens', 
+        value: `<@${userId}> received **${splitTokens} tokens**\n[View Token Tracker](https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit#gid=0)`, 
+        inline: true 
+      },
+      { 
+        name: '💰 Collaborator Tokens', 
+        value: `<@${collaboratorId}> received **${splitTokens} tokens**\n[View Token Tracker](https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit#gid=0)`, 
+        inline: true 
+      }
+    );
+  } else {
+    embed.addFields(
+      { 
+        name: '💰 User Tokens', 
+        value: `<@${userId}> received **${tokenAmount} tokens**\n[View Token Tracker](https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit#gid=0)`, 
+        inline: true 
+      }
+    );
+  }
+  
+  return embed;
 }
 
 // ------------------- Function: createModDenialConfirmationEmbed -------------------

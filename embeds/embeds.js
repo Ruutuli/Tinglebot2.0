@@ -979,7 +979,7 @@ const createArtSubmissionEmbed = (submissionData) => {
 
   // Always include these core fields
   if (submissionId && submissionId !== 'N/A') {
-    fields.push({ name: 'Submission ID', value: submissionId, inline: false });
+    fields.push({ name: 'Submission ID', value: `\`${submissionId}\``, inline: false });
   }
   
   fields.push({ name: 'Art Title', value: artTitle, inline: false });
