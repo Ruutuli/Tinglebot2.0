@@ -248,14 +248,11 @@ async function simulateWeightedWeather(village, season) {
   
   console.log(`[weatherModule.js]: ✨ Special weather check for ${village}:`, {
     hasSpecials: seasonInfo.Special.length > 0,
-    availableSpecials: seasonInfo.Special,
-    randomChance: Math.random(),
-    threshold: 0.5
+    availableSpecials: seasonInfo.Special
   });
   
-  // Check if special weather should be considered (50% chance - increased from 30%)
-  if (seasonInfo.Special.length && Math.random() < 0.5) {
-    console.log(`[weatherModule.js]: 🎲 Special weather RNG passed for ${village} in ${seasonKey}`);
+  // Let getSpecialCondition handle the RNG logic (removed redundant check)
+  if (seasonInfo.Special.length) {
     console.log(`[weatherModule.js]: 📋 Available specials:`, seasonInfo.Special);
     console.log(`[weatherModule.js]: 🌡️ Current conditions:`, {
       temperature: simTemp,
@@ -285,11 +282,7 @@ async function simulateWeightedWeather(village, season) {
       console.log(`[weatherModule.js]: ❌ No valid special weather conditions met for ${village}`);
     }
   } else {
-    if (!seasonInfo.Special.length) {
-      console.log(`[weatherModule.js]: 📝 No specials defined for ${village} in ${seasonKey}`);
-    } else {
-      console.log(`[weatherModule.js]: 🎲 Special weather RNG failed for ${village} (random chance)`);
-    }
+    console.log(`[weatherModule.js]: 📝 No specials defined for ${village} in ${seasonKey}`);
   }
   
   // Probabilities
