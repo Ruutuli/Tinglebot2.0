@@ -303,7 +303,7 @@ async function handleSubmitAction(interaction) {
       // ------------------- Update Token Data -------------------
       // If a collaboration exists, split tokens; otherwise, assign all tokens to the main user.
       if (submission.collab) {
-        const splitTokens = submission.finalTokenAmount / 2;
+        const splitTokens = Math.floor(submission.finalTokenAmount / 2);
         // Update tokens for the main user
         await appendEarnedTokens(user.id, submission.fileName, 'art', splitTokens, submission.fileUrl);
         await updateTokenBalance(user.id, splitTokens);
