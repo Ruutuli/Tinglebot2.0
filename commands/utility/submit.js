@@ -150,6 +150,17 @@ module.exports = {
           return;
         }
 
+        // Prevent self-collaboration
+        if (collab) {
+          const collaboratorId = collab.match(/<@(\d+)>/)?.[1];
+          if (collaboratorId === user.id) {
+            await interaction.editReply({ 
+              content: '❌ **You cannot collaborate with yourself.** Please select a different collaborator or remove the collaboration option.' 
+            });
+            return;
+          }
+        }
+
         // Check if a file is attached
         if (!attachedFile) {
           await interaction.editReply({ content: '❌ **No file attached. Please try again.**' });
@@ -235,6 +246,17 @@ module.exports = {
             content: '❌ **Invalid collaboration format.** Please use the autocomplete to select a collaborator from the server. The collaborator must be mentioned with @username format.' 
           });
           return;
+        }
+
+        // Prevent self-collaboration
+        if (collab) {
+          const collaboratorId = collab.match(/<@(\d+)>/)?.[1];
+          if (collaboratorId === user.id) {
+            await interaction.editReply({ 
+              content: '❌ **You cannot collaborate with yourself.** Please select a different collaborator or remove the collaboration option.' 
+            });
+            return;
+          }
         }
     
         // Fetch user data from the database
