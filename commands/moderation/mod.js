@@ -1350,7 +1350,7 @@ async function handleApprove(interaction) {
 
           try {
             await updateTokenBalance(userId, splitTokens);
-            await appendEarnedTokens(userId, title, category, tokenAmount, messageUrl);
+            await appendEarnedTokens(userId, title, category, splitTokens, messageUrl);
           } catch (tokenError) {
             console.error(`[mod.js]: ❌ Error updating tokens for main user ${userId}:`, tokenError);
             tokenErrors.push(`Main user (${userId})`);

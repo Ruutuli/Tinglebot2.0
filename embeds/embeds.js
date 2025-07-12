@@ -937,8 +937,10 @@ const createArtSubmissionEmbed = (submissionData) => {
   // Member field (proper mention)
   const memberField = userId ? `<@${userId}>` : username ? `@${username}` : 'N/A';
 
-  // Token tracker link (placeholder, replace with actual if available)
-  const tokenTrackerLink = '[Token Tracker](https://tracker.example.com)';
+  // Token tracker link from submission data
+  const tokenTrackerLink = submissionData.tokenTracker
+    ? `[Token Tracker](${submissionData.tokenTracker})`
+    : 'N/A';
 
   // Quest/Event and Bonus
   const questEventField = questEvent || 'N/A';
