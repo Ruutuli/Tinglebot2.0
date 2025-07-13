@@ -1480,7 +1480,8 @@ if (quantity <= 0) {
    `[shops]: Inventory item found. Quantity available: ${inventoryItem.quantity}`
   );
 
-  const isCrafted = inventoryItem.obtain.includes("Crafting");
+  const obtainMethod = inventoryItem.obtain.toLowerCase();
+  const isCrafted = obtainMethod.includes("crafting") || obtainMethod.includes("crafted");
   console.log(`[shops]: Item crafted: ${isCrafted}`);
 
   if (!isCrafted) {
