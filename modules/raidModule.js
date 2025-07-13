@@ -544,12 +544,11 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false)
       // Ensure we're creating the thread on the actual raid message
       console.log(`[raidModule.js]: 🧵 Creating thread on message ID: ${raidMessage.id}`);
       
-      // Create thread using the channel's startThread method with the message ID
-      thread = await interaction.channel.threads.create({
+      // Create thread using the message's startThread method
+      thread = await raidMessage.startThread({
         name: `🛡️ ${villageId} - ${monster.name} (T${monster.tier})`,
         autoArchiveDuration: THREAD_AUTO_ARCHIVE_DURATION,
-        reason: `Raid thread for ${monster.name} in ${villageId}`,
-        startMessage: raidMessage
+        reason: `Raid thread for ${monster.name} in ${villageId}`
       });
 
       // Verify thread was created properly
