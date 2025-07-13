@@ -190,8 +190,8 @@ async function initializeClient() {
             startExpirationChecks(client);
             
             // Initialize random encounters system
-            const { initializeRandomEncounters } = require('./modules/randomEncountersModule');
-            initializeRandomEncounters(client);
+            const { initializeRandomEncounterBot } = require('./scripts/randomMonsterEncounters');
+            initializeRandomEncounterBot(client);
           } catch (error) {
             handleError(error, "index.js");
           }
