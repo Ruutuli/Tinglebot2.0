@@ -3,6 +3,17 @@
 // ============================================================================
 const { v4: uuidv4 } = require('uuid');
 
+// ============================================================================
+// ------------------- Constants -------------------
+// ============================================================================
+
+// Village visiting role IDs
+const VILLAGE_VISITING_ROLES = {
+  'Rudania': '1379850030856405185',
+  'Inariko': '1379850102486863924', 
+  'Vhintl': '1379850161794056303'
+};
+
 // ------------------- Discord.js Components -------------------
 const { EmbedBuilder } = require('discord.js');
 
@@ -123,6 +134,58 @@ function createFinalTravelEmbed(character, destination, paths, totalTravelDurati
 // ============================================================================
 // ------------------- Private Helpers -------------------
 // ============================================================================
+
+// ------------------- Role Assignment Helper -------------------
+// Assigns the appropriate village visiting role to the user when they arrive at a destination
+async function assignVillageVisitingRole(interaction, destination, character = null) {
+  try {
+    const member = await interaction.guild.members.fetch(interaction.user.id);
+    const destinationRoleId = VILLAGE_VISITING_ROLES[capitalizeFirstLetter(destination)];
+    const isHomeVillage = character && character.homeVillage.toLowerCase() === destination.toLowerCase();
+    
+    if (destinationRoleId) {
+      // Check if bot has manage roles permission
+      const botMember = await interaction.guild.members.fetch(interaction.client.user.id);
+      if (botMember.permissions.has('ManageRoles')) {
+        // Remove all village visiting roles first
+        const visitingRoleIds = Object.values(VILLAGE_VISITING_ROLES);
+        for (const roleId of visitingRoleIds) {
+          if (member.roles.cache.has(roleId)) {
+            try {
+              await member.roles.remove(roleId);
+              console.log(`[travelHandler.js]: ✅ Removed visiting role ${roleId} from ${interaction.user.tag}`);
+            } catch (error) {
+              console.warn(`[travelHandler.js]: ⚠️ Failed to remove role ${roleId}: ${error.message}`);
+            }
+          }
+        }
+    
+        // Only add visiting role if not returning to home village
+        if (!isHomeVillage) {
+          if (!member.roles.cache.has(destinationRoleId)) {
+            try {
+              await member.roles.add(destinationRoleId);
+              console.log(`[travelHandler.js]: ✅ Added ${capitalizeFirstLetter(destination)} visiting role to ${interaction.user.tag}`);
+            } catch (error) {
+              console.warn(`[travelHandler.js]: ⚠️ Failed to add ${capitalizeFirstLetter(destination)} visiting role: ${error.message}`);
+            }
+          } else {
+            console.log(`[travelHandler.js]: ℹ️ ${interaction.user.tag} already has ${capitalizeFirstLetter(destination)} visiting role`);
+          }
+        } else {
+          console.log(`[travelHandler.js]: ℹ️ ${interaction.user.tag} returned to home village ${capitalizeFirstLetter(destination)} - no visiting role assigned`);
+        }
+      } else {
+        console.warn('[travelHandler.js]: ⚠️ Bot lacks ManageRoles permission - skipping role management');
+      }
+    } else {
+      console.warn(`[travelHandler.js]: ⚠️ No role ID found for destination: ${capitalizeFirstLetter(destination)}`);
+    }
+  } catch (error) {
+    console.warn(`[travelHandler.js]: ⚠️ Role management failed: ${error.message}`);
+    // Continue with travel completion even if role management fails
+  }
+}
 
 // ------------------- Recover Helper -------------------
 // Attempts to recover a heart if character not KO'd, has stamina or Delivering perk,
@@ -612,5 +675,6 @@ async function handleTravelInteraction(
   // Exports the primary handler for use in the command module.
   module.exports = { 
     handleTravelInteraction,
-    createFinalTravelEmbed 
+    createFinalTravelEmbed,
+    assignVillageVisitingRole
   };
