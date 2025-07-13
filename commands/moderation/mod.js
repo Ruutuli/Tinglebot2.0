@@ -2315,7 +2315,11 @@ async function handleTriggerRaid(interaction) {
       channel: targetChannel,
       client: interaction.client,
       user: interaction.user,
-      guild: interaction.guild
+      guild: interaction.guild,
+      // Add the followUp method to prevent errors
+      followUp: async (options) => {
+        return await targetChannel.send(options);
+      }
     };
     
     // Trigger the raid in the correct village channel

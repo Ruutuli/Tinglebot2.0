@@ -17,6 +17,11 @@ const { authorizeSheets, safeAppendDataToSheet } = require('../../utils/googleSh
 const { v4: uuidv4 } = require('uuid');
 
 // ============================================================================
+// ---- Import Inventory Sync Check ----
+// ============================================================================
+const { checkInventorySync } = require('../../utils/characterUtils');
+
+// ============================================================================
 // ---- Constants ----
 // ============================================================================
 // Village resident role IDs
@@ -75,6 +80,33 @@ module.exports = {
         });
       }
 
+      // ------------------- Check Inventory Sync -------------------
+      try {
+        await checkInventorySync(character);
+      } catch (error) {
+        await interaction.editReply({
+          embeds: [{
+            color: 0xFF0000, // Red color
+            title: '❌ Inventory Not Synced',
+            description: error.message,
+            fields: [
+              {
+                name: 'How to Fix',
+                value: '1. Use `/inventory test` to test your inventory\n2. Use `/inventory sync` to sync your inventory'
+              }
+            ],
+            image: {
+              url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+            },
+            footer: {
+              text: 'Inventory Sync Required'
+            }
+          }],
+          ephemeral: true
+        });
+        return;
+      }
+
       // Check if character is KO'd
       if (character.ko) {
         return interaction.editReply({
@@ -99,7 +131,7 @@ module.exports = {
 
       if (raidData.status !== 'active') {
         return interaction.editReply({
-          content: `❌ This raid is no longer active. Status: ${raidData.status}`,
+          content: `❌ **Raid ${raidId} is no longer active!**\n\n**Status:** ${raidData.status}\n\n**Possible reasons:**\n• The raid has been completed by other players\n• The raid has expired (15-minute time limit)\n• The raid was manually ended by a moderator\n\n**To join a new raid:**\n• Wait for a new raid announcement\n• Check the village town hall for active raids\n• Use the raid ID from the most recent announcement`,
           ephemeral: true
         });
       }
@@ -259,6 +291,9 @@ function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
     )
     .setThumbnail(monsterImage)
     .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+    .setFooter({ 
+      text: `Raid ID: ${raidId} • Use /raid to take your turn! Please respect turn order.` 
+    })
     .setTimestamp();
 
   // Add KO warning if character is down
@@ -296,8 +331,8 @@ async function handleRaidVictory(interaction, raidData, monster) {
           continue;
         }
         
-        // Generate loot for this participant
-        const lootedItem = generateLootedItem(monster, weightedItems);
+        // Generate loot for this participant based on damage dealt
+        const lootedItem = generateLootedItem(monster, weightedItems, participant.damage);
         
         // Add to inventory if character has valid inventory link
         if (character.inventory && isValidGoogleSheetsUrl(character.inventory)) {
@@ -358,15 +393,45 @@ async function handleRaidVictory(interaction, raidData, monster) {
               }
             });
             
-            lootResults.push(`**${character.name}** got ${lootedItem.emoji || ''} **${lootedItem.itemName}** × ${lootedItem.quantity}!`);
+            // Determine loot quality indicator based on damage
+            let qualityIndicator = '';
+            if (participant.damage >= 10) {
+              qualityIndicator = ' 🔥'; // High damage = fire emoji
+            } else if (participant.damage >= 5) {
+              qualityIndicator = ' ⚡'; // Medium damage = lightning emoji
+            } else if (participant.damage >= 2) {
+              qualityIndicator = ' ✨'; // Low damage = sparkle emoji
+            }
+            
+            lootResults.push(`**${character.name}** (${participant.damage} hearts)${qualityIndicator} got ${lootedItem.emoji || ''} **${lootedItem.itemName}** × ${lootedItem.quantity}!`);
             
           } catch (error) {
             console.error(`[raid.js]: ❌ Error processing loot for ${character.name}:`, error);
-            lootResults.push(`**${character.name}** got ${lootedItem.emoji || ''} **${lootedItem.itemName}** × ${lootedItem.quantity}! *(inventory sync failed)*`);
+            // Determine loot quality indicator based on damage
+            let qualityIndicator = '';
+            if (participant.damage >= 10) {
+              qualityIndicator = ' 🔥'; // High damage = fire emoji
+            } else if (participant.damage >= 5) {
+              qualityIndicator = ' ⚡'; // Medium damage = lightning emoji
+            } else if (participant.damage >= 2) {
+              qualityIndicator = ' ✨'; // Low damage = sparkle emoji
+            }
+            
+            lootResults.push(`**${character.name}** (${participant.damage} hearts)${qualityIndicator} got ${lootedItem.emoji || ''} **${lootedItem.itemName}** × ${lootedItem.quantity}! *(inventory sync failed)*`);
           }
         } else {
           // Character doesn't have valid inventory, but still show loot
-          lootResults.push(`**${character.name}** got ${lootedItem.emoji || ''} **${lootedItem.itemName}** × ${lootedItem.quantity}! *(no inventory link)*`);
+          // Determine loot quality indicator based on damage
+          let qualityIndicator = '';
+          if (participant.damage >= 10) {
+            qualityIndicator = ' 🔥'; // High damage = fire emoji
+          } else if (participant.damage >= 5) {
+            qualityIndicator = ' ⚡'; // Medium damage = lightning emoji
+          } else if (participant.damage >= 2) {
+            qualityIndicator = ' ✨'; // Low damage = sparkle emoji
+          }
+          
+          lootResults.push(`**${character.name}** (${participant.damage} hearts)${qualityIndicator} got ${lootedItem.emoji || ''} **${lootedItem.itemName}** × ${lootedItem.quantity}! *(no inventory link)*`);
         }
         
       } catch (error) {
@@ -447,8 +512,8 @@ async function handleRaidVictory(interaction, raidData, monster) {
 }
 
 // ---- Function: generateLootedItem ----
-// Generates looted item for raid participants (similar to loot.js)
-function generateLootedItem(monster, weightedItems) {
+// Generates looted item for raid participants based on damage dealt
+function generateLootedItem(monster, weightedItems, damageDealt = 0) {
   if (weightedItems.length === 0) {
     return {
       itemName: 'nothing',
@@ -460,8 +525,33 @@ function generateLootedItem(monster, weightedItems) {
     };
   }
   
-  const randomIndex = Math.floor(Math.random() * weightedItems.length);
-  const lootedItem = { ...weightedItems[randomIndex] };
+  // Calculate damage-based loot multiplier
+  // More damage = better chance of rare items
+  let lootMultiplier = 1;
+  if (damageDealt >= 10) {
+    lootMultiplier = 3; // High damage dealers get 3x better loot chances
+  } else if (damageDealt >= 5) {
+    lootMultiplier = 2; // Medium damage dealers get 2x better loot chances
+  } else if (damageDealt >= 2) {
+    lootMultiplier = 1.5; // Low damage dealers get 1.5x better loot chances
+  }
+  // 0-1 damage = 1x multiplier (base chance)
+  
+  // Create weighted selection based on damage
+  const weightedSelection = [];
+  for (let i = 0; i < weightedItems.length; i++) {
+    const item = weightedItems[i];
+    // Higher damage = more copies of rare items in the selection pool
+    const copies = Math.floor(lootMultiplier * (item.itemRarity || 1));
+    for (let j = 0; j < copies; j++) {
+      weightedSelection.push(item);
+    }
+  }
+  
+  // If no items in weighted selection, fall back to original
+  const selectionPool = weightedSelection.length > 0 ? weightedSelection : weightedItems;
+  const randomIndex = Math.floor(Math.random() * selectionPool.length);
+  const lootedItem = { ...selectionPool[randomIndex] };
 
   // Handle Chuchu special case
   if (monster.name.includes("Chuchu")) {
