@@ -22,7 +22,7 @@ const Raid = require('../models/RaidModel');
 // ---- Constants ----
 // ============================================================================
 const RAID_DURATION = 10 * 60 * 1000; // 10 minutes in milliseconds
-const THREAD_AUTO_ARCHIVE_DURATION = 60; // 60 minutes (minimum allowed by Discord)
+const THREAD_AUTO_ARCHIVE_DURATION = 60; // 60 minutes (Discord allows: 1, 3, 7, 14, 30, 60, 1440 minutes)
 
 // Village resident role IDs
 const VILLAGE_RESIDENT_ROLES = {
@@ -450,7 +450,7 @@ async function createRaidThread(interaction, raid) {
       `\n${roleMention} — come help defend your home!`,
       `\nUse </raid:1392945628002259014> to join the fight!`,
       `\n\n**Raid ID:** \`\`\`${raid.raidId}\`\`\``,
-      `\n\n⏰ **You have 10 minutes to complete this raid!**`
+      `\n\n⏰ **You have 15 minutes to complete this raid!**`
     ].join('');
 
     // Send the text message to the thread
@@ -482,7 +482,7 @@ function createRaidEmbed(raid, monsterImage) {
       `*It's a Tier ${raid.monster.tier} monster! Protect the village!*\n\n` +
       `</raid:1392945628002259014> to join or continue the raid!\n` +
       `</item:1379838613067530385> to heal during the raid!\n\n` +
-      `⏰ **You have 10 minutes to complete this raid!**`
+      `⏰ **You have 15 minutes to complete this raid!**`
     )
     .addFields(
       {
@@ -535,6 +535,10 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false)
     console.log(`[raidModule.js]: 📤 Interaction replied: ${interaction.replied}`);
     
     // Send the raid announcement - always send to channel directly for consistent thread creation
+    console.log(`[raidModule.js]: 📤 Sending raid embed with monster: ${monster.name}, tier: ${monster.tier}`);
+    console.log(`[raidModule.js]: 📤 Embed title: ${embed.data?.title || 'No title'}`);
+    console.log(`[raidModule.js]: 📤 Embed description: ${embed.data?.description || 'No description'}`);
+    
     const raidMessage = await interaction.channel.send({
       content: isBloodMoon ? `🌙 **BLOOD MOON RAID!**` : `⚠️ **RAID TRIGGERED!** ⚠️`,
       embeds: [embed]
@@ -545,6 +549,12 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false)
     console.log(`[raidModule.js]: 📝 Raid message channel: ${raidMessage.channel?.id}`);
     console.log(`[raidModule.js]: 📝 Raid message guild: ${raidMessage.guild?.id}`);
     console.log(`[raidModule.js]: 📝 Raid message has startThread method: ${typeof raidMessage.startThread === 'function'}`);
+    console.log(`[raidModule.js]: 📝 Raid message content: ${raidMessage.content}`);
+    console.log(`[raidModule.js]: 📝 Raid message embeds count: ${raidMessage.embeds?.length || 0}`);
+    if (raidMessage.embeds && raidMessage.embeds.length > 0) {
+      console.log(`[raidModule.js]: 📝 First embed title: ${raidMessage.embeds[0].title}`);
+      console.log(`[raidModule.js]: 📝 First embed description: ${raidMessage.embeds[0].description}`);
+    }
     console.log(`[raidModule.js]: 🧵 Creating thread on raid message...`);
 
     // Create the raid thread with error handling
@@ -554,10 +564,14 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false)
       console.log(`[raidModule.js]: 🧵 Creating thread on message ID: ${raidMessage.id}`);
       
       // Wait a moment to ensure the message is fully processed
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, 500));
       
-      // Create thread using the message's startThread method
-      thread = await raidMessage.startThread({
+      // Fetch the message again to ensure we have the latest version
+      const freshMessage = await interaction.channel.messages.fetch(raidMessage.id);
+      console.log(`[raidModule.js]: 🧵 Fetched fresh message with ID: ${freshMessage.id}`);
+      
+      // Create thread using the fresh message's startThread method
+      thread = await freshMessage.startThread({
         name: `🛡️ ${villageId} - ${monster.name} (T${monster.tier})`,
         autoArchiveDuration: THREAD_AUTO_ARCHIVE_DURATION,
         reason: `Raid thread for ${monster.name} in ${villageId}`
@@ -571,13 +585,13 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false)
       console.log(`[raidModule.js]: 🧵 Thread created with ID: ${thread.id}`);
       console.log(`[raidModule.js]: 📝 Thread name: ${thread.name}`);
       console.log(`[raidModule.js]: 📍 Thread parent message ID: ${thread.parentId}`);
-      console.log(`[raidModule.js]: 📍 Raid message ID: ${raidMessage.id}`);
+      console.log(`[raidModule.js]: 📍 Raid message ID: ${freshMessage.id}`);
       console.log(`[raidModule.js]: 📍 Thread parent ID type: ${typeof thread.parentId}`);
-      console.log(`[raidModule.js]: 📍 Raid message ID type: ${typeof raidMessage.id}`);
+      console.log(`[raidModule.js]: 📍 Raid message ID type: ${typeof freshMessage.id}`);
       
       // Verify the thread is properly connected to the raid message
-      if (thread.parentId !== raidMessage.id) {
-        console.warn(`[raidModule.js]: ⚠️ Thread parent ID (${thread.parentId}) doesn't match raid message ID (${raidMessage.id})`);
+      if (thread.parentId !== freshMessage.id) {
+        console.warn(`[raidModule.js]: ⚠️ Thread parent ID (${thread.parentId}) doesn't match raid message ID (${freshMessage.id})`);
         console.warn(`[raidModule.js]: ⚠️ This might be a Discord.js caching issue - thread should still work correctly`);
       } else {
         console.log(`[raidModule.js]: ✅ Thread created successfully on raid message`);
@@ -599,7 +613,7 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false)
         `\n${roleMention} — come help defend your home!`,
         `\nUse </raid:1392945628002259014> to join the fight!`,
         `\n\n**Raid ID:** \`\`\`${raidId}\`\`\``,
-        `\n\n⏰ **You have 10 minutes to complete this raid!**`
+        `\n\n⏰ **You have 15 minutes to complete this raid!**`
       ].join('');
 
       await thread.send(threadMessage);
@@ -632,11 +646,17 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false)
         `\n${roleMention} — come help defend your home!`,
         `\nUse </raid:1392945628002259014> to join the fight!`,
         `\n\n**Raid ID:** \`\`\`${raidId}\`\`\``,
-        `\n\n⏰ **You have 10 minutes to complete this raid!**`,
+        `\n\n⏰ **You have 15 minutes to complete this raid!**`,
         `\n\n*Note: No thread was created in this channel. Use the raid ID to participate!*`
       ].join('');
 
-      await interaction.followUp({ content: raidInfoMessage });
+      // Check if interaction has followUp method before calling it
+      if (interaction && typeof interaction.followUp === 'function') {
+        await interaction.followUp({ content: raidInfoMessage });
+      } else {
+        // If no followUp method, send as a regular message to the channel
+        await interaction.channel.send({ content: raidInfoMessage });
+      }
       
       // Update raid data without thread information
       raidData.messageId = raidMessage.id;
