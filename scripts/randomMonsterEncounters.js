@@ -26,11 +26,17 @@ require('dotenv').config();
 // ============================================================================
 // Constants
 // ------------------- Define thresholds and timing constants -------------------
-const MESSAGE_THRESHOLD = 50;            // Number of messages to trigger an encounter
+const MESSAGE_THRESHOLD = 100;            // Number of messages to trigger an encounter
 const MIN_ACTIVE_USERS = 4;               // Minimum unique users required for an encounter
 const TIME_WINDOW = 30 * 60 * 1000;         // 30 minutes in milliseconds
 const CHECK_INTERVAL = 60 * 1000;           // Check every 60 seconds
-const RAID_COOLDOWN = 4 * 60 * 60 * 1000;  // 4 hours cooldown between raids
+const RAID_COOLDOWN = 1 * 60 * 60 * 1000;  // 1 hour cooldown between raids
+
+// ------------------- Excluded Channels -------------------
+// Channels to exclude from message threshold calculations
+const EXCLUDED_CHANNELS = [
+  '606126567302627329'  // Category channel to exclude
+];
 
 // ------------------- Village Channels -------------------
 // Maps village names to their respective channel IDs (from environment variables)
@@ -59,6 +65,11 @@ let lastRaidTime = 0;
 
 function trackMessageActivity(channelId, userId, isBot, username) {
   if (isBot) return; // Ignore bot messages
+  
+  // Skip excluded channels
+  if (EXCLUDED_CHANNELS.includes(channelId)) {
+    return;
+  }
 
   const currentTime = Date.now();
 
@@ -83,7 +94,9 @@ function trackMessageActivity(channelId, userId, isBot, username) {
 // ------------------- Check for Random Encounter -------------------
 async function checkForRandomEncounters(client) {
   const currentTime = Date.now();
-  let totalActivity = 0;
+  let totalMessages = 0;
+  let totalUsers = new Set();
+  let activeChannels = 0;
 
   // Check if we're still in cooldown period
   const timeSinceLastRaid = currentTime - lastRaidTime;
@@ -94,6 +107,11 @@ async function checkForRandomEncounters(client) {
   }
 
   for (const [channelId, activity] of messageActivity.entries()) {
+    // Skip excluded channels
+    if (EXCLUDED_CHANNELS.includes(channelId)) {
+      continue;
+    }
+    
     // Remove outdated messages.
     activity.messages = activity.messages.filter(
       (timestamp) => currentTime - timestamp <= TIME_WINDOW
@@ -104,8 +122,9 @@ async function checkForRandomEncounters(client) {
     const meetsThreshold = messageCount >= MESSAGE_THRESHOLD && uniqueUserCount >= MIN_ACTIVE_USERS;
 
     if (messageCount > 0) {
-      totalActivity += messageCount;
-      console.log(`[randomMonsterEncounters.js]: 📊 Channel ${channelId}: ${messageCount} messages, ${uniqueUserCount} users`);
+      totalMessages += messageCount;
+      activity.users.forEach(userId => totalUsers.add(userId));
+      activeChannels++;
     }
 
     if (meetsThreshold) {
@@ -113,7 +132,7 @@ async function checkForRandomEncounters(client) {
       
       // Update last raid time to start cooldown
       lastRaidTime = currentTime;
-      console.log(`[randomMonsterEncounters.js]: ⏰ Raid cooldown started - next raid available in 4 hours`);
+      console.log(`[randomMonsterEncounters.js]: ⏰ Raid cooldown started - next raid available in 1 hour`);
       
       // Reset the activity for the channel.
       messageActivity.set(channelId, { messages: [], users: new Set() });
@@ -140,7 +159,10 @@ async function checkForRandomEncounters(client) {
     }
   }
 
-  if (totalActivity === 0) {
+  // Log aggregated server activity
+  if (totalMessages > 0) {
+    console.log(`[randomMonsterEncounters.js]: 📊 Server activity: ${totalMessages} messages, ${totalUsers.size} users across ${activeChannels} channels`);
+  } else {
     console.log(`[randomMonsterEncounters.js]: 💤 No activity detected in any channels`);
   }
 }

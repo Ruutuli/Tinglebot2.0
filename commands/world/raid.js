@@ -458,7 +458,7 @@ async function handleRaidVictory(interaction, raidData, monster) {
       .addFields(
         {
           name: '__Raid Summary__',
-          value: `🎯 **Total Damage:** ${raidData.analytics.totalDamage} hearts\n👥 **Participants:** ${raidData.participants.length}\n⏱️ **Duration:** ${Math.floor((raidData.analytics.endTime - raidData.analytics.startTime) / 1000)}s`,
+          value: `🎯 **Total Damage:** ${raidData.analytics.totalDamage} hearts\n👥 **Participants:** ${raidData.participants.length}\n⏱️ **Duration:** ${Math.floor((raidData.analytics.endTime - raidData.analytics.startTime) / 1000 / 60)}m`,
           inline: false
         },
         {
@@ -469,11 +469,6 @@ async function handleRaidVictory(interaction, raidData, monster) {
         {
           name: '__Loot Distribution__',
           value: lootResults.length > 0 ? lootResults.join('\n') : 'No loot was found.',
-          inline: false
-        },
-        {
-          name: '__Loot System Explanation__',
-          value: `**Damage-Based Loot System:**\n🔥 **10+ hearts damage** = 3x better loot chances\n⚡ **5-9 hearts damage** = 2x better loot chances\n✨ **2-4 hearts damage** = 1.5x better loot chances\n• **0-1 hearts damage** = Base loot chances\n\n*Higher damage dealers get more copies of rare items in their loot pool!*`,
           inline: false
         }
       )
