@@ -26,7 +26,7 @@ require('dotenv').config();
 // ============================================================================
 // Constants
 // ------------------- Define thresholds and timing constants -------------------
-const MESSAGE_THRESHOLD = 100;            // Number of messages to trigger an encounter
+const MESSAGE_THRESHOLD = 200;            // Number of messages to trigger an encounter
 const MIN_ACTIVE_USERS = 4;               // Minimum unique users required for an encounter
 const TIME_WINDOW = 30 * 60 * 1000;         // 30 minutes in milliseconds
 const CHECK_INTERVAL = 60 * 1000;           // Check every 60 seconds

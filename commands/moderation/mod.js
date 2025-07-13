@@ -209,6 +209,13 @@ function getMonsterRegion(monster) {
   return 'Unknown';
 }
 
+// ------------------- Function: isMonsterInRegion -------------------
+// Checks if a monster belongs to a specific region
+function isMonsterInRegion(monster, region) {
+  const regionLower = region.toLowerCase();
+  return monster[regionLower] === true;
+}
+
 // ------------------- Embed Footer Update Helper -------------------
 async function updateSubmissionEmbedFooter(message, status, moderatorTag, reason = null) {
   try {
@@ -2274,9 +2281,8 @@ async function handleTriggerRaid(interaction) {
         return interaction.editReply({ content: `❌ **${monster.name} is tier ${monster.tier}. Only tier 5+ monsters can be used for triggered raids.**` });
       }
       // Check if monster is from the correct region
-      const monsterRegion = getMonsterRegion(monster);
-      if (monsterRegion !== villageRegion) {
-        return interaction.editReply({ content: `❌ **${monster.name} is from ${monsterRegion} region, but you're trying to trigger a raid in ${villageRegion} region (${capitalizedVillage}).**` });
+      if (!isMonsterInRegion(monster, villageRegion)) {
+        return interaction.editReply({ content: `❌ **${monster.name} is not found in ${villageRegion} region, but you're trying to trigger a raid in ${capitalizedVillage}.**` });
       }
     } else {
       // Get a random monster from the village's region (tier 5 and above only)

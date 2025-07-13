@@ -1403,6 +1403,57 @@ const createKOEmbed = (character) => {
   );
 };
 
+// ------------------- Function: createRaidKOEmbed -------------------
+// Creates an embed for characters who are KO'd and cannot participate in raids
+const createRaidKOEmbed = (character) => {
+ const settings = getCommonEmbedSettings(character);
+
+ const isVisiting = character.homeVillage !== character.currentVillage;
+ const locationPrefix = isVisiting
+  ? `${capitalizeWords(character.homeVillage)} ${capitalizeWords(
+     character.job
+    )} is visiting ${capitalizeWords(character.currentVillage)}`
+  : `${capitalizeWords(character.homeVillage)} ${capitalizeWords(
+     character.job
+    )}`;
+
+ return new EmbedBuilder()
+  .setColor("#FF0000") // Red for KO status
+  .setAuthor({
+   name: `${character.name} 🔗`,
+   iconURL: settings.author.iconURL,
+   url: settings.author.url,
+  })
+  .setTitle(`💥 ${locationPrefix}: ${character.name} Cannot Join Raid!`)
+  .setDescription(
+   `> **${character.name} is KO'd and cannot participate in raids.**\n\n` +
+   `> **To heal your character and join raids:**\n` +
+   `> • Use </itemheal:1306176789755858979> with a healing item\n` +
+   `> • Use </heal request:1306176789755858977> to request healing from a Healer\n` +
+   `> **Current Status:** ${character.currentHearts}/${character.maxHearts} hearts`
+  )
+  .addFields(
+   {
+    name: "__❤️ Hearts__",
+    value: `> ${character.currentHearts}/${character.maxHearts}`,
+    inline: true,
+   },
+   {
+    name: "__📍 Location__",
+    value: `> ${capitalizeFirstLetter(character.currentVillage)}`,
+    inline: true,
+   },
+   {
+    name: "__💊 Healing Options__",
+    value: `> • Item healing (</itemheal:1306176789755858979>)\n> • Healer request (</heal request:1306176789755858977>)\n>`,
+    inline: false,
+   }
+  )
+  .setImage(
+   "https://storage.googleapis.com/tinglebot/Graphics/border%20blood%20moon.png"
+  );
+};
+
 // ------------------- Subsection Title ------------------- 
 const createHealEmbed = (
  healerCharacter,
@@ -1780,6 +1831,7 @@ module.exports = {
  createMonsterEncounterEmbed,
  createNoEncounterEmbed,
  createKOEmbed,
+ createRaidKOEmbed,
  createHealEmbed,
  createTravelMonsterEncounterEmbed,
  createInitialTravelEmbed,
