@@ -101,17 +101,7 @@ async function checkForRandomEncounters(client) {
   // Check if we're still in global cooldown period
   const timeSinceLastRaid = currentTime - lastRaidTime;
   if (timeSinceLastRaid < RAID_COOLDOWN) {
-    const remainingCooldown = Math.ceil((RAID_COOLDOWN - timeSinceLastRaid) / (1000 * 60)); // minutes
-    const remainingHours = Math.floor(remainingCooldown / 60);
-    const remainingMinutes = remainingCooldown % 60;
-    const timeString = remainingHours > 0 
-      ? `${remainingHours}h ${remainingMinutes}m` 
-      : `${remainingMinutes}m`;
-    console.log(`[randomMonsterEncounters.js]: ⏰ Global raid cooldown active - ${timeString} remaining`);
     return;
-  } else if (lastRaidTime > 0) {
-    // Log when cooldown expires
-    console.log(`[randomMonsterEncounters.js]: ✅ Global raid cooldown expired - raids are now available`);
   }
 
   // First pass: collect total activity across all channels
@@ -171,12 +161,7 @@ async function checkForRandomEncounters(client) {
     }
   }
 
-  // Log aggregated server activity
-  if (totalMessages > 0) {
-    console.log(`[randomMonsterEncounters.js]: 📊 Server activity: ${totalMessages} messages, ${totalUsers.size} users across ${activeChannels} channels`);
-  } else {
-    console.log(`[randomMonsterEncounters.js]: 💤 No activity detected in any channels`);
-  }
+
 }
 
 // ============================================================================
@@ -260,7 +245,6 @@ function initializeRandomEncounterBot(client) {
 
   // Start periodic encounter checks
   setInterval(() => {
-    console.log(`[randomMonsterEncounters.js]: 🔍 Checking for random encounters... (${new Date().toLocaleTimeString()})`);
     checkForRandomEncounters(client).catch(error => {
       console.error('[randomMonsterEncounters.js]: ❌ Encounter check failed:', error);
       handleError(error, 'randomMonsterEncounters.js');

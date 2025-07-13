@@ -101,6 +101,13 @@ function precipitationMatches(label, condition) {
       .some(alias => alias.toLowerCase() === normalizedLabel);
   }
   
+  // Handle specific conditions
+  if (normalizedCond === 'sunny') return normalizedLabel === 'sunny';
+  if (normalizedCond === 'rain') return ['rain', 'light rain', 'heavy rain'].includes(normalizedLabel);
+  if (normalizedCond === 'snow') return ['snow', 'light snow', 'heavy snow', 'blizzard'].includes(normalizedLabel);
+  if (normalizedCond === 'fog') return normalizedLabel === 'fog';
+  if (normalizedCond === 'cloudy') return normalizedLabel === 'cloudy';
+  
   // Handle exact matches
   return normalizedLabel === normalizedCond;
 }
@@ -261,18 +268,9 @@ function getPrecipitationLabel(seasonData, simTemp, simWind, cloudyStreak, weigh
 // ------------------- Special Condition Selector -------------------
 // Selects special weather condition based on dynamic rules (e.g., floods after rain).
 function getSpecialCondition(seasonData, simTemp, simWind, precipLabel, rainStreak, weightMapping, modifierMap = {}) {
-  console.log(`[weatherHandler.js]: 🎲 Special weather RNG check:`, {
-    randomValue: Math.random(),
-    threshold: 0.5,
-    passed: Math.random() < 0.5
-  });
-  
-  if (!seasonData.Special.length || Math.random() >= 0.5) {
-    console.log(`[weatherHandler.js]: ❌ Special weather check failed:`, {
-      hasSpecials: seasonData.Special.length > 0,
-      specialCount: seasonData.Special.length,
-      rngPassed: Math.random() < 0.5
-    });
+  // Check if there are any special weather options available
+  if (!seasonData.Special.length) {
+    console.log(`[weatherHandler.js]: ❌ No special weather options available for this season`);
     return null;
   }
   
@@ -307,6 +305,34 @@ function getSpecialCondition(seasonData, simTemp, simWind, precipLabel, rainStre
   }
   
   console.log(`[weatherHandler.js]: ✅ Valid specials found:`, validSpecials);
+  
+  // Calculate total weight for valid specials to determine probability
+  const totalWeight = validSpecials.reduce((sum, special) => {
+    const baseWeight = weightMapping[special] ?? 0.01;
+    const modifier = modifierMap[special] ?? 1;
+    return sum + (baseWeight * modifier);
+  }, 0);
+  
+  // Use weighted probability instead of hard-coded 50%
+  // Increase base chance and make it more dynamic based on available specials
+  const baseChance = 0.15; // 15% base chance
+  const weightMultiplier = Math.min(totalWeight * 0.2, 0.3); // Up to 30% additional chance
+  const specialWeatherChance = Math.min(baseChance + weightMultiplier, 0.4); // Cap at 40% total
+  const rngValue = Math.random();
+  
+  console.log(`[weatherHandler.js]: 🎲 Special weather probability check:`, {
+    totalWeight,
+    baseChance: `${(baseChance * 100).toFixed(1)}%`,
+    weightMultiplier: `${(weightMultiplier * 100).toFixed(1)}%`,
+    specialWeatherChance: `${(specialWeatherChance * 100).toFixed(1)}%`,
+    rngValue: rngValue.toFixed(3),
+    passed: rngValue < specialWeatherChance
+  });
+  
+  if (rngValue >= specialWeatherChance) {
+    console.log(`[weatherHandler.js]: ❌ Special weather RNG check failed`);
+    return null;
+  }
   
   const adjustedWeights = { ...weightMapping };
   if (rainStreak >= 2) {
