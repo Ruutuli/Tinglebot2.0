@@ -2286,14 +2286,40 @@ async function handleTriggerRaid(interaction) {
       }
     }
 
+    // ------------------- Determine Correct Channel -------------------
+    // Map village names to their respective town hall channel IDs
+    const villageChannelMap = {
+      'rudania': process.env.RUDANIA_TOWNHALL,
+      'inariko': process.env.INARIKO_TOWNHALL,
+      'vhintl': process.env.VHINTL_TOWNHALL
+    };
 
-    
+    const targetChannelId = villageChannelMap[village.toLowerCase()];
+    if (!targetChannelId) {
+      return interaction.editReply({ content: `❌ **Invalid village: ${capitalizedVillage}**` });
+    }
+
+    // Get the target channel
+    const targetChannel = interaction.client.channels.cache.get(targetChannelId);
+    if (!targetChannel) {
+      return interaction.editReply({ content: `❌ **Could not find channel for ${capitalizedVillage}.**` });
+    }
+
     console.log(`[mod.js]: 🎯 Triggering raid for ${monster.name} in ${capitalizedVillage}`);
-    console.log(`[mod.js]: 📍 Interaction type: ${interaction?.constructor?.name || 'unknown'}`);
-    console.log(`[mod.js]: 📍 Channel ID: ${interaction?.channel?.id || 'unknown'}`);
+    console.log(`[mod.js]: 📍 Target channel ID: ${targetChannelId}`);
+    console.log(`[mod.js]: 📍 Target channel name: ${targetChannel.name}`);
     
-    // Trigger the raid
-    const result = await triggerRaid(monster, interaction, capitalizedVillage, false);
+    // Create a modified interaction object that points to the correct channel
+    const modifiedInteraction = {
+      ...interaction,
+      channel: targetChannel,
+      client: interaction.client,
+      user: interaction.user,
+      guild: interaction.guild
+    };
+    
+    // Trigger the raid in the correct village channel
+    const result = await triggerRaid(monster, modifiedInteraction, capitalizedVillage, false);
 
     if (!result || !result.success) {
       return interaction.editReply({ 
@@ -2302,11 +2328,11 @@ async function handleTriggerRaid(interaction) {
       });
     }
 
-    console.log(`[mod.js]: ✅ Raid triggered successfully, sending confirmation message`);
+    console.log(`[mod.js]: ✅ Raid triggered successfully in ${capitalizedVillage} channel`);
     
-    // Don't send a separate success message - the raid embed serves as the success message
+    // Send confirmation message to the mod
     return interaction.editReply({ 
-      content: `✅ **Raid triggered successfully!** The raid embed has been posted in the channel.`,
+      content: `✅ **Raid triggered successfully!** The raid embed has been posted in the ${capitalizedVillage} town hall channel.`,
       ephemeral: true
     });
 
