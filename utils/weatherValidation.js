@@ -69,10 +69,17 @@ function checkNumericCondition(value, condition) {
 function precipitationMatches(label, condition) {
   if (!label || !condition) return true;
   if (condition === 'any') return true;
-  if (condition === 'sunny') return label === 'Sunny';
-  if (condition === 'rain') return ['Rain', 'Light Rain', 'Heavy Rain'].includes(label);
-  if (condition === 'snow') return ['Snow', 'Light Snow', 'Heavy Snow', 'Blizzard'].includes(label);
-  return label === condition;
+  
+  const normalizedLabel = label.toLowerCase();
+  const normalizedCondition = condition.toLowerCase();
+  
+  if (normalizedCondition === 'sunny') return normalizedLabel === 'sunny';
+  if (normalizedCondition === 'rain') return ['rain', 'light rain', 'heavy rain'].includes(normalizedLabel);
+  if (normalizedCondition === 'snow') return ['snow', 'light snow', 'heavy snow', 'blizzard'].includes(normalizedLabel);
+  if (normalizedCondition === 'fog') return normalizedLabel === 'fog';
+  if (normalizedCondition === 'cloudy') return normalizedLabel === 'cloudy';
+  
+  return normalizedLabel === normalizedCondition;
 }
 
 // ------------------- Weather Combination Validator -------------------

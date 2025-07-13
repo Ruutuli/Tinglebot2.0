@@ -859,8 +859,30 @@ async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, c
             return;
         }
 
-        if (!character || typeof character !== 'object' || !character.name) {
+        if (!character || typeof character !== 'object') {
             console.error(`[googleSheetsUtils.js]: ❌ Invalid character object:`, character);
+            return;
+        }
+
+        // Handle both User and Character objects
+        const isUserObject = character.discordId && !character.name;
+        const isCharacterObject = character.name;
+        
+        if (!isUserObject && !isCharacterObject) {
+            console.error(`[googleSheetsUtils.js]: ❌ Invalid object type - neither User nor Character:`, character);
+            return;
+        }
+
+        // For token tracker operations, we can use a User object
+        // For inventory operations, we need a Character object
+        const sheetName = range.split('!')[0];
+        if (sheetName.toLowerCase() === 'loggedtracker' && isUserObject) {
+            // This is a valid case - User object for token tracker
+        } else if (sheetName.toLowerCase() === 'loggedinventory' && !isCharacterObject) {
+            console.error(`[googleSheetsUtils.js]: ❌ Character object required for inventory operations:`, character);
+            return;
+        } else if (!isCharacterObject) {
+            console.error(`[googleSheetsUtils.js]: ❌ Character object required for this operation:`, character);
             return;
         }
 
@@ -886,19 +908,33 @@ async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, c
             if (sheetName.toLowerCase() === 'loggedtracker') {
                 validationResult = await validateTokenTrackerSheet(spreadsheetUrl);
             } else if (sheetName.toLowerCase() === 'loggedinventory') {
-                validationResult = await validateInventorySheet(spreadsheetUrl, character.name);
+                // For inventory validation, we need a character name
+                const characterName = isCharacterObject ? character.name : 'Unknown';
+                validationResult = await validateInventorySheet(spreadsheetUrl, characterName);
             } else {
                 throw new Error(`Unknown sheet type: ${sheetName}. Expected 'loggedTracker' or 'loggedInventory'`);
             }
             
             if (!validationResult.success) {
                 console.error(`[googleSheetsUtils.js]: ❌ Sheet validation failed:`, validationResult.message);
-                if (character.userId && client) {
+                if (isCharacterObject && character.userId && client) {
                     try {
                         const user = await client.users.fetch(character.userId);
                         if (user) {
                             await user.send(
                                 `⚠️ Heads up! Your ${sheetName} sync for **${character.name}** failed.\n\n` +
+                                `Your linked Google Sheet may be missing, renamed, or set up incorrectly. Please update your sheet link or re-setup your sheet when you have a chance!`
+                            );
+                        }
+                    } catch (dmError) {
+                        console.error(`[googleSheetsUtils.js]: ❌ Error sending DM to user: ${dmError.message}`);
+                    }
+                } else if (isUserObject && character.discordId && client) {
+                    try {
+                        const user = await client.users.fetch(character.discordId);
+                        if (user) {
+                            await user.send(
+                                `⚠️ Heads up! Your ${sheetName} sync failed.\n\n` +
                                 `Your linked Google Sheet may be missing, renamed, or set up incorrectly. Please update your sheet link or re-setup your sheet when you have a chance!`
                             );
                         }
@@ -929,25 +965,28 @@ async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, c
         
         // More specific logging based on sheet type
         const sheetName = range.split('!')[0];
+        const entityName = isCharacterObject ? character.name : `User ${character.discordId}`;
+        
         if (sheetName.toLowerCase() === 'loggedtracker') {
-            console.log(`[googleSheetsUtils.js]: ✅ Token transaction logged to sheet for ${character.name}`);
+            console.log(`[googleSheetsUtils.js]: ✅ Token transaction logged to sheet for ${entityName}`);
         } else if (sheetName.toLowerCase() === 'loggedinventory') {
-            console.log(`[googleSheetsUtils.js]: ✅ Inventory update logged to sheet for ${character.name}`);
+            console.log(`[googleSheetsUtils.js]: ✅ Inventory update logged to sheet for ${entityName}`);
         } else {
-            console.log(`[googleSheetsUtils.js]: ✅ Data logged to ${sheetName} sheet for ${character.name}`);
+            console.log(`[googleSheetsUtils.js]: ✅ Data logged to ${sheetName} sheet for ${entityName}`);
         }
 
     } catch (error) {
         console.error(`[googleSheetsUtils.js]: ❌ Error in safeAppendDataToSheet:`, error.message);
         // Add context to the error
         error.context = {
-            characterName: character?.name,
+            characterName: isCharacterObject ? character?.name : null,
+            userId: isUserObject ? character?.discordId : character?.userId,
             spreadsheetId: extractSpreadsheetId(spreadsheetUrl),
             range: range,
             sheetType: range.split('!')[0].toLowerCase(),
             commandName: client?.commandName,
             userTag: client?.user?.tag,
-            userId: client?.user?.id,
+            clientUserId: client?.user?.id,
             options: client?.options?.data
         };
         throw error;
