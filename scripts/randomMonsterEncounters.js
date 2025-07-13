@@ -29,7 +29,7 @@ require('dotenv').config();
 const MESSAGE_THRESHOLD = 50;            // Number of messages to trigger an encounter
 const MIN_ACTIVE_USERS = 4;               // Minimum unique users required for an encounter
 const TIME_WINDOW = 10 * 60 * 1000;         // 10 minutes in milliseconds
-const CHECK_INTERVAL = 20 * 1000;           // Check every 20 seconds
+const CHECK_INTERVAL = 30 * 1000;           // Check every 30 seconds
 
 // ------------------- Village Channels -------------------
 // Maps village names to their respective channel IDs (from environment variables)
@@ -74,6 +74,7 @@ function trackMessageActivity(channelId, userId, isBot, username) {
 // ------------------- Check for Random Encounter -------------------
 async function checkForRandomEncounters(client) {
   const currentTime = Date.now();
+  let totalActivity = 0;
 
   for (const [channelId, activity] of messageActivity.entries()) {
     // Remove outdated messages.
@@ -85,8 +86,13 @@ async function checkForRandomEncounters(client) {
     const uniqueUserCount = activity.users.size;
     const meetsThreshold = messageCount >= MESSAGE_THRESHOLD && uniqueUserCount >= MIN_ACTIVE_USERS;
 
+    if (messageCount > 0) {
+      totalActivity += messageCount;
+      console.log(`[randomMonsterEncounters.js]: 📊 Channel ${channelId}: ${messageCount} messages, ${uniqueUserCount} users`);
+    }
+
     if (meetsThreshold) {
-      console.log(`[Encounter LOG] Triggering encounter for channel: ${channelId}`);
+      console.log(`[randomMonsterEncounters.js]: 🐉 TRIGGERING ENCOUNTER! Channel: ${channelId} (${messageCount} messages, ${uniqueUserCount} users)`);
       // Reset the activity for the channel.
       messageActivity.set(channelId, { messages: [], users: new Set() });
 
@@ -97,6 +103,10 @@ async function checkForRandomEncounters(client) {
         await triggerRandomEncounter(raidChannel);
       }
     }
+  }
+
+  if (totalActivity === 0) {
+    console.log(`[randomMonsterEncounters.js]: 💤 No activity detected in any channels`);
   }
 }
 
@@ -109,20 +119,28 @@ async function triggerRandomEncounter(channel) {
     const villages = Object.keys(villageChannels);
     const selectedVillage = villages[Math.floor(Math.random() * villages.length)];
     
+    console.log(`[randomMonsterEncounters.js]: 🎯 Selected village: ${selectedVillage}`);
+    
     // Get the village region.
     const villageRegion = getVillageRegionByName(selectedVillage);
+    console.log(`[randomMonsterEncounters.js]: 🗺️ Village region: ${villageRegion}`);
 
     // Select a monster above tier 5 from the region.
     const monster = await getMonstersAboveTierByRegion(5, villageRegion);
     if (!monster || !monster.name || !monster.tier) {
-      console.error(`[Encounter LOG] No eligible monsters found for region: ${villageRegion}`);
+      console.error(`[randomMonsterEncounters.js]: ❌ No eligible monsters found for region: ${villageRegion}`);
       await channel.send(`❌ **No eligible monsters found for ${selectedVillage} region.**`);
       return;
     }
 
+    console.log(`[randomMonsterEncounters.js]: 🐉 Selected monster: ${monster.name} (Tier ${monster.tier}) from ${villageRegion} region`);
+
     // Start the raid using the raid module
     const { startRaid, createRaidEmbed } = require('../modules/raidModule');
+    console.log(`[randomMonsterEncounters.js]: 🚀 Starting raid for ${monster.name} in ${selectedVillage}`);
+    
     const { raidId, raidData } = await startRaid(monster, selectedVillage);
+    console.log(`[randomMonsterEncounters.js]: ✅ Raid created with ID: ${raidId}`);
 
     // Get monster image from monsterMapping
     const { monsterMapping } = require('../models/MonsterModel');
@@ -131,21 +149,27 @@ async function triggerRandomEncounter(channel) {
       : { image: monster.image };
     const monsterImage = monsterDetails.image || monster.image;
 
+    console.log(`[randomMonsterEncounters.js]: 🖼️ Using monster image: ${monsterImage}`);
+
     // Create encounter embed
     const encounterEmbed = createRaidEmbed(raidData, monsterImage);
 
     // Send the raid announcement to the temporary channel
+    console.log(`[randomMonsterEncounters.js]: 📢 Sending raid announcement to channel ${channel.id}`);
     const raidMessage = await channel.send({
       content: `⚠️ **RANDOM ENCOUNTER RAID!** ⚠️`,
       embeds: [encounterEmbed]
     });
+    console.log(`[randomMonsterEncounters.js]: ✅ Raid message sent with ID: ${raidMessage.id}`);
 
     // Create thread in the temporary channel
+    console.log(`[randomMonsterEncounters.js]: 🧵 Creating thread for raid...`);
     const thread = await raidMessage.startThread({
       name: `🛡️ ${selectedVillage} - ${monster.name} (T${monster.tier})`,
       autoArchiveDuration: 60,
       reason: `Random encounter raid against ${monster.name}`
     });
+    console.log(`[randomMonsterEncounters.js]: ✅ Thread created with ID: ${thread.id}`);
 
     // Send initial thread message
     const threadMessage = [
@@ -156,11 +180,12 @@ async function triggerRandomEncounter(channel) {
     ].join('');
 
     await thread.send(threadMessage);
+    console.log(`[randomMonsterEncounters.js]: 📝 Thread message sent`);
 
-    console.log(`[Encounter LOG]: 🐉 Random encounter raid triggered in temporary channel - ${monster.name} (T${monster.tier}) in ${selectedVillage}`);
+    console.log(`[randomMonsterEncounters.js]: 🎉 RANDOM ENCOUNTER COMPLETE! ${monster.name} (T${monster.tier}) in ${selectedVillage} - Raid ID: ${raidId}`);
   } catch (error) {
-    console.error('[Encounter LOG] Error triggering encounter:', error);
-    await handleError(error);
+    console.error('[randomMonsterEncounters.js]: ❌ Error triggering encounter:', error);
+    await handleError(error, 'randomMonsterEncounters.js');
   }
 }
 
@@ -181,9 +206,10 @@ function initializeRandomEncounterBot(client) {
 
   // Start periodic encounter checks
   setInterval(() => {
+    console.log(`[randomMonsterEncounters.js]: 🔍 Checking for random encounters... (${new Date().toLocaleTimeString()})`);
     checkForRandomEncounters(client).catch(error => {
-      console.error('[encounters.js]: ❌ Encounter check failed:', error);
-      handleError(error, 'randomEncounters.js');
+      console.error('[randomMonsterEncounters.js]: ❌ Encounter check failed:', error);
+      handleError(error, 'randomMonsterEncounters.js');
     });
   }, CHECK_INTERVAL);
 

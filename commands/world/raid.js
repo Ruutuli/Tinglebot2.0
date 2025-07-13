@@ -403,7 +403,7 @@ async function handleRaidVictory(interaction, raidData, monster) {
               qualityIndicator = ' ✨'; // Low damage = sparkle emoji
             }
             
-            lootResults.push(`**${character.name}** (${participant.damage} hearts)${qualityIndicator} got ${lootedItem.emoji || ''} **${lootedItem.itemName}** × ${lootedItem.quantity}!`);
+            lootResults.push(`**${character.name}**${qualityIndicator} got ${lootedItem.emoji || ''} **${lootedItem.itemName}** × ${lootedItem.quantity}!`);
             
           } catch (error) {
             console.error(`[raid.js]: ❌ Error processing loot for ${character.name}:`, error);
@@ -417,7 +417,7 @@ async function handleRaidVictory(interaction, raidData, monster) {
               qualityIndicator = ' ✨'; // Low damage = sparkle emoji
             }
             
-            lootResults.push(`**${character.name}** (${participant.damage} hearts)${qualityIndicator} got ${lootedItem.emoji || ''} **${lootedItem.itemName}** × ${lootedItem.quantity}! *(inventory sync failed)*`);
+            lootResults.push(`**${character.name}**${qualityIndicator} got ${lootedItem.emoji || ''} **${lootedItem.itemName}** × ${lootedItem.quantity}! *(inventory sync failed)*`);
           }
         } else {
           // Character doesn't have valid inventory, but still show loot
@@ -431,7 +431,7 @@ async function handleRaidVictory(interaction, raidData, monster) {
             qualityIndicator = ' ✨'; // Low damage = sparkle emoji
           }
           
-          lootResults.push(`**${character.name}** (${participant.damage} hearts)${qualityIndicator} got ${lootedItem.emoji || ''} **${lootedItem.itemName}** × ${lootedItem.quantity}! *(no inventory link)*`);
+          lootResults.push(`**${character.name}**${qualityIndicator} got ${lootedItem.emoji || ''} **${lootedItem.itemName}** × ${lootedItem.quantity}! *(no inventory link)*`);
         }
         
       } catch (error) {
