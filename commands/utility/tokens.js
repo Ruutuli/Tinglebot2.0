@@ -70,9 +70,9 @@ module.exports = {
           const embed = new EmbedBuilder()
             .setTitle(`${interaction.user.username}'s Token Balance`)
             .addFields(
-              { name: '👛 **Overall Total**', value: `> **${overallTotal !== 'N/A' ? overallTotal : 'Data not found'}**`, inline: false },
               { name: '🪙 **Current Total**', value: `> **${tokenRecord.tokens}**`, inline: false },
               { name: '🧾 **Spent**', value: `> **${spent !== 'N/A' ? spent : 'Data not found'}**`, inline: false },
+              { name: '👛 **Overall Total**', value: `> **${overallTotal !== 'N/A' ? overallTotal : 'Data not found'}**`, inline: false },
               {
                 name: '🔗 **Token Tracker Link**',
                 value: `> [📄 View your token tracker](${tokenRecord.tokenTracker})`,
