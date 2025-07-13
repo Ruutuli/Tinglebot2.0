@@ -232,7 +232,11 @@ async function joinRaid(character, raidId) {
     // Retrieve raid from database
     const raid = await Raid.findOne({ raidId: raidId });
     if (!raid) {
-      throw new Error('Raid not found');
+      // Get all active raids for debugging
+      const allRaids = await Raid.find({ status: 'active' }).select('raidId village monster.name createdAt').limit(10);
+      const activeRaidIds = allRaids.map(r => r.raidId).join(', ');
+      
+      throw new Error(`Raid not found. Raid ID: "${raidId}". Available active raids: ${activeRaidIds || 'None'}`);
     }
 
     // Check if raid is active
@@ -302,7 +306,11 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
       raid = await Raid.findOne({ raidId: raidId });
     }
     if (!raid) {
-      throw new Error('Raid not found');
+      // Get all active raids for debugging
+      const allRaids = await Raid.find({ status: 'active' }).select('raidId village monster.name createdAt').limit(10);
+      const activeRaidIds = allRaids.map(r => r.raidId).join(', ');
+      
+      throw new Error(`Raid not found. Raid ID: "${raidId}". Available active raids: ${activeRaidIds || 'None'}`);
     }
 
     // Check if raid is active
@@ -473,7 +481,8 @@ function createRaidEmbed(raid, monsterImage) {
       `**${raid.monster.name} has been spotted in ${villageName}!**\n` +
       `*It's a Tier ${raid.monster.tier} monster! Protect the village!*\n\n` +
       `</raid:1392945628002259014> to join or continue the raid!\n` +
-      `</item:1379838613067530385> to heal during the raid!`
+      `</item:1379838613067530385> to heal during the raid!\n\n` +
+      `⏰ **You have 10 minutes to complete this raid!**`
     )
     .addFields(
       {
@@ -544,6 +553,9 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false)
       // Ensure we're creating the thread on the actual raid message
       console.log(`[raidModule.js]: 🧵 Creating thread on message ID: ${raidMessage.id}`);
       
+      // Wait a moment to ensure the message is fully processed
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       // Create thread using the message's startThread method
       thread = await raidMessage.startThread({
         name: `🛡️ ${villageId} - ${monster.name} (T${monster.tier})`,
@@ -560,10 +572,13 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false)
       console.log(`[raidModule.js]: 📝 Thread name: ${thread.name}`);
       console.log(`[raidModule.js]: 📍 Thread parent message ID: ${thread.parentId}`);
       console.log(`[raidModule.js]: 📍 Raid message ID: ${raidMessage.id}`);
+      console.log(`[raidModule.js]: 📍 Thread parent ID type: ${typeof thread.parentId}`);
+      console.log(`[raidModule.js]: 📍 Raid message ID type: ${typeof raidMessage.id}`);
       
       // Verify the thread is properly connected to the raid message
       if (thread.parentId !== raidMessage.id) {
         console.warn(`[raidModule.js]: ⚠️ Thread parent ID (${thread.parentId}) doesn't match raid message ID (${raidMessage.id})`);
+        console.warn(`[raidModule.js]: ⚠️ This might be a Discord.js caching issue - thread should still work correctly`);
       } else {
         console.log(`[raidModule.js]: ✅ Thread created successfully on raid message`);
       }

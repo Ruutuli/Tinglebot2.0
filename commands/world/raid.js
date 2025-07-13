@@ -86,8 +86,13 @@ module.exports = {
       // Check raid expiration and get raid data
       const raidData = await checkRaidExpiration(raidId);
       if (!raidData) {
+        // Get all active raids for debugging
+        const { Raid } = require('../../models/RaidModel');
+        const allRaids = await Raid.find({ status: 'active' }).select('raidId village monster.name createdAt').limit(10);
+        const activeRaidIds = allRaids.map(r => r.raidId).join(', ');
+        
         return interaction.editReply({
-          content: `❌ Raid ${raidId} not found.`,
+          content: `❌ **Raid not found!**\n\n**Raid ID you entered:** \`${raidId}\`\n\n**Available active raids:** ${activeRaidIds || 'None'}\n\n**Possible issues:**\n• Check if you copied the raid ID correctly\n• The raid may have expired (15-minute time limit)\n• The raid may have been completed\n• Check the raid announcement for the correct ID`,
           ephemeral: true
         });
       }
@@ -118,8 +123,9 @@ module.exports = {
           const joinResult = await joinRaid(character, raidId);
           updatedRaidData = joinResult.raidData;
         } catch (joinError) {
+          console.error(`[raid.js]: ❌ Join raid error for ${character.name}:`, joinError);
           return interaction.editReply({
-            content: `❌ Failed to join raid: ${joinError.message}`,
+            content: `❌ **Failed to join raid:** ${joinError.message}\n\n**Character:** ${character.name}\n**Raid ID:** \`${raidId}\`\n**Current Village:** ${character.currentVillage}`,
             ephemeral: true
           });
         }
@@ -398,11 +404,6 @@ async function handleRaidVictory(interaction, raidData, monster) {
         {
           name: '__Loot Distribution__',
           value: lootResults.length > 0 ? lootResults.join('\n') : 'No loot was found.',
-          inline: false
-        },
-        {
-          name: '__Village Victory__',
-          value: `${getVillageRoleMention(raidData.village)} — your village is safe! 🛡️`,
           inline: false
         }
       )
