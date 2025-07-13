@@ -46,7 +46,14 @@ const getEncounterOutcome = async (character, monster, damageValue, adjustedRand
         console.log(`[encounterModule.js]: 🎯 Starting encounter calculation for ${character.name} vs ${monster.name} (T${tier})`);
         console.log(`[encounterModule.js]: 📊 Initial values - Roll: ${damageValue}, Adjusted: ${adjustedRandomValue}, Attack: ${attackSuccess}, Defense: ${defenseSuccess}`);
 
-        if (adjustedRandomValue <= 25) {
+        // --- FIX: If defenseSuccess, always block all damage and win ---
+        if (defenseSuccess) {
+            outcome = {
+                result: 'Win!/Loot',
+                hearts: 0,
+                canLoot: true,
+            };
+        } else if (adjustedRandomValue <= 25) {
             outcome = {
                 result: `${tier} HEART(S)`,
                 hearts: tier,
