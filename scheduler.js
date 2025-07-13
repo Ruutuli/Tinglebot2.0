@@ -1,37 +1,63 @@
-const dotenv = require('dotenv');
-const path = require('path');
-const cron = require('node-cron');
-const { handleError } = require('./utils/globalErrorHandler');
-const { EmbedBuilder } = require('discord.js');
-const { recoverDailyStamina } = require('./modules/characterStatsModule');
-const { generateVendingStockList, getCurrentVendingStockList, resetPetRollsForAllCharacters } = require('./database/db');
-const { postBlightRollCall, cleanupExpiredBlightRequests, checkMissedRolls } = require('./handlers/blightHandler');
-const { sendBloodMoonAnnouncement, isBloodMoonDay, renameChannels, revertChannelNames, cleanupOldTrackingData } = require('./scripts/bloodmoon');
-const { cleanupExpiredEntries, cleanupExpiredHealingRequests } = require('./utils/storage');
-const { authorizeSheets, clearSheetFormatting, writeSheetData } = require('./utils/googleSheetsUtils');
-const { convertToHyruleanDate } = require('./modules/calendarModule');
-const Character = require('./models/CharacterModel');
-const { sendUserDM } = require('./utils/messageUtils');
-const { generateWeatherEmbed } = require('./embeds/weatherEmbed');
-const { checkExpiredRequests } = require('./utils/expirationHandler');
-const { isValidImageUrl } = require('./utils/validation');
-const DEFAULT_IMAGE_URL = "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png";
-const TempData = require('./models/TempDataModel');
-const { loadBlightSubmissions, saveBlightSubmissions } = require('./handlers/blightHandler');
-const { connectToInventories } = require('./handlers/blightHandler');
-const { getCurrentWeather, saveWeather } = require('./modules/weatherModule');
-const Pet = require('./models/PetModel');
-const Raid = require('./models/RaidModel');
+const dotenv = require("dotenv");
+const path = require("path");
+const cron = require("node-cron");
+const { handleError } = require("./utils/globalErrorHandler");
+const { EmbedBuilder } = require("discord.js");
+const { recoverDailyStamina } = require("./modules/characterStatsModule");
+const {
+ generateVendingStockList,
+ getCurrentVendingStockList,
+ resetPetRollsForAllCharacters,
+} = require("./database/db");
+const {
+ postBlightRollCall,
+ cleanupExpiredBlightRequests,
+ checkMissedRolls,
+} = require("./handlers/blightHandler");
+const {
+ sendBloodMoonAnnouncement,
+ isBloodMoonDay,
+ renameChannels,
+ revertChannelNames,
+ cleanupOldTrackingData,
+} = require("./scripts/bloodmoon");
+const {
+ cleanupExpiredEntries,
+ cleanupExpiredHealingRequests,
+ cleanupExpiredBoostingRequests,
+ getBoostingStatistics,
+ archiveOldBoostingRequests,
+} = require("./utils/storage");
+const {
+ authorizeSheets,
+ clearSheetFormatting,
+ writeSheetData,
+} = require("./utils/googleSheetsUtils");
+const { convertToHyruleanDate } = require("./modules/calendarModule");
+const Character = require("./models/CharacterModel");
+const { sendUserDM } = require("./utils/messageUtils");
+const { generateWeatherEmbed } = require("./embeds/weatherEmbed");
+const { checkExpiredRequests } = require("./utils/expirationHandler");
+const { isValidImageUrl } = require("./utils/validation");
+const DEFAULT_IMAGE_URL =
+ "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png";
+const TempData = require("./models/TempDataModel");
+const {
+ loadBlightSubmissions,
+ saveBlightSubmissions,
+} = require("./handlers/blightHandler");
+const { connectToInventories } = require("./handlers/blightHandler");
+const { getCurrentWeather, saveWeather } = require("./modules/weatherModule");
+const Pet = require("./models/PetModel");
+const Raid = require("./models/RaidModel");
 
-// Load environment variables based on NODE_ENV
-const env = process.env.NODE_ENV || 'development';
+const env = process.env.NODE_ENV || "development";
 try {
-  const envPath = path.resolve(process.cwd(), `.env.${env}`);
-  dotenv.config({ path: envPath });
+ const envPath = path.resolve(process.cwd(), `.env.${env}`);
+ dotenv.config({ path: envPath });
 } catch (error) {
-  console.error(`[scheduler.js]: ❌ Failed to load .env.${env}:`, error.message);
-  // Fallback to default .env
-  dotenv.config();
+ console.error(`[scheduler.js]: Failed to load .env.${env}:`, error.message);
+ dotenv.config();
 }
 
 // ============================================================================
@@ -39,42 +65,47 @@ try {
 // Core utility functions for creating cron jobs and announcement embeds
 // ============================================================================
 
-// ---- Function: createCronJob ----
-// Creates a cron job with standardized error handling and logging
-function createCronJob(schedule, jobName, jobFunction, timezone = 'America/New_York') {
-  return cron.schedule(schedule, async () => {
-    try {
-      await jobFunction();
-    } catch (error) {
-      handleError(error, 'scheduler.js');
-      console.error(`[scheduler.js]: ❌ ${jobName} failed:`, error.message);
-    }
-  }, { timezone });
+function createCronJob(
+ schedule,
+ jobName,
+ jobFunction,
+ timezone = "America/New_York"
+) {
+ return cron.schedule(
+  schedule,
+  async () => {
+   try {
+    await jobFunction();
+   } catch (error) {
+    handleError(error, "scheduler.js");
+    console.error(`[scheduler.js]: ${jobName} failed:`, error.message);
+   }
+  },
+  { timezone }
+ );
 }
 
-// ---- Function: createAnnouncementEmbed ----
-// Creates a standardized embed for announcements with fallback images
 function createAnnouncementEmbed(title, description, thumbnail, image, footer) {
-  const embed = new EmbedBuilder()
-    .setColor('#88cc88')
-    .setTitle(title)
-    .setDescription(description)
-    .setTimestamp()
-    .setFooter({ text: footer });
+ const embed = new EmbedBuilder()
+  .setColor("#88cc88")
+  .setTitle(title)
+  .setDescription(description)
+  .setTimestamp()
+  .setFooter({ text: footer });
 
-  if (isValidImageUrl(thumbnail)) {
-    embed.setThumbnail(thumbnail);
-  } else {
-    embed.setThumbnail(DEFAULT_IMAGE_URL);
-  }
+ if (isValidImageUrl(thumbnail)) {
+  embed.setThumbnail(thumbnail);
+ } else {
+  embed.setThumbnail(DEFAULT_IMAGE_URL);
+ }
 
-  if (isValidImageUrl(image)) {
-    embed.setImage(image);
-  } else {
-    embed.setImage(DEFAULT_IMAGE_URL);
-  }
+ if (isValidImageUrl(image)) {
+  embed.setImage(image);
+ } else {
+  embed.setImage(DEFAULT_IMAGE_URL);
+ }
 
-  return embed;
+ return embed;
 }
 
 // ============================================================================
@@ -83,87 +114,90 @@ function createAnnouncementEmbed(title, description, thumbnail, image, footer) {
 // ============================================================================
 
 const TOWNHALL_CHANNELS = {
-  Rudania: process.env.RUDANIA_TOWNHALL,
-  Inariko: process.env.INARIKO_TOWNHALL,
-  Vhintl: process.env.VHINTL_TOWNHALL
+ Rudania: process.env.RUDANIA_TOWNHALL,
+ Inariko: process.env.INARIKO_TOWNHALL,
+ Vhintl: process.env.VHINTL_TOWNHALL,
 };
 
-// ---- Function: getCurrentSeason ----
-// Determines the current season based on the month
 function getCurrentSeason() {
-  const month = new Date().getMonth() + 1;
-  if (month >= 3 && month <= 5) return 'Spring';
-  if (month >= 6 && month <= 8) return 'Summer';
-  if (month >= 9 && month <= 11) return 'Autumn';
-  return 'Winter';
+ const month = new Date().getMonth() + 1;
+ if (month >= 3 && month <= 5) return "Spring";
+ if (month >= 6 && month <= 8) return "Summer";
+ if (month >= 9 && month <= 11) return "Autumn";
+ return "Winter";
 }
 
-// ---- Function: postWeatherUpdate ----
-// Posts weather updates to all village town halls
 async function postWeatherUpdate(client) {
-  try {
-    console.log(`[scheduler.js]: 🌤️ Starting 8am weather update process`);
-    console.log(`[scheduler.js]: 📅 Current time: ${new Date().toISOString()}`);
-    
-    const villages = Object.keys(TOWNHALL_CHANNELS);
-    console.log(`[scheduler.js]: 🏘️ Processing villages: ${villages.join(', ')}`);
-    
-    for (const village of villages) {
-      try {
-        console.log(`[scheduler.js]: 🌤️ Processing weather for ${village}...`);
-        
-        // Use getCurrentWeather which handles generation properly
-        const weather = await getCurrentWeather(village);
-        
-        if (!weather) {
-          console.error(`[scheduler.js]: ❌ Failed to get or generate weather for ${village}`);
-          continue;
-        }
-        
-        console.log(`[scheduler.js]: ✅ Weather generated for ${village}:`, {
-          temperature: weather.temperature?.label,
-          precipitation: weather.precipitation?.label,
-          special: weather.special?.label || 'None',
-          date: weather.date
-        });
-        
-        const channelId = TOWNHALL_CHANNELS[village];
-        const channel = client.channels.cache.get(channelId);
-        
-        if (!channel) {
-          console.error(`[scheduler.js]: ❌ Channel not found: ${channelId}`);
-          continue;
-        }
-        
-        console.log(`[scheduler.js]: 📢 Generating weather embed for ${village}...`);
-        const { embed, files } = await generateWeatherEmbed(village, weather);
-        
-        console.log(`[scheduler.js]: 📤 Sending weather update to ${village} channel...`);
-        await channel.send({ embeds: [embed], files });
-        console.log(`[scheduler.js]: ✅ Posted weather for ${village}`);
-        
-        // Special logging for Rudania and Vhintl
-        if (village === 'Rudania' || village === 'Vhintl') {
-          console.log(`[scheduler.js]: 🔍 Special weather check for ${village}:`, {
-            hasSpecial: !!weather.special,
-            specialType: weather.special?.label || 'None',
-            specialEmoji: weather.special?.emoji || 'None',
-            temperature: weather.temperature?.label,
-            precipitation: weather.precipitation?.label
-          });
-        }
-        
-      } catch (error) {
-        console.error(`[scheduler.js]: ❌ Error posting weather for ${village}:`, error.message);
-        console.error(`[scheduler.js]: ❌ Full error for ${village}:`, error);
-      }
+ try {
+  console.log(`[scheduler.js]: Starting 8am weather update process`);
+  console.log(`[scheduler.js]: Current time: ${new Date().toISOString()}`);
+
+  const villages = Object.keys(TOWNHALL_CHANNELS);
+  console.log(`[scheduler.js]: Processing villages: ${villages.join(", ")}`);
+
+  for (const village of villages) {
+   try {
+    console.log(`[scheduler.js]: Processing weather for ${village}...`);
+
+    const weather = await getCurrentWeather(village);
+
+    if (!weather) {
+     console.error(
+      `[scheduler.js]: Failed to get or generate weather for ${village}`
+     );
+     continue;
     }
-    
-    console.log(`[scheduler.js]: ✅ 8am weather update process completed`);
-  } catch (error) {
-    console.error('[scheduler.js]: ❌ Weather update process failed:', error.message);
-    console.error('[scheduler.js]: ❌ Full weather update error:', error);
+
+    console.log(`[scheduler.js]: Weather generated for ${village}:`, {
+     temperature: weather.temperature?.label,
+     precipitation: weather.precipitation?.label,
+     special: weather.special?.label || "None",
+     date: weather.date,
+    });
+
+    const channelId = TOWNHALL_CHANNELS[village];
+    const channel = client.channels.cache.get(channelId);
+
+    if (!channel) {
+     console.error(`[scheduler.js]: Channel not found: ${channelId}`);
+     continue;
+    }
+
+    console.log(`[scheduler.js]: Generating weather embed for ${village}...`);
+    const { embed, files } = await generateWeatherEmbed(village, weather);
+
+    console.log(
+     `[scheduler.js]: Sending weather update to ${village} channel...`
+    );
+    await channel.send({ embeds: [embed], files });
+    console.log(`[scheduler.js]: Posted weather for ${village}`);
+
+    if (village === "Rudania" || village === "Vhintl") {
+     console.log(`[scheduler.js]: Special weather check for ${village}:`, {
+      hasSpecial: !!weather.special,
+      specialType: weather.special?.label || "None",
+      specialEmoji: weather.special?.emoji || "None",
+      temperature: weather.temperature?.label,
+      precipitation: weather.precipitation?.label,
+     });
+    }
+   } catch (error) {
+    console.error(
+     `[scheduler.js]: Error posting weather for ${village}:`,
+     error.message
+    );
+    console.error(`[scheduler.js]: Full error for ${village}:`, error);
+   }
   }
+
+  console.log(`[scheduler.js]: 8am weather update process completed`);
+ } catch (error) {
+  console.error(
+   "[scheduler.js]: Weather update process failed:",
+   error.message
+  );
+  console.error("[scheduler.js]: Full weather update error:", error);
+ }
 }
 
 // ============================================================================
@@ -171,23 +205,21 @@ async function postWeatherUpdate(client) {
 // Handles raid cleanup and maintenance
 // ============================================================================
 
-// ---- Function: cleanupExpiredRaids ----
-// Cleans up expired raids by marking them as timed out
 async function cleanupExpiredRaids() {
-  try {
-    console.log(`[scheduler.js]: 🧹 Starting raid cleanup process`);
-    
-    const expiredCount = await Raid.cleanupExpiredRaids();
-    
-    if (expiredCount > 0) {
-      console.log(`[scheduler.js]: ✅ Cleaned up ${expiredCount} expired raids`);
-    } else {
-      console.log(`[scheduler.js]: ✅ No expired raids to clean up`);
-    }
-  } catch (error) {
-    console.error(`[scheduler.js]: ❌ Error cleaning up expired raids:`, error);
-    handleError(error, 'scheduler.js');
+ try {
+  console.log(`[scheduler.js]: Starting raid cleanup process`);
+
+  const expiredCount = await Raid.cleanupExpiredRaids();
+
+  if (expiredCount > 0) {
+   console.log(`[scheduler.js]: Cleaned up ${expiredCount} expired raids`);
+  } else {
+   console.log(`[scheduler.js]: No expired raids to clean up`);
   }
+ } catch (error) {
+  console.error(`[scheduler.js]: Error cleaning up expired raids:`, error);
+  handleError(error, "scheduler.js");
+ }
 }
 
 // ============================================================================
@@ -195,66 +227,77 @@ async function cleanupExpiredRaids() {
 // Handles birthday announcements and celebrations
 // ============================================================================
 
-// ---- Function: executeBirthdayAnnouncements ----
-// Posts birthday announcements for characters with birthdays today
 async function executeBirthdayAnnouncements(client) {
-  const now = new Date();
-  const estNow = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
-  const today = estNow.toISOString().slice(5, 10);
-  const guildIds = [process.env.GUILD_ID];
-  
-  const guildChannelMap = {
-    [process.env.GUILD_ID]: process.env.BIRTHDAY_CHANNEL_ID || '1326997448085995530',
-  };
+ const now = new Date();
+ const estNow = new Date(
+  now.toLocaleString("en-US", { timeZone: "America/New_York" })
+ );
+ const today = estNow.toISOString().slice(5, 10);
+ const guildIds = [process.env.GUILD_ID];
 
-  const birthdayMessages = [
-    "🔥🌍 May Din's fiery blessing fill your birthday with the **Power** to overcome any challenge that comes your way! 🔴",
-    "💧❄️ On this nameday, may Nayru's profound **Wisdom** guide you towards new heights of wisdom and understanding! 🔵",
-    "🌿⚡ As you celebrate another year, may Farore's steadfast **Courage** inspire you to embrace every opportunity with bravery and grace! 🟢",
-  ];
+ const guildChannelMap = {
+  [process.env.GUILD_ID]:
+   process.env.BIRTHDAY_CHANNEL_ID || "1326997448085995530",
+ };
 
-  const realWorldDate = estNow.toLocaleString("en-US", { month: "long", day: "numeric" });
-  const hyruleanDate = convertToHyruleanDate(estNow);
+ const birthdayMessages = [
+  "May Din's fiery blessing fill your birthday with the **Power** to overcome any challenge that comes your way!",
+  "On this nameday, may Nayru's profound **Wisdom** guide you towards new heights of wisdom and understanding!",
+  "As you celebrate another year, may Farore's steadfast **Courage** inspire you to embrace every opportunity with bravery and grace!",
+ ];
 
-  for (const guildId of guildIds) {
-    const birthdayChannelId = guildChannelMap[guildId];
-    if (!birthdayChannelId) continue;
+ const realWorldDate = estNow.toLocaleString("en-US", {
+  month: "long",
+  day: "numeric",
+ });
+ const hyruleanDate = convertToHyruleanDate(estNow);
 
-    const guild = client.guilds.cache.get(guildId);
-    if (!guild) continue;
+ for (const guildId of guildIds) {
+  const birthdayChannelId = guildChannelMap[guildId];
+  if (!birthdayChannelId) continue;
 
-    const announcementChannel = guild.channels.cache.get(birthdayChannelId);
-    if (!announcementChannel) continue;
+  const guild = client.guilds.cache.get(guildId);
+  if (!guild) continue;
 
-    const characters = await Character.find({ birthday: today });
-    console.log(`[scheduler.js]: 🎂 Found ${characters.length} characters with birthdays today in guild ${guild.name}`);
+  const announcementChannel = guild.channels.cache.get(birthdayChannelId);
+  if (!announcementChannel) continue;
 
-    for (const character of characters) {
-      try {
-        const user = await client.users.fetch(character.userId);
-        const randomMessage = birthdayMessages[Math.floor(Math.random() * birthdayMessages.length)];
+  const characters = await Character.find({ birthday: today });
+  console.log(
+   `[scheduler.js]: Found ${characters.length} characters with birthdays today in guild ${guild.name}`
+  );
 
-        const embed = new EmbedBuilder()
-          .setColor('#FF709B')
-          .setTitle(`🎉🎂🎈 Happy Birthday, ${character.name}! 🎈🎂🎉`)
-          .setDescription(randomMessage)
-          .addFields(
-            { name: "Real-World Date", value: realWorldDate, inline: true },
-            { name: "Hyrulean Date", value: hyruleanDate, inline: true }
-          )
-          .setThumbnail(character.icon)
-          .setImage('https://storage.googleapis.com/tinglebot/Graphics/bday.png')
-          .setFooter({ text: `🎉 ${character.name} belongs to ${user.username}! 🎉` })
-          .setTimestamp();
+  for (const character of characters) {
+   try {
+    const user = await client.users.fetch(character.userId);
+    const randomMessage =
+     birthdayMessages[Math.floor(Math.random() * birthdayMessages.length)];
 
-        await announcementChannel.send({ embeds: [embed] });
-        console.log(`[scheduler.js]: 🎉 Announced ${character.name}'s birthday in ${guild.name}`);
-      } catch (error) {
-        handleError(error, 'scheduler.js');
-        console.error(`[scheduler.js]: ❌ Failed to announce birthday for ${character.name}: ${error.message}`);
-      }
-    }
+    const embed = new EmbedBuilder()
+     .setColor("#FF709B")
+     .setTitle(`Happy Birthday, ${character.name}!`)
+     .setDescription(randomMessage)
+     .addFields(
+      { name: "Real-World Date", value: realWorldDate, inline: true },
+      { name: "Hyrulean Date", value: hyruleanDate, inline: true }
+     )
+     .setThumbnail(character.icon)
+     .setImage("https://storage.googleapis.com/tinglebot/Graphics/bday.png")
+     .setFooter({ text: `${character.name} belongs to ${user.username}!` })
+     .setTimestamp();
+
+    await announcementChannel.send({ embeds: [embed] });
+    console.log(
+     `[scheduler.js]: Announced ${character.name}'s birthday in ${guild.name}`
+    );
+   } catch (error) {
+    handleError(error, "scheduler.js");
+    console.error(
+     `[scheduler.js]: Failed to announce birthday for ${character.name}: ${error.message}`
+    );
+   }
   }
+ }
 }
 
 // ============================================================================
@@ -262,103 +305,109 @@ async function executeBirthdayAnnouncements(client) {
 // Handles various job-related tasks like jail releases and debuffs
 // ============================================================================
 
-// ---- Function: handleJailRelease ----
-// Releases characters from jail when their time is served
 async function handleJailRelease(client) {
-  const now = new Date();
-  const charactersToRelease = await Character.find({ inJail: true, jailReleaseTime: { $lte: now } });
-  
-  if (charactersToRelease.length === 0) {
-    console.log('[scheduler.js]: 🔄 No characters to release from jail at this time');
-    return;
+ const now = new Date();
+ const charactersToRelease = await Character.find({
+  inJail: true,
+  jailReleaseTime: { $lte: now },
+ });
+
+ if (charactersToRelease.length === 0) {
+  console.log(
+   "[scheduler.js]: No characters to release from jail at this time"
+  );
+  return;
+ }
+
+ const announcementChannelId = "1354451878053937215";
+ const announcementChannel = await client.channels.fetch(announcementChannelId);
+
+ for (const character of charactersToRelease) {
+  character.inJail = false;
+  character.failedStealAttempts = 0;
+  character.jailReleaseTime = null;
+  await character.save();
+
+  const releaseEmbed = createAnnouncementEmbed(
+   "Town Hall Proclamation",
+   `The town hall doors creak open and a voice rings out:\n\n> **${character.name}** has served their time and is hereby released from jail.\n\nMay you walk the path of virtue henceforth.`,
+   character.icon,
+   "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png",
+   "Town Hall Records • Reformed & Released"
+  );
+
+  if (announcementChannel) {
+   await announcementChannel.send({
+    content: `<@${character.userId}>, your character **${character.name}** has been released from jail.`,
+    embeds: [releaseEmbed],
+   });
+   console.log(`[scheduler.js]: Released ${character.name} from jail`);
   }
 
-  const announcementChannelId = '1354451878053937215';
-  const announcementChannel = await client.channels.fetch(announcementChannelId);
-
-  for (const character of charactersToRelease) {
-    character.inJail = false;
-    character.failedStealAttempts = 0;
-    character.jailReleaseTime = null;
-    await character.save();
-
-    const releaseEmbed = createAnnouncementEmbed(
-      '🏛️ Town Hall Proclamation',
-      `The town hall doors creak open and a voice rings out:\n\n> **${character.name}** has served their time and is hereby released from jail.\n\nMay you walk the path of virtue henceforth.`,
-      character.icon,
-      'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png',
-      'Town Hall Records • Reformed & Released'
-    );
-
-    if (announcementChannel) {
-      await announcementChannel.send({
-        content: `<@${character.userId}>, your character **${character.name}** has been released from jail.`,
-        embeds: [releaseEmbed]
-      });
-      console.log(`[scheduler.js]: 🏛️ Released ${character.name} from jail`);
-    }
-
-    await sendUserDM(character.userId, `🏛️ **Town Hall Notice**\n\nYour character **${character.name}** has been released from jail. Remember, a fresh start awaits you!`);
-  }
+  await sendUserDM(
+   character.userId,
+   `**Town Hall Notice**\n\nYour character **${character.name}** has been released from jail. Remember, a fresh start awaits you!`
+  );
+ }
 }
 
-// ---- Function: handleDebuffExpiry ----
-// Removes expired debuffs from characters
 async function handleDebuffExpiry(client) {
-  const now = new Date();
-  const charactersWithActiveDebuffs = await Character.find({
-    'debuff.active': true,
-    'debuff.endDate': { $lte: now }
-  });
+ const now = new Date();
+ const charactersWithActiveDebuffs = await Character.find({
+  "debuff.active": true,
+  "debuff.endDate": { $lte: now },
+ });
 
-  for (const character of charactersWithActiveDebuffs) {
-    character.debuff.active = false;
-    character.debuff.endDate = null;
-    await character.save();
+ for (const character of charactersWithActiveDebuffs) {
+  character.debuff.active = false;
+  character.debuff.endDate = null;
+  await character.save();
 
-    await sendUserDM(
-      character.userId,
-      `💖 Your character **${character.name}**'s week-long debuff has ended! You can now heal them with items or a Healer.`
-    );
-  }
+  await sendUserDM(
+   character.userId,
+   `Your character **${character.name}**'s week-long debuff has ended! You can now heal them with items or a Healer.`
+  );
+ }
 }
 
-// ---- Function: resetDailyRolls ----
-// Resets daily rolls for all characters
 async function resetDailyRolls(client) {
-  try {
-    const characters = await Character.find({});
-    let resetCount = 0;
+ try {
+  const characters = await Character.find({});
+  let resetCount = 0;
 
-    for (const character of characters) {
-      if (character.dailyRoll && character.dailyRoll.size > 0) {
-        character.dailyRoll = new Map();
-        character.markModified('dailyRoll');
-        await character.save();
-        resetCount++;
-      }
-    }
-
-    console.log(`[scheduler.js]: 🔄 Reset daily rolls for ${resetCount} characters`);
-  } catch (error) {
-    handleError(error, 'scheduler.js');
-    console.error(`[scheduler.js]: ❌ Failed to reset daily rolls: ${error.message}`);
+  for (const character of characters) {
+   if (character.dailyRoll && character.dailyRoll.size > 0) {
+    character.dailyRoll = new Map();
+    character.markModified("dailyRoll");
+    await character.save();
+    resetCount++;
+   }
   }
+
+  console.log(`[scheduler.js]: Reset daily rolls for ${resetCount} characters`);
+ } catch (error) {
+  handleError(error, "scheduler.js");
+  console.error(
+   `[scheduler.js]: Failed to reset daily rolls: ${error.message}`
+  );
+ }
 }
 
-// ---- Function: resetPetLastRollDates ----
-// Resets lastRollDate for all pets to allow daily rolls
 async function resetPetLastRollDates(client) {
-  try {
-    const result = await Pet.updateMany(
-      { status: 'active' },
-      { $set: { lastRollDate: null } }
-    );
-    console.log(`[scheduler.js]: 🔄 Reset lastRollDate for ${result.modifiedCount} pets`);
-  } catch (error) {
-    handleError(error, 'scheduler.js');
-    console.error(`[scheduler.js]: ❌ Failed to reset pet lastRollDates: ${error.message}`);
-  }
+ try {
+  const result = await Pet.updateMany(
+   { status: "active" },
+   { $set: { lastRollDate: null } }
+  );
+  console.log(
+   `[scheduler.js]: Reset lastRollDate for ${result.modifiedCount} pets`
+  );
+ } catch (error) {
+  handleError(error, "scheduler.js");
+  console.error(
+   `[scheduler.js]: Failed to reset pet lastRollDates: ${error.message}`
+  );
+ }
 }
 
 // ============================================================================
@@ -366,24 +415,83 @@ async function resetPetLastRollDates(client) {
 // Handles blight-related tasks and checks
 // ============================================================================
 
-// ---- Function: setupBlightScheduler ----
-// Sets up the blight roll call and missed rolls check
 function setupBlightScheduler(client) {
-  // Schedule blight roll call for 8:00 PM EST
-  createCronJob('0 20 * * *', 'Blight Roll Call', async () => {
-    try {
-      await postBlightRollCall(client);
-    } catch (error) {
-      handleError(error, 'scheduler.js');
-      console.error('[scheduler.js]: ❌ Blight roll call failed:', error.message);
-    }
-  });
-  
-  // Check for missed rolls at 8:00 PM EST
-  createCronJob('0 20 * * *', 'Check Missed Rolls', () => checkMissedRolls(client));
-  
-  // Clean up expired blight requests daily at midnight EST
-  createCronJob('0 0 * * *', 'Cleanup Expired Blight Requests', cleanupExpiredBlightRequests);
+ createCronJob("0 20 * * *", "Blight Roll Call", async () => {
+  try {
+   await postBlightRollCall(client);
+  } catch (error) {
+   handleError(error, "scheduler.js");
+   console.error("[scheduler.js]: Blight roll call failed:", error.message);
+  }
+ });
+
+ createCronJob("0 20 * * *", "Check Missed Rolls", () =>
+  checkMissedRolls(client)
+ );
+
+ createCronJob(
+  "0 0 * * *",
+  "Cleanup Expired Blight Requests",
+  cleanupExpiredBlightRequests
+ );
+}
+
+// ============================================================================
+// ---- Boosting Functions ----
+// Handles boosting system cleanup and maintenance
+// ============================================================================
+
+async function setupBoostingScheduler(client) {
+ // Clean up expired boost requests every hour
+ createCronJob("0 * * * *", "Boost Cleanup", async () => {
+  try {
+   console.log("[scheduler.js]: Running boost cleanup...");
+   const stats = cleanupExpiredBoostingRequests();
+   console.log(
+    `[scheduler.js]: Cleanup complete - Expired requests: ${stats.expiredRequests}, Expired boosts: ${stats.expiredBoosts}`
+   );
+  } catch (error) {
+   handleError(error, "scheduler.js");
+   console.error("[scheduler.js]: Error during boost cleanup:", error);
+  }
+ });
+
+ // Archive old boost requests weekly (Sundays at 2 AM)
+ createCronJob("0 2 * * 0", "Weekly Boost Archive", async () => {
+  try {
+   console.log("[scheduler.js]: Running weekly archive...");
+   const stats = archiveOldBoostingRequests(30);
+   console.log(
+    `[scheduler.js]: Archive complete - Archived: ${stats.archived}, Remaining: ${stats.remaining}`
+   );
+  } catch (error) {
+   handleError(error, "scheduler.js");
+   console.error("[scheduler.js]: Error during weekly archive:", error);
+  }
+ });
+
+ // Log boost statistics daily at midnight
+ createCronJob("0 0 * * *", "Daily Boost Statistics", async () => {
+  try {
+   const stats = getBoostingStatistics();
+   console.log("[scheduler.js]: Daily boost statistics:", stats);
+  } catch (error) {
+   handleError(error, "scheduler.js");
+   console.error("[scheduler.js]: Error getting boost statistics:", error);
+  }
+ });
+}
+
+// ============================================================================
+// ---- Weather Scheduler ----
+// Enhanced weather scheduler functionality
+// ============================================================================
+
+function setupWeatherScheduler(client) {
+ // Weather updates at 8 AM EST daily
+ createCronJob("0 8 * * *", "Daily Weather Update", () =>
+  postWeatherUpdate(client)
+ );
 }
 
 // ============================================================================
@@ -391,149 +499,196 @@ function setupBlightScheduler(client) {
 // Main initialization function for all scheduled tasks
 // ============================================================================
 
-// ---- Function: initializeScheduler ----
-// Initializes all scheduled tasks and cron jobs
 function initializeScheduler(client) {
-  // Validate client
-  if (!client || !client.isReady()) {
-    console.error('[scheduler.js]: ❌ Invalid or unready Discord client provided to scheduler');
-    return;
+ if (!client || !client.isReady()) {
+  console.error(
+   "[scheduler.js]: Invalid or unready Discord client provided to scheduler"
+  );
+  return;
+ }
+
+ // Add startup Blood Moon check
+ (async () => {
+  try {
+   console.log(`[scheduler.js]: Starting Blood Moon startup check...`);
+
+   const channels = [
+    process.env.RUDANIA_TOWNHALL,
+    process.env.INARIKO_TOWNHALL,
+    process.env.VHINTL_TOWNHALL,
+   ];
+
+   console.log(
+    `[scheduler.js]: Checking ${channels.length} channels for Blood Moon status`
+   );
+
+   const isBloodMoonActive = isBloodMoonDay();
+   console.log(
+    `[scheduler.js]: Blood Moon status check result: ${
+     isBloodMoonActive ? "ACTIVE" : "INACTIVE"
+    }`
+   );
+
+   if (isBloodMoonActive) {
+    console.log(`[scheduler.js]: Blood Moon active - processing all channels`);
+    await renameChannels(client);
+
+    for (const channelId of channels) {
+     if (!channelId) {
+      console.warn(`[scheduler.js]: Skipping undefined channel ID`);
+      continue;
+     }
+     console.log(
+      `[scheduler.js]: Sending Blood Moon announcement to channel ${channelId}`
+     );
+     await sendBloodMoonAnnouncement(
+      client,
+      channelId,
+      "The Blood Moon is upon us! Beware!"
+     );
+    }
+   } else {
+    console.log(`[scheduler.js]: No Blood Moon - reverting all channels`);
+    await revertChannelNames(client);
+   }
+
+   console.log(`[scheduler.js]: Blood Moon startup check completed`);
+  } catch (error) {
+   handleError(error, "scheduler.js");
+   console.error(`[scheduler.js]: Blood Moon check failed: ${error.message}`);
   }
+ })();
 
-  // Add startup Blood Moon check
-  (async () => {
+ // Initialize all schedulers
+ createCronJob("0 0 * * *", "jail release check", () =>
+  handleJailRelease(client)
+ );
+ createCronJob("0 8 * * *", "reset daily rolls", () => resetDailyRolls(client));
+ createCronJob("0 8 * * *", "daily stamina recovery", () =>
+  recoverDailyStamina(client)
+ );
+ createCronJob("0 0 1 * *", "monthly vending stock generation", () =>
+  generateVendingStockList(client)
+ );
+ createCronJob("0 0 * * 0", "weekly pet rolls reset", () =>
+  resetPetRollsForAllCharacters(client)
+ );
+ createCronJob("0 0 * * *", "reset pet last roll dates", () =>
+  resetPetLastRollDates(client)
+ );
+ createCronJob("0 0 * * *", "request expiration and cleanup", () => {
+  Promise.all([
+   cleanupExpiredEntries(),
+   cleanupExpiredHealingRequests(),
+   checkExpiredRequests(client),
+   cleanupExpiredBlightRequests(),
+   cleanupExpiredRaids(),
+  ]);
+ });
+ createCronJob("0 0 * * *", "debuff expiry check", () =>
+  handleDebuffExpiry(client)
+ );
+ createCronJob("0 8 * * *", "daily weather update", () =>
+  postWeatherUpdate(client)
+ );
+ createCronJob("0 0 * * *", "birthday announcements", () =>
+  executeBirthdayAnnouncements(client)
+ );
+
+ createCronJob("0 1 * * *", "blood moon tracking cleanup", () => {
+  console.log(`[scheduler.js]: Starting Blood Moon tracking cleanup`);
+  cleanupOldTrackingData();
+  console.log(`[scheduler.js]: Blood Moon tracking cleanup completed`);
+ });
+
+ setupBlightScheduler(client);
+ setupBoostingScheduler(client);
+ setupWeatherScheduler(client);
+
+ createCronJob(
+  "0 20 * * *",
+  "blood moon tracking",
+  async () => {
+   console.log(`[scheduler.js]: Starting Blood Moon check at 8 PM EST`);
+
+   const channels = [
+    process.env.RUDANIA_TOWNHALL,
+    process.env.INARIKO_TOWNHALL,
+    process.env.VHINTL_TOWNHALL,
+   ];
+
+   console.log(
+    `[scheduler.js]: Processing ${channels.length} channels for Blood Moon check`
+   );
+
+   const isBloodMoonActive = isBloodMoonDay();
+   console.log(
+    `[scheduler.js]: Blood Moon status check result: ${
+     isBloodMoonActive ? "ACTIVE" : "INACTIVE"
+    }`
+   );
+
+   if (isBloodMoonActive) {
+    console.log(
+     `[scheduler.js]: Blood Moon period starting at 8 PM EST - processing all channels`
+    );
+    await renameChannels(client);
+
+    for (const channelId of channels) {
+     if (!channelId) {
+      console.warn(
+       `[scheduler.js]: Skipping undefined channel ID in Blood Moon check`
+      );
+      continue;
+     }
+
+     try {
+      console.log(
+       `[scheduler.js]: Sending Blood Moon announcement to channel ${channelId}`
+      );
+      await sendBloodMoonAnnouncement(
+       client,
+       channelId,
+       "The Blood Moon rises at nightfall! Beware!"
+      );
+     } catch (error) {
+      handleError(error, "scheduler.js");
+      console.error(
+       `[scheduler.js]: Blood Moon announcement failed for channel ${channelId}: ${error.message}`
+      );
+     }
+    }
+   } else {
+    console.log(
+     `[scheduler.js]: No Blood Moon period at 8 PM EST - reverting all channels`
+    );
     try {
-      console.log(`[scheduler.js]: 🌕 Starting Blood Moon startup check...`);
-      
-      const channels = [
-        process.env.RUDANIA_TOWNHALL,
-        process.env.INARIKO_TOWNHALL,
-        process.env.VHINTL_TOWNHALL,
-      ];
-
-      console.log(`[scheduler.js]: 📋 Checking ${channels.length} channels for Blood Moon status`);
-
-      // Check Blood Moon status once for all channels
-      const isBloodMoonActive = isBloodMoonDay();
-      console.log(`[scheduler.js]: 🔍 Blood Moon status check result: ${isBloodMoonActive ? 'ACTIVE' : 'INACTIVE'}`);
-
-      if (isBloodMoonActive) {
-        console.log(`[scheduler.js]: 🌕 Blood Moon active - processing all channels`);
-        await renameChannels(client);
-        
-        // Send announcements to each channel
-        for (const channelId of channels) {
-          if (!channelId) {
-            console.warn(`[scheduler.js]: ⚠️ Skipping undefined channel ID`);
-            continue;
-          }
-          console.log(`[scheduler.js]: 🌕 Sending Blood Moon announcement to channel ${channelId}`);
-          await sendBloodMoonAnnouncement(client, channelId, 'The Blood Moon is upon us! Beware!');
-        }
-      } else {
-        console.log(`[scheduler.js]: 📅 No Blood Moon - reverting all channels`);
-        await revertChannelNames(client);
-      }
-      
-      console.log(`[scheduler.js]: ✅ Blood Moon startup check completed`);
+     await revertChannelNames(client);
     } catch (error) {
-      handleError(error, 'scheduler.js');
-      console.error(`[scheduler.js]: ❌ Blood Moon check failed: ${error.message}`);
+     handleError(error, "scheduler.js");
+     console.error(
+      `[scheduler.js]: Blood Moon channel reversion failed: ${error.message}`
+     );
     }
-  })();
+   }
 
-  // Initialize all schedulers
-  createCronJob('0 0 * * *', 'jail release check', () => handleJailRelease(client));
-  createCronJob('0 8 * * *', 'reset daily rolls', () => resetDailyRolls(client));
-  createCronJob('0 8 * * *', 'daily stamina recovery', () => recoverDailyStamina(client));
-  createCronJob('0 0 1 * *', 'monthly vending stock generation', () => generateVendingStockList(client));
-  createCronJob('0 0 * * 0', 'weekly pet rolls reset', () => resetPetRollsForAllCharacters(client));
-  createCronJob('0 0 * * *', 'reset pet last roll dates', () => resetPetLastRollDates(client));
-  createCronJob('0 0 * * *', 'request expiration and cleanup', () => {
-    Promise.all([
-      cleanupExpiredEntries(),
-      cleanupExpiredHealingRequests(),
-      checkExpiredRequests(client),
-      cleanupExpiredBlightRequests(),
-      cleanupExpiredRaids()
-    ]);
-  });
-  createCronJob('0 0 * * *', 'debuff expiry check', () => handleDebuffExpiry(client));
-  createCronJob('0 8 * * *', 'daily weather update', () => postWeatherUpdate(client));
-  createCronJob('0 0 * * *', 'birthday announcements', () => executeBirthdayAnnouncements(client));
-  
-  // Blood Moon tracking cleanup (daily at 1 AM EST)
-  createCronJob('0 1 * * *', 'blood moon tracking cleanup', () => {
-    console.log(`[scheduler.js]: 🧹 Starting Blood Moon tracking cleanup`);
-    cleanupOldTrackingData();
-    console.log(`[scheduler.js]: ✅ Blood Moon tracking cleanup completed`);
-  });
-  
-  // Initialize blight scheduler
-  setupBlightScheduler(client);
+   console.log(`[scheduler.js]: Blood Moon check completed`);
+  },
+  "America/New_York"
+ );
 
-  // Blood moon tracking - runs at 8 PM EST to handle blood moon period transitions
-  createCronJob('0 20 * * *', 'blood moon tracking', async () => {
-    console.log(`[scheduler.js]: 🌕 Starting Blood Moon check at 8 PM EST`);
-    
-    const channels = [
-      process.env.RUDANIA_TOWNHALL,
-      process.env.INARIKO_TOWNHALL,
-      process.env.VHINTL_TOWNHALL,
-    ];
-
-    console.log(`[scheduler.js]: 📋 Processing ${channels.length} channels for Blood Moon check`);
-
-    // Check Blood Moon status once for all channels
-    const isBloodMoonActive = isBloodMoonDay();
-    console.log(`[scheduler.js]: 🔍 Blood Moon status check result: ${isBloodMoonActive ? 'ACTIVE' : 'INACTIVE'}`);
-
-    if (isBloodMoonActive) {
-      console.log(`[scheduler.js]: 🌕 Blood Moon period starting at 8 PM EST - processing all channels`);
-      await renameChannels(client);
-      
-      // Send announcements to each channel
-      for (const channelId of channels) {
-        if (!channelId) {
-          console.warn(`[scheduler.js]: ⚠️ Skipping undefined channel ID in Blood Moon check`);
-          continue;
-        }
-        
-        try {
-          console.log(`[scheduler.js]: 🌕 Sending Blood Moon announcement to channel ${channelId}`);
-          await sendBloodMoonAnnouncement(client, channelId, 'The Blood Moon rises at nightfall! Beware!');
-        } catch (error) {
-          handleError(error, 'scheduler.js');
-          console.error(`[scheduler.js]: ❌ Blood Moon announcement failed for channel ${channelId}: ${error.message}`);
-        }
-      }
-    } else {
-      console.log(`[scheduler.js]: 📅 No Blood Moon period at 8 PM EST - reverting all channels`);
-      try {
-        await revertChannelNames(client);
-      } catch (error) {
-        handleError(error, 'scheduler.js');
-        console.error(`[scheduler.js]: ❌ Blood Moon channel reversion failed: ${error.message}`);
-      }
-    }
-    
-    console.log(`[scheduler.js]: ✅ Blood Moon check completed`);
-  }, 'America/New_York');
+ console.log("[scheduler.js]: All scheduled tasks initialized");
 }
 
-// Export all functions
 module.exports = {
-  initializeScheduler,
-  setupBlightScheduler,
-  postWeatherUpdate,
-  executeBirthdayAnnouncements,
-  handleJailRelease,
-  handleDebuffExpiry,
-  resetDailyRolls,
-  resetPetLastRollDates
+ initializeScheduler,
+ setupBlightScheduler,
+ setupBoostingScheduler,
+ setupWeatherScheduler,
+ postWeatherUpdate,
+ executeBirthdayAnnouncements,
+ handleJailRelease,
+ handleDebuffExpiry,
+ resetDailyRolls,
+ resetPetLastRollDates,
 };
-
-
-
-
-
