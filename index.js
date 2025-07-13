@@ -372,6 +372,30 @@ async function initializeClient() {
     });
 
     // --------------------------------------------------------------------------
+    // Raid Thread Slow Mode Management
+    // --------------------------------------------------------------------------
+    // Enable slow mode on raid threads when they're created
+    client.on("threadCreate", async (thread) => {
+      try {
+        // Check if this thread is associated with a raid (thread name contains raid indicators)
+        const threadName = thread.name.toLowerCase();
+        const isRaidThread = threadName.includes('🛡️') || 
+                             threadName.includes('raid') || 
+                             threadName.includes('rudania') || 
+                             threadName.includes('inariko') || 
+                             threadName.includes('vhintl');
+        
+        if (isRaidThread) {
+          // Enable 10-second slow mode on the thread
+          await thread.setRateLimitPerUser(10);
+          console.log(`[index.js]: ⏰ Enabled 10-second slow mode on raid thread: ${thread.name} (${thread.id})`);
+        }
+      } catch (error) {
+        console.error(`[index.js]: ❌ Error enabling slow mode on raid thread:`, error);
+      }
+    });
+
+    // --------------------------------------------------------------------------
     // Start the Bot
     // --------------------------------------------------------------------------
     try {
