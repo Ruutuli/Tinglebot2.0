@@ -13,7 +13,7 @@ const { handleError } = require('../utils/globalErrorHandler');
 // ============================================================================
 // Local Modules & Database Models
 // ------------------- Importing local services and models -------------------
-const { getMonstersAboveTierByRegion } = require('../database/db');
+const { getMonstersAboveTierByRegion, fetchMonsterByName } = require('../database/db');
 const { getVillageRegionByName } = require('../modules/locationsModule');
 const { createRaidEmbed, createOrUpdateRaidThread, scheduleRaidTimer, storeRaidProgress, getRaidProgressById } = require('../modules/raidModule');
 const { capitalizeVillageName } = require('../utils/stringUtils');
@@ -28,8 +28,8 @@ require('dotenv').config();
 // ------------------- Define thresholds and timing constants -------------------
 const MESSAGE_THRESHOLD = 50;            // Number of messages to trigger an encounter
 const MIN_ACTIVE_USERS = 4;               // Minimum unique users required for an encounter
-const TIME_WINDOW = 10 * 60 * 1000;         // 10 minutes in milliseconds
-const CHECK_INTERVAL = 30 * 1000;           // Check every 30 seconds
+const TIME_WINDOW = 30 * 60 * 1000;         // 10 minutes in milliseconds
+const CHECK_INTERVAL = 60 * 1000;           // Check every 30 seconds
 
 // ------------------- Village Channels -------------------
 // Maps village names to their respective channel IDs (from environment variables)
@@ -39,8 +39,12 @@ const villageChannels = {
   Vhintl: process.env.VHINTL_TOWN_HALL,
 };
 
-// Temporary raid channel - all raids will happen here
-const TEMP_RAID_CHANNEL_ID = '1391812848099004578';
+// Village channel mapping for raids
+const villageChannelMap = {
+  'rudania': process.env.RUDANIA_TOWNHALL,
+  'inariko': process.env.INARIKO_TOWNHALL,
+  'vhintl': process.env.VHINTL_TOWNHALL
+};
 
 // ============================================================================
 // Message Activity Tracking
@@ -96,11 +100,21 @@ async function checkForRandomEncounters(client) {
       // Reset the activity for the channel.
       messageActivity.set(channelId, { messages: [], users: new Set() });
 
-      // Use the temporary raid channel instead of randomly choosing a village channel
-      const raidChannel = client.channels.cache.get(TEMP_RAID_CHANNEL_ID);
+      // Select a random village for the raid
+      const villages = Object.keys(villageChannelMap);
+      const selectedVillage = villages[Math.floor(Math.random() * villages.length)];
+      const selectedVillageKey = selectedVillage.toLowerCase();
+      
+      console.log(`[randomMonsterEncounters.js]: 🎯 Selected village for raid: ${selectedVillage}`);
+      
+      // Get the target channel for the selected village
+      const targetChannelId = villageChannelMap[selectedVillageKey];
+      const raidChannel = client.channels.cache.get(targetChannelId);
 
       if (raidChannel && raidChannel.type === ChannelType.GuildText) {
-        await triggerRandomEncounter(raidChannel);
+        await triggerRandomEncounter(raidChannel, selectedVillage);
+      } else {
+        console.error(`[randomMonsterEncounters.js]: ❌ Could not find channel for ${selectedVillage} (ID: ${targetChannelId})`);
       }
     }
   }
@@ -113,76 +127,58 @@ async function checkForRandomEncounters(client) {
 // ============================================================================
 // Random Encounter Trigger
 // ------------------- Trigger Random Encounter -------------------
-async function triggerRandomEncounter(channel) {
+async function triggerRandomEncounter(channel, selectedVillage) {
   try {
-    // For temporary channel, we'll use a random village for the monster selection
-    const villages = Object.keys(villageChannels);
-    const selectedVillage = villages[Math.floor(Math.random() * villages.length)];
-    
-    console.log(`[randomMonsterEncounters.js]: 🎯 Selected village: ${selectedVillage}`);
+    console.log(`[randomMonsterEncounters.js]: 🎯 Processing raid for village: ${selectedVillage}`);
     
     // Get the village region.
     const villageRegion = getVillageRegionByName(selectedVillage);
     console.log(`[randomMonsterEncounters.js]: 🗺️ Village region: ${villageRegion}`);
 
+    if (!villageRegion) {
+      console.error(`[randomMonsterEncounters.js]: ❌ Invalid village: ${selectedVillage}`);
+      await channel.send(`❌ **Invalid village: ${selectedVillage}**`);
+      return;
+    }
+
     // Select a monster above tier 5 from the region.
     const monster = await getMonstersAboveTierByRegion(5, villageRegion);
     if (!monster || !monster.name || !monster.tier) {
       console.error(`[randomMonsterEncounters.js]: ❌ No eligible monsters found for region: ${villageRegion}`);
-      await channel.send(`❌ **No eligible monsters found for ${selectedVillage} region.**`);
+      await channel.send(`❌ **No tier 5+ monsters found in ${villageRegion} region for ${selectedVillage}.**`);
       return;
     }
 
     console.log(`[randomMonsterEncounters.js]: 🐉 Selected monster: ${monster.name} (Tier ${monster.tier}) from ${villageRegion} region`);
 
-    // Start the raid using the raid module
-    const { startRaid, createRaidEmbed } = require('../modules/raidModule');
-    console.log(`[randomMonsterEncounters.js]: 🚀 Starting raid for ${monster.name} in ${selectedVillage}`);
+    // Create a mock interaction object for the triggerRaid function
+    const mockInteraction = {
+      channel: channel,
+      client: channel.client,
+      user: { id: 'random-encounter-bot', tag: 'Random Encounter Bot' },
+      guild: channel.guild,
+      editReply: async (options) => {
+        return await channel.send(options);
+      },
+      followUp: async (options) => {
+        return await channel.send(options);
+      }
+    };
     
-    const { raidId, raidData } = await startRaid(monster, selectedVillage);
-    console.log(`[randomMonsterEncounters.js]: ✅ Raid created with ID: ${raidId}`);
+    // Use the same triggerRaid function as the mod command
+    const { triggerRaid } = require('../modules/raidModule');
+    console.log(`[randomMonsterEncounters.js]: 🚀 Triggering raid for ${monster.name} in ${selectedVillage}`);
+    
+    const result = await triggerRaid(monster, mockInteraction, selectedVillage, false);
 
-    // Get monster image from monsterMapping
-    const { monsterMapping } = require('../models/MonsterModel');
-    const monsterDetails = monsterMapping && monsterMapping[monster.nameMapping] 
-      ? monsterMapping[monster.nameMapping] 
-      : { image: monster.image };
-    const monsterImage = monsterDetails.image || monster.image;
+    if (!result || !result.success) {
+      console.error(`[randomMonsterEncounters.js]: ❌ Failed to trigger raid: ${result?.error || 'Unknown error'}`);
+      await channel.send(`❌ **Failed to trigger the raid:** ${result?.error || 'Unknown error'}`);
+      return;
+    }
 
-    console.log(`[randomMonsterEncounters.js]: 🖼️ Using monster image: ${monsterImage}`);
-
-    // Create encounter embed
-    const encounterEmbed = createRaidEmbed(raidData, monsterImage);
-
-    // Send the raid announcement to the temporary channel
-    console.log(`[randomMonsterEncounters.js]: 📢 Sending raid announcement to channel ${channel.id}`);
-    const raidMessage = await channel.send({
-      content: `⚠️ **RANDOM ENCOUNTER RAID!** ⚠️`,
-      embeds: [encounterEmbed]
-    });
-    console.log(`[randomMonsterEncounters.js]: ✅ Raid message sent with ID: ${raidMessage.id}`);
-
-    // Create thread in the temporary channel
-    console.log(`[randomMonsterEncounters.js]: 🧵 Creating thread for raid...`);
-    const thread = await raidMessage.startThread({
-      name: `🛡️ ${selectedVillage} - ${monster.name} (T${monster.tier})`,
-      autoArchiveDuration: 60,
-      reason: `Random encounter raid against ${monster.name}`
-    });
-    console.log(`[randomMonsterEncounters.js]: ✅ Thread created with ID: ${thread.id}`);
-
-    // Send initial thread message
-    const threadMessage = [
-      `💀 A random encounter raid has been initiated against **${monster.name} (Tier ${monster.tier})**!`,
-      `\n@${selectedVillage} residents — come help defend your home!`,
-      `\nUse \`/raid ${raidId} <character>\` to join the fight!`,
-      `\n\n**Raid ID:** \`\`\`${raidId}\`\`\``
-    ].join('');
-
-    await thread.send(threadMessage);
-    console.log(`[randomMonsterEncounters.js]: 📝 Thread message sent`);
-
-    console.log(`[randomMonsterEncounters.js]: 🎉 RANDOM ENCOUNTER COMPLETE! ${monster.name} (T${monster.tier}) in ${selectedVillage} - Raid ID: ${raidId}`);
+    console.log(`[randomMonsterEncounters.js]: ✅ Raid triggered successfully in ${selectedVillage} channel`);
+    console.log(`[randomMonsterEncounters.js]: 🎉 RANDOM ENCOUNTER COMPLETE! ${monster.name} (T${monster.tier}) in ${selectedVillage}`);
   } catch (error) {
     console.error('[randomMonsterEncounters.js]: ❌ Error triggering encounter:', error);
     await handleError(error, 'randomMonsterEncounters.js');
