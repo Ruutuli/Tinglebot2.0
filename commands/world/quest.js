@@ -261,7 +261,7 @@ module.exports = {
      break;
     default:
      await interaction.reply({
-      content: "❌ Unknown subcommand.",
+      content: "Unknown subcommand.",
       ephemeral: true,
      });
    }
@@ -276,7 +276,7 @@ module.exports = {
    if (!interaction.replied && !interaction.deferred) {
     await interaction.reply({
      content:
-      "❌ An error occurred while processing your request. Please try again later.",
+      "An error occurred while processing your request. Please try again later.",
      ephemeral: true,
     });
    }
@@ -292,14 +292,14 @@ module.exports = {
   const quest = await Quest.findOne({ questID });
   if (!quest) {
    return interaction.reply({
-    content: `❌ Quest with ID \`${questID}\` does not exist.`,
+    content: `Quest with ID \`${questID}\` does not exist.`,
     ephemeral: true,
    });
   }
 
   if (quest.status !== "active") {
    return interaction.reply({
-    content: `❌ The quest \`${quest.title}\` is no longer active.`,
+    content: `The quest \`${quest.title}\` is no longer active.`,
     ephemeral: true,
    });
   }
@@ -309,7 +309,7 @@ module.exports = {
    const deadline = new Date(quest.signupDeadline);
    if (now > deadline) {
     return interaction.reply({
-     content: `❌ The signup deadline for quest \`${quest.title}\` has passed.`,
+     content: `The signup deadline for quest \`${quest.title}\` has passed.`,
      ephemeral: true,
     });
    }
@@ -322,14 +322,14 @@ module.exports = {
 
   if (!character) {
    return interaction.reply({
-    content: `❌ You don't own a character named \`${characterName}\`. Please use one of your registered characters.`,
+    content: `You do not own a character named \`${characterName}\`. Please use one of your registered characters.`,
     ephemeral: true,
    });
   }
 
   if (quest.participants.has(userID)) {
    return interaction.reply({
-    content: `❌ You are already participating in the quest \`${
+    content: `You are already participating in the quest \`${
      quest.title
     }\` with character **${quest.participants.get(userID)}**.`,
     ephemeral: true,
@@ -346,7 +346,7 @@ module.exports = {
    for (const otherQuest of otherCappedQuests) {
     if (otherQuest.participants.has(userID)) {
      return interaction.reply({
-      content: `❌ You are already participating in another member-capped quest (\`${otherQuest.title}\`). **RULE**: You can only join ONE member-capped quest at a time.`,
+      content: `You are already participating in another member-capped quest (\`${otherQuest.title}\`). **RULE**: You can only join ONE member-capped quest at a time.`,
       ephemeral: true,
      });
     }
@@ -354,7 +354,7 @@ module.exports = {
 
    if (quest.participants.size >= quest.participantCap) {
     return interaction.reply({
-     content: `❌ The member-capped quest \`${quest.title}\` has reached its participant limit of ${quest.participantCap}. Consider getting a Quest Voucher if you miss consecutive member-capped quests!`,
+     content: `The member-capped quest \`${quest.title}\` has reached its participant limit of ${quest.participantCap}. Consider getting a Quest Voucher if you miss consecutive member-capped quests!`,
      ephemeral: true,
     });
    }
@@ -370,7 +370,7 @@ module.exports = {
 
      if (now > rpSignupDeadline) {
       return interaction.reply({
-       content: `❌ The signup window for RP quest \`${quest.title}\` has closed. **RULE**: RP quests have a 1-week signup window after posting.`,
+       content: `The signup window for RP quest \`${quest.title}\` has closed. **RULE**: RP quests have a 1-week signup window after posting.`,
        ephemeral: true,
       });
      }
@@ -400,31 +400,31 @@ module.exports = {
 
   await this.updateQuestEmbed(interaction.guild, quest);
 
-  let successMessage = `✅ **${userName}** joined the quest **${quest.title}** with character **${characterName}**!`;
+  let successMessage = `**${userName}** joined the quest **${quest.title}** with character **${characterName}**!`;
 
   switch (quest.questType.toLowerCase()) {
    case "rp":
     if (quest.postRequirement) {
-     successMessage += `\n📝 **RP Rules Reminder**: This quest requires a minimum of ${quest.postRequirement} posts with a **maximum of 2 paragraphs each**.`;
+     successMessage += `\n**RP Rules Reminder**: This quest requires a minimum of ${quest.postRequirement} posts with a **maximum of 2 paragraphs each**.`;
     }
-    successMessage += `\n🎭 **RP Note**: These quests are member-driven. Use @TaleWeaver if you need help moving things along!`;
+    successMessage += `\n**RP Note**: These quests are member-driven. Use @TaleWeaver if you need help moving things along!`;
     break;
 
    case "art":
-    successMessage += `\n🎨 **Art Quest**: Create an illustration based on quest specifications. Collaborations may be allowed!`;
+    successMessage += `\n**Art Quest**: Create an illustration based on quest specifications. Collaborations may be allowed!`;
     break;
 
    case "writing":
-    successMessage += `\n✍️ **Writing Quest**: Write a piece based on quest specifications. Collaborations may be allowed!`;
+    successMessage += `\n**Writing Quest**: Write a piece based on quest specifications. Collaborations may be allowed!`;
     break;
 
    case "interactive":
-    successMessage += `\n🎲 **Interactive Quest**: Follow the mod-run event commands as they come to you!`;
+    successMessage += `\n**Interactive Quest**: Follow the mod-run event commands as they come to you!`;
     break;
   }
 
   if (quest.timeLimit) {
-   successMessage += `\n⏰ **Time Limit**: ${quest.timeLimit}`;
+   successMessage += `\n**Time Limit**: ${quest.timeLimit}`;
   }
 
   return interaction.reply({
@@ -440,14 +440,14 @@ module.exports = {
   const quest = await Quest.findOne({ questID });
   if (!quest) {
    return interaction.reply({
-    content: `❌ Quest with ID \`${questID}\` does not exist.`,
+    content: `Quest with ID \`${questID}\` does not exist.`,
     ephemeral: true,
    });
   }
 
   if (!quest.participants.has(userID)) {
    return interaction.reply({
-    content: `❌ You are not participating in the quest \`${quest.title}\`.`,
+    content: `You are not participating in the quest \`${quest.title}\`.`,
     ephemeral: true,
    });
   }
@@ -470,10 +470,10 @@ module.exports = {
 
   await this.updateQuestEmbed(interaction.guild, quest);
 
-  let leaveMessage = `✅ You have left the quest **${quest.title}** (Character: **${characterName}**).`;
+  let leaveMessage = `You have left the quest **${quest.title}** (Character: **${characterName}**).`;
 
   if (quest.participantCap) {
-   leaveMessage += `\n📝 **Note**: Since this was a member-capped quest, you can now join another member-capped quest if available.`;
+   leaveMessage += `\n**Note**: Since this was a member-capped quest, you can now join another member-capped quest if available.`;
   }
 
   return interaction.reply({
@@ -485,7 +485,7 @@ module.exports = {
  async handleCreateQuest(interaction) {
   if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
    return interaction.reply({
-    content: "❌ You need administrator permissions to create quests.",
+    content: "You need administrator permissions to create quests.",
     ephemeral: true,
    });
   }
@@ -520,7 +520,7 @@ module.exports = {
    }
 
    const rpRules =
-    "📝 RP Quest Rules: 15-20 posts minimum, 2 paragraph maximum per post, member-driven with @TaleWeaver support available.";
+    "RP Quest Rules: 15-20 posts minimum, 2 paragraph maximum per post, member-driven with @TaleWeaver support available.";
    questData.specialNote = questData.specialNote
     ? `${questData.specialNote}\n\n${rpRules}`
     : rpRules;
@@ -529,7 +529,7 @@ module.exports = {
   const existingQuest = await Quest.findOne({ questID: questData.questID });
   if (existingQuest) {
    return interaction.reply({
-    content: `❌ A quest with ID \`${questData.questID}\` already exists.`,
+    content: `A quest with ID \`${questData.questID}\` already exists.`,
     ephemeral: true,
    });
   }
@@ -539,16 +539,16 @@ module.exports = {
 
   const embed = new EmbedBuilder()
    .setColor(0x00ff00)
-   .setTitle("✅ Quest Created Successfully")
+   .setTitle("Quest Created Successfully")
    .setDescription("A smaller, optional, fun timed task for community rewards!")
    .addFields(
-    { name: "🎯 Title", value: questData.title, inline: true },
-    { name: "🆔 Quest ID", value: questData.questID, inline: true },
-    { name: "📝 Type", value: questData.questType.toUpperCase(), inline: true },
-    { name: "📍 Location", value: questData.location, inline: true },
-    { name: "⏰ Time Limit", value: questData.timeLimit, inline: true },
+    { name: "Title", value: questData.title, inline: true },
+    { name: "Quest ID", value: questData.questID, inline: true },
+    { name: "Type", value: questData.questType.toUpperCase(), inline: true },
+    { name: "Location", value: questData.location, inline: true },
+    { name: "Time Limit", value: questData.timeLimit, inline: true },
     {
-     name: "🪙 Token Reward",
+     name: "Token Reward",
      value: questData.tokenReward.toString(),
      inline: true,
     }
@@ -556,7 +556,7 @@ module.exports = {
 
   if (questData.participantCap) {
    embed.addFields({
-    name: "👥 Participant Cap",
+    name: "Participant Cap",
     value: `${questData.participantCap} (Member-Capped Quest)`,
     inline: true,
    });
@@ -564,7 +564,7 @@ module.exports = {
 
   if (questData.questType.toLowerCase() === "rp") {
    embed.addFields({
-    name: "📋 RP Rules Applied",
+    name: "RP Rules Applied",
     value: "1-week signup window, 15-20 posts min, 2 paragraph max",
     inline: false,
    });
@@ -576,10 +576,9 @@ module.exports = {
  },
 
  async handleEditQuest(interaction) {
-  // Check admin permissions
   if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
    return interaction.reply({
-    content: "❌ You need administrator permissions to edit quests.",
+    content: "You need administrator permissions to edit quests.",
     ephemeral: true,
    });
   }
@@ -591,7 +590,7 @@ module.exports = {
   const quest = await Quest.findOne({ questID });
   if (!quest) {
    return interaction.reply({
-    content: `❌ Quest with ID \`${questID}\` does not exist.`,
+    content: `Quest with ID \`${questID}\` does not exist.`,
     ephemeral: true,
    });
   }
@@ -609,7 +608,7 @@ module.exports = {
    convertedValue = parseInt(value);
    if (isNaN(convertedValue)) {
     return interaction.reply({
-     content: `❌ Invalid number format for field \`${field}\`.`,
+     content: `Invalid number format for field \`${field}\`.`,
      ephemeral: true,
     });
    }
@@ -620,10 +619,10 @@ module.exports = {
   await quest.save();
 
   await this.updateQuestEmbed(interaction.guild, quest);
-  let updateMessage = `✅ Quest \`${quest.title}\` updated successfully!\n**${field}**: \`${oldValue}\` → \`${convertedValue}\``;
+  let updateMessage = `Quest \`${quest.title}\` updated successfully!\n**${field}**: \`${oldValue}\` → \`${convertedValue}\``;
 
   if (field === "participantCap" && convertedValue) {
-   updateMessage += `\n⚠️ **Note**: This is now a member-capped quest. Members can only join ONE member-capped quest at a time.`;
+   updateMessage += `\n**Note**: This is now a member-capped quest. Members can only join ONE member-capped quest at a time.`;
   }
 
   return interaction.reply({
@@ -633,10 +632,9 @@ module.exports = {
  },
 
  async handleDeleteQuest(interaction) {
-  // Check admin permissions
   if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
    return interaction.reply({
-    content: "❌ You need administrator permissions to delete quests.",
+    content: "You need administrator permissions to delete quests.",
     ephemeral: true,
    });
   }
@@ -646,7 +644,7 @@ module.exports = {
   const quest = await Quest.findOne({ questID });
   if (!quest) {
    return interaction.reply({
-    content: `❌ Quest with ID \`${questID}\` does not exist.`,
+    content: `Quest with ID \`${questID}\` does not exist.`,
     ephemeral: true,
    });
   }
@@ -665,7 +663,7 @@ module.exports = {
 
   const embed = new EmbedBuilder()
    .setColor(0xff0000)
-   .setTitle("⚠️ Confirm Quest Deletion")
+   .setTitle("Confirm Quest Deletion")
    .setDescription(
     `Are you sure you want to delete the quest **${
      quest.title
@@ -674,13 +672,13 @@ module.exports = {
     }\n**Type**: ${quest.questType.toUpperCase()}\n**Status**: ${quest.status}`
    )
    .addFields(
-    { name: "🆔 Quest ID", value: questID, inline: true },
-    { name: "📝 Quest Type", value: quest.questType, inline: true }
+    { name: "Quest ID", value: questID, inline: true },
+    { name: "Quest Type", value: quest.questType, inline: true }
    );
 
   if (quest.participantCap) {
    embed.addFields({
-    name: "⚠️ Warning",
+    name: "Warning",
     value:
      "This is a member-capped quest! Participants will be able to join other member-capped quests after deletion.",
     inline: false,
@@ -718,9 +716,9 @@ module.exports = {
 
     await Quest.deleteOne({ questID });
 
-    let deleteMessage = `✅ Quest **${quest.title}** has been deleted successfully.`;
+    let deleteMessage = `Quest **${quest.title}** has been deleted successfully.`;
     if (quest.participantCap) {
-     deleteMessage += `\n📝 **Note**: This was a member-capped quest. ${quest.participants.size} participants can now join other member-capped quests.`;
+     deleteMessage += `\n**Note**: This was a member-capped quest. ${quest.participants.size} participants can now join other member-capped quests.`;
     }
 
     await i.update({
@@ -730,7 +728,7 @@ module.exports = {
     });
    } else {
     await i.update({
-     content: "❌ Quest deletion cancelled.",
+     content: "Quest deletion cancelled.",
      embeds: [],
      components: [],
     });
@@ -741,7 +739,7 @@ module.exports = {
   collector.on("end", async (collected) => {
    if (collected.size === 0) {
     await interaction.editReply({
-     content: "❌ Quest deletion timed out.",
+     content: "Quest deletion timed out.",
      embeds: [],
      components: [],
     });
@@ -761,14 +759,14 @@ module.exports = {
 
   if (!character) {
    return interaction.reply({
-    content: `❌ You don't own a character named \`${characterName}\`.`,
+    content: `You do not own a character named \`${characterName}\`.`,
     ephemeral: true,
    });
   }
 
   if (!character.jobVoucher) {
    return interaction.reply({
-    content: `❌ Character \`${characterName}\` doesn't have a quest voucher available.\n\n💡 **Quest Voucher Info**: Vouchers are given to members who miss 2 consecutive member-capped quests. DM the Admin Account to claim one if eligible!`,
+    content: `Character \`${characterName}\` does not have a quest voucher available.\n\n**Quest Voucher Info**: Vouchers are given to members who miss 2 consecutive member-capped quests. DM the Admin Account to claim one if eligible!`,
     ephemeral: true,
    });
   }
@@ -776,28 +774,28 @@ module.exports = {
   const quest = await Quest.findOne({ questID });
   if (!quest) {
    return interaction.reply({
-    content: `❌ Quest with ID \`${questID}\` does not exist.`,
+    content: `Quest with ID \`${questID}\` does not exist.`,
     ephemeral: true,
    });
   }
 
   if (quest.status !== "active") {
    return interaction.reply({
-    content: `❌ The quest \`${quest.title}\` is no longer active.`,
+    content: `The quest \`${quest.title}\` is no longer active.`,
     ephemeral: true,
    });
   }
 
   if (!quest.participantCap) {
    return interaction.reply({
-    content: `❌ Quest vouchers can only be used for member-capped quests. \`${quest.title}\` is not member-capped.`,
+    content: `Quest vouchers can only be used for member-capped quests. \`${quest.title}\` is not member-capped.`,
     ephemeral: true,
    });
   }
 
   if (quest.participants.has(userID)) {
    return interaction.reply({
-    content: `❌ You are already participating in the quest \`${quest.title}\`.`,
+    content: `You are already participating in the quest \`${quest.title}\`.`,
     ephemeral: true,
    });
   }
@@ -811,7 +809,7 @@ module.exports = {
   for (const otherQuest of otherCappedQuests) {
    if (otherQuest.participants.has(userID)) {
     return interaction.reply({
-     content: `❌ You are already participating in another member-capped quest (\`${otherQuest.title}\`). You must leave that quest first before using a voucher for another member-capped quest.`,
+     content: `You are already participating in another member-capped quest (\`${otherQuest.title}\`). You must leave that quest first before using a voucher for another member-capped quest.`,
      ephemeral: true,
     });
    }
@@ -837,12 +835,11 @@ module.exports = {
 
   await this.updateQuestEmbed(interaction.guild, quest);
 
-  let voucherMessage = `🎫 **Quest Voucher Used!** ${interaction.user.username} joined the member-capped quest **${quest.title}** with character **${characterName}**.`;
-  voucherMessage += `\n✨ **Voucher Benefit**: Guaranteed spot bypassing the participant cap!`;
+  let voucherMessage = `**Quest Voucher Used!** ${interaction.user.username} joined the member-capped quest **${quest.title}** with character **${characterName}**.`;
+  voucherMessage += `\n**Voucher Benefit**: Guaranteed spot bypassing the participant cap!`;
 
-  // Add quest-specific info
   if (quest.questType.toLowerCase() === "rp") {
-   voucherMessage += `\n📝 **RP Rules**: ${
+   voucherMessage += `\n**RP Rules**: ${
     quest.postRequirement || 15
    }-20 posts minimum, 2 paragraph maximum per post.`;
   }
@@ -859,14 +856,14 @@ module.exports = {
   if (quests.length === 0) {
    return interaction.reply({
     content:
-     "📋 No active quests available.\n\n💡 **About Quests**: Quests are smaller, optional, fun timed tasks that happen every other month! They can be Art, Writing, Interactive, or RP based.",
+     "No active quests available.\n\n**About Quests**: Quests are smaller, optional, fun timed tasks that happen every other month! They can be Art, Writing, Interactive, or RP based.",
     ephemeral: true,
    });
   }
 
   const embed = new EmbedBuilder()
    .setColor(0x0099ff)
-   .setTitle("📋 Active Quests - Every Other Month Events!")
+   .setTitle("Active Quests - Every Other Month Events!")
    .setDescription("Smaller, optional, fun timed tasks for community rewards!")
    .setTimestamp();
 
@@ -886,17 +883,17 @@ module.exports = {
    } tokens`;
 
    if (quest.participantCap) {
-    questInfo += `\n🔒 **Member-Capped Quest**`;
+    questInfo += `\n**Member-Capped Quest**`;
    }
 
    if (quest.questType.toLowerCase() === "rp") {
-    questInfo += `\n📝 **RP**: ${
+    questInfo += `\n**RP**: ${
      quest.postRequirement || 15
     }-20 posts, 2 para max`;
    }
 
    embed.addFields({
-    name: `🎯 ${quest.title}`,
+    name: `${quest.title}`,
     value: questInfo,
     inline: true,
    });
@@ -909,7 +906,7 @@ module.exports = {
   }
 
   embed.addFields({
-   name: "📚 Quest Rules Reminder",
+   name: "Quest Rules Reminder",
    value:
     "• Only **ONE** member-capped quest per person\n• RP quests: 1-week signup window\n• Art/Writing/Interactive: No signup deadline\n• Use Quest Vouchers for guaranteed spots!",
    inline: false,
@@ -948,7 +945,7 @@ module.exports = {
 
      return {
       ...field,
-      name: `👥 Participants ${participantCount}`,
+      name: `Participants ${participantCount}`,
       value:
        participantList.length > 1024
         ? participantList.substring(0, 1021) + "..."
