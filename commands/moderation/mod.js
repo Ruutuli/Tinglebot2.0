@@ -197,6 +197,18 @@ function encodePetImageUrl(petImageUrl) {
   return null;
 }
 
+// ------------------- Function: getMonsterRegion -------------------
+// Determines the region of a monster based on its location flags
+function getMonsterRegion(monster) {
+  if (monster.eldin) return 'Eldin';
+  if (monster.lanayru) return 'Lanayru';
+  if (monster.faron) return 'Faron';
+  if (monster.centralHyrule) return 'CentralHyrule';
+  if (monster.gerudo) return 'Gerudo';
+  if (monster.hebra) return 'Hebra';
+  return 'Unknown';
+}
+
 // ------------------- Embed Footer Update Helper -------------------
 async function updateSubmissionEmbedFooter(message, status, moderatorTag, reason = null) {
   try {
@@ -2239,6 +2251,17 @@ async function handleTriggerRaid(interaction) {
   const monsterName = interaction.options.getString('monster');
 
   try {
+    // Get the village region for filtering monsters
+    const { getVillageRegionByName } = require('../../modules/locationsModule');
+    const { getMonstersAboveTierByRegion } = require('../../database/db');
+    
+    const capitalizedVillage = village.charAt(0).toUpperCase() + village.slice(1);
+    const villageRegion = getVillageRegionByName(capitalizedVillage);
+    
+    if (!villageRegion) {
+      return interaction.editReply({ content: `❌ **Invalid village: ${capitalizedVillage}**` });
+    }
+
     // Get a random monster if none specified
     let monster;
     if (monsterName) {
@@ -2250,18 +2273,20 @@ async function handleTriggerRaid(interaction) {
       if (monster.tier < 5) {
         return interaction.editReply({ content: `❌ **${monster.name} is tier ${monster.tier}. Only tier 5+ monsters can be used for triggered raids.**` });
       }
-    } else {
-      // Get a random monster from the database (tier 5 and above only)
-      const allMonsters = await fetchAllMonsters();
-      const tier5PlusMonsters = allMonsters.filter(m => m.tier >= 5);
-      if (tier5PlusMonsters.length === 0) {
-        return interaction.editReply({ content: '❌ **No tier 5+ monsters found in database.**' });
+      // Check if monster is from the correct region
+      const monsterRegion = getMonsterRegion(monster);
+      if (monsterRegion !== villageRegion) {
+        return interaction.editReply({ content: `❌ **${monster.name} is from ${monsterRegion} region, but you're trying to trigger a raid in ${villageRegion} region (${capitalizedVillage}).**` });
       }
-      monster = tier5PlusMonsters[Math.floor(Math.random() * tier5PlusMonsters.length)];
+    } else {
+      // Get a random monster from the village's region (tier 5 and above only)
+      monster = await getMonstersAboveTierByRegion(5, villageRegion);
+      if (!monster || !monster.name || !monster.tier) {
+        return interaction.editReply({ content: `❌ **No tier 5+ monsters found in ${villageRegion} region for ${capitalizedVillage}.**` });
+      }
     }
 
-    // Capitalize the village name to match the Raid model enum values
-    const capitalizedVillage = village.charAt(0).toUpperCase() + village.slice(1);
+
     
     console.log(`[mod.js]: 🎯 Triggering raid for ${monster.name} in ${capitalizedVillage}`);
     console.log(`[mod.js]: 📍 Interaction type: ${interaction?.constructor?.name || 'unknown'}`);

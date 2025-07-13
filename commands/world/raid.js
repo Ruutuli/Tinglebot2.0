@@ -17,6 +17,23 @@ const { authorizeSheets, safeAppendDataToSheet } = require('../../utils/googleSh
 const { v4: uuidv4 } = require('uuid');
 
 // ============================================================================
+// ---- Constants ----
+// ============================================================================
+// Village resident role IDs
+const VILLAGE_RESIDENT_ROLES = {
+  'Rudania': '907344585238409236',
+  'Inariko': '907344454854266890', 
+  'Vhintl': '907344092491554906'
+};
+
+// Village visiting role IDs
+const VILLAGE_VISITING_ROLES = {
+  'Rudania': '1379850030856405185',
+  'Inariko': '1379850102486863924', 
+  'Vhintl': '1379850161794056303'
+};
+
+// ============================================================================
 // ---- Command Definition ----
 // ============================================================================
 module.exports = {
@@ -153,6 +170,21 @@ module.exports = {
 // ---- Helper Functions ----
 // ============================================================================
 
+// ---- Function: getVillageRoleMention ----
+// Gets the proper role mention for a village (both resident and visiting)
+function getVillageRoleMention(village) {
+  const residentRoleId = VILLAGE_RESIDENT_ROLES[village];
+  const visitingRoleId = VILLAGE_VISITING_ROLES[village];
+  
+  if (residentRoleId && visitingRoleId) {
+    return `<@&${residentRoleId}> <@&${visitingRoleId}>`;
+  } else if (residentRoleId) {
+    return `<@&${residentRoleId}>`;
+  } else {
+    return `@${village} residents`;
+  }
+}
+
 // ---- Function: createRaidTurnEmbed ----
 // Creates an embed showing the results of a raid turn
 function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
@@ -213,9 +245,11 @@ function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
       },
       {
         name: 'Want to join in?',
-        value: 'Use `/raid` to join!',
+        value: 'Use </raid:1392945628002259014> to join!',
         inline: false
-      }
+      },
+
+
     )
     .setThumbnail(monsterImage)
     .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
@@ -364,6 +398,11 @@ async function handleRaidVictory(interaction, raidData, monster) {
         {
           name: '__Loot Distribution__',
           value: lootResults.length > 0 ? lootResults.join('\n') : 'No loot was found.',
+          inline: false
+        },
+        {
+          name: '__Village Victory__',
+          value: `${getVillageRoleMention(raidData.village)} — your village is safe! 🛡️`,
           inline: false
         }
       )

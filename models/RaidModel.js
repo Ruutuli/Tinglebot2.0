@@ -220,7 +220,7 @@ raidSchema.methods.completeRaid = function(result, endTime = new Date()) {
 };
 
 // ---- Method: timeoutRaid ----
-// Mark the raid as timed out
+// Mark the raid as timed out (DEPRECATED - village damage feature removed)
 raidSchema.methods.timeoutRaid = function(villageDamage = 0) {
   this.status = 'timed_out';
   this.result = 'timeout';
@@ -229,6 +229,35 @@ raidSchema.methods.timeoutRaid = function(villageDamage = 0) {
   this.analytics.endTime = new Date();
   this.analytics.duration = this.analytics.endTime - this.analytics.startTime;
   this.analytics.villageDamage = villageDamage;
+  
+  return this.save();
+};
+
+// ---- Method: failRaid ----
+// Mark the raid as failed and KO all participants
+raidSchema.methods.failRaid = async function() {
+  this.status = 'timed_out';
+  this.result = 'timeout';
+  this.isActive = false;
+  this.analytics.success = false;
+  this.analytics.endTime = new Date();
+  this.analytics.duration = this.analytics.endTime - this.analytics.startTime;
+  
+  // KO all participants
+  const Character = require('./CharacterModel');
+  for (const participant of this.participants) {
+    try {
+      const character = await Character.findById(participant.characterId);
+      if (character) {
+        character.ko = true;
+        character.currentHearts = 0;
+        await character.save();
+        console.log(`[RaidModel.js]: 💀 KO'd participant ${character.name} in failed raid ${this.raidId}`);
+      }
+    } catch (error) {
+      console.error(`[RaidModel.js]: ❌ Error KO'ing participant ${participant.name}:`, error);
+    }
+  }
   
   return this.save();
 };
@@ -258,12 +287,12 @@ raidSchema.statics.findExpiredRaids = function() {
 };
 
 // ---- Method: cleanupExpiredRaids ----
-// Clean up expired raids by marking them as timed out
+// Clean up expired raids by marking them as failed and KO'ing participants
 raidSchema.statics.cleanupExpiredRaids = async function() {
   const expiredRaids = await this.findExpiredRaids();
   
   for (const raid of expiredRaids) {
-    await raid.timeoutRaid();
+    await raid.failRaid();
   }
   
   return expiredRaids.length;
