@@ -964,7 +964,6 @@ async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, c
             });
         
         // More specific logging based on sheet type
-        const sheetName = range.split('!')[0];
         const entityName = isCharacterObject ? character.name : `User ${character.discordId}`;
         
         if (sheetName.toLowerCase() === 'loggedtracker') {

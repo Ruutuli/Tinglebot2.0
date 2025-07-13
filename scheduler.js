@@ -472,9 +472,9 @@ function initializeScheduler(client) {
   // Initialize blight scheduler
   setupBlightScheduler(client);
 
-  // Blood moon tracking 
-  createCronJob('00 20 * * *', 'blood moon tracking', async () => {
-    console.log(`[scheduler.js]: 🌕 Starting scheduled Blood Moon check at 8 PM EST`);
+  // Blood moon tracking - runs at 8 PM EST to handle blood moon period transitions
+  createCronJob('0 20 * * *', 'blood moon tracking', async () => {
+    console.log(`[scheduler.js]: 🌕 Starting Blood Moon check at 8 PM EST`);
     
     const channels = [
       process.env.RUDANIA_TOWNHALL,
@@ -482,25 +482,25 @@ function initializeScheduler(client) {
       process.env.VHINTL_TOWNHALL,
     ];
 
-    console.log(`[scheduler.js]: 📋 Processing ${channels.length} channels for scheduled Blood Moon check`);
+    console.log(`[scheduler.js]: 📋 Processing ${channels.length} channels for Blood Moon check`);
 
     // Check Blood Moon status once for all channels
     const isBloodMoonActive = isBloodMoonDay();
-    console.log(`[scheduler.js]: 🔍 Scheduled Blood Moon status check result: ${isBloodMoonActive ? 'ACTIVE' : 'INACTIVE'}`);
+    console.log(`[scheduler.js]: 🔍 Blood Moon status check result: ${isBloodMoonActive ? 'ACTIVE' : 'INACTIVE'}`);
 
     if (isBloodMoonActive) {
-      console.log(`[scheduler.js]: 🌕 Blood Moon rising at 8 PM EST - processing all channels`);
+      console.log(`[scheduler.js]: 🌕 Blood Moon period starting at 8 PM EST - processing all channels`);
       await renameChannels(client);
       
       // Send announcements to each channel
       for (const channelId of channels) {
         if (!channelId) {
-          console.warn(`[scheduler.js]: ⚠️ Skipping undefined channel ID in scheduled check`);
+          console.warn(`[scheduler.js]: ⚠️ Skipping undefined channel ID in Blood Moon check`);
           continue;
         }
         
         try {
-          console.log(`[scheduler.js]: 🌕 Sending scheduled Blood Moon announcement to channel ${channelId}`);
+          console.log(`[scheduler.js]: 🌕 Sending Blood Moon announcement to channel ${channelId}`);
           await sendBloodMoonAnnouncement(client, channelId, 'The Blood Moon rises at nightfall! Beware!');
         } catch (error) {
           handleError(error, 'scheduler.js');
@@ -508,7 +508,7 @@ function initializeScheduler(client) {
         }
       }
     } else {
-      console.log(`[scheduler.js]: 📅 No Blood Moon at 8 PM EST - reverting all channels`);
+      console.log(`[scheduler.js]: 📅 No Blood Moon period at 8 PM EST - reverting all channels`);
       try {
         await revertChannelNames(client);
       } catch (error) {
@@ -517,7 +517,7 @@ function initializeScheduler(client) {
       }
     }
     
-    console.log(`[scheduler.js]: ✅ Scheduled Blood Moon check completed`);
+    console.log(`[scheduler.js]: ✅ Blood Moon check completed`);
   }, 'America/New_York');
 }
 
