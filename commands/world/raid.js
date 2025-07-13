@@ -263,7 +263,7 @@ function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
       },
       {
         name: `__${character.name} Status__`,
-        value: `💙 **Hearts:** ${battleResult.playerHearts.current}/${battleResult.playerHearts.max}`,
+        value: `❤️ **Hearts:** ${battleResult.playerHearts.current}/${battleResult.playerHearts.max}`,
         inline: false
       },
       {
@@ -292,7 +292,7 @@ function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
     .setThumbnail(monsterImage)
     .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
     .setFooter({ 
-      text: `Raid ID: ${raidId} • Use /raid to take your turn! Please respect turn order.` 
+      text: `Raid ID: ${raidId} • Use /raid to take your turn! Please respect turn order. • Use /item to heal characters!` 
     })
     .setTimestamp();
 
@@ -469,6 +469,11 @@ async function handleRaidVictory(interaction, raidData, monster) {
         {
           name: '__Loot Distribution__',
           value: lootResults.length > 0 ? lootResults.join('\n') : 'No loot was found.',
+          inline: false
+        },
+        {
+          name: '__Loot System Explanation__',
+          value: `**Damage-Based Loot System:**\n🔥 **10+ hearts damage** = 3x better loot chances\n⚡ **5-9 hearts damage** = 2x better loot chances\n✨ **2-4 hearts damage** = 1.5x better loot chances\n• **0-1 hearts damage** = Base loot chances\n\n*Higher damage dealers get more copies of rare items in their loot pool!*`,
           inline: false
         }
       )
