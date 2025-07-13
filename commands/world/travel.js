@@ -38,7 +38,8 @@ const {
 // ------------------- Handlers -------------------
 const {
   createFinalTravelEmbed,
-  handleTravelInteraction
+  handleTravelInteraction,
+  assignVillageVisitingRole
 } = require('../../handlers/travelHandler.js');
 
 // ------------------- Utility Functions -------------------
@@ -61,6 +62,13 @@ const { isBloodMoonActive } = require('../../scripts/bloodmoon.js');
 
 const COMMAND_NAME = 'travel';
 const COMMAND_DESCRIPTION = 'Travel between villages';
+
+// Village visiting role IDs
+const VILLAGE_VISITING_ROLES = {
+  'Rudania': '1379850030856405185',
+  'Inariko': '1379850102486863924', 
+  'Vhintl': '1379850161794056303'
+};
 
 // Severe weather conditions that block travel
 const SEVERE_WEATHER_CONDITIONS = [
@@ -624,35 +632,46 @@ async function processTravelDay(day, context) {
       // ------------------- Assign Village Role -------------------
       try {
         const member = await interaction.guild.members.fetch(interaction.user.id);
-        const allRoles = await interaction.guild.roles.fetch();
-        const roleName = `${capitalizeFirstLetter(destination)} Visiting`;
-        const villageRole = allRoles.find(role => role.name === roleName);
-      
-        if (villageRole) {
+        const destinationRoleId = VILLAGE_VISITING_ROLES[capitalizeFirstLetter(destination)];
+        const isHomeVillage = character.homeVillage.toLowerCase() === destination.toLowerCase();
+        
+        if (destinationRoleId) {
           // Check if bot has manage roles permission
           const botMember = await interaction.guild.members.fetch(interaction.client.user.id);
           if (botMember.permissions.has('ManageRoles')) {
-            // Remove other "* Visiting" roles first
-            const visitingRoles = member.roles.cache.filter(r => /Visiting$/.test(r.name) && r.id !== villageRole.id);
-            for (const [roleId] of visitingRoles) {
-              try {
-                await member.roles.remove(roleId);
-              } catch (error) {
-                console.warn(`[travel.js]: ⚠️ Failed to remove role ${roleId}: ${error.message}`);
+            // Remove all village visiting roles first
+            const visitingRoleIds = Object.values(VILLAGE_VISITING_ROLES);
+            for (const roleId of visitingRoleIds) {
+              if (member.roles.cache.has(roleId)) {
+                try {
+                  await member.roles.remove(roleId);
+                  console.log(`[travel.js]: ✅ Removed visiting role ${roleId} from ${interaction.user.tag}`);
+                } catch (error) {
+                  console.warn(`[travel.js]: ⚠️ Failed to remove role ${roleId}: ${error.message}`);
+                }
               }
             }
         
-            // Add destination visiting role
-            if (!member.roles.cache.has(villageRole.id)) {
-              try {
-                await member.roles.add(villageRole);
-              } catch (error) {
-                console.warn(`[travel.js]: ⚠️ Failed to add role ${roleName}: ${error.message}`);
+            // Only add visiting role if not returning to home village
+            if (!isHomeVillage) {
+              if (!member.roles.cache.has(destinationRoleId)) {
+                try {
+                  await member.roles.add(destinationRoleId);
+                  console.log(`[travel.js]: ✅ Added ${capitalizeFirstLetter(destination)} visiting role to ${interaction.user.tag}`);
+                } catch (error) {
+                  console.warn(`[travel.js]: ⚠️ Failed to add ${capitalizeFirstLetter(destination)} visiting role: ${error.message}`);
+                }
+              } else {
+                console.log(`[travel.js]: ℹ️ ${interaction.user.tag} already has ${capitalizeFirstLetter(destination)} visiting role`);
               }
+            } else {
+              console.log(`[travel.js]: ℹ️ ${interaction.user.tag} returned to home village ${capitalizeFirstLetter(destination)} - no visiting role assigned`);
             }
           } else {
             console.warn('[travel.js]: ⚠️ Bot lacks ManageRoles permission - skipping role management');
           }
+        } else {
+          console.warn(`[travel.js]: ⚠️ No role ID found for destination: ${capitalizeFirstLetter(destination)}`);
         }
       } catch (error) {
         console.warn(`[travel.js]: ⚠️ Role management failed: ${error.message}`);
@@ -711,6 +730,9 @@ async function processTravelDay(day, context) {
       try {
         await finalChannel.send({ embeds: [finalEmbed] });
         await finalChannel.send({ embeds: [imageEmbed] });
+        
+        // Assign village visiting role after successful arrival
+        await assignVillageVisitingRole(interaction, destination, character);
       } catch (error) {
         handleError(error, 'travel.js');
         await finalChannel.send({ content: '⚠️ Unable to display the arrival embed.' });
