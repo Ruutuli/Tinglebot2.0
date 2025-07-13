@@ -34,7 +34,7 @@ const tokenPath = path.join(__dirname, 'token.json');
 const googleTokens = JSON.parse(fs.readFileSync(tokenPath, 'utf8'));
 
 // Game constants
-const RAID_DURATION = 10 * 60 * 1000; // 10 minutes in milliseconds
+const RAID_DURATION = 20 * 60 * 1000; // 20 minutes in milliseconds
 
 const config = {
   discordToken: process.env.DISCORD_TOKEN,

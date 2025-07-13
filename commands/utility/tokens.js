@@ -146,6 +146,8 @@ module.exports = {
             return;
           }
 
+          // No need to check for 'earned' entries. Allow sync if headers and tab are present.
+
           // Create confirmation buttons
           const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder()

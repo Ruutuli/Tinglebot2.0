@@ -30,7 +30,7 @@ const MESSAGE_THRESHOLD = 100;            // Number of messages to trigger an en
 const MIN_ACTIVE_USERS = 4;               // Minimum unique users required for an encounter
 const TIME_WINDOW = 30 * 60 * 1000;         // 30 minutes in milliseconds
 const CHECK_INTERVAL = 60 * 1000;           // Check every 60 seconds
-const RAID_COOLDOWN = 1 * 60 * 60 * 1000;  // 1 hour cooldown between raids
+const RAID_COOLDOWN = 4 * 60 * 60 * 1000;  // 4 hour cooldown between raids
 
 // ------------------- Excluded Channels -------------------
 // Channels to exclude from message threshold calculations
@@ -59,8 +59,8 @@ const villageChannelMap = {
 // Tracks message timestamps and unique users in each channel.
 const messageActivity = new Map();
 
-// ------------------- Track Raid Cooldowns -------------------
-// Tracks the last raid time to prevent too frequent encounters
+// ------------------- Track Global Raid Cooldown -------------------
+// Tracks the last raid time globally (across all villages) to prevent too frequent encounters
 let lastRaidTime = 0;
 
 function trackMessageActivity(channelId, userId, isBot, username) {
@@ -98,14 +98,23 @@ async function checkForRandomEncounters(client) {
   let totalUsers = new Set();
   let activeChannels = 0;
 
-  // Check if we're still in cooldown period
+  // Check if we're still in global cooldown period
   const timeSinceLastRaid = currentTime - lastRaidTime;
   if (timeSinceLastRaid < RAID_COOLDOWN) {
     const remainingCooldown = Math.ceil((RAID_COOLDOWN - timeSinceLastRaid) / (1000 * 60)); // minutes
-    console.log(`[randomMonsterEncounters.js]: ⏰ Raid cooldown active - ${remainingCooldown} minutes remaining`);
+    const remainingHours = Math.floor(remainingCooldown / 60);
+    const remainingMinutes = remainingCooldown % 60;
+    const timeString = remainingHours > 0 
+      ? `${remainingHours}h ${remainingMinutes}m` 
+      : `${remainingMinutes}m`;
+    console.log(`[randomMonsterEncounters.js]: ⏰ Global raid cooldown active - ${timeString} remaining`);
     return;
+  } else if (lastRaidTime > 0) {
+    // Log when cooldown expires
+    console.log(`[randomMonsterEncounters.js]: ✅ Global raid cooldown expired - raids are now available`);
   }
 
+  // First pass: collect total activity across all channels
   for (const [channelId, activity] of messageActivity.entries()) {
     // Skip excluded channels
     if (EXCLUDED_CHANNELS.includes(channelId)) {
@@ -119,43 +128,46 @@ async function checkForRandomEncounters(client) {
 
     const messageCount = activity.messages.length;
     const uniqueUserCount = activity.users.size;
-    const meetsThreshold = messageCount >= MESSAGE_THRESHOLD && uniqueUserCount >= MIN_ACTIVE_USERS;
 
     if (messageCount > 0) {
       totalMessages += messageCount;
       activity.users.forEach(userId => totalUsers.add(userId));
       activeChannels++;
     }
+  }
 
-    if (meetsThreshold) {
-      console.log(`[randomMonsterEncounters.js]: 🐉 TRIGGERING ENCOUNTER! Channel: ${channelId} (${messageCount} messages, ${uniqueUserCount} users)`);
-      
-      // Update last raid time to start cooldown
-      lastRaidTime = currentTime;
-      console.log(`[randomMonsterEncounters.js]: ⏰ Raid cooldown started - next raid available in 1 hour`);
-      
-      // Reset the activity for the channel.
-      messageActivity.set(channelId, { messages: [], users: new Set() });
+  // Check if server-wide activity meets threshold
+  const meetsThreshold = totalMessages >= MESSAGE_THRESHOLD && totalUsers.size >= MIN_ACTIVE_USERS;
 
-      // Select a random village for the raid
-      const villages = Object.keys(villageChannelMap);
-      const selectedVillage = villages[Math.floor(Math.random() * villages.length)];
-      const selectedVillageKey = selectedVillage.toLowerCase();
-      
-      console.log(`[randomMonsterEncounters.js]: 🎯 Selected village for raid: ${selectedVillage}`);
-      
-      // Get the target channel for the selected village
-      const targetChannelId = villageChannelMap[selectedVillageKey];
-      const raidChannel = client.channels.cache.get(targetChannelId);
-
-      if (raidChannel && raidChannel.type === ChannelType.GuildText) {
-        await triggerRandomEncounter(raidChannel, selectedVillage);
-      } else {
-        console.error(`[randomMonsterEncounters.js]: ❌ Could not find channel for ${selectedVillage} (ID: ${targetChannelId})`);
+  if (meetsThreshold) {
+    console.log(`[randomMonsterEncounters.js]: 🐉 TRIGGERING ENCOUNTER! Server-wide activity: ${totalMessages} messages, ${totalUsers.size} users across ${activeChannels} channels`);
+    
+    // Update global raid cooldown (applies to all villages)
+    lastRaidTime = currentTime;
+    console.log(`[randomMonsterEncounters.js]: ⏰ Global raid cooldown started - next raid available in 4 hours`);
+    
+    // Reset all channel activity after triggering encounter
+    for (const [channelId, activity] of messageActivity.entries()) {
+      if (!EXCLUDED_CHANNELS.includes(channelId)) {
+        messageActivity.set(channelId, { messages: [], users: new Set() });
       }
-      
-      // Only trigger one encounter at a time, so break here
-      break;
+    }
+
+    // Select a random village for the raid
+    const villages = Object.keys(villageChannelMap);
+    const selectedVillage = villages[Math.floor(Math.random() * villages.length)];
+    const selectedVillageKey = selectedVillage.toLowerCase();
+    
+    console.log(`[randomMonsterEncounters.js]: 🎯 Selected village for raid: ${selectedVillage}`);
+    
+    // Get the target channel for the selected village
+    const targetChannelId = villageChannelMap[selectedVillageKey];
+    const raidChannel = client.channels.cache.get(targetChannelId);
+
+    if (raidChannel && raidChannel.type === ChannelType.GuildText) {
+      await triggerRandomEncounter(raidChannel, selectedVillage);
+    } else {
+      console.error(`[randomMonsterEncounters.js]: ❌ Could not find channel for ${selectedVillage} (ID: ${targetChannelId})`);
     }
   }
 

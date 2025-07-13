@@ -124,14 +124,14 @@ module.exports = {
         const activeRaidIds = allRaids.map(r => r.raidId).join(', ');
         
         return interaction.editReply({
-          content: `❌ **Raid not found!**\n\n**Raid ID you entered:** \`${raidId}\`\n\n**Available active raids:** ${activeRaidIds || 'None'}\n\n**Possible issues:**\n• Check if you copied the raid ID correctly\n• The raid may have expired (15-minute time limit)\n• The raid may have been completed\n• Check the raid announcement for the correct ID`,
+          content: `❌ **Raid not found!**\n\n**Raid ID you entered:** \`${raidId}\`\n\n**Available active raids:** ${activeRaidIds || 'None'}\n\n**Possible issues:**\n• Check if you copied the raid ID correctly\n• The raid may have expired (20-minute time limit)\n• The raid may have been completed\n• Check the raid announcement for the correct ID`,
           ephemeral: true
         });
       }
 
       if (raidData.status !== 'active') {
         return interaction.editReply({
-          content: `❌ **Raid ${raidId} is no longer active!**\n\n**Status:** ${raidData.status}\n\n**Possible reasons:**\n• The raid has been completed by other players\n• The raid has expired (15-minute time limit)\n• The raid was manually ended by a moderator\n\n**To join a new raid:**\n• Wait for a new raid announcement\n• Check the village town hall for active raids\n• Use the raid ID from the most recent announcement`,
+          content: `❌ **Raid ${raidId} is no longer active!**\n\n**Status:** ${raidData.status}\n\n**Possible reasons:**\n• The raid has been completed by other players\n• The raid has expired (20-minute time limit)\n• The raid was manually ended by a moderator\n\n**To join a new raid:**\n• Wait for a new raid announcement\n• Check the village town hall for active raids\n• Use the raid ID from the most recent announcement`,
           ephemeral: true
         });
       }
@@ -146,6 +146,13 @@ module.exports = {
 
       // Try to join the raid if not already participating
       let updatedRaidData = raidData;
+      
+      // Ensure participants array exists
+      if (!raidData.participants) {
+        console.warn(`[raid.js]: ⚠️ Raid ${raidId} has no participants array, initializing...`);
+        raidData.participants = [];
+      }
+      
       const existingParticipant = raidData.participants.find(p => 
         p.characterId.toString() === character._id.toString()
       );
@@ -240,7 +247,23 @@ function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
   const characterIcon = character.icon || 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png';
 
   // Build turn order list
-  const turnOrder = raidData.participants.map((p, idx) => `${idx + 1}. ${p.name}`).join('\n');
+  const participants = raidData.participants || [];
+  const turnOrder = participants.map((p, idx) => `${idx + 1}. ${p.name}`).join('\n');
+
+  // Calculate remaining time
+  const now = new Date();
+  const expiresAt = new Date(raidData.expiresAt);
+  const timeRemaining = expiresAt.getTime() - now.getTime();
+  
+  // Format remaining time
+  let timeString = '';
+  if (timeRemaining > 0) {
+    const minutes = Math.floor(timeRemaining / (1000 * 60));
+    const seconds = Math.floor((timeRemaining % (1000 * 60)) / 1000);
+    timeString = `${minutes}m ${seconds}s remaining`;
+  } else {
+    timeString = '⏰ Time expired!';
+  }
 
   // Determine embed color based on outcome
   let color = '#00FF00'; // Green for success
@@ -274,6 +297,11 @@ function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
       {
         name: `__Turn Order__`,
         value: turnOrder || 'No participants',
+        inline: false
+      },
+      {
+        name: `__⏰ Time Remaining__`,
+        value: `**${timeString}**`,
         inline: false
       },
       {
@@ -312,7 +340,8 @@ function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
 // Handles raid victory with loot distribution for all participants
 async function handleRaidVictory(interaction, raidData, monster) {
   try {
-    console.log(`[raid.js]: 🎉 Raid victory! Processing loot for ${raidData.participants.length} participants`);
+    const participants = raidData.participants || [];
+    console.log(`[raid.js]: 🎉 Raid victory! Processing loot for ${participants.length} participants`);
     
     // Fetch items for the monster
     const items = await fetchItemsByMonster(monster.name);
@@ -322,7 +351,7 @@ async function handleRaidVictory(interaction, raidData, monster) {
     const lootResults = [];
     const Character = require('../../models/CharacterModel');
     
-    for (const participant of raidData.participants) {
+    for (const participant of participants) {
       try {
         // Fetch the character's current data
         const character = await Character.findById(participant.characterId);
@@ -441,7 +470,7 @@ async function handleRaidVictory(interaction, raidData, monster) {
     }
     
     // Create participant list
-    const participantList = raidData.participants.map(p => `• **${p.name}** (${p.damage} hearts)`).join('\n');
+    const participantList = participants.map(p => `• **${p.name}** (${p.damage} hearts)`).join('\n');
     
     // Get monster image from monsterMapping
     const { monsterMapping } = require('../../models/MonsterModel');
@@ -458,7 +487,7 @@ async function handleRaidVictory(interaction, raidData, monster) {
       .addFields(
         {
           name: '__Raid Summary__',
-          value: `🎯 **Total Damage:** ${raidData.analytics.totalDamage} hearts\n👥 **Participants:** ${raidData.participants.length}\n⏱️ **Duration:** ${Math.floor((raidData.analytics.endTime - raidData.analytics.startTime) / 1000 / 60)}m`,
+          value: `🎯 **Total Damage:** ${raidData.analytics.totalDamage} hearts\n👥 **Participants:** ${participants.length}\n⏱️ **Duration:** ${Math.floor((raidData.analytics.endTime - raidData.analytics.startTime) / 1000 / 60)}m`,
           inline: false
         },
         {

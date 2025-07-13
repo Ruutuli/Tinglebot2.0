@@ -75,7 +75,7 @@ const raidSchema = new mongoose.Schema({
     default: null
   },
   
-  // Participant information
+    // Participant information
   participants: [{
     userId: {
       type: String,
@@ -99,19 +99,19 @@ const raidSchema = new mongoose.Schema({
       type: Date,
       default: Date.now
     },
-    characterState: {
-      currentHearts: Number,
-      maxHearts: Number,
-      currentStamina: Number,
-      maxStamina: Number,
-      attack: Number,
-      defense: Number,
-      gearArmor: String,
-      gearWeapon: String,
-      gearShield: String,
-      ko: Boolean
-    }
-  }],
+          characterState: {
+        currentHearts: Number,
+        maxHearts: Number,
+        currentStamina: Number,
+        maxStamina: Number,
+        attack: Number,
+        defense: Number,
+        gearArmor: String,
+        gearWeapon: String,
+        gearShield: String,
+        ko: Boolean
+      }
+    }],
   
   // Analytics information
   analytics: {
@@ -180,6 +180,11 @@ raidSchema.methods.isExpired = function() {
 // ---- Method: addParticipant ----
 // Add a participant to the raid
 raidSchema.methods.addParticipant = function(participant) {
+  // Ensure participants array exists
+  if (!this.participants) {
+    this.participants = [];
+  }
+  
   // Check if user already has a character in the raid
   const existingParticipant = this.participants.find(p => p.userId === participant.userId);
   if (existingParticipant) {
@@ -194,6 +199,11 @@ raidSchema.methods.addParticipant = function(participant) {
 // ---- Method: updateParticipantDamage ----
 // Update a participant's damage
 raidSchema.methods.updateParticipantDamage = function(characterId, damage) {
+  // Ensure participants array exists
+  if (!this.participants) {
+    this.participants = [];
+  }
+  
   const participant = this.participants.find(p => p.characterId.toString() === characterId.toString());
   if (!participant) {
     throw new Error('Participant not found in raid');
@@ -242,6 +252,11 @@ raidSchema.methods.failRaid = async function() {
   this.analytics.success = false;
   this.analytics.endTime = new Date();
   this.analytics.duration = this.analytics.endTime - this.analytics.startTime;
+  
+  // Ensure participants array exists
+  if (!this.participants) {
+    this.participants = [];
+  }
   
   // KO all participants
   const Character = require('./CharacterModel');
