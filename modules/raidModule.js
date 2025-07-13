@@ -21,7 +21,7 @@ const Raid = require('../models/RaidModel');
 // ============================================================================
 // ---- Constants ----
 // ============================================================================
-const RAID_DURATION = 10 * 60 * 1000; // 10 minutes in milliseconds
+const RAID_DURATION = 20 * 60 * 1000; // 20 minutes in milliseconds
 const THREAD_AUTO_ARCHIVE_DURATION = 60; // 60 minutes (Discord allows: 1, 3, 7, 14, 30, 60, 1440 minutes)
 
 // Village resident role IDs
@@ -151,7 +151,7 @@ async function startRaid(monster, village, interaction = null) {
         // Check if raid is still active
         const currentRaid = await Raid.findOne({ raidId: raidId });
         if (currentRaid && currentRaid.status === 'active') {
-          console.log(`[raidModule.js]: ⏰ Raid ${raidId} timed out after ${RAID_DURATION/1000} seconds`);
+          console.log(`[raidModule.js]: ⏰ Raid ${raidId} timed out`);
           
           // Mark raid as failed and KO all participants
           await currentRaid.failRaid();
@@ -164,7 +164,7 @@ async function startRaid(monster, village, interaction = null) {
                 const failureEmbed = new EmbedBuilder()
                   .setColor('#FF0000')
                   .setTitle('💥 **Raid Failed!**')
-                  .setDescription(`The raid against **${currentRaid.monster.name}** has failed after ${RAID_DURATION/1000} seconds!`)
+                  .setDescription(`The raid against **${currentRaid.monster.name}** has failed!`)
                   .addFields(
                     {
                       name: '__Monster Status__',
@@ -173,14 +173,14 @@ async function startRaid(monster, village, interaction = null) {
                     },
                     {
                       name: '__Participants__',
-                      value: currentRaid.participants.length > 0 
+                      value: (currentRaid.participants && currentRaid.participants.length > 0)
                         ? currentRaid.participants.map(p => `• **${p.name}** (${p.damage} hearts) - **KO'd**`).join('\n')
                         : 'No participants',
                       inline: false
                     },
                     {
                       name: '__Failure__',
-                      value: currentRaid.participants.length > 0 
+                      value: (currentRaid.participants && currentRaid.participants.length > 0)
                         ? `All participants have been knocked out! 💀`
                         : `The monster caused havoc as no one defended the village from it and then ran off!`,
                       inline: false
@@ -319,7 +319,8 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
     }
 
     // Find participant
-    const participant = raid.participants.find(p => p.characterId.toString() === character._id.toString());
+    const participants = raid.participants || [];
+    const participant = participants.find(p => p.characterId.toString() === character._id.toString());
     if (!participant) {
       throw new Error('Character is not in this raid');
     }
@@ -450,7 +451,7 @@ async function createRaidThread(interaction, raid) {
       `\n${roleMention} — come help defend your home!`,
       `\nUse </raid:1392945628002259014> to join the fight!`,
       `\n\n**Raid ID:** \`\`\`${raid.raidId}\`\`\``,
-      `\n\n⏰ **You have 15 minutes to complete this raid!**`
+      `\n\n⏰ **You have 20 minutes to complete this raid!**`
     ].join('');
 
     // Send the text message to the thread
@@ -474,6 +475,21 @@ function createRaidEmbed(raid, monsterImage) {
   const villageName = capitalizeVillageName(raid.village);
   const villageEmoji = getVillageEmojiByName(raid.village) || '';
 
+  // Calculate remaining time
+  const now = new Date();
+  const expiresAt = new Date(raid.expiresAt);
+  const timeRemaining = expiresAt.getTime() - now.getTime();
+  
+  // Format remaining time
+  let timeString = '';
+  if (timeRemaining > 0) {
+    const minutes = Math.floor(timeRemaining / (1000 * 60));
+    const seconds = Math.floor((timeRemaining % (1000 * 60)) / 1000);
+    timeString = `${minutes}m ${seconds}s remaining`;
+  } else {
+    timeString = '⏰ Time expired!';
+  }
+
   const embed = new EmbedBuilder()
     .setColor('#FF0000')
     .setTitle('🛡️ Village Raid!')
@@ -482,7 +498,7 @@ function createRaidEmbed(raid, monsterImage) {
       `*It's a Tier ${raid.monster.tier} monster! Protect the village!*\n\n` +
       `</raid:1392945628002259014> to join or continue the raid!\n` +
       `</item:1379838613067530385> to heal during the raid!\n\n` +
-      `⏰ **You have 15 minutes to complete this raid!**`
+      `⏰ **You have 20 minutes to complete this raid!**`
     )
     .addFields(
       {
@@ -493,6 +509,11 @@ function createRaidEmbed(raid, monsterImage) {
       {
         name: `__Location__`,
         value: `${villageEmoji} ${villageName}`,
+        inline: false
+      },
+      {
+        name: `__⏰ Time Remaining__`,
+        value: `**${timeString}**`,
         inline: false
       },
       {
@@ -613,7 +634,7 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false)
         `\n${roleMention} — come help defend your home!`,
         `\nUse </raid:1392945628002259014> to join the fight!`,
         `\n\n**Raid ID:** \`\`\`${raidId}\`\`\``,
-        `\n\n⏰ **You have 15 minutes to complete this raid!**`
+        `\n\n⏰ **You have 20 minutes to complete this raid!**`
       ].join('');
 
       await thread.send(threadMessage);
@@ -646,7 +667,7 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false)
         `\n${roleMention} — come help defend your home!`,
         `\nUse </raid:1392945628002259014> to join the fight!`,
         `\n\n**Raid ID:** \`\`\`${raidId}\`\`\``,
-        `\n\n⏰ **You have 15 minutes to complete this raid!**`,
+        `\n\n⏰ **You have 20 minutes to complete this raid!**`,
         `\n\n*Note: No thread was created in this channel. Use the raid ID to participate!*`
       ].join('');
 
