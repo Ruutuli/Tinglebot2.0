@@ -28,8 +28,9 @@ require('dotenv').config();
 // ------------------- Define thresholds and timing constants -------------------
 const MESSAGE_THRESHOLD = 50;            // Number of messages to trigger an encounter
 const MIN_ACTIVE_USERS = 4;               // Minimum unique users required for an encounter
-const TIME_WINDOW = 30 * 60 * 1000;         // 10 minutes in milliseconds
-const CHECK_INTERVAL = 60 * 1000;           // Check every 30 seconds
+const TIME_WINDOW = 30 * 60 * 1000;         // 30 minutes in milliseconds
+const CHECK_INTERVAL = 60 * 1000;           // Check every 60 seconds
+const RAID_COOLDOWN = 4 * 60 * 60 * 1000;  // 4 hours cooldown between raids
 
 // ------------------- Village Channels -------------------
 // Maps village names to their respective channel IDs (from environment variables)
@@ -47,10 +48,14 @@ const villageChannelMap = {
 };
 
 // ============================================================================
-// Message Activity Tracking
+// Message Activity Tracking & Cooldown System
 // ------------------- Track Server Activity -------------------
 // Tracks message timestamps and unique users in each channel.
 const messageActivity = new Map();
+
+// ------------------- Track Raid Cooldowns -------------------
+// Tracks the last raid time to prevent too frequent encounters
+let lastRaidTime = 0;
 
 function trackMessageActivity(channelId, userId, isBot, username) {
   if (isBot) return; // Ignore bot messages
@@ -80,6 +85,14 @@ async function checkForRandomEncounters(client) {
   const currentTime = Date.now();
   let totalActivity = 0;
 
+  // Check if we're still in cooldown period
+  const timeSinceLastRaid = currentTime - lastRaidTime;
+  if (timeSinceLastRaid < RAID_COOLDOWN) {
+    const remainingCooldown = Math.ceil((RAID_COOLDOWN - timeSinceLastRaid) / (1000 * 60)); // minutes
+    console.log(`[randomMonsterEncounters.js]: ⏰ Raid cooldown active - ${remainingCooldown} minutes remaining`);
+    return;
+  }
+
   for (const [channelId, activity] of messageActivity.entries()) {
     // Remove outdated messages.
     activity.messages = activity.messages.filter(
@@ -97,6 +110,11 @@ async function checkForRandomEncounters(client) {
 
     if (meetsThreshold) {
       console.log(`[randomMonsterEncounters.js]: 🐉 TRIGGERING ENCOUNTER! Channel: ${channelId} (${messageCount} messages, ${uniqueUserCount} users)`);
+      
+      // Update last raid time to start cooldown
+      lastRaidTime = currentTime;
+      console.log(`[randomMonsterEncounters.js]: ⏰ Raid cooldown started - next raid available in 4 hours`);
+      
       // Reset the activity for the channel.
       messageActivity.set(channelId, { messages: [], users: new Set() });
 
@@ -116,6 +134,9 @@ async function checkForRandomEncounters(client) {
       } else {
         console.error(`[randomMonsterEncounters.js]: ❌ Could not find channel for ${selectedVillage} (ID: ${targetChannelId})`);
       }
+      
+      // Only trigger one encounter at a time, so break here
+      break;
     }
   }
 
@@ -167,9 +188,12 @@ async function triggerRandomEncounter(channel, selectedVillage) {
     
     // Use the same triggerRaid function as the mod command
     const { triggerRaid } = require('../modules/raidModule');
-    console.log(`[randomMonsterEncounters.js]: 🚀 Triggering raid for ${monster.name} in ${selectedVillage}`);
     
-    const result = await triggerRaid(monster, mockInteraction, selectedVillage, false);
+    // Capitalize the village name to match the RaidModel enum values
+    const capitalizedVillage = capitalizeVillageName(selectedVillage);
+    console.log(`[randomMonsterEncounters.js]: 🚀 Triggering raid for ${monster.name} in ${capitalizedVillage}`);
+    
+    const result = await triggerRaid(monster, mockInteraction, capitalizedVillage, false);
 
     if (!result || !result.success) {
       console.error(`[randomMonsterEncounters.js]: ❌ Failed to trigger raid: ${result?.error || 'Unknown error'}`);
