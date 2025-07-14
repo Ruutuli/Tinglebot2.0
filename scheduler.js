@@ -488,7 +488,7 @@ async function setupBoostingScheduler(client) {
 // ============================================================================
 
 function setupWeatherScheduler(client) {
- // Weather updates at 8 AM EST daily
+ // Weather updates at 8 AM EST daily - THIS IS THE ONLY WEATHER POSTING JOB
  createCronJob("0 8 * * *", "Daily Weather Update", () =>
   postWeatherUpdate(client)
  );
@@ -588,9 +588,7 @@ function initializeScheduler(client) {
  createCronJob("0 0 * * *", "debuff expiry check", () =>
   handleDebuffExpiry(client)
  );
- createCronJob("0 8 * * *", "daily weather update", () =>
-  postWeatherUpdate(client)
- );
+ // Weather update is handled by setupWeatherScheduler() - removed duplicate
  createCronJob("0 0 * * *", "birthday announcements", () =>
   executeBirthdayAnnouncements(client)
  );
