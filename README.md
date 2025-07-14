@@ -40,9 +40,9 @@ A Discord bot for managing character interactions, raids, and village activities
 ### Combat System
 - **Regular Combat**: Equipment provides percentage-based bonuses to attack and defense
 - **Raid Combat**: Equipment **always** provides guaranteed benefits during raids
-  - Weapons: Always add their attack value to combat rolls
-  - Armor/Shields: Always add their defense value to combat rolls
-  - This makes equipment much more valuable and impactful in raid scenarios
+  - Weapons: Always add `attackStat × 5` to combat rolls
+  - Armor/Shields: Always add `defenseStat × 1.2` to combat rolls
+  - This makes equipment valuable and impactful in raid scenarios while maintaining challenge
 
 ### Equipment System
 - Characters can equip weapons, armor (head, chest, legs), and shields
