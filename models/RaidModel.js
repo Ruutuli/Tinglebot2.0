@@ -113,6 +113,13 @@ const raidSchema = new mongoose.Schema({
       }
     }],
   
+  // Turn order tracking
+  currentTurn: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  
   // Analytics information
   analytics: {
     totalDamage: {
@@ -214,6 +221,98 @@ raidSchema.methods.updateParticipantDamage = function(characterId, damage) {
   this.analytics.averageDamagePerParticipant = this.analytics.totalDamage / this.analytics.participantCount;
   
   return this.save();
+};
+
+// ---- Method: advanceTurn ----
+// Advance to the next turn, skipping KO'd participants
+raidSchema.methods.advanceTurn = async function() {
+  // Ensure participants array exists
+  if (!this.participants) {
+    this.participants = [];
+  }
+  
+  if (this.participants.length === 0) {
+    return this.save();
+  }
+  
+  // Find the next non-KO'd participant
+  let nextTurn = this.currentTurn;
+  let attempts = 0;
+  const maxAttempts = this.participants.length * 2; // Prevent infinite loops
+  
+  do {
+    nextTurn = (nextTurn + 1) % this.participants.length;
+    attempts++;
+    
+    // Check if the next participant is KO'd from database
+    const nextParticipant = this.participants[nextTurn];
+    const Character = require('./CharacterModel');
+    const currentCharacter = await Character.findById(nextParticipant.characterId);
+    const isKO = currentCharacter?.ko || false;
+    
+    if (!isKO) {
+      this.currentTurn = nextTurn;
+      break;
+    }
+  } while (attempts < maxAttempts);
+  
+  // If all participants are KO'd, keep current turn
+  if (attempts >= maxAttempts) {
+    console.warn(`[RaidModel.js]: ⚠️ All participants in raid ${this.raidId} appear to be KO'd`);
+  }
+  
+  return this.save();
+};
+
+// ---- Method: getCurrentTurnParticipant ----
+// Get the participant whose turn it currently is
+raidSchema.methods.getCurrentTurnParticipant = function() {
+  // Ensure participants array exists
+  if (!this.participants) {
+    this.participants = [];
+  }
+  
+  if (this.participants.length === 0) {
+    return null;
+  }
+  
+  return this.participants[this.currentTurn];
+};
+
+// ---- Method: getNextTurnParticipant ----
+// Get the next participant in turn order (skipping KO'd)
+raidSchema.methods.getNextTurnParticipant = async function() {
+  // Ensure participants array exists
+  if (!this.participants) {
+    this.participants = [];
+  }
+  
+  if (this.participants.length === 0) {
+    return null;
+  }
+  
+  // Find the next non-KO'd participant
+  let nextTurn = this.currentTurn;
+  let attempts = 0;
+  const maxAttempts = this.participants.length * 2; // Prevent infinite loops
+  
+  do {
+    nextTurn = (nextTurn + 1) % this.participants.length;
+    attempts++;
+    
+    // Check if the next participant is KO'd from database
+    const nextParticipant = this.participants[nextTurn];
+    const Character = require('./CharacterModel');
+    const currentCharacter = await Character.findById(nextParticipant.characterId);
+    const isKO = currentCharacter?.ko || false;
+    
+    if (!isKO) {
+      return nextParticipant;
+    }
+  } while (attempts < maxAttempts);
+  
+  // If all participants are KO'd, return null
+  return null;
 };
 
 // ---- Method: completeRaid ----

@@ -871,21 +871,23 @@ module.exports = {
        );
 
        try {
-        const battleId = await triggerRaid(
-         character,
+        const raidResult = await triggerRaid(
          selectedMonster,
          interaction,
          null,
-         false
+         false,
+         character
         );
 
-        if (!battleId) {
-         console.error(`[ERROR] Failed to trigger raid for battle.`);
+        if (!raidResult || !raidResult.success) {
+         console.error(`[ERROR] Failed to trigger raid for battle: ${raidResult?.error || 'Unknown error'}`);
          await interaction.editReply(
           "**An error occurred during the raid setup.**"
          );
          return;
         }
+
+        const battleId = raidResult.raidId;
 
         await new Promise((resolve) => setTimeout(resolve, 2000));
 
