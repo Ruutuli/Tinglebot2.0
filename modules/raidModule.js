@@ -244,10 +244,7 @@ async function joinRaid(character, raidId) {
       throw new Error('Raid is not active');
     }
 
-    // Check if character is KO'd
-    if (character.ko) {
-      throw new Error('Character is KO\'d and cannot join raid');
-    }
+    // Note: KO'd characters can still join raids (KO status is handled during combat)
 
     // Check if character is in the same village
     if (character.currentVillage.toLowerCase() !== raid.village.toLowerCase()) {
@@ -325,10 +322,7 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
       throw new Error('Character is not in this raid');
     }
 
-    // Check if character is KO'd
-    if (character.ko) {
-      throw new Error('Character is KO\'d and cannot take turns');
-    }
+    // Note: KO'd characters can still take turns in raids (KO status is handled during combat)
 
     // Generate random roll and calculate final value
     const diceRoll = Math.floor(Math.random() * 100) + 1;
