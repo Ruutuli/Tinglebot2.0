@@ -191,11 +191,17 @@ function isBloodMoonDay() {
 
   const now = new Date();
   const today = normalizeDate(now);
-  const estHour = now.getUTCHours() - 4; // Convert UTC to EST
+  
+  // Proper EST time calculation
+  const estHour = parseInt(now.toLocaleString('en-US', { 
+    timeZone: 'America/New_York',
+    hour: 'numeric',
+    hour12: false
+  }));
   
   console.log(`[bloodmoon.js]: 📅 Current date: ${today.toISOString().split('T')[0]}, EST hour: ${estHour}`);
   
-  // Check if it's within the Blood Moon period (day before, blood moon day, day after)
+  // Check if it's within the Blood Moon period (day before, blood moon date, day after)
   const isBloodMoonPeriod = bloodmoonDates.some(({ realDate }) => {
     const [month, day] = realDate.split('-').map(Number);
     const bloodMoonDate = normalizeDate(new Date(today.getFullYear(), month - 1, day));
@@ -363,7 +369,13 @@ async function revertChannelNames(client) {
 
   // Check if we're at 8 PM EST and transitioning out of a Blood Moon period
   const now = new Date();
-  const estHour = now.getUTCHours() - 4; // Convert UTC to EST
+  
+  // Proper EST time calculation
+  const estHour = parseInt(now.toLocaleString('en-US', { 
+    timeZone: 'America/New_York',
+    hour: 'numeric',
+    hour12: false
+  }));
   const is8PM = estHour === 20;
   
   console.log(`[bloodmoon.js]: 🕐 Current EST hour: ${estHour}:00, is 8 PM: ${is8PM}`);
