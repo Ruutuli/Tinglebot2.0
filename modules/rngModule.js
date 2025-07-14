@@ -177,9 +177,7 @@ function calculateRaidFinalValue(character, diceRoll) {
     character.defense
   );
   
-  console.log(`[rngModule.js]: 🎲 Raid calculation - Roll: ${diceRoll}, Adjusted: ${adjustedRandomValue}, Attack: ${attackSuccess}, Defense: ${defenseSuccess}`);
-  console.log(`[rngModule.js]: 🗡️ Weapon equipped: ${character.gearWeapon?.name || 'None'}, Attack: ${character.attack}`);
-  console.log(`[rngModule.js]: 🛡️ Armor equipped: Head(${character.gearArmor?.head?.name || 'None'}), Chest(${character.gearArmor?.chest?.name || 'None'}), Legs(${character.gearArmor?.legs?.name || 'None'}), Shield(${character.gearShield?.name || 'None'}), Defense: ${character.defense}`);
+  // Raid calculation details logged only in debug mode
   
   return {
     damageValue: diceRoll,

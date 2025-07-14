@@ -46,9 +46,7 @@ const VILLAGE_VISITING_ROLES = {
 // Processes a raid battle turn using the encounter module's tier-specific logic
 async function processRaidBattle(character, monster, diceRoll, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess) {
   try {
-    console.log(`[raidModule.js]: ⚔️ Processing raid battle - ${character.name} vs ${monster.name} (T${monster.tier})`);
-    console.log(`[raidModule.js]: 🎲 Roll: ${diceRoll}, Damage Value: ${damageValue}, Adjusted: ${adjustedRandomValue}`);
-    console.log(`[raidModule.js]: 🗡️ Equipment check - Weapon: ${character.gearWeapon?.name || 'None'} (${character.attack} attack), Armor: ${character.defense} defense`);
+    // Battle processing details logged only in debug mode
 
     let outcome;
     
@@ -80,7 +78,7 @@ async function processRaidBattle(character, monster, diceRoll, damageValue, adju
       throw new Error('Failed to calculate raid battle outcome');
     }
 
-    console.log(`[raidModule.js]: 💥 Battle result - Damage dealt: ${outcome.hearts}, Character damage: ${outcome.result.includes('loses') ? 'Yes' : 'No'}`);
+    // Battle result logged only in debug mode
 
     return {
       hearts: outcome.hearts, // Damage dealt to monster
@@ -365,15 +363,13 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
       
       // Advance to next turn if monster is not defeated
       await raid.advanceTurn();
-      console.log(`[raidModule.js]: 🔄 Advanced turn in raid ${raidId} to index ${raid.currentTurn}`);
+      // Turn advancement logged only in debug mode
     }
 
     // Save updated raid data
     await raid.save();
 
-    console.log(`[raidModule.js]: ⚔️ ${character.name} completed turn in raid ${raidId}`);
-    console.log(`[raidModule.js]: 📊 Final raid data - currentTurn: ${raid.currentTurn}`);
-    console.log(`[raidModule.js]: 📊 Final raid data - participants length: ${raid.participants?.length}`);
+    // Turn completion logged only in debug mode
     
     return {
       raidId,

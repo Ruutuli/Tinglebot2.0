@@ -591,13 +591,13 @@ async function processBattle(character, monster, battleId, originalRoll, interac
 
 async function handleEncounter(character, monster, battleId) {
     try {
-        console.log(`[encounterModule.js]: ⚔️ ${character.name} vs ${monster.name} (T${monster.tier}) - Roll: ${roll}/${100}`);
+        // Battle details logged only in debug mode
 
         // Calculate damage
         const characterDamage = calculateDamage(character, monster);
         const monsterDamage = calculateDamage(monster, character);
 
-        console.log(`[encounterModule.js]: 💥 Damage - ${character.name}: ${characterDamage}, ${monster.name}: ${monsterDamage}`);
+        // Damage details logged only in debug mode
 
         // Update character stats
         if (monsterDamage > 0) {

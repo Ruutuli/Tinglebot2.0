@@ -53,21 +53,21 @@ const applyRaidBuffs = (randomValue, attackSuccess, defenseSuccess, attackStat, 
 
   // In raids, if equipment exists, it always provides its benefit
   if (attackSuccess && attackStat > 0) {
-    // Weapon always adds its attack value to the roll (reduced multiplier for balance)
-    adjustedRandomValue += attackStat * 5;
-    console.log(`[buffModule.js]: 🗡️ Raid weapon bonus applied: +${attackStat * 5} (${attackStat} attack)`);
+    // Weapon always adds its attack value to the roll (further reduced multiplier for balance)
+    adjustedRandomValue += attackStat * 2.5;
+    // Raid weapon bonus logged only in debug mode
   }
 
   if (defenseSuccess && defenseStat > 0) {
-    // Armor/shield always adds its defense value to the roll (reduced multiplier for balance)
-    adjustedRandomValue += defenseStat * 1.2;
-    console.log(`[buffModule.js]: 🛡️ Raid armor bonus applied: +${defenseStat * 1.2} (${defenseStat} defense)`);
+    // Armor/shield always adds its defense value to the roll (further reduced multiplier for balance)
+    adjustedRandomValue += defenseStat * 1.1;
+    console.log(`[buffModule.js]: 🛡️ Raid armor bonus applied: +${defenseStat * 1.1} (${defenseStat} defense)`);
   }
 
   // Ensure the final adjusted value is between 1 and 100
   adjustedRandomValue = Math.max(1, Math.min(adjustedRandomValue, 100));
   
-  console.log(`[buffModule.js]: 🎯 Raid buff result - Original: ${randomValue}, Adjusted: ${adjustedRandomValue}`);
+  // Raid buff result logged only in debug mode
   
   return adjustedRandomValue;
 };
