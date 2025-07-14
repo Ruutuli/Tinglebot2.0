@@ -272,6 +272,11 @@ async function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
   
   console.log(`[raid.js]: 📊 Creating turn order display - Current turn index: ${currentTurnIndex}`);
   console.log(`[raid.js]: 📊 Total participants: ${participants.length}`);
+  console.log(`[raid.js]: 📊 RaidData.currentTurn: ${raidData.currentTurn}`);
+  console.log(`[raid.js]: 📊 Participants array length: ${participants.length}`);
+  console.log(`[raid.js]: 📊 RaidData object keys: ${Object.keys(raidData)}`);
+  console.log(`[raid.js]: 📊 RaidData.raidId: ${raidData.raidId}`);
+  console.log(`[raid.js]: 📊 Participants array: ${participants.map((p, idx) => `${idx}: ${p.name}`).join(', ')}`);
   
   // Create turn order with current turn indicator
   const turnOrderLines = [];
@@ -294,6 +299,7 @@ async function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
       koCharacters.push(p.name);
       turnOrderLines.push(`${idx + 1}. ${p.name} 💀 (KO'd)`);
     } else if (isCurrentTurn) {
+      console.log(`[raid.js]: 📊 MARKING AS CURRENT TURN: ${p.name} at index ${idx}`);
       turnOrderLines.push(`${idx + 1}. ${p.name} ⚔️ (Current Turn)`);
     } else {
       turnOrderLines.push(`${idx + 1}. ${p.name}`);
@@ -301,6 +307,7 @@ async function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
   }
   
   const turnOrder = turnOrderLines.join('\n');
+  console.log(`[raid.js]: 📊 Final turn order display:\n${turnOrder}`);
   
   // Get next player for mention
   const nextPlayer = await raidData.getNextTurnParticipant();

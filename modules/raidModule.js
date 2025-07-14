@@ -371,6 +371,8 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
     await raid.save();
 
     console.log(`[raidModule.js]: ⚔️ ${character.name} completed turn in raid ${raidId}`);
+    console.log(`[raidModule.js]: 📊 Final raid data - currentTurn: ${raid.currentTurn}`);
+    console.log(`[raidModule.js]: 📊 Final raid data - participants length: ${raid.participants?.length}`);
     
     return {
       raidId,
