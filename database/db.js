@@ -1411,8 +1411,11 @@ async function updateTokenBalance(userId, change) {
 // ------------------- syncTokenTracker -------------------
 async function syncTokenTracker(userId) {
  try {
+  console.log(`[syncTokenTracker]: Starting sync for userId: ${userId}`);
   const user = await getOrCreateToken(userId);
+  console.log(`[syncTokenTracker]: User loaded:`, { userId: user.discordId, tokenTracker: user.tokenTracker });
   if (!user.tokenTracker || !isValidGoogleSheetsUrl(user.tokenTracker)) {
+   console.log(`[syncTokenTracker]: Invalid or missing token tracker URL.`);
    throw new Error("Invalid URL");
   }
 
@@ -1420,27 +1423,37 @@ async function syncTokenTracker(userId) {
   const spreadsheetId = extractSpreadsheetId(user.tokenTracker);
   const range = "loggedTracker!B7:F";
   const sheetData = await readSheetData(auth, spreadsheetId, range);
+  console.log(`[syncTokenTracker]: Sheet data loaded. Rows: ${sheetData.length}`);
 
   // Validate headers
   const headers = sheetData[0];
+  console.log(`[syncTokenTracker]: Headers found:`, headers);
   if (!headers || headers.length < 5) {
+    console.log(`[syncTokenTracker]: Invalid or missing headers in row 7. Headers:`, headers);
     throw new Error("Invalid sheet format. Please ensure your sheet has the correct headers in row 7.");
   }
 
   // Check if there are any earned entries
-  const hasEarnedEntries = sheetData.slice(1).some(row => row[3] === "earned");
-  if (!hasEarnedEntries) {
+  const earnedRows = sheetData.slice(1).filter(row => row[3] === "earned");
+  console.log(`[syncTokenTracker]: Earned entry rows found: ${earnedRows.length}`);
+  if (!earnedRows.length) {
+    console.log(`[syncTokenTracker]: No 'earned' entries found in the sheet. Blocking sync.`);
     throw new Error("No 'earned' entries found in your token tracker. Please add at least one entry with type 'earned' in column E.");
   }
 
   let totalEarned = 0;
   let totalSpent = 0;
 
-  sheetData.slice(1).forEach((row) => {
-    if (row.length < 5) return; // Skip invalid rows
+  sheetData.slice(1).forEach((row, idx) => {
+    if (row.length < 5) {
+      console.log(`[syncTokenTracker]: Skipping invalid row at index ${idx + 1}:`, row);
+      return; // Skip invalid rows
+    }
     const amount = parseInt(row[4]);
-    if (isNaN(amount)) return; // Skip rows with invalid amounts
-    
+    if (isNaN(amount)) {
+      console.log(`[syncTokenTracker]: Skipping row with invalid amount at index ${idx + 1}:`, row);
+      return; // Skip rows with invalid amounts
+    }
     if (row[3] === "earned") {
       totalEarned += amount;
     } else if (row[3] === "spent") {
@@ -1448,9 +1461,12 @@ async function syncTokenTracker(userId) {
     }
   });
 
+  console.log(`[syncTokenTracker]: totalEarned: ${totalEarned}, totalSpent: ${totalSpent}`);
+
   user.tokens = totalEarned - totalSpent;
   user.tokensSynced = true;
   await user.save();
+  console.log(`[syncTokenTracker]: Sync complete. User tokens updated to: ${user.tokens}`);
 
   return user;
  } catch (error) {
@@ -1461,6 +1477,7 @@ async function syncTokenTracker(userId) {
     handleError(error, "tokenService.js");
     console.error("[tokenService.js]: ❌ Error syncing token tracker:", error);
   }
+  console.error(`[syncTokenTracker]: Error: ${error.message}`);
   throw error; // Pass the original error to maintain the specific error message
  }
 }

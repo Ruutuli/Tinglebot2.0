@@ -179,6 +179,14 @@ module.exports = {
       console.log(`[raid.js]: 🔄 Current turn index: ${updatedRaidData.currentTurn}`);
       console.log(`[raid.js]: 👤 Current turn participant: ${currentTurnParticipant?.name || 'None'}`);
       console.log(`[raid.js]: 👤 Attempting turn: ${character.name}`);
+      console.log(`[raid.js]: 👥 Total participants: ${updatedRaidData.participants?.length || 0}`);
+      
+      // Log all participants for debugging
+      if (updatedRaidData.participants) {
+        updatedRaidData.participants.forEach((p, idx) => {
+          console.log(`[raid.js]: 👥 Participant ${idx}: ${p.name} (ID: ${p.characterId})`);
+        });
+      }
 
       // Process the raid turn
       const turnResult = await processRaidTurn(character, raidId, interaction, updatedRaidData);
@@ -269,6 +277,9 @@ async function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
   const participants = raidData.participants || [];
   const currentTurnIndex = raidData.currentTurn || 0;
   
+  console.log(`[raid.js]: 📊 Creating turn order display - Current turn index: ${currentTurnIndex}`);
+  console.log(`[raid.js]: 📊 Total participants: ${participants.length}`);
+  
   // Create turn order with current turn indicator
   const turnOrderLines = [];
   const koCharacters = [];
@@ -283,6 +294,8 @@ async function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
     // Get current character state from database
     const currentCharacter = await Character.findById(p.characterId);
     const isKO = currentCharacter?.ko || false;
+    
+    console.log(`[raid.js]: 📊 Participant ${idx}: ${p.name} - KO: ${isKO}, Current Turn: ${isCurrentTurn}`);
     
     if (isKO) {
       koCharacters.push(p.name);
