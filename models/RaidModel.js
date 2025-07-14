@@ -239,7 +239,7 @@ raidSchema.methods.advanceTurn = async function() {
   this.currentTurn = (this.currentTurn + 1) % this.participants.length;
   
   const nextParticipant = this.participants[this.currentTurn];
-  console.log(`[RaidModel.js]: ✅ Advanced turn to ${nextParticipant.name} at index ${this.currentTurn}`);
+      // Turn advancement logged only in debug mode
   
   return this.save();
 };

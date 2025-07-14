@@ -148,7 +148,7 @@ const useHearts = async (characterId, hearts) => {
     const currentHearts = character.currentHearts;
     const newHearts = Math.max(currentHearts - hearts, 0);
 
-    console.log(`[characterStatsModule.js]: ❤️ Deducting hearts for ${character.name}. Current: ${currentHearts}, Deducting: ${hearts}, Result: ${newHearts}`);
+    // Heart deduction logged only in debug mode
 
     await updateCurrentHearts(characterId, newHearts);
 

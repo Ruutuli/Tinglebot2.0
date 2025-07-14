@@ -527,6 +527,16 @@ module.exports = {
        filteredMonsters[Math.floor(Math.random() * filteredMonsters.length)];
 
       if (encounteredMonster.tier > 4) {
+       // ------------------- Deactivate Job Voucher Before Raid -------------------
+       if (character.jobVoucher && !voucherCheck?.skipVoucher) {
+         const deactivationResult = await deactivateJobVoucher(character._id);
+         if (!deactivationResult.success) {
+           console.error(`[Loot Command]: ❌ Failed to deactivate job voucher for ${character.name}`);
+         } else {
+           console.log(`[Loot Command]: ✅ Job voucher deactivated for ${character.name} before Blood Moon raid`);
+         }
+       }
+       
        await triggerRaid(
         encounteredMonster,
         interaction,
@@ -576,16 +586,9 @@ module.exports = {
     interaction,
     character,
     encounteredMonster,
-    bloodMoonActive
+    bloodMoonActive,
+    character.jobVoucher && !voucherCheck?.skipVoucher // Deactivate job voucher if needed
    );
-
-   // ------------------- Deactivate Job Voucher -------------------
-   if (character.jobVoucher && !voucherCheck?.skipVoucher) {
-     const deactivationResult = await deactivateJobVoucher(character._id);
-     if (!deactivationResult.success) {
-       console.error(`[Loot Command]: ❌ Failed to deactivate job voucher for ${character.name}`);
-     }
-   }
 
    // Remove duplicate daily roll update since we now do it at the start
    console.log(`[loot.js]: ✅ Loot command completed successfully for ${character.name}`);
@@ -677,6 +680,16 @@ async function handleBloodMoonRerolls(
     rerolledMonsters[Math.floor(Math.random() * rerolledMonsters.length)];
 
    if (encounteredMonster.tier > 4) {
+    // ------------------- Deactivate Job Voucher Before Raid -------------------
+    if (character.jobVoucher) {
+      const deactivationResult = await deactivateJobVoucher(character._id);
+      if (!deactivationResult.success) {
+        console.error(`[Loot Command]: ❌ Failed to deactivate job voucher for ${character.name}`);
+      } else {
+        console.log(`[Loot Command]: ✅ Job voucher deactivated for ${character.name} before Blood Moon raid (reroll)`);
+      }
+    }
+    
     await triggerRaid(
      encounteredMonster,
      interaction,
@@ -690,7 +703,8 @@ async function handleBloodMoonRerolls(
      interaction,
      character,
      encounteredMonster,
-     bloodMoonActive
+     bloodMoonActive,
+     true // Deactivate job voucher for reroll encounters
     );
     return; // End reroll processing after looting
    }
@@ -744,7 +758,8 @@ async function processLootingLogic(
  interaction,
  character,
  encounteredMonster,
- bloodMoonActive
+ bloodMoonActive,
+ shouldDeactivateVoucher = false
 ) {
  try {
   const items = await fetchItemsByMonster(encounteredMonster.name);
@@ -842,6 +857,16 @@ async function processLootingLogic(
   );
   await interaction.editReply({ embeds: [embed] });
   console.log(`[loot.js]: ✅ Loot process completed for ${character.name}`);
+
+  // ------------------- Deactivate Job Voucher if needed -------------------
+  if (shouldDeactivateVoucher && character.jobVoucher) {
+    const deactivationResult = await deactivateJobVoucher(character._id);
+    if (!deactivationResult.success) {
+      console.error(`[Loot Command]: ❌ Failed to deactivate job voucher for ${character.name}`);
+    } else {
+      console.log(`[Loot Command]: ✅ Job voucher deactivated for ${character.name} in processLootingLogic`);
+    }
+  }
 
  } catch (error) {
   console.error(`[loot.js]: ❌ Error in processLootingLogic:`, error);

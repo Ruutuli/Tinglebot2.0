@@ -164,22 +164,12 @@ module.exports = {
           });
         }
       } else {
-        console.log(`[raid.js]: ✅ Character ${character.name} is already in raid ${raidId}, processing turn directly`);
+        // Character already in raid logged only in debug mode
       }
 
       // Log turn order info for debugging (but don't enforce)
       const currentTurnParticipant = updatedRaidData.getCurrentTurnParticipant();
-      console.log(`[raid.js]: 🔄 Current turn index: ${updatedRaidData.currentTurn}`);
-      console.log(`[raid.js]: 👤 Current turn participant: ${currentTurnParticipant?.name || 'None'}`);
-      console.log(`[raid.js]: 👤 Attempting turn: ${character.name}`);
-      console.log(`[raid.js]: 👥 Total participants: ${updatedRaidData.participants?.length || 0}`);
-      
-      // Log all participants for debugging
-      if (updatedRaidData.participants) {
-        updatedRaidData.participants.forEach((p, idx) => {
-          console.log(`[raid.js]: 👥 Participant ${idx}: ${p.name} (ID: ${p.characterId})`);
-        });
-      }
+      // Turn processing details logged only in debug mode
 
       // Process the raid turn
       const turnResult = await processRaidTurn(character, raidId, interaction, updatedRaidData);
@@ -261,13 +251,7 @@ async function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
   const participants = raidData.participants || [];
   const currentTurnIndex = raidData.currentTurn || 0;
   
-  console.log(`[raid.js]: 📊 Creating turn order display - Current turn index: ${currentTurnIndex}`);
-  console.log(`[raid.js]: 📊 Total participants: ${participants.length}`);
-  console.log(`[raid.js]: 📊 RaidData.currentTurn: ${raidData.currentTurn}`);
-  console.log(`[raid.js]: 📊 Participants array length: ${participants.length}`);
-  console.log(`[raid.js]: 📊 RaidData object keys: ${Object.keys(raidData)}`);
-  console.log(`[raid.js]: 📊 RaidData.raidId: ${raidData.raidId}`);
-  console.log(`[raid.js]: 📊 Participants array: ${participants.map((p, idx) => `${idx}: ${p.name}`).join(', ')}`);
+  // Turn order display details logged only in debug mode
   
   // Create turn order with current turn indicator
   const turnOrderLines = [];
@@ -284,13 +268,13 @@ async function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
     const currentCharacter = await Character.findById(p.characterId);
     const isKO = currentCharacter?.ko || false;
     
-    console.log(`[raid.js]: 📊 Participant ${idx}: ${p.name} - KO: ${isKO}, Current Turn: ${isCurrentTurn}`);
+    // Participant status logged only in debug mode
     
     if (isKO) {
       koCharacters.push(p.name);
       turnOrderLines.push(`${idx + 1}. ${p.name} 💀 (KO'd)`);
     } else if (isCurrentTurn) {
-      console.log(`[raid.js]: 📊 MARKING AS CURRENT TURN: ${p.name} at index ${idx}`);
+      // Current turn marking logged only in debug mode
       turnOrderLines.push(`${idx + 1}. ${p.name} ⚔️ (Current Turn)`);
     } else {
       turnOrderLines.push(`${idx + 1}. ${p.name}`);
@@ -298,7 +282,7 @@ async function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
   }
   
   const turnOrder = turnOrderLines.join('\n');
-  console.log(`[raid.js]: 📊 Final turn order display:\n${turnOrder}`);
+  // Final turn order display logged only in debug mode
   
   // User mention removed - not working as intended
 
