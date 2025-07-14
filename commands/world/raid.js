@@ -185,7 +185,7 @@ module.exports = {
       const turnResult = await processRaidTurn(character, raidId, interaction, updatedRaidData);
       
       // Create embed for the turn result using the updated raid data from turnResult
-      const { embed, userMention, koCharacters } = await createRaidTurnEmbed(character, raidId, turnResult, turnResult.raidData);
+      const { embed, koCharacters } = await createRaidTurnEmbed(character, raidId, turnResult, turnResult.raidData);
 
       // Check if monster was defeated in this turn
       if (turnResult.raidData.monster.currentHearts <= 0 && turnResult.raidData.status === 'completed') {
@@ -197,17 +197,8 @@ module.exports = {
         return;
       }
       
-      // Send the turn result embed with user mention
-      let replyContent = '';
-      if (userMention) {
-        replyContent = `${userMention} - Your turn!`;
-      } else {
-        // If no next player (all KO'd), show a different message
-        replyContent = '⚠️ All participants are KO\'d!';
-      }
-      
+      // Send the turn result embed without user mention
       return interaction.editReply({ 
-        content: replyContent,
         embeds: [embed] 
       });
 
@@ -309,19 +300,7 @@ async function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
   const turnOrder = turnOrderLines.join('\n');
   console.log(`[raid.js]: 📊 Final turn order display:\n${turnOrder}`);
   
-  // Get next player for mention
-  const nextPlayer = await raidData.getNextTurnParticipant();
-  
-  // Create user mention string
-  let userMention = '';
-  if (nextPlayer) {
-    // Find the user ID for the next player
-    const Character = require('../../models/CharacterModel');
-    const nextCharacter = await Character.findById(nextPlayer.characterId);
-    if (nextCharacter) {
-      userMention = `<@${nextCharacter.userId}>`;
-    }
-  }
+  // User mention removed - not working as intended
 
   // Calculate remaining time
   const now = new Date();
@@ -406,7 +385,7 @@ async function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
     });
   }
 
-  return { embed, userMention, koCharacters };
+  return { embed, koCharacters };
 }
 
 // ---- Function: handleRaidVictory ----
