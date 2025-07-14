@@ -3,7 +3,7 @@
 // ============================================================================
 const { handleError } = require('../utils/globalErrorHandler');
 const { generateUniqueId } = require('../utils/uniqueIdUtils');
-const { calculateFinalValue } = require('./rngModule');
+const { calculateFinalValue, calculateRaidFinalValue } = require('./rngModule');
 const { EmbedBuilder } = require('discord.js');
 const { 
   getTier5EncounterOutcome,
@@ -48,6 +48,7 @@ async function processRaidBattle(character, monster, diceRoll, damageValue, adju
   try {
     console.log(`[raidModule.js]: ⚔️ Processing raid battle - ${character.name} vs ${monster.name} (T${monster.tier})`);
     console.log(`[raidModule.js]: 🎲 Roll: ${diceRoll}, Damage Value: ${damageValue}, Adjusted: ${adjustedRandomValue}`);
+    console.log(`[raidModule.js]: 🗡️ Equipment check - Weapon: ${character.gearWeapon?.name || 'None'} (${character.attack} attack), Armor: ${character.defense} defense`);
 
     let outcome;
     
@@ -324,9 +325,9 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
 
     // Note: KO'd characters can still take turns in raids (KO status is handled during combat)
 
-    // Generate random roll and calculate final value
+    // Generate random roll and calculate final value using raid-specific calculation
     const diceRoll = Math.floor(Math.random() * 100) + 1;
-    const { damageValue, adjustedRandomValue, attackSuccess, defenseSuccess } = calculateFinalValue(character, diceRoll);
+    const { damageValue, adjustedRandomValue, attackSuccess, defenseSuccess } = calculateRaidFinalValue(character, diceRoll);
 
     // Process the raid battle turn
     const battleResult = await processRaidBattle(

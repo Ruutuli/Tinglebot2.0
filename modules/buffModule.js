@@ -19,6 +19,59 @@ const calculateDefenseBuff = (character) => {
   return success;
 };
 
+// ============================================================================
+// ---- Raid-Specific Buff Functions ----
+// ============================================================================
+
+// ---- Function: calculateRaidAttackBuff ----
+// Always applies attack buff in raids based on weapon equipment
+// Guarantees that weapons always help during raids
+const calculateRaidAttackBuff = (character) => {
+  const attackStat = character.attack || 0;
+  
+  // In raids, weapons always provide their benefit
+  // Return true if character has any attack stat from equipment
+  return attackStat > 0;
+};
+
+// ---- Function: calculateRaidDefenseBuff ----
+// Always applies defense buff in raids based on armor/shield equipment
+// Guarantees that armor and shields always help during raids
+const calculateRaidDefenseBuff = (character) => {
+  const defenseStat = character.defense || 0;
+  
+  // In raids, armor and shields always provide their benefit
+  // Return true if character has any defense stat from equipment
+  return defenseStat > 0;
+};
+
+// ---- Function: applyRaidBuffs ----
+// Applies guaranteed equipment benefits for raids
+// Unlike regular combat, equipment always helps in raids
+const applyRaidBuffs = (randomValue, attackSuccess, defenseSuccess, attackStat, defenseStat) => {
+  let adjustedRandomValue = randomValue || 0;
+
+  // In raids, if equipment exists, it always provides its benefit
+  if (attackSuccess && attackStat > 0) {
+    // Weapon always adds its attack value to the roll
+    adjustedRandomValue += attackStat * 10;
+    console.log(`[buffModule.js]: 🗡️ Raid weapon bonus applied: +${attackStat * 10} (${attackStat} attack)`);
+  }
+
+  if (defenseSuccess && defenseStat > 0) {
+    // Armor/shield always adds its defense value to the roll
+    adjustedRandomValue += defenseStat * 2;
+    console.log(`[buffModule.js]: 🛡️ Raid armor bonus applied: +${defenseStat * 2} (${defenseStat} defense)`);
+  }
+
+  // Ensure the final adjusted value is between 1 and 100
+  adjustedRandomValue = Math.max(1, Math.min(adjustedRandomValue, 100));
+  
+  console.log(`[buffModule.js]: 🎯 Raid buff result - Original: ${randomValue}, Adjusted: ${adjustedRandomValue}`);
+  
+  return adjustedRandomValue;
+};
+
 // ------------------- Apply buffs to random value -------------------
 // This function adjusts the provided random value by applying any successful attack or defense buffs.
 // It ensures the final adjusted value is within the valid range of 1 to 100.
@@ -54,6 +107,9 @@ const applyBuffs = (randomValue, attackSuccess, defenseSuccess, attackStat, defe
 module.exports = {
   calculateAttackBuff,
   calculateDefenseBuff,
+  calculateRaidAttackBuff,
+  calculateRaidDefenseBuff,
   applyBuffs,
+  applyRaidBuffs,
   getLastDebugValues: () => lastDebugValues,
 };
