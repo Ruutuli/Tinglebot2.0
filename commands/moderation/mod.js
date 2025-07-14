@@ -489,6 +489,27 @@ function createPetEmbed(type, options = {}) {
     moderatorTag
   } = options;
 
+  // Validate required parameters based on type
+  if (!character || !pet || !petName || !moderatorTag) {
+    throw new Error('Missing required parameters for createPetEmbed');
+  }
+
+  if (type === 'levelUpdate' && (oldLevel === undefined || newLevel === undefined)) {
+    throw new Error('Missing oldLevel or newLevel for levelUpdate type');
+  }
+
+  if (type === 'rollReset' && !result) {
+    throw new Error('Missing result object for rollReset type');
+  }
+
+  // Ensure result object has required properties for rollReset type
+  if (type === 'rollReset' && (!result.oldRolls || !result.newRolls)) {
+    console.warn(`[mod.js]: Result object missing oldRolls or newRolls:`, result);
+    // Provide fallback values
+    result.oldRolls = result.oldRolls || 0;
+    result.newRolls = result.newRolls || 0;
+  }
+
   const embedConfigs = {
     levelUpdate: {
       title: "🎉 Pet Level Updated!",
@@ -1158,35 +1179,47 @@ async function handlePetLevel(interaction) {
     });
   
     // Create a beautiful embed for the pet level update
-    const petLevelEmbed = createPetEmbed('levelUpdate', {
-      character,
-      pet: petDoc,
-      petName,
-      oldLevel,
-      newLevel,
-      moderatorTag: interaction.user.tag
-    });
-
-    // Log the embed data before sending
-    console.log(`[mod.js]: Embed data:`, {
-      author: petLevelEmbed.data.author,
-      title: petLevelEmbed.data.title,
-      fields: petLevelEmbed.data.fields,
-      footer: petLevelEmbed.data.footer,
-      color: petLevelEmbed.data.color
-    });
-
-    // Send the embed as a public message and mention the character owner
     try {
+      const petLevelEmbed = createPetEmbed('levelUpdate', {
+        character,
+        pet: petDoc,
+        petName,
+        oldLevel,
+        newLevel,
+        moderatorTag: interaction.user.tag
+      });
+
+      // Log the embed data before sending
+      console.log(`[mod.js]: Embed data:`, {
+        author: petLevelEmbed.data.author,
+        title: petLevelEmbed.data.title,
+        fields: petLevelEmbed.data.fields,
+        footer: petLevelEmbed.data.footer,
+        color: petLevelEmbed.data.color
+      });
+
+      // Send the embed as a public message and mention the character owner
       await interaction.editReply({ content: '✅ Processing pet level update...', ephemeral: true });
       return await interaction.followUp({
         content: `🎉 <@${character.userId}> | ${character.name}'s pet ${petName} is now level ${newLevel}! It can roll ${newLevel} times per week! Rolls reset every Sunday at 8:00 AM.`,
         embeds: [petLevelEmbed]
       });
     } catch (error) {
-      console.error(`[mod.js]: Error sending pet level embed:`, error);
-      console.error(`[mod.js]: Embed data that caused error:`, JSON.stringify(petLevelEmbed.data, null, 2));
-      throw error;
+      console.error(`[mod.js]: Error creating or sending pet level embed:`, error);
+      handleError(error, 'mod.js', {
+        commandName: '/mod petlevel',
+        userTag: interaction.user.tag,
+        userId: interaction.user.id,
+        characterName: character.name,
+        petName: petName,
+        oldLevel: oldLevel,
+        newLevel: newLevel
+      });
+      
+      return interaction.editReply({
+        content: `❌ Failed to create pet level embed: ${error.message || 'Unknown error'}`,
+        ephemeral: true
+      });
     }
   }
   
@@ -2047,36 +2080,47 @@ async function handleForceResetPetRolls(interaction) {
     });
 
     // Create a beautiful embed for the pet roll reset
-    const resetEmbed = createPetEmbed('rollReset', {
-      character,
-      pet,
-      petName,
-      result,
-      moderatorTag: interaction.user.tag
-    });
-
-    // Log the embed data before sending
-    console.log(`[mod.js]: Reset embed data:`, {
-      author: resetEmbed.data.author,
-      title: resetEmbed.data.title,
-      thumbnail: resetEmbed.data.thumbnail,
-      image: resetEmbed.data.image,
-      fields: resetEmbed.data.fields,
-      footer: resetEmbed.data.footer,
-      color: resetEmbed.data.color
-    });
-
-    // Send the embed as a public message and mention the character owner
     try {
+      const resetEmbed = createPetEmbed('rollReset', {
+        character,
+        pet,
+        petName,
+        result,
+        moderatorTag: interaction.user.tag
+      });
+
+      // Log the embed data before sending
+      console.log(`[mod.js]: Reset embed data:`, {
+        author: resetEmbed.data.author,
+        title: resetEmbed.data.title,
+        thumbnail: resetEmbed.data.thumbnail,
+        image: resetEmbed.data.image,
+        fields: resetEmbed.data.fields,
+        footer: resetEmbed.data.footer,
+        color: resetEmbed.data.color
+      });
+
+      // Send the embed as a public message and mention the character owner
       await interaction.editReply({ content: '✅ Processing pet roll reset...', ephemeral: true });
       return await interaction.followUp({
-        content: `🔄 <@${character.userId}> | ${character.name}'s pet ${petName} rolls have been reset from ${result.oldRolls} to ${result.newRolls} rolls! Daily reset at 8:00 AM.`,
+        content: `🔄 <@${character.userId}> | ${character.name}'s pet ${petName} rolls have been reset from ${result?.oldRolls || 0} to ${result?.newRolls || 0} rolls! Daily reset at 8:00 AM.`,
         embeds: [resetEmbed]
       });
     } catch (error) {
-      console.error(`[mod.js]: Error sending pet reset embed:`, error);
-      console.error(`[mod.js]: Reset embed data that caused error:`, JSON.stringify(resetEmbed.data, null, 2));
-      throw error;
+      console.error(`[mod.js]: Error creating or sending pet reset embed:`, error);
+      handleError(error, 'mod.js', {
+        commandName: '/mod forceresetpetrolls',
+        userTag: interaction.user.tag,
+        userId: interaction.user.id,
+        characterName: character.name,
+        petName: petName,
+        result: result
+      });
+      
+      return interaction.editReply({
+        content: `❌ Failed to create pet reset embed: ${error.message || 'Unknown error'}`,
+        ephemeral: true
+      });
     }
   } catch (error) {
     handleError(error, "mod.js", {
