@@ -105,9 +105,45 @@ async function sendBloodMoonAnnouncement(client, channelId, message) {
 
     console.log(`[bloodmoon.js]: 🌕 Sending Blood Moon start announcement to channel ${channelId}`);
     
-    const currentDate = new Date();
-    const realWorldDate = currentDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-    const hyruleanDate = convertToHyruleanDate(currentDate);
+    // Determine the correct date for the Blood Moon announcement
+    const now = new Date();
+    const today = normalizeDate(now);
+    
+    // Find which Blood Moon period we're in and determine the correct date to show
+    let announcementDate = today;
+    let foundBloodMoonPeriod = false;
+    
+    for (const { realDate } of bloodmoonDates) {
+      const [month, day] = realDate.split('-').map(Number);
+      const bloodMoonDate = normalizeDate(new Date(today.getFullYear(), month - 1, day));
+      const dayBefore = new Date(bloodMoonDate);
+      dayBefore.setDate(bloodMoonDate.getDate() - 1);
+      const dayAfter = new Date(bloodMoonDate);
+      dayAfter.setDate(bloodMoonDate.getDate() + 1);
+      
+      if (today >= dayBefore && today <= dayAfter) {
+        // We're in a Blood Moon period
+        foundBloodMoonPeriod = true;
+        
+        // If today is the day before the blood moon date, show today's date
+        // If today is the blood moon date, show the blood moon date
+        // If today is the day after, show the blood moon date
+        if (today.getTime() === dayBefore.getTime()) {
+          // Today is the day before - show today's date
+          announcementDate = today;
+        } else if (today.getTime() === bloodMoonDate.getTime()) {
+          // Today is the blood moon date - show the blood moon date
+          announcementDate = bloodMoonDate;
+        } else {
+          // Today is the day after - show the blood moon date
+          announcementDate = bloodMoonDate;
+        }
+        break;
+      }
+    }
+    
+    const realWorldDate = announcementDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    const hyruleanDate = convertToHyruleanDate(announcementDate);
 
     const embed = new EmbedBuilder()
       .setColor('#8B0000')
@@ -143,9 +179,38 @@ async function sendBloodMoonEndAnnouncement(client, channelId) {
 
     console.log(`[bloodmoon.js]: 🌙 Sending Blood Moon end announcement to channel ${channelId}`);
     
-    const currentDate = new Date();
-    const realWorldDate = currentDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-    const hyruleanDate = convertToHyruleanDate(currentDate);
+    // Determine the correct date for the Blood Moon end announcement
+    const now = new Date();
+    const today = normalizeDate(now);
+    
+    // Find which Blood Moon period we're transitioning from and determine the correct date to show
+    let announcementDate = today;
+    let foundBloodMoonPeriod = false;
+    
+    for (const { realDate } of bloodmoonDates) {
+      const [month, day] = realDate.split('-').map(Number);
+      const bloodMoonDate = normalizeDate(new Date(today.getFullYear(), month - 1, day));
+      const dayBefore = new Date(bloodMoonDate);
+      dayBefore.setDate(bloodMoonDate.getDate() - 1);
+      const dayAfter = new Date(bloodMoonDate);
+      dayAfter.setDate(bloodMoonDate.getDate() + 1);
+      
+      // Check if yesterday was within this Blood Moon period
+      const yesterday = new Date(today);
+      yesterday.setDate(today.getDate() - 1);
+      
+      if (yesterday >= dayBefore && yesterday <= dayAfter) {
+        // Yesterday was in a Blood Moon period, so we're transitioning out
+        foundBloodMoonPeriod = true;
+        
+        // Show the blood moon date for the end announcement
+        announcementDate = bloodMoonDate;
+        break;
+      }
+    }
+    
+    const realWorldDate = announcementDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    const hyruleanDate = convertToHyruleanDate(announcementDate);
 
     const embed = new EmbedBuilder()
       .setColor('#FFFACD')
