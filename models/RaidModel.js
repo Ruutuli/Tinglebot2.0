@@ -239,6 +239,7 @@ raidSchema.methods.advanceTurn = async function() {
   let nextTurn = this.currentTurn;
   let attempts = 0;
   const maxAttempts = this.participants.length * 2; // Prevent infinite loops
+  let foundNextTurn = false;
   
   do {
     nextTurn = (nextTurn + 1) % this.participants.length;
@@ -250,14 +251,18 @@ raidSchema.methods.advanceTurn = async function() {
     const currentCharacter = await Character.findById(nextParticipant.characterId);
     const isKO = currentCharacter?.ko || false;
     
+    console.log(`[RaidModel.js]: 🔄 Checking participant ${nextParticipant.name} at index ${nextTurn}, KO: ${isKO}`);
+    
     if (!isKO) {
       this.currentTurn = nextTurn;
+      foundNextTurn = true;
+      console.log(`[RaidModel.js]: ✅ Advanced turn to ${nextParticipant.name} at index ${nextTurn}`);
       break;
     }
   } while (attempts < maxAttempts);
   
   // If all participants are KO'd, keep current turn
-  if (attempts >= maxAttempts) {
+  if (!foundNextTurn) {
     console.warn(`[RaidModel.js]: ⚠️ All participants in raid ${this.raidId} appear to be KO'd`);
   }
   

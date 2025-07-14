@@ -359,6 +359,15 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
     if (raid.monster.currentHearts <= 0) {
       await raid.completeRaid('defeated');
     } else {
+      // Ensure character's KO status is saved before advancing turn
+      if (battleResult.playerHearts.current <= 0) {
+        // Character was KO'd, make sure it's saved
+        character.ko = true;
+        character.currentHearts = 0;
+        await character.save();
+        console.log(`[raidModule.js]: 💀 Character ${character.name} KO'd and saved to database`);
+      }
+      
       // Advance to next turn if monster is not defeated
       await raid.advanceTurn();
       console.log(`[raidModule.js]: 🔄 Advanced turn in raid ${raidId} to index ${raid.currentTurn}`);
