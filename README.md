@@ -29,3 +29,43 @@ Each subcommand requires:
 
 # Dragon with Dragon as job
 /modcharacter create dragon name:"Sanskar" age:1000 height:200 pronouns:"he/him" race:"Dragon" village:"Inariko" dragon_type:"Wisdom" job:"Dragon" inventory_link:"..." app_link:"..." 
+```
+
+# Tinglebot 2.0
+
+A Discord bot for managing character interactions, raids, and village activities in a Zelda-themed roleplay environment.
+
+## Features
+
+### Combat System
+- **Regular Combat**: Equipment provides percentage-based bonuses to attack and defense
+- **Raid Combat**: Equipment **always** provides guaranteed benefits during raids
+  - Weapons: Always add their attack value to combat rolls
+  - Armor/Shields: Always add their defense value to combat rolls
+  - This makes equipment much more valuable and impactful in raid scenarios
+
+### Equipment System
+- Characters can equip weapons, armor (head, chest, legs), and shields
+- Equipment provides modifierHearts values that affect combat performance
+- In raids, equipment guarantees its benefits instead of using percentage chances
+
+### Raid System
+- Multi-participant boss battles against high-tier monsters
+- Equipment always helps during raids (unlike regular combat)
+- Participants deal damage based on their equipment and rolls
+- Loot distribution based on damage dealt
+
+## Installation
+
+1. Clone the repository
+2. Install dependencies: `npm install`
+3. Set up environment variables
+4. Run the bot: `npm start`
+
+## Configuration
+
+See `config/` directory for configuration files.
+
+## Contributing
+
+Please follow the established code style and add appropriate error handling for all new features. 

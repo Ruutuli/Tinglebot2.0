@@ -158,6 +158,38 @@ function calculateFinalValue(character, diceRoll) {
 }
 
 // ============================================================================
+// ---- Raid-Specific Final Value Calculation ----
+// ============================================================================
+
+// ---- Function: calculateRaidFinalValue ----
+// Calculates the Final Value for raids with guaranteed equipment benefits
+// Unlike regular combat, equipment always helps in raids
+function calculateRaidFinalValue(character, diceRoll) {
+  const { calculateRaidAttackBuff, calculateRaidDefenseBuff, applyRaidBuffs } = require('./buffModule');
+  
+  const attackSuccess = calculateRaidAttackBuff(character);
+  const defenseSuccess = calculateRaidDefenseBuff(character);
+  const adjustedRandomValue = applyRaidBuffs(
+    diceRoll,
+    attackSuccess,
+    defenseSuccess,
+    character.attack,
+    character.defense
+  );
+  
+  console.log(`[rngModule.js]: 🎲 Raid calculation - Roll: ${diceRoll}, Adjusted: ${adjustedRandomValue}, Attack: ${attackSuccess}, Defense: ${defenseSuccess}`);
+  console.log(`[rngModule.js]: 🗡️ Weapon equipped: ${character.gearWeapon?.name || 'None'}, Attack: ${character.attack}`);
+  console.log(`[rngModule.js]: 🛡️ Armor equipped: Head(${character.gearArmor?.head?.name || 'None'}), Chest(${character.gearArmor?.chest?.name || 'None'}), Legs(${character.gearArmor?.legs?.name || 'None'}), Shield(${character.gearShield?.name || 'None'}), Defense: ${character.defense}`);
+  
+  return {
+    damageValue: diceRoll,
+    adjustedRandomValue,
+    attackSuccess,
+    defenseSuccess
+  };
+}
+
+// ============================================================================
 // Random Encounter Determination
 // ------------------- Get Random Encounter -------------------
 // Determines a random encounter based on defined encounter probabilities.
@@ -371,6 +403,7 @@ module.exports = {
   getMonsterEncounterFromList,
   getMonstersByCriteria,
   calculateFinalValue,
+  calculateRaidFinalValue,
   getMonstersByPath,
   getRandomTravelEncounter,
   encounterProbabilitiesTravel,
