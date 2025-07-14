@@ -243,9 +243,47 @@ function normalizeDate(date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
+// ------------------- isBloodMoonPeriod -------------------
+// Checks if today falls within a Blood Moon period (day before, blood moon date, day after).
+// This is independent of the time - it just checks if we're in the 3-day window.
+function isBloodMoonPeriod() {
+  console.log(`[bloodmoon.js]: 🔍 Checking if today is within a Blood Moon period...`);
+  
+  if (!bloodmoonDates || !Array.isArray(bloodmoonDates)) {
+    console.error(`[bloodmoon.js]: ❌ Error: 'bloodmoonDates' is not defined or not an array.`);
+    return false;
+  }
+
+  const now = new Date();
+  const today = normalizeDate(now);
+  
+  console.log(`[bloodmoon.js]: 📅 Current date: ${today.toISOString().split('T')[0]}`);
+  
+  // Check if it's within the Blood Moon period (day before, blood moon date, day after)
+  for (const { realDate } of bloodmoonDates) {
+    const [month, day] = realDate.split('-').map(Number);
+    const bloodMoonDate = normalizeDate(new Date(today.getFullYear(), month - 1, day));
+    const dayBefore = new Date(bloodMoonDate);
+    dayBefore.setDate(bloodMoonDate.getDate() - 1);
+    const dayAfter = new Date(bloodMoonDate);
+    dayAfter.setDate(bloodMoonDate.getDate() + 1);
+    const isInRange = today >= dayBefore && today <= dayAfter;
+    
+    if (isInRange) {
+      console.log(`[bloodmoon.js]: 📅 Found Blood Moon period match: ${realDate} (${month}/${day})`);
+      console.log(`[bloodmoon.js]: 📅 Blood Moon period: ${dayBefore.toISOString().split('T')[0]} to ${dayAfter.toISOString().split('T')[0]}`);
+      return true;
+    }
+  }
+
+  console.log(`[bloodmoon.js]: 📅 Today is not within a Blood Moon period`);
+  return false;
+}
+
 // ------------------- isBloodMoonDay -------------------
-// Checks if today falls within a Blood Moon period based on predefined dates.
-// Blood Moon starts at 8 PM EST the day BEFORE the blood moon date and ends at 8 PM EST the day AFTER.
+// Checks if Blood Moon is currently active.
+// Blood Moon starts at 8 PM EST on the day BEFORE the blood moon date and ends at 8 PM EST the day AFTER.
+// For example: July 13 at 8 PM EST until July 15 at 8 PM EST.
 function isBloodMoonDay() {
   console.log(`[bloodmoon.js]: 🔍 Checking if today is Blood Moon day...`);
   
@@ -266,9 +304,9 @@ function isBloodMoonDay() {
   
   console.log(`[bloodmoon.js]: 📅 Current date: ${today.toISOString().split('T')[0]}, EST hour: ${estHour}`);
   
-  // Check if it's within the Blood Moon period (day before, blood moon date, day after)
-  let foundBloodMoonPeriod = false;
-  let bloodMoonStartTime = null;
+  // Find the Blood Moon period we're in
+  let bloodMoonStartDate = null;
+  let bloodMoonEndDate = null;
   
   for (const { realDate } of bloodmoonDates) {
     const [month, day] = realDate.split('-').map(Number);
@@ -282,33 +320,43 @@ function isBloodMoonDay() {
     if (isInRange) {
       console.log(`[bloodmoon.js]: 📅 Found Blood Moon period match: ${realDate} (${month}/${day})`);
       console.log(`[bloodmoon.js]: 📅 Blood Moon period: ${dayBefore.toISOString().split('T')[0]} to ${dayAfter.toISOString().split('T')[0]}`);
-      foundBloodMoonPeriod = true;
       
-      // Calculate when this Blood Moon period started (8 PM EST on day before)
-      bloodMoonStartTime = new Date(dayBefore);
-      bloodMoonStartTime.setHours(20, 0, 0, 0); // 8 PM EST
+      // Blood Moon starts at 8 PM EST on the day before
+      bloodMoonStartDate = new Date(dayBefore);
+      bloodMoonStartDate.setHours(20, 0, 0, 0); // 8 PM EST
+      
+      // Blood Moon ends at 8 PM EST on the day after
+      bloodMoonEndDate = new Date(dayAfter);
+      bloodMoonEndDate.setHours(20, 0, 0, 0); // 8 PM EST
+      
       break;
     }
   }
-
-  // If it's not a Blood Moon period, return false
-  if (!foundBloodMoonPeriod) {
+  
+  // If we're not in a Blood Moon period, return false
+  if (!bloodMoonStartDate || !bloodMoonEndDate) {
     console.log(`[bloodmoon.js]: 📅 Today is not within a Blood Moon period`);
     return false;
   }
-
-  // Blood Moon should be active from 8 PM EST on the day before the Blood Moon date
-  // until 8 PM EST on the day after the Blood Moon date
   
-  // If we're in a Blood Moon period and it's past 8 PM EST, Blood Moon is active
-  const isActive = estHour >= 20;
+  // Check if current time is within the Blood Moon activation period
+  const currentTime = new Date();
+  const currentEST = new Date(currentTime.toLocaleString('en-US', { timeZone: 'America/New_York' }));
   
-  console.log(`[bloodmoon.js]: 🕐 Blood Moon status - Active: ${isActive}, EST hour: ${estHour}:00`);
+  // Convert start and end dates to EST for comparison
+  const startEST = new Date(bloodMoonStartDate.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  const endEST = new Date(bloodMoonEndDate.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  
+  const isActive = currentEST >= startEST && currentEST < endEST;
+  
+  console.log(`[bloodmoon.js]: 🕐 Blood Moon activation period: ${startEST.toISOString()} to ${endEST.toISOString()}`);
+  console.log(`[bloodmoon.js]: 🕐 Current EST time: ${currentEST.toISOString()}`);
+  console.log(`[bloodmoon.js]: 🕐 Blood Moon status - Active: ${isActive}`);
   
   if (isActive) {
-    console.log(`[bloodmoon.js]: 🌕 BLOOD MOON PERIOD IS ACTIVE!`);
+    console.log(`[bloodmoon.js]: 🌕 BLOOD MOON IS ACTIVE!`);
   } else {
-    console.log(`[bloodmoon.js]: 📅 Blood Moon period but not 8 PM yet`);
+    console.log(`[bloodmoon.js]: 📅 Blood Moon period but not yet active or already ended`);
   }
   
   return isActive;
@@ -548,6 +596,7 @@ module.exports = {
   renameChannels,
   revertChannelNames,
   isBloodMoonDay,
+  isBloodMoonPeriod,
   triggerBloodMoonNow,
   isBloodMoonActive,
   cleanupOldTrackingData,
