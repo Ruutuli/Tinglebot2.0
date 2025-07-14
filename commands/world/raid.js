@@ -108,14 +108,7 @@ module.exports = {
         return;
       }
 
-      // Check if character is KO'd
-      if (character.ko) {
-        const koEmbed = createRaidKOEmbed(character);
-        return interaction.editReply({
-          embeds: [koEmbed],
-          ephemeral: true
-        });
-      }
+      // Note: KO'd characters can still take turns in raids (KO status is handled during combat)
 
       // Check raid expiration and get raid data
       const raidData = await checkRaidExpiration(raidId);
@@ -191,8 +184,8 @@ module.exports = {
       // Process the raid turn
       const turnResult = await processRaidTurn(character, raidId, interaction, updatedRaidData);
       
-      // Create embed for the turn result
-      const { embed, userMention, koCharacters } = await createRaidTurnEmbed(character, raidId, turnResult, updatedRaidData);
+      // Create embed for the turn result using the updated raid data from turnResult
+      const { embed, userMention, koCharacters } = await createRaidTurnEmbed(character, raidId, turnResult, turnResult.raidData);
 
       // Check if monster was defeated in this turn
       if (turnResult.raidData.monster.currentHearts <= 0 && turnResult.raidData.status === 'completed') {
