@@ -174,6 +174,12 @@ module.exports = {
         console.log(`[raid.js]: ✅ Character ${character.name} is already in raid ${raidId}, processing turn directly`);
       }
 
+      // Log turn order info for debugging (but don't enforce)
+      const currentTurnParticipant = updatedRaidData.getCurrentTurnParticipant();
+      console.log(`[raid.js]: 🔄 Current turn index: ${updatedRaidData.currentTurn}`);
+      console.log(`[raid.js]: 👤 Current turn participant: ${currentTurnParticipant?.name || 'None'}`);
+      console.log(`[raid.js]: 👤 Attempting turn: ${character.name}`);
+
       // Process the raid turn
       const turnResult = await processRaidTurn(character, raidId, interaction, updatedRaidData);
       
@@ -191,7 +197,14 @@ module.exports = {
       }
       
       // Send the turn result embed with user mention
-      const replyContent = userMention ? `${userMention} - Your turn!` : '';
+      let replyContent = '';
+      if (userMention) {
+        replyContent = `${userMention} - Your turn!`;
+      } else {
+        // If no next player (all KO'd), show a different message
+        replyContent = '⚠️ All participants are KO\'d!';
+      }
+      
       return interaction.editReply({ 
         content: replyContent,
         embeds: [embed] 
@@ -252,38 +265,39 @@ async function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
   // Get character icon (if available)
   const characterIcon = character.icon || 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png';
 
-  // Build turn order list with KO status and user mention
+  // Build turn order list with current turn indicator
   const participants = raidData.participants || [];
+  const currentTurnIndex = raidData.currentTurn || 0;
   
-  // Create turn order with KO status
+  // Create turn order with current turn indicator
   const turnOrderLines = [];
   const koCharacters = [];
   
-  participants.forEach((p, idx) => {
-    const isKO = p.characterState?.ko || false;
+  // Get current character states from database
+  const Character = require('../../models/CharacterModel');
+  
+  for (let idx = 0; idx < participants.length; idx++) {
+    const p = participants[idx];
+    const isCurrentTurn = idx === currentTurnIndex;
+    
+    // Get current character state from database
+    const currentCharacter = await Character.findById(p.characterId);
+    const isKO = currentCharacter?.ko || false;
+    
     if (isKO) {
       koCharacters.push(p.name);
       turnOrderLines.push(`${idx + 1}. ${p.name} 💀 (KO'd)`);
+    } else if (isCurrentTurn) {
+      turnOrderLines.push(`${idx + 1}. ${p.name} ⚔️ (Current Turn)`);
     } else {
       turnOrderLines.push(`${idx + 1}. ${p.name}`);
     }
-  });
+  }
   
   const turnOrder = turnOrderLines.join('\n');
   
-  // Create user mention for next player (skip KO'd characters)
-  let nextPlayer = null;
-  let nextPlayerIndex = -1;
-  
-  for (let i = 0; i < participants.length; i++) {
-    const participant = participants[i];
-    const isKO = participant.characterState?.ko || false;
-    if (!isKO) {
-      nextPlayer = participant;
-      nextPlayerIndex = i;
-      break;
-    }
-  }
+  // Get next player for mention
+  const nextPlayer = await raidData.getNextTurnParticipant();
   
   // Create user mention string
   let userMention = '';
@@ -366,7 +380,7 @@ async function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
     .setThumbnail(monsterImage)
     .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
     .setFooter({ 
-      text: `Raid ID: ${raidId} • Use /raid to take your turn! Please respect turn order. • Use /item to heal characters!` 
+      text: `Raid ID: ${raidId} • Use /raid to take your turn! • Use /item to heal characters!` 
     })
     .setTimestamp();
 

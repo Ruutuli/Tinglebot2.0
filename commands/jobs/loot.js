@@ -531,8 +531,9 @@ module.exports = {
         encounteredMonster,
         interaction,
         capitalizeVillageName(character.currentVillage),
-        true
-       ); // Pass `true` for Blood Moon
+        true,
+        character
+       ); // Pass `true` for Blood Moon and character for auto-join
        return;
       }
      } else {
@@ -680,8 +681,9 @@ async function handleBloodMoonRerolls(
      encounteredMonster,
      interaction,
      capitalizeVillageName(character.currentVillage),
-     bloodMoonActive
-    ); // Let triggerRaid handle thread creation
+     bloodMoonActive,
+     character
+    ); // Let triggerRaid handle thread creation and auto-join
     return;
    } else {
     await processLootingLogic(

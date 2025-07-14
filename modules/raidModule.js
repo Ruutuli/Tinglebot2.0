@@ -358,6 +358,10 @@ async function processRaidTurn(character, raidId, interaction, raidData = null) 
     // Check if monster is defeated
     if (raid.monster.currentHearts <= 0) {
       await raid.completeRaid('defeated');
+    } else {
+      // Advance to next turn if monster is not defeated
+      await raid.advanceTurn();
+      console.log(`[raidModule.js]: 🔄 Advanced turn in raid ${raidId} to index ${raid.currentTurn}`);
     }
 
     // Save updated raid data
@@ -535,7 +539,7 @@ function createRaidEmbed(raid, monsterImage) {
 
 // ---- Function: triggerRaid ----
 // Triggers a raid in the specified channel
-async function triggerRaid(monster, interaction, villageId, isBloodMoon = false) {
+async function triggerRaid(monster, interaction, villageId, isBloodMoon = false, character = null) {
   try {
     console.log(`[raidModule.js]: 🐉 Starting raid trigger for ${monster.name} in ${villageId}`);
     console.log(`[raidModule.js]: 📍 Interaction type: ${interaction?.constructor?.name || 'unknown'}`);
@@ -543,6 +547,18 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false)
     
     // Start the raid
     const { raidId, raidData } = await startRaid(monster, villageId, interaction);
+    
+    // Automatically add character to raid if provided (from loot command)
+    if (character) {
+      try {
+        console.log(`[raidModule.js]: 👤 Auto-adding character ${character.name} to raid ${raidId}`);
+        await joinRaid(character, raidId);
+        console.log(`[raidModule.js]: ✅ Successfully auto-added ${character.name} to raid ${raidId}`);
+      } catch (joinError) {
+        console.warn(`[raidModule.js]: ⚠️ Failed to auto-add character ${character.name} to raid: ${joinError.message}`);
+        // Don't fail the raid creation if auto-join fails
+      }
+    }
     
     // Create the raid embed
     const monsterDetails = monsterMapping && monsterMapping[monster.nameMapping] 
