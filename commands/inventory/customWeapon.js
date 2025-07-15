@@ -16,7 +16,7 @@ const { fetchCharacterByNameAndUserId, updateCharacterById, getCharacterInventor
 // ------------------- Utility Functions -------------------
 const { addItemInventoryDatabase, processMaterials, removeItemInventoryDatabase } = require('../../utils/inventoryUtils');
 const { appendSheetData, authorizeSheets, extractSpreadsheetId, safeAppendDataToSheet, } = require('../../utils/googleSheetsUtils');
-const { retrieveWeaponSubmissionFromStorage, saveWeaponSubmissionToStorage, updateWeaponSubmissionData, deleteWeaponSubmissionFromStorage } = require('../../utils/storage');
+const { retrieveWeaponSubmissionFromStorage, saveWeaponSubmissionToStorage, updateWeaponSubmissionData, deleteWeaponSubmissionFromStorage, saveSubmissionToStorage, deleteSubmissionFromStorage } = require('../../utils/storage');
 const { uploadSubmissionImage } = require('../../utils/uploadUtils');
 const { generateUniqueId } = require('../../utils/uniqueIdUtils');
 const { checkAndUseStamina } = require('../../modules/characterStatsModule')
@@ -26,6 +26,38 @@ const { formatDateTime } = require('../../modules/formattingModule');
 const ItemModel = require('../../models/ItemModel');
 
 // ------------------- Helper Functions -------------------
+
+// ---- Function: buildMaterialsList ----
+// Builds materials list synchronously for Discord embeds
+function buildMaterialsList(craftingMaterials) {
+    try {
+        // Get material names (case-insensitive)
+        const materialNames = craftingMaterials.map(mat => mat.itemName.toLowerCase());
+        
+        // Build the list synchronously
+        const materialLines = [];
+        
+        // Add crafting materials
+        for (const mat of craftingMaterials) {
+            materialLines.push(`> :small_blue_diamond: **${mat.itemName}** x${mat.quantity}`);
+        }
+        
+        // Only add Blueprint Voucher if not already present
+        if (!materialNames.includes('blueprint voucher')) {
+            materialLines.push(`> :small_blue_diamond: **Blueprint Voucher** x1`);
+        }
+        
+        // Only add Star Fragment if not already present
+        if (!materialNames.includes('star fragment')) {
+            materialLines.push(`> :small_blue_diamond: **Star Fragment** x1`);
+        }
+        
+        return materialLines.join('\n');
+    } catch (error) {
+        console.error(`[buildMaterialsList]: Error building materials list:`, error);
+        return '> :small_blue_diamond: **Materials** (Error loading details)';
+    }
+}
 
 // ---- Function: logMaterialsToGoogleSheets ----
 // Logs materials used for crafting to Google Sheets
@@ -469,23 +501,7 @@ async function sendApprovalDM(user, weaponSubmission, craftingMaterials, stamina
                 { name: 'Weapon ID', value: `\`\`\`${weaponSubmission.submissionId || weaponId}\`\`\``, inline: false },
                 {
                     name: '__Materials to Craft__',
-                    value: (await Promise.all([
-                      ...craftingMaterials.map(async (mat) => {
-                        const item = await ItemModel.findOne({ itemName: mat.itemName });
-                        const emoji = item?.emoji && item.emoji.trim() !== '' ? item.emoji : ':small_blue_diamond:';
-                        return `> ${emoji} **${mat.itemName}** x${mat.quantity}`;
-                      }),
-                      (async () => {
-                        const blueprintItem = await ItemModel.findOne({ itemName: 'Blueprint Voucher' });
-                        const blueprintEmoji = blueprintItem?.emoji && blueprintItem.emoji.trim() !== '' ? blueprintItem.emoji : ':small_blue_diamond:';
-                        return `> ${blueprintEmoji} **Blueprint Voucher** x1`;
-                      })(),
-                      (async () => {
-                        const starFragmentItem = await ItemModel.findOne({ itemName: 'Star Fragment' });
-                        const starFragmentEmoji = starFragmentItem?.emoji && starFragmentItem.emoji.trim() !== '' ? starFragmentItem.emoji : ':small_blue_diamond:';
-                        return `> ${starFragmentEmoji} **Star Fragment** x1`;
-                      })()
-                    ])).join('\n'),
+                    value: buildMaterialsList(craftingMaterials),
                     inline: false,
                 },
             ],
@@ -1127,22 +1143,8 @@ try {
 try {
     const updatedStamina = character.currentStamina;
 
-   // Fetch material emojis from database
-const fullMaterialsUsed = await Promise.all([
-    ...weaponSubmission.craftingMaterials.map(async (mat) => {
-        const dbItem = await ItemModel.findOne({ itemName: mat.itemName });
-        const emoji = dbItem?.emoji || ':small_blue_diamond:'; // Default to diamond if no emoji found
-        return `> ${emoji} **${mat.itemName}** x${mat.quantity}`;
-    }),
-    (async () => {
-        const blueprintItem = await ItemModel.findOne({ itemName: 'Blueprint Voucher' });
-        const blueprintEmoji = (blueprintItem?.itemName === 'Blueprint Voucher' || !blueprintItem?.emoji || blueprintItem.emoji.trim() === '') 
-    ? ':small_blue_diamond:' 
-    : blueprintItem.emoji;
-
-        return `> ${blueprintEmoji} **Blueprint Voucher** x1`;
-    })()
-]);
+    // Build materials list synchronously
+    const fullMaterialsUsed = buildMaterialsList(weaponSubmission.craftingMaterials);
 
 // Create the 🎉 Congratulations! embed
 const embed = {
@@ -1163,7 +1165,7 @@ const embed = {
         },
         {
             name: `📦 Materials Used`,
-            value: fullMaterialsUsed.join('\n'),
+            value: fullMaterialsUsed,
             inline: false,
         },
         {
@@ -1278,8 +1280,8 @@ try {
 
 // ❌ Check for duplicate weapon name globally (regardless of character)
 const duplicateNameExists = allSubmissions.some(sub =>
-    sub.weaponName.toLowerCase() === weaponName.toLowerCase() &&
-    sub.status !== 'rejected'
+    sub.weaponName && weaponName &&
+    sub.weaponName.toLowerCase() === weaponName.toLowerCase()
 );
 
 // 🔒 Prevent submission if any existing non-rejected weapon has same name
@@ -1434,7 +1436,7 @@ try {
                 },
                 {
                     name: '📋 How to Approve',
-                    value: `Use the command:\n\`/customweapon approve weaponid:${weaponId} staminatocraft:[number] materialstocraft:[items]\`\n\n**Example:**\n\`/customweapon approve weaponid:${weaponId} staminatocraft:5 materialstocraft:Iron x5, Wood x3\`\n\n**Quick Copy:** \`${weaponId}\``,
+                    value: `Use the command:\n\`/customweapon approve weaponid:${weaponId} staminatocraft:[number] materialstocraft:[items]\`\n\n**Example:**\n\`/customweapon approve weaponid:${weaponId} staminatocraft:5 materialstocraft:Iron x5, Wood x3`,
                     inline: false
                 },
                 {
@@ -1778,18 +1780,7 @@ try {
                             { name: 'Weapon ID', value: `\`\`\`${weaponSubmission.submissionId || weaponId}\`\`\``, inline: false },
                             {
                                 name: '__Materials to Craft__',
-                                value: (await Promise.all([
-                                  ...craftingMaterials.map(async (mat) => {
-                                    const item = await ItemModel.findOne({ itemName: mat.itemName });
-                                    const emoji = item?.emoji && item.emoji.trim() !== '' ? item.emoji : ':small_blue_diamond:';
-                                    return `> ${emoji} **${mat.itemName}** x${mat.quantity}`;
-                                  }),
-                                  (async () => {
-                                    const blueprintItem = await ItemModel.findOne({ itemName: 'Blueprint Voucher' });
-                                    const emoji = blueprintItem?.emoji && blueprintItem.emoji.trim() !== '' ? blueprintItem.emoji : ':small_blue_diamond:';
-                                    return `> ${emoji} **Blueprint Voucher** x1`;
-                                  })()
-                                ])).join('\n'),
+                                value: buildMaterialsList(craftingMaterials),
                                 inline: false,
                             }
                         ],
