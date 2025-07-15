@@ -1361,26 +1361,51 @@ if (existingSubmission && ['approved', 'crafted'].includes(existingSubmission.st
         });
     }
 
-    // 🛠️ Save submission initially without notificationMessageId
-saveSubmissionToStorage(weaponId, {
-    characterName,
-    weaponName,
-    baseWeapon,
-    modifiers,
-    type,
-    subtype,
-    description,
-    image: uploadedImageUrl || 'https://default.image.url/weapon.png',
-    userId: interaction.user.id,
-    itemId: weaponId,
-    status: 'pending',
-    submissionMessageId: submissionMessage?.id,
-    notificationMessageId: null, // Will be updated after notification is sent
-    submittedAt: new Date(),
-    crafted: false,
-    craftingMaterials: [], // Will be populated during approval
-    staminaToCraft: 0 // Will be set during approval
-});
+    // 🛠️ Save weapon submission with proper structure
+    const weaponSubmissionData = {
+        submissionId: weaponId,
+        userId: interaction.user.id,
+        username: interaction.user.username,
+        userAvatar: interaction.user.displayAvatarURL({ dynamic: true }),
+        category: 'customweapon',
+        // Weapon-specific fields
+        characterName,
+        weaponName,
+        baseWeapon,
+        modifiers,
+        type,
+        subtype,
+        description,
+        image: uploadedImageUrl || 'https://default.image.url/weapon.png',
+        itemId: weaponId,
+        status: 'pending',
+        submissionMessageId: submissionMessage?.id,
+        notificationMessageId: null, // Will be updated after notification is sent
+        submittedAt: new Date(),
+        crafted: false,
+        craftingMaterials: [], // Will be populated during approval
+        staminaToCraft: 0, // Will be set during approval
+        // Required fields for storage compatibility
+        questEvent: 'N/A',
+        questBonus: 'N/A',
+        baseSelections: [],
+        typeMultiplierSelections: [],
+        productMultiplierValue: null,
+        addOnsApplied: [],
+        specialWorksApplied: [],
+        characterCount: 1,
+        typeMultiplierCounts: {},
+        finalTokenAmount: 0,
+        tokenCalculation: 'N/A',
+        collab: null,
+        blightId: null,
+        tokenTracker: null,
+        fileUrl: null,
+        fileName: null,
+        title: weaponName
+    };
+
+    await saveSubmissionToStorage(weaponId, weaponSubmissionData);
 
       
     
@@ -1416,6 +1441,11 @@ try {
                     name: '🔗 View Submission',
                     value: `[Click Here](${submissionLink})`,
                     inline: true
+                },
+                {
+                    name: '⚔️ Weapon Details',
+                    value: `**Name:** ${weaponName}\n**Base:** ${baseWeapon}\n**Type:** ${type}\n**Subtype:** ${subtype}\n**Modifiers:** ${modifiers}`,
+                    inline: false
                 },
                 {
                     name: '📋 How to Approve',
@@ -1588,9 +1618,7 @@ try {
             Subtype: ${weaponSubmission.subtype}
             Modifiers: ${weaponSubmission.modifiers}`);
 
-        const validModifiers = ['1', '2', '3', '4'];
         const validTypes = ['1h', '2h'];
-
         const validSubtypes = await fetchValidWeaponSubtypes();
 
         // Fetch the base weapon from database to validate
@@ -1609,15 +1637,6 @@ try {
             console.error(`[customweapon approve]: ❌ Base weapon type (${baseWeapon.type}) does not match selected type (${weaponSubmission.type})`);
             await interaction.editReply({
                 content: `❌ The base weapon "${weaponSubmission.baseWeapon}" is a ${baseWeapon.type.join('/')} weapon, but you selected ${weaponSubmission.type}.`,
-                ephemeral: true,
-            });
-            return;
-        }
-
-        if (!validModifiers.includes(weaponSubmission.modifiers)) {
-            console.error(`[customweapon approve]: ❌ Invalid modifier: ${weaponSubmission.modifiers}`);
-            await interaction.editReply({
-                content: `❌ Invalid modifier value: ${weaponSubmission.modifiers}. Must be one of: ${validModifiers.join(', ')}`,
                 ephemeral: true,
             });
             return;
