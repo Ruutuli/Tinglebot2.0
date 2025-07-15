@@ -282,8 +282,8 @@ function isBloodMoonPeriod() {
 
 // ------------------- isBloodMoonDay -------------------
 // Checks if Blood Moon is currently active.
-// Blood Moon starts at 8 PM EST on the day BEFORE the blood moon date and ends at 8 PM EST the day AFTER.
-// For example: July 13 at 8 PM EST until July 15 at 8 PM EST.
+// Blood Moon starts at 8 PM EST on the day BEFORE the blood moon date and ends at 8 AM EST the day AFTER.
+// For example: July 13 at 8 PM EST until July 15 at 8 AM EST.
 function isBloodMoonDay() {
   console.log(`[bloodmoon.js]: 🔍 Checking if today is Blood Moon day...`);
   
@@ -325,9 +325,9 @@ function isBloodMoonDay() {
       bloodMoonStartDate = new Date(dayBefore);
       bloodMoonStartDate.setHours(20, 0, 0, 0); // 8 PM EST
       
-      // Blood Moon ends at 8 PM EST on the day after
+      // Blood Moon ends at 8 AM EST on the day after
       bloodMoonEndDate = new Date(dayAfter);
-      bloodMoonEndDate.setHours(20, 0, 0, 0); // 8 PM EST
+      bloodMoonEndDate.setHours(8, 0, 0, 0); // 8 AM EST
       
       break;
     }
