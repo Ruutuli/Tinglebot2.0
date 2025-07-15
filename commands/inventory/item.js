@@ -22,6 +22,7 @@ const { healKoCharacter, updateCurrentHearts, updateCurrentStamina } = require('
 const { getJobPerk } = require('../../modules/jobsModule');
 const { capitalizeWords } = require('../../modules/formattingModule');
 const { getVillageEmojiByName } = require('../../modules/locationsModule');
+const { createDebuffEmbed } = require('../../embeds/embeds');
 
 // ------------------- Utility Functions -------------------
 // General-purpose utilities: error handling, inventory utils.
@@ -283,17 +284,16 @@ module.exports = {
       if (character.debuff?.active) {
         const debuffEndDate = new Date(character.debuff.endDate);
         
-        // Convert to EST and set to midnight for display
+        // Convert to EST and set to midnight of the next day for display
         const estDate = new Date(debuffEndDate.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+        estDate.setDate(estDate.getDate() + 1); // Add one day to get next midnight
         estDate.setHours(0, 0, 0, 0);
         
         // Convert back to UTC for Discord timestamp
-        const utcDate = new Date(estDate.toLocaleString('en-US', { timeZone: 'America/New_York' }));
-        const expireUnix = Math.floor(utcDate.getTime() / 1000);
+        const expireUnix = Math.floor(estDate.getTime() / 1000);
         
-        return void await interaction.editReply({
-          content: `❌ **${character.name} is currently debuffed and cannot use items to heal.**\n🕒 **Debuff Expires:** <t:${expireUnix}:F>`
-        });
+        const debuffEmbed = createDebuffEmbed(character, expireUnix);
+        return void await interaction.editReply({ embeds: [debuffEmbed] });
       }
 
       // Check inventory sync before proceeding
