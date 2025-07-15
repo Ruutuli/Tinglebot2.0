@@ -374,6 +374,7 @@ async function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
 
 // ---- Function: handleRaidVictory ----
 // Handles raid victory with loot distribution for all participants
+// Includes error handling that skips failed characters and notifies mods
 async function handleRaidVictory(interaction, raidData, monster) {
   try {
     const participants = raidData.participants || [];
@@ -385,6 +386,7 @@ async function handleRaidVictory(interaction, raidData, monster) {
     
     // Process loot for each participant
     const lootResults = [];
+    const failedCharacters = [];
     const Character = require('../../models/CharacterModel');
     
     for (const participant of participants) {
@@ -393,6 +395,10 @@ async function handleRaidVictory(interaction, raidData, monster) {
         const character = await Character.findById(participant.characterId);
         if (!character) {
           console.log(`[raid.js]: ⚠️ Character ${participant.name} not found, skipping loot`);
+          failedCharacters.push({
+            name: participant.name,
+            reason: 'Character not found in database'
+          });
           continue;
         }
         
@@ -472,6 +478,14 @@ async function handleRaidVictory(interaction, raidData, monster) {
             
           } catch (error) {
             console.error(`[raid.js]: ❌ Error processing loot for ${character.name}:`, error);
+            
+            // Add to failed characters list
+            failedCharacters.push({
+              name: character.name,
+              reason: `Inventory sync failed: ${error.message}`,
+              lootedItem: lootedItem
+            });
+            
             // Determine loot quality indicator based on damage
             let qualityIndicator = '';
             if (participant.damage >= 10) {
@@ -501,6 +515,13 @@ async function handleRaidVictory(interaction, raidData, monster) {
         
       } catch (error) {
         console.error(`[raid.js]: ❌ Error processing participant ${participant.name}:`, error);
+        
+        // Add to failed characters list
+        failedCharacters.push({
+          name: participant.name,
+          reason: `General error: ${error.message}`
+        });
+        
         lootResults.push(`**${participant.name}** - *Error processing loot*`);
       }
     }
@@ -558,6 +579,42 @@ async function handleRaidVictory(interaction, raidData, monster) {
       console.log(`[raid.js]: ⚠️ No thread ID found for raid ${raidData.raidId} - victory embed will only be sent to the original interaction`);
       // Only send to original interaction if no thread exists
       await interaction.followUp({ embeds: [victoryEmbed] });
+    }
+    
+    // Notify mods if there were any failed loot processing
+    if (failedCharacters.length > 0) {
+      try {
+        // Get mod channel or use the current channel
+        const modChannel = interaction.client.channels.cache.find(channel => 
+          channel.name === 'mod-logs' || channel.name === 'mod-logs' || channel.name === 'admin'
+        ) || interaction.channel;
+        
+        const failedLootEmbed = new EmbedBuilder()
+          .setColor('#FF6B6B') // Red color for warnings
+          .setTitle(`⚠️ Raid Loot Processing Issues`)
+          .setDescription(`Some characters had issues receiving their raid loot. Please investigate:`)
+          .addFields(
+            {
+              name: '__Failed Characters__',
+              value: failedCharacters.map(fc => 
+                `• **${fc.name}**: ${fc.reason}${fc.lootedItem ? ` (${fc.lootedItem.itemName} × ${fc.lootedItem.quantity})` : ''}`
+              ).join('\n'),
+              inline: false
+            },
+            {
+              name: '__Raid Details__',
+              value: `**Monster:** ${monster.name}\n**Raid ID:** ${raidData.raidId}\n**Channel:** <#${interaction.channelId}>\n**Message:** ${interaction.url}`,
+              inline: false
+            }
+          )
+          .setTimestamp();
+        
+        await modChannel.send({ embeds: [failedLootEmbed] });
+        console.log(`[raid.js]: ⚠️ Sent loot processing failure notification to mods for ${failedCharacters.length} characters`);
+        
+      } catch (error) {
+        console.error(`[raid.js]: ❌ Error notifying mods about loot processing failures:`, error);
+      }
     }
     
   } catch (error) {

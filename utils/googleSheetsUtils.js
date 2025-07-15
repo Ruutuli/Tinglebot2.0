@@ -853,6 +853,10 @@ async function deleteInventorySheetData(spreadsheetId, characterName, context = 
 // ------------------- Function: safeAppendDataToSheet -------------------
 // Safely appends data to a sheet with validation
 async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, client, { skipValidation = false } = {}) {
+    // Move variable declarations outside try block to avoid scope issues
+    let isUserObject = false;
+    let isCharacterObject = false;
+    
     try {
         if (!spreadsheetUrl || typeof spreadsheetUrl !== 'string') {
             console.error(`[googleSheetsUtils.js]: ❌ Invalid spreadsheet URL:`, spreadsheetUrl);
@@ -865,8 +869,8 @@ async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, c
         }
 
         // Handle both User and Character objects
-        const isUserObject = character.discordId && !character.name;
-        const isCharacterObject = character.name;
+        isUserObject = character.discordId && !character.name;
+        isCharacterObject = character.name;
         
         if (!isUserObject && !isCharacterObject) {
             console.error(`[googleSheetsUtils.js]: ❌ Invalid object type - neither User nor Character:`, character);
