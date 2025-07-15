@@ -1,5 +1,5 @@
 // ------------------- Standard Libraries -------------------
-const { SlashCommandBuilder } = require('discord.js');
+const { SlashCommandBuilder, MessageFlags } = require('discord.js');
 const { handleError } = require('../../utils/globalErrorHandler');
 
 // ------------------- Database Services -------------------
@@ -23,7 +23,7 @@ module.exports = {
         ),
 
     async execute(interaction) {
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
         try {
             const characterName = interaction.options.getString('charactername');
             

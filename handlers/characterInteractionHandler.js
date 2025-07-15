@@ -7,6 +7,7 @@ const axios = require('axios');
 const { handleError } = require('../utils/globalErrorHandler');
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
+const { MessageFlags } = require('discord.js');
 
 // Local modules
 const Character = require('../models/CharacterModel');
@@ -58,7 +59,7 @@ async function createCharacterAutocomplete(interaction) {
 async function createCharacterInteraction(interaction, assignedRoles = [], missingRoles = []) {
     // Only defer if not already deferred or replied
     if (!interaction.replied && !interaction.deferred) {
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
     }
 
     const userId = interaction.user.id;

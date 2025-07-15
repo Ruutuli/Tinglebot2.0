@@ -7,7 +7,7 @@ const path = require('path');
 
 const { handleError } = require('../../utils/globalErrorHandler.js');
 // Discord.js Imports
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require('discord.js');
 
 // Handler Imports
 const { handleSelectMenuInteraction } = require('../../handlers/selectMenuHandler.js');
@@ -154,7 +154,7 @@ module.exports = {
     // ------------------- Handle Art Submission -------------------
     if (subcommand === 'art') {
       try {
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
 
         const user = interaction.user;
         const attachedFile = interaction.options.getAttachment('file');
@@ -246,7 +246,7 @@ module.exports = {
     // ------------------- Handle Writing Submission -------------------
     if (subcommand === 'writing') {
       try {
-        await interaction.deferReply({ ephemeral: true }); // Ensure the entire flow starts as ephemeral
+        await interaction.deferReply({ flags: [MessageFlags.Ephemeral] }); // Ensure the entire flow starts as ephemeral
     
         const user = interaction.user;
         const title = interaction.options.getString('title')?.trim();
