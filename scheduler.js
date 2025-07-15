@@ -12,6 +12,7 @@ const {
 const {
  postBlightRollCall,
  cleanupExpiredBlightRequests,
+ checkExpiringBlightRequests,
  checkMissedRolls,
 } = require("./handlers/blightHandler");
 const {
@@ -431,9 +432,33 @@ function setupBlightScheduler(client) {
  );
 
  createCronJob(
-  "0 0 * * *",
+  "0 */6 * * *",
   "Cleanup Expired Blight Requests",
-  cleanupExpiredBlightRequests
+  async () => {
+    try {
+      console.log('[scheduler.js]: Running blight request cleanup...');
+      const result = await cleanupExpiredBlightRequests();
+      console.log(`[scheduler.js]: Blight cleanup complete - Expired: ${result.expiredCount}, Notified: ${result.notifiedUsers}, Deleted: ${result.deletedCount}`);
+    } catch (error) {
+      handleError(error, 'scheduler.js');
+      console.error('[scheduler.js]: Error during blight cleanup:', error);
+    }
+  }
+ );
+
+ createCronJob(
+  "0 */12 * * *",
+  "Check Expiring Blight Requests",
+  async () => {
+    try {
+      console.log('[scheduler.js]: Running blight expiration warning check...');
+      const result = await checkExpiringBlightRequests();
+      console.log(`[scheduler.js]: Blight warning check complete - Warned: ${result.warnedUsers}`);
+    } catch (error) {
+      handleError(error, 'scheduler.js');
+      console.error('[scheduler.js]: Error during blight warning check:', error);
+    }
+  }
  );
 }
 
@@ -577,14 +602,26 @@ function initializeScheduler(client) {
  createCronJob("0 0 * * *", "reset pet last roll dates", () =>
   resetPetLastRollDates(client)
  );
- createCronJob("0 0 * * *", "request expiration and cleanup", () => {
-  Promise.all([
-   cleanupExpiredEntries(),
-   cleanupExpiredHealingRequests(),
-   checkExpiredRequests(client),
-   cleanupExpiredBlightRequests(),
-   cleanupExpiredRaids(),
-  ]);
+ createCronJob("0 0 * * *", "request expiration and cleanup", async () => {
+  try {
+    console.log('[scheduler.js]: Running daily cleanup tasks...');
+    const results = await Promise.all([
+     cleanupExpiredEntries(),
+     cleanupExpiredHealingRequests(),
+     checkExpiredRequests(client),
+     cleanupExpiredBlightRequests(),
+     cleanupExpiredRaids(),
+    ]);
+    
+    // Log blight cleanup results specifically
+    const blightResult = results[3]; // cleanupExpiredBlightRequests is 4th in the array
+    if (blightResult && typeof blightResult === 'object') {
+      console.log(`[scheduler.js]: Daily blight cleanup - Expired: ${blightResult.expiredCount}, Notified: ${blightResult.notifiedUsers}, Deleted: ${blightResult.deletedCount}`);
+    }
+  } catch (error) {
+    handleError(error, 'scheduler.js');
+    console.error('[scheduler.js]: Error during daily cleanup:', error);
+  }
  });
  createCronJob("0 0 * * *", "debuff expiry check", () =>
   handleDebuffExpiry(client)

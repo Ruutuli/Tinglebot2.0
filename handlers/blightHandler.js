@@ -1702,12 +1702,28 @@ async function viewBlightStatus(interaction, characterName) {
       const expiresAt = new Date(currentSubmission.expiresAt);
       const timeLeft = Math.floor((expiresAt.getTime() - Date.now()) / (1000 * 60 * 60)); // hours
       
+      // Determine status color and urgency
+      let statusEmoji = '🔄';
+      let urgencyText = '';
+      
+      if (timeLeft <= 0) {
+        statusEmoji = '⏰';
+        urgencyText = '\n⚠️ **EXPIRED** - This request has expired and needs to be renewed.';
+      } else if (timeLeft <= 24) {
+        statusEmoji = '⚠️';
+        urgencyText = '\n🚨 **URGENT** - This request expires soon!';
+      } else if (timeLeft <= 72) {
+        statusEmoji = '⏳';
+        urgencyText = '\n⏰ **Expiring Soon** - Complete your task quickly.';
+      }
+      
       embed.addFields({
-        name: '🔄 Healing Request',
+        name: `${statusEmoji} Healing Request`,
         value: `**Status:** Pending approval from **${currentSubmission.healerName}**\n` +
                `**Task:** ${currentSubmission.taskType}\n` +
                `**Expires:** <t:${Math.floor(expiresAt.getTime() / 1000)}:R>\n` +
-               `**Submission ID:** \`${currentSubmission.submissionId}\``,
+               `**Submission ID:** \`${currentSubmission.submissionId}\`` +
+               urgencyText,
         inline: false
       });
 
@@ -1913,17 +1929,212 @@ async function viewBlightHistory(interaction, characterName, limit = 10) {
   }
 }
 
+// ------------------- Function: checkExpiringBlightRequests -------------------
+// Checks for blight requests that are about to expire and sends warning notifications.
+async function checkExpiringBlightRequests() {
+  try {
+    console.log('[blightHandler]: Checking for expiring blight requests...');
+    
+    // Find submissions that expire within the next 24 hours
+    const warningThreshold = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours from now
+    const expiringSubmissions = await TempData.find({ 
+      type: 'blight',
+      expiresAt: { $lt: warningThreshold, $gt: new Date() }
+    });
+    
+    console.log(`[blightHandler]: Found ${expiringSubmissions.length} submissions expiring within 24 hours`);
+    
+    let warnedUsers = 0;
+    
+    for (const submission of expiringSubmissions) {
+      try {
+        const submissionData = submission.data;
+        
+        // Only warn for pending submissions
+        if (submissionData.status === 'pending') {
+          const expiresAt = new Date(submission.expiresAt);
+          const hoursUntilExpiry = Math.floor((expiresAt.getTime() - Date.now()) / (1000 * 60 * 60));
+          
+          // Only warn if expiring within 24 hours and haven't been warned recently
+          if (hoursUntilExpiry <= 24 && hoursUntilExpiry > 0) {
+            console.log(`[blightHandler]: Sending warning for ${submissionData.characterName} - expires in ${hoursUntilExpiry} hours`);
+            
+            // Check if we've already warned this user recently (within last 12 hours)
+            const lastWarningKey = `blight_warning_${submissionData.submissionId}`;
+            const lastWarning = await TempData.findOne({ 
+              type: 'blight_warning',
+              key: lastWarningKey
+            });
+            
+            if (!lastWarning || (Date.now() - new Date(lastWarning.createdAt).getTime()) > 12 * 60 * 60 * 1000) {
+              // Send warning DM
+              if (submissionData.userId) {
+                try {
+                  const { sendUserDM } = require('../utils/messageUtils');
+                  const { EmbedBuilder } = require('discord.js');
+                  
+                  const warningEmbed = new EmbedBuilder()
+                    .setColor('#FFA500')
+                    .setTitle('⚠️ Blight Healing Request Expiring Soon')
+                    .setDescription(`Your blight healing request for **${submissionData.characterName}** will expire soon.`)
+                    .addFields(
+                      { name: '🆔 Submission ID', value: `\`${submissionData.submissionId}\``, inline: true },
+                      { name: '👨‍⚕️ Healer', value: submissionData.healerName, inline: true },
+                      { name: '📝 Task Type', value: submissionData.taskType, inline: true },
+                      { name: '⏰ Expires In', value: `**${hoursUntilExpiry} hours**`, inline: false },
+                      { name: '📅 Expires At', value: `<t:${Math.floor(expiresAt.getTime() / 1000)}:F>`, inline: false },
+                      { name: '💡 Action Required', value: 'Complete your healing task before expiration or request a new task if needed.' }
+                    )
+                    .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png')
+                    .setFooter({ text: 'Blight Healing Expiration Warning' })
+                    .setTimestamp();
+                  
+                  await sendUserDM(null, submissionData.userId, {
+                    content: `Your blight healing request is expiring soon!`,
+                    embeds: [warningEmbed]
+                  });
+                  
+                  // Record that we've warned this user
+                  await TempData.create({
+                    type: 'blight_warning',
+                    key: lastWarningKey,
+                    data: {
+                      submissionId: submissionData.submissionId,
+                      userId: submissionData.userId,
+                      warnedAt: new Date().toISOString()
+                    },
+                    createdAt: new Date(),
+                    expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+                  });
+                  
+                  warnedUsers++;
+                  console.log(`[blightHandler]: Sent warning DM to user ${submissionData.userId} for ${submissionData.characterName}`);
+                } catch (dmError) {
+                  console.error(`[blightHandler]: Failed to send warning DM to user ${submissionData.userId}:`, dmError);
+                }
+              }
+            }
+          }
+        }
+      } catch (submissionError) {
+        console.error(`[blightHandler]: Error processing expiring submission ${submission._id}:`, submissionError);
+      }
+    }
+    
+    console.log(`[blightHandler]: Expiration warning check complete - Warned: ${warnedUsers}`);
+    return { warnedUsers };
+  } catch (error) {
+    handleError(error, 'blightHandler.js');
+    console.error('[blightHandler]: Error checking expiring blight requests:', error);
+    throw error;
+  }
+}
+
 // ------------------- Function: cleanupExpiredBlightRequests -------------------
-// Deletes all expired TempData entries related to blight.
+// Deletes all expired TempData entries related to blight and notifies users.
 async function cleanupExpiredBlightRequests() {
   try {
-    const result = await TempData.deleteMany({ 
+    console.log('[blightHandler]: Starting cleanup of expired blight requests...');
+    
+    // Find all expired blight submissions
+    const expiredSubmissions = await TempData.find({ 
       type: 'blight',
       expiresAt: { $lt: new Date() }
     });
     
-    console.log(`[blightHandler]: Cleaned up ${result.deletedCount} expired blight requests`);
-    return result.deletedCount;
+    console.log(`[blightHandler]: Found ${expiredSubmissions.length} expired blight submissions`);
+    
+    let notifiedUsers = 0;
+    let expiredCount = 0;
+    
+    for (const submission of expiredSubmissions) {
+      try {
+        const submissionData = submission.data;
+        
+        // Only process pending submissions that haven't been marked as expired
+        if (submissionData.status === 'pending') {
+          console.log(`[blightHandler]: Processing expired submission for ${submissionData.characterName}`);
+          
+          // Mark as expired in the database
+          submissionData.status = 'expired';
+          submissionData.expiredAt = new Date().toISOString();
+          
+          // Save the updated submission data
+          await TempData.updateOne(
+            { _id: submission._id },
+            { 
+              $set: { 
+                data: submissionData,
+                expiresAt: new Date() // Ensure it's marked as expired
+              }
+            }
+          );
+          
+          // Save expiration event to blight history
+          try {
+            const character = await Character.findOne({ name: submissionData.characterName });
+            if (character) {
+              await saveBlightEventToHistory(character, 'Submission Expired', {
+                notes: `Healing submission expired - Task: ${submissionData.taskType} from ${submissionData.healerName}`,
+                submissionId: submissionData.submissionId
+              });
+            }
+          } catch (historyError) {
+            console.error('[blightHandler]: Error saving expiration to history:', historyError);
+          }
+          
+          // Notify the user via DM
+          if (submissionData.userId) {
+            try {
+              const { sendUserDM } = require('../utils/messageUtils');
+              const { EmbedBuilder } = require('discord.js');
+              
+              const expirationEmbed = new EmbedBuilder()
+                .setColor('#FF6B6B')
+                .setTitle('⏰ Blight Healing Request Expired')
+                .setDescription(`Your blight healing request for **${submissionData.characterName}** has expired.`)
+                .addFields(
+                  { name: '🆔 Submission ID', value: `\`${submissionData.submissionId}\``, inline: true },
+                  { name: '👨‍⚕️ Healer', value: submissionData.healerName, inline: true },
+                  { name: '📝 Task Type', value: submissionData.taskType, inline: true },
+                  { name: '⏰ Expired At', value: `<t:${Math.floor(new Date().getTime() / 1000)}:F>`, inline: false },
+                  { name: '💡 Next Steps', value: 'You can request a new healing task using `/blight heal` if your character is still blighted.' }
+                )
+                .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png')
+                .setFooter({ text: 'Blight Healing Expiration Notice' })
+                .setTimestamp();
+              
+              await sendUserDM(null, submissionData.userId, {
+                content: `Your blight healing request has expired.`,
+                embeds: [expirationEmbed]
+              });
+              
+              notifiedUsers++;
+              console.log(`[blightHandler]: Sent expiration DM to user ${submissionData.userId} for ${submissionData.characterName}`);
+            } catch (dmError) {
+              console.error(`[blightHandler]: Failed to send expiration DM to user ${submissionData.userId}:`, dmError);
+            }
+          }
+          
+          expiredCount++;
+        }
+      } catch (submissionError) {
+        console.error(`[blightHandler]: Error processing expired submission ${submission._id}:`, submissionError);
+      }
+    }
+    
+    // Delete all expired submissions from TempData
+    const deleteResult = await TempData.deleteMany({ 
+      type: 'blight',
+      expiresAt: { $lt: new Date() }
+    });
+    
+    console.log(`[blightHandler]: Cleanup complete - Expired: ${expiredCount}, Notified: ${notifiedUsers}, Deleted: ${deleteResult.deletedCount}`);
+    return {
+      expiredCount,
+      notifiedUsers,
+      deletedCount: deleteResult.deletedCount
+    };
   } catch (error) {
     handleError(error, 'blightHandler.js');
     console.error('[blightHandler]: Error cleaning up expired blight requests:', error);
@@ -2276,6 +2487,7 @@ module.exports = {
   viewBlightStatus,
   saveBlightEventToHistory,
   cleanupExpiredBlightRequests,
+  checkExpiringBlightRequests,
   validateCharacterOwnership,
   checkMissedRolls,
   getCharacterBlightHistory
