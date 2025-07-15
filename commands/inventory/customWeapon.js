@@ -16,7 +16,7 @@ const { fetchCharacterByNameAndUserId, updateCharacterById, getCharacterInventor
 // ------------------- Utility Functions -------------------
 const { addItemInventoryDatabase, processMaterials, removeItemInventoryDatabase } = require('../../utils/inventoryUtils');
 const { appendSheetData, authorizeSheets, extractSpreadsheetId, safeAppendDataToSheet, } = require('../../utils/googleSheetsUtils');
-const { retrieveSubmissionFromStorage, saveSubmissionToStorage, deleteSubmissionFromStorage } = require('../../utils/storage');
+const { retrieveWeaponSubmissionFromStorage, saveWeaponSubmissionToStorage, updateWeaponSubmissionData, deleteWeaponSubmissionFromStorage } = require('../../utils/storage');
 const { uploadSubmissionImage } = require('../../utils/uploadUtils');
 const { generateUniqueId } = require('../../utils/uniqueIdUtils');
 const { checkAndUseStamina } = require('../../modules/characterStatsModule')
@@ -176,36 +176,16 @@ function combineMaterials(materialsUsed) {
     return Array.from(materialMap.values());
   }
 
-// ---- Function: getAllSubmissions ----
+// ---- Function: getAllWeaponSubmissions ----
 // Retrieves all weapon submissions from storage
-function getAllSubmissions() {
+async function getAllWeaponSubmissions() {
     try {
-        const fs = require('fs');
-        const path = require('path');
-        const submissionsPath = path.join(__dirname, '../data/submissions.json');
-
-        if (!fs.existsSync(submissionsPath)) return [];
-
-        const rawData = fs.readFileSync(submissionsPath, 'utf-8').trim();
-
-        // Handle empty file safely
-        if (!rawData) return [];
-
-        let submissions = {};
-        try {
-            submissions = JSON.parse(rawData);
-        } catch (parseError) {
-    handleError(parseError, 'customWeapon.js');
-
-            console.error(`[customweapon helper]: Failed to parse submissions.json — it might be corrupt or empty. Returning empty list.`);
-            return [];
-        }
-
-        return Object.values(submissions);
+        const { getAllWeaponSubmissions } = require('../../utils/storage');
+        const submissions = await getAllWeaponSubmissions();
+        return submissions;
     } catch (error) {
-    handleError(error, 'customWeapon.js');
-
-        console.error(`[customweapon helper]: Error retrieving all submissions:`, error);
+        handleError(error, 'customWeapon.js');
+        console.error(`[customweapon helper]: Error reading weapon submissions:`, error);
         return [];
     }
 }
@@ -1289,7 +1269,7 @@ try {
     }
 
 // ------------------- Duplicate Submission Check -------------------
-const allSubmissions = getAllSubmissions(); 
+        const allSubmissions = await getAllWeaponSubmissions(); 
 
 // ❌ Check for duplicate weapon name globally (regardless of character)
 const duplicateNameExists = allSubmissions.some(sub =>
@@ -1405,7 +1385,7 @@ if (existingSubmission && ['approved', 'crafted'].includes(existingSubmission.st
         title: weaponName
     };
 
-    await saveSubmissionToStorage(weaponId, weaponSubmissionData);
+    await saveWeaponSubmissionToStorage(weaponId, weaponSubmissionData);
 
       
     
@@ -1472,10 +1452,10 @@ try {
         });
 
         // ✅ Safely update submission with notificationMessageId now
-        const currentSubmission = await retrieveSubmissionFromStorage(weaponId);
+        const currentSubmission = await retrieveWeaponSubmissionFromStorage(weaponId);
         if (currentSubmission) {
             currentSubmission.notificationMessageId = notificationMessage.id;
-            await saveSubmissionToStorage(weaponId, currentSubmission);
+            await saveWeaponSubmissionToStorage(weaponId, currentSubmission);
         }
     } else {
         console.warn(`[customweapon submit]: Notification channel not found or bot lacks access. Submission will still be processed.`);
@@ -1556,7 +1536,7 @@ try {
     try {
         // Retrieve Submission
         console.log(`[customweapon approve]: 🔍 Retrieving submission ${weaponId}`);
-        const weaponSubmission = await retrieveSubmissionFromStorage(weaponId);
+        const weaponSubmission = await retrieveWeaponSubmissionFromStorage(weaponId);
         
         if (!weaponSubmission) {
             console.error(`[customweapon approve]: ❌ No submission found for ID: ${weaponId}`);
@@ -1740,7 +1720,7 @@ try {
             weaponSubmission.approvedAt = new Date();
             weaponSubmission.approvedBy = interaction.user.id;
             
-            await saveSubmissionToStorage(weaponId, weaponSubmission);
+            await saveWeaponSubmissionToStorage(weaponId, weaponSubmission);
             console.log(`[customweapon approve]: ✅ Updated submission status to approved`);
 
             approvalSuccessful = true;
