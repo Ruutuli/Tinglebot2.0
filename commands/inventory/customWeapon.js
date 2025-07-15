@@ -59,6 +59,109 @@ function buildMaterialsList(craftingMaterials) {
     }
 }
 
+// ---- Function: createValidationErrorEmbed ----
+// Creates a comprehensive error embed for validation failures
+function createValidationErrorEmbed(characterName, itemName, currentQuantity, requiredQuantity, similarItems = [], operation = 'craft') {
+    const embed = {
+        color: 0xFF6B35, // Orange color for warnings
+        title: `❌ Missing Required Item: ${itemName}`,
+        description: `**${characterName}** is missing the required **${itemName}** to ${operation}.`,
+        fields: [
+            {
+                name: '📊 Current Status',
+                value: `**Current:** ${currentQuantity || 0}\n**Required:** ${requiredQuantity}\n**Missing:** ${requiredQuantity - (currentQuantity || 0)}`,
+                inline: true
+            }
+        ],
+        footer: { text: 'Please obtain the required items before attempting to craft.' },
+        timestamp: new Date().toISOString()
+    };
+
+    // Add similar items field if any found
+    if (similarItems.length > 0) {
+        embed.fields.push({
+            name: '💡 Similar Items Found',
+            value: similarItems.map(item => `• **${item}**`).join('\n'),
+            inline: false
+        });
+    }
+
+    // Add helpful tips based on the item
+    const tips = [];
+    if (itemName.toLowerCase().includes('star fragment')) {
+        tips.push('• Complete special events and quests');
+        tips.push('• Participate in seasonal activities');
+        tips.push('• Trade with other players');
+        tips.push('• Check the marketplace');
+    } else if (itemName.toLowerCase().includes('blueprint voucher')) {
+        tips.push('• Complete special crafting events');
+        tips.push('• Participate in seasonal activities');
+        tips.push('• Trade with other players');
+        tips.push('• Check the marketplace');
+        tips.push('• Complete specific quests');
+    }
+
+    if (tips.length > 0) {
+        embed.fields.push({
+            name: '🔍 How to Obtain',
+            value: tips.join('\n'),
+            inline: false
+        });
+    }
+
+    return embed;
+}
+
+// ---- Function: validateInventoryData ----
+// Validates inventory data structure and provides detailed error messages
+function validateInventoryData(inventoryItems, characterName) {
+    try {
+        // Check if inventoryItems is valid
+        if (!inventoryItems) {
+            throw new Error(`❌ **${characterName}**'s inventory data is null or undefined. Please ensure your inventory is properly synced.`);
+        }
+
+        if (!Array.isArray(inventoryItems)) {
+            throw new Error(`❌ **${characterName}**'s inventory data is not in the expected format. Please ensure your inventory is properly synced.`);
+        }
+
+        if (inventoryItems.length === 0) {
+            throw new Error(`❌ **${characterName}**'s inventory appears to be empty. Please ensure your inventory is properly synced with the database.`);
+        }
+
+        // Check for invalid items in the inventory
+        const invalidItems = inventoryItems.filter(item => 
+            !item || 
+            typeof item !== 'object' || 
+            !item.itemName || 
+            typeof item.itemName !== 'string' ||
+            item.quantity === undefined || 
+            item.quantity === null
+        );
+
+        if (invalidItems.length > 0) {
+            console.warn(`[validateInventoryData]: ⚠️ Found ${invalidItems.length} invalid items in ${characterName}'s inventory`);
+        }
+
+        // Log inventory summary for debugging
+        console.log(`[validateInventoryData]: ✅ Inventory validation passed for ${characterName}:`);
+        console.log(`[validateInventoryData]:   - Total items: ${inventoryItems.length}`);
+        console.log(`[validateInventoryData]:   - Valid items: ${inventoryItems.length - invalidItems.length}`);
+        console.log(`[validateInventoryData]:   - Invalid items: ${invalidItems.length}`);
+
+        return {
+            isValid: true,
+            itemCount: inventoryItems.length,
+            validItemCount: inventoryItems.length - invalidItems.length,
+            invalidItemCount: invalidItems.length
+        };
+
+    } catch (error) {
+        console.error(`[validateInventoryData]: ❌ Inventory validation failed for ${characterName}:`, error.message);
+        throw error;
+    }
+}
+
 // ---- Function: logMaterialsToGoogleSheets ----
 // Logs materials used for crafting to Google Sheets
 async function logMaterialsToGoogleSheets(auth, spreadsheetId, range, character, materialsUsed, craftedItem, interactionUrl, formattedDateTime, interaction) {
@@ -535,69 +638,235 @@ async function sendApprovalDM(user, weaponSubmission, craftingMaterials, stamina
 }
 
 // ---- Function: validateBlueprintVoucher ----
-// Validates Blueprint Voucher requirement with comprehensive error handling
+// Validates Blueprint Voucher requirement with comprehensive error handling and detailed feedback
 async function validateBlueprintVoucher(inventoryItems, characterName, operation = 'craft') {
     try {
-        // Case-insensitive search for Blueprint Voucher
-        const blueprintVoucher = inventoryItems.find(item => 
-            item.itemName && 
-            item.itemName.toLowerCase() === 'blueprint voucher' && 
-            item.quantity > 0
-        );
-
-        if (!blueprintVoucher) {
-            const errorMessage = operation === 'submit' 
-                ? `❌ **${characterName}** does not have a **Blueprint Voucher** in their inventory. You need this item to submit a custom weapon!`
-                : `You need 1 Blueprint Voucher to craft this weapon.`;
-            
-            throw new Error(errorMessage);
+        // Validate input parameters and inventory data
+        if (!characterName || typeof characterName !== 'string') {
+            throw new Error('❌ Invalid character name provided for Blueprint Voucher validation.');
         }
 
-        console.log(`[validateBlueprintVoucher]: ✅ Found Blueprint Voucher x${blueprintVoucher.quantity} for ${characterName}`);
-        return blueprintVoucher;
+        // Validate inventory data structure
+        validateInventoryData(inventoryItems, characterName);
+
+        // Case-insensitive search for Blueprint Voucher with multiple variations
+        const blueprintVoucherVariations = [
+            'blueprint voucher',
+            'blueprint vouchers',
+            'blueprintvoucher',
+            'blueprintvouchers'
+        ];
+
+        const blueprintVouchers = inventoryItems.filter(item => {
+            if (!item || !item.itemName) return false;
+            
+            const itemNameLower = item.itemName.toLowerCase().trim();
+            return blueprintVoucherVariations.some(variation => 
+                itemNameLower === variation || 
+                (itemNameLower.includes('blueprint') && itemNameLower.includes('voucher'))
+            );
+        });
+
+        // Calculate total quantity with proper validation
+        const totalBlueprintVouchers = blueprintVouchers.reduce((sum, item) => {
+            const quantity = parseInt(item.quantity) || 0;
+            if (quantity < 0) {
+                console.warn(`[validateBlueprintVoucher]: ⚠️ Negative quantity detected for ${item.itemName}: ${quantity}`);
+                return sum;
+            }
+            return sum + quantity;
+        }, 0);
+
+        // Detailed logging for debugging
+        console.log(`[validateBlueprintVoucher]: 🔍 Inventory analysis for ${characterName}:`);
+        console.log(`[validateBlueprintVoucher]:   - Total inventory items: ${inventoryItems.length}`);
+        console.log(`[validateBlueprintVoucher]:   - Blueprint Voucher items found: ${blueprintVouchers.length}`);
+        console.log(`[validateBlueprintVoucher]:   - Total Blueprint Vouchers: ${totalBlueprintVouchers}`);
+
+        // Check if any Blueprint Vouchers were found at all
+        if (blueprintVouchers.length === 0) {
+
+            // Check for similar items that might be Blueprint Vouchers
+            const similarItems = inventoryItems.filter(item => 
+                item.itemName && 
+                (item.itemName.toLowerCase().includes('blueprint') || 
+                 item.itemName.toLowerCase().includes('voucher'))
+            );
+
+            if (similarItems.length > 0) {
+                const similarItemNames = similarItems.map(item => `"${item.itemName}"`).join(', ');
+                throw new Error(`❌ **${characterName}** does not have a **Blueprint Voucher** in their inventory.\n\n💡 **Similar items found:** ${similarItemNames}\n\n🔍 **Please check:**\n• Item name spelling (should be exactly "Blueprint Voucher")\n• Item availability in your inventory\n• Inventory sync status`);
+            } else {
+                const operationContext = operation === 'submit' 
+                    ? 'submit a custom weapon'
+                    : 'craft this weapon';
+                
+                throw new Error(`❌ **${characterName}** does not have a **Blueprint Voucher** in their inventory.\n\n💡 **How to obtain Blueprint Vouchers:**\n• Complete special crafting events\n• Participate in seasonal activities\n• Trade with other players\n• Check the marketplace\n• Complete specific quests\n\n🔍 **Please ensure:**\n• Your inventory is properly synced\n• You have the required item before attempting to ${operationContext}`);
+            }
+        }
+
+        // Check if enough Blueprint Vouchers are available
+        if (totalBlueprintVouchers < 1) {
+            const availableItems = blueprintVouchers.map(item => 
+                `"${item.itemName}" (Quantity: ${item.quantity || 0})`
+            ).join(', ');
+
+            const operationContext = operation === 'submit' 
+                ? 'submit a custom weapon'
+                : 'craft this weapon';
+
+            throw new Error(`❌ **${characterName}** has insufficient **Blueprint Vouchers**.\n\n📊 **Current Blueprint Vouchers:** ${totalBlueprintVouchers}\n📋 **Required:** 1\n\n💡 **Available items:** ${availableItems}\n\n🔍 **Please obtain:** ${1 - totalBlueprintVouchers} more Blueprint Voucher(s) to ${operationContext}.`);
+        }
+
+        // Success logging
+        console.log(`[validateBlueprintVoucher]: ✅ Found Blueprint Vouchers x${totalBlueprintVouchers} for ${characterName}`);
+        
+        // Return the first valid Blueprint Voucher for backward compatibility
+        const blueprintVoucher = blueprintVouchers.find(item => item.quantity > 0);
+        
+        return {
+            ...blueprintVoucher,
+            totalBlueprintVouchers,
+            validationDetails: {
+                inventoryItemCount: inventoryItems.length,
+                blueprintVoucherItemCount: blueprintVouchers.length,
+                characterName: characterName,
+                operation: operation,
+                validationTimestamp: new Date().toISOString()
+            }
+        };
 
     } catch (error) {
+        // Enhanced error handling with more context
         handleError(error, 'customWeapon.js', {
             commandName: 'customWeapon',
             characterName: characterName,
             options: {
                 operation: 'validateBlueprintVoucher',
                 voucherOperation: operation,
-                inventoryItemCount: inventoryItems?.length || 0
+                inventoryItemCount: inventoryItems?.length || 0,
+                inventoryItems: inventoryItems?.slice(0, 5).map(item => item?.itemName).filter(Boolean), // First 5 items for debugging
+                errorType: error.name,
+                errorMessage: error.message
             }
         });
+
+        // Re-throw the error with enhanced context if it's not already detailed
+        if (!error.message.includes('❌')) {
+            throw new Error(`❌ Blueprint Voucher validation failed for **${characterName}**: ${error.message}`);
+        }
+
         throw error;
     }
 }
 
 // ---- Function: validateStarFragment ----
-// Validates Star Fragment requirement with comprehensive error handling
+// Validates Star Fragment requirement with comprehensive error handling and detailed feedback
 async function validateStarFragment(inventoryItems, characterName) {
     try {
-        // Case-insensitive search for Star Fragment
-        const starFragments = inventoryItems.filter(item => 
-            item.itemName && 
-            item.itemName.toLowerCase() === 'star fragment'
-        );
-
-        const totalStarFragments = starFragments.reduce((sum, item) => sum + (item.quantity || 0), 0);
-
-        if (totalStarFragments < 1) {
-            throw new Error(`You need 1 Star Fragment to craft this weapon.`);
+        // Validate input parameters and inventory data
+        if (!characterName || typeof characterName !== 'string') {
+            throw new Error('❌ Invalid character name provided for Star Fragment validation.');
         }
 
+        // Validate inventory data structure
+        validateInventoryData(inventoryItems, characterName);
+
+        // Case-insensitive search for Star Fragment with multiple variations
+        const starFragmentVariations = [
+            'star fragment',
+            'star fragments',
+            'starfragment',
+            'starfragments'
+        ];
+
+        const starFragments = inventoryItems.filter(item => {
+            if (!item || !item.itemName) return false;
+            
+            const itemNameLower = item.itemName.toLowerCase().trim();
+            return starFragmentVariations.some(variation => 
+                itemNameLower === variation || 
+                itemNameLower.includes('star') && itemNameLower.includes('fragment')
+            );
+        });
+
+        // Calculate total quantity with proper validation
+        const totalStarFragments = starFragments.reduce((sum, item) => {
+            const quantity = parseInt(item.quantity) || 0;
+            if (quantity < 0) {
+                console.warn(`[validateStarFragment]: ⚠️ Negative quantity detected for ${item.itemName}: ${quantity}`);
+                return sum;
+            }
+            return sum + quantity;
+        }, 0);
+
+        // Detailed logging for debugging
+        console.log(`[validateStarFragment]: 🔍 Inventory analysis for ${characterName}:`);
+        console.log(`[validateStarFragment]:   - Total inventory items: ${inventoryItems.length}`);
+        console.log(`[validateStarFragment]:   - Star Fragment items found: ${starFragments.length}`);
+        console.log(`[validateStarFragment]:   - Total Star Fragments: ${totalStarFragments}`);
+
+        // Check if any Star Fragments were found at all
+        if (starFragments.length === 0) {
+
+            // Check for similar items that might be Star Fragments
+            const similarItems = inventoryItems.filter(item => 
+                item.itemName && 
+                (item.itemName.toLowerCase().includes('star') || 
+                 item.itemName.toLowerCase().includes('fragment'))
+            );
+
+            if (similarItems.length > 0) {
+                const similarItemNames = similarItems.map(item => `"${item.itemName}"`).join(', ');
+                throw new Error(`❌ **${characterName}** does not have a **Star Fragment** in their inventory.\n\n💡 **Similar items found:** ${similarItemNames}\n\n🔍 **Please check:**\n• Item name spelling (should be exactly "Star Fragment")\n• Item availability in your inventory\n• Inventory sync status`);
+            } else {
+                throw new Error(`❌ **${characterName}** does not have a **Star Fragment** in their inventory.\n\n💡 **How to obtain Star Fragments:**\n• Complete special events and quests\n• Participate in seasonal activities\n• Trade with other players\n• Check the marketplace\n\n🔍 **Please ensure:**\n• Your inventory is properly synced\n• You have the required item before attempting to craft`);
+            }
+        }
+
+        // Check if enough Star Fragments are available
+        if (totalStarFragments < 1) {
+            const availableItems = starFragments.map(item => 
+                `"${item.itemName}" (Quantity: ${item.quantity || 0})`
+            ).join(', ');
+
+            throw new Error(`❌ **${characterName}** has insufficient **Star Fragments**.\n\n📊 **Current Star Fragments:** ${totalStarFragments}\n📋 **Required:** 1\n\n💡 **Available items:** ${availableItems}\n\n🔍 **Please obtain:** ${1 - totalStarFragments} more Star Fragment(s) to craft this weapon.`);
+        }
+
+        // Success logging
         console.log(`[validateStarFragment]: ✅ Found Star Fragments x${totalStarFragments} for ${characterName}`);
-        return { totalStarFragments, starFragments };
+        
+        // Return detailed information for potential future use
+        return { 
+            totalStarFragments, 
+            starFragments,
+            validationDetails: {
+                inventoryItemCount: inventoryItems.length,
+                starFragmentItemCount: starFragments.length,
+                characterName: characterName,
+                validationTimestamp: new Date().toISOString()
+            }
+        };
 
     } catch (error) {
+        // Enhanced error handling with more context
         handleError(error, 'customWeapon.js', {
             commandName: 'customWeapon',
             characterName: characterName,
             options: {
                 operation: 'validateStarFragment',
-                inventoryItemCount: inventoryItems?.length || 0
+                inventoryItemCount: inventoryItems?.length || 0,
+                inventoryItems: inventoryItems?.slice(0, 5).map(item => item?.itemName).filter(Boolean), // First 5 items for debugging
+                errorType: error.name,
+                errorMessage: error.message
             }
         });
+
+        // Re-throw the error with enhanced context if it's not already detailed
+        if (!error.message.includes('❌')) {
+            throw new Error(`❌ Star Fragment validation failed for **${characterName}**: ${error.message}`);
+        }
+
         throw error;
     }
 }
@@ -766,16 +1035,29 @@ async function processCraftingTransaction(character, weaponSubmission, inventory
     let staminaDeducted = false;
     let weaponAdded = false;
     let weaponMarkedAsCrafted = false;
+    let hasStarFragment = false;
+    let hasBlueprintVoucher = false;
 
     try {
         console.log(`[processCraftingTransaction]: 🛠️ Starting crafting transaction for ${weaponSubmission.weaponName}`);
 
         // Step 1: Process materials
+        // Check if Star Fragment and Blueprint Voucher are already in crafting materials
+        const existingMaterialNames = weaponSubmission.craftingMaterials.map(m => m.itemName.toLowerCase());
+        hasStarFragment = existingMaterialNames.includes('star fragment');
+        hasBlueprintVoucher = existingMaterialNames.includes('blueprint voucher');
+
         const materialsToProcess = [
             ...weaponSubmission.craftingMaterials,
-            { itemName: 'Star Fragment', quantity: 1 },
-            { itemName: 'Blueprint Voucher', quantity: 1 }
+            // Only add Star Fragment if not already present
+            ...(!hasStarFragment ? [{ itemName: 'Star Fragment', quantity: 1 }] : []),
+            // Only add Blueprint Voucher if not already present
+            ...(!hasBlueprintVoucher ? [{ itemName: 'Blueprint Voucher', quantity: 1 }] : [])
         ];
+
+        console.log(`[processCraftingTransaction]: 📋 Materials to process: ${materialsToProcess.length} items`);
+        console.log(`[processCraftingTransaction]:   - Has Star Fragment: ${hasStarFragment}`);
+        console.log(`[processCraftingTransaction]:   - Has Blueprint Voucher: ${hasBlueprintVoucher}`);
 
         const processedMaterials = await processMaterials(interaction, character, inventoryItems, { craftingMaterial: materialsToProcess }, 1);
         if (processedMaterials === "canceled") {
@@ -837,10 +1119,16 @@ async function processCraftingTransaction(character, weaponSubmission, inventory
 
             if (materialsRemoved) {
                 console.log(`[processCraftingTransaction]: 🔄 Rolling back material consumption`);
-                // Restore materials
+                // Restore materials - only restore what was actually consumed
                 await addItemInventoryDatabase(character._id, weaponSubmission.craftingMaterials, 1);
-                await addItemInventoryDatabase(character._id, [{ itemName: 'Star Fragment', quantity: 1 }], 1);
-                await addItemInventoryDatabase(character._id, [{ itemName: 'Blueprint Voucher', quantity: 1 }], 1);
+                
+                // Only restore Star Fragment and Blueprint Voucher if they were added during processing
+                if (!hasStarFragment) {
+                    await addItemInventoryDatabase(character._id, [{ itemName: 'Star Fragment', quantity: 1 }], 1);
+                }
+                if (!hasBlueprintVoucher) {
+                    await addItemInventoryDatabase(character._id, [{ itemName: 'Blueprint Voucher', quantity: 1 }], 1);
+                }
             }
 
             console.log(`[processCraftingTransaction]: ✅ Rollback completed successfully`);
@@ -1148,7 +1436,7 @@ try {
 
 // Create the 🎉 Congratulations! embed
 const embed = {
-    title: `🎉 Congratulations!`,
+    title: `🎉 Congratulations, ${characterName}!`,
     description: `You have created your custom weapon, **${weaponSubmission.weaponName}**, with the help of a skilled crafter!! This item has been added to **${characterName}**'s inventory.`,
     color: 0xAA926A,
     thumbnail: { url: weaponSubmission.image },
@@ -1166,6 +1454,11 @@ const embed = {
         {
             name: `📦 Materials Used`,
             value: fullMaterialsUsed,
+            inline: false,
+        },
+        {
+            name: `📋 Inventory Link`,
+            value: character.inventory ? `[View ${characterName}'s Inventory](${character.inventory})` : `Inventory link not available`,
             inline: false,
         },
         {
