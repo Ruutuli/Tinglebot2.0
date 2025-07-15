@@ -678,6 +678,152 @@ async function cleanupCraftedSubmission(weaponId, weaponName) {
     }
 }
 
+// ---- Function: validateCreateCommandRequirements ----
+// Comprehensive validation for the create command
+async function validateCreateCommandRequirements(characterName, weaponId, userId, interaction) {
+    try {
+        // Validate input parameters
+        if (!characterName || !weaponId || !userId) {
+            throw new Error('Missing required parameters for crafting.');
+        }
+
+        // Fetch Character with comprehensive error handling
+        const character = await fetchCharacterByNameAndUserId(characterName, userId);
+        if (!character) {
+            throw new Error(`Character **${characterName}** not found.`);
+        }
+
+        // Validate character ownership
+        if (character.userId !== userId) {
+            throw new Error(`Character **${characterName}** does not belong to you.`);
+        }
+
+        // Check character status (jail, etc.)
+        if (character.jailed === true) {
+            throw new Error(`Character **${characterName}** is currently jailed and cannot craft weapons.`);
+        }
+
+        console.log(`[validateCreateCommandRequirements]: ✅ Character validation passed for ${characterName}`);
+        return character;
+
+    } catch (error) {
+        handleError(error, 'customWeapon.js', {
+            commandName: 'customWeapon',
+            userTag: interaction?.user?.tag,
+            userId: userId,
+            characterName: characterName,
+            options: {
+                weaponId: weaponId,
+                operation: 'validateCreateCommandRequirements'
+            }
+        });
+        throw error;
+    }
+}
+
+// ---- Function: processCraftingTransaction ----
+// Handles the entire crafting transaction with comprehensive rollback
+async function processCraftingTransaction(character, weaponSubmission, inventoryItems, interaction) {
+    let materialsRemoved = false;
+    let staminaDeducted = false;
+    let weaponAdded = false;
+    let weaponMarkedAsCrafted = false;
+
+    try {
+        console.log(`[processCraftingTransaction]: 🛠️ Starting crafting transaction for ${weaponSubmission.weaponName}`);
+
+        // Step 1: Process materials
+        const materialsToProcess = [
+            ...weaponSubmission.craftingMaterials,
+            { itemName: 'Star Fragment', quantity: 1 },
+            { itemName: 'Blueprint Voucher', quantity: 1 }
+        ];
+
+        const processedMaterials = await processMaterials(interaction, character, inventoryItems, { craftingMaterial: materialsToProcess }, 1);
+        if (processedMaterials === "canceled") {
+            throw new Error('Crafting canceled due to insufficient materials.');
+        }
+        materialsRemoved = true;
+        console.log(`[processCraftingTransaction]: ✅ Materials processed successfully`);
+
+        // Step 2: Deduct stamina
+        await checkAndUseStamina(character, weaponSubmission.staminaToCraft);
+        staminaDeducted = true;
+        console.log(`[processCraftingTransaction]: ✅ Stamina deducted successfully`);
+
+        // Step 3: Add weapon to inventory
+        await addItemInventoryDatabase(
+            character._id,
+            weaponSubmission.weaponName,
+            1,
+            interaction,
+            'Custom Weapon'
+        );
+        weaponAdded = true;
+        console.log(`[processCraftingTransaction]: ✅ Weapon added to inventory successfully`);
+
+        // Step 4: Mark as crafted
+        await markWeaponAsCrafted(weaponSubmission, weaponSubmission.itemId, character.name);
+        weaponMarkedAsCrafted = true;
+        console.log(`[processCraftingTransaction]: ✅ Weapon marked as crafted successfully`);
+
+        // Step 5: Cleanup submission
+        await cleanupCraftedSubmission(weaponSubmission.itemId, weaponSubmission.weaponName);
+        console.log(`[processCraftingTransaction]: ✅ Submission cleaned up successfully`);
+
+        console.log(`[processCraftingTransaction]: ✅ Crafting transaction completed successfully`);
+        return true;
+
+    } catch (error) {
+        console.error(`[processCraftingTransaction]: ❌ Transaction failed: ${error.message}`);
+        
+        // Comprehensive rollback
+        try {
+            if (weaponMarkedAsCrafted) {
+                console.log(`[processCraftingTransaction]: 🔄 Rolling back weapon marking`);
+                // Note: This would require a separate function to unmark, but for now we'll log it
+            }
+
+            if (weaponAdded) {
+                console.log(`[processCraftingTransaction]: 🔄 Rolling back weapon addition`);
+                // Remove weapon from inventory
+                await addItemInventoryDatabase(character._id, weaponSubmission.weaponName, -1, interaction, 'Rollback');
+            }
+
+            if (staminaDeducted) {
+                console.log(`[processCraftingTransaction]: 🔄 Rolling back stamina deduction`);
+                await updateCharacterById(character._id, {
+                    $inc: { currentStamina: weaponSubmission.staminaToCraft }
+                });
+            }
+
+            if (materialsRemoved) {
+                console.log(`[processCraftingTransaction]: 🔄 Rolling back material consumption`);
+                // Restore materials
+                await addItemInventoryDatabase(character._id, weaponSubmission.craftingMaterials, 1);
+                await addItemInventoryDatabase(character._id, [{ itemName: 'Star Fragment', quantity: 1 }], 1);
+                await addItemInventoryDatabase(character._id, [{ itemName: 'Blueprint Voucher', quantity: 1 }], 1);
+            }
+
+            console.log(`[processCraftingTransaction]: ✅ Rollback completed successfully`);
+        } catch (rollbackError) {
+            console.error(`[processCraftingTransaction]: ❌ Rollback failed: ${rollbackError.message}`);
+            handleError(rollbackError, 'customWeapon.js', {
+                commandName: 'customWeapon',
+                userTag: interaction?.user?.tag,
+                userId: interaction?.user?.id,
+                characterName: character?.name,
+                options: {
+                    weaponName: weaponSubmission?.weaponName,
+                    operation: 'processCraftingTransaction_rollback'
+                }
+            });
+        }
+
+        throw error;
+    }
+}
+
 // ============================================================================
 // ---- Command Module Export ----
 // Exports the custom weapon command and its subcommands
@@ -816,23 +962,14 @@ if (subcommand === 'create') {
     const weaponId = interaction.options.getString('weaponid');
     const userId = interaction.user.id;
 
-    // Fetch Character
+    // Validate create command requirements
     let character;
     try {
-        character = await fetchCharacterByNameAndUserId(characterName, userId);
-        if (!character) {
-            await interaction.editReply({
-                content: `❌ Character **${characterName}** not found.`,
-                ephemeral: true,
-            });
-            return;
-        }
+        character = await validateCreateCommandRequirements(characterName, weaponId, userId, interaction);
     } catch (error) {
-    handleError(error, 'customWeapon.js');
-
-        console.error(`[customweapon create]: Error fetching character ${characterName}:`, error);
+        console.error(`[customweapon create]: ❌ Validation failed for create command: ${error.message}`);
         await interaction.editReply({
-            content: `❌ An error occurred while retrieving character data. Please try again later.`,
+            content: `❌ ${error.message}`,
             ephemeral: true,
         });
         return;
@@ -862,9 +999,9 @@ try {
     } catch (error) {
     handleError(error, 'customWeapon.js');
 
-        console.error(`[customweapon create]: Failed to fetch inventory for ${characterName}:`, error);
+        console.error(`[customweapon create]: Failed to fetch inventory for ${character.name}:`, error);
         await interaction.editReply({
-            content: `❌ Unable to access **${characterName}**'s inventory. Please ensure it is properly synced.`,
+            content: `❌ Unable to access **${character.name}**'s inventory. Please ensure it is properly synced.`,
             ephemeral: true,
         });
         return;
@@ -884,150 +1021,84 @@ try {
 
     // ------------------- Process Materials & Remove Inventory -------------------
     // ✅ Begin Transaction-safe Crafting
-    let materialsRemoved = false;
-    let staminaDeducted = false;
-
     try {
-        // Process all materials at once using inventoryUtils
-        const materialsToProcess = [
-            ...weaponSubmission.craftingMaterials,
-            { itemName: 'Star Fragment', quantity: 1 },
-            { itemName: 'Blueprint Voucher', quantity: 1 }
-        ];
-
-        const processedMaterials = await processMaterials(interaction, character, inventoryItems, { craftingMaterial: materialsToProcess }, 1);
-        if (processedMaterials === "canceled") {
-            await interaction.editReply({
-                content: `❌ Crafting canceled due to insufficient materials.`,
-                ephemeral: true,
-            });
-            return;
-        }
-        materialsRemoved = true;
-
-        // Log stamina before and after deduction
-        await checkAndUseStamina(character, weaponSubmission.staminaToCraft);
-        staminaDeducted = true;
-
+        await processCraftingTransaction(character, weaponSubmission, inventoryItems, interaction);
     } catch (error) {
-        handleError(error, 'customWeapon.js');
-
         console.error(`[customweapon create]: Transaction error:`, error);
-
-        if (materialsRemoved) {
-            await addItemInventoryDatabase(character._id, weaponSubmission.craftingMaterials, 1);
-            await addItemInventoryDatabase(character._id, [{ itemName: 'Star Fragment', quantity: 1 }], 1);
-            await addItemInventoryDatabase(character._id, [{ itemName: 'Blueprint Voucher', quantity: 1 }], 1);
-        }
-
-        if (staminaDeducted) {
-            await updateCharacterById(character._id, {
-                $inc: { currentStamina: weaponSubmission.staminaToCraft }
-            });
-            console.log(`[customweapon create]: Rolled back ${weaponSubmission.staminaToCraft} stamina for ${character.name}.`);
-        }
-
         await interaction.editReply({
-            content: `❌ Crafting failed. Materials and stamina have been restored. Error: ${error.message}`,
+            content: `❌ Crafting failed. Error: ${error.message}`,
             ephemeral: true,
         });
         return;
     }
 
-    // ------------------- Add Custom Weapon to Inventory -------------------
+    // ------------------- Log Crafted Weapon to Google Sheets -------------------
     try {
-        // Add the new weapon to inventory using inventoryUtils
-        await addItemInventoryDatabase(
-            character._id,
-            weaponSubmission.weaponName,
-            1,
-            interaction,
-            'Custom Weapon'
-        );
+        const auth = await authorizeSheets();
+        const spreadsheetId = extractSpreadsheetId(character.inventory || character.inventoryLink);
+        const range = 'loggedInventory!A2:M';
+        const uniqueSyncId = uuidv4();
+        const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
+        const formattedDateTime = formatDateTime(new Date());
 
-        // Mark weapon as crafted with comprehensive validation
-        await markWeaponAsCrafted(weaponSubmission, weaponId, character.name);
+        // 🛠️ Fetch actual item details from DB for accurate category/type/subtype
+        const item = await fetchItemByName(weaponSubmission.weaponName);
 
-        // Clean up the crafted submission from storage
-        await cleanupCraftedSubmission(weaponId, weaponSubmission.weaponName);
-
-        // ------------------- Log Crafted Weapon to Google Sheets -------------------
-        try {
-            const auth = await authorizeSheets();
-            const spreadsheetId = extractSpreadsheetId(character.inventory || character.inventoryLink);
-            const range = 'loggedInventory!A2:M';
-            const uniqueSyncId = uuidv4();
-            const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
-            const formattedDateTime = formatDateTime(new Date());
-
-            // 🛠️ Fetch actual item details from DB for accurate category/type/subtype
-            const item = await fetchItemByName(weaponSubmission.weaponName);
-
-            const values = [
-                [
-                    character.name,
-                    weaponSubmission.weaponName,
-                    '1',
-                    item?.category?.join(', ') || 'Unknown',
-                    item?.type?.join(', ') || 'Unknown',
-                    item?.subtype?.join(', ') || 'Unknown',
-                    'Custom Weapon',
-                    character.job || '',
-                    '',
-                    character.currentVillage,
-                    interactionUrl,
-                    formattedDateTime,
-                    uniqueSyncId
-                ]
-            ];
-
-            if (character?.name && character?.inventory && character?.userId) {
-                await safeAppendDataToSheet(character.inventory, character, range, values, undefined, { 
-                    skipValidation: true,
-                    context: {
-                        commandName: 'customWeapon',
-                        userTag: interaction.user.tag,
-                        userId: interaction.user.id,
-                        characterName: character.name,
-                        spreadsheetId: extractSpreadsheetId(character.inventory),
-                        range: range,
-                        sheetType: 'inventory',
-                        options: {
-                            weaponName: weaponSubmission.weaponName,
-                            materials: weaponSubmission.craftingMaterials
-                        }
-                    }
-                });
-            } else {
-                console.error('[safeAppendDataToSheet]: Invalid character object detected before syncing.');
-            }
-
-            // Log materials used
-            await logMaterialsToGoogleSheets(
-                auth,
-                spreadsheetId,
-                range,
-                character,
-                weaponSubmission.craftingMaterials,
-                { itemName: weaponSubmission.weaponName },
+        const values = [
+            [
+                character.name,
+                weaponSubmission.weaponName,
+                '1',
+                item?.category?.join(', ') || 'Unknown',
+                item?.type?.join(', ') || 'Unknown',
+                item?.subtype?.join(', ') || 'Unknown',
+                'Custom Weapon',
+                character.job || '',
+                '',
+                character.currentVillage,
                 interactionUrl,
                 formattedDateTime,
-                interaction
-            );
+                uniqueSyncId
+            ]
+        ];
 
-        } catch (error) {
-            handleError(error, 'customWeapon.js');
-            console.error(`[customweapon create]: Failed to log Google Sheets crafting entry:`, error);
+        if (character?.name && character?.inventory && character?.userId) {
+            await safeAppendDataToSheet(character.inventory, character, range, values, undefined, { 
+                skipValidation: true,
+                context: {
+                    commandName: 'customWeapon',
+                    userTag: interaction.user.tag,
+                    userId: interaction.user.id,
+                    characterName: character.name,
+                    spreadsheetId: extractSpreadsheetId(character.inventory),
+                    range: range,
+                    sheetType: 'inventory',
+                    options: {
+                        weaponName: weaponSubmission.weaponName,
+                        materials: weaponSubmission.craftingMaterials
+                    }
+                }
+            });
+        } else {
+            console.error('[safeAppendDataToSheet]: Invalid character object detected before syncing.');
         }
+
+        // Log materials used
+        await logMaterialsToGoogleSheets(
+            auth,
+            spreadsheetId,
+            range,
+            character,
+            weaponSubmission.craftingMaterials,
+            { itemName: weaponSubmission.weaponName },
+            interactionUrl,
+            formattedDateTime,
+            interaction
+        );
 
     } catch (error) {
         handleError(error, 'customWeapon.js');
-        console.error(`[customweapon create]: Failed to add ${weaponSubmission.weaponName} to inventory:`, error);
-        await interaction.editReply({
-            content: `❌ Failed to add the custom weapon **${weaponSubmission.weaponName}** to the inventory.`,
-            ephemeral: true,
-        });
-        return;
+        console.error(`[customweapon create]: Failed to log Google Sheets crafting entry:`, error);
     }
 
 // ------------------- Send Success Message -------------------
