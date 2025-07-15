@@ -106,6 +106,7 @@ const tempDataSchema = new mongoose.Schema({
     finalTokenAmount: Number,
     tokenCalculation: String,
     collab: mongoose.Schema.Types.Mixed,
+    blightId: String,
     createdAt: Date,
     updatedAt: Date
   },

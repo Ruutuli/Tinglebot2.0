@@ -117,10 +117,23 @@ module.exports = {
   async execute(interaction) {
     const communityBoardChannelId = process.env.COMMUNITY_BOARD;
 
-    // Check if the command is executed in the Community Board channel
-    if (interaction.channelId !== communityBoardChannelId) {
+    // Check if the command is executed in the Community Board channel or testing channel
+    const testingChannelId = '1391812848099004578';
+    if (interaction.channelId !== communityBoardChannelId && interaction.channelId !== testingChannelId) {
+      const errorEmbed = new EmbedBuilder()
+        .setColor('#FF0000')
+        .setTitle('❌ Channel Restriction')
+        .setDescription('This command can only be used in the Community Board channel.')
+        .addFields(
+          { name: '📍 Required Channel', value: `<#${communityBoardChannelId}>`, inline: true },
+          { name: '💡 How to Fix', value: 'Please navigate to the Community Board channel to use this command.', inline: false }
+        )
+        .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
+        .setFooter({ text: 'Channel Validation Error' })
+        .setTimestamp();
+
       await interaction.reply({
-        content: `❌ This command can only be used in the Community Board channel. Please go to <#${communityBoardChannelId}> to use this command.`,
+        embeds: [errorEmbed],
         ephemeral: true,
       });
       return;

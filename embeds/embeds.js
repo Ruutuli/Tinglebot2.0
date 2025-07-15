@@ -922,6 +922,11 @@ const createWritingSubmissionEmbed = (submissionData) => {
      : "N/A",
     inline: true,
    },
+   ...(submissionData.blightId && submissionData.blightId !== 'N/A' ? [{
+    name: "🩸 Blight Healing ID",
+    value: `\`${submissionData.blightId}\``,
+    inline: true,
+   }] : []),
    { name: "Description", value: submissionData.description, inline: false }
   )
   .setImage(DEFAULT_IMAGE_URL)
@@ -1008,6 +1013,11 @@ const createArtSubmissionEmbed = (submissionData) => {
   fields.push({ name: 'Art Title', value: artTitle, inline: false });
   fields.push({ name: 'Member', value: memberField, inline: true });
   fields.push({ name: 'Token Tracker Link', value: tokenTrackerLink, inline: true });
+  
+  // Add blight ID if provided
+  if (submissionData.blightId && submissionData.blightId !== 'N/A') {
+    fields.push({ name: '🩸 Blight Healing ID', value: `\`${submissionData.blightId}\``, inline: true });
+  }
   
   // Only add quest/event fields if they're not N/A
   if (questEvent && questEvent !== 'N/A') {

@@ -112,6 +112,12 @@ const approvedSubmissionSchema = new mongoose.Schema({
     default: null
   },
   
+  // ------------------- Blight Healing Information -------------------
+  blightId: {
+    type: String,
+    default: null
+  },
+  
   // ------------------- Quest/Event Information -------------------
   questEvent: {
     type: String,
