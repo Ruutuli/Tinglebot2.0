@@ -1375,6 +1375,7 @@ async function handleApprove(interaction) {
           link: submission.link,
           description: submission.description,
           collab: submission.collab,
+          blightId: submission.blightId || null,
           questEvent: submission.questEvent || 'N/A',
           questBonus: submission.questBonus || 'N/A',
           approvedBy: interaction.user.tag,

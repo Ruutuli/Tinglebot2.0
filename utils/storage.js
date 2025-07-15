@@ -46,6 +46,7 @@ async function saveSubmissionToStorage(key, submissionData) {
     finalTokenAmount: submissionData.finalTokenAmount || 0,
     tokenCalculation: submissionData.tokenCalculation || "N/A",
     collab: submissionData.collab || null,
+    blightId: submissionData.blightId || null,
     fileUrl: submissionData.fileUrl,
     fileName: submissionData.fileName,
     title: submissionData.title,

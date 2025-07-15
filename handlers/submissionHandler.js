@@ -165,7 +165,12 @@ async function handleSubmissionCompletion(interaction) {
             { name: `${typeEmoji} Title`, value: submissionData.title || submissionData.fileName || 'Untitled', inline: true },
             { name: '💰 Token Amount', value: `${totalTokens} tokens`, inline: true },
             { name: '🆔 Submission ID', value: `\`${submissionId}\``, inline: true },
-            { name: '🔗 View Submission', value: `[Click Here](${submissionData.messageUrl})`, inline: true }
+            { name: '🔗 View Submission', value: `[Click Here](${submissionData.messageUrl})`, inline: true },
+            ...(submissionData.blightId && submissionData.blightId !== 'N/A' ? [{ 
+              name: '🩸 Blight Healing ID', 
+              value: `\`${submissionData.blightId}\``, 
+              inline: true 
+            }] : [])
           )
           .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
           .setFooter({ text: `${submissionType} Submission Approval Required` })

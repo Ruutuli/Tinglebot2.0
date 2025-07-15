@@ -64,6 +64,12 @@ module.exports = {
             .setDescription('Collaborator username if this is a collaboration')
             .setRequired(false)
         )
+        .addStringOption(option =>
+          option
+            .setName('blightid')
+            .setDescription('Blight healing request ID (optional)')
+            .setRequired(false)
+        )
     )
     .addSubcommand(subcommand =>
       subcommand
@@ -103,6 +109,12 @@ module.exports = {
           option
             .setName('collab')
             .setDescription('Collaborator username if this is a collaboration')
+            .setRequired(false)
+        )
+        .addStringOption(option =>
+          option
+            .setName('blightid')
+            .setDescription('Blight healing request ID (optional)')
             .setRequired(false)
         )
     ),
@@ -149,6 +161,7 @@ module.exports = {
         const title = interaction.options.getString('title')?.trim() || attachedFile.name; // Use user-input title or default to file name
         const questId = interaction.options.getString('questid') || 'N/A';
         const collab = interaction.options.getString('collab');
+        const blightId = interaction.options.getString('blightid') || null;
 
         // Validate collaboration format if provided
         if (collab && !collab.match(/^<@\d+>$/)) {
@@ -203,6 +216,7 @@ module.exports = {
           questEvent: questId,
           questBonus: 'N/A',
           collab: collab || null,
+          blightId: blightId,
           tokenTracker: userData.tokenTracker || null,
         };
 
@@ -248,6 +262,7 @@ module.exports = {
         const description = interaction.options.getString('description') || 'No description provided.';
         const questId = interaction.options.getString('questid') || 'N/A';
         const collab = interaction.options.getString('collab');
+        const blightId = interaction.options.getString('blightid') || null;
 
         // Validate collaboration format if provided
         if (collab && !collab.match(/^<@\d+>$/)) {
@@ -294,6 +309,7 @@ module.exports = {
           questEvent: questId,
           questBonus: 'N/A',
           collab: collab || null,
+          blightId: blightId,
           tokenTracker: userData.tokenTracker || null,
         };
     
@@ -326,7 +342,12 @@ module.exports = {
                 { name: '📝 Title', value: title || 'Untitled', inline: true },
                 { name: '💰 Token Amount', value: `${finalTokenAmount} tokens`, inline: true },
                 { name: '🆔 Submission ID', value: `\`${submissionId}\``, inline: true },
-                { name: '🔗 View Submission', value: `[Click Here](https://discord.com/channels/${interaction.guildId}/${submissionsChannel.id}/${sentMessage.id})`, inline: true }
+                { name: '🔗 View Submission', value: `[Click Here](https://discord.com/channels/${interaction.guildId}/${submissionsChannel.id}/${sentMessage.id})`, inline: true },
+                ...(blightId && blightId !== 'N/A' ? [{ 
+                  name: '🩸 Blight Healing ID', 
+                  value: `\`${blightId}\``, 
+                  inline: true 
+                }] : [])
               )
               .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
               .setFooter({ text: 'WRITING Submission Approval Required' })

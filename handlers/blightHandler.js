@@ -979,16 +979,16 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
         return;
       }
 
-      // Validate Discord message link
-      const linkValidation = validateDiscordMessageLink(link);
+      // Validate Discord message link and check for approval
+      const linkValidation = await validateDiscordMessageLink(link, interaction.client, submission.submissionId);
       if (!linkValidation.valid) {
         const invalidLinkEmbed = new EmbedBuilder()
           .setColor('#FF0000')
           .setTitle('❌ Invalid Submission Channel')
           .setDescription('Your submission must be posted in the submissions channel first.')
           .addFields(
-            { name: '📝 What Happened?', value: 'The link you provided is from a different channel. All art and writing submissions must be posted in the submissions channel first.' },
-            { name: '💡 How to Fix', value: '1. Post your art/writing in the submissions channel\n2. Copy the link from your submission\n3. Use that link with the healing command' },
+            { name: '📝 What Happened?', value: linkValidation.error || 'The link you provided is from a different channel. All art and writing submissions must be posted in the submissions channel first.' },
+            { name: '💡 How to Fix', value: '1. Post your art/writing in the submissions channel\n2. Include your blight healing request ID when submitting\n3. Wait for a moderator to approve with a checkmark emoji\n4. Copy the link from your approved submission\n5. Use that link with the healing command' },
             { name: '📌 Important', value: 'This is required to ensure all submissions are properly documented and reviewed.' }
           )
           .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
@@ -1010,7 +1010,17 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
       const embed = createBlightHealingCompleteEmbed(character, healer, [
         {
           name: 'Submitted Link',
-          value: `[View Submission](${link})`
+          value: `[View Approved Submission](${link})`
+        },
+        {
+          name: 'Approval Status',
+          value: '✅ **Approved by Moderator** - This submission has been verified and approved for blight healing.'
+        },
+        {
+          name: 'Blight ID Verification',
+          value: linkValidation.blightIdVerified ? 
+            `✅ **Verified** - This submission is confirmed for blight healing request \`${linkValidation.foundBlightId}\`` :
+            '⚠️ **No Blight ID** - This submission was not created with a specific blight healing request ID.'
         }
       ]);
 
@@ -1026,8 +1036,23 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
 }
 
 // ------------------- Function: validateDiscordMessageLink -------------------
-// Validates if a link is a valid Discord message link and belongs to the correct channel
-function validateDiscordMessageLink(link) {
+// Validates if a link is a valid Discord message link, belongs to the correct channel,
+// has been approved by Tinglebot (checkmark emoji reaction), and contains the claimed blight ID
+// 
+// This function performs four levels of validation:
+// 1. Format validation: Ensures the link follows Discord message link format
+// 2. Channel validation: Verifies the message is from the submissions channel
+// 3. Approval validation: Checks if Tinglebot has reacted with a checkmark emoji
+// 4. Blight ID validation: Verifies the submission contains the claimed blight ID
+//
+// Parameters:
+// - link: The Discord message link to validate
+// - client: Discord.js client instance (optional, for approval checking)
+// - claimedBlightId: The blight ID the user is claiming (optional)
+//
+// Returns:
+// - Object with validation results including approval status and blight ID verification
+async function validateDiscordMessageLink(link, client, claimedBlightId = null) {
   try {
     // Discord message link format: https://discord.com/channels/guildId/channelId/messageId
     const discordLinkRegex = /^https:\/\/discord\.com\/channels\/(\d+)\/(\d+)\/(\d+)$/;
@@ -1051,11 +1076,110 @@ function validateDiscordMessageLink(link) {
       };
     }
 
+    // Check if the message has been approved by Tinglebot (checkmark emoji reaction)
+    if (client) {
+      try {
+        const channel = await client.channels.fetch(channelId);
+        if (!channel) {
+          return {
+            valid: false,
+            error: 'Could not access the submission channel. Please ensure the link is correct.'
+          };
+        }
+
+        const message = await channel.messages.fetch(messageId);
+        if (!message) {
+          return {
+            valid: false,
+            error: 'Could not find the submission message. Please ensure the link is correct.'
+          };
+        }
+
+        // Check for checkmark emoji reactions from Tinglebot
+        const checkmarkReactions = message.reactions.cache.filter(reaction => {
+          // Check for various checkmark emojis
+          const isCheckmark = reaction.emoji.name === '✅' || 
+                             reaction.emoji.name === '☑️' || 
+                             reaction.emoji.name === '✔️' ||
+                             reaction.emoji.id === '854499720797618207'; // Custom checkmark emoji ID if exists
+          
+          // Check if Tinglebot has reacted with the checkmark
+          return isCheckmark && reaction.users.cache.has(client.user.id);
+        });
+
+        if (checkmarkReactions.size === 0) {
+          return {
+            valid: false,
+            error: 'This submission has not been approved yet. Please wait for a moderator to approve your submission with a checkmark emoji before using it for blight healing.'
+          };
+        }
+
+        // Check if the submission contains the claimed blight ID
+        let blightIdVerified = false;
+        let foundBlightId = null;
+        
+        if (claimedBlightId) {
+          // Check the embed fields for blight ID
+          if (message.embeds && message.embeds.length > 0) {
+            const embed = message.embeds[0];
+            if (embed.fields) {
+              const blightIdField = embed.fields.find(field => 
+                field.name && field.name.includes('🩸 Blight Healing ID') && 
+                field.value && field.value.includes(claimedBlightId)
+              );
+              
+              if (blightIdField) {
+                blightIdVerified = true;
+                foundBlightId = claimedBlightId;
+              } else {
+                // Check if there's any blight ID field that doesn't match
+                const anyBlightIdField = embed.fields.find(field => 
+                  field.name && field.name.includes('🩸 Blight Healing ID')
+                );
+                
+                if (anyBlightIdField) {
+                  return {
+                    valid: false,
+                    error: `This submission is for a different blight healing request (${anyBlightIdField.value}). Please use the correct submission for your blight healing request.`
+                  };
+                } else {
+                  return {
+                    valid: false,
+                    error: `This submission does not contain a blight healing ID. Please use a submission that was created with a blight ID for your healing request.`
+                  };
+                }
+              }
+            }
+          }
+        }
+
+        return {
+          valid: true,
+          guildId,
+          channelId,
+          messageId,
+          approved: true,
+          blightIdVerified,
+          foundBlightId
+        };
+      } catch (fetchError) {
+        console.error('[blightHandler.js]: Error fetching message for approval check:', fetchError);
+        return {
+          valid: false,
+          error: 'Could not verify submission approval. Please ensure the link is correct and try again.'
+        };
+      }
+    }
+
+    // Fallback if no client provided (for testing or other contexts)
     return {
       valid: true,
       guildId,
       channelId,
-      messageId
+      messageId,
+      approved: false, // We can't verify without client
+      blightIdVerified: false,
+      foundBlightId: null
     };
   } catch (error) {
     return {
