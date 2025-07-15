@@ -171,6 +171,15 @@ module.exports = {
       const currentTurnParticipant = updatedRaidData.getCurrentTurnParticipant();
       // Turn processing details logged only in debug mode
 
+      // Validate turn order - ensure only the correct participant can take their turn
+      const effectiveCurrentTurnParticipant = await updatedRaidData.getEffectiveCurrentTurnParticipant();
+      if (effectiveCurrentTurnParticipant && effectiveCurrentTurnParticipant.characterId.toString() !== character._id.toString()) {
+        return interaction.editReply({
+          content: `❌ **It's not your turn!** ${effectiveCurrentTurnParticipant.name} should take their turn next.`,
+          ephemeral: true
+        });
+      }
+
       // Process the raid turn
       const turnResult = await processRaidTurn(character, raidId, interaction, updatedRaidData);
       
@@ -260,9 +269,14 @@ async function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
   // Get current character states from database
   const Character = require('../../models/CharacterModel');
   
+  // Get the effective current turn participant (skipping KO'd participants)
+  const effectiveCurrentTurnParticipant = await raidData.getEffectiveCurrentTurnParticipant();
+  const effectiveCurrentTurnIndex = participants.findIndex(p => p.characterId.toString() === effectiveCurrentTurnParticipant?.characterId?.toString());
+  
   for (let idx = 0; idx < participants.length; idx++) {
     const p = participants[idx];
     const isCurrentTurn = idx === currentTurnIndex;
+    const isEffectiveCurrentTurn = idx === effectiveCurrentTurnIndex;
     
     // Get current character state from database
     const currentCharacter = await Character.findById(p.characterId);
@@ -273,8 +287,8 @@ async function createRaidTurnEmbed(character, raidId, turnResult, raidData) {
     if (isKO) {
       koCharacters.push(p.name);
       turnOrderLines.push(`${idx + 1}. ${p.name} 💀 (KO'd)`);
-    } else if (isCurrentTurn) {
-      // Current turn marking logged only in debug mode
+    } else if (isEffectiveCurrentTurn) {
+      // Show turn indicator on the effective current turn participant
       turnOrderLines.push(`${idx + 1}. ${p.name} ⚔️ (Current Turn)`);
     } else {
       turnOrderLines.push(`${idx + 1}. ${p.name}`);
