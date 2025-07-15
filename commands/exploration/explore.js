@@ -1004,12 +1004,13 @@ module.exports = {
         `[explore.js]: Encounter: ${selectedMonster.name} (Tier ${selectedMonster.tier})`
        );
 
+       const diceRoll = Math.floor(Math.random() * 100) + 1;
        const {
         damageValue,
         adjustedRandomValue,
         attackSuccess,
         defenseSuccess,
-       } = calculateFinalValue(character);
+       } = calculateFinalValue(character, diceRoll);
        console.log(
         `[explore.js]: Battle Stats - Damage: ${damageValue}, Roll: ${adjustedRandomValue}/100`
        );
@@ -1451,8 +1452,9 @@ module.exports = {
      const selectedMonster =
       monsters[Math.floor(Math.random() * monsters.length)];
 
+     const diceRoll = Math.floor(Math.random() * 100) + 1;
      const { damageValue, adjustedRandomValue, attackSuccess, defenseSuccess } =
-      calculateFinalValue(character);
+      calculateFinalValue(character, diceRoll);
      const outcome = await getEncounterOutcome(
       character,
       selectedMonster,

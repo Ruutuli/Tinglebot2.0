@@ -50,7 +50,8 @@ async function processLoot(battleProgress, currentMonster, interaction, battleId
         continue;
       }
 
-      const { adjustedRandomValue } = calculateFinalValue(character);  // Calculate adjusted roll value
+      const diceRoll = Math.floor(Math.random() * 100) + 1;
+      const { adjustedRandomValue } = calculateFinalValue(character, diceRoll);  // Calculate adjusted roll value
       const weightedItems = createWeightedItemList(items, adjustedRandomValue);  // Create weighted list of loot items
 
       if (weightedItems.length > 0) {

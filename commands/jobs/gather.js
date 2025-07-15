@@ -454,7 +454,8 @@ module.exports = {
         );
         if (monstersByRegion.length > 0) {
           const encounteredMonster = monstersByRegion[Math.floor(Math.random() * monstersByRegion.length)];
-          const { damageValue, adjustedRandomValue, attackSuccess, defenseSuccess } = calculateFinalValue(character);
+          const diceRoll = Math.floor(Math.random() * 100) + 1;
+          const { damageValue, adjustedRandomValue, attackSuccess, defenseSuccess } = calculateFinalValue(character, diceRoll);
           const outcome = await getEncounterOutcome(
             character,
             encounteredMonster,

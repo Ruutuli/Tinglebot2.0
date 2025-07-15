@@ -139,18 +139,28 @@ function createWeightedItemList(items, fv) {
 // Calculates the Final Value (FV) for a character by generating a damage value,
 // applying attack and defense buffs, and returning the adjusted random value along with buff details.
 function calculateFinalValue(character, diceRoll) {
+  // Apply blight roll multiplier if present
+  const blightMultiplier = character.blightEffects?.rollMultiplier || 1.0;
+  const adjustedDiceRoll = Math.floor(diceRoll * blightMultiplier);
+  
   const attackSuccess = calculateAttackBuff(character);
   const defenseSuccess = calculateDefenseBuff(character);
   const adjustedRandomValue = applyBuffs(
-    diceRoll,
+    adjustedDiceRoll,
     attackSuccess,
     defenseSuccess,
     character.attack,
     character.defense
   );
-  console.log(`[rngModule.js]: 🎲 Combat calculation - Roll: ${diceRoll}, Adjusted: ${adjustedRandomValue}, Attack: ${attackSuccess}, Defense: ${defenseSuccess}`);
+  
+  // Log blight multiplier effect if present
+  if (blightMultiplier !== 1.0) {
+    console.log(`[rngModule.js]: 🎲 Blight multiplier applied - Original: ${diceRoll}, Multiplier: ${blightMultiplier}x, Adjusted: ${adjustedDiceRoll}`);
+  }
+  
+  console.log(`[rngModule.js]: 🎲 Combat calculation - Roll: ${adjustedDiceRoll}, Adjusted: ${adjustedRandomValue}, Attack: ${attackSuccess}, Defense: ${defenseSuccess}`);
   return {
-    damageValue: diceRoll,
+    damageValue: adjustedDiceRoll,
     adjustedRandomValue,
     attackSuccess,
     defenseSuccess
@@ -167,20 +177,29 @@ function calculateFinalValue(character, diceRoll) {
 function calculateRaidFinalValue(character, diceRoll) {
   const { calculateRaidAttackBuff, calculateRaidDefenseBuff, applyRaidBuffs } = require('./buffModule');
   
+  // Apply blight roll multiplier if present
+  const blightMultiplier = character.blightEffects?.rollMultiplier || 1.0;
+  const adjustedDiceRoll = Math.floor(diceRoll * blightMultiplier);
+  
   const attackSuccess = calculateRaidAttackBuff(character);
   const defenseSuccess = calculateRaidDefenseBuff(character);
   const adjustedRandomValue = applyRaidBuffs(
-    diceRoll,
+    adjustedDiceRoll,
     attackSuccess,
     defenseSuccess,
     character.attack,
     character.defense
   );
   
+  // Log blight multiplier effect if present
+  if (blightMultiplier !== 1.0) {
+    console.log(`[rngModule.js]: 🎲 Raid blight multiplier applied - Original: ${diceRoll}, Multiplier: ${blightMultiplier}x, Adjusted: ${adjustedDiceRoll}`);
+  }
+  
   // Raid calculation details logged only in debug mode
   
   return {
-    damageValue: diceRoll,
+    damageValue: adjustedDiceRoll,
     adjustedRandomValue,
     attackSuccess,
     defenseSuccess
