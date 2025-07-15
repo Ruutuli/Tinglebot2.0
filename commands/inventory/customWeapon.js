@@ -466,7 +466,7 @@ async function sendApprovalDM(user, weaponSubmission, craftingMaterials, stamina
                 { name: 'Modifiers', value: `> ${weaponSubmission.modifiers}`, inline: true },
                 { name: 'Type', value: `> ${weaponSubmission.type}`, inline: true },
                 { name: 'Stamina to Craft', value: `> ${staminaToCraft}`, inline: true },
-                { name: 'Weapon ID', value: `\`\`\`${weaponId}\`\`\``, inline: false },
+                { name: 'Weapon ID', value: `\`\`\`${weaponSubmission.submissionId || weaponId}\`\`\``, inline: false },
                 {
                     name: '__Materials to Craft__',
                     value: (await Promise.all([
@@ -477,8 +477,13 @@ async function sendApprovalDM(user, weaponSubmission, craftingMaterials, stamina
                       }),
                       (async () => {
                         const blueprintItem = await ItemModel.findOne({ itemName: 'Blueprint Voucher' });
-                        const emoji = blueprintItem?.emoji && blueprintItem.emoji.trim() !== '' ? blueprintItem.emoji : ':small_blue_diamond:';
-                        return `> ${emoji} **Blueprint Voucher** x1`;
+                        const blueprintEmoji = blueprintItem?.emoji && blueprintItem.emoji.trim() !== '' ? blueprintItem.emoji : ':small_blue_diamond:';
+                        return `> ${blueprintEmoji} **Blueprint Voucher** x1`;
+                      })(),
+                      (async () => {
+                        const starFragmentItem = await ItemModel.findOne({ itemName: 'Star Fragment' });
+                        const starFragmentEmoji = starFragmentItem?.emoji && starFragmentItem.emoji.trim() !== '' ? starFragmentItem.emoji : ':small_blue_diamond:';
+                        return `> ${starFragmentEmoji} **Star Fragment** x1`;
                       })()
                     ])).join('\n'),
                     inline: false,
@@ -994,7 +999,7 @@ if (subcommand === 'create') {
 
 // Retrieve Submission
 console.log(`[customweapon create]: 🔍 Retrieving submission ${weaponId}`);
-const weaponSubmission = await retrieveSubmissionFromStorage(weaponId);
+        const weaponSubmission = await retrieveWeaponSubmissionFromStorage(weaponId);
 
 // Validate crafting lock with comprehensive checks
 try {
@@ -1298,7 +1303,7 @@ if (duplicateIdExists) {
 }
 
 // 🔒 Prevent editing if the weaponId already exists and is approved or crafted
-const existingSubmission = retrieveSubmissionFromStorage(weaponId);
+        const existingSubmission = await retrieveWeaponSubmissionFromStorage(weaponId);
 if (existingSubmission && ['approved', 'crafted'].includes(existingSubmission.status)) {
     return interaction.editReply({
         content: `❌ This weapon submission has already been **approved** or **crafted**, and cannot be edited or resubmitted.`,
@@ -1330,13 +1335,13 @@ if (existingSubmission && ['approved', 'crafted'].includes(existingSubmission.st
     let submissionMessage;
     if (!interaction.replied && !interaction.deferred) {
         submissionMessage = await interaction.reply({
-            content: `✅ Your custom weapon has been submitted successfully by <@${interaction.user.id}>! Awaiting <@&1330750652745519116> approval.`,
+            content: `✅ Your custom weapon has been submitted successfully by <@${interaction.user.id}>! Awaiting mod approval.`,
             embeds: [embed],
             fetchReply: true, // ✅ This allows us to capture the message ID
         });
     } else {
         submissionMessage = await interaction.editReply({
-            content: `✅ Your custom weapon has been submitted successfully by <@${interaction.user.id}>! Awaiting <@&1330750652745519116> approval.`,
+            content: `✅ Your custom weapon has been submitted successfully by <@${interaction.user.id}>! Awaiting mod approval.`,
             embeds: [embed],
         });
     }
@@ -1429,7 +1434,7 @@ try {
                 },
                 {
                     name: '📋 How to Approve',
-                    value: `Use the command:\n\`/customweapon approve weaponid:${weaponId} staminatocraft:[number] materialstocraft:[items]\`\n\n**Example:**\n\`/customweapon approve weaponid:${weaponId} staminatocraft:50 materialstocraft:Iron x5, Wood x3\``,
+                    value: `Use the command:\n\`/customweapon approve weaponid:${weaponId} staminatocraft:[number] materialstocraft:[items]\`\n\n**Example:**\n\`/customweapon approve weaponid:${weaponId} staminatocraft:5 materialstocraft:Iron x5, Wood x3\`\n\n**Quick Copy:** \`${weaponId}\``,
                     inline: false
                 },
                 {
@@ -1770,7 +1775,7 @@ try {
                             { name: 'Modifiers', value: `> ${weaponSubmission.modifiers}`, inline: true },
                             { name: 'Type', value: `> ${weaponSubmission.type}`, inline: true },
                             { name: 'Stamina to Craft', value: `> ${staminaToCraft}`, inline: true },
-                            { name: 'Weapon ID', value: `\`\`\`${weaponId}\`\`\``, inline: false },
+                            { name: 'Weapon ID', value: `\`\`\`${weaponSubmission.submissionId || weaponId}\`\`\``, inline: false },
                             {
                                 name: '__Materials to Craft__',
                                 value: (await Promise.all([
