@@ -1929,6 +1929,266 @@ async function viewBlightHistory(interaction, characterName, limit = 10) {
   }
 }
 
+// ------------------- Function: sendBlightReminders -------------------
+// Sends comprehensive reminders for death deadlines and expiring healing tasks.
+async function sendBlightReminders(client) {
+  try {
+    console.log('[blightHandler]: Starting comprehensive blight reminder check...');
+    
+    const now = new Date();
+    let deathWarnings = 0;
+    let healingWarnings = 0;
+    let submissionWarnings = 0;
+    
+    // ------------------- Check Stage 5 Death Deadlines -------------------
+    const stage5Characters = await Character.find({ 
+      blighted: true, 
+      blightStage: 5,
+      deathDeadline: { $exists: true, $ne: null }
+    });
+    
+    console.log(`[blightHandler]: Found ${stage5Characters.length} Stage 5 characters with death deadlines`);
+    
+    for (const character of stage5Characters) {
+      try {
+        const timeUntilDeath = character.deathDeadline.getTime() - now.getTime();
+        const daysUntilDeath = Math.floor(timeUntilDeath / (1000 * 60 * 60 * 24));
+        const hoursUntilDeath = Math.floor(timeUntilDeath / (1000 * 60 * 60));
+        
+        // Check if we should send a reminder
+        let shouldSendReminder = false;
+        let reminderType = '';
+        let reminderEmbed = null;
+        
+        if (timeUntilDeath <= 0) {
+          // Death has already occurred - this should be handled by checkMissedRolls
+          continue;
+        } else if (hoursUntilDeath <= 6) {
+          // Final 6-hour warning
+          shouldSendReminder = true;
+          reminderType = 'final_6_hour';
+        } else if (hoursUntilDeath <= 24) {
+          // 24-hour warning
+          shouldSendReminder = true;
+          reminderType = '24_hour';
+        } else if (daysUntilDeath <= 3) {
+          // 3-day warning
+          shouldSendReminder = true;
+          reminderType = '3_day';
+        } else if (daysUntilDeath <= 5) {
+          // 5-day warning
+          shouldSendReminder = true;
+          reminderType = '5_day';
+        }
+        
+        if (shouldSendReminder) {
+          // Check if we've already sent this type of reminder recently
+          const reminderKey = `death_reminder_${character._id}_${reminderType}`;
+          const lastReminder = await TempData.findOne({ 
+            type: 'death_reminder',
+            key: reminderKey
+          });
+          
+          if (!lastReminder) {
+            const { EmbedBuilder } = require('discord.js');
+            
+            let title, color, urgencyText;
+            if (reminderType === 'final_6_hour') {
+              title = '🚨 FINAL WARNING: 6 Hours Until Death 🚨';
+              color = '#FF0000';
+              urgencyText = '**CRITICAL URGENCY** - This is your final chance to save your character!';
+            } else if (reminderType === '24_hour') {
+              title = '⚠️ URGENT: 24 Hours Until Death ⚠️';
+              color = '#FF6B6B';
+              urgencyText = '**URGENT** - You must act immediately to save your character!';
+            } else if (reminderType === '3_day') {
+              title = '⚠️ WARNING: 3 Days Until Death ⚠️';
+              color = '#FFA500';
+              urgencyText = '**WARNING** - Your character is in critical danger!';
+            } else {
+              title = '⚠️ NOTICE: 5 Days Until Death ⚠️';
+              color = '#FFD700';
+              urgencyText = '**NOTICE** - Your character is approaching the death deadline.';
+            }
+            
+            reminderEmbed = new EmbedBuilder()
+              .setColor(color)
+              .setTitle(title)
+              .setDescription(
+                `**${character.name}** is at Stage 5 Blight and approaching death.\n\n` +
+                `${urgencyText}\n\n` +
+                `🕒 **Time Remaining**: <t:${Math.floor(character.deathDeadline.getTime() / 1000)}:R>\n` +
+                `📅 **Death Date**: <t:${Math.floor(character.deathDeadline.getTime() / 1000)}:F>\n\n` +
+                `💀 **Stage 5 Effects**:\n` +
+                `• No monster encounters\n` +
+                `• No gathering activities\n` +
+                `• Only Dragons can heal you\n\n` +
+                `💡 **Action Required**:\n` +
+                `• Request healing from a Dragon using \`/blight heal\`\n` +
+                `• Complete the healing task before the deadline\n` +
+                `• Check your status with \`/blight status ${character.name}\``
+              )
+              .setThumbnail(character.icon || 'https://example.com/default-icon.png')
+              .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png')
+              .setFooter({ text: 'Blight Death Reminder' })
+              .setTimestamp();
+            
+            // Send the reminder
+            try {
+              const { sendUserDM } = require('../utils/messageUtils');
+              await sendUserDM(client, character.userId, {
+                content: `🚨 **DEATH REMINDER** for ${character.name}`,
+                embeds: [reminderEmbed]
+              });
+              
+              // Record the reminder
+              await TempData.create({
+                type: 'death_reminder',
+                key: reminderKey,
+                data: {
+                  characterName: character.name,
+                  userId: character.userId,
+                  reminderType,
+                  sentAt: new Date().toISOString()
+                },
+                createdAt: new Date(),
+                expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
+              });
+              
+              deathWarnings++;
+              console.log(`[blightHandler]: Sent ${reminderType} death reminder to ${character.userId} for ${character.name}`);
+            } catch (dmError) {
+              console.error(`[blightHandler]: Failed to send death reminder to ${character.userId}:`, dmError);
+            }
+          }
+        }
+      } catch (characterError) {
+        console.error(`[blightHandler]: Error processing death reminder for ${character.name}:`, characterError);
+      }
+    }
+    
+    // ------------------- Check Expiring Healing Submissions -------------------
+    const warningThreshold = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours from now
+    const expiringSubmissions = await TempData.find({ 
+      type: 'blight',
+      expiresAt: { $lt: warningThreshold, $gt: new Date() }
+    });
+    
+    console.log(`[blightHandler]: Found ${expiringSubmissions.length} submissions expiring within 24 hours`);
+    
+    for (const submission of expiringSubmissions) {
+      try {
+        const submissionData = submission.data;
+        
+        // Only warn for pending submissions
+        if (submissionData.status === 'pending') {
+          const expiresAt = new Date(submission.expiresAt);
+          const hoursUntilExpiry = Math.floor((expiresAt.getTime() - Date.now()) / (1000 * 60 * 60));
+          
+          // Send warnings at different intervals
+          let shouldSendWarning = false;
+          let warningType = '';
+          
+          if (hoursUntilExpiry <= 6) {
+            shouldSendWarning = true;
+            warningType = 'final_6_hour';
+          } else if (hoursUntilExpiry <= 12) {
+            shouldSendWarning = true;
+            warningType = '12_hour';
+          } else if (hoursUntilExpiry <= 24) {
+            shouldSendWarning = true;
+            warningType = '24_hour';
+          }
+          
+          if (shouldSendWarning) {
+            // Check if we've already warned this user recently
+            const warningKey = `healing_warning_${submissionData.submissionId}_${warningType}`;
+            const lastWarning = await TempData.findOne({ 
+              type: 'healing_warning',
+              key: warningKey
+            });
+            
+            if (!lastWarning) {
+              const { sendUserDM } = require('../utils/messageUtils');
+              const { EmbedBuilder } = require('discord.js');
+              
+              let title, color, urgencyText;
+              if (warningType === 'final_6_hour') {
+                title = '🚨 FINAL WARNING: Healing Task Expiring Soon 🚨';
+                color = '#FF0000';
+                urgencyText = '**CRITICAL URGENCY** - This is your final chance to complete the task!';
+              } else if (warningType === '12_hour') {
+                title = '⚠️ URGENT: Healing Task Expiring Soon ⚠️';
+                color = '#FF6B6B';
+                urgencyText = '**URGENT** - Complete your task immediately!';
+              } else {
+                title = '⚠️ WARNING: Healing Task Expiring Soon ⚠️';
+                color = '#FFA500';
+                urgencyText = '**WARNING** - Your healing task is expiring soon.';
+              }
+              
+              const warningEmbed = new EmbedBuilder()
+                .setColor(color)
+                .setTitle(title)
+                .setDescription(
+                  `Your blight healing request for **${submissionData.characterName}** will expire soon.\n\n` +
+                  `${urgencyText}\n\n` +
+                  `🆔 **Submission ID**: \`${submissionData.submissionId}\`\n` +
+                  `👨‍⚕️ **Healer**: ${submissionData.healerName}\n` +
+                  `📝 **Task Type**: ${submissionData.taskType}\n` +
+                  `⏰ **Expires In**: **${hoursUntilExpiry} hours**\n` +
+                  `📅 **Expires At**: <t:${Math.floor(expiresAt.getTime() / 1000)}:F>\n\n` +
+                  `💡 **Action Required**:\n` +
+                  `• Complete your healing task before expiration\n` +
+                  `• Submit using \`/blight submit\` with your submission ID\n` +
+                  `• Or request a new task if needed`
+                )
+                .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png')
+                .setFooter({ text: 'Blight Healing Expiration Warning' })
+                .setTimestamp();
+              
+              await sendUserDM(client, submissionData.userId, {
+                content: `🚨 **HEALING TASK EXPIRATION WARNING** for ${submissionData.characterName}`,
+                embeds: [warningEmbed]
+              });
+              
+              // Record the warning
+              await TempData.create({
+                type: 'healing_warning',
+                key: warningKey,
+                data: {
+                  submissionId: submissionData.submissionId,
+                  userId: submissionData.userId,
+                  characterName: submissionData.characterName,
+                  warningType,
+                  warnedAt: new Date().toISOString()
+                },
+                createdAt: new Date(),
+                expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+              });
+              
+              submissionWarnings++;
+              console.log(`[blightHandler]: Sent ${warningType} healing warning to ${submissionData.userId} for ${submissionData.characterName}`);
+            }
+          }
+        }
+      } catch (submissionError) {
+        console.error(`[blightHandler]: Error processing expiring submission ${submission._id}:`, submissionError);
+      }
+    }
+    
+    console.log(`[blightHandler]: Reminder check complete - Death: ${deathWarnings}, Healing: ${submissionWarnings}`);
+    return { 
+      deathWarnings, 
+      healingWarnings: submissionWarnings 
+    };
+  } catch (error) {
+    handleError(error, 'blightHandler.js');
+    console.error('[blightHandler]: Error sending blight reminders:', error);
+    throw error;
+  }
+}
+
 // ------------------- Function: checkExpiringBlightRequests -------------------
 // Checks for blight requests that are about to expire and sends warning notifications.
 async function checkExpiringBlightRequests() {
@@ -2488,6 +2748,7 @@ module.exports = {
   saveBlightEventToHistory,
   cleanupExpiredBlightRequests,
   checkExpiringBlightRequests,
+  sendBlightReminders,
   validateCharacterOwnership,
   checkMissedRolls,
   getCharacterBlightHistory
