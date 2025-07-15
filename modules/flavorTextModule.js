@@ -494,6 +494,169 @@ const generateCraftingFlavorText = (job) => {
  return getRandomMessage(flavorOptions || ["A successful crafting session!"]);
 };
 
+// ============================================================================
+// Blight-Affected Roll Flavor Text
+// ============================================================================
+
+// ------------------- Function: generateBlightRollFlavorText -------------------
+// Generates flavor text for when blight affects combat rolls
+function generateBlightRollFlavorText(blightStage, rollType = 'combat') {
+  const blightMessages = {
+    stage2: {
+      combat: [
+        "💀 The blight's corruption courses through your veins, making your movements more erratic but somehow more powerful...",
+        "🩸 Your blight-infected blood burns with unnatural energy, amplifying your combat prowess.",
+        "🌑 The dark influence of blight seems to enhance your reflexes, though at what cost?",
+        "⚡ The corruption within you crackles with energy, turning your pain into power.",
+        "🖤 Your blight-stained soul resonates with the monster's essence, creating an eerie synergy."
+      ],
+      loot: [
+        "💀 The blight's influence seems to guide your hands to the most valuable spoils...",
+        "🩸 Your corrupted senses detect hidden treasures that others might miss.",
+        "🌑 The dark energy within you resonates with the monster's remains, revealing secrets.",
+        "⚡ Your blight-enhanced perception uncovers rare materials in the carnage.",
+        "🖤 The corruption in your blood draws you to the most potent remnants."
+      ]
+    },
+    stage3: {
+      combat: [
+        "💀 The blight's grip tightens, but your desperation fuels an unnatural strength...",
+        "🩸 Your corrupted blood burns with feverish intensity, driving you to fight harder.",
+        "🌑 The dark influence has taken hold, but you channel it into devastating attacks.",
+        "⚡ Your blight-stained soul crackles with malevolent energy, turning fear into fury.",
+        "🖤 The corruption within you resonates with the monster's own darkness."
+      ],
+      loot: [
+        "💀 The blight's corruption seems to attract the most potent remnants...",
+        "🩸 Your feverish state heightens your awareness of valuable materials.",
+        "🌑 The dark energy within you draws you to the most powerful spoils.",
+        "⚡ Your blight-enhanced senses detect rare components others would miss.",
+        "🖤 The corruption in your blood resonates with the monster's essence."
+      ]
+    },
+    stage4: {
+      combat: [
+        "💀 The blight's corruption has reached a critical point, but you channel its power into devastating strikes...",
+        "🩸 Your blood burns with the fever of corruption, driving you to fight with desperate strength.",
+        "🌑 The dark influence has consumed much of your being, but you wield it as a weapon.",
+        "⚡ Your blight-stained soul pulses with malevolent energy, turning your agony into power.",
+        "🖤 The corruption within you has become a dark force that even monsters fear."
+      ],
+      loot: [
+        "💀 The blight's corruption has reached such intensity that it draws the most potent remnants to you...",
+        "🩸 Your feverish corruption heightens your awareness of the most valuable materials.",
+        "🌑 The dark energy within you has become a beacon for powerful spoils.",
+        "⚡ Your blight-enhanced senses detect rare components that pulse with dark energy.",
+        "🖤 The corruption in your blood has become a magnet for the most potent remnants."
+      ]
+    },
+    stage5: {
+      combat: [
+        "💀 The blight's corruption has reached terminal levels, but you channel its overwhelming power into devastating attacks...",
+        "🩸 Your blood burns with the fever of approaching death, driving you to fight with desperate, unnatural strength.",
+        "🌑 The dark influence has nearly consumed your being, but you wield it as a weapon of pure destruction.",
+        "⚡ Your blight-stained soul pulses with malevolent energy, turning your agony into overwhelming power.",
+        "🖤 The corruption within you has become a force of pure darkness that even the strongest monsters fear."
+      ],
+      loot: [
+        "💀 The blight's corruption has reached such intensity that it draws the most potent remnants to you like a beacon...",
+        "🩸 Your feverish corruption has become so intense that it heightens your awareness of the most valuable materials.",
+        "🌑 The dark energy within you has become a powerful beacon for the most potent spoils.",
+        "⚡ Your blight-enhanced senses detect rare components that pulse with dark energy, drawn to your corruption.",
+        "🖤 The corruption in your blood has become a powerful magnet for the most potent remnants."
+      ]
+    }
+  };
+
+  const stageKey = `stage${blightStage}`;
+  const messages = blightMessages[stageKey]?.[rollType] || blightMessages.stage2[rollType];
+  
+  return getRandomMessage(messages);
+}
+
+// ------------------- Function: generateBlightVictoryFlavorText -------------------
+// Generates flavor text for victories achieved with blight-affected rolls
+function generateBlightVictoryFlavorText(blightStage) {
+  const victoryMessages = {
+    stage2: [
+      "💀 Despite the blight's corruption, you emerge victorious, though the cost is clear...",
+      "🩸 Your blight-enhanced strength carried you to victory, but at what price?",
+      "🌑 The dark influence within you proved to be both a curse and a weapon.",
+      "⚡ Your corrupted blood burned with energy, turning your pain into power for this victory.",
+      "🖤 The blight's corruption resonated with the monster's essence, creating an eerie victory."
+    ],
+    stage3: [
+      "💀 The blight's grip tightens, but your desperation and corrupted strength secured victory...",
+      "🩸 Your feverish corruption drove you to fight harder, achieving victory through unnatural means.",
+      "🌑 The dark influence has taken hold, but you channeled it into devastating attacks for victory.",
+      "⚡ Your blight-stained soul crackled with malevolent energy, turning fear into fury for victory.",
+      "🖤 The corruption within you resonated with the monster's own darkness, securing your victory."
+    ],
+    stage4: [
+      "💀 The blight's corruption has reached critical levels, but you channeled its power into overwhelming victory...",
+      "🩸 Your blood burned with the fever of corruption, driving you to fight with desperate strength for victory.",
+      "🌑 The dark influence has consumed much of your being, but you wielded it as a weapon of victory.",
+      "⚡ Your blight-stained soul pulsed with malevolent energy, turning your agony into power for victory.",
+      "🖤 The corruption within you has become a dark force that even monsters fear, securing your victory."
+    ],
+    stage5: [
+      "💀 The blight's corruption has reached terminal levels, but you channeled its overwhelming power into devastating victory...",
+      "🩸 Your blood burned with the fever of approaching death, driving you to fight with desperate, unnatural strength for victory.",
+      "🌑 The dark influence has nearly consumed your being, but you wielded it as a weapon of pure destruction for victory.",
+      "⚡ Your blight-stained soul pulsed with malevolent energy, turning your agony into overwhelming power for victory.",
+      "🖤 The corruption within you has become a force of pure darkness that even the strongest monsters fear, securing your victory."
+    ]
+  };
+
+  const stageKey = `stage${blightStage}`;
+  const messages = victoryMessages[stageKey] || victoryMessages.stage2;
+  
+  return getRandomMessage(messages);
+}
+
+// ------------------- Function: generateBlightLootFlavorText -------------------
+// Generates flavor text for loot obtained with blight-affected rolls
+function generateBlightLootFlavorText(blightStage, itemType) {
+  const baseFlavorText = generateGatherFlavorText(itemType);
+  
+  const blightPrefixes = {
+    stage2: [
+      "💀 The blight's corruption guided your hands to ",
+      "🩸 Your blight-enhanced senses detected ",
+      "🌑 The dark influence within you drew you to ",
+      "⚡ Your corrupted blood resonated with ",
+      "🖤 The corruption in your veins attracted "
+    ],
+    stage3: [
+      "💀 The blight's corruption intensified, leading you to ",
+      "🩸 Your feverish corruption heightened your awareness of ",
+      "🌑 The dark energy within you became a beacon for ",
+      "⚡ Your blight-enhanced perception uncovered ",
+      "🖤 The corruption in your blood resonated with "
+    ],
+    stage4: [
+      "💀 The blight's corruption has reached critical levels, drawing you to ",
+      "🩸 Your feverish corruption has become so intense that it revealed ",
+      "🌑 The dark energy within you has become a powerful beacon for ",
+      "⚡ Your blight-enhanced senses detected ",
+      "🖤 The corruption in your blood has become a magnet for "
+    ],
+    stage5: [
+      "💀 The blight's corruption has reached terminal levels, irresistibly drawing you to ",
+      "🩸 Your feverish corruption has become so overwhelming that it revealed ",
+      "🌑 The dark energy within you has become an irresistible beacon for ",
+      "⚡ Your blight-enhanced senses detected ",
+      "🖤 The corruption in your blood has become an overwhelming magnet for "
+    ]
+  };
+
+  const stageKey = `stage${blightStage}`;
+  const prefixes = blightPrefixes[stageKey] || blightPrefixes.stage2;
+  const prefix = getRandomMessage(prefixes);
+  
+  return prefix + baseFlavorText.toLowerCase();
+}
+
 // Module Exports
 // ==============
 
@@ -524,4 +687,8 @@ module.exports = {
  getArticleForItem,
  generateGatherFlavorText,
  generateCraftingFlavorText,
+ // Blight Flavor Text
+ generateBlightRollFlavorText,
+ generateBlightVictoryFlavorText,
+ generateBlightLootFlavorText,
 };
