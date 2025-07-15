@@ -221,6 +221,10 @@ async function handleAutocomplete(interaction) {
                 if (focusedOption.name === "monster") {
                   await handleTier5PlusMonsterAutocomplete(interaction, focusedOption);
                 }
+              } else if (modSubcommand === "blightoverride") {
+                if (focusedOption.name === "target") {
+                  await handleBlightOverrideTargetAutocomplete(interaction, focusedOption);
+                }
               }
             }
             break;
@@ -3924,6 +3928,49 @@ async function handleTier5PlusMonsterAutocomplete(interaction, focusedOption) {
   }
 }
 
+// ------------------- Function: handleBlightOverrideTargetAutocomplete -------------------
+// Provides autocomplete suggestions for blight override targets (characters, villages, or "all")
+async function handleBlightOverrideTargetAutocomplete(interaction, focusedOption) {
+  try {
+    const action = interaction.options.getString('action');
+    const searchQuery = focusedOption.value?.toLowerCase() || '';
+    
+    let choices = [];
+
+    if (action === 'wipe_all' || action === 'set_all_level') {
+      // For all-target actions, suggest "all" as the only option
+      choices = [
+        { name: 'All Characters', value: 'all' }
+      ];
+    } else if (action === 'wipe_village' || action === 'set_village_level') {
+      // For village-target actions, suggest village names
+      const villages = ['rudania', 'inariko', 'vhintl'];
+      choices = villages
+        .filter(village => village.toLowerCase().includes(searchQuery))
+        .map(village => ({
+          name: capitalize(village),
+          value: village
+        }));
+    } else if (action === 'wipe_character' || action === 'set_character_level') {
+      // For character-target actions, suggest all characters
+      const characters = await fetchAllCharacters();
+      choices = characters
+        .filter(char => char.name.toLowerCase().includes(searchQuery))
+        .map(char => ({
+          name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
+          value: char.name
+        }))
+        .slice(0, 25); // Limit to 25 choices
+    }
+
+    await safeAutocompleteResponse(interaction, choices);
+  } catch (error) {
+    handleError(error, "autocompleteHandler.js");
+    console.error("[handleBlightOverrideTargetAutocomplete]: Error:", error);
+    await safeRespondWithError(interaction);
+  }
+}
+
 // ------------------- Mod Character Name Autocomplete -------------------
 // Provides autocomplete suggestions for mod character names owned by the user.
 async function handleModCharacterNameAutocomplete(interaction, focusedOption) {
@@ -4044,6 +4091,9 @@ handleModPetLevelPetNameAutocomplete,
 // ------------------- Monster Functions -------------------
 handleMonsterAutocomplete,
 handleTier5PlusMonsterAutocomplete,
+
+// ------------------- Blight Override Functions -------------------
+handleBlightOverrideTargetAutocomplete,
 
  // ------------------- Mount/Stable Functions -------------------
  handleMountAutocomplete,

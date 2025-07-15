@@ -9,6 +9,7 @@ const {
   healBlight, 
   submitHealingTask, 
   viewBlightHistory,
+  viewBlightStatus,
   validateCharacterOwnership,
   loadBlightSubmissions
 } = require('../../handlers/blightHandler');
@@ -111,7 +112,18 @@ module.exports = {
         .addBooleanOption(option =>
           option.setName('show_expired')
             .setDescription('Include expired healing requests (default: false)')
-            .setRequired(false))),
+            .setRequired(false)))
+
+    // ------------------- Subcommand: View blight status -------------------
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName('status')
+        .setDescription('View current blight status, submission progress, and deadlines for a character')
+        .addStringOption(option =>
+          option.setName('character_name')
+            .setDescription('The name of the character to view blight status for')
+            .setRequired(true)
+            .setAutocomplete(true))),
 
   // ------------------- Command Execution Logic -------------------
   async execute(interaction) {
@@ -174,6 +186,13 @@ module.exports = {
         
         const limit = interaction.options.getInteger('limit') || 10;
         await viewBlightHistory(interaction, characterName, limit);
+
+      } else if (subcommand === 'status') {
+        const characterName = interaction.options.getString('character_name');
+        const character = await validateCharacterOwnership(interaction, characterName);
+        if (!character) return;
+        
+        await viewBlightStatus(interaction, characterName);
 
       } else if (subcommand === 'roster') {
         try {

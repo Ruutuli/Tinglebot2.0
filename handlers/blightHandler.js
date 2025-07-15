@@ -345,6 +345,12 @@ async function healBlight(interaction, characterName, healerName) {
 
     await saveBlightRequestToStorage(newSubmissionId, submissionData);
 
+    // Save healing request to blight history
+    await saveBlightEventToHistory(character, 'Healing Request', {
+      notes: `Requested healing from ${healerName} - Task: ${healingRequirement.type} - ${healingRequirement.description}`,
+      submissionId: newSubmissionId
+    });
+
     // Notify mods in the mod queue channel
     const modQueueChannelId = process.env.MOD_QUEUE_CHANNEL_ID;
     if (modQueueChannelId) {
@@ -531,6 +537,13 @@ function validateHealerPermission(healer, blightStage) {
 // ------------------- Function: completeBlightHealing -------------------
 // Applies healing effects and resets blight status.
 async function completeBlightHealing(character) {
+  // Save healing completion to blight history
+  await saveBlightEventToHistory(character, 'Healing Completed', {
+    notes: `Character healed from blight - Stage ${character.blightStage} to 0`,
+    previousStage: character.blightStage,
+    newStage: 0
+  });
+
   character.blighted = false;
   character.blightedAt = null;
   character.blightStage = 0;
@@ -1589,6 +1602,221 @@ async function postBlightRollCall(client) {
   console.log('[blightHandler]: Blight roll call posted successfully.');
 }
 
+// ------------------- Function: viewBlightStatus -------------------
+// Displays current blight status, submission progress, and deadlines for a character.
+async function viewBlightStatus(interaction, characterName) {
+  try {
+    const character = await Character.findOne({ name: characterName });
+    if (!character) {
+      await interaction.editReply({ content: `❌ Character "${characterName}" not found.`, ephemeral: true });
+      return;
+    }
+
+    // Check if character is currently blighted
+    if (!character.blighted) {
+      const notBlightedEmbed = new EmbedBuilder()
+        .setColor('#00FF00') // Green color for positive message
+        .setTitle('✅ Not Blighted')
+        .setDescription(`**${characterName}** is not currently blighted.`)
+        .setThumbnail(character.icon)
+        .setAuthor({ name: `${characterName}'s Status`, iconURL: interaction.user.displayAvatarURL() })
+        .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png')
+        .setFooter({ text: 'Blight Status Check', iconURL: 'https://static.wixstatic.com/media/7573f4_a510c95090fd43f5ae17e20d80c1289f~mv2.png' })
+        .setTimestamp();
+
+      await interaction.editReply({ 
+        content: `<@${interaction.user.id}>`,
+        embeds: [notBlightedEmbed],
+        ephemeral: true 
+      });
+      return;
+    }
+
+    // Get current blight submission if any
+    const blightSubmissions = await loadBlightSubmissions();
+    const currentSubmission = Object.values(blightSubmissions).find(
+      sub => sub.characterName === characterName && sub.status === 'pending'
+    );
+
+    // Get last blight roll history entry
+    const BlightRollHistory = require('../models/BlightRollHistoryModel');
+    const lastRoll = await BlightRollHistory.findOne({ characterId: character._id })
+      .sort({ timestamp: -1 })
+      .limit(1);
+
+    // Create status embed
+    const embed = new EmbedBuilder()
+      .setColor('#AD1457')
+      .setTitle(`📊 Blight Status: ${characterName}`)
+      .setDescription(`Current blight status and submission progress for **${characterName}**`)
+      .setThumbnail(character.icon)
+      .setAuthor({ name: characterName, iconURL: character.icon })
+      .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png')
+      .setFooter({ text: 'Blight Status Report' })
+      .setTimestamp();
+
+    // Add current stage info
+    const stageEmoji = character.blightStage === 5 ? '☠️' : 
+                     character.blightStage === 4 ? '💀' :
+                     character.blightStage === 3 ? '👻' :
+                     character.blightStage === 2 ? '🎯' : '⚠️';
+    
+    embed.addFields({
+      name: `${stageEmoji} Current Stage`,
+      value: `**Stage ${character.blightStage}** - ${getBlightStageDescription(character.blightStage)}`,
+      inline: true
+    });
+
+    // Add village info
+    embed.addFields({
+      name: '🏘️ Village',
+      value: character.currentVillage || 'Unknown',
+      inline: true
+    });
+
+    // Add blight pause status
+    if (character.blightPaused) {
+      embed.addFields({
+        name: '⏸️ Status',
+        value: '**Blight Progression Paused**',
+        inline: true
+      });
+    }
+
+    // Add last roll info
+    if (lastRoll) {
+      const lastRollDate = new Date(lastRoll.timestamp);
+      const timeSinceLastRoll = Math.floor((Date.now() - lastRollDate.getTime()) / (1000 * 60 * 60 * 24)); // days
+      
+      embed.addFields({
+        name: '🎲 Last Roll',
+        value: `**${lastRollDate.toLocaleDateString()}** at **${lastRollDate.toLocaleTimeString()}**\n` +
+               `Roll: **${lastRoll.rollValue}** (${lastRoll.previousStage} → ${lastRoll.newStage})\n` +
+               `${timeSinceLastRoll === 0 ? 'Today' : timeSinceLastRoll === 1 ? 'Yesterday' : `${timeSinceLastRoll} days ago`}`,
+        inline: false
+      });
+    }
+
+    // Add submission status
+    if (currentSubmission) {
+      const expiresAt = new Date(currentSubmission.expiresAt);
+      const timeLeft = Math.floor((expiresAt.getTime() - Date.now()) / (1000 * 60 * 60)); // hours
+      
+      embed.addFields({
+        name: '🔄 Healing Request',
+        value: `**Status:** Pending approval from **${currentSubmission.healerName}**\n` +
+               `**Task:** ${currentSubmission.taskType}\n` +
+               `**Expires:** <t:${Math.floor(expiresAt.getTime() / 1000)}:R>\n` +
+               `**Submission ID:** \`${currentSubmission.submissionId}\``,
+        inline: false
+      });
+
+      // Add task details
+      if (currentSubmission.taskDetails) {
+        embed.addFields({
+          name: '📋 Task Requirements',
+          value: currentSubmission.taskDetails,
+          inline: false
+        });
+      }
+    } else {
+      embed.addFields({
+        name: '🔄 Healing Request',
+        value: '**No active healing request**\nUse `/blight heal` to request healing',
+        inline: false
+      });
+    }
+
+    // Add death deadline for stage 5
+    if (character.blightStage === 5 && character.deathDeadline) {
+      const deathDeadline = new Date(character.deathDeadline);
+      const timeUntilDeath = Math.floor((deathDeadline.getTime() - Date.now()) / (1000 * 60 * 60)); // hours
+      
+      embed.addFields({
+        name: '⚰️ Death Deadline',
+        value: `**${deathDeadline.toLocaleDateString()}** at **${deathDeadline.toLocaleTimeString()}**\n` +
+               `**Time remaining:** <t:${Math.floor(deathDeadline.getTime() / 1000)}:R>`,
+        inline: false
+      });
+    }
+
+    // Add next roll reminder
+    const nextRollTime = new Date();
+    nextRollTime.setHours(20, 0, 0, 0); // 8 PM EST
+    nextRollTime.setDate(nextRollTime.getDate() + 1); // Tomorrow
+    
+    embed.addFields({
+      name: '⏰ Next Roll Call',
+      value: `<t:${Math.floor(nextRollTime.getTime() / 1000)}:R> at 8:00 PM EST`,
+      inline: false
+    });
+
+    await interaction.editReply({ 
+      content: `<@${interaction.user.id}>`,
+      embeds: [embed],
+      ephemeral: true 
+    });
+  } catch (error) {
+    handleError(error, 'blightHandler.js');
+    console.error('[blightHandler]: Error viewing blight status:', error);
+    await interaction.editReply({ 
+      content: '❌ An error occurred while fetching the blight status.',
+      ephemeral: true 
+    });
+  }
+}
+
+// ------------------- Function: saveBlightEventToHistory -------------------
+// Saves blight-related events to the BlightRollHistoryModel for tracking
+async function saveBlightEventToHistory(character, eventType, details = {}) {
+  try {
+    const BlightRollHistory = require('../models/BlightRollHistoryModel');
+    
+    // Ensure we're connected to the main database
+    if (mongoose.connection.readyState === 0) {
+      await mongoose.connect(process.env.MONGODB_URI, {
+        useNewUrlParser: true,
+        useUnifiedTopology: true
+      });
+    }
+    
+    const historyEntry = await BlightRollHistory.create({
+      characterId: character._id,
+      characterName: character.name,
+      userId: character.userId,
+      rollValue: details.rollValue || null,
+      previousStage: details.previousStage || character.blightStage,
+      newStage: details.newStage || character.blightStage,
+      timestamp: new Date(),
+      notes: `${eventType}: ${details.notes || ''}`
+    });
+    
+    console.log(`[blightHandler]: Saved blight event to history: ${eventType} for ${character.name}`);
+    return historyEntry;
+  } catch (error) {
+    handleError(error, 'blightHandler.js', {
+      operation: 'saveBlightEventToHistory',
+      characterName: character.name,
+      eventType,
+      details
+    });
+    console.error('[blightHandler]: Failed to save blight event to history:', error);
+  }
+}
+
+// ------------------- Function: getBlightStageDescription -------------------
+// Returns a description for each blight stage.
+function getBlightStageDescription(stage) {
+  switch (stage) {
+    case 1: return 'Minor symptoms - slight discomfort';
+    case 2: return 'Moderate symptoms - noticeable effects';
+    case 3: return 'Severe symptoms - significant impairment';
+    case 4: return 'Critical symptoms - life-threatening';
+    case 5: return 'Terminal stage - death imminent';
+    default: return 'Unknown stage';
+  }
+}
+
 // ------------------- Function: viewBlightHistory -------------------
 // Displays the most recent blight progression history for a character.
 async function viewBlightHistory(interaction, characterName, limit = 10) {
@@ -2045,6 +2273,8 @@ module.exports = {
   rollForBlightProgression,
   postBlightRollCall,
   viewBlightHistory,
+  viewBlightStatus,
+  saveBlightEventToHistory,
   cleanupExpiredBlightRequests,
   validateCharacterOwnership,
   checkMissedRolls,

@@ -928,6 +928,47 @@ const modCommand = new SlashCommandBuilder()
     )
 )
 
+// ------------------- Subcommand: blightoverride -------------------
+.addSubcommand(sub =>
+  sub
+    .setName('blightoverride')
+    .setDescription('🚨 Admin override for blight healing in emergencies')
+    .addStringOption(option =>
+      option
+        .setName('action')
+        .setDescription('The emergency action to perform')
+        .setRequired(true)
+        .addChoices(
+          { name: 'Wipe All Blight', value: 'wipe_all' },
+          { name: 'Wipe Village Blight', value: 'wipe_village' },
+          { name: 'Wipe Character Blight', value: 'wipe_character' },
+          { name: 'Set All Blight Level', value: 'set_all_level' },
+          { name: 'Set Village Blight Level', value: 'set_village_level' },
+          { name: 'Set Character Blight Level', value: 'set_character_level' }
+        )
+    )
+    .addStringOption(option =>
+      option
+        .setName('target')
+        .setDescription('Target for the action (village name, character name, or "all")')
+        .setRequired(false)
+    )
+    .addIntegerOption(option =>
+      option
+        .setName('level')
+        .setDescription('Blight level to set (0-5, only for set actions)')
+        .setRequired(false)
+        .setMinValue(0)
+        .setMaxValue(5)
+    )
+    .addStringOption(option =>
+      option
+        .setName('reason')
+        .setDescription('Reason for the emergency override')
+        .setRequired(false)
+    )
+)
+
 // ============================================================================
 // ------------------- Execute Command Handler -------------------
 // Delegates logic to subcommand-specific handlers
@@ -1024,6 +1065,8 @@ async function execute(interaction) {
         return await handleShopAdd(interaction);
     } else if (subcommand === 'trigger-raid') {
         return await handleTriggerRaid(interaction);
+    } else if (subcommand === 'blightoverride') {
+        return await handleBlightOverride(interaction);
     } else {
         return interaction.editReply('❌ Unknown subcommand.');
     }
@@ -2291,6 +2334,192 @@ async function handleShopAdd(interaction) {
         .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
         .setFooter({ text: 'Error Handling' })
         .setTimestamp()],
+      ephemeral: true
+    });
+  }
+}
+
+// ------------------- Function: handleBlightOverride -------------------
+// Admin override for blight healing in emergencies
+async function handleBlightOverride(interaction) {
+  const action = interaction.options.getString('action');
+  const target = interaction.options.getString('target');
+  const level = interaction.options.getInteger('level');
+  const reason = interaction.options.getString('reason') || 'Emergency override';
+
+  try {
+    // Check for required parameters based on action
+    if (action.startsWith('wipe_') && !target) {
+      return interaction.editReply({
+        content: '❌ **Target required for wipe actions.** Please specify a village name, character name, or "all".',
+        ephemeral: true
+      });
+    }
+
+    if (action.startsWith('set_') && (level === null || level === undefined)) {
+      return interaction.editReply({
+        content: '❌ **Level required for set actions.** Please specify a blight level (0-10).',
+        ephemeral: true
+      });
+    }
+
+    // Validate target for specific actions
+    if (action === 'wipe_village' || action === 'set_village_level') {
+      const validVillages = ['rudania', 'inariko', 'vhintl'];
+      if (!validVillages.includes(target?.toLowerCase())) {
+        return interaction.editReply({
+          content: '❌ **Invalid village.** Please specify: rudania, inariko, or vhintl.',
+          ephemeral: true
+        });
+      }
+    }
+
+    if (action === 'wipe_character' || action === 'set_character_level') {
+      if (!target || target === 'all') {
+        return interaction.editReply({
+          content: '❌ **Character name required.** Please specify a specific character name.',
+          ephemeral: true
+        });
+      }
+    }
+
+    // Build the update query based on action
+    let updateQuery = {};
+    let affectedCount = 0;
+    let actionDescription = '';
+
+    switch (action) {
+      case 'wipe_all':
+        updateQuery = { $set: { blightLevel: 0, blightPaused: false } };
+        actionDescription = 'wiped blight from ALL characters';
+        break;
+
+      case 'wipe_village':
+        updateQuery = { 
+          $set: { blightLevel: 0, blightPaused: false },
+          $match: { currentVillage: target.toLowerCase() }
+        };
+        actionDescription = `wiped blight from all characters in ${target}`;
+        break;
+
+      case 'wipe_character':
+        const character = await fetchCharacterByName(target);
+        if (!character) {
+          return interaction.editReply({
+            content: `❌ **Character not found:** ${target}`,
+            ephemeral: true
+          });
+        }
+        updateQuery = { 
+          $set: { blightLevel: 0, blightPaused: false },
+          $match: { _id: character._id }
+        };
+        actionDescription = `wiped blight from character ${target}`;
+        break;
+
+      case 'set_all_level':
+        updateQuery = { $set: { blightLevel: level, blightPaused: false } };
+        actionDescription = `set blight level to ${level} for ALL characters`;
+        break;
+
+      case 'set_village_level':
+        updateQuery = { 
+          $set: { blightLevel: level, blightPaused: false },
+          $match: { currentVillage: target.toLowerCase() }
+        };
+        actionDescription = `set blight level to ${level} for all characters in ${target}`;
+        break;
+
+      case 'set_character_level':
+        const targetCharacter = await fetchCharacterByName(target);
+        if (!targetCharacter) {
+          return interaction.editReply({
+            content: `❌ **Character not found:** ${target}`,
+            ephemeral: true
+          });
+        }
+        updateQuery = { 
+          $set: { blightLevel: level, blightPaused: false },
+          $match: { _id: targetCharacter._id }
+        };
+        actionDescription = `set blight level to ${level} for character ${target}`;
+        break;
+
+      default:
+        return interaction.editReply({
+          content: '❌ **Invalid action.** Please select a valid emergency action.',
+          ephemeral: true
+        });
+    }
+
+    // Execute the update
+    let result;
+    if (action === 'wipe_character' || action === 'set_character_level') {
+      // For single character actions, use findByIdAndUpdate
+      const characterId = action === 'wipe_character' ? 
+        (await fetchCharacterByName(target))._id : 
+        (await fetchCharacterByName(target))._id;
+      
+      result = await Character.findByIdAndUpdate(
+        characterId,
+        { blightLevel: action.startsWith('wipe_') ? 0 : level, blightPaused: false },
+        { new: true }
+      );
+      affectedCount = result ? 1 : 0;
+    } else {
+      // For bulk actions, use updateMany
+      const filter = {};
+      if (action === 'wipe_village' || action === 'set_village_level') {
+        filter.currentVillage = target.toLowerCase();
+      }
+      
+      result = await Character.updateMany(filter, {
+        blightLevel: action.startsWith('wipe_') ? 0 : level,
+        blightPaused: false
+      });
+      affectedCount = result.modifiedCount;
+    }
+
+    // Create confirmation embed
+    const confirmationEmbed = new EmbedBuilder()
+      .setColor('#FF6B35') // Emergency orange color
+      .setTitle('🚨 EMERGENCY BLIGHT OVERRIDE EXECUTED')
+      .setDescription(`**${actionDescription}**`)
+      .addFields(
+        { name: '📊 Characters Affected', value: `${affectedCount}`, inline: true },
+        { name: '👤 Admin', value: interaction.user.tag, inline: true },
+        { name: '📝 Reason', value: reason, inline: true },
+        { name: '⏰ Timestamp', value: new Date().toLocaleString(), inline: true }
+      )
+      .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+      .setFooter({ text: 'Emergency Override - Use with caution' })
+      .setTimestamp();
+
+    // Log the emergency action
+    console.log(`[mod.js]: 🚨 EMERGENCY BLIGHT OVERRIDE - ${interaction.user.tag} ${actionDescription}. Reason: ${reason}. Affected: ${affectedCount} characters.`);
+
+    return interaction.editReply({
+      content: `🚨 **EMERGENCY OVERRIDE EXECUTED:** ${actionDescription}`,
+      embeds: [confirmationEmbed],
+      ephemeral: true
+    });
+
+  } catch (error) {
+    handleError(error, 'mod.js', {
+      commandName: '/mod blightoverride',
+      userTag: interaction.user.tag,
+      userId: interaction.user.id,
+      options: {
+        action: action,
+        target: target,
+        level: level,
+        reason: reason
+      }
+    });
+    
+    console.error('[mod.js]: Error in blight override:', error);
+    return interaction.editReply({
+      content: '❌ **An error occurred during the emergency override.**',
       ephemeral: true
     });
   }
