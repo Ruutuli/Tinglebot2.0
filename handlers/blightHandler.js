@@ -254,16 +254,36 @@ async function healBlight(interaction, characterName, healerName) {
           .setFooter({ text: 'Blight Healing Request', iconURL: 'https://static.wixstatic.com/media/7573f4_a510c95090fd43f5ae17e20d80c1289e~mv2.png'})
           .setTimestamp();
 
+        // Create instructions embed for art submissions (always show for existing requests too)
+        let instructionsEmbed = null;
+        if (existingSubmission.data.taskType === 'art') {
+          instructionsEmbed = createBlightSubmissionInstructionsEmbed(existingSubmission.key, existingSubmission.data.taskType);
+        }
+
+        // Reply in-channel with pending embed (non-ephemeral)
         await interaction.editReply({
           embeds: [pendingEmbed],
-          ephemeral: true
+          ephemeral: false
         });
+
+        // Send instructions embed separately as ephemeral
+        if (instructionsEmbed) {
+          await interaction.followUp({
+            embeds: [instructionsEmbed],
+            ephemeral: true
+          });
+        }
 
         // DM the user as well
         try {
+          const dmEmbeds = [pendingEmbed];
+          if (instructionsEmbed) {
+            dmEmbeds.push(instructionsEmbed);
+          }
+          
           await interaction.user.send({
             content: `Hi <@${interaction.user.id}>, you already have a pending blight healing request for **${characterName}**.`,
-            embeds: [pendingEmbed]
+            embeds: dmEmbeds
           });
         } catch (dmError) {
           handleError(dmError, 'blightHandler.js');
@@ -351,8 +371,14 @@ async function healBlight(interaction, characterName, healerName) {
     }
 
     const embed = createBlightHealingEmbed(character, healer, healingRequirement, newSubmissionId, expiresAt);
+    
+    // Create instructions embed for art submissions
+    let instructionsEmbed = null;
+    if (healingRequirement.type === 'art') {
+      instructionsEmbed = createBlightSubmissionInstructionsEmbed(newSubmissionId, healingRequirement.type);
+    }
 
-    // Reply in-channel using editReply since we deferred
+    // Reply in-channel using editReply since we deferred (non-ephemeral)
     let replyContent = `<@${interaction.user.id}>`;
     if (oldRequestCancelled) {
       replyContent = `⚠️ **${characterName}** had a pending healing request from **${oldHealerName}**, but they can no longer heal at Stage ${oldStage}.\n\nThe old request has been cancelled. Here is your new healing prompt:\n\n` + replyContent;
@@ -364,11 +390,24 @@ async function healBlight(interaction, characterName, healerName) {
       ephemeral: false,
     });
 
+    // Send instructions embed separately as ephemeral
+    if (instructionsEmbed) {
+      await interaction.followUp({
+        embeds: [instructionsEmbed],
+        ephemeral: true
+      });
+    }
+
     // Attempt DM
     try {
+      const dmEmbeds = [embed];
+      if (instructionsEmbed) {
+        dmEmbeds.push(instructionsEmbed);
+      }
+      
       await interaction.user.send({
         content: `Hi <@${interaction.user.id}>, here are the details of your healing request:`,
-        embeds: [embed],
+        embeds: dmEmbeds,
       });
     } catch (dmError) {
       handleError(dmError, 'blightHandler.js');
@@ -632,6 +671,135 @@ function createBlightHealingEmbed(character, healer, healingRequirement, submiss
     .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
     .setFooter({ text: 'Use the Submission ID when you submit the task with /blight submit' })
     .setTimestamp();
+}
+
+// ------------------- Function: createBlightSubmissionErrorEmbed -------------------
+// Creates appropriate error embeds based on validation error type.
+function createBlightSubmissionErrorEmbed(errorMessage) {
+  let title, description, fields, footerText;
+  
+  if (errorMessage.includes('Invalid Discord message link format')) {
+    title = '❌ Invalid Link Format';
+    description = 'The link you provided is not a valid Discord message link.';
+    fields = [
+      { name: '📝 What Happened?', value: 'The link format is incorrect. Please provide a valid Discord message link.' },
+      { name: '💡 How to Fix', value: '1. Right-click on your submission message\n2. Select "Copy Message Link"\n3. Use that link with the healing command' },
+      { name: '📌 Important', value: 'The link must be from a Discord message, not a general channel link.' }
+    ];
+    footerText = 'Link Format Error';
+  } else if (errorMessage.includes('submissions channel')) {
+    title = '❌ Wrong Channel';
+    description = 'Your submission must be posted in the submissions channel first.';
+    fields = [
+      { name: '📝 What Happened?', value: 'The submission link is from a different channel than allowed.' },
+      { name: '💡 How to Fix', value: '1. Post your art/writing in the submissions channel\n2. Include your blight healing request ID when submitting\n3. Wait for a moderator to approve with a checkmark emoji\n4. Copy the link from your approved submission\n5. Use that link with the healing command' },
+      { name: '📌 Important', value: 'This is required to ensure all submissions are properly documented and reviewed.' }
+    ];
+    footerText = 'Channel Error';
+  } else if (errorMessage.includes('not been approved yet')) {
+    title = '❌ Submission Not Approved';
+    description = 'This submission has not been approved by a moderator yet.';
+    fields = [
+      { name: '📝 What Happened?', value: 'Your submission is waiting for moderator approval with a checkmark emoji.' },
+      { name: '💡 How to Fix', value: '1. Wait for a moderator to approve your submission\n2. Look for a checkmark emoji reaction on your submission\n3. Once approved, copy the link and use it for healing' },
+      { name: '📌 Important', value: 'Only approved submissions can be used for blight healing.' }
+    ];
+    footerText = 'Approval Error';
+  } else if (errorMessage.includes('different blight healing request')) {
+    title = '❌ Wrong Blight ID';
+    description = 'This submission is for a different blight healing request.';
+    fields = [
+      { name: '📝 What Happened?', value: 'The submission contains a different blight healing ID than the one you\'re trying to use.' },
+      { name: '💡 How to Fix', value: '1. Use the submission that matches your current blight healing request\n2. Make sure the blight ID in the submission matches your request\n3. If you need a new submission, create one with the correct blight ID' },
+      { name: '📌 Important', value: 'Each submission is tied to a specific blight healing request.' }
+    ];
+    footerText = 'Blight ID Mismatch Error';
+  } else if (errorMessage.includes('does not contain a blight healing ID')) {
+    title = '❌ Missing Blight ID';
+    description = 'This submission was not created with a blight healing ID.';
+    fields = [
+      { name: '📝 What Happened?', value: 'The submission does not contain a blight healing ID, which is required for healing.' },
+      { name: '💡 How to Fix', value: '1. Create a new submission using `/submit art` or `/submit writing`\n2. Include your blight healing request ID when submitting\n3. Wait for moderator approval\n4. Use the approved submission link for healing' },
+      { name: '📌 Important', value: 'Only submissions created with a blight ID can be used for healing.' }
+    ];
+    footerText = 'Missing Blight ID Error';
+  } else if (errorMessage.includes('Could not access') || errorMessage.includes('Could not find')) {
+    title = '❌ Link Access Error';
+    description = 'Could not access or find the submission message.';
+    fields = [
+      { name: '📝 What Happened?', value: 'The bot could not access the submission message. This could be due to permissions or an incorrect link.' },
+      { name: '💡 How to Fix', value: '1. Make sure the link is correct and recent\n2. Ensure the submission is in a public channel\n3. Try copying the link again\n4. Contact support if the issue persists' },
+      { name: '📌 Important', value: 'The submission must be accessible to the bot for verification.' }
+    ];
+    footerText = 'Access Error';
+  } else {
+    // Generic error fallback
+    title = '❌ Submission Error';
+    description = 'There was an issue with your submission link.';
+    fields = [
+      { name: '📝 What Happened?', value: errorMessage },
+      { name: '💡 How to Fix', value: '1. Check that your submission link is correct\n2. Ensure the submission is approved\n3. Verify the blight ID matches your request\n4. Try again or contact support' },
+      { name: '📌 Important', value: 'All submissions must be properly formatted and approved.' }
+    ];
+    footerText = 'General Error';
+  }
+
+  return new EmbedBuilder()
+    .setColor('#FF0000')
+    .setTitle(title)
+    .setDescription(description)
+    .addFields(fields)
+    .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
+    .setFooter({ text: footerText, iconURL: 'https://static.wixstatic.com/media/7573f4_a510c95090fd43f5ae17e20d80c1289e~mv2.png' })
+    .setTimestamp();
+}
+
+// ------------------- Function: createBlightSubmissionInstructionsEmbed -------------------
+// Returns a formatted embed with instructions on how to submit art for blight healing.
+function createBlightSubmissionInstructionsEmbed(submissionId, taskType) {
+  const embed = new EmbedBuilder()
+    .setColor('#4A90E2')
+    .setTitle('📋 How to Submit Your Blight Healing Art')
+    .setDescription('Follow these steps to submit your art for blight healing approval:')
+    .addFields(
+      { 
+        name: '🎨 Step 1: Create Your Art', 
+        value: 'Complete the art requirement as specified in your healing request above.', 
+        inline: false 
+      },
+      { 
+        name: '📤 Step 2: Submit to Submissions Channel', 
+        value: 'Use `/submit art` in the <#1393274995580604566> channel with your art file.', 
+        inline: false 
+      },
+      { 
+        name: '🆔 Step 3: Include Blight ID', 
+        value: `When submitting, include your **Blight ID**: \`${submissionId}\`\n\n**Command Format:**\n\`/submit art file:your-art.png blightid:${submissionId}\``, 
+        inline: false 
+      },
+      { 
+        name: '⏳ Step 4: Wait for Approval', 
+        value: 'A moderator will review your submission and approve it with a checkmark emoji.', 
+        inline: false 
+      },
+      { 
+        name: '✅ Step 5: Complete Healing', 
+        value: `Once approved, use the submission link with:\n\`/blight submit submission_id:${submissionId} link:your-submission-link\``, 
+        inline: false 
+      }
+    )
+    .addFields(
+      { 
+        name: '⚠️ Important Notes', 
+        value: '• Your submission must be approved before you can use it for healing\n• The submission must contain your Blight ID\n• You have 30 days to complete this task\n• You can forfeit all tokens as an alternative option', 
+        inline: false 
+      }
+    )
+    .setImage('https://storage.googleapis.com/tinglebot/border%20instructions.png')
+    .setFooter({ text: 'Blight Healing Submission Guide' })
+    .setTimestamp();
+
+  return embed;
 }
 
 // ------------------- Function: createBlightHealingCompleteEmbed -------------------
@@ -982,21 +1150,9 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
       // Validate Discord message link and check for approval
       const linkValidation = await validateDiscordMessageLink(link, interaction.client, submission.submissionId);
       if (!linkValidation.valid) {
-        const invalidLinkEmbed = new EmbedBuilder()
-          .setColor('#FF0000')
-          .setTitle('❌ Invalid Submission Channel')
-          .setDescription('Your submission must be posted in the submissions channel first.')
-          .addFields(
-            { name: '📝 What Happened?', value: linkValidation.error || 'The link you provided is from a different channel. All art and writing submissions must be posted in the submissions channel first.' },
-            { name: '💡 How to Fix', value: '1. Post your art/writing in the submissions channel\n2. Include your blight healing request ID when submitting\n3. Wait for a moderator to approve with a checkmark emoji\n4. Copy the link from your approved submission\n5. Use that link with the healing command' },
-            { name: '📌 Important', value: 'This is required to ensure all submissions are properly documented and reviewed.' }
-          )
-          .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
-          .setFooter({ text: 'Submission Channel Error', iconURL: 'https://static.wixstatic.com/media/7573f4_a510c95090fd43f5ae17e20d80c1289e~mv2.png' })
-          .setTimestamp();
-
+        const errorEmbed = createBlightSubmissionErrorEmbed(linkValidation.error);
         await interaction.editReply({ 
-          embeds: [invalidLinkEmbed],
+          embeds: [errorEmbed],
           ephemeral: true 
         });
         return;
@@ -1067,9 +1223,12 @@ async function validateDiscordMessageLink(link, client, claimedBlightId = null) 
 
     const [, guildId, channelId, messageId] = match;
     
-    // Check if the link is from the submissions channel
+    // Check if the link is from the submissions channel or the additional allowed channel
     const submissionsChannelId = process.env.SUBMISSIONS;
-    if (submissionsChannelId && channelId !== submissionsChannelId) {
+    const additionalChannelId = '1393274995580604566';
+    const allowedChannels = [submissionsChannelId, additionalChannelId].filter(Boolean);
+    
+    if (allowedChannels.length > 0 && !allowedChannels.includes(channelId)) {
       return {
         valid: false,
         error: 'The submission link must be from the submissions channel.'
