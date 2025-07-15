@@ -282,17 +282,7 @@ module.exports = {
       // ------------------- Debuff and Inventory Sync Checks -------------------
       // Prevent item use if character is debuffed or inventory isn't synced.
       if (character.debuff?.active) {
-        const debuffEndDate = new Date(character.debuff.endDate);
-        
-        // Convert to EST and set to midnight of the next day for display
-        const estDate = new Date(debuffEndDate.toLocaleString('en-US', { timeZone: 'America/New_York' }));
-        estDate.setDate(estDate.getDate() + 1); // Add one day to get next midnight
-        estDate.setHours(0, 0, 0, 0);
-        
-        // Convert back to UTC for Discord timestamp
-        const expireUnix = Math.floor(estDate.getTime() / 1000);
-        
-        const debuffEmbed = createDebuffEmbed(character, expireUnix);
+        const debuffEmbed = createDebuffEmbed(character);
         return void await interaction.editReply({ embeds: [debuffEmbed] });
       }
 

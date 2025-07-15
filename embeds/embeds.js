@@ -121,15 +121,15 @@ const formatMaterialsList = (materials) => {
 
 // ------------------- Debuff Embed -------------------
 // Creates an embed for when a character is debuffed and cannot use items
-const createDebuffEmbed = (character, expireUnix) => {
+const createDebuffEmbed = (character) => {
   const embed = new EmbedBuilder()
     .setColor('#FF0000')
     .setTitle('⚠️ Debuff Active ⚠️')
     .setDescription(`**${character.name}** is currently debuffed and cannot use items to heal.`)
     .addFields(
       {
-        name: '🕒 Debuff Expires',
-        value: `<t:${expireUnix}:F>`,
+        name: '🕒 Debuff Resets',
+        value: '**Midnight EST**',
         inline: false
       }
     )
