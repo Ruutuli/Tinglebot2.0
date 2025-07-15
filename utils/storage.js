@@ -15,6 +15,141 @@ if (!fs.existsSync(STORAGE_DIR)) {
 // ------------------- Submission Storage Functions -------------------
 // Functions for saving, retrieving, and deleting submissions from persistent storage.
 
+async function saveWeaponSubmissionToStorage(key, weaponData) {
+ try {
+  if (!key || !weaponData) {
+   console.error(`[storage.js]: Missing key or data for weapon save operation`);
+   throw new Error("Missing key or data");
+  }
+
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+
+  const weaponSubmission = {
+   type: "weaponSubmission",
+   key,
+   data: {
+    submissionId: weaponData.submissionId || key,
+    userId: weaponData.userId,
+    username: weaponData.username,
+    userAvatar: weaponData.userAvatar,
+    characterName: weaponData.characterName,
+    weaponName: weaponData.weaponName,
+    baseWeapon: weaponData.baseWeapon,
+    modifiers: weaponData.modifiers,
+    type: weaponData.type,
+    subtype: weaponData.subtype,
+    description: weaponData.description,
+    image: weaponData.image,
+    itemId: weaponData.itemId,
+    status: weaponData.status || 'pending',
+    submissionMessageId: weaponData.submissionMessageId,
+    notificationMessageId: weaponData.notificationMessageId,
+    submittedAt: weaponData.submittedAt || now,
+    crafted: weaponData.crafted || false,
+    craftingMaterials: weaponData.craftingMaterials || [],
+    staminaToCraft: weaponData.staminaToCraft || 0,
+    approvedAt: weaponData.approvedAt,
+    approvedBy: weaponData.approvedBy,
+    updatedAt: now,
+    createdAt: weaponData.createdAt || now,
+   },
+   expiresAt,
+  };
+
+  const result = await TempData.findOneAndUpdate(
+   { type: "weaponSubmission", key },
+   weaponSubmission,
+   { upsert: true, new: true }
+  );
+
+  console.log(`[storage.js]: Saved weapon submission ${key}`);
+  return result;
+ } catch (error) {
+  console.error(`[storage.js]: Error saving weapon submission ${key}:`, error);
+  throw error;
+ }
+}
+
+async function retrieveWeaponSubmissionFromStorage(key) {
+ try {
+  const weaponSubmission = await TempData.findByTypeAndKey("weaponSubmission", key);
+  if (weaponSubmission) {
+   return weaponSubmission.data;
+  }
+  return null;
+ } catch (error) {
+  console.error(`[storage.js]: Error retrieving weapon submission ${key}:`, error);
+  throw error;
+ }
+}
+
+async function updateWeaponSubmissionData(submissionId, updates) {
+ try {
+  if (!submissionId || !updates) {
+   console.error(`[storage.js]: Missing submissionId or updates for weapon update operation`);
+   throw new Error("Missing submissionId or updates");
+  }
+
+  const now = new Date();
+
+  const existingData = await retrieveWeaponSubmissionFromStorage(submissionId);
+  if (!existingData) {
+   console.error(`[storage.js]: Weapon submission ${submissionId} not found for update`);
+   return null;
+  }
+
+  const updateData = {
+   ...existingData,
+   ...updates,
+   updatedAt: now,
+  };
+
+  const result = await TempData.findOneAndUpdate(
+   { type: "weaponSubmission", key: submissionId },
+   {
+    $set: {
+     data: updateData,
+     expiresAt: new Date(now.getTime() + 48 * 60 * 60 * 1000),
+    },
+   },
+   { new: true }
+  );
+
+  if (result) {
+   return result.data;
+  } else {
+   console.error(`[storage.js]: Weapon submission ${submissionId} not found for update`);
+   return null;
+  }
+ } catch (error) {
+  console.error(`[storage.js]: Error updating weapon submission ${submissionId}:`, error);
+  throw error;
+ }
+}
+
+async function deleteWeaponSubmissionFromStorage(submissionId) {
+ try {
+  await TempData.findOneAndDelete({ type: "weaponSubmission", key: submissionId });
+ } catch (error) {
+  handleError(error, "storage.js");
+  throw new Error("Failed to delete weapon submission");
+ }
+}
+
+async function getAllWeaponSubmissions() {
+ try {
+  const weaponSubmissions = await TempData.find({ type: "weaponSubmission" });
+  return weaponSubmissions.map(submission => ({
+   key: submission.key,
+   data: submission.data
+  }));
+ } catch (error) {
+  console.error(`[storage.js]: Error retrieving all weapon submissions:`, error);
+  throw error;
+ }
+}
+
 async function saveSubmissionToStorage(key, submissionData) {
  try {
   if (!key || !submissionData) {
@@ -949,6 +1084,12 @@ async function findLatestSubmissionIdForUser(userId) {
 }
 
 module.exports = {
+ saveWeaponSubmissionToStorage,
+ retrieveWeaponSubmissionFromStorage,
+ updateWeaponSubmissionData,
+ deleteWeaponSubmissionFromStorage,
+ getAllWeaponSubmissions,
+
  saveSubmissionToStorage,
  updateSubmissionData,
  getOrCreateSubmission,
