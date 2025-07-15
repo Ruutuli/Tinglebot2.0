@@ -119,7 +119,28 @@ const formatMaterialsList = (materials) => {
   .join(", ");
 };
 
-// ------------------- Subsection Title ------------------- 
+// ------------------- Debuff Embed -------------------
+// Creates an embed for when a character is debuffed and cannot use items
+const createDebuffEmbed = (character, expireUnix) => {
+  const embed = new EmbedBuilder()
+    .setColor('#FF0000')
+    .setTitle('⚠️ Debuff Active ⚠️')
+    .setDescription(`**${character.name}** is currently debuffed and cannot use items to heal.`)
+    .addFields(
+      {
+        name: '🕒 Debuff Expires',
+        value: `<t:${expireUnix}:F>`,
+        inline: false
+      }
+    )
+    .setThumbnail(character.icon)
+    .setFooter({ text: 'Debuff System' });
+  
+  return embed;
+};
+
+// ------------------- Character Embed -------------------
+// Creates a detailed character information embed
 const createCharacterEmbed = (character) => {
  const settings = getCommonEmbedSettings(character);
 
@@ -1809,6 +1830,7 @@ module.exports = {
  getCommonEmbedSettings,
  aggregateItems,
  formatMaterialsList,
+ createDebuffEmbed,
  createCharacterEmbed,
  createSimpleCharacterEmbed,
  createCharacterGearEmbed,
