@@ -1170,11 +1170,41 @@ async function handleGive(interaction) {
       }
     }
   
-    // Send error messages as ephemeral but success message as public
+    // Send processing message as ephemeral
     await interaction.editReply({ content: '✅ Processing...', ephemeral: true });
-    return interaction.followUp(
-      `✨ The Gods have blessed you! **${character.name}** now has **${itemName} × ${quantity}**!`
-    );
+    
+    // Create a beautiful embed for the success message
+    const successEmbed = new EmbedBuilder()
+      .setColor('#59A914') // Green color for success
+      .setTitle('✨ Divine Blessing Received!')
+      .setDescription(`The Gods have blessed **${character.name}** with divine gifts!`)
+      .setAuthor({
+        name: `${character.name}`,
+        iconURL: character.icon || 'https://via.placeholder.com/100',
+        url: character.inventory || null
+      })
+      .addFields(
+        { 
+          name: '🎁 Item Received', 
+          value: `**${itemName}** × **${quantity}**`, 
+          inline: false 
+        },
+        { 
+          name: '👤 Character', 
+          value: `**${character.name}**`, 
+          inline: false 
+        }
+      )
+      .setThumbnail(item.image || 'https://via.placeholder.com/100')
+      .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+      .setFooter({ text: 'Divine blessing bestowed by the Gods ✨' })
+      .setTimestamp();
+    
+    // Send the embed as a public message and mention the character owner
+    return interaction.followUp({
+      content: `🎉 <@${character.userId}> | The Gods have blessed you!`,
+      embeds: [successEmbed]
+    });
   }
 
   // ------------------- Function: handlePetLevel -------------------

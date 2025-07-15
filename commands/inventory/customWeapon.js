@@ -385,7 +385,7 @@ async function updateNotificationMessage(weaponSubmission, interaction) {
             return;
         }
 
-        const notificationChannel = await interaction.client.channels.fetch('1347628427993153637');
+        const notificationChannel = await interaction.client.channels.fetch('1381479893090566144');
         if (!notificationChannel) {
             console.error(`[updateNotificationMessage]: Could not fetch notification channel`);
             return;
@@ -397,17 +397,54 @@ async function updateNotificationMessage(weaponSubmission, interaction) {
             return;
         }
 
-        const approvalDate = new Date().toLocaleString('en-US', {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: true,
-        });
+        // Update the embed to show approval status
+        const updatedEmbed = {
+            color: 0x00FF00, // Green color for approved
+            title: '✅ CUSTOM WEAPON APPROVED!',
+            description: '⏰ **Approved within 24 hours!**',
+            fields: [
+                {
+                    name: '👤 Submitted by',
+                    value: `<@${weaponSubmission.userId}>`,
+                    inline: true
+                },
+                {
+                    name: '✅ Approved by',
+                    value: `<@${interaction.user.id}>`,
+                    inline: true
+                },
+                {
+                    name: '📅 Approved on',
+                    value: `<t:${Math.floor(Date.now() / 1000)}:F>`,
+                    inline: true
+                },
+                {
+                    name: '🆔 Submission ID',
+                    value: `\`${weaponSubmission.submissionId || 'N/A'}\``,
+                    inline: true
+                },
+                {
+                    name: '🛠️ Weapon Name',
+                    value: weaponSubmission.weaponName,
+                    inline: true
+                },
+                {
+                    name: '⚡ Stamina Cost',
+                    value: `${weaponSubmission.staminaToCraft || 'N/A'}`,
+                    inline: true
+                }
+            ],
+            image: {
+                url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+            },
+            footer: {
+                text: 'Custom Weapon Approved'
+            },
+            timestamp: new Date().toISOString()
+        };
 
         await notificationMessage.edit({
-            content: `✅ **Custom Weapon Approved!**\n📌 Approved by <@${interaction.user.id}> on **${approvalDate}**.\n🔗 [View Submission](https://discord.com/channels/${interaction.guild.id}/${interaction.channel.id}/${interaction.id})`
+            embeds: [updatedEmbed]
         });
 
         console.log(`[updateNotificationMessage]: ✅ Successfully updated notification message for weapon ${weaponSubmission.weaponName}`);
@@ -474,7 +511,7 @@ async function sendApprovalDM(user, weaponSubmission, craftingMaterials, stamina
         };
 
         await user.send({
-            content: `☑️ Your custom weapon **${weaponSubmission.weaponName}** has been approved!`,
+            content: `✅ Your custom weapon **${weaponSubmission.weaponName}** has been approved!`,
             embeds: [dmEmbed],
         });
 
@@ -951,7 +988,7 @@ execute: async (interaction) => {
     try {
         // Defer reply early for long-running commands
         if (!interaction.deferred && !interaction.replied) {
-            await interaction.deferReply({ ephemeral: false });
+            await interaction.deferReply();
         }
 
         const subcommand = interaction.options.getSubcommand();
@@ -1350,12 +1387,58 @@ saveSubmissionToStorage(weaponId, {
     
 // ------------------- Send Pending Submission Notification to Approval Channel -------------------
 try {
-    const notificationChannel = await interaction.client.channels.fetch('1347628427993153637');
+    const notificationChannel = await interaction.client.channels.fetch('1381479893090566144');
     if (notificationChannel) {
         const submissionLink = `https://discord.com/channels/${interaction.guild.id}/${interaction.channel.id}/${submissionMessage.id}`;
 
+        // Create embed for notification
+        const notificationEmbed = {
+            color: 0xFF6B35, // Orange color for custom weapons
+            title: '🛠️ PENDING CUSTOM WEAPON SUBMISSION!',
+            description: '⏳ **Please approve within 24 hours!**',
+            fields: [
+                {
+                    name: '👤 Submitted by',
+                    value: `<@${interaction.user.id}>`,
+                    inline: true
+                },
+                {
+                    name: '📅 Submitted on',
+                    value: `<t:${Math.floor(new Date(submissionDate).getTime() / 1000)}:F>`,
+                    inline: true
+                },
+                {
+                    name: '🆔 Submission ID',
+                    value: `\`${weaponId}\``,
+                    inline: true
+                },
+                {
+                    name: '🔗 View Submission',
+                    value: `[Click Here](${submissionLink})`,
+                    inline: true
+                },
+                {
+                    name: '📋 How to Approve',
+                    value: `Use the command:\n\`/customweapon approve weaponid:${weaponId} staminatocraft:[number] materialstocraft:[items]\`\n\n**Example:**\n\`/customweapon approve weaponid:${weaponId} staminatocraft:50 materialstocraft:Iron x5, Wood x3\``,
+                    inline: false
+                },
+                {
+                    name: '⚠️ Important Notes',
+                    value: '• Set appropriate stamina cost \n• List all required materials with quantities\n• Use exact item names from the database\n• Materials format: "Item x1, Item x2"',
+                    inline: false
+                }
+            ],
+            image: {
+                url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+            },
+            footer: {
+                text: 'Custom Weapon Approval Required'
+            },
+            timestamp: new Date().toISOString()
+        };
+
         const notificationMessage = await notificationChannel.send({
-            content: `🛠️ **Pending Custom Weapon Submission!**\n⏳ **Please approve within 24 hours!**\n📌 Submitted by <@${interaction.user.id}> on **${submissionDate}**.\n🔍 Awaiting approval!\n\n🆔 **Submission ID:** \`${weaponId}\`\n🔗 [View Submission](${submissionLink})`
+            embeds: [notificationEmbed]
         });
 
         // ✅ Safely update submission with notificationMessageId now
@@ -1364,10 +1447,17 @@ try {
             currentSubmission.notificationMessageId = notificationMessage.id;
             await saveSubmissionToStorage(weaponId, currentSubmission);
         }
+    } else {
+        console.warn(`[customweapon submit]: Notification channel not found or bot lacks access. Submission will still be processed.`);
     }
 } catch (error) {
-    handleError(error, 'customWeapon.js');
-    console.error(`[customweapon submit]: Error sending notification to channel:`, error);
+    // Handle specific Discord API errors
+    if (error.code === 50001) {
+        console.warn(`[customweapon submit]: Bot lacks access to notification channel. Submission will still be processed.`);
+    } else {
+        handleError(error, 'customWeapon.js');
+        console.error(`[customweapon submit]: Error sending notification to channel:`, error);
+    }
 }
 
 

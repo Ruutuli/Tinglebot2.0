@@ -2297,7 +2297,7 @@ async function handleTrade(interaction) {
   const userId = interaction.user.id;
 
   try {
-    await interaction.deferReply({ ephemeral: false });
+    await interaction.deferReply();
 
     // ------------------- Validate Item Existence -------------------
     const itemNamesToCheck = [item1, item2, item3].filter(Boolean);
