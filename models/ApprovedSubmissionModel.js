@@ -118,6 +118,12 @@ const approvedSubmissionSchema = new mongoose.Schema({
     default: null
   },
   
+  // ------------------- Token Tracker Information -------------------
+  tokenTracker: {
+    type: String,
+    default: null
+  },
+  
   // ------------------- Quest/Event Information -------------------
   questEvent: {
     type: String,
