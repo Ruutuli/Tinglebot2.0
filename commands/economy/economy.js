@@ -363,8 +363,15 @@ async function handleGift(interaction) {
   },
  ].filter((item) => item.name && item.quantity);
 
- // ------------------- Validate Gift Quantities -------------------
-for (const { quantity } of items) {
+ // ------------------- Clean Item Names from Copy-Paste -------------------
+// Remove quantity information from item names if users copy-paste autocomplete text
+const cleanedItems = items.map(item => ({
+  name: item.name.replace(/\s*\(Qty:\s*\d+\)/i, '').trim(),
+  quantity: item.quantity
+}));
+
+// ------------------- Validate Gift Quantities -------------------
+for (const { quantity } of cleanedItems) {
   if (quantity <= 0) {
     await interaction.editReply({
       embeds: [{
@@ -385,7 +392,7 @@ for (const { quantity } of items) {
 }
 
 // ------------------- NEW: Prevent gifting Spirit Orbs -------------------
-for (const { name } of items) {
+for (const { name } of cleanedItems) {
   if (isSpiritOrb(name)) {
     await interaction.editReply({
       embeds: [{
@@ -439,7 +446,7 @@ for (const { name } of items) {
     fromCharacter.gearShield?.name,
   ].filter(Boolean); // remove undefineds
   
-  for (const { name } of items) {
+  for (const { name } of cleanedItems) {
     if (equippedItems.includes(name)) {
       await interaction.editReply({
         embeds: [{
@@ -557,7 +564,7 @@ for (const { name } of items) {
   // Aggregate quantities for duplicate items (case-insensitive)
   const aggregatedItems = [];
   const itemMap = new Map();
-  for (const { name, quantity } of items) {
+  for (const { name, quantity } of cleanedItems) {
     const key = name.trim().toLowerCase();
     if (!itemMap.has(key)) {
       itemMap.set(key, { name, quantity });
@@ -588,11 +595,18 @@ for (const { name } of items) {
       color: 0xFF0000, // Red color
       title: '❌ Insufficient Items',
       description: `\`${fromCharacterName}\` does not have enough of the following items to gift:`,
-      fields: unavailableItems.map(item => ({
-        name: item,
-        value: 'Insufficient quantity',
-        inline: true
-      })),
+      fields: [
+        ...unavailableItems.map(item => ({
+          name: item,
+          value: 'Insufficient quantity',
+          inline: true
+        })),
+        {
+          name: '💡 Tip',
+          value: 'If you copied the item name from autocomplete, make sure to only use the item name (without the quantity in parentheses).',
+          inline: false
+        }
+      ],
       image: {
         url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
       },
@@ -1353,8 +1367,12 @@ async function handleShopSell(interaction) {
   await interaction.deferReply();
 
   const characterName = interaction.options.getString("charactername");
-  const itemName = interaction.options.getString("itemname");
+  const itemNameRaw = interaction.options.getString("itemname");
   const quantity = interaction.options.getInteger("quantity");
+
+  // ------------------- Clean Item Name from Copy-Paste -------------------
+  // Remove quantity information from item names if users copy-paste autocomplete text
+  const itemName = itemNameRaw.replace(/\s*\(Qty:\s*\d+\)/i, '').trim();
 
   const user = await User.findOne({ discordId: interaction.user.id });
   if (!user || !user.tokensSynced) {
@@ -1706,8 +1724,15 @@ async function handleTransfer(interaction) {
   },
  ].filter((item) => item.name && item.quantity);
 
+ // ------------------- Clean Item Names from Copy-Paste -------------------
+// Remove quantity information from item names if users copy-paste autocomplete text
+const cleanedItems = items.map(item => ({
+  name: item.name.replace(/\s*\(Qty:\s*\d+\)/i, '').trim(),
+  quantity: item.quantity
+}));
+
  // ------------------- Validate Transfer Quantities -------------------
-for (const { quantity } of items) {
+for (const { quantity } of cleanedItems) {
   if (quantity <= 0) {
     await interaction.editReply({
       embeds: [{
@@ -1767,7 +1792,7 @@ const equippedItems = [
   fromCharacter.gearShield?.name,
 ].filter(Boolean);
 
-for (const { name } of items) {
+for (const { name } of cleanedItems) {
   if (equippedItems.includes(name)) {
     await interaction.editReply({
       embeds: [{
@@ -1829,7 +1854,7 @@ for (const { name } of items) {
   // Aggregate quantities for duplicate items (case-insensitive)
   const aggregatedItems = [];
   const itemMap = new Map();
-  for (const { name, quantity } of items) {
+  for (const { name, quantity } of cleanedItems) {
     const key = name.trim().toLowerCase();
     if (!itemMap.has(key)) {
       itemMap.set(key, { name, quantity });
@@ -2304,14 +2329,19 @@ async function handleTrade(interaction) {
       return;
     }
 
-    // ------------------- Validate Trade Quantities -------------------
-    const itemArrayRaw = [
+    // ------------------- Clean Item Names from Copy-Paste -------------------
+    // Remove quantity information from item names if users copy-paste autocomplete text
+    const cleanedItemArrayRaw = [
       { name: item1, quantity: quantity1 },
       { name: item2, quantity: quantity2 },
       { name: item3, quantity: quantity3 },
-    ].filter((item) => item.name);
+    ].filter((item) => item.name).map(item => ({
+      name: item.name.replace(/\s*\(Qty:\s*\d+\)/i, '').trim(),
+      quantity: item.quantity
+    }));
 
-    for (const { quantity } of itemArrayRaw) {
+    // ------------------- Validate Trade Quantities -------------------
+    for (const { quantity } of cleanedItemArrayRaw) {
       if (quantity <= 0) {
         await interaction.editReply({
           embeds: [{
@@ -2333,7 +2363,7 @@ async function handleTrade(interaction) {
 
     // ---- Aggregate duplicate items (case-insensitive) ----
     const itemMap = new Map();
-    for (const { name, quantity } of itemArrayRaw) {
+    for (const { name, quantity } of cleanedItemArrayRaw) {
       const key = name.trim().toLowerCase();
       if (!itemMap.has(key)) {
         itemMap.set(key, { name, quantity });

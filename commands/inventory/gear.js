@@ -74,8 +74,12 @@ module.exports = {
       // Retrieve options provided by the user.
       const characterName = interaction.options.getString('charactername');
       const type = interaction.options.getString('type');
-      const itemName = interaction.options.getString('itemname');
+      const itemNameRaw = interaction.options.getString('itemname');
       const status = interaction.options.getString('status');
+
+      // ------------------- Clean Item Name from Copy-Paste -------------------
+      // Remove quantity information from item names if users copy-paste autocomplete text
+      const itemName = itemNameRaw ? itemNameRaw.replace(/\s*\(Qty:\s*\d+\)/i, '').trim() : null;
 
       // Validate status
       if (status && status !== 'equip' && status !== 'unequip') {

@@ -69,9 +69,13 @@ module.exports = {
     // ------------------- Extract Command Options -------------------
     const userId = interaction.user.id;
     const characterName = interaction.options.getString('charactername');
-    const itemName = interaction.options.getString('itemname');
+    const itemNameRaw = interaction.options.getString('itemname');
     const quantity = interaction.options.getInteger('quantity');
     const flavorText = interaction.options.getString('flavortext') || '';
+
+    // ------------------- Clean Item Name from Copy-Paste -------------------
+    // Remove quantity information from item names if users copy-paste autocomplete text
+    const itemName = itemNameRaw.replace(/\s*\(Qty:\s*\d+\)/i, '').trim();
 
     const villageChannels = {
       Rudania: process.env.RUDANIA_TOWNHALL,
