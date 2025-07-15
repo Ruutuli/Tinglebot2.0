@@ -110,46 +110,43 @@ async function sendBloodMoonAnnouncement(client, channelId, message) {
     const today = normalizeDate(now);
     
     // Find which Blood Moon period we're in and determine the correct date to show
-    let announcementDate = today;
+    let bloodMoonDate = null;
     let foundBloodMoonPeriod = false;
     
     for (const { realDate } of bloodmoonDates) {
       const [month, day] = realDate.split('-').map(Number);
-      const bloodMoonDate = normalizeDate(new Date(today.getFullYear(), month - 1, day));
-      const dayBefore = new Date(bloodMoonDate);
-      dayBefore.setDate(bloodMoonDate.getDate() - 1);
-      const dayAfter = new Date(bloodMoonDate);
-      dayAfter.setDate(bloodMoonDate.getDate() + 1);
+      const currentBloodMoonDate = normalizeDate(new Date(today.getFullYear(), month - 1, day));
+      const dayBefore = new Date(currentBloodMoonDate);
+      dayBefore.setDate(currentBloodMoonDate.getDate() - 1);
+      const dayAfter = new Date(currentBloodMoonDate);
+      dayAfter.setDate(currentBloodMoonDate.getDate() + 1);
       
       if (today >= dayBefore && today <= dayAfter) {
         // We're in a Blood Moon period
         foundBloodMoonPeriod = true;
-        
-        // If today is the day before the blood moon date, show today's date
-        // If today is the blood moon date, show the blood moon date
-        // If today is the day after, show the blood moon date
-        if (today.getTime() === dayBefore.getTime()) {
-          // Today is the day before - show today's date
-          announcementDate = today;
-        } else if (today.getTime() === bloodMoonDate.getTime()) {
-          // Today is the blood moon date - show the blood moon date
-          announcementDate = bloodMoonDate;
-        } else {
-          // Today is the day after - show the blood moon date
-          announcementDate = bloodMoonDate;
-        }
+        bloodMoonDate = currentBloodMoonDate;
         break;
       }
     }
     
+    // Use current date for the announcement (when the announcement is posted)
+    const announcementDate = today;
     const realWorldDate = announcementDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
     const hyruleanDate = convertToHyruleanDate(announcementDate);
+    
+    // Create date range information for clarity
+    let dateRangeInfo = '';
+    if (bloodMoonDate) {
+      const bloodMoonRealDate = bloodMoonDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+      const bloodMoonHyruleanDate = convertToHyruleanDate(bloodMoonDate);
+      dateRangeInfo = `\n\n📅 **Blood Moon Period:** ${bloodMoonRealDate} (${bloodMoonHyruleanDate})`;
+    }
 
     const embed = new EmbedBuilder()
       .setColor('#8B0000')
       .setAuthor({ name: 'Blood Moon Rising', iconURL: 'https://static.wikia.nocookie.net/zelda_gamepedia_en/images/d/dc/HWAoC_Blood_Moon_Icon.png/revision/latest/scale-to-width-down/250?cb=20210328041409' })
       .setDescription(
-        `**${message}**\n\n**Beware the monsters, as they are drawn to the moon's red glow.**\n\n🌕 **Real-World Date:** ${realWorldDate}\n🌕 **Hyrulean Date:** ${hyruleanDate}`
+        `**${message}**\n\n**Beware the monsters, as they are drawn to the moon's red glow.**\n\n🌕 **Real-World Date:** ${realWorldDate}\n🌕 **Hyrulean Date:** ${hyruleanDate}${dateRangeInfo}`
       )
       .setImage('https://oyster.ignimgs.com/mediawiki/apis.ign.com/the-legend-of-zelda-hd/e/e7/The_Legend_of_Zelda._Breath_of_the_Wild_Screen_Shot_3-16-17%2C_1.22_PM.png?width=1280')
       .setTimestamp();
@@ -184,16 +181,16 @@ async function sendBloodMoonEndAnnouncement(client, channelId) {
     const today = normalizeDate(now);
     
     // Find which Blood Moon period we're transitioning from and determine the correct date to show
-    let announcementDate = today;
+    let bloodMoonDate = null;
     let foundBloodMoonPeriod = false;
     
     for (const { realDate } of bloodmoonDates) {
       const [month, day] = realDate.split('-').map(Number);
-      const bloodMoonDate = normalizeDate(new Date(today.getFullYear(), month - 1, day));
-      const dayBefore = new Date(bloodMoonDate);
-      dayBefore.setDate(bloodMoonDate.getDate() - 1);
-      const dayAfter = new Date(bloodMoonDate);
-      dayAfter.setDate(bloodMoonDate.getDate() + 1);
+      const currentBloodMoonDate = normalizeDate(new Date(today.getFullYear(), month - 1, day));
+      const dayBefore = new Date(currentBloodMoonDate);
+      dayBefore.setDate(currentBloodMoonDate.getDate() - 1);
+      const dayAfter = new Date(currentBloodMoonDate);
+      dayAfter.setDate(currentBloodMoonDate.getDate() + 1);
       
       // Check if yesterday was within this Blood Moon period
       const yesterday = new Date(today);
@@ -202,21 +199,29 @@ async function sendBloodMoonEndAnnouncement(client, channelId) {
       if (yesterday >= dayBefore && yesterday <= dayAfter) {
         // Yesterday was in a Blood Moon period, so we're transitioning out
         foundBloodMoonPeriod = true;
-        
-        // Show the blood moon date for the end announcement
-        announcementDate = bloodMoonDate;
+        bloodMoonDate = currentBloodMoonDate;
         break;
       }
     }
     
+    // Use current date for the announcement (when the announcement is posted)
+    const announcementDate = today;
     const realWorldDate = announcementDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
     const hyruleanDate = convertToHyruleanDate(announcementDate);
+    
+    // Create date range information for clarity
+    let dateRangeInfo = '';
+    if (bloodMoonDate) {
+      const bloodMoonRealDate = bloodMoonDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+      const bloodMoonHyruleanDate = convertToHyruleanDate(bloodMoonDate);
+      dateRangeInfo = `\n\n📅 **Blood Moon Period:** ${bloodMoonRealDate} (${bloodMoonHyruleanDate})`;
+    }
 
     const embed = new EmbedBuilder()
       .setColor('#FFFACD')
       .setAuthor({ name: 'Blood Moon Fades', iconURL: 'https://cdn-icons-png.flaticon.com/512/616/616456.png' })
       .setDescription(
-        `**The Blood Moon has ended... for now.**\n\n🌕 **Real-World Date:** ${realWorldDate}\n🌕 **Hyrulean Date:** ${hyruleanDate}`
+        `**The Blood Moon has ended... for now.**\n\n🌕 **Real-World Date:** ${realWorldDate}\n🌕 **Hyrulean Date:** ${hyruleanDate}${dateRangeInfo}`
       )
       .setImage('https://drive.google.com/uc?export=view&id=1aRe4OR_QbHnlrC-OFCVyvCzkAGRxgDbN')
       .setTimestamp();
