@@ -35,6 +35,8 @@ const Mount = require('../models/MountModel');
 // ------------------- Custom Modules -------------------
 // Module for retrieving moderator character data
 const { getModCharacterByName } = require('../modules/modCharacters');
+// Module for generating flavorful text and lore
+const { generateBlightSubmissionExpiryFlavorText } = require('../modules/flavorTextModule');
 
 // ------------------- Utility Functions -------------------
 // Global error handler, inventory utils, Google Sheets utils, storage, and unique ID utils
@@ -220,6 +222,18 @@ async function healBlight(interaction, characterName, healerName) {
       const pendingPermission = validateHealerPermission(pendingHealer, currentStage);
       
       if (!pendingPermission.canHeal) {
+        // Generate lore text for the cancelled request
+        const loreText = generateBlightSubmissionExpiryFlavorText(
+          characterName,
+          pendingHealer.name,
+          currentStage,
+          existingSubmission.data.taskType
+        );
+        
+        // Log the lore text for administrators
+        console.log(`[blightHandler]: 📜 Blight submission cancelled for ${characterName} (healer no longer eligible):`);
+        console.log(`[blightHandler]: ${loreText}`);
+        
         // Expire/cancel the old request
         await deleteBlightRequestFromStorage(existingSubmission.key);
         oldRequestCancelled = true;
@@ -865,8 +879,35 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
     }
 
     if (new Date(submission.expiresAt) < new Date()) {
+      // Generate flavorful lore text for the expiry
+      const character = await Character.findOne({ name: submission.characterName });
+      const blightStage = character ? character.blightStage : 2;
+      
+      const loreText = generateBlightSubmissionExpiryFlavorText(
+        submission.characterName,
+        submission.healerName,
+        blightStage,
+        submission.taskType
+      );
+      
+      const expiredEmbed = new EmbedBuilder()
+        .setColor('#FF6B6B')
+        .setTitle('⏰ Blight Healing Request Expired')
+        .setDescription(loreText)
+        .addFields(
+          { name: '🆔 Submission ID', value: `\`${submissionId}\``, inline: true },
+          { name: '👨‍⚕️ Healer', value: submission.healerName, inline: true },
+          { name: '📝 Task Type', value: submission.taskType, inline: true },
+          { name: '⏰ Expired At', value: `<t:${Math.floor(new Date().getTime() / 1000)}:F>`, inline: false },
+          { name: '💡 Next Steps', value: 'You can request a new healing task using `/blight heal` if your character is still blighted.' }
+        )
+        .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png')
+        .setFooter({ text: 'Blight Healing Expiration Notice' })
+        .setTimestamp();
+      
       await interaction.editReply({
-        content: `❌ This submission has expired. Please request a new healing task.`
+        embeds: [expiredEmbed],
+        ephemeral: true
       });
       return;
     }
@@ -2334,10 +2375,23 @@ async function cleanupExpiredBlightRequests() {
           try {
             const character = await Character.findOne({ name: submissionData.characterName });
             if (character) {
+              // Generate lore text for logging
+              const loreText = generateBlightSubmissionExpiryFlavorText(
+                submissionData.characterName,
+                submissionData.healerName,
+                character.blightStage,
+                submissionData.taskType
+              );
+              
               await saveBlightEventToHistory(character, 'Submission Expired', {
                 notes: `Healing submission expired - Task: ${submissionData.taskType} from ${submissionData.healerName}`,
-                submissionId: submissionData.submissionId
+                submissionId: submissionData.submissionId,
+                loreText: loreText
               });
+              
+              // Log the lore text for administrators
+              console.log(`[blightHandler]: 📜 Blight submission expired for ${submissionData.characterName}:`);
+              console.log(`[blightHandler]: ${loreText}`);
             }
           } catch (historyError) {
             console.error('[blightHandler]: Error saving expiration to history:', historyError);
@@ -2349,10 +2403,22 @@ async function cleanupExpiredBlightRequests() {
               const { sendUserDM } = require('../utils/messageUtils');
               const { EmbedBuilder } = require('discord.js');
               
+              // Get character's current blight stage for flavor text
+              const character = await Character.findOne({ name: submissionData.characterName });
+              const blightStage = character ? character.blightStage : 2;
+              
+              // Generate flavorful lore text for the expiry
+              const loreText = generateBlightSubmissionExpiryFlavorText(
+                submissionData.characterName,
+                submissionData.healerName,
+                blightStage,
+                submissionData.taskType
+              );
+              
               const expirationEmbed = new EmbedBuilder()
                 .setColor('#FF6B6B')
                 .setTitle('⏰ Blight Healing Request Expired')
-                .setDescription(`Your blight healing request for **${submissionData.characterName}** has expired.`)
+                .setDescription(loreText)
                 .addFields(
                   { name: '🆔 Submission ID', value: `\`${submissionData.submissionId}\``, inline: true },
                   { name: '👨‍⚕️ Healer', value: submissionData.healerName, inline: true },
@@ -2466,7 +2532,42 @@ async function checkMissedRolls(client) {
         
         if (submission.userId) {
           try {
-            await sendUserDM(client, submission.userId, `Your blight submission for ${submission.characterName} has expired.`);
+            // Get character's current blight stage for flavor text
+            const character = await Character.findOne({ name: submission.characterName });
+            const blightStage = character ? character.blightStage : 2;
+            
+            // Generate flavorful lore text for the expiry
+            const loreText = generateBlightSubmissionExpiryFlavorText(
+              submission.characterName,
+              submission.healerName,
+              blightStage,
+              submission.taskType
+            );
+            
+            const expirationEmbed = new EmbedBuilder()
+              .setColor('#FF6B6B')
+              .setTitle('⏰ Blight Healing Request Expired')
+              .setDescription(loreText)
+              .addFields(
+                { name: '🆔 Submission ID', value: `\`${submission.submissionId}\``, inline: true },
+                { name: '👨‍⚕️ Healer', value: submission.healerName, inline: true },
+                { name: '📝 Task Type', value: submission.taskType, inline: true },
+                { name: '⏰ Expired At', value: `<t:${Math.floor(new Date().getTime() / 1000)}:F>`, inline: false },
+                { name: '💡 Next Steps', value: 'You can request a new healing task using `/blight heal` if your character is still blighted.' }
+              )
+              .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png')
+              .setFooter({ text: 'Blight Healing Expiration Notice' })
+              .setTimestamp();
+            
+            await sendUserDM(client, submission.userId, {
+              content: `Your blight healing request has expired.`,
+              embeds: [expirationEmbed]
+            });
+            
+            // Log the lore text for administrators
+            console.log(`[blightHandler]: 📜 Blight submission expired for ${submission.characterName}:`);
+            console.log(`[blightHandler]: ${loreText}`);
+            
             console.log(`[blightHandler]: Sent expiration DM to user ${submission.userId}`);
           } catch (error) {
             console.error('[blightHandler]: ❌ Error sending DM:', error);

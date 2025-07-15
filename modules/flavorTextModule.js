@@ -657,6 +657,57 @@ function generateBlightLootFlavorText(blightStage, itemType) {
   return prefix + baseFlavorText.toLowerCase();
 }
 
+// ------------------- Function: generateBlightSubmissionExpiryFlavorText -------------------
+// Generates flavorful lore text for expired or abandoned blight healing submissions
+function generateBlightSubmissionExpiryFlavorText(characterName, healerName, blightStage, taskType) {
+  const expiryMessages = {
+    stage2: [
+      `💀 The healing request for **${characterName}** has expired. ${healerName}'s patience has worn thin, and the opportunity for gentle healing has passed. The blight's corruption continues to spread unchecked.`,
+      `🩸 Time has run out for **${characterName}**'s healing. ${healerName} can no longer offer their aid, and the blight's grip tightens with each passing moment.`,
+      `🌑 The healing window has closed for **${characterName}**. ${healerName} has moved on to other patients, leaving the blight's corruption to fester and grow stronger.`,
+      `⚡ The chance for healing has slipped away for **${characterName}**. ${healerName}'s offer has expired, and the blight's influence continues to spread through their veins.`,
+      `🖤 The healing opportunity for **${characterName}** has been lost. ${healerName} can no longer provide their aid, and the blight's corruption deepens its hold.`
+    ],
+    stage3: [
+      `💀 The healing request for **${characterName}** has expired. ${healerName}'s concern grows as the blight's corruption reaches more critical levels, making future healing attempts more challenging.`,
+      `🩸 Time has run out for **${characterName}**'s healing. ${healerName} watches helplessly as the blight's corruption intensifies, spreading deeper into their being.`,
+      `🌑 The healing window has closed for **${characterName}**. ${healerName} fears the blight's corruption may soon reach a point of no return, making recovery increasingly difficult.`,
+      `⚡ The chance for healing has slipped away for **${characterName}**. ${healerName} knows that with each passing moment, the blight's corruption becomes more entrenched and dangerous.`,
+      `🖤 The healing opportunity for **${characterName}** has been lost. ${healerName} worries that the blight's corruption may soon reach critical levels that could prove fatal.`
+    ],
+    stage4: [
+      `💀 The healing request for **${characterName}** has expired. ${healerName} is gravely concerned as the blight's corruption has reached critical levels, making any future healing attempts extremely dangerous.`,
+      `🩸 Time has run out for **${characterName}**'s healing. ${healerName} fears the blight's corruption may soon reach terminal levels, with little hope for recovery.`,
+      `🌑 The healing window has closed for **${characterName}**. ${healerName} knows that the blight's corruption has reached a critical point where any delay could prove fatal.`,
+      `⚡ The chance for healing has slipped away for **${characterName}**. ${healerName} watches in horror as the blight's corruption continues to spread, reaching ever more dangerous levels.`,
+      `🖤 The healing opportunity for **${characterName}** has been lost. ${healerName} fears that the blight's corruption may soon reach terminal levels, making recovery nearly impossible.`
+    ],
+    stage5: [
+      `💀 The healing request for **${characterName}** has expired. ${healerName} is devastated as the blight's corruption has reached terminal levels, making any healing attempt extremely risky and potentially fatal.`,
+      `🩸 Time has run out for **${characterName}**'s healing. ${healerName} knows that the blight's corruption has reached terminal levels, where even the most skilled healing may not be enough.`,
+      `🌑 The healing window has closed for **${characterName}**. ${healerName} fears that the blight's corruption has reached a point where recovery may be impossible, and death is imminent.`,
+      `⚡ The chance for healing has slipped away for **${characterName}**. ${healerName} watches in despair as the blight's corruption reaches terminal levels, with little hope for survival.`,
+      `🖤 The healing opportunity for **${characterName}** has been lost. ${healerName} knows that the blight's corruption has reached terminal levels, making any attempt at healing a desperate gamble with life itself.`
+    ]
+  };
+
+  const stageKey = `stage${blightStage}`;
+  const messages = expiryMessages[stageKey] || expiryMessages.stage2;
+  const baseMessage = getRandomMessage(messages);
+
+  // Add task-specific consequences
+  const taskConsequences = {
+    'writing': ` Your writing task remains incomplete. Please use \`/blight heal\` to request a new healing task.`,
+    'art': ` Your art task remains incomplete. Please use \`/blight heal\` to request a new healing task.`,
+    'item': ` Your item submission remains incomplete. Please use \`/blight heal\` to request a new healing task.`,
+    'tokens': ` Your token forfeiture remains incomplete. Please use \`/blight heal\` to request a new healing task.`
+  };
+
+  const consequence = taskConsequences[taskType] || ` Your healing task remains incomplete. Please use \`/blight heal\` to request a new healing task.`;
+
+  return baseMessage + consequence;
+}
+
 // Module Exports
 // ==============
 
@@ -691,4 +742,5 @@ module.exports = {
  generateBlightRollFlavorText,
  generateBlightVictoryFlavorText,
  generateBlightLootFlavorText,
+ generateBlightSubmissionExpiryFlavorText,
 };
