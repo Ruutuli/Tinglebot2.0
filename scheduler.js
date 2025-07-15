@@ -13,6 +13,7 @@ const {
  postBlightRollCall,
  cleanupExpiredBlightRequests,
  checkExpiringBlightRequests,
+ sendBlightReminders,
  checkMissedRolls,
 } = require("./handlers/blightHandler");
 const {
@@ -457,6 +458,21 @@ function setupBlightScheduler(client) {
     } catch (error) {
       handleError(error, 'scheduler.js');
       console.error('[scheduler.js]: Error during blight warning check:', error);
+    }
+  }
+ );
+
+ createCronJob(
+  "0 */4 * * *",
+  "Send Blight Reminders",
+  async () => {
+    try {
+      console.log('[scheduler.js]: Running comprehensive blight reminder check...');
+      const result = await sendBlightReminders(client);
+      console.log(`[scheduler.js]: Blight reminder check complete - Death: ${result.deathWarnings}, Healing: ${result.healingWarnings}`);
+    } catch (error) {
+      handleError(error, 'scheduler.js');
+      console.error('[scheduler.js]: Error during blight reminder check:', error);
     }
   }
  );
