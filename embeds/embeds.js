@@ -122,6 +122,23 @@ const formatMaterialsList = (materials) => {
 // ------------------- Debuff Embed -------------------
 // Creates an embed for when a character is debuffed and cannot use items
 const createDebuffEmbed = (character) => {
+  // Calculate the debuff expiration date and time
+  let debuffExpirationText = '**Midnight EST**';
+  
+  if (character.debuff?.endDate) {
+    const debuffEndDate = new Date(character.debuff.endDate);
+    
+    // Convert to EST and set to midnight for display
+    const estDate = new Date(debuffEndDate.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+    estDate.setHours(0, 0, 0, 0);
+    
+    // Convert back to UTC for Discord timestamp
+    const utcDate = new Date(estDate.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+    const unixTimestamp = Math.floor(utcDate.getTime() / 1000);
+    
+    debuffExpirationText = `<t:${unixTimestamp}:F> (<t:${unixTimestamp}:R>)`;
+  }
+
   const embed = new EmbedBuilder()
     .setColor('#FF0000')
     .setTitle('⚠️ Debuff Active ⚠️')
@@ -129,7 +146,7 @@ const createDebuffEmbed = (character) => {
     .addFields(
       {
         name: '🕒 Debuff Resets',
-        value: '**Midnight EST**',
+        value: debuffExpirationText,
         inline: false
       }
     )
