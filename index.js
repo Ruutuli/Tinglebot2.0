@@ -2,7 +2,7 @@
 // ------------------- Load Environment -------------------
 const dotenv = require('dotenv');
 
-// Load environment variables
+// Load environment variables 
 dotenv.config();
 
 const port = process.env.PORT || 5001;
