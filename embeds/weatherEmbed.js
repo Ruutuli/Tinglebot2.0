@@ -171,7 +171,7 @@ function specialWeatherFlavorText(weatherType) {
         "Meteor Shower": "Shooting stars have been spotted streaking through the sky! Quick, all residents and visitors make a wish and use </specialweather:1379838613356806315> for a chance to find a star fragment!",
         "Muggy": "Oof! Sure is humid today! Critters are out and about more than usual. All residents and visitors may use </specialweather:1379838613356806315> to catch some critters!",
         "Rock Slide": "Oh no, there's been a rock slide! Traveling to and from this village is impossible today. All residents and visitors may use </specialweather:1379838613356806315> to help clear the road! You might just find something interesting while you work...",
-        "Blight Rain": "Blighted rain falls from the sky, staining the ground and creating sickly maroon-tinged puddles... if you roll for gathering today, you must also use </specialweather:1379838613356806315> to see if you get infected! If you skip this roll, blighting will be automatic."
+        "Blight Rain": "Blighted rain falls from the sky, staining the ground and creating sickly maroon-tinged puddles... any character who gathers, loots, or travels in this village today risks exposure to the blight. The corruption spreads through contact with the tainted rain."
     };
 
     return weatherTextMap[weatherType] || "Unknown weather condition.";
