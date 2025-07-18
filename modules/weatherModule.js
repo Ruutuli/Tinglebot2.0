@@ -145,8 +145,6 @@ function getSmoothedWind(windOptions, previous, weightMap) {
 
 // Refactored simulateWeightedWeather to use DB-backed history
 async function simulateWeightedWeather(village, season) {
-  console.log(`[weatherModule.js]: 🌤️ Starting weather generation for ${village} in ${season}`);
-  
   const seasonKey = capitalizeFirstLetter(season);
   const villageData = seasonsData[village];
   if (!villageData || !villageData.seasons[seasonKey]) {
@@ -156,12 +154,6 @@ async function simulateWeightedWeather(village, season) {
   const seasonInfo = villageData.seasons[seasonKey];
   const weightModifiers = weatherWeightModifiers[village]?.[seasonKey] || {};
   validateWeightModifiers(village, seasonKey, weightModifiers);
-  
-  console.log(`[weatherModule.js]: 📊 Season info for ${village} in ${seasonKey}:`, {
-    availableSpecials: seasonInfo.Special,
-    specialCount: seasonInfo.Special.length,
-    weightModifiers: weightModifiers
-  });
   
   // Fetch last 3 weather entries for smoothing
   const history = await Weather.getRecentWeather(village, 3);
@@ -176,13 +168,6 @@ async function simulateWeightedWeather(village, season) {
     .length;
   const hadStormYesterday = ['Thunderstorm', 'Heavy Rain'].includes(previous.precipitation?.label);
   
-  console.log(`[weatherModule.js]: 📈 Weather history for ${village}:`, {
-    previousWeather: previous.precipitation?.label || 'None',
-    cloudyStreak,
-    rainStreak,
-    hadStormYesterday
-  });
-  
   // Temperature
   const temperatureLabel = getSmoothedTemperature(
     seasonInfo.Temperature,
@@ -192,11 +177,7 @@ async function simulateWeightedWeather(village, season) {
     weightModifiers.temperature || {}
   );
   
-  console.log(`[weatherModule.js]: 🌡️ Generated temperature label: ${temperatureLabel}`);
-  
   const simTemp = parseFahrenheit(temperatureLabel);
-  
-  console.log(`[weatherModule.js]: 🌡️ Parsed temperature value: ${simTemp}`);
   
   // Wind
   const windLabel = getSmoothedWind(
@@ -205,8 +186,6 @@ async function simulateWeightedWeather(village, season) {
     windWeights
   );
   const simWind = parseWind(windLabel);
-  
-  console.log(`[weatherModule.js]: 💨 Generated wind: ${windLabel} (${simWind} km/h)`);
   
   // Precipitation
   const precipitationLabel = getPrecipitationLabel(
@@ -218,48 +197,17 @@ async function simulateWeightedWeather(village, season) {
     weightModifiers.precipitation || {}
   );
   
-  console.log(`[weatherModule.js]: 🌧️ Generated precipitation: ${precipitationLabel}`);
-  
   // Validate that we have valid labels
-  if (!temperatureLabel) {
-    console.error(`[weatherModule.js]: Failed to generate temperature label for ${village}`);
+  if (!temperatureLabel || !windLabel || !precipitationLabel) {
+    console.error(`[weatherModule.js]: Failed to generate weather labels for ${village}`);
     return null;
   }
   
-  if (!windLabel) {
-    console.error(`[weatherModule.js]: Failed to generate wind label for ${village}`);
-    return null;
-  }
-  
-  if (!precipitationLabel) {
-    console.error(`[weatherModule.js]: Failed to generate precipitation label for ${village}`);
-    return null;
-  }
-  
-  console.log(`[weatherModule.js]: ✅ All weather labels generated successfully:`, {
-    temperature: temperatureLabel,
-    wind: windLabel,
-    precipitation: precipitationLabel
-  });
-  
-  // Special - Enhanced logging for Rudania and Vhintl
+  // Special weather
   let specialLabel = null;
   let special = null;
   
-  console.log(`[weatherModule.js]: ✨ Special weather check for ${village}:`, {
-    hasSpecials: seasonInfo.Special.length > 0,
-    availableSpecials: seasonInfo.Special
-  });
-  
-  // Let getSpecialCondition handle the RNG logic (removed redundant check)
   if (seasonInfo.Special.length) {
-    console.log(`[weatherModule.js]: 📋 Available specials:`, seasonInfo.Special);
-    console.log(`[weatherModule.js]: 🌡️ Current conditions:`, {
-      temperature: simTemp,
-      wind: simWind,
-      precipitation: precipitationLabel
-    });
-    
     specialLabel = getSpecialCondition(
       seasonInfo,
       simTemp,
@@ -277,12 +225,7 @@ async function simulateWeightedWeather(village, season) {
         emoji: specialObj.emoji,
         probability: '10%'
       };
-      console.log(`[weatherModule.js]: ✨ Generated special weather for ${village}: ${specialLabel}`);
-    } else {
-      console.log(`[weatherModule.js]: ❌ No valid special weather conditions met for ${village}`);
     }
-  } else {
-    console.log(`[weatherModule.js]: 📝 No specials defined for ${village} in ${seasonKey}`);
   }
   
   // Probabilities
@@ -326,14 +269,7 @@ async function simulateWeightedWeather(village, season) {
     };
   }
   
-  console.log(`[weatherModule.js]: 🎯 Final weather result for ${village}:`, {
-    village: result.village,
-    temperature: result.temperature.label,
-    wind: result.wind.label,
-    precipitation: result.precipitation.label,
-    special: result.special?.label || 'None',
-    specialProbability: result.special ? `${specialProbability.toFixed(1)}%` : 'N/A'
-  });
+
   
   return result;
 }
@@ -371,8 +307,6 @@ function safeWeightedChoice(candidates, weightMapping, modifierMap = {}) {
     return null;
   }
   
-  console.log(`[weatherModule.js]: Processing ${candidates.length} candidates:`, candidates);
-  
   let totalWeight = 0;
   const weightedCandidates = candidates.map(candidate => {
     const baseWeight = weightMapping[candidate] ?? 0.01;
@@ -391,7 +325,6 @@ function safeWeightedChoice(candidates, weightMapping, modifierMap = {}) {
   for (const { candidate, weight } of weightedCandidates) {
     threshold -= weight;
     if (threshold < 0) {
-      console.log(`[weatherModule.js]: Selected candidate: ${candidate}`);
       return candidate;
     }
   }
@@ -403,7 +336,6 @@ function safeWeightedChoice(candidates, weightMapping, modifierMap = {}) {
     return candidates[0];
   }
   
-  console.log(`[weatherModule.js]: Fallback selected candidate: ${result}`);
   return result;
 }
 
@@ -457,9 +389,7 @@ function getHumidityForWeather(weather) {
     snowy: 70
   };
   
-  const humidity = humidities[weather] || 50;
-  console.log(`[weatherModule.js]: Humidity for ${weather}: ${humidity}%`);
-  return humidity;
+  return humidities[weather] || 50;
 }
 
 // ------------------- Get Weather Without Generation -------------------
@@ -470,11 +400,7 @@ async function getWeatherWithoutGeneration(village) {
     
     // Get current time in EST/EDT
     const now = new Date();
-    console.log(`[weatherModule.js]: Current UTC time: ${now.toISOString()}`);
-    
-    // Convert to EST/EDT
     const estTime = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
-    console.log(`[weatherModule.js]: Current EST/EDT time: ${estTime.toLocaleString("en-US", { timeZone: "America/New_York" })}`);
     
     // Calculate the start of the current weather period (8am EST/EDT of the current day)
     const startOfPeriod = new Date(estTime);
@@ -490,17 +416,9 @@ async function getWeatherWithoutGeneration(village) {
     endOfPeriod.setDate(endOfPeriod.getDate() + 1);
     endOfPeriod.setHours(7, 59, 59, 999);
     
-    console.log(`[weatherModule.js]: Weather period boundaries (EST/EDT):`);
-    console.log(`[weatherModule.js]: Start of period: ${startOfPeriod.toLocaleString("en-US", { timeZone: "America/New_York" })}`);
-    console.log(`[weatherModule.js]: End of period: ${endOfPeriod.toLocaleString("en-US", { timeZone: "America/New_York" })}`);
-    
     // Convert EST/EDT times to UTC for database query
     const startOfPeriodUTC = new Date(startOfPeriod.getTime() - (startOfPeriod.getTimezoneOffset() * 60000));
     const endOfPeriodUTC = new Date(endOfPeriod.getTime() - (endOfPeriod.getTimezoneOffset() * 60000));
-    
-    console.log(`[weatherModule.js]: UTC boundaries for database query:`);
-    console.log(`[weatherModule.js]: Start of period (UTC): ${startOfPeriodUTC.toISOString()}`);
-    console.log(`[weatherModule.js]: End of period (UTC): ${endOfPeriodUTC.toISOString()}`);
     
     // Get weather from the current period
     const weather = await Weather.findOne({
@@ -512,16 +430,8 @@ async function getWeatherWithoutGeneration(village) {
     });
     
     if (!weather) {
-      console.log(`[weatherModule.js]: No weather found for ${normalizedVillage} between ${startOfPeriodUTC.toISOString()} and ${endOfPeriodUTC.toISOString()}`);
       return null;
     }
-    
-    console.log(`[weatherModule.js]: Found weather for ${normalizedVillage}:`, {
-      date: weather.date,
-      temperature: weather.temperature?.label,
-      precipitation: weather.precipitation?.label,
-      special: weather.special?.label
-    });
     
     return weather;
   } catch (error) {
@@ -538,11 +448,7 @@ async function getCurrentWeather(village) {
     
     // Get current time in EST/EDT
     const now = new Date();
-    console.log(`[weatherModule.js]: Current UTC time: ${now.toISOString()}`);
-    
-    // Convert to EST/EDT
     const estTime = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
-    console.log(`[weatherModule.js]: Current EST/EDT time: ${estTime.toLocaleString("en-US", { timeZone: "America/New_York" })}`);
     
     // Calculate the start of the current weather period (8am EST/EDT of the current day)
     const startOfPeriod = new Date(estTime);
@@ -558,19 +464,14 @@ async function getCurrentWeather(village) {
     endOfPeriod.setDate(endOfPeriod.getDate() + 1);
     endOfPeriod.setHours(7, 59, 59, 999);
     
-    console.log(`[weatherModule.js]: Weather period boundaries (EST/EDT):`);
-    console.log(`[weatherModule.js]: Start of period: ${startOfPeriod.toLocaleString("en-US", { timeZone: "America/New_York" })}`);
-    console.log(`[weatherModule.js]: End of period: ${endOfPeriod.toLocaleString("en-US", { timeZone: "America/New_York" })}`);
-    
     // Convert EST/EDT times to UTC for database query
     const startOfPeriodUTC = new Date(startOfPeriod.getTime() - (startOfPeriod.getTimezoneOffset() * 60000));
     const endOfPeriodUTC = new Date(endOfPeriod.getTime() - (endOfPeriod.getTimezoneOffset() * 60000));
     
-    console.log(`[weatherModule.js]: UTC boundaries for database query:`);
-    console.log(`[weatherModule.js]: Start of period (UTC): ${startOfPeriodUTC.toISOString()}`);
-    console.log(`[weatherModule.js]: End of period (UTC): ${endOfPeriodUTC.toISOString()}`);
-    
     // Get weather from the current period
+    console.log(`[weatherModule.js]: 🔍 Searching for existing weather for ${normalizedVillage}`);
+    console.log(`[weatherModule.js]: 📅 Search period: ${startOfPeriodUTC.toISOString()} to ${endOfPeriodUTC.toISOString()}`);
+    
     let weather = await Weather.findOne({
       village: normalizedVillage,
       date: {
@@ -579,13 +480,24 @@ async function getCurrentWeather(village) {
       }
     });
     
+    if (weather) {
+      console.log(`[weatherModule.js]: ✅ Found existing weather for ${normalizedVillage}:`, {
+        id: weather._id,
+        date: weather.date,
+        temperature: weather.temperature?.label,
+        precipitation: weather.precipitation?.label,
+        special: weather.special?.label || 'None'
+      });
+    } else {
+      console.log(`[weatherModule.js]: ❌ No existing weather found for ${normalizedVillage}`);
+    }
+    
     // Only generate new weather if none exists for the current period
     if (!weather) {
-      console.log(`[weatherModule.js]: No weather found for ${normalizedVillage} between ${startOfPeriodUTC.toISOString()} and ${endOfPeriodUTC.toISOString()}`);
-      console.log(`[weatherModule.js]: Generating new weather for ${normalizedVillage}`);
-      
+      console.log(`[weatherModule.js]: 🌤️ No existing weather found for ${normalizedVillage}, generating new weather`);
       const season = getCurrentSeason();
       const capitalizedSeason = capitalizeFirstLetter(season);
+      console.log(`[weatherModule.js]: 📅 Current season: ${season}, capitalized: ${capitalizedSeason}`);
       
       // Try to generate valid weather with retry limit
       let newWeather = null;
@@ -594,6 +506,7 @@ async function getCurrentWeather(village) {
       
       while (attempts < maxAttempts) {
         attempts++;
+        console.log(`[weatherModule.js]: 🔄 Attempt ${attempts} to generate weather for ${normalizedVillage}`);
         newWeather = await simulateWeightedWeather(normalizedVillage, capitalizedSeason);
         
         if (!newWeather) {
@@ -604,16 +517,21 @@ async function getCurrentWeather(village) {
           continue;
         }
         
+        console.log(`[weatherModule.js]: ✅ Weather generated successfully on attempt ${attempts}:`, {
+          temperature: newWeather.temperature?.label,
+          wind: newWeather.wind?.label,
+          precipitation: newWeather.precipitation?.label,
+          special: newWeather.special?.label || 'None'
+        });
+        
         // Add date and season to weather data
         newWeather.date = new Date();
         newWeather.season = season;
 
         // Validate weather combination
         if (validateWeatherCombination(newWeather)) {
-          console.log(`[weatherModule.js]: Valid weather generated on attempt ${attempts}`);
           break;
         } else {
-          console.log(`[weatherModule.js]: Invalid weather generated on attempt ${attempts}, retrying...`);
           if (attempts === maxAttempts) {
             console.warn(`[weatherModule.js]: Failed to generate valid weather after ${maxAttempts} attempts, removing special weather`);
             newWeather.special = null;
@@ -647,19 +565,15 @@ async function getCurrentWeather(village) {
       }
       
       // Save new weather
+      console.log(`[weatherModule.js]: 💾 About to save new weather for ${normalizedVillage}`);
       weather = await saveWeather(newWeather);
-      console.log(`[weatherModule.js]: Generated and saved new weather for ${normalizedVillage}:`, {
+      console.log(`[weatherModule.js]: ✅ Weather saved and retrieved:`, {
+        id: weather._id,
+        village: weather.village,
         date: weather.date,
         temperature: weather.temperature?.label,
         precipitation: weather.precipitation?.label,
-        special: weather.special?.label
-      });
-    } else {
-      console.log(`[weatherModule.js]: Found existing weather for ${normalizedVillage}:`, {
-        date: weather.date,
-        temperature: weather.temperature?.label,
-        precipitation: weather.precipitation?.label,
-        special: weather.special?.label
+        special: weather.special?.label || 'None'
       });
     }
     
@@ -674,11 +588,38 @@ async function getCurrentWeather(village) {
 // Saves weather data to the database
 async function saveWeather(weatherData) {
   try {
+    console.log(`[weatherModule.js]: 🔄 Attempting to save weather for ${weatherData.village}`);
+    console.log(`[weatherModule.js]: 📊 Weather data to save:`, {
+      village: weatherData.village,
+      date: weatherData.date,
+      season: weatherData.season,
+      temperature: weatherData.temperature?.label,
+      wind: weatherData.wind?.label,
+      precipitation: weatherData.precipitation?.label,
+      special: weatherData.special?.label || 'None'
+    });
+    
+    // Check database connection
+    console.log(`[weatherModule.js]: 🔌 Checking database connection...`);
+    console.log(`[weatherModule.js]: 📡 Mongoose connection state: ${mongoose.connection.readyState}`);
+    console.log(`[weatherModule.js]: 🗄️ Database name: ${mongoose.connection.name}`);
+    
     const weather = new Weather(weatherData);
-    await weather.save();
-    return weather;
+    console.log(`[weatherModule.js]: ✅ Weather model created successfully`);
+    
+    const savedWeather = await weather.save();
+    console.log(`[weatherModule.js]: ✅ Weather saved successfully to database`);
+    console.log(`[weatherModule.js]: 📝 Saved weather ID: ${savedWeather._id}`);
+    
+    return savedWeather;
   } catch (error) {
     console.error('[weatherModule.js]: ❌ Error saving weather:', error);
+    console.error('[weatherModule.js]: ❌ Error details:', {
+      message: error.message,
+      code: error.code,
+      name: error.name,
+      stack: error.stack
+    });
     throw error;
   }
 }

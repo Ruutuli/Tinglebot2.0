@@ -40,8 +40,35 @@ function parseFahrenheit(label) {
 // Helper to parse wind speed from label
 function parseWind(label) {
   if (!label) return 0;
-  const match = label.match(/(\d+)/);
-  return match ? parseInt(match[1]) : 0;
+  
+  // Handle "< 2(km/h) // Calm" format
+  const lessThanMatch = label.match(/< (\d+)/);
+  if (lessThanMatch) {
+    const value = parseInt(lessThanMatch[1], 10);
+    return Math.max(0, value - 1); // Return value less than the threshold
+  }
+  
+  // Handle ">= 118(km/h) // Hurricane" format
+  const greaterThanMatch = label.match(/>= (\d+)/);
+  if (greaterThanMatch) {
+    return parseInt(greaterThanMatch[1], 10);
+  }
+  
+  // Handle "2 - 12(km/h) // Breeze" format (range)
+  const rangeMatch = label.match(/(\d+)\s*-\s*(\d+)/);
+  if (rangeMatch) {
+    const min = parseInt(rangeMatch[1], 10);
+    const max = parseInt(rangeMatch[2], 10);
+    return Math.round((min + max) / 2); // Return average of range
+  }
+  
+  // Handle single number format
+  const singleMatch = label.match(/(\d+)/);
+  if (singleMatch) {
+    return parseInt(singleMatch[1], 10);
+  }
+  
+  return 0;
 }
 
 // Helper to check numeric conditions

@@ -978,16 +978,13 @@ async function processTravelDay(day, context) {
 // Checks if the current weather conditions are too severe for travel
 async function checkSevereWeather(village) {
   try {
-    console.log(`[travel.js]: 🌤️ Checking weather for ${village}`);
     const weather = await getWeatherWithoutGeneration(village);
     if (!weather) {
-      console.log(`[travel.js]: ⚠️ No weather data found for ${village}`);
       return false;
     }
 
     // Check special conditions
     if (weather.special?.label && SEVERE_WEATHER_CONDITIONS.includes(weather.special.label)) {
-      console.log(`[travel.js]: ⚠️ Severe weather detected in ${village}: ${weather.special.label}`);
       return {
         blocked: true,
         condition: weather.special.label,
@@ -1000,14 +997,6 @@ async function checkSevereWeather(village) {
     handleError(error, 'travel.js (checkSevereWeather)', {
       commandName: 'travel',
       options: {
-        village,
-        weather: weather?.special?.label
-      }
-    });
-    console.error(`[travel.js]: ❌ Error checking weather:`, {
-      error: error.message,
-      stack: error.stack,
-      context: {
         village,
         weather: weather?.special?.label
       }

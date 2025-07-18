@@ -478,13 +478,7 @@ module.exports = {
       const currentVillage = channelVillage; // Use the village from the channel
       const weather = await getWeatherWithoutGeneration(currentVillage);
 
-      // Add detailed logging for weather data
-      console.log(`[specialweather.js]: Weather data for ${currentVillage}:`, {
-        hasWeather: !!weather,
-        weatherData: weather,
-        specialWeather: weather?.special,
-        specialLabel: weather?.special?.label
-      });
+
       
       if (!weather) {
         console.error(`[specialweather.js]: ❌ No weather data found for ${currentVillage}`);

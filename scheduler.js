@@ -133,30 +133,18 @@ function getCurrentSeason() {
 async function postWeatherUpdate(client) {
  try {
   console.log(`[scheduler.js]: Starting 8am weather update process`);
-  console.log(`[scheduler.js]: Current time: ${new Date().toISOString()}`);
 
   const villages = Object.keys(TOWNHALL_CHANNELS);
-  console.log(`[scheduler.js]: Processing villages: ${villages.join(", ")}`);
 
   for (const village of villages) {
    try {
-    console.log(`[scheduler.js]: Processing weather for ${village}...`);
-
+    console.log(`[scheduler.js]: 🌤️ Processing weather for ${village}...`);
     const weather = await getCurrentWeather(village);
 
     if (!weather) {
-     console.error(
-      `[scheduler.js]: Failed to get or generate weather for ${village}`
-     );
+     console.error(`[scheduler.js]: Failed to get or generate weather for ${village}`);
      continue;
     }
-
-    console.log(`[scheduler.js]: Weather generated for ${village}:`, {
-     temperature: weather.temperature?.label,
-     precipitation: weather.precipitation?.label,
-     special: weather.special?.label || "None",
-     date: weather.date,
-    });
 
     const channelId = TOWNHALL_CHANNELS[village];
     const channel = client.channels.cache.get(channelId);
@@ -166,12 +154,7 @@ async function postWeatherUpdate(client) {
      continue;
     }
 
-    console.log(`[scheduler.js]: Generating weather embed for ${village}...`);
     const { embed, files } = await generateWeatherEmbed(village, weather);
-
-    console.log(
-     `[scheduler.js]: Sending weather update to ${village} channel...`
-    );
     await channel.send({ embeds: [embed], files });
     console.log(`[scheduler.js]: Posted weather for ${village}`);
 
@@ -185,21 +168,13 @@ async function postWeatherUpdate(client) {
      });
     }
    } catch (error) {
-    console.error(
-     `[scheduler.js]: Error posting weather for ${village}:`,
-     error.message
-    );
-    console.error(`[scheduler.js]: Full error for ${village}:`, error);
+    console.error(`[scheduler.js]: Error posting weather for ${village}:`, error.message);
    }
   }
 
   console.log(`[scheduler.js]: 8am weather update process completed`);
  } catch (error) {
-  console.error(
-   "[scheduler.js]: Weather update process failed:",
-   error.message
-  );
-  console.error("[scheduler.js]: Full weather update error:", error);
+  console.error("[scheduler.js]: Weather update process failed:", error.message);
  }
 }
 
