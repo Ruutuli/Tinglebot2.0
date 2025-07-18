@@ -176,23 +176,20 @@ function isValidUrl(string) {
 }
 
 // ------------------- Function: encodePetImageUrl -------------------
-// Encodes pet image URLs by splitting and encoding filename separately
+// Encodes pet image URLs for safe embedding
 function encodePetImageUrl(petImageUrl) {
   if (!petImageUrl) return null;
-  
   try {
-    // Split the URL into base and filename parts
     const lastSlashIndex = petImageUrl.lastIndexOf('/');
     if (lastSlashIndex !== -1) {
       const baseUrl = petImageUrl.substring(0, lastSlashIndex + 1);
       const filename = petImageUrl.substring(lastSlashIndex + 1);
       const encodedFilename = encodeURIComponent(filename);
       const encodedUrl = baseUrl + encodedFilename;
-      console.log(`[mod.js]: Encoded pet image URL: "${petImageUrl}" -> "${encodedUrl}"`);
       return encodedUrl;
     }
   } catch (error) {
-    console.log(`[mod.js]: Error encoding pet image URL: ${error.message}`);
+    console.error(`[mod.js]: ❌ Error encoding pet image URL: ${error.message}`);
   }
   return null;
 }

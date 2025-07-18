@@ -124,11 +124,10 @@ const encodePetImageUrl = (petImageUrl) => {
       const filename = petImageUrl.substring(lastSlashIndex + 1);
       const encodedFilename = encodeURIComponent(filename);
       const encodedUrl = baseUrl + encodedFilename;
-      console.log(`[pet.js]: Encoded pet image URL: "${petImageUrl}" -> "${encodedUrl}"`);
       return encodedUrl;
     }
   } catch (error) {
-    console.log(`[pet.js]: Error encoding pet image URL: ${error.message}`);
+    console.error(`[pet.js]: ❌ Error encoding pet image URL: ${error.message}`);
   }
   return null;
 };
@@ -822,16 +821,11 @@ module.exports = {
       weightedItems[Math.floor(Math.random() * weightedItems.length)];
 
      // ------------------- Deduct Pet Roll and Update Database -------------------
-     const newRollsRemaining = pet.rollsRemaining - 1;
-     console.log(
-      `[pet.js]: logs - Deducting pet roll. Old rollsRemaining: ${pet.rollsRemaining}, New rollsRemaining: ${newRollsRemaining}`
-     );
+     // Deduct the roll
+     const newRollsRemaining = Math.max(0, pet.rollsRemaining - 1);
      await updatePetRolls(character._id, petName, newRollsRemaining);
      pet.rollsRemaining = newRollsRemaining;
      
-     // Verify the database update worked
-     const updatedPet = await Pet.findOne({ _id: pet._id });
-     console.log(`[pet.js]: logs - After update, pet rollsRemaining in DB: ${updatedPet.rollsRemaining}`);
      // Only set lastRollDate after a successful roll
      pet.lastRollDate = now;
      await Pet.updateOne(
@@ -897,10 +891,6 @@ module.exports = {
       pet.name,
       pet.species,
       randomItem.itemName
-     );
-
-     console.log(
-      `[pet.js]: logs - Building roll embed with ${newRollsRemaining} rolls remaining.`
      );
 
      // ------------------- Determine Embed Color Based on Village -------------------
@@ -1152,13 +1142,9 @@ module.exports = {
           const availableRolls = Math.max(0, pet.level - 1); // Level 3 pet that rolled = 2 available
           const usedToday = 1;
           rollsDisplay = "🔔".repeat(availableRolls) + "🔕".repeat(usedToday);
-          
-          // Debug logging
-          console.log(`[pet.js]: Pet ${pet.name} rolled today. Level: ${pet.level}, RollsRemaining: ${pet.rollsRemaining}, Available: ${availableRolls}, Used: ${usedToday}, Display: ${rollsDisplay}`);
         } else {
           // Normal display based on rolls remaining vs level
           rollsDisplay = getRollsDisplay(pet.rollsRemaining || 0, pet.level || 0);
-          console.log(`[pet.js]: Pet ${pet.name} hasn't rolled today. Level: ${pet.level}, RollsRemaining: ${pet.rollsRemaining}, Display: ${rollsDisplay}`);
         }
 
         // ------------------- Calculate Next Upgrade Info -------------------
