@@ -512,7 +512,7 @@ function cleanupExpiredBoostingRequests() {
     requestData.status = "expired";
     updated = true;
     expiredRequests++;
-    console.log(`[storage.js]: Expired pending boost request ${requestId}`);
+    console.log(`[storage.js]: ⏰ Expired pending boost request ${requestId}`);
    }
 
    if (
@@ -524,7 +524,7 @@ function cleanupExpiredBoostingRequests() {
     updated = true;
     expiredBoosts++;
     console.log(
-     `[storage.js]: Expired active boost ${requestId} for ${requestData.targetCharacter}`
+     `[storage.js]: ⏰ Expired active boost ${requestId} for ${requestData.targetCharacter}`
     );
    }
 
@@ -546,7 +546,7 @@ function cleanupExpiredBoostingRequests() {
    totalProcessed: Object.keys(allRequests).length,
   };
  } catch (error) {
-  console.error("[storage.js]: Error during cleanup:", error);
+  console.error("[storage.js]: ❌ Error during boost cleanup:", error);
   return {
    expiredRequests: 0,
    expiredBoosts: 0,
@@ -605,7 +605,7 @@ function getBoostingStatistics() {
 
   return stats;
  } catch (error) {
-  console.error("[storage.js]: Error getting boosting statistics:", error);
+  console.error("[storage.js]: ❌ Error getting boosting statistics:", error);
   return {
    total: 0,
    pending: 0,
@@ -644,9 +644,7 @@ function archiveOldBoostingRequests(daysOld = 30) {
   if (Object.keys(toArchive).length > 0) {
    fs.writeFileSync(archiveFile, JSON.stringify(toArchive, null, 2));
    console.log(
-    `[storage.js]: Archived ${
-     Object.keys(toArchive).length
-    } old boost requests to ${archiveFile}`
+    `[storage.js]: 📦 Archived ${Object.keys(toArchive).length} old boost requests to ${archiveFile}`
    );
   }
 
@@ -657,7 +655,7 @@ function archiveOldBoostingRequests(daysOld = 30) {
    remaining: Object.keys(toKeep).length,
   };
  } catch (error) {
-  console.error("[storage.js]: Error archiving old requests:", error);
+  console.error("[storage.js]: ❌ Error archiving old boost requests:", error);
   return {
    archived: 0,
    remaining: 0,

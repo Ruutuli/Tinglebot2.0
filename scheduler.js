@@ -433,16 +433,16 @@ function setupBlightScheduler(client) {
  );
 
  createCronJob(
-  "0 */6 * * *",
+  "0 0 * * *",
   "Cleanup Expired Blight Requests",
   async () => {
     try {
-      console.log('[scheduler.js]: Running blight request cleanup...');
+      console.log('[scheduler.js]: 🧹 Starting blight request cleanup');
       const result = await cleanupExpiredBlightRequests();
-      console.log(`[scheduler.js]: Blight cleanup complete - Expired: ${result.expiredCount}, Notified: ${result.notifiedUsers}, Deleted: ${result.deletedCount}`);
+      console.log(`[scheduler.js]: ✅ Blight cleanup complete - Expired: ${result.expiredCount}, Notified: ${result.notifiedUsers}, Deleted: ${result.deletedCount}`);
     } catch (error) {
       handleError(error, 'scheduler.js');
-      console.error('[scheduler.js]: Error during blight cleanup:', error);
+      console.error('[scheduler.js]: ❌ Error during blight cleanup:', error);
     }
   }
  );
@@ -452,12 +452,12 @@ function setupBlightScheduler(client) {
   "Check Expiring Blight Requests",
   async () => {
     try {
-      console.log('[scheduler.js]: Running blight expiration warning check...');
+      console.log('[scheduler.js]: ⚠️ Running blight expiration warning check');
       const result = await checkExpiringBlightRequests();
-      console.log(`[scheduler.js]: Blight warning check complete - Warned: ${result.warnedUsers}`);
+      console.log(`[scheduler.js]: ✅ Blight warning check complete - Warned: ${result.warnedUsers}`);
     } catch (error) {
       handleError(error, 'scheduler.js');
-      console.error('[scheduler.js]: Error during blight warning check:', error);
+      console.error('[scheduler.js]: ❌ Error during blight warning check:', error);
     }
   }
  );
@@ -467,12 +467,12 @@ function setupBlightScheduler(client) {
   "Send Blight Reminders",
   async () => {
     try {
-      console.log('[scheduler.js]: Running comprehensive blight reminder check...');
+      console.log('[scheduler.js]: 📢 Running comprehensive blight reminder check');
       const result = await sendBlightReminders(client);
-      console.log(`[scheduler.js]: Blight reminder check complete - Death: ${result.deathWarnings}, Healing: ${result.healingWarnings}`);
+      console.log(`[scheduler.js]: ✅ Blight reminder check complete - Death: ${result.deathWarnings}, Healing: ${result.healingWarnings}`);
     } catch (error) {
       handleError(error, 'scheduler.js');
-      console.error('[scheduler.js]: Error during blight reminder check:', error);
+      console.error('[scheduler.js]: ❌ Error during blight reminder check:', error);
     }
   }
  );
@@ -484,31 +484,31 @@ function setupBlightScheduler(client) {
 // ============================================================================
 
 async function setupBoostingScheduler(client) {
- // Clean up expired boost requests every hour
- createCronJob("0 * * * *", "Boost Cleanup", async () => {
+ // Clean up expired boost requests at midnight
+ createCronJob("0 0 * * *", "Boost Cleanup", async () => {
   try {
-   console.log("[scheduler.js]: Running boost cleanup...");
+   console.log("[scheduler.js]: 🧹 Starting boost cleanup");
    const stats = cleanupExpiredBoostingRequests();
    console.log(
-    `[scheduler.js]: Cleanup complete - Expired requests: ${stats.expiredRequests}, Expired boosts: ${stats.expiredBoosts}`
+    `[scheduler.js]: ✅ Boost cleanup complete - Expired requests: ${stats.expiredRequests}, Expired boosts: ${stats.expiredBoosts}`
    );
   } catch (error) {
    handleError(error, "scheduler.js");
-   console.error("[scheduler.js]: Error during boost cleanup:", error);
+   console.error("[scheduler.js]: ❌ Error during boost cleanup:", error);
   }
  });
 
  // Archive old boost requests weekly (Sundays at 2 AM)
  createCronJob("0 2 * * 0", "Weekly Boost Archive", async () => {
   try {
-   console.log("[scheduler.js]: Running weekly archive...");
+   console.log("[scheduler.js]: 📦 Running weekly boost archive");
    const stats = archiveOldBoostingRequests(30);
    console.log(
-    `[scheduler.js]: Archive complete - Archived: ${stats.archived}, Remaining: ${stats.remaining}`
+    `[scheduler.js]: ✅ Archive complete - Archived: ${stats.archived}, Remaining: ${stats.remaining}`
    );
   } catch (error) {
    handleError(error, "scheduler.js");
-   console.error("[scheduler.js]: Error during weekly archive:", error);
+   console.error("[scheduler.js]: ❌ Error during weekly archive:", error);
   }
  });
 
@@ -516,10 +516,10 @@ async function setupBoostingScheduler(client) {
  createCronJob("0 0 * * *", "Daily Boost Statistics", async () => {
   try {
    const stats = getBoostingStatistics();
-   console.log("[scheduler.js]: Daily boost statistics:", stats);
+   console.log("[scheduler.js]: 📊 Daily boost statistics:", stats);
   } catch (error) {
    handleError(error, "scheduler.js");
-   console.error("[scheduler.js]: Error getting boost statistics:", error);
+   console.error("[scheduler.js]: ❌ Error getting boost statistics:", error);
   }
  });
 }
