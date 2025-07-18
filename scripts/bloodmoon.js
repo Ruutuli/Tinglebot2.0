@@ -156,7 +156,7 @@ async function sendBloodMoonAnnouncement(client, channelId, message) {
     
     // Mark announcement as sent
     await markAnnouncementAsSent(channelId, 'start');
-    console.log(`[bloodmoon.js]: ✅ Blood Moon start announcement sent successfully to channel ${channelId}`);
+    console.log(`[bloodmoon.js]: ✅ Blood Moon start announcement sent to channel ${channelId}`);
     
   } catch (error) {
     handleError(error, 'bloodmoon.js');
@@ -230,8 +230,8 @@ async function sendBloodMoonEndAnnouncement(client, channelId) {
     await channel.send({ embeds: [embed] });
     
     // Mark end announcement as sent
-    markEndAnnouncementAsSent(channelId);
-    console.log(`[bloodmoon.js]: ✅ Blood Moon end announcement sent successfully to channel ${channelId}`);
+    await markEndAnnouncementAsSent(channelId);
+    console.log(`[bloodmoon.js]: ✅ Blood Moon end announcement sent to channel ${channelId}`);
     
   } catch (error) {
     handleError(error, 'bloodmoon.js');
@@ -252,8 +252,6 @@ function normalizeDate(date) {
 // Checks if today falls within a Blood Moon period (day before, blood moon date, day after).
 // This is independent of the time - it just checks if we're in the 3-day window.
 function isBloodMoonPeriod() {
-  console.log(`[bloodmoon.js]: 🔍 Checking if today is within a Blood Moon period...`);
-  
   if (!bloodmoonDates || !Array.isArray(bloodmoonDates)) {
     console.error(`[bloodmoon.js]: ❌ Error: 'bloodmoonDates' is not defined or not an array.`);
     return false;
@@ -261,8 +259,6 @@ function isBloodMoonPeriod() {
 
   const now = new Date();
   const today = normalizeDate(now);
-  
-  console.log(`[bloodmoon.js]: 📅 Current date: ${today.toISOString().split('T')[0]}`);
   
   // Check if it's within the Blood Moon period (day before, blood moon date, day after)
   for (const { realDate } of bloodmoonDates) {
@@ -275,13 +271,12 @@ function isBloodMoonPeriod() {
     const isInRange = today >= dayBefore && today <= dayAfter;
     
     if (isInRange) {
-      console.log(`[bloodmoon.js]: 📅 Found Blood Moon period match: ${realDate} (${month}/${day})`);
-      console.log(`[bloodmoon.js]: 📅 Blood Moon period: ${dayBefore.toISOString().split('T')[0]} to ${dayAfter.toISOString().split('T')[0]}`);
+      console.log(`[bloodmoon.js]: 🌕 Blood Moon period active: ${realDate} (${month}/${day})`);
       return true;
     }
   }
 
-  console.log(`[bloodmoon.js]: 📅 Today is not within a Blood Moon period`);
+  console.log(`[bloodmoon.js]: 📅 No Blood Moon period active`);
   return false;
 }
 
@@ -290,8 +285,6 @@ function isBloodMoonPeriod() {
 // Blood Moon starts at 8 PM EST on the day BEFORE the blood moon date and ends at 8 AM EST the day AFTER.
 // For example: July 13 at 8 PM EST until July 15 at 8 AM EST.
 function isBloodMoonDay() {
-  console.log(`[bloodmoon.js]: 🔍 Checking if today is Blood Moon day...`);
-  
   if (!bloodmoonDates || !Array.isArray(bloodmoonDates)) {
     console.error(`[bloodmoon.js]: ❌ Error: 'bloodmoonDates' is not defined or not an array.`);
     return false;
@@ -307,8 +300,6 @@ function isBloodMoonDay() {
     hour12: false
   }));
   
-  console.log(`[bloodmoon.js]: 📅 Current date: ${today.toISOString().split('T')[0]}, EST hour: ${estHour}`);
-  
   // Find the Blood Moon period we're in
   let bloodMoonStartDate = null;
   let bloodMoonEndDate = null;
@@ -323,9 +314,6 @@ function isBloodMoonDay() {
     const isInRange = today >= dayBefore && today <= dayAfter;
     
     if (isInRange) {
-      console.log(`[bloodmoon.js]: 📅 Found Blood Moon period match: ${realDate} (${month}/${day})`);
-      console.log(`[bloodmoon.js]: 📅 Blood Moon period: ${dayBefore.toISOString().split('T')[0]} to ${dayAfter.toISOString().split('T')[0]}`);
-      
       // Blood Moon starts at 8 PM EST on the day before
       bloodMoonStartDate = new Date(dayBefore);
       bloodMoonStartDate.setHours(20, 0, 0, 0); // 8 PM EST
@@ -340,7 +328,6 @@ function isBloodMoonDay() {
   
   // If we're not in a Blood Moon period, return false
   if (!bloodMoonStartDate || !bloodMoonEndDate) {
-    console.log(`[bloodmoon.js]: 📅 Today is not within a Blood Moon period`);
     return false;
   }
   
@@ -354,14 +341,8 @@ function isBloodMoonDay() {
   
   const isActive = currentEST >= startEST && currentEST < endEST;
   
-  console.log(`[bloodmoon.js]: 🕐 Blood Moon activation period: ${startEST.toISOString()} to ${endEST.toISOString()}`);
-  console.log(`[bloodmoon.js]: 🕐 Current EST time: ${currentEST.toISOString()}`);
-  console.log(`[bloodmoon.js]: 🕐 Blood Moon status - Active: ${isActive}`);
-  
   if (isActive) {
-    console.log(`[bloodmoon.js]: 🌕 BLOOD MOON IS ACTIVE!`);
-  } else {
-    console.log(`[bloodmoon.js]: 📅 Blood Moon period but not yet active or already ended`);
+    console.log(`[bloodmoon.js]: 🌕 Blood Moon is ACTIVE! (EST: ${estHour}:00)`);
   }
   
   return isActive;
@@ -437,13 +418,6 @@ async function changeChannelName(client, channelId, newName) {
         console.error(`[bloodmoon.js]: ❌ Channel ${channelId} not found`);
       } else {
         console.error(`[bloodmoon.js]: ❌ Error accessing channel ${channelId}: ${error.message}`);
-        // Only log environment variables when there's an error
-        console.error('[bloodmoon.js]: 🔍 Environment variables:', {
-          NODE_ENV: process.env.NODE_ENV,
-          RUDANIA_TOWNHALL: process.env.RUDANIA_TOWNHALL,
-          INARIKO_TOWNHALL: process.env.INARIKO_TOWNHALL,
-          VHINTL_TOWNHALL: process.env.VHINTL_TOWNHALL
-        });
       }
       return null;
     });
@@ -470,32 +444,31 @@ async function changeChannelName(client, channelId, newName) {
 // ------------------- renameChannels -------------------
 // Renames channels to indicate Blood Moon activation.
 async function renameChannels(client) {
-  console.log(`[bloodmoon.js]: 🔴 Starting Blood Moon channel renaming process`);
+  console.log(`[bloodmoon.js]: 🔴 Starting Blood Moon channel renaming`);
   
   const channelMappings = getBloodMoonChannelMappings();
   for (const [channelId, newName] of Object.entries(channelMappings)) {
     try {
-      console.log(`[bloodmoon.js]: 🔴 Renaming channel ${channelId} to: ${newName}`);
       await changeChannelName(client, channelId, newName);
-      console.log(`[bloodmoon.js]: ✅ Successfully renamed channel ${channelId} for Blood Moon`);
+      console.log(`[bloodmoon.js]: ✅ Renamed channel ${channelId} for Blood Moon`);
     } catch (error) {
-      console.error(`[bloodmoon.js]: ❌ Failed to rename channel ${channelId} for Blood Moon: ${error.message}`);
+      console.error(`[bloodmoon.js]: ❌ Failed to rename channel ${channelId}: ${error.message}`);
     }
   }
   
-  console.log(`[bloodmoon.js]: ✅ Blood Moon channel renaming process completed`);
+  console.log(`[bloodmoon.js]: ✅ Blood Moon channel renaming completed`);
 }
 
 // ------------------- revertChannelNames -------------------
 // Reverts channel names to their default state and sends end-of-event announcements.
 async function revertChannelNames(client) {
-  console.log(`[bloodmoon.js]: 🔄 Starting channel name reversion process`);
+  console.log(`[bloodmoon.js]: 🔄 Starting channel name reversion`);
   
   // First check if Blood Moon is currently active
   const isBloodMoonActive = isBloodMoonDay();
   
   if (isBloodMoonActive) {
-    console.log(`[bloodmoon.js]: 🌕 Blood Moon is currently active - skipping channel reversion`);
+    console.log(`[bloodmoon.js]: 🌕 Blood Moon is active - skipping channel reversion`);
     return;
   }
   
@@ -512,8 +485,6 @@ async function revertChannelNames(client) {
   }));
   const is8PM = estHour === 20;
   
-  console.log(`[bloodmoon.js]: 🕐 Current EST hour: ${estHour}:00, is 8 PM: ${is8PM}`);
-  
   // Check if yesterday was within any Blood Moon period
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
@@ -527,18 +498,15 @@ async function revertChannelNames(client) {
     dayAfter.setDate(bloodMoonDate.getDate() + 1);
     return yesterday >= dayBefore && yesterday <= dayAfter;
   });
-  
-  console.log(`[bloodmoon.js]: 📅 Yesterday was within Blood Moon period: ${wasBloodMoonPeriodYesterday}`);
 
   // Track successful channel changes
   const successfulChannels = new Set();
 
   for (const [channelId, newName] of Object.entries(channelMappings)) {
     try {
-      console.log(`[bloodmoon.js]: 🔄 Reverting channel ${channelId} to name: ${newName}`);
       await changeChannelName(client, channelId, newName);
       successfulChannels.add(channelId);
-      console.log(`[bloodmoon.js]: ✅ Successfully reverted channel ${channelId}`);
+      console.log(`[bloodmoon.js]: ✅ Reverted channel ${channelId}`);
     } catch (error) {
       console.error(`[bloodmoon.js]: ❌ Failed to revert channel ${channelId}: ${error.message}`);
     }
@@ -546,7 +514,7 @@ async function revertChannelNames(client) {
 
   // Only send end announcements at 8 PM if we're transitioning out of a Blood Moon period
   if (is8PM && wasBloodMoonPeriodYesterday) {
-    console.log(`[bloodmoon.js]: 🌙 8 PM transition from Blood Moon period, sending end announcements to ${successfulChannels.size} channels`);
+    console.log(`[bloodmoon.js]: 🌙 Sending end announcements to ${successfulChannels.size} channels`);
     for (const channelId of successfulChannels) {
       try {
         await sendBloodMoonEndAnnouncement(client, channelId);
@@ -560,7 +528,7 @@ async function revertChannelNames(client) {
     console.log(`[bloodmoon.js]: 📅 Yesterday was not within Blood Moon period, skipping end announcements`);
   }
   
-  console.log(`[bloodmoon.js]: ✅ Channel reversion process completed`);
+  console.log(`[bloodmoon.js]: ✅ Channel reversion completed`);
 }
 
 // ============================================================================
@@ -569,9 +537,10 @@ async function revertChannelNames(client) {
 // Immediately triggers the Blood Moon event by sending announcements and renaming channels.
 async function triggerBloodMoonNow(client, channelId) {
   try {
-    console.log(`[bloodmoon.js]: 🌕 Triggering Blood Moon`);
+    console.log(`[bloodmoon.js]: 🌕 Triggering Blood Moon manually`);
     await sendBloodMoonAnnouncement(client, channelId, 'The Blood Moon is upon us! Beware!');
     await renameChannels(client);
+    console.log(`[bloodmoon.js]: ✅ Blood Moon triggered successfully`);
   } catch (error) {
     handleError(error, 'bloodmoon.js');
     console.error(`[bloodmoon.js]: ❌ Blood Moon trigger failed: ${error.message}`);

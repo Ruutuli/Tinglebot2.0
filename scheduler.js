@@ -552,7 +552,7 @@ function initializeScheduler(client) {
  // Add startup Blood Moon check
  (async () => {
   try {
-   console.log(`[scheduler.js]: Starting Blood Moon startup check...`);
+   console.log(`[scheduler.js]: 🌕 Starting Blood Moon startup check`);
 
    const channels = [
     process.env.RUDANIA_TOWNHALL,
@@ -560,29 +560,20 @@ function initializeScheduler(client) {
     process.env.VHINTL_TOWNHALL,
    ];
 
-   console.log(
-    `[scheduler.js]: Checking ${channels.length} channels for Blood Moon status`
-   );
-
    const isBloodMoonActive = isBloodMoonDay();
    console.log(
-    `[scheduler.js]: Blood Moon status check result: ${
-     isBloodMoonActive ? "ACTIVE" : "INACTIVE"
-    }`
+    `[scheduler.js]: 🌕 Blood Moon status: ${isBloodMoonActive ? "ACTIVE" : "INACTIVE"}`
    );
 
    if (isBloodMoonActive) {
-    console.log(`[scheduler.js]: Blood Moon active - processing all channels`);
+    console.log(`[scheduler.js]: 🌕 Blood Moon active - processing channels`);
     await renameChannels(client);
 
     for (const channelId of channels) {
      if (!channelId) {
-      console.warn(`[scheduler.js]: Skipping undefined channel ID`);
+      console.warn(`[scheduler.js]: ⚠️ Skipping undefined channel ID`);
       continue;
      }
-     console.log(
-      `[scheduler.js]: Sending Blood Moon announcement to channel ${channelId}`
-     );
      await sendBloodMoonAnnouncement(
       client,
       channelId,
@@ -590,14 +581,14 @@ function initializeScheduler(client) {
      );
     }
    } else {
-    console.log(`[scheduler.js]: No Blood Moon - reverting all channels`);
+    console.log(`[scheduler.js]: 📅 No Blood Moon - reverting channels`);
     await revertChannelNames(client);
    }
 
-   console.log(`[scheduler.js]: Blood Moon startup check completed`);
+   console.log(`[scheduler.js]: ✅ Blood Moon startup check completed`);
   } catch (error) {
    handleError(error, "scheduler.js");
-   console.error(`[scheduler.js]: Blood Moon check failed: ${error.message}`);
+   console.error(`[scheduler.js]: ❌ Blood Moon check failed: ${error.message}`);
   }
  })();
 
@@ -648,9 +639,9 @@ function initializeScheduler(client) {
  );
 
  createCronJob("0 1 * * *", "blood moon tracking cleanup", () => {
-  console.log(`[scheduler.js]: Starting Blood Moon tracking cleanup`);
+  console.log(`[scheduler.js]: 🧹 Starting Blood Moon tracking cleanup`);
   cleanupOldTrackingData();
-  console.log(`[scheduler.js]: Blood Moon tracking cleanup completed`);
+  console.log(`[scheduler.js]: ✅ Blood Moon tracking cleanup completed`);
  });
 
  setupBlightScheduler(client);
@@ -667,17 +658,13 @@ function initializeScheduler(client) {
   "0 20 * * *",
   "blood moon start announcement",
   async () => {
-   console.log(`[scheduler.js]: Starting Blood Moon start check at 8 PM EST`);
+   console.log(`[scheduler.js]: 🌕 Starting Blood Moon start check at 8 PM EST`);
 
    const channels = [
     process.env.RUDANIA_TOWNHALL,
     process.env.INARIKO_TOWNHALL,
     process.env.VHINTL_TOWNHALL,
    ];
-
-   console.log(
-    `[scheduler.js]: Processing ${channels.length} channels for Blood Moon start check`
-   );
 
    // Check if tomorrow is a blood moon day
    const tomorrow = new Date();
@@ -693,29 +680,22 @@ function initializeScheduler(client) {
     const bloodMoonDate = new Date(tomorrowDate.getFullYear(), month - 1, day);
     if (tomorrowDate.getTime() === bloodMoonDate.getTime()) {
      isTomorrowBloodMoon = true;
-     console.log(`[scheduler.js]: Tomorrow (${realDate}) is a Blood Moon day - sending start announcement`);
+     console.log(`[scheduler.js]: 🌕 Tomorrow (${realDate}) is a Blood Moon day - sending start announcement`);
      break;
     }
    }
 
    if (isTomorrowBloodMoon) {
-    console.log(
-     `[scheduler.js]: Blood Moon starts tomorrow - processing all channels`
-    );
+    console.log(`[scheduler.js]: 🌕 Blood Moon starts tomorrow - processing channels`);
     await renameChannels(client);
 
     for (const channelId of channels) {
      if (!channelId) {
-      console.warn(
-       `[scheduler.js]: Skipping undefined channel ID in Blood Moon start check`
-      );
+      console.warn(`[scheduler.js]: ⚠️ Skipping undefined channel ID in Blood Moon start check`);
       continue;
      }
 
      try {
-      console.log(
-       `[scheduler.js]: Sending Blood Moon start announcement to channel ${channelId}`
-      );
       await sendBloodMoonAnnouncement(
        client,
        channelId,
@@ -723,18 +703,14 @@ function initializeScheduler(client) {
       );
      } catch (error) {
       handleError(error, "scheduler.js");
-      console.error(
-       `[scheduler.js]: Blood Moon start announcement failed for channel ${channelId}: ${error.message}`
-      );
+      console.error(`[scheduler.js]: ❌ Blood Moon start announcement failed for channel ${channelId}: ${error.message}`);
      }
     }
    } else {
-    console.log(
-     `[scheduler.js]: No Blood Moon starting tomorrow - no announcement needed`
-    );
+    console.log(`[scheduler.js]: 📅 No Blood Moon starting tomorrow - no announcement needed`);
    }
 
-   console.log(`[scheduler.js]: Blood Moon start check completed`);
+   console.log(`[scheduler.js]: ✅ Blood Moon start check completed`);
   },
   "America/New_York"
  );
@@ -744,17 +720,13 @@ function initializeScheduler(client) {
   "0 8 * * *",
   "blood moon end announcement",
   async () => {
-   console.log(`[scheduler.js]: Starting Blood Moon end check at 8 AM EST`);
+   console.log(`[scheduler.js]: 🌙 Starting Blood Moon end check at 8 AM EST`);
 
    const channels = [
     process.env.RUDANIA_TOWNHALL,
     process.env.INARIKO_TOWNHALL,
     process.env.VHINTL_TOWNHALL,
    ];
-
-   console.log(
-    `[scheduler.js]: Processing ${channels.length} channels for Blood Moon end check`
-   );
 
    // Check if yesterday was a blood moon day
    const yesterday = new Date();
@@ -770,44 +742,33 @@ function initializeScheduler(client) {
     const bloodMoonDate = new Date(yesterdayDate.getFullYear(), month - 1, day);
     if (yesterdayDate.getTime() === bloodMoonDate.getTime()) {
      wasYesterdayBloodMoon = true;
-     console.log(`[scheduler.js]: Yesterday (${realDate}) was a Blood Moon day - sending end announcement`);
+     console.log(`[scheduler.js]: 🌙 Yesterday (${realDate}) was a Blood Moon day - sending end announcement`);
      break;
     }
    }
 
    if (wasYesterdayBloodMoon) {
-    console.log(
-     `[scheduler.js]: Blood Moon ended yesterday - processing all channels`
-    );
+    console.log(`[scheduler.js]: 🌙 Blood Moon ended yesterday - processing channels`);
     await revertChannelNames(client);
 
     for (const channelId of channels) {
      if (!channelId) {
-      console.warn(
-       `[scheduler.js]: Skipping undefined channel ID in Blood Moon end check`
-      );
+      console.warn(`[scheduler.js]: ⚠️ Skipping undefined channel ID in Blood Moon end check`);
       continue;
      }
 
      try {
-      console.log(
-       `[scheduler.js]: Sending Blood Moon end announcement to channel ${channelId}`
-      );
       await sendBloodMoonEndAnnouncement(client, channelId);
      } catch (error) {
       handleError(error, "scheduler.js");
-      console.error(
-       `[scheduler.js]: Blood Moon end announcement failed for channel ${channelId}: ${error.message}`
-      );
+      console.error(`[scheduler.js]: ❌ Blood Moon end announcement failed for channel ${channelId}: ${error.message}`);
      }
     }
    } else {
-    console.log(
-     `[scheduler.js]: No Blood Moon ended yesterday - no announcement needed`
-    );
+    console.log(`[scheduler.js]: 📅 No Blood Moon ended yesterday - no announcement needed`);
    }
 
-   console.log(`[scheduler.js]: Blood Moon end check completed`);
+   console.log(`[scheduler.js]: ✅ Blood Moon end check completed`);
   },
   "America/New_York"
  );
