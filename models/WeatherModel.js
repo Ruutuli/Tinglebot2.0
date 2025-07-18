@@ -61,8 +61,34 @@ WeatherSchema.statics.getWeather = async function(village, date) {
 
 // Static method to save new weather
 WeatherSchema.statics.saveWeather = async function(weatherData) {
-  const weather = new this(weatherData);
-  return weather.save();
+  try {
+    console.log(`[WeatherModel.js]: 🔄 Static saveWeather called for ${weatherData.village}`);
+    console.log(`[WeatherModel.js]: 📊 Data received:`, {
+      village: weatherData.village,
+      date: weatherData.date,
+      season: weatherData.season,
+      hasTemperature: !!weatherData.temperature,
+      hasWind: !!weatherData.wind,
+      hasPrecipitation: !!weatherData.precipitation,
+      hasSpecial: !!weatherData.special
+    });
+    
+    const weather = new this(weatherData);
+    console.log(`[WeatherModel.js]: ✅ Weather document created`);
+    
+    const savedWeather = await weather.save();
+    console.log(`[WeatherModel.js]: ✅ Weather saved via static method, ID: ${savedWeather._id}`);
+    
+    return savedWeather;
+  } catch (error) {
+    console.error(`[WeatherModel.js]: ❌ Error in saveWeather static method:`, error);
+    console.error(`[WeatherModel.js]: ❌ Error details:`, {
+      message: error.message,
+      code: error.code,
+      name: error.name
+    });
+    throw error;
+  }
 };
 
 // Static method to clear old weather data

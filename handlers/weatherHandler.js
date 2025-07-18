@@ -57,8 +57,36 @@ function parseFahrenheit(label) {
 // ------------------- Wind Parser -------------------
 // Extracts numeric wind speed from a string label.
 function parseWind(label) {
-  const match = label.match(/(\d+)/);
-  return match ? parseInt(match[1], 10) : null;
+  if (!label) return null;
+  
+  // Handle "< 2(km/h) // Calm" format
+  const lessThanMatch = label.match(/< (\d+)/);
+  if (lessThanMatch) {
+    const value = parseInt(lessThanMatch[1], 10);
+    return Math.max(0, value - 1); // Return value less than the threshold
+  }
+  
+  // Handle ">= 118(km/h) // Hurricane" format
+  const greaterThanMatch = label.match(/>= (\d+)/);
+  if (greaterThanMatch) {
+    return parseInt(greaterThanMatch[1], 10);
+  }
+  
+  // Handle "2 - 12(km/h) // Breeze" format (range)
+  const rangeMatch = label.match(/(\d+)\s*-\s*(\d+)/);
+  if (rangeMatch) {
+    const min = parseInt(rangeMatch[1], 10);
+    const max = parseInt(rangeMatch[2], 10);
+    return Math.round((min + max) / 2); // Return average of range
+  }
+  
+  // Handle single number format
+  const singleMatch = label.match(/(\d+)/);
+  if (singleMatch) {
+    return parseInt(singleMatch[1], 10);
+  }
+  
+  return null;
 }
 
 // ------------------- Numeric Condition Checker -------------------
@@ -138,61 +166,30 @@ function candidateMatches(candidateLabel, simTemp, simWind) {
 // ------------------- Special Condition Validator -------------------
 // Determines if a special weather candidate is valid based on temperature, wind, and precipitation.
 function specialCandidateMatches(candidateLabel, simTemp, simWind, precipLabel) {
-  console.log(`[weatherHandler.js]: 🔍 Validating special weather candidate: ${candidateLabel}`);
-  
   const candidateObj = findWeatherEmoji('specials', candidateLabel);
   if (!candidateObj || !candidateObj.conditions) {
-    console.log(`[weatherHandler.js]: ✅ Special ${candidateLabel} has no conditions, allowing`);
     return true;
   }
   
   const { temperature: tempConds, wind: windConds, precipitation: precipConds } = candidateObj.conditions;
   
-  console.log(`[weatherHandler.js]: 📋 Conditions for ${candidateLabel}:`, {
-    temperature: tempConds,
-    wind: windConds,
-    precipitation: precipConds,
-    currentValues: {
-      temperature: simTemp,
-      wind: simWind,
-      precipitation: precipLabel
-    }
-  });
-  
   // Handle temperature conditions
   const tempOK = !tempConds || tempConds.every(cond => {
     if (cond === 'any') return true;
-    const isValid = checkNumericCondition(simTemp, cond);
-    console.log(`[weatherHandler.js]: 🌡️ Temperature condition "${cond}" for ${simTemp}°F: ${isValid}`);
-    return isValid;
+    return checkNumericCondition(simTemp, cond);
   });
   
   // Handle wind conditions
   const windOK = !windConds || windConds.every(cond => {
     if (cond === 'any') return true;
-    const isValid = checkNumericCondition(simWind, cond);
-    console.log(`[weatherHandler.js]: 💨 Wind condition "${cond}" for ${simWind} km/h: ${isValid}`);
-    return isValid;
+    return checkNumericCondition(simWind, cond);
   });
   
   // Handle precipitation conditions
   const precipOK = !precipConds || precipConds.some(cond => {
     if (cond === 'any') return true;
-    const isValid = precipitationMatches(precipLabel, cond);
-    console.log(`[weatherHandler.js]: 🌧️ Precipitation condition "${cond}" for "${precipLabel}": ${isValid}`);
-    return isValid;
+    return precipitationMatches(precipLabel, cond);
   });
-
-  // Log validation details for debugging
-  if (!tempOK || !windOK || !precipOK) {
-    console.log(`[weatherHandler.js]: ❌ Special weather validation failed for ${candidateLabel}:`, {
-      temperature: { conditions: tempConds, value: simTemp, valid: tempOK },
-      wind: { conditions: windConds, value: simWind, valid: windOK },
-      precipitation: { conditions: precipConds, value: precipLabel, valid: precipOK }
-    });
-  } else {
-    console.log(`[weatherHandler.js]: ✅ Special weather validation passed for ${candidateLabel}`);
-  }
   
   return tempOK && windOK && precipOK;
 }
@@ -270,41 +267,17 @@ function getPrecipitationLabel(seasonData, simTemp, simWind, cloudyStreak, weigh
 function getSpecialCondition(seasonData, simTemp, simWind, precipLabel, rainStreak, weightMapping, modifierMap = {}) {
   // Check if there are any special weather options available
   if (!seasonData.Special.length) {
-    console.log(`[weatherHandler.js]: ❌ No special weather options available for this season`);
     return null;
   }
-  
-  console.log(`[weatherHandler.js]: ✨ Checking special weather conditions for:`, {
-    availableSpecials: seasonData.Special,
-    currentTemp: simTemp,
-    currentWind: simWind,
-    currentPrecip: precipLabel,
-    rainStreak: rainStreak
-  });
   
   // Filter out invalid special conditions based on current weather
   const validSpecials = seasonData.Special.filter(specialType => {
-    const isValid = specialCandidateMatches(specialType, simTemp, simWind, precipLabel);
-    console.log(`[weatherHandler.js]: 🔍 Special ${specialType} validation:`, {
-      isValid,
-      temperature: simTemp,
-      wind: simWind,
-      precipitation: precipLabel
-    });
-    return isValid;
+    return specialCandidateMatches(specialType, simTemp, simWind, precipLabel);
   });
   
   if (validSpecials.length === 0) {
-    console.log(`[weatherHandler.js]: ❌ No valid special conditions for current weather:`, {
-      temperature: simTemp,
-      wind: simWind,
-      precipitation: precipLabel,
-      availableSpecials: seasonData.Special
-    });
     return null;
   }
-  
-  console.log(`[weatherHandler.js]: ✅ Valid specials found:`, validSpecials);
   
   // Calculate total weight for valid specials to determine probability
   const totalWeight = validSpecials.reduce((sum, special) => {
@@ -320,17 +293,7 @@ function getSpecialCondition(seasonData, simTemp, simWind, precipLabel, rainStre
   const specialWeatherChance = Math.min(baseChance + weightMultiplier, 0.4); // Cap at 40% total
   const rngValue = Math.random();
   
-  console.log(`[weatherHandler.js]: 🎲 Special weather probability check:`, {
-    totalWeight,
-    baseChance: `${(baseChance * 100).toFixed(1)}%`,
-    weightMultiplier: `${(weightMultiplier * 100).toFixed(1)}%`,
-    specialWeatherChance: `${(specialWeatherChance * 100).toFixed(1)}%`,
-    rngValue: rngValue.toFixed(3),
-    passed: rngValue < specialWeatherChance
-  });
-  
   if (rngValue >= specialWeatherChance) {
-    console.log(`[weatherHandler.js]: ❌ Special weather RNG check failed`);
     return null;
   }
   
