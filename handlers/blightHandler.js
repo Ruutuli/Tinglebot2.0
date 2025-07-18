@@ -2335,7 +2335,7 @@ async function checkExpiringBlightRequests() {
 // Deletes all expired TempData entries related to blight and notifies users.
 async function cleanupExpiredBlightRequests() {
   try {
-    console.log('[blightHandler]: Starting cleanup of expired blight requests...');
+    console.log('[blightHandler]: 🧹 Starting cleanup of expired blight requests');
     
     // Find all expired blight submissions
     const expiredSubmissions = await TempData.find({ 
@@ -2343,7 +2343,7 @@ async function cleanupExpiredBlightRequests() {
       expiresAt: { $lt: new Date() }
     });
     
-    console.log(`[blightHandler]: Found ${expiredSubmissions.length} expired blight submissions`);
+    console.log(`[blightHandler]: 📋 Found ${expiredSubmissions.length} expired blight submissions`);
     
     let notifiedUsers = 0;
     let expiredCount = 0;
@@ -2354,7 +2354,7 @@ async function cleanupExpiredBlightRequests() {
         
         // Only process pending submissions that haven't been marked as expired
         if (submissionData.status === 'pending') {
-          console.log(`[blightHandler]: Processing expired submission for ${submissionData.characterName}`);
+          console.log(`[blightHandler]: ⏰ Processing expired submission for ${submissionData.characterName}`);
           
           // Mark as expired in the database
           submissionData.status = 'expired';
@@ -2394,7 +2394,7 @@ async function cleanupExpiredBlightRequests() {
               console.log(`[blightHandler]: ${loreText}`);
             }
           } catch (historyError) {
-            console.error('[blightHandler]: Error saving expiration to history:', historyError);
+            console.error('[blightHandler]: ❌ Error saving expiration to history:', historyError);
           }
           
           // Notify the user via DM
@@ -2436,16 +2436,16 @@ async function cleanupExpiredBlightRequests() {
               });
               
               notifiedUsers++;
-              console.log(`[blightHandler]: Sent expiration DM to user ${submissionData.userId} for ${submissionData.characterName}`);
+              console.log(`[blightHandler]: ✅ Sent expiration DM to user ${submissionData.userId} for ${submissionData.characterName}`);
             } catch (dmError) {
-              console.error(`[blightHandler]: Failed to send expiration DM to user ${submissionData.userId}:`, dmError);
+              console.error(`[blightHandler]: ❌ Failed to send expiration DM to user ${submissionData.userId}:`, dmError);
             }
           }
           
           expiredCount++;
         }
       } catch (submissionError) {
-        console.error(`[blightHandler]: Error processing expired submission ${submission._id}:`, submissionError);
+        console.error(`[blightHandler]: ❌ Error processing expired submission ${submission._id}:`, submissionError);
       }
     }
     
@@ -2455,7 +2455,7 @@ async function cleanupExpiredBlightRequests() {
       expiresAt: { $lt: new Date() }
     });
     
-    console.log(`[blightHandler]: Cleanup complete - Expired: ${expiredCount}, Notified: ${notifiedUsers}, Deleted: ${deleteResult.deletedCount}`);
+    console.log(`[blightHandler]: ✅ Cleanup complete - Expired: ${expiredCount}, Notified: ${notifiedUsers}, Deleted: ${deleteResult.deletedCount}`);
     return {
       expiredCount,
       notifiedUsers,
@@ -2463,7 +2463,7 @@ async function cleanupExpiredBlightRequests() {
     };
   } catch (error) {
     handleError(error, 'blightHandler.js');
-    console.error('[blightHandler]: Error cleaning up expired blight requests:', error);
+    console.error('[blightHandler]: ❌ Error cleaning up expired blight requests:', error);
     throw error;
   }
 }
