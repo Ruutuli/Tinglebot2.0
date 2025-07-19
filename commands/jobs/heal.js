@@ -85,13 +85,14 @@ async function checkDebuff(character) {
   if (character.debuff?.active) {
     const debuffEndDate = new Date(character.debuff.endDate);
     
-    // Convert to EST and set to midnight for display
+    // Convert the debuff end date to EST to get the local date
     const estDate = new Date(debuffEndDate.toLocaleString('en-US', { timeZone: 'America/New_York' }));
-    estDate.setHours(0, 0, 0, 0);
     
-    // Convert back to UTC for Discord timestamp
-    const utcDate = new Date(estDate.toLocaleString('en-US', { timeZone: 'America/New_York' }));
-    const unixTimestamp = Math.floor(utcDate.getTime() / 1000);
+    // Create midnight EST for that date
+    const midnightEST = new Date(estDate.getFullYear(), estDate.getMonth(), estDate.getDate(), 0, 0, 0, 0);
+    
+    // Convert to UTC timestamp for Discord
+    const unixTimestamp = Math.floor(midnightEST.getTime() / 1000);
     
     return {
       hasDebuff: true,
