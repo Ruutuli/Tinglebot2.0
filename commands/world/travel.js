@@ -527,7 +527,7 @@ async function checkAndHandleKO(character, channel, startingVillage) {
     character.currentStamina = 0;
     character.debuff = {
       active: true,
-      endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+      endDate: new Date(Date.now() + 6 * 24 * 60 * 60 * 1000)
     };
 
     await character.save();
@@ -538,7 +538,7 @@ async function checkAndHandleKO(character, channel, startingVillage) {
         `**${character.name}** woke up in **${capitalizeFirstLetter(recoveryVillage)}** and needs time to recover from their ordeal.\n\n` +
         `**❤️ __Hearts:__** ${character.currentHearts}/${character.maxHearts}\n` +
         `**🟩 __Stamina:__** ${character.currentStamina}/${character.maxStamina}\n\n` +
-        `🔔 **${character.name}** is out of commission and a debuff has been applied. They will recover in 7 days.`
+        `🔔 **${character.name}** is out of commission and a debuff has been applied. They will recover in 6 days.`
       )
       .setColor('#FF0000')
       .setImage('https://storage.googleapis.com/tinglebot/Graphics/KORecovery.png')

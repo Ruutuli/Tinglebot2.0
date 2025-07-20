@@ -128,14 +128,8 @@ const createDebuffEmbed = (character) => {
   if (character.debuff?.endDate) {
     const debuffEndDate = new Date(character.debuff.endDate);
     
-    // Convert the debuff end date to EST to get the local date
-    const estDate = new Date(debuffEndDate.toLocaleString('en-US', { timeZone: 'America/New_York' }));
-    
-    // Create midnight EST for that date
-    const midnightEST = new Date(estDate.getFullYear(), estDate.getMonth(), estDate.getDate(), 0, 0, 0, 0);
-    
-    // Convert to UTC timestamp for Discord
-    const utcTimestamp = Math.floor(midnightEST.getTime() / 1000);
+    // Use the original endDate timestamp directly for Discord display
+    const utcTimestamp = Math.floor(debuffEndDate.getTime() / 1000);
     
     debuffExpirationText = `<t:${utcTimestamp}:F> (<t:${utcTimestamp}:R>)`;
   }

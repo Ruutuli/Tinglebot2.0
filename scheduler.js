@@ -567,6 +567,18 @@ function initializeScheduler(client) {
   }
  })();
 
+ // Add startup debuff expiry check
+ (async () => {
+  try {
+   console.log("[scheduler.js]: 🧹 Running startup debuff expiry check...");
+   await handleDebuffExpiry(client);
+   console.log("[scheduler.js]: ✅ Startup debuff expiry check completed");
+  } catch (error) {
+   handleError(error, "scheduler.js");
+   console.error("[scheduler.js]: ❌ Startup debuff expiry check failed:", error.message);
+  }
+ })();
+
  // Initialize all schedulers
  createCronJob("0 0 * * *", "jail release check", () =>
   handleJailRelease(client)
