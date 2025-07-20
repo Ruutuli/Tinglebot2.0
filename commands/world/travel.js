@@ -51,7 +51,7 @@ const { checkInventorySync } = require('../../utils/characterUtils');
 const { enforceJail } = require('../../utils/jailCheck');
 const { handleError } = require('../../utils/globalErrorHandler.js');
 const { retrieveAllByType } = require('../../utils/storage.js');
-const { getWeatherWithoutGeneration } = require('../../modules/weatherModule.js');
+const { getWeatherWithoutGeneration } = require('../../services/weatherService');
 
 // ------------------- External API Integrations -------------------
 const { isBloodMoonActive } = require('../../scripts/bloodmoon.js');

@@ -31,7 +31,7 @@ const { addItemInventoryDatabase } = require("../../utils/inventoryUtils.js");
 const { isBloodMoonActive } = require("../../scripts/bloodmoon.js");
 const { checkInventorySync } = require('../../utils/characterUtils');
 const { enforceJail } = require('../../utils/jailCheck');
-const { getWeatherWithoutGeneration } = require('../../modules/weatherModule.js');
+const { getWeatherWithoutGeneration } = require('../../services/weatherService');
 
 // Modules - Job, Location, Damage, and Formatting Logic
 const { getJobPerk, isValidJob } = require("../../modules/jobsModule.js");
@@ -88,7 +88,7 @@ const villageChannels = {
 };
 
 // Modules - Weather Logic
-const { getCurrentWeather } = require('../../modules/weatherModule.js');
+const { getCurrentWeather } = require('../../services/weatherService');
 
 // ------------------- Helper Functions -------------------
 

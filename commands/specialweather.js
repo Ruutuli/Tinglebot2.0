@@ -16,7 +16,8 @@ const { fetchCharacterByNameAndUserId, fetchAllItems } = require('../database/db
 const { createWeightedItemList } = require('../modules/rngModule.js');
 const { handleError } = require('../utils/globalErrorHandler.js');
 const { syncToInventoryDatabase, SOURCE_TYPES } = require('../utils/inventoryUtils.js');
-const { getWeatherWithoutGeneration } = require('../modules/weatherModule.js');
+const { getWeatherWithoutGeneration } = require('../services/weatherService');
+const WeatherService = require('../services/weatherService');
 const { enforceJail } = require('../utils/jailCheck.js');
 const { checkInventorySync } = require('../utils/characterUtils.js');
 
@@ -133,64 +134,12 @@ function getOverlayPath(condition) {
   return null;
 }
 
+// Remove the duplicate generateBanner function and use the unified service
 async function generateBanner(village, weather) {
-  try {
-    // Check cache first
-    const cacheKey = `${village}-${weather.special.label}`;
-    const cachedBanner = bannerCache.get(cacheKey);
-    if (cachedBanner && Date.now() - cachedBanner.timestamp < CACHE_DURATION) {
-      return cachedBanner.banner;
-    }
-
-    const bannerUrl = VILLAGE_IMAGES[village];
-    if (!bannerUrl) {
-      console.error(`[specialweather.js]: ❌ No banner URL found for village: ${village}`);
-      return null;
-    }
-
-    const overlayPath = getOverlayPath(weather.special.label);
-    if (!overlayPath) {
-      return null;
-    }
-
-    // Add timeout to prevent infinite loops
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Image processing timeout')), 3000); // Reduced timeout further
-    });
-
-    // Process images in parallel
-    const [bannerImg, overlayImg] = await Promise.all([
-      Promise.race([Jimp.read(bannerUrl), timeoutPromise]),
-      Promise.race([Jimp.read(overlayPath), timeoutPromise])
-    ]);
-
-    // Validate image dimensions before processing
-    if (bannerImg.bitmap.width > 0 && bannerImg.bitmap.height > 0) {
-      overlayImg.resize(bannerImg.bitmap.width, bannerImg.bitmap.height);
-      bannerImg.composite(overlayImg, 0, 0, {
-        mode: Jimp.BLEND_SOURCE_OVER,
-        opacitySource: 1,
-        opacityDest: 1
-      });
-    } else {
-      throw new Error('Invalid image dimensions');
-    }
-
-    const outName = `banner-${village.toLowerCase()}.png`;
-    const buffer = await bannerImg.getBufferAsync(Jimp.MIME_PNG);
-    const banner = new AttachmentBuilder(buffer, { name: outName });
-
-    // Cache the banner
-    bannerCache.set(cacheKey, {
-      banner,
-      timestamp: Date.now()
-    });
-
-    return banner;
-  } catch (error) {
-    console.error(`[specialweather.js]: ❌ Error generating banner: ${error.message}`);
-    return null;
-  }
+  return await WeatherService.generateBanner(village, weather, { 
+    enableCaching: true, 
+    cacheDuration: 300000 // 5 minutes
+  });
 }
 
 // ------------------- Embed Creation -------------------

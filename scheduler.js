@@ -39,7 +39,6 @@ const {
 const { convertToHyruleanDate } = require("./modules/calendarModule");
 const Character = require("./models/CharacterModel");
 const { sendUserDM } = require("./utils/messageUtils");
-const { generateWeatherEmbed } = require("./embeds/weatherEmbed");
 const { checkExpiredRequests } = require("./utils/expirationHandler");
 const { isValidImageUrl } = require("./utils/validation");
 const DEFAULT_IMAGE_URL =
@@ -50,7 +49,7 @@ const {
  saveBlightSubmissions,
 } = require("./handlers/blightHandler");
 const { connectToInventories } = require("./handlers/blightHandler");
-const { getCurrentWeather, saveWeather } = require("./modules/weatherModule");
+const { getCurrentWeather, generateWeatherEmbed } = require("./services/weatherService");
 const Pet = require("./models/PetModel");
 const Raid = require("./models/RaidModel");
 

@@ -1,11 +1,17 @@
 // ============================================================================
-// 🌤️ Weather Validation
-// Contains validation functions for weather combinations
+// 🌤️ Weather Validation & Utilities
+// Consolidated weather utilities and validation functions
+// Single source of truth for all weather-related utility functions
 // ============================================================================
 
 const { temperatures, winds, precipitations, specials } = require('../data/weatherData');
 
-// Helper to find weather emoji
+// ============================================================================
+// ------------------- Core Utility Functions -------------------
+// ============================================================================
+
+// ------------------- Weather Emoji Finder -------------------
+// Finds weather emoji by category and label
 function findWeatherEmoji(category, label) {
   if (!label) return null;
   
@@ -30,14 +36,16 @@ function findWeatherEmoji(category, label) {
   return data.find(item => item.label === label) || null;
 }
 
-// Helper to parse Fahrenheit from label
+// ------------------- Temperature Parser -------------------
+// Parses Fahrenheit temperature from weather label
 function parseFahrenheit(label) {
   if (!label) return 0;
   const match = label.match(/(\d+)°F/);
   return match ? parseInt(match[1]) : 0;
 }
 
-// Helper to parse wind speed from label
+// ------------------- Wind Parser -------------------
+// Parses wind speed from weather label
 function parseWind(label) {
   if (!label) return 0;
   
@@ -71,7 +79,8 @@ function parseWind(label) {
   return 0;
 }
 
-// Helper to check numeric conditions
+// ------------------- Numeric Condition Checker -------------------
+// Checks if a value meets numeric conditions
 function checkNumericCondition(value, condition) {
   if (!condition) return true;
   if (condition === 'any') return true;
@@ -92,7 +101,8 @@ function checkNumericCondition(value, condition) {
   }
 }
 
-// Helper to check precipitation matches
+// ------------------- Precipitation Matcher -------------------
+// Checks if precipitation label matches condition
 function precipitationMatches(label, condition) {
   if (!label || !condition) return true;
   if (condition === 'any') return true;
@@ -108,6 +118,10 @@ function precipitationMatches(label, condition) {
   
   return normalizedLabel === normalizedCondition;
 }
+
+// ============================================================================
+// ------------------- Weather Combination Validator -------------------
+// ============================================================================
 
 // ------------------- Weather Combination Validator -------------------
 // Validates that weather combinations are valid according to the rules
@@ -188,7 +202,20 @@ function validateWeatherCombination(weather) {
   return true;
 }
 
+// ============================================================================
+// ------------------- Exports -------------------
+// ============================================================================
+
 module.exports = {
+  // Core validation
   validateWeatherCombination,
-  findWeatherEmoji
+  findWeatherEmoji,
+  
+  // Parsing utilities
+  parseFahrenheit,
+  parseWind,
+  
+  // Condition checking
+  checkNumericCondition,
+  precipitationMatches
 }; 
