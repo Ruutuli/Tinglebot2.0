@@ -129,9 +129,8 @@ module.exports = {
   async execute(interaction) {
     const communityBoardChannelId = process.env.COMMUNITY_BOARD;
 
-    // Check if the command is executed in the Community Board channel or testing channel
-    const testingChannelId = '1391812848099004578';
-    if (interaction.channelId !== communityBoardChannelId && interaction.channelId !== testingChannelId) {
+    // Check if the command is executed in the Community Board channel
+    if (interaction.channelId !== communityBoardChannelId) {
       const errorEmbed = new EmbedBuilder()
         .setColor('#FF0000')
         .setTitle('❌ Channel Restriction')
