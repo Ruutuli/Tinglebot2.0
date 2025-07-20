@@ -377,7 +377,7 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
 
       character.currentHearts = 0;
       character.currentStamina = 0;
-      character.debuff = { active: true, endDate: new Date(Date.now() + 7 * 86400000) };
+      character.debuff = { active: true, endDate: new Date(Date.now() + 6 * 86400000) };
       character.currentVillage = startingVillage || character.homeVillage;
       character.ko = true;
 
@@ -523,7 +523,7 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
           decision = `💔 KO'd while fleeing!`;
           // KO on flee: KO state and heart update are already handled by useHearts
           // Only update debuff and village if needed (if not already handled)
-          character.debuff = { active: true, endDate: new Date(Date.now()+7*86400000) };
+          character.debuff = { active: true, endDate: new Date(Date.now()+6*86400000) };
           character.currentVillage = ['rudania','vhintl'].includes(character.currentVillage)?'inariko':character.homeVillage;
           character.ko = true;
           await useStamina(character._id,0);
