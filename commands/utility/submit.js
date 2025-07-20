@@ -320,7 +320,7 @@ module.exports = {
         const embed = createWritingSubmissionEmbed(submissionData);
     
         // Post the embed publicly in the submissions channel
-        const submissionsChannel = interaction.client.channels.cache.get('1393274995580604566');
+        const submissionsChannel = interaction.client.channels.cache.get('940446392789389362');
         const sentMessage = await submissionsChannel.send({ embeds: [embed] });
         
         // Update with message URL

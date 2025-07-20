@@ -796,7 +796,7 @@ function createBlightSubmissionInstructionsEmbed(submissionId, taskType) {
       },
       { 
         name: '📤 Step 2: Submit to Submissions Channel', 
-        value: 'Use `/submit art` in the <#1393274995580604566> channel with your art file.', 
+        value: 'Use `/submit art` in the <#940446392789389362> channel with your art file.', 
         inline: false 
       },
       { 
@@ -1279,7 +1279,7 @@ async function validateDiscordMessageLink(link, client, claimedBlightId = null) 
     
     // Check if the link is from the submissions channel or the additional allowed channel
     const submissionsChannelId = process.env.SUBMISSIONS;
-    const additionalChannelId = '1393274995580604566';
+    const additionalChannelId = '940446392789389362';
     const allowedChannels = [submissionsChannelId, additionalChannelId].filter(Boolean);
     
     if (allowedChannels.length > 0 && !allowedChannels.includes(channelId)) {
