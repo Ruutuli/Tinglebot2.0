@@ -30,7 +30,7 @@ const { capitalizeWords } = require('../../modules/formattingModule.js');
 const { validateJobVoucher, activateJobVoucher, fetchJobVoucherItem, deactivateJobVoucher, getJobVoucherErrorMessage } = require('../../modules/jobVoucherModule.js');
 const { checkInventorySync } = require('../../utils/characterUtils');
 const { enforceJail } = require('../../utils/jailCheck');
-const { getWeatherWithoutGeneration } = require('../../modules/weatherModule.js');
+const { getWeatherWithoutGeneration } = require('../../services/weatherService');
 
 
 // ------------------- Utilities -------------------

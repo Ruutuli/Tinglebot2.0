@@ -100,7 +100,7 @@ const {
   handleModGiveItemAutocomplete
 } = require('../../handlers/autocompleteHandler');
 
-const { simulateWeightedWeather } = require('../../handlers/weatherHandler');
+const { simulateWeightedWeather } = require('../../services/weatherService');
 
 // ------------------- Database Models -------------------
 const ApprovedSubmission = require('../../models/ApprovedSubmissionModel');
@@ -123,7 +123,8 @@ const {
 } = require('../../embeds/embeds');
 
 const { createMountEncounterEmbed } = require('../../embeds/embeds');
-const { generateWeatherEmbed } = require('../../embeds/weatherEmbed.js');
+const { generateWeatherEmbed } = require('../../services/weatherService');
+const WeatherService = require('../../services/weatherService');
 
 // ------------------- Third-Party Libraries -------------------
 const { v4: uuidv4 } = require('uuid');
@@ -860,11 +861,11 @@ const modCommand = new SlashCommandBuilder()
 .addSubcommand(sub =>
   sub
     .setName('weather')
-    .setDescription('🌤️ Test the weather system')
+    .setDescription('🌤️ Generate weather and post in channel (does not save to database)')
     .addStringOption(opt =>
       opt
         .setName('village')
-        .setDescription('The village to test weather for')
+        .setDescription('The village to generate weather for')
         .setRequired(true)
         .addChoices(
           { name: 'Rudania', value: 'Rudania' },
@@ -1013,8 +1014,8 @@ async function execute(interaction) {
   try {
     const subcommand = interaction.options.getSubcommand();
 
-    // Only defer with ephemeral for non-mount commands
-    if (subcommand !== 'mount') {
+    // Only defer with ephemeral for non-mount and non-weather commands
+    if (subcommand !== 'mount' && subcommand !== 'weather') {
       await interaction.deferReply({ flags: [4096] }); // 4096 is the flag for ephemeral messages
     } else {
       await interaction.deferReply();
@@ -2064,27 +2065,39 @@ async function handleSlots(interaction) {
 async function handleWeather(interaction) {
   try {
     const village = interaction.options.getString('village');
-    const currentSeason = getCurrentSeason();
+    const currentSeason = WeatherService.getCurrentSeason();
     
-    const weather = simulateWeightedWeather(village, currentSeason);
+    // Use the unified weather service for moderation commands
+    const weather = await WeatherService.simulateWeightedWeather(village, currentSeason, { 
+      useDatabaseHistory: false, // Use memory-based for moderation
+      validateResult: true 
+    });
+    
+    if (!weather) {
+      await interaction.editReply({ content: '❌ Failed to generate weather preview.' });
+      return;
+    }
+    
     weather.season = currentSeason; // Add season to weather object for embed
     
+    // Generate the weather embed
     const { embed, files } = await generateWeatherEmbed(village, weather);
-    await interaction.editReply({ embeds: [embed], files });
+    
+    // Send processing message as ephemeral
+    await interaction.editReply({ content: '✅ Generating weather...', ephemeral: true });
+    
+    // Post the weather embed in the channel (not ephemeral)
+    await interaction.followUp({ 
+      embeds: [embed], 
+      files,
+      content: `🌤️ **${village} Weather Generated** - Posted by ${interaction.user.tag}`
+    });
+    
+    console.log(`[mod.js]: Generated weather for ${village} and posted in channel (not saved to database)`);
   } catch (error) {
     console.error('[mod.js]: Error handling weather command:', error);
     await interaction.editReply({ content: '❌ An error occurred while generating the weather report.' });
   }
-}
-
-// Helper function to get current season
-function getCurrentSeason() {
-  const month = new Date().getMonth() + 1; // 1-12
-  
-  if (month >= 3 && month <= 5) return 'Spring';
-  if (month >= 6 && month <= 8) return 'Summer';
-  if (month >= 9 && month <= 11) return 'Autumn';
-  return 'Winter';
 }
 
 // ------------------- Function: handleVendingReset -------------------
