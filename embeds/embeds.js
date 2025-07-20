@@ -131,7 +131,7 @@ const createDebuffEmbed = (character) => {
     // Use the original endDate timestamp directly for Discord display
     const utcTimestamp = Math.floor(debuffEndDate.getTime() / 1000);
     
-    debuffExpirationText = `<t:${utcTimestamp}:F> (<t:${utcTimestamp}:R>)`;
+    debuffExpirationText = `<t:${utcTimestamp}:D> (<t:${utcTimestamp}:R>)`;
   }
 
   const embed = new EmbedBuilder()
