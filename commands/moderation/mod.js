@@ -791,6 +791,44 @@ const modCommand = new SlashCommandBuilder()
     )
 )
 
+// ------------------- Subcommand: debuff -------------------
+.addSubcommand(sub =>
+  sub
+    .setName('debuff')
+    .setDescription('⚠️ Apply or remove a debuff from a character')
+    .addStringOption(opt =>
+      opt
+        .setName('character')
+        .setDescription('Name of the target character')
+        .setRequired(true)
+        .setAutocomplete(true)
+    )
+    .addStringOption(opt =>
+      opt
+        .setName('action')
+        .setDescription('Apply or remove the debuff')
+        .setRequired(true)
+        .addChoices(
+          { name: 'Apply Debuff', value: 'apply' },
+          { name: 'Remove Debuff', value: 'remove' }
+        )
+    )
+    .addIntegerOption(opt =>
+      opt
+        .setName('days')
+        .setDescription('Number of days for the debuff (default: 7)')
+        .setRequired(false)
+        .setMinValue(1)
+        .setMaxValue(30)
+    )
+    .addStringOption(opt =>
+      opt
+        .setName('reason')
+        .setDescription('Reason for applying the debuff')
+        .setRequired(false)
+    )
+)
+
 // ------------------- Subcommand: kick -------------------
 .addSubcommand(sub =>
   sub
@@ -1064,6 +1102,8 @@ async function execute(interaction) {
         return await handleTriggerRaid(interaction);
     } else if (subcommand === 'blightoverride') {
         return await handleBlightOverride(interaction);
+    } else if (subcommand === 'debuff') {
+        return await handleDebuff(interaction);
     } else {
         return interaction.editReply('❌ Unknown subcommand.');
     }
@@ -2663,6 +2703,128 @@ async function handleTriggerRaid(interaction) {
       content: '⚠️ **An error occurred while triggering the raid.**',
       ephemeral: true
     });
+  }
+}
+
+// ============================================================================
+// ------------------- Function: handleDebuff -------------------
+// Applies or removes debuffs from characters with proper date calculation
+// ============================================================================
+
+async function handleDebuff(interaction) {
+  try {
+    const characterName = interaction.options.getString('character');
+    const action = interaction.options.getString('action');
+    const days = interaction.options.getInteger('days') || 7;
+    const reason = interaction.options.getString('reason') || 'Moderator action';
+
+    // ------------------- Fetch Character -------------------
+    const character = await fetchCharacterByName(characterName);
+    if (!character) {
+      return interaction.editReply(`❌ Character **${characterName}** not found.`);
+    }
+
+    if (action === 'apply') {
+      // ------------------- Apply Debuff -------------------
+      // Calculate debuff end date: midnight EST on the specified day after application
+      const now = new Date();
+      const estDate = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+      // Set to midnight EST X days from now (date only, no time)
+      const debuffEndDate = new Date(estDate.getFullYear(), estDate.getMonth(), estDate.getDate() + days, 0, 0, 0, 0);
+      
+      character.debuff = {
+        active: true,
+        endDate: debuffEndDate
+      };
+
+      await character.save();
+
+      console.log(`[mod.js]: ✅ Applied ${days}-day debuff to ${character.name} (ends: ${debuffEndDate.toISOString()})`);
+
+      // Send DM to user about the debuff
+      try {
+        const user = await interaction.client.users.fetch(character.userId);
+        const debuffEmbed = new EmbedBuilder()
+          .setColor('#FF0000')
+          .setTitle('⚠️ Debuff Applied ⚠️')
+          .setDescription(`**${character.name}** has been debuffed by a moderator.`)
+          .addFields(
+            {
+              name: '🕒 Debuff Duration',
+              value: `${days} days`,
+              inline: true
+            },
+            {
+              name: '🕒 Debuff Expires',
+              value: `<t:${Math.floor(debuffEndDate.getTime() / 1000)}:F>`,
+              inline: true
+            },
+            {
+              name: '📝 Reason',
+              value: reason,
+              inline: false
+            }
+          )
+          .setThumbnail(character.icon)
+          .setFooter({ text: 'Moderator Action' })
+          .setTimestamp();
+
+        await user.send({ embeds: [debuffEmbed] });
+      } catch (dmError) {
+        console.warn(`[mod.js]: ⚠️ Could not send DM to user ${character.userId}:`, dmError);
+      }
+
+      return interaction.editReply({
+        content: `✅ **${character.name}** has been debuffed for **${days} days**.\n🕒 **Expires:** <t:${Math.floor(debuffEndDate.getTime() / 1000)}:F>\n📝 **Reason:** ${reason}`,
+        ephemeral: true
+      });
+
+    } else if (action === 'remove') {
+      // ------------------- Remove Debuff -------------------
+      if (!character.debuff?.active) {
+        return interaction.editReply(`❌ **${character.name}** is not currently debuffed.`);
+      }
+
+      character.debuff.active = false;
+      character.debuff.endDate = null;
+      await character.save();
+
+      console.log(`[mod.js]: ✅ Removed debuff from ${character.name}`);
+
+      // Send DM to user about the debuff removal
+      try {
+        const user = await interaction.client.users.fetch(character.userId);
+        const removalEmbed = new EmbedBuilder()
+          .setColor('#00FF00')
+          .setTitle('✅ Debuff Removed ✅')
+          .setDescription(`**${character.name}**'s debuff has been removed by a moderator.`)
+          .addFields(
+            {
+              name: '📝 Reason',
+              value: reason,
+              inline: false
+            }
+          )
+          .setThumbnail(character.icon)
+          .setFooter({ text: 'Moderator Action' })
+          .setTimestamp();
+
+        await user.send({ embeds: [removalEmbed] });
+      } catch (dmError) {
+        console.warn(`[mod.js]: ⚠️ Could not send DM to user ${character.userId}:`, dmError);
+      }
+
+      return interaction.editReply({
+        content: `✅ **${character.name}**'s debuff has been removed.\n📝 **Reason:** ${reason}`,
+        ephemeral: true
+      });
+    }
+
+    return interaction.editReply('❌ Invalid action specified. Use `apply` or `remove`.');
+  } catch (error) {
+    handleError(error, 'mod.js');
+    console.error('[mod.js]: Error during debuff handling:', error);
+    return interaction.editReply('⚠️ An error occurred while processing the debuff action.');
   }
 }
 

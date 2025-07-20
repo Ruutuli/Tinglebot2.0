@@ -377,7 +377,13 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
 
       character.currentHearts = 0;
       character.currentStamina = 0;
-      character.debuff = { active: true, endDate: new Date(Date.now() + 6 * 86400000) };
+      // Calculate debuff end date: midnight EST on the 7th day after KO
+      const now = new Date();
+      const estDate = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+      // Set to midnight EST 7 days from now (date only, no time)
+      const debuffEndDate = new Date(estDate.getFullYear(), estDate.getMonth(), estDate.getDate() + 7, 0, 0, 0, 0);
+      
+      character.debuff = { active: true, endDate: debuffEndDate };
       character.currentVillage = startingVillage || character.homeVillage;
       character.ko = true;
 
@@ -523,7 +529,13 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
           decision = `💔 KO'd while fleeing!`;
           // KO on flee: KO state and heart update are already handled by useHearts
           // Only update debuff and village if needed (if not already handled)
-          character.debuff = { active: true, endDate: new Date(Date.now()+6*86400000) };
+          // Calculate debuff end date: midnight EST on the 7th day after KO
+          const now = new Date();
+          const estDate = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+          // Set to midnight EST 7 days from now (date only, no time)
+          const debuffEndDate = new Date(estDate.getFullYear(), estDate.getMonth(), estDate.getDate() + 7, 0, 0, 0, 0);
+          
+          character.debuff = { active: true, endDate: debuffEndDate };
           character.currentVillage = ['rudania','vhintl'].includes(character.currentVillage)?'inariko':character.homeVillage;
           character.ko = true;
           await useStamina(character._id,0);

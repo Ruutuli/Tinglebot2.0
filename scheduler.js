@@ -330,22 +330,32 @@ async function handleJailRelease(client) {
 }
 
 async function handleDebuffExpiry(client) {
- const now = new Date();
- const charactersWithActiveDebuffs = await Character.find({
-  "debuff.active": true,
-  "debuff.endDate": { $lte: now },
- });
+  // Get current date in EST timezone
+  const now = new Date();
+  const estDate = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+  // Set to midnight EST today for comparison
+  const midnightEST = new Date(estDate.getFullYear(), estDate.getMonth(), estDate.getDate(), 0, 0, 0, 0);
+  
+  console.log(`[scheduler.js]: 🧹 Checking debuff expiry at ${midnightEST.toISOString()} (midnight EST)`);
+  
+  const charactersWithActiveDebuffs = await Character.find({
+    "debuff.active": true,
+    "debuff.endDate": { $lte: midnightEST },
+  });
 
- for (const character of charactersWithActiveDebuffs) {
-  character.debuff.active = false;
-  character.debuff.endDate = null;
-  await character.save();
+  console.log(`[scheduler.js]: 📊 Found ${charactersWithActiveDebuffs.length} characters with expired debuffs`);
 
-  await sendUserDM(
-   character.userId,
-   `Your character **${character.name}**'s week-long debuff has ended! You can now heal them with items or a Healer.`
-  );
- }
+  for (const character of charactersWithActiveDebuffs) {
+    console.log(`[scheduler.js]: ✅ Expiring debuff for ${character.name} (endDate: ${character.debuff.endDate})`);
+    character.debuff.active = false;
+    character.debuff.endDate = null;
+    await character.save();
+
+    await sendUserDM(
+      character.userId,
+      `Your character **${character.name}**'s week-long debuff has ended! You can now heal them with items or a Healer.`
+    );
+  }
 }
 
 async function resetDailyRolls(client) {
