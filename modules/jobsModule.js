@@ -11,10 +11,10 @@ const capitalize = (str) => {
 // ------------------- Define job data and configurations -------------------
 // Job categories with associated jobs
 const jobPages = [
-  { title: 'General Jobs (Page 1)', jobs: ['Adventurer', 'Artist', "Bandit", 'Cook', 'Courier', 'Craftsman', 'Farmer', 'Forager', 'Graveskeeper', 'Guard', 'Healer'] },
+  { title: 'General Jobs (Page 1)', jobs: ['Adventurer', 'Artist', "Bandit", 'Cook', 'Courier', 'Craftsman', 'Farmer', 'Forager', 'Graveskeeper', 'Guard', 'Healer', 'Entertainer'] },
   { title: 'General Jobs (Page 2)', jobs: ['Herbalist', 'Hunter', 'Merchant', 'Mercenary', 'Priest', 'Scout', 'Shopkeeper', 'Stablehand', 'Villager', 'Witch'] },
   { title: 'Inariko Exclusive Jobs', jobs: ['Fisherman', 'Researcher', 'Scholar', 'Teacher'] },
-  { title: 'Rudania Exclusive Jobs', jobs: ['Rancher', 'Blacksmith', 'Miner', 'Entertainer'] },
+  { title: 'Rudania Exclusive Jobs', jobs: ['Rancher', 'Blacksmith', 'Miner'] },
   { title: 'Vhintl Exclusive Jobs', jobs: ['Beekeeper', 'Fortune Teller', 'Mask Maker', 'Weaver'] },
   { title: 'All Jobs', jobs: [] } // This will be populated dynamically
 ];
@@ -22,7 +22,7 @@ const jobPages = [
 // Village-specific job assignments
 const villageJobs = {
   inariko: ['Fisherman', 'Researcher', 'Scholar', 'Teacher'],
-  rudania: ['Rancher', 'Blacksmith', 'Miner', 'Entertainer'],
+  rudania: ['Rancher', 'Blacksmith', 'Miner'],
   vhintl: ['Beekeeper', 'Fortune Teller', 'Mask Maker', 'Weaver']
 };
 
@@ -30,7 +30,7 @@ const villageJobs = {
 const generalJobs = [
   'Adventurer', 'Artist', 'Bandit', 'Cook', 'Courier', 'Craftsman', 'Farmer', 'Forager',
   'Guard', 'Graveskeeper', 'Healer', 'Herbalist', 'Hunter', 'Merchant', 'Mercenary',
-  'Minstrel', 'Priest', 'Scout', 'Shopkeeper', 'Stablehand', 'Villager', 'Witch'
+  'Priest', 'Scout', 'Shopkeeper', 'Stablehand', 'Villager', 'Witch', 'Entertainer'
 ];
 
 // Mod character jobs (Oracle, Sage, Dragon)
@@ -49,7 +49,7 @@ const jobPerks = [
   { job: 'Rancher', perk: 'GATHERING', village: 'Rudania' },
   { job: 'Blacksmith', perk: 'CRAFTING', village: 'Rudania' },
   { job: 'Miner', perk: 'GATHERING', village: 'Rudania' },
-  { job: 'Entertainer', perk: 'BOOST', village: 'Rudania' },
+  { job: 'Entertainer', perk: 'BOOST', village: null },
   { job: 'Beekeeper', perk: 'GATHERING', village: 'Vhintl' },
   { job: 'Fortune Teller', perk: 'BOOST', village: 'Vhintl' },
   { job: 'Mask Maker', perk: 'CRAFTING', village: 'Vhintl' },
