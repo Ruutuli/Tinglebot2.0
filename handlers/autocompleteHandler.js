@@ -441,6 +441,13 @@ async function handleAutocomplete(interaction) {
             }
             break;
 
+          // ------------------- Transfer All Command -------------------
+          case "transfer-all":
+            if (focusedOption.name === "from" || focusedOption.name === "to") {
+              await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "transfer-all");
+            }
+            break;
+
           // ------------------- Lookup Command -------------------
           case "lookup":
             await handleLookupAutocomplete(interaction, focusedOption);
