@@ -132,27 +132,46 @@ module.exports = {
           return;
         }
         if (i.customId === `transferall_confirm_${interaction.id}`) {
-          // Transfer each item
-          for (const item of inventoryItems) {
-            // Remove from fromChar and log to Google Sheets
-            await syncToInventoryDatabase(fromChar, {
-              itemName: item.itemName,
-              quantity: -item.quantity,
-              obtain: `Transfer to ${toChar.name}`
-            }, interaction);
-            // Add to toChar and log to Google Sheets
-            await syncToInventoryDatabase(toChar, {
-              itemName: item.itemName,
-              quantity: item.quantity,
-              obtain: `Transfer from ${fromChar.name}`
-            }, interaction);
-          }
+          // Immediately update to show processing and remove buttons
           await i.update({
-            content: `✅ All items have been transferred from **${fromChar.name}** to **${toChar.name}**.`,
+            content: '⏳ Processing transfer...',
             embeds: [],
             components: [],
             ephemeral: true
           });
+          try {
+            // Transfer each item
+            for (const item of inventoryItems) {
+              // Remove from fromChar and log to Google Sheets
+              await syncToInventoryDatabase(fromChar, {
+                itemName: item.itemName,
+                quantity: -item.quantity,
+                obtain: `Transfer to ${toChar.name}`
+              }, interaction);
+              // Add to toChar and log to Google Sheets
+              await syncToInventoryDatabase(toChar, {
+                itemName: item.itemName,
+                quantity: item.quantity,
+                obtain: `Transfer from ${fromChar.name}`
+              }, interaction);
+            }
+            // Edit the reply to show success
+            await i.followUp({
+              content: `✅ All items have been transferred from **${fromChar.name}** to **${toChar.name}**.`,
+              ephemeral: true
+            });
+          } catch (error) {
+            handleError(error, 'transferAll.js', {
+              commandName: 'transfer-all',
+              userTag: interaction.user.tag,
+              userId: interaction.user.id,
+              options: interaction.options.data
+            });
+            await i.followUp({
+              content: '❌ An error occurred during the transfer. Please try again later.',
+              ephemeral: true
+            });
+          }
         }
       });
 
