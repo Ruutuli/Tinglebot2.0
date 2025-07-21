@@ -155,23 +155,36 @@ async function handleSubmissionCompletion(interaction) {
         const typeEmoji = isWriting ? '📝' : '🎨';
         const typeColor = isWriting ? '#FF6B35' : '#FF0000'; // Orange for writing, red for art
         
+        // Build notification fields dynamically
+        const notificationFields = [
+          { name: '👤 Submitted by', value: `<@${interaction.user.id}>`, inline: true },
+          { name: '📅 Submitted on', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true },
+          { name: `${typeEmoji} Title`, value: submissionData.title || submissionData.fileName || 'Untitled', inline: true },
+          { name: '💰 Token Amount', value: `${totalTokens} tokens`, inline: true },
+          { name: '🆔 Submission ID', value: `\`${submissionId}\``, inline: true },
+          { name: '🔗 View Submission', value: `[Click Here](${submissionData.messageUrl})`, inline: true }
+        ];
+
+        // Add collaboration field if present
+        if (submissionData.collab && submissionData.collab !== 'N/A') {
+          const collabDisplay = submissionData.collab.startsWith('<@') && submissionData.collab.endsWith('>') ? submissionData.collab : `@${submissionData.collab}`;
+          notificationFields.push({ name: '🤝 Collaboration', value: `Collaborating with ${collabDisplay}`, inline: true });
+        }
+
+        // Add blight ID if provided
+        if (submissionData.blightId && submissionData.blightId !== 'N/A') {
+          notificationFields.push({ 
+            name: '🩸 Blight Healing ID', 
+            value: `\`${submissionData.blightId}\``, 
+            inline: true 
+          });
+        }
+
         const notificationEmbed = new EmbedBuilder()
           .setColor(typeColor)
           .setTitle(`${typeEmoji} PENDING ${submissionType} SUBMISSION!`)
           .setDescription('⏳ **Please approve within 24 hours!**')
-          .addFields(
-            { name: '👤 Submitted by', value: `<@${interaction.user.id}>`, inline: true },
-            { name: '📅 Submitted on', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true },
-            { name: `${typeEmoji} Title`, value: submissionData.title || submissionData.fileName || 'Untitled', inline: true },
-            { name: '💰 Token Amount', value: `${totalTokens} tokens`, inline: true },
-            { name: '🆔 Submission ID', value: `\`${submissionId}\``, inline: true },
-            { name: '🔗 View Submission', value: `[Click Here](${submissionData.messageUrl})`, inline: true },
-            ...(submissionData.blightId && submissionData.blightId !== 'N/A' ? [{ 
-              name: '🩸 Blight Healing ID', 
-              value: `\`${submissionData.blightId}\``, 
-              inline: true 
-            }] : [])
-          )
+          .addFields(notificationFields)
           .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
           .setFooter({ text: `${submissionType} Submission Approval Required` })
           .setTimestamp();

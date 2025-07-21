@@ -332,23 +332,36 @@ module.exports = {
         try {
           const approvalChannel = interaction.client.channels.cache.get('1381479893090566144');
           if (approvalChannel?.isTextBased()) {
+            // Build notification fields dynamically
+            const notificationFields = [
+              { name: '👤 Submitted by', value: `<@${interaction.user.id}>`, inline: true },
+              { name: '📅 Submitted on', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true },
+              { name: '📝 Title', value: title || 'Untitled', inline: true },
+              { name: '💰 Token Amount', value: `${finalTokenAmount} tokens`, inline: true },
+              { name: '🆔 Submission ID', value: `\`${submissionId}\``, inline: true },
+              { name: '🔗 View Submission', value: `[Click Here](https://discord.com/channels/${interaction.guildId}/${submissionsChannel.id}/${sentMessage.id})`, inline: true }
+            ];
+
+            // Add collaboration field if present
+            if (collab && collab !== 'N/A') {
+              const collabDisplay = collab.startsWith('<@') && collab.endsWith('>') ? collab : `@${collab}`;
+              notificationFields.push({ name: '🤝 Collaboration', value: `Collaborating with ${collabDisplay}`, inline: true });
+            }
+
+            // Add blight ID if provided
+            if (blightId && blightId !== 'N/A') {
+              notificationFields.push({ 
+                name: '🩸 Blight Healing ID', 
+                value: `\`${blightId}\``, 
+                inline: true 
+              });
+            }
+
             const notificationEmbed = new EmbedBuilder()
               .setColor('#FF6B35') // Orange for writing
               .setTitle('📝 PENDING WRITING SUBMISSION!')
               .setDescription('⏳ **Please approve within 24 hours!**')
-              .addFields(
-                { name: '👤 Submitted by', value: `<@${interaction.user.id}>`, inline: true },
-                { name: '📅 Submitted on', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true },
-                { name: '📝 Title', value: title || 'Untitled', inline: true },
-                { name: '💰 Token Amount', value: `${finalTokenAmount} tokens`, inline: true },
-                { name: '🆔 Submission ID', value: `\`${submissionId}\``, inline: true },
-                { name: '🔗 View Submission', value: `[Click Here](https://discord.com/channels/${interaction.guildId}/${submissionsChannel.id}/${sentMessage.id})`, inline: true },
-                ...(blightId && blightId !== 'N/A' ? [{ 
-                  name: '🩸 Blight Healing ID', 
-                  value: `\`${blightId}\``, 
-                  inline: true 
-                }] : [])
-              )
+              .addFields(notificationFields)
               .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
               .setFooter({ text: 'WRITING Submission Approval Required' })
               .setTimestamp();

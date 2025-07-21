@@ -902,6 +902,48 @@ const combinedFlavorText = flavorText?.trim()
 
 // ------------------- Subsection Title ------------------- 
 const createWritingSubmissionEmbed = (submissionData) => {
+ // Build fields array dynamically - only include non-N/A fields
+ const fields = [];
+
+ // Always include these core fields
+ if (submissionData.submissionId && submissionData.submissionId !== 'N/A') {
+   fields.push({ name: "Submission ID", value: `\`${submissionData.submissionId}\``, inline: false });
+ }
+ 
+ fields.push({ name: "Member", value: `<@${submissionData.userId}>`, inline: true });
+ fields.push({ name: "Word Count", value: `${submissionData.wordCount}`, inline: true });
+ 
+ // Add blight ID if provided
+ if (submissionData.blightId && submissionData.blightId !== 'N/A') {
+   fields.push({ name: "🩸 Blight Healing ID", value: `\`${submissionData.blightId}\``, inline: true });
+ }
+ 
+ // Add collab field if present
+ if (submissionData.collab && submissionData.collab !== 'N/A') {
+   // Format collab display - if it's a Discord mention, show it as a mention, otherwise show as is
+   const collabDisplay = submissionData.collab.startsWith('<@') && submissionData.collab.endsWith('>') ? submissionData.collab : `@${submissionData.collab}`;
+   fields.push({ name: "Collaboration", value: `Collaborating with ${collabDisplay}`, inline: true });
+ }
+ 
+ fields.push({
+   name: "Token Total",
+   value: `${submissionData.finalTokenAmount} Tokens`,
+   inline: true,
+ });
+ fields.push({
+   name: "Submission Link",
+   value: `[View Submission](${submissionData.link})`,
+   inline: true,
+ });
+ fields.push({
+   name: "Token Tracker Link",
+   value: submissionData.tokenTracker
+    ? `[Token Tracker](${submissionData.tokenTracker})`
+    : "N/A",
+   inline: true,
+ });
+ fields.push({ name: "Description", value: submissionData.description, inline: false });
+
  return new EmbedBuilder()
   .setColor("#AA926A")
   .setTitle(`📚 ${submissionData.title}`)
@@ -909,38 +951,7 @@ const createWritingSubmissionEmbed = (submissionData) => {
    name: `Submitted by: ${submissionData.username}`,
    iconURL: submissionData.userAvatar || "https://via.placeholder.com/128",
   })
-  .addFields(
-   {
-    name: "Submission ID",
-    value: `\`${submissionData.submissionId}\``,
-    inline: false,
-   },
-   { name: "Member", value: `<@${submissionData.userId}>`, inline: true },
-   { name: "Word Count", value: `${submissionData.wordCount}`, inline: true },
-   {
-    name: "Token Total",
-    value: `${submissionData.finalTokenAmount} Tokens`,
-    inline: true,
-   },
-   {
-    name: "Submission Link",
-    value: `[View Submission](${submissionData.link})`,
-    inline: true,
-   },
-   {
-    name: "Token Tracker Link",
-    value: submissionData.tokenTracker
-     ? `[Token Tracker](${submissionData.tokenTracker})`
-     : "N/A",
-    inline: true,
-   },
-   ...(submissionData.blightId && submissionData.blightId !== 'N/A' ? [{
-    name: "🩸 Blight Healing ID",
-    value: `\`${submissionData.blightId}\``,
-    inline: true,
-   }] : []),
-   { name: "Description", value: submissionData.description, inline: false }
-  )
+  .addFields(fields)
   .setImage(DEFAULT_IMAGE_URL)
   .setTimestamp()
   .setFooter({ text: "⏳ Please wait for a mod to approve your submission!" });
