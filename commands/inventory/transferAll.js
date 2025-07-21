@@ -3,10 +3,10 @@
 // Allows a user to transfer all items from one character to another
 // ============================================================================
 
-const { SlashCommandBuilder, MessageFlags, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, MessageFlags, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, InteractionType } = require('discord.js');
 const { fetchCharacterByNameAndUserId, getCharacterInventoryCollection } = require('../../database/db');
 const { handleError } = require('../../utils/globalErrorHandler');
-const { removeItemInventoryDatabase, addItemInventoryDatabase } = require('../../utils/inventoryUtils');
+const { syncToInventoryDatabase } = require('../../utils/inventoryUtils');
 
 // ============================================================================
 // ------------------- Command Definition -------------------
@@ -89,17 +89,82 @@ module.exports = {
         });
       }
 
-      // Transfer each item
-      for (const item of inventoryItems) {
-        // Remove from fromChar
-        await removeItemInventoryDatabase(fromChar._id, item.itemName, item.quantity, interaction, `Transfer to ${toChar.name}`);
-        // Add to toChar
-        await addItemInventoryDatabase(toChar._id, item.itemName, item.quantity, interaction, `Transfer from ${fromChar.name}`);
-      }
+      // Confirmation embed and buttons
+      const confirmEmbed = new EmbedBuilder()
+        .setColor('#FFD700')
+        .setTitle('Confirm Transfer')
+        .setDescription(`This will remove **all items** from **${fromChar.name}** and give them to **${toChar.name}**.\n\nAre you sure you want to proceed?`)
+        .setFooter({ text: 'This action cannot be undone.' });
+
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`transferall_confirm_${interaction.id}`)
+          .setLabel('✅ Yes, proceed')
+          .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+          .setCustomId(`transferall_cancel_${interaction.id}`)
+          .setLabel('❌ No, cancel')
+          .setStyle(ButtonStyle.Danger)
+      );
 
       await interaction.editReply({
-        content: `✅ All items have been transferred from **${fromChar.name}** to **${toChar.name}**.`,
+        embeds: [confirmEmbed],
+        components: [row],
         ephemeral: true
+      });
+
+      // Set up a collector for the button interaction
+      const filter = i => i.user.id === userId && i.message.interaction && i.message.interaction.id === interaction.id;
+      const collector = interaction.channel.createMessageComponentCollector({
+        filter,
+        time: 30_000,
+        max: 1
+      });
+
+      collector.on('collect', async (i) => {
+        if (i.customId === `transferall_cancel_${interaction.id}`) {
+          await i.update({
+            content: '❌ Transfer cancelled.',
+            embeds: [],
+            components: [],
+            ephemeral: true
+          });
+          return;
+        }
+        if (i.customId === `transferall_confirm_${interaction.id}`) {
+          // Transfer each item
+          for (const item of inventoryItems) {
+            // Remove from fromChar and log to Google Sheets
+            await syncToInventoryDatabase(fromChar, {
+              itemName: item.itemName,
+              quantity: -item.quantity,
+              obtain: `Transfer to ${toChar.name}`
+            }, interaction);
+            // Add to toChar and log to Google Sheets
+            await syncToInventoryDatabase(toChar, {
+              itemName: item.itemName,
+              quantity: item.quantity,
+              obtain: `Transfer from ${fromChar.name}`
+            }, interaction);
+          }
+          await i.update({
+            content: `✅ All items have been transferred from **${fromChar.name}** to **${toChar.name}**.`,
+            embeds: [],
+            components: [],
+            ephemeral: true
+          });
+        }
+      });
+
+      collector.on('end', async (collected) => {
+        if (collected.size === 0) {
+          await interaction.editReply({
+            content: '⌛ Transfer timed out. No action was taken.',
+            embeds: [],
+            components: [],
+            ephemeral: true
+          });
+        }
       });
     } catch (error) {
       handleError(error, 'transferAll.js', {
