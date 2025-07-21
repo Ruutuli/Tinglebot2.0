@@ -1017,7 +1017,7 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
           'spent',
           `-${currentTokenBalance}`
         ]];
-        await safeAppendDataToSheet(tokenTrackerLink, character, 'loggedTracker!B7:F', tokenRow, undefined, { skipValidation: true });
+        await safeAppendDataToSheet(tokenTrackerLink, user, 'loggedTracker!B7:F', tokenRow, undefined, { skipValidation: true });
       } catch (sheetError) {
         handleError(sheetError, 'blightHandler.js');
         console.error('[blightHandler]: Error logging token forfeiture', sheetError);

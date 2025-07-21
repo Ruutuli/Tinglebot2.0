@@ -1544,7 +1544,7 @@ async function handleApprove(interaction) {
             console.error(`[mod.js]: ❌ Error sending DM to collaborator ${collaboratorId}:`, dmError);
           }
         } else {
-          
+          // No collaboration - assign all tokens to the main user
           try {
             await updateTokenBalance(userId, tokenAmount);
             await appendEarnedTokens(userId, title, category, tokenAmount, messageUrl);

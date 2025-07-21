@@ -1788,7 +1788,7 @@ async function handleChangeJob(interaction) {
         'spent',
         '-500'
       ];
-      await safeAppendDataToSheet(user.tokenTracker, character, 'loggedTracker!B7:F', [tokenRow], undefined, { skipValidation: true });
+      await safeAppendDataToSheet(user.tokenTracker, user, 'loggedTracker!B7:F', [tokenRow], undefined, { skipValidation: true });
       console.log(`[handleChangeJob]: ✅ Logged job change to token tracker for ${character.name}`);
     }
   } catch (sheetError) {

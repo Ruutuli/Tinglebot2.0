@@ -1006,7 +1006,7 @@ module.exports = {
          `-${cost}`
        ];
        try {
-         await safeAppendDataToSheet(user.tokenTracker, character, "loggedTracker!B7:F", [tokenRow], undefined, { skipValidation: true });
+         await safeAppendDataToSheet(user.tokenTracker, user, "loggedTracker!B7:F", [tokenRow], undefined, { skipValidation: true });
        } catch (sheetError) {
          console.error(`[pet.js]: ❌ Error logging pet upgrade to token tracker:`, sheetError);
        }

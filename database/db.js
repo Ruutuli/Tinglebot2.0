@@ -1540,7 +1540,7 @@ async function appendSpentTokens(userId, purchaseName, amount, link = "") {
   const spreadsheetId = extractSpreadsheetId(tokenTrackerLink);
   const auth = await authorizeSheets();
   const newRow = [purchaseName, link, "", "spent", `-${amount}`];
-  await safeAppendDataToSheet(character.inventory, character, "loggedTracker!B7:F", [newRow]);
+  await safeAppendDataToSheet(tokenTrackerLink, user, "loggedTracker!B7:F", [newRow]);
  } catch (error) {
   handleError(error, "tokenService.js");
   console.error(
@@ -1629,12 +1629,7 @@ async function updateUserTokens(discordId, amount, activity, link = "") {
   const range = "loggedTracker!B:F";
   const dateTime = new Date().toISOString();
   const values = [["Update", activity, link, amount.toString(), dateTime]];
-  if (character?.name && character?.inventory && character?.userId) {
-    await safeAppendDataToSheet(character.inventory, character, range, values);
-} else {
-    console.error('[safeAppendDataToSheet]: Invalid character object detected before syncing.');
-}
-
+  await safeAppendDataToSheet(user.tokenTracker, user, range, values);
  }
 
  return user;

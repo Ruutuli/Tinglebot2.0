@@ -210,7 +210,13 @@ async function handleSubmissionCompletion(interaction) {
 
     // Update token count in database and log to Google Sheets
     console.log(`[submissionHandler.js]: 💰 Updating token count for user: ${user.id}`);
-    await appendEarnedTokens(user.id, fileName, 'art', totalTokens, fileUrl);
+    
+    // Determine submission category and title
+    const submissionCategory = submissionData.category || 'art';
+    const submissionTitle = submissionData.title || fileName;
+    const submissionUrl = submissionData.fileUrl || fileUrl;
+    
+    await appendEarnedTokens(user.id, submissionTitle, submissionCategory, totalTokens, submissionUrl);
     await updateTokenBalance(user.id, totalTokens);
     console.log(`[submissionHandler.js]: ✅ Token count updated`);
 
@@ -326,24 +332,28 @@ async function handleSubmitAction(interaction) {
 
     try {
       // ------------------- Update Token Data -------------------
+      // Determine submission category and title
+      const submissionCategory = submission.category || 'art';
+      const submissionTitle = submission.title || submission.fileName;
+      const submissionUrl = submission.fileUrl;
+      
       // If a collaboration exists, split tokens; otherwise, assign all tokens to the main user.
       if (submission.collab) {
         const splitTokens = Math.floor(submission.finalTokenAmount / 2);
         // Update tokens for the main user
-        await appendEarnedTokens(user.id, submission.fileName, 'art', splitTokens, submission.fileUrl);
+        await appendEarnedTokens(user.id, submissionTitle, submissionCategory, splitTokens, submissionUrl);
         await updateTokenBalance(user.id, splitTokens);
         // Update tokens for the collaborator (extracting their user ID)
         const collaboratorId = submission.collab.replace(/[<@>]/g, '');
-        await appendEarnedTokens(collaboratorId, submission.fileName, 'art', splitTokens, submission.fileUrl);
+        await appendEarnedTokens(collaboratorId, submissionTitle, submissionCategory, splitTokens, submissionUrl);
         await updateTokenBalance(collaboratorId, splitTokens);
       } else {
         // No collaboration; assign all tokens to the main user.
-        await appendEarnedTokens(user.id, submission.fileName, 'art', submission.finalTokenAmount, submission.fileUrl);
+        await appendEarnedTokens(user.id, submissionTitle, submissionCategory, submission.finalTokenAmount, submissionUrl);
         await updateTokenBalance(user.id, submission.finalTokenAmount);
       }
     } catch (error) {
-    handleError(error, 'submissionHandler.js');
-
+      handleError(error, 'submissionHandler.js');
       console.error(`[submissionHandler.js]: handleSubmitAction: Error appending token data for submission ${submissionId}: ${error.message}`);
     }
 
