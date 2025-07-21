@@ -155,12 +155,19 @@ async function handleSubmissionCompletion(interaction) {
         const typeEmoji = isWriting ? '📝' : '🎨';
         const typeColor = isWriting ? '#FF6B35' : '#FF0000'; // Orange for writing, red for art
         
+        // Calculate token display based on collaboration
+        let tokenDisplay = `${totalTokens} tokens`;
+        if (submissionData.collab && submissionData.collab !== 'N/A') {
+          const splitTokens = Math.floor(totalTokens / 2);
+          tokenDisplay = `${totalTokens} tokens (${splitTokens} each)`;
+        }
+
         // Build notification fields dynamically
         const notificationFields = [
           { name: '👤 Submitted by', value: `<@${interaction.user.id}>`, inline: true },
           { name: '📅 Submitted on', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true },
           { name: `${typeEmoji} Title`, value: submissionData.title || submissionData.fileName || 'Untitled', inline: true },
-          { name: '💰 Token Amount', value: `${totalTokens} tokens`, inline: true },
+          { name: '💰 Token Amount', value: tokenDisplay, inline: true },
           { name: '🆔 Submission ID', value: `\`${submissionId}\``, inline: true },
           { name: '🔗 View Submission', value: `[Click Here](${submissionData.messageUrl})`, inline: true }
         ];

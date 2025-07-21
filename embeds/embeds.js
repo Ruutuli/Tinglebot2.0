@@ -925,11 +925,18 @@ const createWritingSubmissionEmbed = (submissionData) => {
    fields.push({ name: "Collaboration", value: `Collaborating with ${collabDisplay}`, inline: true });
  }
  
- fields.push({
-   name: "Token Total",
-   value: `${submissionData.finalTokenAmount} Tokens`,
-   inline: true,
- });
+   // Calculate token display based on collaboration
+  let tokenDisplay = `${submissionData.finalTokenAmount} Tokens`;
+  if (submissionData.collab && submissionData.collab !== 'N/A') {
+    const splitTokens = Math.floor(submissionData.finalTokenAmount / 2);
+    tokenDisplay = `${submissionData.finalTokenAmount} Tokens (${splitTokens} each)`;
+  }
+  
+  fields.push({
+    name: "Token Total",
+    value: tokenDisplay,
+    inline: true,
+  });
  fields.push({
    name: "Submission Link",
    value: `[View Submission](${submissionData.link})`,

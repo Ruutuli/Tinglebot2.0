@@ -15,7 +15,7 @@ const { handleModalSubmission } = require('../../handlers/modalHandler.js');
 const { getCancelButtonRow, handleButtonInteraction } = require('../../handlers/componentHandler.js');
 
 // Utility Imports
-const { resetSubmissionState, calculateWritingTokens } = require('../../utils/tokenUtils.js');
+const { resetSubmissionState, calculateWritingTokens, calculateWritingTokensWithCollab } = require('../../utils/tokenUtils.js');
 const { getBaseSelectMenu } = require('../../utils/menuUtils.js');
 const { 
   saveSubmissionToStorage, 
@@ -290,8 +290,9 @@ module.exports = {
           return;
         }
     
-        // Calculate tokens for the writing submission
-        const finalTokenAmount = calculateWritingTokens(wordCount);
+        // Calculate tokens for the writing submission with collaboration splitting
+        const tokenCalculation = calculateWritingTokensWithCollab(wordCount, collab);
+        const finalTokenAmount = tokenCalculation.totalTokens;
     
         // Create a unique submission ID and save to database
         const submissionId = generateUniqueId('W');
@@ -304,6 +305,7 @@ module.exports = {
           title,
           wordCount,
           finalTokenAmount,
+          tokenCalculation: tokenCalculation.breakdown,
           link,
           description,
           questEvent: questId,
@@ -332,12 +334,19 @@ module.exports = {
         try {
           const approvalChannel = interaction.client.channels.cache.get('1381479893090566144');
           if (approvalChannel?.isTextBased()) {
+            // Calculate token display based on collaboration
+            let tokenDisplay = `${finalTokenAmount} tokens`;
+            if (collab && collab !== 'N/A') {
+              const splitTokens = Math.floor(finalTokenAmount / 2);
+              tokenDisplay = `${finalTokenAmount} tokens (${splitTokens} each)`;
+            }
+
             // Build notification fields dynamically
             const notificationFields = [
               { name: '👤 Submitted by', value: `<@${interaction.user.id}>`, inline: true },
               { name: '📅 Submitted on', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true },
               { name: '📝 Title', value: title || 'Untitled', inline: true },
-              { name: '💰 Token Amount', value: `${finalTokenAmount} tokens`, inline: true },
+              { name: '💰 Token Amount', value: tokenDisplay, inline: true },
               { name: '🆔 Submission ID', value: `\`${submissionId}\``, inline: true },
               { name: '🔗 View Submission', value: `[Click Here](https://discord.com/channels/${interaction.guildId}/${submissionsChannel.id}/${sentMessage.id})`, inline: true }
             ];

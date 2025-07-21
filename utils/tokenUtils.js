@@ -306,6 +306,23 @@ function calculateWritingTokens(wordCount) {
   return Math.round(wordCount / 100 * 10); // 10 tokens per 100 words
 }
 
+// ------------------- Calculate Writing Tokens with Collaboration -------------------
+// Calculates tokens for writing submissions with collaboration splitting
+function calculateWritingTokensWithCollab(wordCount, collab = null) {
+  const totalTokens = Math.round(wordCount / 100 * 10); // 10 tokens per 100 words
+  
+  return {
+    totalTokens,
+    splitTokens: collab ? Math.floor(totalTokens / 2) : totalTokens, // Split if collaborator exists
+    breakdown: {
+      wordCount,
+      tokensPerHundredWords: 10,
+      calculation: `${wordCount} words ÷ 100 × 10 = ${totalTokens} tokens`,
+      finalTotal: totalTokens,
+    }
+  };
+}
+
 // ------------------- Handle Token Errors -------------------
 // Provides consistent error handling and user guidance for token-related issues
 function handleTokenError(error, interaction) {
@@ -419,6 +436,7 @@ module.exports = {
   resetSubmissionState,
   calculateTokens,
   calculateWritingTokens,
+  calculateWritingTokensWithCollab,
   generateTokenBreakdown,
   handleTokenError,
   logTokenBalanceChange,
