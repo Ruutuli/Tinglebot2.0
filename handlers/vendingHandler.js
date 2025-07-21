@@ -726,6 +726,25 @@ async function handleFulfill(interaction) {
         await updateTokenBalance(buyerId, -totalCost);
         await updateTokenBalance(vendor.userId, totalCost);
 
+        // Log token transaction in buyer's token tracker
+        const buyer = await User.findOne({ discordId: buyerId });
+        if (buyer && buyer.tokenTracker) {
+          try {
+            const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
+            const buyerTokenRow = [
+              `Purchase from ${vendor.name} - ${itemName} x${quantity}`,
+              interactionUrl,
+              "vending",
+              "spent",
+              `-${totalCost}`
+            ];
+            await safeAppendDataToSheet(buyer.tokenTracker, buyer, "loggedTracker!B7:F", [buyerTokenRow], undefined, { skipValidation: true });
+            console.log(`[vendingHandler.js]: ✅ Logged token transaction to buyer's tracker for user ${buyerId}`);
+          } catch (buyerSheetError) {
+            console.error(`[vendingHandler.js]: ❌ Error logging to buyer's token tracker:`, buyerSheetError.message);
+          }
+        }
+
         // Log token transaction in vendor's sheet
         if (vendorShopLink) {
           try {

@@ -1622,7 +1622,7 @@ if (quantity <= 0) {
     "earned",
     `+${totalPrice}`,
    ];
-   await safeAppendDataToSheet(user.tokenTracker, character, "loggedTracker!B7:F", [tokenRow], undefined, { skipValidation: true });
+   await safeAppendDataToSheet(user.tokenTracker, user, "loggedTracker!B7:F", [tokenRow], undefined, { skipValidation: true });
    console.log(`[shops]: Logged sale in token tracker.`);
   }
 
