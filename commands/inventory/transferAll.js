@@ -7,6 +7,7 @@ const { SlashCommandBuilder, MessageFlags, EmbedBuilder, ActionRowBuilder, Butto
 const { fetchCharacterByNameAndUserId, getCharacterInventoryCollection } = require('../../database/db');
 const { handleError } = require('../../utils/globalErrorHandler');
 const { syncToInventoryDatabase } = require('../../utils/inventoryUtils');
+const { checkInventorySync } = require('../../utils/characterUtils');
 
 // ============================================================================
 // ------------------- Command Definition -------------------
@@ -51,7 +52,37 @@ module.exports = {
       const toChar = await fetchCharacterByNameAndUserId(toName, userId);
       if (!fromChar || !toChar) {
         return await interaction.editReply({
-          content: '❌ One or both characters not found or do not belong to you.',
+          embeds: [
+            new EmbedBuilder()
+              .setColor('#FF0000')
+              .setTitle('❌ Character Not Found')
+              .setDescription('Either the source or destination character does not exist or does not belong to you.')
+              .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
+              .setFooter({ text: 'Character Validation' })
+              .setTimestamp()
+          ],
+          ephemeral: true
+        });
+      }
+
+      // Check inventory sync for both characters
+      try {
+        await checkInventorySync(fromChar);
+        await checkInventorySync(toChar);
+      } catch (error) {
+        return await interaction.editReply({
+          embeds: [
+            new EmbedBuilder()
+              .setColor('#FF0000')
+              .setTitle('❌ Inventory Not Synced')
+              .setDescription(error.message)
+              .addFields({
+                name: 'How to Fix',
+                value: '1. Use `/inventory test` to test your inventory\n2. Use `/inventory sync` to sync your inventory'
+              })
+              .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+              .setFooter({ text: 'Inventory Sync Required' })
+          ],
           ephemeral: true
         });
       }
