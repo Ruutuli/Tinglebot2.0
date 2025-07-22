@@ -58,13 +58,16 @@ module.exports = {
         if (Array.isArray(quest.requirements.monsters)) {
           monsterList = quest.requirements.monsters;
         } else if (quest.requirements.monster) {
-          monsterList = [quest.requirements.monster];
+          // Handle amount field for single monster quests
+          const amount = quest.requirements.amount || 1;
+          monsterList = Array(amount).fill(quest.requirements.monster);
         } else {
           return await interaction.reply({ content: '❌ No monsters specified for this quest.', ephemeral: true });
         }
         if (monsterList.length === 0) {
           return await interaction.reply({ content: '❌ No monsters specified for this quest.', ephemeral: true });
         }
+        console.log(`[helpWanted.js]: 🎯 Monster hunt quest - ${monsterList.length} monsters to fight: ${monsterList.join(', ')}`);
         // ------------------- Fetch Character -------------------
         const character = await Character.findOne({ userId: interaction.user.id, name: characterName });
         if (!character) {
@@ -87,36 +90,102 @@ module.exports = {
         const { handleKO, updateCurrentHearts } = require('../../modules/characterStatsModule.js');
         const { generateVictoryMessage, generateDamageMessage, generateFinalOutcomeMessage, generateDefenseBuffMessage, generateAttackBuffMessage } = require('../../modules/flavorTextModule.js');
         const { createMonsterEncounterEmbed, createKOEmbed } = require('../../embeds/embeds.js');
+        
+        await interaction.deferReply();
+        
         let summary = [];
         let defeatedAll = true;
         let heartsRemaining = character.currentHearts;
+        let currentMonsterIndex = 0;
+        
+        console.log(`[helpWanted.js]: 🏃 Starting monster hunt for ${character.name} - ${heartsRemaining} hearts remaining`);
+        
         for (const monsterName of monsterList) {
+          currentMonsterIndex++;
+          console.log(`[helpWanted.js]: ⚔️ Battle ${currentMonsterIndex}/${monsterList.length} - ${character.name} vs ${monsterName} (${heartsRemaining} hearts remaining)`);
+          
           // Fetch monster data (assume name is enough)
           const items = await fetchItemsByMonster(monsterName);
+          
           // Simulate encounter
           const diceRoll = Math.floor(Math.random() * 100) + 1;
+          console.log(`[helpWanted.js]: 🎲 Dice roll for ${monsterName}: ${diceRoll}/100`);
+          
           const { damageValue, adjustedRandomValue, attackSuccess, defenseSuccess } = calculateFinalValue(character, diceRoll);
+          console.log(`[helpWanted.js]: 📊 Combat values for ${monsterName} - Damage: ${damageValue}, Adjusted: ${adjustedRandomValue}, Attack: ${attackSuccess}, Defense: ${defenseSuccess}`);
+          
           const outcome = await getEncounterOutcome(character, { name: monsterName }, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess);
+          console.log(`[helpWanted.js]: 🎯 Encounter outcome for ${monsterName} - Result: ${outcome.result}, Hearts: ${outcome.hearts || 0}, Can Loot: ${outcome.canLoot}`);
+          
+          // Generate outcome message
+          let outcomeMessage;
+          if (outcome.hearts) {
+            outcomeMessage = outcome.result === "KO" ? generateDamageMessage("KO") : generateDamageMessage(outcome.hearts);
+          } else if (outcome.defenseSuccess) {
+            outcomeMessage = generateDefenseBuffMessage(outcome.defenseSuccess, adjustedRandomValue, damageValue);
+          } else if (outcome.attackSuccess) {
+            outcomeMessage = generateAttackBuffMessage(outcome.attackSuccess, adjustedRandomValue, damageValue);
+          } else if (outcome.result === "Win!/Loot") {
+            outcomeMessage = generateVictoryMessage(adjustedRandomValue, outcome.defenseSuccess, outcome.attackSuccess);
+          } else {
+            outcomeMessage = generateFinalOutcomeMessage(damageValue, outcome.defenseSuccess, outcome.attackSuccess, adjustedRandomValue, damageValue);
+          }
+          
           // Update hearts
           if (outcome.hearts) {
             heartsRemaining = Math.max(heartsRemaining - outcome.hearts, 0);
             await updateCurrentHearts(character._id, heartsRemaining);
+            console.log(`[helpWanted.js]: ❤️ ${character.name} lost ${outcome.hearts} hearts - ${heartsRemaining} remaining`);
+            
             if (heartsRemaining === 0) {
               await handleKO(character._id);
-              summary.push({ monster: monsterName, result: 'KO', message: generateDamageMessage('KO') });
+              console.log(`[helpWanted.js]: 💀 ${character.name} has been KO'd by ${monsterName}`);
+              
+              // Send KO embed for this battle
+              const koEmbed = createMonsterEncounterEmbed(
+                character,
+                { name: monsterName },
+                outcomeMessage,
+                0,
+                null,
+                false,
+                adjustedRandomValue
+              );
+              await interaction.editReply({ embeds: [koEmbed] });
+              
+              summary.push({ monster: monsterName, result: 'KO', message: outcomeMessage });
               defeatedAll = false;
               break;
             } else {
-              summary.push({ monster: monsterName, result: 'Damaged', message: generateDamageMessage(outcome.hearts) });
+              summary.push({ monster: monsterName, result: 'Damaged', message: outcomeMessage });
             }
           } else if (outcome.defenseSuccess) {
-            summary.push({ monster: monsterName, result: 'Defended', message: generateDefenseBuffMessage(outcome.defenseSuccess, adjustedRandomValue, damageValue) });
+            summary.push({ monster: monsterName, result: 'Defended', message: outcomeMessage });
           } else if (outcome.attackSuccess) {
-            summary.push({ monster: monsterName, result: 'Attacked', message: generateAttackBuffMessage(outcome.attackSuccess, adjustedRandomValue, damageValue) });
+            summary.push({ monster: monsterName, result: 'Attacked', message: outcomeMessage });
           } else if (outcome.result === 'Win!/Loot') {
-            summary.push({ monster: monsterName, result: 'Victory', message: generateVictoryMessage(adjustedRandomValue, outcome.defenseSuccess, outcome.attackSuccess) });
+            summary.push({ monster: monsterName, result: 'Victory', message: outcomeMessage });
           } else {
-            summary.push({ monster: monsterName, result: 'Other', message: generateFinalOutcomeMessage(damageValue, outcome.defenseSuccess, outcome.attackSuccess, adjustedRandomValue, damageValue) });
+            summary.push({ monster: monsterName, result: 'Other', message: outcomeMessage });
+          }
+          
+          // Send embed for this battle (unless it was a KO)
+          if (heartsRemaining > 0) {
+            const battleEmbed = createMonsterEncounterEmbed(
+              character,
+              { name: monsterName },
+              outcomeMessage,
+              heartsRemaining,
+              null,
+              false,
+              adjustedRandomValue
+            );
+            await interaction.editReply({ embeds: [battleEmbed] });
+            
+            // Add a small delay between battles for readability
+            if (currentMonsterIndex < monsterList.length) {
+              await new Promise(resolve => setTimeout(resolve, 1000));
+            }
           }
         }
         // ------------------- Mark Quest Completed if All Defeated -------------------
@@ -124,11 +193,21 @@ module.exports = {
           quest.completed = true;
           quest.completedBy = { userId: interaction.user.id, characterId: character._id, timestamp: new Date().toISOString() };
           await quest.save();
+          console.log(`[helpWanted.js]: ✅ Quest ${questId} completed by ${character.name}`);
+        } else {
+          console.log(`[helpWanted.js]: ❌ Quest ${questId} failed - ${character.name} was KO'd`);
         }
-        // ------------------- Respond to User -------------------
-        let resultMsg = defeatedAll ? `✅ ${character.name} defeated all monsters! Quest completed.` : `❌ ${character.name} was KO'd. Quest failed.`;
-        let details = summary.map(s => `**${s.monster}:** ${s.message}`).join('\n');
-        await interaction.reply({ content: `${resultMsg}\n\n${details}`, ephemeral: true });
+        
+        // ------------------- Final Summary -------------------
+        console.log(`[helpWanted.js]: 📋 Monster hunt summary for ${character.name}:`);
+        summary.forEach((battle, index) => {
+          console.log(`[helpWanted.js]:   ${index + 1}. ${battle.monster} - ${battle.result}: ${battle.message}`);
+        });
+        
+        // Send final summary message
+        let resultMsg = defeatedAll ? `✅ **${character.name} defeated all ${monsterList.length} monsters! Quest completed.**` : `❌ **${character.name} was KO'd after defeating ${currentMonsterIndex - 1} monsters. Quest failed.**`;
+        let details = summary.map((s, index) => `**${index + 1}. ${s.monster}:** ${s.message}`).join('\n');
+        await interaction.editReply({ content: `${resultMsg}\n\n${details}`, ephemeral: true });
         return;
       } catch (error) {
         handleError(error, 'helpWanted.js', {
