@@ -551,6 +551,15 @@ async function checkAndHandleKO(character, channel, startingVillage) {
       .setTimestamp();
 
     await channel.send({ embeds: [koEmbed] });
+    // Log KO travel attempt
+    character.travelLog = character.travelLog || [];
+    character.travelLog.push({
+      from: startingVillage,
+      to: character.currentVillage,
+      date: new Date(),
+      success: false
+    });
+    await character.save();
     return true;
   }
   return false;
@@ -739,6 +748,15 @@ async function processTravelDay(day, context) {
         
         // Assign village visiting role after successful arrival
         await assignVillageVisitingRole(interaction, destination, character);
+        // Log travel completion
+        character.travelLog = character.travelLog || [];
+        character.travelLog.push({
+          from: startingVillage,
+          to: destination,
+          date: new Date(),
+          success: true
+        });
+        await character.save();
       } catch (error) {
         handleError(error, 'travel.js');
         await finalChannel.send({ content: '⚠️ Unable to display the arrival embed.' });

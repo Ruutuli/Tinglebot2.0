@@ -107,6 +107,14 @@ const characterSchema = new Schema({
     of: Schema.Types.Mixed,
     default: new Map()
   },
+  travelLog: [
+    {
+      from: { type: String },
+      to: { type: String },
+      date: { type: Date },
+      success: { type: Boolean }
+    }
+  ],
 
   // ------------------- Additional features -------------------
   jobVoucher: {

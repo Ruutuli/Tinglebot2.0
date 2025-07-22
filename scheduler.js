@@ -52,6 +52,13 @@ const { connectToInventories } = require("./handlers/blightHandler");
 const { getCurrentWeather, generateWeatherEmbed } = require("./services/weatherService");
 const Pet = require("./models/PetModel");
 const Raid = require("./models/RaidModel");
+const fs = require('fs');
+const { formatQuestsAsEmbedsByVillage, generateDailyQuests, getQuestsForScheduledTime } = require('./modules/helpWantedModule');
+const HelpWantedQuest = require('./models/HelpWantedQuestModel');
+const moment = require('moment');
+
+const HELP_WANTED_SCHEDULE_FILE = './helpWantedSchedule.json';
+const HELP_WANTED_TEST_CHANNEL = '1391812848099004578';
 
 const env = process.env.NODE_ENV || "development";
 try {
@@ -520,6 +527,51 @@ function setupWeatherScheduler(client) {
  );
 }
 
+// ------------------- Fixed Times for Help Wanted Board -------------------
+async function postHelpWantedBoardToTestChannel(client, cronTime) {
+  try {
+    // Only post quests scheduled for this cron time
+    const quests = await getQuestsForScheduledTime(cronTime);
+    if (!quests.length) {
+      console.log(`[scheduler.js]: No Help Wanted quests scheduled for ${cronTime}`);
+      return;
+    }
+    const channel = await client.channels.fetch(HELP_WANTED_TEST_CHANNEL);
+    let posted = 0;
+    for (const quest of quests) {
+      // Format embed for this quest only
+      const embedsByVillage = await formatQuestsAsEmbedsByVillage();
+      const embed = embedsByVillage[quest.village];
+      if (embed) {
+        await channel.send({ embeds: [embed] });
+        posted++;
+      }
+    }
+    console.log(`[scheduler.js]: Posted Help Wanted board for ${posted} village(s) at ${cronTime}`);
+  } catch (error) {
+    handleError(error, 'scheduler.js');
+    console.error('[scheduler.js]: Error posting Help Wanted board:', error);
+  }
+}
+
+function setupHelpWantedFixedScheduler(client) {
+  const times = [
+    '0 5 * * *',   // 5:00 AM EST
+    '0 11 * * *',  // 11:00 AM EST
+    '0 17 * * *',  // 5:00 PM EST
+    '0 23 * * *',  // 11:00 PM EST
+  ];
+  times.forEach((cronTime, idx) => {
+    createCronJob(
+      cronTime,
+      `Help Wanted Board Fixed Post #${idx + 1}`,
+      () => postHelpWantedBoardToTestChannel(client, cronTime),
+      'America/New_York'
+    );
+    console.log(`[scheduler.js]: Scheduled Help Wanted board post at ${cronTime} EST`);
+  });
+}
+
 // ============================================================================
 // ---- Scheduler Initialization ----
 // Main initialization function for all scheduled tasks
@@ -643,6 +695,7 @@ function initializeScheduler(client) {
  setupBlightScheduler(client);
  setupBoostingScheduler(client);
  setupWeatherScheduler(client);
+ setupHelpWantedFixedScheduler(client);
 
  // ============================================================================
  // ---- Blood Moon Scheduling ----

@@ -41,6 +41,10 @@ const HelpWantedQuestSchema = new mongoose.Schema({
     type: Object,
     default: null
     // Example: { userId, characterId, timestamp }
+  },
+  scheduledPostTime: {
+    type: String,
+    required: true
   }
 });
 
