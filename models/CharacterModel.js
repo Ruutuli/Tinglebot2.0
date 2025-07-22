@@ -130,6 +130,20 @@ const characterSchema = new Schema({
     type: Schema.Types.ObjectId, 
     ref: 'Mount', 
     default: null 
+  },
+
+  // ------------------- Help Wanted Quest Tracking -------------------
+  // Tracks Help Wanted quest completions, cooldowns, and history for this character
+  helpWanted: {
+    lastCompletion: { type: String, default: null }, // YYYY-MM-DD
+    cooldownUntil: { type: Date, default: null },
+    completions: [
+      {
+        date: { type: String }, // YYYY-MM-DD
+        village: { type: String },
+        questType: { type: String }
+      }
+    ]
   }
 
 }, { collection: 'characters' });

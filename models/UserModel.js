@@ -18,6 +18,20 @@ const userSchema = new mongoose.Schema({
   // ------------------- Message tracking fields -------------------
   lastMessageContent: { type: String, default: '' }, // Content of the last message sent
   lastMessageTimestamp: { type: Date }, // Timestamp of the last message
+
+  // ------------------- Help Wanted Quest Tracking -------------------
+  // Tracks Help Wanted quest completions, cooldowns, and history for this user
+  helpWanted: {
+    lastCompletion: { type: String, default: null }, // YYYY-MM-DD
+    cooldownUntil: { type: Date, default: null },
+    completions: [
+      {
+        date: { type: String }, // YYYY-MM-DD
+        village: { type: String },
+        questType: { type: String }
+      }
+    ]
+  }
 });
 
 // ------------------- Export the User model -------------------
