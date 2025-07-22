@@ -620,7 +620,10 @@ module.exports = {
           return;
         }
         const weightedItems = createWeightedItemList(availableItems, undefined, job);
-        const randomItem = weightedItems[Math.floor(Math.random() * weightedItems.length)];
+        const randomIndex = Math.floor(Math.random() * weightedItems.length);
+        const randomItem = weightedItems[randomIndex];
+        // Logging for random selection
+        console.log(`[gather.js]: 🎲 Weighted list length: ${weightedItems.length}, Random index chosen: ${randomIndex}, Item selected: ${randomItem.itemName}`);
         const quantity = 1;
         await addItemInventoryDatabase(
           character._id,
