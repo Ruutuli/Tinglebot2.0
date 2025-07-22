@@ -123,21 +123,38 @@ function createWeightedItemList(items, fv, job) {
   }
 
   const weightedList = [];
+  const honeyBoostLog = [];
   validItems.forEach(item => {
     let weight = adjustedWeights[item.itemRarity];
     // Boost honey items for Beekeeper job
+    let honeyBoosted = false;
     if (
       job &&
       job.replace(/\s+/g, '').toLowerCase() === 'beekeeper' &&
       typeof item.itemName === 'string' &&
       item.itemName.toLowerCase().includes('honey')
     ) {
-      weight *= 3;
+      honeyBoosted = true;
+      weight *= 5;
+      honeyBoostLog.push({ item: item.itemName, originalWeight: adjustedWeights[item.itemRarity], boostedWeight: weight });
     }
     for (let i = 0; i < weight; i++) {
       weightedList.push(item);
     }
   });
+
+  // Logging for honey boost
+  if (job && job.replace(/\s+/g, '').toLowerCase() === 'beekeeper') {
+    if (honeyBoostLog.length > 0) {
+      console.log(`[rngModule.js]: 🍯 Beekeeper honey boost applied! Details:`);
+      honeyBoostLog.forEach(log => {
+        console.log(`  - Item: ${log.item}, Original Weight: ${log.originalWeight}, Boosted Weight: ${log.boostedWeight}`);
+      });
+      console.log(`[rngModule.js]: 🍯 Weighted list length after boost: ${weightedList.length}`);
+    } else {
+      console.log(`[rngModule.js]: 🍯 Beekeeper present, but no honey items found to boost.`);
+    }
+  }
 
   return weightedList;
 }
