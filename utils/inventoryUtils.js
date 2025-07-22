@@ -292,7 +292,7 @@ async function syncToInventoryDatabase(character, item, interaction) {
 
 // ---- Function: addItemInventoryDatabase ----
 // Adds a single item to inventory database
-async function addItemInventoryDatabase(characterId, itemName, quantity, interaction, obtain = "") {
+async function addItemInventoryDatabase(characterId, itemName, quantity, interaction, obtain = "", craftedAt = null) {
   try {
     if (!interaction && obtain !== 'Trade') {
       throw new Error("Interaction object is undefined.");
@@ -357,6 +357,9 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
         date: new Date(),
         obtain,
       };
+      if ((obtain === 'Crafting' || obtain === 'Custom Weapon') && craftedAt) {
+        newItem.craftedAt = craftedAt;
+      }
       await inventoryCollection.insertOne(newItem);
     }
     return true;

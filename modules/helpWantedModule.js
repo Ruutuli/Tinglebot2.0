@@ -16,6 +16,12 @@ const { generateUniqueId } = require('../utils/uniqueIdUtils');
 // ============================================================================
 const VILLAGES = ['Rudania', 'Inariko', 'Vhintl'];
 const QUEST_TYPES = ['item', 'monster', 'escort', 'crafting'];
+const FIXED_CRON_TIMES = [
+  '0 5 * * *',   // 5:00 AM EST
+  '0 11 * * *',  // 11:00 AM EST
+  '0 17 * * *',  // 5:00 PM EST
+  '0 23 * * *',  // 11:00 PM EST
+];
 
 // ------------------- Function: getRandomElement -------------------
 // Returns a random element from an array
@@ -113,11 +119,33 @@ async function generateQuestForVillage(village, date, pools) {
   };
 }
 
+// ------------------- Function: assignRandomPostTimes -------------------
+// Assigns a random cron time to each village for today
+// ============================================================================
+function assignRandomPostTimes() {
+  const times = [...FIXED_CRON_TIMES];
+  // Shuffle times for random assignment
+  for (let i = times.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [times[i], times[j]] = [times[j], times[i]];
+  }
+  // Map each village to a time (if more villages than times, reuse times)
+  const mapping = {};
+  for (let i = 0; i < VILLAGES.length; i++) {
+    mapping[VILLAGES[i]] = times[i % times.length];
+  }
+  return mapping;
+}
+
 // ------------------- Function: generateDailyQuests -------------------
 // Generates and saves one quest per village for the current day using real data
+// Assigns a random scheduledPostTime to each quest
 // ============================================================================
 async function generateDailyQuests() {
   const date = moment().utc().format('YYYY-MM-DD');
+
+  // Assign random post times for each village
+  const postTimeMap = assignRandomPostTimes();
 
   // Fetch all pools in parallel
   const [itemPool, monsterPool, craftingPool] = await Promise.all([
@@ -129,12 +157,16 @@ async function generateDailyQuests() {
 
   const pools = { itemPool, monsterPool, craftingPool, escortPool };
 
-  const quests = await Promise.all(VILLAGES.map(village => generateQuestForVillage(village, date, pools)));
+  const quests = await Promise.all(VILLAGES.map(async village => {
+    const quest = await generateQuestForVillage(village, date, pools);
+    quest.scheduledPostTime = postTimeMap[village];
+    return quest;
+  }));
 
   // Upsert: Replace today's quest for each village
   const results = [];
   for (const quest of quests) {
-    console.log(`[HelpWanted] Upserting quest for ${quest.village} with questId: ${quest.questId}`);
+    console.log(`[HelpWanted] Upserting quest for ${quest.village} with questId: ${quest.questId} at ${quest.scheduledPostTime}`);
     const updated = await HelpWantedQuest.findOneAndUpdate(
       { village: quest.village, date: quest.date },
       quest,
@@ -151,6 +183,14 @@ async function generateDailyQuests() {
 async function getTodaysQuests() {
   const date = moment().utc().format('YYYY-MM-DD');
   return await HelpWantedQuest.find({ date });
+}
+
+// ------------------- Function: getQuestsForScheduledTime -------------------
+// Fetches today's quests scheduled for a specific cron time
+// ============================================================================
+async function getQuestsForScheduledTime(cronTime) {
+  const date = moment().utc().format('YYYY-MM-DD');
+  return await HelpWantedQuest.find({ date, scheduledPostTime: cronTime });
 }
 
 // ------------------- Function: getRandomNPCName -------------------
@@ -301,11 +341,12 @@ async function formatQuestsAsEmbedsByVillage() {
     const color = VILLAGE_COLORS[quest.village] || '#25c059';
     const image = VILLAGE_IMAGES[quest.village] || null;
 
+    const divider = '<:br:788136157363306506><:br:788136157363306506><:br:788136157363306506><:br:788136157363306506><:br:788136157363306506><:br:788136157363306506><:br:788136157363306506><:br:788136157363306506><:br:788136157363306506><:br:788136157363306506><:br:788136157363306506>';
     const embed = new EmbedBuilder()
       .setTitle(`🌿 Help Wanted — ${quest.village}`)
       .setColor(color)
       .addFields(
-        { name: 'Quest', value: `${questLine}\n${status}` },
+        { name: 'Quest', value: `${questLine}\n${status}\n${divider}` },
         { name: 'How to Complete', value: turnIn },
         { name: 'Rules', value: rules },
         { name: 'Quest ID', value: quest.questId ? String(quest.questId) : 'N/A', inline: true }
@@ -328,5 +369,6 @@ module.exports = {
   QUEST_TYPES,
   getTodaysQuests,
   formatQuestsAsEmbed,
-  formatQuestsAsEmbedsByVillage
+  formatQuestsAsEmbedsByVillage,
+  getQuestsForScheduledTime
 }; 

@@ -353,7 +353,8 @@ module.exports = {
         }
       }
 
-      await addItemInventoryDatabase(character._id, item.itemName, quantity, interaction, 'Crafting');
+      const craftedAt = new Date();
+      await addItemInventoryDatabase(character._id, item.itemName, quantity, interaction, 'Crafting', craftedAt);
 
       // ------------------- Activate and Deactivate Job Voucher AFTER Crafting Success -------------------
       if (character.jobVoucher && !voucherCheck?.skipVoucher && jobVoucherItem) {

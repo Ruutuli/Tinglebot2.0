@@ -1072,12 +1072,14 @@ async function processCraftingTransaction(character, weaponSubmission, inventory
         console.log(`[processCraftingTransaction]: ✅ Stamina deducted successfully`);
 
         // Step 3: Add weapon to inventory
+        const craftedAt = new Date();
         await addItemInventoryDatabase(
             character._id,
             weaponSubmission.weaponName,
             1,
             interaction,
-            'Custom Weapon'
+            'Custom Weapon',
+            craftedAt
         );
         weaponAdded = true;
         console.log(`[processCraftingTransaction]: ✅ Weapon added to inventory successfully`);
