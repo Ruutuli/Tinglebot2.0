@@ -619,7 +619,7 @@ module.exports = {
           });
           return;
         }
-        const weightedItems = createWeightedItemList(availableItems);
+        const weightedItems = createWeightedItemList(availableItems, undefined, job);
         const randomItem = weightedItems[Math.floor(Math.random() * weightedItems.length)];
         const quantity = 1;
         await addItemInventoryDatabase(

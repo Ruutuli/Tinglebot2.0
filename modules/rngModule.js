@@ -111,7 +111,7 @@ const adjustRarityWeights = (fv) => {
 
 // ------------------- Create Weighted Item List -------------------
 // Creates a weighted list of items based on their rarity and a provided Final Value (FV).
-function createWeightedItemList(items, fv) {
+function createWeightedItemList(items, fv, job) {
   if (!items || items.length === 0) {
     return [];
   }
@@ -124,7 +124,16 @@ function createWeightedItemList(items, fv) {
 
   const weightedList = [];
   validItems.forEach(item => {
-    const weight = adjustedWeights[item.itemRarity];
+    let weight = adjustedWeights[item.itemRarity];
+    // Boost honey items for Beekeeper job
+    if (
+      job &&
+      job.replace(/\s+/g, '').toLowerCase() === 'beekeeper' &&
+      typeof item.itemName === 'string' &&
+      item.itemName.toLowerCase().includes('honey')
+    ) {
+      weight *= 3;
+    }
     for (let i = 0; i < weight; i++) {
       weightedList.push(item);
     }
