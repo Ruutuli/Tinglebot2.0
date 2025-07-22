@@ -97,6 +97,7 @@ module.exports = {
         let defeatedAll = true;
         let heartsRemaining = character.currentHearts;
         let currentMonsterIndex = 0;
+        let isFirstBattle = true;
         
         console.log(`[helpWanted.js]: 🏃 Starting monster hunt for ${character.name} - ${heartsRemaining} hearts remaining`);
         
@@ -161,7 +162,12 @@ module.exports = {
                 false,
                 adjustedRandomValue
               );
-              await interaction.editReply({ embeds: [koEmbed] });
+              
+              if (isFirstBattle) {
+                await interaction.editReply({ embeds: [koEmbed] });
+              } else {
+                await interaction.followUp({ embeds: [koEmbed] });
+              }
               
               summary.push({ monster: monsterName, result: 'KO', message: outcomeMessage });
               defeatedAll = false;
@@ -190,7 +196,13 @@ module.exports = {
               false,
               adjustedRandomValue
             );
-            await interaction.editReply({ embeds: [battleEmbed] });
+            
+            if (isFirstBattle) {
+              await interaction.editReply({ embeds: [battleEmbed] });
+              isFirstBattle = false;
+            } else {
+              await interaction.followUp({ embeds: [battleEmbed] });
+            }
             
             // Add a small delay between battles for readability
             if (currentMonsterIndex < monsterList.length) {
@@ -214,10 +226,10 @@ module.exports = {
           console.log(`[helpWanted.js]:   ${index + 1}. ${battle.monster} - ${battle.result}: ${battle.message}`);
         });
         
-        // Send final summary message
+        // Send final summary message as a follow-up
         let resultMsg = defeatedAll ? `✅ **${character.name} defeated all ${monsterList.length} monsters! Quest completed.**` : `❌ **${character.name} was KO'd after defeating ${currentMonsterIndex - 1} monsters. Quest failed.**`;
         let details = summary.map((s, index) => `**${index + 1}. ${s.monster}:** ${s.message}`).join('\n');
-        await interaction.editReply({ content: `${resultMsg}\n\n${details}`, ephemeral: true });
+        await interaction.followUp({ content: `${resultMsg}\n\n${details}`, ephemeral: true });
         return;
       } catch (error) {
         handleError(error, 'helpWanted.js', {
