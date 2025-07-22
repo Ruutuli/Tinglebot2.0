@@ -104,7 +104,17 @@ module.exports = {
           currentMonsterIndex++;
           console.log(`[helpWanted.js]: ⚔️ Battle ${currentMonsterIndex}/${monsterList.length} - ${character.name} vs ${monsterName} (${heartsRemaining} hearts remaining)`);
           
-          // Fetch monster data (assume name is enough)
+          // Fetch full monster data by name
+          const { fetchMonsterByName } = require('../../database/db.js');
+          const monster = await fetchMonsterByName(monsterName);
+          if (!monster) {
+            console.error(`[helpWanted.js]: ❌ Monster "${monsterName}" not found in database`);
+            await interaction.editReply({ content: `❌ Monster "${monsterName}" not found in database.`, ephemeral: true });
+            return;
+          }
+          console.log(`[helpWanted.js]: 🐉 Fetched monster data for ${monsterName} - Tier: ${monster.tier}, Hearts: ${monster.hearts}`);
+          
+          // Fetch monster items
           const items = await fetchItemsByMonster(monsterName);
           
           // Simulate encounter
@@ -114,7 +124,7 @@ module.exports = {
           const { damageValue, adjustedRandomValue, attackSuccess, defenseSuccess } = calculateFinalValue(character, diceRoll);
           console.log(`[helpWanted.js]: 📊 Combat values for ${monsterName} - Damage: ${damageValue}, Adjusted: ${adjustedRandomValue}, Attack: ${attackSuccess}, Defense: ${defenseSuccess}`);
           
-          const outcome = await getEncounterOutcome(character, { name: monsterName }, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess);
+          const outcome = await getEncounterOutcome(character, monster, damageValue, adjustedRandomValue, attackSuccess, defenseSuccess);
           console.log(`[helpWanted.js]: 🎯 Encounter outcome for ${monsterName} - Result: ${outcome.result}, Hearts: ${outcome.hearts || 0}, Can Loot: ${outcome.canLoot}`);
           
           // Generate outcome message
@@ -144,7 +154,7 @@ module.exports = {
               // Send KO embed for this battle
               const koEmbed = createMonsterEncounterEmbed(
                 character,
-                { name: monsterName },
+                monster,
                 outcomeMessage,
                 0,
                 null,
@@ -173,7 +183,7 @@ module.exports = {
           if (heartsRemaining > 0) {
             const battleEmbed = createMonsterEncounterEmbed(
               character,
-              { name: monsterName },
+              monster,
               outcomeMessage,
               heartsRemaining,
               null,
