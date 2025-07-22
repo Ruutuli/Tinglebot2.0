@@ -83,6 +83,11 @@ module.exports = {
         if (character.blightEffects?.noMonsters) {
           return await interaction.reply({ content: `❌ ${character.name} cannot fight monsters due to blight.`, ephemeral: true });
         }
+        
+        // ------------------- Stamina Check -------------------
+        if (character.stamina < 1) {
+          return await interaction.reply({ content: `❌ ${character.name} needs at least 1 stamina to attempt a monster hunt.`, ephemeral: true });
+        }
         // ------------------- Sequential Monster Fights -------------------
         const { fetchItemsByMonster } = require('../../database/db.js');
         const { calculateFinalValue, createWeightedItemList } = require('../../modules/rngModule.js');
@@ -90,14 +95,64 @@ module.exports = {
         const { handleKO, updateCurrentHearts } = require('../../modules/characterStatsModule.js');
         const { generateVictoryMessage, generateDamageMessage, generateFinalOutcomeMessage, generateDefenseBuffMessage, generateAttackBuffMessage } = require('../../modules/flavorTextModule.js');
         const { createMonsterEncounterEmbed, createKOEmbed } = require('../../embeds/embeds.js');
+        const { addItemInventoryDatabase } = require('../../utils/inventoryUtils.js');
+        const { isValidGoogleSheetsUrl, safeAppendDataToSheet } = require('../../utils/googleSheetsUtils.js');
+        
+        // ------------------- Helper Function: Generate Looted Item -------------------
+        function generateLootedItem(encounteredMonster, weightedItems) {
+          const randomIndex = Math.floor(Math.random() * weightedItems.length);
+          const lootedItem = { ...weightedItems[randomIndex] };
+          
+          if (encounteredMonster.name.includes("Chuchu")) {
+            let jellyType;
+            if (encounteredMonster.name.includes('Ice')) {
+              jellyType = 'White Chuchu Jelly';
+            } else if (encounteredMonster.name.includes('Fire')) {
+              jellyType = 'Red Chuchu Jelly';
+            } else if (encounteredMonster.name.includes('Electric')) {
+              jellyType = 'Yellow Chuchu Jelly';
+            } else {
+              jellyType = 'Chuchu Jelly';
+            }
+            const quantity = encounteredMonster.name.includes("Large")
+              ? 3
+              : encounteredMonster.name.includes("Medium")
+              ? 2
+              : 1;
+            lootedItem.itemName = jellyType;
+            lootedItem.quantity = quantity;
+            lootedItem.emoji = '<:Chuchu_Jelly:744755431175356416>';
+          } else {
+            lootedItem.quantity = 1;
+          }
+          
+          return lootedItem;
+        }
         
         await interaction.deferReply();
+        
+        // ------------------- Deduct Stamina and Announce Hunt Start -------------------
+        character.stamina = Math.max(0, character.stamina - 1);
+        await character.save();
+        console.log(`[helpWanted.js]: ⚡ ${character.name} spent 1 stamina for monster hunt - ${character.stamina} remaining`);
+        
+        // Send initial announcement
+        const { EmbedBuilder } = require('discord.js');
+        const startEmbed = new EmbedBuilder()
+          .setColor(0x0099FF)
+          .setTitle(`🗡️ Monster Hunt Begins!`)
+          .setDescription(`**${character.name}** has started the monster hunt for quest **${questId}**!\n\n🎯 **Target:** ${monsterList.length} ${monsterList[0]}${monsterList.length > 1 ? 's' : ''}\n⚡ **Stamina Cost:** 1\n❤️ **Starting Hearts:** ${character.currentHearts}`)
+          .setFooter({ text: `Quest ID: ${questId}` })
+          .setTimestamp();
+        
+        await interaction.editReply({ embeds: [startEmbed] });
         
         let summary = [];
         let defeatedAll = true;
         let heartsRemaining = character.currentHearts;
         let currentMonsterIndex = 0;
         let isFirstBattle = true;
+        let totalLoot = [];
         
         console.log(`[helpWanted.js]: 🏃 Starting monster hunt for ${character.name} - ${heartsRemaining} hearts remaining`);
         
@@ -181,6 +236,82 @@ module.exports = {
             summary.push({ monster: monsterName, result: 'Attacked', message: outcomeMessage });
           } else if (outcome.result === 'Win!/Loot') {
             summary.push({ monster: monsterName, result: 'Victory', message: outcomeMessage });
+            
+            // ------------------- Handle Loot for Defeated Monsters -------------------
+            if (outcome.canLoot && items.length > 0) {
+              const weightedItems = createWeightedItemList(items, adjustedRandomValue);
+              if (weightedItems.length > 0) {
+                const lootedItem = generateLootedItem(monster, weightedItems);
+                totalLoot.push({ monster: monsterName, item: lootedItem });
+                console.log(`[helpWanted.js]: 🎁 ${character.name} looted ${lootedItem.itemName} (x${lootedItem.quantity}) from ${monsterName}`);
+                
+                // Add to character's inventory (if they have a valid inventory link)
+                const inventoryLink = character.inventory || character.inventoryLink;
+                if (inventoryLink && isValidGoogleSheetsUrl(inventoryLink)) {
+                  try {
+                    await addItemInventoryDatabase(
+                      character._id,
+                      lootedItem.itemName,
+                      lootedItem.quantity,
+                      lootedItem.category.join(", "),
+                      lootedItem.type.join(", "),
+                      interaction
+                    );
+                    
+                    // Update Google Sheets
+                    const { extractSpreadsheetId, authorizeSheets } = require('../../utils/googleSheetsUtils');
+                    const { v4: uuidv4 } = require('uuid');
+                    const spreadsheetId = extractSpreadsheetId(inventoryLink);
+                    const auth = await authorizeSheets();
+                    const range = "loggedInventory!A2:M";
+                    const uniqueSyncId = uuidv4();
+                    const formattedDateTime = new Date().toLocaleString("en-US", {
+                      timeZone: "America/New_York",
+                    });
+                    const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
+
+                    const values = [
+                      [
+                        character.name,
+                        lootedItem.itemName,
+                        lootedItem.quantity.toString(),
+                        lootedItem.category.join(", "),
+                        lootedItem.type.join(", "),
+                        lootedItem.subtype.join(", "),
+                        "Monster Hunt",
+                        character.job,
+                        "",
+                        character.currentVillage,
+                        interactionUrl,
+                        formattedDateTime,
+                        uniqueSyncId,
+                      ],
+                    ];
+
+                    await safeAppendDataToSheet(inventoryLink, character, range, values, undefined, {
+                      skipValidation: true,
+                      context: {
+                        commandName: 'helpwanted monsterhunt',
+                        userTag: interaction.user.tag,
+                        userId: interaction.user.id,
+                        characterName: character.name,
+                        spreadsheetId: extractSpreadsheetId(inventoryLink),
+                        range: range,
+                        sheetType: 'inventory',
+                        options: {
+                          monsterName: monsterName,
+                          itemName: lootedItem.itemName,
+                          quantity: lootedItem.quantity,
+                          questId: questId
+                        }
+                      }
+                    });
+                  } catch (error) {
+                    console.error(`[helpWanted.js]: ❌ Failed to add loot to inventory:`, error);
+                  }
+                }
+              }
+            }
           } else {
             summary.push({ monster: monsterName, result: 'Other', message: outcomeMessage });
           }
@@ -226,10 +357,34 @@ module.exports = {
           console.log(`[helpWanted.js]:   ${index + 1}. ${battle.monster} - ${battle.result}: ${battle.message}`);
         });
         
-        // Send final summary message as a follow-up
+        // Send final summary message as a follow-up embed
+        const { EmbedBuilder } = require('discord.js');
+        
         let resultMsg = defeatedAll ? `✅ **${character.name} defeated all ${monsterList.length} monsters! Quest completed.**` : `❌ **${character.name} was KO'd after defeating ${currentMonsterIndex - 1} monsters. Quest failed.**`;
         let details = summary.map((s, index) => `**${index + 1}. ${s.monster}:** ${s.message}`).join('\n');
-        await interaction.followUp({ content: `${resultMsg}\n\n${details}`, ephemeral: true });
+        
+        // Create loot summary if any items were looted
+        let lootSummary = '';
+        if (totalLoot.length > 0) {
+          lootSummary = totalLoot.map(loot => `🎁 **${loot.monster}:** ${loot.item.itemName} (x${loot.item.quantity})`).join('\n');
+        }
+        
+        const summaryEmbed = new EmbedBuilder()
+          .setColor(defeatedAll ? 0x00FF00 : 0xFF0000) // Green for success, red for failure
+          .setTitle(`🏆 Monster Hunt Results - ${character.name}`)
+          .setDescription(resultMsg)
+          .addFields(
+            { name: '📋 Battle Summary', value: details, inline: false }
+          )
+          .setFooter({ text: `Quest ID: ${questId} | Stamina: ${character.stamina} | ${new Date().toLocaleString()}` })
+          .setTimestamp();
+        
+        // Add loot field if there was any loot
+        if (lootSummary) {
+          summaryEmbed.addFields({ name: '🎁 Loot Gained', value: lootSummary, inline: false });
+        }
+        
+        await interaction.followUp({ embeds: [summaryEmbed], ephemeral: false });
         return;
       } catch (error) {
         handleError(error, 'helpWanted.js', {
