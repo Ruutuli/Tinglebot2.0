@@ -85,7 +85,9 @@ module.exports = {
         }
         
         // ------------------- Stamina Check -------------------
-        if (character.stamina < 1) {
+        // Ensure stamina is a number (using currentStamina field)
+        const currentStamina = parseInt(character.currentStamina) || 0;
+        if (currentStamina < 1) {
           return await interaction.reply({ content: `❌ ${character.name} needs at least 1 stamina to attempt a monster hunt.`, ephemeral: true });
         }
         // ------------------- Sequential Monster Fights -------------------
@@ -132,9 +134,10 @@ module.exports = {
         await interaction.deferReply();
         
         // ------------------- Deduct Stamina and Announce Hunt Start -------------------
-        character.stamina = Math.max(0, character.stamina - 1);
+        const newStamina = Math.max(0, currentStamina - 1);
+        character.currentStamina = newStamina;
         await character.save();
-        console.log(`[helpWanted.js]: ⚡ ${character.name} spent 1 stamina for monster hunt - ${character.stamina} remaining`);
+        console.log(`[helpWanted.js]: ⚡ ${character.name} spent 1 stamina for monster hunt - ${newStamina} remaining`);
         
         // Send initial announcement
         const { EmbedBuilder } = require('discord.js');
@@ -151,7 +154,6 @@ module.exports = {
         let defeatedAll = true;
         let heartsRemaining = character.currentHearts;
         let currentMonsterIndex = 0;
-        let isFirstBattle = true;
         let totalLoot = [];
         
         console.log(`[helpWanted.js]: 🏃 Starting monster hunt for ${character.name} - ${heartsRemaining} hearts remaining`);
@@ -165,7 +167,7 @@ module.exports = {
           const monster = await fetchMonsterByName(monsterName);
           if (!monster) {
             console.error(`[helpWanted.js]: ❌ Monster "${monsterName}" not found in database`);
-            await interaction.editReply({ content: `❌ Monster "${monsterName}" not found in database.`, ephemeral: true });
+            await interaction.followUp({ content: `❌ Monster "${monsterName}" not found in database.`, ephemeral: true });
             return;
           }
           console.log(`[helpWanted.js]: 🐉 Fetched monster data for ${monsterName} - Tier: ${monster.tier}, Hearts: ${monster.hearts}`);
@@ -218,11 +220,7 @@ module.exports = {
                 adjustedRandomValue
               );
               
-              if (isFirstBattle) {
-                await interaction.editReply({ embeds: [koEmbed] });
-              } else {
-                await interaction.followUp({ embeds: [koEmbed] });
-              }
+              await interaction.followUp({ embeds: [koEmbed] });
               
               summary.push({ monster: monsterName, result: 'KO', message: outcomeMessage });
               defeatedAll = false;
@@ -328,12 +326,7 @@ module.exports = {
               adjustedRandomValue
             );
             
-            if (isFirstBattle) {
-              await interaction.editReply({ embeds: [battleEmbed] });
-              isFirstBattle = false;
-            } else {
-              await interaction.followUp({ embeds: [battleEmbed] });
-            }
+            await interaction.followUp({ embeds: [battleEmbed] });
             
             // Add a small delay between battles for readability
             if (currentMonsterIndex < monsterList.length) {
@@ -358,7 +351,6 @@ module.exports = {
         });
         
         // Send final summary message as a follow-up embed
-        const { EmbedBuilder } = require('discord.js');
         
         let resultMsg = defeatedAll ? `✅ **${character.name} defeated all ${monsterList.length} monsters! Quest completed.**` : `❌ **${character.name} was KO'd after defeating ${currentMonsterIndex - 1} monsters. Quest failed.**`;
         let details = summary.map((s, index) => `**${index + 1}. ${s.monster}:** ${s.message}`).join('\n');
@@ -376,7 +368,7 @@ module.exports = {
           .addFields(
             { name: '📋 Battle Summary', value: details, inline: false }
           )
-          .setFooter({ text: `Quest ID: ${questId} | Stamina: ${character.stamina} | ${new Date().toLocaleString()}` })
+          .setFooter({ text: `Quest ID: ${questId} | Stamina: ${newStamina} | ${new Date().toLocaleString()}` })
           .setTimestamp();
         
         // Add loot field if there was any loot
@@ -398,7 +390,11 @@ module.exports = {
         return;
       }
     }
-    if (sub !== 'complete') return;
+    if (sub === 'complete') {
+      // Continue with existing complete logic
+    } else {
+      return;
+    }
 
     const characterName = interaction.options.getString('character');
     try {
