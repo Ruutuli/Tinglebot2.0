@@ -531,9 +531,32 @@ function setupWeatherScheduler(client) {
 async function postHelpWantedBoardToTestChannel(client, cronTime) {
   try {
     // Only post quests scheduled for this cron time
-    const quests = await getQuestsForScheduledTime(cronTime);
+    let quests = await getQuestsForScheduledTime(cronTime);
     if (!quests.length) {
-      console.log(`[scheduler.js]: No Help Wanted quests scheduled for ${cronTime}`);
+      // Check if any quests exist for today at all
+      const todaysQuests = await require('./modules/helpWantedModule').getTodaysQuests();
+      if (!todaysQuests.length) {
+        console.log(`[scheduler.js]: No Help Wanted quests found for today. Generating new daily quests...`);
+        try {
+          await generateDailyQuests();
+          // Try fetching again after generation
+          quests = await getQuestsForScheduledTime(cronTime);
+        } catch (error) {
+          handleError(error, 'scheduler.js', {
+            commandName: 'postHelpWantedBoardToTestChannel',
+            operation: 'generateDailyQuests',
+            cronTime
+          });
+          console.error('[scheduler.js]: Failed to generate daily Help Wanted quests:', error);
+          return;
+        }
+      } else {
+        console.log(`[scheduler.js]: No Help Wanted quests scheduled for ${cronTime}, but quests exist for today.`);
+        return;
+      }
+    }
+    if (!quests.length) {
+      console.log(`[scheduler.js]: Still no Help Wanted quests scheduled for ${cronTime} after generation attempt.`);
       return;
     }
     const channel = await client.channels.fetch(HELP_WANTED_TEST_CHANNEL);
@@ -549,7 +572,10 @@ async function postHelpWantedBoardToTestChannel(client, cronTime) {
     }
     console.log(`[scheduler.js]: Posted Help Wanted board for ${posted} village(s) at ${cronTime}`);
   } catch (error) {
-    handleError(error, 'scheduler.js');
+    handleError(error, 'scheduler.js', {
+      commandName: 'postHelpWantedBoardToTestChannel',
+      cronTime
+    });
     console.error('[scheduler.js]: Error posting Help Wanted board:', error);
   }
 }
