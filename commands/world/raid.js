@@ -171,15 +171,6 @@ module.exports = {
       const currentTurnParticipant = updatedRaidData.getCurrentTurnParticipant();
       // Turn processing details logged only in debug mode
 
-      // Validate turn order - ensure only the correct participant can take their turn
-      const effectiveCurrentTurnParticipant = await updatedRaidData.getEffectiveCurrentTurnParticipant();
-      if (effectiveCurrentTurnParticipant && effectiveCurrentTurnParticipant.characterId.toString() !== character._id.toString()) {
-        return interaction.editReply({
-          content: `❌ **It's not your turn!** ${effectiveCurrentTurnParticipant.name} should take their turn next.`,
-          ephemeral: true
-        });
-      }
-
       // Process the raid turn
       const turnResult = await processRaidTurn(character, raidId, interaction, updatedRaidData);
       
