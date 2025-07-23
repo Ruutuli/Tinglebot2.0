@@ -187,35 +187,35 @@ const getNoEncounterMessage = (currentVillage) => {
     const villageKey = currentVillage ? capitalizeVillageName(currentVillage).toLowerCase() : "default";
 
     // Village-specific messages
-    const villageMessages = {
-        rudania: [
-            "🔥 The air is warm, and no monsters disturb the peace.",
-            "🔥⚒️ The forges hum, but the valley is quiet. No monsters today.",
-            "🌋 A distant rumble from the volcano, but no threats nearby.",
-            "🎉 The sounds of celebration drown out any sign of danger.",
-            "🪓 The farmlands are safe, and no monsters prowl.",
-        ],
-        inariko: [
-            "💦 The river flows quietly. No monsters are here.",
-            "🏞️ Peaceful waters surround you, undisturbed by threats.",
-            "📖 The wisdom of the past guards this place. No danger today.",
-            "🌀 The gentle whirl of the waterwheel is all you hear.",
-            "❄️ The crisp mountain air carries no sign of danger.",
-        ],
-        vhintl: [
-            "🌿 The forest whispers softly, but no monsters reply.",
-            "🕸️ Even the Skulltulas seem to sleep today. All is calm.",
-            "🌧️ The rain falls gently through the trees, masking all sound.",
-            "🪶 A Rito song drifts through the canopy, warding off danger.",
-            "🍃 The mists of the forest conceal no threats today.",
-        ],
-        default: [
-            "🌲🕊️ A quiet day. No monsters were encountered.",
-            "🌿☀️ The area is peaceful. No monsters in sight.",
-            "🌸🌼 Nothing stirs. No monsters to be found.",
-            "🌳🦋 All is calm. No monsters appear.",
-        ],
-    };
+const villageMessages = {
+  rudania: [
+    "🔥 The valley holds steady. No monsters in sight.",
+    "⚒️ The forge burns, but the roads stay quiet.",
+    "🌋 The mountain watches silently. No threats today.",
+    "🎉 Daily life carries on—no signs of trouble.",
+    "🪓 Fields are tended, borders are clear. All is calm.",
+  ],
+  inariko: [
+    "💦 The river runs smooth. No disturbances reported.",
+    "🏞️ Still waters surround the village. No threats nearby.",
+    "📖 Stories are shared, not battles. The day is quiet.",
+    "🌀 The wheel turns, steady and uneventful.",
+    "❄️ The cool air carries no movement from the wilds.",
+  ],
+  vhintl: [
+    "🌿 No rustle but the wind. The woods are still.",
+    "🕸️ Even the quiet corners hold no danger today.",
+    "🪶 A distant melody carries through the trees. No threats linger.",
+    "🍃 Hidden paths are clear. Nothing stirs in the undergrowth.",
+    "🌲 The forest watches, but no monsters cross its edge.",
+  ],
+  default: [
+    "🕊️ A calm day—no danger to speak of.",
+    "🌿 All paths remained clear. No monsters seen.",
+    "🌸 No movement but your own. It’s quiet out here.",
+    "🌳 The area holds steady. Nothing hostile found.",
+  ],
+};
 
     // Return messages for the specific village or fallback to default
     const messages = villageMessages[villageKey] || villageMessages.default;
@@ -323,105 +323,105 @@ const typeActionMap = {
 };
 
 const generateGatherFlavorText = (itemType) => {
- const typeToFlavorText = {
-  "1h": [
-   "⚔️ A well-worn tool, etched with marks of countless journeys, was unearthed.",
-   "🛡️ A dependable one-handed weapon, sturdy and true, was found.",
-   "⚔️ This blade carries the weight of forgotten tales.",
-   "🗡️ A finely crafted tool, its balance perfect for swift action.",
-  ],
-  "2h": [
-   "⚔️ A heavy two-handed weapon, forged for strength, was uncovered.",
-   "💪 This tool, built for power, whispers of battles long past.",
-   "⚔️ A mighty find, its weight a testament to its craftsmanship.",
-   "🪓 A weapon of the ancients, built for enduring strength, was discovered.",
-  ],
-  "Ancient Parts": [
-   "🔮 Relics of a bygone era, humming with faint energy, were gathered.",
-   "🏺 Fragments of the past, their purpose lost to time, were carefully collected.",
-   "🔧 Strange components, worn by ages yet intricate in design, were uncovered.",
-   "🌌 Echoes of forgotten civilizations linger in these ancient mechanisms.",
-  ],
-  Creature: [
-   "🌾 The lands yielded curious creatures, elusive and fleeting.",
-   "🌿 Hidden within the leaves, the secrets of nature stirred and were caught.",
-   "🍃 The wilderness offered glimpses of life, quick and unpredictable.",
-   "✨ Among the grasses and shadows, living treasures were carefully gathered.",
-   "🪴 Creatures moved in harmony with the land, their presence a fleeting mystery.",
-  ],
-  Dairy: [
-   "🥛 Rich and wholesome dairy, a gift from gentle hands, was collected.",
-   "🧀 The day's yield included provisions crafted with care and tradition.",
-   "🍶 Fresh and nourishing, the bounty speaks of peaceful homesteads.",
-   "🐄 The livestock's offerings, simple yet vital, ensured a good harvest.",
-  ],
-  Fish: [
-   "🎣 The shimmering waters surrendered their hidden bounty.",
-   "🐟 Quick and silent, the river's life was skillfully caught.",
-   "🌊 The depths revealed their secrets, glimmering and fleeting.",
-   "✨ The tranquil waters whispered of abundance, offering their treasures.",
-  ],
-  Fruit: [
-   "🍎 The trees offered their bounty, ripe and fragrant with the season's best.",
-   "🍇 Sweet and vibrant, the fruits of the land were gathered with care.",
-   "🍊 Hidden among the leaves, nature's flavors were plentiful and inviting.",
-   "🌿 The orchard whispered of life's abundance, yielding its colorful harvest.",
-  ],
-  Meat: [
-   "🍖 Fresh meat was gathered, ready to be prepared for meals.",
-   "🥩 The land provided its bounty, yielding quality meat for the community.",
-   "🍗 A successful gathering trip brought back fresh meat for all.",
-   "🥓 The day's hunt yielded enough meat to feed many.",
-   "🍖 Nature's bounty provided fresh meat for the journey ahead.",
-   "🥩 The wilderness offered its gifts, bringing meat to the table.",
-   "🍗 The land's resources were gathered, providing meat for all.",
-   "🥓 A good haul of meat was collected, ready for preparation."
-  ],
-  Monster: [
-   "👹 The remnants of a defeated foe bore rare and curious materials.",
-   "🔮 Echoes of dark magic lingered in the remains, now collected.",
-   "👾 The battle's spoils included components shrouded in mystery.",
-   "🌌 Strange remnants, imbued with power, tell of an ancient conflict.",
-  ],
-  Mushroom: [
-   "🍄 The forest floor offered its earthy treasures, rich and varied.",
-   "🌧️ Shrouded in mist, hidden fungi thrived and were gently gathered.",
-   "🌲 Quiet corners of the wild held delicate and valuable mushrooms.",
-   "🌿 The damp earth revealed its bounty, fragrant and full of life.",
-  ],
-  Natural: [
-   "🌳 The land yielded its gifts, timeless and versatile.",
-   "🪵 A harvest of materials, raw and brimming with potential, was gathered.",
-   "🌿 The land offered resources, their use bound only by imagination.",
-   "🌱 Nature's offerings spoke of resilience and quiet abundance.",
-  ],
-  Ore: [
-   "⛏️ Deep within the rock, shimmering stones awaited discovery.",
-   "💎 Precious minerals, the lifeblood of the mountains, were unearthed.",
-   "🏔️ The veins of the earth gave forth their treasures, long hidden.",
-   "🌋 The glow of raw ore hinted at ancient secrets, locked within stone.",
-  ],
-  Plant: [
-   "🌿 Vibrant herbs and plants whispered of hidden knowledge.",
-   "🍃 The forest floor revealed its botanical riches, delicate and rare.",
-   "🌱 The land yielded flora both useful and mysterious.",
-   "🌻 The land's greenery spoke of life's quiet persistence and beauty.",
-  ],
-  Protein: [
-   "🥩 A vital source of strength was carefully gathered and prepared.",
-   "🍗 The provisions ensured sustenance for journeys yet to come.",
-   "🍖 The bounty, simple yet nourishing, was a gift from the land.",
-   "🐾 Nature's energy, preserved in its purest form, was secured.",
-  ],
-  default: [
-   "✨ The search was fruitful, yielding items of value and wonder.",
-   "💼 The hard work uncovered treasures hidden by time and nature.",
-   "🏞️ The land revealed its secrets, shared with those who sought them.",
-   "🌟 Quiet effort brought forth a bounty of unexpected riches.",
-   "💡 Among the ordinary, extraordinary finds awaited discovery.",
-   "🏔️ The journey was rewarded with a wealth of resources and promise.",
-  ],
- };
+  const typeToFlavorText = {
+   "1h": [
+    "⚔️ A reliable one-handed blade, worn but ready for use.",
+    "🛡️ Balanced and sturdy—well-suited for quick strikes and defense.",
+    "🗡️ Light in the hand, with signs of careful craftsmanship.",
+    "🔧 A compact tool made for action, not ceremony.",
+   ],
+   "2h": [
+    "⚔️ A broad weapon with real heft, built for power.",
+    "💪 Heavy, slow, but strong—a tool for clearing the way.",
+    "🪓 This one's made to leave a mark and hold its own.",
+    "🔨 Thick grip, long reach. Not subtle, but effective.",
+   ],
+   "Ancient Parts": [
+    "🔮 Odd remnants from a forgotten time, still humming with purpose.",
+    "🏺 These pieces once served a machine now long gone.",
+    "🔧 Complex bits and pieces, built to outlast their makers.",
+    "📡 Still intact—barely—and not built by modern hands.",
+   ],
+   Creature: [
+    "🌾 Unusual lifeforms gathered from the edges of the wild.",
+    "🌿 Small and strange, these creatures thrive where few tread.",
+    "🍃 Collected quickly, before they slipped out of reach.",
+    "🪴 Elusive and light-footed—barely caught in time.",
+    "🐾 They don’t stay still long, but they’re in the basket now.",
+   ],
+   Dairy: [
+    "🥛 Clean and fresh, the result of a practiced hand.",
+    "🧀 Carefully collected, set aside for preserving or trade.",
+    "🍶 Nourishing, simple, and always in demand.",
+    "🐄 The yield was small but reliable—just enough.",
+   ],
+   Fish: [
+    "🎣 Pulled from the water with a steady hand.",
+    "🐟 Slippery and quick, but not quick enough.",
+    "🌊 Caught clean—gills still twitching.",
+    "🪣 Added to the day's haul, still glinting in the light.",
+   ],
+   Fruit: [
+    "🍎 Ripe and ready, picked at just the right moment.",
+    "🍇 Sweet and full, these won’t last long in the sun.",
+    "🍊 A good bunch—unblemished and easy to carry.",
+    "🌿 Found low on the branches, hiding in plain sight.",
+   ],
+   Meat: [
+    "🍖 A solid cut, fresh and ready for the fire.",
+    "🥩 Enough to feed a few or fill a pack.",
+    "🍗 Skinned and cleaned, just needs a cook.",
+    "🥓 Stashed quickly—this won’t stay fresh forever.",
+    "🍖 No frills, just something to roast or trade.",
+    "🥩 Bagged up, heavy and useful.",
+    "🍗 Plenty for now. Hopefully enough for later.",
+    "🥓 Straight from the field, nothing wasted.",
+   ],
+   Monster: [
+    "👹 The creature’s remains hold strange materials of interest.",
+    "🔮 What’s left behind isn’t just scrap—it hums with energy.",
+    "👾 Gnarled pieces, clearly touched by something unnatural.",
+    "🩸 Tough hide, brittle claw—still worth something.",
+   ],
+   Mushroom: [
+    "🍄 Found nestled near tree roots, firm and intact.",
+    "🌲 A good collection—some edible, some… probably not.",
+    "🌿 Easy to miss, but worth the stoop to gather.",
+    "🧺 Plucked carefully—delicate, but useful.",
+   ],
+   Natural: [
+    "🌳 A small haul of wood, stone, and other basics.",
+    "🪵 Gathered from the land, no tools wasted.",
+    "🌿 Rough, raw, and ready to be shaped into something better.",
+    "🌱 Good stock for crafting or trade.",
+   ],
+   Ore: [
+    "⛏️ A solid find, chipped loose from the rock face.",
+    "💎 Raw and unpolished, but valuable all the same.",
+    "🏔️ Tough to reach, but worth the weight.",
+    "🪨 Uncut and gritty—exactly what’s needed for smelting.",
+   ],
+   Plant: [
+    "🌿 Useful herbs and greens, gathered with care.",
+    "🍃 Picked before they wilted—still potent.",
+    "🌱 Recognizable by scent alone—good for tinctures or meals.",
+    "🌻 These will dry out quick, but there’s time to use them.",
+   ],
+   Protein: [
+    "🥩 Cleaned and stored, ready to be cooked or traded.",
+    "🍗 Light enough to carry, but filling enough to matter.",
+    "🍖 A solid source of strength, plain and simple.",
+    "🐾 Bagged up and good to go—nothing wasted.",
+   ],
+   default: [
+    "🧺 A worthwhile haul with more than a few useful finds.",
+    "📦 Packed up and ready—plenty of good material here.",
+    "🏞️ Not the rarest day, but not a wasted one either.",
+    "🔍 Practical, serviceable, and well worth the time.",
+    "⚙️ A solid collection—tools, parts, and odds and ends.",
+    "📚 Most folks would walk right past it—but you didn’t.",
+   ],
+  };
 
  // Use the provided type, or fall back to the default if the type is unknown
  const flavorOptions =
@@ -436,57 +436,52 @@ const generateCraftingFlavorText = (job) => {
 
  const jobToFlavorText = {
   researcher: [
-   "📚 With keen focus, the Researcher transcribed their findings into a practical creation.",
-   "🔍 Experimentation and study bore fruit, crafting something of great potential.",
-   "🌟 Guided by knowledge, the Researcher brought an innovative idea to life.",
+    "📚 Notes became schematics; schematics became something you can actually use.",
+    "🔍 Field data translated into a working proof of concept.",
+    "🧪 Curiosity ran the numbers, then built the prototype.",
   ],
   blacksmith: [
-   "⚒️ The Blacksmith worked tirelessly, the hammer's rhythm echoing through the forge.",
-   "🔥 Sparks danced in the air as molten metal took shape under the Blacksmith's hand.",
-   "🛡️ After hours of labor, the Blacksmith unveiled a creation fit to withstand Hyrule's fiercest battles.",
+    "⚒️ Hammer, heat, repeat. Metal drew into form under practiced strikes.",
+    "🔥 From coal bed to quench, the piece took its temper and purpose.",
+    "🛡️ Built to take a beating—the forge mark still cooling on the steel.",
   ],
   "mask maker": [
-   "🎭 In the Mask Maker's hands, ordinary materials transformed into something mystical.",
-   "🖌️ Each brushstroke carried intent, weaving stories into the mask's design.",
-   "🌟 The Mask Maker's craft captured the spirit of a forgotten legend.",
+    "🎭 Cut, carve, fit. A new face takes shape with its own intent.",
+    "🖌️ Pigment and lacquer set; another story you can wear.",
+    "👁️ There’s something in the eyeholes—you swear it’s watching back.",
   ],
   weaver: [
-   "🧵 The Weaver's loom hummed softly, threads intertwining into a tapestry of purpose.",
-   "🪡 With precision and patience, the Weaver created a fabric imbued with meaning.",
-   "✨ Each stitch told a story, the Weaver's art weaving past and present together.",
+    "🧵 Warp set, shuttle flying—cloth grows by steady habit.",
+    "🪡 Tight weave, clean selvedge; this will hold up in the wilds.",
+    "📐 Pattern nods to old motifs without making a fuss about it.",
   ],
   artist: [
-   "🌟 The Artist's masterpiece shimmered with emotion, as if Hyrule itself had inspired it.",
+    "🖼️ Sketch to line, line to color—the piece landed where it needed to.",
+    "🎨 It doesn’t shout; it just makes you look twice.",
+    "✍️ Finished, signed, and ready to hang (or haggle over).",
   ],
   cook: [
-   "🍳 The Cook's kitchen bustled with energy, aromas hinting at something delicious to come.",
-   "🧂 With a steady hand, the Cook crafted a dish both hearty and full of flavor.",
-   "🍲 As the pot simmered, the Cook smiled, knowing the meal would fortify even the bravest adventurer.",
+    "🍳 Knife work, pan heat; nothing fancy, just solid food.",
+    "🧂 Seasoned right and cooked through—travel rations upgraded.",
+    "🍲 Stew thickened slow; smells good enough to pull folks off the road.",
   ],
   craftsman: [
-   "🛠️ The Craftsman's tools danced across the workbench, shaping raw materials into something extraordinary.",
-   "🔧 Each motion was deliberate, as if the Craftsman could see the finished piece before it began.",
-   "✨ By the end of the day, the Craftsman stood back to admire their elegant and functional creation.",
+    "🛠️ Measure twice, cut once; the fit came out clean.",
+    "🔧 Scrap to useful—now it’s a tool you’ll actually reach for.",
+    "📦 No ornament, all utility. Exactly what was needed.",
   ],
   witch: [
-   "🔮 The Witch's cauldron bubbled, its contents glowing faintly with magical energy.",
-   "🌙 Chanting softly, the Witch infused the brew with ancient knowledge and power.",
-   "🧹 A swirl of light marked the completion of the Witch's spellbound creation.",
+    "🔮 Herb, ash, stir clockwise. The mix settled into a usable draught.",
+    "🌙 Low words, steady focus; the charm holds.",
+    "🧹 When the steam cleared, the reagents agreed to work together.",
   ],
   default: [
-   "✨ With effort and care, a new creation was brought into the world.",
-   "🔧 Through determination, a simple idea became a reality.",
-   "🌟 Creativity and skill combined to forge something extraordinary.",
+    "🪧 Put in the time; got something workable.",
+    "📦 Started as an idea, ended as gear.",
+    "⚙️ Not pretty, but it does the job.",
   ],
- };
+};
 
- const normalizedJob = job.trim().toLowerCase();
- const jobToFlavorTextNormalized = Object.fromEntries(
-  Object.entries(jobToFlavorText).map(([key, value]) => [
-   key.toLowerCase(),
-   value,
-  ])
- );
 
  const flavorOptions =
   jobToFlavorTextNormalized[normalizedJob] ||
