@@ -2769,7 +2769,7 @@ async function handleDebuff(interaction) {
             },
             {
               name: '🕒 Debuff Expires',
-              value: `<t:${Math.floor(debuffEndDate.getTime() / 1000)}:F>`,
+              value: `<t:${Math.floor(debuffEndDate.getTime() / 1000)}:D>`,
               inline: true
             },
             {
@@ -2788,7 +2788,7 @@ async function handleDebuff(interaction) {
       }
 
       return interaction.editReply({
-        content: `✅ **${character.name}** has been debuffed for **${days} days**.\n🕒 **Expires:** <t:${Math.floor(debuffEndDate.getTime() / 1000)}:F>\n📝 **Reason:** ${reason}`,
+        content: `✅ **${character.name}** has been debuffed for **${days} days**.\n🕒 **Expires:** <t:${Math.floor(debuffEndDate.getTime() / 1000)}:D>\n📝 **Reason:** ${reason}`,
         ephemeral: true
       });
 

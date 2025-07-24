@@ -389,7 +389,7 @@ module.exports = {
         const unixTimestamp = Math.floor(debuffEndDate.getTime() / 1000);
         
         await interaction.editReply({
-          content: `❌ **${character.name} is currently debuffed and cannot gather.**\n🕒 **Debuff Expires:** <t:${unixTimestamp}:F>`,
+          content: `❌ **${character.name} is currently debuffed and cannot gather.**\n🕒 **Debuff Expires:** <t:${unixTimestamp}:D>`,
           ephemeral: true,
         });
         return;

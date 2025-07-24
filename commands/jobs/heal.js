@@ -90,7 +90,7 @@ async function checkDebuff(character) {
     
     return {
       hasDebuff: true,
-      message: `❌ **Error:** Healing cannot be requested because **${character.name}** is currently affected by a debuff. Please wait until the debuff expires.\n🕒 **Debuff Expires:** <t:${unixTimestamp}:F>`
+      message: `❌ **Error:** Healing cannot be requested because **${character.name}** is currently affected by a debuff. Please wait until the debuff expires.\n🕒 **Debuff Expires:** <t:${unixTimestamp}:D>`
     };
   }
   return { hasDebuff: false };
