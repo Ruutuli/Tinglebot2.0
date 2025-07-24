@@ -663,7 +663,7 @@ module.exports = {
         ]];
         if (character?.name && character?.inventory && character?.userId) {
           try {
-            await safeAppendDataToSheet(character.inventory, character, range, values, undefined, { 
+            const sheetResult = await safeAppendDataToSheet(character.inventory, character, range, values, undefined, { 
               skipValidation: true,
               context: {
                 commandName: 'gather',
@@ -680,6 +680,12 @@ module.exports = {
                 }
               }
             });
+            
+            // Check if the operation was stored for retry
+            if (sheetResult && sheetResult.storedForRetry) {
+              console.log(`[gather.js]: 📦 Sheet operation stored for retry: ${sheetResult.operationId}`);
+              // Don't show error to user - the operation will be retried automatically
+            }
           } catch (sheetError) {
             handleError(sheetError, 'gather.js', {
               commandName: '/gather',

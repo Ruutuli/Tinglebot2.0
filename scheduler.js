@@ -35,6 +35,8 @@ const {
  authorizeSheets,
  clearSheetFormatting,
  writeSheetData,
+ retryPendingSheetOperations,
+ getPendingSheetOperationsCount,
 } = require("./utils/googleSheetsUtils");
 const { convertToHyruleanDate } = require("./modules/calendarModule");
 const Character = require("./models/CharacterModel");
@@ -844,6 +846,32 @@ function initializeScheduler(client) {
    }
 
    console.log(`[scheduler.js]: ✅ Blood Moon end check completed`);
+  },
+  "America/New_York"
+ );
+
+ // Retry pending Google Sheets operations every 15 minutes
+ createCronJob(
+  "*/15 * * * *",
+  "retry pending Google Sheets operations",
+  async () => {
+   try {
+    const pendingCount = await getPendingSheetOperationsCount();
+    if (pendingCount > 0) {
+     console.log(`[scheduler.js]: 🔄 Retrying ${pendingCount} pending Google Sheets operations`);
+     const result = await retryPendingSheetOperations();
+     if (result.success) {
+      console.log(`[scheduler.js]: ✅ Retry completed: ${result.retried} successful, ${result.failed} failed`);
+     } else {
+      console.error(`[scheduler.js]: ❌ Retry failed: ${result.error}`);
+     }
+    } else {
+     console.log(`[scheduler.js]: ✅ No pending Google Sheets operations to retry`);
+    }
+   } catch (error) {
+    handleError(error, "scheduler.js");
+    console.error(`[scheduler.js]: ❌ Google Sheets retry task failed: ${error.message}`);
+   }
   },
   "America/New_York"
  );

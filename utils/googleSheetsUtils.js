@@ -1,6 +1,6 @@
 // ============================================================================
 // ------------------- Google Sheets Utilities -------------------
-// This module handles Google Sheets API integration for reading, writing, and managing data.
+// Handles Google Sheets API operations with fallback mechanisms
 // ============================================================================
 
 // ============================================================================
@@ -18,6 +18,7 @@ const { google } = require('googleapis');
 
 // Internal Models
 const Character = require('../models/CharacterModel');
+const TempData = require('../models/TempDataModel');
 
 // ============================================================================
 // ------------------- Constants -------------------
@@ -980,6 +981,42 @@ async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, c
 
     } catch (error) {
         console.error(`[googleSheetsUtils.js]: ❌ Error in safeAppendDataToSheet:`, error.message);
+        
+        // Check if this is a service unavailable error
+        if (error.message.includes('service is currently unavailable') || 
+            error.message.includes('quota exceeded') ||
+            error.message.includes('rate limit') ||
+            error.message.includes('temporarily unavailable')) {
+            
+            try {
+                // Store the operation for later retry
+                const operationData = {
+                    operationType: 'append',
+                    spreadsheetId: extractSpreadsheetId(spreadsheetUrl),
+                    range: range,
+                    values: values,
+                    characterName: isCharacterObject ? character?.name : null,
+                    userId: isUserObject ? character?.discordId : character?.userId,
+                    sheetType: range.split('!')[0].toLowerCase(),
+                    commandName: client?.commandName,
+                    userTag: client?.user?.tag,
+                    clientUserId: client?.user?.id,
+                    options: client?.options?.data,
+                    originalError: error.message
+                };
+                
+                const operationId = await storePendingSheetOperation(operationData);
+                console.log(`[googleSheetsUtils.js]: 📦 Operation stored for retry: ${operationId}`);
+                
+                // Don't throw the error - the operation will be retried later
+                return { success: false, storedForRetry: true, operationId };
+                
+            } catch (storageError) {
+                console.error(`[googleSheetsUtils.js]: ❌ Failed to store operation for retry: ${storageError.message}`);
+                // Fall through to throw the original error
+            }
+        }
+        
         // Add context to the error
         error.context = {
             characterName: isCharacterObject ? character?.name : null,
@@ -1042,6 +1079,123 @@ async function parseSheetData(sheetUrl) {
 }
 
 // ============================================================================
+// ------------------- Fallback Storage Functions -------------------
+// Stores pending sheet operations when Google Sheets is unavailable
+// ============================================================================
+
+// ------------------- Function: storePendingSheetOperation -------------------
+// Stores a pending sheet operation in TempData for later retry
+async function storePendingSheetOperation(operationData) {
+  try {
+    const operationId = `sheet_op_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    await TempData.create({
+      key: operationId,
+      type: 'pendingSheetOperation',
+      data: {
+        ...operationData,
+        retryCount: 0,
+        lastAttempt: new Date(),
+        createdAt: new Date()
+      },
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
+    });
+
+    console.log(`[googleSheetsUtils.js]: 📦 Stored pending sheet operation: ${operationId}`);
+    return operationId;
+  } catch (error) {
+    console.error(`[googleSheetsUtils.js]: ❌ Error storing pending operation: ${error.message}`);
+    throw error;
+  }
+}
+
+// ------------------- Function: retryPendingSheetOperations -------------------
+// Attempts to retry all pending sheet operations
+async function retryPendingSheetOperations() {
+  try {
+    const pendingOperations = await TempData.findAllByType('pendingSheetOperation');
+    
+    if (pendingOperations.length === 0) {
+      console.log(`[googleSheetsUtils.js]: ✅ No pending sheet operations to retry`);
+      return { success: true, retried: 0, failed: 0 };
+    }
+
+    console.log(`[googleSheetsUtils.js]: 🔄 Attempting to retry ${pendingOperations.length} pending sheet operations`);
+    
+    let successCount = 0;
+    let failureCount = 0;
+    const maxRetries = 3;
+
+    for (const operation of pendingOperations) {
+      try {
+        // Check if operation has exceeded max retries
+        if (operation.data.retryCount >= maxRetries) {
+          console.log(`[googleSheetsUtils.js]: ❌ Operation ${operation.key} exceeded max retries, removing`);
+          await TempData.findByIdAndDelete(operation._id);
+          failureCount++;
+          continue;
+        }
+
+        // Attempt to execute the original operation
+        const auth = await authorizeSheets();
+        const sheets = google.sheets({ version: 'v4', auth });
+        
+        if (operation.data.operationType === 'append') {
+          await sheets.spreadsheets.values.append({
+            spreadsheetId: operation.data.spreadsheetId,
+            range: operation.data.range,
+            valueInputOption: 'USER_ENTERED',
+            resource: { values: operation.data.values }
+          });
+        } else if (operation.data.operationType === 'write') {
+          await sheets.spreadsheets.values.update({
+            spreadsheetId: operation.data.spreadsheetId,
+            range: operation.data.range,
+            valueInputOption: 'USER_ENTERED',
+            resource: { values: operation.data.values }
+          });
+        }
+
+        // Success - remove the pending operation
+        await TempData.findByIdAndDelete(operation._id);
+        successCount++;
+        
+        console.log(`[googleSheetsUtils.js]: ✅ Successfully retried operation: ${operation.key}`);
+        
+      } catch (error) {
+        // Increment retry count
+        await TempData.findByIdAndUpdate(operation._id, {
+          $inc: { 'data.retryCount': 1 },
+          $set: { 'data.lastAttempt': new Date() }
+        });
+        
+        failureCount++;
+        console.log(`[googleSheetsUtils.js]: ⚠️ Failed to retry operation ${operation.key}: ${error.message}`);
+      }
+    }
+
+    console.log(`[googleSheetsUtils.js]: 📊 Retry summary: ${successCount} successful, ${failureCount} failed`);
+    return { success: true, retried: successCount, failed: failureCount };
+    
+  } catch (error) {
+    console.error(`[googleSheetsUtils.js]: ❌ Error during retry process: ${error.message}`);
+    return { success: false, error: error.message };
+  }
+}
+
+// ------------------- Function: getPendingSheetOperationsCount -------------------
+// Returns the count of pending sheet operations
+async function getPendingSheetOperationsCount() {
+  try {
+    const count = await TempData.countDocuments({ type: 'pendingSheetOperation' });
+    return count;
+  } catch (error) {
+    console.error(`[googleSheetsUtils.js]: ❌ Error getting pending operations count: ${error.message}`);
+    return 0;
+  }
+}
+
+// ============================================================================
 // ------------------- Exports -------------------
 // Module exports grouped by functionality
 // ============================================================================
@@ -1075,5 +1229,8 @@ module.exports = {
     validateVendingSheet,
     validateTokenTrackerSheet,
     safeAppendDataToSheet,
-    parseSheetData
+    parseSheetData,
+    storePendingSheetOperation,
+    retryPendingSheetOperations,
+    getPendingSheetOperationsCount
 };
