@@ -482,10 +482,12 @@ const generateCraftingFlavorText = (job) => {
   ],
 };
 
+ // Normalize the job string
+ const normalizedJob = typeof job === 'string' ? job.trim().toLowerCase() : 'default';
 
  const flavorOptions =
-  jobToFlavorTextNormalized[normalizedJob] ||
-  jobToFlavorTextNormalized["default"];
+  jobToFlavorText[normalizedJob] ||
+  jobToFlavorText["default"];
  return getRandomMessage(flavorOptions || ["A successful crafting session!"]);
 };
 

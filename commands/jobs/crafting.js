@@ -270,7 +270,8 @@ module.exports = {
             title: `❌ Missing Required Materials`,
             description: `You are missing the following materials to craft **${quantity}x ${itemName}**:\n\n${missingMaterials.join('\n')}`,
             color: 0xff0000,
-            footer: { text: 'Sync your inventory or gather more materials.' }
+            footer: { text: 'Gather, buy, or trade for more materials!' }
+
           }],
           ephemeral: true
         });
@@ -290,14 +291,33 @@ module.exports = {
       } catch (error) {
         console.error(`[crafting.js]: ❌ Failed to deduct stamina for ${freshCharacter.name}: ${error.message}`);
         handleError(error, 'crafting.js');
-        return interaction.followUp({ content: `⚠️ **Crafting failed due to insufficient stamina.**`, ephemeral: true });
+        // Refund materials if stamina deduction fails
+        for (const mat of materialsUsed) {
+          await addItemInventoryDatabase(character._id, mat.itemName, mat.quantity, interaction, 'Crafting Refund');
+        }
+        return interaction.followUp({ content: `⚠️ **Crafting failed due to insufficient stamina. Materials have been refunded.**`, ephemeral: true });
       }
 
       // ------------------- Send Crafting Embed -------------------
-      const embed = await createCraftingEmbed(
-        item, character, flavorText, materialsUsed, quantity, staminaCost, updatedStamina,
-        character.jobVoucher ? character.jobVoucherJob : null
-      );
+      let embed;
+      try {
+        // Ensure job string is always valid for flavor text
+        const jobForFlavorText = (character.jobVoucher && character.jobVoucherJob) ? character.jobVoucherJob : character.job || '';
+        embed = await createCraftingEmbed(
+          item, character, flavorText, materialsUsed, quantity, staminaCost, updatedStamina,
+          jobForFlavorText
+        );
+      } catch (embedError) {
+        // ------------------- Failsafe: Refund on Embed Error -------------------
+        // Refund stamina
+        await checkAndUseStamina(freshCharacter, -staminaCost); // Negative to add back
+        // Refund materials
+        for (const mat of materialsUsed) {
+          await addItemInventoryDatabase(character._id, mat.itemName, mat.quantity, interaction, 'Crafting Refund');
+        }
+        handleError(embedError, 'crafting.js');
+        return interaction.editReply({ content: '❌ **An error occurred while generating the crafting result. Your materials and stamina have been refunded. Please contact a moderator.**', ephemeral: true });
+      }
 
       await interaction.editReply({ content: `✅ **Successfully crafted ${quantity} "${itemName}".**`, ephemeral: true });
       await interaction.followUp({ embeds: [embed], ephemeral: false });
@@ -371,8 +391,24 @@ module.exports = {
         }
       }
     } catch (error) {
+      // ============================================================================
+      // ------------------- Failsafe: Critical Error Handling -------------------
+      // If an error occurs after materials/stamina are deducted, attempt to refund
+      // ============================================================================
       handleError(error, 'crafting.js');
-      console.error(`[crafting.js]: Critical error in crafting execution.`, error);
+      try {
+        if (typeof materialsUsed !== 'undefined' && Array.isArray(materialsUsed)) {
+          for (const mat of materialsUsed) {
+            await addItemInventoryDatabase(character._id, mat.itemName, mat.quantity, interaction, 'Crafting Refund');
+          }
+        }
+        if (typeof updatedStamina !== 'undefined') {
+          await checkAndUseStamina(freshCharacter, -staminaCost); // Refund stamina
+        }
+      } catch (refundError) {
+        handleError(refundError, 'crafting.js (refund)');
+      }
+      await interaction.editReply({ content: '❌ **A critical error occurred during crafting. Your materials and stamina have been refunded if possible. Please contact a moderator.**', ephemeral: true });
     }
   }
 };

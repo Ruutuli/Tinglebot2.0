@@ -1233,7 +1233,7 @@ async function handleGive(interaction) {
           inline: false 
         }
       )
-      .setThumbnail(item.image || 'https://via.placeholder.com/100')
+      .setThumbnail(validateAndSanitizeUrl(item.image, 'https://via.placeholder.com/100'))
       .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
       .setFooter({ text: 'Divine blessing bestowed by the Gods ✨' })
       .setTimestamp();
@@ -2840,7 +2840,6 @@ async function handleDebuff(interaction) {
     return interaction.editReply('⚠️ An error occurred while processing the debuff action.');
   }
 }
-
 // ============================================================================
 // ------------------- Export Command -------------------
 // ============================================================================
