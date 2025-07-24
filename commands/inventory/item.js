@@ -23,6 +23,7 @@ const { getJobPerk } = require('../../modules/jobsModule');
 const { capitalizeWords } = require('../../modules/formattingModule');
 const { getVillageEmojiByName } = require('../../modules/locationsModule');
 const { createDebuffEmbed } = require('../../embeds/embeds');
+const { getJobVoucherErrorMessage } = require('../../modules/jobVoucherModule');
 
 // ------------------- Utility Functions -------------------
 // General-purpose utilities: error handling, inventory utils.
@@ -167,9 +168,12 @@ module.exports = {
 
         const jobName = interaction.options.getString('jobname');
         if (!jobName) {
-          return void await interaction.editReply({
-            content: '❗ **You must specify a job to use with the Job Voucher.**'
-          });
+          // ============================================================================
+          // ------------------- Job Voucher: No Job Specified Error -------------------
+          // Show embed with instructions if no job is specified
+          // ============================================================================
+          const { embed } = getJobVoucherErrorMessage('NO_JOB_SPECIFIED');
+          return void await interaction.editReply({ embeds: [embed], ephemeral: true });
         }
 
         const jobPerkInfo = getJobPerk(jobName);
