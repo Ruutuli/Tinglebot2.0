@@ -56,7 +56,9 @@ const {
   authorizeSheets,
   extractSpreadsheetId,
   isValidGoogleSheetsUrl,
-  safeAppendDataToSheet
+  safeAppendDataToSheet,
+  retryPendingSheetOperations,
+  getPendingSheetOperationsCount
 } = require('../../utils/googleSheetsUtils');
 const {
   deletePendingEditFromStorage,
@@ -830,6 +832,24 @@ const modCommand = new SlashCommandBuilder()
     )
 )
 
+// ------------------- Subcommand: sheets -------------------
+.addSubcommand(sub =>
+  sub
+    .setName('sheets')
+    .setDescription('📊 Manage Google Sheets operations and retry failed operations')
+    .addStringOption(option =>
+      option
+        .setName('action')
+        .setDescription('The action to perform')
+        .setRequired(true)
+        .addChoices(
+          { name: 'Retry Pending Operations', value: 'retry' },
+          { name: 'Check Status', value: 'status' },
+          { name: 'Clear All Pending', value: 'clear' }
+        )
+    )
+)
+
 // ------------------- Subcommand: kick -------------------
 .addSubcommand(sub =>
   sub
@@ -1105,6 +1125,8 @@ async function execute(interaction) {
         return await handleBlightOverride(interaction);
     } else if (subcommand === 'debuff') {
         return await handleDebuff(interaction);
+    } else if (subcommand === 'sheets') {
+        return await handleSheets(interaction);
     } else {
         return interaction.editReply('❌ Unknown subcommand.');
     }
@@ -2838,6 +2860,81 @@ async function handleDebuff(interaction) {
     handleError(error, 'mod.js');
     console.error('[mod.js]: Error during debuff handling:', error);
     return interaction.editReply('⚠️ An error occurred while processing the debuff action.');
+  }
+}
+
+// ============================================================================
+// ------------------- Function: handleSheets -------------------
+// Manages Google Sheets operations and retry functionality
+// ============================================================================
+
+async function handleSheets(interaction) {
+  try {
+    const action = interaction.options.getString('action');
+    
+    if (action === 'retry') {
+      const pendingCount = await getPendingSheetOperationsCount();
+      
+      if (pendingCount === 0) {
+        return interaction.editReply('✅ No pending Google Sheets operations to retry.');
+      }
+      
+      await interaction.editReply(`🔄 Attempting to retry ${pendingCount} pending operations...`);
+      
+      const result = await retryPendingSheetOperations();
+      
+      if (result.success) {
+        const embed = new EmbedBuilder()
+          .setColor('#88cc88')
+          .setTitle('📊 Google Sheets Retry Results')
+          .setDescription(`Successfully processed pending operations.`)
+          .addFields(
+            { name: '✅ Successful', value: result.retried.toString(), inline: true },
+            { name: '❌ Failed', value: result.failed.toString(), inline: true },
+            { name: '📦 Total Processed', value: (result.retried + result.failed).toString(), inline: true }
+          )
+          .setTimestamp();
+        
+        return interaction.editReply({ embeds: [embed] });
+      } else {
+        return interaction.editReply(`❌ Failed to retry operations: ${result.error}`);
+      }
+      
+    } else if (action === 'status') {
+      const pendingCount = await getPendingSheetOperationsCount();
+      
+      const embed = new EmbedBuilder()
+        .setColor(pendingCount > 0 ? '#ffaa00' : '#88cc88')
+        .setTitle('📊 Google Sheets Status')
+        .setDescription(pendingCount > 0 
+          ? `There are **${pendingCount}** pending operations waiting to be retried.`
+          : '✅ All Google Sheets operations are up to date.'
+        )
+        .addFields(
+          { name: '📦 Pending Operations', value: pendingCount.toString(), inline: true },
+          { name: '🔄 Auto Retry', value: 'Every 15 minutes', inline: true },
+          { name: '⏰ Max Retries', value: '3 attempts', inline: true }
+        )
+        .setTimestamp();
+      
+      return interaction.editReply({ embeds: [embed] });
+      
+    } else if (action === 'clear') {
+      const TempData = require('../../models/TempDataModel');
+      const deleteResult = await TempData.deleteMany({ type: 'pendingSheetOperation' });
+      
+      const embed = new EmbedBuilder()
+        .setColor('#ff6666')
+        .setTitle('🗑️ Google Sheets Operations Cleared')
+        .setDescription(`Cleared **${deleteResult.deletedCount}** pending operations.`)
+        .setTimestamp();
+      
+      return interaction.editReply({ embeds: [embed] });
+    }
+    
+  } catch (error) {
+    console.error('[mod.js]: Error during sheets handling:', error);
+    return interaction.editReply('⚠️ An error occurred while processing the sheets action.');
   }
 }
 // ============================================================================

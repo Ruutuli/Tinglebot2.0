@@ -145,7 +145,8 @@ const tempDataSchema = new mongoose.Schema({
       // System & Maintenance
       'cache',         // General caching
       'session',       // User sessions
-      'temp'          // Temporary data
+      'temp',         // Temporary data
+      'pendingSheetOperation' // Pending Google Sheets operations
     ],
     index: true
   },

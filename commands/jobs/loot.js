@@ -909,7 +909,7 @@ async function handleInventoryUpdate(interaction, character, lootedItem, encount
 
   try {
     if (character?.name && character?.inventory && character?.userId) {
-      await safeAppendDataToSheet(character.inventory, character, range, values, undefined, {
+      const sheetResult = await safeAppendDataToSheet(character.inventory, character, range, values, undefined, {
         skipValidation: true,
         context: {
           commandName: 'loot',
@@ -927,6 +927,12 @@ async function handleInventoryUpdate(interaction, character, lootedItem, encount
           }
         }
       });
+      
+      // Check if the operation was stored for retry
+      if (sheetResult && sheetResult.storedForRetry) {
+        console.log(`[loot.js]: 📦 Sheet operation stored for retry: ${sheetResult.operationId}`);
+        // Don't show error to user - the operation will be retried automatically
+      }
     } else {
       console.error('[safeAppendDataToSheet]: Invalid character object detected before syncing.');
     }
