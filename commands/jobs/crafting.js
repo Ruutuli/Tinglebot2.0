@@ -63,7 +63,7 @@ module.exports = {
     ),
 
   async execute(interaction) {
-    await interaction.deferReply({ flags: [4096] });
+    await interaction.deferReply({ ephemeral: true });
     await connectToTinglebot();
 
     // ------------------- Extract Command Options -------------------
