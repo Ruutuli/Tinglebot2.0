@@ -446,9 +446,27 @@ function extractSpreadsheetId(url) {
     if (typeof url !== 'string') {
         throw new Error('Invalid URL: URL must be a string');
     }
+    
+    // Clean the URL - remove any trailing semicolons or invalid characters
+    const cleanUrl = url.trim().replace(/;$/, '').replace(/['"]/g, '');
+    
     const regex = /\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/;
-    const match = url.match(regex);
-    return match ? match[1] : null;
+    const match = cleanUrl.match(regex);
+    
+    if (!match) {
+        console.error(`[googleSheetsUtils.js]: ❌ Failed to extract spreadsheet ID from URL: ${url}`);
+        return null;
+    }
+    
+    const spreadsheetId = match[1];
+    
+    // Validate the spreadsheet ID format
+    if (!spreadsheetId || spreadsheetId.length < 20) {
+        console.error(`[googleSheetsUtils.js]: ❌ Invalid spreadsheet ID format: ${spreadsheetId}`);
+        return null;
+    }
+    
+    return spreadsheetId;
 }
 
 // ============================================================================
@@ -853,7 +871,7 @@ async function deleteInventorySheetData(spreadsheetId, characterName, context = 
 
 // ------------------- Function: safeAppendDataToSheet -------------------
 // Safely appends data to a sheet with validation
-async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, client, { skipValidation = false } = {}) {
+async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, client, { skipValidation = false, context = {} } = {}) {
     // Move variable declarations outside try block to avoid scope issues
     let isUserObject = false;
     let isCharacterObject = false;
@@ -866,6 +884,16 @@ async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, c
 
         if (!character || typeof character !== 'object') {
             console.error(`[googleSheetsUtils.js]: ❌ Invalid character object:`, character);
+            return;
+        }
+
+        // Validate required character properties
+        if (isCharacterObject && (!character.name || !character.inventory || !character.userId)) {
+            console.error(`[googleSheetsUtils.js]: ❌ Character missing required properties:`, {
+                name: character.name,
+                hasInventory: !!character.inventory,
+                userId: character.userId
+            });
             return;
         }
 
@@ -892,7 +920,25 @@ async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, c
         }
 
         const spreadsheetId = extractSpreadsheetId(spreadsheetUrl);
+        if (!spreadsheetId) {
+            throw new Error(`Failed to extract spreadsheet ID from URL: ${spreadsheetUrl}`);
+        }
+        
+        // Validate that the URL is a proper Google Sheets URL
+        if (!spreadsheetUrl.includes('docs.google.com/spreadsheets')) {
+            throw new Error(`Invalid Google Sheets URL format: ${spreadsheetUrl}`);
+        }
+        console.log(`[googleSheetsUtils.js]: 🔗 Processing sheet operation for spreadsheet: ${spreadsheetId}`);
         const auth = await authorizeSheets();
+        
+        if (!auth) {
+            throw new Error('Failed to authorize Google Sheets API');
+        }
+        
+        // Validate auth object has required properties
+        if (!auth.credentials || !auth.credentials.access_token) {
+            throw new Error('Google Sheets API auth object is not properly configured');
+        }
 
         if (!skipValidation) {
             // Validate the range format
@@ -906,6 +952,11 @@ async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, c
             // Validate the cell range format
             if (!cellRange.match(/^[A-Z]+\d*:[A-Z]+\d*$/)) {
                 throw new Error(`Invalid cell range format. Expected format: A1:Z1 or A1:Z`);
+            }
+            
+            // Validate sheet name is not empty
+            if (!sheetName || sheetName.trim() === '') {
+                throw new Error('Sheet name cannot be empty');
             }
 
             // Validate the appropriate sheet
@@ -952,21 +1003,79 @@ async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, c
         }
 
         // If validation passed or skipped, append the data
+        if (!Array.isArray(values) || values.length === 0) {
+            throw new Error('Invalid values array: must be a non-empty array');
+        }
+        
         const resource = {
-            values: values.map(row =>
-                Array.isArray(row)
-                    ? row.map(value => (value != null ? value.toString() : ''))
-                    : []
-            )
+            values: values.map(row => {
+                if (!Array.isArray(row)) {
+                    console.error(`[googleSheetsUtils.js]: ❌ Invalid row format:`, row);
+                    throw new Error('Each value in values array must be an array');
+                }
+                return row.map(value => (value != null ? value.toString() : ''));
+            })
         };
+        
+        console.log(`[googleSheetsUtils.js]: 📝 Preparing to append ${resource.values.length} rows to sheet`);
+        
+        // Log the first row for debugging
+        if (resource.values.length > 0 && resource.values[0].length > 0) {
+            console.log(`[googleSheetsUtils.js]: 📝 First row data:`, resource.values[0].slice(0, 3)); // Log first 3 columns
+        }
 
-        await google.sheets({ version: 'v4', auth })
-            .spreadsheets.values.append({
+        try {
+            // Validate the API call parameters
+            if (!spreadsheetId || !range || !resource || !resource.values) {
+                throw new Error(`Invalid API call parameters: spreadsheetId=${spreadsheetId}, range=${range}, hasResource=${!!resource}`);
+            }
+            
+            await google.sheets({ version: 'v4', auth })
+                .spreadsheets.values.append({
+                    spreadsheetId,
+                    range,
+                    valueInputOption: 'USER_ENTERED',
+                    resource
+                });
+        } catch (apiError) {
+            console.error(`[googleSheetsUtils.js]: ❌ Google Sheets API error:`, {
+                message: apiError.message,
+                status: apiError.status,
+                code: apiError.code,
                 spreadsheetId,
-                range,
-                valueInputOption: 'USER_ENTERED',
-                resource
+                range
             });
+            
+            // Handle 409 Conflict error specifically
+            if (apiError.status === 409) {
+                console.log(`[googleSheetsUtils.js]: 🔄 409 Conflict detected - storing operation for retry`);
+                try {
+                    const operationData = {
+                        operationType: 'append',
+                        spreadsheetId: extractSpreadsheetId(spreadsheetUrl),
+                        range: range,
+                        values: values,
+                        characterName: isCharacterObject ? character?.name : null,
+                        userId: isUserObject ? character?.discordId : character?.userId,
+                        sheetType: range.split('!')[0].toLowerCase(),
+                        commandName: context?.commandName || client?.commandName,
+                        userTag: context?.userTag || client?.user?.tag,
+                        clientUserId: context?.userId || client?.user?.id,
+                        options: context?.options || client?.options?.data,
+                        originalError: apiError.message
+                    };
+                    
+                    const operationId = await storePendingSheetOperation(operationData);
+                    console.log(`[googleSheetsUtils.js]: 📦 409 Conflict operation stored for retry: ${operationId}`);
+                    
+                    return { success: false, storedForRetry: true, operationId };
+                } catch (storageError) {
+                    console.error(`[googleSheetsUtils.js]: ❌ Failed to store 409 conflict operation: ${storageError.message}`);
+                }
+            }
+            
+            throw apiError;
+        }
         
         // More specific logging based on sheet type
         const entityName = isCharacterObject ? character.name : `User ${character.discordId}`;
@@ -981,12 +1090,22 @@ async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, c
 
     } catch (error) {
         console.error(`[googleSheetsUtils.js]: ❌ Error in safeAppendDataToSheet:`, error.message);
+        console.error(`[googleSheetsUtils.js]: 📊 Error details:`, {
+            status: error.status,
+            code: error.code,
+            spreadsheetId: extractSpreadsheetId(spreadsheetUrl),
+            range: range,
+            valuesLength: values?.length,
+            characterName: isCharacterObject ? character?.name : null
+        });
         
-        // Check if this is a service unavailable error
+        // Check if this is a service unavailable error or conflict error
         if (error.message.includes('service is currently unavailable') || 
             error.message.includes('quota exceeded') ||
             error.message.includes('rate limit') ||
-            error.message.includes('temporarily unavailable')) {
+            error.message.includes('temporarily unavailable') ||
+            error.message.includes('aborted') ||
+            error.status === 409) {
             
             try {
                 // Store the operation for later retry
@@ -998,10 +1117,10 @@ async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, c
                     characterName: isCharacterObject ? character?.name : null,
                     userId: isUserObject ? character?.discordId : character?.userId,
                     sheetType: range.split('!')[0].toLowerCase(),
-                    commandName: client?.commandName,
-                    userTag: client?.user?.tag,
-                    clientUserId: client?.user?.id,
-                    options: client?.options?.data,
+                    commandName: context?.commandName || client?.commandName,
+                    userTag: context?.userTag || client?.user?.tag,
+                    clientUserId: context?.userId || client?.user?.id,
+                    options: context?.options || client?.options?.data,
                     originalError: error.message
                 };
                 
@@ -1024,10 +1143,10 @@ async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, c
             spreadsheetId: extractSpreadsheetId(spreadsheetUrl),
             range: range,
             sheetType: range.split('!')[0].toLowerCase(),
-            commandName: client?.commandName,
-            userTag: client?.user?.tag,
-            clientUserId: client?.user?.id,
-            options: client?.options?.data
+            commandName: context?.commandName || client?.commandName,
+            userTag: context?.userTag || client?.user?.tag,
+            clientUserId: context?.userId || client?.user?.id,
+            options: context?.options || client?.options?.data
         };
         throw error;
     }
@@ -1134,6 +1253,13 @@ async function retryPendingSheetOperations() {
           await TempData.findByIdAndDelete(operation._id);
           failureCount++;
           continue;
+        }
+
+        // Add a small delay between retries to avoid conflicts
+        if (operation.data.retryCount > 0) {
+          const delay = Math.min(1000 * operation.data.retryCount, 5000); // 1s, 2s, 3s, 4s, 5s max
+          console.log(`[googleSheetsUtils.js]: ⏳ Waiting ${delay}ms before retry ${operation.data.retryCount + 1}`);
+          await new Promise(resolve => setTimeout(resolve, delay));
         }
 
         // Attempt to execute the original operation
