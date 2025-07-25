@@ -10,6 +10,7 @@ const { v4: uuidv4 } = require('uuid');
 
 // ------------------- Discord.js Components -------------------
 const { SlashCommandBuilder } = require('@discordjs/builders');
+const { MessageFlags } = require('discord.js');
 
 // ------------------- Database Connections -------------------
 const { connectToTinglebot, fetchCharacterByNameAndUserId, getCharacterInventoryCollection, fetchItemByName } = require('../../database/db');
@@ -63,7 +64,7 @@ module.exports = {
     ),
 
   async execute(interaction) {
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
     await connectToTinglebot();
 
     // ------------------- Extract Command Options -------------------
@@ -87,7 +88,7 @@ module.exports = {
       // ------------------- Fetch and Validate Character -------------------
       const character = await fetchCharacterByNameAndUserId(characterName, userId);
       if (!character) {
-        return interaction.editReply({ content: `❌ **Character "${characterName}" not found or does not belong to you.**`, ephemeral: true });
+        return interaction.editReply({ content: `❌ **Character "${characterName}" not found or does not belong to you.**`, flags: [MessageFlags.Ephemeral] });
       }
 
       // Check if character is in jail
@@ -102,7 +103,7 @@ module.exports = {
         // Use the original endDate timestamp directly for Discord display
         const unixTimestamp = Math.floor(debuffEndDate.getTime() / 1000);
         
-        return interaction.editReply({ content: `❌ **${character.name} is currently debuffed and cannot craft.**\n🕒 Debuff Ends: <t:${unixTimestamp}:F>`, ephemeral: true });
+        return interaction.editReply({ content: `❌ **${character.name} is currently debuffed and cannot craft.**\n🕒 Debuff Ends: <t:${unixTimestamp}:F>`, flags: [MessageFlags.Ephemeral] });
       }
 
       // ------------------- Check Inventory Sync -------------------
@@ -121,7 +122,7 @@ module.exports = {
               }
             ]
           }],
-          ephemeral: true
+          flags: [MessageFlags.Ephemeral]
         });
         return;
       }
@@ -151,14 +152,14 @@ module.exports = {
               text: 'Channel Restriction'
             }
           }],
-          ephemeral: true
+          flags: [MessageFlags.Ephemeral]
         });
       }
 
       // ------------------- Fetch and Validate Item -------------------
       const item = await fetchItemByName(itemName);
       if (!item) {
-        return interaction.editReply({ content: `❌ **No item found named "${itemName}".**`, ephemeral: true });
+        return interaction.editReply({ content: `❌ **No item found named "${itemName}".**`, flags: [MessageFlags.Ephemeral] });
       }
 
       // ------------------- Validate Character Job and Voucher -------------------
@@ -193,7 +194,7 @@ module.exports = {
             console.log(`[crafting.js]: 🔄 Unrestricted job voucher - proceeding with "${job}"`);
           } else {
             console.error(`[crafting.js]: ❌ Voucher validation failed: ${voucherCheck.message}`);
-            return interaction.editReply({ content: voucherCheck.message, ephemeral: true });
+            return interaction.editReply({ content: voucherCheck.message, flags: [MessageFlags.Ephemeral] });
           }
         } else {
           // Restrict crafting of items that require more than 5 stamina when using a job voucher
@@ -204,7 +205,7 @@ module.exports = {
                 characterName: character.name,
                 itemName: itemName
               }).message,
-              ephemeral: true,
+              flags: [MessageFlags.Ephemeral],
             });
             return;
           }
@@ -218,14 +219,14 @@ module.exports = {
                 jobName: job,
                 activity: 'crafting'
               }).message,
-              ephemeral: true 
+              flags: [MessageFlags.Ephemeral] 
             });
           }
 
           // Fetch the job voucher item for later activation
           const fetchResult = await fetchJobVoucherItem();
           if (!fetchResult.success) {
-            await interaction.editReply({ content: fetchResult.message, ephemeral: true });
+            await interaction.editReply({ content: fetchResult.message, flags: [MessageFlags.Ephemeral] });
             return;
           }
           jobVoucherItem = fetchResult.item;
@@ -236,12 +237,12 @@ module.exports = {
       // Always fetch the latest character data before stamina check to avoid stale values
       const freshCharacter = await fetchCharacterByNameAndUserId(characterName, userId);
       if (!freshCharacter) {
-        return interaction.editReply({ content: `❌ **Character \"${characterName}\" not found or does not belong to you.**`, ephemeral: true });
+        return interaction.editReply({ content: `❌ **Character \"${characterName}\" not found or does not belong to you.**`, flags: [MessageFlags.Ephemeral] });
       }
       const staminaCost = item.staminaToCraft * quantity;
       if (freshCharacter.currentStamina < staminaCost) {
         console.error(`[crafting.js]: ❌ Insufficient stamina for ${freshCharacter.name} - needed ${staminaCost}, has ${freshCharacter.currentStamina}`);
-        return interaction.editReply({ content: `❌ **Not enough stamina. Needed: ${staminaCost}, Available: ${freshCharacter.currentStamina}.**`, ephemeral: true });
+        return interaction.editReply({ content: `❌ **Not enough stamina. Needed: ${staminaCost}, Available: ${freshCharacter.currentStamina}.**`, flags: [MessageFlags.Ephemeral] });
       }
 
       // ------------------- Validate Required Materials -------------------
@@ -273,14 +274,14 @@ module.exports = {
             footer: { text: 'Gather, buy, or trade for more materials!' }
 
           }],
-          ephemeral: true
+          flags: [MessageFlags.Ephemeral]
         });
       }
 
       // ------------------- Process Materials -------------------
       const materialsUsed = await processMaterials(interaction, character, inventory, item, quantity);
       if (materialsUsed === 'canceled') {
-        return interaction.editReply({ content: '❌ **Crafting canceled.**', ephemeral: true });
+        return interaction.editReply({ content: '❌ **Crafting canceled.**', flags: [MessageFlags.Ephemeral] });
       }
 
       // ------------------- Deduct Stamina -------------------
@@ -295,7 +296,7 @@ module.exports = {
         for (const mat of materialsUsed) {
           await addItemInventoryDatabase(character._id, mat.itemName, mat.quantity, interaction, 'Crafting Refund');
         }
-        return interaction.followUp({ content: `⚠️ **Crafting failed due to insufficient stamina. Materials have been refunded.**`, ephemeral: true });
+        return interaction.followUp({ content: `⚠️ **Crafting failed due to insufficient stamina. Materials have been refunded.**`, flags: [MessageFlags.Ephemeral] });
       }
 
       // ------------------- Send Crafting Embed -------------------
@@ -316,10 +317,10 @@ module.exports = {
           await addItemInventoryDatabase(character._id, mat.itemName, mat.quantity, interaction, 'Crafting Refund');
         }
         handleError(embedError, 'crafting.js');
-        return interaction.editReply({ content: '❌ **An error occurred while generating the crafting result. Your materials and stamina have been refunded. Please contact a moderator.**', ephemeral: true });
+        return interaction.editReply({ content: '❌ **An error occurred while generating the crafting result. Your materials and stamina have been refunded. Please contact a moderator.**', flags: [MessageFlags.Ephemeral] });
       }
 
-      await interaction.editReply({ content: `✅ **Successfully crafted ${quantity} "${itemName}".**`, ephemeral: true });
+      await interaction.editReply({ content: `✅ **Successfully crafted ${quantity} "${itemName}".**`, flags: [MessageFlags.Ephemeral] });
       await interaction.followUp({ embeds: [embed], ephemeral: false });
 
       // ------------------- Update Inventory and Sheets -------------------
@@ -408,7 +409,7 @@ module.exports = {
       } catch (refundError) {
         handleError(refundError, 'crafting.js (refund)');
       }
-      await interaction.editReply({ content: '❌ **A critical error occurred during crafting. Your materials and stamina have been refunded if possible. Please contact a moderator.**', ephemeral: true });
+      await interaction.editReply({ content: '❌ **A critical error occurred during crafting. Your materials and stamina have been refunded if possible. Please contact a moderator.**', flags: [MessageFlags.Ephemeral] });
     }
   }
 };
