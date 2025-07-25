@@ -24,6 +24,7 @@ const userSchema = new mongoose.Schema({
   helpWanted: {
     lastCompletion: { type: String, default: null }, // YYYY-MM-DD
     cooldownUntil: { type: Date, default: null },
+    totalCompletions: { type: Number, default: 0 }, // Total number of Help Wanted quests completed
     completions: [
       {
         date: { type: String }, // YYYY-MM-DD

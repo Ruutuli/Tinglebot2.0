@@ -27,6 +27,7 @@ module.exports = {
           opt.setName('character')
             .setDescription('Your character\'s name (if you have multiple)')
             .setRequired(true)
+            .setAutocomplete(true)
         )
     )
     .addSubcommand(sub =>
@@ -36,11 +37,13 @@ module.exports = {
           opt.setName('id')
             .setDescription('The quest ID')
             .setRequired(true)
+            .setAutocomplete(true)
         )
         .addStringOption(opt =>
           opt.setName('character')
             .setDescription('Your character\'s name (if you have multiple)')
             .setRequired(true)
+            .setAutocomplete(true)
         )
     ),
 
@@ -355,19 +358,20 @@ module.exports = {
           quest.completedBy = { userId: interaction.user.id, characterId: character._id, timestamp: new Date().toISOString() };
           await quest.save();
           
-          // Update user's Help Wanted tracking
-          const user = await User.findOne({ discordId: interaction.user.id });
-          if (user) {
-            const today = new Date().toISOString().slice(0, 10);
-            user.helpWanted.lastCompletion = today;
-            user.helpWanted.completions.push({
-              date: today,
-              village: quest.village,
-              questType: quest.type
-            });
-            await user.save();
-            console.log(`[helpWanted.js]: ✅ Updated user tracking for ${interaction.user.tag}`);
-          }
+                     // Update user's Help Wanted tracking
+           const user = await User.findOne({ discordId: interaction.user.id });
+           if (user) {
+             const today = new Date().toISOString().slice(0, 10);
+             user.helpWanted.lastCompletion = today;
+             user.helpWanted.totalCompletions = (user.helpWanted.totalCompletions || 0) + 1;
+             user.helpWanted.completions.push({
+               date: today,
+               village: quest.village,
+               questType: quest.type
+             });
+             await user.save();
+             console.log(`[helpWanted.js]: ✅ Updated user tracking for ${interaction.user.tag} - Total completions: ${user.helpWanted.totalCompletions}`);
+           }
           
           // Update the quest embed to show completion
           const { updateQuestEmbed } = require('../../modules/helpWantedModule');
@@ -558,15 +562,17 @@ module.exports = {
         };
         await quest.save();
 
-        // ------------------- Update User Tracking -------------------
-        const today = new Date().toISOString().slice(0, 10);
-        user.helpWanted.lastCompletion = today;
-        user.helpWanted.completions.push({
-          date: today,
-          village: quest.village,
-          questType: quest.type
-        });
-        await user.save();
+                 // ------------------- Update User Tracking -------------------
+         const today = new Date().toISOString().slice(0, 10);
+         user.helpWanted.lastCompletion = today;
+         user.helpWanted.totalCompletions = (user.helpWanted.totalCompletions || 0) + 1;
+         user.helpWanted.completions.push({
+           date: today,
+           village: quest.village,
+           questType: quest.type
+         });
+         await user.save();
+         console.log(`[helpWanted.js]: ✅ Updated user tracking for ${interaction.user.tag} - Total completions: ${user.helpWanted.totalCompletions}`);
 
         // ------------------- Update Quest Embed -------------------
         const { updateQuestEmbed } = require('../../modules/helpWantedModule');

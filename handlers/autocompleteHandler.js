@@ -480,10 +480,21 @@ async function handleAutocomplete(interaction) {
 
           // ------------------- Help Wanted Command -------------------
           case 'helpwanted':
-            if (focusedOption.name === 'questid') {
-              await handleHelpWantedQuestIdAutocomplete(interaction, focusedOption);
-            } else if (focusedOption.name === 'character') {
-              await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, 'helpwanted');
+            if (interaction.options._subcommand) {
+              const helpWantedSubcommand = interaction.options.getSubcommand();
+              if (helpWantedSubcommand === 'complete') {
+                if (focusedOption.name === 'questid') {
+                  await handleHelpWantedQuestIdAutocomplete(interaction, focusedOption);
+                } else if (focusedOption.name === 'character') {
+                  await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, 'helpwanted');
+                }
+              } else if (helpWantedSubcommand === 'monsterhunt') {
+                if (focusedOption.name === 'id') {
+                  await handleHelpWantedQuestIdAutocomplete(interaction, focusedOption);
+                } else if (focusedOption.name === 'character') {
+                  await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, 'helpwanted');
+                }
+              }
             }
             break;
 
