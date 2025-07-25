@@ -686,6 +686,28 @@ async function hasUserCompletedQuestToday(userId) {
   return user.helpWanted.lastCompletion === today;
 }
 
+// ------------------- Function: hasUserReachedWeeklyQuestLimit -------------------
+// Checks if a user has already completed 3 or more Help Wanted quests this week
+// ============================================================================
+async function hasUserReachedWeeklyQuestLimit(userId) {
+  const user = await require('../models/UserModel').findOne({ discordId: userId });
+  if (!user || !user.helpWanted.completions) return false;
+  
+  // Get the start of the current week (Sunday)
+  const now = new Date();
+  const startOfWeek = new Date(now);
+  startOfWeek.setDate(now.getDate() - now.getDay()); // Sunday
+  startOfWeek.setHours(0, 0, 0, 0);
+  
+  // Count completions from this week
+  const weeklyCompletions = user.helpWanted.completions.filter(completion => {
+    const completionDate = new Date(completion.date);
+    return completionDate >= startOfWeek;
+  });
+  
+  return weeklyCompletions.length >= 3;
+}
+
 // ------------------- Function: updateQuestEmbed -------------------
 // Updates the quest embed message to show completion status
 // ============================================================================
@@ -773,6 +795,8 @@ module.exports = {
   generateDailyQuests,
   getItemQuestPool,
   getMonsterQuestPool,
+  hasUserCompletedQuestToday,
+  hasUserReachedWeeklyQuestLimit,
   getCraftingQuestPool,
   getEscortQuestPool,
   VILLAGES,
