@@ -12,7 +12,13 @@ const HelpWantedQuestSchema = new mongoose.Schema({
   questId: {
     type: String,
     required: true,
-    unique: true
+    unique: true,
+    validate: {
+      validator: function(v) {
+        return v != null && v.trim() !== '';
+      },
+      message: 'QuestId cannot be null or empty'
+    }
   },
   village: {
     type: String,
@@ -50,6 +56,11 @@ const HelpWantedQuestSchema = new mongoose.Schema({
     type: String,
     default: null
     // Discord message ID of the quest embed for future edits
+  },
+  channelId: {
+    type: String,
+    default: null
+    // Discord channel ID where the quest embed was posted
   }
 });
 

@@ -18,10 +18,24 @@ const VILLAGES = ['Rudania', 'Inariko', 'Vhintl'];
 const QUEST_TYPES = ['item', 'monster', 'escort', 'crafting'];
 const FIXED_CRON_TIMES = [
   '0 5 * * *',   // 5:00 AM EST
+  '0 8 * * *',   // 8:00 AM EST
   '0 11 * * *',  // 11:00 AM EST
+  '0 14 * * *',  // 2:00 PM EST
   '0 17 * * *',  // 5:00 PM EST
+  '0 20 * * *',  // 8:00 PM EST
   '0 23 * * *',  // 11:00 PM EST
+  '0 2 * * *',   // 2:00 AM EST
 ];
+
+// ------------------- Quest Type Emoji Mapping -------------------
+// Emojis for different quest types to display in the title
+// ============================================================================
+const QUEST_TYPE_EMOJIS = {
+  'item': '📦',      // Package/box for item collection quests
+  'monster': '⚔️',   // Crossed swords for monster hunting quests
+  'escort': '🛡️',   // Shield for escort/protection quests
+  'crafting': '🔨'   // Hammer for crafting quests
+};
 
 // ------------------- NPC Quest Flavor Text Database -------------------
 // Specialized quest flavor text for each NPC, organized by quest type
@@ -405,6 +419,12 @@ async function generateQuestForVillage(village, date, pools) {
   }
   // Generate a unique questId
   const questId = generateUniqueId('X');
+  
+  // Safety check to ensure questId is never null
+  if (!questId) {
+    throw new Error(`Failed to generate questId for ${village} quest`);
+  }
+  
   console.log(`[HelpWanted] Generated quest for ${village} (${type}) with questId: ${questId}`);
   return {
     questId,
@@ -441,6 +461,10 @@ function assignRandomPostTimes() {
 // ============================================================================
 async function generateDailyQuests() {
   const date = moment().utc().format('YYYY-MM-DD');
+
+  // Clean up any existing documents with null questId to prevent duplicate key errors
+  await HelpWantedQuest.deleteMany({ questId: null });
+  console.log('[HelpWanted] Cleaned up documents with null questId');
 
   // Assign random post times for each village
   const postTimeMap = assignRandomPostTimes();
@@ -519,25 +543,21 @@ async function formatQuestsAsEmbed() {
     // Assign a random NPC as the quest requester
     const npcName = getRandomNPCName();
     
-    // Get quest type emoji
-    const questEmojis = {
-      item: '📦',
-      monster: '🗡️',
-      escort: '🛡️',
-      crafting: '🔨'
-    };
-    const emoji = questEmojis[quest.type] || '❓';
+    // Get quest type emoji from centralized mapping
+    const emoji = QUEST_TYPE_EMOJIS[quest.type] || '❓';
     
     // Use specialized NPC flavor text
     let questLine = getNPCQuestFlavor(npcName, quest.type, quest.requirements);
     questLine = `${emoji} **[${quest.type.charAt(0).toUpperCase() + quest.type.slice(1)} Quest]** ${questLine}`;
+    
     // Status line
     let status = quest.completed
       ? `❌ COMPLETED by <@${quest.completedBy?.userId || 'unknown'}> at ${quest.completedBy?.timestamp || 'unknown'}`
       : '✅ AVAILABLE';
+      
     embed.addFields({
       name: `${quest.village} — ${npcName}`,
-      value: `${questLine}\nStatus: ${status}`
+      value: `${questLine}\n**Status:** ${status}\n**Type:** ${emoji} ${quest.type.charAt(0).toUpperCase() + quest.type.slice(1)} Quest\n**Location:** ${quest.village}`
     });
   });
 
@@ -621,14 +641,23 @@ async function formatQuestsAsEmbedsByVillage() {
     const image = VILLAGE_IMAGES[quest.village] || null;
 
     const divider = '<:br:788136157363306506><:br:788136157363306506><:br:788136157363306506><:br:788136157363306506><:br:788136157363306506><:br:788136157363306506><:br:788136157363306506><:br:788136157363306506><:br:788136157363306506><:br:788136157363306506><:br:788136157363306506>';
+    
+    // Quest info fields
+    const questInfoFields = [
+      { name: '__Status__', value: quest.completed ? '❌ **COMPLETED**' : '✅ **AVAILABLE**', inline: true },
+      { name: '__Type__', value: `${QUEST_TYPE_EMOJIS[quest.type] || '❓'} ${quest.type.charAt(0).toUpperCase() + quest.type.slice(1)} Quest`, inline: true },
+      { name: '__Location__', value: quest.village, inline: true }
+    ];
+    
     const embed = new EmbedBuilder()
-      .setTitle(`🌿 Help Wanted — ${quest.village}`)
+      .setTitle(`${QUEST_TYPE_EMOJIS[quest.type] || '🌿'} Help Wanted — ${quest.village}`)
       .setColor(color)
       .addFields(
-        { name: 'Quest', value: `${questLine}\n${status}\n${divider}` },
+        { name: 'Quest', value: `${questLine}\n${divider}` },
+        ...questInfoFields,
         { name: 'How to Complete', value: turnIn },
         { name: 'Rules', value: rules },
-        { name: 'Quest ID', value: quest.questId ? String(quest.questId) : 'N/A', inline: true }
+        { name: 'Quest ID', value: quest.questId ? `\`\`\`${quest.questId}\`\`\`` : 'N/A', inline: true }
       );
     if (image) embed.setImage(image);
     result[quest.village] = embed;
@@ -651,6 +680,9 @@ async function hasUserCompletedQuestToday(userId) {
 // Updates the quest embed message to show completion status
 // ============================================================================
 async function updateQuestEmbed(client, quest, completedBy = null) {
+  console.log(`[helpWantedModule]: Attempting to update quest embed for ${quest.questId}`);
+  console.log(`[helpWantedModule]: Quest messageId: ${quest.messageId}, channelId: ${quest.channelId}, completed: ${quest.completed}`);
+  
   if (!quest.messageId) {
     console.log(`[helpWantedModule]: No message ID found for quest ${quest.questId}`);
     return;
@@ -658,9 +690,14 @@ async function updateQuestEmbed(client, quest, completedBy = null) {
 
   try {
     // Find the channel where the quest was posted
-    const channel = await client.channels.fetch(process.env.HELP_WANTED_TEST_CHANNEL);
+    if (!quest.channelId) {
+      console.error(`[helpWantedModule]: No channel ID found for quest ${quest.questId}`);
+      return;
+    }
+    
+    const channel = await client.channels.fetch(quest.channelId);
     if (!channel) {
-      console.error(`[helpWantedModule]: Could not find Help Wanted channel`);
+      console.error(`[helpWantedModule]: Could not find channel ${quest.channelId} for quest ${quest.questId}`);
       return;
     }
 
@@ -687,35 +724,36 @@ async function updateQuestEmbed(client, quest, completedBy = null) {
     // Update the quest field to show completion status
     const questField = originalEmbed.fields.find(field => field.name.includes('Quest'));
     if (questField) {
-      let updatedValue = questField.value;
-      
-      if (quest.completed && completedBy) {
-        // Replace the status line with completion info
-        updatedValue = updatedValue.replace(
-          /Status: ✅ AVAILABLE/,
-          `Status: ❌ **COMPLETED by <@${completedBy.userId}>**`
-        );
-      }
-      
       updatedEmbed.addFields({
         name: questField.name,
-        value: updatedValue,
+        value: questField.value,
         inline: false
       });
     }
 
-    // Copy other fields
+    // Update status field if it exists
+    const statusField = originalEmbed.fields.find(field => field.name === 'Status' || field.name === '__Status__');
+    if (statusField) {
+      const newStatusValue = quest.completed ? '❌ **COMPLETED**' : '✅ **AVAILABLE**';
+      updatedEmbed.addFields({
+        name: '__Status__',
+        value: newStatusValue,
+        inline: true
+      });
+    }
+
+    // Copy other fields (excluding Quest and Status which we've already handled)
     originalEmbed.fields.forEach(field => {
-      if (!field.name.includes('Quest')) {
+      if (!field.name.includes('Quest') && field.name !== 'Status' && field.name !== '__Status__') {
         updatedEmbed.addFields(field);
       }
     });
 
     // Update the message
     await message.edit({ embeds: [updatedEmbed] });
-    console.log(`[helpWantedModule]: Updated quest embed for ${quest.questId}`);
+    console.log(`[helpWantedModule]: ✅ Successfully updated quest embed for ${quest.questId}`);
   } catch (error) {
-    console.error(`[helpWantedModule]: Failed to update quest embed:`, error);
+    console.error(`[helpWantedModule]: ❌ Failed to update quest embed for ${quest.questId}:`, error);
   }
 }
 
@@ -729,6 +767,7 @@ module.exports = {
   getEscortQuestPool,
   VILLAGES,
   QUEST_TYPES,
+  QUEST_TYPE_EMOJIS,
   getTodaysQuests,
   formatQuestsAsEmbed,
   formatQuestsAsEmbedsByVillage,
