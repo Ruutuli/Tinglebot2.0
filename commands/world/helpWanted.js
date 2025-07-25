@@ -380,22 +380,49 @@ module.exports = {
         
         // Send final summary message as a follow-up embed
         
-        let resultMsg = defeatedAll ? `✅ **${character.name} defeated all ${monsterList.length} monsters! Quest completed.**` : `❌ **${character.name} was KO'd after defeating ${currentMonsterIndex - 1} monsters. Quest failed.**`;
-        let details = summary.map((s, index) => `**${index + 1}. ${s.monster}:** ${s.message}`).join('\n');
+        let resultMsg = defeatedAll ? 
+          `🎉 **${character.name} has successfully completed the monster hunt!**\n\nAll ${monsterList.length} monsters have been defeated and the quest is complete.` : 
+          `💀 **${character.name} was defeated during the monster hunt.**\n\nThey managed to defeat ${currentMonsterIndex - 1} out of ${monsterList.length} monsters before being KO'd.`;
+        let details = summary.map((s, index) => `**${index + 1}.** ${s.monster}\n> ${s.message}`).join('\n\n');
         
-        // Create loot summary if any items were looted
+        // Create loot summary with proper item emojis if any items were looted
         let lootSummary = '';
         if (totalLoot.length > 0) {
-          lootSummary = totalLoot.map(loot => `🎁 **${loot.monster}:** ${loot.item.itemName} (x${loot.item.quantity})`).join('\n');
+          // Import necessary modules for item formatting
+          const ItemModel = require('../../models/ItemModel');
+          const { formatItemDetails } = require('../../embeds/embeds.js');
+          
+          // Fetch emojis for all looted items
+          const formattedLoot = await Promise.all(
+            totalLoot.map(async (loot) => {
+              const itemDetails = await ItemModel.findOne({ 
+                itemName: loot.item.itemName 
+              }).select('emoji');
+              const emoji = itemDetails?.emoji || '🔹';
+              return formatItemDetails(loot.item.itemName, loot.item.quantity, emoji);
+            })
+          );
+          
+          lootSummary = formattedLoot.join('\n');
         }
         
+        // Import village color function for consistent styling
+        const { getVillageColorByName } = require('../../modules/locationsModule');
+        const villageColor = getVillageColorByName(character.currentVillage) || (defeatedAll ? 0x00FF00 : 0xFF0000);
+        
         const summaryEmbed = new EmbedBuilder()
-          .setColor(defeatedAll ? 0x00FF00 : 0xFF0000) // Green for success, red for failure
+          .setColor(villageColor) // Use village color for consistency
           .setTitle(`🗡️ Monster Hunt Results - ${character.name}`)
           .setDescription(resultMsg)
+          .setAuthor({
+            name: `${character.name} 🔗`,
+            iconURL: character.icon || 'https://via.placeholder.com/128',
+            url: character.inventory || ''
+          })
+          .setThumbnail(character.icon || 'https://via.placeholder.com/128')
           .addFields(
             { 
-              name: defeatedAll ? '🏆 Victory Summary' : '💀 Hunt Summary', 
+              name: defeatedAll ? '🏆 Battle Summary' : '💀 Hunt Summary', 
               value: details, 
               inline: false 
             }
@@ -403,17 +430,18 @@ module.exports = {
           .addFields(
             { 
               name: '📊 Statistics', 
-              value: `❤️ **Hearts Remaining:** ${heartsRemaining}\n⚔️ **Monsters Defeated:** ${defeatedAll ? monsterList.length : currentMonsterIndex - 1}/${monsterList.length}\n⚡ **Stamina Used:** 1\n🎯 **Quest Progress:** ${defeatedAll ? 'COMPLETED' : 'FAILED'}`, 
+              value: `❤️ **Hearts Remaining:** ${heartsRemaining}\n⚔️ **Monsters Defeated:** ${defeatedAll ? monsterList.length : currentMonsterIndex - 1}/${monsterList.length}\n⚡ **Stamina Used:** 1\n🎯 **Quest Progress:** ${defeatedAll ? '✅ COMPLETED' : '❌ FAILED'}`, 
               inline: true 
             }
           )
-          .setFooter({ text: `Quest ID: ${questId} | ${new Date().toLocaleString()}` })
-          .setTimestamp();
+          .setFooter({ text: `${character.currentVillage} Monster Hunt | Quest ID: ${questId} | ${new Date().toLocaleString()}` })
+          .setTimestamp()
+          .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png');
         
         // Add loot field if there was any loot
         if (lootSummary) {
           summaryEmbed.addFields({ 
-            name: '🎁 Loot Gained', 
+            name: `💎 Loot Gained (${totalLoot.length} items)`, 
             value: lootSummary, 
             inline: false 
           });

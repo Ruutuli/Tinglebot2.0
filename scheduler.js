@@ -60,7 +60,7 @@ const HelpWantedQuest = require('./models/HelpWantedQuestModel');
 const moment = require('moment');
 
 const HELP_WANTED_SCHEDULE_FILE = './helpWantedSchedule.json';
-const HELP_WANTED_TEST_CHANNEL = '1391812848099004578';
+const HELP_WANTED_TEST_CHANNEL = process.env.HELP_WANTED_TEST_CHANNEL || '1391812848099004578';
 
 const env = process.env.NODE_ENV || "development";
 try {
@@ -569,9 +569,16 @@ async function postHelpWantedBoardToTestChannel(client, cronTime) {
       const embed = embedsByVillage[quest.village];
       if (embed) {
         const message = await channel.send({ embeds: [embed] });
-        // Save the message ID for future edits
-        quest.messageId = message.id;
-        await quest.save();
+        // Save the message ID and channel ID for future edits
+        const updatedQuest = await HelpWantedQuest.findOneAndUpdate(
+          { _id: quest._id },
+          { 
+            messageId: message.id,
+            channelId: channel.id
+          },
+          { new: true }
+        );
+        console.log(`[scheduler.js]: Saved message ID ${message.id} and channel ID ${channel.id} for quest ${quest.questId} in ${quest.village}`);
         posted++;
       }
     }
@@ -586,13 +593,8 @@ async function postHelpWantedBoardToTestChannel(client, cronTime) {
 }
 
 function setupHelpWantedFixedScheduler(client) {
-  const times = [
-    '0 5 * * *',   // 5:00 AM EST
-    '0 11 * * *',  // 11:00 AM EST
-    '0 17 * * *',  // 5:00 PM EST
-    '0 23 * * *',  // 11:00 PM EST
-  ];
-  times.forEach((cronTime, idx) => {
+  const { FIXED_CRON_TIMES } = require('./modules/helpWantedModule');
+  FIXED_CRON_TIMES.forEach((cronTime, idx) => {
     createCronJob(
       cronTime,
       `Help Wanted Board Fixed Post #${idx + 1}`,
