@@ -593,15 +593,15 @@ const VILLAGE_IMAGES = {
 function getQuestTurnInInstructions(type) {
   switch (type) {
     case 'item':
-      return '• **Item Quest:** Gather the requested materials and bring them to the quest board. Use `/helpwanted complete` when ready.';
+      return '• **Item Quest:** Gather the requested materials and bring them to the quest board. Use </helpwanted complete:1397274578530865313> when ready.';
     case 'monster':
-      return '• **Monster Quest:** Hunt down the dangerous creatures threatening the village. Use `/helpwanted monsterhunt` to complete this quest.';
+      return '• **Monster Quest:** Hunt down the dangerous creatures threatening the village. Use </helpwanted monsterhunt:1397274578530865313> to complete this quest.';
     case 'escort':
-      return '• **Escort Quest:** Safely guide the villager to their destination. Please travel from the quest village to the destination village using `/travel`, then use `/helpwanted complete`.';
+      return '• **Escort Quest:** Safely guide the villager to their destination. Please travel from the quest village to the destination village using `/travel`, then use </helpwanted complete:1397274578530865313>.';
     case 'crafting':
-      return '• **Crafting Quest:** Create the requested item with your own hands. Craft the required item yourself, then use `/helpwanted complete`.';
+      return '• **Crafting Quest:** Create the requested item with your own hands. Craft the required item yourself, then use </helpwanted complete:1397274578530865313>.';
     default:
-      return '• Use `/helpwanted complete` to turn in your quest.';
+      return '• Use </helpwanted complete:1397274578530865313> to turn in your quest.';
   }
 }
 
