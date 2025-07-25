@@ -53,14 +53,18 @@ module.exports = {
     if (sub === 'monsterhunt') {
       const questId = interaction.options.getString('id');
       const characterName = interaction.options.getString('character');
+      
+      // Defer the reply to extend interaction timeout
+      await interaction.deferReply({ ephemeral: true });
+      
       try {
         // ------------------- Fetch Quest -------------------
         const quest = await HelpWantedQuest.findOne({ questId });
         if (!quest) {
-          return await interaction.reply({ content: '❌ Quest not found.', ephemeral: true });
+          return await interaction.editReply({ content: '❌ Quest not found.' });
         }
         if (quest.type !== 'monster') {
-          return await interaction.reply({ content: '❌ This quest is not a monster hunt.', ephemeral: true });
+          return await interaction.editReply({ content: '❌ This quest is not a monster hunt.' });
         }
         // ------------------- Get Monster List -------------------
         let monsterList = [];
@@ -71,42 +75,48 @@ module.exports = {
           const amount = quest.requirements.amount || 1;
           monsterList = Array(amount).fill(quest.requirements.monster);
         } else {
-          return await interaction.reply({ content: '❌ No monsters specified for this quest.', ephemeral: true });
+          return await interaction.editReply({ content: '❌ No monsters specified for this quest.' });
         }
         if (monsterList.length === 0) {
-          return await interaction.reply({ content: '❌ No monsters specified for this quest.', ephemeral: true });
+          return await interaction.editReply({ content: '❌ No monsters specified for this quest.' });
         }
         console.log(`[helpWanted.js]: 🎯 Monster hunt quest - ${monsterList.length} monsters to fight: ${monsterList.join(', ')}`);
         // ------------------- Fetch Character and User -------------------
         const character = await Character.findOne({ userId: interaction.user.id, name: characterName });
         if (!character) {
-          return await interaction.reply({ content: '❌ Character not found.', ephemeral: true });
+          return await interaction.editReply({ content: '❌ Character not found.' });
         }
         
-        // Check if user has already completed a Help Wanted quest today
-        const { hasUserCompletedQuestToday } = require('../../modules/helpWantedModule');
-        if (await hasUserCompletedQuestToday(interaction.user.id)) {
-          return await interaction.reply({ 
-            content: '❌ You have already completed a Help Wanted quest today. Only one quest per user per day is allowed.', 
-            ephemeral: true 
-          });
-        }
+                 // Check if user has already completed a Help Wanted quest today
+         const { hasUserCompletedQuestToday } = require('../../modules/helpWantedModule');
+         if (await hasUserCompletedQuestToday(interaction.user.id)) {
+           return await interaction.editReply({ 
+             content: '🕐 **Daily Quest Cooldown Active!**\n\nYou\'ve already completed a Help Wanted quest today. Each adventurer can only take on **one quest per day** to maintain balance in the realm.\n\n⏰ **Next Quest Available:** Tomorrow at midnight (EST)\n💡 **Tip:** Use this time to rest, gather resources, or help other adventurers!'
+           });
+         }
         // ------------------- Eligibility Checks -------------------
         if (character.currentHearts === 0) {
-          return await interaction.reply({ content: `❌ ${character.name} is KO'd and cannot participate.`, ephemeral: true });
+          return await interaction.editReply({ content: `❌ ${character.name} is KO'd and cannot participate.` });
         }
         if (character.debuff?.active) {
-          return await interaction.reply({ content: `❌ ${character.name} is debuffed and cannot participate.`, ephemeral: true });
+          return await interaction.editReply({ content: `❌ ${character.name} is debuffed and cannot participate.` });
         }
-        if (character.blightEffects?.noMonsters) {
-          return await interaction.reply({ content: `❌ ${character.name} cannot fight monsters due to blight.`, ephemeral: true });
-        }
+                 if (character.blightEffects?.noMonsters) {
+           return await interaction.editReply({ content: `❌ ${character.name} cannot fight monsters due to blight.` });
+         }
+         
+         // ------------------- Village Check -------------------
+         if (character.currentVillage.toLowerCase() !== quest.village.toLowerCase()) {
+           return await interaction.editReply({ 
+             content: `❌ **Wrong Village!**\n\n**${character.name}** is currently in **${character.currentVillage}**, but this quest is for **${quest.village}**.\n\n🏠 **Home Village:** ${character.homeVillage}\n📍 **Current Location:** ${character.currentVillage}\n🎯 **Quest Village:** ${quest.village}\n\n**Characters must be in their home village to complete Help Wanted quests.**\n\n💡 **Need to travel?** Use \`/travel\` to move between villages.`
+           });
+         }
         
         // ------------------- Stamina Check -------------------
         // Ensure stamina is a number (using currentStamina field)
         const currentStamina = parseInt(character.currentStamina) || 0;
         if (currentStamina < 1) {
-          return await interaction.reply({ content: `❌ ${character.name} needs at least 1 stamina to attempt a monster hunt.`, ephemeral: true });
+          return await interaction.editReply({ content: `❌ ${character.name} needs at least 1 stamina to attempt a monster hunt.` });
         }
         // ------------------- Sequential Monster Fights -------------------
         const { fetchItemsByMonster } = require('../../database/db.js');
@@ -185,7 +195,7 @@ module.exports = {
           const monster = await fetchMonsterByName(monsterName);
           if (!monster) {
             console.error(`[helpWanted.js]: ❌ Monster "${monsterName}" not found in database`);
-            await interaction.followUp({ content: `❌ Monster "${monsterName}" not found in database.`, ephemeral: true });
+            await interaction.followUp({ content: `❌ Monster "${monsterName}" not found in database.`, flags: 64 });
             return;
           }
           console.log(`[helpWanted.js]: 🐉 Fetched monster data for ${monsterName} - Tier: ${monster.tier}, Hearts: ${monster.hearts}`);
@@ -467,18 +477,23 @@ module.exports = {
           questId,
           characterName
         });
-        await interaction.reply({ content: '❌ An error occurred during the monster hunt. Please try again later.', ephemeral: true });
+        
+        await interaction.editReply({ content: '❌ An error occurred during the monster hunt. Please try again later.' });
         return;
       }
     }
     if (sub === 'complete') {
       const questId = interaction.options.getString('questid');
       const characterName = interaction.options.getString('character');
+      
+      // Defer the reply to extend interaction timeout
+      await interaction.deferReply({ ephemeral: false });
+      
       try {
         // ------------------- Fetch Quest by ID -------------------
         const quest = await HelpWantedQuest.findOne({ questId });
         if (!quest) {
-          return await interaction.reply({ content: '❌ Quest not found.', ephemeral: true });
+          return await interaction.editReply({ content: '❌ Quest not found.' });
         }
 
         // ------------------- Fetch Character and User -------------------
@@ -487,58 +502,165 @@ module.exports = {
           name: characterName
         });
         if (!character) {
-          return await interaction.reply({ content: '❌ Character not found.', ephemeral: true });
+          return await interaction.editReply({ content: '❌ Character not found.' });
         }
 
         const user = await User.findOne({ discordId: interaction.user.id });
         if (!user) {
-          return await interaction.reply({ content: '❌ User not found.', ephemeral: true });
+          return await interaction.editReply({ content: '❌ User not found.' });
         }
 
-        // ------------------- Cooldown Check -------------------
-        const { hasUserCompletedQuestToday } = require('../../modules/helpWantedModule');
-        if (await hasUserCompletedQuestToday(interaction.user.id)) {
-          return await interaction.reply({ 
-            content: '❌ You have already completed a Help Wanted quest today. Only one quest per user per day is allowed.', 
-            ephemeral: true 
-          });
-        }
+                 // ------------------- Cooldown Check -------------------
+         const { hasUserCompletedQuestToday } = require('../../modules/helpWantedModule');
+         if (await hasUserCompletedQuestToday(interaction.user.id)) {
+           return await interaction.editReply({ 
+             content: '🕐 **Daily Quest Cooldown Active!**\n\nYou\'ve already completed a Help Wanted quest today. Each adventurer can only take on **one quest per day** to maintain balance in the realm.\n\n⏰ **Next Quest Available:** Tomorrow at midnight (server time)\n💡 **Tip:** Use this time to rest, gather resources, or help other adventurers!'
+           });
+         }
 
         // ------------------- Quest Status Check -------------------
         if (quest.completed) {
-          return await interaction.reply({ 
-            content: `❌ This quest has already been completed by <@${quest.completedBy?.userId || 'unknown'}>.`, 
-            ephemeral: true 
+          return await interaction.editReply({ 
+            content: `❌ This quest has already been completed by <@${quest.completedBy?.userId || 'unknown'}>.`
+          });
+        }
+        
+        // ------------------- Village Check -------------------
+        if (character.currentVillage.toLowerCase() !== quest.village.toLowerCase()) {
+          return await interaction.editReply({ 
+            content: `❌ **Wrong Village!**\n\n**${character.name}** is currently in **${character.currentVillage}**, but this quest is for **${quest.village}**.\n\n🏠 **Home Village:** ${character.homeVillage}\n📍 **Current Location:** ${character.currentVillage}\n🎯 **Quest Village:** ${quest.village}\n\n**Characters must be in their home village to complete Help Wanted quests.**\n\n💡 **Need to travel?** Use \`/travel\` to move between villages.`
           });
         }
 
         // ------------------- Quest Requirement Validation -------------------
+        console.log(`[helpWanted.js]: 🔍 Starting quest requirements validation for ${character.name} (${interaction.user.tag})`);
+        console.log(`[helpWanted.js]: 📋 Quest: ${quest.questId} - ${quest.type} quest for ${quest.village}`);
+        console.log(`[helpWanted.js]: 🎯 Requirements: ${JSON.stringify(quest.requirements)}`);
+        
         let requirementsMet = false;
         let validationMessage = '';
 
         switch (quest.type) {
           case 'item': {
-            // TODO: Implement inventory checking logic
-            validationMessage = `📦 **Item Quest:** Please ensure you have ${quest.requirements.amount}x ${quest.requirements.item} in your inventory.`;
-            requirementsMet = true; // Placeholder - implement actual inventory check
+            // ------------------- Item Quest Validation -------------------
+            // Check if character has the required items in their inventory
+            // Check database inventory for items only
+            const { connectToInventories } = require('../../database/db');
+            
+            let totalQuantity = 0;
+            let matchingItems = [];
+            
+            // ------------------- Check Database Inventory -------------------
+            try {
+              const inventoriesConnection = await connectToInventories();
+              const db = inventoriesConnection.useDb('inventories');
+              const collectionName = character.name.toLowerCase();
+              const inventoryCollection = db.collection(collectionName);
+              
+              // Search for items in database
+              const dbItems = await inventoryCollection.find({
+                characterId: character._id,
+                itemName: { $regex: new RegExp(quest.requirements.item, 'i') }
+              }).toArray();
+              
+              for (const item of dbItems) {
+                totalQuantity += item.quantity || 0;
+                matchingItems.push(`${item.itemName} (${item.quantity}x, source: ${item.obtain})`);
+              }
+              console.log(`[helpWanted.js]: 🔍 Database inventory scan for ${character.name}`);
+              console.log(`[helpWanted.js]: 📦 Database items found: ${dbItems.length} items`);
+            } catch (error) {
+              console.error(`[helpWanted.js]: ❌ Error checking database inventory:`, error);
+            }
+            
+            // ------------------- Validate Requirements -------------------
+            if (totalQuantity >= quest.requirements.amount) {
+              validationMessage = `📦 **Item Quest:** ✅ ${character.name} has ${totalQuantity}x ${quest.requirements.item} (required: ${quest.requirements.amount}x)`;
+              requirementsMet = true;
+            } else {
+              validationMessage = `📦 **Item Quest:** ❌ ${character.name} has ${totalQuantity}x ${quest.requirements.item} but needs ${quest.requirements.amount}x`;
+              requirementsMet = false;
+            }
             break;
           }
           case 'monster': {
-            // TODO: Implement monster defeat tracking
-            validationMessage = `🗡️ **Monster Quest:** Please ensure you have defeated ${quest.requirements.amount}x ${quest.requirements.monster}.`;
-            requirementsMet = true; // Placeholder - implement actual monster tracking
+            // ------------------- Monster Quest Validation -------------------
+            // For monster quests, we'll use the monsterhunt subcommand instead
+            // This validation is mainly for non-hunt monster quests (if any exist)
+            validationMessage = `🗡️ **Monster Quest:** This quest requires defeating monsters. Please use the \`/helpwanted monsterhunt\` command instead.`;
+            requirementsMet = false; // Force use of monsterhunt subcommand
             break;
           }
           case 'escort': {
-            // TODO: Implement travel location checking
-            validationMessage = `🛡️ **Escort Quest:** Please ensure you have traveled to ${quest.requirements.location}.`;
-            requirementsMet = true; // Placeholder - implement actual travel check
+            // ------------------- Escort Quest Validation -------------------
+            // Check if character has traveled to the required location
+            const requiredLocation = quest.requirements.location?.toLowerCase();
+            const currentLocation = character.currentVillage?.toLowerCase();
+            
+            if (!requiredLocation) {
+              validationMessage = `🛡️ **Escort Quest:** ❌ Quest requirements are incomplete - no location specified.`;
+              requirementsMet = false;
+              break;
+            }
+            
+            if (currentLocation === requiredLocation) {
+              validationMessage = `🛡️ **Escort Quest:** ✅ ${character.name} is currently in ${quest.requirements.location}`;
+              requirementsMet = true;
+            } else {
+              validationMessage = `🛡️ **Escort Quest:** ❌ ${character.name} is in ${character.currentVillage} but needs to be in ${quest.requirements.location}. Use \`/travel\` to move.`;
+              requirementsMet = false;
+            }
             break;
           }
           case 'crafting': {
-            // TODO: Implement crafting tracking
-            validationMessage = `🔨 **Crafting Quest:** Please ensure you have crafted ${quest.requirements.amount}x ${quest.requirements.item}.`;
-            requirementsMet = true; // Placeholder - implement actual crafting check
+            // ------------------- Crafting Quest Validation -------------------
+            // Check if character has crafted the required items
+            // Check database inventory for crafted items only
+            const { connectToInventories } = require('../../database/db');
+            
+            let totalCraftedQuantity = 0;
+            let matchingItems = [];
+            
+            // ------------------- Check Database Inventory -------------------
+            try {
+              const inventoriesConnection = await connectToInventories();
+              const db = inventoriesConnection.useDb('inventories');
+              const collectionName = character.name.toLowerCase();
+              const inventoryCollection = db.collection(collectionName);
+              
+              // Search for crafted items in database
+              const dbItems = await inventoryCollection.find({
+                characterId: character._id,
+                itemName: { $regex: new RegExp(quest.requirements.item, 'i') },
+                obtain: { $regex: /crafting/i }
+              }).toArray();
+              
+              for (const item of dbItems) {
+                totalCraftedQuantity += item.quantity || 0;
+                matchingItems.push(`${item.itemName} (${item.quantity}x, source: ${item.obtain})`);
+              }
+              
+              console.log(`[helpWanted.js]: 🔍 Database inventory scan for ${character.name}`);
+              console.log(`[helpWanted.js]: 📦 Database crafted items found: ${dbItems.length} items`);
+            } catch (error) {
+              console.error(`[helpWanted.js]: ❌ Error checking database inventory:`, error);
+            }
+            
+            console.log(`[helpWanted.js]: 🔍 Crafting quest inventory scan for ${character.name}`);
+            console.log(`[helpWanted.js]: 🎯 Looking for: ${quest.requirements.item}`);
+            console.log(`[helpWanted.js]: 📦 Total matching crafted items found: ${matchingItems.length > 0 ? matchingItems.join(', ') : 'None'}`);
+            console.log(`[helpWanted.js]: 📊 Total crafted quantity: ${totalCraftedQuantity}`);
+            
+            if (totalCraftedQuantity >= quest.requirements.amount) {
+              validationMessage = `🔨 **Crafting Quest:** ✅ ${character.name} has crafted ${totalCraftedQuantity}x ${quest.requirements.item} (required: ${quest.requirements.amount}x)`;
+              requirementsMet = true;
+              console.log(`[helpWanted.js]: ✅ Crafting quest requirements met - ${character.name} has ${totalCraftedQuantity}x ${quest.requirements.item}`);
+            } else {
+              validationMessage = `🔨 **Crafting Quest:** ❌ ${character.name} has crafted ${totalCraftedQuantity}x ${quest.requirements.item} but needs ${quest.requirements.amount}x. Use \`/crafting\` to craft more.`;
+              requirementsMet = false;
+              console.log(`[helpWanted.js]: ❌ Crafting quest requirements failed - ${character.name} has ${totalCraftedQuantity}x ${quest.requirements.item}, needs ${quest.requirements.amount}x`);
+              console.log(`[helpWanted.js]: 📊 Crafting Quest Details - Item: ${quest.requirements.item}, Required: ${quest.requirements.amount}, Found: ${totalCraftedQuantity}`);
+            }
             break;
           }
           default:
@@ -547,10 +669,96 @@ module.exports = {
         }
 
         if (!requirementsMet) {
-          return await interaction.reply({ 
-            content: `❌ Quest requirements not met.\n\n${validationMessage}`, 
-            ephemeral: true 
+          // ------------------- Log Quest Requirements Failure -------------------
+          console.log(`[helpWanted.js]: ❌ Quest requirements not met for ${character.name} (${interaction.user.tag})`);
+          console.log(`[helpWanted.js]: 📋 Quest Details - ID: ${quest.questId}, Type: ${quest.type}, Village: ${quest.village}`);
+          console.log(`[helpWanted.js]: 🔍 Requirements Check - ${validationMessage}`);
+          console.log(`[helpWanted.js]: 👤 Character Status - Hearts: ${character.currentHearts}, Village: ${character.currentVillage}, Debuff: ${character.debuff?.active || false}`);
+          
+          return await interaction.editReply({ 
+            content: `❌ Quest requirements not met.\n\n${validationMessage}`
           });
+        }
+
+        // ------------------- Remove Items for Crafting and Item Quests -------------------
+        if (quest.type === 'crafting' || quest.type === 'item') {
+          try {
+            console.log(`[helpWanted.js]: 🗑️ Removing items for ${quest.type} quest completion`);
+            
+            // Import required modules
+            const { connectToInventories } = require('../../database/db');
+            const { removeItemInventoryDatabase } = require('../../utils/inventoryUtils');
+            const { safeAppendDataToSheet } = require('../../utils/googleSheetsUtils');
+            
+            // Connect to inventory database
+            const inventoriesConnection = await connectToInventories();
+            const db = inventoriesConnection.useDb('inventories');
+            const collectionName = character.name.toLowerCase();
+            const inventoryCollection = db.collection(collectionName);
+            
+            // Find items to remove
+            let itemsToRemove = [];
+            
+            if (quest.type === 'crafting') {
+              // For crafting quests, find crafted items
+              const dbItems = await inventoryCollection.find({
+                characterId: character._id,
+                itemName: { $regex: new RegExp(quest.requirements.item, 'i') },
+                obtain: { $regex: /crafting/i }
+              }).toArray();
+              
+              itemsToRemove = dbItems;
+            } else if (quest.type === 'item') {
+              // For item quests, find any matching items
+              const dbItems = await inventoryCollection.find({
+                characterId: character._id,
+                itemName: { $regex: new RegExp(quest.requirements.item, 'i') }
+              }).toArray();
+              
+              itemsToRemove = dbItems;
+            }
+            
+            // Remove items from database
+            let totalRemoved = 0;
+            const itemsToLog = [];
+            
+            for (const item of itemsToRemove) {
+              if (totalRemoved >= quest.requirements.amount) break;
+              
+              const remainingToRemove = quest.requirements.amount - totalRemoved;
+              const quantityToRemove = Math.min(item.quantity, remainingToRemove);
+              
+              // Remove from database
+              const removed = await removeItemInventoryDatabase(
+                character._id, 
+                item.itemName, 
+                quantityToRemove, 
+                interaction, 
+                quest.type === 'crafting' ? 'Quest (Crafting)' : 'Quest (Item)'
+              );
+              
+              if (removed) {
+                totalRemoved += quantityToRemove;
+                itemsToLog.push({
+                  itemName: item.itemName,
+                  quantity: quantityToRemove,
+                  obtain: item.obtain
+                });
+                
+                console.log(`[helpWanted.js]: ✅ Removed ${quantityToRemove}x ${item.itemName} from ${character.name}'s inventory`);
+              }
+            }
+            
+            // Item removals are now automatically logged to Google Sheets by removeItemInventoryDatabase function
+            
+            console.log(`[helpWanted.js]: ✅ Successfully removed ${totalRemoved}x ${quest.requirements.item} for quest completion`);
+            
+          } catch (removalError) {
+            console.error(`[helpWanted.js]: ❌ Error removing items for quest completion:`, removalError);
+            return await interaction.editReply({ 
+              content: `❌ Failed to remove items from inventory. Please try again later.`
+            });
+          }
         }
 
         // ------------------- Mark Quest Completed -------------------
@@ -562,17 +770,17 @@ module.exports = {
         };
         await quest.save();
 
-                 // ------------------- Update User Tracking -------------------
-         const today = new Date().toISOString().slice(0, 10);
-         user.helpWanted.lastCompletion = today;
-         user.helpWanted.totalCompletions = (user.helpWanted.totalCompletions || 0) + 1;
-         user.helpWanted.completions.push({
-           date: today,
-           village: quest.village,
-           questType: quest.type
-         });
-         await user.save();
-         console.log(`[helpWanted.js]: ✅ Updated user tracking for ${interaction.user.tag} - Total completions: ${user.helpWanted.totalCompletions}`);
+        // ------------------- Update User Tracking -------------------
+        const today = new Date().toISOString().slice(0, 10);
+        user.helpWanted.lastCompletion = today;
+        user.helpWanted.totalCompletions = (user.helpWanted.totalCompletions || 0) + 1;
+        user.helpWanted.completions.push({
+          date: today,
+          village: quest.village,
+          questType: quest.type
+        });
+        await user.save();
+        console.log(`[helpWanted.js]: ✅ Updated user tracking for ${interaction.user.tag} - Total completions: ${user.helpWanted.totalCompletions}`);
 
         // ------------------- Update Quest Embed -------------------
         const { updateQuestEmbed } = require('../../modules/helpWantedModule');
@@ -591,7 +799,7 @@ module.exports = {
           .setFooter({ text: `Quest ID: ${quest.questId}` })
           .setTimestamp();
 
-        await interaction.reply({ embeds: [successEmbed], ephemeral: false });
+        await interaction.editReply({ embeds: [successEmbed] });
         console.log(`[helpWanted.js]: ✅ Quest ${quest.questId} completed by ${character.name} (${interaction.user.tag})`);
 
       } catch (error) {
@@ -602,7 +810,8 @@ module.exports = {
           characterName: characterName,
           questId: questId
         });
-        await interaction.reply({ content: '❌ An error occurred. Please try again later.', ephemeral: true });
+        
+        await interaction.editReply({ content: '❌ An error occurred. Please try again later.' });
       }
       return;
     } else {

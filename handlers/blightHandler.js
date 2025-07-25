@@ -1144,35 +1144,7 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
         throw new Error(`Failed to remove ${itemName} x${itemQuantityInt} from inventory.`);
       }
 
-      // Log inventory change
-      try {
-        const inventoryLink = character.inventory || character.inventoryLink;
-        if (inventoryLink) {
-          const spreadsheetId = extractSpreadsheetId(inventoryLink);
-          const auth = await authorizeSheets();
-          const uniqueSyncId = uuidv4();
-          const formattedDateTime = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
-          const values = [[
-            character.name,
-            itemName,
-            `-${itemQuantityInt}`,
-            'Healing',
-            submission.taskType,
-            '',
-            'Blight Healing',
-            character.job,
-            '',
-            character.currentVillage,
-            `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${(await interaction.fetchReply()).id}`,
-            formattedDateTime,
-            uniqueSyncId
-          ]];
-          await safeAppendDataToSheet(character.inventory, character, 'loggedInventory!A2:M', values, undefined, { skipValidation: true });
-        }
-      } catch (invSheetError) {
-        handleError(invSheetError, 'blightHandler.js');
-        console.error('[blightHandler]: Error appending to Google Sheets', invSheetError);
-      }
+      // Item removal is now automatically logged to Google Sheets by removeItemInventoryDatabase function
 
       await deleteBlightRequestFromStorage(submissionId);
       await completeBlightHealing(character);

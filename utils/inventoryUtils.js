@@ -417,7 +417,7 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
         .setDescription(`Not enough ${itemName} in inventory`)
         .addFields(
           { name: 'Required', value: quantity.toString(), inline: true },
-          { name: 'Available', value: existingItem ? existingItem.quantity.toString() : '0', inline: true }
+          { name: 'Available', value: inventoryItem.quantity.toString(), inline: true }
         )
         .setFooter({ text: 'Check your inventory and try again' })
         .setTimestamp();
@@ -450,6 +450,49 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
       if (updateResult.modifiedCount === 0) {
         console.error(`[inventoryUtils.js]: ❌ Failed to update quantity for item ${itemName}`);
         return false;
+      }
+    }
+
+    // Google Sheets Sync for item removal
+    if (character.inventory && typeof character.inventory === 'string' && isValidGoogleSheetsUrl(character.inventory)) {
+      try {
+        // Fetch item details for proper categorization
+        const itemDetails = await dbFunctions.fetchItemByName(itemName);
+        const category = Array.isArray(itemDetails?.category) ? itemDetails.category.join(", ") : (itemDetails?.category || "");
+        const type = Array.isArray(itemDetails?.type) ? itemDetails.type.join(", ") : (itemDetails?.type || "");
+        const subtype = Array.isArray(itemDetails?.subtype) ? itemDetails.subtype.join(", ") : (itemDetails?.subtype || "");
+        
+        // Create removal log entry with correct format
+        const removalLogEntry = [
+          character.name, // Character Name (A)
+          itemName, // Item Name (B)
+          -quantity, // Qty of Item (C) - negative for removal
+          category, // Category (D)
+          type, // Type (E)
+          subtype, // Subtype (F)
+          obtain, // Obtain (G)
+          character.job || "", // Job (H)
+          character.perk || "", // Perk (I)
+          character.currentLocation || character.homeVillage || "", // Location (J)
+          interaction ? `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}` : "", // Link (K)
+          formatDateTime(new Date()), // Date/Time (L)
+          uuidv4() // Confirmed Sync (M)
+        ];
+
+        // Log to Google Sheets
+        await safeAppendDataToSheet(
+          character.inventory,
+          character,
+          'loggedInventory!A:M',
+          [removalLogEntry],
+          interaction?.client,
+          { skipValidation: false }
+        );
+        
+        console.log(`[inventoryUtils.js]: ✅ Logged item removal to Google Sheets: ${quantity}x ${itemName} removed from ${character.name}`);
+      } catch (sheetError) {
+        console.error(`[inventoryUtils.js]: ⚠️ Failed to log item removal to Google Sheets: ${sheetError.message}`);
+        // Don't fail the removal if sheet logging fails
       }
     }
 
