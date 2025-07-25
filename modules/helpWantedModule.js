@@ -269,13 +269,13 @@ const VILLAGE_IMAGES = {
 function getQuestTurnInInstructions(type) {
   switch (type) {
     case 'item':
-      return '• **Item Quest:** Just have the required item(s) in your inventory and use `/helpwanted complete`.';
+      return '• **Item Quest:** Gather the requested materials and bring them to the quest board. Use `/helpwanted complete` when ready.';
     case 'monster':
-      return '• **Monster Quest:** Defeat the required monsters in battle, then use `/helpwanted complete`.';
+      return '• **Monster Quest:** Hunt down the dangerous creatures threatening the village. Use `/helpwanted monsterhunt` for a boss rush, or defeat them individually and use `/helpwanted complete`.';
     case 'escort':
-      return '• **Escort Quest:** Travel to the required location using `/travel`, then use `/helpwanted complete`.';
+      return '• **Escort Quest:** Safely guide the villager to their destination. Travel to the required location using `/travel`, then use `/helpwanted complete`.';
     case 'crafting':
-      return '• **Crafting Quest:** Craft the required item yourself, then use `/helpwanted complete`.';
+      return '• **Crafting Quest:** Create the requested item with your own hands. Craft the required item yourself, then use `/helpwanted complete`.';
     default:
       return '• Use `/helpwanted complete` to turn in your quest.';
   }
@@ -310,16 +310,16 @@ async function formatQuestsAsEmbedsByVillage() {
     let questLine = '';
     switch (quest.type) {
       case 'item':
-        questLine = `**${npcName} requests:** Bring **${quest.requirements.amount}x ${quest.requirements.item}**`;
+        questLine = `**${npcName} needs supplies:** Gather **${quest.requirements.amount}x ${quest.requirements.item}** for the village`;
         break;
       case 'monster':
-        questLine = `**${npcName} requests:** Defeat **${quest.requirements.amount}x ${quest.requirements.monster}**`;
+        questLine = `**${npcName} seeks a hunter:** Defeat **${quest.requirements.amount}x ${quest.requirements.monster}** threatening the area (Monster Hunt: 1 of ${quest.requirements.amount})`;
         break;
       case 'escort':
-        questLine = `**${npcName} needs an escort to:** **${quest.requirements.location}**`;
+        questLine = `**${npcName} needs protection:** Safely escort them to **${quest.requirements.location}**`;
         break;
       case 'crafting':
-        questLine = `**${npcName} requests:** Deliver a crafted **${quest.requirements.amount}x ${quest.requirements.item}**`;
+        questLine = `**${npcName} needs a craftsman:** Create and deliver **${quest.requirements.amount}x ${quest.requirements.item}**`;
         break;
       default:
         questLine = `❓ Unknown quest type`;
@@ -335,7 +335,8 @@ async function formatQuestsAsEmbedsByVillage() {
     const rules =
       '• Only natives of the village can complete this quest.\n' +
       '• First come, first served—one completion per quest!\n' +
-      '• Each user can only complete one Help Wanted quest per day (across all characters).';
+      '• Each user can only complete one Help Wanted quest per day (across all characters).\n' +
+      '• Complete quests to help your village prosper!';
 
     // Embed color and image
     const color = VILLAGE_COLORS[quest.village] || '#25c059';
@@ -357,6 +358,89 @@ async function formatQuestsAsEmbedsByVillage() {
   return result;
 }
 
+// ------------------- Function: hasUserCompletedQuestToday -------------------
+// Checks if a user has already completed a Help Wanted quest today
+// ============================================================================
+async function hasUserCompletedQuestToday(userId) {
+  const user = await require('../models/UserModel').findOne({ discordId: userId });
+  if (!user) return false;
+  
+  const today = new Date().toISOString().slice(0, 10);
+  return user.helpWanted.lastCompletion === today;
+}
+
+// ------------------- Function: updateQuestEmbed -------------------
+// Updates the quest embed message to show completion status
+// ============================================================================
+async function updateQuestEmbed(client, quest, completedBy = null) {
+  if (!quest.messageId) {
+    console.log(`[helpWantedModule]: No message ID found for quest ${quest.questId}`);
+    return;
+  }
+
+  try {
+    // Find the channel where the quest was posted
+    const channel = await client.channels.fetch(process.env.HELP_WANTED_TEST_CHANNEL);
+    if (!channel) {
+      console.error(`[helpWantedModule]: Could not find Help Wanted channel`);
+      return;
+    }
+
+    // Fetch the original message
+    const message = await channel.messages.fetch(quest.messageId);
+    if (!message) {
+      console.error(`[helpWantedModule]: Could not find message ${quest.messageId}`);
+      return;
+    }
+
+    // Get the original embed
+    const originalEmbed = message.embeds[0];
+    if (!originalEmbed) {
+      console.error(`[helpWantedModule]: No embed found in message ${quest.messageId}`);
+      return;
+    }
+
+    // Create updated embed
+    const updatedEmbed = new EmbedBuilder()
+      .setTitle(originalEmbed.title)
+      .setColor(quest.completed ? 0x00FF00 : originalEmbed.color) // Green if completed
+      .setImage(originalEmbed.image?.url);
+
+    // Update the quest field to show completion status
+    const questField = originalEmbed.fields.find(field => field.name.includes('Quest'));
+    if (questField) {
+      let updatedValue = questField.value;
+      
+      if (quest.completed && completedBy) {
+        // Replace the status line with completion info
+        updatedValue = updatedValue.replace(
+          /Status: ✅ AVAILABLE/,
+          `Status: ❌ **COMPLETED by <@${completedBy.userId}>**`
+        );
+      }
+      
+      updatedEmbed.addFields({
+        name: questField.name,
+        value: updatedValue,
+        inline: false
+      });
+    }
+
+    // Copy other fields
+    originalEmbed.fields.forEach(field => {
+      if (!field.name.includes('Quest')) {
+        updatedEmbed.addFields(field);
+      }
+    });
+
+    // Update the message
+    await message.edit({ embeds: [updatedEmbed] });
+    console.log(`[helpWantedModule]: Updated quest embed for ${quest.questId}`);
+  } catch (error) {
+    console.error(`[helpWantedModule]: Failed to update quest embed:`, error);
+  }
+}
+
 // ------------------- Exports -------------------
 // ============================================================================
 module.exports = {
@@ -370,5 +454,7 @@ module.exports = {
   getTodaysQuests,
   formatQuestsAsEmbed,
   formatQuestsAsEmbedsByVillage,
-  getQuestsForScheduledTime
+  getQuestsForScheduledTime,
+  updateQuestEmbed,
+  hasUserCompletedQuestToday
 }; 
