@@ -405,8 +405,18 @@ async function generateQuestForVillage(village, date, pools) {
       break;
     }
     case 'escort': {
-      const location = getRandomElement(pools.escortPool);
-      requirements = { location };
+      // Filter out the current village from possible destinations to avoid same-location escort quests
+      const availableDestinations = pools.escortPool.filter(loc => loc !== village);
+      if (availableDestinations.length === 0) {
+        // Fallback: if no other destinations available, use any location except current village
+        const allLocations = getAllVillages();
+        const fallbackDestinations = allLocations.filter(loc => loc !== village);
+        const location = getRandomElement(fallbackDestinations);
+        requirements = { location };
+      } else {
+        const location = getRandomElement(availableDestinations);
+        requirements = { location };
+      }
       break;
     }
     case 'crafting': {
@@ -587,7 +597,7 @@ function getQuestTurnInInstructions(type) {
     case 'monster':
       return '• **Monster Quest:** Hunt down the dangerous creatures threatening the village. Use `/helpwanted monsterhunt` to complete this quest.';
     case 'escort':
-      return '• **Escort Quest:** Safely guide the villager to their destination. Travel to the required location using `/travel`, then use `/helpwanted complete`.';
+      return '• **Escort Quest:** Safely guide the villager to their destination. Please travel from the quest village to the destination village using `/travel`, then use `/helpwanted complete`.';
     case 'crafting':
       return '• **Crafting Quest:** Create the requested item with your own hands. Craft the required item yourself, then use `/helpwanted complete`.';
     default:
