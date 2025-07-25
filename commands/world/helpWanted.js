@@ -3,7 +3,7 @@
 // Handles quest completion for Help Wanted system
 // ============================================================================
 
-const { SlashCommandBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const { handleError } = require('../../utils/globalErrorHandler');
 const Character = require('../../models/CharacterModel');
 const User = require('../../models/UserModel');
@@ -17,6 +17,12 @@ module.exports = {
     .addSubcommand(sub =>
       sub.setName('complete')
         .setDescription('Attempt to complete today\'s Help Wanted quest for your character.')
+        .addStringOption(opt =>
+          opt.setName('questid')
+            .setDescription('The quest ID to complete')
+            .setRequired(true)
+            .setAutocomplete(true)
+        )
         .addStringOption(opt =>
           opt.setName('character')
             .setDescription('Your character\'s name (if you have multiple)')
@@ -462,8 +468,15 @@ module.exports = {
       }
     }
     if (sub === 'complete') {
+      const questId = interaction.options.getString('questid');
       const characterName = interaction.options.getString('character');
       try {
+        // ------------------- Fetch Quest by ID -------------------
+        const quest = await HelpWantedQuest.findOne({ questId });
+        if (!quest) {
+          return await interaction.reply({ content: '❌ Quest not found.', ephemeral: true });
+        }
+
         // ------------------- Fetch Character and User -------------------
         const character = await Character.findOne({
           userId: interaction.user.id,
@@ -485,18 +498,6 @@ module.exports = {
             content: '❌ You have already completed a Help Wanted quest today. Only one quest per user per day is allowed.', 
             ephemeral: true 
           });
-        }
-
-        // ------------------- Determine Native Village -------------------
-        const nativeVillage = character.homeVillage;
-
-        // ------------------- Fetch Today's Quest for Village -------------------
-        const quest = await HelpWantedQuest.findOne({
-          village: nativeVillage,
-          date: new Date().toISOString().slice(0, 10)
-        });
-        if (!quest) {
-          return await interaction.reply({ content: '❌ No Help Wanted quest found for your village today.', ephemeral: true });
         }
 
         // ------------------- Quest Status Check -------------------
@@ -592,7 +593,8 @@ module.exports = {
           commandName: 'helpwanted complete',
           userTag: interaction.user.tag,
           userId: interaction.user.id,
-          characterName: characterName
+          characterName: characterName,
+          questId: questId
         });
         await interaction.reply({ content: '❌ An error occurred. Please try again later.', ephemeral: true });
       }

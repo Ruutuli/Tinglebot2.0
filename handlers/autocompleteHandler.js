@@ -56,6 +56,7 @@ const Item = require("../models/ItemModel");
 const Mount = require("../models/MountModel");
 const Party = require("../models/PartyModel");
 const Pet = require("../models/PetModel");
+const Quest = require("../models/QuestModel");
 const ShopStock = require("../models/VillageShopsModel");
 const { Village } = require("../models/VillageModel");
 
@@ -476,6 +477,15 @@ async function handleAutocomplete(interaction) {
           case 'spiritorbs':
             await handleSpiritOrbCharacterAutocomplete(interaction, focusedOption);
             return;
+
+          // ------------------- Help Wanted Command -------------------
+          case 'helpwanted':
+            if (focusedOption.name === 'questid') {
+              await handleHelpWantedQuestIdAutocomplete(interaction, focusedOption);
+            } else if (focusedOption.name === 'character') {
+              await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, 'helpwanted');
+            }
+            break;
 
           // ------------------- Submit Command -------------------
           case "submit":
@@ -2345,6 +2355,32 @@ async function handleQuestIdAutocomplete(interaction, focusedOption) {
   }
 }
 
+// ------------------- Help Wanted Quest ID Autocomplete -------------------
+async function handleHelpWantedQuestIdAutocomplete(interaction, focusedOption) {
+  try {
+      // Fetch today's Help Wanted quests from the database
+      const today = new Date().toISOString().slice(0, 10);
+      const HelpWantedQuest = require('../models/HelpWantedQuestModel');
+      const quests = await HelpWantedQuest.find({ 
+        date: today,
+        completed: false 
+      }).lean();
+      
+      // Format quest choices for autocomplete
+      const choices = quests.map(quest => ({
+          name: `${quest.questId} - ${quest.type} quest for ${quest.village}`,
+          value: quest.questId
+      }));
+      
+      // Respond with filtered quest choices
+      await respondWithFilteredChoices(interaction, focusedOption, choices);
+  } catch (error) {
+      handleError(error, "autocompleteHandler.js");
+      console.error("[handleHelpWantedQuestIdAutocomplete]: Error:", error);
+      await safeRespondWithError(interaction);
+  }
+}
+
 // ============================================================================
 // HEAL COMMANDS
 // ============================================================================
@@ -4017,6 +4053,7 @@ module.exports = {
  handleCharacterBasedCommandsAutocomplete,
  handleExploreCharacterAutocomplete,
  handleQuestIdAutocomplete,
+ handleHelpWantedQuestIdAutocomplete,
 
  // ------------------- Character-Based Functions -------------------
  // ------------------- Blight Functions -------------------
