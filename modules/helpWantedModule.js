@@ -597,7 +597,7 @@ function getQuestTurnInInstructions(type) {
     case 'monster':
       return '• **Monster Quest:** Hunt down the dangerous creatures threatening the village. Use </helpwanted monsterhunt:1397274578530865313> to complete this quest.';
     case 'escort':
-      return '• **Escort Quest:** Safely guide the villager to their destination. Please travel from the quest village to the destination village using `/travel`, then use </helpwanted complete:1397274578530865313>.';
+      return '• **Escort Quest:** Safely guide the villager to their destination. Please travel from the quest village to the destination village using `</travel:1379850586987430009>`, then use </helpwanted complete:1397274578530865313>.';
     case 'crafting':
       return '• **Crafting Quest:** Create the requested item with your own hands. Craft the required item yourself, then use </helpwanted complete:1397274578530865313>.';
     default:

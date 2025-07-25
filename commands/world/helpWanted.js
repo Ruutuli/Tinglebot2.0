@@ -3,7 +3,7 @@
 // Handles quest completion for Help Wanted system
 // ============================================================================
 
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require('discord.js');
 const { handleError } = require('../../utils/globalErrorHandler');
 const Character = require('../../models/CharacterModel');
 const User = require('../../models/UserModel');
@@ -55,7 +55,7 @@ module.exports = {
       const characterName = interaction.options.getString('character');
       
       // Defer the reply to extend interaction timeout
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
       
       try {
         // ------------------- Fetch Quest -------------------
@@ -476,7 +476,7 @@ module.exports = {
           });
         }
         
-        await interaction.followUp({ embeds: [summaryEmbed], ephemeral: false });
+        await interaction.followUp({ embeds: [summaryEmbed] });
         return;
       } catch (error) {
         handleError(error, 'helpWanted.js', {
@@ -496,7 +496,7 @@ module.exports = {
       const characterName = interaction.options.getString('character');
       
       // Defer the reply to extend interaction timeout
-      await interaction.deferReply({ ephemeral: false });
+      await interaction.deferReply();
       
       try {
         // ------------------- Fetch Quest by ID -------------------
