@@ -767,6 +767,7 @@ module.exports = {
   getEscortQuestPool,
   VILLAGES,
   QUEST_TYPES,
+  FIXED_CRON_TIMES,
   QUEST_TYPE_EMOJIS,
   getTodaysQuests,
   formatQuestsAsEmbed,
