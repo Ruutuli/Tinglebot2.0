@@ -68,10 +68,19 @@ module.exports = {
           return await interaction.reply({ content: '❌ No monsters specified for this quest.', ephemeral: true });
         }
         console.log(`[helpWanted.js]: 🎯 Monster hunt quest - ${monsterList.length} monsters to fight: ${monsterList.join(', ')}`);
-        // ------------------- Fetch Character -------------------
+        // ------------------- Fetch Character and User -------------------
         const character = await Character.findOne({ userId: interaction.user.id, name: characterName });
         if (!character) {
           return await interaction.reply({ content: '❌ Character not found.', ephemeral: true });
+        }
+        
+        // Check if user has already completed a Help Wanted quest today
+        const { hasUserCompletedQuestToday } = require('../../modules/helpWantedModule');
+        if (await hasUserCompletedQuestToday(interaction.user.id)) {
+          return await interaction.reply({ 
+            content: '❌ You have already completed a Help Wanted quest today. Only one quest per user per day is allowed.', 
+            ephemeral: true 
+          });
         }
         // ------------------- Eligibility Checks -------------------
         if (character.currentHearts === 0) {
@@ -144,7 +153,7 @@ module.exports = {
         const startEmbed = new EmbedBuilder()
           .setColor(0x0099FF)
           .setTitle(`🗡️ Monster Hunt Begins!`)
-          .setDescription(`**${character.name}** has started the monster hunt for quest **${questId}**!\n\n🎯 **Target:** ${monsterList.length} ${monsterList[0]}${monsterList.length > 1 ? 's' : ''}\n⚡ **Stamina Cost:** 1\n❤️ **Starting Hearts:** ${character.currentHearts}`)
+          .setDescription(`**${character.name}** has embarked on a dangerous hunt for quest **${questId}**!\n\n🎯 **Target:** ${monsterList.length} ${monsterList[0]}${monsterList.length > 1 ? 's' : ''} threatening the area\n⚡ **Stamina Cost:** 1\n❤️ **Starting Hearts:** ${character.currentHearts}\n\n*The hunt is on! Can they survive the challenge?*`)
           .setFooter({ text: `Quest ID: ${questId}` })
           .setTimestamp();
         
@@ -339,6 +348,25 @@ module.exports = {
           quest.completed = true;
           quest.completedBy = { userId: interaction.user.id, characterId: character._id, timestamp: new Date().toISOString() };
           await quest.save();
+          
+          // Update user's Help Wanted tracking
+          const user = await User.findOne({ discordId: interaction.user.id });
+          if (user) {
+            const today = new Date().toISOString().slice(0, 10);
+            user.helpWanted.lastCompletion = today;
+            user.helpWanted.completions.push({
+              date: today,
+              village: quest.village,
+              questType: quest.type
+            });
+            await user.save();
+            console.log(`[helpWanted.js]: ✅ Updated user tracking for ${interaction.user.tag}`);
+          }
+          
+          // Update the quest embed to show completion
+          const { updateQuestEmbed } = require('../../modules/helpWantedModule');
+          await updateQuestEmbed(interaction.client, quest, quest.completedBy);
+          
           console.log(`[helpWanted.js]: ✅ Quest ${questId} completed by ${character.name}`);
         } else {
           console.log(`[helpWanted.js]: ❌ Quest ${questId} failed - ${character.name} was KO'd`);
@@ -363,17 +391,32 @@ module.exports = {
         
         const summaryEmbed = new EmbedBuilder()
           .setColor(defeatedAll ? 0x00FF00 : 0xFF0000) // Green for success, red for failure
-          .setTitle(`🏆 Monster Hunt Results - ${character.name}`)
+          .setTitle(`🗡️ Monster Hunt Results - ${character.name}`)
           .setDescription(resultMsg)
           .addFields(
-            { name: '📋 Battle Summary', value: details, inline: false }
+            { 
+              name: defeatedAll ? '🏆 Victory Summary' : '💀 Hunt Summary', 
+              value: details, 
+              inline: false 
+            }
           )
-          .setFooter({ text: `Quest ID: ${questId} | Stamina: ${newStamina} | ${new Date().toLocaleString()}` })
+          .addFields(
+            { 
+              name: '📊 Statistics', 
+              value: `❤️ **Hearts Remaining:** ${heartsRemaining}\n⚔️ **Monsters Defeated:** ${defeatedAll ? monsterList.length : currentMonsterIndex - 1}/${monsterList.length}\n⚡ **Stamina Used:** 1\n🎯 **Quest Progress:** ${defeatedAll ? 'COMPLETED' : 'FAILED'}`, 
+              inline: true 
+            }
+          )
+          .setFooter({ text: `Quest ID: ${questId} | ${new Date().toLocaleString()}` })
           .setTimestamp();
         
         // Add loot field if there was any loot
         if (lootSummary) {
-          summaryEmbed.addFields({ name: '🎁 Loot Gained', value: lootSummary, inline: false });
+          summaryEmbed.addFields({ 
+            name: '🎁 Loot Gained', 
+            value: lootSummary, 
+            inline: false 
+          });
         }
         
         await interaction.followUp({ embeds: [summaryEmbed], ephemeral: false });
@@ -391,67 +434,143 @@ module.exports = {
       }
     }
     if (sub === 'complete') {
-      // Continue with existing complete logic
+      const characterName = interaction.options.getString('character');
+      try {
+        // ------------------- Fetch Character and User -------------------
+        const character = await Character.findOne({
+          userId: interaction.user.id,
+          name: characterName
+        });
+        if (!character) {
+          return await interaction.reply({ content: '❌ Character not found.', ephemeral: true });
+        }
+
+        const user = await User.findOne({ discordId: interaction.user.id });
+        if (!user) {
+          return await interaction.reply({ content: '❌ User not found.', ephemeral: true });
+        }
+
+        // ------------------- Cooldown Check -------------------
+        const { hasUserCompletedQuestToday } = require('../../modules/helpWantedModule');
+        if (await hasUserCompletedQuestToday(interaction.user.id)) {
+          return await interaction.reply({ 
+            content: '❌ You have already completed a Help Wanted quest today. Only one quest per user per day is allowed.', 
+            ephemeral: true 
+          });
+        }
+
+        // ------------------- Determine Native Village -------------------
+        const nativeVillage = character.homeVillage;
+
+        // ------------------- Fetch Today's Quest for Village -------------------
+        const quest = await HelpWantedQuest.findOne({
+          village: nativeVillage,
+          date: new Date().toISOString().slice(0, 10)
+        });
+        if (!quest) {
+          return await interaction.reply({ content: '❌ No Help Wanted quest found for your village today.', ephemeral: true });
+        }
+
+        // ------------------- Quest Status Check -------------------
+        if (quest.completed) {
+          return await interaction.reply({ 
+            content: `❌ This quest has already been completed by <@${quest.completedBy?.userId || 'unknown'}>.`, 
+            ephemeral: true 
+          });
+        }
+
+        // ------------------- Quest Requirement Validation -------------------
+        let requirementsMet = false;
+        let validationMessage = '';
+
+        switch (quest.type) {
+          case 'item': {
+            // TODO: Implement inventory checking logic
+            validationMessage = `📦 **Item Quest:** Please ensure you have ${quest.requirements.amount}x ${quest.requirements.item} in your inventory.`;
+            requirementsMet = true; // Placeholder - implement actual inventory check
+            break;
+          }
+          case 'monster': {
+            // TODO: Implement monster defeat tracking
+            validationMessage = `🗡️ **Monster Quest:** Please ensure you have defeated ${quest.requirements.amount}x ${quest.requirements.monster}.`;
+            requirementsMet = true; // Placeholder - implement actual monster tracking
+            break;
+          }
+          case 'escort': {
+            // TODO: Implement travel location checking
+            validationMessage = `🛡️ **Escort Quest:** Please ensure you have traveled to ${quest.requirements.location}.`;
+            requirementsMet = true; // Placeholder - implement actual travel check
+            break;
+          }
+          case 'crafting': {
+            // TODO: Implement crafting tracking
+            validationMessage = `🔨 **Crafting Quest:** Please ensure you have crafted ${quest.requirements.amount}x ${quest.requirements.item}.`;
+            requirementsMet = true; // Placeholder - implement actual crafting check
+            break;
+          }
+          default:
+            validationMessage = '❌ Unknown quest type.';
+            requirementsMet = false;
+        }
+
+        if (!requirementsMet) {
+          return await interaction.reply({ 
+            content: `❌ Quest requirements not met.\n\n${validationMessage}`, 
+            ephemeral: true 
+          });
+        }
+
+        // ------------------- Mark Quest Completed -------------------
+        quest.completed = true;
+        quest.completedBy = { 
+          userId: interaction.user.id, 
+          characterId: character._id, 
+          timestamp: new Date().toISOString() 
+        };
+        await quest.save();
+
+        // ------------------- Update User Tracking -------------------
+        const today = new Date().toISOString().slice(0, 10);
+        user.helpWanted.lastCompletion = today;
+        user.helpWanted.completions.push({
+          date: today,
+          village: quest.village,
+          questType: quest.type
+        });
+        await user.save();
+
+        // ------------------- Update Quest Embed -------------------
+        const { updateQuestEmbed } = require('../../modules/helpWantedModule');
+        await updateQuestEmbed(interaction.client, quest, quest.completedBy);
+
+        // ------------------- Success Response -------------------
+        const successEmbed = new EmbedBuilder()
+          .setColor(0x00FF00)
+          .setTitle('✅ Quest Completed!')
+          .setDescription(`**${character.name}** has successfully completed the Help Wanted quest for **${quest.village}**!`)
+          .addFields(
+            { name: 'Quest Type', value: quest.type.charAt(0).toUpperCase() + quest.type.slice(1), inline: true },
+            { name: 'Village', value: quest.village, inline: true },
+            { name: 'Completed By', value: `<@${interaction.user.id}>`, inline: true }
+          )
+          .setFooter({ text: `Quest ID: ${quest.questId}` })
+          .setTimestamp();
+
+        await interaction.reply({ embeds: [successEmbed], ephemeral: false });
+        console.log(`[helpWanted.js]: ✅ Quest ${quest.questId} completed by ${character.name} (${interaction.user.tag})`);
+
+      } catch (error) {
+        handleError(error, 'helpWanted.js', {
+          commandName: 'helpwanted complete',
+          userTag: interaction.user.tag,
+          userId: interaction.user.id,
+          characterName: characterName
+        });
+        await interaction.reply({ content: '❌ An error occurred. Please try again later.', ephemeral: true });
+      }
+      return;
     } else {
       return;
-    }
-
-    const characterName = interaction.options.getString('character');
-    try {
-      // ------------------- Fetch Character -------------------
-      // TODO: Fetch character by name and user ID
-      const character = await Character.findOne({
-        userId: interaction.user.id,
-        name: characterName
-      });
-      if (!character) {
-        return await interaction.reply({ content: '❌ Character not found.', ephemeral: true });
-      }
-
-      // ------------------- Fetch User -------------------
-      const user = await User.findOne({ discordId: interaction.user.id });
-      if (!user) {
-        return await interaction.reply({ content: '❌ User not found.', ephemeral: true });
-      }
-
-      // ------------------- Determine Native Village -------------------
-      const nativeVillage = character.homeVillage;
-
-      // ------------------- Fetch Today's Quest for Village -------------------
-      const quest = await HelpWantedQuest.findOne({
-        village: nativeVillage,
-        date: new Date().toISOString().slice(0, 10)
-      });
-      if (!quest) {
-        return await interaction.reply({ content: '❌ No Help Wanted quest found for your village today.', ephemeral: true });
-      }
-
-      // ------------------- Eligibility Checks (Stubs) -------------------
-      // TODO: Check if quest is already completed
-      // TODO: Check if character is native to village
-      // TODO: Check if user/character has already completed a quest today
-      // TODO: Check for cooldowns
-
-      // ------------------- Quest Requirement Validation (Stubs) -------------------
-      // TODO: Validate quest requirements based on quest.type
-      // - Item: check inventory
-      // - Monster: check battle log
-      // - Crafting: check crafted-by
-      // - Escort: check travel log
-
-      // ------------------- On Success: Mark Quest Completed (Stub) -------------------
-      // TODO: Mark quest as completed, update user/character records
-
-      // ------------------- Respond to User -------------------
-      await interaction.reply({ content: '✅ (Stub) Quest completion logic will go here.', ephemeral: true });
-    } catch (error) {
-      handleError(error, 'helpWanted.js', {
-        commandName: 'helpwanted complete',
-        userTag: interaction.user.tag,
-        userId: interaction.user.id,
-        characterName: characterName
-      });
-      await interaction.reply({ content: '❌ An error occurred. Please try again later.', ephemeral: true });
     }
   }
 }; 

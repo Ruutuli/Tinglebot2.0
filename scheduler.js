@@ -568,7 +568,10 @@ async function postHelpWantedBoardToTestChannel(client, cronTime) {
       const embedsByVillage = await formatQuestsAsEmbedsByVillage();
       const embed = embedsByVillage[quest.village];
       if (embed) {
-        await channel.send({ embeds: [embed] });
+        const message = await channel.send({ embeds: [embed] });
+        // Save the message ID for future edits
+        quest.messageId = message.id;
+        await quest.save();
         posted++;
       }
     }

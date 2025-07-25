@@ -45,6 +45,11 @@ const HelpWantedQuestSchema = new mongoose.Schema({
   scheduledPostTime: {
     type: String,
     required: true
+  },
+  messageId: {
+    type: String,
+    default: null
+    // Discord message ID of the quest embed for future edits
   }
 });
 
