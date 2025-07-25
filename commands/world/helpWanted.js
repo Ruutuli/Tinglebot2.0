@@ -88,10 +88,19 @@ module.exports = {
         }
         
                  // Check if user has already completed a Help Wanted quest today
-         const { hasUserCompletedQuestToday } = require('../../modules/helpWantedModule');
+         const { hasUserCompletedQuestToday, hasUserReachedWeeklyQuestLimit } = require('../../modules/helpWantedModule');
+         
+         // Check daily cooldown
          if (await hasUserCompletedQuestToday(interaction.user.id)) {
            return await interaction.editReply({ 
              content: '🕐 **Daily Quest Cooldown Active!**\n\nYou\'ve already completed a Help Wanted quest today. Each adventurer can only take on **one quest per day** to maintain balance in the realm.\n\n⏰ **Next Quest Available:** Tomorrow at midnight (EST)\n💡 **Tip:** Use this time to rest, gather resources, or help other adventurers!'
+           });
+         }
+         
+         // Check weekly limit
+         if (await hasUserReachedWeeklyQuestLimit(interaction.user.id)) {
+           return await interaction.editReply({ 
+             content: '📅 **Weekly Quest Limit Reached!**\n\nYou\'ve already completed **3 Help Wanted quests this week**. Each adventurer is limited to **3 quests per week** to maintain balance in the realm.\n\n⏰ **Next Quest Available:** Monday at midnight (EST)\n💡 **Tip:** Use this time to rest, gather resources, or help other adventurers!'
            });
          }
         // ------------------- Eligibility Checks -------------------
@@ -511,10 +520,19 @@ module.exports = {
         }
 
                  // ------------------- Cooldown Check -------------------
-         const { hasUserCompletedQuestToday } = require('../../modules/helpWantedModule');
+         const { hasUserCompletedQuestToday, hasUserReachedWeeklyQuestLimit } = require('../../modules/helpWantedModule');
+         
+         // Check daily cooldown
          if (await hasUserCompletedQuestToday(interaction.user.id)) {
            return await interaction.editReply({ 
              content: '🕐 **Daily Quest Cooldown Active!**\n\nYou\'ve already completed a Help Wanted quest today. Each adventurer can only take on **one quest per day** to maintain balance in the realm.\n\n⏰ **Next Quest Available:** Tomorrow at midnight (server time)\n💡 **Tip:** Use this time to rest, gather resources, or help other adventurers!'
+           });
+         }
+         
+         // Check weekly limit
+         if (await hasUserReachedWeeklyQuestLimit(interaction.user.id)) {
+           return await interaction.editReply({ 
+             content: '📅 **Weekly Quest Limit Reached!**\n\nYou\'ve already completed **3 Help Wanted quests this week**. Each adventurer is limited to **3 quests per week** to maintain balance in the realm.\n\n⏰ **Next Quest Available:** Monday at midnight (server time)\n💡 **Tip:** Use this time to rest, gather resources, or help other adventurers!'
            });
          }
 
