@@ -518,16 +518,16 @@ module.exports = {
                 lootedItem.type.join(', '),
                 interaction
               );
-              if (character?.name && character?.inventory && character?.userId) {
+              if (character?.name && inventoryLink && character?.userId) {
                 try {
-                  await safeAppendDataToSheet(character.inventory, character, range, values, undefined, { 
+                  await safeAppendDataToSheet(inventoryLink, character, range, values, undefined, { 
                     skipValidation: true,
                     context: {
                       commandName: 'gather',
                       userTag: interaction.user.tag,
                       userId: interaction.user.id,
                       characterName: character.name,
-                      spreadsheetId: extractSpreadsheetId(character.inventory),
+                      spreadsheetId: extractSpreadsheetId(inventoryLink),
                       range: range,
                       sheetType: 'inventory',
                       options: {
@@ -544,7 +544,7 @@ module.exports = {
                     userId: interaction.user.id,
                     characterName: character.name,
                     sheetType: 'inventory',
-                    spreadsheetId: extractSpreadsheetId(character.inventory),
+                    spreadsheetId: extractSpreadsheetId(inventoryLink),
                     range: range,
                     options: {
                       region: region,
@@ -557,7 +557,7 @@ module.exports = {
               } else {
                 handleError(new Error('Invalid character object'), 'gather.js', {
                   characterName: character?.name,
-                  hasInventory: !!character?.inventory,
+                  hasInventoryLink: !!inventoryLink,
                   userId: character?.userId
                 });
               }
@@ -661,16 +661,16 @@ module.exports = {
           formattedDateTime,
           uniqueSyncId,
         ]];
-        if (character?.name && character?.inventory && character?.userId) {
+        if (character?.name && inventoryLink && character?.userId) {
           try {
-            const sheetResult = await safeAppendDataToSheet(character.inventory, character, range, values, undefined, { 
+            const sheetResult = await safeAppendDataToSheet(inventoryLink, character, range, values, undefined, { 
               skipValidation: true,
               context: {
                 commandName: 'gather',
                 userTag: interaction.user.tag,
                 userId: interaction.user.id,
                 characterName: character.name,
-                spreadsheetId: extractSpreadsheetId(character.inventory),
+                spreadsheetId: extractSpreadsheetId(inventoryLink),
                 range: range,
                 sheetType: 'inventory',
                 options: {
@@ -693,7 +693,7 @@ module.exports = {
               userId: interaction.user.id,
               characterName: character.name,
               sheetType: 'inventory',
-              spreadsheetId: extractSpreadsheetId(character.inventory),
+              spreadsheetId: extractSpreadsheetId(inventoryLink),
               range: range,
               options: {
                 region: region,
@@ -706,7 +706,7 @@ module.exports = {
         } else {
           handleError(new Error('Invalid character object'), 'gather.js', {
             characterName: character?.name,
-            hasInventory: !!character?.inventory,
+            hasInventoryLink: !!inventoryLink,
             userId: character?.userId
           });
         }

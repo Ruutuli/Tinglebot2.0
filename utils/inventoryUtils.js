@@ -137,7 +137,6 @@ async function syncToInventoryDatabase(character, item, interaction) {
     const inventoriesConnection = await dbFunctions.connectToInventories();
     const db = inventoriesConnection.useDb('inventories');
     const collectionName = character.name.toLowerCase();
-    console.log(`[inventoryUtils.js]: 📁 Using collection: ${collectionName}`);
     
     const inventoryCollection = db.collection(collectionName);
 
@@ -316,12 +315,9 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
 
       throw new Error(`Character with ID ${characterId} not found`);
     }
-    console.log(`[inventoryUtils.js]: 📦 Processing inventory for ${character.name}`);
-
     const inventoriesConnection = await dbFunctions.connectToInventories();
     const db = inventoriesConnection.useDb('inventories');
     const collectionName = character.name.toLowerCase();
-    console.log(`[inventoryUtils.js]: 📁 Using collection: ${collectionName}`);
     
     const inventoryCollection = db.collection(collectionName);
 
@@ -336,15 +332,12 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
     });
 
     if (inventoryItem) {
-      console.log(`[inventoryUtils.js]: 📊 Found ${inventoryItem.quantity} ${itemName} in ${character.name}'s inventory`);
-      console.log(`[inventoryUtils.js]: ➕ Adding ${quantity} ${itemName}`);
       await inventoryCollection.updateOne(
         { characterId, itemName: inventoryItem.itemName },
         { $inc: { quantity: quantity } }
       );
       console.log(`[inventoryUtils.js]: ✅ Updated ${itemName} quantity (incremented by ${quantity})`);
     } else {
-      console.log(`[inventoryUtils.js]: ➕ Adding new item ${itemName} (${quantity}) to ${character.name}'s inventory`);
       const newItem = {
         characterId,
         itemName: item.itemName,
@@ -383,11 +376,9 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
       throw new Error(`Character with ID ${characterId} not found`);
     }
 
-    console.log(`[inventoryUtils.js]: 📦 Processing inventory for ${character.name}`);
     const collectionName = character.name.toLowerCase();
     const inventoriesConnection = await dbFunctions.connectToInventories();
     const db = inventoriesConnection.useDb('inventories');
-    console.log(`[inventoryUtils.js]: 📁 Using collection: ${collectionName}`);
     
     const inventoryCollection = db.collection(collectionName);
 
@@ -406,7 +397,6 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
     }
 
     if (!inventoryItem) {
-      console.log(`[inventoryUtils.js]: ❌ Item "${itemName}" not found in ${character.name}'s inventory`);
       return false;
     }
 
@@ -425,11 +415,7 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
       throw new Error(`Not enough ${itemName} in inventory`);
     }
 
-    console.log(`[inventoryUtils.js]: 📊 Found ${inventoryItem.quantity} ${itemName} in ${character.name}'s inventory`);
-    console.log(`[inventoryUtils.js]: ➖ Removing ${quantity} ${itemName}`);
-    
     const newQuantity = inventoryItem.quantity - quantity;
-    console.log(`[inventoryUtils.js]: 🔄 Updated ${itemName} quantity: ${inventoryItem.quantity} → ${newQuantity}`);
 
     if (newQuantity === 0) {
       const deleteResult = await inventoryCollection.deleteOne({
@@ -576,7 +562,6 @@ const addItemsToDatabase = async (character, items, interaction) => {
     const inventoriesConnection = await dbFunctions.connectToInventories();
     const db = inventoriesConnection.useDb('inventories');
     const collectionName = character.name.toLowerCase();
-    console.log(`[inventoryUtils.js]: 📁 Using collection: ${collectionName}`);
     
     const inventoryCollection = db.collection(collectionName);
 
@@ -831,7 +816,6 @@ async function removeInitialItemIfSynced(characterId) {
       const collectionName = character.name.toLowerCase();
       const inventoriesConnection = await dbFunctions.connectToInventories();
       const db = inventoriesConnection.useDb('inventories');
-      console.log(`[inventoryUtils.js]: 📁 Using collection: ${collectionName}`);
       
       const inventoryCollection = db.collection(collectionName);
       const initialItem = await inventoryCollection.findOne({
@@ -862,7 +846,6 @@ const addItemToVendingInventory = async (collectionName, item) => {
 
     const inventoriesConnection = await dbFunctions.connectToInventories();
     const db = inventoriesConnection.useDb('vendingInventories');
-    console.log(`[inventoryUtils.js]: 📁 Using collection: ${collectionName}`);
     
     const inventoryCollection = db.collection(collectionName);
     const existingItem = await inventoryCollection.findOne({
@@ -944,7 +927,6 @@ const syncSheetDataToDatabase = async (character, sheetData) => {
         const inventoriesConnection = await dbFunctions.connectToInventories();
         const db = inventoriesConnection.useDb('inventories');
         const collectionName = character.name.toLowerCase();
-        console.log(`[inventoryUtils.js]: 📁 Using collection: ${collectionName}`);
         
         const inventoryCollection = db.collection(collectionName);
 
@@ -978,10 +960,7 @@ const syncSheetDataToDatabase = async (character, sheetData) => {
             });
 
             if (!existingItem) {
-                console.log(`[inventoryUtils.js]: ➕ Adding new item ${item.itemName} (${item.quantity}) to ${character.name}'s inventory`);
                 await inventoryCollection.insertOne(item);
-            } else {
-                console.log(`[inventoryUtils.js]: ⚠️ Item ${item.itemName} with sync ID ${item.syncId} already exists in database`);
             }
         }
 
