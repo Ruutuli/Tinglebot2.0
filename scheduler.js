@@ -529,36 +529,122 @@ function setupWeatherScheduler(client) {
  );
 }
 
+// ============================================================================
+// ---- Help Wanted Functions ----
+// Handles Help Wanted quest generation and posting
+// ============================================================================
+
+// ------------------- Function: checkAndGenerateDailyQuests -------------------
+// Checks if quests exist for today, generates them if they don't
+// ============================================================================
+async function checkAndGenerateDailyQuests() {
+  try {
+    console.log('[scheduler.js]: 🔍 Checking for existing Help Wanted quests for today...');
+    
+    const todaysQuests = await require('./modules/helpWantedModule').getTodaysQuests();
+    
+    if (todaysQuests.length === 0) {
+      console.log('[scheduler.js]: 📝 No quests found for today. Generating new daily quests...');
+      await generateDailyQuests();
+      console.log('[scheduler.js]: ✅ Daily quests generated successfully');
+    } else {
+      console.log(`[scheduler.js]: ✅ Found ${todaysQuests.length} existing quests for today. No generation needed.`);
+    }
+  } catch (error) {
+    handleError(error, 'scheduler.js', {
+      commandName: 'checkAndGenerateDailyQuests'
+    });
+    console.error('[scheduler.js]: ❌ Error checking/generating daily quests:', error);
+  }
+}
+
+// ------------------- Function: generateDailyQuestsAtMidnight -------------------
+// Generates new quests for the day at midnight with random times
+// ============================================================================
+async function generateDailyQuestsAtMidnight() {
+  try {
+    console.log('[scheduler.js]: 🌙 Midnight quest generation starting...');
+    
+    // Always generate new quests at midnight for the new day
+    await generateDailyQuests();
+    console.log('[scheduler.js]: ✅ Midnight quest generation completed');
+  } catch (error) {
+    handleError(error, 'scheduler.js', {
+      commandName: 'generateDailyQuestsAtMidnight'
+    });
+    console.error('[scheduler.js]: ❌ Error during midnight quest generation:', error);
+  }
+}
+
+// ------------------- Function: checkAndPostMissedQuests -------------------
+// Checks for quests that were scheduled for times that have already passed
+// and posts them immediately to ensure no quests are missed
+// ============================================================================
+async function checkAndPostMissedQuests(client) {
+  try {
+    console.log('[scheduler.js]: 🔍 Checking for missed quest posts...');
+    
+    const { FIXED_CRON_TIMES } = require('./modules/helpWantedModule');
+    const { getQuestsForScheduledTime } = require('./modules/helpWantedModule');
+    const HelpWantedQuest = require('./models/HelpWantedQuestModel');
+    
+    // Get current time in EST
+    const now = new Date();
+    const estTime = new Date(now.toLocaleString("en-US", {timeZone: "America/New_York"}));
+    const currentHour = estTime.getHours();
+    const currentMinute = estTime.getMinutes();
+    
+    console.log(`[scheduler.js]: 🕐 Current time (EST): ${estTime.toLocaleString()}`);
+    
+    let postedCount = 0;
+    
+    // Check each cron time to see if it has passed today
+    for (const cronTime of FIXED_CRON_TIMES) {
+      const [minute, hour] = cronTime.split(' ').map(Number);
+      
+      // Check if this time has already passed today
+      if (currentHour > hour || (currentHour === hour && currentMinute >= minute)) {
+        console.log(`[scheduler.js]: ⏰ Time ${cronTime} (${hour}:${minute.toString().padStart(2, '0')}) has passed, checking for quests...`);
+        
+        // Get quests scheduled for this time
+        const quests = await getQuestsForScheduledTime(cronTime);
+        
+        // Filter out quests that have already been posted (have channelId)
+        const unpostedQuests = quests.filter(quest => !quest.channelId);
+        
+        if (unpostedQuests.length > 0) {
+          console.log(`[scheduler.js]: 📤 Found ${unpostedQuests.length} unposted quests for ${cronTime}, posting now...`);
+          
+          // Post the quests
+          await postHelpWantedBoardToTestChannel(client, cronTime);
+          postedCount += unpostedQuests.length;
+        } else {
+          console.log(`[scheduler.js]: ✅ All quests for ${cronTime} have already been posted or no quests found`);
+        }
+      } else {
+        console.log(`[scheduler.js]: ⏳ Time ${cronTime} (${hour}:${minute.toString().padStart(2, '0')}) has not passed yet`);
+      }
+    }
+    
+    if (postedCount > 0) {
+      console.log(`[scheduler.js]: ✅ Posted ${postedCount} missed quests during startup`);
+    } else {
+      console.log('[scheduler.js]: ✅ No missed quests found');
+    }
+    
+  } catch (error) {
+    handleError(error, 'scheduler.js', { commandName: 'checkAndPostMissedQuests' });
+    console.error('[scheduler.js]: ❌ Error checking for missed quests:', error);
+  }
+}
+
 // ------------------- Fixed Times for Help Wanted Board -------------------
 async function postHelpWantedBoardToTestChannel(client, cronTime) {
   try {
     // Only post quests scheduled for this cron time
-    let quests = await getQuestsForScheduledTime(cronTime);
+    const quests = await getQuestsForScheduledTime(cronTime);
     if (!quests.length) {
-      // Check if any quests exist for today at all
-      const todaysQuests = await require('./modules/helpWantedModule').getTodaysQuests();
-      if (!todaysQuests.length) {
-        console.log(`[scheduler.js]: No Help Wanted quests found for today. Generating new daily quests...`);
-        try {
-          await generateDailyQuests();
-          // Try fetching again after generation
-          quests = await getQuestsForScheduledTime(cronTime);
-        } catch (error) {
-          handleError(error, 'scheduler.js', {
-            commandName: 'postHelpWantedBoardToTestChannel',
-            operation: 'generateDailyQuests',
-            cronTime
-          });
-          console.error('[scheduler.js]: Failed to generate daily Help Wanted quests:', error);
-          return;
-        }
-      } else {
-        console.log(`[scheduler.js]: No Help Wanted quests scheduled for ${cronTime}, but quests exist for today.`);
-        return;
-      }
-    }
-    if (!quests.length) {
-      console.log(`[scheduler.js]: Still no Help Wanted quests scheduled for ${cronTime} after generation attempt.`);
+      console.log(`[scheduler.js]: No Help Wanted quests scheduled for ${cronTime}. Skipping post.`);
       return;
     }
     const channel = await client.channels.fetch(HELP_WANTED_TEST_CHANNEL);
@@ -673,6 +759,30 @@ function initializeScheduler(client) {
   }
  })();
 
+ // Add startup quest generation check
+ (async () => {
+  try {
+   console.log("[scheduler.js]: 🔍 Running startup quest generation check...");
+   await checkAndGenerateDailyQuests();
+   console.log("[scheduler.js]: ✅ Startup quest generation check completed");
+  } catch (error) {
+   handleError(error, "scheduler.js");
+   console.error("[scheduler.js]: ❌ Startup quest generation check failed:", error.message);
+  }
+ })();
+
+ // Add startup quest posting check for missed cron jobs
+ (async () => {
+  try {
+   console.log("[scheduler.js]: 🔍 Running startup quest posting check for missed cron jobs...");
+   await checkAndPostMissedQuests(client);
+   console.log("[scheduler.js]: ✅ Startup quest posting check completed");
+  } catch (error) {
+   handleError(error, "scheduler.js");
+   console.error("[scheduler.js]: ❌ Startup quest posting check failed:", error.message);
+  }
+ })();
+
  // Initialize all schedulers
  createCronJob("0 0 * * *", "jail release check", () =>
   handleJailRelease(client)
@@ -717,6 +827,11 @@ function initializeScheduler(client) {
  // Weather update is handled by setupWeatherScheduler() - removed duplicate
  createCronJob("0 0 * * *", "birthday announcements", () =>
   executeBirthdayAnnouncements(client)
+ );
+ 
+ // Midnight quest generation - generates new quests for the day
+ createCronJob("0 0 * * *", "midnight quest generation", () =>
+  generateDailyQuestsAtMidnight()
  );
 
  createCronJob("0 1 * * *", "blood moon tracking cleanup", () => {
@@ -895,4 +1010,7 @@ module.exports = {
  handleDebuffExpiry,
  resetDailyRolls,
  resetPetLastRollDates,
+ checkAndGenerateDailyQuests,
+ generateDailyQuestsAtMidnight,
+ checkAndPostMissedQuests,
 };
