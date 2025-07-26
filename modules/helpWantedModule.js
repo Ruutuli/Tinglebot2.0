@@ -719,7 +719,7 @@ function getQuestTurnInInstructions(type) {
   const instructions = {
     item: '• **Item Quest:** Gather the requested materials and bring them to the quest board. Use </helpwanted complete:1397274578530865313> when ready.',
     monster: '• **Monster Quest:** Hunt down the dangerous creatures threatening the village. Use </helpwanted monsterhunt:1397274578530865313> to complete this quest.',
-    escort: '• **Escort Quest:** Safely guide the villager to their destination. Please travel from the quest village to the destination village using `</travel:1379850586987430009>`, then use </helpwanted complete:1397274578530865313>.',
+    escort: '• **Escort Quest:** Safely guide the villager to their destination. Please travel from the quest village to the destination village using </travel:1379850586987430009>, then use </helpwanted complete:1397274578530865313>.',
     crafting: '• **Crafting Quest:** Create the requested item with your own hands. Craft the required item yourself, then use </helpwanted complete:1397274578530865313>.'
   };
   
