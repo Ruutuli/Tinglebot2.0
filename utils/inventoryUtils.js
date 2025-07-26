@@ -184,11 +184,9 @@ async function syncToInventoryDatabase(character, item, interaction) {
         { characterId: character._id, itemName: dbDoc.itemName },
         { $inc: { quantity: dbDoc.quantity } }
       );
-      console.log(`[inventoryUtils.js]: ✅ Updated item ${dbDoc.itemName} in database (incremented quantity)`);
     } else {
       // Insert new item
       await inventoryCollection.insertOne(dbDoc);
-      console.log(`[inventoryUtils.js]: ✅ Added new item ${dbDoc.itemName} to database`);
     }
 
     // Google Sheets Sync
@@ -253,7 +251,6 @@ async function syncToInventoryDatabase(character, item, interaction) {
             `loggedInventory!A${rowIndex + 2}:M${rowIndex + 2}`,
             values
           );
-          console.log(`[inventoryUtils.js]: ✅ Updated row for ${dbDoc.itemName} (${existingRow[6] || dbDoc.obtain}) in sheet with all fields`);
         }
       } else {
         // No matching rows found, append a new row
@@ -275,7 +272,6 @@ async function syncToInventoryDatabase(character, item, interaction) {
 
         // Append the new row to the sheet
         await appendSheetData(auth, spreadsheetId, 'loggedInventory!A:M', [newRow]);
-        console.log(`[inventoryUtils.js]: ✅ Added new row for ${dbDoc.itemName} to sheet`);
       }
     } catch (sheetError) {
       console.error(`[inventoryUtils.js]: ❌ Sheet sync error for ${character.name}: ${sheetError.message}`);
@@ -336,7 +332,6 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
         { characterId, itemName: inventoryItem.itemName },
         { $inc: { quantity: quantity } }
       );
-      console.log(`[inventoryUtils.js]: ✅ Updated ${itemName} quantity (incremented by ${quantity})`);
     } else {
       const newItem = {
         characterId,
@@ -475,7 +470,6 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
           { skipValidation: false }
         );
         
-        console.log(`[inventoryUtils.js]: ✅ Logged item removal to Google Sheets: ${quantity}x ${itemName} removed from ${character.name}`);
       } catch (sheetError) {
         console.error(`[inventoryUtils.js]: ⚠️ Failed to log item removal to Google Sheets: ${sheetError.message}`);
         // Don't fail the removal if sheet logging fails
@@ -824,9 +818,7 @@ async function removeInitialItemIfSynced(characterId) {
       });
       if (initialItem) {
         await inventoryCollection.deleteOne({ _id: initialItem._id });
-        console.log("[inventoryUtils.js]: ✅ Initial Item removed from inventory.");
       } else {
-        console.log("[inventoryUtils.js]: ℹ️ Initial Item not found in inventory.");
       }
     }
   } catch (error) {
@@ -874,11 +866,8 @@ async function refundJobVoucher(character, interaction) {
             throw new Error("Character and interaction objects are required");
         }
 
-        console.log(`[inventoryUtils.js]: 🎫 Processing job voucher refund for ${character.name}`);
-
         // Add the job voucher to inventory
         await addItemInventoryDatabase(character._id, "Job Voucher", 1, interaction, "Voucher Refund");
-        console.log(`[inventoryUtils.js]: ✅ Successfully refunded job voucher to ${character.name}'s inventory`);
 
         // Log the refund to Google Sheets if character has an inventory sheet
         if (character.inventory) {
@@ -905,7 +894,6 @@ async function refundJobVoucher(character, interaction) {
                 values,
                 interaction.client
             );
-            console.log(`[inventoryUtils.js]: ✅ Successfully logged job voucher refund to Google Sheets for ${character.name}`);
         }
 
         return true;

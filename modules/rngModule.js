@@ -184,7 +184,6 @@ function calculateFinalValue(character, diceRoll) {
     console.log(`[rngModule.js]: 🎲 Blight multiplier applied - Original: ${diceRoll}, Multiplier: ${blightMultiplier}x, Adjusted: ${adjustedDiceRoll}`);
   }
   
-  console.log(`[rngModule.js]: 🎲 Combat calculation - Roll: ${adjustedDiceRoll}, Adjusted: ${adjustedRandomValue}, Attack: ${attackSuccess}, Defense: ${defenseSuccess}`);
   return {
     damageValue: adjustedDiceRoll,
     adjustedRandomValue,

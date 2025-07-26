@@ -217,7 +217,6 @@ async function connectToVending() {
     maxIdleTimeMS: 60000,
     family: 4
    });
-   console.log(`[db.js]: 🔌 Connected to Vending database`);
   }
   return vendingDbConnection;
  } catch (error) {
@@ -262,9 +261,6 @@ const fetchCharacterByName = async (characterName) => {
   });
 
   if (!character) {
-   console.log(
-    `[characterService]: logs - Character "${actualName}" not found in database.`
-   );
    return null;
   }
   return character;
@@ -354,7 +350,6 @@ const fetchCharacterByNameAndUserId = async (characterName, userId) => {
   });
 
   if (!character) {
-    console.log(`[characterService]: 🔍 Character "${actualName}" not found for userId: ${userId}`);
     return null;
   }
 
@@ -531,7 +526,6 @@ const fetchModCharacterByNameAndUserId = async (characterName, userId) => {
   });
 
   if (!modCharacter) {
-    console.log(`[modCharacterService]: 🔍 Mod character "${actualName}" not found for userId: ${userId}`);
     return null;
   }
 
@@ -837,9 +831,7 @@ async function forceResetPetRolls(characterId, petName) {
 const fetchAllItems = async () => {
     try {
         const db = await connectToInventoriesForItems();
-        console.log(`[db.js]: 🔍 Fetching items from collection 'items' in database '${db.databaseName}'`);
         const items = await db.collection("items").find().toArray();
-        console.log(`[db.js]: ✅ Found ${items.length} items in collection`);
         return items;
     } catch (error) {
         handleError(error, "itemService.js");
@@ -858,7 +850,6 @@ async function fetchItemByName(itemName) {
             itemName: new RegExp(`^${escapedName}$`, "i"),
         });
         if (!item) {
-            console.warn(`[itemService.js]: ⚠️ No item found for "${normalizedItemName}"`);
             return null;
         }
         return item;
@@ -1017,7 +1008,6 @@ const fetchItemsByCategory = async (category) => {
             .toArray();
 
         if (!items || items.length === 0) {
-            console.warn(`[itemService.js]: ⚠️ No items found in category: ${category}`);
             return [];
         }
         return items;
@@ -1411,11 +1401,8 @@ async function updateTokenBalance(userId, change) {
 // ------------------- syncTokenTracker -------------------
 async function syncTokenTracker(userId) {
  try {
-  console.log(`[syncTokenTracker]: Starting sync for userId: ${userId}`);
   const user = await getOrCreateToken(userId);
-  console.log(`[syncTokenTracker]: User loaded:`, { userId: user.discordId, tokenTracker: user.tokenTracker });
   if (!user.tokenTracker || !isValidGoogleSheetsUrl(user.tokenTracker)) {
-   console.log(`[syncTokenTracker]: Invalid or missing token tracker URL.`);
    throw new Error("Invalid URL");
   }
 
@@ -1423,21 +1410,16 @@ async function syncTokenTracker(userId) {
   const spreadsheetId = extractSpreadsheetId(user.tokenTracker);
   const range = "loggedTracker!B7:F";
   const sheetData = await readSheetData(auth, spreadsheetId, range);
-  console.log(`[syncTokenTracker]: Sheet data loaded. Rows: ${sheetData.length}`);
 
   // Validate headers
   const headers = sheetData[0];
-  console.log(`[syncTokenTracker]: Headers found:`, headers);
   if (!headers || headers.length < 5) {
-    console.log(`[syncTokenTracker]: Invalid or missing headers in row 7. Headers:`, headers);
     throw new Error("Invalid sheet format. Please ensure your sheet has the correct headers in row 7.");
   }
 
   // Check if there are any earned entries
   const earnedRows = sheetData.slice(1).filter(row => row[3] === "earned");
-  console.log(`[syncTokenTracker]: Earned entry rows found: ${earnedRows.length}`);
   if (!earnedRows.length) {
-    console.log(`[syncTokenTracker]: No 'earned' entries found in the sheet. Blocking sync.`);
     throw new Error("No 'earned' entries found in your token tracker. Please add at least one entry with type 'earned' in column E.");
   }
 
@@ -1446,12 +1428,10 @@ async function syncTokenTracker(userId) {
 
   sheetData.slice(1).forEach((row, idx) => {
     if (row.length < 5) {
-      console.log(`[syncTokenTracker]: Skipping invalid row at index ${idx + 1}:`, row);
       return; // Skip invalid rows
     }
     const amount = parseInt(row[4]);
     if (isNaN(amount)) {
-      console.log(`[syncTokenTracker]: Skipping row with invalid amount at index ${idx + 1}:`, row);
       return; // Skip rows with invalid amounts
     }
     if (row[3] === "earned") {
@@ -1461,12 +1441,9 @@ async function syncTokenTracker(userId) {
     }
   });
 
-  console.log(`[syncTokenTracker]: totalEarned: ${totalEarned}, totalSpent: ${totalSpent}`);
-
   user.tokens = totalEarned - totalSpent;
   user.tokensSynced = true;
   await user.save();
-  console.log(`[syncTokenTracker]: Sync complete. User tokens updated to: ${user.tokens}`);
 
   return user;
  } catch (error) {

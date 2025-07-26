@@ -35,11 +35,15 @@ const COOLDOWN_MESSAGES = {
  * @returns {Promise<{canProceed: boolean, message?: string}>}
  */
 async function validateUserCooldowns(userId) {
-  if (await hasUserCompletedQuestToday(userId)) {
+  const dailyCompleted = await hasUserCompletedQuestToday(userId);
+  
+  if (dailyCompleted) {
     return { canProceed: false, message: COOLDOWN_MESSAGES.daily };
   }
   
-  if (await hasUserReachedWeeklyQuestLimit(userId)) {
+  const weeklyLimitReached = await hasUserReachedWeeklyQuestLimit(userId);
+  
+  if (weeklyLimitReached) {
     return { canProceed: false, message: COOLDOWN_MESSAGES.weekly };
   }
   
@@ -103,10 +107,6 @@ function validateCharacterLocation(character, quest) {
  * @returns {Promise<{requirementsMet: boolean, message: string}>}
  */
 async function validateQuestRequirements(character, quest) {
-  console.log(`[helpWanted.js]: 🔍 Starting quest requirements validation for ${character.name}`);
-  console.log(`[helpWanted.js]: 📋 Quest: ${quest.questId} - ${quest.type} quest for ${quest.village}`);
-  console.log(`[helpWanted.js]: 🎯 Requirements: ${JSON.stringify(quest.requirements)}`);
-
   switch (quest.type) {
     case 'item':
       return await validateItemQuestRequirements(character, quest);
@@ -145,9 +145,6 @@ async function validateItemQuestRequirements(character, quest) {
     }).toArray();
     
     const totalQuantity = dbItems.reduce((sum, item) => sum + (item.quantity || 0), 0);
-    
-    console.log(`[helpWanted.js]: 🔍 Database inventory scan for ${character.name}`);
-    console.log(`[helpWanted.js]: 📦 Database items found: ${dbItems.length} items`);
     
     if (totalQuantity >= quest.requirements.amount) {
       return {
@@ -214,18 +211,12 @@ async function validateCraftingQuestRequirements(character, quest) {
     
     const totalCraftedQuantity = dbItems.reduce((sum, item) => sum + (item.quantity || 0), 0);
     
-    console.log(`[helpWanted.js]: 🔍 Crafting quest inventory scan for ${character.name}`);
-    console.log(`[helpWanted.js]: 🎯 Looking for: ${quest.requirements.item}`);
-    console.log(`[helpWanted.js]: 📊 Total crafted quantity: ${totalCraftedQuantity}`);
-    
     if (totalCraftedQuantity >= quest.requirements.amount) {
-      console.log(`[helpWanted.js]: ✅ Crafting quest requirements met - ${character.name} has ${totalCraftedQuantity}x ${quest.requirements.item}`);
       return {
         requirementsMet: true,
         message: `🔨 **Crafting Quest:** ✅ ${character.name} has crafted ${totalCraftedQuantity}x ${quest.requirements.item} (required: ${quest.requirements.amount}x)`
       };
     } else {
-      console.log(`[helpWanted.js]: ❌ Crafting quest requirements failed - ${character.name} has ${totalCraftedQuantity}x ${quest.requirements.item}, needs ${quest.requirements.amount}x`);
       return {
         requirementsMet: false,
         message: `🔨 **Crafting Quest:** ❌ ${character.name} has crafted ${totalCraftedQuantity}x ${quest.requirements.item} but needs ${quest.requirements.amount}x. Use \`/crafting\` to craft more.`
@@ -253,8 +244,6 @@ async function removeQuestItems(character, quest, interaction) {
   }
   
   try {
-    console.log(`[helpWanted.js]: 🗑️ Removing items for ${quest.type} quest completion`);
-    
     const { connectToInventories } = require('../../database/db');
     const { removeItemInventoryDatabase } = require('../../utils/inventoryUtils');
     
@@ -296,11 +285,9 @@ async function removeQuestItems(character, quest, interaction) {
       
       if (removed) {
         totalRemoved += quantityToRemove;
-        console.log(`[helpWanted.js]: ✅ Removed ${quantityToRemove}x ${item.itemName} from ${character.name}'s inventory`);
       }
     }
     
-    console.log(`[helpWanted.js]: ✅ Successfully removed ${totalRemoved}x ${quest.requirements.item} for quest completion`);
     return true;
     
   } catch (error) {
@@ -317,7 +304,9 @@ async function removeQuestItems(character, quest, interaction) {
  * @returns {Promise<void>}
  */
 async function updateUserTracking(user, quest, userId) {
-  const today = new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  const today = now.toISOString().slice(0, 10);
+  
   user.helpWanted.lastCompletion = today;
   user.helpWanted.totalCompletions = (user.helpWanted.totalCompletions || 0) + 1;
   user.helpWanted.completions.push({
@@ -326,7 +315,6 @@ async function updateUserTracking(user, quest, userId) {
     questType: quest.type
   });
   await user.save();
-  console.log(`[helpWanted.js]: ✅ Updated user tracking for ${userId} - Total completions: ${user.helpWanted.totalCompletions}`);
 }
 
 /**
@@ -345,9 +333,10 @@ function createQuestCompletionEmbed(character, quest, userId) {
       { name: '🎯 Quest Type', value: quest.type.charAt(0).toUpperCase() + quest.type.slice(1), inline: true },
       { name: '🏘️ Village', value: quest.village, inline: true },
       { name: '👤 Requested By', value: quest.npcName || 'Unknown NPC', inline: true },
-      { name: '👤 Completed By', value: `<@${userId}>`, inline: true }
+      { name: '👤 Completed By', value: `<@${userId}>`, inline: true },
+      { name: '🆔 Quest ID', value: quest.questId, inline: true }
     )
-    .setFooter({ text: `Quest ID: ${quest.questId} | ${new Date().toLocaleString()}` })
+    .setFooter({ text: new Date().toLocaleString() })
     .setTimestamp();
 
   // Add quest-specific details
@@ -570,7 +559,6 @@ async function handleMonsterHunt(interaction, questId, characterName) {
   
   for (let i = 0; i < monsterList.length; i++) {
     const monsterName = monsterList[i];
-    console.log(`[helpWanted.js]: ⚔️ Battle ${i + 1}/${monsterList.length} - ${character.name} vs ${monsterName} (${heartsRemaining} hearts remaining)`);
     
     try {
       const encounterResult = await processMonsterEncounter(character, monsterName, heartsRemaining);
@@ -579,7 +567,6 @@ async function handleMonsterHunt(interaction, questId, characterName) {
       // Handle KO
       if (heartsRemaining === 0) {
         await handleKO(character._id);
-        console.log(`[helpWanted.js]: 💀 ${character.name} has been KO'd by ${monsterName}`);
         
         const koEmbed = createMonsterEncounterEmbed(
           character,
@@ -710,9 +697,6 @@ async function handleMonsterHunt(interaction, questId, characterName) {
     }
     
     await updateQuestEmbed(interaction.client, quest, quest.completedBy);
-    console.log(`[helpWanted.js]: ✅ Quest ${questId} completed by ${character.name}`);
-  } else {
-    console.log(`[helpWanted.js]: ❌ Quest ${questId} failed - ${character.name} was KO'd`);
   }
   
   // Send final summary
@@ -778,7 +762,7 @@ async function sendMonsterHuntSummary(interaction, character, questId, monsterLi
       },
       { 
         name: '📊 Statistics', 
-        value: `❤️ **Hearts Remaining:** ${heartsRemaining}\n⚔️ **Monsters Defeated:** ${defeatedAll ? monsterList.length : summary.filter(s => s.result !== 'KO').length}/${monsterList.length}\n⚡ **Stamina Used:** 1\n🎯 **Quest Progress:** ${defeatedAll ? '✅ COMPLETED' : '❌ FAILED'}`, 
+        value: `❤️ **Hearts Remaining:** ${heartsRemaining}\n⚔️ **Monsters Defeated:** ${defeatedAll ? monsterList.length : summary.filter(s => s.result !== 'KO').length}/${monsterList.length}\n⚡ **Stamina Used:** 1\n🎯 **Quest Progress:** ${defeatedAll ? '🏅 COMPLETED' : '❌ FAILED'}`, 
         inline: true 
       }
     )
@@ -915,11 +899,6 @@ module.exports = {
         // Validate quest requirements
         const requirementsCheck = await validateQuestRequirements(character, quest);
         if (!requirementsCheck.requirementsMet) {
-          console.log(`[helpWanted.js]: ❌ Quest requirements not met for ${character.name} (${interaction.user.tag})`);
-          console.log(`[helpWanted.js]: 📋 Quest Details - ID: ${quest.questId}, Type: ${quest.type}, Village: ${quest.village}`);
-          console.log(`[helpWanted.js]: 🔍 Requirements Check - ${requirementsCheck.message}`);
-          console.log(`[helpWanted.js]: 👤 Character Status - Hearts: ${character.currentHearts}, Village: ${character.currentVillage}, Debuff: ${character.debuff?.active || false}`);
-          
           return await interaction.editReply({ 
             content: `❌ Quest requirements not met.\n\n${requirementsCheck.message}`
           });
@@ -951,8 +930,6 @@ module.exports = {
         // Send success response
         const successEmbed = createQuestCompletionEmbed(character, quest, interaction.user.id);
         await interaction.editReply({ embeds: [successEmbed] });
-        
-        console.log(`[helpWanted.js]: ✅ Quest ${quest.questId} completed by ${character.name} (${interaction.user.tag})`);
 
       } catch (error) {
         handleError(error, 'helpWanted.js', {

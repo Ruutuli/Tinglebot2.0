@@ -622,8 +622,6 @@ module.exports = {
         const weightedItems = createWeightedItemList(availableItems, undefined, job);
         const randomIndex = Math.floor(Math.random() * weightedItems.length);
         const randomItem = weightedItems[randomIndex];
-        // Logging for random selection
-        console.log(`[gather.js]: 🎲 Weighted list length: ${weightedItems.length}, Random index chosen: ${randomIndex}, Item selected: ${randomItem.itemName}`);
         const quantity = 1;
         await addItemInventoryDatabase(
           character._id,
@@ -683,7 +681,6 @@ module.exports = {
             
             // Check if the operation was stored for retry
             if (sheetResult && sheetResult.storedForRetry) {
-              console.log(`[gather.js]: 📦 Sheet operation stored for retry: ${sheetResult.operationId}`);
               // Don't show error to user - the operation will be retried automatically
             }
           } catch (sheetError) {
