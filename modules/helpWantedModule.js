@@ -427,6 +427,7 @@ async function generateQuestForVillage(village, date, pools) {
     default:
       requirements = {};
   }
+  
   // Generate a unique questId
   const questId = generateUniqueId('X');
   
@@ -435,12 +436,16 @@ async function generateQuestForVillage(village, date, pools) {
     throw new Error(`Failed to generate questId for ${village} quest`);
   }
   
-  console.log(`[HelpWanted] Generated quest for ${village} (${type}) with questId: ${questId}`);
+  // Assign a random NPC for this quest
+  const npcName = getRandomNPCName();
+  
+  console.log(`[HelpWanted] Generated quest for ${village} (${type}) with questId: ${questId} - NPC: ${npcName}`);
   return {
     questId,
     village,
     date,
     type,
+    npcName,
     requirements,
     completed: false,
     completedBy: null
@@ -514,7 +519,18 @@ async function generateDailyQuests() {
 // ============================================================================
 async function getTodaysQuests() {
   const date = moment().utc().format('YYYY-MM-DD');
-  return await HelpWantedQuest.find({ date });
+  const quests = await HelpWantedQuest.find({ date });
+  
+  // Ensure all quests have an npcName field (migration for existing quests)
+  for (const quest of quests) {
+    if (!quest.npcName) {
+      quest.npcName = getRandomNPCName();
+      await quest.save();
+      console.log(`[HelpWanted] Added npcName to existing quest ${quest.questId}: ${quest.npcName}`);
+    }
+  }
+  
+  return quests;
 }
 
 // ------------------- Function: getQuestsForScheduledTime -------------------
@@ -550,8 +566,8 @@ async function formatQuestsAsEmbed() {
     .setColor('#25c059');
 
   quests.forEach((quest) => {
-    // Assign a random NPC as the quest requester
-    const npcName = getRandomNPCName();
+    // Use the stored NPC name from the quest data
+    const npcName = quest.npcName || getRandomNPCName();
     
     // Get quest type emoji from centralized mapping
     const emoji = QUEST_TYPE_EMOJIS[quest.type] || '❓';
@@ -614,21 +630,9 @@ async function formatQuestsAsEmbedsByVillage() {
   if (!quests.length) return {};
   const result = {};
 
-  // Get all NPC names and shuffle for unique assignment
-  const npcNames = Object.keys(NPCs);
-  const shuffledNPCs = npcNames.sort(() => Math.random() - 0.5);
-  let npcIndex = 0;
-
   for (const quest of quests) {
-    // Assign a unique NPC per quest (per day)
-    let npcName;
-    if (npcIndex < shuffledNPCs.length) {
-      npcName = shuffledNPCs[npcIndex];
-      npcIndex++;
-    } else {
-      // If more villages than NPCs, fallback to random
-      npcName = shuffledNPCs[Math.floor(Math.random() * shuffledNPCs.length)];
-    }
+    // Use the stored NPC name from the quest data
+    const npcName = quest.npcName || getRandomNPCName();
 
     // Main quest line (using specialized NPC flavor text)
     let questLine = getNPCQuestFlavor(npcName, quest.type, quest.requirements);

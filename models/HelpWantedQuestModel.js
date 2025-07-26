@@ -34,6 +34,11 @@ const HelpWantedQuestSchema = new mongoose.Schema({
     required: true,
     enum: ['item', 'monster', 'escort', 'crafting']
   },
+  npcName: {
+    type: String,
+    required: true
+    // The NPC who requested this quest
+  },
   requirements: {
     type: Object,
     required: true

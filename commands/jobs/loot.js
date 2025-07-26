@@ -132,6 +132,23 @@ async function validateCharacterForLoot(interaction, characterName, userId) {
     });
     return null;
   }
+
+  // ============================================================================
+  // ------------------- Debug Character Object -------------------
+  // Log the character object to understand its structure
+  // ============================================================================
+  console.log(`[loot.js]: 🔍 DEBUG - Character object retrieved for ${characterName}:`, {
+    name: character.name,
+    userId: character.userId,
+    inventory: character.inventory,
+    inventoryType: typeof character.inventory,
+    inventoryLength: character.inventory?.length,
+    hasInventoryLink: !!character.inventoryLink,
+    inventoryLink: character.inventoryLink,
+    inventoryLinkType: typeof character.inventoryLink,
+    allFields: Object.keys(character).filter(key => key.includes('inventory'))
+  });
+
   return character;
 }
 
@@ -871,7 +888,10 @@ async function processLootingLogic(
 
 // New helper function for inventory updates
 async function handleInventoryUpdate(interaction, character, lootedItem, encounteredMonster, bloodMoonActive) {
-  const spreadsheetId = extractSpreadsheetId(character.inventory);
+  // Use the same fallback pattern as other commands
+  const inventoryLink = character.inventory || character.inventoryLink;
+
+  const spreadsheetId = extractSpreadsheetId(inventoryLink);
   const auth = await authorizeSheets();
   const range = "loggedInventory!A2:M";
   const uniqueSyncId = uuidv4();
@@ -898,14 +918,7 @@ async function handleInventoryUpdate(interaction, character, lootedItem, encount
     ],
   ];
 
-  // Validate the values array before sending to sheet
-  console.log(`[loot.js]: 📝 Prepared values for sheet:`, {
-    characterName: character.name,
-    itemName: lootedItem.itemName,
-    quantity: lootedItem.quantity,
-    valuesLength: values.length,
-    firstRowLength: values[0]?.length
-  });
+
 
   await addItemInventoryDatabase(
     character._id,
@@ -917,42 +930,42 @@ async function handleInventoryUpdate(interaction, character, lootedItem, encount
   );
 
   try {
-    console.log(`[loot.js]: 🔗 Attempting to sync inventory for ${character?.name} to sheet: ${character?.inventory?.substring(0, 50)}...`);
+    console.log(`[loot.js]: 🔗 Attempting to sync inventory for ${character?.name} to sheet: ${inventoryLink?.substring(0, 50)}...`);
     
     // Validate character object has all required properties
-    if (!character?.name || !character?.inventory || !character?.userId) {
+    if (!character?.name || !inventoryLink || !character?.userId) {
       console.error(`[loot.js]: ❌ Character missing required properties for sheet sync:`, {
         name: character?.name,
-        hasInventory: !!character?.inventory,
+        hasInventoryLink: !!inventoryLink,
         userId: character?.userId
       });
       return;
     }
     
     // Validate inventory URL format
-    if (!character.inventory.includes('docs.google.com/spreadsheets')) {
-      console.error(`[loot.js]: ❌ Invalid inventory URL format for ${character.name}:`, character.inventory);
+    if (!inventoryLink.includes('docs.google.com/spreadsheets')) {
+      console.error(`[loot.js]: ❌ Invalid inventory URL format for ${character.name}:`, inventoryLink);
       return;
     }
     
-    if (character?.name && character?.inventory && character?.userId) {
-      const sheetResult = await safeAppendDataToSheet(character.inventory, character, range, values, undefined, {
+    if (character?.name && inventoryLink && character?.userId) {
+      const sheetResult = await safeAppendDataToSheet(inventoryLink, character, range, values, undefined, {
         skipValidation: true,
-        context: {
-          commandName: 'loot',
-          userTag: interaction.user.tag,
-          userId: interaction.user.id,
-          characterName: character.name,
-          spreadsheetId: extractSpreadsheetId(character.inventory),
-          range: range,
-          sheetType: 'inventory',
-          options: {
-            monsterName: encounteredMonster.name,
-            itemName: lootedItem.itemName,
-            quantity: lootedItem.quantity,
-            bloodMoonActive: bloodMoonActive
+                  context: {
+            commandName: 'loot',
+            userTag: interaction.user.tag,
+            userId: interaction.user.id,
+            characterName: character.name,
+            spreadsheetId: extractSpreadsheetId(inventoryLink),
+            range: range,
+            sheetType: 'inventory',
+            options: {
+              monsterName: encounteredMonster.name,
+              itemName: lootedItem.itemName,
+              quantity: lootedItem.quantity,
+              bloodMoonActive: bloodMoonActive
+            }
           }
-        }
       });
       
       // Check if the operation was stored for retry

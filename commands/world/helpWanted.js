@@ -115,6 +115,7 @@ module.exports = {
          }
          
          // ------------------- Village Check -------------------
+         // Monster hunt is only for monster quests, so character must be in home village
          if (character.currentVillage.toLowerCase() !== quest.village.toLowerCase()) {
            return await interaction.editReply({ 
              content: `❌ **Wrong Village!**\n\n**${character.name}** is currently in **${character.currentVillage}**, but this quest is for **${quest.village}**.\n\n🏠 **Home Village:** ${character.homeVillage}\n📍 **Current Location:** ${character.currentVillage}\n🎯 **Quest Village:** ${quest.village}\n\n**Characters must be in their home village to complete Help Wanted quests.**\n\n💡 **Need to travel?** Use \`/travel\` to move between villages.`
@@ -167,8 +168,6 @@ module.exports = {
           
           return lootedItem;
         }
-        
-        await interaction.deferReply();
         
         // ------------------- Deduct Stamina and Announce Hunt Start -------------------
         const newStamina = Math.max(0, currentStamina - 1);
@@ -271,84 +270,84 @@ module.exports = {
             summary.push({ monster: monsterName, result: 'Attacked', message: outcomeMessage });
           } else if (outcome.result === 'Win!/Loot') {
             summary.push({ monster: monsterName, result: 'Victory', message: outcomeMessage });
-            
-            // ------------------- Handle Loot for Defeated Monsters -------------------
-            if (outcome.canLoot && items.length > 0) {
-              const weightedItems = createWeightedItemList(items, adjustedRandomValue);
-              if (weightedItems.length > 0) {
-                const lootedItem = generateLootedItem(monster, weightedItems);
-                totalLoot.push({ monster: monsterName, item: lootedItem });
-                console.log(`[helpWanted.js]: 🎁 ${character.name} looted ${lootedItem.itemName} (x${lootedItem.quantity}) from ${monsterName}`);
-                
-                // Add to character's inventory (if they have a valid inventory link)
-                const inventoryLink = character.inventory || character.inventoryLink;
-                if (inventoryLink && isValidGoogleSheetsUrl(inventoryLink)) {
-                  try {
-                    await addItemInventoryDatabase(
-                      character._id,
+          } else {
+            summary.push({ monster: monsterName, result: 'Other', message: outcomeMessage });
+          }
+          
+          // ------------------- Handle Loot for Defeated Monsters -------------------
+          if (outcome.canLoot && items.length > 0) {
+            const weightedItems = createWeightedItemList(items, adjustedRandomValue);
+            if (weightedItems.length > 0) {
+              const lootedItem = generateLootedItem(monster, weightedItems);
+              totalLoot.push({ monster: monsterName, item: lootedItem });
+              console.log(`[helpWanted.js]: 🎁 ${character.name} looted ${lootedItem.itemName} (x${lootedItem.quantity}) from ${monsterName}`);
+              
+              // Add to character's inventory (if they have a valid inventory link)
+              const inventoryLink = character.inventory || character.inventoryLink;
+              if (inventoryLink && isValidGoogleSheetsUrl(inventoryLink)) {
+                try {
+                  await addItemInventoryDatabase(
+                    character._id,
+                    lootedItem.itemName,
+                    lootedItem.quantity,
+                    lootedItem.category.join(", "),
+                    lootedItem.type.join(", "),
+                    interaction
+                  );
+                  
+                  // Update Google Sheets
+                  const { extractSpreadsheetId, authorizeSheets } = require('../../utils/googleSheetsUtils');
+                  const { v4: uuidv4 } = require('uuid');
+                  const spreadsheetId = extractSpreadsheetId(inventoryLink);
+                  const auth = await authorizeSheets();
+                  const range = "loggedInventory!A2:M";
+                  const uniqueSyncId = uuidv4();
+                  const formattedDateTime = new Date().toLocaleString("en-US", {
+                    timeZone: "America/New_York",
+                  });
+                  const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
+
+                  const values = [
+                    [
+                      character.name,
                       lootedItem.itemName,
-                      lootedItem.quantity,
+                      lootedItem.quantity.toString(),
                       lootedItem.category.join(", "),
                       lootedItem.type.join(", "),
-                      interaction
-                    );
-                    
-                    // Update Google Sheets
-                    const { extractSpreadsheetId, authorizeSheets } = require('../../utils/googleSheetsUtils');
-                    const { v4: uuidv4 } = require('uuid');
-                    const spreadsheetId = extractSpreadsheetId(inventoryLink);
-                    const auth = await authorizeSheets();
-                    const range = "loggedInventory!A2:M";
-                    const uniqueSyncId = uuidv4();
-                    const formattedDateTime = new Date().toLocaleString("en-US", {
-                      timeZone: "America/New_York",
-                    });
-                    const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
+                      lootedItem.subtype.join(", "),
+                      "Monster Hunt",
+                      character.job,
+                      "",
+                      character.currentVillage,
+                      interactionUrl,
+                      formattedDateTime,
+                      uniqueSyncId,
+                    ],
+                  ];
 
-                    const values = [
-                      [
-                        character.name,
-                        lootedItem.itemName,
-                        lootedItem.quantity.toString(),
-                        lootedItem.category.join(", "),
-                        lootedItem.type.join(", "),
-                        lootedItem.subtype.join(", "),
-                        "Monster Hunt",
-                        character.job,
-                        "",
-                        character.currentVillage,
-                        interactionUrl,
-                        formattedDateTime,
-                        uniqueSyncId,
-                      ],
-                    ];
-
-                    await safeAppendDataToSheet(inventoryLink, character, range, values, undefined, {
-                      skipValidation: true,
-                      context: {
-                        commandName: 'helpwanted monsterhunt',
-                        userTag: interaction.user.tag,
-                        userId: interaction.user.id,
-                        characterName: character.name,
-                        spreadsheetId: extractSpreadsheetId(inventoryLink),
-                        range: range,
-                        sheetType: 'inventory',
-                        options: {
-                          monsterName: monsterName,
-                          itemName: lootedItem.itemName,
-                          quantity: lootedItem.quantity,
-                          questId: questId
-                        }
+                  await safeAppendDataToSheet(inventoryLink, character, range, values, undefined, {
+                    skipValidation: true,
+                    context: {
+                      commandName: 'helpwanted monsterhunt',
+                      userTag: interaction.user.tag,
+                      userId: interaction.user.id,
+                      characterName: character.name,
+                      spreadsheetId: extractSpreadsheetId(inventoryLink),
+                      range: range,
+                      sheetType: 'inventory',
+                      options: {
+                        monsterName: monsterName,
+                        itemName: lootedItem.itemName,
+                        quantity: lootedItem.quantity,
+                        questId: questId
                       }
-                    });
-                  } catch (error) {
-                    console.error(`[helpWanted.js]: ❌ Failed to add loot to inventory:`, error);
-                  }
+                    }
+                  });
+                } catch (error) {
+                  console.error(`[helpWanted.js]: ❌ Failed to add loot to inventory:`, error);
                 }
               }
             }
-          } else {
-            summary.push({ monster: monsterName, result: 'Other', message: outcomeMessage });
           }
           
           // Send embed for this battle (unless it was a KO)
@@ -544,10 +543,25 @@ module.exports = {
         }
         
         // ------------------- Village Check -------------------
-        if (character.currentVillage.toLowerCase() !== quest.village.toLowerCase()) {
-          return await interaction.editReply({ 
-            content: `❌ **Wrong Village!**\n\n**${character.name}** is currently in **${character.currentVillage}**, but this quest is for **${quest.village}**.\n\n🏠 **Home Village:** ${character.homeVillage}\n📍 **Current Location:** ${character.currentVillage}\n🎯 **Quest Village:** ${quest.village}\n\n**Characters must be in their home village to complete Help Wanted quests.**\n\n💡 **Need to travel?** Use \`/travel\` to move between villages.`
-          });
+        // For escort quests, characters can complete from destination village
+        // For other quests, characters must be in their home village
+        if (quest.type === 'escort') {
+          // For escort quests, check if character is in the destination village
+          const requiredLocation = quest.requirements.location?.toLowerCase();
+          const currentLocation = character.currentVillage?.toLowerCase();
+          
+          if (currentLocation !== requiredLocation) {
+            return await interaction.editReply({ 
+              content: `❌ **Wrong Village!**\n\n**${character.name}** is currently in **${character.currentVillage}**, but needs to be in **${quest.requirements.location}** to complete this escort quest.\n\n🏠 **Home Village:** ${character.homeVillage}\n📍 **Current Location:** ${character.currentVillage}\n🎯 **Quest Village:** ${quest.village}\n🎯 **Destination:** ${quest.requirements.location}\n\n**For escort quests, characters must travel to the destination village to complete the quest.**\n\n💡 **Need to travel?** Use \`/travel\` to move between villages.`
+            });
+          }
+        } else {
+          // For non-escort quests, character must be in their home village
+          if (character.currentVillage.toLowerCase() !== quest.village.toLowerCase()) {
+            return await interaction.editReply({ 
+              content: `❌ **Wrong Village!**\n\n**${character.name}** is currently in **${character.currentVillage}**, but this quest is for **${quest.village}**.\n\n🏠 **Home Village:** ${character.homeVillage}\n📍 **Current Location:** ${character.currentVillage}\n🎯 **Quest Village:** ${quest.village}\n\n**Characters must be in their home village to complete Help Wanted quests.**\n\n💡 **Need to travel?** Use \`/travel\` to move between villages.`
+            });
+          }
         }
 
         // ------------------- Quest Requirement Validation -------------------
@@ -611,9 +625,9 @@ module.exports = {
           }
           case 'escort': {
             // ------------------- Escort Quest Validation -------------------
-            // Check if character has traveled to the required location
+            // For escort quests, the village check above already validated location
+            // Just confirm requirements are complete
             const requiredLocation = quest.requirements.location?.toLowerCase();
-            const currentLocation = character.currentVillage?.toLowerCase();
             
             if (!requiredLocation) {
               validationMessage = `🛡️ **Escort Quest:** ❌ Quest requirements are incomplete - no location specified.`;
@@ -621,13 +635,9 @@ module.exports = {
               break;
             }
             
-            if (currentLocation === requiredLocation) {
-              validationMessage = `🛡️ **Escort Quest:** ✅ ${character.name} is currently in ${quest.requirements.location}`;
-              requirementsMet = true;
-            } else {
-              validationMessage = `🛡️ **Escort Quest:** ❌ ${character.name} is in ${character.currentVillage} but needs to be in ${quest.requirements.location}. Use \`/travel\` to move.`;
-              requirementsMet = false;
-            }
+            // If we reach here, the character is in the correct destination village
+            validationMessage = `🛡️ **Escort Quest:** ✅ ${character.name} has successfully escorted the villager to ${quest.requirements.location}`;
+            requirementsMet = true;
             break;
           }
           case 'crafting': {
@@ -810,12 +820,36 @@ module.exports = {
           .setTitle('✅ Quest Completed!')
           .setDescription(`**${character.name}** has successfully completed the Help Wanted quest for **${quest.village}**!`)
           .addFields(
-            { name: 'Quest Type', value: quest.type.charAt(0).toUpperCase() + quest.type.slice(1), inline: true },
-            { name: 'Village', value: quest.village, inline: true },
-            { name: 'Completed By', value: `<@${interaction.user.id}>`, inline: true }
+            { name: '🎯 Quest Type', value: quest.type.charAt(0).toUpperCase() + quest.type.slice(1), inline: true },
+            { name: '🏘️ Village', value: quest.village, inline: true },
+            { name: '👤 Requested By', value: quest.npcName || 'Unknown NPC', inline: true },
+            { name: '👤 Completed By', value: `<@${interaction.user.id}>`, inline: true }
           )
-          .setFooter({ text: `Quest ID: ${quest.questId}` })
+          .setFooter({ text: `Quest ID: ${quest.questId} | ${new Date().toLocaleString()}` })
           .setTimestamp();
+
+        // Add quest-specific details based on type
+        let questDetails = '';
+        switch (quest.type) {
+          case 'item':
+            questDetails = `**Delivered:** ${quest.requirements.amount}x ${quest.requirements.item}`;
+            break;
+          case 'monster':
+            questDetails = `**Defeated:** ${quest.requirements.amount}x ${quest.requirements.monster} (Tier ${quest.requirements.tier})`;
+            break;
+          case 'escort':
+            questDetails = `**Escorted:** Safely guided villager to ${quest.requirements.location}`;
+            break;
+          case 'crafting':
+            questDetails = `**Crafted:** ${quest.requirements.amount}x ${quest.requirements.item}`;
+            break;
+          default:
+            questDetails = 'Quest completed successfully!';
+        }
+
+        if (questDetails) {
+          successEmbed.addFields({ name: '📋 Quest Details', value: questDetails, inline: false });
+        }
 
         await interaction.editReply({ embeds: [successEmbed] });
         console.log(`[helpWanted.js]: ✅ Quest ${quest.questId} completed by ${character.name} (${interaction.user.tag})`);

@@ -444,6 +444,7 @@ function isValidGoogleSheetsUrl(url) {
 // Extracts the Spreadsheet ID from a Google Sheets URL
 function extractSpreadsheetId(url) {
     if (typeof url !== 'string') {
+        console.error(`[googleSheetsUtils.js]: ❌ Invalid URL input:`, url);
         throw new Error('Invalid URL: URL must be a string');
     }
     
@@ -872,6 +873,7 @@ async function deleteInventorySheetData(spreadsheetId, characterName, context = 
 // ------------------- Function: safeAppendDataToSheet -------------------
 // Safely appends data to a sheet with validation
 async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, client, { skipValidation = false, context = {} } = {}) {
+
     // Move variable declarations outside try block to avoid scope issues
     let isUserObject = false;
     let isCharacterObject = false;
@@ -1018,11 +1020,6 @@ async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, c
         };
         
         console.log(`[googleSheetsUtils.js]: 📝 Preparing to append ${resource.values.length} rows to sheet`);
-        
-        // Log the first row for debugging
-        if (resource.values.length > 0 && resource.values[0].length > 0) {
-            console.log(`[googleSheetsUtils.js]: 📝 First row data:`, resource.values[0].slice(0, 3)); // Log first 3 columns
-        }
 
         try {
             // Validate the API call parameters

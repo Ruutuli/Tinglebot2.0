@@ -1382,6 +1382,7 @@ if (quantity <= 0) {
   );
   const inventoryItem = await inventoryCollection.findOne({ itemName });
 
+  // Get equipped items to check if we're trying to sell more than available non-equipped items
   const equippedItems = [
     character.gearArmor?.head?.name,
     character.gearArmor?.chest?.name,
@@ -1390,9 +1391,12 @@ if (quantity <= 0) {
     character.gearShield?.name,
   ].filter(Boolean);
   
-  if (equippedItems.includes(itemName)) {
+  // Check if the item is equipped
+  const isEquipped = equippedItems.includes(itemName);
+  
+  if (isEquipped) {
     await interaction.editReply({
-      content: `❌ You cannot sell \`${itemName}\` because it is currently equipped. Please unequip it first.`,
+      content: `❌ You cannot sell \`${itemName}\` because it is currently equipped. Please unequip the item first if you want to sell it.`,
       ephemeral: true,
     });
     return;
@@ -1415,7 +1419,7 @@ if (quantity <= 0) {
 
   const obtainMethod = inventoryItem.obtain.toLowerCase();
   const isCrafted = obtainMethod.includes("crafting") || obtainMethod.includes("crafted");
-  console.log(`[shops]: Item crafted: ${isCrafted}`);
+  console.log(`[shops]: Item crafted: ${isCrafted}, Obtain method: ${inventoryItem.obtain}`);
 
   if (!isCrafted) {
    console.warn(
@@ -1455,17 +1459,20 @@ if (quantity <= 0) {
   console.log(`[shops]: 📊 Item details found. Buy price: ${itemDetails.buyPrice}, Sell price: ${itemDetails.sellPrice}, Category: ${itemDetails.category}, Crafting jobs: ${itemDetails.craftingJobs}`);
   console.log(`[shops]: 📊 Full item details:`, JSON.stringify(itemDetails, null, 2));
 
-  const normalizedCharacterJob = character.job.toLowerCase();
+  // Determine the effective job for crafting (consider job vouchers)
+  const effectiveJob = (character.jobVoucher && character.jobVoucherJob) ? character.jobVoucherJob : character.job;
+  const normalizedCharacterJob = effectiveJob.toLowerCase();
   const normalizedCraftingJobs = itemDetails.craftingJobs.map((job) =>
    job.toLowerCase()
   );
 
+  // Check if character has crafting perk with their effective job
   const characterMeetsRequirements =
-   hasPerk(character, "CRAFTING") &&
+   hasPerk({ ...character, job: effectiveJob }, "CRAFTING") &&
    normalizedCraftingJobs.includes(normalizedCharacterJob);
 
   console.log(
-   `[shops]: Character job: ${character.job}, Crafting jobs (normalized): ${normalizedCraftingJobs}`
+   `[shops]: Character job: ${character.job}, Effective job: ${effectiveJob}, Crafting jobs (normalized): ${normalizedCraftingJobs}`
   );
   console.log(
    `[shops]: Meets crafting requirements: ${characterMeetsRequirements}`
@@ -1577,7 +1584,17 @@ if (quantity <= 0) {
   console.log(`[shops]: 📋 - Price per item: ${sellPrice}`);
   console.log(`[shops]: 📋 - Total earned: ${totalPrice} tokens`);
   console.log(`[shops]: 📋 - Item data source: ItemModel (buyPrice: ${itemDetails.buyPrice}, sellPrice: ${itemDetails.sellPrice})`);
+  console.log(`[shops]: 📋 - Crafter's Bonus Applied: ${crafterBonusApplied}`);
+  console.log(`[shops]: 📋 - Item was crafted: ${isCrafted}`);
+  console.log(`[shops]: 📋 - Character meets requirements: ${characterMeetsRequirements}`);
+  console.log(`[shops]: 📋 - Character job: ${character.job}`);
+  console.log(`[shops]: 📋 - Effective job: ${effectiveJob}`);
+  console.log(`[shops]: 📋 - Item crafting jobs: ${itemDetails.craftingJobs}`);
 
+  // Determine if crafter's bonus was applied
+  const crafterBonusApplied = isCrafted && characterMeetsRequirements;
+  const priceType = crafterBonusApplied ? "Crafter's Bonus (Buy Price)" : "Standard Sell Price";
+  
   const saleEmbed = new EmbedBuilder()
    .setTitle("✅ Sale Successful!")
    .setDescription(
@@ -1590,6 +1607,11 @@ if (quantity <= 0) {
     "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"
    )
    .addFields(
+    {
+     name: "💰 Price Details",
+     value: `**${priceType}**: 🪙 ${sellPrice} per item`,
+     inline: true,
+    },
     {
      name: "📦 Inventory Link",
      value: `[View Inventory](${
