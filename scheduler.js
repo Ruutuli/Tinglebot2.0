@@ -140,13 +140,13 @@ function getCurrentSeason() {
 
 async function postWeatherUpdate(client) {
  try {
-  console.log(`[scheduler.js]: Starting 8am weather update process`);
+  console.log(`[scheduler.js]: 🌤️ Starting weather update process`);
 
   const villages = Object.keys(TOWNHALL_CHANNELS);
+  let postedCount = 0;
 
   for (const village of villages) {
    try {
-    console.log(`[scheduler.js]: 🌤️ Processing weather for ${village}...`);
     const weather = await getCurrentWeather(village);
 
     if (!weather) {
@@ -164,23 +164,13 @@ async function postWeatherUpdate(client) {
 
     const { embed, files } = await generateWeatherEmbed(village, weather);
     await channel.send({ embeds: [embed], files });
-    console.log(`[scheduler.js]: Posted weather for ${village}`);
-
-    if (village === "Rudania" || village === "Vhintl") {
-     console.log(`[scheduler.js]: Special weather check for ${village}:`, {
-      hasSpecial: !!weather.special,
-      specialType: weather.special?.label || "None",
-      specialEmoji: weather.special?.emoji || "None",
-      temperature: weather.temperature?.label,
-      precipitation: weather.precipitation?.label,
-     });
-    }
+    postedCount++;
    } catch (error) {
     console.error(`[scheduler.js]: Error posting weather for ${village}:`, error.message);
    }
   }
 
-  console.log(`[scheduler.js]: 8am weather update process completed`);
+  console.log(`[scheduler.js]: ✅ Weather update completed - posted to ${postedCount}/${villages.length} villages`);
  } catch (error) {
   console.error("[scheduler.js]: Weather update process failed:", error.message);
  }
@@ -193,14 +183,10 @@ async function postWeatherUpdate(client) {
 
 async function cleanupExpiredRaids() {
  try {
-  console.log(`[scheduler.js]: Starting raid cleanup process`);
-
   const expiredCount = await Raid.cleanupExpiredRaids();
 
   if (expiredCount > 0) {
-   console.log(`[scheduler.js]: Cleaned up ${expiredCount} expired raids`);
-  } else {
-   console.log(`[scheduler.js]: No expired raids to clean up`);
+   console.log(`[scheduler.js]: 🧹 Cleaned up ${expiredCount} expired raids`);
   }
  } catch (error) {
   console.error(`[scheduler.js]: Error cleaning up expired raids:`, error);
@@ -238,6 +224,8 @@ async function executeBirthdayAnnouncements(client) {
  });
  const hyruleanDate = convertToHyruleanDate(estNow);
 
+ let announcedCount = 0;
+
  for (const guildId of guildIds) {
   const birthdayChannelId = guildChannelMap[guildId];
   if (!birthdayChannelId) continue;
@@ -249,9 +237,6 @@ async function executeBirthdayAnnouncements(client) {
   if (!announcementChannel) continue;
 
   const characters = await Character.find({ birthday: today });
-  console.log(
-   `[scheduler.js]: Found ${characters.length} characters with birthdays today in guild ${guild.name}`
-  );
 
   for (const character of characters) {
    try {
@@ -273,9 +258,7 @@ async function executeBirthdayAnnouncements(client) {
      .setTimestamp();
 
     await announcementChannel.send({ embeds: [embed] });
-    console.log(
-     `[scheduler.js]: Announced ${character.name}'s birthday in ${guild.name}`
-    );
+    announcedCount++;
    } catch (error) {
     handleError(error, "scheduler.js");
     console.error(
@@ -283,6 +266,10 @@ async function executeBirthdayAnnouncements(client) {
     );
    }
   }
+ }
+
+ if (announcedCount > 0) {
+  console.log(`[scheduler.js]: 🎂 Announced ${announcedCount} birthdays`);
  }
 }
 
@@ -299,14 +286,13 @@ async function handleJailRelease(client) {
  });
 
  if (charactersToRelease.length === 0) {
-  console.log(
-   "[scheduler.js]: No characters to release from jail at this time"
-  );
   return;
  }
 
  const announcementChannelId = "1354451878053937215";
  const announcementChannel = await client.channels.fetch(announcementChannelId);
+
+ let releasedCount = 0;
 
  for (const character of charactersToRelease) {
   character.inJail = false;
@@ -327,13 +313,17 @@ async function handleJailRelease(client) {
     content: `<@${character.userId}>, your character **${character.name}** has been released from jail.`,
     embeds: [releaseEmbed],
    });
-   console.log(`[scheduler.js]: Released ${character.name} from jail`);
+   releasedCount++;
   }
 
   await sendUserDM(
    character.userId,
    `**Town Hall Notice**\n\nYour character **${character.name}** has been released from jail. Remember, a fresh start awaits you!`
   );
+ }
+
+ if (releasedCount > 0) {
+  console.log(`[scheduler.js]: 🔓 Released ${releasedCount} characters from jail`);
  }
 }
 
@@ -344,25 +334,24 @@ async function handleDebuffExpiry(client) {
   // Set to midnight EST today for comparison
   const midnightEST = new Date(estDate.getFullYear(), estDate.getMonth(), estDate.getDate(), 0, 0, 0, 0);
   
-  console.log(`[scheduler.js]: 🧹 Checking debuff expiry at ${midnightEST.toISOString()} (midnight EST)`);
-  
   const charactersWithActiveDebuffs = await Character.find({
     "debuff.active": true,
     "debuff.endDate": { $lte: midnightEST },
   });
 
-  console.log(`[scheduler.js]: 📊 Found ${charactersWithActiveDebuffs.length} characters with expired debuffs`);
+  if (charactersWithActiveDebuffs.length > 0) {
+    console.log(`[scheduler.js]: 🧹 Expiring debuffs for ${charactersWithActiveDebuffs.length} characters`);
+    
+    for (const character of charactersWithActiveDebuffs) {
+      character.debuff.active = false;
+      character.debuff.endDate = null;
+      await character.save();
 
-  for (const character of charactersWithActiveDebuffs) {
-    console.log(`[scheduler.js]: ✅ Expiring debuff for ${character.name} (endDate: ${character.debuff.endDate})`);
-    character.debuff.active = false;
-    character.debuff.endDate = null;
-    await character.save();
-
-    await sendUserDM(
-      character.userId,
-      `Your character **${character.name}**'s week-long debuff has ended! You can now heal them with items or a Healer.`
-    );
+      await sendUserDM(
+        character.userId,
+        `Your character **${character.name}**'s week-long debuff has ended! You can now heal them with items or a Healer.`
+      );
+    }
   }
 }
 
@@ -380,7 +369,9 @@ async function resetDailyRolls(client) {
    }
   }
 
-  console.log(`[scheduler.js]: Reset daily rolls for ${resetCount} characters`);
+  if (resetCount > 0) {
+   console.log(`[scheduler.js]: 🔄 Reset daily rolls for ${resetCount} characters`);
+  }
  } catch (error) {
   handleError(error, "scheduler.js");
   console.error(
@@ -395,9 +386,11 @@ async function resetPetLastRollDates(client) {
    { status: "active" },
    { $set: { lastRollDate: null } }
   );
-  console.log(
-   `[scheduler.js]: Reset lastRollDate for ${result.modifiedCount} pets`
-  );
+  if (result.modifiedCount > 0) {
+   console.log(
+    `[scheduler.js]: 🐾 Reset lastRollDate for ${result.modifiedCount} pets`
+   );
+  }
  } catch (error) {
   handleError(error, "scheduler.js");
   console.error(
@@ -539,16 +532,12 @@ function setupWeatherScheduler(client) {
 // ============================================================================
 async function checkAndGenerateDailyQuests() {
   try {
-    console.log('[scheduler.js]: 🔍 Checking for existing Help Wanted quests for today...');
-    
     const todaysQuests = await require('./modules/helpWantedModule').getTodaysQuests();
     
     if (todaysQuests.length === 0) {
-      console.log('[scheduler.js]: 📝 No quests found for today. Generating new daily quests...');
+      console.log('[scheduler.js]: 📝 Generating new daily quests...');
       await generateDailyQuests();
-      console.log('[scheduler.js]: ✅ Daily quests generated successfully');
-    } else {
-      console.log(`[scheduler.js]: ✅ Found ${todaysQuests.length} existing quests for today. No generation needed.`);
+      console.log('[scheduler.js]: ✅ Daily quests generated');
     }
   } catch (error) {
     handleError(error, 'scheduler.js', {
@@ -582,8 +571,6 @@ async function generateDailyQuestsAtMidnight() {
 // ============================================================================
 async function checkAndPostMissedQuests(client) {
   try {
-    console.log('[scheduler.js]: 🔍 Checking for missed quest posts...');
-    
     const { FIXED_CRON_TIMES } = require('./modules/helpWantedModule');
     const { getQuestsForScheduledTime } = require('./modules/helpWantedModule');
     const HelpWantedQuest = require('./models/HelpWantedQuestModel');
@@ -594,8 +581,6 @@ async function checkAndPostMissedQuests(client) {
     const currentHour = estTime.getHours();
     const currentMinute = estTime.getMinutes();
     
-    console.log(`[scheduler.js]: 🕐 Current time (EST): ${estTime.toLocaleString()}`);
-    
     let postedCount = 0;
     
     // Check each cron time to see if it has passed today
@@ -604,8 +589,6 @@ async function checkAndPostMissedQuests(client) {
       
       // Check if this time has already passed today
       if (currentHour > hour || (currentHour === hour && currentMinute >= minute)) {
-        console.log(`[scheduler.js]: ⏰ Time ${cronTime} (${hour}:${minute.toString().padStart(2, '0')}) has passed, checking for quests...`);
-        
         // Get quests scheduled for this time
         const quests = await getQuestsForScheduledTime(cronTime);
         
@@ -613,23 +596,15 @@ async function checkAndPostMissedQuests(client) {
         const unpostedQuests = quests.filter(quest => !quest.channelId);
         
         if (unpostedQuests.length > 0) {
-          console.log(`[scheduler.js]: 📤 Found ${unpostedQuests.length} unposted quests for ${cronTime}, posting now...`);
-          
           // Post the quests
           await postHelpWantedBoardToTestChannel(client, cronTime);
           postedCount += unpostedQuests.length;
-        } else {
-          console.log(`[scheduler.js]: ✅ All quests for ${cronTime} have already been posted or no quests found`);
         }
-      } else {
-        console.log(`[scheduler.js]: ⏳ Time ${cronTime} (${hour}:${minute.toString().padStart(2, '0')}) has not passed yet`);
       }
     }
     
     if (postedCount > 0) {
-      console.log(`[scheduler.js]: ✅ Posted ${postedCount} missed quests during startup`);
-    } else {
-      console.log('[scheduler.js]: ✅ No missed quests found');
+      console.log(`[scheduler.js]: 📤 Posted ${postedCount} missed quests during startup`);
     }
     
   } catch (error) {
@@ -687,8 +662,8 @@ function setupHelpWantedFixedScheduler(client) {
       () => postHelpWantedBoardToTestChannel(client, cronTime),
       'America/New_York'
     );
-    console.log(`[scheduler.js]: Scheduled Help Wanted board post at ${cronTime} EST`);
   });
+  console.log(`[scheduler.js]: 📋 Scheduled ${FIXED_CRON_TIMES.length} Help Wanted board posts`);
 }
 
 // ============================================================================
@@ -704,82 +679,49 @@ function initializeScheduler(client) {
   return;
  }
 
- // Add startup Blood Moon check
+ // Add startup checks - consolidated logging
  (async () => {
   try {
-   console.log(`[scheduler.js]: 🌕 Starting Blood Moon startup check`);
-
-   const channels = [
-    process.env.RUDANIA_TOWNHALL,
-    process.env.INARIKO_TOWNHALL,
-    process.env.VHINTL_TOWNHALL,
-   ];
-
+   console.log(`[scheduler.js]: 🚀 Running startup checks...`);
+   
+   // Blood Moon startup check
    const isBloodMoonActive = isBloodMoonDay();
-   console.log(
-    `[scheduler.js]: 🌕 Blood Moon status: ${isBloodMoonActive ? "ACTIVE" : "INACTIVE"}`
-   );
-
    if (isBloodMoonActive) {
     console.log(`[scheduler.js]: 🌕 Blood Moon active - processing channels`);
     await renameChannels(client);
-
+    
+    const channels = [
+     process.env.RUDANIA_TOWNHALL,
+     process.env.INARIKO_TOWNHALL,
+     process.env.VHINTL_TOWNHALL,
+    ];
+    
     for (const channelId of channels) {
-     if (!channelId) {
-      console.warn(`[scheduler.js]: ⚠️ Skipping undefined channel ID`);
-      continue;
+     if (channelId) {
+      await sendBloodMoonAnnouncement(
+       client,
+       channelId,
+       "The Blood Moon is upon us! Beware!"
+      );
      }
-     await sendBloodMoonAnnouncement(
-      client,
-      channelId,
-      "The Blood Moon is upon us! Beware!"
-     );
     }
    } else {
-    console.log(`[scheduler.js]: 📅 No Blood Moon - reverting channels`);
     await revertChannelNames(client);
    }
 
-   console.log(`[scheduler.js]: ✅ Blood Moon startup check completed`);
-  } catch (error) {
-   handleError(error, "scheduler.js");
-   console.error(`[scheduler.js]: ❌ Blood Moon check failed: ${error.message}`);
-  }
- })();
-
- // Add startup debuff expiry check
- (async () => {
-  try {
-   console.log("[scheduler.js]: 🧹 Running startup debuff expiry check...");
+   // Debuff expiry check
    await handleDebuffExpiry(client);
-   console.log("[scheduler.js]: ✅ Startup debuff expiry check completed");
-  } catch (error) {
-   handleError(error, "scheduler.js");
-   console.error("[scheduler.js]: ❌ Startup debuff expiry check failed:", error.message);
-  }
- })();
 
- // Add startup quest generation check
- (async () => {
-  try {
-   console.log("[scheduler.js]: 🔍 Running startup quest generation check...");
+   // Quest generation check
    await checkAndGenerateDailyQuests();
-   console.log("[scheduler.js]: ✅ Startup quest generation check completed");
-  } catch (error) {
-   handleError(error, "scheduler.js");
-   console.error("[scheduler.js]: ❌ Startup quest generation check failed:", error.message);
-  }
- })();
 
- // Add startup quest posting check for missed cron jobs
- (async () => {
-  try {
-   console.log("[scheduler.js]: 🔍 Running startup quest posting check for missed cron jobs...");
+   // Quest posting check for missed cron jobs
    await checkAndPostMissedQuests(client);
-   console.log("[scheduler.js]: ✅ Startup quest posting check completed");
+
+   console.log(`[scheduler.js]: ✅ Startup checks completed`);
   } catch (error) {
    handleError(error, "scheduler.js");
-   console.error("[scheduler.js]: ❌ Startup quest posting check failed:", error.message);
+   console.error(`[scheduler.js]: ❌ Startup checks failed: ${error.message}`);
   }
  })();
 

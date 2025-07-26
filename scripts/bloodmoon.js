@@ -99,12 +99,9 @@ async function sendBloodMoonAnnouncement(client, channelId, message) {
   try {
     // Check if announcement was already sent today
     if (await hasAnnouncementBeenSent(channelId, 'start')) {
-      console.log(`[bloodmoon.js]: ⏭️ Skipping Blood Moon start announcement for channel ${channelId} - already sent today`);
       return;
     }
 
-    console.log(`[bloodmoon.js]: 🌕 Sending Blood Moon start announcement to channel ${channelId}`);
-    
     // Determine the correct date for the Blood Moon announcement
     const now = new Date();
     const today = normalizeDate(now);
@@ -156,7 +153,7 @@ async function sendBloodMoonAnnouncement(client, channelId, message) {
     
     // Mark announcement as sent
     await markAnnouncementAsSent(channelId, 'start');
-    console.log(`[bloodmoon.js]: ✅ Blood Moon start announcement sent to channel ${channelId}`);
+    console.log(`[bloodmoon.js]: 🌕 Blood Moon start announcement sent to channel ${channelId}`);
     
   } catch (error) {
     handleError(error, 'bloodmoon.js');
@@ -170,12 +167,9 @@ async function sendBloodMoonEndAnnouncement(client, channelId) {
   try {
     // Check if end announcement was already sent today
     if (await hasEndAnnouncementBeenSent(channelId)) {
-      console.log(`[bloodmoon.js]: ⏭️ Skipping Blood Moon end announcement for channel ${channelId} - already sent today`);
       return;
     }
 
-    console.log(`[bloodmoon.js]: 🌙 Sending Blood Moon end announcement to channel ${channelId}`);
-    
     // Determine the correct date for the Blood Moon end announcement
     const now = new Date();
     const today = normalizeDate(now);
@@ -231,7 +225,7 @@ async function sendBloodMoonEndAnnouncement(client, channelId) {
     
     // Mark end announcement as sent
     await markEndAnnouncementAsSent(channelId);
-    console.log(`[bloodmoon.js]: ✅ Blood Moon end announcement sent to channel ${channelId}`);
+    console.log(`[bloodmoon.js]: 🌙 Blood Moon end announcement sent to channel ${channelId}`);
     
   } catch (error) {
     handleError(error, 'bloodmoon.js');
@@ -271,12 +265,10 @@ function isBloodMoonPeriod() {
     const isInRange = today >= dayBefore && today <= dayAfter;
     
     if (isInRange) {
-      console.log(`[bloodmoon.js]: 🌕 Blood Moon period active: ${realDate} (${month}/${day})`);
       return true;
     }
   }
 
-  console.log(`[bloodmoon.js]: 📅 No Blood Moon period active`);
   return false;
 }
 
@@ -340,10 +332,6 @@ function isBloodMoonDay() {
   const endEST = new Date(bloodMoonEndDate.toLocaleString('en-US', { timeZone: 'America/New_York' }));
   
   const isActive = currentEST >= startEST && currentEST < endEST;
-  
-  if (isActive) {
-    console.log(`[bloodmoon.js]: 🌕 Blood Moon is ACTIVE! (EST: ${estHour}:00)`);
-  }
   
   return isActive;
 }
@@ -506,7 +494,6 @@ async function revertChannelNames(client) {
     try {
       await changeChannelName(client, channelId, newName);
       successfulChannels.add(channelId);
-      console.log(`[bloodmoon.js]: ✅ Reverted channel ${channelId}`);
     } catch (error) {
       console.error(`[bloodmoon.js]: ❌ Failed to revert channel ${channelId}: ${error.message}`);
     }
@@ -522,10 +509,6 @@ async function revertChannelNames(client) {
         console.error(`[bloodmoon.js]: ❌ Failed to send end announcement to channel ${channelId}: ${error.message}`);
       }
     }
-  } else if (!is8PM) {
-    console.log(`[bloodmoon.js]: 📅 Not 8 PM yet, skipping end announcements`);
-  } else {
-    console.log(`[bloodmoon.js]: 📅 Yesterday was not within Blood Moon period, skipping end announcements`);
   }
   
   console.log(`[bloodmoon.js]: ✅ Channel reversion completed`);
