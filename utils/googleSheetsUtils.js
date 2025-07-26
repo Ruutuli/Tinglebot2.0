@@ -44,7 +44,7 @@ limiter.on('failed', async (error, jobInfo) => {
     const retryCount = jobInfo.retryCount || 0;
     if (retryCount < 3) {
         const delay = Math.min(1000 * Math.pow(2, retryCount), 10000);
-        console.log(`[googleSheetsUtils.js]: ⚠️ Rate limit hit, retrying in ${delay}ms (attempt ${retryCount + 1})`);
+        console.error(`[googleSheetsUtils.js]: ⚠️ Rate limit hit, retrying in ${delay}ms (attempt ${retryCount + 1})`);
         return delay;
     }
     throw error;
@@ -210,7 +210,6 @@ async function getCachedSheetData(spreadsheetId, range, context = {}) {
     const cached = sheetCache.get(cacheKey);
     
     if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-        console.log(`[googleSheetsUtils.js]: 🔍 Using cached data for ${range}`);
         return cached.data;
     }
     
@@ -231,7 +230,6 @@ function invalidateCache(spreadsheetId = null) {
     } else {
         sheetCache.clear();
     }
-    console.log(`[googleSheetsUtils.js]: 🔄 Cache invalidated for ${spreadsheetId || 'all sheets'}`);
 }
 
 // ------------------- Function: fetchDataFromSheet -------------------
@@ -558,9 +556,6 @@ async function validateInventorySheet(spreadsheetUrl, characterName) {
                 );
             });
             
-            if (!hasAtLeastOneItem && spreadsheetUrl.includes("loggedInventory")) {
-                console.log(`[googleSheetsUtils.js]: ℹ️ No existing inventory items found for ${characterName}, but sheet is valid`);
-            }
         }
   
         return { success: true, message: "✅ Inventory sheet is set up correctly!" };
@@ -677,9 +672,6 @@ async function validateVendingSheet(sheetUrl, characterName) {
                 );
             });
 
-            if (!hasValidItems) {
-                console.log(`[googleSheetsUtils.js]: ℹ️ No valid vending items found for ${characterName}, but sheet is valid`);
-            }
         }
 
         return { 
@@ -930,7 +922,6 @@ async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, c
         if (!spreadsheetUrl.includes('docs.google.com/spreadsheets')) {
             throw new Error(`Invalid Google Sheets URL format: ${spreadsheetUrl}`);
         }
-        console.log(`[googleSheetsUtils.js]: 🔗 Processing sheet operation for spreadsheet: ${spreadsheetId}`);
         const auth = await authorizeSheets();
         
         if (!auth) {
@@ -1019,8 +1010,6 @@ async function safeAppendDataToSheet(spreadsheetUrl, character, range, values, c
             })
         };
         
-        console.log(`[googleSheetsUtils.js]: 📝 Preparing to append ${resource.values.length} rows to sheet`);
-
         try {
             // Validate the API call parameters
             if (!spreadsheetId || !range || !resource || !resource.values) {

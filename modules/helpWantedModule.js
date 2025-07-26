@@ -412,11 +412,8 @@ async function getItemQuestPool() {
       crafted: { $ne: true }
     }, 'itemName');
     
-    console.log(`[HelpWanted] Found ${items.length} items for item quests`);
-    
     if (items.length === 0) {
       items = await Item.find({}, 'itemName');
-      console.log(`[HelpWanted] Using ${items.length} all items as fallback`);
     }
     
     if (items.length === 0) {
@@ -441,8 +438,6 @@ async function getMonsterQuestPool() {
       species: { $ne: 'Boss' }
     }, 'name tier');
     
-    console.log(`[HelpWanted] Found ${monsters.length} monsters for monster quests`);
-    
     if (monsters.length === 0) {
       throw new Error('No monsters found for monster quests');
     }
@@ -466,14 +461,11 @@ async function getCraftingQuestPool() {
       category: { $nin: ['Quest', 'Event'] }
     }, 'itemName');
     
-    console.log(`[HelpWanted] Found ${items.length} items for crafting quests`);
-    
     if (items.length === 0) {
       items = await Item.find({
         itemRarity: { $lte: 4 },
         category: { $nin: ['Quest', 'Event'] }
       }, 'itemName');
-      console.log(`[HelpWanted] Using ${items.length} regular items for crafting quests`);
     }
     
     if (items.length === 0) {
@@ -606,8 +598,6 @@ async function generateQuestForVillage(village, date, pools) {
   
   const npcName = getRandomNPCName();
   
-  console.log(`[HelpWanted] Generated quest for ${village} (${type}) with questId: ${questId} - NPC: ${npcName}`);
-  
   return {
     questId,
     village,
@@ -645,7 +635,6 @@ async function generateDailyQuests() {
 
     // Clean up existing documents with null questId
     await HelpWantedQuest.deleteMany({ questId: null });
-    console.log('[HelpWanted] Cleaned up documents with null questId');
 
     const postTimeMap = assignRandomPostTimes();
     const pools = await getAllQuestPools();
@@ -659,7 +648,6 @@ async function generateDailyQuests() {
     // Upsert quests
     const results = [];
     for (const quest of quests) {
-      console.log(`[HelpWanted] Upserting quest for ${quest.village} with questId: ${quest.questId} at ${quest.scheduledPostTime}`);
       const updated = await HelpWantedQuest.findOneAndUpdate(
         { village: quest.village, date: quest.date },
         quest,
@@ -693,7 +681,6 @@ async function getTodaysQuests() {
       if (!quest.npcName) {
         quest.npcName = getRandomNPCName();
         await quest.save();
-        console.log(`[HelpWanted] Added npcName to existing quest ${quest.questId}: ${quest.npcName}`);
       }
     }
     
@@ -765,7 +752,7 @@ async function formatQuestsAsEmbed() {
       const formattedQuestLine = `${emoji} **[${quest.type.charAt(0).toUpperCase() + quest.type.slice(1)} Quest]** ${questLine}`;
       
       const status = quest.completed
-        ? `❌ COMPLETED by <@${quest.completedBy?.userId || 'unknown'}> at ${quest.completedBy?.timestamp || 'unknown'}`
+        ? `🏅 COMPLETED by <@${quest.completedBy?.userId || 'unknown'}> at ${quest.completedBy?.timestamp || 'unknown'}`
         : '✅ AVAILABLE';
         
       embed.addFields({
@@ -799,7 +786,7 @@ async function formatQuestsAsEmbedsByVillage() {
       const npcName = quest.npcName || getRandomNPCName();
       const questLine = getNPCQuestFlavor(npcName, quest.type, quest.requirements);
       const status = quest.completed
-        ? `❌ COMPLETED by <@${quest.completedBy?.userId || 'unknown'}> at ${quest.completedBy?.timestamp || 'unknown'}`
+        ? `🏅 COMPLETED by <@${quest.completedBy?.userId || 'unknown'}> at ${quest.completedBy?.timestamp || 'unknown'}`
         : '✅ AVAILABLE';
 
       const turnIn = getQuestTurnInInstructions(quest.type);
@@ -813,7 +800,7 @@ async function formatQuestsAsEmbedsByVillage() {
       const divider = '<:br:788136157363306506>'.repeat(11);
       
       const questInfoFields = [
-        { name: '__Status__', value: quest.completed ? '❌ **COMPLETED**' : '✅ **AVAILABLE**', inline: true },
+        { name: '__Status__', value: quest.completed ? '🏅 **COMPLETED**' : '✅ **AVAILABLE**', inline: true },
         { name: '__Type__', value: `${QUEST_TYPE_EMOJIS[quest.type] || '❓'} ${quest.type.charAt(0).toUpperCase() + quest.type.slice(1)} Quest`, inline: true },
         { name: '__Location__', value: quest.village, inline: true }
       ];
@@ -852,10 +839,15 @@ async function formatQuestsAsEmbedsByVillage() {
 async function hasUserCompletedQuestToday(userId) {
   try {
     const user = await require('../models/UserModel').findOne({ discordId: userId });
-    if (!user) return false;
+    if (!user) {
+      return false;
+    }
     
-    const today = new Date().toISOString().slice(0, 10);
-    return user.helpWanted.lastCompletion === today;
+    const now = new Date();
+    const today = now.toISOString().slice(0, 10);
+    const lastCompletion = user.helpWanted?.lastCompletion || 'null';
+    
+    return lastCompletion === today;
   } catch (error) {
     console.error('[HelpWanted] Error checking user quest completion:', error);
     return false;
@@ -901,10 +893,8 @@ async function hasUserReachedWeeklyQuestLimit(userId) {
  */
 async function updateQuestEmbed(client, quest, completedBy = null) {
   try {
-    console.log(`[helpWantedModule]: Attempting to update quest embed for ${quest.questId}`);
     
     if (!quest.messageId) {
-      console.log(`[helpWantedModule]: No message ID found for quest ${quest.questId}`);
       return;
     }
 
@@ -941,7 +931,7 @@ async function updateQuestEmbed(client, quest, completedBy = null) {
       if (field.name === 'Status' || field.name === '__Status__') {
         updatedEmbed.addFields({
           name: '__Status__',
-          value: quest.completed ? '❌ **COMPLETED**' : '✅ **AVAILABLE**',
+          value: quest.completed ? '🏅 **COMPLETED**' : '✅ **AVAILABLE**',
           inline: true
         });
       } else if (!field.name.includes('Quest')) {
@@ -960,7 +950,6 @@ async function updateQuestEmbed(client, quest, completedBy = null) {
     }
 
     await message.edit({ embeds: [updatedEmbed] });
-    console.log(`[helpWantedModule]: ✅ Successfully updated quest embed for ${quest.questId}`);
   } catch (error) {
     console.error(`[helpWantedModule]: ❌ Failed to update quest embed for ${quest.questId}:`, error);
   }
