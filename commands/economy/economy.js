@@ -680,7 +680,8 @@ for (const { name } of cleanedItems) {
     fromCharacter._id,
     name,
     quantity,
-    interaction
+    interaction,
+    'Gift to ' + toCharacter.name
    );
 
    if (!removeResult) {
@@ -697,7 +698,7 @@ for (const { name } of cleanedItems) {
     name, 
     quantity, 
     interaction, 
-    'Gift from ' + fromCharacterName
+    'Gift from ' + fromCharacter.name
    );
 
    if (!addResult) {
@@ -718,9 +719,15 @@ for (const { name } of cleanedItems) {
 
    // Item removals and additions are now automatically logged to Google Sheets by removeItemInventoryDatabase and addItemInventoryDatabase functions
 
-   
-   const itemIcon = itemDetails?.emoji || "🎁";
-   formattedItems.push({ itemName: name, quantity, itemIcon });
+   // Get item details for emoji
+   try {
+     const itemDetails = await fetchItemByName(name);
+     const itemIcon = itemDetails?.emoji || "🎁";
+     formattedItems.push({ itemName: name, quantity, itemIcon });
+   } catch (error) {
+     console.error(`[economy.js]: Failed to fetch item details for ${name}:`, error.message);
+     formattedItems.push({ itemName: name, quantity, itemIcon: "🎁" });
+   }
   }
 
   const fromCharacterIcon = fromCharacter.icon || "🧙";
