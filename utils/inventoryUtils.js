@@ -350,6 +350,49 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
       }
       await inventoryCollection.insertOne(newItem);
     }
+
+    // Google Sheets Sync for item addition
+    if (character.inventory && typeof character.inventory === 'string' && isValidGoogleSheetsUrl(character.inventory)) {
+      try {
+        // Fetch item details for proper categorization
+        const itemDetails = await dbFunctions.fetchItemByName(itemName);
+        const category = Array.isArray(itemDetails?.category) ? itemDetails.category.join(", ") : (itemDetails?.category || "");
+        const type = Array.isArray(itemDetails?.type) ? itemDetails.type.join(", ") : (itemDetails?.type || "");
+        const subtype = Array.isArray(itemDetails?.subtype) ? itemDetails.subtype.join(", ") : (itemDetails?.subtype || "");
+        
+        // Create addition log entry with correct format
+        const additionLogEntry = [
+          character.name, // Character Name (A)
+          itemName, // Item Name (B)
+          quantity, // Qty of Item (C) - positive for addition
+          category, // Category (D)
+          type, // Type (E)
+          subtype, // Subtype (F)
+          obtain, // Obtain (G)
+          character.job || "", // Job (H)
+          character.perk || "", // Perk (I)
+          character.currentLocation || character.homeVillage || "", // Location (J)
+          interaction ? `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}` : "", // Link (K)
+          formatDateTime(new Date()), // Date/Time (L)
+          uuidv4() // Confirmed Sync (M)
+        ];
+
+        // Log to Google Sheets
+        await safeAppendDataToSheet(
+          character.inventory,
+          character,
+          'loggedInventory!A:M',
+          [additionLogEntry],
+          interaction?.client,
+          { skipValidation: false }
+        );
+        
+      } catch (sheetError) {
+        console.error(`[inventoryUtils.js]: ⚠️ Failed to log item addition to Google Sheets: ${sheetError.message}`);
+        // Don't fail the addition if sheet logging fails
+      }
+    }
+
     return true;
   } catch (error) {
     handleError(error, "inventoryUtils.js");
