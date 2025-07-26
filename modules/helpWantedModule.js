@@ -12,6 +12,7 @@ const { EmbedBuilder } = require('discord.js');
 const { NPCs } = require('./stealingNPCSModule');
 const { generateUniqueId } = require('../utils/uniqueIdUtils');
 
+// ============================================================================
 // ------------------- Constants -------------------
 // ============================================================================
 const VILLAGES = ['Rudania', 'Inariko', 'Vhintl'];
@@ -27,14 +28,30 @@ const FIXED_CRON_TIMES = [
   '0 2 * * *',   // 2:00 AM EST
 ];
 
-// ------------------- Quest Type Emoji Mapping -------------------
-// Emojis for different quest types to display in the title
-// ============================================================================
 const QUEST_TYPE_EMOJIS = {
-  'item': '📦',      // Package/box for item collection quests
-  'monster': '⚔️',   // Crossed swords for monster hunting quests
-  'escort': '🛡️',   // Shield for escort/protection quests
-  'crafting': '🔨'   // Hammer for crafting quests
+  'item': '📦',
+  'monster': '⚔️',
+  'escort': '🛡️',
+  'crafting': '🔨'
+};
+
+const VILLAGE_COLORS = {
+  Rudania: '#d7342a',
+  Inariko: '#277ecd',
+  Vhintl: '#25c059'
+};
+
+const VILLAGE_IMAGES = {
+  Rudania: 'https://storage.googleapis.com/tinglebot/Graphics/border_rudania.png',
+  Inariko: 'https://storage.googleapis.com/tinglebot/Graphics/border_inariko.png',
+  Vhintl: 'https://storage.googleapis.com/tinglebot/Graphics/border_vhitnl.png'
+};
+
+// Quest generation parameters
+const QUEST_PARAMS = {
+  item: { minAmount: 2, maxAmount: 5 },
+  monster: { minAmount: 3, maxAmount: 7 },
+  crafting: { amount: 1 }
 };
 
 // ------------------- NPC Quest Flavor Text Database -------------------
@@ -307,16 +324,55 @@ const NPC_QUEST_FLAVOR = {
   }
 };
 
-// ------------------- Function: getRandomElement -------------------
-// Returns a random element from an array
 // ============================================================================
+// ------------------- Utility Functions -------------------
+// ============================================================================
+
+/**
+ * Returns a random element from an array
+ * @param {Array} arr - The array to select from
+ * @returns {*} Random element from the array
+ */
 function getRandomElement(arr) {
+  if (!Array.isArray(arr) || arr.length === 0) {
+    throw new Error('Invalid array provided to getRandomElement');
+  }
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-// ------------------- Function: getNPCQuestFlavor -------------------
-// Returns a random quest flavor text for the given NPC and quest type
-// ============================================================================
+/**
+ * Returns a random NPC name from the stealingNPCSModule
+ * @returns {string} Random NPC name
+ */
+function getRandomNPCName() {
+  const npcNames = Object.keys(NPCs);
+  if (npcNames.length === 0) {
+    throw new Error('No NPCs available');
+  }
+  return getRandomElement(npcNames);
+}
+
+/**
+ * Shuffles an array in place using Fisher-Yates algorithm
+ * @param {Array} array - Array to shuffle
+ * @returns {Array} Shuffled array
+ */
+function shuffleArray(array) {
+  const shuffled = [...array];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+}
+
+/**
+ * Returns a random quest flavor text for the given NPC and quest type
+ * @param {string} npcName - NPC name
+ * @param {string} questType - Quest type
+ * @param {Object} requirements - Quest requirements
+ * @returns {string} Formatted flavor text
+ */
 function getNPCQuestFlavor(npcName, questType, requirements) {
   const npcFlavor = NPC_QUEST_FLAVOR[npcName];
   if (!npcFlavor || !npcFlavor[questType]) {
@@ -342,104 +398,216 @@ function getNPCQuestFlavor(npcName, questType, requirements) {
     .replace('{location}', requirements.location);
 }
 
-// ------------------- Function: getItemQuestPool -------------------
-// Fetches all valid items for item quests
 // ============================================================================
+// ------------------- Quest Pool Management -------------------
+// ============================================================================
+
+/**
+ * Fetches all valid items for item quests
+ * @returns {Promise<Array>} Array of valid items
+ */
 async function getItemQuestPool() {
-  // Exclude rare, quest-only, or otherwise inappropriate items
-  // Adjust filters as needed for your game
-  return await Item.find({
-    itemRarity: { $lte: 3 }, // Not too rare
-    category: { $nin: ['Quest', 'Event'] },
-    stackable: true // Only stackable items for delivery quests
-  }, 'itemName');
+  try {
+    let items = await Item.find({
+      crafted: { $ne: true }
+    }, 'itemName');
+    
+    console.log(`[HelpWanted] Found ${items.length} items for item quests`);
+    
+    if (items.length === 0) {
+      items = await Item.find({}, 'itemName');
+      console.log(`[HelpWanted] Using ${items.length} all items as fallback`);
+    }
+    
+    if (items.length === 0) {
+      throw new Error('No items found for item quests');
+    }
+    
+    return items;
+  } catch (error) {
+    console.error('[HelpWanted] Error fetching item quest pool:', error);
+    throw error;
+  }
 }
 
-// ------------------- Function: getMonsterQuestPool -------------------
-// Fetches all valid monsters for monster quests
-// ============================================================================
+/**
+ * Fetches all valid monsters for monster quests
+ * @returns {Promise<Array>} Array of valid monsters
+ */
 async function getMonsterQuestPool() {
-  // Exclude bosses, event monsters, etc.
-  return await Monster.find({
-    tier: { $lte: 3 }, // Not a boss
-    species: { $ne: 'Boss' }
-  }, 'name tier');
+  try {
+    const monsters = await Monster.find({
+      tier: { $lte: 3 },
+      species: { $ne: 'Boss' }
+    }, 'name tier');
+    
+    console.log(`[HelpWanted] Found ${monsters.length} monsters for monster quests`);
+    
+    if (monsters.length === 0) {
+      throw new Error('No monsters found for monster quests');
+    }
+    
+    return monsters;
+  } catch (error) {
+    console.error('[HelpWanted] Error fetching monster quest pool:', error);
+    throw error;
+  }
 }
 
-// ------------------- Function: getCraftingQuestPool -------------------
-// Fetches all craftable items for crafting quests
-// ============================================================================
+/**
+ * Fetches all craftable items for crafting quests
+ * @returns {Promise<Array>} Array of craftable items
+ */
 async function getCraftingQuestPool() {
-  return await Item.find({
-    crafting: true,
-    itemRarity: { $lte: 3 },
-    category: { $nin: ['Quest', 'Event'] }
-  }, 'itemName');
+  try {
+    let items = await Item.find({
+      crafting: true,
+      itemRarity: { $lte: 4 },
+      category: { $nin: ['Quest', 'Event'] }
+    }, 'itemName');
+    
+    console.log(`[HelpWanted] Found ${items.length} items for crafting quests`);
+    
+    if (items.length === 0) {
+      items = await Item.find({
+        itemRarity: { $lte: 4 },
+        category: { $nin: ['Quest', 'Event'] }
+      }, 'itemName');
+      console.log(`[HelpWanted] Using ${items.length} regular items for crafting quests`);
+    }
+    
+    if (items.length === 0) {
+      throw new Error('No items found for crafting quests');
+    }
+    
+    return items;
+  } catch (error) {
+    console.error('[HelpWanted] Error fetching crafting quest pool:', error);
+    throw error;
+  }
 }
 
-// ------------------- Function: getEscortQuestPool -------------------
-// Fetches all valid escort locations (villages + major locations)
-// ============================================================================
+/**
+ * Gets all valid escort locations
+ * @returns {Array} Array of escort locations
+ */
 function getEscortQuestPool() {
-  // Use all villages and major locations as possible destinations
-  const villages = getAllVillages();
-  // Add more locations if desired
-  return villages;
+  return getAllVillages();
 }
 
-// ------------------- Function: generateQuestForVillage -------------------
-// Generates a random quest object for a given village and date, using real data
+/**
+ * Fetches all quest pools in parallel
+ * @returns {Promise<Object>} Object containing all quest pools
+ */
+async function getAllQuestPools() {
+  try {
+    const [itemPool, monsterPool, craftingPool] = await Promise.all([
+      getItemQuestPool(),
+      getMonsterQuestPool(),
+      getCraftingQuestPool()
+    ]);
+    
+    const escortPool = getEscortQuestPool();
+    
+    return { itemPool, monsterPool, craftingPool, escortPool };
+  } catch (error) {
+    console.error('[HelpWanted] Error fetching quest pools:', error);
+    throw error;
+  }
+}
+
 // ============================================================================
-async function generateQuestForVillage(village, date, pools) {
-  const type = getRandomElement(QUEST_TYPES);
-  let requirements;
+// ------------------- Quest Generation -------------------
+// ============================================================================
+
+/**
+ * Generates quest requirements based on quest type
+ * @param {string} type - Quest type
+ * @param {Object} pools - Quest pools
+ * @param {string} village - Village name
+ * @returns {Object} Quest requirements
+ */
+function generateQuestRequirements(type, pools, village) {
   switch (type) {
     case 'item': {
       const item = getRandomElement(pools.itemPool);
-      requirements = { item: item.itemName, amount: Math.floor(Math.random() * 4) + 2 };
-      break;
+      if (!item?.itemName) {
+        throw new Error(`Invalid item selected for ${village} item quest`);
+      }
+      const { minAmount, maxAmount } = QUEST_PARAMS.item;
+      return {
+        item: item.itemName,
+        amount: Math.floor(Math.random() * (maxAmount - minAmount + 1)) + minAmount
+      };
     }
+    
     case 'monster': {
       const monster = getRandomElement(pools.monsterPool);
-      requirements = { monster: monster.name, tier: monster.tier, amount: Math.floor(Math.random() * 5) + 3 };
-      break;
+      if (!monster?.name) {
+        throw new Error(`Invalid monster selected for ${village} monster quest`);
+      }
+      const { minAmount, maxAmount } = QUEST_PARAMS.monster;
+      return {
+        monster: monster.name,
+        tier: monster.tier,
+        amount: Math.floor(Math.random() * (maxAmount - minAmount + 1)) + minAmount
+      };
     }
+    
     case 'escort': {
-      // Filter out the current village from possible destinations to avoid same-location escort quests
       const availableDestinations = pools.escortPool.filter(loc => loc !== village);
       if (availableDestinations.length === 0) {
-        // Fallback: if no other destinations available, use any location except current village
         const allLocations = getAllVillages();
         const fallbackDestinations = allLocations.filter(loc => loc !== village);
-        const location = getRandomElement(fallbackDestinations);
-        requirements = { location };
-      } else {
-        const location = getRandomElement(availableDestinations);
-        requirements = { location };
+        if (fallbackDestinations.length === 0) {
+          throw new Error(`No escort destinations available for ${village}`);
+        }
+        return { location: getRandomElement(fallbackDestinations) };
       }
-      break;
+      return { location: getRandomElement(availableDestinations) };
     }
+    
     case 'crafting': {
       const item = getRandomElement(pools.craftingPool);
-      requirements = { item: item.itemName, amount: 1 };
-      break;
+      if (!item?.itemName) {
+        throw new Error(`Invalid crafting item selected for ${village} crafting quest`);
+      }
+      return { item: item.itemName, amount: QUEST_PARAMS.crafting.amount };
     }
+    
     default:
-      requirements = {};
+      throw new Error(`Unknown quest type: ${type}`);
   }
-  
-  // Generate a unique questId
+}
+
+/**
+ * Generates a random quest object for a given village and date
+ * @param {string} village - Village name
+ * @param {string} date - Date string
+ * @param {Object} pools - Quest pools
+ * @returns {Promise<Object>} Generated quest object
+ */
+async function generateQuestForVillage(village, date, pools) {
+  // Validate pools
+  const requiredPools = ['itemPool', 'monsterPool', 'craftingPool', 'escortPool'];
+  for (const poolName of requiredPools) {
+    if (!pools[poolName] || pools[poolName].length === 0) {
+      throw new Error(`No ${poolName} available for ${village} quest generation`);
+    }
+  }
+
+  const type = getRandomElement(QUEST_TYPES);
+  const requirements = generateQuestRequirements(type, pools, village);
   const questId = generateUniqueId('X');
   
-  // Safety check to ensure questId is never null
   if (!questId) {
     throw new Error(`Failed to generate questId for ${village} quest`);
   }
   
-  // Assign a random NPC for this quest
   const npcName = getRandomNPCName();
   
   console.log(`[HelpWanted] Generated quest for ${village} (${type}) with questId: ${questId} - NPC: ${npcName}`);
+  
   return {
     questId,
     village,
@@ -452,280 +620,294 @@ async function generateQuestForVillage(village, date, pools) {
   };
 }
 
-// ------------------- Function: assignRandomPostTimes -------------------
-// Assigns a random cron time to each village for today
-// ============================================================================
+/**
+ * Assigns random cron times to villages
+ * @returns {Object} Mapping of village to cron time
+ */
 function assignRandomPostTimes() {
-  const times = [...FIXED_CRON_TIMES];
-  // Shuffle times for random assignment
-  for (let i = times.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [times[i], times[j]] = [times[j], times[i]];
-  }
-  // Map each village to a time (if more villages than times, reuse times)
+  const shuffledTimes = shuffleArray(FIXED_CRON_TIMES);
   const mapping = {};
-  for (let i = 0; i < VILLAGES.length; i++) {
-    mapping[VILLAGES[i]] = times[i % times.length];
-  }
+  
+  VILLAGES.forEach((village, index) => {
+    mapping[village] = shuffledTimes[index % shuffledTimes.length];
+  });
+  
   return mapping;
 }
 
-// ------------------- Function: generateDailyQuests -------------------
-// Generates and saves one quest per village for the current day using real data
-// Assigns a random scheduledPostTime to each quest
-// ============================================================================
+/**
+ * Generates and saves daily quests for all villages
+ * @returns {Promise<Array>} Array of generated quests
+ */
 async function generateDailyQuests() {
-  const date = moment().utc().format('YYYY-MM-DD');
-
-  // Clean up any existing documents with null questId to prevent duplicate key errors
-  await HelpWantedQuest.deleteMany({ questId: null });
-  console.log('[HelpWanted] Cleaned up documents with null questId');
-
-  // Assign random post times for each village
-  const postTimeMap = assignRandomPostTimes();
-
-  // Fetch all pools in parallel
-  const [itemPool, monsterPool, craftingPool] = await Promise.all([
-    getItemQuestPool(),
-    getMonsterQuestPool(),
-    getCraftingQuestPool()
-  ]);
-  const escortPool = getEscortQuestPool();
-
-  const pools = { itemPool, monsterPool, craftingPool, escortPool };
-
-  const quests = await Promise.all(VILLAGES.map(async village => {
-    const quest = await generateQuestForVillage(village, date, pools);
-    quest.scheduledPostTime = postTimeMap[village];
-    return quest;
-  }));
-
-  // Upsert: Replace today's quest for each village
-  const results = [];
-  for (const quest of quests) {
-    console.log(`[HelpWanted] Upserting quest for ${quest.village} with questId: ${quest.questId} at ${quest.scheduledPostTime}`);
-    const updated = await HelpWantedQuest.findOneAndUpdate(
-      { village: quest.village, date: quest.date },
-      quest,
-      { upsert: true, new: true, setDefaultsOnInsert: true }
-    );
-    results.push(updated);
-  }
-  return results;
-}
-
-// ------------------- Function: getTodaysQuests -------------------
-// Fetches all Help Wanted quests for today from the DB
-// ============================================================================
-async function getTodaysQuests() {
-  const date = moment().utc().format('YYYY-MM-DD');
-  const quests = await HelpWantedQuest.find({ date });
-  
-  // Ensure all quests have an npcName field (migration for existing quests)
-  for (const quest of quests) {
-    if (!quest.npcName) {
-      quest.npcName = getRandomNPCName();
-      await quest.save();
-      console.log(`[HelpWanted] Added npcName to existing quest ${quest.questId}: ${quest.npcName}`);
-    }
-  }
-  
-  return quests;
-}
-
-// ------------------- Function: getQuestsForScheduledTime -------------------
-// Fetches today's quests scheduled for a specific cron time
-// ============================================================================
-async function getQuestsForScheduledTime(cronTime) {
-  const date = moment().utc().format('YYYY-MM-DD');
-  return await HelpWantedQuest.find({ date, scheduledPostTime: cronTime });
-}
-
-// ------------------- Function: getRandomNPCName -------------------
-// Returns a random NPC name from the stealingNPCSModule
-// ============================================================================
-function getRandomNPCName() {
-  const npcNames = Object.keys(NPCs);
-  return npcNames[Math.floor(Math.random() * npcNames.length)];
-}
-
-// ------------------- Function: formatQuestsAsEmbed -------------------
-// Formats today's quests as a Discord embed, assigning a random NPC to each
-// ============================================================================
-async function formatQuestsAsEmbed() {
-  const quests = await getTodaysQuests();
-  if (!quests.length) {
-    return new EmbedBuilder()
-      .setTitle('🌿 Help Wanted Board')
-      .setDescription('No quests available today!');
-  }
-
-  const embed = new EmbedBuilder()
-    .setTitle('🌿 Help Wanted Board')
-    .setDescription('Daily quests for each village. First come, first served!')
-    .setColor('#25c059');
-
-  quests.forEach((quest) => {
-    // Use the stored NPC name from the quest data
-    const npcName = quest.npcName || getRandomNPCName();
-    
-    // Get quest type emoji from centralized mapping
-    const emoji = QUEST_TYPE_EMOJIS[quest.type] || '❓';
-    
-    // Use specialized NPC flavor text
-    let questLine = getNPCQuestFlavor(npcName, quest.type, quest.requirements);
-    questLine = `${emoji} **[${quest.type.charAt(0).toUpperCase() + quest.type.slice(1)} Quest]** ${questLine}`;
-    
-    // Status line
-    let status = quest.completed
-      ? `❌ COMPLETED by <@${quest.completedBy?.userId || 'unknown'}> at ${quest.completedBy?.timestamp || 'unknown'}`
-      : '✅ AVAILABLE';
-      
-    embed.addFields({
-      name: `${quest.village} — ${npcName}`,
-      value: `${questLine}\n**Status:** ${status}\n**Type:** ${emoji} ${quest.type.charAt(0).toUpperCase() + quest.type.slice(1)} Quest\n**Location:** ${quest.village}`
-    });
-  });
-
-  embed.setFooter({ text: 'Only one quest per user per day. Natives only!' });
-  return embed;
-}
-
-// ------------------- Village Colors and Images -------------------
-const VILLAGE_COLORS = {
-  Rudania: '#d7342a',
-  Inariko: '#277ecd',
-  Vhintl: '#25c059'
-};
-const VILLAGE_IMAGES = {
-  Rudania: 'https://storage.googleapis.com/tinglebot/Graphics/border_rudania.png',
-  Inariko: 'https://storage.googleapis.com/tinglebot/Graphics/border_inariko.png',
-  Vhintl: 'https://storage.googleapis.com/tinglebot/Graphics/border_vhitnl.png'
-};
-
-// ------------------- Function: getQuestTurnInInstructions -------------------
-// Returns instructions for how to turn in each quest type
-// ============================================================================
-function getQuestTurnInInstructions(type) {
-  switch (type) {
-    case 'item':
-      return '• **Item Quest:** Gather the requested materials and bring them to the quest board. Use </helpwanted complete:1397274578530865313> when ready.';
-    case 'monster':
-      return '• **Monster Quest:** Hunt down the dangerous creatures threatening the village. Use </helpwanted monsterhunt:1397274578530865313> to complete this quest.';
-    case 'escort':
-      return '• **Escort Quest:** Safely guide the villager to their destination. Please travel from the quest village to the destination village using `</travel:1379850586987430009>`, then use </helpwanted complete:1397274578530865313>.';
-    case 'crafting':
-      return '• **Crafting Quest:** Create the requested item with your own hands. Craft the required item yourself, then use </helpwanted complete:1397274578530865313>.';
-    default:
-      return '• Use </helpwanted complete:1397274578530865313> to turn in your quest.';
-  }
-}
-
-// ------------------- Function: formatQuestsAsEmbedsByVillage -------------------
-// Formats today's quests as a map of village name to Discord embed (one per village)
-// Ensures each NPC is only assigned to one village per day
-// ============================================================================
-async function formatQuestsAsEmbedsByVillage() {
-  const quests = await getTodaysQuests();
-  if (!quests.length) return {};
-  const result = {};
-
-  for (const quest of quests) {
-    // Use the stored NPC name from the quest data
-    const npcName = quest.npcName || getRandomNPCName();
-
-    // Main quest line (using specialized NPC flavor text)
-    let questLine = getNPCQuestFlavor(npcName, quest.type, quest.requirements);
-    let status = quest.completed
-      ? `❌ COMPLETED by <@${quest.completedBy?.userId || 'unknown'}> at ${quest.completedBy?.timestamp || 'unknown'}`
-      : '✅ AVAILABLE';
-
-    // How to complete (quest-type-specific)
-    const turnIn = getQuestTurnInInstructions(quest.type);
-
-    // Rules (short, clear)
-    const rules =
-      '• Only natives of the village can complete this quest.\n' +
-      '• First come, first served—one completion per quest!\n' +
-      '• Each user can only complete one Help Wanted quest per day (across all characters).\n' +
-      '• Complete quests to help your village prosper!';
-
-    // Embed color and image
-    const color = VILLAGE_COLORS[quest.village] || '#25c059';
-    const image = VILLAGE_IMAGES[quest.village] || null;
-
-    const divider = '<:br:788136157363306506><:br:788136157363306506><:br:788136157363306506><:br:788136157363306506><:br:788136157363306506><:br:788136157363306506><:br:788136157363306506><:br:788136157363306506><:br:788136157363306506><:br:788136157363306506><:br:788136157363306506>';
-    
-    // Quest info fields
-    const questInfoFields = [
-      { name: '__Status__', value: quest.completed ? '❌ **COMPLETED**' : '✅ **AVAILABLE**', inline: true },
-      { name: '__Type__', value: `${QUEST_TYPE_EMOJIS[quest.type] || '❓'} ${quest.type.charAt(0).toUpperCase() + quest.type.slice(1)} Quest`, inline: true },
-      { name: '__Location__', value: quest.village, inline: true }
-    ];
-    
-    const embed = new EmbedBuilder()
-      .setTitle(`${QUEST_TYPE_EMOJIS[quest.type] || '🌿'} Help Wanted — ${quest.village}`)
-      .setColor(color)
-      .addFields(
-        { name: 'Quest', value: `${questLine}\n${divider}` },
-        ...questInfoFields,
-        { name: 'How to Complete', value: turnIn },
-        { name: 'Rules', value: rules },
-        { name: 'Quest ID', value: quest.questId ? `\`\`\`${quest.questId}\`\`\`` : 'N/A', inline: true }
-      );
-    if (image) embed.setImage(image);
-    result[quest.village] = embed;
-  }
-  return result;
-}
-
-// ------------------- Function: hasUserCompletedQuestToday -------------------
-// Checks if a user has already completed a Help Wanted quest today
-// ============================================================================
-async function hasUserCompletedQuestToday(userId) {
-  const user = await require('../models/UserModel').findOne({ discordId: userId });
-  if (!user) return false;
-  
-  const today = new Date().toISOString().slice(0, 10);
-  return user.helpWanted.lastCompletion === today;
-}
-
-// ------------------- Function: hasUserReachedWeeklyQuestLimit -------------------
-// Checks if a user has already completed 3 or more Help Wanted quests this week
-// ============================================================================
-async function hasUserReachedWeeklyQuestLimit(userId) {
-  const user = await require('../models/UserModel').findOne({ discordId: userId });
-  if (!user || !user.helpWanted.completions) return false;
-  
-  // Get the start of the current week (Sunday)
-  const now = new Date();
-  const startOfWeek = new Date(now);
-  startOfWeek.setDate(now.getDate() - now.getDay()); // Sunday
-  startOfWeek.setHours(0, 0, 0, 0);
-  
-  // Count completions from this week
-  const weeklyCompletions = user.helpWanted.completions.filter(completion => {
-    const completionDate = new Date(completion.date);
-    return completionDate >= startOfWeek;
-  });
-  
-  return weeklyCompletions.length >= 3;
-}
-
-// ------------------- Function: updateQuestEmbed -------------------
-// Updates the quest embed message to show completion status
-// ============================================================================
-async function updateQuestEmbed(client, quest, completedBy = null) {
-  console.log(`[helpWantedModule]: Attempting to update quest embed for ${quest.questId}`);
-  console.log(`[helpWantedModule]: Quest messageId: ${quest.messageId}, channelId: ${quest.channelId}, completed: ${quest.completed}`);
-  
-  if (!quest.messageId) {
-    console.log(`[helpWantedModule]: No message ID found for quest ${quest.questId}`);
-    return;
-  }
-
   try {
-    // Find the channel where the quest was posted
+    const date = moment().utc().format('YYYY-MM-DD');
+
+    // Clean up existing documents with null questId
+    await HelpWantedQuest.deleteMany({ questId: null });
+    console.log('[HelpWanted] Cleaned up documents with null questId');
+
+    const postTimeMap = assignRandomPostTimes();
+    const pools = await getAllQuestPools();
+
+    const quests = await Promise.all(VILLAGES.map(async village => {
+      const quest = await generateQuestForVillage(village, date, pools);
+      quest.scheduledPostTime = postTimeMap[village];
+      return quest;
+    }));
+
+    // Upsert quests
+    const results = [];
+    for (const quest of quests) {
+      console.log(`[HelpWanted] Upserting quest for ${quest.village} with questId: ${quest.questId} at ${quest.scheduledPostTime}`);
+      const updated = await HelpWantedQuest.findOneAndUpdate(
+        { village: quest.village, date: quest.date },
+        quest,
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+      );
+      results.push(updated);
+    }
+    
+    return results;
+  } catch (error) {
+    console.error('[HelpWanted] Error generating daily quests:', error);
+    throw error;
+  }
+}
+
+// ============================================================================
+// ------------------- Quest Retrieval -------------------
+// ============================================================================
+
+/**
+ * Fetches all Help Wanted quests for today
+ * @returns {Promise<Array>} Array of today's quests
+ */
+async function getTodaysQuests() {
+  try {
+    const date = moment().utc().format('YYYY-MM-DD');
+    const quests = await HelpWantedQuest.find({ date });
+    
+    // Ensure all quests have an npcName field
+    for (const quest of quests) {
+      if (!quest.npcName) {
+        quest.npcName = getRandomNPCName();
+        await quest.save();
+        console.log(`[HelpWanted] Added npcName to existing quest ${quest.questId}: ${quest.npcName}`);
+      }
+    }
+    
+    return quests;
+  } catch (error) {
+    console.error('[HelpWanted] Error fetching today\'s quests:', error);
+    throw error;
+  }
+}
+
+/**
+ * Fetches quests scheduled for a specific cron time
+ * @param {string} cronTime - Cron time string
+ * @returns {Promise<Array>} Array of quests for the scheduled time
+ */
+async function getQuestsForScheduledTime(cronTime) {
+  try {
+    const date = moment().utc().format('YYYY-MM-DD');
+    return await HelpWantedQuest.find({ date, scheduledPostTime: cronTime });
+  } catch (error) {
+    console.error('[HelpWanted] Error fetching quests for scheduled time:', error);
+    throw error;
+  }
+}
+
+// ============================================================================
+// ------------------- Embed Formatting -------------------
+// ============================================================================
+
+/**
+ * Gets quest turn-in instructions based on quest type
+ * @param {string} type - Quest type
+ * @returns {string} Turn-in instructions
+ */
+function getQuestTurnInInstructions(type) {
+  const instructions = {
+    item: '• **Item Quest:** Gather the requested materials and bring them to the quest board. Use </helpwanted complete:1397274578530865313> when ready.',
+    monster: '• **Monster Quest:** Hunt down the dangerous creatures threatening the village. Use </helpwanted monsterhunt:1397274578530865313> to complete this quest.',
+    escort: '• **Escort Quest:** Safely guide the villager to their destination. Please travel from the quest village to the destination village using `</travel:1379850586987430009>`, then use </helpwanted complete:1397274578530865313>.',
+    crafting: '• **Crafting Quest:** Create the requested item with your own hands. Craft the required item yourself, then use </helpwanted complete:1397274578530865313>.'
+  };
+  
+  return instructions[type] || '• Use </helpwanted complete:1397274578530865313> to turn in your quest.';
+}
+
+/**
+ * Formats quests as a single embed
+ * @returns {Promise<EmbedBuilder>} Formatted embed
+ */
+async function formatQuestsAsEmbed() {
+  try {
+    const quests = await getTodaysQuests();
+    if (!quests.length) {
+      return new EmbedBuilder()
+        .setTitle('🌿 Help Wanted Board')
+        .setDescription('No quests available today!');
+    }
+
+    const embed = new EmbedBuilder()
+      .setTitle('🌿 Help Wanted Board')
+      .setDescription('Daily quests for each village. First come, first served!')
+      .setColor('#25c059');
+
+    quests.forEach((quest) => {
+      const npcName = quest.npcName || getRandomNPCName();
+      const emoji = QUEST_TYPE_EMOJIS[quest.type] || '❓';
+      
+      const questLine = getNPCQuestFlavor(npcName, quest.type, quest.requirements);
+      const formattedQuestLine = `${emoji} **[${quest.type.charAt(0).toUpperCase() + quest.type.slice(1)} Quest]** ${questLine}`;
+      
+      const status = quest.completed
+        ? `❌ COMPLETED by <@${quest.completedBy?.userId || 'unknown'}> at ${quest.completedBy?.timestamp || 'unknown'}`
+        : '✅ AVAILABLE';
+        
+      embed.addFields({
+        name: `${quest.village} — ${npcName}`,
+        value: `${formattedQuestLine}\n**Status:** ${status}\n**Type:** ${emoji} ${quest.type.charAt(0).toUpperCase() + quest.type.slice(1)} Quest\n**Location:** ${quest.village}`
+      });
+    });
+
+    embed.setFooter({ text: 'Only one quest per user per day. Natives only!' });
+    return embed;
+  } catch (error) {
+    console.error('[HelpWanted] Error formatting quests as embed:', error);
+    throw error;
+  }
+}
+
+
+
+/**
+ * Formats quests as separate embeds by village
+ * @returns {Promise<Object>} Object mapping village names to embeds
+ */
+async function formatQuestsAsEmbedsByVillage() {
+  try {
+    const quests = await getTodaysQuests();
+    if (!quests.length) return {};
+    
+    const result = {};
+
+    for (const quest of quests) {
+      const npcName = quest.npcName || getRandomNPCName();
+      const questLine = getNPCQuestFlavor(npcName, quest.type, quest.requirements);
+      const status = quest.completed
+        ? `❌ COMPLETED by <@${quest.completedBy?.userId || 'unknown'}> at ${quest.completedBy?.timestamp || 'unknown'}`
+        : '✅ AVAILABLE';
+
+      const turnIn = getQuestTurnInInstructions(quest.type);
+      const rules = '• Only natives of the village can complete this quest.\n' +
+                   '• First come, first served—one completion per quest!\n' +
+                   '• Each user can only complete one Help Wanted quest per day (across all characters).\n' +
+                   '• Complete quests to help your village prosper!';
+
+      const color = VILLAGE_COLORS[quest.village] || '#25c059';
+      const image = VILLAGE_IMAGES[quest.village] || null;
+      const divider = '<:br:788136157363306506>'.repeat(11);
+      
+      const questInfoFields = [
+        { name: '__Status__', value: quest.completed ? '❌ **COMPLETED**' : '✅ **AVAILABLE**', inline: true },
+        { name: '__Type__', value: `${QUEST_TYPE_EMOJIS[quest.type] || '❓'} ${quest.type.charAt(0).toUpperCase() + quest.type.slice(1)} Quest`, inline: true },
+        { name: '__Location__', value: quest.village, inline: true }
+      ];
+      
+      const embed = new EmbedBuilder()
+        .setTitle(`${QUEST_TYPE_EMOJIS[quest.type] || '🌿'} Help Wanted — ${quest.village}`)
+        .setColor(color)
+        .addFields(
+          { name: 'Quest', value: `${questLine}\n${divider}` },
+          ...questInfoFields,
+          { name: 'How to Complete', value: turnIn },
+          { name: 'Rules', value: rules },
+          { name: 'Quest ID', value: quest.questId ? `\`\`\`${quest.questId}\`\`\`` : 'N/A', inline: true }
+        );
+      
+      if (image) embed.setImage(image);
+      result[quest.village] = embed;
+    }
+    
+    return result;
+  } catch (error) {
+    console.error('[HelpWanted] Error formatting quests by village:', error);
+    throw error;
+  }
+}
+
+// ============================================================================
+// ------------------- User Validation -------------------
+// ============================================================================
+
+/**
+ * Checks if a user has completed a quest today
+ * @param {string} userId - Discord user ID
+ * @returns {Promise<boolean>} True if user completed a quest today
+ */
+async function hasUserCompletedQuestToday(userId) {
+  try {
+    const user = await require('../models/UserModel').findOne({ discordId: userId });
+    if (!user) return false;
+    
+    const today = new Date().toISOString().slice(0, 10);
+    return user.helpWanted.lastCompletion === today;
+  } catch (error) {
+    console.error('[HelpWanted] Error checking user quest completion:', error);
+    return false;
+  }
+}
+
+/**
+ * Checks if a user has reached the weekly quest limit
+ * @param {string} userId - Discord user ID
+ * @returns {Promise<boolean>} True if user has reached weekly limit
+ */
+async function hasUserReachedWeeklyQuestLimit(userId) {
+  try {
+    const user = await require('../models/UserModel').findOne({ discordId: userId });
+    if (!user || !user.helpWanted.completions) return false;
+    
+    const now = new Date();
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - now.getDay());
+    startOfWeek.setHours(0, 0, 0, 0);
+    
+    const weeklyCompletions = user.helpWanted.completions.filter(completion => {
+      const completionDate = new Date(completion.date);
+      return completionDate >= startOfWeek;
+    });
+    
+    return weeklyCompletions.length >= 3;
+  } catch (error) {
+    console.error('[HelpWanted] Error checking weekly quest limit:', error);
+    return false;
+  }
+}
+
+// ============================================================================
+// ------------------- Quest Embed Updates -------------------
+// ============================================================================
+
+/**
+ * Updates the quest embed message to show completion status
+ * @param {Object} client - Discord client
+ * @param {Object} quest - Quest object
+ * @param {Object} completedBy - User who completed the quest
+ */
+async function updateQuestEmbed(client, quest, completedBy = null) {
+  try {
+    console.log(`[helpWantedModule]: Attempting to update quest embed for ${quest.questId}`);
+    
+    if (!quest.messageId) {
+      console.log(`[helpWantedModule]: No message ID found for quest ${quest.questId}`);
+      return;
+    }
+
     if (!quest.channelId) {
       console.error(`[helpWantedModule]: No channel ID found for quest ${quest.questId}`);
       return;
@@ -737,27 +919,37 @@ async function updateQuestEmbed(client, quest, completedBy = null) {
       return;
     }
 
-    // Fetch the original message
     const message = await channel.messages.fetch(quest.messageId);
     if (!message) {
       console.error(`[helpWantedModule]: Could not find message ${quest.messageId}`);
       return;
     }
 
-    // Get the original embed
     const originalEmbed = message.embeds[0];
     if (!originalEmbed) {
       console.error(`[helpWantedModule]: No embed found in message ${quest.messageId}`);
       return;
     }
 
-    // Create updated embed
     const updatedEmbed = new EmbedBuilder()
       .setTitle(originalEmbed.title)
-      .setColor(quest.completed ? 0x00FF00 : originalEmbed.color) // Green if completed
+      .setColor(quest.completed ? 0x00FF00 : originalEmbed.color)
       .setImage(originalEmbed.image?.url);
 
-    // Update the quest field to show completion status
+    // Copy fields, updating status if needed
+    originalEmbed.fields.forEach(field => {
+      if (field.name === 'Status' || field.name === '__Status__') {
+        updatedEmbed.addFields({
+          name: '__Status__',
+          value: quest.completed ? '❌ **COMPLETED**' : '✅ **AVAILABLE**',
+          inline: true
+        });
+      } else if (!field.name.includes('Quest')) {
+        updatedEmbed.addFields(field);
+      }
+    });
+
+    // Add quest field if it exists
     const questField = originalEmbed.fields.find(field => field.name.includes('Quest'));
     if (questField) {
       updatedEmbed.addFields({
@@ -767,25 +959,6 @@ async function updateQuestEmbed(client, quest, completedBy = null) {
       });
     }
 
-    // Update status field if it exists
-    const statusField = originalEmbed.fields.find(field => field.name === 'Status' || field.name === '__Status__');
-    if (statusField) {
-      const newStatusValue = quest.completed ? '❌ **COMPLETED**' : '✅ **AVAILABLE**';
-      updatedEmbed.addFields({
-        name: '__Status__',
-        value: newStatusValue,
-        inline: true
-      });
-    }
-
-    // Copy other fields (excluding Quest and Status which we've already handled)
-    originalEmbed.fields.forEach(field => {
-      if (!field.name.includes('Quest') && field.name !== 'Status' && field.name !== '__Status__') {
-        updatedEmbed.addFields(field);
-      }
-    });
-
-    // Update the message
     await message.edit({ embeds: [updatedEmbed] });
     console.log(`[helpWantedModule]: ✅ Successfully updated quest embed for ${quest.questId}`);
   } catch (error) {
@@ -793,6 +966,7 @@ async function updateQuestEmbed(client, quest, completedBy = null) {
   }
 }
 
+// ============================================================================
 // ------------------- Exports -------------------
 // ============================================================================
 module.exports = {
@@ -803,6 +977,7 @@ module.exports = {
   hasUserReachedWeeklyQuestLimit,
   getCraftingQuestPool,
   getEscortQuestPool,
+  getAllQuestPools,
   VILLAGES,
   QUEST_TYPES,
   FIXED_CRON_TIMES,
@@ -811,6 +986,5 @@ module.exports = {
   formatQuestsAsEmbed,
   formatQuestsAsEmbedsByVillage,
   getQuestsForScheduledTime,
-  updateQuestEmbed,
-  hasUserCompletedQuestToday
+  updateQuestEmbed
 }; 
