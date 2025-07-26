@@ -155,7 +155,6 @@ function validateAndSanitizeUrl(url, fallbackUrl = "https://i.imgur.com/placehol
     
     // Only allow http and https protocols
     if (urlObj.protocol === 'http:' || urlObj.protocol === 'https:') {
-      console.log(`[mod.js]: ✅ URL validated and sanitized: "${url}" -> "${encodedUrl}"`);
       return encodedUrl;
     } else {
       console.warn(`[mod.js]: ⚠️ Invalid protocol for URL: ${url}`);
