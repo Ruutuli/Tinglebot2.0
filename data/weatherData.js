@@ -58,7 +58,7 @@ const specials = [
   { label: "Avalanche", emoji: "🏔️", conditions: { temperature: ["<= 36°F"], wind: ["any"], precipitation: ["snow"] } },
   { label: "Blight Rain", emoji: "🌧️🧿", conditions: { temperature: [">= 44°F"], wind: ["any"], precipitation: ["rain"] } },
   { label: "Drought", emoji: "🌵", conditions: { temperature: [">= 97°F"], wind: ["any"], precipitation: ["sunny"] } },
-  { label: "Fairy Circle", emoji: "🍄", conditions: { temperature: ["any"], wind: ["any"], precipitation: ["any"] } },
+  { label: "Fairy Circle", emoji: "🍄", conditions: { temperature: [">= 52°F"], wind: ["< 63 km/h"], precipitation: ["sunny", "partly cloudy"] } },
   { label: "Flood", emoji: "🌊", conditions: { temperature: [">= 24°F"], wind: ["any"], precipitation: ["Heavy Rain"] } },
   { label: "Flower Bloom", emoji: "🌼", conditions: { temperature: [">= 72°F"], wind: ["any"], precipitation: ["any"] } },
   { label: "Jubilee", emoji: "🐟", conditions: { temperature: ["any"], wind: ["any"], precipitation: ["any"] } },
@@ -124,13 +124,13 @@ const specialWeights = {
   "Avalanche": 0.05,
   "Blight Rain": 0.1,
   "Drought": 0.1,
-  "Fairy Circle": 0.2,
-  "Flood": 0.1,
-  "Flower Bloom": 0.15,
-  "Jubilee": 0.05,
-  "Meteor Shower": 0.1,
-  "Muggy": 0.1,
-  "Rock Slide": 0.05
+  "Fairy Circle": 0.08,
+  "Flood": 0.2,
+  "Flower Bloom": 0.2,
+  "Jubilee": 0.02,
+  "Meteor Shower": 0.12,
+  "Muggy": 0.3,
+  "Rock Slide": 0.02
 };
 
 // ============================================================================
