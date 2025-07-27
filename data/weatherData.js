@@ -141,87 +141,95 @@ const weatherWeightModifiers = {
   Rudania: {
     Winter: {
       temperature: {
-        "24°F / -4°C - Cold": 0.4,
-        "36°F / 2°C - Chilly": 0.6,
-        "44°F / 6°C - Brisk": 1,
-        "52°F / 11°C - Cool": 1.2,
-        "61°F / 16°C - Mild": 1.4,
-        "72°F / 22°C - Perfect": 1.5
+        "24°F / -4°C - Cold": 0.2,
+        "36°F / 2°C - Chilly": 0.4,
+        "44°F / 6°C - Brisk": 0.8,
+        "52°F / 11°C - Cool": 1.4,
+        "61°F / 16°C - Mild": 1.6,
+        "72°F / 22°C - Perfect": 1.8
       },
       precipitation: {
-        "Snow": 0.3,
-        "Light Snow": 0.3,
-        "Sunny": 1.5,
-        "Fog": 1.2,
-        "Cinder Storm": 1.2
+        "Snow": 0.1,
+        "Light Snow": 0.1,
+        "Rain": 1.5,
+        "Light Rain": 1.4,
+        "Heavy Rain": 1.3,
+        "Sunny": 1.2,
+        "Fog": 1.1,
+        "Cinder Storm": 1.8
       }
     },
     Summer: {
       temperature: {
         "75°F / 24°C - Warm": 0.8,
-        "82°F / 28°C - Hot": 1.2,
-        "89°F / 32°C - Very Hot": 1.5,
-        "97°F / 36°C - Scorching": 2,
-        "105°F / 41°C - Blazing": 2.2,
-        "110°F / 43°C - Heat Wave": 2.5,
-        "115°F / 46°C - Infernal": 2.8
+        "82°F / 28°C - Hot": 1.4,
+        "89°F / 32°C - Very Hot": 1.8,
+        "97°F / 36°C - Scorching": 2.2,
+        "105°F / 41°C - Blazing": 2.5,
+        "110°F / 43°C - Heat Wave": 2.8,
+        "115°F / 46°C - Infernal": 3.0
       },
       precipitation: {
-        "Cinder Storm": 2,
-        "Sunny": 1.4,
-        "Rain": 0.8
+        "Cinder Storm": 2.5,
+        "Sunny": 1.8,
+        "Rain": 0.6
       }
     },
     Spring: {
       temperature: {
-        "61°F / 16°C - Mild": 1.2,
-        "72°F / 22°C - Perfect": 1.3,
-        "82°F / 28°C - Warm": 1.1
+        "61°F / 16°C - Mild": 1.4,
+        "72°F / 22°C - Perfect": 1.6,
+        "82°F / 28°C - Warm": 1.3
       },
       precipitation: {
-        "Cinder Storm": 1.5,
-        "Sunny": 1.2
+        "Cinder Storm": 1.8,
+        "Sunny": 1.4,
+        "Rain": 1.2
       }
     },
     Autumn: {
       temperature: {
-        "52°F / 11°C - Cool": 1.1,
-        "61°F / 16°C - Mild": 1.3,
-        "72°F / 22°C - Perfect": 1.4
+        "52°F / 11°C - Cool": 1.3,
+        "61°F / 16°C - Mild": 1.5,
+        "72°F / 22°C - Perfect": 1.6
       },
       precipitation: {
-        "Cinder Storm": 1.2,
-        "Fog": 1.3
+        "Cinder Storm": 1.4,
+        "Fog": 1.5,
+        "Rain": 1.3
       }
     }
   },
   Inariko: {
     Winter: {
       temperature: {
-        "0°F / -18°C - Frigid": 1.2,
-        "8°F / -14°C - Freezing": 1.2,
-        "24°F / -4°C - Cold": 1.3,
-        "36°F / 2°C - Chilly": 1,
+        "0°F / -18°C - Frigid": 1.8,
+        "8°F / -14°C - Freezing": 1.6,
+        "24°F / -4°C - Cold": 1.5,
+        "36°F / 2°C - Chilly": 1.2,
         "44°F / 6°C - Brisk": 0.8
       },
       precipitation: {
-        "Blizzard": 1.4,
-        "Heavy Snow": 1.5,
-        "Snow": 1.4,
-        "Fog": 1.3
+        "Blizzard": 2.0,
+        "Heavy Snow": 1.8,
+        "Snow": 1.6,
+        "Light Snow": 1.4,
+        "Fog": 1.5,
+        "Cloudy": 1.3
       }
     },
     Spring: {
       temperature: {
-        "44°F / 6°C - Brisk": 1.2,
-        "52°F / 11°C - Cool": 1.2,
-        "61°F / 16°C - Mild": 1,
-        "72°F / 22°C - Perfect": 0.8
+        "44°F / 6°C - Brisk": 1.4,
+        "52°F / 11°C - Cool": 1.3,
+        "61°F / 16°C - Mild": 1.1,
+        "72°F / 22°C - Perfect": 0.7
       },
       precipitation: {
-        "Fog": 1.3,
-        "Rain": 1.2,
-        "Cloudy": 1.2
+        "Fog": 1.8,
+        "Rain": 1.4,
+        "Cloudy": 1.5,
+        "Light Rain": 1.3
       },
       special: {
         "Flower Bloom": 1.8
@@ -229,14 +237,15 @@ const weatherWeightModifiers = {
     },
     Summer: {
       temperature: {
-        "61°F / 16°C - Mild": 1.2,
-        "72°F / 22°C - Perfect": 1,
-        "82°F / 28°C - Warm": 0.8
+        "61°F / 16°C - Mild": 1.4,
+        "72°F / 22°C - Perfect": 1.2,
+        "82°F / 28°C - Warm": 0.6
       },
       precipitation: {
-        "Rain": 1.2,
-        "Thunderstorm": 1.3,
-        "Fog": 1.1
+        "Rain": 1.5,
+        "Thunderstorm": 1.4,
+        "Fog": 1.6,
+        "Cloudy": 1.3
       },
       special: {
         "Flower Bloom": 1.4
@@ -244,70 +253,80 @@ const weatherWeightModifiers = {
     },
     Autumn: {
       temperature: {
-        "36°F / 2°C - Chilly": 1.2,
-        "44°F / 6°C - Brisk": 1.2,
-        "52°F / 11°C - Cool": 1.1
+        "36°F / 2°C - Chilly": 1.4,
+        "44°F / 6°C - Brisk": 1.3,
+        "52°F / 11°C - Cool": 1.2
       },
       precipitation: {
-        "Fog": 1.3,
-        "Snow": 1.2,
-        "Cloudy": 1.2
+        "Fog": 1.8,
+        "Snow": 1.5,
+        "Cloudy": 1.4,
+        "Light Snow": 1.3
       }
     }
   },
   Vhintl: {
     Winter: {
       temperature: {
-        "36°F / 2°C - Chilly": 1.2,
+        "36°F / 2°C - Chilly": 1.3,
         "44°F / 6°C - Brisk": 1.2,
         "52°F / 11°C - Cool": 1.1
       },
       precipitation: {
-        "Fog": 1.5,
-        "Rain": 1.3,
-        "Light Snow": 0.4,
-        "Thundersnow": 0.3
+        "Fog": 2.0,
+        "Rain": 1.6,
+        "Heavy Rain": 1.4,
+        "Thunderstorm": 1.3,
+        "Light Rain": 1.5,
+        "Cloudy": 1.4,
+        "Light Snow": 0.2,
+        "Thundersnow": 0.1
       }
     },
     Spring: {
       temperature: {
-        "61°F / 16°C - Mild": 1.2,
-        "72°F / 22°C - Perfect": 1.3,
+        "61°F / 16°C - Mild": 1.3,
+        "72°F / 22°C - Perfect": 1.4,
         "82°F / 28°C - Warm": 1.2
       },
       precipitation: {
-        "Rain": 1.3,
-        "Thunderstorm": 1.5,
-        "Fog": 1.3
+        "Rain": 1.6,
+        "Thunderstorm": 1.8,
+        "Fog": 1.5,
+        "Heavy Rain": 1.4,
+        "Light Rain": 1.3
       },
       special: {
-        "Muggy": 1.4
+        "Muggy": 1.6
       }
     },
     Summer: {
       temperature: {
-        "82°F / 28°C - Warm": 1.4,
-        "89°F / 32°C - Hot": 1.2,
-        "97°F / 36°C - Scorching": 0.8
+        "82°F / 28°C - Warm": 1.6,
+        "89°F / 32°C - Hot": 1.4,
+        "97°F / 36°C - Scorching": 1.0
       },
       precipitation: {
-        "Thunderstorm": 2,
-        "Heavy Rain": 1.5,
-        "Fog": 1.2
+        "Thunderstorm": 2.2,
+        "Heavy Rain": 1.8,
+        "Fog": 1.6,
+        "Rain": 1.5,
+        "Light Rain": 1.4
       },
       special: {
-        "Muggy": 1.8
+        "Muggy": 2.2
       }
     },
     Autumn: {
       temperature: {
-        "61°F / 16°C - Mild": 1.2,
-        "72°F / 22°C - Perfect": 1.2
+        "61°F / 16°C - Mild": 1.3,
+        "72°F / 22°C - Perfect": 1.3
       },
       precipitation: {
-        "Fog": 1.4,
-        "Rain": 1.3,
-        "Thunderstorm": 1.4
+        "Fog": 1.8,
+        "Rain": 1.6,
+        "Thunderstorm": 1.7,
+        "Heavy Rain": 1.4
       }
     }
   }
