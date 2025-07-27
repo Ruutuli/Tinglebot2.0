@@ -571,9 +571,8 @@ async function generateDailyQuestsAtMidnight() {
 // ============================================================================
 async function checkAndPostMissedQuests(client) {
   try {
-    const { FIXED_CRON_TIMES } = require('./modules/helpWantedModule');
-    const { getQuestsForScheduledTime } = require('./modules/helpWantedModule');
     const HelpWantedQuest = require('./models/HelpWantedQuestModel');
+    const { formatSpecificQuestsAsEmbedsByVillage } = require('./modules/helpWantedModule');
     
     // Get current time in EST
     const now = new Date();
@@ -581,30 +580,60 @@ async function checkAndPostMissedQuests(client) {
     const currentHour = estTime.getHours();
     const currentMinute = estTime.getMinutes();
     
-    let postedCount = 0;
+    // Get today's quests that haven't been posted yet
+    const today = estTime.toISOString().slice(0, 10);
+    const unpostedQuests = await HelpWantedQuest.find({
+      date: today,
+      messageId: { $exists: false }
+    });
     
-    // Check each cron time to see if it has passed today
-    for (const cronTime of FIXED_CRON_TIMES) {
-      const [minute, hour] = cronTime.split(' ').map(Number);
+    if (!unpostedQuests.length) {
+      console.log(`[scheduler.js]: No missed quests to post during startup`);
+      return;
+    }
+    
+    const channel = await client.channels.fetch(HELP_WANTED_TEST_CHANNEL);
+    let posted = 0;
+    
+    for (const quest of unpostedQuests) {
+      // Parse the scheduled time
+      const scheduledTime = quest.scheduledPostTime;
+      if (!scheduledTime) continue;
       
-      // Check if this time has already passed today
-      if (currentHour > hour || (currentHour === hour && currentMinute >= minute)) {
-        // Get quests scheduled for this time
-        const quests = await getQuestsForScheduledTime(cronTime);
-        
-        // Filter out quests that have already been posted (have channelId)
-        const unpostedQuests = quests.filter(quest => !quest.channelId);
-        
-        if (unpostedQuests.length > 0) {
-          // Post only the unposted quests
-          await postMissedQuestsToTestChannel(client, unpostedQuests);
-          postedCount += unpostedQuests.length;
+      // Parse cron time (format: "minute hour * * *")
+      const parts = scheduledTime.split(' ');
+      if (parts.length !== 5) continue;
+      
+      const scheduledMinute = parseInt(parts[0]);
+      const scheduledHour = parseInt(parts[1]);
+      
+      // Check if this time has already passed (with 15-minute grace period)
+      const scheduledTimeInMinutes = scheduledHour * 60 + scheduledMinute;
+      const currentTimeInMinutes = currentHour * 60 + currentMinute;
+      
+      if (currentTimeInMinutes >= scheduledTimeInMinutes - 15) {
+        // Format embed for this specific quest only
+        const embedsByVillage = await formatSpecificQuestsAsEmbedsByVillage([quest]);
+        const embed = embedsByVillage[quest.village];
+        if (embed) {
+          const message = await channel.send({ embeds: [embed] });
+          // Save the message ID and channel ID for future edits
+          const updatedQuest = await HelpWantedQuest.findOneAndUpdate(
+            { _id: quest._id },
+            { 
+              messageId: message.id,
+              channelId: channel.id
+            },
+            { new: true }
+          );
+          console.log(`[scheduler.js]: Posted missed quest ${quest.questId} for ${quest.village} (was scheduled for ${scheduledHour}:${scheduledMinute.toString().padStart(2, '0')})`);
+          posted++;
         }
       }
     }
     
-    if (postedCount > 0) {
-      console.log(`[scheduler.js]: 📤 Posted ${postedCount} missed quests during startup`);
+    if (posted > 0) {
+      console.log(`[scheduler.js]: 📤 Posted ${posted} missed quests during startup`);
     }
     
   } catch (error) {
@@ -613,45 +642,7 @@ async function checkAndPostMissedQuests(client) {
   }
 }
 
-// ------------------- Fixed Times for Help Wanted Board -------------------
-async function postHelpWantedBoardToTestChannel(client, cronTime) {
-  try {
-    // Only post quests scheduled for this cron time
-    const quests = await getQuestsForScheduledTime(cronTime);
-    if (!quests.length) {
-      console.log(`[scheduler.js]: No Help Wanted quests scheduled for ${cronTime}. Skipping post.`);
-      return;
-    }
-    const channel = await client.channels.fetch(HELP_WANTED_TEST_CHANNEL);
-    let posted = 0;
-    for (const quest of quests) {
-      // Format embed for this quest only
-      const embedsByVillage = await formatSpecificQuestsAsEmbedsByVillage([quest]);
-      const embed = embedsByVillage[quest.village];
-      if (embed) {
-        const message = await channel.send({ embeds: [embed] });
-        // Save the message ID and channel ID for future edits
-        const updatedQuest = await HelpWantedQuest.findOneAndUpdate(
-          { _id: quest._id },
-          { 
-            messageId: message.id,
-            channelId: channel.id
-          },
-          { new: true }
-        );
-        console.log(`[scheduler.js]: Saved message ID ${message.id} and channel ID ${channel.id} for quest ${quest.questId} in ${quest.village}`);
-        posted++;
-      }
-    }
-    console.log(`[scheduler.js]: Posted Help Wanted board for ${posted} village(s) at ${cronTime}`);
-  } catch (error) {
-    handleError(error, 'scheduler.js', {
-      commandName: 'postHelpWantedBoardToTestChannel',
-      cronTime
-    });
-    console.error('[scheduler.js]: Error posting Help Wanted board:', error);
-  }
-}
+
 
 // ------------------- Post Missed Quests Function -------------------
 // Posts only the specific quests that were missed during startup
@@ -695,17 +686,86 @@ async function postMissedQuestsToTestChannel(client, unpostedQuests) {
   }
 }
 
+// ============================================================================
+// ------------------- Check and Post Scheduled Quests -------------------
+// Checks for quests that need to be posted based on their scheduled time
+// ============================================================================
+async function checkAndPostScheduledQuests(client, cronTime) {
+  try {
+    const HelpWantedQuest = require('./models/HelpWantedQuestModel');
+    const { formatSpecificQuestsAsEmbedsByVillage } = require('./modules/helpWantedModule');
+    
+    // Get today's quests that are scheduled for this specific time and haven't been posted yet
+    const now = new Date();
+    const estDate = new Date(now.toLocaleString("en-US", {timeZone: "America/New_York"}));
+    const today = estDate.toISOString().slice(0, 10);
+    
+    const questsToPost = await HelpWantedQuest.find({
+      date: today,
+      scheduledPostTime: cronTime,
+      messageId: { $exists: false }
+    });
+    
+    if (!questsToPost.length) {
+      console.log(`[scheduler.js]: No quests scheduled for ${cronTime} on ${today}`);
+      return;
+    }
+    
+    const channel = await client.channels.fetch(HELP_WANTED_TEST_CHANNEL);
+    let posted = 0;
+    
+    for (const quest of questsToPost) {
+      // Format embed for this specific quest only
+      const embedsByVillage = await formatSpecificQuestsAsEmbedsByVillage([quest]);
+      const embed = embedsByVillage[quest.village];
+      if (embed) {
+        const message = await channel.send({ embeds: [embed] });
+        // Save the message ID and channel ID for future edits
+        const updatedQuest = await HelpWantedQuest.findOneAndUpdate(
+          { _id: quest._id },
+          { 
+            messageId: message.id,
+            channelId: channel.id
+          },
+          { new: true }
+        );
+        
+        // Parse the cron time for logging
+        const parts = cronTime.split(' ');
+        const scheduledMinute = parseInt(parts[0]);
+        const scheduledHour = parseInt(parts[1]);
+        
+        console.log(`[scheduler.js]: Posted quest ${quest.questId} for ${quest.village} at ${scheduledHour}:${scheduledMinute.toString().padStart(2, '0')} (scheduled time: ${cronTime})`);
+        posted++;
+      }
+    }
+    
+    if (posted > 0) {
+      console.log(`[scheduler.js]: Posted ${posted} scheduled quests for ${cronTime}`);
+    }
+  } catch (error) {
+    handleError(error, 'scheduler.js', {
+      commandName: 'checkAndPostScheduledQuests',
+      scheduledTime: cronTime
+    });
+    console.error('[scheduler.js]: Error checking and posting scheduled quests:', error);
+  }
+}
+
 function setupHelpWantedFixedScheduler(client) {
+  // Import the FIXED_CRON_TIMES from helpWantedModule
   const { FIXED_CRON_TIMES } = require('./modules/helpWantedModule');
-  FIXED_CRON_TIMES.forEach((cronTime, idx) => {
+  
+  // Create individual cron jobs for each fixed time
+  FIXED_CRON_TIMES.forEach(cronTime => {
     createCronJob(
       cronTime,
-      `Help Wanted Board Fixed Post #${idx + 1}`,
-      () => postHelpWantedBoardToTestChannel(client, cronTime),
+      `Help Wanted Board Check - ${cronTime}`,
+      () => checkAndPostScheduledQuests(client, cronTime),
       'America/New_York'
     );
+    console.log(`[scheduler.js]: 📋 Scheduled Help Wanted board check for ${cronTime}`);
   });
-  console.log(`[scheduler.js]: 📋 Scheduled ${FIXED_CRON_TIMES.length} Help Wanted board posts`);
 }
 
 // ============================================================================
