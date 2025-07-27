@@ -18,14 +18,14 @@ const { generateUniqueId } = require('../utils/uniqueIdUtils');
 const VILLAGES = ['Rudania', 'Inariko', 'Vhintl'];
 const QUEST_TYPES = ['item', 'monster', 'escort', 'crafting'];
 const FIXED_CRON_TIMES = [
-  '0 5 * * *',   // 5:00 AM EST
-  '0 8 * * *',   // 8:00 AM EST
-  '0 11 * * *',  // 11:00 AM EST
-  '0 14 * * *',  // 2:00 PM EST
-  '0 17 * * *',  // 5:00 PM EST
-  '0 20 * * *',  // 8:00 PM EST
-  '0 23 * * *',  // 11:00 PM EST
-  '0 2 * * *',   // 2:00 AM EST
+'0 3 * * *',   // 3:00 AM EST  
+'0 6 * * *',   // 6:00 AM EST  
+'0 9 * * *',   // 9:00 AM EST  
+'0 12 * * *',  // 12:00 PM EST  
+'0 15 * * *',  // 3:00 PM EST  
+'0 18 * * *',  // 6:00 PM EST  
+'0 21 * * *',  // 9:00 PM EST  
+'0 23 * * *'   // 11:00 PM EST
 ];
 
 const QUEST_TYPE_EMOJIS = {
@@ -341,6 +341,15 @@ function getRandomElement(arr) {
 }
 
 /**
+ * Generates a truly random cron time for quest posting
+ * @returns {string} Random cron time string
+ */
+function generateRandomCronTime() {
+  // Pick randomly from the fixed times only
+  return getRandomElement(FIXED_CRON_TIMES);
+}
+
+/**
  * Returns a random NPC name from the stealingNPCSModule
  * @returns {string} Random NPC name
  */
@@ -610,20 +619,7 @@ async function generateQuestForVillage(village, date, pools) {
   };
 }
 
-/**
- * Assigns random cron times to villages
- * @returns {Object} Mapping of village to cron time
- */
-function assignRandomPostTimes() {
-  const shuffledTimes = shuffleArray(FIXED_CRON_TIMES);
-  const mapping = {};
-  
-  VILLAGES.forEach((village, index) => {
-    mapping[village] = shuffledTimes[index % shuffledTimes.length];
-  });
-  
-  return mapping;
-}
+
 
 /**
  * Generates and saves daily quests for all villages
@@ -638,12 +634,13 @@ async function generateDailyQuests() {
     // Clean up existing documents with null questId
     await HelpWantedQuest.deleteMany({ questId: null });
 
-    const postTimeMap = assignRandomPostTimes();
     const pools = await getAllQuestPools();
 
     const quests = await Promise.all(VILLAGES.map(async village => {
       const quest = await generateQuestForVillage(village, date, pools);
-      quest.scheduledPostTime = postTimeMap[village];
+      // Assign a truly random posting time for each village each day
+      quest.scheduledPostTime = generateRandomCronTime();
+      console.log(`[HelpWanted] Generated quest for ${village} with posting time: ${quest.scheduledPostTime}`);
       return quest;
     }));
 
@@ -657,6 +654,16 @@ async function generateDailyQuests() {
       );
       results.push(updated);
     }
+    
+    // Log the final schedule for the day
+    console.log(`[HelpWanted] Daily quest schedule for ${date}:`);
+    results.forEach(quest => {
+      const timeParts = quest.scheduledPostTime.split(' ');
+      const hour = parseInt(timeParts[1]);
+      const minute = parseInt(timeParts[0]);
+      const timeString = `${hour}:${minute.toString().padStart(2, '0')}`;
+      console.log(`  ${quest.village}: ${timeString} (${quest.scheduledPostTime})`);
+    });
     
     return results;
   } catch (error) {
@@ -708,6 +715,35 @@ async function getQuestsForScheduledTime(cronTime) {
     return await HelpWantedQuest.find({ date, scheduledPostTime: cronTime });
   } catch (error) {
     console.error('[HelpWanted] Error fetching quests for scheduled time:', error);
+    throw error;
+  }
+}
+
+/**
+ * Gets the current quest schedule for debugging
+ * @returns {Promise<Object>} Object with village names as keys and posting times as values
+ */
+async function getCurrentQuestSchedule() {
+  try {
+    const quests = await getTodaysQuests();
+    const schedule = {};
+    
+    quests.forEach(quest => {
+      const timeParts = quest.scheduledPostTime.split(' ');
+      const hour = parseInt(timeParts[1]);
+      const minute = parseInt(timeParts[0]);
+      const timeString = `${hour}:${minute.toString().padStart(2, '0')}`;
+      schedule[quest.village] = {
+        time: timeString,
+        cronTime: quest.scheduledPostTime,
+        posted: !!quest.messageId,
+        questId: quest.questId
+      };
+    });
+    
+    return schedule;
+  } catch (error) {
+    console.error('[HelpWanted] Error getting current quest schedule:', error);
     throw error;
   }
 }
@@ -1038,5 +1074,6 @@ module.exports = {
   formatQuestsAsEmbedsByVillage,
   formatSpecificQuestsAsEmbedsByVillage,
   getQuestsForScheduledTime,
+  getCurrentQuestSchedule,
   updateQuestEmbed
 }; 
