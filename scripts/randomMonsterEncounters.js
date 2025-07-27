@@ -3,6 +3,9 @@
 // It tracks message activity in channels, determines if an encounter should be triggered,
 // creates encounter embeds, and triggers random encounters based on server activity.
 // It also manages the timing and channel selection for encounters.
+//
+// IMPORTANT: Users with role ID 788137818135330837 cannot trigger raids
+// (their messages are excluded from activity tracking)
 
 // ============================================================================
 // Discord.js Components
@@ -17,6 +20,7 @@ const { getMonstersAboveTierByRegion, fetchMonsterByName } = require('../databas
 const { getVillageRegionByName } = require('../modules/locationsModule');
 const { createRaidEmbed, createOrUpdateRaidThread, scheduleRaidTimer, storeRaidProgress, getRaidProgressById } = require('../modules/raidModule');
 const { capitalizeVillageName } = require('../utils/stringUtils');
+const TempData = require('../models/TempDataModel');
 
 // ============================================================================
 // Environment Configuration
@@ -31,6 +35,11 @@ const MIN_ACTIVE_USERS = 4;               // Minimum unique users required for a
 const TIME_WINDOW = 30 * 60 * 1000;         // 30 minutes in milliseconds
 const CHECK_INTERVAL = 60 * 1000;           // Check every 60 seconds
 const RAID_COOLDOWN = 4 * 60 * 60 * 1000;  // 4 hour cooldown between raids
+const RAID_COOLDOWN_KEY = 'global_raid_cooldown'; // Key for storing raid cooldown in TempData
+
+// ------------------- Restricted Role -------------------
+// Role ID that cannot trigger raids
+const RESTRICTED_ROLE_ID = '788137818135330837';
 
 // ------------------- Excluded Channels -------------------
 // Channels to exclude from message threshold calculations
@@ -59,9 +68,45 @@ const villageChannelMap = {
 // Tracks message timestamps and unique users in each channel.
 const messageActivity = new Map();
 
-// ------------------- Track Global Raid Cooldown -------------------
-// Tracks the last raid time globally (across all villages) to prevent too frequent encounters
-let lastRaidTime = 0;
+// ============================================================================
+// Raid Cooldown Management Functions
+// ------------------- Get Global Raid Cooldown -------------------
+async function getGlobalRaidCooldown() {
+  try {
+    const cooldownData = await TempData.findOne({ key: RAID_COOLDOWN_KEY });
+    return cooldownData ? cooldownData.data.lastRaidTime : 0;
+  } catch (error) {
+    console.error('[randomMonsterEncounters.js]: ❌ Error getting raid cooldown:', error);
+    return 0; // Default to 0 if there's an error
+  }
+}
+
+// ------------------- Set Global Raid Cooldown -------------------
+async function setGlobalRaidCooldown(timestamp) {
+  try {
+    await TempData.findOneAndUpdate(
+      { key: RAID_COOLDOWN_KEY },
+      { 
+        key: RAID_COOLDOWN_KEY,
+        data: { lastRaidTime: timestamp }
+      },
+      { upsert: true, new: true }
+    );
+    console.log(`[randomMonsterEncounters.js]: ⏰ Global raid cooldown set to: ${new Date(timestamp).toISOString()}`);
+  } catch (error) {
+    console.error('[randomMonsterEncounters.js]: ❌ Error setting raid cooldown:', error);
+  }
+}
+
+// ------------------- Reset Global Raid Cooldown -------------------
+async function resetGlobalRaidCooldown() {
+  try {
+    await TempData.findOneAndDelete({ key: RAID_COOLDOWN_KEY });
+    console.log(`[randomMonsterEncounters.js]: 🔄 Global raid cooldown reset - raids can now be triggered immediately`);
+  } catch (error) {
+    console.error('[randomMonsterEncounters.js]: ❌ Error resetting raid cooldown:', error);
+  }
+}
 
 function trackMessageActivity(channelId, userId, isBot, username) {
   if (isBot) return; // Ignore bot messages
@@ -71,6 +116,8 @@ function trackMessageActivity(channelId, userId, isBot, username) {
     return;
   }
 
+  // Check if the user has the restricted role
+  // Note: We need the message object to check roles, so this will be handled in the messageCreate event
   const currentTime = Date.now();
 
   if (!messageActivity.has(channelId)) {
@@ -99,9 +146,22 @@ async function checkForRandomEncounters(client) {
   let activeChannels = 0;
 
   // Check if we're still in global cooldown period
+  const lastRaidTime = await getGlobalRaidCooldown();
   const timeSinceLastRaid = currentTime - lastRaidTime;
+  
   if (timeSinceLastRaid < RAID_COOLDOWN) {
+    const remainingTime = RAID_COOLDOWN - timeSinceLastRaid;
+    const remainingHours = Math.floor(remainingTime / (1000 * 60 * 60));
+    const remainingMinutes = Math.floor((remainingTime % (1000 * 60 * 60)) / (1000 * 60));
+    
+    console.log(`[randomMonsterEncounters.js]: ⏰ Global raid cooldown active - ${remainingHours}h ${remainingMinutes}m remaining`);
+    console.log(`[randomMonsterEncounters.js]: ⏰ Last raid time: ${new Date(lastRaidTime).toISOString()}`);
+    console.log(`[randomMonsterEncounters.js]: ⏰ Current time: ${new Date(currentTime).toISOString()}`);
+    console.log(`[randomMonsterEncounters.js]: ⏰ Time since last raid: ${Math.floor(timeSinceLastRaid / (1000 * 60))} minutes`);
     return;
+  } else {
+    console.log(`[randomMonsterEncounters.js]: ✅ Global raid cooldown expired - raids can be triggered`);
+    console.log(`[randomMonsterEncounters.js]: ⏰ Time since last raid: ${Math.floor(timeSinceLastRaid / (1000 * 60))} minutes (${Math.floor(timeSinceLastRaid / (1000 * 60 * 60))} hours)`);
   }
 
   // First pass: collect total activity across all channels
@@ -132,8 +192,8 @@ async function checkForRandomEncounters(client) {
   if (meetsThreshold) {
     console.log(`[randomMonsterEncounters.js]: 🐉 TRIGGERING ENCOUNTER! Server-wide activity: ${totalMessages} messages, ${totalUsers.size} users across ${activeChannels} channels`);
     
-    // Update global raid cooldown (applies to all villages)
-    lastRaidTime = currentTime;
+    // Update global raid cooldown (applies to all villages) - now persisted to database
+    await setGlobalRaidCooldown(currentTime);
     console.log(`[randomMonsterEncounters.js]: ⏰ Global raid cooldown started - next raid available in 4 hours`);
     
     // Reset all channel activity after triggering encounter
@@ -231,10 +291,45 @@ async function triggerRandomEncounter(channel, selectedVillage) {
 // ============================================================================
 // Initialization Function
 // ------------------- Initialize Random Encounter Bot -------------------
-function initializeRandomEncounterBot(client) {
+async function initializeRandomEncounterBot(client) {
+  // Log current cooldown status on startup
+  try {
+    const lastRaidTime = await getGlobalRaidCooldown();
+    const currentTime = Date.now();
+    const timeSinceLastRaid = currentTime - lastRaidTime;
+    
+    if (lastRaidTime > 0) {
+      if (timeSinceLastRaid < RAID_COOLDOWN) {
+        const remainingTime = RAID_COOLDOWN - timeSinceLastRaid;
+        const remainingHours = Math.floor(remainingTime / (1000 * 60 * 60));
+        const remainingMinutes = Math.floor((remainingTime % (1000 * 60 * 60)) / (1000 * 60));
+        
+        console.log(`[randomMonsterEncounters.js]: ⏰ Bot startup - Global raid cooldown active: ${remainingHours}h ${remainingMinutes}m remaining`);
+        console.log(`[randomMonsterEncounters.js]: ⏰ Last raid: ${new Date(lastRaidTime).toISOString()}`);
+      } else {
+        console.log(`[randomMonsterEncounters.js]: ✅ Bot startup - Global raid cooldown expired, raids can be triggered`);
+        console.log(`[randomMonsterEncounters.js]: ⏰ Time since last raid: ${Math.floor(timeSinceLastRaid / (1000 * 60))} minutes`);
+      }
+    } else {
+      console.log(`[randomMonsterEncounters.js]: ✅ Bot startup - No previous raids recorded, raids can be triggered immediately`);
+    }
+    
+    // Log role restriction status
+    console.log(`[randomMonsterEncounters.js]: 🚫 Role restriction active - Users with role ${RESTRICTED_ROLE_ID} cannot trigger raids`);
+  } catch (error) {
+    console.error('[randomMonsterEncounters.js]: ❌ Error checking cooldown status on startup:', error);
+  }
+
   // Set up message tracking
   client.on('messageCreate', (message) => {
     if (message.author.bot) return;
+    
+    // Check if the user has the restricted role
+    if (message.member && message.member.roles.cache.has(RESTRICTED_ROLE_ID)) {
+      console.log(`[randomMonsterEncounters.js]: 🚫 Skipping message from user with restricted role: ${message.author.tag} (${message.author.id})`);
+      return;
+    }
+    
     trackMessageActivity(
       message.channel.id,
       message.author.id,
@@ -260,5 +355,8 @@ module.exports = {
   initializeRandomEncounterBot,
   trackMessageActivity,
   checkForRandomEncounters,
-  triggerRandomEncounter
+  triggerRandomEncounter,
+  getGlobalRaidCooldown,
+  setGlobalRaidCooldown,
+  resetGlobalRaidCooldown
 };
