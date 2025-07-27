@@ -631,7 +631,9 @@ function assignRandomPostTimes() {
  */
 async function generateDailyQuests() {
   try {
-    const date = moment().utc().format('YYYY-MM-DD');
+    const now = new Date();
+    const estDate = new Date(now.toLocaleString("en-US", {timeZone: "America/New_York"}));
+    const date = estDate.toISOString().slice(0, 10);
 
     // Clean up existing documents with null questId
     await HelpWantedQuest.deleteMany({ questId: null });
@@ -673,7 +675,9 @@ async function generateDailyQuests() {
  */
 async function getTodaysQuests() {
   try {
-    const date = moment().utc().format('YYYY-MM-DD');
+    const now = new Date();
+    const estDate = new Date(now.toLocaleString("en-US", {timeZone: "America/New_York"}));
+    const date = estDate.toISOString().slice(0, 10);
     const quests = await HelpWantedQuest.find({ date });
     
     // Ensure all quests have an npcName field
@@ -698,7 +702,9 @@ async function getTodaysQuests() {
  */
 async function getQuestsForScheduledTime(cronTime) {
   try {
-    const date = moment().utc().format('YYYY-MM-DD');
+    const now = new Date();
+    const estDate = new Date(now.toLocaleString("en-US", {timeZone: "America/New_York"}));
+    const date = estDate.toISOString().slice(0, 10);
     return await HelpWantedQuest.find({ date, scheduledPostTime: cronTime });
   } catch (error) {
     console.error('[HelpWanted] Error fetching quests for scheduled time:', error);
@@ -823,6 +829,62 @@ async function formatQuestsAsEmbedsByVillage() {
     return result;
   } catch (error) {
     console.error('[HelpWanted] Error formatting quests by village:', error);
+    throw error;
+  }
+}
+
+/**
+ * Formats specific quests as separate embeds by village
+ * @param {Array} quests - Array of quest objects to format
+ * @returns {Promise<Object>} Object mapping village names to embeds
+ */
+async function formatSpecificQuestsAsEmbedsByVillage(quests) {
+  try {
+    if (!quests || !quests.length) return {};
+    
+    const result = {};
+
+    for (const quest of quests) {
+      const npcName = quest.npcName || getRandomNPCName();
+      const questLine = getNPCQuestFlavor(npcName, quest.type, quest.requirements);
+      const status = quest.completed
+        ? `🏅 COMPLETED by <@${quest.completedBy?.userId || 'unknown'}> at ${quest.completedBy?.timestamp || 'unknown'}`
+        : '✅ AVAILABLE';
+
+      const turnIn = getQuestTurnInInstructions(quest.type);
+      const rules = '• Only natives of the village can complete this quest.\n' +
+                   '• First come, first served—one completion per quest!\n' +
+                   '• Each user can only complete one Help Wanted quest per day (across all characters).\n' +
+                   '• Complete quests to help your village prosper!';
+
+      const color = VILLAGE_COLORS[quest.village] || '#25c059';
+      const image = VILLAGE_IMAGES[quest.village] || null;
+      const divider = '<:br:788136157363306506>'.repeat(11);
+      
+      const questInfoFields = [
+        { name: '__Status__', value: quest.completed ? '🏅 **COMPLETED**' : '✅ **AVAILABLE**', inline: true },
+        { name: '__Type__', value: `${QUEST_TYPE_EMOJIS[quest.type] || '❓'} ${quest.type.charAt(0).toUpperCase() + quest.type.slice(1)} Quest`, inline: true },
+        { name: '__Location__', value: quest.village, inline: true }
+      ];
+      
+      const embed = new EmbedBuilder()
+        .setTitle(`${QUEST_TYPE_EMOJIS[quest.type] || '🌿'} Help Wanted — ${quest.village}`)
+        .setColor(color)
+        .addFields(
+          { name: 'Quest', value: `${questLine}\n${divider}` },
+          ...questInfoFields,
+          { name: 'How to Complete', value: turnIn },
+          { name: 'Rules', value: rules },
+          { name: 'Quest ID', value: quest.questId ? `\`\`\`${quest.questId}\`\`\`` : 'N/A', inline: true }
+        );
+      
+      if (image) embed.setImage(image);
+      result[quest.village] = embed;
+    }
+    
+    return result;
+  } catch (error) {
+    console.error('[HelpWanted] Error formatting specific quests by village:', error);
     throw error;
   }
 }
@@ -974,6 +1036,7 @@ module.exports = {
   getTodaysQuests,
   formatQuestsAsEmbed,
   formatQuestsAsEmbedsByVillage,
+  formatSpecificQuestsAsEmbedsByVillage,
   getQuestsForScheduledTime,
   updateQuestEmbed
 }; 
