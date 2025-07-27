@@ -1671,39 +1671,35 @@ async function handleChangeJob(interaction) {
   const characterName = interaction.options.getString("charactername");
   const newJob = interaction.options.getString("newjob");
   
-  console.log(`[handleChangeJob] Input values - userId: ${userId}, characterName: ${characterName}, newJob: ${newJob}`);
+  console.log(`[handleChangeJob] Processing job change: ${characterName} -> ${newJob} (User: ${userId})`);
 
   // ------------------- Job Validation -------------------
   if (!isValidJob(newJob)) {
-    console.warn(`[handleChangeJob] Invalid job change attempt: '${newJob}' by user ${userId}`);
+    console.warn(`[handleChangeJob] Invalid job: '${newJob}' by user ${userId}`);
     await interaction.followUp({
       content: `❌ **${newJob}** is not a valid job. Please select a valid job from the list.`,
       ephemeral: true
     });
     return;
   }
-  console.log('[handleChangeJob] Job validation passed');
 
   await connectToTinglebot();
-  console.log('[handleChangeJob] Connected to Tinglebot database');
-
   const character = await fetchCharacterByNameAndUserId(characterName, userId);
-  console.log(`[handleChangeJob] Character fetch result:`, character ? 'Found' : 'Not found');
   
   if (!character) {
-   console.log(`[handleChangeJob] Character not found for name: ${characterName} and user: ${userId}`);
+   console.log(`[handleChangeJob] Character not found: ${characterName} (User: ${userId})`);
    await interaction.followUp({
     content: `❌ **Character \"${characterName}\"** not found or does not belong to you.`,
     ephemeral: true
    });
    return;
   }
+  
   const previousJob = character.job || "Unknown";
-  console.log(`[handleChangeJob] Previous job: ${previousJob}`);
 
   // Add validation to prevent changing to current job
   if (previousJob.toLowerCase() === newJob.toLowerCase()) {
-    console.log(`[handleChangeJob] Attempted to change to same job: ${previousJob}`);
+    console.log(`[handleChangeJob] Same job attempt: ${previousJob}`);
     await interaction.followUp({
       content: `❌ You cannot change your job to the same job you currently have (${previousJob}).`,
       ephemeral: true
@@ -1711,29 +1707,25 @@ async function handleChangeJob(interaction) {
     return;
   }
 
-  console.log('[handleChangeJob] Calling canChangeJob validation');
   const jobValidation = await canChangeJob(character, newJob);
-  console.log('[handleChangeJob] Job validation result:', jobValidation);
   
   if (!jobValidation.valid) {
-    console.log(`[handleChangeJob] Job validation failed: ${jobValidation.message}`);
+    console.log(`[handleChangeJob] Validation failed: ${jobValidation.message}`);
     await interaction.followUp({
       content: jobValidation.message,
       ephemeral: true
     });
     return;
   }
-  console.log('[handleChangeJob] Job validation passed');
 
   const lastJobChange = character.lastJobChange ? new Date(character.lastJobChange) : null;
   const now = new Date();
   const oneMonthAgo = new Date(now);
   oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
-  console.log(`[handleChangeJob] Last job change: ${lastJobChange}, One month ago: ${oneMonthAgo}`);
 
   if (lastJobChange && lastJobChange > oneMonthAgo) {
     const remainingDays = Math.ceil((lastJobChange - oneMonthAgo) / (1000 * 60 * 60 * 24));
-    console.log(`[handleChangeJob] Job change too soon, remaining days: ${remainingDays}`);
+    console.log(`[handleChangeJob] Cooldown active: ${remainingDays} days remaining`);
     await interaction.followUp({
       content: `⚠️ You can only change jobs once per month. Please wait **${remainingDays}** more day(s).`,
       ephemeral: true
@@ -1741,9 +1733,7 @@ async function handleChangeJob(interaction) {
     return;
   }
 
-  console.log('[handleChangeJob] Checking user tokens');
   const userTokens = await getOrCreateToken(interaction.user.id);
-  console.log(`[handleChangeJob] User tokens:`, userTokens);
   
   if (!userTokens) {
     console.log('[handleChangeJob] No token tracker found');
@@ -1773,7 +1763,7 @@ async function handleChangeJob(interaction) {
     return;
   }
 
-  console.log('[handleChangeJob] Updating token balance');
+  console.log('[handleChangeJob] Processing job change and deducting 500 tokens');
   await updateTokenBalance(interaction.user.id, -500);
 
   // Log to token tracker
@@ -1789,14 +1779,12 @@ async function handleChangeJob(interaction) {
         '-500'
       ];
       await safeAppendDataToSheet(user.tokenTracker, user, 'loggedTracker!B7:F', [tokenRow], undefined, { skipValidation: true });
-      console.log(`[handleChangeJob]: ✅ Logged job change to token tracker for ${character.name}`);
+      console.log(`[handleChangeJob] ✅ Logged to token tracker: ${character.name}`);
     }
   } catch (sheetError) {
-    console.error(`[handleChangeJob]: ❌ Error logging to token tracker:`, sheetError);
-    // Don't throw here, just log the error since the job change was already processed
+    console.error(`[handleChangeJob] ❌ Token tracker error:`, sheetError);
   }
 
-  console.log('[handleChangeJob] Updating character job');
   character.job = newJob;
   character.lastJobChange = now;
   character.jobDateChanged = now;
@@ -1810,7 +1798,7 @@ async function handleChangeJob(interaction) {
   // ------------------- Reset Vending on Invalid Job -------------------
   const nonVendor = !["merchant", "shopkeeper"].includes(newJob.toLowerCase());
   if (nonVendor) {
-    console.log('[handleChangeJob] Resetting vending data for non-vendor job');
+    console.log('[handleChangeJob] Resetting vending data (non-vendor job)');
     try {
       const vendingUri = process.env.NODE_ENV === 'production' 
         ? process.env.MONGODB_VENDING_URI_PROD 
@@ -1822,14 +1810,10 @@ async function handleChangeJob(interaction) {
 
       const vendingClient = new MongoClient(vendingUri);
       await vendingClient.connect();
-      console.log('[handleChangeJob] Connected to vending database');
-
       const vendingDb = vendingClient.db("vending");
       const vendingCollection = vendingDb.collection(character.name.toLowerCase());
 
       await vendingCollection.deleteMany({});
-      console.log('[handleChangeJob] Cleared vending collection');
-
       character.vendingPoints = 0;
       character.vendingSetup = null;
       character.vendingSync = false;
@@ -1839,16 +1823,13 @@ async function handleChangeJob(interaction) {
       character.vendingType = null;
 
       await vendingClient.close();
-      console.log('[handleChangeJob] Closed vending connection');
 
     } catch (err) {
-      console.error(`[handleChangeJob] Failed to reset vending data:`, err);
+      console.error(`[handleChangeJob] Vending reset failed:`, err);
     }
   }
 
-  console.log('[handleChangeJob] Saving character changes');
   await character.save();
-  console.log('[handleChangeJob] Character saved successfully');
 
   const villageColor = getVillageColorByName(character.homeVillage) || "#4CAF50";
   const villageEmoji = getVillageEmojiByName(character.homeVillage) || "\ud83c\udfe1";
@@ -1865,16 +1846,16 @@ async function handleChangeJob(interaction) {
   
   const formattedHomeVillage = capitalizeFirstLetter(character.homeVillage);
   
-  console.log('[handleChangeJob] Creating embed');
   const embed = new EmbedBuilder()
    .setTitle(`${villageEmoji} Job Change Notification`)
    .setDescription(
     `Resident **${character.name}** has formally submitted their notice of job change from **${previousJob}** to **${newJob}**.\n\n` +
-     `The **${formattedHomeVillage} Town Hall** wishes you the best in your new endeavors!`
+     `The **${formattedHomeVillage} Town Hall** wishes you the best in your new endeavors!\n\n` +
+     `💰 **500 tokens deducted.**`
    )
    .addFields(
     { name: "\ud83d\udc64 __Name__", value: character.name, inline: true },
-    { name: "\ud83c\udfe1 __Home Village__", value: character.homeVillage, inline: true },
+    { name: "\ud83c\udfe1 __Home Village__", value: formattedHomeVillage, inline: true },
     { name: "​", value: "​", inline: true },
     {
      name: "\ud83d\udcc5 __Last Job Change__",
@@ -1892,12 +1873,9 @@ async function handleChangeJob(interaction) {
    .setImage(DEFAULT_IMAGE_URL)
    .setTimestamp();
 
-  console.log('[handleChangeJob] Sending success message');
   await interaction.followUp({ embeds: [embed] });
   
-  console.log(
-   `[handleChangeJob] Successfully processed job change for character "${characterName}" from "${previousJob}" to "${newJob}"`
-  );
+  console.log(`[handleChangeJob] ✅ Job change completed: ${characterName} (${previousJob} -> ${newJob})`);
  } catch (error) {
   console.error('[handleChangeJob] Error occurred:', error);
   handleError(error, "character.js");
