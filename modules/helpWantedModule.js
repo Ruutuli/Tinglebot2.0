@@ -93,7 +93,7 @@ const NPC_QUEST_FLAVOR = {
     ],
     escort: [
       "Sue has a shipment of fresh fish bound for **{location}** but the journey is risky. She needs an escort to ensure the delivery arrives on time.",
-      "The Zora fisherman is heading to **{location}** to negotiate new trade routes, but the path is dangerous. She seeks protection.",
+      "Sue is heading to **{location}** to negotiate new trade routes, but the path is dangerous. She seeks protection.",
       "Sue's been invited to **{location}** to share her fishing techniques, but she's worried about traveling alone."
     ],
     crafting: [
@@ -115,7 +115,7 @@ const NPC_QUEST_FLAVOR = {
     ],
     escort: [
       "Lukan has a wagon full of fresh fruit bound for **{location}** but bandits have been targeting merchant caravans. He needs protection.",
-      "The orchard keeper is heading to **{location}** to learn new cultivation techniques, but the journey is perilous.",
+      "Lukan is heading to **{location}** to learn new cultivation techniques, but the journey is perilous.",
       "Lukan's been invited to **{location}** to share his fruit-growing secrets, but he's nervous about traveling alone."
     ],
     crafting: [
@@ -137,7 +137,7 @@ const NPC_QUEST_FLAVOR = {
     ],
     escort: [
       "Myti discovered a valuable mineral deposit near **{location}** but the path is treacherous. He needs an escort to safely reach the site.",
-      "The Mogma scout is heading to **{location}** to share his underground discoveries, but the surface journey is dangerous.",
+      "Myti is heading to **{location}** to share his underground discoveries, but the surface journey is dangerous.",
       "Myti's been invited to **{location}** to teach cave exploration techniques, but he's not used to traveling above ground."
     ],
     crafting: [
@@ -159,7 +159,7 @@ const NPC_QUEST_FLAVOR = {
     ],
     escort: [
       "Cree needs to deliver monster parts to **{location}** for analysis, but the road is dangerous. He seeks a capable escort.",
-      "The monster hunter is heading to **{location}** to report on dangerous creatures, but the journey is perilous.",
+      "Cree is heading to **{location}** to report on dangerous creatures, but the journey is perilous.",
       "Cree's been summoned to **{location}** to help with a monster problem, but he's worried about traveling alone."
     ],
     crafting: [
@@ -181,7 +181,7 @@ const NPC_QUEST_FLAVOR = {
     ],
     escort: [
       "Cece has a rare mushroom shipment bound for **{location}** but the journey is risky. She needs protection to ensure the delicate cargo arrives.",
-      "The forager is heading to **{location}** to share her mushroom knowledge, but the path is dangerous.",
+      "Cece is heading to **{location}** to share her mushroom knowledge, but the path is dangerous.",
       "Cece's been invited to **{location}** to teach foraging techniques, but she's nervous about traveling alone."
     ],
     crafting: [
@@ -203,7 +203,7 @@ const NPC_QUEST_FLAVOR = {
     ],
     escort: [
       "Walton needs to deliver sacred seeds to **{location}** but the journey is dangerous. He seeks a trustworthy escort.",
-      "The Korok is heading to **{location}** to share forest wisdom, but the path is perilous.",
+      "Walton is heading to **{location}** to share forest wisdom, but the path is perilous.",
       "Walton's been summoned to **{location}** to help with a forest problem, but he's worried about leaving his trees."
     ],
     crafting: [
@@ -225,7 +225,7 @@ const NPC_QUEST_FLAVOR = {
     ],
     escort: [
       "Jengo has a valuable ore shipment bound for **{location}** but bandits are targeting mining caravans. He needs protection.",
-      "The miner is heading to **{location}** to share mining techniques, but the journey is dangerous.",
+      "Jengo is heading to **{location}** to share mining techniques, but the journey is dangerous.",
       "Jengo's been invited to **{location}** to help with a mining problem, but he's nervous about traveling alone."
     ],
     crafting: [
@@ -247,7 +247,7 @@ const NPC_QUEST_FLAVOR = {
     ],
     escort: [
       "Jasz needs to deliver rare nocturnal specimens to **{location}** for study, but the journey is dangerous. He seeks an escort.",
-      "The hunter is heading to **{location}** to report on night creatures, but the path is perilous.",
+      "Jasz is heading to **{location}** to report on night creatures, but the path is perilous.",
       "Jasz's been summoned to **{location}** to help with a nocturnal problem, but he's worried about traveling in daylight."
     ],
     crafting: [
@@ -269,7 +269,7 @@ const NPC_QUEST_FLAVOR = {
     ],
     escort: [
       "Lecia has fragile ancient artifacts bound for **{location}** for study, but the journey is risky. She needs careful protection.",
-      "The scholar is heading to **{location}** to share her archaeological discoveries, but the path is dangerous.",
+      "Lecia is heading to **{location}** to share her archaeological discoveries, but the path is dangerous.",
       "Lecia's been invited to **{location}** to teach ancient history, but she's nervous about traveling with valuable artifacts."
     ],
     crafting: [
@@ -291,7 +291,7 @@ const NPC_QUEST_FLAVOR = {
     ],
     escort: [
       "Tye has delicate plant specimens bound for **{location}** for study, but the journey is risky. She needs careful protection.",
-      "The botanist is heading to **{location}** to share her botanical discoveries, but the path is dangerous.",
+      "Tye is heading to **{location}** to share her botanical discoveries, but the path is dangerous.",
       "Tye's been invited to **{location}** to teach plant cultivation, but she's worried about traveling with fragile specimens."
     ],
     crafting: [
@@ -313,7 +313,7 @@ const NPC_QUEST_FLAVOR = {
     ],
     escort: [
       "Lil Tim needs to deliver fresh eggs to **{location}** but the journey is dangerous. He seeks a trustworthy escort.",
-      "The Cucco is heading to **{location}** to share his bird-keeping wisdom, but the path is perilous.",
+      "Lil Tim is heading to **{location}** to share his bird-keeping wisdom, but the path is perilous.",
       "Lil Tim's been invited to **{location}** to help with a poultry problem, but he's nervous about traveling alone."
     ],
     crafting: [
