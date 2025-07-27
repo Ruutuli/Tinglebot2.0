@@ -1590,6 +1590,9 @@ if (quantity <= 0) {
   console.log(`[shops]: 📋 - Quantity sold: ${quantity}`);
   console.log(`[shops]: 📋 - Price per item: ${sellPrice}`);
   console.log(`[shops]: 📋 - Total earned: ${totalPrice} tokens`);
+  // Determine if crafter's bonus was applied
+  const crafterBonusApplied = isCrafted && characterMeetsRequirements;
+  
   console.log(`[shops]: 📋 - Item data source: ItemModel (buyPrice: ${itemDetails.buyPrice}, sellPrice: ${itemDetails.sellPrice})`);
   console.log(`[shops]: 📋 - Crafter's Bonus Applied: ${crafterBonusApplied}`);
   console.log(`[shops]: 📋 - Item was crafted: ${isCrafted}`);
@@ -1597,9 +1600,6 @@ if (quantity <= 0) {
   console.log(`[shops]: 📋 - Character job: ${character.job}`);
   console.log(`[shops]: 📋 - Effective job: ${effectiveJob}`);
   console.log(`[shops]: 📋 - Item crafting jobs: ${itemDetails.craftingJobs}`);
-
-  // Determine if crafter's bonus was applied
-  const crafterBonusApplied = isCrafted && characterMeetsRequirements;
   const priceType = crafterBonusApplied ? "Crafter's Bonus (Buy Price)" : "Standard Sell Price";
   
   const saleEmbed = new EmbedBuilder()
@@ -1637,13 +1637,44 @@ if (quantity <= 0) {
 
   interaction.editReply({ embeds: [saleEmbed] });
  } catch (error) {
-  handleError(error, "shops.js");
-  console.error("[shops]: Error selling item:", error);
-  const { fullMessage } = handleTokenError(error, interaction);
-  await interaction.editReply({
-    content: fullMessage,
-    ephemeral: true,
+  // Log the error for debugging
+  handleError(error, "shops.js", {
+    commandName: "economy shop-sell",
+    userTag: interaction.user.tag,
+    userId: interaction.user.id,
+    options: {
+      characterName: interaction.options.getString("charactername"),
+      itemName: interaction.options.getString("itemname"),
+      quantity: interaction.options.getInteger("quantity")
+    }
   });
+  
+  console.error("[shops]: Error selling item:", error);
+  
+  // Determine if this is a token-related error or a general system error
+  const isTokenError = error.message && (
+    error.message.includes('Invalid URL') ||
+    error.message.includes('permission') ||
+    error.message.includes('404') ||
+    error.message.includes('headers') ||
+    error.message.includes('No \'earned\' entries found') ||
+    error.message.includes('Invalid sheet format')
+  );
+  
+  if (isTokenError) {
+    // Handle token tracker specific errors
+    const { fullMessage } = handleTokenError(error, interaction);
+    await interaction.editReply({
+      content: fullMessage,
+      ephemeral: true,
+    });
+  } else {
+    // Handle general system errors with a user-friendly message
+    await interaction.editReply({
+      content: `❌ **An error occurred while processing your sale request.**\n\nThis appears to be a system error. Please try again in a moment, or contact a moderator if the problem persists.\n\n**Error Details:** ${error.message || 'Unknown error'}`,
+      ephemeral: true,
+    });
+  }
  }
 }
 
