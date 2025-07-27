@@ -55,7 +55,7 @@ const { getCurrentWeather, generateWeatherEmbed } = require("./services/weatherS
 const Pet = require("./models/PetModel");
 const Raid = require("./models/RaidModel");
 const fs = require('fs');
-const { formatQuestsAsEmbedsByVillage, generateDailyQuests, getQuestsForScheduledTime } = require('./modules/helpWantedModule');
+const { formatQuestsAsEmbedsByVillage, formatSpecificQuestsAsEmbedsByVillage, generateDailyQuests, getQuestsForScheduledTime } = require('./modules/helpWantedModule');
 const HelpWantedQuest = require('./models/HelpWantedQuestModel');
 const moment = require('moment');
 
@@ -596,8 +596,8 @@ async function checkAndPostMissedQuests(client) {
         const unpostedQuests = quests.filter(quest => !quest.channelId);
         
         if (unpostedQuests.length > 0) {
-          // Post the quests
-          await postHelpWantedBoardToTestChannel(client, cronTime);
+          // Post only the unposted quests
+          await postMissedQuestsToTestChannel(client, unpostedQuests);
           postedCount += unpostedQuests.length;
         }
       }
@@ -626,7 +626,7 @@ async function postHelpWantedBoardToTestChannel(client, cronTime) {
     let posted = 0;
     for (const quest of quests) {
       // Format embed for this quest only
-      const embedsByVillage = await formatQuestsAsEmbedsByVillage();
+      const embedsByVillage = await formatSpecificQuestsAsEmbedsByVillage([quest]);
       const embed = embedsByVillage[quest.village];
       if (embed) {
         const message = await channel.send({ embeds: [embed] });
@@ -650,6 +650,48 @@ async function postHelpWantedBoardToTestChannel(client, cronTime) {
       cronTime
     });
     console.error('[scheduler.js]: Error posting Help Wanted board:', error);
+  }
+}
+
+// ------------------- Post Missed Quests Function -------------------
+// Posts only the specific quests that were missed during startup
+// ============================================================================
+async function postMissedQuestsToTestChannel(client, unpostedQuests) {
+  try {
+    if (!unpostedQuests.length) {
+      console.log(`[scheduler.js]: No unposted quests to post. Skipping.`);
+      return;
+    }
+    
+    const channel = await client.channels.fetch(HELP_WANTED_TEST_CHANNEL);
+    let posted = 0;
+    
+    for (const quest of unpostedQuests) {
+      // Format embed for this specific quest only
+      const embedsByVillage = await formatSpecificQuestsAsEmbedsByVillage([quest]);
+      const embed = embedsByVillage[quest.village];
+      if (embed) {
+        const message = await channel.send({ embeds: [embed] });
+        // Save the message ID and channel ID for future edits
+        const updatedQuest = await HelpWantedQuest.findOneAndUpdate(
+          { _id: quest._id },
+          { 
+            messageId: message.id,
+            channelId: channel.id
+          },
+          { new: true }
+        );
+        console.log(`[scheduler.js]: Saved message ID ${message.id} and channel ID ${channel.id} for quest ${quest.questId} in ${quest.village}`);
+        posted++;
+      }
+    }
+    console.log(`[scheduler.js]: Posted ${posted} missed quests during startup`);
+  } catch (error) {
+    handleError(error, 'scheduler.js', {
+      commandName: 'postMissedQuestsToTestChannel',
+      questCount: unpostedQuests.length
+    });
+    console.error('[scheduler.js]: Error posting missed quests:', error);
   }
 }
 
