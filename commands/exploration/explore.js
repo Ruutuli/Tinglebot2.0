@@ -880,10 +880,18 @@ module.exports = {
         );
 
         if (!raidResult || !raidResult.success) {
-         console.error(`[ERROR] Failed to trigger raid for battle: ${raidResult?.error || 'Unknown error'}`);
-         await interaction.editReply(
-          "**An error occurred during the raid setup.**"
-         );
+         // Check if it's a cooldown error
+         if (raidResult?.error && raidResult.error.includes('Raid cooldown active')) {
+          console.error(`[ERROR] Raid cooldown active during exploration: ${raidResult.error}`);
+          await interaction.editReply(
+           `⏰ **${raidResult.error}**\n\n🗺️ **The monster has retreated due to recent raid activity. Try exploring again later.**`
+          );
+         } else {
+          console.error(`[ERROR] Failed to trigger raid for battle: ${raidResult?.error || 'Unknown error'}`);
+          await interaction.editReply(
+           "**An error occurred during the raid setup.**"
+          );
+         }
          return;
         }
 

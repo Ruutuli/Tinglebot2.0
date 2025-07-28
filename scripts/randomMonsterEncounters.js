@@ -73,8 +73,30 @@ const messageActivity = new Map();
 // ------------------- Get Global Raid Cooldown -------------------
 async function getGlobalRaidCooldown() {
   try {
-    const cooldownData = await TempData.findOne({ key: RAID_COOLDOWN_KEY });
-    return cooldownData ? cooldownData.data.lastRaidTime : 0;
+    const cooldownData = await TempData.findOne({ key: RAID_COOLDOWN_KEY, type: 'temp' });
+    
+    // If no cooldown data found, also check for any old entries without type field and clean them up
+    if (!cooldownData) {
+      const oldCooldownData = await TempData.findOne({ key: RAID_COOLDOWN_KEY });
+      if (oldCooldownData) {
+        console.log('[randomMonsterEncounters.js]: 🧹 Found old cooldown entry without type field, cleaning up...');
+        await TempData.findOneAndDelete({ key: RAID_COOLDOWN_KEY });
+      }
+      return 0;
+    }
+    
+    // Validate the timestamp is reasonable (not more than 1 year ago)
+    const lastRaidTime = cooldownData.data.lastRaidTime;
+    const currentTime = Date.now();
+    const oneYearAgo = currentTime - (365 * 24 * 60 * 60 * 1000);
+    
+    if (lastRaidTime && lastRaidTime < oneYearAgo) {
+      console.log('[randomMonsterEncounters.js]: 🧹 Found corrupted cooldown timestamp, resetting...');
+      await resetGlobalRaidCooldown();
+      return 0;
+    }
+    
+    return lastRaidTime || 0;
   } catch (error) {
     console.error('[randomMonsterEncounters.js]: ❌ Error getting raid cooldown:', error);
     return 0; // Default to 0 if there's an error
@@ -88,6 +110,7 @@ async function setGlobalRaidCooldown(timestamp) {
       { key: RAID_COOLDOWN_KEY },
       { 
         key: RAID_COOLDOWN_KEY,
+        type: 'temp',
         data: { lastRaidTime: timestamp }
       },
       { upsert: true, new: true }
@@ -101,7 +124,7 @@ async function setGlobalRaidCooldown(timestamp) {
 // ------------------- Reset Global Raid Cooldown -------------------
 async function resetGlobalRaidCooldown() {
   try {
-    await TempData.findOneAndDelete({ key: RAID_COOLDOWN_KEY });
+    await TempData.findOneAndDelete({ key: RAID_COOLDOWN_KEY, type: 'temp' });
     console.log(`[randomMonsterEncounters.js]: 🔄 Global raid cooldown reset - raids can now be triggered immediately`);
   } catch (error) {
     console.error('[randomMonsterEncounters.js]: ❌ Error resetting raid cooldown:', error);
@@ -145,25 +168,6 @@ async function checkForRandomEncounters(client) {
   let totalUsers = new Set();
   let activeChannels = 0;
 
-  // Check if we're still in global cooldown period
-  const lastRaidTime = await getGlobalRaidCooldown();
-  const timeSinceLastRaid = currentTime - lastRaidTime;
-  
-  if (timeSinceLastRaid < RAID_COOLDOWN) {
-    const remainingTime = RAID_COOLDOWN - timeSinceLastRaid;
-    const remainingHours = Math.floor(remainingTime / (1000 * 60 * 60));
-    const remainingMinutes = Math.floor((remainingTime % (1000 * 60 * 60)) / (1000 * 60));
-    
-    console.log(`[randomMonsterEncounters.js]: ⏰ Global raid cooldown active - ${remainingHours}h ${remainingMinutes}m remaining`);
-    console.log(`[randomMonsterEncounters.js]: ⏰ Last raid time: ${new Date(lastRaidTime).toISOString()}`);
-    console.log(`[randomMonsterEncounters.js]: ⏰ Current time: ${new Date(currentTime).toISOString()}`);
-    console.log(`[randomMonsterEncounters.js]: ⏰ Time since last raid: ${Math.floor(timeSinceLastRaid / (1000 * 60))} minutes`);
-    return;
-  } else {
-    console.log(`[randomMonsterEncounters.js]: ✅ Global raid cooldown expired - raids can be triggered`);
-    console.log(`[randomMonsterEncounters.js]: ⏰ Time since last raid: ${Math.floor(timeSinceLastRaid / (1000 * 60))} minutes (${Math.floor(timeSinceLastRaid / (1000 * 60 * 60))} hours)`);
-  }
-
   // First pass: collect total activity across all channels
   for (const [channelId, activity] of messageActivity.entries()) {
     // Skip excluded channels
@@ -192,10 +196,6 @@ async function checkForRandomEncounters(client) {
   if (meetsThreshold) {
     console.log(`[randomMonsterEncounters.js]: 🐉 TRIGGERING ENCOUNTER! Server-wide activity: ${totalMessages} messages, ${totalUsers.size} users across ${activeChannels} channels`);
     
-    // Update global raid cooldown (applies to all villages) - now persisted to database
-    await setGlobalRaidCooldown(currentTime);
-    console.log(`[randomMonsterEncounters.js]: ⏰ Global raid cooldown started - next raid available in 4 hours`);
-    
     // Reset all channel activity after triggering encounter
     for (const [channelId, activity] of messageActivity.entries()) {
       if (!EXCLUDED_CHANNELS.includes(channelId)) {
@@ -220,8 +220,6 @@ async function checkForRandomEncounters(client) {
       console.error(`[randomMonsterEncounters.js]: ❌ Could not find channel for ${selectedVillage} (ID: ${targetChannelId})`);
     }
   }
-
-
 }
 
 // ============================================================================
@@ -292,33 +290,8 @@ async function triggerRandomEncounter(channel, selectedVillage) {
 // Initialization Function
 // ------------------- Initialize Random Encounter Bot -------------------
 async function initializeRandomEncounterBot(client) {
-  // Log current cooldown status on startup
-  try {
-    const lastRaidTime = await getGlobalRaidCooldown();
-    const currentTime = Date.now();
-    const timeSinceLastRaid = currentTime - lastRaidTime;
-    
-    if (lastRaidTime > 0) {
-      if (timeSinceLastRaid < RAID_COOLDOWN) {
-        const remainingTime = RAID_COOLDOWN - timeSinceLastRaid;
-        const remainingHours = Math.floor(remainingTime / (1000 * 60 * 60));
-        const remainingMinutes = Math.floor((remainingTime % (1000 * 60 * 60)) / (1000 * 60));
-        
-        console.log(`[randomMonsterEncounters.js]: ⏰ Bot startup - Global raid cooldown active: ${remainingHours}h ${remainingMinutes}m remaining`);
-        console.log(`[randomMonsterEncounters.js]: ⏰ Last raid: ${new Date(lastRaidTime).toISOString()}`);
-      } else {
-        console.log(`[randomMonsterEncounters.js]: ✅ Bot startup - Global raid cooldown expired, raids can be triggered`);
-        console.log(`[randomMonsterEncounters.js]: ⏰ Time since last raid: ${Math.floor(timeSinceLastRaid / (1000 * 60))} minutes`);
-      }
-    } else {
-      console.log(`[randomMonsterEncounters.js]: ✅ Bot startup - No previous raids recorded, raids can be triggered immediately`);
-    }
-    
-    // Log role restriction status
-    console.log(`[randomMonsterEncounters.js]: 🚫 Role restriction active - Users with role ${RESTRICTED_ROLE_ID} cannot trigger raids`);
-  } catch (error) {
-    console.error('[randomMonsterEncounters.js]: ❌ Error checking cooldown status on startup:', error);
-  }
+  // Log role restriction status
+  console.log(`[randomMonsterEncounters.js]: 🚫 Role restriction active - Users with role ${RESTRICTED_ROLE_ID} cannot trigger raids`);
 
   // Set up message tracking
   client.on('messageCreate', (message) => {
@@ -326,7 +299,6 @@ async function initializeRandomEncounterBot(client) {
     
     // Check if the user has the restricted role
     if (message.member && message.member.roles.cache.has(RESTRICTED_ROLE_ID)) {
-      console.log(`[randomMonsterEncounters.js]: 🚫 Skipping message from user with restricted role: ${message.author.tag} (${message.author.id})`);
       return;
     }
     
