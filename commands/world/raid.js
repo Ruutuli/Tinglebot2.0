@@ -148,6 +148,12 @@ module.exports = {
         raidData.participants = [];
       }
       
+      // Additional safety check to ensure participants is an array
+      if (!Array.isArray(raidData.participants)) {
+        console.warn(`[raid.js]: ⚠️ Raid ${raidId} participants is not an array, initializing...`);
+        raidData.participants = [];
+      }
+      
       const existingParticipant = raidData.participants.find(p => 
         p.characterId.toString() === character._id.toString()
       );
