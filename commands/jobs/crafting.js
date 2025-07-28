@@ -323,59 +323,10 @@ module.exports = {
       await interaction.editReply({ content: `✅ **Successfully crafted ${quantity} "${itemName}".**`, flags: [MessageFlags.Ephemeral] });
       await interaction.followUp({ embeds: [embed], ephemeral: false });
 
-      // ------------------- Update Inventory and Sheets -------------------
-      const inventoryLink = character.inventory || character.inventoryLink;
-      if (typeof inventoryLink === 'string' && isValidGoogleSheetsUrl(inventoryLink)) {
-        const spreadsheetId = extractSpreadsheetId(inventoryLink);
-        const auth = await authorizeSheets();
-        const range = 'loggedInventory!A2:M';
-        const uniqueSyncId = uuidv4();
-        const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
-        const formattedDateTime = formatDateTime(new Date());
-
-        const values = [
-          [
-            character.name,
-            item.itemName,
-            quantity.toString(),
-            item.category.join(', '),
-            item.type.join(', '),
-            item.subtype.join(', '),
-            'Crafting',
-            character.job,
-            '',
-            character.currentVillage,
-            interactionUrl,
-            formattedDateTime,
-            uniqueSyncId
-          ]
-        ];
-
-        if (character?.name && character?.inventory && character?.userId) {
-          await safeAppendDataToSheet(character.inventory, character, range, values, undefined, { 
-            skipValidation: true,
-            context: {
-              commandName: 'crafting',
-              userTag: interaction.user.tag,
-              userId: interaction.user.id,
-              characterName: character.name,
-              spreadsheetId: extractSpreadsheetId(character.inventory),
-              range: range,
-              sheetType: 'inventory',
-              options: {
-                itemName: item.itemName,
-                quantity: quantity,
-                flavorText: interaction.options.getString('flavortext')
-              }
-            }
-          });
-        } else {
-          console.error('[safeAppendDataToSheet]: Invalid character object detected before syncing.');
-        }
-      }
-
       const craftedAt = new Date();
       await addItemInventoryDatabase(character._id, item.itemName, quantity, interaction, 'Crafting', craftedAt);
+      
+      // Note: Google Sheets sync is handled by addItemInventoryDatabase
 
       // ------------------- Activate and Deactivate Job Voucher AFTER Crafting Success -------------------
       if (character.jobVoucher && !voucherCheck?.skipVoucher && jobVoucherItem) {

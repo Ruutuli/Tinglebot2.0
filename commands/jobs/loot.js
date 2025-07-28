@@ -946,80 +946,8 @@ async function handleInventoryUpdate(interaction, character, lootedItem, encount
     interaction
   );
 
-  try {
-    console.log(`[loot.js]: 🔗 Attempting to sync inventory for ${character?.name} to sheet: ${inventoryLink?.substring(0, 50)}...`);
-    
-    // Validate character object has all required properties
-    if (!character?.name || !inventoryLink || !character?.userId) {
-      console.error(`[loot.js]: ❌ Character missing required properties for sheet sync:`, {
-        name: character?.name,
-        hasInventoryLink: !!inventoryLink,
-        userId: character?.userId
-      });
-      return;
-    }
-    
-    // Validate inventory URL format
-    if (!inventoryLink.includes('docs.google.com/spreadsheets')) {
-      console.error(`[loot.js]: ❌ Invalid inventory URL format for ${character.name}:`, inventoryLink);
-      return;
-    }
-    
-    if (character?.name && inventoryLink && character?.userId) {
-      const sheetResult = await safeAppendDataToSheet(inventoryLink, character, range, values, undefined, {
-        skipValidation: true,
-                  context: {
-            commandName: 'loot',
-            userTag: interaction.user.tag,
-            userId: interaction.user.id,
-            characterName: character.name,
-            spreadsheetId: extractSpreadsheetId(inventoryLink),
-            range: range,
-            sheetType: 'inventory',
-            options: {
-              monsterName: encounteredMonster.name,
-              itemName: lootedItem.itemName,
-              quantity: lootedItem.quantity,
-              bloodMoonActive: bloodMoonActive
-            }
-          }
-      });
-      
-      // Check if the operation was stored for retry
-      if (sheetResult && sheetResult.storedForRetry) {
-        console.log(`[loot.js]: 📦 Sheet operation stored for retry: ${sheetResult.operationId}`);
-        // Don't show error to user - the operation will be retried automatically
-        return; // Exit early since the operation is being handled asynchronously
-      }
-    } else {
-      console.error('[safeAppendDataToSheet]: Invalid character object detected before syncing.');
-    }
-  } catch (sheetError) {
-    console.error(`[LOOT] Google Sheets append error: ${sheetError.message}`);
-    
-    // Handle specific error types
-    if (sheetError.status === 409 || sheetError.message.includes('aborted')) {
-      console.log(`[loot.js]: 🔄 Sheet operation conflict detected - operation will be retried automatically`);
-      // Don't show error to user for conflicts - they'll be retried automatically
-      return;
-    }
-    
-    // For other sheet errors, log them but don't fail the entire command
-    console.error(`[loot.js]: ⚠️ Sheet sync failed but continuing with loot command:`, sheetError.message);
-    
-    // Optionally notify the user about the sheet issue (but don't fail the command)
-    try {
-      await interaction.followUp({
-        content: `⚠️ **Note:** Your loot was successful, but there was an issue syncing to your Google Sheet. The data will be retried automatically.`,
-        ephemeral: true,
-      });
-    } catch (followUpError) {
-      console.error(`[loot.js]: ❌ Error sending follow-up message:`, followUpError.message);
-    }
-    
-    // Don't throw the error - let the loot command complete successfully
-    return;
-  }
+  // Note: Google Sheets sync is handled by addItemInventoryDatabase
+  console.log(`[loot.js]: ✅ Item added to database and synced to Google Sheets for ${character.name}`);
 }
 
 // ------------------- Helper Function: Generate Outcome Message -------------------

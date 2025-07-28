@@ -600,47 +600,7 @@ async function handleMonsterHunt(interaction, questId, characterName) {
               interaction
             );
             
-            const spreadsheetId = extractSpreadsheetId(inventoryLink);
-            const auth = await authorizeSheets();
-            const range = "loggedInventory!A2:M";
-            const uniqueSyncId = uuidv4();
-            const formattedDateTime = new Date().toLocaleString("en-US", { timeZone: "America/New_York" });
-            const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
-
-            const values = [[
-              character.name,
-              encounterResult.lootedItem.itemName,
-              encounterResult.lootedItem.quantity.toString(),
-              encounterResult.lootedItem.category.join(", "),
-              encounterResult.lootedItem.type.join(", "),
-              encounterResult.lootedItem.subtype.join(", "),
-              "Monster Hunt",
-              character.job,
-              "",
-              character.currentVillage,
-              interactionUrl,
-              formattedDateTime,
-              uniqueSyncId,
-            ]];
-
-            await safeAppendDataToSheet(inventoryLink, character, range, values, undefined, {
-              skipValidation: true,
-              context: {
-                commandName: 'helpwanted monsterhunt',
-                userTag: interaction.user.tag,
-                userId: interaction.user.id,
-                characterName: character.name,
-                spreadsheetId: extractSpreadsheetId(inventoryLink),
-                range: range,
-                sheetType: 'inventory',
-                options: {
-                  monsterName: monsterName,
-                  itemName: encounterResult.lootedItem.itemName,
-                  quantity: encounterResult.lootedItem.quantity,
-                  questId: questId
-                }
-              }
-            });
+            // Note: Google Sheets sync is handled by addItemInventoryDatabase
           } catch (error) {
             console.error(`[helpWanted.js]: ❌ Failed to add loot to inventory:`, error);
           }

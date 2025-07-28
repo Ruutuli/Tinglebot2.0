@@ -428,52 +428,7 @@ async function handleRaidVictory(interaction, raidData, monster) {
               interaction
             );
             
-            // Add to Google Sheets
-            const spreadsheetId = extractSpreadsheetId(character.inventory);
-            const auth = await authorizeSheets();
-            const range = "loggedInventory!A2:M";
-            const uniqueSyncId = uuidv4();
-            const formattedDateTime = new Date().toLocaleString("en-US", {
-              timeZone: "America/New_York",
-            });
-            const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
-
-            const values = [
-              [
-                character.name,
-                lootedItem.itemName,
-                lootedItem.quantity.toString(),
-                lootedItem.category.join(", "),
-                lootedItem.type.join(", "),
-                lootedItem.subtype.join(", "),
-                "Raid Loot",
-                character.job,
-                "",
-                character.currentVillage,
-                interactionUrl,
-                formattedDateTime,
-                uniqueSyncId,
-              ],
-            ];
-
-            await safeAppendDataToSheet(character.inventory, character, range, values, undefined, {
-              skipValidation: true,
-              context: {
-                commandName: 'raid',
-                userTag: interaction.user.tag,
-                userId: interaction.user.id,
-                characterName: character.name,
-                spreadsheetId: extractSpreadsheetId(character.inventory),
-                range: range,
-                sheetType: 'inventory',
-                options: {
-                  monsterName: monster.name,
-                  itemName: lootedItem.itemName,
-                  quantity: lootedItem.quantity,
-                  raidId: raidData.raidId
-                }
-              }
-            });
+            // Note: Google Sheets sync is handled by addItemInventoryDatabase
             
             // Determine loot quality indicator based on damage
             let qualityIndicator = '';
