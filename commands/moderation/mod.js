@@ -2707,6 +2707,14 @@ async function handleTriggerRaid(interaction) {
     const result = await triggerRaid(monster, modifiedInteraction, capitalizedVillage, false);
 
     if (!result || !result.success) {
+      // Check if it's a cooldown error
+      if (result?.error && result.error.includes('Raid cooldown active')) {
+        return interaction.editReply({ 
+          content: `⏰ **${result.error}**`,
+          ephemeral: true
+        });
+      }
+      
       return interaction.editReply({ 
         content: `❌ **Failed to trigger the raid:** ${result?.error || 'Unknown error'}`,
         ephemeral: true

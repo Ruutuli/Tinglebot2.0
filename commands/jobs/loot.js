@@ -549,13 +549,30 @@ module.exports = {
          }
        }
        
-       await triggerRaid(
+       const raidResult = await triggerRaid(
         encounteredMonster,
         interaction,
         capitalizeVillageName(character.currentVillage),
         true,
         character
        ); // Pass `true` for Blood Moon and character for auto-join
+       
+       if (!raidResult || !raidResult.success) {
+        // Check if it's a cooldown error
+        if (raidResult?.error && raidResult.error.includes('Raid cooldown active')) {
+          await interaction.followUp({
+            content: `⏰ **${raidResult.error}**\n\n🌕 **Blood Moon is active, but a raid was recently triggered. The monster has retreated for now.**`,
+            ephemeral: true
+          });
+        } else {
+          await interaction.followUp({
+            content: `❌ **Failed to trigger Blood Moon raid:** ${raidResult?.error || 'Unknown error'}`,
+            ephemeral: true
+          });
+        }
+        return;
+       }
+       
        return;
       }
      } else {
