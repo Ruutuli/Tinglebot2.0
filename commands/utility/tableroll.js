@@ -326,70 +326,7 @@ module.exports = {
             interaction
           );
 
-          // Add to Google Sheets
-          const inventoryLink = character.inventory || character.inventoryLink;
-          if (typeof inventoryLink === 'string' && isValidGoogleSheetsUrl(inventoryLink)) {
-            const spreadsheetId = extractSpreadsheetId(inventoryLink);
-            const auth = await authorizeSheets();
-            const range = 'loggedInventory!A2:M';
-            const uniqueSyncId = uuidv4();
-            const formattedDateTime = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
-            const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
-            
-            const values = [[
-              character.name,
-              rolledItemName,
-              '1', // Quantity
-              'Table Roll',
-              'Table Roll',
-              '', // Subtype
-              'Table Roll',
-              character.job,
-              '',
-              character.currentVillage,
-              interactionUrl,
-              formattedDateTime,
-              uniqueSyncId,
-            ]];
-
-            if (character?.name && character?.inventory && character?.userId) {
-              try {
-                await safeAppendDataToSheet(character.inventory, character, range, values, undefined, { 
-                  skipValidation: true,
-                  context: {
-                    commandName: 'tableroll',
-                    userTag: interaction.user.tag,
-                    userId: interaction.user.id,
-                    characterName: character.name,
-                    spreadsheetId: extractSpreadsheetId(character.inventory),
-                    range: range,
-                    sheetType: 'inventory',
-                    options: {
-                      tableName: tableName,
-                      itemName: rolledItemName,
-                      quantity: 1
-                    }
-                  }
-                });
-              } catch (sheetError) {
-                handleError(sheetError, 'tableroll.js', {
-                  commandName: '/tableroll roll',
-                  userTag: interaction.user.tag,
-                  userId: interaction.user.id,
-                  characterName: character.name,
-                  sheetType: 'inventory',
-                  spreadsheetId: extractSpreadsheetId(character.inventory),
-                  range: range,
-                  options: {
-                    tableName: tableName,
-                    itemName: rolledItemName,
-                    quantity: 1
-                  }
-                });
-                // Continue execution since the item was already added to the database
-              }
-            }
-          }
+          // Note: Google Sheets sync is handled by addItemInventoryDatabase
         } catch (error) {
           handleError(error, 'tableroll.js', {
             commandName: '/tableroll roll',

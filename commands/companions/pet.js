@@ -840,50 +840,7 @@ module.exports = {
       interaction
      );
 
-     // ------------------- Log Roll Details to Google Sheets (if applicable) -------------------
-     const inventoryLink = character.inventory || character.inventoryLink;
-     if (isValidGoogleSheetsUrl(inventoryLink)) {
-      const spreadsheetId = extractSpreadsheetId(inventoryLink);
-      const auth = await authorizeSheets();
-      const values = [
-       [
-        character.name,
-        randomItem.itemName,
-        quantity.toString(),
-        randomItem.category.join(", "),
-        randomItem.type.join(", "),
-        randomItem.subtype.join(", "),
-        "Pet Roll",
-        character.job,
-        pet.chosenRoll,
-        character.currentVillage,
-        `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`,
-        new Date().toLocaleString("en-US", { timeZone: "America/New_York" }),
-        uuidv4(),
-       ],
-      ];
-      await safeAppendDataToSheet(character.inventory, character, "loggedInventory!A2:M", values, undefined, { 
-        skipValidation: true,
-        context: {
-          commandName: 'pet',
-          userTag: interaction.user.tag,
-          userId: interaction.user.id,
-          characterName: character.name,
-          spreadsheetId: extractSpreadsheetId(character.inventory),
-          range: 'loggedInventory!A2:M',
-          sheetType: 'inventory',
-          options: {
-            petName: pet.name,
-            petSpecies: pet.species,
-            petType: pet.petType,
-            petLevel: pet.level,
-            chosenRoll: pet.chosenRoll,
-            itemName: randomItem.itemName,
-            quantity: quantity
-          }
-        }
-      });
-     }
+     // Note: Google Sheets sync is handled by addItemInventoryDatabase
 
      // ------------------- Build Roll Result Embed -------------------
      const flavorTextMessage = getFlavorText(

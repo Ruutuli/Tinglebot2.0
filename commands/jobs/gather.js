@@ -518,49 +518,7 @@ module.exports = {
                 lootedItem.type.join(', '),
                 interaction
               );
-              if (character?.name && inventoryLink && character?.userId) {
-                try {
-                  await safeAppendDataToSheet(inventoryLink, character, range, values, undefined, { 
-                    skipValidation: true,
-                    context: {
-                      commandName: 'gather',
-                      userTag: interaction.user.tag,
-                      userId: interaction.user.id,
-                      characterName: character.name,
-                      spreadsheetId: extractSpreadsheetId(inventoryLink),
-                      range: range,
-                      sheetType: 'inventory',
-                      options: {
-                        region: region,
-                        itemName: lootedItem.itemName,
-                        quantity: lootedItem.quantity
-                      }
-                    }
-                  });
-                } catch (sheetError) {
-                  handleError(sheetError, 'gather.js', {
-                    commandName: '/gather',
-                    userTag: interaction.user.tag,
-                    userId: interaction.user.id,
-                    characterName: character.name,
-                    sheetType: 'inventory',
-                    spreadsheetId: extractSpreadsheetId(inventoryLink),
-                    range: range,
-                    options: {
-                      region: region,
-                      itemName: lootedItem.itemName,
-                      quantity: lootedItem.quantity
-                    }
-                  });
-                  // Continue execution since the item was already added to the database
-                }
-              } else {
-                handleError(new Error('Invalid character object'), 'gather.js', {
-                  characterName: character?.name,
-                  hasInventoryLink: !!inventoryLink,
-                  userId: character?.userId
-                });
-              }
+              // Note: Google Sheets sync is handled by addItemInventoryDatabase
 
               const embed = createMonsterEncounterEmbed(
                 character,
@@ -631,82 +589,7 @@ module.exports = {
           randomItem.type.join(', '),
           interaction
         );
-        const inventoryLink = character.inventory || character.inventoryLink;
-        if (typeof inventoryLink !== 'string' || !isValidGoogleSheetsUrl(inventoryLink)) {
-          await interaction.editReply({
-            content: `❌ **Invalid or missing Google Sheets URL for character ${characterName}.**`,
-          });
-          return;
-        }
-        const spreadsheetId = extractSpreadsheetId(inventoryLink);
-        const auth = await authorizeSheets();
-        const range = 'loggedInventory!A2:M';
-        const uniqueSyncId = uuidv4();
-        const formattedDateTime = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
-        const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
-        const values = [[
-          character.name,
-          randomItem.itemName,
-          quantity.toString(),
-          randomItem.category.join(', '),
-          randomItem.type.join(', '),
-          randomItem.subtype.join(', '),
-          'Gathering',
-          character.job,
-          '',
-          character.currentVillage,
-          interactionUrl,
-          formattedDateTime,
-          uniqueSyncId,
-        ]];
-        if (character?.name && inventoryLink && character?.userId) {
-          try {
-            const sheetResult = await safeAppendDataToSheet(inventoryLink, character, range, values, undefined, { 
-              skipValidation: true,
-              context: {
-                commandName: 'gather',
-                userTag: interaction.user.tag,
-                userId: interaction.user.id,
-                characterName: character.name,
-                spreadsheetId: extractSpreadsheetId(inventoryLink),
-                range: range,
-                sheetType: 'inventory',
-                options: {
-                  region: region,
-                  itemName: randomItem.itemName,
-                  quantity: quantity
-                }
-              }
-            });
-            
-            // Check if the operation was stored for retry
-            if (sheetResult && sheetResult.storedForRetry) {
-              // Don't show error to user - the operation will be retried automatically
-            }
-          } catch (sheetError) {
-            handleError(sheetError, 'gather.js', {
-              commandName: '/gather',
-              userTag: interaction.user.tag,
-              userId: interaction.user.id,
-              characterName: character.name,
-              sheetType: 'inventory',
-              spreadsheetId: extractSpreadsheetId(inventoryLink),
-              range: range,
-              options: {
-                region: region,
-                itemName: randomItem.itemName,
-                quantity: quantity
-              }
-            });
-            // Continue execution since the item was already added to the database
-          }
-        } else {
-          handleError(new Error('Invalid character object'), 'gather.js', {
-            characterName: character?.name,
-            hasInventoryLink: !!inventoryLink,
-            userId: character?.userId
-          });
-        }
+        // Note: Google Sheets sync is handled by addItemInventoryDatabase
 
         const embed = createGatherEmbed(character, randomItem);
         await interaction.editReply({ embeds: [embed] });

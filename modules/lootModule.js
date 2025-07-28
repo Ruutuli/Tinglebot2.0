@@ -65,25 +65,7 @@ async function processLoot(battleProgress, currentMonster, interaction, battleId
 
         await addItemInventoryDatabase(character._id, lootedItem.itemName, quantity, category, type, interaction);
 
-        // Update Google Sheets with the new inventory
-        const inventoryLink = character.inventory || character.inventoryLink;
-        const spreadsheetId = extractSpreadsheetId(inventoryLink);
-        const auth = await authorizeSheets();
-        const range = 'loggedInventory!A2:M';
-        const formattedDateTime = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
-        const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
-        const values = [[
-          character.name, lootedItem.itemName, quantity, category, type,
-          lootedItem.subtype ? lootedItem.subtype.join(', ') : 'N/A', 'Looted', character.job, '',
-          character.currentVillage, interactionUrl, formattedDateTime, uuidv4()
-        ]];
-
-        if (character?.name && character?.inventory && character?.userId) {
-    await safeAppendDataToSheet(character.inventory, character, range, values, undefined, { skipValidation: true });
-} else {
-    console.error('[safeAppendDataToSheet]: Invalid character object detected before syncing.');
-}
-  // Append data to the Google Sheet
+        // Note: Google Sheets sync is handled by addItemInventoryDatabase
 
         // Create a link to the character's inventory for the loot message
         const inventoryLinkFormatted = `[${character.name}](<${inventoryLink}>)`;
