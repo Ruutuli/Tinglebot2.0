@@ -131,14 +131,47 @@ module.exports = {
     let job;
     let region;
     let currentVillage;
+    let hasResponded = false;
+
+    // Helper function to safely respond to interaction
+    const safeReply = async (content, options = {}) => {
+      if (hasResponded || interaction.replied || interaction.deferred) {
+        try {
+          await interaction.editReply(content);
+        } catch (error) {
+          if (error.code === 10062) {
+            // Interaction has expired, try followUp instead
+            try {
+              await interaction.followUp(content);
+            } catch (followUpError) {
+              console.error('[gather.js]: Failed to send followUp message:', followUpError);
+            }
+          } else {
+            throw error;
+          }
+        }
+      } else {
+        try {
+          await interaction.reply(content);
+          hasResponded = true;
+        } catch (error) {
+          if (error.code === 10062) {
+            console.error('[gather.js]: Interaction expired before initial response');
+          } else {
+            throw error;
+          }
+        }
+      }
+    };
 
     try {
       await interaction.deferReply();
+      hasResponded = true;
 
       const characterName = interaction.options.getString('charactername');
       const character = await fetchCharacterByNameAndUserId(characterName, interaction.user.id);
       if (!character) {
-        await interaction.editReply({
+        await safeReply({
           content: `❌ **Character ${characterName} not found or does not belong to you.**`,
         });
         return;
@@ -153,13 +186,13 @@ module.exports = {
       // Check for KO status
       if (character.currentHearts === 0) {
         const embed = createKOEmbed(character);
-        await interaction.editReply({ embeds: [embed] });
+        await safeReply({ embeds: [embed] });
         return;
       }
 
       // Check for blight stage 4 effect (no gathering)
       if (character.blightEffects?.noGathering) {
-        await interaction.editReply({
+        await safeReply({
           content: `❌ **${character.name}** cannot gather items due to advanced blight stage.`,
           ephemeral: true
         });
@@ -173,7 +206,7 @@ module.exports = {
 
       // Check if the character is KOed.
       if (character.isKO) {
-        await interaction.editReply({
+        await safeReply({
           content: `❌ **${character.name}** is currently KOed and cannot gather.**\n💤 **Let them rest and recover before gathering again.**`,
           ephemeral: true,
         });
@@ -187,7 +220,7 @@ module.exports = {
         // Use the original endDate timestamp directly for Discord display
         const unixTimestamp = Math.floor(debuffEndDate.getTime() / 1000);
         
-        await interaction.editReply({
+        await safeReply({
           content: `❌ **${character.name}** is currently debuffed and cannot gather.**\n🕒 **Debuff Expires:** <t:${unixTimestamp}:F>`,
           ephemeral: true,
         });
@@ -196,7 +229,7 @@ module.exports = {
 
       // ------------------- Step 3: Validate Job -------------------
       if (!job || typeof job !== 'string' || !job.trim() || !isValidJob(job)) {
-        await interaction.editReply({
+        await safeReply({
           content: getJobVoucherErrorMessage('MISSING_SKILLS', {
             characterName: character.name,
             jobName: job || "None"
@@ -209,7 +242,7 @@ module.exports = {
       // Check for gathering perk.
       const jobPerk = getJobPerk(job);
       if (!jobPerk || !jobPerk.perks.includes('GATHERING')) {
-        await interaction.editReply({
+        await safeReply({
           embeds: [{
             color: 0x008B8B, // Dark cyan color
             description: `${character.name} can't gather as a ${capitalizeWords(job)} because they lack the necessary gathering skills.`,
@@ -242,7 +275,7 @@ module.exports = {
       // Check if character is physically in the correct village
       const channelVillage = Object.entries(villageChannels).find(([_, id]) => id === interaction.channelId)?.[0];
       if (channelVillage && character.currentVillage.toLowerCase() !== channelVillage.toLowerCase()) {
-        await interaction.editReply({
+        await safeReply({
           embeds: [{
             color: 0x008B8B, // Dark cyan color
             description: `*${character.name} looks around confused...*\n\n**Wrong Village Location**\nYou must be physically present in ${channelVillage} to gather here.\n\n🗺️ **Current Location:** ${capitalizeWords(character.currentVillage)}`,
@@ -260,7 +293,7 @@ module.exports = {
 
       if (!allowedChannel || interaction.channelId !== allowedChannel) {
         const channelMention = `<#${allowedChannel}>`;
-        await interaction.editReply({
+        await safeReply({
           embeds: [{
             color: 0x008B8B, // Dark cyan color
             description: `*${character.name} looks around, confused by their surroundings...*\n\n**Channel Restriction**\nYou can only use this command in the ${currentVillage} Town Hall channel!\n\n📍 **Current Location:** ${capitalizeWords(character.currentVillage)}\n💬 **Command Allowed In:** ${channelMention}`,
@@ -283,7 +316,7 @@ module.exports = {
           const alreadyMsg =
             "<:blight_eye:805576955725611058> **Blight Rain!**\n\n" +
             `◈ Your character **${character.name}** braved the blight rain, but they're already blighted... guess it doesn't matter! ◈`;
-          await interaction.editReply({ content: alreadyMsg, ephemeral: false });
+          await safeReply({ content: alreadyMsg, ephemeral: false });
         } else if (Math.random() < 0.75) {
           const blightMsg =
             "<:blight_eye:805576955725611058> **Blight Infection!**\n\n" +
@@ -295,7 +328,7 @@ module.exports = {
             "Infected areas appear like blight-colored bruises on the body. Side effects include fatigue, nausea, and feverish symptoms. At this stage you can be helped by having one of the sages, oracles or dragons heal you.\n\n" +
             "> **Starting tomorrow, you'll be prompted to roll in the Community Board each day to see if your blight gets worse!**\n" +
             "> *You will not be penalized for missing today's blight roll if you were just infected.*";
-          await interaction.editReply({ content: blightMsg, ephemeral: false });
+          await safeReply({ content: blightMsg, ephemeral: false });
           // Update character in DB
           character.blighted = true;
           character.blightedAt = new Date();
@@ -312,7 +345,7 @@ module.exports = {
             "<:blight_eye:805576955725611058> **Blight Rain!**\n\n" +
             `◈ Your character **${character.name}** braved the blight rain but managed to avoid infection this time! ◈\n` +
             "You feel lucky... but be careful out there.";
-          await interaction.editReply({ content: safeMsg, ephemeral: false });
+          await safeReply({ content: safeMsg, ephemeral: false });
         }
       }
 
@@ -331,7 +364,7 @@ module.exports = {
           }
           const unixTimestamp = Math.floor(nextRollover.getTime() / 1000);
           
-          await interaction.editReply({
+          await safeReply({
             embeds: [{
               color: 0x008B8B, // Dark cyan color
               description: `*${character.name} seems exhausted from their earlier gathering...*\n\n**Daily gathering limit reached.**\nThe next opportunity to gather will be available at <t:${unixTimestamp}:F>.\n\n*Tip: A job voucher would allow you to gather again today.*`,
@@ -352,7 +385,7 @@ module.exports = {
           await updateDailyRoll(character, 'gather');
         } catch (error) {
           console.error(`[Gather Command]: ❌ Failed to update daily roll:`, error);
-          await interaction.editReply({
+          await safeReply({
             content: `❌ **An error occurred while updating your daily roll. Please try again.**`,
             ephemeral: true,
           });
@@ -363,7 +396,7 @@ module.exports = {
       // ------------------- Step 5: Validate Region -------------------
       region = getVillageRegionByName(currentVillage);
       if (!region) {
-        await interaction.editReply({
+        await safeReply({
           content: `❌ **No valid region found for the village ${currentVillage}.**\n📍 **Please check the character's current location and try again.**`,
         });
         return;
@@ -483,7 +516,7 @@ module.exports = {
                   lootedItem,
                   bloodMoonActive
                 );
-                await interaction.editReply({
+                await safeReply({
                   content: `❌ **Invalid Google Sheets URL for "${character.name}".**`,
                   embeds: [embed],
                 });
@@ -528,7 +561,7 @@ module.exports = {
                 lootedItem,
                 bloodMoonActive
               );
-              await interaction.editReply({ embeds: [embed] });
+              await safeReply({ embeds: [embed] });
               return;
             }
           }
@@ -540,10 +573,10 @@ module.exports = {
             null,
             bloodMoonActive
           );
-          await interaction.editReply({ embeds: [embed] });
+          await safeReply({ embeds: [embed] });
           return;
         } else {
-          await interaction.editReply({
+          await safeReply({
             content: `⚠️ **No monsters found in the ${region} region during the Blood Moon.**`,
           });
           return;
@@ -572,7 +605,7 @@ module.exports = {
         });
         
         if (availableItems.length === 0) {
-          await interaction.editReply({
+          await safeReply({
             content: `⚠️ **No items available to gather in this location with the given job.**`,
           });
           return;
@@ -592,7 +625,7 @@ module.exports = {
         // Note: Google Sheets sync is handled by addItemInventoryDatabase
 
         const embed = createGatherEmbed(character, randomItem);
-        await interaction.editReply({ embeds: [embed] });
+        await safeReply({ embeds: [embed] });
         // ------------------- Update Last Gather Timestamp -------------------
         character.lastGatheredAt = new Date().toISOString();
         await character.save();
@@ -637,7 +670,7 @@ module.exports = {
       // Provide more specific error messages based on the error type
       let errorMessage;
       if (error.message.includes('inventory is not synced')) {
-        await interaction.editReply({
+        await safeReply({
           embeds: [{
             color: 0xFF0000, // Red color
             title: '❌ Inventory Not Synced',
@@ -673,7 +706,7 @@ module.exports = {
       }
 
       if (errorMessage) {
-        await interaction.editReply({
+        await safeReply({
           content: errorMessage,
           ephemeral: true
         });
