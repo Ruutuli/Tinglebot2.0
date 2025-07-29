@@ -305,7 +305,8 @@ async function removeQuestItems(character, quest, interaction) {
  */
 async function updateUserTracking(user, quest, userId) {
   const now = new Date();
-  const today = now.toISOString().slice(0, 10);
+  // Use EST timezone for midnight reset
+  const today = now.toLocaleDateString('en-CA', {timeZone: 'America/New_York'});
   
   user.helpWanted.lastCompletion = today;
   user.helpWanted.totalCompletions = (user.helpWanted.totalCompletions || 0) + 1;
@@ -336,7 +337,7 @@ function createQuestCompletionEmbed(character, quest, userId) {
       { name: '👤 Completed By', value: `<@${userId}>`, inline: true },
       { name: '🆔 Quest ID', value: quest.questId, inline: true }
     )
-    .setFooter({ text: new Date().toLocaleString() })
+    .setFooter({ text: new Date().toLocaleString('en-US', {timeZone: 'America/New_York'}) })
     .setTimestamp();
 
   // Add quest-specific details
@@ -648,7 +649,7 @@ async function handleMonsterHunt(interaction, questId, characterName) {
   // Handle quest completion
   if (defeatedAll) {
     quest.completed = true;
-    quest.completedBy = { userId: interaction.user.id, characterId: character._id, timestamp: new Date().toISOString() };
+    quest.completedBy = { userId: interaction.user.id, characterId: character._id, timestamp: new Date().toLocaleString('en-US', {timeZone: 'America/New_York'}) };
     await quest.save();
     
     const user = await User.findOne({ discordId: interaction.user.id });
@@ -726,7 +727,7 @@ async function sendMonsterHuntSummary(interaction, character, questId, monsterLi
         inline: true 
       }
     )
-    .setFooter({ text: `${character.currentVillage} Monster Hunt | Quest ID: ${questId} | ${new Date().toLocaleString()}` })
+    .setFooter({ text: `${character.currentVillage} Monster Hunt | Quest ID: ${questId} | ${new Date().toLocaleString('en-US', {timeZone: 'America/New_York'})}` })
     .setTimestamp()
     .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png');
   
@@ -789,7 +790,7 @@ module.exports = {
       const questId = interaction.options.getString('id');
       const characterName = interaction.options.getString('character');
       
-      await interaction.deferReply({ flags: [MessageFlags.Ephemeral] });
+      await interaction.deferReply();
       
       try {
         await handleMonsterHunt(interaction, questId, characterName);
@@ -877,7 +878,7 @@ module.exports = {
         quest.completedBy = { 
           userId: interaction.user.id, 
           characterId: character._id, 
-          timestamp: new Date().toISOString() 
+          timestamp: new Date().toLocaleString('en-US', {timeZone: 'America/New_York'}) 
         };
         await quest.save();
 
