@@ -1,5 +1,5 @@
 [deploy-commands.js]: Deploying commands...
-[deploy-commands.js]: Found 39 potential command files
+[deploy-commands.js]: Found 40 potential command files
 [deploy-commands.js]: Processing file: commands\character\character.js
 ✅ Loaded command: character from commands\character\character.js
 [deploy-commands.js]: Processing file: commands\character\modCharacter.js
@@ -54,6 +54,8 @@
 ✅ Loaded command: lookup from commands\utility\lookup.js
 [deploy-commands.js]: Processing file: commands\utility\roll.js
 ✅ Loaded command: roll from commands\utility\roll.js
+[deploy-commands.js]: Processing file: commands\utility\ruugame.js
+✅ Loaded command: ruugame from commands\utility\ruugame.js
 [deploy-commands.js]: Processing file: commands\utility\submit.js
 ✅ Loaded command: submit from commands\utility\submit.js
 [deploy-commands.js]: Processing file: commands\utility\tableroll.js
@@ -78,7 +80,9 @@
 ⚠️ The command at embeds\embeds.js is missing a required "data" property.
 [deploy-commands.js]: Processing file: embeds\weatherEmbed.js
 ⚠️ The command at embeds\weatherEmbed.js is missing a required "data" property.
-[deploy-commands.js]: Successfully loaded 29 commands
-🔄 Started refreshing 29 commands.
+[deploy-commands.js]: Successfully loaded 30 commands
+🔄 Started refreshing 30 commands.
 [deploy-commands.js]: Deploying to guild: 603960955839447050
-✅ Successfully registered 29 commands to guild.
+(node:44084) [MONGOOSE] Warning: Duplicate schema index on {"sessionId":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✅ Successfully registered 30 commands to guild.
