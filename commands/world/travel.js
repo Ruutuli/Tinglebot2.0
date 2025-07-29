@@ -565,10 +565,19 @@ async function checkAndHandleKO(character, channel, startingVillage) {
   return false;
 }
 
+// ============================================================================
 // ------------------- Process Travel Day -------------------
-// Recursively processes each day of travel: checks completion, validates path,
-// posts travel messages, handles safe days or monster encounters, collects actions,
-// logs outcomes, stops in Inariko if needed, and recurses to the next day.
+// ============================================================================
+// Handles a single day of travel with encounters, safe days, and user interactions.
+// 
+// IMPORTANT: Interaction timeout handling
+// - Discord interactions expire after 15 minutes
+// - Multi-day travel can exceed this limit
+// - Collectors are set to 2 minutes (120000ms) to prevent long-running interactions
+// - If interactions expire, the system gracefully falls back to "do nothing" actions
+// - Error handling ensures travel continues even if interactions fail
+// ============================================================================
+
 async function processTravelDay(day, context) {
   try {
     const {
@@ -841,34 +850,13 @@ async function processTravelDay(day, context) {
             }
             return true;
           }, 
-          time: 300000 
+          time: 120000 // Reduced from 300000 (5 min) to 120000 (2 min)
         });
 
         collector.on('collect', async i => {
-          const decision = await handleTravelInteraction(
-            i,
-            character,
-            pathEmoji,
-            currentPath,
-            encounterMessage,
-            monster,
-            travelLog,
-            startingVillage
-          );
-          // Only append the decision to the daily log if it's not a damage message
-          if (!decision.includes('heart')) {
-            dailyLogEntry += `${decision}\n`;
-          } else {
-            // Add damage message to the current day's log
-            dailyLogEntry += `${decision}\n`;
-          }
-          collector.stop();
-        });
-        
-        collector.on('end', async (collected, reason) => {
-          if (reason === 'time') {
+          try {
             const decision = await handleTravelInteraction(
-              { customId: 'do_nothing' },
+              i,
               character,
               pathEmoji,
               currentPath,
@@ -877,12 +865,48 @@ async function processTravelDay(day, context) {
               travelLog,
               startingVillage
             );
-        
-            dailyLogEntry += decision.split('\n').map(line => `${line}`).join('\n') + '\n';
+            // Only append the decision to the daily log if it's not a damage message
+            if (!decision.includes('heart')) {
+              dailyLogEntry += `${decision}\n`;
+            } else {
+              // Add damage message to the current day's log
+              dailyLogEntry += `${decision}\n`;
+            }
+            collector.stop();
+          } catch (error) {
+            console.error(`[travel.js]: ❌ Error handling monster encounter interaction:`, error);
+            dailyLogEntry += `❌ An error occurred during the encounter.\n`;
+            collector.stop();
           }
-          if (await checkAndHandleKO(character, channel, startingVillage)) return;
-          travelLog.push(dailyLogEntry);
-          await processTravelDay(day + 1, { ...context, channel });
+        });
+        
+        collector.on('end', async (collected, reason) => {
+          try {
+            if (reason === 'time') {
+              console.log(`[travel.js]: ⏰ Collector timed out for monster encounter on day ${day}`);
+              const decision = await handleTravelInteraction(
+                { customId: 'do_nothing' },
+                character,
+                pathEmoji,
+                currentPath,
+                encounterMessage,
+                monster,
+                travelLog,
+                startingVillage
+              );
+          
+              dailyLogEntry += decision.split('\n').map(line => `${line}`).join('\n') + '\n';
+            }
+            if (await checkAndHandleKO(character, channel, startingVillage)) return;
+            travelLog.push(dailyLogEntry);
+            await processTravelDay(day + 1, { ...context, channel });
+          } catch (error) {
+            console.error(`[travel.js]: ❌ Error in monster encounter collector end:`, error);
+            // Continue with travel even if there's an error
+            if (await checkAndHandleKO(character, channel, startingVillage)) return;
+            travelLog.push(dailyLogEntry);
+            await processTravelDay(day + 1, { ...context, channel });
+          }
         });
       }
     } else {
@@ -918,34 +942,12 @@ async function processTravelDay(day, context) {
           }
           return true;
         }, 
-        time: 300000 
+        time: 120000 // Reduced from 300000 (5 min) to 120000 (2 min)
       });
       collector.on('collect', async i => {
-        const decision = await handleTravelInteraction(
-          i,
-          character,
-          pathEmoji,
-          currentPath,
-          safeMessage,
-          null,
-          travelLog,
-          startingVillage,
-          i.customId === 'do_nothing' ? doNothingFlavor : undefined
-        );    
-        dailyLogEntry += `${decision}\n`;
-        const updated = new EmbedBuilder(safeMessage.embeds[0].toJSON()).setDescription(
-          `🌸 It's a safe day of travel. What do you want to do next?\n> ${decision}\n\n` +
-          `**❤️ __Hearts:__** ${character.currentHearts}/${character.maxHearts}\n` +
-          `**🟩 __Stamina:__** ${character.currentStamina}/${character.maxStamina}`
-        );
-        await safeMessage.edit({ embeds: [updated], components: [] });
-        collector.stop();
-      });
-
-      collector.on('end', async (collected, reason) => {
-        if (reason === 'time') {
+        try {
           const decision = await handleTravelInteraction(
-            { customId: 'do_nothing' },
+            i,
             character,
             pathEmoji,
             currentPath,
@@ -953,17 +955,54 @@ async function processTravelDay(day, context) {
             null,
             travelLog,
             startingVillage,
-            doNothingFlavor
-          );
+            i.customId === 'do_nothing' ? doNothingFlavor : undefined
+          );    
           dailyLogEntry += `${decision}\n`;
+          const updated = new EmbedBuilder(safeMessage.embeds[0].toJSON()).setDescription(
+            `🌸 It's a safe day of travel. What do you want to do next?\n> ${decision}\n\n` +
+            `**❤️ __Hearts:__** ${character.currentHearts}/${character.maxHearts}\n` +
+            `**🟩 __Stamina:__** ${character.currentStamina}/${character.maxStamina}`
+          );
+          await safeMessage.edit({ embeds: [updated], components: [] });
+          collector.stop();
+        } catch (error) {
+          console.error(`[travel.js]: ❌ Error handling safe day interaction:`, error);
+          dailyLogEntry += `❌ An error occurred during the safe day.\n`;
+          collector.stop();
         }
-      
-        if (await checkAndHandleKO(character, channel, startingVillage)) return;
-      
-        travelLog.push(dailyLogEntry);
+      });
 
-        await processTravelDay(day + 1, { ...context, channel });
-      });    
+      collector.on('end', async (collected, reason) => {
+        try {
+          if (reason === 'time') {
+            console.log(`[travel.js]: ⏰ Collector timed out for safe day on day ${day}`);
+            const decision = await handleTravelInteraction(
+              { customId: 'do_nothing' },
+              character,
+              pathEmoji,
+              currentPath,
+              safeMessage,
+              null,
+              travelLog,
+              startingVillage,
+              doNothingFlavor
+            );
+            dailyLogEntry += `${decision}\n`;
+          }
+        
+          if (await checkAndHandleKO(character, channel, startingVillage)) return;
+        
+          travelLog.push(dailyLogEntry);
+
+          await processTravelDay(day + 1, { ...context, channel });
+        } catch (error) {
+          console.error(`[travel.js]: ❌ Error in safe day collector end:`, error);
+          // Continue with travel even if there's an error
+          if (await checkAndHandleKO(character, channel, startingVillage)) return;
+          travelLog.push(dailyLogEntry);
+          await processTravelDay(day + 1, { ...context, channel });
+        }
+      });
     }
   } catch (error) {
     handleError(error, 'travel.js (processTravelDay)', {
