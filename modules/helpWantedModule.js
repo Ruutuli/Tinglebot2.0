@@ -831,12 +831,6 @@ async function formatQuestsAsEmbedsByVillage() {
         ? `🏅 COMPLETED by <@${quest.completedBy?.userId || 'unknown'}> at ${quest.completedBy?.timestamp || 'unknown'}`
         : '✅ AVAILABLE';
 
-      const turnIn = getQuestTurnInInstructions(quest.type);
-      const rules = '• Only natives of the village can complete this quest.\n' +
-                   '• First come, first served—one completion per quest!\n' +
-                   '• Each user can only complete one Help Wanted quest per day (across all characters).\n' +
-                   '• Complete quests to help your village prosper!';
-
       const color = VILLAGE_COLORS[quest.village] || '#25c059';
       const image = VILLAGE_IMAGES[quest.village] || null;
       const divider = '<:br:788136157363306506>'.repeat(11);
@@ -852,11 +846,40 @@ async function formatQuestsAsEmbedsByVillage() {
         .setColor(color)
         .addFields(
           { name: 'Quest', value: `${questLine}\n${divider}` },
-          ...questInfoFields,
-          { name: 'How to Complete', value: turnIn },
-          { name: 'Rules', value: rules },
-          { name: 'Quest ID', value: quest.questId ? `\`\`\`${quest.questId}\`\`\`` : 'N/A', inline: true }
+          ...questInfoFields
         );
+      
+      // Add character completion info if quest is completed
+      if (quest.completed && quest.completedBy?.characterId) {
+        try {
+          const Character = require('../models/CharacterModel');
+          const character = await Character.findById(quest.completedBy.characterId);
+          if (character) {
+            embed.setThumbnail(character.icon || 'https://via.placeholder.com/128');
+            embed.addFields({
+              name: '🏆 Completed By',
+              value: `**${character.name}** (${character.race}) - <@${quest.completedBy.userId}>`,
+              inline: false
+            });
+          }
+        } catch (error) {
+          console.error('[HelpWanted] Error fetching character for completed quest:', error);
+        }
+      } else {
+        // Only add rules and how to complete for available quests
+        const turnIn = getQuestTurnInInstructions(quest.type);
+        const rules = '• Only natives of the village can complete this quest.\n' +
+                     '• First come, first served—one completion per quest!\n' +
+                     '• Each user can only complete one Help Wanted quest per day (across all characters).\n' +
+                     '• Complete quests to help your village prosper!';
+        
+        embed.addFields(
+          { name: 'How to Complete', value: turnIn },
+          { name: 'Rules', value: rules }
+        );
+      }
+      
+      embed.addFields({ name: 'Quest ID', value: quest.questId ? `\`\`\`${quest.questId}\`\`\`` : 'N/A', inline: true });
       
       if (image) embed.setImage(image);
       result[quest.village] = embed;
@@ -887,12 +910,6 @@ async function formatSpecificQuestsAsEmbedsByVillage(quests) {
         ? `🏅 COMPLETED by <@${quest.completedBy?.userId || 'unknown'}> at ${quest.completedBy?.timestamp || 'unknown'}`
         : '✅ AVAILABLE';
 
-      const turnIn = getQuestTurnInInstructions(quest.type);
-      const rules = '• Only natives of the village can complete this quest.\n' +
-                   '• First come, first served—one completion per quest!\n' +
-                   '• Each user can only complete one Help Wanted quest per day (across all characters).\n' +
-                   '• Complete quests to help your village prosper!';
-
       const color = VILLAGE_COLORS[quest.village] || '#25c059';
       const image = VILLAGE_IMAGES[quest.village] || null;
       const divider = '<:br:788136157363306506>'.repeat(11);
@@ -908,11 +925,40 @@ async function formatSpecificQuestsAsEmbedsByVillage(quests) {
         .setColor(color)
         .addFields(
           { name: 'Quest', value: `${questLine}\n${divider}` },
-          ...questInfoFields,
-          { name: 'How to Complete', value: turnIn },
-          { name: 'Rules', value: rules },
-          { name: 'Quest ID', value: quest.questId ? `\`\`\`${quest.questId}\`\`\`` : 'N/A', inline: true }
+          ...questInfoFields
         );
+      
+      // Add character completion info if quest is completed
+      if (quest.completed && quest.completedBy?.characterId) {
+        try {
+          const Character = require('../models/CharacterModel');
+          const character = await Character.findById(quest.completedBy.characterId);
+          if (character) {
+            embed.setThumbnail(character.icon || 'https://via.placeholder.com/128');
+            embed.addFields({
+              name: '🏆 Completed By',
+              value: `**${character.name}** (${character.race}) - <@${quest.completedBy.userId}>`,
+              inline: false
+            });
+          }
+        } catch (error) {
+          console.error('[HelpWanted] Error fetching character for completed quest:', error);
+        }
+      } else {
+        // Only add rules and how to complete for available quests
+        const turnIn = getQuestTurnInInstructions(quest.type);
+        const rules = '• Only natives of the village can complete this quest.\n' +
+                     '• First come, first served—one completion per quest!\n' +
+                     '• Each user can only complete one Help Wanted quest per day (across all characters).\n' +
+                     '• Complete quests to help your village prosper!';
+        
+        embed.addFields(
+          { name: 'How to Complete', value: turnIn },
+          { name: 'Rules', value: rules }
+        );
+      }
+      
+      embed.addFields({ name: 'Quest ID', value: quest.questId ? `\`\`\`${quest.questId}\`\`\`` : 'N/A', inline: true });
       
       if (image) embed.setImage(image);
       result[quest.village] = embed;
@@ -941,8 +987,9 @@ async function hasUserCompletedQuestToday(userId) {
       return false;
     }
     
+    // Use EST timezone for midnight reset
     const now = new Date();
-    const today = now.toISOString().slice(0, 10);
+    const today = now.toLocaleDateString('en-CA', {timeZone: 'America/New_York'});
     const lastCompletion = user.helpWanted?.lastCompletion || 'null';
     
     return lastCompletion === today;
@@ -962,13 +1009,15 @@ async function hasUserReachedWeeklyQuestLimit(userId) {
     const user = await require('../models/UserModel').findOne({ discordId: userId });
     if (!user || !user.helpWanted.completions) return false;
     
+    // Use EST timezone for weekly reset
     const now = new Date();
-    const startOfWeek = new Date(now);
-    startOfWeek.setDate(now.getDate() - now.getDay());
+    const estNow = new Date(now.toLocaleString('en-US', {timeZone: 'America/New_York'}));
+    const startOfWeek = new Date(estNow);
+    startOfWeek.setDate(estNow.getDate() - estNow.getDay());
     startOfWeek.setHours(0, 0, 0, 0);
     
     const weeklyCompletions = user.helpWanted.completions.filter(completion => {
-      const completionDate = new Date(completion.date);
+      const completionDate = new Date(completion.date + 'T00:00:00-05:00'); // EST timezone
       return completionDate >= startOfWeek;
     });
     
@@ -1019,33 +1068,60 @@ async function updateQuestEmbed(client, quest, completedBy = null) {
       return;
     }
 
+    // Create a new embed with the updated format
+    const npcName = quest.npcName || getRandomNPCName();
+    const questLine = getNPCQuestFlavor(npcName, quest.type, quest.requirements);
+    const color = quest.completed ? 0x00FF00 : (VILLAGE_COLORS[quest.village] || '#25c059');
+    const image = VILLAGE_IMAGES[quest.village] || null;
+    const divider = '<:br:788136157363306506>'.repeat(11);
+    
+    const questInfoFields = [
+      { name: '__Status__', value: quest.completed ? '🏅 **COMPLETED**' : '✅ **AVAILABLE**', inline: true },
+      { name: '__Type__', value: `${QUEST_TYPE_EMOJIS[quest.type] || '❓'} ${quest.type.charAt(0).toUpperCase() + quest.type.slice(1)} Quest`, inline: true },
+      { name: '__Location__', value: quest.village, inline: true }
+    ];
+    
     const updatedEmbed = new EmbedBuilder()
-      .setTitle(originalEmbed.title)
-      .setColor(quest.completed ? 0x00FF00 : originalEmbed.color)
-      .setImage(originalEmbed.image?.url);
-
-    // Copy fields, updating status if needed
-    originalEmbed.fields.forEach(field => {
-      if (field.name === 'Status' || field.name === '__Status__') {
-        updatedEmbed.addFields({
-          name: '__Status__',
-          value: quest.completed ? '🏅 **COMPLETED**' : '✅ **AVAILABLE**',
-          inline: true
-        });
-      } else if (!field.name.includes('Quest')) {
-        updatedEmbed.addFields(field);
+      .setTitle(`${QUEST_TYPE_EMOJIS[quest.type] || '🌿'} Help Wanted — ${quest.village}`)
+      .setColor(color)
+      .addFields(
+        { name: 'Quest', value: `${questLine}\n${divider}` },
+        ...questInfoFields
+      );
+    
+    // Add character completion info if quest is completed
+    if (quest.completed && quest.completedBy?.characterId) {
+      try {
+        const Character = require('../models/CharacterModel');
+        const character = await Character.findById(quest.completedBy.characterId);
+        if (character) {
+          updatedEmbed.setThumbnail(character.icon || 'https://via.placeholder.com/128');
+          updatedEmbed.addFields({
+            name: '🏆 Completed By',
+            value: `**${character.name}** (${character.race}) - <@${quest.completedBy.userId}>`,
+            inline: false
+          });
+        }
+      } catch (error) {
+        console.error('[HelpWanted] Error fetching character for completed quest:', error);
       }
-    });
-
-    // Add quest field if it exists
-    const questField = originalEmbed.fields.find(field => field.name.includes('Quest'));
-    if (questField) {
-      updatedEmbed.addFields({
-        name: questField.name,
-        value: questField.value,
-        inline: false
-      });
+    } else {
+      // Only add rules and how to complete for available quests
+      const turnIn = getQuestTurnInInstructions(quest.type);
+      const rules = '• Only natives of the village can complete this quest.\n' +
+                   '• First come, first served—one completion per quest!\n' +
+                   '• Each user can only complete one Help Wanted quest per day (across all characters).\n' +
+                   '• Complete quests to help your village prosper!';
+      
+      updatedEmbed.addFields(
+        { name: 'How to Complete', value: turnIn },
+        { name: 'Rules', value: rules }
+      );
     }
+    
+    updatedEmbed.addFields({ name: 'Quest ID', value: quest.questId ? `\`\`\`${quest.questId}\`\`\`` : 'N/A', inline: true });
+    
+    if (image) updatedEmbed.setImage(image);
 
     await message.edit({ embeds: [updatedEmbed] });
   } catch (error) {

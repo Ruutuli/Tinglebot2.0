@@ -500,7 +500,7 @@ function createPetEmbed(type, options = {}) {
   }
 
   // Ensure result object has required properties for rollReset type
-  if (type === 'rollReset') {
+  if (type === 'rollReset' && result) {
     if (!result.oldRolls || !result.newRolls) {
       console.warn(`[mod.js]: Result object missing oldRolls or newRolls:`, result);
       // Provide fallback values
@@ -509,8 +509,10 @@ function createPetEmbed(type, options = {}) {
     }
   }
 
-  const embedConfigs = {
-    levelUpdate: {
+  let config;
+  
+  if (type === 'levelUpdate') {
+    config = {
       title: "🎉 Pet Level Updated!",
       description: "Your pet has been upgraded by a moderator!",
       fields: [
@@ -522,8 +524,9 @@ function createPetEmbed(type, options = {}) {
         { name: "🔄 Rolls Reset", value: `> Every Sunday at 8:00 AM`, inline: true }
       ],
       footer: `Updated by ${moderatorTag}`
-    },
-    rollReset: {
+    };
+  } else if (type === 'rollReset') {
+    config = {
       title: "🔄 Pet Rolls Reset Successfully!",
       description: "A moderator has reset your pet's rolls for this week.",
       fields: [
@@ -535,11 +538,8 @@ function createPetEmbed(type, options = {}) {
         { name: "📅 Reset Schedule", value: `> Every Sunday at midnight`, inline: true }
       ],
       footer: `Reset by ${moderatorTag}`
-    }
-  };
-
-  const config = embedConfigs[type];
-  if (!config) {
+    };
+  } else {
     throw new Error(`Invalid pet embed type: ${type}`);
   }
 

@@ -585,7 +585,7 @@ async function checkAndPostMissedQuests(client) {
     const today = now.toLocaleDateString('en-CA', {timeZone: 'America/New_York'});
     const unpostedQuests = await HelpWantedQuest.find({
       date: today,
-      messageId: { $exists: false }
+      messageId: null
     });
     
     if (!unpostedQuests.length) {
@@ -704,7 +704,7 @@ async function checkAndPostScheduledQuests(client, cronTime) {
     const questsToPost = await HelpWantedQuest.find({
       date: today,
       scheduledPostTime: cronTime,
-      messageId: { $exists: false }
+      messageId: null
     });
     
     if (!questsToPost.length) {
