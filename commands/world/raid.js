@@ -6,6 +6,7 @@ const { handleError } = require('../../utils/globalErrorHandler');
 const { fetchCharacterByNameAndUserId } = require('../../database/db');
 const { joinRaid, processRaidTurn, checkRaidExpiration } = require('../../modules/raidModule');
 const { createRaidKOEmbed } = require('../../embeds/embeds.js');
+const Raid = require('../../models/RaidModel');
 
 // ============================================================================
 // ---- Import Loot Functions ----
@@ -115,7 +116,6 @@ module.exports = {
       const raidData = await checkRaidExpiration(raidId);
       if (!raidData) {
         // Get all active raids for debugging
-        const { Raid } = require('../../models/RaidModel');
         const allRaids = await Raid.find({ status: 'active' }).select('raidId village monster.name createdAt').limit(10);
         const activeRaidIds = allRaids.map(r => r.raidId).join(', ');
         
@@ -188,6 +188,12 @@ module.exports = {
       if (turnResult.raidData.monster.currentHearts <= 0 && turnResult.raidData.status === 'completed') {
         // Send the final turn embed first
         await interaction.editReply({ embeds: [embed] });
+        
+        // Send immediate victory message before loot processing
+        const immediateVictoryMessage = await interaction.followUp({
+          content: `🎉 **${turnResult.raidData.monster.name} DEFEATED!** Processing loot... Please stop rolling! ⏳`,
+          ephemeral: false
+        });
         
         // Then handle raid victory (which will send a follow-up)
         await handleRaidVictory(interaction, turnResult.raidData, turnResult.raidData.monster);
