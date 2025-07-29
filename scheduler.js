@@ -581,7 +581,8 @@ async function checkAndPostMissedQuests(client) {
     const currentMinute = estTime.getMinutes();
     
     // Get today's quests that haven't been posted yet
-    const today = estTime.toISOString().slice(0, 10);
+    // Fix: Use toLocaleDateString to get the correct EST date
+    const today = now.toLocaleDateString('en-CA', {timeZone: 'America/New_York'});
     const unpostedQuests = await HelpWantedQuest.find({
       date: today,
       messageId: { $exists: false }
@@ -697,8 +698,8 @@ async function checkAndPostScheduledQuests(client, cronTime) {
     
     // Get today's quests that are scheduled for this specific time and haven't been posted yet
     const now = new Date();
-    const estDate = new Date(now.toLocaleString("en-US", {timeZone: "America/New_York"}));
-    const today = estDate.toISOString().slice(0, 10);
+    // Fix: Use toLocaleDateString to get the correct EST date
+    const today = now.toLocaleDateString('en-CA', {timeZone: 'America/New_York'});
     
     const questsToPost = await HelpWantedQuest.find({
       date: today,
