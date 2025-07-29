@@ -30,7 +30,7 @@ require('dotenv').config();
 // ============================================================================
 // Constants
 // ------------------- Define thresholds and timing constants -------------------
-const MESSAGE_THRESHOLD = 150;            // Number of messages to trigger an encounter
+const MESSAGE_THRESHOLD = 200;            // Number of messages to trigger an encounter
 const MIN_ACTIVE_USERS = 4;               // Minimum unique users required for an encounter
 const TIME_WINDOW = 30 * 60 * 1000;         // 30 minutes in milliseconds
 const CHECK_INTERVAL = 60 * 1000;           // Check every 60 seconds
@@ -274,6 +274,13 @@ async function triggerRandomEncounter(channel, selectedVillage) {
 
     if (!result || !result.success) {
       console.error(`[randomMonsterEncounters.js]: ❌ Failed to trigger raid: ${result?.error || 'Unknown error'}`);
+      
+      // Don't send error messages to channel for cooldown - this is expected behavior
+      if (result?.error && result.error.includes('Raid cooldown active')) {
+        console.log(`[randomMonsterEncounters.js]: ⏰ Raid cooldown active - skipping random encounter`);
+        return;
+      }
+      
       await channel.send(`❌ **Failed to trigger the raid:** ${result?.error || 'Unknown error'}`);
       return;
     }
@@ -282,6 +289,13 @@ async function triggerRandomEncounter(channel, selectedVillage) {
     console.log(`[randomMonsterEncounters.js]: 🎉 RANDOM ENCOUNTER COMPLETE! ${monster.name} (T${monster.tier}) in ${selectedVillage}`);
   } catch (error) {
     console.error('[randomMonsterEncounters.js]: ❌ Error triggering encounter:', error);
+    
+    // Don't send cooldown errors to Discord - they're expected behavior
+    if (error.message && error.message.includes('Raid cooldown active')) {
+      console.log(`[randomMonsterEncounters.js]: ⏰ Raid cooldown active - skipping random encounter`);
+      return;
+    }
+    
     await handleError(error, 'randomMonsterEncounters.js');
   }
 }

@@ -565,7 +565,10 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false,
       console.log(`[raidModule.js]: ⏰ Current time: ${new Date(currentTime).toISOString()}`);
       console.log(`[raidModule.js]: ⏰ Time since last raid: ${Math.floor(timeSinceLastRaid / (1000 * 60))} minutes`);
       
-      throw new Error(`Raid cooldown active. Please wait ${remainingHours}h ${remainingMinutes}m before triggering another raid.`);
+      return {
+        success: false,
+        error: `Raid cooldown active. Please wait ${remainingHours}h ${remainingMinutes}m before triggering another raid.`
+      };
     }
     
     // Update global raid cooldown (applies to all villages)
