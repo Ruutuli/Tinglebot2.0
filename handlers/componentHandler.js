@@ -77,28 +77,33 @@ const { canChangeJob } = require('../utils/validation');
 // ============================================================================
 // ------------------- RuuGame Configuration -------------------
 // Game settings and prize configuration
-// ============================================================================
+// =============================================================================
 const GAME_CONFIG = {
   TARGET_SCORE: 20,
   DICE_SIDES: 20,
-  ROLL_COOLDOWN_SECONDS: 30
+  SESSION_DURATION_HOURS: 24,
+  MAX_PLAYERS: 10,
+  ROLL_COOLDOWN_SECONDS: 10
 };
 
 const PRIZES = {
   fairy: {
     name: 'Fairy',
     description: 'A magical fairy companion',
-    emoji: '🧚'
+    emoji: '🧚',
+    itemName: 'Fairy'
   },
   job_voucher: {
     name: 'Job Voucher',
     description: 'A voucher for a new job opportunity',
-    emoji: '📜'
+    emoji: '📜',
+    itemName: 'Job Voucher'
   },
   enduring_elixir: {
     name: 'Enduring Elixir',
     description: 'A powerful elixir that grants endurance',
-    emoji: '🧪'
+    emoji: '🧪',
+    itemName: 'Enduring Elixir'
   }
 };
 
@@ -156,7 +161,7 @@ async function handleButtonInteraction(interaction) {
         if (!submissionId) {
           return interaction.reply({
             content: '❌ **No active submission found. Please start a new submission.**',
-            ephemeral: true
+            flags: 64
           });
         }
         const submissionData = await retrieveSubmissionFromStorage(submissionId);
@@ -167,7 +172,7 @@ async function handleButtonInteraction(interaction) {
         if (!cancelSubmissionId) {
           return interaction.reply({
             content: '❌ **No active submission found. Please start a new submission.**',
-            ephemeral: true
+            flags: 64
           });
         }
         const cancelData = await retrieveSubmissionFromStorage(cancelSubmissionId);
@@ -189,12 +194,12 @@ async function handleButtonInteraction(interaction) {
       if (!interaction.replied && !interaction.deferred) {
         await interaction.reply({
           content: '❌ **An error occurred while processing your action.**',
-          ephemeral: true
+          flags: 64
         });
       } else if (interaction.replied) {
         await interaction.followUp({
           content: '❌ **An error occurred while processing your action.**',
-          ephemeral: true
+          flags: 64
         });
       }
     } catch (replyError) {
@@ -209,7 +214,7 @@ async function handleSyncYes(interaction, characterId) {
   try {
     const character = await fetchCharacterById(characterId);
     if (!character) {
-              return interaction.reply({ content: '❌ **Character not found.**', ephemeral: true });
+              return interaction.reply({ content: '❌ **Character not found.**', flags: 64 });
     }
 
     // Check if inventory is already synced
@@ -236,7 +241,7 @@ async function handleSyncYes(interaction, characterId) {
     if (!interaction.replied && !interaction.deferred) {
       await interaction.reply({ 
         content: '❌ **An error occurred while starting the sync process.**',
-        flags: 64 // 64 is the flag for ephemeral messages
+        flags: 64
       });
     }
   }
@@ -445,7 +450,7 @@ async function handleViewCharacter(interaction, characterId) {
           .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
           .setFooter({ text: 'Character Validation' })
           .setTimestamp()],
-        ephemeral: true
+        flags: 64
       });
     }
 
@@ -474,7 +479,7 @@ async function handleViewCharacter(interaction, characterId) {
     };
 
     const gearEmbed = createCharacterGearEmbed(character, gearMap, 'all');
-          await interaction.reply({ embeds: [embed, gearEmbed], ephemeral: true });
+          await interaction.reply({ embeds: [embed, gearEmbed], flags: 64 });
   } catch (error) {
     handleError(error, 'componentHandler.js');
     console.error(`[componentHandler.js]: Error in handleViewCharacter:`, error);
@@ -483,12 +488,12 @@ async function handleViewCharacter(interaction, characterId) {
       if (!interaction.replied && !interaction.deferred) {
         await interaction.reply({
           content: '❌ **An error occurred while viewing the character.**\nPlease try again later.',
-          ephemeral: true
+          flags: 64
         });
       } else if (interaction.replied) {
         await interaction.followUp({
           content: '❌ **An error occurred while viewing the character.**\nPlease try again later.',
-          ephemeral: true
+          flags: 64
         });
       }
     } catch (replyError) {
@@ -511,7 +516,7 @@ async function handleJobSelect(interaction, characterId, updatedJob) {
   
       if (!character) {
         console.error(`[componentHandler.js]: Character not found for ID: ${characterId}`);
-        return interaction.reply({ content: '❌ **Character not found.**', ephemeral: true });
+        return interaction.reply({ content: '❌ **Character not found.**', flags: 64 });
       }
   
       // Validate job change
@@ -628,7 +633,7 @@ async function handleJobSelect(interaction, characterId, updatedJob) {
             { name: '4️⃣ Get Started', value: 'After setup, you can:\n• Add items with `/vending add`\n• Edit your shop with `/vending edit`\n• View your shop with `/vending view`' }
           )
           .setColor('#AA926A')
-          .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png');
+          .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png');
 
         await interaction.followUp({
           embeds: [shopGuideEmbed],
@@ -679,7 +684,7 @@ async function handleJobSelect(interaction, characterId, updatedJob) {
       if (isNaN(pageIndex) || pageIndex < 1 || pageIndex > 2) {
         return interaction.reply({
           content: '⚠️ **Invalid job page. Please try again.**',
-          flags: 64 // 64 is the flag for ephemeral messages
+          flags: 64
         });
       }
   
@@ -687,7 +692,7 @@ async function handleJobSelect(interaction, characterId, updatedJob) {
       if (!jobs || !Array.isArray(jobs) || jobs.length === 0) {
         return interaction.reply({
           content: '⚠️ **No jobs available on this page.**',
-          flags: 64 // 64 is the flag for ephemeral messages
+          flags: 64
         });
       }
   
@@ -743,72 +748,41 @@ async function handleJobSelect(interaction, characterId, updatedJob) {
 // Handles button interactions for the RuuGame dice rolling game
 // =============================================================================
 
-// ------------------- Function: handleRuuGameJoin -------------------
-// Handles join game button clicks
-async function handleRuuGameJoin(interaction) {
-  try {
-    const sessionId = interaction.customId.replace('ruugame_join_', '');
-    const userId = interaction.user.id;
-    
-    const session = await RuuGame.findOne({
-      sessionId: sessionId,
-      status: { $in: ['waiting', 'active'] },
-      expiresAt: { $gt: new Date() }
-    });
-    
-    if (!session) {
-      return await interaction.reply({
-        content: '❌ Session not found or has expired.',
-        ephemeral: true
-      });
-    }
-    
-    // Check if player is already in the game
-    const existingPlayer = session.players.find(p => p.discordId === userId);
-    if (existingPlayer) {
-      return await interaction.reply({
-        content: '❌ You are already in this game!',
-        ephemeral: true
-      });
-    }
-    
-    // Check if game is full
-    if (session.players.length >= 10) {
-      return await interaction.reply({
-        content: '❌ This game is full!',
-        ephemeral: true
-      });
-    }
-    
-    // Add player to game
-    session.players.push({
-      discordId: userId,
-      username: interaction.user.username,
-      score: 0
-    });
-    
-    await session.save();
-    
-    const embed = createRuuGameEmbed(session, 'Player Joined!');
-    const buttons = createRuuGameButtons(sessionId);
-    
-    await interaction.reply({
-      embeds: [embed],
-      components: [buttons]
-    });
-    
-  } catch (error) {
-    handleError(error, 'componentHandler.js');
-    await interaction.reply({
-      content: '❌ An error occurred while joining the game.',
-      ephemeral: true
-    });
-  }
-}
+// =============================================================================
+// ------------------- RuuGame Component Handler -------------------
+// Handles RuuGame button interactions and game logic.
+// =============================================================================
+
+// Track processed interactions to prevent double processing
+const processedInteractions = new Set();
 
 // ------------------- Function: handleRuuGameRoll -------------------
 // Handles roll dice button clicks
 async function handleRuuGameRoll(interaction) {
+  const interactionId = `${interaction.id}_${interaction.user.id}`;
+  
+  // Check if this interaction has already been processed
+  if (processedInteractions.has(interactionId)) {
+    return;
+  }
+  
+  // Check if interaction is still valid
+  if (interaction.replied || interaction.deferred) {
+    return;
+  }
+  
+  // Mark this interaction as being processed
+  processedInteractions.add(interactionId);
+  
+  // Clean up old processed interactions (keep only last 1000)
+  if (processedInteractions.size > 1000) {
+    const entries = Array.from(processedInteractions);
+    processedInteractions.clear();
+    entries.slice(-500).forEach(id => processedInteractions.add(id));
+  }
+  
+  let hasDeferred = false;
+  
   try {
     const sessionId = interaction.customId.replace('ruugame_roll_', '');
     const userId = interaction.user.id;
@@ -820,141 +794,182 @@ async function handleRuuGameRoll(interaction) {
     });
     
     if (!session) {
-      return await interaction.reply({
+      await interaction.reply({
         content: '❌ No active session found.',
-        ephemeral: true
+        flags: 64
       });
+      return;
     }
     
-    // Find player in the game
-    const player = session.players.find(p => p.discordId === userId);
+    // Find player in the game or auto-join them
+    let player = session.players.find(p => p.discordId === userId);
     if (!player) {
-      return await interaction.reply({
-        content: '❌ You are not in this game!',
-        ephemeral: true
-      });
+      // Auto-join the player
+      if (session.players.length >= GAME_CONFIG.MAX_PLAYERS) {
+        await interaction.reply({
+          content: '❌ This game is full!',
+          flags: 64
+        });
+        return;
+      }
+      
+      player = {
+        discordId: userId,
+        username: interaction.user.username,
+        lastRoll: null,
+        lastRollTime: null
+      };
+      session.players.push(player);
     }
     
-    // Check cooldown
+    // Check cooldown BEFORE deferring
     const now = new Date();
     if (player.lastRollTime && (now - player.lastRollTime) < (GAME_CONFIG.ROLL_COOLDOWN_SECONDS * 1000)) {
       const remainingSeconds = Math.ceil((GAME_CONFIG.ROLL_COOLDOWN_SECONDS * 1000 - (now - player.lastRollTime)) / 1000);
-      return await interaction.reply({
-        content: `⏰ Please wait ${remainingSeconds} seconds before rolling again.`,
-        ephemeral: true
-      });
+      
+      try {
+        // Send ephemeral cooldown message using reply
+        await interaction.reply({
+          content: `⏰ Please wait ${remainingSeconds} seconds before rolling again.`,
+          flags: 64
+        });
+      } catch (error) {
+        console.error(`[RuuGame Component] Failed to send cooldown message:`, error);
+      }
+      return;
     }
+    
+    // Only defer the interaction if we're actually going to process the roll
+    await interaction.deferReply({ flags: 0 });
+    hasDeferred = true;
     
     // Roll the dice
     const roll = Math.floor(Math.random() * GAME_CONFIG.DICE_SIDES) + 1;
     player.lastRoll = roll;
     player.lastRollTime = now;
-    player.rolls.push(roll);
-    player.score += roll;
-    
-    // Check for winner
+
     let gameEnded = false;
-    if (player.score >= GAME_CONFIG.TARGET_SCORE) {
+    let prizeCharacter = null; // Track which character received the prize
+    
+    if (roll === GAME_CONFIG.TARGET_SCORE) {
       session.status = 'finished';
       session.winner = userId;
-      session.winningScore = player.score;
+      session.winningScore = roll;
       gameEnded = true;
+
+      try {
+        prizeCharacter = await awardRuuGamePrize(session, userId, interaction);
+      } catch (error) {
+        console.error('Error auto-awarding prize:', error);
+        // Don't fail the game if prize awarding fails
+        session.prizeClaimed = false;
+        session.prizeClaimedBy = null;
+        session.prizeClaimedAt = null;
+      }
     } else if (session.status === 'waiting') {
       session.status = 'active';
     }
-    
-    await session.save();
-    
-    const embed = createRuuGameEmbed(session, gameEnded ? 'Game Over!' : 'Roll Result!');
-    const buttons = gameEnded ? [] : createRuuGameButtons(sessionId);
-    
-    await interaction.reply({
-      embeds: [embed],
-      components: buttons.length > 0 ? [buttons] : []
-    });
-    
-  } catch (error) {
-    handleError(error, 'componentHandler.js');
-    await interaction.reply({
-      content: '❌ An error occurred while rolling.',
-      ephemeral: true
-    });
-  }
-}
 
-// ------------------- Function: handleRuuGameStatus -------------------
-// Handles status button clicks
-async function handleRuuGameStatus(interaction) {
-  try {
-    const sessionId = interaction.customId.replace('ruugame_status_', '');
-    
-    const session = await RuuGame.findOne({
-      sessionId: sessionId,
-      status: { $in: ['waiting', 'active', 'finished'] },
-      expiresAt: { $gt: new Date() }
-    });
-    
-    if (!session) {
-      return await interaction.reply({
-        content: '❌ Session not found or has expired.',
-        ephemeral: true
-      });
+    // Save the session with updated player data
+    await session.save();
+
+    // Fetch the updated session to ensure we have the latest data
+    const updatedSession = await RuuGame.findById(session._id);
+
+    const embed = await createRuuGameEmbed(updatedSession, gameEnded ? '🎉 WINNER!' : 'Roll Result!', interaction.user, prizeCharacter, roll);
+
+    if (!gameEnded) {
+      embed.setTitle(`🎲 RuuGame - ${interaction.user.username} rolled a ${roll}!`);
     }
     
-    const embed = createRuuGameEmbed(session, 'Game Status');
-    const buttons = session.status === 'finished' ? [] : createRuuGameButtons(sessionId);
-    
-    await interaction.reply({
+    let buttons = null;
+    if (!gameEnded) {
+      buttons = createRuuGameButtons(sessionId);
+    }
+
+    await interaction.editReply({
       embeds: [embed],
-      components: buttons.length > 0 ? [buttons] : []
+      components: buttons ? [buttons] : []
     });
     
+    // Send prize notification if awarded
+    if (prizeCharacter && session.prizeClaimed) {
+      // Prize embed removed - already handled in main embed
+    }
+
   } catch (error) {
+    console.error(`[RuuGame Component] Error in handleRuuGameRoll:`, error);
+    
     handleError(error, 'componentHandler.js');
-    await interaction.reply({
-      content: '❌ An error occurred while checking status.',
-      ephemeral: true
-    });
+    
+    // Only try to reply if we haven't already deferred and the interaction hasn't been responded to
+    if (!hasDeferred && !interaction.replied && !interaction.deferred) {
+      try {
+        await interaction.reply({
+          content: '❌ An error occurred while rolling.',
+          flags: 64
+        });
+      } catch (replyError) {
+        console.error(`[RuuGame Component] Failed to send error response:`, replyError);
+      }
+    } else if (hasDeferred) {
+      try {
+        await interaction.editReply({
+          content: '❌ An error occurred while rolling.'
+        });
+      } catch (replyError) {
+        console.error(`[RuuGame Component] Failed to send error edit response:`, replyError);
+      }
+    }
   }
 }
 
 // ------------------- Function: createRuuGameEmbed -------------------
 // Creates an embed showing game information
-function createRuuGameEmbed(session, title) {
+async function createRuuGameEmbed(session, title, userWhoRolled = null, prizeCharacter = null, roll = null) {
+  // Fetch the actual item emoji from ItemModel
+  const itemDetails = await ItemModel.findOne({ itemName: PRIZES[session.prizeType].itemName }).select('emoji');
+  const itemEmoji = itemDetails?.emoji || PRIZES[session.prizeType].emoji; // Fallback to hardcoded emoji if not found
+  
   const prize = PRIZES[session.prizeType];
   const embed = new EmbedBuilder()
     .setTitle(`🎲 RuuGame - ${title}`)
-    .setDescription(`First to reach **${GAME_CONFIG.TARGET_SCORE}** wins a **${prize.name}**!`)
-    .addFields(
-      { name: 'Session ID', value: session.sessionId, inline: true },
-      { name: 'Status', value: session.status.charAt(0).toUpperCase() + session.status.slice(1), inline: true },
-      { name: 'Players', value: session.players.length.toString(), inline: true },
-      { name: 'Prize', value: `${prize.emoji} ${prize.name}`, inline: true },
-      { name: 'Target Score', value: GAME_CONFIG.TARGET_SCORE.toString(), inline: true },
-      { name: 'Dice', value: `d${GAME_CONFIG.DICE_SIDES}`, inline: true }
-    )
+    .setDescription(`**Roll a 20 to win a ${itemEmoji} ${prize.name}!**\n\n*Only members with set up characters can join!*\n*Prize will be added to a random character's inventory!*`)
+    .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
     .setColor(getRuuGameStatusColor(session.status))
     .setTimestamp();
   
-  // Add player scores
-  if (session.players.length > 0) {
-    const playerList = session.players
-      .sort((a, b) => b.score - a.score)
-      .map((player, index) => {
-        const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '•';
-        const lastRoll = player.lastRoll ? ` (Last: ${player.lastRoll})` : '';
-        return `${medal} **${player.username}**: ${player.score}${lastRoll}`;
-      })
-      .join('\n');
-    
-    embed.addFields({ name: 'Scores', value: playerList, inline: false });
+  // Add user avatar as thumbnail if we have a user who rolled
+  if (userWhoRolled) {
+    embed.setThumbnail(userWhoRolled.displayAvatarURL({ dynamic: true }));
+  }
+  
+  // Add game info in a cleaner format
+  embed.addFields(
+    { name: '📋 Game Info', value: `**Session:** ${session.sessionId}\n**Status:** ${session.status.charAt(0).toUpperCase() + session.status.slice(1)}\n**Players:** ${session.players.length}`, inline: false }
+  );
+  
+  // Add roll result with emojis if we have a roll
+  if (roll !== null) {
+    const rollEmojis = getRollEmojis(roll);
+    embed.addFields(
+      { name: '🎲 Roll Result', value: `${rollEmojis}`, inline: false }
+    );
   }
   
   if (session.winner) {
     const winner = session.players.find(p => p.discordId === session.winner);
+    let winnerValue = `**${winner.username}** rolled a perfect **${session.winningScore}**!`;
+    
+    // Add prize information if we have character details
+    if (prizeCharacter && session.prizeClaimed) {
+      winnerValue += `\n\n🎁 **Prize Awarded:** ${itemEmoji} ${prize.name} added to **${prizeCharacter.name}**'s inventory!`;
+      winnerValue += `\n📦 **Inventory Link:** [View ${prizeCharacter.name}'s Inventory](${prizeCharacter.inventory})`;
+    }
+    
     embed.addFields({ 
       name: '🏆 Winner!', 
-      value: `**${winner.username}** with ${session.winningScore} points!`, 
+      value: winnerValue, 
       inline: false 
     });
   }
@@ -962,27 +977,31 @@ function createRuuGameEmbed(session, title) {
   return embed;
 }
 
+// ------------------- Function: getRollEmojis -------------------
+// Returns emoji representation of the rolled number
+function getRollEmojis(roll) {
+  const emojiMap = {
+    1: '1️⃣', 2: '2️⃣', 3: '3️⃣', 4: '4️⃣', 5: '5️⃣',
+    6: '6️⃣', 7: '7️⃣', 8: '8️⃣', 9: '9️⃣', 10: '🔟',
+    11: '1️⃣1️⃣', 12: '1️⃣2️⃣', 13: '1️⃣3️⃣', 14: '1️⃣4️⃣', 15: '1️⃣5️⃣',
+    16: '1️⃣6️⃣', 17: '1️⃣7️⃣', 18: '1️⃣8️⃣', 19: '1️⃣9️⃣', 20: '2️⃣0️⃣'
+  };
+  return emojiMap[roll] || roll.toString();
+}
+
 // ------------------- Function: createRuuGameButtons -------------------
 // Creates action buttons for the game
 function createRuuGameButtons(sessionId) {
-  return new ActionRowBuilder()
-    .addComponents(
-      new ButtonBuilder()
-        .setCustomId(`ruugame_join_${sessionId}`)
-        .setLabel('Join Game')
-        .setStyle(ButtonStyle.Primary)
-        .setEmoji('🎮'),
-      new ButtonBuilder()
-        .setCustomId(`ruugame_roll_${sessionId}`)
-        .setLabel('Roll d20')
-        .setStyle(ButtonStyle.Success)
-        .setEmoji('🎲'),
-      new ButtonBuilder()
-        .setCustomId(`ruugame_status_${sessionId}`)
-        .setLabel('Status')
-        .setStyle(ButtonStyle.Secondary)
-        .setEmoji('📊')
-    );
+  const rollButton = new ButtonBuilder()
+    .setCustomId(`ruugame_roll_${sessionId}`)
+    .setLabel('Roll d20')
+    .setStyle(ButtonStyle.Success)
+    .setEmoji('🎲');
+  
+  const buttons = new ActionRowBuilder()
+    .addComponents(rollButton);
+  
+  return buttons;
 }
 
 // ------------------- Function: getRuuGameStatusColor -------------------
@@ -994,6 +1013,45 @@ function getRuuGameStatusColor(status) {
     case 'finished': return '#ff0000'; // Red
     default: return '#0099ff'; // Blue
   }
+}
+
+// ------------------- Function: awardRuuGamePrize -------------------
+// Shared function to award prizes to RuuGame winners
+async function awardRuuGamePrize(session, userId, interaction) {
+  try {
+    const characters = await Character.find({ userId: userId, inventorySynced: true });
+    if (characters.length > 0) {
+      const randomCharacter = characters[Math.floor(Math.random() * characters.length)];
+      const prize = PRIZES[session.prizeType];
+
+      // Fetch the actual item emoji from ItemModel
+      const itemDetails = await ItemModel.findOne({ itemName: prize.itemName }).select('emoji');
+      const itemEmoji = itemDetails?.emoji || '🎁'; // Fallback emoji if not found
+
+      // Add item to random character's inventory using inventory utilities
+      const { addItemInventoryDatabase } = require('../utils/inventoryUtils');
+      await addItemInventoryDatabase(
+        randomCharacter._id,
+        prize.itemName,
+        1,
+        interaction,
+        'RuuGame Win'
+      );
+
+      session.prizeClaimed = true;
+      session.prizeClaimedBy = randomCharacter.name;
+      session.prizeClaimedAt = new Date();
+
+      return randomCharacter; // Return the character for embed display
+    }
+  } catch (error) {
+    console.error('Error auto-awarding prize:', error);
+    // Don't fail the game if prize awarding fails
+    session.prizeClaimed = false;
+    session.prizeClaimedBy = null;
+    session.prizeClaimedAt = null;
+  }
+  return null;
 }
 
 // =============================================================================
@@ -1015,9 +1073,9 @@ async function handleComponentInteraction(interaction) {
 
     // Handle RuuGame buttons
     if (interaction.customId.startsWith('ruugame_')) {
-      if (interaction.customId.startsWith('ruugame_join_')) return await handleRuuGameJoin(interaction);
-      if (interaction.customId.startsWith('ruugame_roll_')) return await handleRuuGameRoll(interaction);
-      if (interaction.customId.startsWith('ruugame_status_')) return await handleRuuGameStatus(interaction);
+      if (interaction.customId.startsWith('ruugame_roll_')) {
+        return await handleRuuGameRoll(interaction);
+      }
     }
 
     if ([
@@ -1065,12 +1123,12 @@ async function handleComponentInteraction(interaction) {
       if (!interaction.replied && !interaction.deferred) {
         await interaction.reply({
           content: '❌ **An error occurred while processing your interaction.**',
-          ephemeral: true
+          flags: 64
         });
       } else if (interaction.replied) {
         await interaction.followUp({
           content: '❌ **An error occurred while processing your interaction.**',
-          ephemeral: true
+          flags: 64
         });
       }
     } catch (replyError) {
@@ -1078,7 +1136,6 @@ async function handleComponentInteraction(interaction) {
     }
   }
 }
-
 
 // =============================================================================
 // ------------------- Exports -------------------
@@ -1089,10 +1146,12 @@ module.exports = {
   handleButtonInteraction,
   getCancelButtonRow,
   getConfirmButtonRow,
-  handleRuuGameJoin,
   handleRuuGameRoll,
-  handleRuuGameStatus,
   createRuuGameEmbed,
   createRuuGameButtons,
-  getRuuGameStatusColor
+  getRuuGameStatusColor,
+  getRollEmojis,
+  GAME_CONFIG,
+  PRIZES,
+  awardRuuGamePrize
 };
