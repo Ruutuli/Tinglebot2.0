@@ -628,8 +628,8 @@ async function generateQuestForVillage(village, date, pools) {
 async function generateDailyQuests() {
   try {
     const now = new Date();
-    const estDate = new Date(now.toLocaleString("en-US", {timeZone: "America/New_York"}));
-    const date = estDate.toISOString().slice(0, 10);
+    // Fix: Use toLocaleDateString to get the correct EST date
+    const date = now.toLocaleDateString('en-CA', {timeZone: 'America/New_York'});
 
     // Clean up existing documents with null questId
     await HelpWantedQuest.deleteMany({ questId: null });
@@ -683,8 +683,8 @@ async function generateDailyQuests() {
 async function getTodaysQuests() {
   try {
     const now = new Date();
-    const estDate = new Date(now.toLocaleString("en-US", {timeZone: "America/New_York"}));
-    const date = estDate.toISOString().slice(0, 10);
+    // Fix: Use toLocaleDateString to get the correct EST date
+    const date = now.toLocaleDateString('en-CA', {timeZone: 'America/New_York'});
     const quests = await HelpWantedQuest.find({ date });
     
     // Ensure all quests have an npcName field
@@ -710,8 +710,8 @@ async function getTodaysQuests() {
 async function getQuestsForScheduledTime(cronTime) {
   try {
     const now = new Date();
-    const estDate = new Date(now.toLocaleString("en-US", {timeZone: "America/New_York"}));
-    const date = estDate.toISOString().slice(0, 10);
+    // Fix: Use toLocaleDateString to get the correct EST date
+    const date = now.toLocaleDateString('en-CA', {timeZone: 'America/New_York'});
     return await HelpWantedQuest.find({ date, scheduledPostTime: cronTime });
   } catch (error) {
     console.error('[HelpWanted] Error fetching quests for scheduled time:', error);
