@@ -320,13 +320,14 @@ module.exports = {
         return interaction.editReply({ content: '❌ **An error occurred while generating the crafting result. Your materials and stamina have been refunded. Please contact a moderator.**', flags: [MessageFlags.Ephemeral] });
       }
 
-      await interaction.editReply({ content: `✅ **Successfully crafted ${quantity} "${itemName}".**`, flags: [MessageFlags.Ephemeral] });
-      await interaction.followUp({ embeds: [embed], ephemeral: false });
-
+      // ------------------- Add Crafted Item to Inventory -------------------
       const craftedAt = new Date();
       await addItemInventoryDatabase(character._id, item.itemName, quantity, interaction, 'Crafting', craftedAt);
       
       // Note: Google Sheets sync is handled by addItemInventoryDatabase
+
+      await interaction.editReply({ content: `✅ **Successfully crafted ${quantity} "${itemName}".**`, flags: [MessageFlags.Ephemeral] });
+      await interaction.followUp({ embeds: [embed], ephemeral: false });
 
       // ------------------- Activate and Deactivate Job Voucher AFTER Crafting Success -------------------
       if (character.jobVoucher && !voucherCheck?.skipVoucher && jobVoucherItem) {

@@ -6,6 +6,7 @@
 // ------------------- Node.js Standard Libraries -------------------
 const fs = require('fs');
 const path = require('path');
+const { v4: uuidv4 } = require('uuid');
 
 // ------------------- Discord.js Components -------------------
 const {
@@ -127,9 +128,6 @@ const {
 const { createMountEncounterEmbed } = require('../../embeds/embeds');
 const { generateWeatherEmbed } = require('../../services/weatherService');
 const WeatherService = require('../../services/weatherService');
-
-// ------------------- Third-Party Libraries -------------------
-const { v4: uuidv4 } = require('uuid');
 
 
 // ============================================================================
@@ -1131,8 +1129,8 @@ async function execute(interaction) {
     }
 
   } catch (error) {
-    handleError(error, 'modCombined.js');
-    console.error('[modCombined.js]: Command execution error', error);
+    handleError(error, 'mod.js');
+    console.error('[mod.js]: Command execution error', error);
     return interaction.editReply('⚠️ Something went wrong while processing the command.');
   }
 }
@@ -1174,60 +1172,7 @@ async function handleGive(interaction) {
       'Admin Give'
     );
 
-    // ------------------- Update Google Sheet -------------------
-    if (character.inventory && isValidGoogleSheetsUrl(character.inventory)) {
-      try {
-        const spreadsheetId = extractSpreadsheetId(character.inventory);
-        const auth = await authorizeSheets();
-        const range = 'loggedInventory!A2:M';
-        const uniqueSyncId = uuidv4();
-        const formattedDateTime = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
-        const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
-        
-        const values = [[
-          character.name,
-          itemName,
-          quantity.toString(),
-          item.category.join(', '),
-          item.type.join(', '),
-          item.subtype.join(', '),
-          'Admin Give',
-          character.job,
-          '',
-          character.currentVillage,
-          interactionUrl,
-          formattedDateTime,
-          uniqueSyncId
-        ]];
-
-        await safeAppendDataToSheet(
-          character.inventory,
-          character,
-          range,
-          values,
-          undefined,
-          { 
-            skipValidation: true,
-            context: {
-              commandName: 'mod give',
-              userTag: interaction.user.tag,
-              userId: interaction.user.id,
-              characterName: character.name,
-              spreadsheetId: spreadsheetId,
-              range: range,
-              sheetType: 'inventory',
-              options: {
-                itemName: itemName,
-                quantity: quantity
-              }
-            }
-          }
-        );
-      } catch (sheetError) {
-        console.error(`[mod.js]: ❌ Error updating Google Sheet:`, sheetError);
-        // Don't throw here, just log the error since the item was already given
-      }
-    }
+    // Note: Google Sheets sync is handled by addItemInventoryDatabase
   
     // Send processing message as ephemeral
     await interaction.editReply({ content: '✅ Processing...', ephemeral: true });

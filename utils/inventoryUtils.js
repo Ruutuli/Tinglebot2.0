@@ -403,7 +403,7 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
 
 // ---- Function: removeItemInventoryDatabase ----
 // Removes a single item from inventory database
-async function removeItemInventoryDatabase(characterId, itemName, quantity, interaction, obtain = "Trade") {
+async function removeItemInventoryDatabase(characterId, itemName, quantity, interaction, obtain = "Trade", skipSheetsLogging = false) {
   try {
     if (!dbFunctions.fetchCharacterById || !dbFunctions.connectToInventories) {
       throw new Error("Required database functions not initialized");
@@ -477,8 +477,8 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
       }
     }
 
-    // Google Sheets Sync for item removal
-    if (character.inventory && typeof character.inventory === 'string' && isValidGoogleSheetsUrl(character.inventory)) {
+    // Google Sheets Sync for item removal - only if not skipping
+    if (!skipSheetsLogging && character.inventory && typeof character.inventory === 'string' && isValidGoogleSheetsUrl(character.inventory)) {
       try {
         // Fetch item details for proper categorization
         const itemDetails = await dbFunctions.fetchItemByName(itemName);
@@ -792,7 +792,9 @@ const processMaterials = async (interaction, character, inventory, craftableItem
         character._id,
         specificItem.itemName,
         removeQuantity,
-        interaction
+        interaction,
+        "Trade",
+        true // Skip Google Sheets logging to prevent double logging
       );
       materialsUsed.push({
         itemName: specificItem.itemName,
