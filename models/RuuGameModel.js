@@ -7,7 +7,7 @@ const { Schema } = mongoose;
 
 // ============================================================================
 // ------------------- Define the RuuGame session schema -------------------
-// Tracks game sessions, players, scores, and game state
+// Tracks game sessions, players, and game state
 // ============================================================================
 const ruuGameSchema = new Schema({
   // ------------------- Game session information -------------------
@@ -27,14 +27,12 @@ const ruuGameSchema = new Schema({
   winner: { type: String, default: null }, // Discord ID of winner
   winningScore: { type: Number, default: null }, // Final winning score
   
-  // ------------------- Players and scores -------------------
+  // ------------------- Players -------------------
   players: [{
     discordId: { type: String, required: true },
     username: { type: String, required: true },
-    score: { type: Number, default: 0 },
     lastRoll: { type: Number, default: null },
-    lastRollTime: { type: Date, default: null },
-    rolls: [{ type: Number }] // History of all rolls
+    lastRollTime: { type: Date, default: null }
   }],
   
   // ------------------- Game settings -------------------
@@ -53,7 +51,6 @@ const ruuGameSchema = new Schema({
 });
 
 // ------------------- Create indexes for better query performance -------------------
-ruuGameSchema.index({ sessionId: 1 });
 ruuGameSchema.index({ channelId: 1 });
 ruuGameSchema.index({ status: 1 });
 ruuGameSchema.index({ expiresAt: 1 });

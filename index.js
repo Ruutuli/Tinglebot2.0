@@ -220,8 +220,6 @@ async function initializeClient() {
             }
           }
         } else if (interaction.isButton()) {
-          console.log(`[index.js]: 🔄 Processing button interaction: ${interaction.customId}`);
-          
           await handleComponentInteraction(interaction);
         } else if (interaction.isStringSelectMenu()) {
           console.log(`[index.js]: 🔄 Processing select menu interaction: ${interaction.customId}`);

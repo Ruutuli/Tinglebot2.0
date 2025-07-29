@@ -17,41 +17,23 @@ const {
 // ============================================================================
 const RuuGame = require('../../models/RuuGameModel');
 const Character = require('../../models/CharacterModel');
+const User = require('../../models/UserModel');
 const { generateUniqueId } = require('../../utils/uniqueIdUtils');
+const { syncInventory } = require('../../handlers/syncHandler');
 
 // ============================================================================
-// ------------------- Game configuration -------------------
-// Settings for the RuuGame dice rolling game
+// ------------------- Import RuuGame configuration -------------------
+// Import shared game settings and prize configuration
 // ============================================================================
-const GAME_CONFIG = {
-  TARGET_SCORE: 20,
-  DICE_SIDES: 20,
-  SESSION_DURATION_HOURS: 24,
-  MAX_PLAYERS: 10,
-  ROLL_COOLDOWN_SECONDS: 30
-};
-
-// ============================================================================
-// ------------------- Prize configuration -------------------
-// Available prizes and their descriptions
-// ============================================================================
-const PRIZES = {
-  fairy: {
-    name: 'Fairy',
-    description: 'A magical fairy companion',
-    emoji: '🧚'
-  },
-  job_voucher: {
-    name: 'Job Voucher',
-    description: 'A voucher for a new job opportunity',
-    emoji: '📜'
-  },
-  enduring_elixir: {
-    name: 'Enduring Elixir',
-    description: 'A powerful elixir that grants endurance',
-    emoji: '🧪'
-  }
-};
+const { 
+  GAME_CONFIG, 
+  PRIZES, 
+  createRuuGameEmbed, 
+  createRuuGameButtons, 
+  getRuuGameStatusColor,
+  getRollEmojis,
+  awardRuuGamePrize
+} = require('../../handlers/componentHandler');
 
 // ============================================================================
 // ------------------- Export the slash command -------------------
@@ -64,7 +46,7 @@ module.exports = {
     .addSubcommand(subcommand =>
       subcommand
         .setName('create')
-        .setDescription('Create a new RuuGame session')
+        .setDescription('Create a new RuuGame session (Admin only)')
         .addStringOption(option =>
           option.setName('prize')
             .setDescription('Type of prize for the winner')
@@ -78,33 +60,8 @@ module.exports = {
     )
     .addSubcommand(subcommand =>
       subcommand
-        .setName('join')
-        .setDescription('Join an active RuuGame session')
-        .addStringOption(option =>
-          option.setName('session_id')
-            .setDescription('The session ID to join')
-            .setRequired(true)
-        )
-    )
-    .addSubcommand(subcommand =>
-      subcommand
         .setName('roll')
-        .setDescription('Roll a d20 in the current game')
-    )
-    .addSubcommand(subcommand =>
-      subcommand
-        .setName('status')
-        .setDescription('Check the status of the current game')
-    )
-    .addSubcommand(subcommand =>
-      subcommand
-        .setName('claim')
-        .setDescription('Claim your prize if you won')
-        .addStringOption(option =>
-          option.setName('session_id')
-            .setDescription('The session ID to claim prize from')
-            .setRequired(true)
-        )
+        .setDescription('Roll a d20 in the current game (auto-joins if not in game)')
     ),
 
   // ============================================================================
@@ -119,35 +76,78 @@ module.exports = {
         case 'create':
           await this.handleCreate(interaction);
           break;
-        case 'join':
-          await this.handleJoin(interaction);
-          break;
         case 'roll':
           await this.handleRoll(interaction);
           break;
-        case 'status':
-          await this.handleStatus(interaction);
-          break;
-        case 'claim':
-          await this.handleClaim(interaction);
-          break;
         default:
-          await interaction.reply({ content: '❌ Unknown subcommand.', ephemeral: true });
+          await interaction.reply({ content: '❌ Unknown subcommand.', flags: 64 });
       }
     } catch (error) {
       console.error('RuuGame command error:', error);
-      await interaction.reply({ 
-        content: '❌ An error occurred while processing your request.', 
-        ephemeral: true 
-      });
+      
+      // Only try to reply if the interaction hasn't been responded to yet
+      if (!interaction.replied && !interaction.deferred) {
+        try {
+          await interaction.reply({ 
+            content: '❌ An error occurred while processing your request.', 
+            flags: 64 
+          });
+        } catch (replyError) {
+          console.error('Failed to send error response:', replyError);
+        }
+      } else if (interaction.deferred) {
+        try {
+          await interaction.editReply({ 
+            content: '❌ An error occurred while processing your request.', 
+            flags: 64 
+          });
+        } catch (editError) {
+          console.error('Failed to send error edit response:', editError);
+        }
+      }
     }
   },
 
   // ============================================================================
+  // ------------------- Validate user setup -------------------
+  // Checks if user has proper character setup and synced data
+  // ============================================================================
+  async validateUserSetup(interaction) {
+    const userId = interaction.user.id;
+    
+    // Check if user exists and has synced token tracker
+    const user = await User.findOne({ discordId: userId });
+    if (!user || !user.tokensSynced) {
+      return { valid: false, message: '❌ You need to have a synced token tracker to play RuuGame.' };
+    }
+    
+    // Check if user has at least one character with synced inventory
+    const characters = await Character.find({ userId: userId });
+    if (characters.length === 0) {
+      return { valid: false, message: '❌ You need to have at least one character to play RuuGame.' };
+    }
+    
+    const syncedCharacters = characters.filter(char => char.inventorySynced);
+    if (syncedCharacters.length === 0) {
+      return { valid: false, message: '❌ You need to have at least one character with a synced inventory to play RuuGame.' };
+    }
+    
+    return { valid: true, characters: syncedCharacters };
+  },
+
+  // ============================================================================
   // ------------------- Handle create subcommand -------------------
-  // Creates a new RuuGame session
+  // Creates a new RuuGame session (Admin only)
   // ============================================================================
   async handleCreate(interaction) {
+    // Check if user is admin
+    if (!interaction.member.permissions.has('Administrator')) {
+      return await interaction.reply({
+        content: '❌ Only administrators can create RuuGame sessions.',
+        flags: 64
+      });
+    }
+    
     const prizeType = interaction.options.getString('prize');
     const channelId = interaction.channelId;
     const guildId = interaction.guildId;
@@ -163,7 +163,7 @@ module.exports = {
     if (existingSession) {
       return await interaction.reply({
         content: `❌ There's already an active session in this channel (ID: ${existingSession.sessionId})`,
-        ephemeral: true
+        flags: 64
       });
     }
     
@@ -187,64 +187,8 @@ module.exports = {
     
     await newSession.save();
     
-    const embed = this.createGameEmbed(newSession, 'Session Created!');
-    const buttons = this.createGameButtons(sessionId);
-    
-    await interaction.reply({
-      embeds: [embed],
-      components: [buttons]
-    });
-  },
-
-  // ============================================================================
-  // ------------------- Handle join subcommand -------------------
-  // Allows players to join an existing session
-  // ============================================================================
-  async handleJoin(interaction) {
-    const sessionId = interaction.options.getString('session_id');
-    const userId = interaction.user.id;
-    
-    const session = await RuuGame.findOne({
-      sessionId: sessionId,
-      status: { $in: ['waiting', 'active'] },
-      expiresAt: { $gt: new Date() }
-    });
-    
-    if (!session) {
-      return await interaction.reply({
-        content: '❌ Session not found or has expired.',
-        ephemeral: true
-      });
-    }
-    
-    // Check if player is already in the game
-    const existingPlayer = session.players.find(p => p.discordId === userId);
-    if (existingPlayer) {
-      return await interaction.reply({
-        content: '❌ You are already in this game!',
-        ephemeral: true
-      });
-    }
-    
-    // Check if game is full
-    if (session.players.length >= GAME_CONFIG.MAX_PLAYERS) {
-      return await interaction.reply({
-        content: '❌ This game is full!',
-        ephemeral: true
-      });
-    }
-    
-    // Add player to game
-    session.players.push({
-      discordId: userId,
-      username: interaction.user.username,
-      score: 0
-    });
-    
-    await session.save();
-    
-    const embed = this.createGameEmbed(session, 'Player Joined!');
-    const buttons = this.createGameButtons(sessionId);
+    const embed = await createRuuGameEmbed(newSession, 'Session Created!');
+    const buttons = createRuuGameButtons(sessionId);
     
     await interaction.reply({
       embeds: [embed],
@@ -254,9 +198,15 @@ module.exports = {
 
   // ============================================================================
   // ------------------- Handle roll subcommand -------------------
-  // Allows players to roll dice and update scores
+  // Allows players to roll dice and update scores (auto-joins if not in game)
   // ============================================================================
   async handleRoll(interaction) {
+    // Validate user setup
+    const validation = await this.validateUserSetup(interaction);
+    if (!validation.valid) {
+      return await interaction.reply({ content: validation.message, flags: 64 });
+    }
+    
     const userId = interaction.user.id;
     const channelId = interaction.channelId;
     
@@ -270,222 +220,95 @@ module.exports = {
     if (!session) {
       return await interaction.reply({
         content: '❌ No active session found in this channel.',
-        ephemeral: true
+        flags: 64
       });
     }
     
-    // Find player in the game
-    const player = session.players.find(p => p.discordId === userId);
+    // Find player in the game or auto-join them
+    let player = session.players.find(p => p.discordId === userId);
     if (!player) {
-      return await interaction.reply({
-        content: '❌ You are not in this game!',
-        ephemeral: true
-      });
+      // Auto-join the player
+      if (session.players.length >= GAME_CONFIG.MAX_PLAYERS) {
+        return await interaction.reply({
+          content: '❌ This game is full!',
+          flags: 64
+        });
+      }
+      
+      player = {
+        discordId: userId,
+        username: interaction.user.username,
+        lastRoll: null,
+        lastRollTime: null
+      };
+      session.players.push(player);
     }
     
     // Check cooldown
     const now = new Date();
     if (player.lastRollTime && (now - player.lastRollTime) < (GAME_CONFIG.ROLL_COOLDOWN_SECONDS * 1000)) {
       const remainingSeconds = Math.ceil((GAME_CONFIG.ROLL_COOLDOWN_SECONDS * 1000 - (now - player.lastRollTime)) / 1000);
-      return await interaction.reply({
-        content: `⏰ Please wait ${remainingSeconds} seconds before rolling again.`,
-        ephemeral: true
-      });
+      
+      try {
+        const reply = await interaction.reply({
+          content: `⏰ Please wait ${remainingSeconds} seconds before rolling again.`,
+          flags: 64
+        });
+      } catch (error) {
+        console.error(`[RuuGame Command] Failed to send cooldown message:`, error);
+      }
+      return;
     }
     
     // Roll the dice
     const roll = Math.floor(Math.random() * GAME_CONFIG.DICE_SIDES) + 1;
     player.lastRoll = roll;
     player.lastRollTime = now;
-    player.rolls.push(roll);
-    player.score += roll;
     
-    // Check for winner
+    // Check for winner (exact 20, not cumulative)
     let gameEnded = false;
-    if (player.score >= GAME_CONFIG.TARGET_SCORE) {
+    let prizeAwarded = false;
+    let prizeCharacter = null;
+
+    if (roll === GAME_CONFIG.TARGET_SCORE) {
       session.status = 'finished';
       session.winner = userId;
-      session.winningScore = player.score;
+      session.winningScore = roll;
       gameEnded = true;
+
+      prizeCharacter = await awardRuuGamePrize(session, userId, interaction);
+      prizeAwarded = prizeCharacter !== null;
     } else if (session.status === 'waiting') {
       session.status = 'active';
     }
     
+    // Save the session with updated player data
     await session.save();
     
-    const embed = this.createGameEmbed(session, gameEnded ? 'Game Over!' : 'Roll Result!');
-    const buttons = this.createGameButtons(session.sessionId);
+    // Fetch the updated session to ensure we have the latest data
+    const updatedSession = await RuuGame.findById(session._id);
     
+    const embed = await createRuuGameEmbed(updatedSession, gameEnded ? '🎉 WINNER!' : 'Roll Result!', interaction.user, prizeCharacter, roll);
+    
+    // Add roll announcement for non-winner rolls
+    if (!gameEnded) {
+      embed.setTitle(`🎲 RuuGame - ${interaction.user.username} rolled a ${roll}!`);
+    }
+    
+    // Show buttons on ALL posts except when someone wins
+    let buttons = null;
+    if (!gameEnded) {
+      buttons = createRuuGameButtons(session.sessionId);
+    }
+
     await interaction.reply({
       embeds: [embed],
-      components: gameEnded ? [] : [buttons]
-    });
-  },
-
-  // ============================================================================
-  // ------------------- Handle status subcommand -------------------
-  // Shows current game status and player scores
-  // ============================================================================
-  async handleStatus(interaction) {
-    const channelId = interaction.channelId;
-    
-    const session = await RuuGame.findOne({
-      channelId: channelId,
-      status: { $in: ['waiting', 'active', 'finished'] },
-      expiresAt: { $gt: new Date() }
+      components: buttons ? [buttons] : []
     });
     
-    if (!session) {
-      return await interaction.reply({
-        content: '❌ No active session found in this channel.',
-        ephemeral: true
-      });
-    }
-    
-    const embed = this.createGameEmbed(session, 'Game Status');
-    const buttons = session.status === 'finished' ? [] : this.createGameButtons(session.sessionId);
-    
-    await interaction.reply({
-      embeds: [embed],
-      components: buttons.length > 0 ? [buttons] : []
-    });
-  },
-
-  // ============================================================================
-  // ------------------- Handle claim subcommand -------------------
-  // Allows winners to claim their prizes
-  // ============================================================================
-  async handleClaim(interaction) {
-    const sessionId = interaction.options.getString('session_id');
-    const userId = interaction.user.id;
-    
-    const session = await RuuGame.findOne({
-      sessionId: sessionId,
-      status: 'finished',
-      winner: userId,
-      prizeClaimed: false
-    });
-    
-    if (!session) {
-      return await interaction.reply({
-        content: '❌ You are not the winner of this session or the prize has already been claimed.',
-        ephemeral: true
-      });
-    }
-    
-    // Find a random character to give the prize to
-    const characters = await Character.find({ userId: userId });
-    if (characters.length === 0) {
-      return await interaction.reply({
-        content: '❌ You need to have at least one character to claim a prize.',
-        ephemeral: true
-      });
-    }
-    
-    const randomCharacter = characters[Math.floor(Math.random() * characters.length)];
-    
-    // Mark prize as claimed
-    session.prizeClaimed = true;
-    session.prizeClaimedBy = randomCharacter.name;
-    session.prizeClaimedAt = new Date();
-    await session.save();
-    
-    const prize = PRIZES[session.prizeType];
-    const embed = new EmbedBuilder()
-      .setTitle('🎉 Prize Claimed!')
-      .setDescription(`Congratulations! You've won a **${prize.name}**!`)
-      .addFields(
-        { name: 'Prize', value: `${prize.emoji} ${prize.name}`, inline: true },
-        { name: 'Character', value: randomCharacter.name, inline: true },
-        { name: 'Description', value: prize.description, inline: false }
-      )
-      .setColor('#00ff00')
-      .setTimestamp();
-    
-    await interaction.reply({ embeds: [embed] });
-  },
-
-  // ============================================================================
-  // ------------------- Create game embed -------------------
-  // Creates an embed showing game information
-  // ============================================================================
-  createGameEmbed(session, title) {
-    const prize = PRIZES[session.prizeType];
-    const embed = new EmbedBuilder()
-      .setTitle(`🎲 RuuGame - ${title}`)
-      .setDescription(`First to reach **${GAME_CONFIG.TARGET_SCORE}** wins a **${prize.name}**!`)
-      .addFields(
-        { name: 'Session ID', value: session.sessionId, inline: true },
-        { name: 'Status', value: session.status.charAt(0).toUpperCase() + session.status.slice(1), inline: true },
-        { name: 'Players', value: session.players.length.toString(), inline: true },
-        { name: 'Prize', value: `${prize.emoji} ${prize.name}`, inline: true },
-        { name: 'Target Score', value: GAME_CONFIG.TARGET_SCORE.toString(), inline: true },
-        { name: 'Dice', value: `d${GAME_CONFIG.DICE_SIDES}`, inline: true }
-      )
-      .setColor(this.getStatusColor(session.status))
-      .setTimestamp();
-    
-    // Add player scores
-    if (session.players.length > 0) {
-      const playerList = session.players
-        .sort((a, b) => b.score - a.score)
-        .map((player, index) => {
-          const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '•';
-          const lastRoll = player.lastRoll ? ` (Last: ${player.lastRoll})` : '';
-          return `${medal} **${player.username}**: ${player.score}${lastRoll}`;
-        })
-        .join('\n');
-      
-      embed.addFields({ name: 'Scores', value: playerList, inline: false });
-    }
-    
-    if (session.winner) {
-      const winner = session.players.find(p => p.discordId === session.winner);
-      embed.addFields({ 
-        name: '🏆 Winner!', 
-        value: `**${winner.username}** with ${session.winningScore} points!`, 
-        inline: false 
-      });
-    }
-    
-    return embed;
-  },
-
-  // ============================================================================
-  // ------------------- Create game buttons -------------------
-  // Creates action buttons for the game
-  // ============================================================================
-  createGameButtons(sessionId) {
-    return new ActionRowBuilder()
-      .addComponents(
-        new ButtonBuilder()
-          .setCustomId(`ruugame_join_${sessionId}`)
-          .setLabel('Join Game')
-          .setStyle(ButtonStyle.Primary)
-          .setEmoji('🎮'),
-        new ButtonBuilder()
-          .setCustomId(`ruugame_roll_${sessionId}`)
-          .setLabel('Roll d20')
-          .setStyle(ButtonStyle.Success)
-          .setEmoji('🎲'),
-        new ButtonBuilder()
-          .setCustomId(`ruugame_status_${sessionId}`)
-          .setLabel('Status')
-          .setStyle(ButtonStyle.Secondary)
-          .setEmoji('📊')
-      );
-  },
-
-  // ============================================================================
-  // ------------------- Get status color -------------------
-  // Returns appropriate color for game status
-  // ============================================================================
-  getStatusColor(status) {
-    switch (status) {
-      case 'waiting': return '#ffff00'; // Yellow
-      case 'active': return '#00ff00'; // Green
-      case 'finished': return '#ff0000'; // Red
-      default: return '#0099ff'; // Blue
+    // Send prize notification if awarded
+    if (prizeAwarded) {
+      // Prize notification removed - consolidated into main winner embed
     }
   }
 };
