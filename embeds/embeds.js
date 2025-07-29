@@ -1280,7 +1280,9 @@ const createMonsterEncounterEmbed = (
  heartsRemaining,
  lootItem,
  isBloodMoon = false,
- actualRoll = null
+ actualRoll = null,
+ currentMonster = null,
+ totalMonsters = null
 ) => {
  const settings = getCommonEmbedSettings(character) || {};
  const nameMapping = monster.nameMapping || monster.name;
@@ -1312,6 +1314,13 @@ const createMonsterEncounterEmbed = (
   villageImages[capitalizeWords(character.currentVillage)] ||
   "https://via.placeholder.com/100x100";
 
+ // Add progress indicator if provided
+ const progressField = currentMonster && totalMonsters ? {
+  name: "⚔️ __Battle Progress__",
+  value: `> Fighting monster **${currentMonster}/${totalMonsters}**`,
+  inline: true,
+ } : null;
+
  const embed = new EmbedBuilder()
   .setColor(isBloodMoon ? "#FF4500" : embedColor)
   .setTitle(
@@ -1336,20 +1345,26 @@ const createMonsterEncounterEmbed = (
     name: "__🟩 Stamina__",
     value: `> ${character.currentStamina}/${character.maxStamina}`,
     inline: true,
-   },
-   {
-    name: "🔹 __Outcome__",
-    value: `> ${outcomeMessage || "No outcome specified."}${koMessage}`,
-    inline: false,
    }
-  )
-  .setFooter({
-   text: `Tier: ${monster.tier}${
-    isBloodMoon ? " 🔴 Blood Moon Encounter" : ""
-   }${character.jobVoucher && character.jobVoucherJob ? ` | 🎫 Job Voucher in use: ${character.jobVoucherJob}` : ""}`,
-   iconURL: authorIconURL,
-  })
-  .setImage(villageImage);
+  );
+
+ // Add progress field if available
+ if (progressField) {
+  embed.addFields(progressField);
+ }
+
+ embed.addFields({
+  name: "🔹 __Outcome__",
+  value: `> ${outcomeMessage || "No outcome specified."}${koMessage}`,
+  inline: false,
+ });
+
+ embed.setFooter({
+  text: `Tier: ${monster.tier}${
+   isBloodMoon ? " 🔴 Blood Moon Encounter" : ""
+  }${character.jobVoucher && character.jobVoucherJob ? ` | 🎫 Job Voucher in use: ${character.jobVoucherJob}` : ""}`,
+  iconURL: authorIconURL,
+ });
 
  if (lootItem) {
   embed.addFields({

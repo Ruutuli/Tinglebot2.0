@@ -49,9 +49,9 @@ const VILLAGE_IMAGES = {
 
 // Quest generation parameters
 const QUEST_PARAMS = {
-  item: { minAmount: 2, maxAmount: 5 },
+  item: { minAmount: 1, maxAmount: 5 },
   monster: { minAmount: 3, maxAmount: 7 },
-  crafting: { amount: 1 }
+  crafting: { minAmount: 2, maxAmount: 5 }
 };
 
 // ------------------- NPC Quest Flavor Text Database -------------------
@@ -88,7 +88,7 @@ const NPC_QUEST_FLAVOR = {
     ],
     monster: [
       "Sue spotted **{amount}x {monster} (tier: {tier})** lurking in the shallows, scaring away all the fish. She needs them removed to restore her catch.",
-      "The Zora fisherman's favorite fishing spot is overrun by **{amount}x {monster} (tier: {tier})**. She can't work until they're cleared out.",
+      "Sue's favorite fishing spot is overrun by **{amount}x {monster} (tier: {tier})**. She can't work until they're cleared out.",
       "Sue's fish traps keep getting destroyed by **{amount}x {monster} (tier: {tier})**. She needs a hunter to eliminate the threat."
     ],
     escort: [
@@ -98,7 +98,7 @@ const NPC_QUEST_FLAVOR = {
     ],
     crafting: [
       "Sue's fishing gear is wearing out. She needs **{amount}x {item}** to maintain her livelihood on the river.",
-      "The Zora fisherman wants to expand her business but needs **{amount}x {item}** to build new fish processing equipment.",
+      "Sue wants to expand her business but needs **{amount}x {item}** to build new fish processing equipment.",
       "Sue's been experimenting with new fishing techniques but requires **{amount}x {item}** to perfect her methods."
     ]
   },
@@ -149,12 +149,12 @@ const NPC_QUEST_FLAVOR = {
   'Cree': {
     item: [
       "Cree the Rito Monster Hunter's weapons are dull from constant use. He needs **{amount}x {item}** to maintain his hunting gear.",
-      "The monster hunter's tracking supplies are depleted. Cree needs **{amount}x {item}** to continue his dangerous work.",
+      "Cree's tracking supplies are depleted. He needs **{amount}x {item}** to continue his dangerous work.",
       "Cree's been hunting in harsh conditions and needs **{amount}x {item}** to repair his damaged equipment."
     ],
     monster: [
       "Cree spotted a pack of **{amount}x {monster} (tier: {tier})** that are too dangerous for him to handle alone. He needs backup to eliminate them.",
-      "The Rito monster hunter's territory is being invaded by **{amount}x {monster} (tier: {tier})**. He needs help to drive them back.",
+      "Cree's territory is being invaded by **{amount}x {monster} (tier: {tier})**. He needs help to drive them back.",
       "Cree discovered **{amount}x {monster} (tier: {tier})** that are threatening local wildlife. He needs assistance to restore the balance."
     ],
     escort: [
@@ -164,19 +164,19 @@ const NPC_QUEST_FLAVOR = {
     ],
     crafting: [
       "Cree's hunting weapons need upgrading to handle stronger monsters. He requires **{amount}x {item}** to forge better gear.",
-      "The Rito monster hunter wants to build a new hunting lodge but needs **{amount}x {item}** for the construction.",
+      "Cree wants to build a new hunting lodge but needs **{amount}x {item}** for the construction.",
       "Cree's been developing new monster tracking techniques but requires **{amount}x {item}** to perfect his methods."
     ]
   },
   'Cece': {
     item: [
       "Cece the Mixed Mushroom Forager's collection baskets are falling apart. She needs **{amount}x {item}** to continue her mushroom hunting.",
-      "The forager's preservation supplies are running low. Cece needs **{amount}x {item}** to keep her mushrooms fresh.",
+      "Cece's preservation supplies are running low. She needs **{amount}x {item}** to keep her mushrooms fresh.",
       "Cece's been exploring new forest areas and needs **{amount}x {item}** to safely navigate the dangerous terrain."
     ],
     monster: [
       "Cece discovered **{amount}x {monster} (tier: {tier})** in her favorite mushroom patch. They're trampling all the rare fungi she needs.",
-      "The mushroom forager's usual gathering spots are infested with **{amount}x {monster} (tier: {tier})**. She can't work safely until they're gone.",
+      "Cece's usual gathering spots are infested with **{amount}x {monster} (tier: {tier})**. She can't work safely until they're gone.",
       "Cece found a new mushroom grove but it's guarded by **{amount}x {monster} (tier: {tier})**. She needs help to access the valuable fungi."
     ],
     escort: [
@@ -186,19 +186,19 @@ const NPC_QUEST_FLAVOR = {
     ],
     crafting: [
       "Cece's foraging tools are worn out from constant use. She needs **{amount}x {item}** to maintain her collection equipment.",
-      "The mushroom forager wants to build a new drying shed but requires **{amount}x {item}** for the construction.",
+      "Cece wants to build a new drying shed but requires **{amount}x {item}** for the construction.",
       "Cece's been developing new mushroom preservation methods but needs **{amount}x {item}** to complete her research."
     ]
   },
   'Walton': {
     item: [
       "Walton the Korok's acorn collection is running low. He needs **{amount}x {item}** to maintain his forest home.",
-      "The Korok's tree care supplies are depleted. Walton needs **{amount}x {item}** to keep the forest healthy.",
+      "Walton's tree care supplies are depleted. He needs **{amount}x {item}** to keep the forest healthy.",
       "Walton's been busy with forest maintenance and needs **{amount}x {item}** to complete his work."
     ],
     monster: [
       "Walton spotted **{amount}x {monster} (tier: {tier})** damaging the ancient trees. He needs help to protect the forest from these threats.",
-      "The Korok's sacred grove is being invaded by **{amount}x {monster} (tier: {tier})**. He can't maintain the forest until they're removed.",
+      "Walton's sacred grove is being invaded by **{amount}x {monster} (tier: {tier})**. He can't maintain the forest until they're removed.",
       "Walton discovered **{amount}x {monster} (tier: {tier})** that are threatening the forest's delicate balance. He needs assistance."
     ],
     escort: [
@@ -208,19 +208,19 @@ const NPC_QUEST_FLAVOR = {
     ],
     crafting: [
       "Walton's forest care tools are breaking down. He needs **{amount}x {item}** to maintain the ancient trees properly.",
-      "The Korok wants to build a new forest sanctuary but requires **{amount}x {item}** for the construction.",
+      "Walton wants to build a new forest sanctuary but requires **{amount}x {item}** for the construction.",
       "Walton's been developing new tree healing techniques but needs **{amount}x {item}** to complete his methods."
     ]
   },
   'Jengo': {
     item: [
       "Jengo the Goron Miner's pickaxes are dull from constant use. He needs **{amount}x {item}** to maintain his mining equipment.",
-      "The miner's safety gear is wearing out. Jengo needs **{amount}x {item}** to work safely in the deep mines.",
+      "Jengo's safety gear is wearing out. He needs **{amount}x {item}** to work safely in the deep mines.",
       "Jengo's been mining in dangerous conditions and needs **{amount}x {item}** to repair his damaged tools."
     ],
     monster: [
       "Jengo discovered **{amount}x {monster} (tier: {tier})** in the mine shafts. They're blocking access to valuable ore deposits.",
-      "The Goron miner's usual mining areas are infested with **{amount}x {monster} (tier: {tier})**. He can't work until they're cleared.",
+      "Jengo's usual mining areas are infested with **{amount}x {monster} (tier: {tier})**. He can't work until they're cleared.",
       "Jengo found a rich ore vein but it's guarded by **{amount}x {monster} (tier: {tier})**. He needs help to access the minerals."
     ],
     escort: [
@@ -230,19 +230,19 @@ const NPC_QUEST_FLAVOR = {
     ],
     crafting: [
       "Jengo's mining tools need upgrading to reach deeper deposits. He requires **{amount}x {item}** to forge better equipment.",
-      "The Goron miner wants to build a new mining outpost but needs **{amount}x {item}** for the construction.",
+      "Jengo wants to build a new mining outpost but needs **{amount}x {item}** for the construction.",
       "Jengo's been developing new mining techniques but requires **{amount}x {item}** to perfect his methods."
     ]
   },
   'Jasz': {
     item: [
       "Jasz the Nocturnal Twili Hunter's night vision equipment is failing. He needs **{amount}x {item}** to continue his nocturnal work.",
-      "The hunter's stealth gear is damaged. Jasz needs **{amount}x {item}** to maintain his silent hunting abilities.",
+      "Jasz's stealth gear is damaged. He needs **{amount}x {item}** to maintain his silent hunting abilities.",
       "Jasz's been hunting in the darkness and needs **{amount}x {item}** to repair his specialized equipment."
     ],
     monster: [
       "Jasz spotted **{amount}x {monster} (tier: {tier})** that are too dangerous for night hunting. He needs backup to eliminate them safely.",
-      "The Twili hunter's territory is being invaded by **{amount}x {monster} (tier: {tier})**. He needs help to drive them back.",
+      "Jasz's territory is being invaded by **{amount}x {monster} (tier: {tier})**. He needs help to drive them back.",
       "Jasz discovered **{amount}x {monster} (tier: {tier})** that are threatening nocturnal wildlife. He needs assistance to restore balance."
     ],
     escort: [
@@ -252,19 +252,19 @@ const NPC_QUEST_FLAVOR = {
     ],
     crafting: [
       "Jasz's hunting weapons need upgrading for stronger night creatures. He requires **{amount}x {item}** to forge better gear.",
-      "The Twili hunter wants to build a new night hunting lodge but needs **{amount}x {item}** for the construction.",
+      "Jasz wants to build a new night hunting lodge but needs **{amount}x {item}** for the construction.",
       "Jasz's been developing new nocturnal tracking techniques but requires **{amount}x {item}** to perfect his methods."
     ]
   },
   'Lecia': {
     item: [
       "Lecia the Sheikah Scholar's research materials are running low. She needs **{amount}x {item}** to continue her ancient studies.",
-      "The scholar's preservation equipment is failing. Lecia needs **{amount}x {item}** to protect valuable artifacts.",
+      "Lecia's preservation equipment is failing. She needs **{amount}x {item}** to protect valuable artifacts.",
       "Lecia's been studying ancient ruins and needs **{amount}x {item}** to safely explore dangerous sites."
     ],
     monster: [
       "Lecia discovered **{amount}x {monster} (tier: {tier})** guarding ancient ruins she was studying. She needs help to access the historical site.",
-      "The Sheikah scholar's research areas are infested with **{amount}x {monster} (tier: {tier})**. She can't work until they're cleared.",
+      "Lecia's research areas are infested with **{amount}x {monster} (tier: {tier})**. She can't work until they're cleared.",
       "Lecia found a promising archaeological site but it's protected by **{amount}x {monster} (tier: {tier})**. She needs assistance to explore it."
     ],
     escort: [
@@ -274,19 +274,19 @@ const NPC_QUEST_FLAVOR = {
     ],
     crafting: [
       "Lecia's research tools are wearing out from constant use. She needs **{amount}x {item}** to maintain her scholarly equipment.",
-      "The Sheikah scholar wants to build a new research library but requires **{amount}x {item}** for the construction.",
+      "Lecia wants to build a new research library but requires **{amount}x {item}** for the construction.",
       "Lecia's been developing new archaeological techniques but needs **{amount}x {item}** to complete her research."
     ]
   },
   'Tye': {
     item: [
       "Tye the Kokiri Botanist's plant samples are deteriorating. She needs **{amount}x {item}** to preserve her botanical research.",
-      "The botanist's greenhouse equipment is failing. Tye needs **{amount}x {item}** to maintain her plant experiments.",
+      "Tye's greenhouse equipment is failing. She needs **{amount}x {item}** to maintain her plant experiments.",
       "Tye's been studying rare plants and needs **{amount}x {item}** to safely collect specimens from dangerous areas."
     ],
     monster: [
       "Tye discovered **{amount}x {monster} (tier: {tier})** destroying rare plants she was studying. She needs help to protect the endangered species.",
-      "The Kokiri botanist's research areas are infested with **{amount}x {monster} (tier: {tier})**. She can't work until they're removed.",
+      "Tye's research areas are infested with **{amount}x {monster} (tier: {tier})**. She can't work until they're removed.",
       "Tye found a rare plant grove but it's guarded by **{amount}x {monster} (tier: {tier})**. She needs assistance to access the specimens."
     ],
     escort: [
@@ -296,19 +296,19 @@ const NPC_QUEST_FLAVOR = {
     ],
     crafting: [
       "Tye's botanical tools are wearing out from constant use. She needs **{amount}x {item}** to maintain her research equipment.",
-      "The Kokiri botanist wants to build a new greenhouse but requires **{amount}x {item}** for the construction.",
+      "Tye wants to build a new greenhouse but requires **{amount}x {item}** for the construction.",
       "Tye's been developing new plant cultivation techniques but needs **{amount}x {item}** to complete her research."
     ]
   },
   'Lil Tim': {
     item: [
       "Lil Tim the Cucco's coop is falling apart. He needs **{amount}x {item}** to rebuild his home for his feathered family.",
-      "The Cucco's feeding supplies are running low. Lil Tim needs **{amount}x {item}** to keep his birds healthy.",
+      "Lil Tim's feeding supplies are running low. He needs **{amount}x {item}** to keep his birds healthy.",
       "Lil Tim's been busy with his flock and needs **{amount}x {item}** to maintain their living space."
     ],
     monster: [
       "Lil Tim spotted **{amount}x {monster} (tier: {tier})** threatening his precious Cucco flock. He needs help to protect his birds.",
-      "The Cucco's territory is being invaded by **{amount}x {monster} (tier: {tier})**. He can't keep his flock safe until they're driven away.",
+      "Lil Tim's territory is being invaded by **{amount}x {monster} (tier: {tier})**. He can't keep his flock safe until they're driven away.",
       "Lil Tim discovered **{amount}x {monster} (tier: {tier})** that are scaring away his birds. He needs assistance to restore peace."
     ],
     escort: [
@@ -318,7 +318,7 @@ const NPC_QUEST_FLAVOR = {
     ],
     crafting: [
       "Lil Tim's coop maintenance tools are breaking down. He needs **{amount}x {item}** to keep his birds' home in good condition.",
-      "The Cucco wants to build a new nesting area but requires **{amount}x {item}** for the construction.",
+      "Lil Tim wants to build a new nesting area but requires **{amount}x {item}** for the construction.",
       "Lil Tim's been developing new bird care techniques but needs **{amount}x {item}** to complete his methods."
     ]
   }
@@ -573,7 +573,8 @@ function generateQuestRequirements(type, pools, village) {
       if (!item?.itemName) {
         throw new Error(`Invalid crafting item selected for ${village} crafting quest`);
       }
-      return { item: item.itemName, amount: QUEST_PARAMS.crafting.amount };
+      const { minAmount, maxAmount } = QUEST_PARAMS.crafting;
+      return { item: item.itemName, amount: Math.floor(Math.random() * (maxAmount - minAmount + 1)) + minAmount };
     }
     
     default:
@@ -760,7 +761,7 @@ async function getCurrentQuestSchedule() {
 function getQuestTurnInInstructions(type) {
   const instructions = {
     item: '• **Item Quest:** Gather the requested materials and bring them to the quest board. Use </helpwanted complete:1397274578530865313> when ready.',
-    monster: '• **Monster Quest:** Hunt down the dangerous creatures threatening the village. Use </helpwanted monsterhunt:1397274578530865313> to complete this quest.',
+    monster: '• **Monster Quest:** Hunt down the dangerous creatures threatening the village. Use </helpwanted monsterhunt:1397274578530865313> to complete this quest. **Costs 1 stamina per attempt.**',
     escort: '• **Escort Quest:** Safely guide the villager to their destination. Please travel from the quest village to the destination village using </travel:1379850586987430009>, then use </helpwanted complete:1397274578530865313>.',
     crafting: '• **Crafting Quest:** Create the requested item with your own hands. Craft the required item yourself, then use </helpwanted complete:1397274578530865313>.'
   };
@@ -866,6 +867,17 @@ async function formatQuestsAsEmbedsByVillage() {
           console.error('[HelpWanted] Error fetching character for completed quest:', error);
         }
       } else {
+        // Add NPC icon as thumbnail for available quests
+        try {
+          const { NPCs } = require('./stealingNPCSModule');
+          const npcData = NPCs[npcName];
+          if (npcData && npcData.icon) {
+            embed.setThumbnail(npcData.icon);
+          }
+        } catch (error) {
+          console.error('[HelpWanted] Error setting NPC thumbnail:', error);
+        }
+        
         // Only add rules and how to complete for available quests
         const turnIn = getQuestTurnInInstructions(quest.type);
         const rules = '• Only natives of the village can complete this quest.\n' +
@@ -945,6 +957,17 @@ async function formatSpecificQuestsAsEmbedsByVillage(quests) {
           console.error('[HelpWanted] Error fetching character for completed quest:', error);
         }
       } else {
+        // Add NPC icon as thumbnail for available quests
+        try {
+          const { NPCs } = require('./stealingNPCSModule');
+          const npcData = NPCs[npcName];
+          if (npcData && npcData.icon) {
+            embed.setThumbnail(npcData.icon);
+          }
+        } catch (error) {
+          console.error('[HelpWanted] Error setting NPC thumbnail:', error);
+        }
+        
         // Only add rules and how to complete for available quests
         const turnIn = getQuestTurnInInstructions(quest.type);
         const rules = '• Only natives of the village can complete this quest.\n' +
@@ -1106,6 +1129,17 @@ async function updateQuestEmbed(client, quest, completedBy = null) {
         console.error('[HelpWanted] Error fetching character for completed quest:', error);
       }
     } else {
+      // Add NPC icon as thumbnail for available quests
+      try {
+        const { NPCs } = require('./stealingNPCSModule');
+        const npcData = NPCs[npcName];
+        if (npcData && npcData.icon) {
+          updatedEmbed.setThumbnail(npcData.icon);
+        }
+      } catch (error) {
+        console.error('[HelpWanted] Error setting NPC thumbnail:', error);
+      }
+      
       // Only add rules and how to complete for available quests
       const turnIn = getQuestTurnInInstructions(quest.type);
       const rules = '• Only natives of the village can complete this quest.\n' +

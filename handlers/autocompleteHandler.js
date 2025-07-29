@@ -355,7 +355,9 @@ async function handleAutocomplete(interaction) {
 
           // ------------------- Raid Command -------------------
           case "raid":
-            if (focusedOption.name === "charactername") {
+            if (focusedOption.name === "raidid") {
+              await handleRaidIdAutocomplete(interaction, focusedOption);
+            } else if (focusedOption.name === "charactername") {
               await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "raid");
             }
             break;
@@ -4058,6 +4060,16 @@ async function handleModCharacterNameAutocomplete(interaction, focusedOption) {
   }
 }
 
+// ------------------- Mod Character Functions -------------------
+handleModCharacterJobAutocomplete,
+handleModCharacterNameAutocomplete,
+
+// ------------------- Raid Functions -------------------
+handleRaidIdAutocomplete,
+
+// ------------------- Submit Functions -------------------
+handleSubmitCollabAutocomplete,
+
 module.exports = {
  handleAutocomplete,
  handleEconomyAutocomplete,
@@ -4200,5 +4212,55 @@ handleBlightOverrideTargetAutocomplete,
  // ------------------- Shop Buy Functions -------------------
  handleShopBuyItemAutocomplete,
 };
+
+// ------------------- Raid ID Autocomplete -------------------
+// Provides autocomplete suggestions for active raid IDs.
+async function handleRaidIdAutocomplete(interaction, focusedOption) {
+  try {
+    // Import the Raid model
+    const Raid = require('../models/RaidModel');
+    
+    // Get the search query from the focused option
+    const searchQuery = focusedOption.value?.toLowerCase() || "";
+    
+    // Find active raids
+    const activeRaids = await Raid.find({ 
+      status: 'active',
+      isActive: true,
+      expiresAt: { $gt: new Date() }
+    }).select('raidId village monster.name monster.tier createdAt').limit(25);
+    
+    if (!activeRaids || activeRaids.length === 0) {
+      return await interaction.respond([]);
+    }
+
+    // Map raids to autocomplete choices
+    const choices = activeRaids.map((raid) => {
+      const villageName = raid.village;
+      const monsterName = raid.monster.name;
+      const tier = raid.monster.tier;
+      const raidId = raid.raidId;
+      
+      return {
+        name: `${raidId} | ${monsterName} (T${tier}) in ${villageName}`,
+        value: raidId,
+      };
+    });
+
+    // Filter based on user input (search by raid ID, monster name, or village)
+    const filteredChoices = choices.filter(choice => 
+      choice.name.toLowerCase().includes(searchQuery) ||
+      choice.value.toLowerCase().includes(searchQuery)
+    );
+
+    await interaction.respond(filteredChoices.slice(0, 25));
+  } catch (error) {
+    handleError(error, "autocompleteHandler.js");
+    console.error("[handleRaidIdAutocomplete]: Error:", error);
+    await safeRespondWithError(interaction);
+  }
+}
+
+// ------------------- Mod Character Functions -------------------
 
 
