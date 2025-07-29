@@ -500,11 +500,13 @@ function createPetEmbed(type, options = {}) {
   }
 
   // Ensure result object has required properties for rollReset type
-  if (type === 'rollReset' && (!result.oldRolls || !result.newRolls)) {
-    console.warn(`[mod.js]: Result object missing oldRolls or newRolls:`, result);
-    // Provide fallback values
-    result.oldRolls = result.oldRolls || 0;
-    result.newRolls = result.newRolls || 0;
+  if (type === 'rollReset') {
+    if (!result.oldRolls || !result.newRolls) {
+      console.warn(`[mod.js]: Result object missing oldRolls or newRolls:`, result);
+      // Provide fallback values
+      result.oldRolls = result.oldRolls || 0;
+      result.newRolls = result.newRolls || 0;
+    }
   }
 
   const embedConfigs = {
