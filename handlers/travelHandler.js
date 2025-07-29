@@ -633,13 +633,19 @@ async function handleTravelInteraction(
     preGeneratedFlavor
   ) {
     try {
+      // Check if this is a button interaction and handle potential expiration
       if (interaction?.isButton?.()) {
         try {
           await interaction.deferUpdate();
         } catch (err) {
           if (err.code === 10062) {
+            console.warn(`[travelHandler.js]: ⚠️ Interaction expired for user ${interaction.user?.id || 'unknown'}`);
             return '❌ This interaction has expired. Please try again or reissue the command.';
+          } else if (err.code === 10008) {
+            console.warn(`[travelHandler.js]: ⚠️ Unknown interaction for user ${interaction.user?.id || 'unknown'}`);
+            return '❌ This interaction is no longer valid. Please try again or reissue the command.';
           } else {
+            console.error(`[travelHandler.js]: ❌ Unexpected interaction error:`, err);
             throw err;
           }
         }
@@ -664,6 +670,9 @@ async function handleTravelInteraction(
           break;
         case 'flee':
           result = await handleFlee(interaction, character, encounterMessage, monster, travelLog);
+          break;
+        case 'do_nothing':
+          result = await handleDoNothing(interaction, character, encounterMessage, travelLog, preGeneratedFlavor);
           break;
         default:
           if (monster) {
