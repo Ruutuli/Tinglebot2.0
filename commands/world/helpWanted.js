@@ -576,7 +576,9 @@ async function handleMonsterHunt(interaction, questId, characterName) {
           0,
           null,
           false,
-          encounterResult.adjustedRandomValue
+          encounterResult.adjustedRandomValue,
+          i + 1, // currentMonster (1-based index)
+          monsterList.length // totalMonsters
         );
         
         await interaction.followUp({ embeds: [koEmbed] });
@@ -629,7 +631,9 @@ async function handleMonsterHunt(interaction, questId, characterName) {
         heartsRemaining,
         null,
         false,
-        encounterResult.adjustedRandomValue
+        encounterResult.adjustedRandomValue,
+        i + 1, // currentMonster (1-based index)
+        monsterList.length // totalMonsters
       );
       
       await interaction.followUp({ embeds: [battleEmbed] });

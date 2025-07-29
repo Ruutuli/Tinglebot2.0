@@ -51,6 +51,7 @@ module.exports = {
         .setName('raidid')
         .setDescription('The ID of the raid to join')
         .setRequired(true)
+        .setAutocomplete(true)
     )
     .addStringOption(option =>
       option

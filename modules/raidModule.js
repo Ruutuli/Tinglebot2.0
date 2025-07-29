@@ -21,7 +21,26 @@ const Raid = require('../models/RaidModel');
 // ============================================================================
 // ---- Constants ----
 // ============================================================================
-const RAID_DURATION = 20 * 60 * 1000; // 20 minutes in milliseconds
+// ---- Function: calculateRaidDuration ----
+// Calculates raid duration based on monster tier
+// Tier 5: 10 minutes, Tier 10: 20 minutes, scales linearly
+function calculateRaidDuration(tier) {
+  if (tier < 5) {
+    return 10 * 60 * 1000; // 10 minutes for tiers below 5
+  }
+  if (tier > 10) {
+    return 20 * 60 * 1000; // 20 minutes for tiers above 10
+  }
+  
+  // Linear scaling: tier 5 = 10 minutes, tier 10 = 20 minutes
+  const baseMinutes = 10;
+  const minutesPerTier = (20 - 10) / (10 - 5); // 2 minutes per tier
+  const additionalMinutes = (tier - 5) * minutesPerTier;
+  const totalMinutes = baseMinutes + additionalMinutes;
+  
+  return totalMinutes * 60 * 1000; // Convert to milliseconds
+}
+
 const THREAD_AUTO_ARCHIVE_DURATION = 60; // 60 minutes (Discord allows: 1, 3, 7, 14, 30, 60, 1440 minutes)
 
 // Village resident role IDs
@@ -119,6 +138,9 @@ async function startRaid(monster, village, interaction = null) {
     // Generate unique raid ID with 'R' prefix for Raid
     const raidId = generateUniqueId('R');
     
+    // Calculate raid duration based on monster tier
+    const raidDuration = calculateRaidDuration(monster.tier);
+    
     // Create raid document
     const raid = new Raid({
       raidId: raidId,
@@ -132,7 +154,7 @@ async function startRaid(monster, village, interaction = null) {
       },
       village: village,
       channelId: interaction?.channel?.id || null,
-      expiresAt: new Date(Date.now() + RAID_DURATION),
+      expiresAt: new Date(Date.now() + raidDuration),
       analytics: {
         monsterTier: monster.tier,
         village: village
@@ -142,7 +164,7 @@ async function startRaid(monster, village, interaction = null) {
     // Save raid to database
     await raid.save();
 
-    console.log(`[raidModule.js]: 🐉 Started new raid ${raidId} - ${monster.name} (T${monster.tier}) in ${village}`);
+    console.log(`[raidModule.js]: 🐉 Started new raid ${raidId} - ${monster.name} (T${monster.tier}) in ${village} - Duration: ${Math.floor(raidDuration / (1000 * 60))} minutes`);
     
     // Set up internal timer for raid timeout
     setTimeout(async () => {
@@ -206,7 +228,7 @@ async function startRaid(monster, village, interaction = null) {
           raidId: raidId
         });
       }
-    }, RAID_DURATION);
+    }, raidDuration);
     
     return {
       raidId,
@@ -452,12 +474,16 @@ async function createRaidThread(interaction, raid) {
       roleMention = `<@&${residentRoleId}>`;
     }
     
+    // Calculate total duration for this tier
+    const totalDuration = calculateRaidDuration(raid.monster.tier);
+    const totalMinutes = Math.floor(totalDuration / (1000 * 60));
+    
     const threadMessage = [
       `💀 A raid has been initiated against **${raid.monster.name} (Tier ${raid.monster.tier})**!`,
       `\n${roleMention} — come help defend your home!`,
       `\nUse </raid:1392945628002259014> to join the fight!`,
       `\n\n**Raid ID:** \`\`\`${raid.raidId}\`\`\``,
-      `\n\n⏰ **You have 20 minutes to complete this raid!**`
+      `\n\n⏰ **You have ${totalMinutes} minutes to complete this raid!**`
     ].join('');
 
     // Send the text message to the thread
@@ -496,6 +522,10 @@ function createRaidEmbed(raid, monsterImage) {
     timeString = '⏰ Time expired!';
   }
 
+  // Calculate total duration for this tier
+  const totalDuration = calculateRaidDuration(raid.monster.tier);
+  const totalMinutes = Math.floor(totalDuration / (1000 * 60));
+
   const embed = new EmbedBuilder()
     .setColor('#FF0000')
     .setTitle('🛡️ Village Raid!')
@@ -504,7 +534,7 @@ function createRaidEmbed(raid, monsterImage) {
       `*It's a Tier ${raid.monster.tier} monster! Protect the village!*\n\n` +
       `</raid:1392945628002259014> to join or continue the raid!\n` +
       `</item:1379838613067530385> to heal during the raid!\n\n` +
-      `⏰ **You have 20 minutes to complete this raid!**`
+      `⏰ **You have ${totalMinutes} minutes to complete this raid!**`
     )
     .addFields(
       {
@@ -675,12 +705,16 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false,
         roleMention = `<@&${residentRoleId}>`;
       }
       
+      // Calculate total duration for this tier
+      const totalDuration = calculateRaidDuration(monster.tier);
+      const totalMinutes = Math.floor(totalDuration / (1000 * 60));
+      
       const threadMessage = [
         `💀 A raid has been initiated against **${monster.name} (Tier ${monster.tier})**!`,
         `\n${roleMention} — come help defend your home!`,
         `\nUse </raid:1392945628002259014> to join the fight!`,
         `\n\n**Raid ID:** \`\`\`${raidId}\`\`\``,
-        `\n\n⏰ **You have 20 minutes to complete this raid!**`
+        `\n\n⏰ **You have ${totalMinutes} minutes to complete this raid!**`
       ].join('');
 
       await thread.send(threadMessage);
@@ -708,12 +742,16 @@ async function triggerRaid(monster, interaction, villageId, isBloodMoon = false,
         roleMention = `<@&${residentRoleId}>`;
       }
       
+      // Calculate total duration for this tier
+      const totalDuration = calculateRaidDuration(monster.tier);
+      const totalMinutes = Math.floor(totalDuration / (1000 * 60));
+      
       const raidInfoMessage = [
         `💀 A raid has been initiated against **${monster.name} (Tier ${monster.tier})**!`,
         `\n${roleMention} — come help defend your home!`,
         `\nUse </raid:1392945628002259014> to join the fight!`,
         `\n\n**Raid ID:** \`\`\`${raidId}\`\`\``,
-        `\n\n⏰ **You have 20 minutes to complete this raid!**`,
+        `\n\n⏰ **You have ${totalMinutes} minutes to complete this raid!**`,
         `\n\n*Note: No thread was created in this channel. Use the raid ID to participate!*`
       ].join('');
 
@@ -765,5 +803,6 @@ module.exports = {
   checkRaidExpiration,
   createRaidEmbed,
   createRaidThread,
-  triggerRaid
+  triggerRaid,
+  calculateRaidDuration
 };

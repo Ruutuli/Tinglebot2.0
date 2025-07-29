@@ -34,7 +34,8 @@ const tokenPath = path.join(__dirname, 'token.json');
 const googleTokens = JSON.parse(fs.readFileSync(tokenPath, 'utf8'));
 
 // Game constants
-const RAID_DURATION = 20 * 60 * 1000; // 20 minutes in milliseconds
+// Note: Raid duration is now calculated dynamically based on monster tier
+// See modules/raidModule.js calculateRaidDuration() function
 
 const config = {
   discordToken: process.env.DISCORD_TOKEN,
@@ -46,7 +47,6 @@ const config = {
   serviceAccount,
   googleCredentials,
   googleTokens,
-  RAID_DURATION,
 };
 
 module.exports = config;
