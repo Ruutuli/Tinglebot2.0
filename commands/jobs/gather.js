@@ -45,6 +45,10 @@ const { isBloodMoonActive } = require('../../scripts/bloodmoon.js');
 // Import embed utilities for gathering and monster encounter messages.
 const { createGatherEmbed, createMonsterEncounterEmbed, createKOEmbed } = require('../../embeds/embeds.js');
 
+// ------------------- Models -------------------
+// Import database models.
+const User = require('../../models/UserModel.js');
+
 
 // ------------------- Village Channels -------------------
 // Define the allowed channels for each village.
@@ -338,7 +342,14 @@ module.exports = {
           const guild = interaction.guild;
           if (guild) {
             const member = await guild.members.fetch(interaction.user.id);
-            await member.roles.add('1314750575933653022');
+            await member.roles.add('798387447967907910');
+          }
+          
+          // Update user's blightedcharacter status
+          const user = await User.findOne({ discordId: interaction.user.id });
+          if (user) {
+            user.blightedcharacter = true;
+            await user.save();
           }
         } else {
           const safeMsg =

@@ -25,6 +25,7 @@ const {
 
 // ------------------- Database Models -------------------
 // const Mount = require('../../models/MountModel');
+const User = require('../../models/UserModel.js');
 
 // ------------------- Embeds -------------------
 const {
@@ -239,8 +240,16 @@ module.exports = {
           const guild = interaction.guild;
           if (guild) {
             const member = await guild.members.fetch(interaction.user.id);
-            await member.roles.add('1314750575933653022');
+            await member.roles.add('798387447967907910');
           }
+          
+          // Update user's blightedcharacter status
+          const user = await User.findOne({ discordId: interaction.user.id });
+          if (user) {
+            user.blightedcharacter = true;
+            await user.save();
+          }
+          
           // Add to travel log
           travelLog.push(`<:blight_eye:805576955725611058> **${character.name}** was infected with blight in **${capitalizeFirstLetter(startingVillage)}**!`);
         } else {
@@ -731,8 +740,16 @@ async function processTravelDay(day, context) {
           const guild = interaction.guild;
           if (guild) {
             const member = await guild.members.fetch(interaction.user.id);
-            await member.roles.add('1314750575933653022');
+            await member.roles.add('798387447967907910');
           }
+          
+          // Update user's blightedcharacter status
+          const user = await User.findOne({ discordId: interaction.user.id });
+          if (user) {
+            user.blightedcharacter = true;
+            await user.save();
+          }
+          
           // Add to travel log
           travelLog.push(`<:blight_eye:805576955725611058> **${character.name}** was infected with blight in **${capitalizeFirstLetter(destination)}**!`);
         } else {
