@@ -95,7 +95,13 @@ const { getCurrentWeather } = require('../../services/weatherService');
 
 // Unified error handling
 async function handleLootError(interaction, error, context = '') {
-  handleError(error, "loot.js");
+  handleError(error, "loot.js", {
+    operation: 'handleLootError',
+    commandName: interaction.commandName || 'loot',
+    userTag: interaction.user.tag,
+    userId: interaction.user.id,
+    context
+  });
   await interaction.editReply({
     content: `❌ **An error occurred during the loot command execution${context ? `: ${context}` : ''}.**`,
   });
@@ -453,6 +459,13 @@ module.exports = {
      try {
        await updateDailyRoll(character, 'loot');
      } catch (error) {
+       handleError(error, "loot.js", {
+         operation: 'updateDailyRoll',
+         commandName: interaction.commandName || 'loot',
+         userTag: interaction.user.tag,
+         userId: interaction.user.id,
+         characterName: character.name
+       });
        console.error(`[Loot Command]: ❌ Failed to update daily roll:`, error);
        await interaction.editReply({
          content: `❌ **An error occurred while updating your daily roll. Please try again.**`,
@@ -568,7 +581,14 @@ module.exports = {
       return; // Stop if reroll is needed and executed
      }
     } catch (error) {
-     handleError(error, "loot.js");
+     handleError(error, "loot.js", {
+       operation: 'bloodMoonEncounter',
+       commandName: interaction.commandName || 'loot',
+       userTag: interaction.user.tag,
+       userId: interaction.user.id,
+       characterName: character.name,
+       currentVillage
+     });
      await interaction.followUp(
       `🌕 **Blood Moon is active, but an error occurred while determining an encounter.**`
      );
@@ -604,7 +624,15 @@ module.exports = {
   } catch (error) {
     // Only log errors that aren't inventory sync related
     if (!error.message.includes('inventory is not synced')) {
-      handleError(error, "loot.js");
+      handleError(error, "loot.js", {
+        operation: 'execute',
+        commandName: interaction.commandName || 'loot',
+        userTag: interaction.user.tag,
+        userId: interaction.user.id,
+        characterName: interaction.options.getString('charactername'),
+        guildId: interaction.guildId,
+        channelId: interaction.channelId
+      });
       console.error(`[loot.js]: Error during loot process: ${error.message}`, {
         stack: error.stack,
         interactionData: {
