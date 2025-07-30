@@ -1384,6 +1384,9 @@ const createMonsterEncounterEmbed = (
   embed.setThumbnail("https://via.placeholder.com/100x100");
  }
 
+ // Set the default image for loot embeds
+ embed.setImage(DEFAULT_IMAGE_URL);
+
  return embed;
 };
 
@@ -1734,6 +1737,9 @@ const createTravelMonsterEncounterEmbed = (
  } else {
   embed.setThumbnail("https://via.placeholder.com/100x100");
  }
+
+ // Set the default image for loot embeds
+ embed.setImage(DEFAULT_IMAGE_URL);
 
  return embed;
 };

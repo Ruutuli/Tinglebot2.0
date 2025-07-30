@@ -159,7 +159,7 @@ async function syncToInventoryDatabase(character, item, interaction) {
       characterId: character._id,
       itemId,
       itemName: item.itemName,
-      quantity: item.quantity,
+      quantity: parseInt(item.quantity) || 0,
       category,
       type,
       subtype,

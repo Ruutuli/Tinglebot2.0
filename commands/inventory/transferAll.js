@@ -173,16 +173,19 @@ module.exports = {
           try {
             // Transfer each item
             for (const item of inventoryItems) {
+              // Ensure quantity is a number
+              const itemQuantity = parseInt(item.quantity) || 0;
+              
               // Remove from fromChar and log to Google Sheets
               await syncToInventoryDatabase(fromChar, {
                 itemName: item.itemName,
-                quantity: -item.quantity,
+                quantity: -itemQuantity,
                 obtain: `Transfer to ${toChar.name}`
               }, interaction);
               // Add to toChar and log to Google Sheets
               await syncToInventoryDatabase(toChar, {
                 itemName: item.itemName,
-                quantity: item.quantity,
+                quantity: itemQuantity,
                 obtain: `Transfer from ${fromChar.name}`
               }, interaction);
             }

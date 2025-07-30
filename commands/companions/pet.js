@@ -270,11 +270,11 @@ module.exports = {
       .setRequired(false)
     )
   )
-  // ------------------- Subcommand: Edit Pet Image -------------------
+  // ------------------- Subcommand: Edit Pet -------------------
   .addSubcommand((subcommand) =>
    subcommand
     .setName("edit")
-    .setDescription("Edit your pet's image")
+    .setDescription("Edit your pet's name or image")
     .addStringOption((option) =>
      option
       .setName("charactername")
@@ -289,11 +289,17 @@ module.exports = {
       .setRequired(true)
       .setAutocomplete(true)
     )
+    .addStringOption((option) =>
+     option
+      .setName("newname")
+      .setDescription("Enter the new name for your pet (optional)")
+      .setRequired(false)
+    )
     .addAttachmentOption((option) =>
      option
       .setName("image")
-      .setDescription("Upload a new image of the pet")
-      .setRequired(true)
+      .setDescription("Upload a new image of the pet (optional)")
+      .setRequired(false)
     )
   )
   // ------------------- Subcommand: View Pet -------------------
@@ -536,13 +542,16 @@ module.exports = {
       }
     }
 
-    // ------------------- Subcommand: Edit Pet Image -------------------
+    // ------------------- Subcommand: Edit Pet -------------------
     if (subcommand === "edit") {
-      // Retrieve the image attachment.
+      // Retrieve the new name and image attachment (both optional)
+      const newName = interaction.options.getString("newname");
       const imageAttachment = interaction.options.getAttachment("image");
-      if (!imageAttachment) {
+      
+      // Check if at least one edit option is provided
+      if (!newName && !imageAttachment) {
         return interaction.editReply({
-          content: "❌ **Please upload an image to update your pet.**",
+          content: "❌ **Please provide either a new name or upload an image to update your pet.**",
           ephemeral: true
         });
       }
@@ -556,21 +565,71 @@ module.exports = {
         });
       }
 
-      // Attempt to upload the new image
+      // Track what was updated for the embed
+      const updates = [];
+      let updatedPetDoc = { ...petDoc };
+
+      // Update pet name if provided
+      if (newName && newName.trim() !== '') {
+        const trimmedNewName = newName.trim();
+        if (trimmedNewName !== petDoc.name) {
+          // Check if the new name is already taken by another pet
+          const existingPetWithName = await Pet.findOne({ 
+            owner: character._id, 
+            name: trimmedNewName,
+            _id: { $ne: petDoc._id } // Exclude current pet
+          });
+          
+          if (existingPetWithName) {
+            return interaction.editReply({
+              content: `❌ **A pet named \`${trimmedNewName}\` already exists for this character. Please choose a different name.**`,
+              ephemeral: true
+            });
+          }
+          
+          updatedPetDoc.name = trimmedNewName;
+          updates.push('name');
+        }
+      }
+
+      // Update pet image if provided
+      if (imageAttachment) {
+        try {
+          const petImageUrl = await handlePetImageUpload(imageAttachment, updatedPetDoc.name || petDoc.name);
+          updatedPetDoc.imageUrl = petImageUrl;
+          updates.push('image');
+        } catch (error) {
+          console.error(`[pet.js]: ❌ Error uploading pet image:`, error);
+          return interaction.editReply({
+            content: `❌ **An error occurred while uploading the image. Please try again later.**`,
+            ephemeral: true
+          });
+        }
+      }
+
+      // Update the pet in the database
       try {
-        const petImageUrl = await handlePetImageUpload(imageAttachment, petName);
-        petDoc.imageUrl = petImageUrl;
-        
-        // Update both the Pet model and Character model
+        const updateFields = {};
+        if (updates.includes('name')) {
+          updateFields.name = updatedPetDoc.name;
+        }
+        if (updates.includes('image')) {
+          updateFields.imageUrl = updatedPetDoc.imageUrl;
+        }
+
         await Pet.updateOne(
           { _id: petDoc._id },
-          { $set: { imageUrl: petImageUrl } }
+          { $set: updateFields }
         );
-        await updatePetToCharacter(character._id, petName, petDoc);
+        
+        // Update character's pet reference if name changed
+        if (updates.includes('name')) {
+          await updatePetToCharacter(character._id, updatedPetDoc.name, updatedPetDoc);
+        }
 
         // Encode and sanitize the URL before using it in the embed
-        const encodedImageUrl = encodePetImageUrl(petDoc.imageUrl);
-        const sanitizedImageUrl = sanitizeUrl(encodedImageUrl || petDoc.imageUrl);
+        const encodedImageUrl = encodePetImageUrl(updatedPetDoc.imageUrl);
+        const sanitizedImageUrl = sanitizeUrl(encodedImageUrl || updatedPetDoc.imageUrl);
 
         // ------------------- Determine Embed Color Based on Village -------------------
         const villageName =
@@ -584,31 +643,46 @@ module.exports = {
         const embedColor = villageColors[villageName] || "#00FF00";
 
         // ------------------- Calculate Rolls Display -------------------
-        const petEmoji = getPetEmoji(petDoc.species);
-        const rollsDisplay = getRollsDisplay(petDoc.rollsRemaining || 0, petDoc.level || 0);
+        const petEmoji = getPetEmoji(updatedPetDoc.species || petDoc.species);
+        const rollsDisplay = getRollsDisplay(updatedPetDoc.rollsRemaining || petDoc.rollsRemaining || 0, updatedPetDoc.level || petDoc.level || 0);
+
+        // Build embed title and description based on what was updated
+        let embedTitle = '';
+        let embedDescription = '';
+        
+        if (updates.includes('name') && updates.includes('image')) {
+          embedTitle = `✏️ Pet Updated — ${updatedPetDoc.name || petDoc.name}`;
+          embedDescription = `✅ **${petDoc.name}** has been renamed to **${updatedPetDoc.name || petDoc.name}** and their image has been updated!`;
+        } else if (updates.includes('name')) {
+          embedTitle = `✏️ Pet Renamed — ${updatedPetDoc.name || petDoc.name}`;
+          embedDescription = `✅ **${petDoc.name}** has been renamed to **${updatedPetDoc.name || petDoc.name}**!`;
+        } else if (updates.includes('image')) {
+          embedTitle = `🖼️ Pet Image Updated — ${updatedPetDoc.name || petDoc.name}`;
+          embedDescription = `✅ **${updatedPetDoc.name || petDoc.name}**'s image has been successfully updated!`;
+        }
 
         // Build and send embed showing updated pet
         const editEmbed = new EmbedBuilder()
           .setAuthor({ name: character.name, iconURL: character.icon })
-          .setTitle(`🖼️ Pet Image Updated — ${petDoc.name}`)
-          .setThumbnail(sanitizedImageUrl)
+          .setTitle(embedTitle)
+          .setThumbnail(sanitizedImageUrl || petDoc.imageUrl)
           .setColor(embedColor)
-          .setDescription(`✅ **${petDoc.name}**'s image has been successfully updated!`)
-          .setImage(sanitizeUrl("https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png"))
+          .setDescription(embedDescription)
+          .setImage(sanitizeUrl("https://static.wikimg.net/en/zeldawiki/images/thumb/c/c3/TotK_Chuchu_Model.png/1200px-TotK_Chuchu_Model.png"))
           .addFields(
-            { name: "__Pet Name__", value: `> ${petDoc.name}`, inline: true },
+            { name: "__Pet Name__", value: `> ${updatedPetDoc.name || petDoc.name}`, inline: true },
             { name: "__Owner__", value: `> ${character.name}`, inline: true },
             { name: "__Village__", value: `> ${character.currentVillage}`, inline: true },
             {
               name: "__Pet Species__",
-              value: `> ${petEmoji} ${petDoc.species}`,
+              value: `> ${petEmoji} ${updatedPetDoc.species || petDoc.species}`,
               inline: true,
             },
-            { name: "__Pet Type__", value: `> ${petDoc.petType}`, inline: true },
-            { name: "__Status__", value: `> ${petDoc.status === 'active' ? '🟢 Active' : '🔵 Stored'}`, inline: true },
+            { name: "__Pet Type__", value: `> ${updatedPetDoc.petType || petDoc.petType}`, inline: true },
+            { name: "__Status__", value: `> ${(updatedPetDoc.status || petDoc.status) === 'active' ? '🟢 Active' : '🔵 Stored'}`, inline: true },
             {
               name: "__Current Level__",
-              value: `> Level ${petDoc.level || 0}`,
+              value: `> Level ${updatedPetDoc.level || petDoc.level || 0}`,
               inline: true,
             },
             {
@@ -618,15 +692,15 @@ module.exports = {
             }
           )
           .setFooter({
-            text: `Pet image updated successfully!`,
+            text: `Pet updated successfully!`,
             iconURL: character.icon
           });
 
         return interaction.editReply({ embeds: [editEmbed] });
       } catch (error) {
-        console.error(`[pet.js]: ❌ Error updating pet image:`, error);
+        console.error(`[pet.js]: ❌ Error updating pet:`, error);
         return interaction.editReply({
-          content: `❌ **An error occurred while updating the image for ${petDoc.name}. Please try again later.**`,
+          content: `❌ **An error occurred while updating ${petDoc.name}. Please try again later.**`,
           ephemeral: true
         });
       }
