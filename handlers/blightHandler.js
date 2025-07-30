@@ -300,7 +300,13 @@ async function healBlight(interaction, characterName, healerName) {
             embeds: dmEmbeds
           });
         } catch (dmError) {
-          handleError(dmError, 'blightHandler.js');
+          handleError(dmError, 'blightHandler.js', {
+            operation: 'sendPendingHealingDM',
+            commandName: interaction.commandName || 'heal',
+            userTag: interaction.user.tag,
+            userId: interaction.user.id,
+            characterName: character.name
+          });
           console.error(`[blightHandler.js]: ❌ Failed to send DM to user ${interaction.user.id} about pending blight healing request: ${dmError.message}`);
         }
         return;
@@ -363,6 +369,10 @@ async function healBlight(interaction, characterName, healerName) {
     await saveBlightEventToHistory(character, 'Healing Request', {
       notes: `Requested healing from ${healerName} - Task: ${healingRequirement.type} - ${healingRequirement.description}`,
       submissionId: newSubmissionId
+    }, {
+      commandName: interaction.commandName || 'heal',
+      userTag: interaction.user.tag,
+      userId: interaction.user.id
     });
 
     // Notify mods in the mod queue channel
@@ -430,11 +440,23 @@ async function healBlight(interaction, characterName, healerName) {
         embeds: dmEmbeds,
       });
     } catch (dmError) {
-      handleError(dmError, 'blightHandler.js');
+      handleError(dmError, 'blightHandler.js', {
+        operation: 'sendDM',
+        commandName: interaction.commandName || 'heal',
+        userTag: interaction.user.tag,
+        userId: interaction.user.id
+      });
       console.error(`[blightHandler]: Failed to send DM to user ${interaction.user.id}`, dmError);
     }
   } catch (error) {
-    handleError(error, 'blightHandler.js');
+    handleError(error, 'blightHandler.js', {
+      operation: 'healBlight',
+      commandName: interaction.commandName || 'heal',
+      userTag: interaction.user.tag,
+      userId: interaction.user.id,
+      characterName,
+      healerName
+    });
     console.error('[blightHandler]: Error healing blight:', error);
     
     await interaction.editReply({ 
@@ -506,7 +528,13 @@ async function validateCharacterOwnership(interaction, characterName) {
     }
     return character;
   } catch (error) {
-    handleError(error, 'blightHandler.js');
+    handleError(error, 'blightHandler.js', {
+      operation: 'validateCharacterOwnership',
+      commandName: interaction.commandName || 'unknown',
+      userTag: interaction.user.tag,
+      userId: interaction.user.id,
+      characterName
+    });
     console.error('[blightHandler]: Error validating character ownership:', error);
     
     const errorEmbed = new EmbedBuilder()
@@ -560,6 +588,10 @@ async function completeBlightHealing(character) {
     notes: `Character healed from blight - Stage ${character.blightStage} to 0`,
     previousStage: character.blightStage,
     newStage: 0
+  }, {
+    commandName: 'heal',
+    userTag: character.userId ? `User: ${character.userId}` : 'System',
+    userId: character.userId || 'system'
   });
 
   character.blighted = false;
@@ -1023,7 +1055,13 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
         ]];
         await safeAppendDataToSheet(tokenTrackerLink, user, 'loggedTracker!B7:F', tokenRow, undefined, { skipValidation: true });
       } catch (sheetError) {
-        handleError(sheetError, 'blightHandler.js');
+        handleError(sheetError, 'blightHandler.js', {
+          operation: 'logTokenForfeiture',
+          commandName: interaction.commandName || 'submit',
+          userTag: interaction.user.tag,
+          userId: interaction.user.id,
+          submissionId
+        });
         console.error('[blightHandler]: Error logging token forfeiture', sheetError);
       }
 
@@ -1128,7 +1166,15 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
             .reduce((sum, it) => sum + it.quantity, 0);
           return { available: totalQuantity >= needed, quantity: totalQuantity };
         } catch (invError) {
-          handleError(invError, 'blightHandler.js');
+          handleError(invError, 'blightHandler.js', {
+            operation: 'fetchInventory',
+            commandName: interaction.commandName || 'submit',
+            userTag: interaction.user.tag,
+            userId: interaction.user.id,
+            characterName: character.name,
+            itemName: name,
+            neededQuantity: needed
+          });
           console.error('[blightHandler]: Error fetching inventory', invError);
           throw invError;
         }
@@ -1215,7 +1261,16 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
     }
 
   } catch (error) {
-    handleError(error, 'blightHandler.js');
+    handleError(error, 'blightHandler.js', {
+      operation: 'submitHealingTask',
+      commandName: interaction.commandName || 'submit',
+      userTag: interaction.user.tag,
+      userId: interaction.user.id,
+      submissionId,
+      item: item ? 'provided' : 'not provided',
+      link: link ? 'provided' : 'not provided',
+      tokens
+    });
     console.error('[blightHandler]: Error submitting healing task:', error);
     await interaction.editReply({ content: '❌ An error occurred while processing your request.', ephemeral: true });
   }
@@ -1553,7 +1608,13 @@ async function rollForBlightProgression(interaction, characterName) {
       });
       console.log(`[blightHandler]: Successfully created blight roll history entry: ${historyEntry._id}`);
     } catch (error) {
-      handleError(error, 'blightHandler.js');
+      handleError(error, 'blightHandler.js', {
+        operation: 'createBlightRollHistory',
+        commandName: interaction.commandName || 'roll',
+        userTag: interaction.user.tag,
+        userId: interaction.user.id,
+        characterName
+      });
       console.error('[blightHandler]: Failed to create blight roll history:', error);
     }
 
@@ -1570,7 +1631,13 @@ async function rollForBlightProgression(interaction, characterName) {
 
     await interaction.editReply({ content: `<@${interaction.user.id}> rolled for ${characterName}`, embeds: [embed] });
   } catch (error) {
-    handleError(error, 'blightHandler.js');
+    handleError(error, 'blightHandler.js', {
+      operation: 'rollForBlightProgression',
+      commandName: interaction.commandName || 'roll',
+      userTag: interaction.user.tag,
+      userId: interaction.user.id,
+      characterName
+    });
     console.error('[blightHandler]: Error rolling for blight progression:', error);
     await interaction.editReply({ content: '❌ An error occurred while processing your request.', ephemeral: true });
   }
@@ -1790,7 +1857,13 @@ async function viewBlightStatus(interaction, characterName) {
       ephemeral: true 
     });
   } catch (error) {
-    handleError(error, 'blightHandler.js');
+    handleError(error, 'blightHandler.js', {
+      operation: 'viewBlightStatus',
+      commandName: interaction.commandName || 'status',
+      userTag: interaction.user.tag,
+      userId: interaction.user.id,
+      characterName
+    });
     console.error('[blightHandler]: Error viewing blight status:', error);
     await interaction.editReply({ 
       content: '❌ An error occurred while fetching the blight status.',
@@ -1801,7 +1874,7 @@ async function viewBlightStatus(interaction, characterName) {
 
 // ------------------- Function: saveBlightEventToHistory -------------------
 // Saves blight-related events to the BlightRollHistoryModel for tracking
-async function saveBlightEventToHistory(character, eventType, details = {}) {
+async function saveBlightEventToHistory(character, eventType, details = {}, userInfo = {}) {
   try {
     const BlightRollHistory = require('../models/BlightRollHistoryModel');
     
@@ -1834,7 +1907,10 @@ async function saveBlightEventToHistory(character, eventType, details = {}) {
       operation: 'saveBlightEventToHistory',
       characterName: character.name,
       eventType,
-      details
+      details,
+      commandName: userInfo.commandName || 'Unknown',
+      userTag: userInfo.userTag || 'Unknown',
+      userId: userInfo.userId || 'Unknown'
     });
     console.error('[blightHandler]: Failed to save blight event to history:', error);
   }
@@ -1940,7 +2016,13 @@ async function viewBlightHistory(interaction, characterName, limit = 10) {
 
     await interaction.editReply({ embeds: [embed] });
   } catch (error) {
-    handleError(error, 'blightHandler.js');
+    handleError(error, 'blightHandler.js', {
+      operation: 'viewBlightHistory',
+      commandName: interaction.commandName || 'history',
+      userTag: interaction.user.tag,
+      userId: interaction.user.id,
+      characterName
+    });
     console.error('[blightHandler]: Error viewing blight history:', error);
     await interaction.editReply({ 
       content: '❌ An error occurred while fetching the blight history.',
@@ -2203,7 +2285,12 @@ async function sendBlightReminders(client) {
       healingWarnings: submissionWarnings 
     };
   } catch (error) {
-    handleError(error, 'blightHandler.js');
+    handleError(error, 'blightHandler.js', {
+      operation: 'sendBlightReminders',
+      commandName: 'system',
+      userTag: 'System',
+      userId: 'system'
+    });
     console.error('[blightHandler]: Error sending blight reminders:', error);
     throw error;
   }
@@ -2304,7 +2391,12 @@ async function checkExpiringBlightRequests() {
     console.log(`[blightHandler]: Expiration warning check complete - Warned: ${warnedUsers}`);
     return { warnedUsers };
   } catch (error) {
-    handleError(error, 'blightHandler.js');
+    handleError(error, 'blightHandler.js', {
+      operation: 'checkExpiringBlightRequests',
+      commandName: 'system',
+      userTag: 'System',
+      userId: 'system'
+    });
     console.error('[blightHandler]: Error checking expiring blight requests:', error);
     throw error;
   }
@@ -2366,6 +2458,10 @@ async function cleanupExpiredBlightRequests() {
                 notes: `Healing submission expired - Task: ${submissionData.taskType} from ${submissionData.healerName}`,
                 submissionId: submissionData.submissionId,
                 loreText: loreText
+              }, {
+                commandName: 'system',
+                userTag: character.userId ? `User: ${character.userId}` : 'System',
+                userId: character.userId || 'system'
               });
               
               // Log the lore text for administrators
@@ -2441,7 +2537,12 @@ async function cleanupExpiredBlightRequests() {
       deletedCount: deleteResult.deletedCount
     };
   } catch (error) {
-    handleError(error, 'blightHandler.js');
+    handleError(error, 'blightHandler.js', {
+      operation: 'cleanupExpiredBlightRequests',
+      commandName: 'system',
+      userTag: 'System',
+      userId: 'system'
+    });
     console.error('[blightHandler]: ❌ Error cleaning up expired blight requests:', error);
     throw error;
   }
@@ -2602,7 +2703,25 @@ async function checkMissedRolls(client) {
               console.log(`[blightHandler]: Sent 24-hour warning DM to ${character.userId} (${character.name})`);
             }
           } catch (error) {
-            handleError(error, 'blightHandler.js');
+            // Try to fetch the Discord user's tag for better error reporting
+            let userTag = 'System';
+            try {
+              const user = await client.users.fetch(character.userId);
+              if (user) {
+                userTag = user.tag;
+              }
+            } catch (fetchError) {
+              console.log(`[blightHandler]: Could not fetch user tag for ${character.userId}, using 'System' as fallback`);
+            }
+            
+            handleError(error, 'blightHandler.js', {
+              operation: 'sendDeathWarningDM',
+              commandName: 'system',
+              userTag: userTag,
+              userId: character.userId,
+              characterName: character.name,
+              characterUserId: character.userId
+            });
             console.error(`[blightHandler]: Failed to send DM to ${character.userId} (${character.name})`, error);
           }
         }
@@ -2640,7 +2759,13 @@ async function checkMissedRolls(client) {
 
             await saveBlightSubmissions(blightSubmissions);
           } catch (error) {
-            handleError(error, 'blightHandler.js');
+            handleError(error, 'blightHandler.js', {
+              operation: 'cleanupBlightSubmissions',
+              commandName: 'system',
+              userTag: character.userId ? `User: ${character.userId}` : 'System',
+              userId: character.userId || 'system',
+              characterName: character.name
+            });
             console.error('[blightHandler]: Error cleaning up blight submissions:', error);
           }
 
@@ -2659,7 +2784,13 @@ async function checkMissedRolls(client) {
             
             console.log(`[blightHandler]: Dropped inventory collection for ${character.name}`);
           } catch (error) {
-            handleError(error, 'blightHandler.js');
+            handleError(error, 'blightHandler.js', {
+              operation: 'wipeInventory',
+              commandName: 'system',
+              userTag: character.userId ? `User: ${character.userId}` : 'System',
+              userId: character.userId || 'system',
+              characterName: character.name
+            });
             console.error('[blightHandler]: Error wiping inventory:', error);
           }
 
@@ -2711,7 +2842,13 @@ async function checkMissedRolls(client) {
               console.error('[blightHandler]: Mod log channel not found');
             }
           } catch (error) {
-            handleError(error, 'blightHandler.js');
+            handleError(error, 'blightHandler.js', {
+              operation: 'sendModLogDeathReport',
+              commandName: 'system',
+              userTag: character.userId ? `User: ${character.userId}` : 'System',
+              userId: character.userId || 'system',
+              characterName: character.name
+            });
             console.error('[blightHandler]: Error sending mod log death report:', error);
           }
 
@@ -2790,7 +2927,12 @@ async function checkMissedRolls(client) {
     
     console.log('[blightHandler]: Completed checkMissedRolls successfully');
   } catch (error) {
-    handleError(error, 'blightHandler.js');
+    handleError(error, 'blightHandler.js', {
+      operation: 'checkMissedRolls',
+      commandName: 'system',
+      userTag: 'System',
+      userId: 'system'
+    });
     console.error('[blightHandler]: ❌ Error checking missed rolls:', error);
   }
 }
@@ -2805,7 +2947,26 @@ async function getCharacterBlightHistory(characterId, limit = 10) {
       .limit(limit);
     return history;
   } catch (error) {
-    handleError(error, 'blightHandler.js');
+    // Try to fetch character info for better error reporting
+    let userTag = 'System';
+    let userId = 'system';
+    try {
+      const character = await Character.findById(characterId);
+      if (character && character.userId) {
+        userId = character.userId;
+        userTag = `User: ${character.userId}`;
+      }
+    } catch (fetchError) {
+      console.log(`[blightHandler]: Could not fetch character info for ${characterId}, using 'System' as fallback`);
+    }
+    
+    handleError(error, 'blightHandler.js', {
+      operation: 'getCharacterBlightHistory',
+      commandName: 'system',
+      userTag: userTag,
+      userId: userId,
+      characterId
+    });
     console.error('[blightHandler]: Error fetching blight history:', error);
     throw error;
   }
