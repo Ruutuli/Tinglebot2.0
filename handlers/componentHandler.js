@@ -787,114 +787,198 @@ async function handleRuuGameRoll(interaction) {
     const sessionId = interaction.customId.replace('ruugame_roll_', '');
     const userId = interaction.user.id;
     
-    const session = await RuuGame.findOne({
-      sessionId: sessionId,
-      status: { $in: ['waiting', 'active'] },
-      expiresAt: { $gt: new Date() }
-    });
+    // Use findOneAndUpdate with optimistic concurrency control and retry logic
+    let session = null;
+    let retryCount = 0;
+    const maxRetries = 3;
     
-    if (!session) {
-      await interaction.reply({
-        content: '❌ No active session found.',
-        flags: 64
-      });
-      return;
-    }
-    
-    // Find player in the game or auto-join them
-    let player = session.players.find(p => p.discordId === userId);
-    if (!player) {
-      // Auto-join the player
-      if (session.players.length >= GAME_CONFIG.MAX_PLAYERS) {
-        await interaction.reply({
-          content: '❌ This game is full!',
-          flags: 64
-        });
-        return;
-      }
-      
-      player = {
-        discordId: userId,
-        username: interaction.user.username,
-        lastRoll: null,
-        lastRollTime: null
-      };
-      session.players.push(player);
-    }
-    
-    // Check cooldown BEFORE deferring
-    const now = new Date();
-    if (player.lastRollTime && (now - player.lastRollTime) < (GAME_CONFIG.ROLL_COOLDOWN_SECONDS * 1000)) {
-      const remainingSeconds = Math.ceil((GAME_CONFIG.ROLL_COOLDOWN_SECONDS * 1000 - (now - player.lastRollTime)) / 1000);
-      
+    while (retryCount < maxRetries) {
       try {
-        // Send ephemeral cooldown message using reply
-        await interaction.reply({
-          content: `⏰ Please wait ${remainingSeconds} seconds before rolling again.`,
-          flags: 64
+        // Find the session with optimistic locking
+        session = await RuuGame.findOne({
+          sessionId: sessionId,
+          status: { $in: ['waiting', 'active'] },
+          expiresAt: { $gt: new Date() }
         });
+        
+        if (!session) {
+          await interaction.reply({
+            content: '❌ No active session found.',
+            flags: 64
+          });
+          return;
+        }
+        
+        // Check if game is already finished (double-check to prevent late rolls)
+        if (session.status === 'finished') {
+          await interaction.reply({
+            content: '❌ This game has already ended!',
+            flags: 64
+          });
+          return;
+        }
+        
+        // Find player in the game or auto-join them
+        let player = session.players.find(p => p.discordId === userId);
+        if (!player) {
+          // Auto-join the player
+          if (session.players.length >= GAME_CONFIG.MAX_PLAYERS) {
+            await interaction.reply({
+              content: '❌ This game is full!',
+              flags: 64
+            });
+            return;
+          }
+          
+          player = {
+            discordId: userId,
+            username: interaction.user.username,
+            lastRoll: null,
+            lastRollTime: null
+          };
+          session.players.push(player);
+        }
+        
+        // Check cooldown BEFORE deferring
+        const now = new Date();
+        if (player.lastRollTime && (now - player.lastRollTime) < (GAME_CONFIG.ROLL_COOLDOWN_SECONDS * 1000)) {
+          const remainingSeconds = Math.ceil((GAME_CONFIG.ROLL_COOLDOWN_SECONDS * 1000 - (now - player.lastRollTime)) / 1000);
+          
+          try {
+            // Send ephemeral cooldown message using reply
+            await interaction.reply({
+              content: `⏰ Please wait ${remainingSeconds} seconds before rolling again.`,
+              flags: 64
+            });
+          } catch (error) {
+            console.error(`[RuuGame Component] Failed to send cooldown message:`, error);
+          }
+          return;
+        }
+        
+        // Only defer the interaction if we're actually going to process the roll
+        await interaction.deferReply({ flags: 0 });
+        hasDeferred = true;
+        
+        // Roll the dice
+        const roll = Math.floor(Math.random() * GAME_CONFIG.DICE_SIDES) + 1;
+        player.lastRoll = roll;
+        player.lastRollTime = now;
+
+        let gameEnded = false;
+        let prizeCharacter = null; // Track which character received the prize
+        
+        if (roll === GAME_CONFIG.TARGET_SCORE) {
+          session.status = 'finished';
+          session.winner = userId;
+          session.winningScore = roll;
+          gameEnded = true;
+
+          // Immediately send winner announcement to prevent further button clicks
+          const immediateWinnerEmbed = await createRuuGameEmbed(session, '🎉 WINNER!', interaction.user, null, roll);
+          immediateWinnerEmbed.setTitle(`🎲 RuuGame - ${interaction.user.username} rolled a ${roll} and WON!`);
+          
+          await interaction.editReply({
+            embeds: [immediateWinnerEmbed],
+            components: [] // Remove buttons immediately
+          });
+
+          // Award prize in background (non-blocking)
+          try {
+            prizeCharacter = await awardRuuGamePrize(session, userId, interaction);
+            
+            // Update the embed with prize information if successful
+            if (prizeCharacter) {
+              const finalWinnerEmbed = await createRuuGameEmbed(session, '🎉 WINNER!', interaction.user, prizeCharacter, roll);
+              finalWinnerEmbed.setTitle(`🎲 RuuGame - ${interaction.user.username} rolled a ${roll} and WON!`);
+              
+              await interaction.editReply({
+                embeds: [finalWinnerEmbed],
+                components: []
+              });
+            }
+          } catch (error) {
+            console.error('Error auto-awarding prize:', error);
+            // Don't fail the game if prize awarding fails
+            session.prizeClaimed = false;
+            session.prizeClaimedBy = null;
+            session.prizeClaimedAt = null;
+          }
+        } else if (session.status === 'waiting') {
+          session.status = 'active';
+        }
+
+        // Use findOneAndUpdate with optimistic concurrency control
+        const updateResult = await RuuGame.findOneAndUpdate(
+          { 
+            _id: session._id,
+            __v: session.__v // Optimistic locking using version
+          },
+          {
+            $set: {
+              players: session.players,
+              status: session.status,
+              winner: session.winner,
+              winningScore: session.winningScore,
+              prizeClaimed: session.prizeClaimed,
+              prizeClaimedBy: session.prizeClaimedBy,
+              prizeClaimedAt: session.prizeClaimedAt
+            },
+            $inc: { __v: 1 } // Increment version
+          },
+          { 
+            new: true, // Return the updated document
+            runValidators: true
+          }
+        );
+        
+        if (!updateResult) {
+          // Version conflict - retry
+          retryCount++;
+          if (retryCount >= maxRetries) {
+            throw new Error('Failed to update session after multiple retries due to concurrent modifications');
+          }
+          continue; // Retry the loop
+        }
+        
+        // Successfully updated - use the updated session
+        session = updateResult;
+
+        // Only send response if this wasn't a winning roll (winner response already sent)
+        if (!gameEnded) {
+          const embed = await createRuuGameEmbed(session, 'Roll Result!', interaction.user, prizeCharacter, roll);
+          embed.setTitle(`🎲 RuuGame - ${interaction.user.username} rolled a ${roll}!`);
+          
+          let buttons = createRuuGameButtons(sessionId);
+
+          await interaction.editReply({
+            embeds: [embed],
+            components: [buttons]
+          });
+        }
+        
+        // Send prize notification if awarded (for non-winning rolls)
+        if (prizeCharacter && session.prizeClaimed && !gameEnded) {
+          // Prize embed removed - already handled in main embed
+        }
+        
+        // Success - break out of retry loop
+        break;
+        
       } catch (error) {
-        console.error(`[RuuGame Component] Failed to send cooldown message:`, error);
+        if (error.name === 'VersionError' || error.message.includes('No matching document found')) {
+          retryCount++;
+          if (retryCount >= maxRetries) {
+            throw new Error('Failed to update session after multiple retries due to concurrent modifications');
+          }
+          // Wait a bit before retrying to reduce contention
+          await new Promise(resolve => setTimeout(resolve, 100 * retryCount));
+          continue;
+        } else {
+          // Non-version error - rethrow
+          throw error;
+        }
       }
-      return;
-    }
-    
-    // Only defer the interaction if we're actually going to process the roll
-    await interaction.deferReply({ flags: 0 });
-    hasDeferred = true;
-    
-    // Roll the dice
-    const roll = Math.floor(Math.random() * GAME_CONFIG.DICE_SIDES) + 1;
-    player.lastRoll = roll;
-    player.lastRollTime = now;
-
-    let gameEnded = false;
-    let prizeCharacter = null; // Track which character received the prize
-    
-    if (roll === GAME_CONFIG.TARGET_SCORE) {
-      session.status = 'finished';
-      session.winner = userId;
-      session.winningScore = roll;
-      gameEnded = true;
-
-      try {
-        prizeCharacter = await awardRuuGamePrize(session, userId, interaction);
-      } catch (error) {
-        console.error('Error auto-awarding prize:', error);
-        // Don't fail the game if prize awarding fails
-        session.prizeClaimed = false;
-        session.prizeClaimedBy = null;
-        session.prizeClaimedAt = null;
-      }
-    } else if (session.status === 'waiting') {
-      session.status = 'active';
-    }
-
-    // Save the session with updated player data
-    await session.save();
-
-    // Fetch the updated session to ensure we have the latest data
-    const updatedSession = await RuuGame.findById(session._id);
-
-    const embed = await createRuuGameEmbed(updatedSession, gameEnded ? '🎉 WINNER!' : 'Roll Result!', interaction.user, prizeCharacter, roll);
-
-    if (!gameEnded) {
-      embed.setTitle(`🎲 RuuGame - ${interaction.user.username} rolled a ${roll}!`);
-    }
-    
-    let buttons = null;
-    if (!gameEnded) {
-      buttons = createRuuGameButtons(sessionId);
-    }
-
-    await interaction.editReply({
-      embeds: [embed],
-      components: buttons ? [buttons] : []
-    });
-    
-    // Send prize notification if awarded
-    if (prizeCharacter && session.prizeClaimed) {
-      // Prize embed removed - already handled in main embed
     }
 
   } catch (error) {

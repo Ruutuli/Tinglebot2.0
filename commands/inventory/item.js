@@ -24,15 +24,19 @@ const { capitalizeWords } = require('../../modules/formattingModule');
 const { getVillageEmojiByName } = require('../../modules/locationsModule');
 const { createDebuffEmbed } = require('../../embeds/embeds');
 const { getJobVoucherErrorMessage } = require('../../modules/jobVoucherModule');
+const { getPetTypeData, getPetEmoji, getRollsDisplay } = require('../../modules/petModule');
 
 // ------------------- Utility Functions -------------------
 // General-purpose utilities: error handling, inventory utils.
 const { handleError } = require('../../utils/globalErrorHandler');
-const { removeItemInventoryDatabase, syncToInventoryDatabase } = require('../../utils/inventoryUtils');
+const { removeItemInventoryDatabase, syncToInventoryDatabase, addItemInventoryDatabase } = require('../../utils/inventoryUtils');
 const { checkInventorySync } = require('../../utils/characterUtils');
 const { safeAppendDataToSheet } = require('../../utils/googleSheetsUtils');
 const { enforceJail } = require('../../utils/jailCheck');
 
+// ------------------- Database Models -------------------
+const User = require('../../models/UserModel');
+const Pet = require('../../models/PetModel');
 
 // ------------------- Command Definition -------------------
 // Defines the /item command schema and its execution logic.
@@ -282,6 +286,304 @@ module.exports = {
         return void await interaction.editReply({ embeds: [voucherEmbed] });
       }
 
+      // ------------------- Character Slot Voucher Handling -------------------
+      // Specialized logic for 'Character Slot Voucher' item: adds character slots to user
+      if (item.itemName.toLowerCase() === 'character slot voucher') {
+        // Find or create user record
+        let user = await User.findOne({ discordId: interaction.user.id });
+        if (!user) {
+          user = new User({
+            discordId: interaction.user.id,
+            characterSlot: quantity, // Just add the vouchers, User model handles default 2
+            status: 'active'
+          });
+        } else {
+          user.characterSlot = (user.characterSlot || 0) + quantity;
+        }
+
+        await user.save();
+
+        // Remove the vouchers from inventory
+        await removeItemInventoryDatabase(character._id, 'Character Slot Voucher', quantity, interaction);
+
+        // Log character slot voucher usage to Google Sheets
+        const inventoryLink = character.inventory || character.inventoryLink;
+        if (typeof inventoryLink === 'string') {
+          const { category = [], type = [], subtype = [] } = item;
+          const formattedDateTime = new Date().toISOString();
+          const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
+          const values = [[
+            character.name,
+            'Character Slot Voucher',
+            `-${quantity}`,
+            Array.isArray(category) ? category.join(', ') : category,
+            Array.isArray(type) ? type.join(', ') : type,
+            Array.isArray(subtype) ? subtype.join(', ') : subtype,
+            `Used ${quantity} character slot voucher(s)`,
+            character.job,
+            '',
+            character.currentVillage,
+            interactionUrl,
+            formattedDateTime,
+            ''
+          ]];
+          await safeAppendDataToSheet(inventoryLink, character, 'loggedInventory!A2:M', values, interaction.client, { 
+            skipValidation: true,
+            context: {
+              commandName: 'item',
+              userTag: interaction.user.tag,
+              userId: interaction.user.id,
+              options: {
+                characterName,
+                itemName,
+                quantity
+              }
+            }
+          });
+        }
+
+                 // ------------------- Build and Send Voucher Embed -------------------
+         const voucherEmbed = new EmbedBuilder()
+           .setColor('#FFD700')
+           .setTitle('🎫 Character Slot Voucher Activated!')
+           .setDescription(
+             `**${interaction.user.username}** has used **${quantity} Character Slot Voucher${quantity > 1 ? 's' : ''}** to increase their character slot capacity!\n\n` +
+             `You now have **${user.characterSlot}** total character slots available.`
+           )
+          .addFields(
+            { name: '👤 Character Slots', value: `**${user.characterSlot}** total slots`, inline: true },
+            { name: '🎫 Vouchers Used', value: `**${quantity}** Character Slot Voucher${quantity > 1 ? 's' : ''}`, inline: true }
+          )
+          .setThumbnail(item.image || 'https://via.placeholder.com/150')
+          .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+          .setFooter({ text: '✨ You can now create more characters! Use /character create to get started!' });
+
+        return void await interaction.editReply({ embeds: [voucherEmbed] });
+      }
+
+      // ------------------- Chuchu Egg Handling -------------------
+      // Specialized logic for 'Chuchu Egg' item: hatches egg and gives character a pet
+      if (item.itemName.toLowerCase() === 'chuchu egg') {
+        // Force quantity to 1 for chuchu eggs
+        if (quantity !== 1) {
+          return void await interaction.editReply({
+            embeds: [{
+              color: 0xFF6B35,
+              title: '🥚 Chuchu Egg Usage',
+              description: '❌ **Chuchu Eggs can only be used one at a time.**\nPlease use a quantity of 1.',
+              image: {
+                url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+              },
+              footer: {
+                text: 'Pet System'
+              }
+            }]
+          });
+        }
+
+        // Check if character already has an active pet
+        const existingActivePet = await Pet.findOne({ owner: character._id, status: 'active' });
+        if (existingActivePet) {
+          return void await interaction.editReply({
+            embeds: [{
+              color: 0xFF6B35,
+              title: '❌ Active Pet Found',
+              description: `${character.name} already has an active pet and cannot hatch another Chuchu Egg at this time.`,
+              fields: [
+                { 
+                  name: '🐾 Current Active Pet', 
+                  value: `\`${existingActivePet.name}\` the ${existingActivePet.species}`, 
+                  inline: true 
+                },
+                { 
+                  name: '📋 Pet Type', 
+                  value: `\`${existingActivePet.petType}\``, 
+                  inline: true 
+                },
+                { 
+                  name: '📊 Level', 
+                  value: `Level ${existingActivePet.level}`, 
+                  inline: true 
+                }
+              ],
+              image: {
+                url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+              },
+              footer: {
+                text: 'Please store your pet in the stables (feature coming soon) before hatching a new one'
+              }
+            }],
+            ephemeral: true
+          });
+        }
+
+        // Generate a normal Chuchu type (not elemental variants)
+        const chuchuType = 'Chuchu';
+        
+        // Generate a random pet name for normal Chuchu
+        const chuchuNames = ['Bubble', 'Squish', 'Bounce', 'Jelly', 'Blob', 'Squirt', 'Pop', 'Splash', 'Drip', 'Gel'];
+        const randomPetName = chuchuNames[Math.floor(Math.random() * chuchuNames.length)];
+        
+        // Get pet type data
+        const petTypeData = getPetTypeData(chuchuType);
+        
+        if (!petTypeData) {
+          return void await interaction.editReply({
+            content: '❌ **Error: Invalid Chuchu type generated. Please try again.**',
+            ephemeral: true
+          });
+        }
+
+        // Create the new pet
+        const newPet = await Pet.create({
+          ownerName: character.name,
+          owner: character._id,
+          name: randomPetName,
+          species: chuchuType.toLowerCase(),
+          petType: chuchuType,
+          level: 0,
+          rollsRemaining: 0,
+          imageUrl: 'https://cdn.wikimg.net/en/zeldawiki/images/thumb/c/c3/TotK_Chuchu_Model.png/1200px-TotK_Chuchu_Model.png',
+          rollCombination: petTypeData.rollCombination,
+          tableDescription: petTypeData.description,
+          discordId: character.userId
+        });
+        
+        // Set as current active pet
+        await updateCharacterById(character._id, { currentActivePet: newPet._id });
+
+        // Remove the egg from inventory
+        await removeItemInventoryDatabase(character._id, 'Chuchu Egg', 1, interaction);
+
+        // Log chuchu egg usage to Google Sheets
+        const inventoryLink = character.inventory || character.inventoryLink;
+        if (typeof inventoryLink === 'string') {
+          const { category = [], type = [], subtype = [] } = item;
+          const formattedDateTime = new Date().toISOString();
+          const interactionUrl = `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}/${interaction.id}`;
+          const values = [[
+            character.name,
+            'Chuchu Egg',
+            '-1',
+            Array.isArray(category) ? category.join(', ') : category,
+            Array.isArray(type) ? type.join(', ') : type,
+            Array.isArray(subtype) ? subtype.join(', ') : subtype,
+                         `Hatched into ${randomPetName} the ${chuchuType}`,
+            character.job,
+            '',
+            character.currentVillage,
+            interactionUrl,
+            formattedDateTime,
+            ''
+          ]];
+          await safeAppendDataToSheet(inventoryLink, character, 'loggedInventory!A2:M', values, interaction.client, { 
+            skipValidation: true,
+            context: {
+              commandName: 'item',
+              userTag: interaction.user.tag,
+              userId: interaction.user.id,
+              options: {
+                characterName,
+                itemName,
+                quantity
+              }
+            }
+          });
+        }
+
+        // ------------------- Build and Send Hatching Embed -------------------
+        const petEmoji = getPetEmoji(chuchuType.toLowerCase());
+        const rollsDisplay = getRollsDisplay(0, 0); // Level 0 pet
+
+        // Determine embed color based on village
+        const villageName = character.currentVillage.charAt(0).toUpperCase() + character.currentVillage.slice(1).toLowerCase();
+        const villageColors = {
+          Rudania: "#d7342a",
+          Inariko: "#277ecd",
+          Vhintl: "#25c059",
+        };
+        const embedColor = villageColors[villageName] || "#00FF00";
+
+        const hatchingEmbed = new EmbedBuilder()
+          .setColor(embedColor)
+          .setTitle('🥚 Chuchu Egg Hatched!')
+          .setDescription(
+            `**${character.name}** has successfully hatched a **Chuchu Egg**!\n\n` +
+            `A new **${chuchuType}** has emerged and bonded with ${character.name}!\n\n` +
+            `🎉 **Welcome ${randomPetName}!** Use /pet edit to give your Chuchu a custom name!`
+          )
+          .addFields(
+            { name: '__Pet Name__', value: `> ${randomPetName}`, inline: true },
+            { name: '__Owner__', value: `> ${character.name}`, inline: true },
+            { name: '__Village__', value: `> ${character.currentVillage}`, inline: true },
+            { name: '__Pet Species__', value: `> ${petEmoji} ${chuchuType}`, inline: true },
+            { name: '__Pet Type__', value: `> ${chuchuType}`, inline: true },
+            { name: '__Status__', value: `> 🟢 Active`, inline: true },
+            { name: '__Current Level__', value: `> Level 0`, inline: true },
+            { name: '__Rolls Available__', value: `> ${rollsDisplay}`, inline: true },
+            { name: '🎲 Available Roll Types', value: petTypeData.rollCombination.join(', '), inline: false },
+            { name: '📝 Pet Description', value: petTypeData.description, inline: false }
+          )
+          .setThumbnail('https://cdn.wikimg.net/en/zeldawiki/images/thumb/c/c3/TotK_Chuchu_Model.png/1200px-TotK_Chuchu_Model.png')
+          .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+          .setFooter({ 
+            text: `Pet System`,
+            iconURL: character.icon
+          });
+
+        return void await interaction.editReply({ embeds: [hatchingEmbed] });
+      }
+
+      // ------------------- Chuchu Jelly Compression Handling -------------------
+      // Specialized logic for compressing 100 of any Chuchu Jelly into a Chuchu Egg
+      const chuchuJellyTypes = ['chuchu jelly', 'red chuchu jelly', 'white chuchu jelly', 'yellow chuchu jelly'];
+      if (chuchuJellyTypes.includes(item.itemName.toLowerCase()) && quantity === 100) {
+        // Check if character has exactly 100 of the jelly type
+        if (ownedItem.quantity < 100) {
+          return void await interaction.editReply({
+            embeds: [{
+              color: 0xFF6B35,
+              title: '🥚 Chuchu Jelly Compression',
+              description: `❌ **You need exactly 100 ${item.itemName} to compress into a Chuchu Egg.**\n\nYou currently have ${ownedItem.quantity} ${item.itemName}.`,
+              image: {
+                url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+              },
+              footer: {
+                text: 'Chuchu Jelly Compression'
+              }
+            }],
+            ephemeral: true
+          });
+        }
+
+        // Remove the 100 jelly from inventory
+        await removeItemInventoryDatabase(character._id, item.itemName, 100, interaction);
+
+        // Add 1 Chuchu Egg to inventory (Google Sheets logging is handled automatically by addItemInventoryDatabase)
+        await addItemInventoryDatabase(character._id, 'Chuchu Egg', 1, interaction, `Compressed from 100 ${item.itemName}`);
+
+        // ------------------- Build and Send Compression Embed -------------------
+        const compressionEmbed = new EmbedBuilder()
+          .setColor('#FF6B35')
+          .setTitle('🥚 Chuchu Jelly Compressed!')
+          .setDescription(
+            `**${character.name}** has successfully compressed **100 ${item.itemName}** into a **Chuchu Egg**!\n\n` +
+            `The jelly has been magically condensed into a single egg that can be hatched into a pet.`
+          )
+          .addFields(
+            { name: '__Jelly Used__', value: `> 100 ${item.itemName}`, inline: true },
+            { name: '__Egg Created__', value: `> 1 Chuchu Egg`, inline: true },
+            { name: '__Process__', value: `> Compression`, inline: true }
+          )
+          .setThumbnail(item.image || 'https://via.placeholder.com/150')
+          .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+          .setFooter({ 
+            text: `Chuchu Jelly Compression System`,
+            iconURL: character.icon
+          });
+
+        return void await interaction.editReply({ embeds: [compressionEmbed] });
+      }
 
       // ------------------- Debuff and Inventory Sync Checks -------------------
       // Prevent item use if character is debuffed or inventory isn't synced.
