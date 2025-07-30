@@ -441,8 +441,8 @@ module.exports = {
           name: randomPetName,
           species: chuchuType.toLowerCase(),
           petType: chuchuType,
-          level: 0,
-          rollsRemaining: 0,
+          level: 1,
+          rollsRemaining: 1,
           imageUrl: 'https://cdn.wikimg.net/en/zeldawiki/images/thumb/c/c3/TotK_Chuchu_Model.png/1200px-TotK_Chuchu_Model.png',
           rollCombination: petTypeData.rollCombination,
           tableDescription: petTypeData.description,
@@ -493,7 +493,7 @@ module.exports = {
 
         // ------------------- Build and Send Hatching Embed -------------------
         const petEmoji = getPetEmoji(chuchuType.toLowerCase());
-        const rollsDisplay = getRollsDisplay(0, 0); // Level 0 pet
+        const rollsDisplay = getRollsDisplay(0, 1); // Level 1 pet
 
         // Determine embed color based on village
         const villageName = character.currentVillage.charAt(0).toUpperCase() + character.currentVillage.slice(1).toLowerCase();
@@ -519,7 +519,7 @@ module.exports = {
             { name: '__Pet Species__', value: `> ${petEmoji} ${chuchuType}`, inline: true },
             { name: '__Pet Type__', value: `> ${chuchuType}`, inline: true },
             { name: '__Status__', value: `> 🟢 Active`, inline: true },
-            { name: '__Current Level__', value: `> Level 0`, inline: true },
+            { name: '__Current Level__', value: `> Level 1`, inline: true },
             { name: '__Rolls Available__', value: `> ${rollsDisplay}`, inline: true },
             { name: '🎲 Available Roll Types', value: petTypeData.rollCombination.join(', '), inline: false },
             { name: '📝 Pet Description', value: petTypeData.description, inline: false }
