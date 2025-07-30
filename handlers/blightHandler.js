@@ -179,9 +179,9 @@ async function healBlight(interaction, characterName, healerName) {
       const notBlightedEmbed = new EmbedBuilder()
         .setColor('#00FF00') // Green color for positive message
         .setTitle('⚠️ Not Blighted')
-        .setDescription(`**${characterName}** is not blighted and does not require healing.`)
+        .setDescription(`**${character.name}** is not blighted and does not require healing.`)
         .setThumbnail(character.icon)
-        .setAuthor({ name: `${characterName}'s Status`, iconURL: interaction.user.displayAvatarURL() })
+        .setAuthor({ name: `${character.name}'s Status`, iconURL: interaction.user.displayAvatarURL() })
         .setImage('https://storage.googleapis.com/tinglebot/border%20blight.png')
         .setFooter({ text: 'Blight Status Check', iconURL: 'https://static.wixstatic.com/media/7573f4_a510c95090fd43f5ae17e20d80c1289e~mv2.png' })
         .setTimestamp();
@@ -209,7 +209,7 @@ async function healBlight(interaction, characterName, healerName) {
     // Check for existing pending submission
     const existingSubmissions = await TempData.find({
       type: 'blight',
-      'data.characterName': characterName,
+      'data.characterName': character.name,
       'data.status': 'pending',
       expiresAt: { $gt: new Date() }
     });
@@ -224,14 +224,14 @@ async function healBlight(interaction, characterName, healerName) {
       if (!pendingPermission.canHeal) {
         // Generate lore text for the cancelled request
         const loreText = generateBlightSubmissionExpiryFlavorText(
-          characterName,
+          character.name,
           pendingHealer.name,
           currentStage,
           existingSubmission.data.taskType
         );
         
         // Log the lore text for administrators
-        console.log(`[blightHandler]: 📜 Blight submission cancelled for ${characterName} (healer no longer eligible):`);
+        console.log(`[blightHandler]: 📜 Blight submission cancelled for ${character.name} (healer no longer eligible):`);
         console.log(`[blightHandler]: ${loreText}`);
         
         // Expire/cancel the old request
@@ -246,7 +246,7 @@ async function healBlight(interaction, characterName, healerName) {
         const pendingEmbed = new EmbedBuilder()
           .setColor('#FFA500') // Orange color for warning
           .setTitle('⚠️ Pending Healing Request')
-          .setDescription(`**${characterName}** already has a pending healing request.`)
+          .setDescription(`**${character.name}** already has a pending healing request.`)
           .addFields(
             { name: '⏰ Expiration', value: `This request expires in **${timeLeft} days**` },
             { name: '🆔 Submission ID', value: `\`${existingSubmission.key}\`` },
@@ -296,7 +296,7 @@ async function healBlight(interaction, characterName, healerName) {
           }
           
           await interaction.user.send({
-            content: `Hi <@${interaction.user.id}>, you already have a pending blight healing request for **${characterName}**.`,
+            content: `Hi <@${interaction.user.id}>, you already have a pending blight healing request for **${character.name}**.`,
             embeds: dmEmbeds
           });
         } catch (dmError) {
@@ -318,7 +318,7 @@ async function healBlight(interaction, characterName, healerName) {
 
     if (character.currentVillage.toLowerCase() !== healer.village.toLowerCase()) {
       await interaction.editReply({
-        content: `⚠️ **${healer.name}** cannot heal **${characterName}** because they are from different villages.`,
+        content: `⚠️ **${healer.name}** cannot heal **${character.name}** because they are from different villages.`,
         ephemeral: true,
       });
       return;
@@ -333,21 +333,21 @@ async function healBlight(interaction, characterName, healerName) {
         .join(' or ');
       
       await interaction.editReply({
-        content: `⚠️ **${healer.name}** cannot heal **${characterName}** at Blight Stage ${blightStage}. Only ${allowedHealers} can heal this stage.`,
+        content: `⚠️ **${healer.name}** cannot heal **${character.name}** at Blight Stage ${blightStage}. Only ${allowedHealers} can heal this stage.`,
         ephemeral: true,
       });
       return;
     }
 
     // Create new healing request
-    const healingRequirement = getRandomHealingRequirement(healer, characterName);
+    const healingRequirement = getRandomHealingRequirement(healer, character.name);
     const newSubmissionId = generateUniqueId('B');
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days expiration
 
     const submissionData = {
       submissionId: newSubmissionId,
       userId: interaction.user.id,
-      characterName,
+      characterName: character.name,
       healerName,
       taskType: healingRequirement.type,
       taskDescription: healingRequirement.description,
@@ -375,7 +375,7 @@ async function healBlight(interaction, characterName, healerName) {
           .setTitle('🆕 New Blight Healing Request')
           .setDescription(`A new blight healing request has been submitted.`)
           .addFields(
-            { name: 'Character', value: characterName },
+            { name: 'Character', value: character.name },
             { name: 'User', value: `<@${interaction.user.id}>` },
             { name: 'Healer', value: healerName },
             { name: 'Stage', value: `Stage ${blightStage}` },
@@ -401,7 +401,7 @@ async function healBlight(interaction, characterName, healerName) {
     // Reply in-channel using editReply since we deferred (non-ephemeral)
     let replyContent = `<@${interaction.user.id}>`;
     if (oldRequestCancelled) {
-      replyContent = `⚠️ **${characterName}** had a pending healing request from **${oldHealerName}**, but they can no longer heal at Stage ${oldStage}.\n\nThe old request has been cancelled. Here is your new healing prompt:\n\n` + replyContent;
+      replyContent = `⚠️ **${character.name}** had a pending healing request from **${oldHealerName}**, but they can no longer heal at Stage ${oldStage}.\n\nThe old request has been cancelled. Here is your new healing prompt:\n\n` + replyContent;
     }
     
     await interaction.editReply({
@@ -454,20 +454,24 @@ async function healBlight(interaction, characterName, healerName) {
 async function validateCharacterOwnership(interaction, characterName) {
   try {
     const userId = interaction.user.id;
+    
+    // Extract just the character name if it includes additional information (e.g., "Rhifu | Vhintl | Graveskeeper")
+    const cleanCharacterName = characterName.split('|')[0].trim();
+    
     const character = await Character.findOne({ 
-      name: { $regex: new RegExp(`^${characterName}$`, 'i') }, 
+      name: { $regex: new RegExp(`^${cleanCharacterName}$`, 'i') }, 
       userId 
     });
     if (!character) {
       // Check if the character exists at all (for better error message)
       const exists = await Character.findOne({ 
-        name: { $regex: new RegExp(`^${characterName}$`, 'i') } 
+        name: { $regex: new RegExp(`^${cleanCharacterName}$`, 'i') } 
       });
       if (!exists) {
         const errorEmbed = new EmbedBuilder()
           .setColor('#FF0000')
           .setTitle('❌ Character Not Found')
-          .setDescription(`The character "${characterName}" does not exist in the database.`)
+          .setDescription(`The character "${cleanCharacterName}" does not exist in the database.`)
           .addFields(
             { name: '🔍 Possible Reasons', value: '• Character name is misspelled\n• Character was deleted\n• Character was never created' },
             { name: '💡 Suggestion', value: 'Please check the spelling and try again.' }
@@ -486,7 +490,7 @@ async function validateCharacterOwnership(interaction, characterName) {
           .setTitle('❌ Ownership Error')
           .setDescription(`You can only perform this action for your **own** characters!`)
           .addFields(
-            { name: '🔒 Character Ownership', value: `The character "${characterName}" belongs to another user.` },
+            { name: '🔒 Character Ownership', value: `The character "${cleanCharacterName}" belongs to another user.` },
             { name: '💡 Suggestion', value: 'Please use this command with one of your own characters.' }
           )
           .setImage('https://storage.googleapis.com/tinglebot/border%20error.png')
@@ -1809,11 +1813,14 @@ async function saveBlightEventToHistory(character, eventType, details = {}) {
       });
     }
     
+    // For non-roll events, provide a default rollValue to satisfy schema requirements
+    const defaultRollValue = details.rollValue !== undefined ? details.rollValue : -1;
+    
     const historyEntry = await BlightRollHistory.create({
       characterId: character._id,
       characterName: character.name,
       userId: character.userId,
-      rollValue: details.rollValue || null,
+      rollValue: defaultRollValue,
       previousStage: details.previousStage || character.blightStage,
       newStage: details.newStage || character.blightStage,
       timestamp: new Date(),
