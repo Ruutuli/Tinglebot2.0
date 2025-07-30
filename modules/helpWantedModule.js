@@ -328,11 +328,8 @@ const NPC_QUEST_FLAVOR = {
 // ------------------- Utility Functions -------------------
 // ============================================================================
 
-/**
- * Returns a random element from an array
- * @param {Array} arr - The array to select from
- * @returns {*} Random element from the array
- */
+// ------------------- Function: getRandomElement -------------------
+// Returns a random element from an array
 function getRandomElement(arr) {
   if (!Array.isArray(arr) || arr.length === 0) {
     throw new Error('Invalid array provided to getRandomElement');
@@ -340,19 +337,8 @@ function getRandomElement(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-/**
- * Generates a truly random cron time for quest posting
- * @returns {string} Random cron time string
- */
-function generateRandomCronTime() {
-  // Pick randomly from the fixed times only
-  return getRandomElement(FIXED_CRON_TIMES);
-}
-
-/**
- * Returns a random NPC name from the stealingNPCSModule
- * @returns {string} Random NPC name
- */
+// ------------------- Function: getRandomNPCName -------------------
+// Returns a random NPC name from the stealingNPCSModule
 function getRandomNPCName() {
   const npcNames = Object.keys(NPCs);
   if (npcNames.length === 0) {
@@ -361,11 +347,8 @@ function getRandomNPCName() {
   return getRandomElement(npcNames);
 }
 
-/**
- * Shuffles an array in place using Fisher-Yates algorithm
- * @param {Array} array - Array to shuffle
- * @returns {Array} Shuffled array
- */
+// ------------------- Function: shuffleArray -------------------
+// Shuffles an array in place using Fisher-Yates algorithm
 function shuffleArray(array) {
   const shuffled = [...array];
   for (let i = shuffled.length - 1; i > 0; i--) {
@@ -375,13 +358,8 @@ function shuffleArray(array) {
   return shuffled;
 }
 
-/**
- * Returns a random quest flavor text for the given NPC and quest type
- * @param {string} npcName - NPC name
- * @param {string} questType - Quest type
- * @param {Object} requirements - Quest requirements
- * @returns {string} Formatted flavor text
- */
+// ------------------- Function: getNPCQuestFlavor -------------------
+// Returns a random quest flavor text for the given NPC and quest type
 function getNPCQuestFlavor(npcName, questType, requirements) {
   const npcFlavor = NPC_QUEST_FLAVOR[npcName];
   if (!npcFlavor || !npcFlavor[questType]) {
@@ -411,10 +389,8 @@ function getNPCQuestFlavor(npcName, questType, requirements) {
 // ------------------- Quest Pool Management -------------------
 // ============================================================================
 
-/**
- * Fetches all valid items for item quests
- * @returns {Promise<Array>} Array of valid items
- */
+// ------------------- Function: getItemQuestPool -------------------
+// Fetches all valid items for item quests
 async function getItemQuestPool() {
   try {
     let items = await Item.find({
@@ -436,10 +412,8 @@ async function getItemQuestPool() {
   }
 }
 
-/**
- * Fetches all valid monsters for monster quests
- * @returns {Promise<Array>} Array of valid monsters
- */
+// ------------------- Function: getMonsterQuestPool -------------------
+// Fetches all valid monsters for monster quests
 async function getMonsterQuestPool() {
   try {
     const monsters = await Monster.find({
@@ -458,10 +432,8 @@ async function getMonsterQuestPool() {
   }
 }
 
-/**
- * Fetches all craftable items for crafting quests
- * @returns {Promise<Array>} Array of craftable items
- */
+// ------------------- Function: getCraftingQuestPool -------------------
+// Fetches all craftable items for crafting quests
 async function getCraftingQuestPool() {
   try {
     let items = await Item.find({
@@ -488,18 +460,14 @@ async function getCraftingQuestPool() {
   }
 }
 
-/**
- * Gets all valid escort locations
- * @returns {Array} Array of escort locations
- */
+// ------------------- Function: getEscortQuestPool -------------------
+// Gets all valid escort locations
 function getEscortQuestPool() {
   return getAllVillages();
 }
 
-/**
- * Fetches all quest pools in parallel
- * @returns {Promise<Object>} Object containing all quest pools
- */
+// ------------------- Function: getAllQuestPools -------------------
+// Fetches all quest pools in parallel
 async function getAllQuestPools() {
   try {
     const [itemPool, monsterPool, craftingPool] = await Promise.all([
@@ -521,13 +489,8 @@ async function getAllQuestPools() {
 // ------------------- Quest Generation -------------------
 // ============================================================================
 
-/**
- * Generates quest requirements based on quest type
- * @param {string} type - Quest type
- * @param {Object} pools - Quest pools
- * @param {string} village - Village name
- * @returns {Object} Quest requirements
- */
+// ------------------- Function: generateQuestRequirements -------------------
+// Generates quest requirements based on quest type
 function generateQuestRequirements(type, pools, village) {
   switch (type) {
     case 'item': {
@@ -582,13 +545,8 @@ function generateQuestRequirements(type, pools, village) {
   }
 }
 
-/**
- * Generates a random quest object for a given village and date
- * @param {string} village - Village name
- * @param {string} date - Date string
- * @param {Object} pools - Quest pools
- * @returns {Promise<Object>} Generated quest object
- */
+// ------------------- Function: generateQuestForVillage -------------------
+// Generates a random quest object for a given village and date
 async function generateQuestForVillage(village, date, pools) {
   // Validate pools
   const requiredPools = ['itemPool', 'monsterPool', 'craftingPool', 'escortPool'];
@@ -622,10 +580,8 @@ async function generateQuestForVillage(village, date, pools) {
 
 
 
-/**
- * Generates and saves daily quests for all villages
- * @returns {Promise<Array>} Array of generated quests
- */
+// ------------------- Function: generateDailyQuests -------------------
+// Generates and saves daily quests for all villages
 async function generateDailyQuests() {
   try {
     const now = new Date();
@@ -637,10 +593,12 @@ async function generateDailyQuests() {
 
     const pools = await getAllQuestPools();
 
-    const quests = await Promise.all(VILLAGES.map(async village => {
+    // Generate unique posting times for each village to avoid conflicts
+    const shuffledTimes = shuffleArray([...FIXED_CRON_TIMES]);
+    const quests = await Promise.all(VILLAGES.map(async (village, index) => {
       const quest = await generateQuestForVillage(village, date, pools);
-      // Assign a truly random posting time for each village each day
-      quest.scheduledPostTime = generateRandomCronTime();
+      // Assign a unique posting time for each village each day
+      quest.scheduledPostTime = shuffledTimes[index];
       console.log(`[HelpWanted] Generated quest for ${village} with posting time: ${quest.scheduledPostTime}`);
       return quest;
     }));
@@ -677,10 +635,8 @@ async function generateDailyQuests() {
 // ------------------- Quest Retrieval -------------------
 // ============================================================================
 
-/**
- * Fetches all Help Wanted quests for today
- * @returns {Promise<Array>} Array of today's quests
- */
+// ------------------- Function: getTodaysQuests -------------------
+// Fetches all Help Wanted quests for today
 async function getTodaysQuests() {
   try {
     const now = new Date();
@@ -703,11 +659,8 @@ async function getTodaysQuests() {
   }
 }
 
-/**
- * Fetches quests scheduled for a specific cron time
- * @param {string} cronTime - Cron time string
- * @returns {Promise<Array>} Array of quests for the scheduled time
- */
+// ------------------- Function: getQuestsForScheduledTime -------------------
+// Fetches quests scheduled for a specific cron time
 async function getQuestsForScheduledTime(cronTime) {
   try {
     const now = new Date();
@@ -720,10 +673,8 @@ async function getQuestsForScheduledTime(cronTime) {
   }
 }
 
-/**
- * Gets the current quest schedule for debugging
- * @returns {Promise<Object>} Object with village names as keys and posting times as values
- */
+// ------------------- Function: getCurrentQuestSchedule -------------------
+// Gets the current quest schedule for debugging
 async function getCurrentQuestSchedule() {
   try {
     const quests = await getTodaysQuests();
@@ -753,11 +704,8 @@ async function getCurrentQuestSchedule() {
 // ------------------- Embed Formatting -------------------
 // ============================================================================
 
-/**
- * Gets quest turn-in instructions based on quest type
- * @param {string} type - Quest type
- * @returns {string} Turn-in instructions
- */
+// ------------------- Function: getQuestTurnInInstructions -------------------
+// Gets quest turn-in instructions based on quest type
 function getQuestTurnInInstructions(type) {
   const instructions = {
     item: '• **Item Quest:** Gather the requested materials and bring them to the quest board. Use </helpwanted complete:1397274578530865313> when ready.',
@@ -769,10 +717,8 @@ function getQuestTurnInInstructions(type) {
   return instructions[type] || '• Use </helpwanted complete:1397274578530865313> to turn in your quest.';
 }
 
-/**
- * Formats quests as a single embed
- * @returns {Promise<EmbedBuilder>} Formatted embed
- */
+// ------------------- Function: formatQuestsAsEmbed -------------------
+// Formats quests as a single embed
 async function formatQuestsAsEmbed() {
   try {
     const quests = await getTodaysQuests();
@@ -814,10 +760,8 @@ async function formatQuestsAsEmbed() {
 
 
 
-/**
- * Formats quests as separate embeds by village
- * @returns {Promise<Object>} Object mapping village names to embeds
- */
+// ------------------- Function: formatQuestsAsEmbedsByVillage -------------------
+// Formats quests as separate embeds by village
 async function formatQuestsAsEmbedsByVillage() {
   try {
     const quests = await getTodaysQuests();
@@ -904,11 +848,8 @@ async function formatQuestsAsEmbedsByVillage() {
   }
 }
 
-/**
- * Formats specific quests as separate embeds by village
- * @param {Array} quests - Array of quest objects to format
- * @returns {Promise<Object>} Object mapping village names to embeds
- */
+// ------------------- Function: formatSpecificQuestsAsEmbedsByVillage -------------------
+// Formats specific quests as separate embeds by village
 async function formatSpecificQuestsAsEmbedsByVillage(quests) {
   try {
     if (!quests || !quests.length) return {};
@@ -998,11 +939,8 @@ async function formatSpecificQuestsAsEmbedsByVillage(quests) {
 // ------------------- User Validation -------------------
 // ============================================================================
 
-/**
- * Checks if a user has completed a quest today
- * @param {string} userId - Discord user ID
- * @returns {Promise<boolean>} True if user completed a quest today
- */
+// ------------------- Function: hasUserCompletedQuestToday -------------------
+// Checks if a user has completed a quest today
 async function hasUserCompletedQuestToday(userId) {
   try {
     const user = await require('../models/UserModel').findOne({ discordId: userId });
@@ -1022,11 +960,8 @@ async function hasUserCompletedQuestToday(userId) {
   }
 }
 
-/**
- * Checks if a user has reached the weekly quest limit
- * @param {string} userId - Discord user ID
- * @returns {Promise<boolean>} True if user has reached weekly limit
- */
+// ------------------- Function: hasUserReachedWeeklyQuestLimit -------------------
+// Checks if a user has reached the weekly quest limit
 async function hasUserReachedWeeklyQuestLimit(userId) {
   try {
     const user = await require('../models/UserModel').findOne({ discordId: userId });
@@ -1055,12 +990,8 @@ async function hasUserReachedWeeklyQuestLimit(userId) {
 // ------------------- Quest Embed Updates -------------------
 // ============================================================================
 
-/**
- * Updates the quest embed message to show completion status
- * @param {Object} client - Discord client
- * @param {Object} quest - Quest object
- * @param {Object} completedBy - User who completed the quest
- */
+// ------------------- Function: updateQuestEmbed -------------------
+// Updates the quest embed message to show completion status
 async function updateQuestEmbed(client, quest, completedBy = null) {
   try {
     
@@ -1164,7 +1095,7 @@ async function updateQuestEmbed(client, quest, completedBy = null) {
 }
 
 // ============================================================================
-// ------------------- Exports -------------------
+// ------------------- Module Exports -------------------
 // ============================================================================
 module.exports = {
   generateDailyQuests,

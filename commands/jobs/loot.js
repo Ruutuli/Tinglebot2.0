@@ -133,21 +133,7 @@ async function validateCharacterForLoot(interaction, characterName, userId) {
     return null;
   }
 
-  // ============================================================================
-  // ------------------- Debug Character Object -------------------
-  // Log the character object to understand its structure
-  // ============================================================================
-  console.log(`[loot.js]: 🔍 DEBUG - Character object retrieved for ${characterName}:`, {
-    name: character.name,
-    userId: character.userId,
-    inventory: character.inventory,
-    inventoryType: typeof character.inventory,
-    inventoryLength: character.inventory?.length,
-    hasInventoryLink: !!character.inventoryLink,
-    inventoryLink: character.inventoryLink,
-    inventoryLinkType: typeof character.inventoryLink,
-    allFields: Object.keys(character).filter(key => key.includes('inventory'))
-  });
+
 
   return character;
 }
@@ -202,7 +188,6 @@ function canUseDailyRoll(character, activity) {
   const lastLootRoll = character.dailyRoll?.get('loot');
   
   if (!lastGatherRoll && !lastLootRoll) {
-    console.log(`[loot.js]: 📅 No previous rolls for gather/loot. Allowing action.`);
     return true;
   }
 
@@ -211,15 +196,12 @@ function canUseDailyRoll(character, activity) {
   
   // If either activity was used today, deny the action
   if (lastGatherDate && lastGatherDate >= rollover) {
-    console.log(`[loot.js]: 📅 Already gathered today at ${lastGatherDate.toISOString()}`);
     return false;
   }
   if (lastLootDate && lastLootDate >= rollover) {
-    console.log(`[loot.js]: 📅 Already looted today at ${lastLootDate.toISOString()}`);
     return false;
   }
 
-  console.log(`[loot.js]: 📅 now=${now.toISOString()} | lastGather=${lastGatherDate?.toISOString()} | lastLoot=${lastLootDate?.toISOString()} | rollover=${rollover.toISOString()}`);
   return true;
 }
 
@@ -232,7 +214,6 @@ async function updateDailyRoll(character, activity) {
     const now = new Date().toISOString();
     character.dailyRoll.set(activity, now);
     await character.save();
-    console.log(`[loot.js]: ✅ Updated daily roll for ${activity} at ${now}`);
   } catch (error) {
     console.error(`[loot.js]: ❌ Failed to update daily roll for ${character.name}:`, error);
     throw error;
@@ -275,73 +256,64 @@ module.exports = {
     return;
    }
 
-   // Determine job based on jobVoucher or default job
-   let job = character.jobVoucher && character.jobVoucherJob ? character.jobVoucherJob : character.job;
-   console.log(`[loot.js]: 🔄 Job determined for ${character.name}: "${job}"`);
+       // Determine job based on jobVoucher or default job
+    let job = character.jobVoucher && character.jobVoucherJob ? character.jobVoucherJob : character.job;
+    console.log(`[loot.js]: 🎯 ${character.name} using job: "${job}"${character.jobVoucher ? ' (voucher active)' : ''}`);
 
-   // Validate job BEFORE any other checks
-   if (!await validateJobForLoot(interaction, character, job)) {
-    return;
-   }
-
-   // Check if character is in jail
-   if (await enforceJail(interaction, character)) {
+    // Validate job BEFORE any other checks
+    if (!await validateJobForLoot(interaction, character, job)) {
      return;
-   }
+    }
 
-   // ------------------- Step 3: Validate Interaction Channel -------------------
-   let currentVillage = capitalizeWords(character.currentVillage);
-   let allowedChannel = villageChannels[currentVillage];
+    // Check if character is in jail
+    if (await enforceJail(interaction, character)) {
+      return;
+    }
 
-   // If using a job voucher for a village-exclusive job, override to required village
-   if (character.jobVoucher && character.jobVoucherJob) {
-     const voucherPerk = getJobPerk(character.jobVoucherJob);
-     if (voucherPerk && voucherPerk.village) {
-       const requiredVillage = capitalizeWords(voucherPerk.village);
-       currentVillage = requiredVillage;
-       allowedChannel = villageChannels[requiredVillage];
-     }
-   }
+    // ------------------- Step 3: Validate Interaction Channel -------------------
+    let currentVillage = capitalizeWords(character.currentVillage);
+    let allowedChannel = villageChannels[currentVillage];
 
-   if (!allowedChannel || interaction.channelId !== allowedChannel) {
-    const channelMention = `<#${allowedChannel}>`;
-    await interaction.editReply({
-      embeds: [{
-        color: 0x008B8B, // Dark cyan color
-        description: `*${character.name} looks around, confused by their surroundings...*\n\n**Channel Restriction**\nYou can only use this command in the ${currentVillage} Town Hall channel!\n\n📍 **Current Location:** ${capitalizeWords(character.currentVillage)}\n💬 **Command Allowed In:** ${channelMention}`,
-        image: {
-          url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
-        },
-        footer: {
-          text: 'Channel Restriction'
-        }
-      }],
-      ephemeral: true
-    });
-    return;
-   }
+    // If using a job voucher for a village-exclusive job, override to required village
+    if (character.jobVoucher && character.jobVoucherJob) {
+      const voucherPerk = getJobPerk(character.jobVoucherJob);
+      if (voucherPerk && voucherPerk.village) {
+        const requiredVillage = capitalizeWords(voucherPerk.village);
+        currentVillage = requiredVillage;
+        allowedChannel = villageChannels[requiredVillage];
+      }
+    }
 
-   // Check for job voucher
-   if (character.jobVoucher) {
-     console.log(`[Loot Command]: 🔄 Active job voucher found for ${character.name}`);
-   } else {
-     console.log(`[Loot Command]: 🔄 No active job voucher for ${character.name}`);
-   }
+    if (!allowedChannel || interaction.channelId !== allowedChannel) {
+     const channelMention = `<#${allowedChannel}>`;
+     await interaction.editReply({
+       embeds: [{
+         color: 0x008B8B, // Dark cyan color
+         description: `*${character.name} looks around, confused by their surroundings...*\n\n**Channel Restriction**\nYou can only use this command in the ${currentVillage} Town Hall channel!\n\n📍 **Current Location:** ${capitalizeWords(character.currentVillage)}\n💬 **Command Allowed In:** ${channelMention}`,
+         image: {
+           url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+         },
+         footer: {
+           text: 'Channel Restriction'
+         }
+       }],
+       ephemeral: true
+     });
+     return;
+    }
 
-   // Validate job voucher (without consuming it)
-   let voucherCheck;
-   if (character.jobVoucher) {
-     console.log(`[loot.js]: 🎫 Validating job voucher for ${character.name}`);
-     voucherCheck = await validateJobVoucher(character, job, 'LOOTING');
-     if (!voucherCheck.success) {
-       await interaction.editReply({
-         content: voucherCheck.message,
-         ephemeral: true
-       });
-       return;
-     }
-     console.log(`[loot.js]: ✅ Job voucher validation successful for ${character.name}`);
-   }
+       // Validate job voucher (without consuming it)
+    let voucherCheck;
+    if (character.jobVoucher) {
+      voucherCheck = await validateJobVoucher(character, job, 'LOOTING');
+      if (!voucherCheck.success) {
+        await interaction.editReply({
+          content: voucherCheck.message,
+          ephemeral: true
+        });
+        return;
+      }
+    }
 
    // ---- Blight Rain Infection Check ----
    const weather = await getWeatherWithoutGeneration(character.currentVillage);
@@ -619,8 +591,7 @@ module.exports = {
     character.jobVoucher && !voucherCheck?.skipVoucher // Deactivate job voucher if needed
    );
 
-   // Remove duplicate daily roll update since we now do it at the start
-   console.log(`[loot.js]: ✅ Loot command completed successfully for ${character.name}`);
+   
 
   } catch (error) {
     // Only log errors that aren't inventory sync related
@@ -794,24 +765,12 @@ async function processLootingLogic(
   const items = await fetchItemsByMonster(encounteredMonster.name);
 
   // Step 1: Calculate Encounter Outcome
-  console.log(`[loot.js]: 🎲 Starting damage calculation for ${character.name} vs ${encounteredMonster.name}`);
-  console.log(`[loot.js]: 📊 Character stats - Attack: ${character.attack}, Defense: ${character.defense}`);
-  
-  // Generate a random dice roll between 1 and 100
   const diceRoll = Math.floor(Math.random() * 100) + 1;
-  console.log(`[loot.js]: 🎲 Generated dice roll: ${diceRoll}/100`);
-  
   const { damageValue, adjustedRandomValue, attackSuccess, defenseSuccess } =
    calculateFinalValue(character, diceRoll);
 
-  console.log(`[loot.js]: 📈 Damage calculation results:`);
-  console.log(`[loot.js]: - Base damage value: ${damageValue}`);
-  console.log(`[loot.js]: - Adjusted random value: ${adjustedRandomValue}`);
-  console.log(`[loot.js]: - Attack success: ${attackSuccess}`);
-  console.log(`[loot.js]: - Defense success: ${defenseSuccess}`);
-
   const weightedItems = createWeightedItemList(items, adjustedRandomValue);
-  console.log(`[loot.js]: 🎯 Created weighted item list with ${weightedItems.length} items based on adjusted value: ${adjustedRandomValue}`);
+  console.log(`[loot.js]: ⚔️ ${character.name} vs ${encounteredMonster.name} | Roll: ${diceRoll}/100 | Damage: ${damageValue} | Can loot: ${weightedItems.length > 0 ? 'Yes' : 'No'}`);
 
   const outcome = await getEncounterOutcome(
    character,
@@ -821,11 +780,6 @@ async function processLootingLogic(
    attackSuccess,
    defenseSuccess
   );
-
-  console.log(`[loot.js]: 🎯 Encounter outcome:`);
-  console.log(`[loot.js]: - Result: ${outcome.result}`);
-  console.log(`[loot.js]: - Hearts lost: ${outcome.hearts || 0}`);
-  console.log(`[loot.js]: - Can loot: ${outcome.canLoot}`);
 
   // Step 2: Handle KO Logic
   const updatedCharacter = await Character.findById(character._id);
@@ -840,14 +794,12 @@ async function processLootingLogic(
 
   // Step 3: Generate Outcome Message
   const outcomeMessage = generateOutcomeMessage(outcome);
-  console.log(`[loot.js]: 📝 Generated outcome message: ${outcomeMessage}`);
 
   // Step 4: Loot Item Logic
   let lootedItem = null;
   if (outcome.canLoot && weightedItems.length > 0) {
-   console.log(`[loot.js]: 🎁 Attempting to loot items from ${encounteredMonster.name}`);
    lootedItem = generateLootedItem(encounteredMonster, weightedItems);
-   console.log(`[loot.js]: 🎁 Selected item: ${lootedItem?.itemName} (Quantity: ${lootedItem?.quantity})`);
+   console.log(`[loot.js]: 🎁 ${character.name} looted: ${lootedItem?.itemName} (x${lootedItem?.quantity})`);
 
    const inventoryLink = character.inventory || character.inventoryLink;
    if (!isValidGoogleSheetsUrl(inventoryLink)) {
@@ -873,7 +825,6 @@ async function processLootingLogic(
 
   // Update character timestamp
   await updateCharacterLootTimestamp(character);
-  console.log(`[loot.js]: ✅ Updated loot timestamp for ${character.name}`);
 
   const embed = createMonsterEncounterEmbed(
    character,
@@ -885,7 +836,6 @@ async function processLootingLogic(
    outcome.adjustedRandomValue
   );
   await interaction.editReply({ embeds: [embed] });
-  console.log(`[loot.js]: ✅ Loot process completed for ${character.name}`);
 
   // ------------------- Deactivate Job Voucher if needed -------------------
   if (shouldDeactivateVoucher && character.jobVoucher) {
@@ -947,7 +897,6 @@ async function handleInventoryUpdate(interaction, character, lootedItem, encount
   );
 
   // Note: Google Sheets sync is handled by addItemInventoryDatabase
-  console.log(`[loot.js]: ✅ Item added to database and synced to Google Sheets for ${character.name}`);
 }
 
 // ------------------- Helper Function: Generate Outcome Message -------------------
