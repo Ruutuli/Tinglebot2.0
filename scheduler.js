@@ -289,8 +289,7 @@ async function handleJailRelease(client) {
   return;
  }
 
- const announcementChannelId = "1354451878053937215";
- const announcementChannel = await client.channels.fetch(announcementChannelId);
+ const testChannel = await client.channels.fetch(HELP_WANTED_TEST_CHANNEL);
 
  let releasedCount = 0;
 
@@ -308,8 +307,8 @@ async function handleJailRelease(client) {
    "Town Hall Records • Reformed & Released"
   );
 
-  if (announcementChannel) {
-   await announcementChannel.send({
+  if (testChannel) {
+   await testChannel.send({
     content: `<@${character.userId}>, your character **${character.name}** has been released from jail.`,
     embeds: [releaseEmbed],
    });

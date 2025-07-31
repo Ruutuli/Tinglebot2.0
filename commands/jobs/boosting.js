@@ -119,7 +119,7 @@ module.exports = {
      `[boosting.js]: Error - Characters are in different villages. Target: ${targetCharacter.currentVillage}, Booster: ${boosterCharacter.currentVillage}`
     );
     await interaction.reply({
-     content: "Both characters must be in the same village.",
+     content: "❌ **Village Mismatch**\n\nBoth characters must be in the same village.\n\n💡 **Travel Tip:** Use </travel:1379850586987430009> to travel between villages and access characters in different locations!",
      ephemeral: true,
     });
     return;

@@ -213,13 +213,22 @@ async function createStealResultEmbed(thiefCharacter, targetCharacter, item, qua
     const itemEmoji = item.emoji || await getItemEmoji(item.itemName);
     const successField = `Roll: **${roll}** / 99 = ${isSuccess ? '✅ Success!' : '❌ Failure!'}`;
     
-    // Get NPC flavor text if it's an NPC
+    // Get NPC flavor text and icon if it's an NPC
     let npcFlavorText = '';
+    let npcIcon = null;
     if (isNPC) {
         const npcName = typeof targetCharacter === 'string' ? targetCharacter : targetCharacter.name;
         const npcData = NPCs[npcName];
-        if (npcData && npcData.flavorText) {
-            npcFlavorText = `*${npcData.flavorText}*`;
+        if (npcData) {
+            if (npcData.flavorText) {
+                npcFlavorText = `*${npcData.flavorText}*`;
+            } else {
+                npcFlavorText = `*${npcName} ${isSuccess ? 'didn\'t notice you taking' : 'caught you trying to take'} something...*`;
+            }
+            // Use the actual NPC icon if available
+            if (npcData.icon) {
+                npcIcon = npcData.icon;
+            }
         } else {
             npcFlavorText = `*${npcName} ${isSuccess ? 'didn\'t notice you taking' : 'caught you trying to take'} something...*`;
         }
@@ -232,14 +241,14 @@ async function createStealResultEmbed(thiefCharacter, targetCharacter, item, qua
             { name: '🎲 Roll', value: `> ${successField}`, inline: false },
             { name: '✨ Rarity', value: `> **${item.tier.toUpperCase()}**`, inline: false }
         )
-        .setThumbnail(isNPC ? 'https://i.pinimg.com/736x/3b/fb/7b/3bfb7bd4ea33b017d58d289e130d487a.jpg' : targetCharacter.icon)
+        .setThumbnail(isNPC ? (npcIcon || 'https://i.pinimg.com/736x/3b/fb/7b/3bfb7bd4ea33b017d58d289e130d487a.jpg') : targetCharacter.icon)
         .setAuthor({ 
             name: `${thiefCharacter.name} the ${thiefCharacter.job ? thiefCharacter.job.charAt(0).toUpperCase() + thiefCharacter.job.slice(1).toLowerCase() : 'No Job'}`, 
             iconURL: thiefCharacter.icon 
         })
         .setFooter({ 
             text: isSuccess ? 'Steal successful!' : 'Steal failed!', 
-            iconURL: isNPC ? null : targetCharacter.icon 
+            iconURL: isNPC ? npcIcon : targetCharacter.icon 
         });
 
     // Add job voucher indicator if active
@@ -252,6 +261,10 @@ async function createStealResultEmbed(thiefCharacter, targetCharacter, item, qua
     }
 
     if (isSuccess) {
+        // Always use the default success image, NPC icon is only used for thumbnail
+        embed.setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png');
+    } else {
+        // Add image for failed steals
         embed.setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png');
     }
 
@@ -478,7 +491,7 @@ function getRandomItemByWeight(items) {
 
 // ------------------- Jail Management Functions -------------------
 // Centralized jail system to prevent race conditions and ensure consistency
-const JAIL_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+const JAIL_DURATION = 3 * 24 * 60 * 60 * 1000; // 3 days in milliseconds
 
 async function checkAndUpdateJailStatus(character) {
     // If not in jail, no action needed
@@ -547,6 +560,22 @@ function formatJailTimeLeft(timeLeft) {
     }
 }
 
+function formatJailTimeLeftDaysHours(timeLeft) {
+    if (timeLeft <= 0) return '0 minutes';
+    
+    const days = Math.floor(timeLeft / (24 * 60 * 60 * 1000));
+    const hours = Math.floor((timeLeft % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+    const minutes = Math.floor((timeLeft % (60 * 60 * 1000)) / (60 * 1000));
+    
+    if (days > 0) {
+        return `${days}d ${hours}h`;
+    } else if (hours > 0) {
+        return `${hours}h ${minutes}m`;
+    } else {
+        return `${minutes}m`;
+    }
+}
+
 // ------------------- Centralized Error Handling -------------------
 // Centralized error handling for steal operations to eliminate duplication
 async function handleStealError(error, interaction, operationType) {
@@ -608,9 +637,9 @@ async function handleFailedAttempts(thiefCharacter, embed) {
         warningMessage = '⚠️ **Final Warning:** One more failed attempt and you\'ll be sent to jail!';
         attemptsText = 'You have 1 attempt remaining before jail time!';
     } else if (attemptsLeft <= 0) {
-        // Send to jail using centralized function
-        const jailResult = await sendToJail(thiefCharacter);
-        warningMessage = '⛔ **You have been sent to jail for 24 hours!**';
+                    // Send to jail using centralized function
+            const jailResult = await sendToJail(thiefCharacter);
+            warningMessage = '⛔ **You have been sent to jail for 3 days!**';
         attemptsText = 'Too many failed attempts!';
     } else {
         attemptsText = `You have ${attemptsLeft} attempt${attemptsLeft !== 1 ? 's' : ''} remaining before jail time!`;
@@ -660,6 +689,16 @@ async function handleStealSuccess(thiefCharacter, targetCharacter, selectedItem,
         
         // Create and send the embed
         const embed = await createStealResultEmbed(thiefCharacter, targetCharacter, selectedItem, quantity, roll, failureThreshold, true, isNPC);
+        
+        // Add failed attempts count for tracking
+        const failedAttempts = thiefCharacter.failedStealAttempts || 0;
+        if (failedAttempts > 0) {
+            embed.addFields({
+                name: '📊 Failed Attempts',
+                value: `> You have **${failedAttempts}** failed attempt${failedAttempts !== 1 ? 's' : ''} on record`,
+                inline: false
+            });
+        }
         
         // Add fallback message if needed
         if (usedFallback) {
@@ -978,16 +1017,61 @@ module.exports = {
             const isBanditJob = (thiefCharacter.job && thiefCharacter.job.toLowerCase() === 'bandit');
             const isBanditVoucher = (thiefCharacter.jobVoucher && thiefCharacter.jobVoucherJob && thiefCharacter.jobVoucherJob.toLowerCase() === 'bandit');
             if (!isBanditJob && !isBanditVoucher) {
-                await interaction.editReply({ content: '❌ Only Bandits or those with a valid Bandit job voucher can steal!' });
+                await interaction.editReply({
+                    embeds: [{
+                        color: 0x008B8B, // Dark cyan color
+                        description: `*${thiefCharacter.name} looks at their hands, unsure of how to proceed...*\n\n**Job Skill Mismatch**\n${thiefCharacter.name} cannot use the stealing perk as a ${capitalizeWords(thiefCharacter.job)} because they lack the necessary stealing skills.\n\n💡 **Tip:** Only Bandits or those with a valid Bandit job voucher can steal!`,
+                        image: {
+                            url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+                        },
+                        footer: {
+                            text: 'Job Skill Check'
+                        }
+                    }],
+                    ephemeral: true
+                });
+                return;
+            }
+
+            // Check if bandit character is debuffed
+            if (thiefCharacter.debuff && thiefCharacter.debuff.active) {
+                await interaction.editReply({ 
+                    content: '❌ **Bandit characters cannot steal while debuffed!**\n💊 You need to wait for your debuff to expire or get healed first.', 
+                    ephemeral: true 
+                });
+                console.log(`[steal.js]: ⚠️ Bandit character attempted to steal while debuffed: ${thiefCharacter.name}`);
+                return;
+            }
+
+            // Check if bandit character is KO'd
+            if (thiefCharacter.ko) {
+                await interaction.editReply({ 
+                    content: '❌ **Bandit characters cannot steal while KO\'d!**\n💀 You need to be healed first before you can steal.', 
+                    ephemeral: true 
+                });
+                console.log(`[steal.js]: ⚠️ Bandit character attempted to steal while KO'd: ${thiefCharacter.name}`);
                 return;
             }
 
             // Check if character is in jail
             if (jailStatus.isInJail) {
-                const timeLeft = formatJailTimeLeft(jailStatus.timeLeft);
-                await interaction.editReply({ 
-                    content: `⛔ **You are currently in jail and cannot steal!**\n⏰ Time remaining: ${timeLeft}` 
-                });
+                const timeLeft = formatJailTimeLeftDaysHours(jailStatus.timeLeft);
+                const embed = new EmbedBuilder()
+                    .setColor(0x8B0000) // Dark red color for jail
+                    .setTitle('⛔ Jail Restriction')
+                    .setDescription('**You are currently in jail and cannot steal!**')
+                    .addFields(
+                        { name: '⏰ Time Remaining', value: timeLeft, inline: true }
+                    )
+                    .setThumbnail(thiefCharacter.icon || 'https://i.pinimg.com/736x/3b/fb/7b/3bfb7bd4ea33b017d58d289e130d487a.jpg')
+                    .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+                    .setFooter({ 
+                        text: 'Jail restriction active',
+                        iconURL: thiefCharacter.icon || 'https://i.pinimg.com/736x/3b/fb/7b/3bfb7bd4ea33b017d58d289e130d487a.jpg'
+                    })
+                    .setTimestamp();
+                
+                await interaction.editReply({ embeds: [embed], ephemeral: true });
                 return;
             }
 
@@ -1010,6 +1094,10 @@ module.exports = {
             let currentVillage = capitalizeWords(thiefCharacter.currentVillage);
             let allowedChannel = villageChannels[currentVillage];
 
+            // Debug logging
+            console.log(`[steal.js]: currentVillage=${currentVillage}, allowedChannel=${allowedChannel}`);
+            console.log(`[steal.js]: villageChannels=`, villageChannels);
+
             // If using a job voucher for a village-exclusive job, override to required village
             if (thiefCharacter.jobVoucher && thiefCharacter.jobVoucherJob) {
                 const voucherPerk = getJobPerk(thiefCharacter.jobVoucherJob);
@@ -1017,10 +1105,20 @@ module.exports = {
                     const requiredVillage = capitalizeWords(voucherPerk.village);
                     currentVillage = requiredVillage;
                     allowedChannel = villageChannels[requiredVillage];
+                    console.log(`[steal.js]: voucher override - requiredVillage=${requiredVillage}, allowedChannel=${allowedChannel}`);
                 }
             }
 
-            if (!allowedChannel || interaction.channelId !== allowedChannel) {
+            // Allow testing in specific channel
+            const testingChannelId = '1391812848099004578';
+            const isTestingChannel = interaction.channelId === testingChannelId;
+
+            // If allowedChannel is undefined, allow the command to proceed (for testing)
+            if (!allowedChannel) {
+                console.log(`[steal.js]: WARNING - allowedChannel is undefined for village ${currentVillage}`);
+                // For now, allow the command to proceed if no channel is configured
+                console.log(`[steal.js]: Allowing command due to undefined allowedChannel`);
+            } else if (interaction.channelId !== allowedChannel && !isTestingChannel) {
                 const channelMention = `<#${allowedChannel}>`;
                 await interaction.editReply({
                     embeds: [{
@@ -1100,6 +1198,23 @@ module.exports = {
                 return;
             }
 
+            // Check if thief is debuffed or KO'd
+            if (thiefCharacter.debuff && thiefCharacter.debuff.active) {
+                await interaction.editReply({ 
+                    content: '❌ **You cannot steal while debuffed!**\n💊 You need to wait for your debuff to expire or get healed first.', 
+                    ephemeral: true 
+                });
+                return;
+            }
+
+            if (thiefCharacter.ko) {
+                await interaction.editReply({ 
+                    content: '❌ **You cannot steal while KO\'d!**\n💀 You need to be healed first before you can steal.', 
+                    ephemeral: true 
+                });
+                return;
+            }
+
             // Check if thief has a valid inventory URL
             const thiefInventoryLink = thiefCharacter.inventory || thiefCharacter.inventoryLink;
             if (typeof thiefInventoryLink !== 'string' || !isValidGoogleSheetsUrl(thiefInventoryLink)) {
@@ -1129,7 +1244,15 @@ module.exports = {
                 }
 
                 const npcInventory = getNPCItems(mappedNPCName);
-                const itemsWithRarity = await processItemsWithRarity(npcInventory, true);
+                
+                // Filter out protected items (spirit orbs and vouchers) from NPC inventory
+                const protectedItems = ['spirit orb', 'voucher'];
+                const filteredNPCInventory = npcInventory.filter(itemName => {
+                    const lowerItemName = itemName.toLowerCase();
+                    return !protectedItems.some(protected => lowerItemName.includes(protected));
+                });
+                
+                const itemsWithRarity = await processItemsWithRarity(filteredNPCInventory, true);
 
                 const { items: filteredItems, selectedTier: npcSelectedTier, usedFallback: npcUsedFallback } = await selectItemsWithFallback(itemsWithRarity, raritySelection);
 
@@ -1138,7 +1261,7 @@ module.exports = {
                     if (fallbackMessage) {
                         await interaction.editReply({ content: fallbackMessage });
                     } else {
-                        await interaction.editReply({ content: ERROR_MESSAGES.NO_ITEMS });
+                        await interaction.editReply({ content: `❌ **No items available to steal from ${mappedNPCName}!**\n🛡️ Spirit Orbs and vouchers are protected from theft.` });
                     }
                     return;
                 }
@@ -1169,11 +1292,55 @@ module.exports = {
                     return;
                 }
 
-                if (thiefCharacter.currentVillage !== targetCharacter.currentVillage) {
+                // Check if target character is debuffed
+                if (targetCharacter.debuff && targetCharacter.debuff.active) {
                     await interaction.editReply({ 
-                        content: `❌ **You can only steal from characters in the same village!**\n📍 **Your Location:** ${thiefCharacter.currentVillage}\n📍 **Target Location:** ${targetCharacter.currentVillage}`, 
+                        content: `❌ **You cannot steal from a character who is debuffed!**\n💊 ${targetCharacter.name} is currently under a debuff effect.`, 
                         ephemeral: true 
                     });
+                    console.log(`[steal.js]: ⚠️ Attempted to steal from debuffed character: ${targetCharacter.name}`);
+                    return;
+                }
+
+                // Check if target character is KO'd
+                if (targetCharacter.ko) {
+                    await interaction.editReply({ 
+                        content: `❌ **You cannot steal from a character who is KO'd!**\n💀 ${targetCharacter.name} is currently unconscious.`, 
+                        ephemeral: true 
+                    });
+                    console.log(`[steal.js]: ⚠️ Attempted to steal from KO'd character: ${targetCharacter.name}`);
+                    return;
+                }
+
+                // Check if both characters have synced inventory
+                if (!targetCharacter.inventorySynced) {
+                    await interaction.editReply({ 
+                        content: `❌ **You cannot steal from a character whose inventory is not synced!**\n📦 ${targetCharacter.name} needs to sync their inventory first.`, 
+                        ephemeral: true 
+                    });
+                    console.log(`[steal.js]: ⚠️ Attempted to steal from character with unsynced inventory: ${targetCharacter.name}`);
+                    return;
+                }
+
+                if (thiefCharacter.currentVillage !== targetCharacter.currentVillage) {
+                    const embed = new EmbedBuilder()
+                        .setColor(0xFF6B35) // Orange color for warning
+                        .setTitle('📍 Village Restriction')
+                        .setDescription(`❌ **You can only steal from characters in the same village!**`)
+                        .addFields(
+                            { name: '📍 Your Location', value: `${thiefCharacter.currentVillage}`, inline: true },
+                            { name: '📍 Target Location', value: `${targetCharacter.currentVillage}`, inline: true },
+                            { name: '💡 Travel Tip', value: 'Use </travel:1379850586987430009> to travel between villages and access characters in different locations!', inline: false }
+                        )
+                        .setThumbnail(thiefCharacter.icon || 'https://i.pinimg.com/736x/3b/fb/7b/3bfb7bd4ea33b017d58d289e130d487a.jpg')
+                        .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+                        .setFooter({ 
+                            text: 'Village restriction active',
+                            iconURL: thiefCharacter.icon || 'https://i.pinimg.com/736x/3b/fb/7b/3bfb7bd4ea33b017d58d289e130d487a.jpg'
+                        })
+                        .setTimestamp();
+                    
+                    await interaction.editReply({ embeds: [embed], ephemeral: true });
                     return;
                 }
 
@@ -1187,7 +1354,23 @@ module.exports = {
                 }
 
                 if (!targetCharacter.canBeStolenFrom) {
-                    await interaction.editReply({ content: `⚠️ **${targetCharacter.name}** cannot be stolen from.` });
+                    const embed = new EmbedBuilder()
+                        .setColor(0xFF6B35) // Orange color for warning
+                        .setTitle('⚠️ Steal Blocked')
+                        .setDescription(`**${targetCharacter.name}** cannot be stolen from.`)
+                        .addFields(
+                            { name: '🛡️ Protection Status', value: 'This character is protected from theft', inline: false },
+                            { name: '💡 Tip', value: 'Try stealing from other characters or NPCs instead', inline: false }
+                        )
+                        .setThumbnail(targetCharacter.icon || 'https://i.pinimg.com/736x/3b/fb/7b/3bfb7bd4ea33b017d58d289e130d487a.jpg')
+                        .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
+                        .setFooter({ 
+                            text: 'Steal protection active',
+                            iconURL: targetCharacter.icon || 'https://i.pinimg.com/736x/3b/fb/7b/3bfb7bd4ea33b017d58d289e130d487a.jpg'
+                        })
+                        .setTimestamp();
+                    
+                    await interaction.editReply({ embeds: [embed] });
                     return;
                 }
 
@@ -1203,7 +1386,14 @@ module.exports = {
                     targetCharacter.gearArmor?.legs?.name,
                 ].filter(Boolean);
 
-                const availableItemNames = rawItemNames.filter(itemName => !equippedItems.includes(itemName));
+                // Filter out protected items (spirit orbs and vouchers)
+                const protectedItems = ['spirit orb', 'voucher'];
+                const availableItemNames = rawItemNames.filter(itemName => {
+                    const lowerItemName = itemName.toLowerCase();
+                    const isEquipped = equippedItems.includes(itemName);
+                    const isProtected = protectedItems.some(protected => lowerItemName.includes(protected));
+                    return !isEquipped && !isProtected;
+                });
                 const itemsWithRarity = await processItemsWithRarity(availableItemNames, false, inventoryEntries);
 
                 const { items: filteredItemsPlayer, selectedTier: playerSelectedTier, usedFallback: playerUsedFallback } = await selectItemsWithFallback(itemsWithRarity, raritySelection);
@@ -1213,7 +1403,7 @@ module.exports = {
                     if (fallbackMessage) {
                         await interaction.editReply({ content: fallbackMessage });
                     } else {
-                        await interaction.editReply({ content: `❌ **Looks like ${targetName || targetCharacter.name} didn't have any items to steal!**` });
+                        await interaction.editReply({ content: `❌ **Looks like ${targetName || targetCharacter.name} didn't have any items to steal!**\n🛡️ Spirit Orbs and vouchers are protected from theft.` });
                     }
                     return;
                 }
