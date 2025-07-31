@@ -102,7 +102,7 @@ function checkVillageMatch(character1, character2) {
   if (character1.currentVillage.toLowerCase() !== character2.currentVillage.toLowerCase()) {
     return {
       match: false,
-      message: `❌ Healing request cannot be created because **${character1.name}** is in **${capitalizeFirstLetter(character1.currentVillage)}**, while **${character2.name}** is in **${capitalizeFirstLetter(character2.currentVillage)}**. Both must be in the same village.`
+      message: `❌ **Village Mismatch**\n\nHealing request cannot be created because **${character1.name}** is in **${capitalizeFirstLetter(character1.currentVillage)}**, while **${character2.name}** is in **${capitalizeFirstLetter(character2.currentVillage)}**. Both must be in the same village.\n\n💡 **Travel Tip:** Use </travel:1379850586987430009> to travel between villages and access characters in different locations!`
     };
   }
   return { match: true };

@@ -55,7 +55,7 @@ const NPCs = {
     'Tye': {
       categories: ['Any Organic Material'],
       flavorText: "Tye, the Kokiri Botanist, is deep in research, giving you a perfect opportunity to snatch some materials.",
-      icon: "https://storage.googleapis.com/tinglebot/NPCs/NPC%20Tye.png"
+      icon: "https://storage.googleapis.com/tinglebot/NPCs/NPC%20Tye.jpg"
     },
     'Lil Tim': {
       items: ['Bird Egg', 'Cucco Feather'], // Specific items

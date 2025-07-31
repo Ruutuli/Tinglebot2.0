@@ -366,9 +366,8 @@ module.exports = {
       await checkInventorySync(character);
 
       // Check if character is in jail
-      const jailCheck = await enforceJail(character, 'gather during special weather');
+      const jailCheck = await enforceJail(interaction, character);
       if (jailCheck) {
-        await interaction.editReply({ content: jailCheck, ephemeral: true });
         return;
       }
 

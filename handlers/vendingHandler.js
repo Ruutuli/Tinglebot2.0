@@ -496,7 +496,7 @@ async function handleVendingBarter(interaction) {
           `You must be in the same village as the vendor to barter.\n\n` +
           `Your location: **${buyer.currentVillage || 'Unknown'}**\n` +
           `Vendor's location: **${shopOwner.currentVillage || 'Unknown'}**\n\n` +
-          `Please travel to ${shopOwner.currentVillage} to barter with ${shopOwner.name}.`
+          `💡 **Travel Tip:** Use </travel:1379850586987430009> to travel to ${shopOwner.currentVillage} and barter with ${shopOwner.name}.`
         );
       }
 
