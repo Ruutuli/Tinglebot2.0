@@ -16,6 +16,7 @@ const { isValidGoogleSheetsUrl, extractSpreadsheetId } = require('../../utils/va
 const ItemModel = require('../../models/ItemModel');
 const { fetchActiveBoost } = require('../../utils/boostingUtils');
 const Character = require('../../models/CharacterModel');
+const User = require('../../models/UserModel');
 const { hasPerk, getJobPerk, normalizeJobName, isValidJob } = require('../../modules/jobsModule');
 const { validateJobVoucher, activateJobVoucher, fetchJobVoucherItem, deactivateJobVoucher, getJobVoucherErrorMessage } = require('../../modules/jobVoucherModule');
 const { capitalizeWords } = require('../../modules/formattingModule');
@@ -96,6 +97,49 @@ const stealProtection = new Map(); // Track protection after being stolen from (
 // ============================================================================
 // ---- Helper Functions ----
 // ============================================================================
+
+// ------------------- Daily Steal Limit Functions -------------------
+// Check if a daily steal is available for a specific activity
+function canUseDailySteal(character, activity) {
+  const now = new Date();
+  // Compute the most recent 12:00 UTC (8am EST) rollover
+  const rollover = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 12, 0, 0, 0));
+  if (now < rollover) {
+    // If before today's 12:00 UTC, use yesterday's 12:00 UTC
+    rollover.setUTCDate(rollover.getUTCDate() - 1);
+  }
+
+  // Check steal activity
+  const lastStealRoll = character.dailyRoll?.get('steal');
+  
+  if (!lastStealRoll) {
+    return true;
+  }
+
+  const lastStealDate = new Date(lastStealRoll);
+  
+  // If steal was used today, deny the action
+  if (lastStealDate >= rollover) {
+    return false;
+  }
+
+  return true;
+}
+
+// Update the daily steal timestamp for an activity
+async function updateDailySteal(character, activity) {
+  try {
+    if (!character.dailyRoll) {
+      character.dailyRoll = new Map();
+    }
+    const now = new Date().toISOString();
+    character.dailyRoll.set(activity, now);
+    await character.save();
+  } catch (error) {
+    console.error(`[steal.js]: ❌ Failed to update daily steal for ${character.name}:`, error);
+    throw error;
+  }
+}
 
 // ------------------- Item Selection with Fallback Hierarchy -------------------
 // Centralized item selection system that handles rarity-based fallback logic
@@ -652,11 +696,71 @@ async function handleFailedAttempts(thiefCharacter, embed) {
     });
 }
 
+// ------------------- Blight Infection Helper Function -------------------
+// Check if thief should be infected with blight when stealing from a blighted target
+async function checkBlightInfection(thiefCharacter, targetCharacter, isNPC, interaction) {
+    // Only check for blight infection when stealing from players (not NPCs)
+    if (isNPC) {
+        return { infected: false, message: null };
+    }
+
+    // Check if target has stage 3 or higher blight
+    if (!targetCharacter.blighted || targetCharacter.blightStage < 3) {
+        return { infected: false, message: null };
+    }
+
+    // 50% chance of infection
+    const infectionRoll = Math.random();
+    if (infectionRoll > 0.5) {
+        return { infected: false, message: null };
+    }
+
+    // Infect the thief with blight
+    try {
+        thiefCharacter.blighted = true;
+        thiefCharacter.blightedAt = new Date();
+        thiefCharacter.blightStage = 1; // Start at stage 1
+        thiefCharacter.blightPaused = false;
+        
+        // Set death deadline (7 days from now)
+        const deathDeadline = new Date();
+        deathDeadline.setDate(deathDeadline.getDate() + 7);
+        thiefCharacter.deathDeadline = deathDeadline;
+        
+        await thiefCharacter.save();
+        
+        // Assign blighted role
+        const guild = interaction.guild;
+        if (guild) {
+            const member = await guild.members.fetch(interaction.user.id);
+            await member.roles.add('798387447967910');
+        }
+        
+        // Update user's blightedcharacter status
+        const user = await User.findOne({ discordId: interaction.user.id });
+        if (user) {
+            user.blightedcharacter = true;
+            await user.save();
+        }
+        
+        return { 
+            infected: true, 
+            message: `⚠️ **Blight Infection!** ${thiefCharacter.name} has been infected with blight while stealing from ${targetCharacter.name} (Stage ${targetCharacter.blightStage} blight).\n\n🦠 **Blight Stage:** 1\n⏰ **Death Deadline:** <t:${Math.floor(deathDeadline.getTime() / 1000)}:F>\n💊 **Seek healing immediately!**`
+        };
+    } catch (error) {
+        console.error(`[steal.js]: ❌ Failed to infect ${thiefCharacter.name} with blight:`, error);
+        return { infected: false, message: null };
+    }
+}
+
 // ------------------- Centralized Success Handling -------------------
 // Centralized success handling to eliminate duplication
 async function handleStealSuccess(thiefCharacter, targetCharacter, selectedItem, quantity, roll, failureThreshold, isNPC, interaction, voucherCheck, usedFallback, targetRarity, selectedTier) {
     incrementStreak(interaction.user.id);
     await updateStealStats(thiefCharacter._id, true, selectedItem.tier, isNPC ? null : targetCharacter);
+    
+    // Check for blight infection
+    const blightResult = await checkBlightInfection(thiefCharacter, targetCharacter, isNPC, interaction);
     
     // Set protection for target
     if (isNPC) {
@@ -689,6 +793,15 @@ async function handleStealSuccess(thiefCharacter, targetCharacter, selectedItem,
         
         // Create and send the embed
         const embed = await createStealResultEmbed(thiefCharacter, targetCharacter, selectedItem, quantity, roll, failureThreshold, true, isNPC);
+        
+        // Add blight infection message if applicable
+        if (blightResult.infected) {
+            embed.addFields({
+                name: '🦠 Blight Infection',
+                value: blightResult.message,
+                inline: false
+            });
+        }
         
         // Add failed attempts count for tracking
         const failedAttempts = thiefCharacter.failedStealAttempts || 0;
@@ -1073,6 +1186,48 @@ module.exports = {
                 
                 await interaction.editReply({ embeds: [embed], ephemeral: true });
                 return;
+            }
+
+            // Check daily steal limit AFTER job validation
+            if (!thiefCharacter.jobVoucher) {
+                // Check if steal has been used today
+                const canSteal = canUseDailySteal(thiefCharacter, 'steal');
+                
+                if (!canSteal) {
+                    const nextRollover = new Date();
+                    nextRollover.setUTCHours(12, 0, 0, 0); // 8AM EST = 12:00 UTC
+                    if (nextRollover < new Date()) {
+                        nextRollover.setUTCDate(nextRollover.getUTCDate() + 1);
+                    }
+                    const unixTimestamp = Math.floor(nextRollover.getTime() / 1000);
+                    
+                    await interaction.editReply({
+                        embeds: [{
+                            color: 0x008B8B, // Dark cyan color
+                            description: `*${thiefCharacter.name} seems exhausted from their earlier stealing...*\n\n**Daily stealing limit reached.**\nThe next opportunity to steal will be available at <t:${unixTimestamp}:F>.\n\n*Tip: A job voucher would allow you to steal again today.*`,
+                            image: {
+                                url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+                            },
+                            footer: {
+                                text: 'Daily Activity Limit'
+                            }
+                        }],
+                        ephemeral: true
+                    });
+                    return;
+                }
+
+                // Update daily steal AFTER all validations pass
+                try {
+                    await updateDailySteal(thiefCharacter, 'steal');
+                } catch (error) {
+                    console.error(`[Steal Command]: ❌ Failed to update daily steal:`, error);
+                    await interaction.editReply({
+                        content: `❌ **An error occurred while updating your daily steal. Please try again.**`,
+                        ephemeral: true
+                    });
+                    return;
+                }
             }
 
             // Validate target character
