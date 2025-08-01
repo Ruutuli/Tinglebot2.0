@@ -2675,6 +2675,7 @@ async function checkMissedRolls(client) {
       lastBlightCall.setHours(20, 0, 0, 0);
       
       // Skip if character was blighted today (before current blight call) or after last blight call
+      // OR if character rolled after the last blight call
       if (character.blightedAt) {
         const blightedAtEST = new Date(character.blightedAt.toLocaleString('en-US', { timeZone: 'America/New_York' }));
         const isBlightedToday = blightedAtEST.getDate() === nowEST.getDate() && 
@@ -2686,6 +2687,12 @@ async function checkMissedRolls(client) {
           console.log(`[blightHandler]: Skipping missed roll for ${character.name} (blightedAt=${character.blightedAt.toISOString()}) - infected today or after last blight call.`);
           continue;
         }
+      }
+      
+      // Check if character rolled after the last blight call
+      if (character.lastRollDate && character.lastRollDate > lastBlightCall) {
+        console.log(`[blightHandler]: Skipping missed roll for ${character.name} (lastRollDate=${character.lastRollDate.toISOString()}, lastBlightCall=${lastBlightCall.toISOString()}) - rolled after last blight call.`);
+        continue;
       }
 
       // ========================================================================
