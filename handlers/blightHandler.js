@@ -1518,7 +1518,7 @@ async function rollForBlightProgression(interaction, characterName) {
     // Check if character has already rolled since the last blight call
     // A character can only roll once per "day" (8 PM to 8 PM window)
     if (character.lastRollDate && character.lastRollDate > lastBlightCall) {
-      const timeUntilNextRoll = currentCallStart - estNow;
+      const timeUntilNextRoll = nextCallStart - estNow;
       const hoursUntilNextRoll = Math.floor(timeUntilNextRoll / (1000 * 60 * 60));
       const minutesUntilNextRoll = Math.floor((timeUntilNextRoll % (1000 * 60 * 60)) / (1000 * 60));
 
