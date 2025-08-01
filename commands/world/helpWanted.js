@@ -56,14 +56,27 @@ async function validateUserCooldowns(userId) {
  * @returns {Promise<{canProceed: boolean, message?: string}>}
  */
 function validateCharacterEligibility(character) {
+  // Check if character is KO'd
   if (character.currentHearts === 0) {
     return { canProceed: false, message: `❌ ${character.name} is KO'd and cannot participate.` };
   }
   
+  // Check if character is debuffed
   if (character.debuff?.active) {
     return { canProceed: false, message: `❌ ${character.name} is debuffed and cannot participate.` };
   }
   
+  // Check if character is in jail
+  if (character.inJail) {
+    return { canProceed: false, message: `⛔ ${character.name} is in jail and cannot participate.` };
+  }
+  
+  // Check if character is blighted
+  if (character.blighted) {
+    return { canProceed: false, message: `💀 ${character.name} is blighted and cannot participate.` };
+  }
+  
+  // Check blight effects that prevent monster fighting
   if (character.blightEffects?.noMonsters) {
     return { canProceed: false, message: `❌ ${character.name} cannot fight monsters due to blight.` };
   }
