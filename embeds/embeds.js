@@ -1482,6 +1482,53 @@ const createKOEmbed = (character) => {
   );
 };
 
+// ------------------- Function: createWrongVillageEmbed -------------------
+// Creates an embed for wrong village location messages
+function createWrongVillageEmbed(character, questVillage, isEscort = false, destination = null) {
+  const villageEmoji = getVillageEmojiByName(character.currentVillage);
+  const questVillageEmoji = getVillageEmojiByName(questVillage);
+  const homeVillageEmoji = getVillageEmojiByName(character.homeVillage);
+  
+  let title, description, fields;
+  
+  if (isEscort && destination) {
+    const destinationEmoji = getVillageEmojiByName(destination);
+    title = '❌ Wrong Village!';
+    description = `**${character.name}** is currently in **${villageEmoji} ${capitalizeFirstLetter(character.currentVillage)}**, but needs to be in **${destinationEmoji} ${capitalizeFirstLetter(destination)}** to complete this escort quest.`;
+    
+    fields = [
+      { name: '🏠 Home Village', value: `${homeVillageEmoji} ${capitalizeFirstLetter(character.homeVillage)}`, inline: true },
+      { name: '📍 Current Location', value: `${villageEmoji} ${capitalizeFirstLetter(character.currentVillage)}`, inline: true },
+      { name: '🎯 Quest Village', value: `${questVillageEmoji} ${capitalizeFirstLetter(questVillage)}`, inline: true },
+      { name: '🎯 Destination', value: `${destinationEmoji} ${capitalizeFirstLetter(destination)}`, inline: true },
+      { name: '💡 Need to travel?', value: 'Use `/travel` to move between villages.', inline: false }
+    ];
+  } else {
+    title = '❌ Wrong Village!';
+    description = `**${character.name}** is currently in **${villageEmoji} ${capitalizeFirstLetter(character.currentVillage)}**, but this quest is for **${questVillageEmoji} ${capitalizeFirstLetter(questVillage)}**.`;
+    
+    fields = [
+      { name: '🏠 Home Village', value: `${homeVillageEmoji} ${capitalizeFirstLetter(character.homeVillage)}`, inline: true },
+      { name: '📍 Current Location', value: `${villageEmoji} ${capitalizeFirstLetter(character.currentVillage)}`, inline: true },
+      { name: '🎯 Quest Village', value: `${questVillageEmoji} ${capitalizeFirstLetter(questVillage)}`, inline: true },
+      { name: '💡 Need to travel?', value: 'Use `/travel` to move between villages.', inline: false }
+    ];
+  }
+  
+  return new EmbedBuilder()
+    .setTitle(title)
+    .setDescription(description)
+    .addFields(fields)
+    .setColor(0xFF0000)
+    .setImage({
+      url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+    })
+    .setFooter({
+      text: isEscort ? 'For escort quests, characters must travel to the destination village to complete the quest.' : 'Characters must be in their home village to complete Help Wanted quests.'
+    })
+    .setTimestamp();
+}
+
 // ------------------- Function: createRaidKOEmbed -------------------
 // Creates an embed for characters who are KO'd and cannot participate in raids
 const createRaidKOEmbed = (character) => {
@@ -1922,4 +1969,5 @@ module.exports = {
  createSafeTravelDayEmbed,
  createUpdatedTravelEmbed,
  createMountEncounterEmbed,
+ createWrongVillageEmbed,
 };

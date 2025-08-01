@@ -2371,17 +2371,15 @@ async function handleQuestIdAutocomplete(interaction, focusedOption) {
 // ------------------- Help Wanted Quest ID Autocomplete -------------------
 async function handleHelpWantedQuestIdAutocomplete(interaction, focusedOption) {
   try {
-      // Fetch today's Help Wanted quests from the database
-      const today = new Date().toISOString().slice(0, 10);
+      // Fetch active Help Wanted quests from the database (not just today's)
       const HelpWantedQuest = require('../models/HelpWantedQuestModel');
       const quests = await HelpWantedQuest.find({ 
-        date: today,
         completed: false 
       }).lean();
       
       // Format quest choices for autocomplete
       const choices = quests.map(quest => ({
-          name: `${quest.questId} - ${quest.type} quest for ${quest.village}`,
+          name: `${quest.questId} - ${quest.type} quest for ${quest.village} (${quest.date})`,
           value: quest.questId
       }));
       
