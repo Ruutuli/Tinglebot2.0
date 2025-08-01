@@ -1507,8 +1507,17 @@ async function rollForBlightProgression(interaction, characterName) {
     const lastRollWasAfter8PM = lastRollDateEST.getHours() >= 20;
     const currentTimeIsAfter8PM = estNow.getHours() >= 20;
 
-    // If it's the same day and before 8 PM, or if the last roll was after 8 PM and current time is before 8 PM
-    if ((isSameDay && !currentTimeIsAfter8PM) || (lastRollWasAfter8PM && !currentTimeIsAfter8PM)) {
+    // Calculate the last 8 PM EST call time
+    const lastBlightCall = new Date(estNow);
+    lastBlightCall.setHours(20, 0, 0, 0); // Set to 8:00 PM EST today
+    if (estNow.getHours() < 20) {
+      // If current time is before 8 PM, the last call was yesterday
+      lastBlightCall.setDate(lastBlightCall.getDate() - 1);
+    }
+
+    // Check if character has already rolled since the last blight call
+    // A character can only roll once per "day" (8 PM to 8 PM window)
+    if (character.lastRollDate && character.lastRollDate > lastBlightCall) {
       const timeUntilNextRoll = currentCallStart - estNow;
       const hoursUntilNextRoll = Math.floor(timeUntilNextRoll / (1000 * 60 * 60));
       const minutesUntilNextRoll = Math.floor((timeUntilNextRoll % (1000 * 60 * 60)) / (1000 * 60));
