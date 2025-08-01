@@ -185,7 +185,10 @@ module.exports = {
       // ------------------- Validate Item in Inventory -------------------
       // Retrieve character inventory and ensure the item exists.
       const inventoryCollection = await getCharacterInventoryCollection(character.name);
-      const inventoryItems = await inventoryCollection.find({ characterId: character._id, itemName }).toArray();
+      const inventoryItems = await inventoryCollection.find({ 
+        characterId: character._id, 
+        itemName: { $regex: new RegExp(`^${itemName}$`, 'i') }
+      }).toArray();
       if (!inventoryItems.length) {
         await interaction.editReply({ 
           embeds: [new EmbedBuilder()
@@ -206,7 +209,7 @@ module.exports = {
 
       // ------------------- Fetch Item Details -------------------
       // Get item details from the item database.
-      const itemDetail = await ItemModel.findOne({ itemName });
+      const itemDetail = await ItemModel.findOne({ itemName: { $regex: new RegExp(`^${itemName}$`, 'i') } });
       if (!itemDetail) {
         await interaction.editReply({ content: `❌ **Item ${itemName} not found in the item database.**`, flags: [MessageFlags.Ephemeral] });
         return;
