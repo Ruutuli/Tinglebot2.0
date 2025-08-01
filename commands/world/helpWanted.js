@@ -1077,6 +1077,21 @@ module.exports = {
         const totalCompletions = user.helpWanted?.totalCompletions || 0;
         const recentCompletions = user.helpWanted?.completions || [];
 
+        // Calculate today's and this week's completions
+        const today = new Date().toLocaleDateString('en-CA', {timeZone: 'America/New_York'});
+        const todayCompletions = recentCompletions.filter(c => c.date === today).length;
+        
+        // Calculate this week's completions (Monday to Sunday)
+        const now = new Date();
+        const startOfWeek = new Date(now);
+        startOfWeek.setDate(now.getDate() - now.getDay() + 1); // Monday
+        startOfWeek.setHours(0, 0, 0, 0);
+        
+        const weekCompletions = recentCompletions.filter(c => {
+          const completionDate = new Date(c.date + 'T00:00:00');
+          return completionDate >= startOfWeek;
+        }).length;
+
         // ------------------- Build History Embed -------------------
         const embed = new EmbedBuilder()
           .setAuthor({ name: `${interaction.user.username} - Help Wanted History`, iconURL: interaction.user.displayAvatarURL() })
@@ -1084,11 +1099,11 @@ module.exports = {
           .setThumbnail('https://static.wixstatic.com/media/7573f4_ec0778984faf4b5e996a5e849fab2165~mv2.png')
           .setDescription(`📜 **Help Wanted Quest History** for **${interaction.user.username}**`);
 
-        // Add user stats
+        // Add simplified stats
         embed.addFields([
           {
-            name: '📊 __User Statistics__',
-            value: `> **${totalCompletions}** total quests completed\n> **${user.characterSlot || 2}** character slots available\n> **${characters.length}** characters created`,
+            name: '📊 __Quest Statistics__',
+            value: `> **${totalCompletions}** total quests completed\n> **${characters.length}** characters have completed quests\n> **${todayCompletions}** quests completed today\n> **${weekCompletions}** quests completed this week`,
             inline: false
           },
           {
@@ -1098,53 +1113,7 @@ module.exports = {
           }
         ]);
 
-        // Add character information
-        const characterInfo = characters.map(char => {
-          const status = char.currentHearts === 0 ? '💀 KO\'d' : 
-                        char.debuff?.active ? '⚠️ Debuffed' : 
-                        '✅ Active';
-          const location = char.currentVillage || 'Unknown';
-          const hearts = `${char.currentHearts}/${char.maxHearts}`;
-          const stamina = `${char.currentStamina}/${char.maxStamina}`;
-          
-          return `> **${char.name}** (${char.job || 'No Job'})\n> ❤️ ${hearts} | ⚡ ${stamina} | 📍 ${location}\n> ${status}`;
-        }).join('\n\n');
-
-        embed.addFields([
-          {
-            name: `👥 __Characters (${characters.length})__`,
-            value: characterInfo,
-            inline: false
-          }
-        ]);
-
-        // Add recent completions if any
-        if (recentCompletions.length > 0) {
-          const recentList = recentCompletions
-            .slice(-10) // Show last 10 completions
-            .reverse() // Most recent first
-            .map(completion => {
-              const emoji = QUEST_TYPE_EMOJIS[completion.questType] || '❓';
-              return `> ${emoji} **${completion.village}** - ${completion.date}`;
-            })
-            .join('\n');
-
-          embed.addFields([
-            {
-              name: '📋 __Recent Completions__',
-              value: recentList || 'No recent completions',
-              inline: false
-            }
-          ]);
-        } else {
-          embed.addFields([
-            {
-              name: '📋 __Recent Completions__',
-              value: 'No quests completed yet',
-              inline: false
-            }
-          ]);
-        }
+        
 
         return await interaction.editReply({ embeds: [embed] });
 
