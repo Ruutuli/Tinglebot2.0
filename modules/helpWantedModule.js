@@ -361,6 +361,19 @@ function shuffleArray(array) {
 // ------------------- Function: getNPCQuestFlavor -------------------
 // Returns a random quest flavor text for the given NPC and quest type
 function getNPCQuestFlavor(npcName, questType, requirements) {
+  // ------------------- Special Walton Acorn Quest -------------------
+  if (npcName === 'Walton' && questType === 'item' && requirements.item === 'Acorn' && requirements.amount === 50) {
+    const specialAcornTexts = [
+      "Walton the Korok is preparing for a grand forest festival! He needs **50x Acorn** to create beautiful decorations for the celebration.",
+      "Walton discovered an ancient Korok tradition that requires **50x Acorn** for a sacred forest ritual. He needs help gathering these special acorns.",
+      "Walton's forest friends are planning a massive acorn feast! He needs **50x Acorn** to make sure everyone has enough to eat.",
+      "Walton found an old Korok recipe that calls for **50x Acorn** to make a legendary forest elixir. He's excited to try it!",
+      "Walton's tree friends are feeling lonely and want **50x Acorn** to plant new saplings. He needs help to grow the forest family.",
+      "Walton wishes to harass the peddler. Please give him **50x Acorn** to help him!"
+    ];
+    return getRandomElement(specialAcornTexts);
+  }
+
   const npcFlavor = NPC_QUEST_FLAVOR[npcName];
   if (!npcFlavor || !npcFlavor[questType]) {
     // Fallback to generic flavor text if NPC or quest type not found
@@ -556,8 +569,6 @@ async function generateQuestForVillage(village, date, pools) {
     }
   }
 
-  const type = getRandomElement(QUEST_TYPES);
-  const requirements = generateQuestRequirements(type, pools, village);
   const questId = generateUniqueId('X');
   
   if (!questId) {
@@ -565,6 +576,28 @@ async function generateQuestForVillage(village, date, pools) {
   }
   
   const npcName = getRandomNPCName();
+  
+  // ------------------- Special Walton Quest Logic -------------------
+  // Walton has a 30% chance to request 50x acorns specifically
+  if (npcName === 'Walton' && Math.random() < 0.30) {
+    return {
+      questId,
+      village,
+      date,
+      type: 'item',
+      npcName: 'Walton',
+      requirements: {
+        item: 'Acorn',
+        amount: 50
+      },
+      completed: false,
+      completedBy: null
+    };
+  }
+  
+  // ------------------- Normal Quest Generation -------------------
+  const type = getRandomElement(QUEST_TYPES);
+  const requirements = generateQuestRequirements(type, pools, village);
   
   return {
     questId,

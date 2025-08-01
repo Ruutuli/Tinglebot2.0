@@ -1096,22 +1096,34 @@ module.exports = {
         const embed = new EmbedBuilder()
           .setAuthor({ name: `${interaction.user.username} - Help Wanted History`, iconURL: interaction.user.displayAvatarURL() })
           .setColor('#AA926A')
-          .setThumbnail('https://static.wixstatic.com/media/7573f4_ec0778984faf4b5e996a5e849fab2165~mv2.png')
+          .setThumbnail(interaction.user.displayAvatarURL())
+          .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
           .setDescription(`📜 **Help Wanted Quest History** for **${interaction.user.username}**`);
 
-        // Add simplified stats
-        embed.addFields([
-          {
-            name: '📊 __Quest Statistics__',
-            value: `> **${totalCompletions}** total quests completed\n> **${characters.length}** characters have completed quests\n> **${todayCompletions}** quests completed today\n> **${weekCompletions}** quests completed this week`,
-            inline: false
-          },
-          {
-            name: '🎯 __Exchange Progress__',
-            value: `> **${Math.floor(totalCompletions / 50)}** exchanges available\n> **${totalCompletions % 50}** more needed for next exchange`,
-            inline: true
-          }
-        ]);
+                 // Add simplified stats
+         embed.addFields([
+           {
+             name: '📊 __Quest Statistics__',
+             value: `> **${totalCompletions}** total quests completed\n> **${characters.length}** characters have completed quests\n> **${todayCompletions}** quests completed today\n> **${weekCompletions}** quests completed this week`,
+             inline: false
+           }
+         ]);
+
+         // Add character breakdown
+         const characterBreakdown = characters.map(char => {
+           const charCompletions = recentCompletions.filter(c => 
+             c.characterId === char._id.toString()
+           ).length;
+           return `> **${char.name}** - completed **${charCompletions}** quests`;
+         }).join('\n');
+
+         embed.addFields([
+           {
+             name: '👥 __Character Breakdown__',
+             value: characterBreakdown || 'No characters have completed quests yet',
+             inline: false
+           }
+         ]);
 
         
 
