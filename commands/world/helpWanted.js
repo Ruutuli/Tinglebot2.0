@@ -811,13 +811,7 @@ module.exports = {
     )
     .addSubcommand(sub =>
       sub.setName('history')
-        .setDescription('View your recent Help Wanted quest completions')
-        .addStringOption(opt =>
-          opt.setName('character')
-            .setDescription('Your character\'s name (if you have multiple)')
-            .setRequired(true)
-            .setAutocomplete(true)
-        )
+        .setDescription('View your recent Help Wanted quest completions and character info')
     ),
 
   async execute(interaction) {
@@ -1066,20 +1060,18 @@ module.exports = {
     }
 
     if (sub === 'history') {
-      const characterName = interaction.options.getString('character');
-      
       await interaction.deferReply();
       
       try {
-        // Fetch character and user
-        const character = await Character.findOne({ userId: interaction.user.id, name: characterName });
-        if (!character) {
-          return await interaction.editReply({ content: '❌ Character not found.' });
-        }
-
+        // Fetch user and all their characters
         const user = await User.findOne({ discordId: interaction.user.id });
         if (!user) {
           return await interaction.editReply({ content: '❌ No user data found.' });
+        }
+
+        const characters = await Character.find({ userId: interaction.user.id });
+        if (!characters || characters.length === 0) {
+          return await interaction.editReply({ content: '❌ No characters found for this user.' });
         }
 
         const totalCompletions = user.helpWanted?.totalCompletions || 0;
@@ -1087,22 +1079,42 @@ module.exports = {
 
         // ------------------- Build History Embed -------------------
         const embed = new EmbedBuilder()
-          .setAuthor({ name: `${character.name} - Help Wanted History`, iconURL: character.icon })
+          .setAuthor({ name: `${interaction.user.username} - Help Wanted History`, iconURL: interaction.user.displayAvatarURL() })
           .setColor('#AA926A')
           .setThumbnail('https://static.wixstatic.com/media/7573f4_ec0778984faf4b5e996a5e849fab2165~mv2.png')
-          .setDescription(`📜 **Help Wanted Quest History** for **[${character.name}](${character.inventory})**`);
+          .setDescription(`📜 **Help Wanted Quest History** for **${interaction.user.username}**`);
 
-        // Add total completions field
+        // Add user stats
         embed.addFields([
           {
-            name: '📊 __Total Completions__',
-            value: `> **${totalCompletions}** quests completed`,
-            inline: true
+            name: '📊 __User Statistics__',
+            value: `> **${totalCompletions}** total quests completed\n> **${user.characterSlot || 2}** character slots available\n> **${characters.length}** characters created`,
+            inline: false
           },
           {
             name: '🎯 __Exchange Progress__',
             value: `> **${Math.floor(totalCompletions / 50)}** exchanges available\n> **${totalCompletions % 50}** more needed for next exchange`,
             inline: true
+          }
+        ]);
+
+        // Add character information
+        const characterInfo = characters.map(char => {
+          const status = char.currentHearts === 0 ? '💀 KO\'d' : 
+                        char.debuff?.active ? '⚠️ Debuffed' : 
+                        '✅ Active';
+          const location = char.currentVillage || 'Unknown';
+          const hearts = `${char.currentHearts}/${char.maxHearts}`;
+          const stamina = `${char.currentStamina}/${char.maxStamina}`;
+          
+          return `> **${char.name}** (${char.job || 'No Job'})\n> ❤️ ${hearts} | ⚡ ${stamina} | 📍 ${location}\n> ${status}`;
+        }).join('\n\n');
+
+        embed.addFields([
+          {
+            name: `👥 __Characters (${characters.length})__`,
+            value: characterInfo,
+            inline: false
           }
         ]);
 
@@ -1140,8 +1152,7 @@ module.exports = {
         handleError(error, 'helpWanted.js', {
           commandName: 'helpwanted history',
           userTag: interaction.user.tag,
-          userId: interaction.user.id,
-          characterName: characterName
+          userId: interaction.user.id
         });
         
         await interaction.editReply({ content: '❌ An error occurred while fetching history. Please try again later.' });
