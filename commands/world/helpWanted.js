@@ -422,7 +422,7 @@ async function processMonsterEncounter(character, monsterName, heartsRemaining) 
   const { calculateFinalValue, createWeightedItemList } = require('../../modules/rngModule.js');
   const { getEncounterOutcome } = require('../../modules/encounterModule.js');
   const { updateCurrentHearts } = require('../../modules/characterStatsModule.js');
-  const { generateVictoryMessage, generateDamageMessage, generateFinalOutcomeMessage, generateDefenseBuffMessage, generateAttackBuffMessage } = require('../../modules/flavorTextModule.js');
+  const { generateVictoryMessage, generateDamageMessage, generateHelpWantedDamageMessage, generateFinalOutcomeMessage, generateDefenseBuffMessage, generateAttackBuffMessage } = require('../../modules/flavorTextModule.js');
   
   const monster = await fetchMonsterByName(monsterName);
   if (!monster) {
@@ -437,7 +437,7 @@ async function processMonsterEncounter(character, monsterName, heartsRemaining) 
   // Generate outcome message
   let outcomeMessage;
   if (outcome.hearts) {
-    outcomeMessage = outcome.result === "KO" ? generateDamageMessage("KO") : generateDamageMessage(outcome.hearts);
+    outcomeMessage = outcome.result === "KO" ? generateDamageMessage("KO") : generateHelpWantedDamageMessage(outcome.hearts);
   } else if (outcome.defenseSuccess) {
     outcomeMessage = generateDefenseBuffMessage(outcome.defenseSuccess, adjustedRandomValue, damageValue);
   } else if (outcome.attackSuccess) {
@@ -789,6 +789,35 @@ module.exports = {
             .setRequired(true)
             .setAutocomplete(true)
         )
+    )
+    .addSubcommand(sub =>
+      sub.setName('exchange')
+        .setDescription('Exchange 50 Help Wanted quest completions for a Spirit Orb or Character Slot Voucher')
+        .addStringOption(opt =>
+          opt.setName('character')
+            .setDescription('Your character\'s name (if you have multiple)')
+            .setRequired(true)
+            .setAutocomplete(true)
+        )
+        .addStringOption(opt =>
+          opt.setName('reward')
+            .setDescription('Choose your reward')
+            .setRequired(true)
+            .addChoices(
+              { name: 'Spirit Orb <:spiritorb:1171310851748270121>', value: 'spirit_orb' },
+              { name: 'Character Slot Voucher 🎫', value: 'character_slot' }
+            )
+        )
+    )
+    .addSubcommand(sub =>
+      sub.setName('history')
+        .setDescription('View your recent Help Wanted quest completions')
+        .addStringOption(opt =>
+          opt.setName('character')
+            .setDescription('Your character\'s name (if you have multiple)')
+            .setRequired(true)
+            .setAutocomplete(true)
+        )
     ),
 
   async execute(interaction) {
@@ -910,6 +939,212 @@ module.exports = {
         });
         
         await interaction.editReply({ content: '❌ An error occurred. Please try again later.' });
+      }
+      return;
+    }
+
+    if (sub === 'exchange') {
+      const characterName = interaction.options.getString('character');
+      const reward = interaction.options.getString('reward');
+      
+      await interaction.deferReply();
+      
+      try {
+        // Fetch character and user
+        const character = await Character.findOne({ userId: interaction.user.id, name: characterName });
+        if (!character) {
+          return await interaction.editReply({ content: '❌ Character not found.' });
+        }
+
+        const user = await User.findOne({ discordId: interaction.user.id });
+        if (!user) {
+          return await interaction.editReply({ content: '❌ No user data found. Please complete some Help Wanted quests first.' });
+        }
+
+        const totalCompletions = user.helpWanted?.totalCompletions || 0;
+
+        if (totalCompletions < 50) {
+          return await interaction.editReply({
+            content: `❌ **${character.name}** has only completed **${totalCompletions} Help Wanted quests**. You need at least **50** to exchange for a reward.`
+          });
+        }
+
+        // ------------------- Process the Exchange -------------------
+        if (reward === 'spirit_orb') {
+          // Add Spirit Orb to character's inventory
+          const { getCharacterInventoryCollection } = require('../../database/db');
+          const inventoryCollection = await getCharacterInventoryCollection(character.name);
+          
+          const existingOrb = await inventoryCollection.findOne({
+            characterId: character._id,
+            itemName: { $regex: /^spirit orb$/i }
+          });
+
+          if (existingOrb) {
+            existingOrb.quantity += 1;
+            await inventoryCollection.updateOne(
+              { _id: existingOrb._id },
+              { $set: { quantity: existingOrb.quantity } }
+            );
+          } else {
+            await inventoryCollection.insertOne({
+              characterId: character._id,
+              itemName: 'Spirit Orb',
+              quantity: 1,
+              category: 'Material',
+              type: 'Special',
+              subtype: '',
+              addedAt: new Date()
+            });
+          }
+
+          // Deduct 50 completions from user
+          user.helpWanted.totalCompletions -= 50;
+          await user.save();
+
+          // ------------------- Build Spirit Orb Exchange Embed -------------------
+          const embed = new EmbedBuilder()
+            .setAuthor({ name: `${character.name} - Quest Exchange`, iconURL: character.icon })
+            .setColor('#AA926A')
+            .setThumbnail('https://static.wixstatic.com/media/7573f4_ec0778984faf4b5e996a5e849fab2165~mv2.png')
+            .setDescription(`🎯 **[${character.name}](${character.inventory})** exchanges **50 Help Wanted quest completions** for a <:spiritorb:1171310851748270121> Spirit Orb.\n\n*A grateful villager hands you a glowing orb as thanks for your service.*`)
+            .addFields([
+              {
+                name: '🎯 __Quest Exchange Result__',
+                value: `> +1 <:spiritorb:1171310851748270121> **Spirit Orb**\n> Added to inventory`,
+                inline: false
+              },
+              {
+                name: '📊 __Help Wanted Progress__',
+                value: `> ${totalCompletions} → ${user.helpWanted.totalCompletions} (used 50)`,
+                inline: true
+              }
+            ]);
+
+          return await interaction.editReply({ embeds: [embed] });
+
+        } else if (reward === 'character_slot') {
+          // Add character slot to user
+          user.characterSlot = (user.characterSlot || 2) + 1;
+          user.helpWanted.totalCompletions -= 50;
+          await user.save();
+
+          // ------------------- Build Character Slot Exchange Embed -------------------
+          const embed = new EmbedBuilder()
+            .setAuthor({ name: `${character.name} - Quest Exchange`, iconURL: character.icon })
+            .setColor('#AA926A')
+            .setThumbnail('https://static.wixstatic.com/media/7573f4_ec0778984faf4b5e996a5e849fab2165~mv2.png')
+            .setDescription(`🎯 **[${character.name}](${character.inventory})** exchanges **50 Help Wanted quest completions** for a 🎫 Character Slot Voucher.\n\n*The village elder grants you permission to create another character in recognition of your service.*`)
+            .addFields([
+              {
+                name: '🎯 __Quest Exchange Result__',
+                value: `> +1 🎫 **Character Slot Voucher**\n> Character slots: ${user.characterSlot - 1} → ${user.characterSlot}`,
+                inline: false
+              },
+              {
+                name: '📊 __Help Wanted Progress__',
+                value: `> ${totalCompletions} → ${user.helpWanted.totalCompletions} (used 50)`,
+                inline: true
+              }
+            ]);
+
+          return await interaction.editReply({ embeds: [embed] });
+        }
+
+      } catch (error) {
+        handleError(error, 'helpWanted.js', {
+          commandName: 'helpwanted exchange',
+          userTag: interaction.user.tag,
+          userId: interaction.user.id,
+          characterName: characterName,
+          reward: reward
+        });
+        
+        await interaction.editReply({ content: '❌ An error occurred during the exchange. Please try again later.' });
+      }
+      return;
+    }
+
+    if (sub === 'history') {
+      const characterName = interaction.options.getString('character');
+      
+      await interaction.deferReply();
+      
+      try {
+        // Fetch character and user
+        const character = await Character.findOne({ userId: interaction.user.id, name: characterName });
+        if (!character) {
+          return await interaction.editReply({ content: '❌ Character not found.' });
+        }
+
+        const user = await User.findOne({ discordId: interaction.user.id });
+        if (!user) {
+          return await interaction.editReply({ content: '❌ No user data found.' });
+        }
+
+        const totalCompletions = user.helpWanted?.totalCompletions || 0;
+        const recentCompletions = user.helpWanted?.completions || [];
+
+        // ------------------- Build History Embed -------------------
+        const embed = new EmbedBuilder()
+          .setAuthor({ name: `${character.name} - Help Wanted History`, iconURL: character.icon })
+          .setColor('#AA926A')
+          .setThumbnail('https://static.wixstatic.com/media/7573f4_ec0778984faf4b5e996a5e849fab2165~mv2.png')
+          .setDescription(`📜 **Help Wanted Quest History** for **[${character.name}](${character.inventory})**`);
+
+        // Add total completions field
+        embed.addFields([
+          {
+            name: '📊 __Total Completions__',
+            value: `> **${totalCompletions}** quests completed`,
+            inline: true
+          },
+          {
+            name: '🎯 __Exchange Progress__',
+            value: `> **${Math.floor(totalCompletions / 50)}** exchanges available\n> **${totalCompletions % 50}** more needed for next exchange`,
+            inline: true
+          }
+        ]);
+
+        // Add recent completions if any
+        if (recentCompletions.length > 0) {
+          const recentList = recentCompletions
+            .slice(-10) // Show last 10 completions
+            .reverse() // Most recent first
+            .map(completion => {
+              const emoji = QUEST_TYPE_EMOJIS[completion.questType] || '❓';
+              return `> ${emoji} **${completion.village}** - ${completion.date}`;
+            })
+            .join('\n');
+
+          embed.addFields([
+            {
+              name: '📋 __Recent Completions__',
+              value: recentList || 'No recent completions',
+              inline: false
+            }
+          ]);
+        } else {
+          embed.addFields([
+            {
+              name: '📋 __Recent Completions__',
+              value: 'No quests completed yet',
+              inline: false
+            }
+          ]);
+        }
+
+        return await interaction.editReply({ embeds: [embed] });
+
+      } catch (error) {
+        handleError(error, 'helpWanted.js', {
+          commandName: 'helpwanted history',
+          userTag: interaction.user.tag,
+          userId: interaction.user.id,
+          characterName: characterName
+        });
+        
+        await interaction.editReply({ content: '❌ An error occurred while fetching history. Please try again later.' });
       }
       return;
     }

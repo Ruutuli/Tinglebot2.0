@@ -52,47 +52,82 @@ const generateDamageMessage = (damage) => {
  return getRandomMessage(messages[damage] || ["No damage taken."]);
 };
 
-// Help Wanted Quest Damage Messages
-// =================================
-
-// Messages for damage taken during help wanted quests (still defeat monster)
-const generateHelpWantedDamageMessage = (damage) => {
- const messages = {
-  1: [
-   "💥💀 The monster attacks! You lose ❤️ 1 heart! But you still managed to defeat the monster...No loot tho",
-   "🩹🌿 Just a scratch! Lose ❤️ 1 heart! But you still managed to defeat the monster...No loot tho",
-   "💥💀 Ouch! That cost you ❤️ 1 heart! But you still managed to defeat the monster...No loot tho",
-   "💥⚔️ A swift strike! Lose ❤️ 1 heart! But you still managed to defeat the monster...No loot tho",
-   "🛡️💔 You couldn't dodge in time! Lose ❤️ 1 heart! But you still managed to defeat the monster...No loot tho",
-   "⚡️😖 A painful blow! You lose ❤️ 1 heart! But you still managed to defeat the monster...No loot tho",
-  ],
-  2: [
-   "💥💀 The monster strikes hard! You lose ❤️❤️ 2 hearts! But you still managed to defeat the monster...No loot tho",
-   "💥💀 You suffer a heavy blow! Lose ❤️❤️ 2 hearts! But you still managed to defeat the monster...No loot tho",
-   "🛡️🌱 A tough one, but it'll take more than that to keep you down! You lose ❤️❤️ 2 hearts! But you still managed to defeat the monster...No loot tho",
-   "💥⚔️ The beast hits you hard! Lose ❤️❤️ 2 hearts! But you still managed to defeat the monster...No loot tho",
-   "🛡️💔 A powerful attack! Lose ❤️❤️ 2 hearts! But you still managed to defeat the monster...No loot tho",
-   "⚡️😖 You stagger from the blow! Lose ❤️❤️ 2 hearts! But you still managed to defeat the monster...No loot tho",
-  ],
-  3: [
-   "💥💀 A fierce attack! You lose ❤️❤️❤️ 3 hearts! But you still managed to defeat the monster...No loot tho",
-   "💥🌳 Your foe's strength is overwhelming! Lose ❤️❤️❤️ 3 hearts! But you still managed to defeat the monster...No loot tho",
-   "💥💀 You barely stand after that hit! Lose ❤️❤️❤️ 3 hearts! But you still managed to defeat the monster...No loot tho",
-   "💥⚔️ An earth-shattering strike! Lose ❤️❤️❤️ 3 hearts! But you still managed to defeat the monster...No loot tho",
-   "🛡️💔 A devastating blow! Lose ❤️❤️❤️ 3 hearts! But you still managed to defeat the monster...No loot tho",
-   "⚡️😖 You reel from the force! Lose ❤️❤️❤️ 3 hearts! But you still managed to defeat the monster...No loot tho",
-  ],
-  KO: [
-   "💥💀 Everything seems to be going wrong... you lose all hearts and the fight...",
-   "💥💀 You couldn't withstand the attack... all hearts lost!",
-   "💥💀 A devastating blow! You lose all hearts and fall...",
-   "⭐🌷 Stars wink in front of your eyes. Your wounds throb painfully. You can't continue. You must retreat... all hearts lost!",
-   "🛡️💔 Crushed by the monster's might... all hearts lost!",
-   "⚡️😖 Overwhelmed... you lose all hearts and fall...",
-  ],
- };
- return getRandomMessage(messages[damage] || ["No damage taken."]);
-};
+       // Help Wanted Quest Damage Messages
+       // =================================
+       
+       // Messages for damage taken during help wanted quests (still defeat monster)
+       const generateHelpWantedDamageMessage = (damage) => {
+        const victoryVariations = [
+         "But you still managed to defeat the monster... No loot though",
+         "But somehow you pulled through and beat it... No loot though",
+         "But you still came out on top... No loot though",
+         "But you managed to take it down anyway... No loot though",
+         "But you still got the job done... No loot though",
+         "But you somehow defeated it despite the damage... No loot though",
+         "But you still emerged victorious... No loot though",
+         "But you managed to finish it off... No loot though",
+         "But you still won the fight... No loot though",
+         "But you somehow pulled off the victory... No loot though",
+         "But you still managed to defeat the monster... No rewards though",
+         "But somehow you pulled through and beat it... No rewards though",
+         "But you still came out on top... No rewards though",
+         "But you managed to take it down anyway... No rewards though",
+         "But you still got the job done... No rewards though",
+         "But you somehow defeated it despite the damage... No rewards though",
+         "But you still emerged victorious... No rewards though",
+         "But you managed to finish it off... No rewards though",
+         "But you still won the fight... No rewards though",
+         "But you somehow pulled off the victory... No rewards though",
+         "But you still managed to defeat the monster... No spoils though",
+         "But somehow you pulled through and beat it... No spoils though",
+         "But you still came out on top... No spoils though",
+         "But you managed to take it down anyway... No spoils though",
+         "But you still got the job done... No spoils though",
+         "But you somehow defeated it despite the damage... No spoils though",
+         "But you still emerged victorious... No spoils though",
+         "But you managed to finish it off... No spoils though",
+         "But you still won the fight... No spoils though",
+         "But you somehow pulled off the victory... No spoils though",
+        ];
+        
+        const getRandomVictoryEnding = () => getRandomMessage(victoryVariations);
+        
+        const messages = {
+         1: [
+          `💥💀 The monster attacks! You lose ❤️ 1 heart! ${getRandomVictoryEnding()}`,
+          `🩹🌿 Just a scratch! Lose ❤️ 1 heart! ${getRandomVictoryEnding()}`,
+          `💥💀 Ouch! That cost you ❤️ 1 heart! ${getRandomVictoryEnding()}`,
+          `💥⚔️ A swift strike! Lose ❤️ 1 heart! ${getRandomVictoryEnding()}`,
+          `🛡️💔 You couldn't dodge in time! Lose ❤️ 1 heart! ${getRandomVictoryEnding()}`,
+          `⚡️😖 A painful blow! You lose ❤️ 1 heart! ${getRandomVictoryEnding()}`,
+         ],
+         2: [
+          `💥💀 The monster strikes hard! You lose ❤️❤️ 2 hearts! ${getRandomVictoryEnding()}`,
+          `💥💀 You suffer a heavy blow! Lose ❤️❤️ 2 hearts! ${getRandomVictoryEnding()}`,
+          `🛡️🌱 A tough one, but it'll take more than that to keep you down! You lose ❤️❤️ 2 hearts! ${getRandomVictoryEnding()}`,
+          `💥⚔️ The beast hits you hard! Lose ❤️❤️ 2 hearts! ${getRandomVictoryEnding()}`,
+          `🛡️💔 A powerful attack! Lose ❤️❤️ 2 hearts! ${getRandomVictoryEnding()}`,
+          `⚡️😖 You stagger from the blow! Lose ❤️❤️ 2 hearts! ${getRandomVictoryEnding()}`,
+         ],
+         3: [
+          `💥💀 A fierce attack! You lose ❤️❤️❤️ 3 hearts! ${getRandomVictoryEnding()}`,
+          `💥🌳 Your foe's strength is overwhelming! Lose ❤️❤️❤️ 3 hearts! ${getRandomVictoryEnding()}`,
+          `💥💀 You barely stand after that hit! Lose ❤️❤️❤️ 3 hearts! ${getRandomVictoryEnding()}`,
+          `💥⚔️ An earth-shattering strike! Lose ❤️❤️❤️ 3 hearts! ${getRandomVictoryEnding()}`,
+          `🛡️💔 A devastating blow! Lose ❤️❤️❤️ 3 hearts! ${getRandomVictoryEnding()}`,
+          `⚡️😖 You reel from the force! Lose ❤️❤️❤️ 3 hearts! ${getRandomVictoryEnding()}`,
+         ],
+         KO: [
+          "💥💀 Everything seems to be going wrong... you lose all hearts and the fight...",
+          "💥💀 You couldn't withstand the attack... all hearts lost!",
+          "💥💀 A devastating blow! You lose all hearts and fall...",
+          "⭐🌷 Stars wink in front of your eyes. Your wounds throb painfully. You can't continue. You must retreat... all hearts lost!",
+          "🛡️💔 Crushed by the monster's might... all hearts lost!",
+          "⚡️😖 Overwhelmed... you lose all hearts and fall...",
+         ],
+        };
+        return getRandomMessage(messages[damage] || ["No damage taken."]);
+       };
 
 // Victory Messages
 // ================
@@ -755,6 +790,7 @@ module.exports = {
  getNoEncounterMessage,
  // Damage
  generateDamageMessage,
+ generateHelpWantedDamageMessage,
  // Victory
  generateVictoryMessage,
  // Attack Buff
