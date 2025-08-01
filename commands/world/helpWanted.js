@@ -78,21 +78,25 @@ function validateCharacterEligibility(character) {
  * @returns {Promise<{canProceed: boolean, message?: string}>}
  */
 function validateCharacterLocation(character, quest) {
+  const { createWrongVillageEmbed } = require('../../embeds/embeds');
+  
   if (quest.type === 'escort') {
     const requiredLocation = quest.requirements.location?.toLowerCase();
     const currentLocation = character.currentVillage?.toLowerCase();
     
     if (currentLocation !== requiredLocation) {
+      const embed = createWrongVillageEmbed(character, quest.village, true, quest.requirements.location);
       return {
         canProceed: false,
-        message: `❌ **Wrong Village!**\n\n**${character.name}** is currently in **${character.currentVillage}**, but needs to be in **${quest.requirements.location}** to complete this escort quest.\n\n🏠 **Home Village:** ${character.homeVillage}\n📍 **Current Location:** ${character.currentVillage}\n🎯 **Quest Village:** ${quest.village}\n🎯 **Destination:** ${quest.requirements.location}\n\n**For escort quests, characters must travel to the destination village to complete the quest.**\n\n💡 **Need to travel?** Use \`/travel\` to move between villages.`
+        embed: embed
       };
     }
   } else {
     if (character.currentVillage.toLowerCase() !== quest.village.toLowerCase()) {
+      const embed = createWrongVillageEmbed(character, quest.village, false);
       return {
         canProceed: false,
-        message: `❌ **Wrong Village!**\n\n**${character.name}** is currently in **${character.currentVillage}**, but this quest is for **${quest.village}**.\n\n🏠 **Home Village:** ${character.homeVillage}\n📍 **Current Location:** ${character.currentVillage}\n🎯 **Quest Village:** ${quest.village}\n\n**Characters must be in their home village to complete Help Wanted quests.**\n\n💡 **Need to travel?** Use \`/travel\` to move between villages.`
+        embed: embed
       };
     }
   }
@@ -523,7 +527,7 @@ async function handleMonsterHunt(interaction, questId, characterName) {
   // Validate character location
   const locationCheck = validateCharacterLocation(character, quest);
   if (!locationCheck.canProceed) {
-    return await interaction.editReply({ content: locationCheck.message });
+    return await interaction.editReply({ embeds: [locationCheck.embed] });
   }
   
   // Check stamina
@@ -858,7 +862,7 @@ module.exports = {
         // Validate character location
         const locationCheck = validateCharacterLocation(character, quest);
         if (!locationCheck.canProceed) {
-          return await interaction.editReply({ content: locationCheck.message });
+          return await interaction.editReply({ embeds: [locationCheck.embed] });
         }
 
         // Validate quest requirements
