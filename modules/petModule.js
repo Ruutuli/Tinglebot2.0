@@ -241,7 +241,7 @@ const speciesRollPermissions = {
     walltula: ['petprey', 'petmon'],
     smallspecial: ['petprey', 'petforage', 'petmon'],
     largespecial: ['lgpetprey', 'petforage', 'petmon'],
-    chuchu: ['petprey', 'petforage', 'petchu'],
+    chuchu: ['petprey', 'petforage', 'petchu', 'petfirechu', 'peticechu', 'petelectricchu'],
     firechuchu: ['petprey', 'petforage', 'petchu', 'petfirechu'],
     icechuchu: ['petprey', 'petforage', 'petchu', 'peticechu'],
     electricchuchu: ['petprey', 'petforage', 'petchu', 'petelectricchu']
