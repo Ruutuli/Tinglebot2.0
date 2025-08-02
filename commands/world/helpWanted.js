@@ -434,7 +434,8 @@ function generateLootedItem(encounteredMonster, weightedItems) {
       : 1;
     lootedItem.itemName = jellyType;
     lootedItem.quantity = quantity;
-    lootedItem.emoji = '<:Chuchu_Jelly:744755431175356416>';
+    // Use the emoji from the database item instead of hardcoding it
+    // The database should have the correct emoji for each jelly type
   } else {
     lootedItem.quantity = 1;
   }
