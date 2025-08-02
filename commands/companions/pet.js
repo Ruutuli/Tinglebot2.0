@@ -911,7 +911,8 @@ module.exports = {
       character._id,
       randomItem.itemName,
       quantity,
-      interaction
+      interaction,
+      "Pet Roll"
      );
 
      // Note: Google Sheets sync is handled by addItemInventoryDatabase

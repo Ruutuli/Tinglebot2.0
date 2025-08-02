@@ -927,9 +927,8 @@ async function handleInventoryUpdate(interaction, character, lootedItem, encount
     character._id,
     lootedItem.itemName,
     lootedItem.quantity,
-    lootedItem.category.join(", "),
-    lootedItem.type.join(", "),
-    interaction
+    interaction,
+    "Looted"
   );
 
   // Note: Google Sheets sync is handled by addItemInventoryDatabase

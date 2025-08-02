@@ -832,9 +832,8 @@ module.exports = {
         character._id,
         selectedItem.itemName,
         1,
-        selectedItem.category?.join(", ") || "Unknown",
-        selectedItem.type?.join(", ") || "Unknown",
-        interaction
+        interaction,
+        "Exploration"
        );
       } catch (error) {
        handleError(error, "explore.js");
@@ -963,9 +962,8 @@ module.exports = {
            character._id,
            lootedItem.itemName,
            1,
-           lootedItem.category?.join(", ") || "Unknown",
-           lootedItem.type?.join(", ") || "Unknown",
-           interaction
+           interaction,
+           "Exploration Loot"
           );
 
           if (!party.gatheredItems) {
@@ -1101,9 +1099,8 @@ module.exports = {
           character._id,
           lootedItem.itemName,
           1,
-          lootedItem.category?.join(", ") || "Unknown",
-          lootedItem.type?.join(", ") || "Unknown",
-          interaction
+          interaction,
+          "Exploration Loot"
          );
 
          if (!party.gatheredItems) {
@@ -1444,9 +1441,8 @@ module.exports = {
        character._id,
        selectedItem.itemName,
        1,
-       selectedItem.category?.join(", ") || "Unknown",
-       selectedItem.type?.join(", ") || "Unknown",
-       interaction
+       interaction,
+       "Exploration"
       );
      } catch (error) {
       console.error(`Could not add item to inventory: ${error.message}`);
@@ -1527,9 +1523,8 @@ module.exports = {
         character._id,
         lootedItem.itemName,
         1,
-        lootedItem.category?.join(", ") || "Unknown",
-        lootedItem.type?.join(", ") || "Unknown",
-        interaction
+        interaction,
+        "Exploration Loot"
        );
 
        if (!party.gatheredItems) {

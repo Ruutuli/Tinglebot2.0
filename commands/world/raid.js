@@ -430,9 +430,8 @@ async function handleRaidVictory(interaction, raidData, monster) {
               character._id,
               lootedItem.itemName,
               lootedItem.quantity,
-              lootedItem.category.join(", "),
-              lootedItem.type.join(", "),
-              interaction
+              interaction,
+              "Raid Loot"
             );
             
             // Note: Google Sheets sync is handled by addItemInventoryDatabase

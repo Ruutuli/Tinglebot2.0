@@ -321,9 +321,8 @@ module.exports = {
             character._id,
             rolledItemName,
             1, // Quantity
-            'Table Roll', // Category
-            'Table Roll', // Type
-            interaction
+            interaction,
+            'Table Roll'
           );
 
           // Note: Google Sheets sync is handled by addItemInventoryDatabase

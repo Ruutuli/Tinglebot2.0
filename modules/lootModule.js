@@ -63,7 +63,7 @@ async function processLoot(battleProgress, currentMonster, interaction, battleId
         const category = lootedItem.category ? lootedItem.category.join(', ') : 'Unknown';
         const type = lootedItem.type ? lootedItem.type.join(', ') : 'Unknown';
 
-        await addItemInventoryDatabase(character._id, lootedItem.itemName, quantity, category, type, interaction);
+        await addItemInventoryDatabase(character._id, lootedItem.itemName, quantity, interaction, "Looted");
 
         // Note: Google Sheets sync is handled by addItemInventoryDatabase
 
