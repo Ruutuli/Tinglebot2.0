@@ -30,6 +30,25 @@ const COOLDOWN_MESSAGES = {
 // ============================================================================
 
 /**
+ * Validates if a quest is still valid (not expired after midnight)
+ * @param {Object} quest - Quest object
+ * @returns {Promise<{canProceed: boolean, message?: string}>}
+ */
+async function validateQuestExpiration(quest) {
+  const now = new Date();
+  const today = now.toLocaleDateString('en-CA', {timeZone: 'America/New_York'});
+  
+  if (quest.date !== today) {
+    return { 
+      canProceed: false, 
+      message: `❌ **Quest Expired!**\n\nThis quest was posted on **${quest.date}** and is no longer available for completion. Help Wanted quests expire at midnight (EST) on the day they are posted.\n\n⏰ **Current Date:** ${today}\n💡 **Tip:** Check the Help Wanted board for today's fresh quests!` 
+    };
+  }
+  
+  return { canProceed: true };
+}
+
+/**
  * Validates user cooldowns for quest completion
  * @param {string} userId - Discord user ID
  * @returns {Promise<{canProceed: boolean, message?: string}>}
@@ -504,6 +523,12 @@ async function handleMonsterHunt(interaction, questId, characterName) {
     return await interaction.editReply({ content: '❌ This quest is not a monster hunt.' });
   }
   
+  // Validate quest expiration
+  const expirationCheck = await validateQuestExpiration(quest);
+  if (!expirationCheck.canProceed) {
+    return await interaction.editReply({ content: expirationCheck.message });
+  }
+  
   // Get monster list
   let monsterList = [];
   if (Array.isArray(quest.requirements.monsters)) {
@@ -863,6 +888,12 @@ module.exports = {
         const quest = await HelpWantedQuest.findOne({ questId });
         if (!quest) {
           return await interaction.editReply({ content: '❌ Quest not found.' });
+        }
+
+        // Validate quest expiration
+        const expirationCheck = await validateQuestExpiration(quest);
+        if (!expirationCheck.canProceed) {
+          return await interaction.editReply({ content: expirationCheck.message });
         }
 
         // Fetch character and user
