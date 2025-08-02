@@ -761,13 +761,13 @@ const processedInteractions = new Set();
 async function handleRuuGameRoll(interaction) {
   const interactionId = `${interaction.id}_${interaction.user.id}`;
   
-  // Check if this interaction has already been processed
+  // IMMEDIATELY mark this interaction as being processed to prevent race conditions
   if (processedInteractions.has(interactionId)) {
     console.log(`[RuuGame Component] Interaction ${interactionId} already processed, skipping`);
     return;
   }
   
-  // Check if interaction is still valid - do this BEFORE marking as processed
+  // Check if interaction is already replied/deferred
   if (interaction.replied || interaction.deferred) {
     console.log(`[RuuGame Component] Interaction ${interactionId} already replied/deferred, skipping`);
     return;
@@ -806,7 +806,6 @@ async function handleRuuGameRoll(interaction) {
         // Find the session with optimistic locking
         session = await RuuGame.findOne({
           sessionId: sessionId,
-          status: { $in: ['waiting', 'active'] },
           expiresAt: { $gt: new Date() }
         });
         
@@ -822,6 +821,15 @@ async function handleRuuGameRoll(interaction) {
         if (session.status === 'finished') {
           await interaction.reply({
             content: '❌ This game has already ended!',
+            flags: 64
+          });
+          return;
+        }
+        
+        // Check if session is in a valid state for rolling
+        if (session.status !== 'waiting' && session.status !== 'active') {
+          await interaction.reply({
+            content: '❌ This game is not in a valid state for rolling.',
             flags: 64
           });
           return;
@@ -867,6 +875,13 @@ async function handleRuuGameRoll(interaction) {
         
         // Only defer the interaction if we're actually going to process the roll
         try {
+          // Double-check interaction state before deferring
+          if (interaction.replied || interaction.deferred) {
+            console.log(`[RuuGame Component] Interaction ${interactionId} became replied/deferred before deferring, cleaning up and skipping`);
+            processedInteractions.delete(interactionId);
+            return;
+          }
+          
           await interaction.deferReply({ flags: 0 });
           hasDeferred = true;
         } catch (deferError) {
@@ -886,9 +901,11 @@ async function handleRuuGameRoll(interaction) {
         
         if (roll === GAME_CONFIG.TARGET_SCORE) {
           console.log(`[RuuGame Component] Winner detected! User ${userId} rolled ${roll}`);
+          console.log(`[RuuGame Component] Before setting winner - Session status: ${session.status}, winner: ${session.winner}`);
           session.status = 'finished';
           session.winner = userId;
           session.winningScore = roll;
+          console.log(`[RuuGame Component] After setting winner - Session status: ${session.status}, winner: ${session.winner}`);
           gameEnded = true;
 
           // Immediately send winner announcement to prevent further button clicks
@@ -930,21 +947,32 @@ async function handleRuuGameRoll(interaction) {
 
         // Use findOneAndUpdate with optimistic concurrency control
         console.log(`[RuuGame Component] Before findOneAndUpdate - Session ${session.sessionId} status: ${session.status}, winner: ${session.winner}`);
+        
+        // Prepare the update data
+        const updateData = {
+          players: session.players,
+          status: session.status,
+          winner: session.winner,
+          winningScore: session.winningScore,
+          prizeClaimed: session.prizeClaimed,
+          prizeClaimedBy: session.prizeClaimedBy,
+          prizeClaimedAt: session.prizeClaimedAt
+        };
+        
+        // Remove undefined values to prevent MongoDB errors
+        Object.keys(updateData).forEach(key => {
+          if (updateData[key] === undefined) {
+            delete updateData[key];
+          }
+        });
+        
         const updateResult = await RuuGame.findOneAndUpdate(
           { 
             _id: session._id,
             __v: session.__v // Optimistic locking using version
           },
           {
-            $set: {
-              players: session.players,
-              status: session.status,
-              winner: session.winner,
-              winningScore: session.winningScore,
-              prizeClaimed: session.prizeClaimed,
-              prizeClaimedBy: session.prizeClaimedBy,
-              prizeClaimedAt: session.prizeClaimedAt
-            },
+            $set: updateData,
             $inc: { __v: 1 } // Increment version
           },
           { 
@@ -955,21 +983,19 @@ async function handleRuuGameRoll(interaction) {
         
         if (updateResult) {
           console.log(`[RuuGame Component] After findOneAndUpdate - Session ${updateResult.sessionId} status: ${updateResult.status}, winner: ${updateResult.winner}`);
+          // Successfully updated - use the updated session
+          session = updateResult;
         } else {
           console.log(`[RuuGame Component] findOneAndUpdate returned null - version conflict or session not found`);
-        }
-        
-        if (!updateResult) {
           // Version conflict - retry
           retryCount++;
           if (retryCount >= maxRetries) {
             throw new Error('Failed to update session after multiple retries due to concurrent modifications');
           }
+          // Wait a bit before retrying to reduce contention
+          await new Promise(resolve => setTimeout(resolve, 100 * retryCount));
           continue; // Retry the loop
         }
-        
-        // Successfully updated - use the updated session
-        session = updateResult;
 
         // Only send response if this wasn't a winning roll (winner response already sent)
         if (!gameEnded) {
@@ -1033,10 +1059,8 @@ async function handleRuuGameRoll(interaction) {
       }
     }
   } finally {
-    // Clean up the processed interaction if there was an error
-    if (!hasDeferred && !interaction.replied) {
-      processedInteractions.delete(interactionId);
-    }
+    // Always clean up the processed interaction
+    processedInteractions.delete(interactionId);
   }
 }
 
@@ -1154,9 +1178,11 @@ async function awardRuuGamePrize(session, userId, interaction) {
         'RuuGame Win'
       );
 
+      console.log(`[RuuGame Component] Before setting prize claimed - Session status: ${session.status}, winner: ${session.winner}`);
       session.prizeClaimed = true;
       session.prizeClaimedBy = randomCharacter.name;
       session.prizeClaimedAt = new Date();
+      console.log(`[RuuGame Component] After setting prize claimed - Session status: ${session.status}, winner: ${session.winner}`);
 
       return randomCharacter; // Return the character for embed display
     }
