@@ -763,15 +763,17 @@ async function handleRuuGameRoll(interaction) {
   
   // Check if this interaction has already been processed
   if (processedInteractions.has(interactionId)) {
+    console.log(`[RuuGame Component] Interaction ${interactionId} already processed, skipping`);
     return;
   }
   
-  // Check if interaction is still valid
+  // Check if interaction is still valid - do this BEFORE marking as processed
   if (interaction.replied || interaction.deferred) {
+    console.log(`[RuuGame Component] Interaction ${interactionId} already replied/deferred, skipping`);
     return;
   }
   
-  // Mark this interaction as being processed
+  // Mark this interaction as being processed IMMEDIATELY
   processedInteractions.add(interactionId);
   
   // Clean up old processed interactions (keep only last 1000)
@@ -782,6 +784,13 @@ async function handleRuuGameRoll(interaction) {
   }
   
   let hasDeferred = false;
+  
+  // Double-check interaction state after marking as processed
+  if (interaction.replied || interaction.deferred) {
+    console.log(`[RuuGame Component] Interaction ${interactionId} became replied/deferred after marking, removing from processed and skipping`);
+    processedInteractions.delete(interactionId);
+    return;
+  }
   
   try {
     const sessionId = interaction.customId.replace('ruugame_roll_', '');
@@ -857,8 +866,15 @@ async function handleRuuGameRoll(interaction) {
         }
         
         // Only defer the interaction if we're actually going to process the roll
-        await interaction.deferReply({ flags: 0 });
-        hasDeferred = true;
+        try {
+          await interaction.deferReply({ flags: 0 });
+          hasDeferred = true;
+        } catch (deferError) {
+          console.error(`[RuuGame Component] Failed to defer reply for interaction ${interactionId}:`, deferError);
+          // If defer fails, the interaction might have been handled by another thread
+          processedInteractions.delete(interactionId);
+          return;
+        }
         
         // Roll the dice
         const roll = Math.floor(Math.random() * GAME_CONFIG.DICE_SIDES) + 1;
@@ -869,6 +885,7 @@ async function handleRuuGameRoll(interaction) {
         let prizeCharacter = null; // Track which character received the prize
         
         if (roll === GAME_CONFIG.TARGET_SCORE) {
+          console.log(`[RuuGame Component] Winner detected! User ${userId} rolled ${roll}`);
           session.status = 'finished';
           session.winner = userId;
           session.winningScore = roll;
@@ -885,7 +902,10 @@ async function handleRuuGameRoll(interaction) {
 
           // Award prize in background (non-blocking)
           try {
+            console.log(`[RuuGame Component] Awarding prize to user ${userId}`);
+            console.log(`[RuuGame Component] Before awardRuuGamePrize - Session status: ${session.status}, winner: ${session.winner}`);
             prizeCharacter = await awardRuuGamePrize(session, userId, interaction);
+            console.log(`[RuuGame Component] After awardRuuGamePrize - Session status: ${session.status}, winner: ${session.winner}`);
             
             // Update the embed with prize information if successful
             if (prizeCharacter) {
@@ -909,6 +929,7 @@ async function handleRuuGameRoll(interaction) {
         }
 
         // Use findOneAndUpdate with optimistic concurrency control
+        console.log(`[RuuGame Component] Before findOneAndUpdate - Session ${session.sessionId} status: ${session.status}, winner: ${session.winner}`);
         const updateResult = await RuuGame.findOneAndUpdate(
           { 
             _id: session._id,
@@ -931,6 +952,12 @@ async function handleRuuGameRoll(interaction) {
             runValidators: true
           }
         );
+        
+        if (updateResult) {
+          console.log(`[RuuGame Component] After findOneAndUpdate - Session ${updateResult.sessionId} status: ${updateResult.status}, winner: ${updateResult.winner}`);
+        } else {
+          console.log(`[RuuGame Component] findOneAndUpdate returned null - version conflict or session not found`);
+        }
         
         if (!updateResult) {
           // Version conflict - retry
@@ -1004,6 +1031,11 @@ async function handleRuuGameRoll(interaction) {
       } catch (replyError) {
         console.error(`[RuuGame Component] Failed to send error edit response:`, replyError);
       }
+    }
+  } finally {
+    // Clean up the processed interaction if there was an error
+    if (!hasDeferred && !interaction.replied) {
+      processedInteractions.delete(interactionId);
     }
   }
 }
@@ -1157,6 +1189,13 @@ async function handleComponentInteraction(interaction) {
 
     // Handle RuuGame buttons
     if (interaction.customId.startsWith('ruugame_')) {
+      // Check if this interaction has already been processed
+      const interactionId = `${interaction.id}_${interaction.user.id}`;
+      if (processedInteractions.has(interactionId)) {
+        console.log(`[ComponentHandler] RuuGame interaction ${interactionId} already processed, skipping`);
+        return;
+      }
+      
       if (interaction.customId.startsWith('ruugame_roll_')) {
         return await handleRuuGameRoll(interaction);
       }
@@ -1204,12 +1243,14 @@ async function handleComponentInteraction(interaction) {
     console.error(`[componentHandler.js]: ❌ Failed to handle component: ${error.message}`);
     
     try {
+      // Only try to reply if the interaction hasn't been handled yet
       if (!interaction.replied && !interaction.deferred) {
         await interaction.reply({
           content: '❌ **An error occurred while processing your interaction.**',
           flags: 64
         });
       } else if (interaction.replied) {
+        // Try followUp if already replied
         await interaction.followUp({
           content: '❌ **An error occurred while processing your interaction.**',
           flags: 64
@@ -1217,6 +1258,14 @@ async function handleComponentInteraction(interaction) {
       }
     } catch (replyError) {
       console.error(`[componentHandler.js]: ❌ Failed to send component error response: ${replyError.message}`);
+    }
+  } finally {
+    // Clean up any RuuGame interactions that might have been processed
+    if (interaction.customId.startsWith('ruugame_')) {
+      const interactionId = `${interaction.id}_${interaction.user.id}`;
+      if (processedInteractions.has(interactionId)) {
+        processedInteractions.delete(interactionId);
+      }
     }
   }
 }

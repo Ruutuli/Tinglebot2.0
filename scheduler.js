@@ -54,6 +54,7 @@ const { connectToInventories } = require("./handlers/blightHandler");
 const { getCurrentWeather, generateWeatherEmbed } = require("./services/weatherService");
 const Pet = require("./models/PetModel");
 const Raid = require("./models/RaidModel");
+const RuuGame = require("./models/RuuGameModel");
 const fs = require('fs');
 const { formatQuestsAsEmbedsByVillage, formatSpecificQuestsAsEmbedsByVillage, generateDailyQuests, getQuestsForScheduledTime } = require('./modules/helpWantedModule');
 const HelpWantedQuest = require('./models/HelpWantedQuestModel');
@@ -190,6 +191,39 @@ async function cleanupExpiredRaids() {
   }
  } catch (error) {
   console.error(`[scheduler.js]: Error cleaning up expired raids:`, error);
+  handleError(error, "scheduler.js");
+ }
+}
+
+// ============================================================================
+// ---- RuuGame Functions ----
+// Handles RuuGame cleanup and maintenance
+// ============================================================================
+
+async function cleanupOldRuuGameSessions() {
+ try {
+  console.log(`[scheduler.js]: 🎲 Starting RuuGame session cleanup`);
+  
+  // Use the model's static cleanup method
+  const result = await RuuGame.cleanupOldSessions();
+  
+  if (result.deletedCount === 0) {
+   console.log(`[scheduler.js]: ✅ No old RuuGame sessions to clean up`);
+   return;
+  }
+  
+  console.log(`[scheduler.js]: ✅ RuuGame cleanup completed - deleted ${result.deletedCount} sessions`);
+  
+  // Log some details about what was cleaned up
+  if (result.finishedCount > 0) {
+   console.log(`[scheduler.js]: 🏆 Cleaned up ${result.finishedCount} completed games`);
+  }
+  if (result.expiredCount > 0) {
+   console.log(`[scheduler.js]: ⏰ Cleaned up ${result.expiredCount} expired sessions`);
+  }
+  
+ } catch (error) {
+  console.error(`[scheduler.js]: Error cleaning up old RuuGame sessions:`, error);
   handleError(error, "scheduler.js");
  }
 }
@@ -909,6 +943,7 @@ function initializeScheduler(client) {
      checkExpiredRequests(client),
      cleanupExpiredBlightRequests(),
      cleanupExpiredRaids(),
+     cleanupOldRuuGameSessions(),
     ]);
     
     // Log blight cleanup results specifically
@@ -1117,4 +1152,5 @@ module.exports = {
  checkAndGenerateDailyQuests,
  generateDailyQuestsAtMidnight,
  checkAndPostMissedQuests,
+ cleanupOldRuuGameSessions,
 };
