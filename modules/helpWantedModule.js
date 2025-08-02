@@ -668,6 +668,14 @@ async function generateDailyQuests() {
 // ------------------- Quest Retrieval -------------------
 // ============================================================================
 
+// ------------------- Function: isQuestExpired -------------------
+// Checks if a quest is expired (not from today)
+function isQuestExpired(quest) {
+  const now = new Date();
+  const today = now.toLocaleDateString('en-CA', {timeZone: 'America/New_York'});
+  return quest.date !== today;
+}
+
 // ------------------- Function: getTodaysQuests -------------------
 // Fetches all Help Wanted quests for today
 async function getTodaysQuests() {
@@ -773,8 +781,12 @@ async function formatQuestsAsEmbed() {
       const questLine = getNPCQuestFlavor(npcName, quest.type, quest.requirements);
       const formattedQuestLine = `${emoji} **[${quest.type.charAt(0).toUpperCase() + quest.type.slice(1)} Quest]** ${questLine}`;
       
+      // Check if quest is expired
+      const isExpired = isQuestExpired(quest);
       const status = quest.completed
         ? `🏅 COMPLETED by <@${quest.completedBy?.userId || 'unknown'}> at ${quest.completedBy?.timestamp || 'unknown'}`
+        : isExpired
+        ? '⏰ EXPIRED'
         : '✅ AVAILABLE';
         
       embed.addFields({
@@ -805,16 +817,21 @@ async function formatQuestsAsEmbedsByVillage() {
     for (const quest of quests) {
       const npcName = quest.npcName || getRandomNPCName();
       const questLine = getNPCQuestFlavor(npcName, quest.type, quest.requirements);
+      
+      // Check if quest is expired
+      const isExpired = isQuestExpired(quest);
       const status = quest.completed
         ? `🏅 COMPLETED by <@${quest.completedBy?.userId || 'unknown'}> at ${quest.completedBy?.timestamp || 'unknown'}`
+        : isExpired
+        ? '⏰ EXPIRED'
         : '✅ AVAILABLE';
 
-      const color = VILLAGE_COLORS[quest.village] || '#25c059';
+      const color = quest.completed ? 0x00FF00 : isExpired ? 0x808080 : (VILLAGE_COLORS[quest.village] || '#25c059');
       const image = VILLAGE_IMAGES[quest.village] || null;
       const divider = '<:br:788136157363306506>'.repeat(11);
       
       const questInfoFields = [
-        { name: '__Status__', value: quest.completed ? '🏅 **COMPLETED**' : '✅ **AVAILABLE**', inline: true },
+        { name: '__Status__', value: quest.completed ? '🏅 **COMPLETED**' : isExpired ? '⏰ **EXPIRED**' : '✅ **AVAILABLE**', inline: true },
         { name: '__Type__', value: `${QUEST_TYPE_EMOJIS[quest.type] || '❓'} ${quest.type.charAt(0).toUpperCase() + quest.type.slice(1)} Quest`, inline: true },
         { name: '__Location__', value: quest.village, inline: true }
       ];
@@ -892,16 +909,21 @@ async function formatSpecificQuestsAsEmbedsByVillage(quests) {
     for (const quest of quests) {
       const npcName = quest.npcName || getRandomNPCName();
       const questLine = getNPCQuestFlavor(npcName, quest.type, quest.requirements);
+      
+      // Check if quest is expired
+      const isExpired = isQuestExpired(quest);
       const status = quest.completed
         ? `🏅 COMPLETED by <@${quest.completedBy?.userId || 'unknown'}> at ${quest.completedBy?.timestamp || 'unknown'}`
+        : isExpired
+        ? '⏰ EXPIRED'
         : '✅ AVAILABLE';
 
-      const color = VILLAGE_COLORS[quest.village] || '#25c059';
+      const color = quest.completed ? 0x00FF00 : isExpired ? 0x808080 : (VILLAGE_COLORS[quest.village] || '#25c059');
       const image = VILLAGE_IMAGES[quest.village] || null;
       const divider = '<:br:788136157363306506>'.repeat(11);
       
       const questInfoFields = [
-        { name: '__Status__', value: quest.completed ? '🏅 **COMPLETED**' : '✅ **AVAILABLE**', inline: true },
+        { name: '__Status__', value: quest.completed ? '🏅 **COMPLETED**' : isExpired ? '⏰ **EXPIRED**' : '✅ **AVAILABLE**', inline: true },
         { name: '__Type__', value: `${QUEST_TYPE_EMOJIS[quest.type] || '❓'} ${quest.type.charAt(0).toUpperCase() + quest.type.slice(1)} Quest`, inline: true },
         { name: '__Location__', value: quest.village, inline: true }
       ];
@@ -1037,6 +1059,8 @@ async function updateQuestEmbed(client, quest, completedBy = null) {
       return;
     }
     
+
+    
     const channel = await client.channels.fetch(quest.channelId);
     if (!channel) {
       console.error(`[helpWantedModule]: Could not find channel ${quest.channelId} for quest ${quest.questId}`);
@@ -1058,12 +1082,15 @@ async function updateQuestEmbed(client, quest, completedBy = null) {
     // Create a new embed with the updated format
     const npcName = quest.npcName || getRandomNPCName();
     const questLine = getNPCQuestFlavor(npcName, quest.type, quest.requirements);
-    const color = quest.completed ? 0x00FF00 : (VILLAGE_COLORS[quest.village] || '#25c059');
+    
+    // Check if quest is expired
+    const isExpired = isQuestExpired(quest);
+    const color = quest.completed ? 0x00FF00 : isExpired ? 0x808080 : (VILLAGE_COLORS[quest.village] || '#25c059');
     const image = VILLAGE_IMAGES[quest.village] || null;
     const divider = '<:br:788136157363306506>'.repeat(11);
     
     const questInfoFields = [
-      { name: '__Status__', value: quest.completed ? '🏅 **COMPLETED**' : '✅ **AVAILABLE**', inline: true },
+      { name: '__Status__', value: quest.completed ? '🏅 **COMPLETED**' : isExpired ? '⏰ **EXPIRED**' : '✅ **AVAILABLE**', inline: true },
       { name: '__Type__', value: `${QUEST_TYPE_EMOJIS[quest.type] || '❓'} ${quest.type.charAt(0).toUpperCase() + quest.type.slice(1)} Quest`, inline: true },
       { name: '__Location__', value: quest.village, inline: true }
     ];
@@ -1092,7 +1119,7 @@ async function updateQuestEmbed(client, quest, completedBy = null) {
       } catch (error) {
         console.error('[HelpWanted] Error fetching character for completed quest:', error);
       }
-    } else {
+    } else if (!isExpired) {
       // Add NPC icon as thumbnail for available quests
       try {
         const { NPCs } = require('./stealingNPCSModule');
@@ -1115,6 +1142,13 @@ async function updateQuestEmbed(client, quest, completedBy = null) {
         { name: 'How to Complete', value: turnIn },
         { name: 'Rules', value: rules }
       );
+    } else {
+      // Add expired quest message
+      updatedEmbed.addFields({
+        name: '⏰ Quest Expired',
+        value: 'This quest was posted on a previous day and is no longer available for completion. Help Wanted quests expire at midnight (EST) on the day they are posted.',
+        inline: false
+      });
     }
     
     updatedEmbed.addFields({ name: 'Quest ID', value: quest.questId ? `\`\`\`${quest.questId}\`\`\`` : 'N/A', inline: true });
@@ -1149,5 +1183,6 @@ module.exports = {
   formatSpecificQuestsAsEmbedsByVillage,
   getQuestsForScheduledTime,
   getCurrentQuestSchedule,
-  updateQuestEmbed
+  updateQuestEmbed,
+  isQuestExpired
 }; 

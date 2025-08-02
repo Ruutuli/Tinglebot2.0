@@ -564,6 +564,59 @@ async function generateDailyQuestsAtMidnight() {
   }
 }
 
+// ------------------- Function: handleQuestExpirationAtMidnight -------------------
+// Handles quest expiration at midnight - updates quest embeds to show expired status
+// ============================================================================
+async function handleQuestExpirationAtMidnight(client = null) {
+  try {
+    console.log('[scheduler.js]: ⏰ Midnight quest expiration check starting...');
+    
+    const HelpWantedQuest = require('./models/HelpWantedQuestModel');
+    const { updateQuestEmbed } = require('./modules/helpWantedModule');
+    
+    // Get yesterday's date in EST
+    const now = new Date();
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayDate = yesterday.toLocaleDateString('en-CA', {timeZone: 'America/New_York'});
+    
+    // Find all quests from yesterday that haven't been completed
+    const expiredQuests = await HelpWantedQuest.find({
+      date: yesterdayDate,
+      completed: false,
+      messageId: { $ne: null } // Only quests that were actually posted
+    });
+    
+    if (expiredQuests.length === 0) {
+      console.log('[scheduler.js]: ✅ No quests to expire from yesterday');
+      return;
+    }
+    
+    console.log(`[scheduler.js]: 📋 Found ${expiredQuests.length} quests to mark as expired`);
+    
+    // Update each expired quest's embed
+    let updatedCount = 0;
+    for (const quest of expiredQuests) {
+      try {
+        // Update the quest embed to show expired status
+        await updateQuestEmbed(client, quest); // Pass client for embed updates
+        updatedCount++;
+        console.log(`[scheduler.js]: ✅ Updated expired quest embed for ${quest.village} (${quest.questId})`);
+      } catch (error) {
+        console.error(`[scheduler.js]: ❌ Failed to update expired quest embed for ${quest.questId}:`, error);
+      }
+    }
+    
+    console.log(`[scheduler.js]: ✅ Quest expiration completed - ${updatedCount}/${expiredQuests.length} quests updated`);
+    
+  } catch (error) {
+    handleError(error, 'scheduler.js', {
+      commandName: 'handleQuestExpirationAtMidnight'
+    });
+    console.error('[scheduler.js]: ❌ Error during quest expiration check:', error);
+  }
+}
+
 // ------------------- Function: checkAndPostMissedQuests -------------------
 // Checks for quests that were scheduled for times that have already passed
 // and posts them immediately to ensure no quests are missed
@@ -820,6 +873,9 @@ function initializeScheduler(client) {
    // Quest posting check for missed cron jobs
    await checkAndPostMissedQuests(client);
 
+   // Quest expiration check for startup
+   await handleQuestExpirationAtMidnight(client);
+
    console.log(`[scheduler.js]: ✅ Startup checks completed`);
   } catch (error) {
    handleError(error, "scheduler.js");
@@ -876,6 +932,10 @@ function initializeScheduler(client) {
  // Midnight quest generation - generates new quests for the day
  createCronJob("0 0 * * *", "midnight quest generation", () =>
   generateDailyQuestsAtMidnight()
+ );
+
+ createCronJob("0 0 * * *", "quest expiration check", () =>
+  handleQuestExpirationAtMidnight(client)
  );
 
  createCronJob("0 1 * * *", "blood moon tracking cleanup", () => {
