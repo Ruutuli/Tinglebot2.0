@@ -289,10 +289,15 @@ async function handleHealingRequest(interaction, characterName, heartsToHeal, pa
     );
 
     // Send the embed and save the message ID
+    const healingRoleId = process.env.JOB_PERK_HEALING;
+    if (!healingRoleId) {
+      console.error('[heal.js]: ❌ JOB_PERK_HEALING environment variable not set');
+    }
+    
     const sentMessage = await interaction.followUp({
       content: healerName
         ? `🔔 <@${healerCharacter.userId}>, **${characterToHeal.name}** is requesting healing from **${healerName}**!`
-        : `🔔 <@&1083191610478698547>, Healing request for any eligible healer in **${capitalizeFirstLetter(characterToHeal.currentVillage)}**!`,
+        : `🔔 <@&${healingRoleId || '1083191610478698547'}>, Healing request for any eligible healer in **${capitalizeFirstLetter(characterToHeal.currentVillage)}**!`,
       embeds: [embed],
     });
 
