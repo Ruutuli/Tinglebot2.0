@@ -55,6 +55,37 @@ ruuGameSchema.index({ channelId: 1 });
 ruuGameSchema.index({ status: 1 });
 ruuGameSchema.index({ expiresAt: 1 });
 
+// ------------------- Static methods for cleanup -------------------
+ruuGameSchema.statics.cleanupOldSessions = async function() {
+  const now = new Date();
+  
+  // Find sessions that are either finished or expired
+  const sessionsToDelete = await this.find({
+    $or: [
+      { status: 'finished' },
+      { expiresAt: { $lt: now } }
+    ]
+  });
+  
+  if (sessionsToDelete.length === 0) {
+    return { deletedCount: 0, finishedCount: 0, expiredCount: 0 };
+  }
+  
+  // Delete the sessions
+  const deleteResult = await this.deleteMany({
+    _id: { $in: sessionsToDelete.map(s => s._id) }
+  });
+  
+  const finishedCount = sessionsToDelete.filter(s => s.status === 'finished').length;
+  const expiredCount = sessionsToDelete.filter(s => s.status !== 'finished').length;
+  
+  return {
+    deletedCount: deleteResult.deletedCount,
+    finishedCount,
+    expiredCount
+  };
+};
+
 // ------------------- Export the RuuGame model -------------------
 const RuuGame = mongoose.model('RuuGame', ruuGameSchema);
 module.exports = RuuGame;

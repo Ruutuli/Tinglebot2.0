@@ -271,22 +271,66 @@ module.exports = {
     let prizeCharacter = null;
 
     if (roll === GAME_CONFIG.TARGET_SCORE) {
+      console.log(`[RuuGame] Winner detected! User ${userId} rolled ${roll}`);
       session.status = 'finished';
       session.winner = userId;
       session.winningScore = roll;
       gameEnded = true;
 
-      prizeCharacter = await awardRuuGamePrize(session, userId, interaction);
-      prizeAwarded = prizeCharacter !== null;
+      try {
+        console.log(`[RuuGame] Awarding prize to user ${userId}`);
+        console.log(`[RuuGame] Before awardRuuGamePrize - Session status: ${session.status}, winner: ${session.winner}`);
+        prizeCharacter = await awardRuuGamePrize(session, userId, interaction);
+        prizeAwarded = prizeCharacter !== null;
+        console.log(`[RuuGame] After awardRuuGamePrize - Session status: ${session.status}, winner: ${session.winner}`);
+        console.log(`[RuuGame] Prize awarded: ${prizeAwarded}, Character: ${prizeCharacter?.name || 'None'}`);
+      } catch (error) {
+        console.error('Error awarding prize:', error);
+        // Don't fail the game if prize awarding fails
+        session.prizeClaimed = false;
+        session.prizeClaimedBy = null;
+        session.prizeClaimedAt = null;
+      }
     } else if (session.status === 'waiting') {
       session.status = 'active';
     }
     
     // Save the session with updated player data
-    await session.save();
+    console.log(`[RuuGame] Before save - Session ${session.sessionId} status: ${session.status}, winner: ${session.winner}`);
+    try {
+      await session.save();
+      console.log(`[RuuGame] Session ${session.sessionId} saved successfully. Status: ${session.status}`);
+    } catch (saveError) {
+      console.error('Error saving session:', saveError);
+      // Try to save with findOneAndUpdate as fallback
+      try {
+        const updateResult = await RuuGame.findOneAndUpdate(
+          { _id: session._id },
+          {
+            $set: {
+              players: session.players,
+              status: session.status,
+              winner: session.winner,
+              winningScore: session.winningScore,
+              prizeClaimed: session.prizeClaimed,
+              prizeClaimedBy: session.prizeClaimedBy,
+              prizeClaimedAt: session.prizeClaimedAt
+            }
+          },
+          { new: true, runValidators: true }
+        );
+        if (updateResult) {
+          session = updateResult;
+          console.log(`[RuuGame] Session ${session.sessionId} updated via findOneAndUpdate. Status: ${session.status}`);
+        }
+      } catch (updateError) {
+        console.error('Error updating session via findOneAndUpdate:', updateError);
+      }
+    }
     
     // Fetch the updated session to ensure we have the latest data
     const updatedSession = await RuuGame.findById(session._id);
+    console.log(`[RuuGame] After save - Session ${updatedSession.sessionId} status: ${updatedSession.status}, winner: ${updatedSession.winner}`);
     
     const embed = await createRuuGameEmbed(updatedSession, gameEnded ? '🎉 WINNER!' : 'Roll Result!', interaction.user, prizeCharacter, roll);
     
