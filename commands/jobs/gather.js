@@ -558,9 +558,8 @@ module.exports = {
                 character._id,
                 lootedItem.itemName,
                 lootedItem.quantity,
-                lootedItem.category.join(', '),
-                lootedItem.type.join(', '),
-                interaction
+                interaction,
+                "Looted"
               );
               // Note: Google Sheets sync is handled by addItemInventoryDatabase
 
@@ -629,9 +628,8 @@ module.exports = {
           character._id,
           randomItem.itemName,
           quantity,
-          randomItem.category.join(', '),
-          randomItem.type.join(', '),
-          interaction
+          interaction,
+          "Gathering"
         );
         // Note: Google Sheets sync is handled by addItemInventoryDatabase
 

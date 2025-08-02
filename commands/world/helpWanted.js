@@ -640,9 +640,8 @@ async function handleMonsterHunt(interaction, questId, characterName) {
               character._id,
               encounterResult.lootedItem.itemName,
               encounterResult.lootedItem.quantity,
-              encounterResult.lootedItem.category.join(", "),
-              encounterResult.lootedItem.type.join(", "),
-              interaction
+              interaction,
+              "Quest Loot"
             );
             
             // Note: Google Sheets sync is handled by addItemInventoryDatabase

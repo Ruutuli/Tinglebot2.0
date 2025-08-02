@@ -1122,14 +1122,14 @@ async function processCraftingTransaction(character, weaponSubmission, inventory
             if (materialsRemoved) {
                 console.log(`[processCraftingTransaction]: 🔄 Rolling back material consumption`);
                 // Restore materials - only restore what was actually consumed
-                await addItemInventoryDatabase(character._id, weaponSubmission.craftingMaterials, 1);
+                await addItemInventoryDatabase(character._id, weaponSubmission.craftingMaterials, 1, interaction, 'Rollback');
                 
                 // Only restore Star Fragment and Blueprint Voucher if they were added during processing
                 if (!hasStarFragment) {
-                    await addItemInventoryDatabase(character._id, [{ itemName: 'Star Fragment', quantity: 1 }], 1);
+                    await addItemInventoryDatabase(character._id, 'Star Fragment', 1, interaction, 'Rollback');
                 }
                 if (!hasBlueprintVoucher) {
-                    await addItemInventoryDatabase(character._id, [{ itemName: 'Blueprint Voucher', quantity: 1 }], 1);
+                    await addItemInventoryDatabase(character._id, 'Blueprint Voucher', 1, interaction, 'Rollback');
                 }
             }
 
