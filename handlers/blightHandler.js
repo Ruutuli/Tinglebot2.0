@@ -1497,13 +1497,7 @@ async function rollForBlightProgression(interaction, characterName) {
     }
 
     const lastRollDate = character.lastRollDate || new Date(0);
-    // The database stores EST times but marks them as UTC
-    // So "2025-07-31T20:17:31.000Z" actually means 8:17 PM EST
-    // We need to adjust by +4 hours to convert from EST to UTC for proper comparison
-    const lastRollDateEST = new Date(lastRollDate.getTime() + (4 * 60 * 60 * 1000));
-
-    // Calculate the last 8 PM EST call time
-    // Since database times are in EST, we need to create lastBlightCall in EST as well
+    // The database stores UTC times, so we can compare directly
     const lastBlightCall = new Date(estNow);
     lastBlightCall.setHours(20, 0, 0, 0); // Set to 8:00 PM EST today
     if (estNow.getHours() < 20) {
@@ -1513,7 +1507,7 @@ async function rollForBlightProgression(interaction, characterName) {
     
     // Check if character has already rolled since the last blight call
     // A character can only roll once per "day" (8 PM to 8 PM window)
-    if (character.lastRollDate && lastRollDateEST > lastBlightCall) {
+    if (character.lastRollDate && lastRollDate > lastBlightCall) {
       const timeUntilNextRoll = nextCallStart - estNow;
       const hoursUntilNextRoll = Math.floor(timeUntilNextRoll / (1000 * 60 * 60));
       const minutesUntilNextRoll = Math.floor((timeUntilNextRoll % (1000 * 60 * 60)) / (1000 * 60));
@@ -2682,13 +2676,12 @@ async function checkMissedRolls(client) {
       // Skip if character was blighted today (before current blight call) or after last blight call
       // OR if character rolled after the last blight call
       if (character.blightedAt) {
-        // The database stores EST times but marks them as UTC
-        // We need to adjust by +4 hours to convert from EST to UTC for proper comparison
-        const blightedAtEST = new Date(character.blightedAt.getTime() + (4 * 60 * 60 * 1000));
+        // Convert blightedAt to EST for proper date comparison
+        const blightedAtEST = new Date(character.blightedAt.toLocaleString('en-US', { timeZone: 'America/New_York' }));
         const isBlightedToday = blightedAtEST.getDate() === nowEST.getDate() && 
                                blightedAtEST.getMonth() === nowEST.getMonth() && 
                                blightedAtEST.getFullYear() === nowEST.getFullYear();
-        const isBlightedAfterLastCall = blightedAtEST > lastBlightCall;
+        const isBlightedAfterLastCall = character.blightedAt > lastBlightCall;
         
         if (isBlightedToday || isBlightedAfterLastCall) {
           console.log(`[blightHandler]: Skipping missed roll for ${character.name} (blightedAt=${character.blightedAt.toISOString()}) - infected today or after last blight call.`);
@@ -2697,10 +2690,8 @@ async function checkMissedRolls(client) {
       }
       
       // Check if character rolled after the last blight call
-      // The database stores EST times but marks them as UTC
-      // We need to adjust by +4 hours to convert from EST to UTC for proper comparison
-      const characterLastRollEST = new Date(character.lastRollDate.getTime() + (4 * 60 * 60 * 1000));
-      if (character.lastRollDate && characterLastRollEST > lastBlightCall) {
+      // The database stores UTC times, so we can compare directly
+      if (character.lastRollDate && character.lastRollDate > lastBlightCall) {
         console.log(`[blightHandler]: Skipping missed roll for ${character.name} (lastRollDate=${character.lastRollDate.toISOString()}, lastBlightCall=${lastBlightCall.toISOString()}) - rolled after last blight call.`);
         continue;
       }

@@ -32,9 +32,6 @@ const {
  archiveOldBoostingRequests,
 } = require("./utils/storage");
 const {
- authorizeSheets,
- clearSheetFormatting,
- writeSheetData,
  retryPendingSheetOperations,
  getPendingSheetOperationsCount,
 } = require("./utils/googleSheetsUtils");
@@ -45,23 +42,18 @@ const { checkExpiredRequests } = require("./utils/expirationHandler");
 const { isValidImageUrl } = require("./utils/validation");
 const DEFAULT_IMAGE_URL =
  "https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png";
-const TempData = require("./models/TempDataModel");
-const {
- loadBlightSubmissions,
- saveBlightSubmissions,
-} = require("./handlers/blightHandler");
-const { connectToInventories } = require("./handlers/blightHandler");
 const { getCurrentWeather, generateWeatherEmbed } = require("./services/weatherService");
 const Pet = require("./models/PetModel");
 const Raid = require("./models/RaidModel");
 const RuuGame = require("./models/RuuGameModel");
-const fs = require('fs');
-const { formatQuestsAsEmbedsByVillage, formatSpecificQuestsAsEmbedsByVillage, generateDailyQuests, getQuestsForScheduledTime } = require('./modules/helpWantedModule');
+const { formatSpecificQuestsAsEmbedsByVillage, generateDailyQuests } = require('./modules/helpWantedModule');
 const HelpWantedQuest = require('./models/HelpWantedQuestModel');
-const moment = require('moment');
 
-const HELP_WANTED_SCHEDULE_FILE = './helpWantedSchedule.json';
 const HELP_WANTED_TEST_CHANNEL = process.env.HELP_WANTED_TEST_CHANNEL || '1391812848099004578';
+
+// ============================================================================
+// ------------------- Environment Setup -------------------
+// ============================================================================
 
 const env = process.env.NODE_ENV || "development";
 try {
@@ -73,8 +65,7 @@ try {
 }
 
 // ============================================================================
-// ---- Utility Functions ----
-// Core utility functions for creating cron jobs and announcement embeds
+// ------------------- Utility Functions -------------------
 // ============================================================================
 
 function createCronJob(
@@ -121,8 +112,7 @@ function createAnnouncementEmbed(title, description, thumbnail, image, footer) {
 }
 
 // ============================================================================
-// ---- Weather Functions ----
-// Handles weather simulation and updates for each village
+// ------------------- Weather Functions -------------------
 // ============================================================================
 
 const TOWNHALL_CHANNELS = {
@@ -130,14 +120,6 @@ const TOWNHALL_CHANNELS = {
  Inariko: process.env.INARIKO_TOWNHALL,
  Vhintl: process.env.VHINTL_TOWNHALL,
 };
-
-function getCurrentSeason() {
- const month = new Date().getMonth() + 1;
- if (month >= 3 && month <= 5) return "Spring";
- if (month >= 6 && month <= 8) return "Summer";
- if (month >= 9 && month <= 11) return "Autumn";
- return "Winter";
-}
 
 async function postWeatherUpdate(client) {
  try {
@@ -178,8 +160,7 @@ async function postWeatherUpdate(client) {
 }
 
 // ============================================================================
-// ---- Raid Functions ----
-// Handles raid cleanup and maintenance
+// ------------------- Cleanup Functions -------------------
 // ============================================================================
 
 async function cleanupExpiredRaids() {
@@ -195,16 +176,10 @@ async function cleanupExpiredRaids() {
  }
 }
 
-// ============================================================================
-// ---- RuuGame Functions ----
-// Handles RuuGame cleanup and maintenance
-// ============================================================================
-
 async function cleanupOldRuuGameSessions() {
  try {
   console.log(`[scheduler.js]: 🎲 Starting RuuGame session cleanup`);
   
-  // Use the model's static cleanup method
   const result = await RuuGame.cleanupOldSessions();
   
   if (result.deletedCount === 0) {
@@ -214,7 +189,6 @@ async function cleanupOldRuuGameSessions() {
   
   console.log(`[scheduler.js]: ✅ RuuGame cleanup completed - deleted ${result.deletedCount} sessions`);
   
-  // Log some details about what was cleaned up
   if (result.finishedCount > 0) {
    console.log(`[scheduler.js]: 🏆 Cleaned up ${result.finishedCount} completed games`);
   }
@@ -229,8 +203,7 @@ async function cleanupOldRuuGameSessions() {
 }
 
 // ============================================================================
-// ---- Birthday Functions ----
-// Handles birthday announcements and celebrations
+// ------------------- Birthday Functions -------------------
 // ============================================================================
 
 async function executeBirthdayAnnouncements(client) {
@@ -308,8 +281,7 @@ async function executeBirthdayAnnouncements(client) {
 }
 
 // ============================================================================
-// ---- Job Functions ----
-// Handles various job-related tasks like jail releases and debuffs
+// ------------------- Job Functions -------------------
 // ============================================================================
 
 async function handleJailRelease(client) {
@@ -361,10 +333,8 @@ async function handleJailRelease(client) {
 }
 
 async function handleDebuffExpiry(client) {
-  // Get current date in EST timezone
   const now = new Date();
   const estDate = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
-  // Set to midnight EST today for comparison
   const midnightEST = new Date(estDate.getFullYear(), estDate.getMonth(), estDate.getDate(), 0, 0, 0, 0);
   
   const charactersWithActiveDebuffs = await Character.find({
@@ -433,8 +403,7 @@ async function resetPetLastRollDates(client) {
 }
 
 // ============================================================================
-// ---- Blight Functions ----
-// Handles blight-related tasks and checks
+// ------------------- Blight Functions -------------------
 // ============================================================================
 
 function setupBlightScheduler(client) {
@@ -498,12 +467,10 @@ function setupBlightScheduler(client) {
 }
 
 // ============================================================================
-// ---- Boosting Functions ----
-// Handles boosting system cleanup and maintenance
+// ------------------- Boosting Functions -------------------
 // ============================================================================
 
 async function setupBoostingScheduler(client) {
- // Clean up expired boost requests at midnight
  createCronJob("0 0 * * *", "Boost Cleanup", async () => {
   try {
    console.log("[scheduler.js]: 🧹 Starting boost cleanup");
@@ -517,7 +484,6 @@ async function setupBoostingScheduler(client) {
   }
  });
 
- // Archive old boost requests weekly (Sundays at 2 AM)
  createCronJob("0 2 * * 0", "Weekly Boost Archive", async () => {
   try {
    console.log("[scheduler.js]: 📦 Running weekly boost archive");
@@ -531,7 +497,6 @@ async function setupBoostingScheduler(client) {
   }
  });
 
- // Log boost statistics daily at midnight
  createCronJob("0 0 * * *", "Daily Boost Statistics", async () => {
   try {
    const stats = getBoostingStatistics();
@@ -544,25 +509,19 @@ async function setupBoostingScheduler(client) {
 }
 
 // ============================================================================
-// ---- Weather Scheduler ----
-// Enhanced weather scheduler functionality
+// ------------------- Weather Scheduler -------------------
 // ============================================================================
 
 function setupWeatherScheduler(client) {
- // Weather updates at 8 AM EST daily - THIS IS THE ONLY WEATHER POSTING JOB
  createCronJob("0 8 * * *", "Daily Weather Update", () =>
   postWeatherUpdate(client)
  );
 }
 
 // ============================================================================
-// ---- Help Wanted Functions ----
-// Handles Help Wanted quest generation and posting
+// ------------------- Help Wanted Functions -------------------
 // ============================================================================
 
-// ------------------- Function: checkAndGenerateDailyQuests -------------------
-// Checks if quests exist for today, generates them if they don't
-// ============================================================================
 async function checkAndGenerateDailyQuests() {
   try {
     const todaysQuests = await require('./modules/helpWantedModule').getTodaysQuests();
@@ -580,14 +539,9 @@ async function checkAndGenerateDailyQuests() {
   }
 }
 
-// ------------------- Function: generateDailyQuestsAtMidnight -------------------
-// Generates new quests for the day at midnight with random times
-// ============================================================================
 async function generateDailyQuestsAtMidnight() {
   try {
     console.log('[scheduler.js]: 🌙 Midnight quest generation starting...');
-    
-    // Always generate new quests at midnight for the new day
     await generateDailyQuests();
     console.log('[scheduler.js]: ✅ Midnight quest generation completed');
   } catch (error) {
@@ -598,27 +552,21 @@ async function generateDailyQuestsAtMidnight() {
   }
 }
 
-// ------------------- Function: handleQuestExpirationAtMidnight -------------------
-// Handles quest expiration at midnight - updates quest embeds to show expired status
-// ============================================================================
 async function handleQuestExpirationAtMidnight(client = null) {
   try {
     console.log('[scheduler.js]: ⏰ Midnight quest expiration check starting...');
     
-    const HelpWantedQuest = require('./models/HelpWantedQuestModel');
     const { updateQuestEmbed } = require('./modules/helpWantedModule');
     
-    // Get yesterday's date in EST
     const now = new Date();
     const yesterday = new Date(now);
     yesterday.setDate(yesterday.getDate() - 1);
     const yesterdayDate = yesterday.toLocaleDateString('en-CA', {timeZone: 'America/New_York'});
     
-    // Find all quests from yesterday that haven't been completed
     const expiredQuests = await HelpWantedQuest.find({
       date: yesterdayDate,
       completed: false,
-      messageId: { $ne: null } // Only quests that were actually posted
+      messageId: { $ne: null }
     });
     
     if (expiredQuests.length === 0) {
@@ -628,12 +576,10 @@ async function handleQuestExpirationAtMidnight(client = null) {
     
     console.log(`[scheduler.js]: 📋 Found ${expiredQuests.length} quests to mark as expired`);
     
-    // Update each expired quest's embed
     let updatedCount = 0;
     for (const quest of expiredQuests) {
       try {
-        // Update the quest embed to show expired status
-        await updateQuestEmbed(client, quest); // Pass client for embed updates
+        await updateQuestEmbed(client, quest);
         updatedCount++;
         console.log(`[scheduler.js]: ✅ Updated expired quest embed for ${quest.village} (${quest.questId})`);
       } catch (error) {
@@ -651,23 +597,13 @@ async function handleQuestExpirationAtMidnight(client = null) {
   }
 }
 
-// ------------------- Function: checkAndPostMissedQuests -------------------
-// Checks for quests that were scheduled for times that have already passed
-// and posts them immediately to ensure no quests are missed
-// ============================================================================
 async function checkAndPostMissedQuests(client) {
   try {
-    const HelpWantedQuest = require('./models/HelpWantedQuestModel');
-    const { formatSpecificQuestsAsEmbedsByVillage } = require('./modules/helpWantedModule');
-    
-    // Get current time in EST
     const now = new Date();
     const estTime = new Date(now.toLocaleString("en-US", {timeZone: "America/New_York"}));
     const currentHour = estTime.getHours();
     const currentMinute = estTime.getMinutes();
     
-    // Get today's quests that haven't been posted yet
-    // Fix: Use toLocaleDateString to get the correct EST date
     const today = now.toLocaleDateString('en-CA', {timeZone: 'America/New_York'});
     const unpostedQuests = await HelpWantedQuest.find({
       date: today,
@@ -683,38 +619,38 @@ async function checkAndPostMissedQuests(client) {
     let posted = 0;
     
     for (const quest of unpostedQuests) {
-      // Parse the scheduled time
       const scheduledTime = quest.scheduledPostTime;
       if (!scheduledTime) continue;
       
-      // Parse cron time (format: "minute hour * * *")
       const parts = scheduledTime.split(' ');
       if (parts.length !== 5) continue;
       
       const scheduledMinute = parseInt(parts[0]);
       const scheduledHour = parseInt(parts[1]);
       
-      // Check if this time has already passed (with 15-minute grace period)
       const scheduledTimeInMinutes = scheduledHour * 60 + scheduledMinute;
       const currentTimeInMinutes = currentHour * 60 + currentMinute;
       
       if (currentTimeInMinutes >= scheduledTimeInMinutes - 15) {
-        // Format embed for this specific quest only
         const embedsByVillage = await formatSpecificQuestsAsEmbedsByVillage([quest]);
         const embed = embedsByVillage[quest.village];
         if (embed) {
           const message = await channel.send({ embeds: [embed] });
-          // Save the message ID and channel ID for future edits
           const updatedQuest = await HelpWantedQuest.findOneAndUpdate(
-            { _id: quest._id },
+            { _id: quest._id, messageId: null },
             { 
               messageId: message.id,
               channelId: channel.id
             },
             { new: true }
           );
-          console.log(`[scheduler.js]: Posted missed quest ${quest.questId} for ${quest.village} (was scheduled for ${scheduledHour}:${scheduledMinute.toString().padStart(2, '0')})`);
-          posted++;
+          
+          if (updatedQuest) {
+            console.log(`[scheduler.js]: Posted missed quest ${quest.questId} for ${quest.village} (was scheduled for ${scheduledHour}:${scheduledMinute.toString().padStart(2, '0')})`);
+            posted++;
+          } else {
+            console.log(`[scheduler.js]: Quest ${quest.questId} was already posted by another process, skipping`);
+          }
         }
       }
     }
@@ -729,62 +665,9 @@ async function checkAndPostMissedQuests(client) {
   }
 }
 
-
-
-// ------------------- Post Missed Quests Function -------------------
-// Posts only the specific quests that were missed during startup
-// ============================================================================
-async function postMissedQuestsToTestChannel(client, unpostedQuests) {
-  try {
-    if (!unpostedQuests.length) {
-      console.log(`[scheduler.js]: No unposted quests to post. Skipping.`);
-      return;
-    }
-    
-    const channel = await client.channels.fetch(HELP_WANTED_TEST_CHANNEL);
-    let posted = 0;
-    
-    for (const quest of unpostedQuests) {
-      // Format embed for this specific quest only
-      const embedsByVillage = await formatSpecificQuestsAsEmbedsByVillage([quest]);
-      const embed = embedsByVillage[quest.village];
-      if (embed) {
-        const message = await channel.send({ embeds: [embed] });
-        // Save the message ID and channel ID for future edits
-        const updatedQuest = await HelpWantedQuest.findOneAndUpdate(
-          { _id: quest._id },
-          { 
-            messageId: message.id,
-            channelId: channel.id
-          },
-          { new: true }
-        );
-        console.log(`[scheduler.js]: Saved message ID ${message.id} and channel ID ${channel.id} for quest ${quest.questId} in ${quest.village}`);
-        posted++;
-      }
-    }
-    console.log(`[scheduler.js]: Posted ${posted} missed quests during startup`);
-  } catch (error) {
-    handleError(error, 'scheduler.js', {
-      commandName: 'postMissedQuestsToTestChannel',
-      questCount: unpostedQuests.length
-    });
-    console.error('[scheduler.js]: Error posting missed quests:', error);
-  }
-}
-
-// ============================================================================
-// ------------------- Check and Post Scheduled Quests -------------------
-// Checks for quests that need to be posted based on their scheduled time
-// ============================================================================
 async function checkAndPostScheduledQuests(client, cronTime) {
   try {
-    const HelpWantedQuest = require('./models/HelpWantedQuestModel');
-    const { formatSpecificQuestsAsEmbedsByVillage } = require('./modules/helpWantedModule');
-    
-    // Get today's quests that are scheduled for this specific time and haven't been posted yet
     const now = new Date();
-    // Fix: Use toLocaleDateString to get the correct EST date
     const today = now.toLocaleDateString('en-CA', {timeZone: 'America/New_York'});
     
     const questsToPost = await HelpWantedQuest.find({
@@ -802,14 +685,12 @@ async function checkAndPostScheduledQuests(client, cronTime) {
     let posted = 0;
     
     for (const quest of questsToPost) {
-      // Format embed for this specific quest only
       const embedsByVillage = await formatSpecificQuestsAsEmbedsByVillage([quest]);
       const embed = embedsByVillage[quest.village];
       if (embed) {
         const message = await channel.send({ embeds: [embed] });
-        // Save the message ID and channel ID for future edits
         const updatedQuest = await HelpWantedQuest.findOneAndUpdate(
-          { _id: quest._id },
+          { _id: quest._id, messageId: null },
           { 
             messageId: message.id,
             channelId: channel.id
@@ -817,19 +698,23 @@ async function checkAndPostScheduledQuests(client, cronTime) {
           { new: true }
         );
         
-        // Parse the cron time for logging
         const parts = cronTime.split(' ');
         const scheduledMinute = parseInt(parts[0]);
         const scheduledHour = parseInt(parts[1]);
         
-        console.log(`[scheduler.js]: Posted quest ${quest.questId} for ${quest.village} at ${scheduledHour}:${scheduledMinute.toString().padStart(2, '0')} (scheduled time: ${cronTime})`);
-        posted++;
+        if (updatedQuest) {
+          console.log(`[scheduler.js]: Posted quest ${quest.questId} for ${quest.village} at ${scheduledHour}:${scheduledMinute.toString().padStart(2, '0')} (scheduled time: ${cronTime})`);
+          posted++;
+        } else {
+          console.log(`[scheduler.js]: Quest ${quest.questId} was already posted by another process, skipping`);
+        }
       }
     }
     
     if (posted > 0) {
       console.log(`[scheduler.js]: Posted ${posted} scheduled quests for ${cronTime}`);
     }
+    
   } catch (error) {
     handleError(error, 'scheduler.js', {
       commandName: 'checkAndPostScheduledQuests',
@@ -840,10 +725,8 @@ async function checkAndPostScheduledQuests(client, cronTime) {
 }
 
 function setupHelpWantedFixedScheduler(client) {
-  // Import the FIXED_CRON_TIMES from helpWantedModule
   const { FIXED_CRON_TIMES } = require('./modules/helpWantedModule');
   
-  // Create individual cron jobs for each fixed time
   FIXED_CRON_TIMES.forEach(cronTime => {
     createCronJob(
       cronTime,
@@ -856,8 +739,115 @@ function setupHelpWantedFixedScheduler(client) {
 }
 
 // ============================================================================
-// ---- Scheduler Initialization ----
-// Main initialization function for all scheduled tasks
+// ------------------- Blood Moon Functions -------------------
+// ============================================================================
+
+async function handleBloodMoonStart(client) {
+  console.log(`[scheduler.js]: 🌕 Starting Blood Moon start check at 8 PM EST`);
+
+  const channels = [
+   process.env.RUDANIA_TOWNHALL,
+   process.env.INARIKO_TOWNHALL,
+   process.env.VHINTL_TOWNHALL,
+  ];
+
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowDate = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate());
+  
+  const { bloodmoonDates } = require('./modules/calendarModule');
+  let isTomorrowBloodMoon = false;
+  
+  for (const { realDate } of bloodmoonDates) {
+   const [month, day] = realDate.split('-').map(Number);
+   const bloodMoonDate = new Date(tomorrowDate.getFullYear(), month - 1, day);
+   if (tomorrowDate.getTime() === bloodMoonDate.getTime()) {
+    isTomorrowBloodMoon = true;
+    console.log(`[scheduler.js]: 🌕 Tomorrow (${realDate}) is a Blood Moon day - sending start announcement`);
+    break;
+   }
+  }
+
+  if (isTomorrowBloodMoon) {
+   console.log(`[scheduler.js]: 🌕 Blood Moon starts tomorrow - processing channels`);
+   await renameChannels(client);
+
+   for (const channelId of channels) {
+    if (!channelId) {
+     console.warn(`[scheduler.js]: ⚠️ Skipping undefined channel ID in Blood Moon start check`);
+     continue;
+    }
+
+    try {
+     await sendBloodMoonAnnouncement(
+      client,
+      channelId,
+      "The Blood Moon rises at nightfall! Beware!"
+     );
+    } catch (error) {
+     handleError(error, "scheduler.js");
+     console.error(`[scheduler.js]: ❌ Blood Moon start announcement failed for channel ${channelId}: ${error.message}`);
+    }
+   }
+  } else {
+   console.log(`[scheduler.js]: 📅 No Blood Moon starting tomorrow - no announcement needed`);
+  }
+
+  console.log(`[scheduler.js]: ✅ Blood Moon start check completed`);
+}
+
+async function handleBloodMoonEnd(client) {
+  console.log(`[scheduler.js]: 🌙 Starting Blood Moon end check at 8 AM EST`);
+
+  const channels = [
+   process.env.RUDANIA_TOWNHALL,
+   process.env.INARIKO_TOWNHALL,
+   process.env.VHINTL_TOWNHALL,
+  ];
+
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayDate = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate());
+  
+  const { bloodmoonDates } = require('./modules/calendarModule');
+  let wasYesterdayBloodMoon = false;
+  
+  for (const { realDate } of bloodmoonDates) {
+   const [month, day] = realDate.split('-').map(Number);
+   const bloodMoonDate = new Date(yesterdayDate.getFullYear(), month - 1, day);
+   if (yesterdayDate.getTime() === bloodMoonDate.getTime()) {
+    wasYesterdayBloodMoon = true;
+    console.log(`[scheduler.js]: 🌙 Yesterday (${realDate}) was a Blood Moon day - sending end announcement`);
+    break;
+   }
+  }
+
+  if (wasYesterdayBloodMoon) {
+   console.log(`[scheduler.js]: 🌙 Blood Moon ended yesterday - processing channels`);
+   await revertChannelNames(client);
+
+   for (const channelId of channels) {
+    if (!channelId) {
+     console.warn(`[scheduler.js]: ⚠️ Skipping undefined channel ID in Blood Moon end check`);
+     continue;
+    }
+
+    try {
+     await sendBloodMoonEndAnnouncement(client, channelId);
+    } catch (error) {
+     handleError(error, "scheduler.js");
+     console.error(`[scheduler.js]: ❌ Blood Moon end announcement failed for channel ${channelId}: ${error.message}`);
+    }
+   }
+  } else {
+   console.log(`[scheduler.js]: 📅 No Blood Moon ended yesterday - no announcement needed`);
+  }
+
+  console.log(`[scheduler.js]: ✅ Blood Moon end check completed`);
+}
+
+// ============================================================================
+// ------------------- Scheduler Initialization -------------------
 // ============================================================================
 
 function initializeScheduler(client) {
@@ -868,12 +858,11 @@ function initializeScheduler(client) {
   return;
  }
 
- // Add startup checks - consolidated logging
+ // Startup checks
  (async () => {
   try {
    console.log(`[scheduler.js]: 🚀 Running startup checks...`);
    
-   // Blood Moon startup check
    const isBloodMoonActive = isBloodMoonDay();
    if (isBloodMoonActive) {
     console.log(`[scheduler.js]: 🌕 Blood Moon active - processing channels`);
@@ -898,16 +887,9 @@ function initializeScheduler(client) {
     await revertChannelNames(client);
    }
 
-   // Debuff expiry check
    await handleDebuffExpiry(client);
-
-   // Quest generation check
    await checkAndGenerateDailyQuests();
-
-   // Quest posting check for missed cron jobs
    await checkAndPostMissedQuests(client);
-
-   // Quest expiration check for startup
    await handleQuestExpirationAtMidnight(client);
 
    console.log(`[scheduler.js]: ✅ Startup checks completed`);
@@ -917,7 +899,7 @@ function initializeScheduler(client) {
   }
  })();
 
- // Initialize all schedulers
+ // Daily tasks
  createCronJob("0 0 * * *", "jail release check", () =>
   handleJailRelease(client)
  );
@@ -946,8 +928,7 @@ function initializeScheduler(client) {
      cleanupOldRuuGameSessions(),
     ]);
     
-    // Log blight cleanup results specifically
-    const blightResult = results[3]; // cleanupExpiredBlightRequests is 4th in the array
+    const blightResult = results[3];
     if (blightResult && typeof blightResult === 'object') {
       console.log(`[scheduler.js]: Daily blight cleanup - Expired: ${blightResult.expiredCount}, Notified: ${blightResult.notifiedUsers}, Deleted: ${blightResult.deletedCount}`);
     }
@@ -959,12 +940,10 @@ function initializeScheduler(client) {
  createCronJob("0 0 * * *", "debuff expiry check", () =>
   handleDebuffExpiry(client)
  );
- // Weather update is handled by setupWeatherScheduler() - removed duplicate
  createCronJob("0 0 * * *", "birthday announcements", () =>
   executeBirthdayAnnouncements(client)
  );
  
- // Midnight quest generation - generates new quests for the day
  createCronJob("0 0 * * *", "midnight quest generation", () =>
   generateDailyQuestsAtMidnight()
  );
@@ -979,137 +958,28 @@ function initializeScheduler(client) {
   console.log(`[scheduler.js]: ✅ Blood Moon tracking cleanup completed`);
  });
 
+ // Initialize specialized schedulers
  setupBlightScheduler(client);
  setupBoostingScheduler(client);
  setupWeatherScheduler(client);
  setupHelpWantedFixedScheduler(client);
 
- // ============================================================================
- // ---- Blood Moon Scheduling ----
- // Handles Blood Moon announcements at correct times
- // ============================================================================
-
- // 8 PM EST - Blood Moon start announcement (day before blood moon)
+ // Blood Moon scheduling
  createCronJob(
   "0 20 * * *",
   "blood moon start announcement",
-  async () => {
-   console.log(`[scheduler.js]: 🌕 Starting Blood Moon start check at 8 PM EST`);
-
-   const channels = [
-    process.env.RUDANIA_TOWNHALL,
-    process.env.INARIKO_TOWNHALL,
-    process.env.VHINTL_TOWNHALL,
-   ];
-
-   // Check if tomorrow is a blood moon day
-   const tomorrow = new Date();
-   tomorrow.setDate(tomorrow.getDate() + 1);
-   const tomorrowDate = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate());
-   
-   // Check if tomorrow is a blood moon date
-   const { bloodmoonDates } = require('./modules/calendarModule');
-   let isTomorrowBloodMoon = false;
-   
-   for (const { realDate } of bloodmoonDates) {
-    const [month, day] = realDate.split('-').map(Number);
-    const bloodMoonDate = new Date(tomorrowDate.getFullYear(), month - 1, day);
-    if (tomorrowDate.getTime() === bloodMoonDate.getTime()) {
-     isTomorrowBloodMoon = true;
-     console.log(`[scheduler.js]: 🌕 Tomorrow (${realDate}) is a Blood Moon day - sending start announcement`);
-     break;
-    }
-   }
-
-   if (isTomorrowBloodMoon) {
-    console.log(`[scheduler.js]: 🌕 Blood Moon starts tomorrow - processing channels`);
-    await renameChannels(client);
-
-    for (const channelId of channels) {
-     if (!channelId) {
-      console.warn(`[scheduler.js]: ⚠️ Skipping undefined channel ID in Blood Moon start check`);
-      continue;
-     }
-
-     try {
-      await sendBloodMoonAnnouncement(
-       client,
-       channelId,
-       "The Blood Moon rises at nightfall! Beware!"
-      );
-     } catch (error) {
-      handleError(error, "scheduler.js");
-      console.error(`[scheduler.js]: ❌ Blood Moon start announcement failed for channel ${channelId}: ${error.message}`);
-     }
-    }
-   } else {
-    console.log(`[scheduler.js]: 📅 No Blood Moon starting tomorrow - no announcement needed`);
-   }
-
-   console.log(`[scheduler.js]: ✅ Blood Moon start check completed`);
-  },
+  () => handleBloodMoonStart(client),
   "America/New_York"
  );
 
- // 8 AM EST - Blood Moon end announcement (day after blood moon)
  createCronJob(
   "0 8 * * *",
   "blood moon end announcement",
-  async () => {
-   console.log(`[scheduler.js]: 🌙 Starting Blood Moon end check at 8 AM EST`);
-
-   const channels = [
-    process.env.RUDANIA_TOWNHALL,
-    process.env.INARIKO_TOWNHALL,
-    process.env.VHINTL_TOWNHALL,
-   ];
-
-   // Check if yesterday was a blood moon day
-   const yesterday = new Date();
-   yesterday.setDate(yesterday.getDate() - 1);
-   const yesterdayDate = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate());
-   
-   // Check if yesterday was a blood moon date
-   const { bloodmoonDates } = require('./modules/calendarModule');
-   let wasYesterdayBloodMoon = false;
-   
-   for (const { realDate } of bloodmoonDates) {
-    const [month, day] = realDate.split('-').map(Number);
-    const bloodMoonDate = new Date(yesterdayDate.getFullYear(), month - 1, day);
-    if (yesterdayDate.getTime() === bloodMoonDate.getTime()) {
-     wasYesterdayBloodMoon = true;
-     console.log(`[scheduler.js]: 🌙 Yesterday (${realDate}) was a Blood Moon day - sending end announcement`);
-     break;
-    }
-   }
-
-   if (wasYesterdayBloodMoon) {
-    console.log(`[scheduler.js]: 🌙 Blood Moon ended yesterday - processing channels`);
-    await revertChannelNames(client);
-
-    for (const channelId of channels) {
-     if (!channelId) {
-      console.warn(`[scheduler.js]: ⚠️ Skipping undefined channel ID in Blood Moon end check`);
-      continue;
-     }
-
-     try {
-      await sendBloodMoonEndAnnouncement(client, channelId);
-     } catch (error) {
-      handleError(error, "scheduler.js");
-      console.error(`[scheduler.js]: ❌ Blood Moon end announcement failed for channel ${channelId}: ${error.message}`);
-     }
-    }
-   } else {
-    console.log(`[scheduler.js]: 📅 No Blood Moon ended yesterday - no announcement needed`);
-   }
-
-   console.log(`[scheduler.js]: ✅ Blood Moon end check completed`);
-  },
+  () => handleBloodMoonEnd(client),
   "America/New_York"
  );
 
- // Retry pending Google Sheets operations every 15 minutes
+ // Google Sheets retry
  createCronJob(
   "*/15 * * * *",
   "retry pending Google Sheets operations",
