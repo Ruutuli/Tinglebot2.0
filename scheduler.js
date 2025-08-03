@@ -323,7 +323,8 @@ async function handleJailRelease(client) {
 
   await sendUserDM(
    character.userId,
-   `**Town Hall Notice**\n\nYour character **${character.name}** has been released from jail. Remember, a fresh start awaits you!`
+   `**Town Hall Notice**\n\nYour character **${character.name}** has been released from jail. Remember, a fresh start awaits you!`,
+   client
   );
  }
 
@@ -352,7 +353,8 @@ async function handleDebuffExpiry(client) {
 
       await sendUserDM(
         character.userId,
-        `Your character **${character.name}**'s week-long debuff has ended! You can now heal them with items or a Healer.`
+        `Your character **${character.name}**'s week-long debuff has ended! You can now heal them with items or a Healer.`,
+        client
       );
     }
   }
@@ -426,7 +428,7 @@ function setupBlightScheduler(client) {
   async () => {
     try {
       console.log('[scheduler.js]: 🧹 Starting blight request cleanup');
-      const result = await cleanupExpiredBlightRequests();
+      const result = await cleanupExpiredBlightRequests(client);
       console.log(`[scheduler.js]: ✅ Blight cleanup complete - Expired: ${result.expiredCount}, Notified: ${result.notifiedUsers}, Deleted: ${result.deletedCount}`);
     } catch (error) {
       handleError(error, 'scheduler.js');
@@ -441,7 +443,7 @@ function setupBlightScheduler(client) {
   async () => {
     try {
       console.log('[scheduler.js]: ⚠️ Running blight expiration warning check');
-      const result = await checkExpiringBlightRequests();
+      const result = await checkExpiringBlightRequests(client);
       console.log(`[scheduler.js]: ✅ Blight warning check complete - Warned: ${result.warnedUsers}`);
     } catch (error) {
       handleError(error, 'scheduler.js');
@@ -923,7 +925,7 @@ function initializeScheduler(client) {
      cleanupExpiredEntries(),
      cleanupExpiredHealingRequests(),
      checkExpiredRequests(client),
-     cleanupExpiredBlightRequests(),
+           cleanupExpiredBlightRequests(client),
      cleanupExpiredRaids(),
      cleanupOldRuuGameSessions(),
     ]);
