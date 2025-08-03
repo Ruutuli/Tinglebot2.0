@@ -132,7 +132,7 @@ async function checkExpiredRelics(client) {
         // Notify discoverer
         if (relic.discovererId) {
           try {
-            await sendUserDM(relic.discovererId, `Your relic discovery "${relic.name}" has expired and will be removed from the system.`);
+            await sendUserDM(relic.discovererId, `Your relic discovery "${relic.name}" has expired and will be removed from the system.`, client);
           } catch (error) {
             console.error('[relicUtils]: Error sending DM:', error);
           }

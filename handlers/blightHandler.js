@@ -2137,10 +2137,7 @@ async function sendBlightReminders(client) {
             // Send the reminder
             try {
               const { sendUserDM } = require('../utils/messageUtils');
-              await sendUserDM(client, character.userId, {
-                content: `🚨 **DEATH REMINDER** for ${character.name}`,
-                embeds: [reminderEmbed]
-              });
+              await sendUserDM(character.userId, `🚨 **DEATH REMINDER** for ${character.name}`, client);
               
               // Record the reminder
               await TempData.create({
@@ -2248,10 +2245,7 @@ async function sendBlightReminders(client) {
                 .setFooter({ text: 'Blight Healing Expiration Warning' })
                 .setTimestamp();
               
-              await sendUserDM(client, submissionData.userId, {
-                content: `🚨 **HEALING TASK EXPIRATION WARNING** for ${submissionData.characterName}`,
-                embeds: [warningEmbed]
-              });
+              await sendUserDM(submissionData.userId, `🚨 **HEALING TASK EXPIRATION WARNING** for ${submissionData.characterName}`, client);
               
               // Record the warning
               await TempData.create({
@@ -2297,7 +2291,7 @@ async function sendBlightReminders(client) {
 
 // ------------------- Function: checkExpiringBlightRequests -------------------
 // Checks for blight requests that are about to expire and sends warning notifications.
-async function checkExpiringBlightRequests() {
+async function checkExpiringBlightRequests(client) {
   try {
     console.log('[blightHandler]: Checking for expiring blight requests...');
     
@@ -2355,10 +2349,7 @@ async function checkExpiringBlightRequests() {
                     .setFooter({ text: 'Blight Healing Expiration Warning' })
                     .setTimestamp();
                   
-                  await sendUserDM(null, submissionData.userId, {
-                    content: `Your blight healing request is expiring soon!`,
-                    embeds: [warningEmbed]
-                  });
+                  await sendUserDM(submissionData.userId, `Your blight healing request is expiring soon!`, client);
                   
                   // Record that we've warned this user
                   await TempData.create({
@@ -2403,7 +2394,7 @@ async function checkExpiringBlightRequests() {
 
 // ------------------- Function: cleanupExpiredBlightRequests -------------------
 // Deletes all expired TempData entries related to blight and notifies users.
-async function cleanupExpiredBlightRequests() {
+async function cleanupExpiredBlightRequests(client) {
   try {
     console.log('[blightHandler]: 🧹 Starting cleanup of expired blight requests');
     
@@ -2504,10 +2495,7 @@ async function cleanupExpiredBlightRequests() {
                 .setFooter({ text: 'Blight Healing Expiration Notice' })
                 .setTimestamp();
               
-              await sendUserDM(null, submissionData.userId, {
-                content: `Your blight healing request has expired.`,
-                embeds: [expirationEmbed]
-              });
+              await sendUserDM(submissionData.userId, `Your blight healing request has expired.`, client);
               
               notifiedUsers++;
               console.log(`[blightHandler]: ✅ Sent expiration DM to user ${submissionData.userId} for ${submissionData.characterName}`);
@@ -2638,10 +2626,7 @@ async function checkMissedRolls(client) {
               .setFooter({ text: 'Blight Healing Expiration Notice' })
               .setTimestamp();
             
-            await sendUserDM(client, submission.userId, {
-              content: `Your blight healing request has expired.`,
-              embeds: [expirationEmbed]
-            });
+            await sendUserDM(submission.userId, `Your blight healing request has expired.`, client);
             
             // Log the lore text for administrators
             console.log(`[blightHandler]: 📜 Blight submission expired for ${submission.characterName}:`);

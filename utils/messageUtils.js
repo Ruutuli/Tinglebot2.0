@@ -34,9 +34,10 @@ async function trackLastMessage(message) {
  * Sends a DM to a user with error handling
  * @param {string} userId - Discord user ID
  * @param {string} message - Message to send
+ * @param {Client} client - Discord client instance
  * @returns {Promise<boolean>} - True if message was sent successfully, false otherwise
  */
-async function sendUserDM(userId, message) {
+async function sendUserDM(userId, message, client) {
   try {
     const user = await client.users.fetch(userId);
     if (user) {
