@@ -51,7 +51,7 @@ const VILLAGE_IMAGES = {
 const QUEST_PARAMS = {
   item: { minAmount: 1, maxAmount: 5 },
   monster: { minAmount: 3, maxAmount: 7 },
-  crafting: { minAmount: 2, maxAmount: 5 }
+  crafting: { minAmount: 1, maxAmount: 3 }
 };
 
 // ------------------- NPC Quest Flavor Text Database -------------------
