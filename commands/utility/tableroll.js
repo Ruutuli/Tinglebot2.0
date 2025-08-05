@@ -1,5 +1,5 @@
 // ------------------- Import necessary modules -------------------
-const { SlashCommandBuilder, EmbedBuilder, AttachmentBuilder, MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, AttachmentBuilder, MessageFlags, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionsBitField } = require('discord.js');
 const csv = require('csv-parser');
 const fs = require('fs');
 const path = require('path');
@@ -12,11 +12,40 @@ const { safeAppendDataToSheet, extractSpreadsheetId, isValidGoogleSheetsUrl, aut
 const { DEFAULT_IMAGE_URL } = require('../../embeds/embeds');
 const { 
   validateTableName, 
-  parseCSVData, 
-  getRarityColor, 
-  getRarityEmoji, 
-  getCategoryEmoji 
+  parseCSVData
 } = require('../../utils/tableRollUtils');
+
+// ------------------- Helper function to get item emoji from database -------------------
+async function getItemEmoji(itemName) {
+  try {
+    const Item = require('../../models/ItemModel');
+    const item = await Item.findOne({ itemName: itemName });
+    if (item && item.emoji) {
+      return item.emoji;
+    }
+  } catch (error) {
+    console.error(`Error fetching item emoji for ${itemName}:`, error);
+  }
+  
+  // Fallback to default emoji if not found in database
+  return '📦';
+}
+
+// ------------------- Helper function to get item image from database -------------------
+async function getItemImage(itemName) {
+  try {
+    const Item = require('../../models/ItemModel');
+    const item = await Item.findOne({ itemName: itemName });
+    if (item && item.image && item.image !== 'No Image') {
+      return item.image;
+    }
+  } catch (error) {
+    console.error(`Error fetching item image for ${itemName}:`, error);
+  }
+  
+  // Fallback to default image if not found in database
+  return null;
+}
 
 // ------------------- Exporting the slash command for table rolls -------------------
 module.exports = {
@@ -37,42 +66,9 @@ module.exports = {
             .setDescription('CSV file with table data (Weight,Flavor,Item,thumbnail image)')
             .setRequired(true)
         )
-        .addStringOption(option =>
-          option.setName('description')
-            .setDescription('Description of the table')
-            .setRequired(false)
-        )
-        .addStringOption(option =>
-          option.setName('category')
-            .setDescription('Category for the table')
-            .setRequired(false)
-            .addChoices(
-              { name: 'General', value: 'general' },
-              { name: 'Loot', value: 'loot' },
-              { name: 'Monster', value: 'monster' },
-              { name: 'Treasure', value: 'treasure' },
-              { name: 'Crafting', value: 'crafting' },
-              { name: 'Event', value: 'event' },
-              { name: 'Custom', value: 'custom' }
-            )
-        )
-        .addStringOption(option =>
-          option.setName('tags')
-            .setDescription('Tags for the table (comma-separated)')
-            .setRequired(false)
-        )
-        .addIntegerOption(option =>
-          option.setName('maxrollsperday')
-            .setDescription('Maximum rolls per day (0 for unlimited)')
-            .setRequired(false)
-            .setMinValue(0)
-            .setMaxValue(1000)
-        )
-        .addBooleanOption(option =>
-          option.setName('public')
-            .setDescription('Make table public (default: true)')
-            .setRequired(false)
-        )
+        
+
+        
     )
     .addSubcommand(subcommand =>
       subcommand
@@ -105,6 +101,7 @@ module.exports = {
           option.setName('name')
             .setDescription('Name of the table to view')
             .setRequired(true)
+            .setAutocomplete(true)
         )
     )
     .addSubcommand(subcommand =>
@@ -131,8 +128,9 @@ module.exports = {
           option.setName('name')
             .setDescription('Name of the table to delete')
             .setRequired(true)
-                )
-      ),
+            .setAutocomplete(true)
+        )
+    ),
 
   // ------------------- Execute function to handle the tableroll command -------------------
   async execute(interaction) {
@@ -192,11 +190,6 @@ module.exports = {
   // ------------------- Handle table creation -------------------
   async handleCreate(interaction) {
     const name = interaction.options.getString('name');
-    const description = interaction.options.getString('description') || '';
-    const category = interaction.options.getString('category') || 'general';
-    const tags = interaction.options.getString('tags') || '';
-    const maxRollsPerDay = interaction.options.getInteger('maxrollsperday') || 0;
-    const isPublic = interaction.options.getBoolean('public') ?? true;
     const attachment = interaction.options.getAttachment('csvfile');
 
     // Validate attachment
@@ -238,47 +231,33 @@ module.exports = {
         });
       }
 
-      if (parseResult.entries.length === 0) {
-        return await interaction.editReply({
-          content: '❌ No valid entries found in the CSV file. Please check the format.',
-          flags: [MessageFlags.Ephemeral]
+             if (parseResult.entries.length === 0) {
+         return await interaction.editReply({
+           content: '❌ No valid entries found in the CSV file. Please check the format.',
+           flags: [MessageFlags.Ephemeral]
+         });
+       }
+
+               // Create table
+        const table = new TableRoll({
+          name: name,
+          entries: parseResult.entries,
+          createdBy: interaction.user.id
         });
-      }
-
-      // Parse tags
-      const tagArray = tags.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);
-
-      // Create table
-      const table = new TableRoll({
-        name: name,
-        description: description,
-        category: category,
-        entries: parseResult.entries,
-        createdBy: interaction.user.id,
-        tags: tagArray,
-        isPublic: isPublic,
-        maxRollsPerDay: maxRollsPerDay
-      });
 
       await table.save();
 
-      const embed = new EmbedBuilder()
-        .setColor(0x00FF00)
-        .setTitle(`✅ Table '${name}' ${existingTable ? 'Updated' : 'Created'} Successfully`)
-        .setDescription(description || 'No description provided')
-        .addFields(
-          { name: '📊 Entries', value: parseResult.entries.length.toString(), inline: true },
-          { name: '🎲 Total Weight', value: table.totalWeight.toString(), inline: true },
-          { name: '👤 Created By', value: `<@${interaction.user.id}>`, inline: true },
-          { name: '📂 Category', value: category, inline: true },
-          { name: '🏷️ Tags', value: tagArray.length > 0 ? tagArray.join(', ') : 'None', inline: true },
-          { name: '🔒 Public', value: isPublic ? 'Yes' : 'No', inline: true }
-        )
-        .setTimestamp();
+             const embed = new EmbedBuilder()
+         .setColor(0x00FF00)
+         .setTitle(`✅ Table '${name}' ${existingTable ? 'Updated' : 'Created'} Successfully`)
+                   .addFields(
+            { name: '📊 Entries', value: parseResult.entries.length.toString(), inline: true },
+            { name: '🎲 Total Weight', value: table.totalWeight.toString(), inline: true },
+            { name: '👤 Created By', value: `<@${interaction.user.id}>`, inline: true }
+          )
+         .setTimestamp();
 
-      if (maxRollsPerDay > 0) {
-        embed.addFields({ name: '📅 Daily Limit', value: maxRollsPerDay.toString(), inline: true });
-      }
+
 
       await interaction.editReply({ embeds: [embed] });
 
@@ -328,13 +307,10 @@ module.exports = {
         });
       }
 
-      // Check if table is public or user is creator
-      if (!table.isPublic && table.createdBy !== userId) {
-        return await interaction.reply({
-          content: `❌ Table '${tableName}' is private and you don't have permission to roll on it.`,
-          flags: [MessageFlags.Ephemeral]
-        });
-      }
+      
+
+      // Defer reply to extend timeout for database operations
+      await interaction.deferReply();
 
       // Roll on the table
       const result = await TableRoll.rollOnTable(tableName);
@@ -354,12 +330,12 @@ module.exports = {
       // Build roll result string
       const rollResultString = `**🎲 d${totalEntries} → ${rolledIndex + 1}**`;
 
-      // Build embed
-      const embed = new EmbedBuilder()
-        .setColor(getRarityColor(rolledRarity))
-        .setTitle(`🎲 Table Roll: ${tableName}`)
-        .setDescription(rollResultString)
-        .setTimestamp();
+             // Build embed
+       const embed = new EmbedBuilder()
+         .setColor(0x0099FF)
+         .setTitle(`🎲 Table Roll: ${tableName}`)
+         .setDescription(rollResultString)
+         .setTimestamp();
 
       // Set author to character
       if (character.icon) {
@@ -370,86 +346,112 @@ module.exports = {
         });
       }
 
-      // Add result fields
-      if (rolledItemName && rolledItemName.trim()) {
-        embed.addFields({
-          name: '🎁 Result',
-          value: `**${rolledItemName}**`,
-          inline: false
-        });
-      }
-      if (rolledFlavor && rolledFlavor.trim()) {
-        embed.addFields({
-          name: '📝 Flavor',
-          value: rolledFlavor,
-          inline: false
-        });
-      }
-      
-      // Add rarity if not common
-      if (rolledRarity && rolledRarity !== 'common') {
-        embed.addFields({
-          name: '⭐ Rarity',
-          value: rolledRarity.charAt(0).toUpperCase() + rolledRarity.slice(1),
-          inline: true
-        });
-      }
-      
-      // Use rolled thumbnail if available, else default image
-      if (rolledThumbnail && rolledThumbnail.trim()) {
-        embed.setThumbnail(rolledThumbnail);
-      }
-      
-      // Always show default image (for both items and flavor-only rolls)
-      embed.setImage(DEFAULT_IMAGE_URL);
+             // Add result fields with emojis
+       if (rolledItemName && rolledItemName.trim()) {
+         const itemEmoji = await getItemEmoji(rolledItemName);
+         embed.addFields({
+           name: '__🎁 Result__',
+           value: `> ${itemEmoji} **${rolledItemName}**`,
+           inline: false
+         });
+       }
+       // Flavor text is required
+       if (!rolledFlavor || !rolledFlavor.trim()) {
+         embed.addFields({
+           name: '__⚠️ Warning__',
+           value: `> No flavor text found for this roll. Please check your table configuration.`,
+           inline: false
+         });
+       } else {
+         embed.addFields({
+           name: '__📝 Flavor__',
+           value: `> ${rolledFlavor}`,
+           inline: false
+         });
+       }
+       
+       // Use item image from database as thumbnail if available
+       if (rolledItemName && rolledItemName.trim()) {
+         const itemImage = await getItemImage(rolledItemName);
+         if (itemImage) {
+           embed.setThumbnail(itemImage);
+         } else if (rolledThumbnail && rolledThumbnail.trim()) {
+           // Fallback to rolled thumbnail if no database image
+           embed.setThumbnail(rolledThumbnail);
+         }
+       } else if (rolledThumbnail && rolledThumbnail.trim()) {
+         // For flavor-only rolls, use rolled thumbnail if available
+         embed.setThumbnail(rolledThumbnail);
+       }
+       
+       // Always show the default image
+       embed.setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png');
 
-      // Add footer with table info
-      embed.setFooter({
-        text: `Table: ${tableName} | Roll #${result.rollNumber}`,
-      });
+             // Add footer with table info
+       embed.setFooter({
+         text: `Table: ${tableName}`,
+       });
 
-      // Add daily roll limit info if applicable
-      if (result.dailyRollsRemaining !== null) {
-        embed.addFields({
-          name: '📅 Daily Rolls Remaining',
-          value: result.dailyRollsRemaining.toString(),
-          inline: true
-        });
-      }
+             // Add item to database and Google Sheets if it's a valid item
+       let inventoryAdded = false;
+       if (rolledItemName && rolledItemName.trim()) {
+         try {
+           // Add to database
+           await addItemInventoryDatabase(
+             character._id,
+             rolledItemName,
+             1, // Quantity
+             interaction,
+             'Table Roll'
+           );
+           inventoryAdded = true;
+           // Note: Google Sheets sync is handled by addItemInventoryDatabase
+         } catch (error) {
+           handleError(error, 'tableroll.js', {
+             commandName: '/tableroll roll',
+             userTag: interaction.user.tag,
+             userId: interaction.user.id,
+             characterName: character.name,
+             tableName: tableName,
+             itemName: rolledItemName
+           });
+           // Continue with the roll display even if database/sheet addition fails
+         }
+       }
 
-      // Add item to database and Google Sheets if it's a valid item
-      if (rolledItemName && rolledItemName.trim()) {
-        try {
-          // Add to database
-          await addItemInventoryDatabase(
-            character._id,
-            rolledItemName,
-            1, // Quantity
-            interaction,
-            'Table Roll'
-          );
+       // Add inventory confirmation to embed
+       if (inventoryAdded && rolledItemName && rolledItemName.trim()) {
+         embed.addFields({
+           name: '__✅ Inventory Updated__',
+           value: `> **${rolledItemName}** has been added to ${character.name}'s inventory!`,
+           inline: false
+         });
+       }
 
-          // Note: Google Sheets sync is handled by addItemInventoryDatabase
-        } catch (error) {
-          handleError(error, 'tableroll.js', {
-            commandName: '/tableroll roll',
-            userTag: interaction.user.tag,
-            userId: interaction.user.id,
-            characterName: character.name,
-            tableName: tableName,
-            itemName: rolledItemName
-          });
-          // Continue with the roll display even if database/sheet addition fails
-        }
-      }
+       // Add daily roll limit info if applicable
+       if (result.dailyRollsRemaining !== null) {
+         embed.addFields({
+           name: '📅 Daily Rolls Remaining',
+           value: result.dailyRollsRemaining.toString(),
+           inline: true
+         });
+       }
 
-      await interaction.reply({ embeds: [embed] });
+      await interaction.editReply({ embeds: [embed] });
 
     } catch (error) {
-      await interaction.reply({
-        content: `❌ ${error.message}`,
-        flags: [MessageFlags.Ephemeral]
-      });
+      // Check if we already deferred the reply
+      if (interaction.deferred) {
+        await interaction.editReply({
+          content: `❌ ${error.message}`,
+          flags: [MessageFlags.Ephemeral]
+        });
+      } else {
+        await interaction.reply({
+          content: `❌ ${error.message}`,
+          flags: [MessageFlags.Ephemeral]
+        });
+      }
     }
   },
 
@@ -467,18 +469,23 @@ module.exports = {
 
       const embed = new EmbedBuilder()
         .setColor(0x0099FF)
-        .setTitle('📋 Available Tables')
-        .setDescription(`Use \`/tableroll roll name:tableName\` to roll on a table`);
+        .setTitle('🎲 Available Tables')
+        .setDescription(`Use \`/tableroll roll name:tableName\` to roll on a table`)
+        .setImage(DEFAULT_IMAGE_URL)
+        .setFooter({ text: `Found ${tables.length} active table${tables.length !== 1 ? 's' : ''}` })
+        .setTimestamp();
 
+      // Simplified table list with just entries and weight
       const tableList = tables.map(table => {
-        const categoryEmoji = getCategoryEmoji(table.category);
-        const rollCount = table.rollCount || 0;
-        return `**${categoryEmoji} ${table.name}** - ${table.entries.length} entries (${table.totalWeight} weight, ${rollCount} rolls)`;
-      }).join('\n');
+        const entryCount = table.entries.length;
+        const totalWeight = table.totalWeight;
+        
+        return `**${table.name}**\n└ 📊 ${entryCount} entries | 🎲 ${totalWeight} weight`;
+      }).join('\n\n');
 
       embed.addFields({
-        name: 'Tables',
-        value: tableList,
+        name: `📋 Tables (${tables.length})`,
+        value: tableList || 'No tables available',
         inline: false
       });
 
@@ -504,6 +511,14 @@ module.exports = {
   async handleView(interaction) {
     const tableName = interaction.options.getString('name');
 
+    // Check if user has administrator permissions
+    if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+      return await interaction.reply({
+        content: '❌ This command requires administrator permissions.',
+        flags: [MessageFlags.Ephemeral]
+      });
+    }
+
     try {
       const table = await TableRoll.findOne({ name: tableName, isActive: true });
       
@@ -517,17 +532,12 @@ module.exports = {
       const embed = new EmbedBuilder()
         .setColor(0x0099FF)
         .setTitle(`📋 Table: ${table.name}`)
-        .setDescription(table.description || 'No description')
+        .setImage(DEFAULT_IMAGE_URL)
+        .setDescription(`**📊 ${table.entries.length} entries** | **🎲 ${table.totalWeight} total weight**`)
         .addFields(
-          { name: '📊 Entries', value: table.entries.length.toString(), inline: true },
-          { name: '🎲 Total Weight', value: table.totalWeight.toString(), inline: true },
           { name: '👤 Created By', value: `<@${table.createdBy}>`, inline: true },
-          { name: '📂 Category', value: table.category, inline: true },
-          { name: '🏷️ Tags', value: table.tags.length > 0 ? table.tags.join(', ') : 'None', inline: true },
-          { name: '🔒 Public', value: table.isPublic ? 'Yes' : 'No', inline: true },
           { name: '📅 Created', value: table.createdAt.toLocaleDateString(), inline: true },
-          { name: '🔄 Updated', value: table.updatedAt.toLocaleDateString(), inline: true },
-          { name: '🎲 Total Rolls', value: (table.rollCount || 0).toString(), inline: true }
+          { name: '🔄 Updated', value: table.updatedAt.toLocaleDateString(), inline: true }
         );
 
       if (table.maxRollsPerDay > 0) {
@@ -538,19 +548,18 @@ module.exports = {
         });
       }
 
-      // Show first few entries as preview
-      const previewEntries = table.entries.slice(0, 5).map((entry, index) => {
-        const rarityEmoji = getRarityEmoji(entry.rarity);
-        return `${index + 1}. **${entry.item || 'Flavor Only'}** (Weight: ${entry.weight}) ${rarityEmoji}`;
+      // Show all entries in a cleaner format
+      const allEntries = table.entries.map((entry, index) => {
+        const itemName = entry.item || 'Flavor Only';
+        const weight = entry.weight;
+        return `**${index + 1}.** ${itemName} (Weight: ${weight})`;
       }).join('\n');
 
-      if (previewEntries) {
-        embed.addFields({
-          name: '📝 Sample Entries',
-          value: previewEntries + (table.entries.length > 5 ? '\n...' : ''),
-          inline: false
-        });
-      }
+      embed.addFields({
+        name: `📝 Entries`,
+        value: allEntries,
+        inline: false
+      });
 
       await interaction.reply({ embeds: [embed] });
 
@@ -632,17 +641,12 @@ module.exports = {
       const embed = new EmbedBuilder()
         .setColor(0x00FF00)
         .setTitle(`✅ Table '${tableName}' Updated Successfully`)
-        .setDescription(table.description || 'No description')
-        .addFields(
-          { name: '📊 New Entries', value: parseResult.entries.length.toString(), inline: true },
-          { name: '🎲 New Total Weight', value: table.totalWeight.toString(), inline: true },
-          { name: '👤 Updated By', value: `<@${interaction.user.id}>`, inline: true },
-          { name: '📂 Category', value: table.category, inline: true },
-          { name: '🏷️ Tags', value: table.tags.length > 0 ? table.tags.join(', ') : 'None', inline: true },
-          { name: '🔒 Public', value: table.isPublic ? 'Yes' : 'No', inline: true },
-          { name: '🔄 Updated', value: table.updatedAt.toLocaleDateString(), inline: true },
-          { name: '🎲 Total Rolls', value: (table.rollCount || 0).toString(), inline: true }
-        );
+                 .addFields(
+           { name: '📊 New Entries', value: parseResult.entries.length.toString(), inline: true },
+           { name: '🎲 New Total Weight', value: table.totalWeight.toString(), inline: true },
+                        { name: '👤 Updated By', value: `<@${interaction.user.id}>`, inline: true },
+             { name: '🔄 Updated', value: table.updatedAt.toLocaleDateString(), inline: true }
+         );
 
       if (table.maxRollsPerDay > 0) {
         embed.addFields({
@@ -654,8 +658,7 @@ module.exports = {
 
       // Show first few entries as preview
       const previewEntries = table.entries.slice(0, 5).map((entry, index) => {
-        const rarityEmoji = getRarityEmoji(entry.rarity);
-        return `${index + 1}. **${entry.item || 'Flavor Only'}** (Weight: ${entry.weight}) ${rarityEmoji}`;
+        return `${index + 1}. **${entry.item || 'Flavor Only'}** (Weight: ${entry.weight})`;
       }).join('\n');
 
       if (previewEntries) {

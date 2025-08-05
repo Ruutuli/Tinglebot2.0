@@ -4233,35 +4233,32 @@ handleBlightOverrideTargetAutocomplete,
 // Provides autocomplete suggestions for table roll names.
 async function handleTableRollNameAutocomplete(interaction, focusedOption) {
   try {
+    // Import the TableRoll model
+    const TableRoll = require('../models/TableRollModel');
+    
     // Get the search query from the focused option
     const searchQuery = focusedOption.value?.toLowerCase() || "";
     
     // Find active table rolls
     const tableRolls = await TableRoll.find({ 
       isActive: true
-    }).select('name category description rollCount').limit(25);
+    }).select('name createdBy totalWeight entries createdAt').limit(25);
     
     if (!tableRolls || tableRolls.length === 0) {
       return await interaction.respond([]);
     }
 
-    // Map table rolls to autocomplete choices
+    // Map table rolls to autocomplete choices - just show the table name
     const choices = tableRolls.map((table) => {
-      const name = table.name;
-      const category = table.category;
-      const description = table.description || '';
-      const rollCount = table.rollCount || 0;
-      
       return {
-        name: `${name} | ${category} | ${rollCount} rolls`,
-        value: name,
+        name: table.name,
+        value: table.name,
       };
     });
 
-    // Filter based on user input (search by name, category, or description)
+    // Filter based on user input (search by name)
     const filteredChoices = choices.filter(choice => 
-      choice.name.toLowerCase().includes(searchQuery) ||
-      choice.value.toLowerCase().includes(searchQuery)
+      choice.name.toLowerCase().includes(searchQuery)
     );
 
     await interaction.respond(filteredChoices.slice(0, 25));
