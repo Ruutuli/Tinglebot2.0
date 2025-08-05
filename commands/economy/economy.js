@@ -555,8 +555,8 @@ for (const { name } of cleanedItems) {
    return;
   }
 
-  const fromInventoryCollection = await getCharacterInventoryCollection(
-   fromCharacter.name
+  const fromInventoryCollection = await getCharacterInventoryCollectionWithModSupport(
+   fromCharacter
   );
   let allItemsAvailable = true;
   const unavailableItems = [];
@@ -1384,8 +1384,8 @@ if (quantity <= 0) {
     return;
   }
 
-  const inventoryCollection = await getCharacterInventoryCollection(
-   characterName
+  const inventoryCollection = await getCharacterInventoryCollectionWithModSupport(
+   character
   );
   const inventoryItem = await inventoryCollection.findOne({ itemName });
 
@@ -1818,8 +1818,8 @@ for (const { name } of cleanedItems) {
 
   let allItemsAvailable = true;
   const unavailableItems = [];
-  const fromInventoryCollection = await getCharacterInventoryCollection(
-   fromCharacter.name
+  const fromInventoryCollection = await getCharacterInventoryCollectionWithModSupport(
+   fromCharacter
   );
 
   console.log(
@@ -2225,7 +2225,7 @@ async function updateTradeMessage(message, tradeData, fromCharacter, toCharacter
 
 // ------------------- Trade Validation -------------------
 async function validateTradeItems(character, items) {
-  const characterInventoryCollection = await getCharacterInventoryCollection(character.name);
+  const characterInventoryCollection = await getCharacterInventoryCollectionWithModSupport(character);
   const unavailableItems = [];
   for (const item of items) {
     const itemInventory = await characterInventoryCollection.findOne({

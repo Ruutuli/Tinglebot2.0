@@ -136,7 +136,10 @@ async function syncToInventoryDatabase(character, item, interaction) {
     
     const inventoriesConnection = await dbFunctions.connectToInventories();
     const db = inventoriesConnection.useDb('inventories');
-    const collectionName = character.name.toLowerCase();
+    
+    // Use per-character inventory collection for mod characters (not shared)
+    let collectionName;
+    collectionName = character.name.toLowerCase();
     
     const inventoryCollection = db.collection(collectionName);
 
@@ -313,7 +316,10 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
     }
     const inventoriesConnection = await dbFunctions.connectToInventories();
     const db = inventoriesConnection.useDb('inventories');
-    const collectionName = character.name.toLowerCase();
+    
+    // Use per-character inventory collection for mod characters (not shared)
+    let collectionName;
+    collectionName = character.name.toLowerCase();
     
     const inventoryCollection = db.collection(collectionName);
 
@@ -414,7 +420,9 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
       throw new Error(`Character with ID ${characterId} not found`);
     }
 
-    const collectionName = character.name.toLowerCase();
+    // Use per-character inventory collection for mod characters (not shared)
+    let collectionName;
+    collectionName = character.name.toLowerCase();
     const inventoriesConnection = await dbFunctions.connectToInventories();
     const db = inventoriesConnection.useDb('inventories');
     
@@ -598,7 +606,10 @@ const addItemsToDatabase = async (character, items, interaction) => {
 
     const inventoriesConnection = await dbFunctions.connectToInventories();
     const db = inventoriesConnection.useDb('inventories');
-    const collectionName = character.name.toLowerCase();
+    
+    // Use per-character inventory collection for mod characters (not shared)
+    let collectionName;
+    collectionName = character.name.toLowerCase();
     
     const inventoryCollection = db.collection(collectionName);
 
@@ -852,9 +863,12 @@ async function removeInitialItemIfSynced(characterId) {
     }
 
     if (character.inventorySynced) {
-      const collectionName = character.name.toLowerCase();
       const inventoriesConnection = await dbFunctions.connectToInventories();
       const db = inventoriesConnection.useDb('inventories');
+      
+      // Use per-character inventory collection for mod characters (not shared)
+      let collectionName;
+      collectionName = character.name.toLowerCase();
       
       const inventoryCollection = db.collection(collectionName);
       const initialItem = await inventoryCollection.findOne({
@@ -959,7 +973,10 @@ const syncSheetDataToDatabase = async (character, sheetData) => {
 
         const inventoriesConnection = await dbFunctions.connectToInventories();
         const db = inventoriesConnection.useDb('inventories');
-        const collectionName = character.name.toLowerCase();
+        
+        // Use per-character inventory collection for mod characters (not shared)
+        let collectionName;
+        collectionName = character.name.toLowerCase();
         
         const inventoryCollection = db.collection(collectionName);
 

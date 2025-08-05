@@ -75,6 +75,11 @@ async function validateUserCooldowns(userId) {
  * @returns {Promise<{canProceed: boolean, message?: string}>}
  */
 function validateCharacterEligibility(character) {
+  // Mod characters are immune to negative effects and can always participate
+  if (character.isModCharacter) {
+    return { canProceed: true };
+  }
+
   // Check if character is KO'd
   if (character.currentHearts === 0) {
     return { canProceed: false, message: `❌ ${character.name} is KO'd and cannot participate.` };
@@ -172,7 +177,14 @@ async function validateItemQuestRequirements(character, quest) {
   try {
     const inventoriesConnection = await connectToInventories();
     const db = inventoriesConnection.useDb('inventories');
-    const collectionName = character.name.toLowerCase();
+    
+    // Use shared inventory collection for mod characters
+    let collectionName;
+    if (character.isModCharacter) {
+      collectionName = 'mod_shared_inventory';
+    } else {
+      collectionName = character.name.toLowerCase();
+    }
     const inventoryCollection = db.collection(collectionName);
     
     const dbItems = await inventoryCollection.find({
@@ -236,7 +248,14 @@ async function validateCraftingQuestRequirements(character, quest) {
   try {
     const inventoriesConnection = await connectToInventories();
     const db = inventoriesConnection.useDb('inventories');
-    const collectionName = character.name.toLowerCase();
+    
+    // Use shared inventory collection for mod characters
+    let collectionName;
+    if (character.isModCharacter) {
+      collectionName = 'mod_shared_inventory';
+    } else {
+      collectionName = character.name.toLowerCase();
+    }
     const inventoryCollection = db.collection(collectionName);
     
     const dbItems = await inventoryCollection.find({
@@ -285,7 +304,14 @@ async function removeQuestItems(character, quest, interaction) {
     
     const inventoriesConnection = await connectToInventories();
     const db = inventoriesConnection.useDb('inventories');
-    const collectionName = character.name.toLowerCase();
+    
+    // Use shared inventory collection for mod characters
+    let collectionName;
+    if (character.isModCharacter) {
+      collectionName = 'mod_shared_inventory';
+    } else {
+      collectionName = character.name.toLowerCase();
+    }
     const inventoryCollection = db.collection(collectionName);
     
     let itemsToRemove = [];

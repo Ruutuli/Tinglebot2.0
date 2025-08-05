@@ -225,12 +225,6 @@ module.exports = {
             )
             .addStringOption((option) =>
               option
-                .setName("inventory_link")
-                .setDescription("Google Sheets link for inventory")
-                .setRequired(true)
-            )
-            .addStringOption((option) =>
-              option
                 .setName("app_link")
                 .setDescription("App link for the character")
                 .setRequired(true)
@@ -309,12 +303,6 @@ module.exports = {
                 .setDescription("Job of the character")
                 .setRequired(true)
                 .setAutocomplete(true)
-            )
-            .addStringOption((option) =>
-              option
-                .setName("inventory_link")
-                .setDescription("Google Sheets link for inventory")
-                .setRequired(true)
             )
             .addStringOption((option) =>
               option
@@ -397,12 +385,6 @@ module.exports = {
                 .setDescription("Job of the character")
                 .setRequired(true)
                 .setAutocomplete(true)
-            )
-            .addStringOption((option) =>
-              option
-                .setName("inventory_link")
-                .setDescription("Google Sheets link for inventory")
-                .setRequired(true)
             )
             .addStringOption((option) =>
               option
@@ -553,7 +535,6 @@ async function handleCreateModCharacter(interaction, subcommand) {
       race: interaction.options.getString('race'),
       village: interaction.options.getString('village'),
       job: interaction.options.getString('job'),
-      inventoryLink: interaction.options.getString('inventory_link'),
       appLink: interaction.options.getString('app_link'),
       userId: interaction.user.id
     };
@@ -604,18 +585,11 @@ async function handleCreateModCharacter(interaction, subcommand) {
       return;
     }
 
-    // Validate Google Sheets URL
-    if (!isValidGoogleSheetsUrl(characterData.inventoryLink)) {
-      await interaction.reply({
-        content: '❌ Invalid Google Sheets URL. Please provide a valid Google Sheets link.',
-        flags: MessageFlags.Ephemeral
-      });
-      return;
-    }
 
-    // Extract spreadsheet ID and create inventory collection
-    const spreadsheetId = extractSpreadsheetId(characterData.inventoryLink);
-    const inventoryCollectionName = `inventory_${characterData.name.toLowerCase().replace(/\s+/g, '_')}`;
+
+    // Use shared mod inventory for all mod characters
+    const MOD_SHARED_INVENTORY_LINK = 'https://docs.google.com/spreadsheets/d/17XE0IOXSjVx47HVQ4FdcvEXm7yeg51KVkoiamD5dmKs/edit?usp=sharing';
+    const inventoryCollectionName = 'mod_shared_inventory';
 
     // Handle icon upload
     let iconUrl = DEFAULT_IMAGE_URL;
@@ -651,7 +625,7 @@ async function handleCreateModCharacter(interaction, subcommand) {
       currentVillage: characterData.village,
       job: characterData.job,
       icon: iconUrl,
-      inventory: inventoryCollectionName,
+      inventory: MOD_SHARED_INVENTORY_LINK,
       appLink: characterData.appLink,
       modTitle: characterData.modTitle,
       modType: characterData.modType,
@@ -666,8 +640,13 @@ async function handleCreateModCharacter(interaction, subcommand) {
 
     await createModCharacter(modCharacterData);
 
-    // Create inventory collection
-    await createCharacterInventory(inventoryCollectionName, null, characterData.job);
+    // Create shared mod inventory collection (only if it doesn't exist)
+    try {
+      await createCharacterInventory(inventoryCollectionName, null, characterData.job);
+    } catch (error) {
+      // Collection might already exist, which is fine for shared inventory
+      console.log(`[modCharacter.js]: Shared mod inventory collection already exists or error creating: ${error.message}`);
+    }
 
     // Create success embed
     const embed = new EmbedBuilder()
@@ -684,7 +663,7 @@ async function handleCreateModCharacter(interaction, subcommand) {
         { name: '❤️ __Hearts__', value: `> ∞ (Unlimited)`, inline: true },
         { name: '⚡ __Stamina__', value: `> ∞ (Unlimited)`, inline: true },
         { name: '📊 __Title__', value: `> ${characterData.modTitle} of ${characterData.modType}`, inline: true },
-        { name: '📦 __Inventory__', value: `> [Google Sheets](${characterData.inventoryLink})`, inline: false },
+        { name: '📦 __Inventory__', value: `> [Shared Mod Inventory](${MOD_SHARED_INVENTORY_LINK})`, inline: false },
         { name: '🔗 __Application Link__', value: `> [Link](${characterData.appLink})`, inline: false }
       )
       .setThumbnail(iconUrl)
@@ -748,7 +727,7 @@ async function handleViewModCharacter(interaction) {
         { name: '🔹 __Job__', value: `> ${capitalizeFirstLetter(modCharacter.job)}`, inline: true },
         { name: '📊 __Title__', value: `> ${modCharacter.modTitle} of ${modCharacter.modType}`, inline: true },
         { name: '👑 __Owner__', value: `> ${modCharacter.modOwner}`, inline: true },
-        { name: '📦 __Inventory__', value: `> [Google Sheets](${modCharacter.inventory})`, inline: false },
+        { name: '📦 __Inventory__', value: `> [Shared Mod Inventory](${modCharacter.inventory})`, inline: false },
         { name: '🔗 __Application Link__', value: `> [Link](${modCharacter.appLink})`, inline: false }
       )
       .setThumbnail(modCharacter.icon || DEFAULT_IMAGE_URL)

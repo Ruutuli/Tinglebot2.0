@@ -9,6 +9,7 @@
 // Database Models
 // ------------------- Importing database models -------------------
 const Character = require('../models/CharacterModel');
+const ModCharacter = require('../models/ModCharacterModel');
 
 const { handleError } = require('../utils/globalErrorHandler');
 // ============================================================================
@@ -140,6 +141,13 @@ const useHearts = async (characterId, hearts) => {
     const character = await Character.findById(characterId);
     if (!character) throw new Error('Character not found');
 
+    // Check if this is a mod character (also check ModCharacter collection)
+    const modCharacter = await ModCharacter.findById(characterId);
+    if (modCharacter || character.isModCharacter) {
+      console.log(`[characterStatsModule.js]: 👑 Mod character ${character.name} is immune to heart loss.`);
+      return createSimpleCharacterEmbed(character, `❤️ Mod character - no hearts lost`);
+    }
+
     if (character.ko) {
       console.log(`[characterStatsModule.js]: 💀 Skipping heart deduction. Character ${character.name} is already KO'd.`);
       return; // Prevent redundant deduction if already KO
@@ -173,6 +181,13 @@ const useStamina = async (characterId, stamina) => {
     const character = await Character.findById(characterId);
     if (!character) throw new Error('Character not found');
 
+    // Check if this is a mod character (also check ModCharacter collection)
+    const modCharacter = await ModCharacter.findById(characterId);
+    if (modCharacter || character.isModCharacter) {
+      console.log(`[characterStatsModule.js]: 👑 Mod character ${character.name} is immune to stamina loss.`);
+      return { message: `🟩 Mod character - no stamina lost`, exhausted: false };
+    }
+
     const newStamina = Math.max(character.currentStamina - stamina, 0);
     await updateCurrentStamina(characterId, newStamina, true);
 
@@ -198,6 +213,15 @@ const useStamina = async (characterId, stamina) => {
 const handleKO = async (characterId) => {
   try {
     console.log(`[characterStatsModule.js]: 💀 Handling KO for Character ID ${characterId}`);
+    
+    // Check if this is a mod character (also check ModCharacter collection)
+    const character = await Character.findById(characterId);
+    const modCharacter = await ModCharacter.findById(characterId);
+    if (modCharacter || (character && character.isModCharacter)) {
+      console.log(`[characterStatsModule.js]: 👑 Mod character ${character?.name || 'Unknown'} is immune to KO.`);
+      return; // Mod characters cannot be KO'd
+    }
+    
     await Character.updateOne({ _id: characterId }, { $set: { ko: true, currentHearts: 0 } });
     console.log(`[characterStatsModule.js]: ✅ Character ID ${characterId} is KO'd.`);
   } catch (error) {
@@ -386,6 +410,13 @@ const updateCharacterAttack = async (characterId) => {
 // Checks if a character has enough stamina, deducts it if possible, and returns the updated stamina.
 const checkAndUseStamina = async (character, staminaCost) => {
   try {
+      // Check if this is a mod character (also check ModCharacter collection)
+      const modCharacter = await ModCharacter.findById(character._id);
+      if (modCharacter || character.isModCharacter) {
+          console.log(`[characterStatsModule.js]: 👑 Mod character ${character.name} is immune to stamina loss.`);
+          return character.currentStamina; // Return current stamina without deduction
+      }
+
       if (character.currentStamina < staminaCost) {
           throw new Error(`❌ Not enough stamina. Required: ${staminaCost}, Available: ${character.currentStamina}`);
       }
@@ -409,6 +440,13 @@ const handleZeroStamina = async (characterId) => {
   try {
     const character = await Character.findById(characterId);
     if (!character) throw new Error('Character not found');
+
+    // Check if this is a mod character (also check ModCharacter collection)
+    const modCharacter = await ModCharacter.findById(characterId);
+    if (modCharacter || character.isModCharacter) {
+      console.log(`[characterStatsModule.js]: 👑 Mod character ${character.name} has unlimited stamina.`);
+      return `${character.name} has unlimited stamina as a mod character.`;
+    }
 
     if (character.currentStamina === 0) {
       console.log(`[characterStatsModule.js]: ⚠️ ${character.name} has run out of stamina!`);

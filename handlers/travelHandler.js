@@ -64,6 +64,7 @@ const {
 const { handleError } = require('../utils/globalErrorHandler');
 
 const Character = require('../models/CharacterModel');
+const ModCharacter = require('../models/ModCharacterModel');
 
 // ============================================================================
 // ------------------- Travel Embeds -------------------
@@ -377,13 +378,23 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
 
       character.currentHearts = 0;
       character.currentStamina = 0;
-      // Calculate debuff end date: midnight EST on the 7th day after KO
-      const now = new Date();
-      const estDate = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
-      // Set to midnight EST 7 days from now (date only, no time)
-      const debuffEndDate = new Date(estDate.getFullYear(), estDate.getMonth(), estDate.getDate() + 7, 0, 0, 0, 0);
       
-      character.debuff = { active: true, endDate: debuffEndDate };
+      // Check if this is a mod character (also check ModCharacter collection)
+      const modCharacter = await ModCharacter.findById(character._id);
+      if (modCharacter || character.isModCharacter) {
+        console.log(`[travelHandler.js]: 👑 Mod character ${character.name} is immune to debuff.`);
+        // Mod characters are immune to debuff but still get KO'd for travel purposes
+        character.debuff = { active: false, endDate: null };
+      } else {
+        // Calculate debuff end date: midnight EST on the 7th day after KO
+        const now = new Date();
+        const estDate = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+        // Set to midnight EST 7 days from now (date only, no time)
+        const debuffEndDate = new Date(estDate.getFullYear(), estDate.getMonth(), estDate.getDate() + 7, 0, 0, 0, 0);
+        
+        character.debuff = { active: true, endDate: debuffEndDate };
+      }
+      
       character.currentVillage = startingVillage || character.homeVillage;
       character.ko = true;
 
@@ -529,13 +540,23 @@ async function handleFight(interaction, character, encounterMessage, monster, tr
           decision = `💔 KO'd while fleeing!`;
           // KO on flee: KO state and heart update are already handled by useHearts
           // Only update debuff and village if needed (if not already handled)
-          // Calculate debuff end date: midnight EST on the 7th day after KO
-          const now = new Date();
-          const estDate = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
-          // Set to midnight EST 7 days from now (date only, no time)
-          const debuffEndDate = new Date(estDate.getFullYear(), estDate.getMonth(), estDate.getDate() + 7, 0, 0, 0, 0);
           
-          character.debuff = { active: true, endDate: debuffEndDate };
+          // Check if this is a mod character (also check ModCharacter collection)
+          const modCharacter = await ModCharacter.findById(character._id);
+          if (modCharacter || character.isModCharacter) {
+            console.log(`[travelHandler.js]: 👑 Mod character ${character.name} is immune to debuff.`);
+            // Mod characters are immune to debuff but still get KO'd for travel purposes
+            character.debuff = { active: false, endDate: null };
+          } else {
+            // Calculate debuff end date: midnight EST on the 7th day after KO
+            const now = new Date();
+            const estDate = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+            // Set to midnight EST 7 days from now (date only, no time)
+            const debuffEndDate = new Date(estDate.getFullYear(), estDate.getMonth(), estDate.getDate() + 7, 0, 0, 0, 0);
+            
+            character.debuff = { active: true, endDate: debuffEndDate };
+          }
+          
           character.currentVillage = ['rudania','vhintl'].includes(character.currentVillage)?'inariko':character.homeVillage;
           character.ko = true;
           await useStamina(character._id,0);

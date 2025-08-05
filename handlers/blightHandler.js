@@ -2791,7 +2791,14 @@ async function checkMissedRolls(client) {
           try {
             const inventoriesConnection = await connectToInventories();
             const db = inventoriesConnection.useDb("inventories");
-            const collectionName = character.name.toLowerCase();
+            
+            // Use shared inventory collection for mod characters
+            let collectionName;
+            if (character.isModCharacter) {
+              collectionName = 'mod_shared_inventory';
+            } else {
+              collectionName = character.name.toLowerCase();
+            }
             
             // Drop the entire collection instead of just deleting documents
             await db.collection(collectionName).drop().catch(error => {
