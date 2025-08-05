@@ -7,11 +7,6 @@ const {
 const { getBoostEffect } = require("../../modules/boostingModule");
 const { getJobPerk } = require("../../modules/jobsModule");
 const { useStamina } = require("../../modules/characterStatsModule");
-const {
- saveBoostingRequestToStorage,
- retrieveBoostingRequestFromStorage,
- retrieveBoostingRequestFromStorageByCharacter,
-} = require("../../utils/storage");
 const TempData = require("../../models/TempDataModel");
 
 // ------------------- TempData Storage Functions for Boosting -------------------
@@ -210,30 +205,40 @@ module.exports = {
     }
    }
 
-   const boosterJob = boosterCharacter.job;
-   const boost = getBoostEffect(boosterJob, category);
+       const boosterJob = boosterCharacter.job;
+    const boost = getBoostEffect(boosterJob, category);
 
-   const boostRequestId = uuidv4().slice(0, 8).toUpperCase();
-   const currentTime = Date.now();
-   const expirationTime = currentTime + 24 * 60 * 60 * 1000;
+    if (!boost) {
+     console.error(
+      `[boosting.js]: Error - No boost effect found for job "${boosterJob}" and category "${category}".`
+     );
+     await interaction.reply({
+      content: `No boost found for job "${boosterJob}" in category "${category}".`,
+      ephemeral: true,
+     });
+     return;
+    }
 
-   const requestData = {
-    boostRequestId,
-    targetCharacter: targetCharacter.name,
-    boostingCharacter: boosterCharacter.name,
-    category,
-    status: "pending",
-    requesterUserId: userId,
-    village: targetCharacter.currentVillage,
-    timestamp: currentTime,
-    expiresAt: expirationTime,
-    createdAt: new Date().toISOString(),
-    durationRemaining: null,
-    fulfilledAt: null,
-   };
+    const boostRequestId = uuidv4().slice(0, 8).toUpperCase();
+    const currentTime = Date.now();
+    const expirationTime = currentTime + 24 * 60 * 60 * 1000;
 
-       // Save to both old storage (for backward compatibility) and new TempData
-    saveBoostingRequestToStorage(boostRequestId, requestData);
+    const requestData = {
+     boostRequestId,
+     targetCharacter: targetCharacter.name,
+     boostingCharacter: boosterCharacter.name,
+     category,
+     status: "pending",
+     requesterUserId: userId,
+     village: targetCharacter.currentVillage,
+     timestamp: currentTime,
+     expiresAt: expirationTime,
+     createdAt: new Date().toISOString(),
+     durationRemaining: null,
+     fulfilledAt: null,
+    };
+
+    // Save to TempData only
     await saveBoostingRequestToTempData(boostRequestId, requestData);
 
     const embed = new EmbedBuilder()
@@ -266,11 +271,7 @@ module.exports = {
    const boosterName = interaction.options.getString("character");
    const userId = interaction.user.id;
 
-   // Try to retrieve from TempData first, then fallback to old storage
-   let requestData = await retrieveBoostingRequestFromTempData(requestId);
-   if (!requestData) {
-    requestData = retrieveBoostingRequestFromStorage(requestId);
-   }
+   const requestData = await retrieveBoostingRequestFromTempData(requestId);
    
    if (!requestData) {
     console.error(
@@ -368,9 +369,8 @@ module.exports = {
    requestData.durationRemaining = boostDuration;
    requestData.boostExpiresAt = boostExpiresAt;
 
-   // Save to both old storage and new TempData
-   saveBoostingRequestToStorage(requestId, requestData);
-   await saveBoostingRequestToTempData(requestId, requestData);
+       // Save to TempData only
+    await saveBoostingRequestToTempData(requestId, requestData);
 
    const embed = new EmbedBuilder()
     .setTitle(`Boost Applied: ${boost.name}`)
@@ -410,11 +410,7 @@ module.exports = {
     return;
    }
 
-   // Try to retrieve from TempData first, then fallback to old storage
-   let activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(characterName);
-   if (!activeBoost) {
-    activeBoost = retrieveBoostingRequestFromStorageByCharacter(characterName);
-   }
+   const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(characterName);
 
    if (!activeBoost || activeBoost.status !== "fulfilled") {
     await interaction.reply({
@@ -427,8 +423,7 @@ module.exports = {
    const currentTime = Date.now();
    if (activeBoost.boostExpiresAt && currentTime > activeBoost.boostExpiresAt) {
     activeBoost.status = "expired";
-    // Save to both old storage and new TempData
-    saveBoostingRequestToStorage(activeBoost.boostRequestId, activeBoost);
+    // Save to TempData only
     await saveBoostingRequestToTempData(activeBoost.boostRequestId, activeBoost);
 
     await interaction.reply({
@@ -490,11 +485,7 @@ module.exports = {
 };
 
 async function isBoostActive(characterName, category) {
- // Try to retrieve from TempData first, then fallback to old storage
- let activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(characterName);
- if (!activeBoost) {
-  activeBoost = retrieveBoostingRequestFromStorageByCharacter(characterName);
- }
+ const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(characterName);
 
  if (!activeBoost || activeBoost.status !== "fulfilled") {
   return false;
@@ -517,11 +508,7 @@ async function getActiveBoostEffect(characterName, category) {
   return null;
  }
 
- // Try to retrieve from TempData first, then fallback to old storage
- let activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(characterName);
- if (!activeBoost) {
-  activeBoost = retrieveBoostingRequestFromStorageByCharacter(characterName);
- }
+ const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(characterName);
  return getBoostEffect(activeBoost.boostingCharacter, category);
 }
 
@@ -530,11 +517,7 @@ async function getRemainingBoostTime(characterName, category) {
   return 0;
  }
 
- // Try to retrieve from TempData first, then fallback to old storage
- let activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(characterName);
- if (!activeBoost) {
-  activeBoost = retrieveBoostingRequestFromStorageByCharacter(characterName);
- }
+ const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(characterName);
  const currentTime = Date.now();
  return Math.max(0, activeBoost.boostExpiresAt - currentTime);
 }
