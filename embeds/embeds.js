@@ -1092,12 +1092,19 @@ function capitalizeFirst(str) {
 }
 
 // ------------------- Subsection Title ------------------- 
-const createGatherEmbed = (character, randomItem, bonusItem = null) => {
+const createGatherEmbed = (character, randomItem, bonusItem = null, isDivineItemWithPriestBoost = false) => {
  const settings = getCommonEmbedSettings(character);
  const action = typeActionMap[randomItem.type[0]]?.action || "found";
  const article = getArticleForItem(randomItem.itemName);
 
- const flavorText = generateGatherFlavorText(randomItem.type[0]);
+ // Use divine flavor text if this is a divine item gathered with Priest boost
+ let flavorText;
+ if (isDivineItemWithPriestBoost) {
+   const { generateDivineItemFlavorText } = require('../modules/flavorTextModule');
+   flavorText = generateDivineItemFlavorText();
+ } else {
+   flavorText = generateGatherFlavorText(randomItem.type[0]);
+ }
 
  // Add bonus item information if present
  let description = flavorText;
@@ -1105,14 +1112,11 @@ const createGatherEmbed = (character, randomItem, bonusItem = null) => {
    const bonusArticle = getArticleForItem(bonusItem.itemName);
    const bonusEmoji = bonusItem.emoji || "🎁";
    
-   // Determine if this is an Entertainer or Priest boost based on the character's boostedBy field
+   // Only Entertainer boost provides bonus items
    const isEntertainerBoost = character.boostedBy && character.boostedBy.toLowerCase().includes('entertainer');
-   const isPriestBoost = character.boostedBy && character.boostedBy.toLowerCase().includes('priest');
    
    if (isEntertainerBoost) {
      description += `\n\n🎭 **Entertainer's Gift:** ${character.name} also found ${bonusArticle} ${bonusEmoji}${bonusItem.itemName}!`;
-   } else if (isPriestBoost) {
-     description += `\n\n🙏 **Divine Favor:** ${character.name} also found ${bonusArticle} ${bonusEmoji}${bonusItem.itemName}!`;
    }
  }
  
