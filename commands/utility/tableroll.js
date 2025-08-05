@@ -88,6 +88,7 @@ module.exports = {
           option.setName('charactername')
             .setDescription('Name of the character rolling')
             .setRequired(false)
+            .setAutocomplete(true)
         )
     )
     .addSubcommand(subcommand =>

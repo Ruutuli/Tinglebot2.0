@@ -515,6 +515,8 @@ async function handleAutocomplete(interaction) {
               if (tablerollSubcommand === "view" || tablerollSubcommand === "roll" || tablerollSubcommand === "edit" || tablerollSubcommand === "delete" || tablerollSubcommand === "duplicate") {
                 if (focusedOption.name === "name") {
                   await handleTableRollNameAutocomplete(interaction, focusedOption);
+                } else if (focusedOption.name === "charactername") {
+                  await handleCharacterBasedCommandsAutocomplete(interaction, focusedOption, "tableroll");
                 }
               }
             }
@@ -4077,6 +4079,9 @@ handleModCharacterNameAutocomplete,
 
 // ------------------- Raid Functions -------------------
 handleRaidIdAutocomplete,
+
+// ------------------- Table Roll Functions -------------------
+handleTableRollNameAutocomplete,
 
 // ------------------- Submit Functions -------------------
 handleSubmitCollabAutocomplete,
