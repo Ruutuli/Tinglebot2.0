@@ -13,6 +13,8 @@ const {
  fetchCharacterByNameAndUserId,
  fetchCharacterByName,
  fetchAllCharactersExceptUser,
+ fetchModCharacterByNameAndUserId,
+ fetchAllModCharacters,
  getCharacterInventoryCollection,
  getOrCreateToken,
  updateTokenBalance,
@@ -415,10 +417,20 @@ for (const { name } of cleanedItems) {
  const userId = interaction.user.id;
 
  try {
-  const fromCharacter = await fetchCharacterByNameAndUserId(
+  // Try to fetch regular character first
+  let fromCharacter = await fetchCharacterByNameAndUserId(
     fromCharacterName,
     userId
   );
+  
+  // If not found, try to fetch mod character
+  if (!fromCharacter) {
+    fromCharacter = await fetchModCharacterByNameAndUserId(
+      fromCharacterName,
+      userId
+    );
+  }
+  
   if (!fromCharacter) {
     await interaction.editReply({
       embeds: [new EmbedBuilder()
@@ -467,12 +479,17 @@ for (const { name } of cleanedItems) {
   }
 
   const allCharacters = await fetchAllCharactersExceptUser(userId);
-  if (allCharacters.length === 0) {
-    console.log('[handleGift]: No characters found in fetchAllCharactersExceptUser. Possible DB connection issue.');
+  const allModCharacters = await fetchAllModCharacters();
+  
+  // Combine regular characters and all mod characters
+  const allPossibleRecipients = [...allCharacters, ...allModCharacters];
+  
+  if (allPossibleRecipients.length === 0) {
+    console.log('[handleGift]: No characters found in fetchAllCharactersExceptUser or fetchAllModCharacters. Possible DB connection issue.');
   }
   // Extract actual name from input (before '|'), trim, and compare case-insensitively
   const toCharacterActualName = toCharacterName.split('|')[0].trim().toLowerCase();
-  const toCharacter = allCharacters.find((c) => c.name.trim().toLowerCase() === toCharacterActualName);
+  const toCharacter = allPossibleRecipients.find((c) => c.name.trim().toLowerCase() === toCharacterActualName);
   if (!toCharacter) {
    await interaction.editReply({
     embeds: [{
@@ -1731,14 +1748,29 @@ for (const { quantity } of cleanedItems) {
  const userId = interaction.user.id;
 
  try {
-  const fromCharacter = await fetchCharacterByNameAndUserId(
+  // Try to fetch regular characters first
+  let fromCharacter = await fetchCharacterByNameAndUserId(
    fromCharacterName,
    userId
   );
-  const toCharacter = await fetchCharacterByNameAndUserId(
+  let toCharacter = await fetchCharacterByNameAndUserId(
    toCharacterName,
    userId
   );
+
+  // If not found, try to fetch mod characters
+  if (!fromCharacter) {
+    fromCharacter = await fetchModCharacterByNameAndUserId(
+      fromCharacterName,
+      userId
+    );
+  }
+  if (!toCharacter) {
+    toCharacter = await fetchModCharacterByNameAndUserId(
+      toCharacterName,
+      userId
+    );
+  }
 
   if (!fromCharacter || !toCharacter) {
    await interaction.editReply({
@@ -2370,7 +2402,14 @@ async function handleTrade(interaction) {
     }
 
     // ------------------- Validate Characters -------------------
-    const fromCharacter = await fetchCharacterByNameAndUserId(characterName, userId);
+    // Try to fetch regular character first
+    let fromCharacter = await fetchCharacterByNameAndUserId(characterName, userId);
+    
+    // If not found, try to fetch mod character
+    if (!fromCharacter) {
+      fromCharacter = await fetchModCharacterByNameAndUserId(characterName, userId);
+    }
+    
     if (!fromCharacter) {
       await interaction.editReply({
         embeds: [new EmbedBuilder()
@@ -2389,7 +2428,15 @@ async function handleTrade(interaction) {
       return;
     }
 
-    const toCharacter = await fetchCharacterByName(tradingWithName);
+    // Try to fetch regular character first
+    let toCharacter = await fetchCharacterByName(tradingWithName);
+    
+    // If not found, try to fetch mod character
+    if (!toCharacter) {
+      const allModCharacters = await fetchAllModCharacters();
+      toCharacter = allModCharacters.find(c => c.name.toLowerCase() === tradingWithName.toLowerCase());
+    }
+    
     if (!toCharacter || toCharacter.userId === userId) {
       await interaction.editReply({
         embeds: [new EmbedBuilder()
