@@ -95,72 +95,8 @@ module.exports = {
       subcommand
         .setName('list')
         .setDescription('List all available tables')
-        .addStringOption(option =>
-          option.setName('category')
-            .setDescription('Filter by category')
-            .setRequired(false)
-            .addChoices(
-              { name: 'All Categories', value: 'all' },
-              { name: 'General', value: 'general' },
-              { name: 'Loot', value: 'loot' },
-              { name: 'Monster', value: 'monster' },
-              { name: 'Treasure', value: 'treasure' },
-              { name: 'Crafting', value: 'crafting' },
-              { name: 'Event', value: 'event' },
-              { name: 'Custom', value: 'custom' }
-            )
-        )
-        .addStringOption(option =>
-          option.setName('sort')
-            .setDescription('Sort order')
-            .setRequired(false)
-            .addChoices(
-              { name: 'Name (A-Z)', value: 'name' },
-              { name: 'Most Popular', value: 'popular' },
-              { name: 'Recently Created', value: 'recent' },
-              { name: 'Recently Rolled', value: 'lastrolled' }
-            )
-        )
-        .addIntegerOption(option =>
-          option.setName('limit')
-            .setDescription('Number of tables to show (max 25)')
-            .setRequired(false)
-            .setMinValue(1)
-            .setMaxValue(25)
-        )
     )
-    .addSubcommand(subcommand =>
-      subcommand
-        .setName('search')
-        .setDescription('Search tables by name or description')
-        .addStringOption(option =>
-          option.setName('query')
-            .setDescription('Search term')
-            .setRequired(true)
-        )
-        .addStringOption(option =>
-          option.setName('category')
-            .setDescription('Filter by category')
-            .setRequired(false)
-            .addChoices(
-              { name: 'All Categories', value: 'all' },
-              { name: 'General', value: 'general' },
-              { name: 'Loot', value: 'loot' },
-              { name: 'Monster', value: 'monster' },
-              { name: 'Treasure', value: 'treasure' },
-              { name: 'Crafting', value: 'crafting' },
-              { name: 'Event', value: 'event' },
-              { name: 'Custom', value: 'custom' }
-            )
-        )
-        .addIntegerOption(option =>
-          option.setName('limit')
-            .setDescription('Number of results to show (max 10)')
-            .setRequired(false)
-            .setMinValue(1)
-            .setMaxValue(10)
-        )
-    )
+
     .addSubcommand(subcommand =>
       subcommand
         .setName('view')
@@ -179,42 +115,7 @@ module.exports = {
           option.setName('name')
             .setDescription('Name of the table to edit')
             .setRequired(true)
-        )
-        .addStringOption(option =>
-          option.setName('description')
-            .setDescription('New description')
-            .setRequired(false)
-        )
-        .addStringOption(option =>
-          option.setName('category')
-            .setDescription('New category')
-            .setRequired(false)
-            .addChoices(
-              { name: 'General', value: 'general' },
-              { name: 'Loot', value: 'loot' },
-              { name: 'Monster', value: 'monster' },
-              { name: 'Treasure', value: 'treasure' },
-              { name: 'Crafting', value: 'crafting' },
-              { name: 'Event', value: 'event' },
-              { name: 'Custom', value: 'custom' }
-            )
-        )
-        .addStringOption(option =>
-          option.setName('tags')
-            .setDescription('New tags (comma-separated)')
-            .setRequired(false)
-        )
-        .addIntegerOption(option =>
-          option.setName('maxrollsperday')
-            .setDescription('New maximum rolls per day (0 for unlimited)')
-            .setRequired(false)
-            .setMinValue(0)
-            .setMaxValue(1000)
-        )
-        .addBooleanOption(option =>
-          option.setName('public')
-            .setDescription('Make table public or private')
-            .setRequired(false)
+            .setAutocomplete(true)
         )
     )
     .addSubcommand(subcommand =>
@@ -240,18 +141,8 @@ module.exports = {
           option.setName('newname')
             .setDescription('Name for the new table')
             .setRequired(true)
-        )
-    )
-    .addSubcommand(subcommand =>
-      subcommand
-        .setName('stats')
-        .setDescription('View table statistics')
-        .addStringOption(option =>
-          option.setName('name')
-            .setDescription('Name of the table to view stats for')
-            .setRequired(false)
-        )
-    ),
+                )
+      ),
 
   // ------------------- Execute function to handle the tableroll command -------------------
   async execute(interaction) {
@@ -271,9 +162,6 @@ module.exports = {
         case 'list':
           await this.handleList(interaction);
           break;
-        case 'search':
-          await this.handleSearch(interaction);
-          break;
         case 'view':
           await this.handleView(interaction);
           break;
@@ -285,9 +173,6 @@ module.exports = {
           break;
         case 'duplicate':
           await this.handleDuplicate(interaction);
-          break;
-        case 'stats':
-          await this.handleStats(interaction);
           break;
         default:
           await interaction.reply({
@@ -584,32 +469,7 @@ module.exports = {
   // ------------------- Handle table listing -------------------
   async handleList(interaction) {
     try {
-      const category = interaction.options.getString('category');
-      const sort = interaction.options.getString('sort') || 'name';
-      const limit = interaction.options.getInteger('limit') || 10;
-
-      let query = { isActive: true };
-      
-      if (category && category !== 'all') {
-        query.category = category;
-      }
-
-      let sortOptions = {};
-      switch (sort) {
-        case 'popular':
-          sortOptions = { rollCount: -1, lastRolled: -1 };
-          break;
-        case 'recent':
-          sortOptions = { createdAt: -1 };
-          break;
-        case 'lastrolled':
-          sortOptions = { lastRolled: -1 };
-          break;
-        default:
-          sortOptions = { name: 1 };
-      }
-
-      const tables = await TableRoll.find(query).sort(sortOptions).limit(limit);
+      const tables = await TableRoll.find({ isActive: true }).sort({ name: 1 });
       
       if (tables.length === 0) {
         return await interaction.reply({
@@ -635,20 +495,6 @@ module.exports = {
         inline: false
       });
 
-      if (category && category !== 'all') {
-        embed.addFields({
-          name: 'Filter',
-          value: `Category: ${category}`,
-          inline: true
-        });
-      }
-
-      embed.addFields({
-        name: 'Sort',
-        value: sort,
-        inline: true
-      });
-
       await interaction.reply({ embeds: [embed] });
 
     } catch (error) {
@@ -665,60 +511,7 @@ module.exports = {
     }
   },
 
-  // ------------------- Handle table search -------------------
-  async handleSearch(interaction) {
-    try {
-      const query = interaction.options.getString('query');
-      const category = interaction.options.getString('category');
-      const limit = interaction.options.getInteger('limit') || 5;
 
-      let searchOptions = {};
-      
-      if (category && category !== 'all') {
-        searchOptions.category = category;
-      }
-
-      const tables = await TableRoll.searchTables(query, { ...searchOptions, limit });
-      
-      if (tables.length === 0) {
-        return await interaction.reply({
-          content: `🔍 No tables found matching "${query}".`,
-          flags: [MessageFlags.Ephemeral]
-        });
-      }
-
-      const embed = new EmbedBuilder()
-        .setColor(0x0099FF)
-        .setTitle(`🔍 Search Results for "${query}"`)
-        .setDescription(`Found ${tables.length} table(s)`);
-
-      const tableList = tables.map(table => {
-        const categoryEmoji = getCategoryEmoji(table.category);
-        const rollCount = table.rollCount || 0;
-        return `**${categoryEmoji} ${table.name}** - ${table.entries.length} entries (${rollCount} rolls)`;
-      }).join('\n');
-
-      embed.addFields({
-        name: 'Results',
-        value: tableList,
-        inline: false
-      });
-
-      await interaction.reply({ embeds: [embed] });
-
-    } catch (error) {
-      handleError(error, 'tableroll.js', {
-        commandName: 'tableroll search',
-        userTag: interaction.user.tag,
-        userId: interaction.user.id
-      });
-      
-      await interaction.reply({
-        content: '❌ Failed to search tables.',
-        flags: [MessageFlags.Ephemeral]
-      });
-    }
-  },
 
   // ------------------- Handle table view -------------------
   async handleView(interaction) {
@@ -792,14 +585,9 @@ module.exports = {
   // ------------------- Handle table editing -------------------
   async handleEdit(interaction) {
     const tableName = interaction.options.getString('name');
-    const description = interaction.options.getString('description');
-    const category = interaction.options.getString('category');
-    const tags = interaction.options.getString('tags');
-    const maxRollsPerDay = interaction.options.getInteger('maxrollsperday');
-    const isPublic = interaction.options.getBoolean('public');
 
     try {
-      const table = await TableRoll.findOne({ name: tableName });
+      const table = await TableRoll.findOne({ name: tableName, isActive: true });
       
       if (!table) {
         return await interaction.reply({
@@ -808,44 +596,41 @@ module.exports = {
         });
       }
 
-      // Check if user is the creator
-      if (table.createdBy !== interaction.user.id) {
-        return await interaction.reply({
-          content: '❌ You can only edit tables that you created.',
-          flags: [MessageFlags.Ephemeral]
-        });
-      }
-
-      // Update fields
-      const updates = {};
-      if (description !== null) updates.description = description;
-      if (category !== null) updates.category = category;
-      if (maxRollsPerDay !== null) updates.maxRollsPerDay = maxRollsPerDay;
-      if (isPublic !== null) updates.isPublic = isPublic;
-      if (tags !== null) {
-        updates.tags = tags.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);
-      }
-
-      Object.assign(table, updates);
-      await table.save();
-
       const embed = new EmbedBuilder()
-        .setColor(0x00FF00)
-        .setTitle(`✅ Table '${tableName}' Updated`)
-        .setDescription('The table has been successfully updated.')
+        .setColor(0x0099FF)
+        .setTitle(`📋 Table: ${table.name}`)
+        .setDescription(table.description || 'No description')
         .addFields(
-          { name: '📝 Description', value: table.description || 'No description', inline: true },
+          { name: '📊 Entries', value: table.entries.length.toString(), inline: true },
+          { name: '🎲 Total Weight', value: table.totalWeight.toString(), inline: true },
+          { name: '👤 Created By', value: `<@${table.createdBy}>`, inline: true },
           { name: '📂 Category', value: table.category, inline: true },
           { name: '🏷️ Tags', value: table.tags.length > 0 ? table.tags.join(', ') : 'None', inline: true },
-          { name: '🔒 Public', value: table.isPublic ? 'Yes' : 'No', inline: true }
-        )
-        .setTimestamp();
+          { name: '🔒 Public', value: table.isPublic ? 'Yes' : 'No', inline: true },
+          { name: '📅 Created', value: table.createdAt.toLocaleDateString(), inline: true },
+          { name: '🔄 Updated', value: table.updatedAt.toLocaleDateString(), inline: true },
+          { name: '🎲 Total Rolls', value: (table.rollCount || 0).toString(), inline: true }
+        );
 
       if (table.maxRollsPerDay > 0) {
         embed.addFields({
           name: '📅 Daily Limit',
-          value: table.maxRollsPerDay.toString(),
+          value: `${table.dailyRollCount}/${table.maxRollsPerDay}`,
           inline: true
+        });
+      }
+
+      // Show first few entries as preview
+      const previewEntries = table.entries.slice(0, 5).map((entry, index) => {
+        const rarityEmoji = getRarityEmoji(entry.rarity);
+        return `${index + 1}. **${entry.item || 'Flavor Only'}** (Weight: ${entry.weight}) ${rarityEmoji}`;
+      }).join('\n');
+
+      if (previewEntries) {
+        embed.addFields({
+          name: '📝 Sample Entries',
+          value: previewEntries + (table.entries.length > 5 ? '\n...' : ''),
+          inline: false
         });
       }
 
@@ -860,7 +645,7 @@ module.exports = {
       });
       
       await interaction.reply({
-        content: '❌ Failed to edit table.',
+        content: '❌ Failed to view table.',
         flags: [MessageFlags.Ephemeral]
       });
     }
@@ -968,102 +753,5 @@ module.exports = {
     }
   },
 
-  // ------------------- Handle table statistics -------------------
-  async handleStats(interaction) {
-    const tableName = interaction.options.getString('name');
 
-    try {
-      if (tableName) {
-        // Show stats for specific table
-        const table = await TableRoll.findOne({ name: tableName });
-        
-        if (!table) {
-          return await interaction.reply({
-            content: `❌ Table '${tableName}' not found.`,
-            flags: [MessageFlags.Ephemeral]
-          });
-        }
-
-        const embed = new EmbedBuilder()
-          .setColor(0x0099FF)
-          .setTitle(`📊 Statistics for '${table.name}'`)
-          .addFields(
-            { name: '🎲 Total Rolls', value: (table.rollCount || 0).toString(), inline: true },
-            { name: '📅 Daily Rolls', value: (table.dailyRollCount || 0).toString(), inline: true },
-            { name: '📊 Entries', value: table.entries.length.toString(), inline: true },
-            { name: '🎯 Total Weight', value: table.totalWeight.toString(), inline: true },
-            { name: '📅 Created', value: table.createdAt.toLocaleDateString(), inline: true },
-            { name: '🔄 Last Updated', value: table.updatedAt.toLocaleDateString(), inline: true }
-          );
-
-        if (table.lastRolled) {
-          embed.addFields({
-            name: '🎲 Last Rolled',
-            value: table.lastRolled.toLocaleDateString(),
-            inline: true
-          });
-        }
-
-        await interaction.reply({ embeds: [embed] });
-      } else {
-        // Show global stats
-        const [totalTables, totalRolls, popularTables, recentTables] = await Promise.all([
-          TableRoll.countDocuments({ isActive: true }),
-          TableRoll.aggregate([
-            { $match: { isActive: true } },
-            { $group: { _id: null, total: { $sum: '$rollCount' } } }
-          ]),
-          TableRoll.getPopularTables(5),
-          TableRoll.getRecentTables(5)
-        ]);
-
-        const embed = new EmbedBuilder()
-          .setColor(0x0099FF)
-          .setTitle('📊 Table Roll Statistics')
-          .addFields(
-            { name: '📋 Total Tables', value: totalTables.toString(), inline: true },
-            { name: '🎲 Total Rolls', value: (totalRolls[0]?.total || 0).toString(), inline: true }
-          );
-
-        if (popularTables.length > 0) {
-          const popularList = popularTables.map((table, index) => 
-            `${index + 1}. **${table.name}** - ${table.rollCount || 0} rolls`
-          ).join('\n');
-          
-          embed.addFields({
-            name: '🏆 Most Popular Tables',
-            value: popularList,
-            inline: false
-          });
-        }
-
-        if (recentTables.length > 0) {
-          const recentList = recentTables.map((table, index) => 
-            `${index + 1}. **${table.name}** - ${table.entries.length} entries`
-          ).join('\n');
-          
-          embed.addFields({
-            name: '🆕 Recently Created Tables',
-            value: recentList,
-            inline: false
-          });
-        }
-
-        await interaction.reply({ embeds: [embed] });
-      }
-
-    } catch (error) {
-      handleError(error, 'tableroll.js', {
-        commandName: 'tableroll stats',
-        userTag: interaction.user.tag,
-        userId: interaction.user.id,
-        tableName: tableName
-      });
-      
-      await interaction.reply({
-        content: '❌ Failed to get statistics.',
-        flags: [MessageFlags.Ephemeral]
-      });
-    }
-  }
 }; 
