@@ -177,12 +177,29 @@ module.exports = {
           collector.on('collect', async i => {
             try {
               if (i.customId === 'token-sync-yes') {
+                // Check if the sheet has any data beyond headers before syncing
+                const auth = await authorizeSheets();
+                const spreadsheetId = extractSpreadsheetId(link);
+                const sheetData = await readSheetData(auth, spreadsheetId, 'loggedTracker!B7:F');
+                const hasData = sheetData.length > 1; // More than just headers
+                
                 const tokenRecord = await syncTokenTracker(userId);
-                await i.update({
-                  content: '✅ Your token tracker has been synced successfully!',
-                  embeds: [],
-                  components: []
-                });
+                
+                // If the sheet was empty, show the setup complete message
+                if (!hasData) {
+                  const { fullMessage } = handleTokenError(new Error('No \'earned\' entries found'), interaction);
+                  await i.update({
+                    content: fullMessage,
+                    embeds: [],
+                    components: []
+                  });
+                } else {
+                  await i.update({
+                    content: '✅ Your token tracker has been synced successfully!',
+                    embeds: [],
+                    components: []
+                  });
+                }
               } else if (i.customId === 'token-sync-no') {
                 await i.update({
                   content: '⏰ Token sync skipped. You can sync later using `/tokens setup` again.',
