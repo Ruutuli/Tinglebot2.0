@@ -898,24 +898,11 @@ async function handleBoostingRequestBoosterAutocomplete(interaction, focusedOpti
    .filter(job => job.perk === 'BOOST')
    .map(job => job.job);
 
-  console.log("[handleBoostingRequestBoosterAutocomplete]: Boost jobs found:", boostJobs);
-  console.log("[handleBoostingRequestBoosterAutocomplete]: Total characters fetched:", characters.length);
-  
-  // Debug: Log first few characters to see their job format
-  if (characters.length > 0) {
-   console.log("[handleBoostingRequestBoosterAutocomplete]: Sample characters:");
-   characters.slice(0, 3).forEach(char => {
-    console.log(`  - ${char.name}: job="${char.job}"`);
-   });
-  }
-
   const filteredCharacters = characters.filter((character) => {
-   const isBoostJob = boostJobs.includes(character.job);
-   console.log(`[handleBoostingRequestBoosterAutocomplete]: ${character.name} (${character.job}) - isBoostJob: ${isBoostJob}`);
-   return isBoostJob;
+   return boostJobs.some(boostJob => 
+     boostJob.toLowerCase() === character.job.toLowerCase()
+   );
   });
-
-  console.log("[handleBoostingRequestBoosterAutocomplete]: Filtered characters count:", filteredCharacters.length);
 
   const choices = filteredCharacters.map((character) => ({
    name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
@@ -946,7 +933,9 @@ async function handleBoostingAcceptCharacterAutocomplete(interaction, focusedOpt
    .map(job => job.job);
 
   const filteredCharacters = characters.filter((character) =>
-   boostJobs.includes(character.job)
+   boostJobs.some(boostJob => 
+     boostJob.toLowerCase() === character.job.toLowerCase()
+   )
   );
 
   const choices = filteredCharacters.map((character) => ({
