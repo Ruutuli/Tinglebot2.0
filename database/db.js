@@ -465,29 +465,17 @@ const getCharacterInventoryCollection = async (characterName) => {
 };
 
 // ------------------- getCharacterInventoryCollectionWithModSupport -------------------
-const getCharacterInventoryCollectionWithModSupport = async (character) => {
+const getCharacterInventoryCollectionWithModSupport = async (characterOrName) => {
  try {
-  if (typeof character === "string") {
-   // If character is a string (character name), use the original function
-   return await getCharacterInventoryCollection(character);
-  }
-  
-  if (!character || typeof character !== "object") {
-   throw new TypeError(
-    `Expected a character object or string, but received ${typeof character}`
-   );
-  }
-  
   await connectToInventories();
-  
-  // Use shared inventory collection for mod characters
   let collectionName;
-  if (character.isModCharacter) {
-    collectionName = 'mod_shared_inventory';
-  } else {
-    collectionName = character.name.toLowerCase();
+  if (typeof characterOrName === 'object' && characterOrName.isModCharacter) {
+    collectionName = characterOrName.name.toLowerCase(); // Now uses individual collection
+  } else if (typeof characterOrName === 'object') {
+    collectionName = characterOrName.name.toLowerCase();
+  } else { // string
+    collectionName = characterOrName.trim().toLowerCase();
   }
-  
   return await getInventoryCollection(collectionName);
  } catch (error) {
   handleError(error, "db.js");
