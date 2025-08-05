@@ -24,6 +24,7 @@ const {
 const {
   connectToTinglebot,
   fetchCharacterById,
+  fetchModCharacterById,
   getUserById
 } = require('../database/db');
 
@@ -212,9 +213,15 @@ async function handleButtonInteraction(interaction) {
 // Begins character inventory sync.
 async function handleSyncYes(interaction, characterId) {
   try {
-    const character = await fetchCharacterById(characterId);
+    // Try to fetch regular character first, then mod character if not found
+    let character = await fetchCharacterById(characterId);
     if (!character) {
-              return interaction.reply({ content: '❌ **Character not found.**', flags: 64 });
+      // Try to fetch as mod character
+      character = await fetchModCharacterById(characterId);
+    }
+    
+    if (!character) {
+      return interaction.reply({ content: '❌ **Character not found in either regular or mod character collections.**', flags: 64 });
     }
 
     // Check if inventory is already synced
@@ -434,10 +441,15 @@ async function handleCancel(interaction, userId, submissionData) {
 async function handleViewCharacter(interaction, characterId) {
   try {
     await connectToTinglebot();
-    const character = await fetchCharacterById(characterId);
+    // Try to fetch regular character first, then mod character if not found
+    let character = await fetchCharacterById(characterId);
+    if (!character) {
+      // Try to fetch as mod character
+      character = await fetchModCharacterById(characterId);
+    }
 
     if (!character) {
-      console.error(`[componentHandler.js]: Character with ID "${characterId}" not found.`);
+      console.error(`[componentHandler.js]: Character with ID "${characterId}" not found in either regular or mod character collections.`);
       return interaction.reply({ 
         embeds: [new EmbedBuilder()
           .setColor('#FF0000')
@@ -512,10 +524,15 @@ async function handleViewCharacter(interaction, characterId) {
 async function handleJobSelect(interaction, characterId, updatedJob) {
     try {
       await connectToTinglebot();
-      const character = await fetchCharacterById(characterId);
+      // Try to fetch regular character first, then mod character if not found
+      let character = await fetchCharacterById(characterId);
+      if (!character) {
+        // Try to fetch as mod character
+        character = await fetchModCharacterById(characterId);
+      }
   
       if (!character) {
-        console.error(`[componentHandler.js]: Character not found for ID: ${characterId}`);
+        console.error(`[componentHandler.js]: Character not found for ID: ${characterId} in either regular or mod character collections`);
         return interaction.reply({ content: '❌ **Character not found.**', flags: 64 });
       }
   
