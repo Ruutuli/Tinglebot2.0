@@ -16,6 +16,7 @@ const {
  fetchModCharacterByNameAndUserId,
  fetchAllModCharacters,
  getCharacterInventoryCollection,
+ getCharacterInventoryCollectionWithModSupport,
  getOrCreateToken,
  updateTokenBalance,
  fetchItemByName
