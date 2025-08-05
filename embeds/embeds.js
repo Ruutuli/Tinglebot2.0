@@ -1943,7 +1943,7 @@ function createMountEncounterEmbed(encounter) {
 }
 
 // ------------------- Function: createBoostRequestEmbed -------------------
-const createBoostRequestEmbed = (requestData, existingRequestId = null) => {
+const createBoostRequestEmbed = (requestData, existingRequestId = null, status = 'pending') => {
   const { generateUniqueId } = require('../utils/uniqueIdUtils');
   const { capitalizeFirstLetter, capitalizeWords } = require('../modules/formattingModule');
   const { getVillageColorByName, getVillageEmojiByName } = require('../modules/locationsModule');
@@ -1968,13 +1968,37 @@ const createBoostRequestEmbed = (requestData, existingRequestId = null) => {
   expiresAt.setHours(expiresAt.getHours() + 24);
   const expiresIn = `<t:${Math.floor(expiresAt.getTime() / 1000)}:F>`;
 
+  // Determine status color and emoji
+  let statusColor, statusEmoji, statusText;
+  switch (status) {
+    case 'pending':
+      statusColor = '#FFA500'; // Orange
+      statusEmoji = '⏳';
+      statusText = 'Pending';
+      break;
+    case 'fulfilled':
+      statusColor = '#00FF00'; // Green
+      statusEmoji = '✅';
+      statusText = 'Fulfilled';
+      break;
+    case 'expired':
+      statusColor = '#FF0000'; // Red
+      statusEmoji = '❌';
+      statusText = 'Expired';
+      break;
+    default:
+      statusColor = '#FFA500';
+      statusEmoji = '⏳';
+      statusText = 'Pending';
+  }
+
   const embed = new EmbedBuilder()
     .setTitle(`⚡ Boost Request Created`)
     .setDescription(
       `**${requestedBy}** has requested a boost from **${booster}**!\n\n` +
       `This request will expire in **24 hours** if not accepted.`
     )
-    .setColor(villageColor)
+    .setColor(statusColor)
     .setThumbnail(requestData.requestedByIcon || 'https://storage.googleapis.com/tinglebot/Graphics/boost-icon.png')
     .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
     .addFields(
@@ -2009,6 +2033,11 @@ const createBoostRequestEmbed = (requestData, existingRequestId = null) => {
         inline: true
       },
       {
+        name: `${statusEmoji} **Status**`,
+        value: `> ${statusText}`,
+        inline: true
+      },
+      {
         name: '⚡ **Boost Effect**',
         value: `> ${boostEffect}`,
         inline: false
@@ -2026,6 +2055,57 @@ const createBoostRequestEmbed = (requestData, existingRequestId = null) => {
     .setTimestamp();
 
   return embed;
+};
+
+// ------------------- Function: updateBoostRequestEmbed -------------------
+const updateBoostRequestEmbed = async (client, requestData, newStatus = 'pending') => {
+  try {
+    // Check if we have the message ID and channel ID
+    if (!requestData.messageId || !requestData.channelId) {
+      console.log(`[embeds.js] No message ID or channel ID found for boost request ${requestData.boostRequestId}`);
+      return false;
+    }
+
+    // Get the channel
+    const channel = await client.channels.fetch(requestData.channelId);
+    if (!channel) {
+      console.log(`[embeds.js] Could not find channel ${requestData.channelId} for boost request ${requestData.boostRequestId}`);
+      return false;
+    }
+
+    // Get the message
+    const message = await channel.messages.fetch(requestData.messageId);
+    if (!message) {
+      console.log(`[embeds.js] Could not find message ${requestData.messageId} for boost request ${requestData.boostRequestId}`);
+      return false;
+    }
+
+    // Create updated embed data
+    const embedData = {
+      requestedBy: requestData.targetCharacter,
+      booster: requestData.boostingCharacter,
+      boosterJob: requestData.boosterJob || 'Unknown',
+      category: requestData.category,
+      boostEffect: requestData.boostEffect || 'No effect specified',
+      village: requestData.village,
+      requestedByIcon: requestData.requestedByIcon,
+      boosterIcon: requestData.boosterIcon
+    };
+
+    // Create the updated embed
+    const updatedEmbed = createBoostRequestEmbed(embedData, requestData.boostRequestId, newStatus);
+
+    // Update the message
+    await message.edit({
+      embeds: [updatedEmbed]
+    });
+
+    console.log(`[embeds.js] Successfully updated boost request embed ${requestData.boostRequestId} to status: ${newStatus}`);
+    return true;
+  } catch (error) {
+    console.error(`[embeds.js] Error updating boost request embed ${requestData.boostRequestId}:`, error);
+    return false;
+  }
 };
 
 // ------------------- Function: createBoostAppliedEmbed -------------------
@@ -2172,5 +2252,6 @@ module.exports = {
  createMountEncounterEmbed,
  createWrongVillageEmbed,
  createBoostRequestEmbed,
+ updateBoostRequestEmbed,
  createBoostAppliedEmbed,
 };

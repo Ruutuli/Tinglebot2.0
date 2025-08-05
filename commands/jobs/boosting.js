@@ -67,6 +67,9 @@ async function retrieveBoostingRequestFromTempDataByCharacter(characterName) {
           requestData.status = "expired";
           await saveBoostingRequestToTempData(requestData.boostRequestId, requestData);
           
+          // Note: Embed update skipped here since we don't have access to the client
+          // The embed will be updated when the user checks boost status or when the boost is accessed
+          
           // Clear the boostedBy field from the character when boost expires
           const targetCharacter = await fetchCharacterByName(characterName);
           if (targetCharacter && targetCharacter.boostedBy) {
@@ -321,6 +324,10 @@ async function handleBoostRequest(interaction) {
   createdAt: new Date().toISOString(),
   durationRemaining: null,
   fulfilledAt: null,
+  boosterJob: boosterJob,
+  boostEffect: `${boost.name} — ${boost.description}`,
+  requestedByIcon: targetCharacter.icon,
+  boosterIcon: boosterCharacter.icon
  };
 
  // Save to TempData only
@@ -347,10 +354,16 @@ async function handleBoostRequest(interaction) {
   const boosterOwnerId = boosterCharacter.userId;
   const boosterOwnerMention = `<@${boosterOwnerId}>`;
   
-  await interaction.reply({
+  const reply = await interaction.reply({
    content: `Boost request created. ${boosterOwnerMention} (**${boosterCharacter.name}**) run </boosting accept:1394790096338817195> within 24 hours.`,
    embeds: [embed],
+   fetchReply: true
   });
+
+  // Save the message ID to TempData for later updates
+  requestData.messageId = reply.id;
+  requestData.channelId = reply.channelId;
+  await saveBoostingRequestToTempData(boostRequestId, requestData);
 }
 
 async function handleBoostAccept(interaction) {
@@ -469,6 +482,10 @@ async function handleBoostAccept(interaction) {
    // Save to TempData only
   await saveBoostingRequestToTempData(requestId, requestData);
 
+  // Update the original boost request embed to show fulfilled status
+  const { updateBoostRequestEmbed } = require('../../embeds/embeds');
+  await updateBoostRequestEmbed(interaction.client, requestData, 'fulfilled');
+
   // Import the new embed function
   const { createBoostAppliedEmbed } = require('../../embeds/embeds');
 
@@ -512,7 +529,19 @@ async function handleBoostStatus(interaction) {
 
  const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(characterName);
 
+ const currentTime = Date.now();
+ 
  if (!activeBoost || activeBoost.status !== "fulfilled") {
+  // If there's a pending boost that has expired, update its embed
+  if (activeBoost && activeBoost.status === "pending" && activeBoost.boostExpiresAt && currentTime > activeBoost.boostExpiresAt) {
+    activeBoost.status = "expired";
+    await saveBoostingRequestToTempData(activeBoost.boostRequestId, activeBoost);
+    
+    // Update the embed to show expired status
+    const { updateBoostRequestEmbed } = require('../../embeds/embeds');
+    await updateBoostRequestEmbed(interaction.client, activeBoost, 'expired');
+  }
+  
   await interaction.reply({
    content: `${characterName} does not have any active boosts.`,
    ephemeral: true,
@@ -525,6 +554,10 @@ async function handleBoostStatus(interaction) {
   activeBoost.status = "expired";
   // Save to TempData only
   await saveBoostingRequestToTempData(activeBoost.boostRequestId, activeBoost);
+
+  // Update the original boost request embed to show expired status
+  const { updateBoostRequestEmbed } = require('../../embeds/embeds');
+  await updateBoostRequestEmbed(interaction.client, activeBoost, 'expired');
 
   // Clear the boostedBy field from the character
   if (character.boostedBy) {
