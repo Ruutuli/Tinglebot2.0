@@ -48,7 +48,7 @@ const {
 
 // ------------------- Boosting Module -------------------
 // Import boosting functionality for applying job-based boosts
-const { applyBoostEffect, getBoostEffect } = require("../../modules/boostingModule.js");
+const { applyBoostEffect, getBoostEffect, getBoostEffectByCharacter } = require("../../modules/boostingModule.js");
 
 // Modules - RNG Logic
 const {
@@ -819,7 +819,7 @@ async function processLootingLogic(
   // ------------------- Apply Boosting Effects -------------------
   // Check if character is boosted and apply looting boosts
   if (character.boostedBy) {
-    const boostEffect = getBoostEffect(character.boostedBy, 'Looting');
+    const boostEffect = await getBoostEffectByCharacter(character.boostedBy, 'Looting');
     if (boostEffect) {
       // Apply boost to the adjusted random value (affects loot success)
       const boostedValue = applyBoostEffect(character.boostedBy, 'Looting', adjustedRandomValue);
@@ -843,7 +843,7 @@ async function processLootingLogic(
   // ------------------- Apply Damage Reduction Boosts -------------------
   // Check if character is boosted and apply damage reduction (Entertainer boost)
   if (character.boostedBy && outcome.hearts) {
-    const boostEffect = getBoostEffect(character.boostedBy, 'Looting');
+    const boostEffect = await getBoostEffectByCharacter(character.boostedBy, 'Looting');
     if (boostEffect) {
       const reducedDamage = applyBoostEffect(character.boostedBy, 'Looting', outcome.hearts);
       if (reducedDamage !== outcome.hearts) {
@@ -870,7 +870,7 @@ async function processLootingLogic(
   // Step 4: Loot Item Logic
   let lootedItem = null;
   if (outcome.canLoot && weightedItems.length > 0) {
-   lootedItem = generateLootedItem(encounteredMonster, weightedItems, character);
+   lootedItem = await generateLootedItem(encounteredMonster, weightedItems, character);
    console.log(`[loot.js]: 🎁 ${character.name} looted: ${lootedItem?.itemName} (x${lootedItem?.quantity})`);
 
    const inventoryLink = character.inventory || character.inventoryLink;
@@ -1005,7 +1005,7 @@ function generateOutcomeMessage(outcome) {
 }
 
 // ------------------- Helper Function: Generate Looted Item -------------------
-function generateLootedItem(encounteredMonster, weightedItems, character) {
+async function generateLootedItem(encounteredMonster, weightedItems, character) {
  const randomIndex = Math.floor(Math.random() * weightedItems.length);
  const lootedItem = weightedItems[randomIndex];
 
@@ -1036,7 +1036,7 @@ function generateLootedItem(encounteredMonster, weightedItems, character) {
  // ------------------- Apply Boosting Effects -------------------
  // Check if character is boosted and apply loot quantity boosts
  if (character && character.boostedBy) {
-   const boostEffect = getBoostEffect(character.boostedBy, 'Looting');
+   const boostEffect = await getBoostEffectByCharacter(character.boostedBy, 'Looting');
    if (boostEffect) {
      const boostedLoot = applyBoostEffect(character.boostedBy, 'Looting', lootedItem);
      if (boostedLoot && boostedLoot.quantity !== lootedItem.quantity) {

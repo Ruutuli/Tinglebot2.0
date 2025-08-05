@@ -106,7 +106,12 @@ async function getActiveBoostEffect(characterName, category) {
  }
 
  const activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(characterName);
- return getBoostEffect(activeBoost.boostingCharacter, category);
+ const boosterCharacter = await fetchCharacterByName(activeBoost.boostingCharacter);
+ if (!boosterCharacter) {
+  console.error(`[boosting.js]: Error - Could not find booster character "${activeBoost.boostingCharacter}"`);
+  return null;
+ }
+ return getBoostEffect(boosterCharacter.job, category);
 }
 
 async function getRemainingBoostTime(characterName, category) {
@@ -514,8 +519,18 @@ async function handleBoostStatus(interaction) {
   (timeRemaining % (1000 * 60 * 60)) / (1000 * 60)
  );
 
+ const boosterCharacter = await fetchCharacterByName(activeBoost.boostingCharacter);
+ if (!boosterCharacter) {
+  console.error(`[boosting.js]: Error - Could not find booster character "${activeBoost.boostingCharacter}"`);
+  await interaction.reply({
+   content: `Error retrieving boost effect for ${characterName}.`,
+   ephemeral: true,
+  });
+  return;
+ }
+
  const boost = getBoostEffect(
-  activeBoost.boostingCharacter,
+  boosterCharacter.job,
   activeBoost.category
  );
 

@@ -34,7 +34,7 @@ const { getWeatherWithoutGeneration } = require('../../services/weatherService')
 
 // ------------------- Boosting Module -------------------
 // Import boosting functionality for applying job-based boosts
-const { applyBoostEffect, getBoostEffect } = require('../../modules/boostingModule.js');
+const { applyBoostEffect, getBoostEffect, getBoostEffectByCharacter } = require('../../modules/boostingModule.js');
 
 
 // ------------------- Utilities -------------------
@@ -634,13 +634,13 @@ module.exports = {
         // ------------------- Apply Boosting Effects -------------------
         // Check if character is boosted and apply gathering boosts
         let boostedItems = availableItems;
-        if (character.boostedBy) {
-          const boostEffect = getBoostEffect(character.boostedBy, 'Gathering');
-          if (boostEffect) {
-            boostedItems = applyBoostEffect(character.boostedBy, 'Gathering', availableItems);
-            console.log(`[gather.js] Applied ${character.boostedBy} gathering boost: ${availableItems.length} → ${boostedItems.length} items`);
-          }
+              if (character.boostedBy) {
+        const boostEffect = await getBoostEffectByCharacter(character.boostedBy, 'Gathering');
+        if (boostEffect) {
+          boostedItems = applyBoostEffect(character.boostedBy, 'Gathering', availableItems);
+          console.log(`[gather.js] Applied ${character.boostedBy} gathering boost: ${availableItems.length} → ${boostedItems.length} items`);
         }
+      }
 
         const weightedItems = createWeightedItemList(boostedItems, undefined, job);
         const randomIndex = Math.floor(Math.random() * weightedItems.length);
