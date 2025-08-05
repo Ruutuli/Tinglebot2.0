@@ -156,9 +156,11 @@ const ItemSchema = new Schema({
   peticechu: { type: Boolean, default: false }, // Pet Ice Chuchu obtain flag
   petelectricchu: { type: Boolean, default: false }, // Pet Electric Chuchu obtain flag
 
-  allJobs: { type: [String], default: ['None'] }, // Define allJobs as an array with a default value
-  allJobsTags: { type: [String], default: ['None'] }, // Define allJobsTags as an array with a default value
-}, { collection: 'items' });
+              allJobs: { type: [String], default: ['None'] }, // Define allJobs as an array with a default value
+            allJobsTags: { type: [String], default: ['None'] }, // Define allJobsTags as an array with a default value
+            entertainerItems: { type: Boolean, default: false }, // Flag for Entertainer boost items
+            divineItems: { type: Boolean, default: false }, // Flag for Priest boost items
+          }, { collection: 'items' });
 
 // ------------------- Add index on itemName for quick lookup -------------------
 ItemSchema.index({ itemName: 1 });

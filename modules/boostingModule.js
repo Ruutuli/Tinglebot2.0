@@ -295,30 +295,17 @@ function applyFortuneTellerTravelingBoost(weatherBlock) {
 }
 
 function applyFortuneTellerGatheringBoost(gatherTable) {
-  console.log(`[boostingModule.js] Fortune Teller Gathering Boost - Input table has ${gatherTable.length} items`);
-  
-  // Log all items and their rarities for debugging
-  gatherTable.forEach((item, index) => {
-    console.log(`[boostingModule.js] Item ${index + 1}: ${item.itemName} (Rarity: ${item.itemRarity || 'Unknown'})`);
-  });
-  
   // COMPLETELY EXCLUDE rarity 1-2 items
   const validItems = gatherTable.filter(item => item.itemRarity && item.itemRarity >= 3);
   const excludedItems = gatherTable.filter(item => !item.itemRarity || item.itemRarity < 3);
   
-  console.log(`[boostingModule.js] Fortune Teller Boost - Excluded ${excludedItems.length} rarity 1-2 items`);
-  excludedItems.forEach(item => {
-    console.log(`[boostingModule.js]   - ${item.itemName} (Rarity: ${item.itemRarity}) - COMPLETELY EXCLUDED`);
-  });
-  
   if (validItems.length === 0) {
-    console.log(`[boostingModule.js] WARNING: No valid items (rarity 3+) found, returning original table`);
+    console.log(`[boostingModule.js] Fortune Teller Boost: No valid items (rarity 3+) found, returning original table`);
     return gatherTable;
   }
   
   // Find the highest available rarity in the valid items
   const maxRarity = Math.max(...validItems.map(item => item.itemRarity));
-  console.log(`[boostingModule.js] Highest available rarity: ${maxRarity}`);
   
   // Categorize items by rarity tiers and apply dynamic weighting
   const boostedTable = [];
@@ -331,9 +318,6 @@ function applyFortuneTellerGatheringBoost(gatherTable) {
     }
     rarityGroups[rarity].push(item);
   });
-  
-  // Log available rarity groups
-  console.log(`[boostingModule.js] Available rarity groups:`, Object.keys(rarityGroups).sort((a, b) => b - a));
   
   // Apply dynamic weighting based on highest available rarity
   Object.keys(rarityGroups).sort((a, b) => b - a).forEach(rarity => {
@@ -363,16 +347,14 @@ function applyFortuneTellerGatheringBoost(gatherTable) {
       weight = rarityNum === maxRarity ? 5 : 1;
     }
     
-    console.log(`[boostingModule.js] Rarity ${rarity} items (${items.length} items): ${weight}x weight`);
     items.forEach(item => {
-      console.log(`[boostingModule.js]   - ${item.itemName} (Rarity: ${item.itemRarity})`);
       for (let i = 0; i < weight; i++) {
         boostedTable.push(item);
       }
     });
   });
   
-  console.log(`[boostingModule.js] Final boosted table: ${boostedTable.length} items`);
+  console.log(`[boostingModule.js] Fortune Teller Boost: Excluded ${excludedItems.length} rarity 1-2 items, boosted ${validItems.length} items (max rarity: ${maxRarity})`);
   return boostedTable;
 }
 
@@ -465,22 +447,21 @@ function applyPriestExploringBoost(blightExposure) {
   return false;
 }
 
-function applyPriestGatheringBoost(gatherTable) {
-  console.log(`[boostingModule.js] Priest Gathering Boost - Input table has ${gatherTable.length} items`);
-  
-  // Increase weighting for divine/spiritual items
-  const divineItems = gatherTable.filter(item => 
-    item.tags && (item.tags.includes('divine') || item.tags.includes('holy') || item.tags.includes('blessed'))
-  );
-  
-  console.log(`[boostingModule.js] Priest Gathering Boost - Found ${divineItems.length} divine/spiritual items`);
-  
-  if (divineItems.length > 0) {
-    console.log(`[boostingModule.js] Priest Gathering Boost - Returning filtered divine items`);
+async function applyPriestGatheringBoost(gatherTable) {
+  // Priest boost provides bonus divine items regardless of region
+  // Fetch all divine items directly from the database
+  try {
+    const Item = require('../models/ItemModel');
+    const divineItems = await Item.find({ divineItems: true });
+    
+    console.log(`[boostingModule.js] Priest Gathering Boost - Found ${divineItems.length} divine/spiritual items globally`);
+    
+    // Return the divine items for potential bonus selection
+    // The actual bonus logic will be handled in the gather command
     return divineItems;
-  } else {
-    console.log(`[boostingModule.js] Priest Gathering Boost - No divine items found, returning original table`);
-    return gatherTable;
+  } catch (error) {
+    console.error('[boostingModule.js] Error fetching divine items:', error);
+    return [];
   }
 }
 
@@ -525,20 +506,22 @@ function applyEntertainerCraftingBoost(voucherCraftCount) {
   return voucherCraftCount + 1;
 }
 
-function applyEntertainerGatheringBoost(regionItems) {
-  console.log(`[boostingModule.js] Entertainer Gathering Boost - Input table has ${regionItems.length} items`);
-  
-  // After normal gather, check if the region has flagged entertainerItems. If so, roll and award one as a bonus.
-  // This function returns the entertainer-themed items that can be added as a bonus
-  const entertainerItems = regionItems.filter(item => 
-    item.tags && (item.tags.includes('beautiful') || item.tags.includes('performance') || item.tags.includes('showy'))
-  );
-  
-  console.log(`[boostingModule.js] Entertainer Gathering Boost - Found ${entertainerItems.length} entertainer-themed items`);
-  
-  // Return the entertainer items for potential bonus selection
-  // The actual bonus logic will be handled in the gather command
-  return entertainerItems;
+async function applyEntertainerGatheringBoost(regionItems) {
+  // Entertainer boost provides bonus items regardless of region
+  // Fetch all entertainer items directly from the database
+  try {
+    const Item = require('../models/ItemModel');
+    const entertainerItems = await Item.find({ entertainerItems: true });
+    
+    console.log(`[boostingModule.js] Entertainer Gathering Boost - Found ${entertainerItems.length} entertainer-themed items globally`);
+    
+    // Return the entertainer items for potential bonus selection
+    // The actual bonus logic will be handled in the gather command
+    return entertainerItems;
+  } catch (error) {
+    console.error('[boostingModule.js] Error fetching entertainer items:', error);
+    return [];
+  }
 }
 
 function applyEntertainerHealingBoost(baseHealing, wasKO) {
@@ -790,7 +773,7 @@ async function applyBoostEffect(job, category, data, additionalData = null) {
       switch (category) {
         case 'Crafting': return applyPriestCraftingBoost(data);
         case 'Exploring': return applyPriestExploringBoost(data);
-        case 'Gathering': return applyPriestGatheringBoost(data);
+        case 'Gathering': return await applyPriestGatheringBoost(data);
         case 'Healers': return applyPriestHealingBoost(data);
         case 'Looting': return applyPriestLootingBoost(data);
         case 'Stealing': return applyPriestStealingBoost(data);
@@ -802,7 +785,7 @@ async function applyBoostEffect(job, category, data, additionalData = null) {
     case 'Entertainer':
       switch (category) {
         case 'Crafting': return applyEntertainerCraftingBoost(data);
-        case 'Gathering': return applyEntertainerGatheringBoost(data);
+        case 'Gathering': return await applyEntertainerGatheringBoost(data);
         case 'Healers': return applyEntertainerHealingBoost(data, additionalData);
         case 'Looting': return applyEntertainerLootingBoost(data);
         case 'Mounts': return applyEntertainerMountsBoost(data);
@@ -846,6 +829,7 @@ module.exports = {
   applyTeacherCraftingBoost,
   applyPriestCraftingBoost,
   applyEntertainerCraftingBoost,
+  applyEntertainerGatheringBoost,
   applyScholarCraftingBoost
 };
   

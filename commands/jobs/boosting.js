@@ -356,9 +356,8 @@ async function handleBoostRequest(interaction) {
   
   const reply = await interaction.reply({
    content: `Boost request created. ${boosterOwnerMention} (**${boosterCharacter.name}**) run </boosting accept:1394790096338817195> within 24 hours.`,
-   embeds: [embed],
-   fetchReply: true
-  });
+   embeds: [embed]
+  }).then(response => response.fetch());
 
   // Save the message ID to TempData for later updates
   requestData.messageId = reply.id;
@@ -549,7 +548,6 @@ async function handleBoostStatus(interaction) {
   return;
  }
 
- const currentTime = Date.now();
  if (activeBoost.boostExpiresAt && currentTime > activeBoost.boostExpiresAt) {
   activeBoost.status = "expired";
   // Save to TempData only
