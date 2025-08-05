@@ -304,18 +304,13 @@ const fetchAllCharacters = async () => {
 // ------------------- fetchCharacterById -------------------
 const fetchCharacterById = async (characterId) => {
  try {
-  console.log(`[fetchCharacterById] Starting with characterId: ${characterId}, type: ${typeof characterId}`);
   await connectToTinglebot();
   const character = await Character.findById(characterId);
-  console.log(`[fetchCharacterById] Database query result:`, character ? `Found - Name: ${character.name}, ID: ${character._id}` : 'Not found');
   if (!character) {
-   console.log(`[fetchCharacterById] Character with ID "${characterId}" not found in regular collection.`);
    return null; // Return null instead of throwing error
   }
-  console.log(`[fetchCharacterById] Successfully returning character: ${character.name}`);
   return character;
  } catch (error) {
-  console.error(`[fetchCharacterById] Error occurred:`, error.message);
   handleError(error, "db.js");
   console.error(
    `[characterService]: logs - Error in fetchCharacterById: ${error.message}`
@@ -656,16 +651,10 @@ const deleteModCharacterById = async (modCharacterId) => {
 
 const fetchModCharacterById = async (modCharacterId) => {
  try {
-  console.log(`[fetchModCharacterById] Starting with modCharacterId: ${modCharacterId}, type: ${typeof modCharacterId}`);
   await connectToTinglebot();
   const modCharacter = await ModCharacter.findById(modCharacterId);
-  console.log(`[fetchModCharacterById] Database query result:`, modCharacter ? `Found - Name: ${modCharacter.name}, ID: ${modCharacter._id}` : 'Not found');
-  if (!modCharacter) {
-   console.error(`[fetchModCharacterById] Mod character with ID "${modCharacterId}" not found.`);
-  }
   return modCharacter;
  } catch (error) {
-  console.error(`[fetchModCharacterById] Error occurred:`, error.message);
   handleError(error, "db.js", {
    function: "fetchModCharacterById",
    modCharacterId: modCharacterId,
