@@ -294,6 +294,31 @@ function applyFortuneTellerTravelingBoost(weatherBlock) {
   return false;
 }
 
+function applyFortuneTellerGatheringBoost(gatherTable) {
+  // Reweight the gather item table to favor high-rarity values (adjust weights inversely by rarity)
+  // Items with rarity 8-10 should have significantly higher chance to be gathered
+  const boostedTable = [];
+  
+  gatherTable.forEach(item => {
+    if (item.itemRarity && item.itemRarity >= 8 && item.itemRarity <= 10) {
+      // Rare items (8-10) get 5x weight
+      for (let i = 0; i < 5; i++) {
+        boostedTable.push(item);
+      }
+    } else if (item.itemRarity && item.itemRarity >= 5 && item.itemRarity <= 7) {
+      // Medium items (5-7) get 2x weight
+      for (let i = 0; i < 2; i++) {
+        boostedTable.push(item);
+      }
+    } else {
+      // Common items (1-4) get normal weight
+      boostedTable.push(item);
+    }
+  });
+  
+  return boostedTable;
+}
+
 // ------------------- Teacher Implementations -------------------
 function applyTeacherCraftingBoost(craftedItem) {
   // Duplicate the crafted item quantity
@@ -415,10 +440,14 @@ function applyEntertainerCraftingBoost(voucherCraftCount) {
 }
 
 function applyEntertainerGatheringBoost(regionItems) {
-  // Add bonus entertainer-themed items if available
+  // After normal gather, check if the region has flagged entertainerItems. If so, roll and award one as a bonus.
+  // This function returns the entertainer-themed items that can be added as a bonus
   const entertainerItems = regionItems.filter(item => 
     item.tags && (item.tags.includes('beautiful') || item.tags.includes('performance') || item.tags.includes('showy'))
   );
+  
+  // Return the entertainer items for potential bonus selection
+  // The actual bonus logic will be handled in the gather command
   return entertainerItems;
 }
 
@@ -479,9 +508,19 @@ function applyScholarExploringBoost(exploreResult) {
 }
 
 function applyScholarGatheringBoost(gatheringData, targetRegion) {
-  // Allow gathering from different region
+  // Let the player select or default to a secondary region's gather table if boost is active. Still respects job requirements.
+  // This function returns the target region for cross-region gathering
   const currentRegion = typeof gatheringData === 'string' ? gatheringData : 'Inariko';
-  return targetRegion || currentRegion;
+  
+  // If no target region specified, default to a different region
+  if (!targetRegion) {
+    const regions = ['Inariko', 'Rudania', 'Vhintl'];
+    const currentIndex = regions.indexOf(currentRegion);
+    // Default to next region in rotation
+    targetRegion = regions[(currentIndex + 1) % regions.length];
+  }
+  
+  return targetRegion;
 }
 
 function applyScholarHealingBoost(healingData) {
@@ -596,6 +635,7 @@ function applyBoostEffect(job, category, data, additionalData = null) {
     case 'Fortune Teller':
       switch (category) {
         case 'Crafting': return applyFortuneTellerCraftingBoost(data);
+        case 'Gathering': return applyFortuneTellerGatheringBoost(data);
         case 'Stealing': return applyFortuneTellerStealingBoost(data);
         case 'Tokens': return applyFortuneTellerTokensBoost(data);
         case 'Traveling': return applyFortuneTellerTravelingBoost(data);
@@ -667,6 +707,7 @@ module.exports = {
   boostingEffects,
   // Individual boost functions for direct use
   applyFortuneTellerCraftingBoost,
+  applyFortuneTellerGatheringBoost,
   applyFortuneTellerStealingBoost,
   applyFortuneTellerTokensBoost,
   applyFortuneTellerTravelingBoost,
