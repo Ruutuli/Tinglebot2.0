@@ -247,15 +247,31 @@ module.exports = {
 
       await table.save();
 
-             const embed = new EmbedBuilder()
-         .setColor(0x00FF00)
-         .setTitle(`✅ Table '${name}' ${existingTable ? 'Updated' : 'Created'} Successfully`)
-                   .addFields(
-            { name: '📊 Entries', value: parseResult.entries.length.toString(), inline: true },
-            { name: '🎲 Total Weight', value: table.totalWeight.toString(), inline: true },
-            { name: '👤 Created By', value: `<@${interaction.user.id}>`, inline: true }
-          )
-         .setTimestamp();
+      // Show sample entries (first 5)
+      const sampleEntries = parseResult.entries.slice(0, 5).map((entry, index) => {
+        const itemName = entry.item || 'Flavor Only';
+        const weight = entry.weight;
+        return `**${index + 1}.** ${itemName} (Weight: ${weight})`;
+      }).join('\n');
+
+      const embed = new EmbedBuilder()
+        .setColor(0x00FF00)
+        .setTitle(`✅ Table '${name}' ${existingTable ? 'Updated' : 'Created'} Successfully`)
+        .setImage(DEFAULT_IMAGE_URL)
+        .setDescription(`**📊 ${parseResult.entries.length} entries** | **🎲 ${table.totalWeight} total weight**`)
+        .addFields(
+          { name: '👤 Created By', value: `<@${interaction.user.id}>`, inline: true }
+        )
+        .setTimestamp();
+
+      // Add sample entries if available
+      if (sampleEntries) {
+        embed.addFields({
+          name: `📝 Sample Entries${parseResult.entries.length > 5 ? ' (showing first 5)' : ''}`,
+          value: sampleEntries,
+          inline: false
+        });
+      }
 
 
 
