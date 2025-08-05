@@ -624,22 +624,37 @@ async function handleHealingFulfillment(interaction, requestId, healerName) {
     
     // Apply Healers boosts to healing amount and stamina cost
     if (healerCharacter.boostedBy) {
+      console.log(`[heal.js] Character ${healerCharacter.name} is boosted by ${healerCharacter.boostedBy} for healing`);
       const boostEffect = await getBoostEffectByCharacter(healerCharacter.boostedBy, 'Healers');
       if (boostEffect) {
+        console.log(`[heal.js] Found boost effect for ${healerCharacter.boostedBy}:`, boostEffect);
+        
         // Apply boost to healing amount
+        const originalHealing = heartsToHeal;
         const boostedHealing = applyBoostEffect(healerCharacter.boostedBy, 'Healers', heartsToHeal, { healer: healerCharacter, recipient: characterToHeal });
         if (boostedHealing !== heartsToHeal) {
-          console.log(`[heal.js] Applied ${healerCharacter.boostedBy} healing boost: ${heartsToHeal} → ${boostedHealing} hearts`);
+          console.log(`[heal.js] Applied ${healerCharacter.boostedBy} healing boost: ${originalHealing} → ${boostedHealing} hearts`);
+          console.log(`[heal.js] Boost effect "${boostEffect.name}" increased healing by ${boostedHealing - originalHealing} hearts`);
           heartsToHeal = boostedHealing;
+        } else {
+          console.log(`[heal.js] Boost effect "${boostEffect.name}" did not modify healing amount (${originalHealing} hearts)`);
         }
         
         // Apply boost to stamina cost (some boosts might reduce stamina cost)
+        const originalStamina = staminaCost;
         const boostedStamina = applyBoostEffect(healerCharacter.boostedBy, 'Healers', staminaCost, { healer: healerCharacter, recipient: characterToHeal });
         if (boostedStamina !== staminaCost) {
-          console.log(`[heal.js] Applied ${healerCharacter.boostedBy} stamina boost: ${staminaCost} → ${boostedStamina} stamina`);
+          console.log(`[heal.js] Applied ${healerCharacter.boostedBy} stamina boost: ${originalStamina} → ${boostedStamina} stamina`);
+          console.log(`[heal.js] Boost effect "${boostEffect.name}" ${boostedStamina < originalStamina ? 'reduced' : 'increased'} stamina cost by ${Math.abs(boostedStamina - originalStamina)}`);
           staminaCost = boostedStamina;
+        } else {
+          console.log(`[heal.js] Boost effect "${boostEffect.name}" did not modify stamina cost (${originalStamina} stamina)`);
         }
+      } else {
+        console.log(`[heal.js] No boost effect found for ${healerCharacter.boostedBy} in Healers category`);
       }
+    } else {
+      console.log(`[heal.js] Character ${healerCharacter.name} is not boosted for healing`);
     }
     
     await useStamina(healerCharacter._id, staminaCost);

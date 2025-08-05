@@ -826,13 +826,21 @@ async function processLootingLogic(
   // ------------------- Apply Boosting Effects -------------------
   // Check if character is boosted and apply looting boosts
   if (character.boostedBy) {
+    console.log(`[loot.js] Character ${character.name} is boosted by ${character.boostedBy}`);
     const boostEffect = await getBoostEffectByCharacter(character.boostedBy, 'Looting');
     if (boostEffect) {
+      console.log(`[loot.js] Found boost effect for ${character.boostedBy}:`, boostEffect);
+      const originalValue = adjustedRandomValue;
       // Apply boost to the adjusted random value (affects loot success)
       const boostedValue = applyBoostEffect(character.boostedBy, 'Looting', adjustedRandomValue);
       adjustedRandomValue = boostedValue;
-      console.log(`[loot.js] Applied ${character.boostedBy} looting boost: ${adjustedRandomValue} → ${boostedValue}`);
+      console.log(`[loot.js] Applied ${character.boostedBy} looting boost: ${originalValue} → ${boostedValue}`);
+      console.log(`[loot.js] Boost effect "${boostEffect.name}" ${boostedValue > originalValue ? 'increased' : boostedValue < originalValue ? 'decreased' : 'did not change'} loot success chance`);
+    } else {
+      console.log(`[loot.js] No boost effect found for ${character.boostedBy} in Looting category`);
     }
+  } else {
+    console.log(`[loot.js] Character ${character.name} is not boosted`);
   }
 
   const weightedItems = createWeightedItemList(items, adjustedRandomValue);
@@ -852,10 +860,14 @@ async function processLootingLogic(
   if (character.boostedBy && outcome.hearts) {
     const boostEffect = await getBoostEffectByCharacter(character.boostedBy, 'Looting');
     if (boostEffect) {
+      const originalDamage = outcome.hearts;
       const reducedDamage = applyBoostEffect(character.boostedBy, 'Looting', outcome.hearts);
       if (reducedDamage !== outcome.hearts) {
-        console.log(`[loot.js] Applied ${character.boostedBy} damage reduction: ${outcome.hearts} → ${reducedDamage}`);
+        console.log(`[loot.js] Applied ${character.boostedBy} damage reduction: ${originalDamage} → ${reducedDamage} hearts`);
+        console.log(`[loot.js] Boost effect "${boostEffect.name}" reduced damage by ${originalDamage - reducedDamage} hearts`);
         outcome.hearts = reducedDamage;
+      } else {
+        console.log(`[loot.js] Boost effect "${boostEffect.name}" did not reduce damage (${originalDamage} hearts)`);
       }
     }
   }
@@ -1043,13 +1055,22 @@ async function generateLootedItem(encounteredMonster, weightedItems, character) 
  // ------------------- Apply Boosting Effects -------------------
  // Check if character is boosted and apply loot quantity boosts
  if (character && character.boostedBy) {
+   console.log(`[loot.js] Character ${character.name} is boosted by ${character.boostedBy} for loot quantity`);
    const boostEffect = await getBoostEffectByCharacter(character.boostedBy, 'Looting');
    if (boostEffect) {
+     console.log(`[loot.js] Found boost effect for ${character.boostedBy}:`, boostEffect);
+     const originalQuantity = lootedItem.quantity;
      const boostedLoot = applyBoostEffect(character.boostedBy, 'Looting', lootedItem);
      if (boostedLoot && boostedLoot.quantity !== lootedItem.quantity) {
-       console.log(`[loot.js] Applied ${character.boostedBy} loot quantity boost: ${lootedItem.quantity} → ${boostedLoot.quantity}`);
+       console.log(`[loot.js] Applied ${character.boostedBy} loot quantity boost: ${originalQuantity} → ${boostedLoot.quantity} items`);
+       console.log(`[loot.js] Boost effect "${boostEffect.name}" increased loot quantity by ${boostedLoot.quantity - originalQuantity} items`);
+       console.log(`[loot.js] Final loot: ${boostedLoot.itemName} (x${boostedLoot.quantity})`);
        return boostedLoot;
+     } else {
+       console.log(`[loot.js] Boost effect "${boostEffect.name}" did not modify loot quantity (${originalQuantity} items)`);
      }
+   } else {
+     console.log(`[loot.js] No boost effect found for ${character.boostedBy} in Looting category`);
    }
  }
 

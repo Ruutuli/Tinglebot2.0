@@ -658,6 +658,22 @@ module.exports = {
         const randomIndex = Math.floor(Math.random() * weightedItems.length);
         const randomItem = weightedItems[randomIndex];
         const quantity = 1;
+        
+        // Enhanced logging for item selection and boost impact
+        console.log(`[gather.js] Final item selection for ${character.name}:`);
+        console.log(`[gather.js] - Selected item: ${randomItem.itemName} (Rarity: ${randomItem.rarity})`);
+        console.log(`[gather.js] - Item was ${boostedItems.includes(randomItem) ? 'available in boosted pool' : 'NOT in boosted pool'}`);
+        if (character.boostedBy && boostedItems.length > availableItems.length) {
+          const addedItems = boostedItems.slice(availableItems.length);
+          console.log(`[gather.js] - Boost effect "${boostEffect.name}" added ${addedItems.length} items to the pool`);
+          console.log(`[gather.js] - Added items: ${addedItems.map(item => `${item.itemName} (Rarity: ${item.rarity})`).join(', ')}`);
+          if (addedItems.includes(randomItem)) {
+            console.log(`[gather.js] - SUCCESS: Selected item was added by boost effect!`);
+          } else {
+            console.log(`[gather.js] - Selected item was from original pool (boost didn't affect this selection)`);
+          }
+        }
+        
         await addItemInventoryDatabase(
           character._id,
           randomItem.itemName,

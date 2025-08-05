@@ -339,14 +339,24 @@ module.exports = {
       
       // Apply Crafting boosts to crafted item quantity
       if (freshCharacter.boostedBy) {
+        console.log(`[crafting.js] Character ${freshCharacter.name} is boosted by ${freshCharacter.boostedBy}`);
         const boostEffect = await getBoostEffectByCharacter(freshCharacter.boostedBy, 'Crafting');
         if (boostEffect) {
+          console.log(`[crafting.js] Found boost effect for ${freshCharacter.boostedBy}:`, boostEffect);
+          const originalQuantity = craftedQuantity;
           const boostedQuantity = applyBoostEffect(freshCharacter.boostedBy, 'Crafting', craftedQuantity);
           if (boostedQuantity !== craftedQuantity) {
-            console.log(`[crafting.js] Applied ${freshCharacter.boostedBy} crafting quantity boost: ${craftedQuantity} → ${boostedQuantity}`);
+            console.log(`[crafting.js] Applied ${freshCharacter.boostedBy} crafting quantity boost: ${originalQuantity} → ${boostedQuantity} items`);
+            console.log(`[crafting.js] Boost effect "${boostEffect.name}" increased crafting output by ${boostedQuantity - originalQuantity} items`);
             craftedQuantity = boostedQuantity;
+          } else {
+            console.log(`[crafting.js] Boost effect "${boostEffect.name}" did not modify crafting quantity (${originalQuantity} items)`);
           }
+        } else {
+          console.log(`[crafting.js] No boost effect found for ${freshCharacter.boostedBy} in Crafting category`);
         }
+      } else {
+        console.log(`[crafting.js] Character ${freshCharacter.name} is not boosted`);
       }
       
       const craftedAt = new Date();
