@@ -837,6 +837,13 @@ async function handleStealSuccess(thiefCharacter, targetCharacter, selectedItem,
             }
         }
         
+        // ------------------- Clear Boost After Use -------------------
+        if (thiefCharacter.boostedBy) {
+          console.log(`[steal.js] Clearing boost for ${thiefCharacter.name} after use`);
+          thiefCharacter.boostedBy = null;
+          await thiefCharacter.save();
+        }
+        
         // Always deactivate job voucher after any attempt
         await deactivateJobVoucherIfNeeded(thiefCharacter, voucherCheck);
         
@@ -872,6 +879,13 @@ async function handleStealFailure(thiefCharacter, targetCharacter, selectedItem,
         
         // Handle failed attempts
         await handleFailedAttempts(thiefCharacter, embed);
+        
+        // ------------------- Clear Boost After Use -------------------
+        if (thiefCharacter.boostedBy) {
+          console.log(`[steal.js] Clearing boost for ${thiefCharacter.name} after use`);
+          thiefCharacter.boostedBy = null;
+          await thiefCharacter.save();
+        }
         
         // Always deactivate job voucher after any attempt
         await deactivateJobVoucherIfNeeded(thiefCharacter, voucherCheck);
