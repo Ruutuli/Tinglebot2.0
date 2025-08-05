@@ -292,6 +292,9 @@ async function syncToInventoryDatabase(character, item, interaction) {
 // Adds a single item to inventory database
 async function addItemInventoryDatabase(characterId, itemName, quantity, interaction, obtain = "", craftedAt = null) {
   try {
+    console.log(`[addItemInventoryDatabase] Starting with characterId: ${characterId}, itemName: ${itemName}, quantity: ${quantity}`);
+    console.log(`[addItemInventoryDatabase] CharacterId type: ${typeof characterId}, value: ${characterId}`);
+    
     if (!interaction && obtain !== 'Trade') {
       throw new Error("Interaction object is undefined.");
     }
@@ -301,13 +304,21 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
     }
 
     // Try to fetch regular character first, then mod character if not found
+    console.log(`[addItemInventoryDatabase] Attempting to fetch regular character with ID: ${characterId}`);
     let character = await dbFunctions.fetchCharacterById(characterId);
+    console.log(`[addItemInventoryDatabase] Regular character fetch result:`, character ? `Found - Name: ${character.name}, isModCharacter: ${character.isModCharacter}` : 'Not found');
+    
     if (!character) {
+      console.log(`[addItemInventoryDatabase] Regular character not found, attempting to fetch as mod character with ID: ${characterId}`);
       // Try to fetch as mod character
       character = await dbFunctions.fetchModCharacterById(characterId);
+      console.log(`[addItemInventoryDatabase] Mod character fetch result:`, character ? `Found - Name: ${character.name}, isModCharacter: ${character.isModCharacter}` : 'Not found');
     }
     
     if (!character) {
+      console.error(`[addItemInventoryDatabase] ERROR: Character with ID ${characterId} not found in either regular or mod character collections`);
+      console.error(`[addItemInventoryDatabase] CharacterId details - Type: ${typeof characterId}, Value: ${characterId}, Stringified: ${JSON.stringify(characterId)}`);
+      
       const errorEmbed = new EmbedBuilder()
         .setColor(0xFF0000)
         .setTitle('❌ Character Not Found')
@@ -320,6 +331,8 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
 
       throw new Error(`Character with ID ${characterId} not found`);
     }
+    
+    console.log(`[addItemInventoryDatabase] Successfully found character: ${character.name} (ID: ${characterId})`);
     const inventoriesConnection = await dbFunctions.connectToInventories();
     const db = inventoriesConnection.useDb('inventories');
     

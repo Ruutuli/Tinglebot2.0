@@ -697,6 +697,8 @@ for (const { name } of cleanedItems) {
 
   for (const { name, quantity } of aggregatedItems) {
    // Remove from source inventory first
+   console.log(`[handleGift] Removing item from source character - fromCharacter._id: ${fromCharacter._id}, type: ${typeof fromCharacter._id}, name: ${name}, quantity: ${quantity}`);
+   console.log(`[handleGift] Source character details - Name: ${fromCharacter.name}, isModCharacter: ${fromCharacter.isModCharacter}`);
    const removeResult = await removeItemInventoryDatabase(
     fromCharacter._id,
     name,
@@ -714,6 +716,8 @@ for (const { name } of cleanedItems) {
    }
 
    // Add to target inventory
+   console.log(`[handleGift] Adding item to target character - toCharacter._id: ${toCharacter._id}, type: ${typeof toCharacter._id}, name: ${name}, quantity: ${quantity}`);
+   console.log(`[handleGift] Target character details - Name: ${toCharacter.name}, isModCharacter: ${toCharacter.isModCharacter}`);
    const addResult = await addItemInventoryDatabase(
     toCharacter._id, 
     name, 
