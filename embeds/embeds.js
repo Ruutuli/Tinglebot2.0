@@ -894,7 +894,8 @@ const combinedFlavorText = flavorText?.trim()
   .setThumbnail(item.image || 'https://via.placeholder.com/150')
   .setImage("https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png/v1/fill/w_600,h_29,al_c,q_85,usm_0.66_1.00_0.01,enc_auto/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png")
   .setFooter({ 
-    text: character.jobVoucher ? `🎫 Job Voucher activated for ${character.name} to perform the job ${jobForFlavorText}` : '✨ Successfully crafted!'
+    text: character.jobVoucher ? `🎫 Job Voucher activated for ${character.name} to perform the job ${jobForFlavorText}` : 
+         character.boostedBy ? `⚡ Boosted by: ${character.boostedBy}` : '✨ Successfully crafted!'
   });
 
  return embed;
@@ -1146,6 +1147,9 @@ const createGatherEmbed = (character, randomItem) => {
  // Add voucher info to footer if active
  if (character.jobVoucher && character.jobVoucherJob) {
   embed.setFooter({ text: `🎫 Job Voucher in use: ${character.jobVoucherJob}` });
+ } else if (character.boostedBy) {
+  // Add boost indicator to footer
+  embed.setFooter({ text: `⚡ Boosted by: ${character.boostedBy}` });
  }
 
  return embed;
@@ -1362,7 +1366,9 @@ const createMonsterEncounterEmbed = (
  embed.setFooter({
   text: `Tier: ${monster.tier}${
    isBloodMoon ? " 🔴 Blood Moon Encounter" : ""
-  }${character.jobVoucher && character.jobVoucherJob ? ` | 🎫 Job Voucher in use: ${character.jobVoucherJob}` : ""}`,
+  }${character.jobVoucher && character.jobVoucherJob ? ` | 🎫 Job Voucher in use: ${character.jobVoucherJob}` : ""}${
+   character.boostedBy ? ` | ⚡ Boosted by: ${character.boostedBy}` : ""
+  }`,
   iconURL: authorIconURL,
  });
 

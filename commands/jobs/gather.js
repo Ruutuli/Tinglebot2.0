@@ -174,7 +174,6 @@ module.exports = {
 
     try {
       await interaction.deferReply();
-      hasResponded = true;
 
       const characterName = interaction.options.getString('charactername');
       const character = await fetchCharacterByNameAndUserId(characterName, interaction.user.id);
@@ -634,13 +633,26 @@ module.exports = {
         // ------------------- Apply Boosting Effects -------------------
         // Check if character is boosted and apply gathering boosts
         let boostedItems = availableItems;
-              if (character.boostedBy) {
-        const boostEffect = await getBoostEffectByCharacter(character.boostedBy, 'Gathering');
-        if (boostEffect) {
-          boostedItems = applyBoostEffect(character.boostedBy, 'Gathering', availableItems);
-          console.log(`[gather.js] Applied ${character.boostedBy} gathering boost: ${availableItems.length} → ${boostedItems.length} items`);
+        if (character.boostedBy) {
+          console.log(`[gather.js] Character ${character.name} is boosted by ${character.boostedBy}`);
+          const boostEffect = await getBoostEffectByCharacter(character.boostedBy, 'Gathering');
+          if (boostEffect) {
+            console.log(`[gather.js] Found boost effect for ${character.boostedBy}:`, boostEffect);
+            const originalItemCount = availableItems.length;
+            boostedItems = applyBoostEffect(character.boostedBy, 'Gathering', availableItems);
+            console.log(`[gather.js] Applied ${character.boostedBy} gathering boost: ${originalItemCount} → ${boostedItems.length} items`);
+            
+            // Log the specific items that were added by the boost
+            if (boostedItems.length > originalItemCount) {
+              const addedItems = boostedItems.slice(originalItemCount);
+              console.log(`[gather.js] Boost added items:`, addedItems.map(item => item.itemName));
+            }
+          } else {
+            console.log(`[gather.js] No boost effect found for ${character.boostedBy} in Gathering category`);
+          }
+        } else {
+          console.log(`[gather.js] Character ${character.name} is not boosted`);
         }
-      }
 
         const weightedItems = createWeightedItemList(boostedItems, undefined, job);
         const randomIndex = Math.floor(Math.random() * weightedItems.length);
@@ -657,6 +669,13 @@ module.exports = {
 
         const embed = createGatherEmbed(character, randomItem);
         await safeReply({ embeds: [embed] });
+        
+        // ------------------- Clear Boost After Use -------------------
+        if (character.boostedBy) {
+          console.log(`[gather.js] Clearing boost for ${character.name} after use`);
+          character.boostedBy = null;
+        }
+        
         // ------------------- Update Last Gather Timestamp -------------------
         character.lastGatheredAt = new Date().toISOString();
         await character.save();
