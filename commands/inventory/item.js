@@ -113,15 +113,19 @@ module.exports = {
       // ------------------- Ownership Validation -------------------
       // Confirm the character owns enough of the requested item.
       const inventoryItems = await inventoryCollection.find().toArray();
+      
+      // Clean the itemName to remove quantity suffix if present (e.g., "Job Voucher - Qty: 1" -> "Job Voucher")
+      const cleanItemName = itemName.replace(/\s*-\s*Qty:\s*\d+\s*$/i, '').toLowerCase();
+      
       const ownedItem = inventoryItems.find(invItem =>
-        invItem.itemName?.toLowerCase() === itemName.toLowerCase()
+        invItem.itemName?.toLowerCase() === cleanItemName
       );
       if (!ownedItem || ownedItem.quantity < quantity) {
         return void await interaction.editReply({
           embeds: [{
             color: 0xAA926A,
             title: '🎫 Job Voucher Usage',
-            description: `*${character.name} looks through their inventory, confused...*\n\n**Item Not Found**\n${character.name} does not have enough "${capitalizeWords(itemName)}" in their inventory.`,
+            description: `*${character.name} looks through their inventory, confused...*\n\n**Item Not Found**\n${character.name} does not have enough "${capitalizeWords(cleanItemName)}" in their inventory.`,
             image: {
               url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
             },
