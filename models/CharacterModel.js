@@ -152,7 +152,11 @@ const characterSchema = new Schema({
         questType: { type: String }
       }
     ]
-  }
+  },
+
+  // ------------------- Boosting System -------------------
+  // Tracks which character is currently boosting this character
+  boostedBy: { type: String, default: null }
 
 }, { collection: 'characters' });
 
