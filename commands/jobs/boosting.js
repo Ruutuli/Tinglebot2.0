@@ -343,10 +343,14 @@ async function handleBoostRequest(interaction) {
 
   const embed = createBoostRequestEmbed(requestDataForEmbed, boostRequestId);
 
- await interaction.reply({
-  content: `Boost request created. Ask **${boosterCharacter.name}** to run \`/boosting accept\` within 24 hours.`,
-  embeds: [embed],
- });
+   // Get the owner of the booster character
+  const boosterOwnerId = boosterCharacter.userId;
+  const boosterOwnerMention = `<@${boosterOwnerId}>`;
+  
+  await interaction.reply({
+   content: `Boost request created. ${boosterOwnerMention} (**${boosterCharacter.name}**) run </boosting accept:1394790096338817195> within 24 hours.`,
+   embeds: [embed],
+  });
 }
 
 async function handleBoostAccept(interaction) {
@@ -478,7 +482,11 @@ async function handleBoostAccept(interaction) {
     boostName: boost.name,
     village: requestData.village,
     boostedByIcon: booster.icon,
-    targetIcon: targetCharacter.icon
+    targetIcon: targetCharacter.icon,
+    boosterStamina: booster.currentStamina,
+    boosterHearts: booster.currentHearts,
+    boosterMaxStamina: booster.maxStamina,
+    boosterMaxHearts: booster.maxHearts
   };
 
   const embed = createBoostAppliedEmbed(boostDataForEmbed);
