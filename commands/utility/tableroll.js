@@ -82,6 +82,7 @@ module.exports = {
           option.setName('name')
             .setDescription('Name of the table to roll on')
             .setRequired(true)
+            .setAutocomplete(true)
         )
         .addStringOption(option =>
           option.setName('charactername')
