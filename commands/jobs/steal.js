@@ -20,7 +20,7 @@ const User = require('../../models/UserModel');
 const { hasPerk, getJobPerk, normalizeJobName, isValidJob } = require('../../modules/jobsModule');
 const { validateJobVoucher, activateJobVoucher, fetchJobVoucherItem, deactivateJobVoucher, getJobVoucherErrorMessage } = require('../../modules/jobVoucherModule');
 const { capitalizeWords } = require('../../modules/formattingModule');
-const { applyBoostEffect, getBoostEffect } = require('../../modules/boostingModule.js');
+const { applyBoostEffect, getBoostEffect, getBoostEffectByCharacter } = require('../../modules/boostingModule.js');
 
 // Add StealStats model
 const StealStats = require('../../models/StealStatsModel');
@@ -884,40 +884,40 @@ async function handleStealFailure(thiefCharacter, targetCharacter, selectedItem,
 
 // ------------------- Centralized Roll Generation -------------------
 // Centralized roll generation to eliminate duplication
-function generateStealRoll(character = null) {
+async function generateStealRoll(character = null) {
     let roll = Math.floor(Math.random() * 99) + 1;
     
     // Apply Stealing boosts to the roll
-    if (character && character.boostedBy) {
-        const boostEffect = getBoostEffect(character.boostedBy, 'Stealing');
+          if (character && character.boostedBy) {
+        const boostEffect = await getBoostEffectByCharacter(character.boostedBy, 'Stealing');
         if (boostEffect) {
-            const boostedRoll = applyBoostEffect(character.boostedBy, 'Stealing', roll);
-            if (boostedRoll !== roll) {
-                console.log(`[steal.js] Applied ${character.boostedBy} stealing roll boost: ${roll} → ${boostedRoll}`);
-                roll = boostedRoll;
-            }
+          const boostedRoll = applyBoostEffect(character.boostedBy, 'Stealing', roll);
+          if (boostedRoll !== roll) {
+            console.log(`[steal.js] Applied ${character.boostedBy} stealing roll boost: ${roll} → ${boostedRoll}`);
+            roll = boostedRoll;
+          }
         }
-    }
+      }
     
     return roll;
 }
 
 // ------------------- Centralized Failure Threshold Calculation -------------------
 // Centralized failure threshold calculation to eliminate duplication
-function calculateFailureThreshold(itemTier, character = null) {
+async function calculateFailureThreshold(itemTier, character = null) {
     let threshold = FAILURE_CHANCES[itemTier];
     
     // Apply Stealing boosts to the failure threshold
-    if (character && character.boostedBy) {
-        const boostEffect = getBoostEffect(character.boostedBy, 'Stealing');
+          if (character && character.boostedBy) {
+        const boostEffect = await getBoostEffectByCharacter(character.boostedBy, 'Stealing');
         if (boostEffect) {
-            const boostedThreshold = applyBoostEffect(character.boostedBy, 'Stealing', threshold);
-            if (boostedThreshold !== threshold) {
-                console.log(`[steal.js] Applied ${character.boostedBy} stealing threshold boost: ${threshold} → ${boostedThreshold}`);
-                threshold = boostedThreshold;
-            }
+          const boostedThreshold = applyBoostEffect(character.boostedBy, 'Stealing', threshold);
+          if (boostedThreshold !== threshold) {
+            console.log(`[steal.js] Applied ${character.boostedBy} stealing threshold boost: ${threshold} → ${boostedThreshold}`);
+            threshold = boostedThreshold;
+          }
         }
-    }
+      }
     
     return threshold;
 }
@@ -1476,8 +1476,8 @@ module.exports = {
                 }
 
                 const selectedItem = getRandomItemByWeight(filteredItems);
-                const roll = generateStealRoll(thiefCharacter);
-                const failureThreshold = calculateFailureThreshold(selectedItem.tier, thiefCharacter);
+                const roll = await generateStealRoll(thiefCharacter);
+                const failureThreshold = await calculateFailureThreshold(selectedItem.tier, thiefCharacter);
                 const isSuccess = roll > failureThreshold;
 
                 if (isSuccess) {
@@ -1618,8 +1618,8 @@ module.exports = {
                 }
 
                 const selectedItem = getRandomItemByWeight(filteredItemsPlayer);
-                const roll = generateStealRoll(thiefCharacter);
-                const failureThreshold = calculateFailureThreshold(selectedItem.tier, thiefCharacter);
+                const roll = await generateStealRoll(thiefCharacter);
+                const failureThreshold = await calculateFailureThreshold(selectedItem.tier, thiefCharacter);
                 const success = roll > failureThreshold;
 
                 if (success) {

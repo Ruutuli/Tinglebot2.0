@@ -16,7 +16,7 @@ const { validateJobVoucher, activateJobVoucher, fetchJobVoucherItem, deactivateJ
 const { handleTradeItemAutocomplete } = require('../../handlers/autocompleteHandler.js');
 const { checkInventorySync } = require('../../utils/characterUtils');
 const { generateUniqueId } = require('../../utils/uniqueIdUtils.js');
-const { applyBoostEffect, getBoostEffect } = require('../../modules/boostingModule.js');
+const { applyBoostEffect, getBoostEffect, getBoostEffectByCharacter } = require('../../modules/boostingModule.js');
 
 // ============================================================================
 // ---- Helper Functions ----
@@ -624,7 +624,7 @@ async function handleHealingFulfillment(interaction, requestId, healerName) {
     
     // Apply Healers boosts to healing amount and stamina cost
     if (healerCharacter.boostedBy) {
-      const boostEffect = getBoostEffect(healerCharacter.boostedBy, 'Healers');
+      const boostEffect = await getBoostEffectByCharacter(healerCharacter.boostedBy, 'Healers');
       if (boostEffect) {
         // Apply boost to healing amount
         const boostedHealing = applyBoostEffect(healerCharacter.boostedBy, 'Healers', heartsToHeal, { healer: healerCharacter, recipient: characterToHeal });

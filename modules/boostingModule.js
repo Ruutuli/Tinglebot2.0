@@ -555,11 +555,33 @@ function applyScholarVendingBoost(allInventories) {
 // Retrieves a boost perk given a job and category. Returns null if not found.
 function getBoostEffect(job, category) {
   // Normalize job name to match the keys in boostingEffects
-  const normalizedJob = job.charAt(0).toUpperCase() + job.slice(1).toLowerCase();
+  // Handle multi-word job names properly
+  const normalizedJob = job.split(' ').map(word => 
+    word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+  ).join(' ');
+  
   const jobBoosts = boostingEffects[normalizedJob];
   if (!jobBoosts) return null;
   const boost = jobBoosts[category];
   return boost || null;
+}
+
+// ------------------- Function to Get Boost Effect by Character Name -------------------
+// Retrieves a boost perk given a character name and category. Returns null if not found.
+// This is a helper function for commands that have character names instead of job names.
+async function getBoostEffectByCharacter(characterName, category) {
+  try {
+    const { fetchCharacterByName } = require('../database/db');
+    const character = await fetchCharacterByName(characterName);
+    if (!character) {
+      console.error(`[boostingModule.js]: Error - Could not find character "${characterName}"`);
+      return null;
+    }
+    return getBoostEffect(character.job, category);
+  } catch (error) {
+    console.error(`[boostingModule.js]: Error getting boost effect for character "${characterName}":`, error);
+    return null;
+  }
 }
 
 // ------------------- Function to Apply Boost Effect -------------------
@@ -640,6 +662,7 @@ function applyBoostEffect(job, category, data, additionalData = null) {
 // Exports the boosting effects and functions for use in other modules.
 module.exports = {
   getBoostEffect,
+  getBoostEffectByCharacter,
   applyBoostEffect,
   boostingEffects,
   // Individual boost functions for direct use
