@@ -71,7 +71,7 @@ const boostingEffects = {
       // ------------------- Exploring -------------------
       Exploring: {
         name: 'Study in Multiples',
-        description: 'Double the amount of any item found during exploration, if it’s a non-combat result.'
+        description: 'Double the amount of any item found during exploration, if it\'s a non-combat result.'
       },
       // ------------------- Gathering -------------------
       Gathering: {
@@ -173,7 +173,7 @@ const boostingEffects = {
       // ------------------- Exploring -------------------
       Exploring: {
         name: 'Song of Soaring',
-        description: 'After exploring, instantly return to your current village’s plaza via magical performance.'
+        description: 'After exploring, instantly return to your current village\'s plaza via magical performance.'
       },
       // ------------------- Gathering -------------------
       Gathering: {
@@ -192,8 +192,8 @@ const boostingEffects = {
       },
       // ------------------- Mounts -------------------
       Mounts: {
-        name: 'Epona’s Song',
-        description: 'You’re more likely to tame a mount that fits the local region\'s style, folklore, or wildlife.'
+        name: 'Epona\'s Song',
+        description: 'You\'re more likely to tame a mount that fits the local region\'s style, folklore, or wildlife.'
       },
       // ------------------- Other -------------------
       Other: {
@@ -234,7 +234,7 @@ const boostingEffects = {
       // ------------------- Gathering -------------------
       Gathering: {
         name: 'Cross-Region Insight',
-        description: 'Gather from another village’s item table without leaving your current location.'
+        description: 'Gather from another village\'s item table without leaving your current location.'
       },
       // ------------------- Healers -------------------
       Healers: {
@@ -264,7 +264,7 @@ const boostingEffects = {
       // ------------------- Traveling -------------------
       Traveling: {
         name: 'Travel Guide',
-        description: 'Gain one extra road gather result during the journey thanks to Scholar’s guidance.'
+        description: 'Gain one extra road gather result during the journey thanks to Scholar\'s guidance.'
       },
       // ------------------- Vending -------------------
       Vending: {
@@ -273,22 +273,383 @@ const boostingEffects = {
       }
     }
   };
-  
-  // ------------------- Function to Get Boost Effect -------------------
-  // Retrieves a boost perk given a job and category. Returns null if not found.
-  function getBoostEffect(job, category) {
-    // Normalize job name to match the keys in boostingEffects
-    const normalizedJob = job.charAt(0).toUpperCase() + job.slice(1).toLowerCase();
-    const jobBoosts = boostingEffects[normalizedJob];
-    if (!jobBoosts) return null;
-    const boost = jobBoosts[category];
-    return boost || null;
+
+// ------------------- Implementation Functions -------------------
+
+// ------------------- Fortune Teller Implementations -------------------
+function applyFortuneTellerCraftingBoost(basePrice) {
+  return Math.floor(basePrice * 1.2);
+}
+
+function applyFortuneTellerStealingBoost(baseChance) {
+  return Math.min(baseChance + 20, 100);
+}
+
+function applyFortuneTellerTokensBoost(baseTokens) {
+  return Math.floor(baseTokens * 1.1);
+}
+
+function applyFortuneTellerTravelingBoost(weatherBlock) {
+  // Override weather blocks for Fortune Teller
+  return false;
+}
+
+// ------------------- Teacher Implementations -------------------
+function applyTeacherCraftingBoost(craftedItem) {
+  // Duplicate the crafted item quantity
+  if (craftedItem && craftedItem.quantity) {
+    craftedItem.quantity += 1;
   }
+  return craftedItem;
+}
+
+function applyTeacherExploringBoost(exploredItem) {
+  // Double the amount of non-combat items found
+  if (exploredItem && exploredItem.quantity && !exploredItem.isCombat) {
+    exploredItem.quantity += 1;
+  }
+  return exploredItem;
+}
+
+function applyTeacherGatheringBoost(gatherTable) {
+  // Filter for useful items (Material, Cooking, Potion tags)
+  const usefulItems = gatherTable.filter(item => 
+    item.tags && (item.tags.includes('Material') || item.tags.includes('Cooking') || item.tags.includes('Potion'))
+  );
+  return usefulItems.length > 0 ? usefulItems : gatherTable;
+}
+
+function applyTeacherHealingBoost(healedCharacter) {
+  // Add +2 temporary hearts
+  if (healedCharacter.tempHearts === undefined) {
+    healedCharacter.tempHearts = 0;
+  }
+  healedCharacter.tempHearts += 2;
+  return healedCharacter;
+}
+
+function applyTeacherLootingBoost(adjustedRoll) {
+  return Math.min(adjustedRoll + 2, 100);
+}
+
+function applyTeacherStealingBoost(failedAttempts) {
+  // Allow one extra failed attempt
+  return failedAttempts + 1;
+}
+
+function applyTeacherTokensBoost(baseTokens) {
+  return Math.floor(baseTokens * 1.5);
+}
+
+function applyTeacherTravelingBoost(roadGathers) {
+  // Roll twice and choose better result
+  if (roadGathers && roadGathers.length >= 2) {
+    const firstRoll = roadGathers[0];
+    const secondRoll = roadGathers[1];
+    return firstRoll.rarity > secondRoll.rarity ? firstRoll : secondRoll;
+  }
+  return roadGathers;
+}
+
+function applyTeacherVendingBoost(baseCost) {
+  return Math.ceil(baseCost * 0.8);
+}
+
+// ------------------- Priest Implementations -------------------
+function applyPriestCraftingBoost(baseStaminaCost) {
+  return Math.ceil(baseStaminaCost * 0.8);
+}
+
+function applyPriestExploringBoost(blightExposure) {
+  // Skip blight exposure check
+  return false;
+}
+
+function applyPriestGatheringBoost(gatherTable) {
+  // Increase weighting for divine/spiritual items
+  const divineItems = gatherTable.filter(item => 
+    item.tags && (item.tags.includes('divine') || item.tags.includes('holy') || item.tags.includes('blessed'))
+  );
+  return divineItems.length > 0 ? divineItems : gatherTable;
+}
+
+function applyPriestHealingBoost(patient) {
+  // Remove active debuffs
+  if (patient.debuff && patient.debuff.active) {
+    patient.debuff.active = false;
+    patient.debuff.endDate = null;
+  }
+  return patient;
+}
+
+function applyPriestLootingBoost(adjustedRoll) {
+  // Apply +5 or -5 modifier randomly
+  const modifier = Math.random() < 0.5 ? 5 : -5;
+  return Math.max(0, Math.min(100, adjustedRoll + modifier));
+}
+
+function applyPriestStealingBoost(jailTime) {
+  return Math.ceil(jailTime * 0.5);
+}
+
+function applyPriestTokensBoost(baseTokens, isBuying = false) {
+  if (isBuying) {
+    return Math.ceil(baseTokens * 0.9); // Pay 10% less
+  } else {
+    return Math.floor(baseTokens * 1.1); // Earn 10% more
+  }
+}
+
+function applyPriestTravelingBoost(baseHealing) {
+  return baseHealing + 2;
+}
+
+function applyPriestVendingBoost(basePoints) {
+  return basePoints + 20;
+}
+
+// ------------------- Entertainer Implementations -------------------
+function applyEntertainerCraftingBoost(voucherCraftCount) {
+  // Allow one extra voucher craft
+  return voucherCraftCount + 1;
+}
+
+function applyEntertainerGatheringBoost(regionItems) {
+  // Add bonus entertainer-themed items if available
+  const entertainerItems = regionItems.filter(item => 
+    item.tags && (item.tags.includes('beautiful') || item.tags.includes('performance') || item.tags.includes('showy'))
+  );
+  return entertainerItems;
+}
+
+function applyEntertainerHealingBoost(baseHealing, wasKO) {
+  // Add +1 heart if revived from KO
+  return wasKO ? baseHealing + 1 : baseHealing;
+}
+
+function applyEntertainerLootingBoost(damageTaken) {
+  // Reduce damage by 1 heart (minimum 0)
+  return Math.max(0, damageTaken - 1);
+}
+
+function applyEntertainerMountsBoost(regionMounts) {
+  // Increase regional mount weighting by 30%
+  return regionMounts.map(mount => ({
+    ...mount,
+    weight: mount.weight * 1.3
+  }));
+}
+
+function applyEntertainerTokensBoost(participants) {
+  // Add +20 tokens to all participants
+  return participants.map(participant => ({
+    ...participant,
+    tokens: (participant.tokens || 0) + 20
+  }));
+}
+
+function applyEntertainerTravelingBoost(escapeRolls) {
+  // Take the better of two escape attempts
+  if (escapeRolls && escapeRolls.length >= 2) {
+    return Math.max(escapeRolls[0], escapeRolls[1]);
+  }
+  return escapeRolls;
+}
+
+function applyEntertainerVendingBoost(collectionTime) {
+  // Allow collection at any time
+  return true;
+}
+
+// ------------------- Scholar Implementations -------------------
+function applyScholarCraftingBoost(materialCosts) {
+  // Reduce material costs by 20%
+  return materialCosts.map(material => ({
+    ...material,
+    quantity: Math.ceil(material.quantity * 0.8)
+  }));
+}
+
+function applyScholarExploringBoost(exploreResult) {
+  // 25% chance for lore-related reward
+  if (Math.random() < 0.25) {
+    return { type: 'lore', description: 'Historical discovery found!' };
+  }
+  return exploreResult;
+}
+
+function applyScholarGatheringBoost(gatheringData, targetRegion) {
+  // Allow gathering from different region
+  const currentRegion = typeof gatheringData === 'string' ? gatheringData : 'Inariko';
+  return targetRegion || currentRegion;
+}
+
+function applyScholarHealingBoost(healingData) {
+  // Both recover 1 stamina
+  const { healer, recipient } = healingData;
   
-  // ------------------- Module Exports -------------------
-  // Exports the boosting effects and function for use in other modules.
-  module.exports = {
-    getBoostEffect,
-    boostingEffects
+  if (healer && healer.stamina < healer.maxStamina) {
+    healer.stamina = Math.min(healer.stamina + 1, healer.maxStamina);
+  }
+  if (recipient && recipient.stamina < recipient.maxStamina) {
+    recipient.stamina = Math.min(recipient.stamina + 1, recipient.maxStamina);
+  }
+  return { healer, recipient };
+}
+
+function applyScholarLootingBoost(lootedItem) {
+  // Double loot quantity
+  if (lootedItem && lootedItem.quantity) {
+    lootedItem.quantity *= 2;
+  }
+  return lootedItem;
+}
+
+function applyScholarMountsBoost(environment) {
+  // Return recommended action based on environment
+  const recommendations = {
+    'Tall Grass': 'Sneak',
+    'Forest': 'Distract',
+    'Mountain': 'Approach',
+    'Water': 'Wait',
+    'Cave': 'Sneak'
   };
+  return recommendations[environment] || 'Approach';
+}
+
+function applyScholarStealingBoost(stolenItem) {
+  // Add +1 extra item
+  if (stolenItem && stolenItem.quantity) {
+    stolenItem.quantity += 1;
+  }
+  return stolenItem;
+}
+
+function applyScholarTokensBoost(baseTokens) {
+  return Math.floor(baseTokens * 1.5);
+}
+
+function applyScholarTravelingBoost(roadGathers) {
+  // Add one extra gather result
+  return roadGathers + 1;
+}
+
+function applyScholarVendingBoost(allInventories) {
+  // Find rarest in-demand item
+  const itemCounts = {};
+  allInventories.forEach(inventory => {
+    inventory.items.forEach(item => {
+      itemCounts[item.name] = (itemCounts[item.name] || 0) + item.quantity;
+    });
+  });
+  
+  // Find items with low global quantity but high crafting use
+  const rareItems = Object.entries(itemCounts)
+    .filter(([name, count]) => count <= 5) // Rare items
+    .sort(([,a], [,b]) => a - b);
+  
+  return rareItems.length > 0 ? rareItems[0][0] : null;
+}
+
+// ------------------- Function to Get Boost Effect -------------------
+// Retrieves a boost perk given a job and category. Returns null if not found.
+function getBoostEffect(job, category) {
+  // Normalize job name to match the keys in boostingEffects
+  const normalizedJob = job.charAt(0).toUpperCase() + job.slice(1).toLowerCase();
+  const jobBoosts = boostingEffects[normalizedJob];
+  if (!jobBoosts) return null;
+  const boost = jobBoosts[category];
+  return boost || null;
+}
+
+// ------------------- Function to Apply Boost Effect -------------------
+// Applies the appropriate boost effect based on job and category
+function applyBoostEffect(job, category, data, additionalData = null) {
+  // Handle multi-word job names properly
+  const normalizedJob = job.split(' ').map(word => 
+    word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+  ).join(' ');
+  
+  switch (normalizedJob) {
+    case 'Fortune Teller':
+      switch (category) {
+        case 'Crafting': return applyFortuneTellerCraftingBoost(data);
+        case 'Stealing': return applyFortuneTellerStealingBoost(data);
+        case 'Tokens': return applyFortuneTellerTokensBoost(data);
+        case 'Traveling': return applyFortuneTellerTravelingBoost(data);
+        default: return data;
+      }
+    case 'Teacher':
+      switch (category) {
+        case 'Crafting': return applyTeacherCraftingBoost(data);
+        case 'Exploring': return applyTeacherExploringBoost(data);
+        case 'Gathering': return applyTeacherGatheringBoost(data);
+        case 'Healers': return applyTeacherHealingBoost(data);
+        case 'Looting': return applyTeacherLootingBoost(data);
+        case 'Stealing': return applyTeacherStealingBoost(data);
+        case 'Tokens': return applyTeacherTokensBoost(data);
+        case 'Traveling': return applyTeacherTravelingBoost(data);
+        case 'Vending': return applyTeacherVendingBoost(data);
+        default: return data;
+      }
+    case 'Priest':
+      switch (category) {
+        case 'Crafting': return applyPriestCraftingBoost(data);
+        case 'Exploring': return applyPriestExploringBoost(data);
+        case 'Gathering': return applyPriestGatheringBoost(data);
+        case 'Healers': return applyPriestHealingBoost(data);
+        case 'Looting': return applyPriestLootingBoost(data);
+        case 'Stealing': return applyPriestStealingBoost(data);
+        case 'Tokens': return applyPriestTokensBoost(data, additionalData);
+        case 'Traveling': return applyPriestTravelingBoost(data);
+        case 'Vending': return applyPriestVendingBoost(data);
+        default: return data;
+      }
+    case 'Entertainer':
+      switch (category) {
+        case 'Crafting': return applyEntertainerCraftingBoost(data);
+        case 'Gathering': return applyEntertainerGatheringBoost(data);
+        case 'Healers': return applyEntertainerHealingBoost(data, additionalData);
+        case 'Looting': return applyEntertainerLootingBoost(data);
+        case 'Mounts': return applyEntertainerMountsBoost(data);
+        case 'Tokens': return applyEntertainerTokensBoost(data);
+        case 'Traveling': return applyEntertainerTravelingBoost(data);
+        case 'Vending': return applyEntertainerVendingBoost(data);
+        default: return data;
+      }
+    case 'Scholar':
+      switch (category) {
+        case 'Crafting': return applyScholarCraftingBoost(data);
+        case 'Exploring': return applyScholarExploringBoost(data);
+        case 'Gathering': return applyScholarGatheringBoost(data, additionalData);
+        case 'Healers': return applyScholarHealingBoost(data);
+        case 'Looting': return applyScholarLootingBoost(data);
+        case 'Mounts': return applyScholarMountsBoost(data);
+        case 'Stealing': return applyScholarStealingBoost(data);
+        case 'Tokens': return applyScholarTokensBoost(data);
+        case 'Traveling': return applyScholarTravelingBoost(data);
+        case 'Vending': return applyScholarVendingBoost(data);
+        default: return data;
+      }
+    default:
+      return data;
+  }
+}
+
+// ------------------- Module Exports -------------------
+// Exports the boosting effects and functions for use in other modules.
+module.exports = {
+  getBoostEffect,
+  applyBoostEffect,
+  boostingEffects,
+  // Individual boost functions for direct use
+  applyFortuneTellerCraftingBoost,
+  applyFortuneTellerStealingBoost,
+  applyFortuneTellerTokensBoost,
+  applyFortuneTellerTravelingBoost,
+  applyTeacherCraftingBoost,
+  applyPriestCraftingBoost,
+  applyEntertainerCraftingBoost,
+  applyScholarCraftingBoost
+};
   
