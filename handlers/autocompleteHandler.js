@@ -58,6 +58,7 @@ const Party = require("../models/PartyModel");
 const Pet = require("../models/PetModel");
 const Quest = require("../models/QuestModel");
 const ShopStock = require("../models/VillageShopsModel");
+const TableRoll = require("../models/TableRollModel");
 const { Village } = require("../models/VillageModel");
 
 
@@ -504,6 +505,18 @@ async function handleAutocomplete(interaction) {
           case "submit":
             if (focusedOption.name === "collab") {
               await handleSubmitCollabAutocomplete(interaction, focusedOption);
+            }
+            break;
+
+          // ------------------- Table Roll Command -------------------
+          case "tableroll":
+            if (interaction.options._subcommand) {
+              const tablerollSubcommand = interaction.options.getSubcommand();
+              if (tablerollSubcommand === "view" || tablerollSubcommand === "roll" || tablerollSubcommand === "edit" || tablerollSubcommand === "delete" || tablerollSubcommand === "duplicate") {
+                if (focusedOption.name === "name") {
+                  await handleTableRollNameAutocomplete(interaction, focusedOption);
+                }
+              }
             }
             break;
 
@@ -4210,6 +4223,49 @@ handleBlightOverrideTargetAutocomplete,
  // ------------------- Shop Buy Functions -------------------
  handleShopBuyItemAutocomplete,
 };
+
+// ------------------- Table Roll Name Autocomplete -------------------
+// Provides autocomplete suggestions for table roll names.
+async function handleTableRollNameAutocomplete(interaction, focusedOption) {
+  try {
+    // Get the search query from the focused option
+    const searchQuery = focusedOption.value?.toLowerCase() || "";
+    
+    // Find active table rolls
+    const tableRolls = await TableRoll.find({ 
+      isActive: true
+    }).select('name category description rollCount').limit(25);
+    
+    if (!tableRolls || tableRolls.length === 0) {
+      return await interaction.respond([]);
+    }
+
+    // Map table rolls to autocomplete choices
+    const choices = tableRolls.map((table) => {
+      const name = table.name;
+      const category = table.category;
+      const description = table.description || '';
+      const rollCount = table.rollCount || 0;
+      
+      return {
+        name: `${name} | ${category} | ${rollCount} rolls`,
+        value: name,
+      };
+    });
+
+    // Filter based on user input (search by name, category, or description)
+    const filteredChoices = choices.filter(choice => 
+      choice.name.toLowerCase().includes(searchQuery) ||
+      choice.value.toLowerCase().includes(searchQuery)
+    );
+
+    await interaction.respond(filteredChoices.slice(0, 25));
+  } catch (error) {
+    handleError(error, "autocompleteHandler.js");
+    console.error("[handleTableRollNameAutocomplete]: Error:", error);
+    await safeRespondWithError(interaction);
+  }
+}
 
 // ------------------- Raid ID Autocomplete -------------------
 // Provides autocomplete suggestions for active raid IDs.
