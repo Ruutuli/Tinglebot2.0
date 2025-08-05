@@ -659,7 +659,7 @@ async function handleCreateModCharacter(interaction, subcommand) {
         { name: '⚔️ __Job__', value: `> ${characterData.job}`, inline: false },
         { name: '🎭 __Race__', value: `> ${characterData.race}`, inline: false },
         { name: '📏 __Age__', value: `> ${characterData.age}`, inline: false },
-        { name: '📐 __Height__', value: `> ${characterData.height}cm`, inline: false },
+        { name: '📐 __Height__', value: `> ${characterData.height}cm (${convertCmToFeetInches(characterData.height)})`, inline: false },
         { name: '❤️ __Hearts__', value: `> ∞ (Unlimited)`, inline: false },
         { name: '⚡ __Stamina__', value: `> ∞ (Unlimited)`, inline: false },
         { name: '📊 __Title__', value: `> ${characterData.modTitle} of ${characterData.modType}`, inline: false },
@@ -667,7 +667,7 @@ async function handleCreateModCharacter(interaction, subcommand) {
         { name: '🔗 __Application Link__', value: `> [Link](${characterData.appLink})`, inline: false }
       )
       .setThumbnail(iconUrl)
-      .setImage(iconUrl)
+      .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
       .setFooter({ text: `Created by ${characterData.modOwner}` })
       .setTimestamp();
 
@@ -720,7 +720,7 @@ async function handleViewModCharacter(interaction) {
         { name: '🟩 __Stamina__', value: `> ∞ (Unlimited)`, inline: true },
         { name: '🔹 __Pronouns__', value: `> ${modCharacter.pronouns}`, inline: true },
         { name: '🔹 __Age__', value: `> ${modCharacter.age || 'N/A'}`, inline: true },
-        { name: '🔹 __Height__', value: `> ${modCharacter.height ? `${modCharacter.height}cm` : 'N/A'}`, inline: true },
+        { name: '🔹 __Height__', value: `> ${modCharacter.height ? `${modCharacter.height}cm (${convertCmToFeetInches(modCharacter.height)})` : 'N/A'}`, inline: true },
         { name: '🔹 __Race__', value: `> ${capitalize(modCharacter.race)}`, inline: true },
         { name: '🔹 __Home Village__', value: `> ${getVillageEmojiByName(modCharacter.homeVillage)} ${capitalizeFirstLetter(modCharacter.homeVillage)}`, inline: true },
         { name: '🔹 __Current Village__', value: `> ${getVillageEmojiByName(modCharacter.currentVillage)} ${capitalizeFirstLetter(modCharacter.currentVillage)}`, inline: true },
@@ -731,7 +731,7 @@ async function handleViewModCharacter(interaction) {
         { name: '🔗 __Application Link__', value: `> [Link](${modCharacter.appLink})`, inline: false }
       )
       .setThumbnail(modCharacter.icon || DEFAULT_IMAGE_URL)
-      .setImage(DEFAULT_IMAGE_URL)
+      .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
       .setFooter({ text: `Mod Character - Created by ${modCharacter.modOwner}` })
       .setTimestamp();
 

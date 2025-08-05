@@ -165,6 +165,9 @@ module.exports = {
               color: 0x00FF00,
               title: '👑 Mod Character - No Job Voucher Needed',
               description: `**${character.name}** is a ${character.modTitle} of ${character.modType} and can use any job without a voucher.\n\nJob vouchers are not needed for mod characters.`,
+              thumbnail: {
+                url: character.icon || 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
+              },
               image: {
                 url: 'https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png'
               },
