@@ -16,6 +16,7 @@ const {
 const {
  fetchAllCharacters,
  fetchAllCharactersExceptUser,
+ fetchAllModCharacters,
  fetchBlightedCharactersByUserId,
  fetchCharacterByName,
  fetchCharacterByNameAndUserId,
@@ -1468,12 +1469,17 @@ async function handleTradeAutocomplete(interaction, focusedOption, focusedValue)
 // Provides autocomplete for selecting the source character in a trade
 async function handleTradeFromCharacterAutocomplete(interaction, focusedValue) {
   try {
-                const userId = interaction.user.id;
-                const characters = await fetchCharactersByUserId(userId);
-    const choices = characters.map(char => ({
-                  name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
-                  value: char.name
-                }));
+    const userId = interaction.user.id;
+    const characters = await fetchCharactersByUserId(userId);
+    const modCharacters = await fetchModCharactersByUserId(userId);
+    
+    // Combine regular characters and mod characters
+    const allCharacters = [...characters, ...modCharacters];
+    
+    const choices = allCharacters.map(char => ({
+      name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
+      value: char.name
+    }));
     const filtered = choices.filter(choice => choice.name.toLowerCase().includes(focusedValue));
     return await interaction.respond(filtered.slice(0, 25));
   } catch (error) {
@@ -1488,7 +1494,12 @@ async function handleTradeToCharacterAutocomplete(interaction, focusedValue) {
   try {
     const userId = interaction.user.id;
     const characters = await fetchAllCharactersExceptUser(userId);
-    const choices = characters.map(char => ({
+    const allModCharacters = await fetchAllModCharacters();
+    
+    // Combine regular characters and all mod characters
+    const allCharacters = [...characters, ...allModCharacters];
+    
+    const choices = allCharacters.map(char => ({
       name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
       value: char.name
     }));
@@ -1577,7 +1588,12 @@ async function handleGiftFromCharacterAutocomplete(interaction, focusedOption) {
   try {
     const userId = interaction.user.id;
     const characters = await fetchCharactersByUserId(userId);
-    const choices = characters.map(char => ({
+    const modCharacters = await fetchModCharactersByUserId(userId);
+    
+    // Combine regular characters and mod characters
+    const allCharacters = [...characters, ...modCharacters];
+    
+    const choices = allCharacters.map(char => ({
       name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
       value: char.name
     }));
@@ -1599,7 +1615,12 @@ async function handleGiftToCharacterAutocomplete(interaction, focusedOption) {
   try {
     const userId = interaction.user.id;
     const characters = await fetchAllCharactersExceptUser(userId);
-    const choices = characters.map(char => ({
+    const allModCharacters = await fetchAllModCharacters();
+    
+    // Combine regular characters and all mod characters
+    const allCharacters = [...characters, ...allModCharacters];
+    
+    const choices = allCharacters.map(char => ({
       name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
       value: char.name
     }));
@@ -1763,12 +1784,17 @@ async function handleTransferAutocomplete(interaction, focusedOption, focusedVal
 // Provides autocomplete for selecting the source character in a transfer
 async function handleTransferFromCharacterAutocomplete(interaction, focusedValue) {
   try {
-                const userId = interaction.user.id;
-                const characters = await fetchCharactersByUserId(userId);
-    const choices = characters.map(char => ({
-                  name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
-                  value: char.name
-                }));
+    const userId = interaction.user.id;
+    const characters = await fetchCharactersByUserId(userId);
+    const modCharacters = await fetchModCharactersByUserId(userId);
+    
+    // Combine regular characters and mod characters
+    const allCharacters = [...characters, ...modCharacters];
+    
+    const choices = allCharacters.map(char => ({
+      name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
+      value: char.name
+    }));
     const filtered = choices.filter(choice => choice.name.toLowerCase().includes(focusedValue));
     return await interaction.respond(filtered.slice(0, 25));
   } catch (error) {
@@ -1781,12 +1807,17 @@ async function handleTransferFromCharacterAutocomplete(interaction, focusedValue
 // Provides autocomplete for selecting the target character in a transfer
 async function handleTransferToCharacterAutocomplete(interaction, focusedValue) {
   try {
-                const userId = interaction.user.id;
-                const characters = await fetchCharactersByUserId(userId);
-    const choices = characters.map(char => ({
-                  name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
-                  value: char.name
-                }));
+    const userId = interaction.user.id;
+    const characters = await fetchCharactersByUserId(userId);
+    const modCharacters = await fetchModCharactersByUserId(userId);
+    
+    // Combine regular characters and mod characters
+    const allCharacters = [...characters, ...modCharacters];
+    
+    const choices = allCharacters.map(char => ({
+      name: `${char.name} | ${capitalize(char.currentVillage)} | ${capitalize(char.job)}`,
+      value: char.name
+    }));
     const filtered = choices.filter(choice => choice.name.toLowerCase().includes(focusedValue));
     return await interaction.respond(filtered.slice(0, 25));
   } catch (error) {
