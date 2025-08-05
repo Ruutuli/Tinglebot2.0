@@ -609,7 +609,7 @@ module.exports = {
         // Check for Scholar boost to determine gathering region
         let gatheringRegion = region;
         if (character.boostedBy && character.boostedBy.toLowerCase().includes('scholar')) {
-          const scholarRegion = applyBoostEffect(character.boostedBy, 'Gathering', region);
+          const scholarRegion = await applyBoostEffect(character.boostedBy, 'Gathering', region);
           if (scholarRegion && scholarRegion !== region) {
             gatheringRegion = scholarRegion;
             console.log(`[gather.js] Scholar boost: Gathering from ${region} → ${gatheringRegion}`);
@@ -641,8 +641,8 @@ module.exports = {
         }
 
         // ------------------- Apply Boosting Effects -------------------
-        // Check if character is boosted and apply gathering boosts
-        let boostedItems = availableItems;
+        // Check if character is boosted and apply gathering boosts to the available items
+        let boostedAvailableItems = availableItems;
         let bonusItem = null;
         let isEntertainerBoost = false;
         
@@ -657,15 +657,23 @@ module.exports = {
               isEntertainerBoost = true;
               console.log(`[gather.js] Entertainer boost detected - will add bonus item after normal gather`);
             } else {
-              // Normal boost application for other jobs
+              // Normal boost application for other jobs - apply to available items
               const originalItemCount = availableItems.length;
-              boostedItems = applyBoostEffect(character.boostedBy, 'Gathering', availableItems);
-              console.log(`[gather.js] Applied ${character.boostedBy} gathering boost: ${originalItemCount} → ${boostedItems.length} items`);
+              console.log(`[gather.js] Applying ${character.boostedBy} boost to ${originalItemCount} available items`);
+              
+              // Log original items and their rarities
+              console.log(`[gather.js] Original items:`, availableItems.map(item => `${item.itemName} (Rarity: ${item.itemRarity || 'Unknown'})`));
+              
+              boostedAvailableItems = await applyBoostEffect(character.boostedBy, 'Gathering', availableItems);
+              console.log(`[gather.js] Applied ${character.boostedBy} gathering boost: ${originalItemCount} → ${boostedAvailableItems.length} items`);
               
               // Log the specific items that were added by the boost
-              if (boostedItems.length > originalItemCount) {
-                const addedItems = boostedItems.slice(originalItemCount);
-                console.log(`[gather.js] Boost added items:`, addedItems.map(item => item.itemName));
+              if (boostedAvailableItems.length > originalItemCount) {
+                const addedItems = boostedAvailableItems.slice(originalItemCount);
+                console.log(`[gather.js] Boost added items:`, addedItems.map(item => `${item.itemName} (Rarity: ${item.itemRarity || 'Unknown'})`));
+              } else if (boostedAvailableItems.length < originalItemCount) {
+                const removedItems = availableItems.filter(item => !boostedAvailableItems.includes(item));
+                console.log(`[gather.js] Boost removed items:`, removedItems.map(item => `${item.itemName} (Rarity: ${item.itemRarity || 'Unknown'})`));
               }
             }
           } else {
@@ -675,7 +683,11 @@ module.exports = {
           console.log(`[gather.js] Character ${character.name} is not boosted`);
         }
 
-        const weightedItems = createWeightedItemList(boostedItems, undefined, job);
+        // ------------------- Create Weighted Item List -------------------
+        console.log(`[gather.js] Creating weighted item list from ${boostedAvailableItems.length} items`);
+        const weightedItems = createWeightedItemList(boostedAvailableItems, undefined, job);
+        console.log(`[gather.js] Weighted list created with ${weightedItems.length} items`);
+        
         const randomIndex = Math.floor(Math.random() * weightedItems.length);
         const randomItem = weightedItems[randomIndex];
         const quantity = 1;
@@ -683,21 +695,29 @@ module.exports = {
         // Enhanced logging for item selection and boost impact
         console.log(`[gather.js] Final item selection for ${character.name}:`);
         console.log(`[gather.js] - Selected item: ${randomItem.itemName} (Rarity: ${randomItem.itemRarity || 'Unknown'})`);
-        console.log(`[gather.js] - Item was ${boostedItems.includes(randomItem) ? 'available in boosted pool' : 'NOT in boosted pool'}`);
-        if (character.boostedBy && !isEntertainerBoost && boostedItems.length > availableItems.length) {
-          const addedItems = boostedItems.slice(availableItems.length);
-          console.log(`[gather.js] - Boost effect "${boostEffect.name}" added ${addedItems.length} items to the pool`);
-          console.log(`[gather.js] - Added items: ${addedItems.map(item => `${item.itemName} (Rarity: ${item.itemRarity || 'Unknown'})`).join(', ')}`);
-          if (addedItems.includes(randomItem)) {
+        console.log(`[gather.js] - Item was ${weightedItems.includes(randomItem) ? 'available in boosted pool' : 'NOT in boosted pool'}`);
+        
+        // Check if the selected item was in the original pool or added by boost
+        const wasInOriginalPool = availableItems.some(item => item.itemName === randomItem.itemName);
+        const wasAddedByBoost = !wasInOriginalPool && boostedAvailableItems.length > availableItems.length;
+        
+        if (character.boostedBy && !isEntertainerBoost) {
+          if (wasAddedByBoost) {
             console.log(`[gather.js] - SUCCESS: Selected item was added by boost effect!`);
-          } else {
+          } else if (wasInOriginalPool) {
             console.log(`[gather.js] - Selected item was from original pool (boost didn't affect this selection)`);
+          }
+          
+          if (boostedAvailableItems.length > availableItems.length) {
+            const addedItems = boostedAvailableItems.slice(availableItems.length);
+            console.log(`[gather.js] - Boost effect "${boostEffect.name}" added ${addedItems.length} items to the pool`);
+            console.log(`[gather.js] - Added items: ${addedItems.map(item => `${item.itemName} (Rarity: ${item.itemRarity || 'Unknown'})`).join(', ')}`);
           }
         }
         
         // Handle Entertainer bonus item
         if (isEntertainerBoost) {
-          const entertainerItems = applyBoostEffect(character.boostedBy, 'Gathering', availableItems);
+          const entertainerItems = await applyBoostEffect(character.boostedBy, 'Gathering', availableItems);
           if (entertainerItems && entertainerItems.length > 0) {
             // Select a random entertainer item as bonus
             const bonusIndex = Math.floor(Math.random() * entertainerItems.length);

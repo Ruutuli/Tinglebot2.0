@@ -832,7 +832,7 @@ async function processLootingLogic(
       console.log(`[loot.js] Found boost effect for ${character.boostedBy}:`, boostEffect);
       const originalValue = adjustedRandomValue;
       // Apply boost to the adjusted random value (affects loot success)
-      const boostedValue = applyBoostEffect(character.boostedBy, 'Looting', adjustedRandomValue);
+      const boostedValue = await applyBoostEffect(character.boostedBy, 'Looting', adjustedRandomValue);
       adjustedRandomValue = boostedValue;
       console.log(`[loot.js] Applied ${character.boostedBy} looting boost: ${originalValue} → ${boostedValue}`);
       console.log(`[loot.js] Boost effect "${boostEffect.name}" ${boostedValue > originalValue ? 'increased' : boostedValue < originalValue ? 'decreased' : 'did not change'} loot success chance`);
@@ -861,7 +861,7 @@ async function processLootingLogic(
     const boostEffect = await getBoostEffectByCharacter(character.boostedBy, 'Looting');
     if (boostEffect) {
       const originalDamage = outcome.hearts;
-      const reducedDamage = applyBoostEffect(character.boostedBy, 'Looting', outcome.hearts);
+              const reducedDamage = await applyBoostEffect(character.boostedBy, 'Looting', outcome.hearts);
       if (reducedDamage !== outcome.hearts) {
         console.log(`[loot.js] Applied ${character.boostedBy} damage reduction: ${originalDamage} → ${reducedDamage} hearts`);
         console.log(`[loot.js] Boost effect "${boostEffect.name}" reduced damage by ${originalDamage - reducedDamage} hearts`);
@@ -1060,7 +1060,7 @@ async function generateLootedItem(encounteredMonster, weightedItems, character) 
    if (boostEffect) {
      console.log(`[loot.js] Found boost effect for ${character.boostedBy}:`, boostEffect);
      const originalQuantity = lootedItem.quantity;
-     const boostedLoot = applyBoostEffect(character.boostedBy, 'Looting', lootedItem);
+     const boostedLoot = await applyBoostEffect(character.boostedBy, 'Looting', lootedItem);
      if (boostedLoot && boostedLoot.quantity !== lootedItem.quantity) {
        console.log(`[loot.js] Applied ${character.boostedBy} loot quantity boost: ${originalQuantity} → ${boostedLoot.quantity} items`);
        console.log(`[loot.js] Boost effect "${boostEffect.name}" increased loot quantity by ${boostedLoot.quantity - originalQuantity} items`);
