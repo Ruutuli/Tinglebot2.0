@@ -1103,7 +1103,17 @@ const createGatherEmbed = (character, randomItem, bonusItem = null) => {
  let description = flavorText;
  if (bonusItem) {
    const bonusArticle = getArticleForItem(bonusItem.itemName);
-   description += `\n\n🎭 **Entertainer's Gift:** ${character.name} also found ${bonusArticle} ${bonusItem.itemName}!`;
+   const bonusEmoji = bonusItem.emoji || "🎁";
+   
+   // Determine if this is an Entertainer or Priest boost based on the character's boostedBy field
+   const isEntertainerBoost = character.boostedBy && character.boostedBy.toLowerCase().includes('entertainer');
+   const isPriestBoost = character.boostedBy && character.boostedBy.toLowerCase().includes('priest');
+   
+   if (isEntertainerBoost) {
+     description += `\n\n🎭 **Entertainer's Gift:** ${character.name} also found ${bonusArticle} ${bonusEmoji}${bonusItem.itemName}!`;
+   } else if (isPriestBoost) {
+     description += `\n\n🙏 **Divine Favor:** ${character.name} also found ${bonusArticle} ${bonusEmoji}${bonusItem.itemName}!`;
+   }
  }
  
  // Add Scholar cross-region information if needed
