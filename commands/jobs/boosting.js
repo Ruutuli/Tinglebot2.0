@@ -66,6 +66,14 @@ async function retrieveBoostingRequestFromTempDataByCharacter(characterName) {
         ) {
           requestData.status = "expired";
           await saveBoostingRequestToTempData(requestData.boostRequestId, requestData);
+          
+          // Clear the boostedBy field from the character when boost expires
+          const targetCharacter = await fetchCharacterByName(characterName);
+          if (targetCharacter && targetCharacter.boostedBy) {
+            targetCharacter.boostedBy = null;
+            await targetCharacter.save();
+            console.log(`[boosting.js]: Cleared ${targetCharacter.name}.boostedBy due to expiration in retrieveBoostingRequestFromTempDataByCharacter`);
+          }
         }
       }
     }
@@ -447,6 +455,16 @@ async function handleBoostAccept(interaction) {
  requestData.durationRemaining = boostDuration;
  requestData.boostExpiresAt = boostExpiresAt;
 
+ // Update the target character's boostedBy field
+ const targetCharacter = await fetchCharacterByName(requestData.targetCharacter);
+ if (targetCharacter) {
+   targetCharacter.boostedBy = booster.name;
+   await targetCharacter.save();
+   console.log(`[boosting.js]: Set ${targetCharacter.name}.boostedBy = ${booster.name}`);
+ } else {
+   console.error(`[boosting.js]: Error - Could not find target character "${requestData.targetCharacter}"`);
+ }
+
  // Save to TempData only
  await saveBoostingRequestToTempData(requestId, requestData);
 
@@ -505,6 +523,13 @@ async function handleBoostStatus(interaction) {
   activeBoost.status = "expired";
   // Save to TempData only
   await saveBoostingRequestToTempData(activeBoost.boostRequestId, activeBoost);
+
+  // Clear the boostedBy field from the character
+  if (character.boostedBy) {
+    character.boostedBy = null;
+    await character.save();
+    console.log(`[boosting.js]: Cleared ${character.name}.boostedBy due to expiration`);
+  }
 
   await interaction.reply({
    content: `${characterName}'s boost has expired.`,

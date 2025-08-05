@@ -902,16 +902,26 @@ async function generateStealRoll(character = null) {
     let roll = Math.floor(Math.random() * 99) + 1;
     
     // Apply Stealing boosts to the roll
-          if (character && character.boostedBy) {
-        const boostEffect = await getBoostEffectByCharacter(character.boostedBy, 'Stealing');
-        if (boostEffect) {
-          const boostedRoll = applyBoostEffect(character.boostedBy, 'Stealing', roll);
-          if (boostedRoll !== roll) {
-            console.log(`[steal.js] Applied ${character.boostedBy} stealing roll boost: ${roll} → ${boostedRoll}`);
-            roll = boostedRoll;
-          }
+    if (character && character.boostedBy) {
+      console.log(`[steal.js] Character ${character.name} is boosted by ${character.boostedBy} for steal roll`);
+      const boostEffect = await getBoostEffectByCharacter(character.boostedBy, 'Stealing');
+      if (boostEffect) {
+        console.log(`[steal.js] Found boost effect for ${character.boostedBy}:`, boostEffect);
+        const originalRoll = roll;
+        const boostedRoll = applyBoostEffect(character.boostedBy, 'Stealing', roll);
+        if (boostedRoll !== roll) {
+          console.log(`[steal.js] Applied ${character.boostedBy} stealing roll boost: ${originalRoll} → ${boostedRoll}`);
+          console.log(`[steal.js] Boost effect "${boostEffect.name}" ${boostedRoll > originalRoll ? 'increased' : 'decreased'} steal success chance`);
+          roll = boostedRoll;
+        } else {
+          console.log(`[steal.js] Boost effect "${boostEffect.name}" did not modify steal roll (${originalRoll})`);
         }
+      } else {
+        console.log(`[steal.js] No boost effect found for ${character.boostedBy} in Stealing category`);
       }
+    } else {
+      console.log(`[steal.js] Character ${character.name} is not boosted for stealing`);
+    }
     
     return roll;
 }
@@ -922,16 +932,26 @@ async function calculateFailureThreshold(itemTier, character = null) {
     let threshold = FAILURE_CHANCES[itemTier];
     
     // Apply Stealing boosts to the failure threshold
-          if (character && character.boostedBy) {
-        const boostEffect = await getBoostEffectByCharacter(character.boostedBy, 'Stealing');
-        if (boostEffect) {
-          const boostedThreshold = applyBoostEffect(character.boostedBy, 'Stealing', threshold);
-          if (boostedThreshold !== threshold) {
-            console.log(`[steal.js] Applied ${character.boostedBy} stealing threshold boost: ${threshold} → ${boostedThreshold}`);
-            threshold = boostedThreshold;
-          }
+    if (character && character.boostedBy) {
+      console.log(`[steal.js] Character ${character.name} is boosted by ${character.boostedBy} for failure threshold`);
+      const boostEffect = await getBoostEffectByCharacter(character.boostedBy, 'Stealing');
+      if (boostEffect) {
+        console.log(`[steal.js] Found boost effect for ${character.boostedBy}:`, boostEffect);
+        const originalThreshold = threshold;
+        const boostedThreshold = applyBoostEffect(character.boostedBy, 'Stealing', threshold);
+        if (boostedThreshold !== threshold) {
+          console.log(`[steal.js] Applied ${character.boostedBy} stealing threshold boost: ${originalThreshold} → ${boostedThreshold}`);
+          console.log(`[steal.js] Boost effect "${boostEffect.name}" ${boostedThreshold < originalThreshold ? 'reduced' : 'increased'} failure threshold`);
+          threshold = boostedThreshold;
+        } else {
+          console.log(`[steal.js] Boost effect "${boostEffect.name}" did not modify failure threshold (${originalThreshold})`);
         }
+      } else {
+        console.log(`[steal.js] No boost effect found for ${character.boostedBy} in Stealing category`);
       }
+    } else {
+      console.log(`[steal.js] Character ${character.name} is not boosted for failure threshold`);
+    }
     
     return threshold;
 }
