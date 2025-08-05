@@ -502,6 +502,28 @@ async function handleAutocomplete(interaction) {
             }
             break;
 
+          // ------------------- Boosting Command -------------------
+          case "boosting":
+            if (interaction.options._subcommand) {
+              const boostingSubcommand = interaction.options.getSubcommand();
+              if (boostingSubcommand === "request") {
+                if (focusedOption.name === "character") {
+                  await handleBoostingRequestCharacterAutocomplete(interaction, focusedOption);
+                } else if (focusedOption.name === "booster") {
+                  await handleBoostingRequestBoosterAutocomplete(interaction, focusedOption);
+                }
+              } else if (boostingSubcommand === "accept") {
+                if (focusedOption.name === "character") {
+                  await handleBoostingAcceptCharacterAutocomplete(interaction, focusedOption);
+                }
+              } else if (boostingSubcommand === "status") {
+                if (focusedOption.name === "charactername") {
+                  await handleBoostingStatusCharacterAutocomplete(interaction, focusedOption);
+                }
+              }
+            }
+            break;
+
           // ------------------- Submit Command -------------------
           case "submit":
             if (focusedOption.name === "collab") {
@@ -839,6 +861,124 @@ async function handleBoostingCharacterAutocomplete(interaction, focusedOption) {
   handleError(error, "autocompleteHandler.js");
 
   console.error("[handleBoostingCharacterAutocomplete]: Error:", error);
+  await safeRespondWithError(interaction);
+ }
+}
+
+// ------------------- Boosting Request Character Autocomplete -------------------
+async function handleBoostingRequestCharacterAutocomplete(interaction, focusedOption) {
+ try {
+  const userId = interaction.user.id;
+  const characters = await fetchCharactersByUserId(userId);
+
+  const choices = characters.map((character) => ({
+   name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
+   value: character.name,
+  }));
+
+  await respondWithFilteredChoices(interaction, focusedOption, choices);
+ } catch (error) {
+  handleError(error, "autocompleteHandler.js");
+
+  console.error("[handleBoostingRequestCharacterAutocomplete]: Error:", error);
+  await safeRespondWithError(interaction);
+ }
+}
+
+// ------------------- Boosting Request Booster Autocomplete -------------------
+async function handleBoostingRequestBoosterAutocomplete(interaction, focusedOption) {
+ try {
+  const characters = await fetchAllCharacters();
+
+  // Import jobPerks from jobsModule to get jobs with BOOST perk
+  const { jobPerks } = require('../modules/jobsModule.js');
+  
+  // Get all jobs that have the BOOST perk
+  const boostJobs = jobPerks
+   .filter(job => job.perk === 'BOOST')
+   .map(job => job.job);
+
+  console.log("[handleBoostingRequestBoosterAutocomplete]: Boost jobs found:", boostJobs);
+  console.log("[handleBoostingRequestBoosterAutocomplete]: Total characters fetched:", characters.length);
+  
+  // Debug: Log first few characters to see their job format
+  if (characters.length > 0) {
+   console.log("[handleBoostingRequestBoosterAutocomplete]: Sample characters:");
+   characters.slice(0, 3).forEach(char => {
+    console.log(`  - ${char.name}: job="${char.job}"`);
+   });
+  }
+
+  const filteredCharacters = characters.filter((character) => {
+   const isBoostJob = boostJobs.includes(character.job);
+   console.log(`[handleBoostingRequestBoosterAutocomplete]: ${character.name} (${character.job}) - isBoostJob: ${isBoostJob}`);
+   return isBoostJob;
+  });
+
+  console.log("[handleBoostingRequestBoosterAutocomplete]: Filtered characters count:", filteredCharacters.length);
+
+  const choices = filteredCharacters.map((character) => ({
+   name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
+   value: character.name,
+  }));
+
+  await respondWithFilteredChoices(interaction, focusedOption, choices);
+ } catch (error) {
+  handleError(error, "autocompleteHandler.js");
+
+  console.error("[handleBoostingRequestBoosterAutocomplete]: Error:", error);
+  await safeRespondWithError(interaction);
+ }
+}
+
+// ------------------- Boosting Accept Character Autocomplete -------------------
+async function handleBoostingAcceptCharacterAutocomplete(interaction, focusedOption) {
+ try {
+  const userId = interaction.user.id;
+  const characters = await fetchCharactersByUserId(userId);
+
+  // Import jobPerks from jobsModule to get jobs with BOOST perk
+  const { jobPerks } = require('../modules/jobsModule.js');
+  
+  // Get all jobs that have the BOOST perk
+  const boostJobs = jobPerks
+   .filter(job => job.perk === 'BOOST')
+   .map(job => job.job);
+
+  const filteredCharacters = characters.filter((character) =>
+   boostJobs.includes(character.job)
+  );
+
+  const choices = filteredCharacters.map((character) => ({
+   name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
+   value: character.name,
+  }));
+
+  await respondWithFilteredChoices(interaction, focusedOption, choices);
+ } catch (error) {
+  handleError(error, "autocompleteHandler.js");
+
+  console.error("[handleBoostingAcceptCharacterAutocomplete]: Error:", error);
+  await safeRespondWithError(interaction);
+ }
+}
+
+// ------------------- Boosting Status Character Autocomplete -------------------
+async function handleBoostingStatusCharacterAutocomplete(interaction, focusedOption) {
+ try {
+  const userId = interaction.user.id;
+  const characters = await fetchCharactersByUserId(userId);
+
+  const choices = characters.map((character) => ({
+   name: `${character.name} | ${capitalize(character.currentVillage)} | ${capitalize(character.job)}`,
+   value: character.name,
+  }));
+
+  await respondWithFilteredChoices(interaction, focusedOption, choices);
+ } catch (error) {
+  handleError(error, "autocompleteHandler.js");
+
+  console.error("[handleBoostingStatusCharacterAutocomplete]: Error:", error);
   await safeRespondWithError(interaction);
  }
 }
@@ -4132,6 +4272,10 @@ module.exports = {
 
  // ------------------- Boosting Functions -------------------
  handleBoostingCharacterAutocomplete,
+ handleBoostingRequestCharacterAutocomplete,
+ handleBoostingRequestBoosterAutocomplete,
+ handleBoostingAcceptCharacterAutocomplete,
+ handleBoostingStatusCharacterAutocomplete,
 
  // ------------------- Change Job Functions -------------------
  handleChangeJobNewJobAutocomplete,
