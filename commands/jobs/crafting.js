@@ -246,7 +246,7 @@ module.exports = {
       if (freshCharacter.boostedBy) {
         const boostEffect = await getBoostEffectByCharacter(freshCharacter.boostedBy, 'Crafting');
         if (boostEffect) {
-          const boostedStamina = applyBoostEffect(freshCharacter.boostedBy, 'Crafting', staminaCost);
+          const boostedStamina = await applyBoostEffect(freshCharacter.boostedBy, 'Crafting', staminaCost);
           if (boostedStamina !== staminaCost) {
             console.log(`[crafting.js] Applied ${freshCharacter.boostedBy} crafting stamina boost: ${staminaCost} → ${boostedStamina}`);
             staminaCost = boostedStamina;
@@ -344,7 +344,7 @@ module.exports = {
         if (boostEffect) {
           console.log(`[crafting.js] Found boost effect for ${freshCharacter.boostedBy}:`, boostEffect);
           const originalQuantity = craftedQuantity;
-          const boostedQuantity = applyBoostEffect(freshCharacter.boostedBy, 'Crafting', craftedQuantity);
+          const boostedQuantity = await applyBoostEffect(freshCharacter.boostedBy, 'Crafting', craftedQuantity);
           if (boostedQuantity !== craftedQuantity) {
             console.log(`[crafting.js] Applied ${freshCharacter.boostedBy} crafting quantity boost: ${originalQuantity} → ${boostedQuantity} items`);
             console.log(`[crafting.js] Boost effect "${boostEffect.name}" increased crafting output by ${boostedQuantity - originalQuantity} items`);

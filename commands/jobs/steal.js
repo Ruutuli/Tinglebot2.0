@@ -908,7 +908,7 @@ async function generateStealRoll(character = null) {
       if (boostEffect) {
         console.log(`[steal.js] Found boost effect for ${character.boostedBy}:`, boostEffect);
         const originalRoll = roll;
-        const boostedRoll = applyBoostEffect(character.boostedBy, 'Stealing', roll);
+        const boostedRoll = await applyBoostEffect(character.boostedBy, 'Stealing', roll);
         if (boostedRoll !== roll) {
           console.log(`[steal.js] Applied ${character.boostedBy} stealing roll boost: ${originalRoll} → ${boostedRoll}`);
           console.log(`[steal.js] Boost effect "${boostEffect.name}" ${boostedRoll > originalRoll ? 'increased' : 'decreased'} steal success chance`);
@@ -938,7 +938,7 @@ async function calculateFailureThreshold(itemTier, character = null) {
       if (boostEffect) {
         console.log(`[steal.js] Found boost effect for ${character.boostedBy}:`, boostEffect);
         const originalThreshold = threshold;
-        const boostedThreshold = applyBoostEffect(character.boostedBy, 'Stealing', threshold);
+        const boostedThreshold = await applyBoostEffect(character.boostedBy, 'Stealing', threshold);
         if (boostedThreshold !== threshold) {
           console.log(`[steal.js] Applied ${character.boostedBy} stealing threshold boost: ${originalThreshold} → ${boostedThreshold}`);
           console.log(`[steal.js] Boost effect "${boostEffect.name}" ${boostedThreshold < originalThreshold ? 'reduced' : 'increased'} failure threshold`);

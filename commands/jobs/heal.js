@@ -631,7 +631,7 @@ async function handleHealingFulfillment(interaction, requestId, healerName) {
         
         // Apply boost to healing amount
         const originalHealing = heartsToHeal;
-        const boostedHealing = applyBoostEffect(healerCharacter.boostedBy, 'Healers', heartsToHeal, { healer: healerCharacter, recipient: characterToHeal });
+        const boostedHealing = await applyBoostEffect(healerCharacter.boostedBy, 'Healers', heartsToHeal, { healer: healerCharacter, recipient: characterToHeal });
         if (boostedHealing !== heartsToHeal) {
           console.log(`[heal.js] Applied ${healerCharacter.boostedBy} healing boost: ${originalHealing} → ${boostedHealing} hearts`);
           console.log(`[heal.js] Boost effect "${boostEffect.name}" increased healing by ${boostedHealing - originalHealing} hearts`);
@@ -642,7 +642,7 @@ async function handleHealingFulfillment(interaction, requestId, healerName) {
         
         // Apply boost to stamina cost (some boosts might reduce stamina cost)
         const originalStamina = staminaCost;
-        const boostedStamina = applyBoostEffect(healerCharacter.boostedBy, 'Healers', staminaCost, { healer: healerCharacter, recipient: characterToHeal });
+        const boostedStamina = await applyBoostEffect(healerCharacter.boostedBy, 'Healers', staminaCost, { healer: healerCharacter, recipient: characterToHeal });
         if (boostedStamina !== staminaCost) {
           console.log(`[heal.js] Applied ${healerCharacter.boostedBy} stamina boost: ${originalStamina} → ${boostedStamina} stamina`);
           console.log(`[heal.js] Boost effect "${boostEffect.name}" ${boostedStamina < originalStamina ? 'reduced' : 'increased'} stamina cost by ${Math.abs(boostedStamina - originalStamina)}`);

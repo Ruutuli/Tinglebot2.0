@@ -25,7 +25,7 @@ const boostingEffects = {
       // ------------------- Gathering -------------------
       Gathering: {
         name: 'Rarity Reversal',
-        description: 'While boosted, rare items (Rarity 8–10) have a significantly higher chance to be gathered.'
+        description: 'While boosted, rare items have a significantly higher chance to be gathered.'
       },
       // ------------------- Looting -------------------
       Looting: {
@@ -295,27 +295,84 @@ function applyFortuneTellerTravelingBoost(weatherBlock) {
 }
 
 function applyFortuneTellerGatheringBoost(gatherTable) {
-  // Reweight the gather item table to favor high-rarity values (adjust weights inversely by rarity)
-  // Items with rarity 8-10 should have significantly higher chance to be gathered
-  const boostedTable = [];
+  console.log(`[boostingModule.js] Fortune Teller Gathering Boost - Input table has ${gatherTable.length} items`);
   
-  gatherTable.forEach(item => {
-    if (item.itemRarity && item.itemRarity >= 8 && item.itemRarity <= 10) {
-      // Rare items (8-10) get 5x weight
-      for (let i = 0; i < 5; i++) {
-        boostedTable.push(item);
-      }
-    } else if (item.itemRarity && item.itemRarity >= 5 && item.itemRarity <= 7) {
-      // Medium items (5-7) get 2x weight
-      for (let i = 0; i < 2; i++) {
-        boostedTable.push(item);
-      }
-    } else {
-      // Common items (1-4) get normal weight
-      boostedTable.push(item);
-    }
+  // Log all items and their rarities for debugging
+  gatherTable.forEach((item, index) => {
+    console.log(`[boostingModule.js] Item ${index + 1}: ${item.itemName} (Rarity: ${item.itemRarity || 'Unknown'})`);
   });
   
+  // COMPLETELY EXCLUDE rarity 1-2 items
+  const validItems = gatherTable.filter(item => item.itemRarity && item.itemRarity >= 3);
+  const excludedItems = gatherTable.filter(item => !item.itemRarity || item.itemRarity < 3);
+  
+  console.log(`[boostingModule.js] Fortune Teller Boost - Excluded ${excludedItems.length} rarity 1-2 items`);
+  excludedItems.forEach(item => {
+    console.log(`[boostingModule.js]   - ${item.itemName} (Rarity: ${item.itemRarity}) - COMPLETELY EXCLUDED`);
+  });
+  
+  if (validItems.length === 0) {
+    console.log(`[boostingModule.js] WARNING: No valid items (rarity 3+) found, returning original table`);
+    return gatherTable;
+  }
+  
+  // Find the highest available rarity in the valid items
+  const maxRarity = Math.max(...validItems.map(item => item.itemRarity));
+  console.log(`[boostingModule.js] Highest available rarity: ${maxRarity}`);
+  
+  // Categorize items by rarity tiers and apply dynamic weighting
+  const boostedTable = [];
+  const rarityGroups = {};
+  
+  validItems.forEach(item => {
+    const rarity = item.itemRarity;
+    if (!rarityGroups[rarity]) {
+      rarityGroups[rarity] = [];
+    }
+    rarityGroups[rarity].push(item);
+  });
+  
+  // Log available rarity groups
+  console.log(`[boostingModule.js] Available rarity groups:`, Object.keys(rarityGroups).sort((a, b) => b - a));
+  
+  // Apply dynamic weighting based on highest available rarity
+  Object.keys(rarityGroups).sort((a, b) => b - a).forEach(rarity => {
+    const items = rarityGroups[rarity];
+    const rarityNum = parseInt(rarity);
+    
+    // Calculate weight based on how close to the maximum rarity this group is
+    let weight;
+    if (maxRarity >= 8) {
+      // If we have rarity 8+ items, use the original weighting system
+      if (rarityNum >= 8) {
+        weight = 10; // 10x weight for rarity 8-10
+      } else if (rarityNum >= 5) {
+        weight = 3;  // 3x weight for rarity 5-7
+      } else {
+        weight = 1;  // 1x weight for rarity 3-4
+      }
+    } else if (maxRarity >= 5) {
+      // If highest is 5-7, boost the highest available rarities
+      if (rarityNum >= 5) {
+        weight = 8;  // 8x weight for highest available (5-7)
+      } else {
+        weight = 2;  // 2x weight for lower available (3-4)
+      }
+    } else {
+      // If highest is 3-4, still give preference to higher rarity
+      weight = rarityNum === maxRarity ? 5 : 1;
+    }
+    
+    console.log(`[boostingModule.js] Rarity ${rarity} items (${items.length} items): ${weight}x weight`);
+    items.forEach(item => {
+      console.log(`[boostingModule.js]   - ${item.itemName} (Rarity: ${item.itemRarity})`);
+      for (let i = 0; i < weight; i++) {
+        boostedTable.push(item);
+      }
+    });
+  });
+  
+  console.log(`[boostingModule.js] Final boosted table: ${boostedTable.length} items`);
   return boostedTable;
 }
 
@@ -337,11 +394,22 @@ function applyTeacherExploringBoost(exploredItem) {
 }
 
 function applyTeacherGatheringBoost(gatherTable) {
+  console.log(`[boostingModule.js] Teacher Gathering Boost - Input table has ${gatherTable.length} items`);
+  
   // Filter for useful items (Material, Cooking, Potion tags)
   const usefulItems = gatherTable.filter(item => 
     item.tags && (item.tags.includes('Material') || item.tags.includes('Cooking') || item.tags.includes('Potion'))
   );
-  return usefulItems.length > 0 ? usefulItems : gatherTable;
+  
+  console.log(`[boostingModule.js] Teacher Gathering Boost - Found ${usefulItems.length} useful items`);
+  
+  if (usefulItems.length > 0) {
+    console.log(`[boostingModule.js] Teacher Gathering Boost - Returning filtered useful items`);
+    return usefulItems;
+  } else {
+    console.log(`[boostingModule.js] Teacher Gathering Boost - No useful items found, returning original table`);
+    return gatherTable;
+  }
 }
 
 function applyTeacherHealingBoost(healedCharacter) {
@@ -371,7 +439,14 @@ function applyTeacherTravelingBoost(roadGathers) {
   if (roadGathers && roadGathers.length >= 2) {
     const firstRoll = roadGathers[0];
     const secondRoll = roadGathers[1];
-    return firstRoll.rarity > secondRoll.rarity ? firstRoll : secondRoll;
+    
+    // Handle cases where rarity might not be available
+    const firstRarity = firstRoll.rarity || firstRoll.itemRarity || 0;
+    const secondRarity = secondRoll.rarity || secondRoll.itemRarity || 0;
+    
+    console.log(`[boostingModule.js] Teacher Traveling Boost - Comparing rarities: ${firstRarity} vs ${secondRarity}`);
+    
+    return firstRarity > secondRarity ? firstRoll : secondRoll;
   }
   return roadGathers;
 }
@@ -391,11 +466,22 @@ function applyPriestExploringBoost(blightExposure) {
 }
 
 function applyPriestGatheringBoost(gatherTable) {
+  console.log(`[boostingModule.js] Priest Gathering Boost - Input table has ${gatherTable.length} items`);
+  
   // Increase weighting for divine/spiritual items
   const divineItems = gatherTable.filter(item => 
     item.tags && (item.tags.includes('divine') || item.tags.includes('holy') || item.tags.includes('blessed'))
   );
-  return divineItems.length > 0 ? divineItems : gatherTable;
+  
+  console.log(`[boostingModule.js] Priest Gathering Boost - Found ${divineItems.length} divine/spiritual items`);
+  
+  if (divineItems.length > 0) {
+    console.log(`[boostingModule.js] Priest Gathering Boost - Returning filtered divine items`);
+    return divineItems;
+  } else {
+    console.log(`[boostingModule.js] Priest Gathering Boost - No divine items found, returning original table`);
+    return gatherTable;
+  }
 }
 
 function applyPriestHealingBoost(patient) {
@@ -440,11 +526,15 @@ function applyEntertainerCraftingBoost(voucherCraftCount) {
 }
 
 function applyEntertainerGatheringBoost(regionItems) {
+  console.log(`[boostingModule.js] Entertainer Gathering Boost - Input table has ${regionItems.length} items`);
+  
   // After normal gather, check if the region has flagged entertainerItems. If so, roll and award one as a bonus.
   // This function returns the entertainer-themed items that can be added as a bonus
   const entertainerItems = regionItems.filter(item => 
     item.tags && (item.tags.includes('beautiful') || item.tags.includes('performance') || item.tags.includes('showy'))
   );
+  
+  console.log(`[boostingModule.js] Entertainer Gathering Boost - Found ${entertainerItems.length} entertainer-themed items`);
   
   // Return the entertainer items for potential bonus selection
   // The actual bonus logic will be handled in the gather command
@@ -582,12 +672,31 @@ function applyScholarVendingBoost(allInventories) {
     });
   });
   
+  console.log(`[boostingModule.js] Scholar Vending Boost - Analyzing ${Object.keys(itemCounts).length} unique items`);
+  
   // Find items with low global quantity but high crafting use
   const rareItems = Object.entries(itemCounts)
     .filter(([name, count]) => count <= 5) // Rare items
     .sort(([,a], [,b]) => a - b);
   
-  return rareItems.length > 0 ? rareItems[0][0] : null;
+  console.log(`[boostingModule.js] Scholar Vending Boost - Found ${rareItems.length} rare items (count <= 5)`);
+  
+  if (rareItems.length > 0) {
+    const recommendedItem = rareItems[0][0];
+    console.log(`[boostingModule.js] Scholar Vending Boost - Recommending: ${recommendedItem} (count: ${rareItems[0][1]})`);
+    return recommendedItem;
+  }
+  
+  // If no rare items found, recommend the least common item available
+  const sortedItems = Object.entries(itemCounts).sort(([,a], [,b]) => a - b);
+  if (sortedItems.length > 0) {
+    const fallbackItem = sortedItems[0][0];
+    console.log(`[boostingModule.js] Scholar Vending Boost - No rare items found, recommending least common: ${fallbackItem} (count: ${sortedItems[0][1]})`);
+    return fallbackItem;
+  }
+  
+  console.log(`[boostingModule.js] Scholar Vending Boost - No items found to recommend`);
+  return null;
 }
 
 // ------------------- Function to Get Boost Effect -------------------
@@ -625,21 +734,44 @@ async function getBoostEffectByCharacter(characterName, category) {
 
 // ------------------- Function to Apply Boost Effect -------------------
 // Applies the appropriate boost effect based on job and category
-function applyBoostEffect(job, category, data, additionalData = null) {
+async function applyBoostEffect(job, category, data, additionalData = null) {
+  console.log(`[boostingModule.js] applyBoostEffect called with job: "${job}", category: "${category}"`);
+  
+  // Check if the job parameter is actually a character name and get their job
+  let actualJob = job;
+  if (job && !boostingEffects[job]) {
+    // This might be a character name, try to get their job
+    try {
+      const { fetchCharacterByName } = require('../database/db');
+      const character = await fetchCharacterByName(job);
+      if (character && character.job) {
+        console.log(`[boostingModule.js] Resolved character "${job}" to job "${character.job}"`);
+        actualJob = character.job;
+      }
+    } catch (error) {
+      console.log(`[boostingModule.js] Could not resolve character "${job}" to job, using as-is`);
+    }
+  }
+  
   // Handle multi-word job names properly
-  const normalizedJob = job.split(' ').map(word => 
+  const normalizedJob = actualJob.split(' ').map(word => 
     word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
   ).join(' ');
   
+  console.log(`[boostingModule.js] Normalized job name: "${normalizedJob}"`);
+  
   switch (normalizedJob) {
     case 'Fortune Teller':
+      console.log(`[boostingModule.js] Applying Fortune Teller boost for category: ${category}`);
       switch (category) {
         case 'Crafting': return applyFortuneTellerCraftingBoost(data);
         case 'Gathering': return applyFortuneTellerGatheringBoost(data);
         case 'Stealing': return applyFortuneTellerStealingBoost(data);
         case 'Tokens': return applyFortuneTellerTokensBoost(data);
         case 'Traveling': return applyFortuneTellerTravelingBoost(data);
-        default: return data;
+        default: 
+          console.log(`[boostingModule.js] No Fortune Teller boost found for category: ${category}`);
+          return data;
       }
     case 'Teacher':
       switch (category) {
