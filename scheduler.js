@@ -633,7 +633,7 @@ async function checkAndPostMissedQuests(client) {
       const scheduledTimeInMinutes = scheduledHour * 60 + scheduledMinute;
       const currentTimeInMinutes = currentHour * 60 + currentMinute;
       
-      if (currentTimeInMinutes >= scheduledTimeInMinutes - 15) {
+      if (currentTimeInMinutes >= scheduledTimeInMinutes) {
         const embedsByVillage = await formatSpecificQuestsAsEmbedsByVillage([quest]);
         const embed = embedsByVillage[quest.village];
         if (embed) {
