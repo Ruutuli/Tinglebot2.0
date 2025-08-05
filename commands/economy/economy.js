@@ -509,6 +509,9 @@ for (const { name } of cleanedItems) {
    return;
   }
 
+  // Determine if the recipient is a mod character
+  const isModCharacter = toCharacter.isModCharacter === true;
+
   // ------------------- Check Inventory Sync for Both Characters -------------------
   try {
     await checkInventorySync(fromCharacter);

@@ -1,5 +1,5 @@
 // ------------------- Import necessary modules and functions -------------------
-const { fetchCharacterById, updateCharacterById } = require('../database/db');
+const { fetchCharacterById, fetchModCharacterById, updateCharacterById, updateModCharacterById } = require('../database/db');
 const { handleError } = require('../utils/globalErrorHandler');
 
 // Helper function for capitalization
@@ -153,10 +153,28 @@ const isVillageExclusiveJob = (job) => {
 // Update the job of a character
 const updateJob = async (characterId, newJob) => {
   try {
-    const character = await fetchCharacterById(characterId);
-    if (!character) throw new Error('[jobsModule.js]: Character not found');
+    // Try to fetch regular character first, then mod character if not found
+    let character = await fetchCharacterById(characterId);
+    let isModCharacter = false;
+    
+    if (!character) {
+      // Try to fetch as mod character
+      character = await fetchModCharacterById(characterId);
+      isModCharacter = true;
+    }
+    
+    if (!character) {
+      throw new Error('[jobsModule.js]: Character not found in either regular or mod character collections');
+    }
+    
     character.job = capitalize(newJob);
-    await updateCharacterById(characterId, { job: character.job });
+    
+    // Update the appropriate character type
+    if (isModCharacter) {
+      await updateModCharacterById(characterId, { job: character.job });
+    } else {
+      await updateCharacterById(characterId, { job: character.job });
+    }
   } catch (error) {
     handleError(error, 'jobsModule.js');
 

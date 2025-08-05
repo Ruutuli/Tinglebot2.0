@@ -300,12 +300,18 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
       throw new Error("Required database functions not initialized");
     }
 
-    const character = await dbFunctions.fetchCharacterById(characterId);
+    // Try to fetch regular character first, then mod character if not found
+    let character = await dbFunctions.fetchCharacterById(characterId);
+    if (!character) {
+      // Try to fetch as mod character
+      character = await dbFunctions.fetchModCharacterById(characterId);
+    }
+    
     if (!character) {
       const errorEmbed = new EmbedBuilder()
         .setColor(0xFF0000)
         .setTitle('❌ Character Not Found')
-        .setDescription(`Character with ID ${characterId} not found`)
+        .setDescription(`Character with ID ${characterId} not found in either regular or mod character collections`)
         .addFields(
           { name: 'Character ID', value: characterId.toString(), inline: true }
         )
@@ -415,9 +421,15 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
       throw new Error("Required database functions not initialized");
     }
 
-    const character = await dbFunctions.fetchCharacterById(characterId);
+    // Try to fetch regular character first, then mod character if not found
+    let character = await dbFunctions.fetchCharacterById(characterId);
     if (!character) {
-      throw new Error(`Character with ID ${characterId} not found`);
+      // Try to fetch as mod character
+      character = await dbFunctions.fetchModCharacterById(characterId);
+    }
+    
+    if (!character) {
+      throw new Error(`Character with ID ${characterId} not found in either regular or mod character collections`);
     }
 
     // Use per-character inventory collection for mod characters (not shared)
@@ -857,9 +869,15 @@ async function removeInitialItemIfSynced(characterId) {
       throw new Error("Required database functions not initialized");
     }
 
-    const character = await dbFunctions.fetchCharacterById(characterId);
+    // Try to fetch regular character first, then mod character if not found
+    let character = await dbFunctions.fetchCharacterById(characterId);
     if (!character) {
-      throw new Error(`Character with ID ${characterId} not found`);
+      // Try to fetch as mod character
+      character = await dbFunctions.fetchModCharacterById(characterId);
+    }
+    
+    if (!character) {
+      throw new Error(`Character with ID ${characterId} not found in either regular or mod character collections`);
     }
 
     if (character.inventorySynced) {

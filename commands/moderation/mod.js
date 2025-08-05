@@ -30,6 +30,7 @@ const {
   fetchAllItems,
   fetchAllMonsters,
   fetchCharacterById,
+  fetchModCharacterById,
   fetchCharacterByName,
   fetchItemByName,
   fetchItemRarityByName,

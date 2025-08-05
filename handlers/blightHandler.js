@@ -18,6 +18,7 @@ dotenv.config({ path: `.env.${env}` });
 // Services for token and inventory management, and character fetching
 const {
   fetchCharacterById,
+  fetchModCharacterById,
   fetchItemByName,
   getCharacterInventoryCollection,
   getTokenBalance,
@@ -1171,7 +1172,17 @@ async function submitHealingTask(interaction, submissionId, item = null, link = 
       // ------------------- Inventory Validation -------------------
       const hasItem = async (characterId, name, needed) => {
         try {
-          const char = await fetchCharacterById(characterId);
+          // Try to fetch regular character first, then mod character if not found
+          let char = await fetchCharacterById(characterId);
+          if (!char) {
+            // Try to fetch as mod character
+            char = await fetchModCharacterById(characterId);
+          }
+          
+          if (!char) {
+            throw new Error(`Character with ID ${characterId} not found in either regular or mod character collections`);
+          }
+          
           const collection = await getCharacterInventoryCollection(char.name);
           const inventoryItems = await collection.find({}).toArray();
           const totalQuantity = inventoryItems
