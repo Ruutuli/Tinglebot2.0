@@ -448,20 +448,50 @@ function applyPriestExploringBoost(blightExposure) {
 }
 
 async function applyPriestGatheringBoost(gatherTable) {
-  // Priest boost provides bonus divine items regardless of region
-  // Fetch all divine items directly from the database
+  // Priest boost adds divine items to the existing gather table and makes them 3x more likely
   try {
     const Item = require('../models/ItemModel');
     const divineItems = await Item.find({ divineItems: true });
     
     console.log(`[boostingModule.js] Priest Gathering Boost - Found ${divineItems.length} divine/spiritual items globally`);
     
-    // Return the divine items for potential bonus selection
-    // The actual bonus logic will be handled in the gather command
-    return divineItems;
+    if (divineItems.length === 0) {
+      console.log(`[boostingModule.js] Priest Gathering Boost - No divine items found, returning original table`);
+      return gatherTable;
+    }
+    
+    // Create a new table that includes both original items and divine items
+    const combinedTable = [...gatherTable];
+    
+    // Add divine items to the table with 3x weight
+    divineItems.forEach(divineItem => {
+      // Check if the divine item is already in the gather table
+      const existingIndex = combinedTable.findIndex(item => item.itemName === divineItem.itemName);
+      
+      if (existingIndex >= 0) {
+        // If it exists, increase its weight by 3x
+        combinedTable[existingIndex].weight = (combinedTable[existingIndex].weight || 1) * 3;
+        console.log(`[boostingModule.js] Priest Gathering Boost - Increased weight for existing divine item: ${divineItem.itemName}`);
+      } else {
+        // If it doesn't exist, add it with 3x weight
+        combinedTable.push({
+          itemName: divineItem.itemName,
+          itemRarity: divineItem.itemRarity || 5,
+          weight: 3, // 3x more likely to be found
+          type: divineItem.type || ['Natural'],
+          image: divineItem.image,
+          emoji: divineItem.emoji,
+          divineItems: true
+        });
+        console.log(`[boostingModule.js] Priest Gathering Boost - Added divine item: ${divineItem.itemName}`);
+      }
+    });
+    
+    console.log(`[boostingModule.js] Priest Gathering Boost - Combined table: ${gatherTable.length} original + ${divineItems.length} divine items`);
+    return combinedTable;
   } catch (error) {
     console.error('[boostingModule.js] Error fetching divine items:', error);
-    return [];
+    return gatherTable;
   }
 }
 
@@ -828,6 +858,7 @@ module.exports = {
   applyFortuneTellerTravelingBoost,
   applyTeacherCraftingBoost,
   applyPriestCraftingBoost,
+  applyPriestGatheringBoost,
   applyEntertainerCraftingBoost,
   applyEntertainerGatheringBoost,
   applyScholarCraftingBoost

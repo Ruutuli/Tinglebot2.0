@@ -782,6 +782,30 @@ function generateBlightSubmissionExpiryFlavorText(characterName, healerName, bli
   return baseMessage + consequence;
 }
 
+// ------------------- Divine Item Flavor Text -------------------
+const generateDivineItemFlavorText = () => {
+  const divineFlavorTexts = [
+    "🙏 Blessed by divine favor, this item radiates with sacred energy.",
+    "✨ A gift from the heavens, found after meeting with a priest.",
+    "🌟 Touched by the divine, this item carries ancient blessings.",
+    "💫 Sacred and pure, this item seems to glow with inner light.",
+    "🙏 The priest's blessing has revealed this divine treasure.",
+    "✨ Divine intervention has guided your hand to this sacred item.",
+    "🌟 Blessed by the gods, this item hums with spiritual power.",
+    "💫 A holy relic, discovered through divine guidance.",
+    "🙏 The priest's prayers have led you to this blessed find.",
+    "✨ Sacred energy flows through this divinely-gifted item.",
+    "🌟 A heavenly blessing has revealed this spiritual treasure.",
+    "💫 Touched by the divine, this item carries ancient wisdom.",
+    "🙏 Blessed by the priest's guidance, this sacred item is yours.",
+    "✨ Divine favor has shone upon your gathering efforts.",
+    "🌟 A holy blessing has revealed this spiritual artifact.",
+    "💫 Sacred and pure, this item glows with divine energy."
+  ];
+  
+  return getRandomMessage(divineFlavorTexts);
+};
+
 // Module Exports
 // ==============
 
@@ -818,4 +842,5 @@ module.exports = {
  generateBlightVictoryFlavorText,
  generateBlightLootFlavorText,
  generateBlightSubmissionExpiryFlavorText,
+ generateDivineItemFlavorText,
 };

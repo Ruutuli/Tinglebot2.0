@@ -645,23 +645,20 @@ module.exports = {
         let boostedAvailableItems = availableItems;
         let bonusItem = null;
         let isEntertainerBoost = false;
-        let isPriestBoost = false;
+        let boosterCharacter = null; // Moved to higher scope
         
         if (character.boostedBy) {
           const boostEffect = await getBoostEffectByCharacter(character.boostedBy, 'Gathering');
           if (boostEffect) {
             // Get the booster character to check their job
             const { fetchCharacterByName } = require('../../database/db');
-            const boosterCharacter = await fetchCharacterByName(character.boostedBy);
+            boosterCharacter = await fetchCharacterByName(character.boostedBy); // Removed const declaration
             
             // Special handling for Entertainer boost (bonus item after normal gather)
             if (boosterCharacter && boosterCharacter.job === 'Entertainer') {
               isEntertainerBoost = true;
-            } else if (boosterCharacter && boosterCharacter.job === 'Priest') {
-              // Special handling for Priest boost (bonus divine item after normal gather)
-              isPriestBoost = true;
             } else {
-              // Normal boost application for other jobs - apply to available items
+              // Normal boost application for all other jobs (including Priest) - apply to available items
               const originalItemCount = availableItems.length;
               boostedAvailableItems = await applyBoostEffect(character.boostedBy, 'Gathering', availableItems);
               console.log(`[gather.js] ${character.boostedBy} boost applied: ${originalItemCount} → ${boostedAvailableItems.length} items`);
@@ -695,21 +692,7 @@ module.exports = {
           }
         }
         
-        // Handle Priest bonus item
-        if (isPriestBoost) {
-          console.log(`[gather.js] Priest boost detected for ${character.name}`);
-          const divineItems = await applyBoostEffect(character.boostedBy, 'Gathering', availableItems);
-          console.log(`[gather.js] Priest boost: Found ${divineItems ? divineItems.length : 0} divine items in region`);
-          
-          if (divineItems && divineItems.length > 0) {
-            // Select a random divine item as bonus
-            const bonusIndex = Math.floor(Math.random() * divineItems.length);
-            bonusItem = divineItems[bonusIndex];
-            console.log(`[gather.js] Priest boost: Bonus item ${bonusItem.itemName}`);
-          } else {
-            console.log(`[gather.js] Priest boost: No divine items available in this region`);
-          }
-        }
+
         
         await addItemInventoryDatabase(
           character._id,
@@ -719,22 +702,33 @@ module.exports = {
           "Gathering"
         );
         
-        // Add bonus item if boost is active
-        if (bonusItem) {
-          const bonusType = isEntertainerBoost ? "Entertainer Bonus" : "Priest Bonus";
+        // Add bonus item if Entertainer boost is active
+        if (bonusItem && isEntertainerBoost) {
           await addItemInventoryDatabase(
             character._id,
             bonusItem.itemName,
             1,
             interaction,
-            `Gathering (${bonusType})`
+            `Gathering (Entertainer Bonus)`
           );
           console.log(`[gather.js] Added bonus item: ${bonusItem.itemName}`);
         }
         
         // Note: Google Sheets sync is handled by addItemInventoryDatabase
 
-        const embed = createGatherEmbed(character, randomItem, bonusItem);
+        // Check if this is a divine item gathered with Priest boost
+        let isDivineItemWithPriestBoost = false;
+        if (character.boostedBy && boosterCharacter && boosterCharacter.job === 'Priest') {
+          // Check if the gathered item is a divine item
+          const Item = require('../../models/ItemModel');
+          const divineItem = await Item.findOne({ itemName: randomItem.itemName, divineItems: true });
+          if (divineItem) {
+            isDivineItemWithPriestBoost = true;
+            console.log(`[gather.js] Divine item gathered with Priest boost: ${randomItem.itemName}`);
+          }
+        }
+
+        const embed = createGatherEmbed(character, randomItem, bonusItem, isDivineItemWithPriestBoost);
         await safeReply({ embeds: [embed] });
         
         // ------------------- Clear Boost After Use -------------------
