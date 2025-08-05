@@ -303,7 +303,8 @@ async function handleBoostRequest(interaction) {
   return;
  }
 
- const boostRequestId = uuidv4().slice(0, 8).toUpperCase();
+ const { generateUniqueId } = require('../../utils/uniqueIdUtils');
+ const boostRequestId = generateUniqueId('B');
  const currentTime = Date.now();
  const expirationTime = currentTime + 24 * 60 * 60 * 1000;
 
@@ -328,17 +329,19 @@ async function handleBoostRequest(interaction) {
  // Import the new embed function
  const { createBoostRequestEmbed } = require('../../embeds/embeds');
 
- // Create the embed using the new function
- const requestDataForEmbed = {
-   requestedBy: targetCharacter.name,
-   booster: boosterCharacter.name,
-   boosterJob: boosterJob,
-   category: category,
-   boostEffect: `${boost.name} — ${boost.description}`,
-   village: targetCharacter.currentVillage
- };
+   // Create the embed using the new function
+  const requestDataForEmbed = {
+    requestedBy: targetCharacter.name,
+    booster: boosterCharacter.name,
+    boosterJob: boosterJob,
+    category: category,
+    boostEffect: `${boost.name} — ${boost.description}`,
+    village: targetCharacter.currentVillage,
+    requestedByIcon: targetCharacter.icon,
+    boosterIcon: boosterCharacter.icon
+  };
 
- const embed = createBoostRequestEmbed(requestDataForEmbed, boostRequestId);
+  const embed = createBoostRequestEmbed(requestDataForEmbed, boostRequestId);
 
  await interaction.reply({
   content: `Boost request created. Ask **${boosterCharacter.name}** to run \`/boosting accept\` within 24 hours.`,
@@ -473,7 +476,9 @@ async function handleBoostAccept(interaction) {
     category: requestData.category,
     effect: boost.description,
     boostName: boost.name,
-    village: requestData.village
+    village: requestData.village,
+    boostedByIcon: booster.icon,
+    targetIcon: targetCharacter.icon
   };
 
   const embed = createBoostAppliedEmbed(boostDataForEmbed);

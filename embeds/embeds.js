@@ -1966,13 +1966,7 @@ const createBoostRequestEmbed = (requestData, existingRequestId = null) => {
   // Calculate expiration time (24 hours from now)
   const expiresAt = new Date();
   expiresAt.setHours(expiresAt.getHours() + 24);
-  const expiresIn = expiresAt.toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true
-  });
+  const expiresIn = `<t:${Math.floor(expiresAt.getTime() / 1000)}:F>`;
 
   const embed = new EmbedBuilder()
     .setTitle(`⚡ Boost Request Created`)
@@ -1981,7 +1975,8 @@ const createBoostRequestEmbed = (requestData, existingRequestId = null) => {
       `This request will expire in **24 hours** if not accepted.`
     )
     .setColor(villageColor)
-    .setThumbnail('https://storage.googleapis.com/tinglebot/Graphics/boost-icon.png')
+    .setThumbnail(requestData.requestedByIcon || 'https://storage.googleapis.com/tinglebot/Graphics/boost-icon.png')
+    .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
     .addFields(
       {
         name: '👤 **Requested By**',
@@ -2053,13 +2048,7 @@ const createBoostAppliedEmbed = (boostData) => {
   // Calculate expiration time (24 hours from now)
   const expiresAt = new Date();
   expiresAt.setHours(expiresAt.getHours() + 24);
-  const expiresIn = expiresAt.toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true
-  });
+  const expiresIn = `<t:${Math.floor(expiresAt.getTime() / 1000)}:F>`;
 
   const embed = new EmbedBuilder()
     .setTitle(`⚡ Boost Applied: ${boostData.boostName || 'Unknown Boost'}`)
@@ -2068,7 +2057,8 @@ const createBoostAppliedEmbed = (boostData) => {
       `The boost will remain active for **24 hours** and provide enhanced abilities.`
     )
     .setColor(villageColor)
-    .setThumbnail('https://storage.googleapis.com/tinglebot/Graphics/boost-applied-icon.png')
+    .setThumbnail(boostData.boostedByIcon || 'https://storage.googleapis.com/tinglebot/Graphics/boost-applied-icon.png')
+    .setImage('https://static.wixstatic.com/media/7573f4_9bdaa09c1bcd4081b48bbe2043a7bf6a~mv2.png')
     .addFields(
       {
         name: '🎭 **Boosted By**',
