@@ -44,6 +44,7 @@ let dbFunctions = {
   connectToInventories: null,
   fetchItemByName: null,
   fetchCharacterById: null,
+  fetchModCharacterById: null,
   getInventoryCollection: null,
 };
 
@@ -305,14 +306,25 @@ async function addItemInventoryDatabase(characterId, itemName, quantity, interac
 
     // Try to fetch regular character first, then mod character if not found
     console.log(`[addItemInventoryDatabase] Attempting to fetch regular character with ID: ${characterId}`);
-    let character = await dbFunctions.fetchCharacterById(characterId);
-    console.log(`[addItemInventoryDatabase] Regular character fetch result:`, character ? `Found - Name: ${character.name}, isModCharacter: ${character.isModCharacter}` : 'Not found');
+    let character = null;
+    try {
+      character = await dbFunctions.fetchCharacterById(characterId);
+      console.log(`[addItemInventoryDatabase] Regular character fetch result:`, character ? `Found - Name: ${character.name}, isModCharacter: ${character.isModCharacter}` : 'Not found');
+    } catch (error) {
+      console.log(`[addItemInventoryDatabase] Error fetching regular character: ${error.message}`);
+      character = null;
+    }
     
     if (!character) {
       console.log(`[addItemInventoryDatabase] Regular character not found, attempting to fetch as mod character with ID: ${characterId}`);
       // Try to fetch as mod character
-      character = await dbFunctions.fetchModCharacterById(characterId);
-      console.log(`[addItemInventoryDatabase] Mod character fetch result:`, character ? `Found - Name: ${character.name}, isModCharacter: ${character.isModCharacter}` : 'Not found');
+      try {
+        character = await dbFunctions.fetchModCharacterById(characterId);
+        console.log(`[addItemInventoryDatabase] Mod character fetch result:`, character ? `Found - Name: ${character.name}, isModCharacter: ${character.isModCharacter}` : 'Not found');
+      } catch (error) {
+        console.log(`[addItemInventoryDatabase] Error fetching mod character: ${error.message}`);
+        character = null;
+      }
     }
     
     if (!character) {
@@ -435,10 +447,22 @@ async function removeItemInventoryDatabase(characterId, itemName, quantity, inte
     }
 
     // Try to fetch regular character first, then mod character if not found
-    let character = await dbFunctions.fetchCharacterById(characterId);
+    let character = null;
+    try {
+      character = await dbFunctions.fetchCharacterById(characterId);
+    } catch (error) {
+      console.log(`[removeItemInventoryDatabase] Error fetching regular character: ${error.message}`);
+      character = null;
+    }
+    
     if (!character) {
       // Try to fetch as mod character
-      character = await dbFunctions.fetchModCharacterById(characterId);
+      try {
+        character = await dbFunctions.fetchModCharacterById(characterId);
+      } catch (error) {
+        console.log(`[removeItemInventoryDatabase] Error fetching mod character: ${error.message}`);
+        character = null;
+      }
     }
     
     if (!character) {
@@ -883,10 +907,22 @@ async function removeInitialItemIfSynced(characterId) {
     }
 
     // Try to fetch regular character first, then mod character if not found
-    let character = await dbFunctions.fetchCharacterById(characterId);
+    let character = null;
+    try {
+      character = await dbFunctions.fetchCharacterById(characterId);
+    } catch (error) {
+      console.log(`[removeInitialItemIfSynced] Error fetching regular character: ${error.message}`);
+      character = null;
+    }
+    
     if (!character) {
       // Try to fetch as mod character
-      character = await dbFunctions.fetchModCharacterById(characterId);
+      try {
+        character = await dbFunctions.fetchModCharacterById(characterId);
+      } catch (error) {
+        console.log(`[removeInitialItemIfSynced] Error fetching mod character: ${error.message}`);
+        character = null;
+      }
     }
     
     if (!character) {
