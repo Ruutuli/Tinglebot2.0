@@ -354,6 +354,13 @@ module.exports = {
       
       // Note: Google Sheets sync is handled by addItemInventoryDatabase
 
+      // ------------------- Clear Boost After Use -------------------
+      if (freshCharacter.boostedBy) {
+        console.log(`[crafting.js] Clearing boost for ${freshCharacter.name} after use`);
+        freshCharacter.boostedBy = null;
+        await freshCharacter.save();
+      }
+
       await interaction.editReply({ content: `✅ **Successfully crafted ${quantity} "${itemName}".**`, flags: [MessageFlags.Ephemeral] });
       await interaction.followUp({ embeds: [embed], ephemeral: false });
 
