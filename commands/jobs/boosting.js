@@ -6,11 +6,74 @@ const {
 } = require("../../database/db");
 const { getBoostEffect } = require("../../modules/boostingModule");
 const { getJobPerk } = require("../../modules/jobsModule");
+const { useStamina } = require("../../modules/characterStatsModule");
 const {
  saveBoostingRequestToStorage,
  retrieveBoostingRequestFromStorage,
  retrieveBoostingRequestFromStorageByCharacter,
 } = require("../../utils/storage");
+const TempData = require("../../models/TempDataModel");
+
+// ------------------- TempData Storage Functions for Boosting -------------------
+async function saveBoostingRequestToTempData(requestId, requestData) {
+  try {
+    await TempData.findOneAndUpdate(
+      { type: 'boosting', key: requestId },
+      { 
+        data: requestData,
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+      },
+      { upsert: true, new: true }
+    );
+    console.log(`[boosting.js]: Saved boosting request ${requestId} to TempData`);
+  } catch (error) {
+    console.error(`[boosting.js]: Error saving boosting request to TempData:`, error);
+    throw error;
+  }
+}
+
+async function retrieveBoostingRequestFromTempData(requestId) {
+  try {
+    const tempData = await TempData.findByTypeAndKey('boosting', requestId);
+    return tempData ? tempData.data : null;
+  } catch (error) {
+    console.error(`[boosting.js]: Error retrieving boosting request from TempData:`, error);
+    return null;
+  }
+}
+
+async function retrieveBoostingRequestFromTempDataByCharacter(characterName) {
+  try {
+    const allBoostingData = await TempData.findAllByType('boosting');
+    const currentTime = Date.now();
+
+    for (const tempData of allBoostingData) {
+      const requestData = tempData.data;
+      if (
+        requestData.targetCharacter === characterName &&
+        requestData.status === "fulfilled"
+      ) {
+        if (
+          requestData.boostExpiresAt &&
+          currentTime <= requestData.boostExpiresAt
+        ) {
+          return requestData;
+        } else if (
+          requestData.boostExpiresAt &&
+          currentTime > requestData.boostExpiresAt
+        ) {
+          requestData.status = "expired";
+          await saveBoostingRequestToTempData(requestData.boostRequestId, requestData);
+        }
+      }
+    }
+
+    return null;
+  } catch (error) {
+    console.error(`[boosting.js]: Error retrieving active boost for ${characterName}:`, error);
+    return null;
+  }
+}
 
 module.exports = {
  data: new SlashCommandBuilder()
@@ -169,9 +232,11 @@ module.exports = {
     fulfilledAt: null,
    };
 
-   saveBoostingRequestToStorage(boostRequestId, requestData);
+       // Save to both old storage (for backward compatibility) and new TempData
+    saveBoostingRequestToStorage(boostRequestId, requestData);
+    await saveBoostingRequestToTempData(boostRequestId, requestData);
 
-   const embed = new EmbedBuilder()
+    const embed = new EmbedBuilder()
     .setTitle("Boost Request Created")
     .addFields(
      { name: "Requested By", value: targetCharacter.name, inline: true },
@@ -201,7 +266,12 @@ module.exports = {
    const boosterName = interaction.options.getString("character");
    const userId = interaction.user.id;
 
-   const requestData = retrieveBoostingRequestFromStorage(requestId);
+   // Try to retrieve from TempData first, then fallback to old storage
+   let requestData = await retrieveBoostingRequestFromTempData(requestId);
+   if (!requestData) {
+    requestData = retrieveBoostingRequestFromStorage(requestId);
+   }
+   
    if (!requestData) {
     console.error(
      `[boosting.js]: Error - Invalid boost request ID "${requestId}".`
@@ -270,6 +340,25 @@ module.exports = {
     return;
    }
 
+   // Deduct 1 stamina from the booster character
+   try {
+    const staminaResult = await useStamina(booster._id, 1);
+    if (staminaResult.exhausted) {
+     await interaction.reply({
+      content: `❌ **${booster.name}** doesn't have enough stamina to provide this boost. They need at least 1 stamina to boost others.`,
+      ephemeral: true,
+     });
+     return;
+    }
+   } catch (error) {
+    console.error(`[boosting.js]: Error deducting stamina from ${booster.name}:`, error);
+    await interaction.reply({
+     content: `❌ Error processing stamina cost for **${booster.name}**. Please try again.`,
+     ephemeral: true,
+    });
+    return;
+   }
+
    const fulfilledTime = Date.now();
    const boostDuration = 24 * 60 * 60 * 1000;
    const boostExpiresAt = fulfilledTime + boostDuration;
@@ -279,7 +368,9 @@ module.exports = {
    requestData.durationRemaining = boostDuration;
    requestData.boostExpiresAt = boostExpiresAt;
 
+   // Save to both old storage and new TempData
    saveBoostingRequestToStorage(requestId, requestData);
+   await saveBoostingRequestToTempData(requestId, requestData);
 
    const embed = new EmbedBuilder()
     .setTitle(`Boost Applied: ${boost.name}`)
@@ -294,7 +385,8 @@ module.exports = {
       name: "Expires",
       value: `<t:${Math.floor(boostExpiresAt / 1000)}:R>`,
       inline: true,
-     }
+     },
+     { name: "Stamina Cost", value: "1 stamina used", inline: true }
     )
     .setColor("#00cc99")
     .setFooter({
@@ -318,8 +410,11 @@ module.exports = {
     return;
    }
 
-   const activeBoost =
-    retrieveBoostingRequestFromStorageByCharacter(characterName);
+   // Try to retrieve from TempData first, then fallback to old storage
+   let activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(characterName);
+   if (!activeBoost) {
+    activeBoost = retrieveBoostingRequestFromStorageByCharacter(characterName);
+   }
 
    if (!activeBoost || activeBoost.status !== "fulfilled") {
     await interaction.reply({
@@ -332,7 +427,9 @@ module.exports = {
    const currentTime = Date.now();
    if (activeBoost.boostExpiresAt && currentTime > activeBoost.boostExpiresAt) {
     activeBoost.status = "expired";
+    // Save to both old storage and new TempData
     saveBoostingRequestToStorage(activeBoost.boostRequestId, activeBoost);
+    await saveBoostingRequestToTempData(activeBoost.boostRequestId, activeBoost);
 
     await interaction.reply({
      content: `${characterName}'s boost has expired.`,
@@ -351,6 +448,17 @@ module.exports = {
     activeBoost.boostingCharacter,
     activeBoost.category
    );
+
+   if (!boost) {
+    console.error(
+     `[boosting.js]: Error - No boost effect found for booster "${activeBoost.boostingCharacter}" and category "${activeBoost.category}".`
+    );
+    await interaction.reply({
+     content: `Error retrieving boost effect for ${characterName}.`,
+     ephemeral: true,
+    });
+    return;
+   }
 
    const embed = new EmbedBuilder()
     .setTitle(`Active Boost Status: ${characterName}`)
@@ -381,9 +489,12 @@ module.exports = {
  },
 };
 
-function isBoostActive(characterName, category) {
- const activeBoost =
-  retrieveBoostingRequestFromStorageByCharacter(characterName);
+async function isBoostActive(characterName, category) {
+ // Try to retrieve from TempData first, then fallback to old storage
+ let activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(characterName);
+ if (!activeBoost) {
+  activeBoost = retrieveBoostingRequestFromStorageByCharacter(characterName);
+ }
 
  if (!activeBoost || activeBoost.status !== "fulfilled") {
   return false;
@@ -401,23 +512,29 @@ function isBoostActive(characterName, category) {
  return true;
 }
 
-function getActiveBoostEffect(characterName, category) {
- if (!isBoostActive(characterName, category)) {
+async function getActiveBoostEffect(characterName, category) {
+ if (!(await isBoostActive(characterName, category))) {
   return null;
  }
 
- const activeBoost =
-  retrieveBoostingRequestFromStorageByCharacter(characterName);
+ // Try to retrieve from TempData first, then fallback to old storage
+ let activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(characterName);
+ if (!activeBoost) {
+  activeBoost = retrieveBoostingRequestFromStorageByCharacter(characterName);
+ }
  return getBoostEffect(activeBoost.boostingCharacter, category);
 }
 
-function getRemainingBoostTime(characterName, category) {
- if (!isBoostActive(characterName, category)) {
+async function getRemainingBoostTime(characterName, category) {
+ if (!(await isBoostActive(characterName, category))) {
   return 0;
  }
 
- const activeBoost =
-  retrieveBoostingRequestFromStorageByCharacter(characterName);
+ // Try to retrieve from TempData first, then fallback to old storage
+ let activeBoost = await retrieveBoostingRequestFromTempDataByCharacter(characterName);
+ if (!activeBoost) {
+  activeBoost = retrieveBoostingRequestFromStorageByCharacter(characterName);
+ }
  const currentTime = Date.now();
  return Math.max(0, activeBoost.boostExpiresAt - currentTime);
 }

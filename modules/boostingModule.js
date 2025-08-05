@@ -277,7 +277,9 @@ const boostingEffects = {
   // ------------------- Function to Get Boost Effect -------------------
   // Retrieves a boost perk given a job and category. Returns null if not found.
   function getBoostEffect(job, category) {
-    const jobBoosts = boostingEffects[job];
+    // Normalize job name to match the keys in boostingEffects
+    const normalizedJob = job.charAt(0).toUpperCase() + job.slice(1).toLowerCase();
+    const jobBoosts = boostingEffects[normalizedJob];
     if (!jobBoosts) return null;
     const boost = jobBoosts[category];
     return boost || null;
