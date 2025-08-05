@@ -46,6 +46,10 @@ const {
  getJobVoucherErrorMessage
 } = require("../../modules/jobVoucherModule.js"); // Importing jobVoucherModule
 
+// ------------------- Boosting Module -------------------
+// Import boosting functionality for applying job-based boosts
+const { applyBoostEffect, getBoostEffect } = require("../../modules/boostingModule.js");
+
 // Modules - RNG Logic
 const {
  createWeightedItemList,
@@ -809,8 +813,20 @@ async function processLootingLogic(
 
   // Step 1: Calculate Encounter Outcome
   const diceRoll = Math.floor(Math.random() * 100) + 1;
-  const { damageValue, adjustedRandomValue, attackSuccess, defenseSuccess } =
+  let { damageValue, adjustedRandomValue, attackSuccess, defenseSuccess } =
    calculateFinalValue(character, diceRoll);
+
+  // ------------------- Apply Boosting Effects -------------------
+  // Check if character is boosted and apply looting boosts
+  if (character.boostedBy) {
+    const boostEffect = getBoostEffect(character.boostedBy, 'Looting');
+    if (boostEffect) {
+      // Apply boost to the adjusted random value (affects loot success)
+      const boostedValue = applyBoostEffect(character.boostedBy, 'Looting', adjustedRandomValue);
+      adjustedRandomValue = boostedValue;
+      console.log(`[loot.js] Applied ${character.boostedBy} looting boost: ${adjustedRandomValue} → ${boostedValue}`);
+    }
+  }
 
   const weightedItems = createWeightedItemList(items, adjustedRandomValue);
   console.log(`[loot.js]: ⚔️ ${character.name} vs ${encounteredMonster.name} | Roll: ${diceRoll}/100 | Damage: ${damageValue} | Can loot: ${weightedItems.length > 0 ? 'Yes' : 'No'}`);
@@ -823,6 +839,19 @@ async function processLootingLogic(
    attackSuccess,
    defenseSuccess
   );
+
+  // ------------------- Apply Damage Reduction Boosts -------------------
+  // Check if character is boosted and apply damage reduction (Entertainer boost)
+  if (character.boostedBy && outcome.hearts) {
+    const boostEffect = getBoostEffect(character.boostedBy, 'Looting');
+    if (boostEffect) {
+      const reducedDamage = applyBoostEffect(character.boostedBy, 'Looting', outcome.hearts);
+      if (reducedDamage !== outcome.hearts) {
+        console.log(`[loot.js] Applied ${character.boostedBy} damage reduction: ${outcome.hearts} → ${reducedDamage}`);
+        outcome.hearts = reducedDamage;
+      }
+    }
+  }
 
   // Step 2: Handle KO Logic
   const updatedCharacter = await Character.findById(character._id);
@@ -841,7 +870,7 @@ async function processLootingLogic(
   // Step 4: Loot Item Logic
   let lootedItem = null;
   if (outcome.canLoot && weightedItems.length > 0) {
-   lootedItem = generateLootedItem(encounteredMonster, weightedItems);
+   lootedItem = generateLootedItem(encounteredMonster, weightedItems, character);
    console.log(`[loot.js]: 🎁 ${character.name} looted: ${lootedItem?.itemName} (x${lootedItem?.quantity})`);
 
    const inventoryLink = character.inventory || character.inventoryLink;
@@ -976,7 +1005,7 @@ function generateOutcomeMessage(outcome) {
 }
 
 // ------------------- Helper Function: Generate Looted Item -------------------
-function generateLootedItem(encounteredMonster, weightedItems) {
+function generateLootedItem(encounteredMonster, weightedItems, character) {
  const randomIndex = Math.floor(Math.random() * weightedItems.length);
  const lootedItem = weightedItems[randomIndex];
 
@@ -1002,6 +1031,19 @@ function generateLootedItem(encounteredMonster, weightedItems) {
   // The database should have the correct emoji for each jelly type
  } else {
   lootedItem.quantity = 1; // Default quantity for non-Chuchu items
+ }
+
+ // ------------------- Apply Boosting Effects -------------------
+ // Check if character is boosted and apply loot quantity boosts
+ if (character && character.boostedBy) {
+   const boostEffect = getBoostEffect(character.boostedBy, 'Looting');
+   if (boostEffect) {
+     const boostedLoot = applyBoostEffect(character.boostedBy, 'Looting', lootedItem);
+     if (boostedLoot && boostedLoot.quantity !== lootedItem.quantity) {
+       console.log(`[loot.js] Applied ${character.boostedBy} loot quantity boost: ${lootedItem.quantity} → ${boostedLoot.quantity}`);
+       return boostedLoot;
+     }
+   }
  }
 
  return lootedItem;

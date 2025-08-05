@@ -23,6 +23,7 @@ const { checkAndUseStamina } = require('../../modules/characterStatsModule');
 const { getJobPerk, isVillageExclusiveJob } = require('../../modules/jobsModule');
 const { validateJobVoucher, activateJobVoucher, fetchJobVoucherItem, deactivateJobVoucher, getJobVoucherErrorMessage } = require('../../modules/jobVoucherModule');
 const { capitalizeWords, formatDateTime } = require('../../modules/formattingModule');
+const { applyBoostEffect, getBoostEffect } = require('../../modules/boostingModule.js');
 
 // ------------------- Utility Functions -------------------
 const { addItemInventoryDatabase, processMaterials } = require('../../utils/inventoryUtils');
@@ -239,7 +240,20 @@ module.exports = {
       if (!freshCharacter) {
         return interaction.editReply({ content: `❌ **Character \"${characterName}\" not found or does not belong to you.**`, flags: [MessageFlags.Ephemeral] });
       }
-      const staminaCost = item.staminaToCraft * quantity;
+      let staminaCost = item.staminaToCraft * quantity;
+      
+      // Apply Crafting boosts to stamina cost
+      if (freshCharacter.boostedBy) {
+        const boostEffect = getBoostEffect(freshCharacter.boostedBy, 'Crafting');
+        if (boostEffect) {
+          const boostedStamina = applyBoostEffect(freshCharacter.boostedBy, 'Crafting', staminaCost);
+          if (boostedStamina !== staminaCost) {
+            console.log(`[crafting.js] Applied ${freshCharacter.boostedBy} crafting stamina boost: ${staminaCost} → ${boostedStamina}`);
+            staminaCost = boostedStamina;
+          }
+        }
+      }
+      
       if (freshCharacter.currentStamina < staminaCost) {
         console.error(`[crafting.js]: ❌ Insufficient stamina for ${freshCharacter.name} - needed ${staminaCost}, has ${freshCharacter.currentStamina}`);
         return interaction.editReply({ content: `❌ **Not enough stamina. Needed: ${staminaCost}, Available: ${freshCharacter.currentStamina}.**`, flags: [MessageFlags.Ephemeral] });
@@ -321,8 +335,22 @@ module.exports = {
       }
 
       // ------------------- Add Crafted Item to Inventory -------------------
+      let craftedQuantity = quantity;
+      
+      // Apply Crafting boosts to crafted item quantity
+      if (freshCharacter.boostedBy) {
+        const boostEffect = getBoostEffect(freshCharacter.boostedBy, 'Crafting');
+        if (boostEffect) {
+          const boostedQuantity = applyBoostEffect(freshCharacter.boostedBy, 'Crafting', craftedQuantity);
+          if (boostedQuantity !== craftedQuantity) {
+            console.log(`[crafting.js] Applied ${freshCharacter.boostedBy} crafting quantity boost: ${craftedQuantity} → ${boostedQuantity}`);
+            craftedQuantity = boostedQuantity;
+          }
+        }
+      }
+      
       const craftedAt = new Date();
-      await addItemInventoryDatabase(character._id, item.itemName, quantity, interaction, 'Crafting', craftedAt);
+      await addItemInventoryDatabase(character._id, item.itemName, craftedQuantity, interaction, 'Crafting', craftedAt);
       
       // Note: Google Sheets sync is handled by addItemInventoryDatabase
 

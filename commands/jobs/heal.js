@@ -16,6 +16,7 @@ const { validateJobVoucher, activateJobVoucher, fetchJobVoucherItem, deactivateJ
 const { handleTradeItemAutocomplete } = require('../../handlers/autocompleteHandler.js');
 const { checkInventorySync } = require('../../utils/characterUtils');
 const { generateUniqueId } = require('../../utils/uniqueIdUtils.js');
+const { applyBoostEffect, getBoostEffect } = require('../../modules/boostingModule.js');
 
 // ============================================================================
 // ---- Helper Functions ----
@@ -617,9 +618,32 @@ async function handleHealingFulfillment(interaction, requestId, healerName) {
     const voucherResult = await handleJobVoucher(healerCharacter, interaction);
     if (!voucherResult.success) return;
 
-    // Process healing
-    await useStamina(healerCharacter._id, healingRequest.heartsToHeal);
-    await recoverHearts(characterToHeal._id, healingRequest.heartsToHeal, healerCharacter._id);
+    // Process healing with boosting
+    let heartsToHeal = healingRequest.heartsToHeal;
+    let staminaCost = healingRequest.heartsToHeal;
+    
+    // Apply Healers boosts to healing amount and stamina cost
+    if (healerCharacter.boostedBy) {
+      const boostEffect = getBoostEffect(healerCharacter.boostedBy, 'Healers');
+      if (boostEffect) {
+        // Apply boost to healing amount
+        const boostedHealing = applyBoostEffect(healerCharacter.boostedBy, 'Healers', heartsToHeal, { healer: healerCharacter, recipient: characterToHeal });
+        if (boostedHealing !== heartsToHeal) {
+          console.log(`[heal.js] Applied ${healerCharacter.boostedBy} healing boost: ${heartsToHeal} → ${boostedHealing} hearts`);
+          heartsToHeal = boostedHealing;
+        }
+        
+        // Apply boost to stamina cost (some boosts might reduce stamina cost)
+        const boostedStamina = applyBoostEffect(healerCharacter.boostedBy, 'Healers', staminaCost, { healer: healerCharacter, recipient: characterToHeal });
+        if (boostedStamina !== staminaCost) {
+          console.log(`[heal.js] Applied ${healerCharacter.boostedBy} stamina boost: ${staminaCost} → ${boostedStamina} stamina`);
+          staminaCost = boostedStamina;
+        }
+      }
+    }
+    
+    await useStamina(healerCharacter._id, staminaCost);
+    await recoverHearts(characterToHeal._id, heartsToHeal, healerCharacter._id);
 
     // Deactivate job voucher if needed
     if (healerCharacter.jobVoucher && !voucherResult.skipVoucher) {
