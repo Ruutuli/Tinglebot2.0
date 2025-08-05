@@ -587,9 +587,9 @@ async function handleCreateModCharacter(interaction, subcommand) {
 
 
 
-    // Use shared mod inventory for all mod characters
-    const MOD_SHARED_INVENTORY_LINK = 'https://docs.google.com/spreadsheets/d/17XE0IOXSjVx47HVQ4FdcvEXm7yeg51KVkoiamD5dmKs/edit?usp=sharing';
-    const inventoryCollectionName = 'mod_shared_inventory';
+    // Create unique inventory for the mod character
+    const characterName = characterData.name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+    const inventoryCollectionName = characterName;
 
     // Handle icon upload
     let iconUrl = DEFAULT_IMAGE_URL;
@@ -625,7 +625,7 @@ async function handleCreateModCharacter(interaction, subcommand) {
       currentVillage: characterData.village,
       job: characterData.job,
       icon: iconUrl,
-      inventory: MOD_SHARED_INVENTORY_LINK,
+      inventory: `https://docs.google.com/spreadsheets/d/17XE0IOXSjVx47HVQ4FdcvEXm7yeg51KVkoiamD5dmKs/edit?usp=sharing`,
       appLink: characterData.appLink,
       modTitle: characterData.modTitle,
       modType: characterData.modType,
@@ -640,12 +640,12 @@ async function handleCreateModCharacter(interaction, subcommand) {
 
     await createModCharacter(modCharacterData);
 
-    // Create shared mod inventory collection (only if it doesn't exist)
+    // Create unique inventory collection for this mod character
     try {
       await createCharacterInventory(inventoryCollectionName, null, characterData.job);
+      console.log(`[modCharacter.js]: Created inventory collection '${inventoryCollectionName}' for mod character '${characterData.name}'`);
     } catch (error) {
-      // Collection might already exist, which is fine for shared inventory
-      console.log(`[modCharacter.js]: Shared mod inventory collection already exists or error creating: ${error.message}`);
+      console.log(`[modCharacter.js]: Inventory collection '${inventoryCollectionName}' already exists or error creating: ${error.message}`);
     }
 
     // Create success embed
@@ -654,16 +654,16 @@ async function handleCreateModCharacter(interaction, subcommand) {
       .setTitle(`✨ ${characterData.modTitle} ${characterData.modType} Created!`)
       .setDescription(`**${characterData.name}** has been successfully created as a ${characterData.modTitle} of ${characterData.modType}!`)
       .addFields(
-        { name: '👤 __Character__', value: `> ${characterData.name}`, inline: true },
-        { name: '🏠 __Village__', value: `> ${characterData.village}`, inline: true },
-        { name: '⚔️ __Job__', value: `> ${characterData.job}`, inline: true },
-        { name: '🎭 __Race__', value: `> ${characterData.race}`, inline: true },
-        { name: '📏 __Age__', value: `> ${characterData.age}`, inline: true },
-        { name: '📐 __Height__', value: `> ${characterData.height}cm`, inline: true },
-        { name: '❤️ __Hearts__', value: `> ∞ (Unlimited)`, inline: true },
-        { name: '⚡ __Stamina__', value: `> ∞ (Unlimited)`, inline: true },
-        { name: '📊 __Title__', value: `> ${characterData.modTitle} of ${characterData.modType}`, inline: true },
-        { name: '📦 __Inventory__', value: `> [Shared Mod Inventory](${MOD_SHARED_INVENTORY_LINK})`, inline: false },
+        { name: '👤 __Character__', value: `> ${characterData.name}`, inline: false },
+        { name: '🏠 __Village__', value: `> ${characterData.village}`, inline: false },
+        { name: '⚔️ __Job__', value: `> ${characterData.job}`, inline: false },
+        { name: '🎭 __Race__', value: `> ${characterData.race}`, inline: false },
+        { name: '📏 __Age__', value: `> ${characterData.age}`, inline: false },
+        { name: '📐 __Height__', value: `> ${characterData.height}cm`, inline: false },
+        { name: '❤️ __Hearts__', value: `> ∞ (Unlimited)`, inline: false },
+        { name: '⚡ __Stamina__', value: `> ∞ (Unlimited)`, inline: false },
+        { name: '📊 __Title__', value: `> ${characterData.modTitle} of ${characterData.modType}`, inline: false },
+        { name: '📦 __Inventory__', value: `> [${characterData.name}'s Inventory](${modCharacterData.inventory})`, inline: false },
         { name: '🔗 __Application Link__', value: `> [Link](${characterData.appLink})`, inline: false }
       )
       .setThumbnail(iconUrl)

@@ -212,11 +212,34 @@ async function initializeClient() {
             await command.execute(interaction);
           } catch (error) {
             handleError(error, 'index.js');
+            console.error(`[index.js]: Command execution error:`, error);
+            
+            // Check if it's a webhook token error
+            if (error.code === 50027) {
+              console.warn('[index.js]: Webhook token expired, sending error as regular message');
+              try {
+                await interaction.channel.send('❌ The command took too long to complete. Please try again.');
+              } catch (sendError) {
+                console.error('[index.js]: Failed to send fallback error message:', sendError);
+              }
+              return;
+            }
+            
             const errorMessage = { content: 'There was an error while executing this command!', flags: [4096] };
-            if (interaction.replied || interaction.deferred) {
-              await interaction.followUp(errorMessage);
-            } else {
-              await interaction.reply(errorMessage);
+            try {
+              if (interaction.replied || interaction.deferred) {
+                await interaction.followUp(errorMessage);
+              } else {
+                await interaction.reply(errorMessage);
+              }
+            } catch (responseError) {
+              console.error('[index.js]: Failed to send error response:', responseError);
+              // Final fallback - send as regular message
+              try {
+                await interaction.channel.send('❌ There was an error while executing this command!');
+              } catch (sendError) {
+                console.error('[index.js]: Failed to send fallback error message:', sendError);
+              }
             }
           }
         } else if (interaction.isButton()) {

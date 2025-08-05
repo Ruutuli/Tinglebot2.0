@@ -53,6 +53,7 @@ const { monsterMapping } = require('../../models/MonsterModel');
 // ------------------- Utility Functions -------------------
 const { handleError } = require('../../utils/globalErrorHandler');
 const { addItemInventoryDatabase } = require('../../utils/inventoryUtils');
+const { safeInteractionResponse, safeFollowUp, safeSendLongMessage, splitMessage } = require('../../utils/interactionUtils');
 const {
   authorizeSheets,
   extractSpreadsheetId,
@@ -1799,128 +1800,130 @@ async function handleInactivityReport(interaction) {
       return interaction.editReply("❌ You do not have permission to use this command.");
     }
   
-    await interaction.editReply("📋 Generating inactivity report... this may take a minute.");
+    try {
+      await safeInteractionResponse(interaction, { 
+        content: "📋 Generating inactivity report... this may take a minute.",
+        ephemeral: true 
+      });
   
-    const threeMonthsAgo = new Date();
-    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+      const threeMonthsAgo = new Date();
+      threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
   
-    let inactiveUsers = await User.find({
-      $or: [
-        { lastMessageTimestamp: { $exists: false } },
-        { lastMessageTimestamp: { $lte: threeMonthsAgo } },
-      ],
-    });
+      let inactiveUsers = await User.find({
+        $or: [
+          { lastMessageTimestamp: { $exists: false } },
+          { lastMessageTimestamp: { $lte: threeMonthsAgo } },
+        ],
+      });
   
-    inactiveUsers = (await Promise.all(
-      inactiveUsers.map(async (user) => {
-        try {
-          await interaction.guild.members.fetch(user.discordId);
-          return user;
-        } catch {
-          return null;
-        }
-      })
-    )).filter(Boolean);
-  
-    const channelsToCheck = interaction.guild.channels.cache.filter(
-      (channel) =>
-        channel.isTextBased() &&
-        channel.viewable &&
-        channel.permissionsFor(interaction.client.user)?.has("ReadMessageHistory")
-    );
-  
-    async function fetchLastMessage(user) {
-      const results = await Promise.all(
-        channelsToCheck.map(async (channel) => {
+      inactiveUsers = (await Promise.all(
+        inactiveUsers.map(async (user) => {
           try {
-            const messages = await channel.messages.fetch({ limit: 100 });
-            const userMessage = messages.find((msg) => msg.author.id === user.discordId);
-            if (userMessage) {
-              return { message: userMessage, channel };
-            }
-          } catch {}
-          return null;
+            await interaction.guild.members.fetch(user.discordId);
+            return user;
+          } catch {
+            return null;
+          }
         })
+      )).filter(Boolean);
+  
+      const channelsToCheck = interaction.guild.channels.cache.filter(
+        (channel) =>
+          channel.isTextBased() &&
+          channel.viewable &&
+          channel.permissionsFor(interaction.client.user)?.has("ReadMessageHistory")
       );
   
-      const valid = results.filter(r => r !== null);
-      if (valid.length > 0) {
-        const best = valid.reduce((a, b) =>
-          a.message.createdAt > b.message.createdAt ? a : b
+      async function fetchLastMessage(user) {
+        const results = await Promise.all(
+          channelsToCheck.map(async (channel) => {
+            try {
+              const messages = await channel.messages.fetch({ limit: 100 });
+              const userMessage = messages.find((msg) => msg.author.id === user.discordId);
+              if (userMessage) {
+                return { message: userMessage, channel };
+              }
+            } catch {}
+            return null;
+          })
         );
-        user.lastMessageTimestamp = best.message.createdAt;
-        user.lastMessageJump = `https://discord.com/channels/${interaction.guild.id}/${best.channel.id}/${best.message.id}`;
-        await user.save();
-      }
-    }
   
-    async function fetchMessageCount(user) {
-      let total = 0;
-      const threeMonthTimestamp = threeMonthsAgo.getTime();
-  
-      for (const channel of channelsToCheck.values()) {
-        try {
-          const messages = await channel.messages.fetch({ limit: 100 });
-          messages.forEach((msg) => {
-            if (
-              msg.author.id === user.discordId &&
-              msg.createdTimestamp > threeMonthTimestamp
-            ) {
-              total++;
-            }
-          });
-        } catch {}
-      }
-  
-      user.messageCount = total;
-    }
-  
-    for (const user of inactiveUsers) {
-      if (!user.lastMessageTimestamp || !user.lastMessageJump) {
-        await fetchLastMessage(user);
-      }
-      await fetchMessageCount(user);
-    }
-  
-    function formatDate(date) {
-      const d = new Date(date);
-      return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear().toString().slice(-2)}`;
-    }
-  
-    const reportLines = inactiveUsers.map((user) => {
-      const last = user.lastMessageTimestamp
-        ? `[Jump to Message](${user.lastMessageJump}) on ${formatDate(user.lastMessageTimestamp)}`
-        : "*Never Messaged*";
-  
-      const emoji =
-        !user.lastMessageTimestamp ? "❌"
-          : new Date(user.lastMessageTimestamp) > threeMonthsAgo ? "✅"
-          : "⚠️";
-  
-      return `**Member:** <@${user.discordId}>\n**Status:** ${user.status || 'unknown'} ${emoji}\n**Last Message:** ${last}\n**Messages (3mo):** ${user.messageCount}`;
-    });
-  
-    const chunks = splitMessage(reportLines.join('\n\n'), 2000);
-    await interaction.editReply({ content: `📋 **Users inactive for 3+ months:**\n\n${chunks[0]}` });
-    for (let i = 1; i < chunks.length; i++) {
-      await interaction.followUp({ content: chunks[i], ephemeral: true });
-    }
-  
-    function splitMessage(text, maxLength = 2000) {
-      const lines = text.split("\n");
-      const chunks = [];
-      let chunk = "";
-  
-      for (const line of lines) {
-        if (chunk.length + line.length + 1 > maxLength) {
-          chunks.push(chunk);
-          chunk = line;
-        } else {
-          chunk += "\n" + line;
+        const valid = results.filter(r => r !== null);
+        if (valid.length > 0) {
+          const best = valid.reduce((a, b) =>
+            a.message.createdAt > b.message.createdAt ? a : b
+          );
+          user.lastMessageTimestamp = best.message.createdAt;
+          user.lastMessageJump = `https://discord.com/channels/${interaction.guild.id}/${best.channel.id}/${best.message.id}`;
+          await user.save();
         }
       }
-      if (chunk.length) chunks.push(chunk);
-      return chunks;
+  
+      async function fetchMessageCount(user) {
+        let total = 0;
+        const threeMonthTimestamp = threeMonthsAgo.getTime();
+  
+        for (const channel of channelsToCheck.values()) {
+          try {
+            const messages = await channel.messages.fetch({ limit: 100 });
+            messages.forEach((msg) => {
+              if (
+                msg.author.id === user.discordId &&
+                msg.createdTimestamp > threeMonthTimestamp
+              ) {
+                total++;
+              }
+            });
+          } catch {}
+        }
+  
+        user.messageCount = total;
+      }
+  
+      for (const user of inactiveUsers) {
+        if (!user.lastMessageTimestamp || !user.lastMessageJump) {
+          await fetchLastMessage(user);
+        }
+        await fetchMessageCount(user);
+      }
+  
+      function formatDate(date) {
+        const d = new Date(date);
+        return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear().toString().slice(-2)}`;
+      }
+  
+      const reportLines = inactiveUsers.map((user) => {
+        const last = user.lastMessageTimestamp
+          ? `[Jump to Message](${user.lastMessageJump}) on ${formatDate(user.lastMessageTimestamp)}`
+          : "*Never Messaged*";
+  
+        const emoji =
+          !user.lastMessageTimestamp ? "❌"
+            : new Date(user.lastMessageTimestamp) > threeMonthsAgo ? "✅"
+            : "⚠️";
+  
+        return `**Member:** <@${user.discordId}>\n**Status:** ${user.status || 'unknown'} ${emoji}\n**Last Message:** ${last}\n**Messages (3mo):** ${user.messageCount}`;
+      });
+  
+      const reportContent = `📋 **Users inactive for 3+ months:**\n\n${reportLines.join('\n\n')}`;
+      
+      // Use the safe utility to send the long message
+      await safeSendLongMessage(interaction, reportContent, {
+        maxLength: 2000,
+        ephemeral: true,
+        fallbackToChannel: true
+      });
+  
+      
+    } catch (error) {
+      console.error('[mod.js]: Error in handleInactivityReport:', error);
+      
+      // Try to send error message using safe utility
+      await safeInteractionResponse(interaction, {
+        content: '❌ An error occurred while generating the inactivity report.',
+        ephemeral: true,
+        fallbackToChannel: true
+      });
     }
   }
   
@@ -1962,7 +1965,10 @@ async function handleKickTravelers(interaction) {
     return interaction.editReply('❌ Environment variable `TRAVELER_ROLE_ID` not set.');
   }
 
-  await interaction.editReply('🔍 Checking members...');
+  await safeInteractionResponse(interaction, {
+    content: '🔍 Checking members...',
+    ephemeral: true
+  });
 
   const fourteenDaysAgo = Date.now() - 14 * 24 * 60 * 60 * 1000;
   const kicked = [];
@@ -1986,9 +1992,13 @@ async function handleKickTravelers(interaction) {
     }
   }
 
-  return interaction.followUp({
-    content: `✅ Kicked ${kicked.length} members:\n${kicked.join('\n') || 'None'}`,
-    ephemeral: true
+  const resultContent = `✅ Kicked ${kicked.length} members:\n${kicked.join('\n') || 'None'}`;
+  
+  // Use safe follow-up to avoid webhook token issues
+  await safeFollowUp(interaction, {
+    content: resultContent,
+    ephemeral: true,
+    fallbackToChannel: true
   });
 }
 
