@@ -325,26 +325,20 @@ async function handleBoostRequest(interaction) {
  // Save to TempData only
  await saveBoostingRequestToTempData(boostRequestId, requestData);
 
- const embed = new EmbedBuilder()
- .setTitle("Boost Request Created")
- .addFields(
-  { name: "Requested By", value: targetCharacter.name, inline: true },
-  { name: "Booster", value: boosterCharacter.name, inline: true },
-  { name: "Booster Job", value: boosterJob, inline: true },
-  { name: "Category", value: category },
-  { name: "Boost Effect", value: `*${boost.name}* — ${boost.description}` },
-  { name: "Request ID", value: boostRequestId },
-  {
-   name: "Expires",
-   value: `<t:${Math.floor(expirationTime / 1000)}:R>`,
-   inline: true,
-  },
-  { name: "Village", value: targetCharacter.currentVillage, inline: true }
- )
- .setColor("#6f42c1")
- .setFooter({
-  text: "This request will expire in 24 hours if not accepted.",
- });
+ // Import the new embed function
+ const { createBoostRequestEmbed } = require('../../embeds/embeds');
+
+ // Create the embed using the new function
+ const requestDataForEmbed = {
+   requestedBy: targetCharacter.name,
+   booster: boosterCharacter.name,
+   boosterJob: boosterJob,
+   category: category,
+   boostEffect: `${boost.name} — ${boost.description}`,
+   village: targetCharacter.currentVillage
+ };
+
+ const embed = createBoostRequestEmbed(requestDataForEmbed, boostRequestId);
 
  await interaction.reply({
   content: `Boost request created. Ask **${boosterCharacter.name}** to run \`/boosting accept\` within 24 hours.`,
@@ -465,29 +459,24 @@ async function handleBoostAccept(interaction) {
    console.error(`[boosting.js]: Error - Could not find target character "${requestData.targetCharacter}"`);
  }
 
- // Save to TempData only
- await saveBoostingRequestToTempData(requestId, requestData);
+   // Save to TempData only
+  await saveBoostingRequestToTempData(requestId, requestData);
 
- const embed = new EmbedBuilder()
- .setTitle(`Boost Applied: ${boost.name}`)
- .addFields(
-  { name: "Boosted By", value: booster.name, inline: true },
-  { name: "Booster Job", value: booster.job, inline: true },
-  { name: "Target", value: requestData.targetCharacter, inline: true },
-  { name: "Category", value: requestData.category },
-  { name: "Effect", value: boost.description },
-  { name: "Duration", value: "24 hours", inline: true },
-  {
-   name: "Expires",
-   value: `<t:${Math.floor(boostExpiresAt / 1000)}:R>`,
-   inline: true,
-  },
-  { name: "Stamina Cost", value: "1 stamina used", inline: true }
- )
- .setColor("#00cc99")
- .setFooter({
-  text: `Boost fulfilled by ${booster.name} and will last 24 hours`,
- });
+  // Import the new embed function
+  const { createBoostAppliedEmbed } = require('../../embeds/embeds');
+
+  // Create the embed using the new function
+  const boostDataForEmbed = {
+    boostedBy: booster.name,
+    boosterJob: booster.job,
+    target: requestData.targetCharacter,
+    category: requestData.category,
+    effect: boost.description,
+    boostName: boost.name,
+    village: requestData.village
+  };
+
+  const embed = createBoostAppliedEmbed(boostDataForEmbed);
 
  await interaction.reply({
   content: `Boost has been applied and will remain active for 24 hours!`,

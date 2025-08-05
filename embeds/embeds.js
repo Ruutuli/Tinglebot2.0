@@ -1943,13 +1943,13 @@ function createMountEncounterEmbed(encounter) {
 }
 
 // ------------------- Function: createBoostRequestEmbed -------------------
-const createBoostRequestEmbed = (requestData) => {
+const createBoostRequestEmbed = (requestData, existingRequestId = null) => {
   const { generateUniqueId } = require('../utils/uniqueIdUtils');
   const { capitalizeFirstLetter, capitalizeWords } = require('../modules/formattingModule');
   const { getVillageColorByName, getVillageEmojiByName } = require('../modules/locationsModule');
 
-  // Generate a unique ID for the request
-  const requestId = generateUniqueId('B'); // 'B' for Boost
+  // Use existing ID if provided, otherwise generate a unique ID for the request
+  const requestId = existingRequestId || generateUniqueId('B'); // 'B' for Boost
   
   // Format the data with proper capitalization
   const requestedBy = capitalizeFirstLetter(requestData.requestedBy || 'Unknown');
@@ -2033,6 +2033,98 @@ const createBoostRequestEmbed = (requestData) => {
   return embed;
 };
 
+// ------------------- Function: createBoostAppliedEmbed -------------------
+const createBoostAppliedEmbed = (boostData) => {
+  const { capitalizeFirstLetter, capitalizeWords } = require('../modules/formattingModule');
+  const { getVillageColorByName, getVillageEmojiByName } = require('../modules/locationsModule');
+
+  // Format the data with proper capitalization
+  const boostedBy = capitalizeFirstLetter(boostData.boostedBy || 'Unknown');
+  const boosterJob = capitalizeWords(boostData.boosterJob || 'Unknown');
+  const target = capitalizeFirstLetter(boostData.target || 'Unknown');
+  const category = capitalizeFirstLetter(boostData.category || 'Unknown');
+  const effect = boostData.effect || 'No effect specified';
+  const village = capitalizeFirstLetter(boostData.village || 'Unknown');
+  
+  // Get village styling
+  const villageColor = getVillageColorByName(village) || '#00cc99';
+  const villageEmoji = getVillageEmojiByName(village) || '🏘️';
+  
+  // Calculate expiration time (24 hours from now)
+  const expiresAt = new Date();
+  expiresAt.setHours(expiresAt.getHours() + 24);
+  const expiresIn = expiresAt.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  });
+
+  const embed = new EmbedBuilder()
+    .setTitle(`⚡ Boost Applied: ${boostData.boostName || 'Unknown Boost'}`)
+    .setDescription(
+      `**${boostedBy}** has successfully applied their boost to **${target}**!\n\n` +
+      `The boost will remain active for **24 hours** and provide enhanced abilities.`
+    )
+    .setColor(villageColor)
+    .setThumbnail('https://storage.googleapis.com/tinglebot/Graphics/boost-applied-icon.png')
+    .addFields(
+      {
+        name: '🎭 **Boosted By**',
+        value: `> ${boostedBy}`,
+        inline: true
+      },
+      {
+        name: '💼 **Booster Job**',
+        value: `> ${boosterJob}`,
+        inline: true
+      },
+      {
+        name: '👤 **Target**',
+        value: `> ${target}`,
+        inline: true
+      },
+      {
+        name: '📋 **Category**',
+        value: `> ${category}`,
+        inline: true
+      },
+      {
+        name: '🏘️ **Village**',
+        value: `> ${villageEmoji} ${village}`,
+        inline: true
+      },
+      {
+        name: '⏰ **Duration**',
+        value: `> 24 hours`,
+        inline: true
+      },
+      {
+        name: '⚡ **Boost Effect**',
+        value: `> ${effect}`,
+        inline: false
+      },
+      {
+        name: '⏰ **Expires**',
+        value: `> ${expiresIn}`,
+        inline: false
+      },
+      {
+        name: '💚 **Stamina Cost**',
+        value: `> 1 stamina used`,
+        inline: false
+      }
+    )
+    .setFooter({ 
+      text: `Boost fulfilled by ${boostedBy} and will last 24 hours`,
+      iconURL: 'https://storage.googleapis.com/tinglebot/Graphics/boost-success-icon.png'
+    })
+    .setTimestamp();
+
+  return embed;
+};
+
 module.exports = {
  DEFAULT_EMOJI,
  DEFAULT_IMAGE_URL,
@@ -2080,4 +2172,5 @@ module.exports = {
  createMountEncounterEmbed,
  createWrongVillageEmbed,
  createBoostRequestEmbed,
+ createBoostAppliedEmbed,
 };
