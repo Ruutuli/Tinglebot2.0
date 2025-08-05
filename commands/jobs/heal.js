@@ -644,6 +644,13 @@ async function handleHealingFulfillment(interaction, requestId, healerName) {
     
     await useStamina(healerCharacter._id, staminaCost);
     await recoverHearts(characterToHeal._id, heartsToHeal, healerCharacter._id);
+    
+    // ------------------- Clear Boost After Use -------------------
+    if (healerCharacter.boostedBy) {
+      console.log(`[heal.js] Clearing boost for ${healerCharacter.name} after use`);
+      healerCharacter.boostedBy = null;
+      await healerCharacter.save();
+    }
 
     // Deactivate job voucher if needed
     if (healerCharacter.jobVoucher && !voucherResult.skipVoucher) {

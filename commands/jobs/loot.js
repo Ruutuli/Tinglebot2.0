@@ -114,6 +114,13 @@ async function handleLootError(interaction, error, context = '') {
 // Unified character update
 async function updateCharacterLootTimestamp(character) {
   character.lastLootedAt = new Date().toISOString();
+  
+  // ------------------- Clear Boost After Use -------------------
+  if (character.boostedBy) {
+    console.log(`[loot.js] Clearing boost for ${character.name} after use`);
+    character.boostedBy = null;
+  }
+  
   await character.save();
 }
 
