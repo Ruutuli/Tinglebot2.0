@@ -66,7 +66,7 @@ const modCharacterSchema = new Schema({
   // ------------------- Inventory and links -------------------
   inventory: { type: String, required: true },
   appLink: { type: String, required: true },
-  inventorySynced: { type: Boolean, default: false },
+  inventorySynced: { type: Boolean, default: true }, // Mod characters are always synced
 
   // ------------------- Vendor and shop details -------------------
   vendingPoints: { type: Number, default: 0 },
@@ -185,6 +185,9 @@ modCharacterSchema.pre('save', function (next) {
   // Ensure all mod characters use the shared inventory
   const MOD_SHARED_INVENTORY_LINK = 'https://docs.google.com/spreadsheets/d/17XE0IOXSjVx47HVQ4FdcvEXm7yeg51KVkoiamD5dmKs/edit?usp=sharing';
   this.inventory = MOD_SHARED_INVENTORY_LINK;
+  
+  // Ensure mod characters are always considered synced
+  this.inventorySynced = true;
   
   next();
 });
